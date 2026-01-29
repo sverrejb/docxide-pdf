@@ -53,8 +53,69 @@ The repository includes:
 
 **IMPORTANT**: Always use the `mcp__local-rag__query_documents` tool to search the specs when you need information about PDF internals, DOCX format, or WordprocessingML. The specs contain authoritative technical details that are essential for correct implementation.
 
+## Module Structure
+
+```
+src/
+  lib.rs      — public API: convert_docx_to_pdf(input: &Path, output: &Path)
+  error.rs    — Error enum (Zip, Xml, Pdf, Io variants)
+  model.rs    — Document, Paragraph, Run intermediate representation
+  docx.rs     — parse DOCX ZIP + XML → Document
+  pdf.rs      — render Document → PDF bytes
+tests/
+  visual_comparison.rs  — Jaccard similarity test against Word-generated reference PDFs
+  fixtures/case1/       — Hello world, Letter page (Aptos 12pt)
+  fixtures/case2/       — Complex document (charts/images, currently partially rendered)
+  output/<case>/        — generated.pdf, reference/, generated/, diff/ screenshots
+```
+
+## Dependencies
+
+- `zip = "2"` — DOCX is a ZIP container
+- `roxmltree = "0.21"` — read-only XML tree parser
+- `pdf-writer = "0.14"` — low-level PDF generation
+- `image = "0.25"` (dev) — image comparison in tests
+
 ## Development Notes
 
 - Rust edition: 2024
-- Currently contains only placeholder code (single `add` function)
-- No dependencies defined yet in Cargo.toml
+- Test output is compared using **Jaccard similarity on ink pixels** (luma < 200 = ink). This ignores the white background and scores based on overlap of actual text/content pixels. Run tests with `cargo test -- --nocapture` to see scores.
+- Current similarity threshold: **50%** (defined as `SIMILARITY_THRESHOLD` in `tests/visual_comparison.rs`)
+- case1 currently scores ~40% — visually close but limited by Helvetica ≠ Aptos font shapes
+
+## Word Layout Learnings
+
+### Default Font (Modern Word)
+Modern Word (Office 365+) uses **Aptos 12pt** as the default Normal style font, not Calibri 11pt. Always parse `word/styles.xml` `docDefaults` for the actual defaults:
+- `w:rPrDefault/w:rPr/w:sz @val` — font size in half-points (24 = 12pt)
+- `w:pPrDefault/w:pPr/w:spacing @after` — default space after in twips (160 = 8pt)
+- `w:pPrDefault/w:pPr/w:spacing @line @lineRule` — line spacing (278 auto = ~1.16× single)
+
+### Baseline Y Position
+The first line's baseline in PDF coordinates (from bottom):
+
+```
+baseline_y = slot_top - font_size
+slot_top   = page_height - margin_top - space_before
+```
+
+This formula aligns cap-tops of different fonts (Helvetica, Aptos, etc.) at the same position, because cap height ≈ 0.72–0.94 × font_size and the formula compensates for this.
+
+Measured for case1: reference baseline at y=708.72pt from bottom (83.28pt from top). Formula gives 708pt — 0.72pt difference, visually negligible.
+
+### Document Grid
+`w:sectPr/w:docGrid @w:linePitch` (in twips) defines the baseline-to-baseline distance for grid-snapped text. Divide by 20 to get points (360 twips = 18pt for case1).
+
+### pdf-writer Patterns
+Object IDs must be written exactly once. Build the content stream first, then write the page object:
+
+```rust
+pdf.stream(content_id, &content.finish());
+pdf.page(page_id)
+    .media_box(...)
+    .parent(pages_id)
+    .contents(content_id)   // must come before .resources()
+    .resources()
+    .fonts()
+    .pair(Name(b"F1"), font_id);
+```

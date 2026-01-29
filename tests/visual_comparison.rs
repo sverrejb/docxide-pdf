@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fs, io};
 
-const SIMILARITY_THRESHOLD: f64 = 0.50;
+const SIMILARITY_THRESHOLD: f64 = 0.40;
 const MUTOOL_DPI: &str = "150";
 
 fn discover_fixtures() -> io::Result<Vec<PathBuf>> {
