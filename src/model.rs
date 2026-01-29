@@ -1,4 +1,11 @@
 #[allow(dead_code)]
+pub enum Alignment {
+    Left,
+    Center,
+    Right,
+}
+
+#[allow(dead_code)]
 pub struct Document {
     pub page_width: f32,
     pub page_height: f32,
@@ -14,6 +21,8 @@ pub struct Paragraph {
     pub runs: Vec<Run>,
     pub space_before: f32,
     pub space_after: f32,
+    pub content_height: f32,
+    pub alignment: Alignment,
 }
 
 #[allow(dead_code)]

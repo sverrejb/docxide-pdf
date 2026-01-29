@@ -1,6 +1,8 @@
 use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fs, io};
 
 const SIMILARITY_THRESHOLD: f64 = 0.40;
@@ -55,19 +57,23 @@ fn compare_images(a: &Path, b: &Path) -> Result<f64, String> {
     let img_b = image::open(b).map_err(|e| format!("Failed to open {}: {e}", b.display()))?;
 
     let (w, h) = img_a.dimensions();
-    if img_b.dimensions() != (w, h) {
+    let (w2, h2) = img_b.dimensions();
+    // Allow up to 2px difference from sub-pixel rounding of A4 page sizes
+    if w.abs_diff(w2) > 2 || h.abs_diff(h2) > 2 {
         return Err(format!(
             "Image dimensions differ: {:?} vs {:?}",
-            img_a.dimensions(),
-            img_b.dimensions()
+            (w, h),
+            (w2, h2)
         ));
     }
+    let cw = w.min(w2);
+    let ch = h.min(h2);
 
     let mut intersection: u64 = 0;
     let mut union: u64 = 0;
 
-    for y in 0..h {
-        for x in 0..w {
+    for y in 0..ch {
+        for x in 0..cw {
             let [ra, ga, ba, _] = img_a.get_pixel(x, y).0;
             let [rb, gb, bb, _] = img_b.get_pixel(x, y).0;
             let a_ink = is_ink(ra, ga, ba);
@@ -97,10 +103,13 @@ fn save_diff_image(a: &Path, b: &Path, out: &Path) -> Result<(), String> {
     let img_b = image::open(b).map_err(|e| format!("{e}"))?;
 
     let (w, h) = img_a.dimensions();
-    let mut diff: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::new(w, h);
+    let (w2, h2) = img_b.dimensions();
+    let cw = w.min(w2);
+    let ch = h.min(h2);
+    let mut diff: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::new(cw, ch);
 
-    for y in 0..h {
-        for x in 0..w {
+    for y in 0..ch {
+        for x in 0..cw {
             let Rgba([ra, ga, ba, aa]) = img_a.get_pixel(x, y).0.into();
             let Rgba([rb, gb, bb, ab]) = img_b.get_pixel(x, y).0.into();
             diff.put_pixel(
@@ -122,6 +131,25 @@ fn save_diff_image(a: &Path, b: &Path, out: &Path) -> Result<(), String> {
     DynamicImage::ImageRgba8(diff)
         .save(out)
         .map_err(|e| e.to_string())
+}
+
+fn log_result(case: &str, pages: usize, avg_jaccard: f64, passed: bool) {
+    let csv_path = Path::new("tests/output/results.csv");
+    fs::create_dir_all("tests/output").ok();
+    let write_header = !csv_path.exists();
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(csv_path)
+        .expect("Cannot open tests/output/results.csv");
+    if write_header {
+        writeln!(file, "timestamp,case,pages,avg_jaccard,pass").unwrap();
+    }
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    writeln!(file, "{ts},{case},{pages},{avg_jaccard:.4},{passed}").unwrap();
 }
 
 fn collect_page_pngs(dir: &Path) -> io::Result<Vec<PathBuf>> {
@@ -228,7 +256,9 @@ fn visual_comparison() {
         if !scores.is_empty() {
             let avg = scores.iter().sum::<f64>() / scores.len() as f64;
             println!("  Average similarity: {:.2}%", avg * 100.0);
-            if avg < SIMILARITY_THRESHOLD {
+            let passed = avg >= SIMILARITY_THRESHOLD;
+            log_result(&name, scores.len(), avg, passed);
+            if !passed {
                 println!(
                     "  [FAIL] {name}: average similarity {:.2}% below threshold {:.0}%",
                     avg * 100.0,

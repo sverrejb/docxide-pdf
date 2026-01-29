@@ -1,0 +1,28 @@
+[package]
+name = "docxside-tools"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[[bin]]
+name = "docx-inspect"
+path = "src/bin/docx_inspect.rs"
+
+[[bin]]
+name = "docx-fonts"
+path = "src/bin/docx_fonts.rs"
+
+[[bin]]
+name = "jaccard"
+path = "src/bin/jaccard.rs"
+
+[[bin]]
+name = "case-diff"
+path = "src/bin/case_diff.rs"
+
+[dependencies]
+zip = "2"
+roxmltree = "0.21"
+image = "0.25"

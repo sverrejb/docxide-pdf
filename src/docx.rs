@@ -3,10 +3,11 @@ use std::io::Read;
 use std::path::Path;
 
 use crate::error::Error;
-use crate::model::{Document, Paragraph, Run};
+use crate::model::{Alignment, Document, Paragraph, Run};
 
 const WML_NS: &str = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const DML_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/main";
+const WPD_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
 
 fn twips_to_pts(twips: f32) -> f32 {
     twips / 20.0
@@ -38,11 +39,20 @@ struct ParagraphStyle {
     font_name: Option<String>,
     space_before: f32,
     space_after: Option<f32>,
+    alignment: Option<Alignment>,
 }
 
 struct StylesInfo {
     defaults: StyleDefaults,
     paragraph_styles: HashMap<String, ParagraphStyle>,
+}
+
+fn parse_alignment(val: &str) -> Alignment {
+    match val {
+        "center" => Alignment::Center,
+        "right" | "end" => Alignment::Right,
+        _ => Alignment::Left,
+    }
 }
 
 fn parse_theme(zip: &mut zip::ZipArchive<std::fs::File>) -> ThemeFonts {
@@ -198,9 +208,14 @@ fn parse_styles(
             resolve_font(ascii, ascii_theme, theme, &defaults.font_name)
         });
 
+        let alignment = wml(style_node, "pPr")
+            .and_then(|ppr| wml(ppr, "jc"))
+            .and_then(|n| n.attribute((WML_NS, "val")))
+            .map(parse_alignment);
+
         paragraph_styles.insert(
             style_id.to_string(),
-            ParagraphStyle { font_size, font_name, space_before, space_after },
+            ParagraphStyle { font_size, font_name, space_before, space_after, alignment },
         );
     }
 
@@ -286,113 +301,189 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
     let mut paragraphs = Vec::new();
 
     for node in body.children() {
-        if node.tag_name().name() != "p" || node.tag_name().namespace() != Some(WML_NS) {
-            continue;
-        }
-
-        let ppr = node
-            .children()
-            .find(|n| n.tag_name().name() == "pPr" && n.tag_name().namespace() == Some(WML_NS));
-
-        let para_style_id = ppr
-            .and_then(|ppr| wml(ppr, "pStyle"))
-            .and_then(|n| n.attribute((WML_NS, "val")));
-
-        let para_style = para_style_id.and_then(|id| styles.paragraph_styles.get(id));
-
-        let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
-
-        let space_before = inline_spacing
-            .and_then(|n| n.attribute((WML_NS, "before")))
-            .and_then(|v| v.parse::<f32>().ok())
-            .map(twips_to_pts)
-            .or_else(|| para_style.map(|s| s.space_before))
-            .unwrap_or(0.0);
-
-        let space_after = inline_spacing
-            .and_then(|n| n.attribute((WML_NS, "after")))
-            .and_then(|v| v.parse::<f32>().ok())
-            .map(twips_to_pts)
-            .or_else(|| para_style.and_then(|s| s.space_after))
-            .unwrap_or(styles.defaults.space_after);
-
-        let style_font_size = para_style
-            .and_then(|s| s.font_size)
-            .unwrap_or(styles.defaults.font_size);
-
-        let style_font_name = para_style
-            .and_then(|s| s.font_name.as_deref())
-            .unwrap_or(&styles.defaults.font_name)
-            .to_string();
-
-        let mut runs = Vec::new();
-
-        for run_node in node.children() {
-            if run_node.tag_name().name() != "r"
-                || run_node.tag_name().namespace() != Some(WML_NS)
-            {
-                continue;
+        match node.tag_name().name() {
+            "tbl" if node.tag_name().namespace() == Some(WML_NS) => {
+                let row_count = node
+                    .children()
+                    .filter(|n| {
+                        n.tag_name().name() == "tr" && n.tag_name().namespace() == Some(WML_NS)
+                    })
+                    .count();
+                let estimated_height = row_count as f32 * (10.5 * 1.6 + 4.0);
+                paragraphs.push(Paragraph {
+                    runs: vec![],
+                    space_before: 0.0,
+                    space_after: 4.0,
+                    content_height: estimated_height,
+                    alignment: Alignment::Left,
+                });
             }
+            "p" if node.tag_name().namespace() == Some(WML_NS) => {
+                let ppr = node.children().find(|n| {
+                    n.tag_name().name() == "pPr" && n.tag_name().namespace() == Some(WML_NS)
+                });
 
-            let rpr = run_node.children().find(|n| {
-                n.tag_name().name() == "rPr" && n.tag_name().namespace() == Some(WML_NS)
-            });
+                let para_style_id = ppr
+                    .and_then(|ppr| wml(ppr, "pStyle"))
+                    .and_then(|n| n.attribute((WML_NS, "val")));
 
-            let font_size = rpr
-                .and_then(|n| {
-                    n.children().find(|c| {
-                        c.tag_name().name() == "sz" && c.tag_name().namespace() == Some(WML_NS)
-                    })
-                })
-                .and_then(|n| n.attribute((WML_NS, "val")))
-                .and_then(|v| v.parse::<f32>().ok())
-                .map(|hp| hp / 2.0)
-                .unwrap_or(style_font_size);
+                let para_style = para_style_id.and_then(|id| styles.paragraph_styles.get(id));
 
-            let font_name = rpr
-                .and_then(|n| {
-                    n.children().find(|c| {
-                        c.tag_name().name() == "rFonts"
-                            && c.tag_name().namespace() == Some(WML_NS)
-                    })
-                })
-                .map(|rfonts| {
-                    let ascii = rfonts.attribute((WML_NS, "ascii"));
-                    let ascii_theme = rfonts.attribute((WML_NS, "asciiTheme"));
-                    resolve_font(ascii, ascii_theme, &theme, &style_font_name)
-                })
-                .unwrap_or_else(|| style_font_name.clone());
+                let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
 
-            let bold = rpr
-                .map(|n| {
-                    n.children().any(|c| {
-                        c.tag_name().name() == "b" && c.tag_name().namespace() == Some(WML_NS)
-                    })
-                })
-                .unwrap_or(false);
+                let space_before = inline_spacing
+                    .and_then(|n| n.attribute((WML_NS, "before")))
+                    .and_then(|v| v.parse::<f32>().ok())
+                    .map(twips_to_pts)
+                    .or_else(|| para_style.map(|s| s.space_before))
+                    .unwrap_or(0.0);
 
-            let italic = rpr
-                .map(|n| {
-                    n.children().any(|c| {
-                        c.tag_name().name() == "i" && c.tag_name().namespace() == Some(WML_NS)
-                    })
-                })
-                .unwrap_or(false);
+                let space_after = inline_spacing
+                    .and_then(|n| n.attribute((WML_NS, "after")))
+                    .and_then(|v| v.parse::<f32>().ok())
+                    .map(twips_to_pts)
+                    .or_else(|| para_style.and_then(|s| s.space_after))
+                    .unwrap_or(styles.defaults.space_after);
 
-            let text: String = run_node
-                .children()
-                .filter(|n| {
-                    n.tag_name().name() == "t" && n.tag_name().namespace() == Some(WML_NS)
-                })
-                .filter_map(|n| n.text())
-                .collect();
+                let style_font_size = para_style
+                    .and_then(|s| s.font_size)
+                    .unwrap_or(styles.defaults.font_size);
 
-            if !text.is_empty() {
-                runs.push(Run { text, font_size, font_name, bold, italic });
+                let style_font_name = para_style
+                    .and_then(|s| s.font_name.as_deref())
+                    .unwrap_or(&styles.defaults.font_name)
+                    .to_string();
+
+                let alignment = ppr
+                    .and_then(|ppr| wml(ppr, "jc"))
+                    .and_then(|n| n.attribute((WML_NS, "val")))
+                    .map(parse_alignment)
+                    .or_else(|| para_style.and_then(|s| s.alignment.as_ref()).map(|a| match a {
+                        Alignment::Center => Alignment::Center,
+                        Alignment::Right => Alignment::Right,
+                        Alignment::Left => Alignment::Left,
+                    }))
+                    .unwrap_or(Alignment::Left);
+
+                let mut runs = Vec::new();
+
+                for run_node in node.children() {
+                    if run_node.tag_name().name() != "r"
+                        || run_node.tag_name().namespace() != Some(WML_NS)
+                    {
+                        continue;
+                    }
+
+                    let rpr = run_node.children().find(|n| {
+                        n.tag_name().name() == "rPr" && n.tag_name().namespace() == Some(WML_NS)
+                    });
+
+                    let font_size = rpr
+                        .and_then(|n| {
+                            n.children().find(|c| {
+                                c.tag_name().name() == "sz"
+                                    && c.tag_name().namespace() == Some(WML_NS)
+                            })
+                        })
+                        .and_then(|n| n.attribute((WML_NS, "val")))
+                        .and_then(|v| v.parse::<f32>().ok())
+                        .map(|hp| hp / 2.0)
+                        .unwrap_or(style_font_size);
+
+                    let font_name = rpr
+                        .and_then(|n| {
+                            n.children().find(|c| {
+                                c.tag_name().name() == "rFonts"
+                                    && c.tag_name().namespace() == Some(WML_NS)
+                            })
+                        })
+                        .map(|rfonts| {
+                            let ascii = rfonts.attribute((WML_NS, "ascii"));
+                            let ascii_theme = rfonts.attribute((WML_NS, "asciiTheme"));
+                            resolve_font(ascii, ascii_theme, &theme, &style_font_name)
+                        })
+                        .unwrap_or_else(|| style_font_name.clone());
+
+                    let bold = rpr
+                        .map(|n| {
+                            n.children().any(|c| {
+                                c.tag_name().name() == "b"
+                                    && c.tag_name().namespace() == Some(WML_NS)
+                            })
+                        })
+                        .unwrap_or(false);
+
+                    let italic = rpr
+                        .map(|n| {
+                            n.children().any(|c| {
+                                c.tag_name().name() == "i"
+                                    && c.tag_name().namespace() == Some(WML_NS)
+                            })
+                        })
+                        .unwrap_or(false);
+
+                    let text: String = run_node
+                        .children()
+                        .filter(|n| {
+                            n.tag_name().name() == "t" && n.tag_name().namespace() == Some(WML_NS)
+                        })
+                        .filter_map(|n| n.text())
+                        .collect();
+
+                    if !text.is_empty() {
+                        runs.push(Run { text, font_size, font_name, bold, italic });
+                    }
+                }
+
+                // Compute drawing height from wp:inline/wp:anchor > wp:extent @cy
+                let mut drawing_height: f32 = 0.0;
+                for child in node.children() {
+                    let drawing_node = if child.tag_name().name() == "drawing"
+                        && child.tag_name().namespace() == Some(WML_NS)
+                    {
+                        Some(child)
+                    } else if child.tag_name().name() == "r"
+                        && child.tag_name().namespace() == Some(WML_NS)
+                    {
+                        child.children().find(|n| {
+                            n.tag_name().name() == "drawing"
+                                && n.tag_name().namespace() == Some(WML_NS)
+                        })
+                    } else {
+                        None
+                    };
+
+                    if let Some(drawing) = drawing_node {
+                        for container in drawing.children() {
+                            if (container.tag_name().name() == "inline"
+                                || container.tag_name().name() == "anchor")
+                                && container.tag_name().namespace() == Some(WPD_NS)
+                            {
+                                if let Some(extent) = container.children().find(|n| {
+                                    n.tag_name().name() == "extent"
+                                        && n.tag_name().namespace() == Some(WPD_NS)
+                                }) {
+                                    if let Some(cy) =
+                                        extent.attribute("cy").and_then(|v| v.parse::<f32>().ok())
+                                    {
+                                        drawing_height = drawing_height.max(cy / 12700.0);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                paragraphs.push(Paragraph {
+                    runs,
+                    space_before,
+                    space_after,
+                    content_height: drawing_height,
+                    alignment,
+                });
             }
+            _ => {}
         }
-
-        paragraphs.push(Paragraph { runs, space_before, space_after });
     }
 
     Ok(Document {

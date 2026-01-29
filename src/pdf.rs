@@ -5,11 +5,12 @@ use pdf_writer::{Content, Name, Pdf, Rect, Ref, Str};
 use ttf_parser::Face;
 
 use crate::error::Error;
-use crate::model::Document;
+use crate::model::{Alignment, Document, Run};
 
 struct FontEntry {
     pdf_name: String,
     font_ref: Ref,
+    widths_1000: Vec<f32>, // 224 entries for WinAnsi chars 32..=255
 }
 
 /// Search the host system for a TTF/OTF file for the given font name.
@@ -48,17 +49,20 @@ fn find_font_file(font_name: &str) -> Option<PathBuf> {
         }
     }
 
-    // 3. System font directories
+    // 3. System font directories — try both "TimesNewRoman.ttf" and "Times New Roman.ttf"
     let system_dirs = [
         "/Library/Fonts",
+        "/Library/Fonts/Microsoft",
         "/System/Library/Fonts",
         "/System/Library/Fonts/Supplemental",
     ];
-    for dir in &system_dirs {
-        for ext in &["ttf", "otf"] {
-            let p = Path::new(dir).join(format!("{}.{}", normalized, ext));
-            if p.exists() {
-                return Some(p);
+    for name_variant in &[normalized.as_str(), font_name] {
+        for dir in &system_dirs {
+            for ext in &["ttf", "otf"] {
+                let p = Path::new(dir).join(format!("{}.{}", name_variant, ext));
+                if p.exists() {
+                    return Some(p);
+                }
             }
         }
     }
@@ -66,8 +70,29 @@ fn find_font_file(font_name: &str) -> Option<PathBuf> {
     None
 }
 
+/// Approximate Helvetica widths at 1000 units/em for WinAnsi chars 32..=255.
+/// Used as fallback when a font file cannot be found.
+fn helvetica_widths() -> Vec<f32> {
+    (32u8..=255u8)
+        .map(|b| match b {
+            32 => 278.0,          // space
+            33..=47 => 333.0,     // punctuation
+            48..=57 => 556.0,     // digits
+            58..=64 => 333.0,     // more punctuation
+            73 | 74 => 278.0,     // I J (narrow uppercase)
+            77 => 833.0,          // M (wide)
+            65..=90 => 667.0,     // uppercase A-Z (average)
+            91..=96 => 333.0,     // brackets etc.
+            102 | 105 | 106 | 108 | 116 => 278.0, // narrow lowercase: f i j l t
+            109 | 119 => 833.0,   // m w (wide)
+            97..=122 => 556.0,    // lowercase a-z (average)
+            _ => 556.0,
+        })
+        .collect()
+}
+
 /// Attempt to embed a TrueType/OpenType font into the PDF.
-/// Returns Some(()) on success, None if the font couldn't be read or parsed.
+/// Returns Some(widths) on success, None if the font couldn't be read or parsed.
 fn embed_truetype(
     pdf: &mut Pdf,
     font_ref: Ref,
@@ -75,7 +100,7 @@ fn embed_truetype(
     data_ref: Ref,
     font_name: &str,
     font_path: &Path,
-) -> Option<()> {
+) -> Option<Vec<f32>> {
     let font_data = std::fs::read(font_path).ok()?;
     let face = Face::parse(&font_data, 0).ok()?;
 
@@ -135,7 +160,122 @@ fn embed_truetype(
         d.insert(Name(b"Widths")).array().items(widths.iter().copied());
     }
 
-    Some(())
+    Some(widths)
+}
+
+/// Normalize a font name: take the first name from a semicolon-separated list
+/// (e.g. "Liberation Sans;Arial" -> "Liberation Sans").
+fn primary_font_name(name: &str) -> &str {
+    name.split(';').next().map(str::trim).unwrap_or(name)
+}
+
+struct WordChunk {
+    pdf_font: String,
+    text: String,
+    font_size: f32,
+    x_offset: f32, // x relative to line start
+    width: f32,
+}
+
+struct TextLine {
+    chunks: Vec<WordChunk>,
+    total_width: f32,
+}
+
+/// Layout runs into wrapped lines. Each line records word chunks with relative x offsets
+/// and the total line width, allowing alignment to be applied at render time.
+fn build_paragraph_lines(
+    runs: &[Run],
+    seen_fonts: &HashMap<String, FontEntry>,
+    max_width: f32,
+) -> Vec<TextLine> {
+    let mut lines: Vec<TextLine> = Vec::new();
+    let mut current_chunks: Vec<WordChunk> = Vec::new();
+    let mut current_x: f32 = 0.0;
+
+    for run in runs {
+        let key = primary_font_name(&run.font_name);
+        let entry = seen_fonts.get(key).expect("font registered");
+        let space_w = entry.widths_1000[0] * run.font_size / 1000.0;
+
+        for word in run.text.split_whitespace() {
+            let ww: f32 = word
+                .bytes()
+                .filter(|&b| b >= 32)
+                .map(|b| entry.widths_1000[(b - 32) as usize] * run.font_size / 1000.0)
+                .sum();
+
+            if current_chunks.is_empty() || current_x + ww <= max_width {
+                current_chunks.push(WordChunk {
+                    pdf_font: entry.pdf_name.clone(),
+                    text: word.to_string(),
+                    font_size: run.font_size,
+                    x_offset: current_x,
+                    width: ww,
+                });
+                current_x += ww + space_w;
+            } else {
+                let total_w = current_chunks
+                    .last()
+                    .map(|c| c.x_offset + c.width)
+                    .unwrap_or(0.0);
+                lines.push(TextLine {
+                    chunks: std::mem::take(&mut current_chunks),
+                    total_width: total_w,
+                });
+                current_chunks.push(WordChunk {
+                    pdf_font: entry.pdf_name.clone(),
+                    text: word.to_string(),
+                    font_size: run.font_size,
+                    x_offset: 0.0,
+                    width: ww,
+                });
+                current_x = ww + space_w;
+            }
+        }
+    }
+
+    if !current_chunks.is_empty() {
+        let total_w = current_chunks
+            .last()
+            .map(|c| c.x_offset + c.width)
+            .unwrap_or(0.0);
+        lines.push(TextLine { chunks: current_chunks, total_width: total_w });
+    }
+
+    if lines.is_empty() {
+        lines.push(TextLine { chunks: vec![], total_width: 0.0 });
+    }
+    lines
+}
+
+/// Render pre-built lines applying the paragraph alignment.
+fn render_paragraph_lines(
+    content: &mut Content,
+    lines: &[TextLine],
+    alignment: &Alignment,
+    margin_left: f32,
+    text_width: f32,
+    first_baseline_y: f32,
+    line_pitch: f32,
+) {
+    for (line_num, line) in lines.iter().enumerate() {
+        let y = first_baseline_y - line_num as f32 * line_pitch;
+        let line_start_x = match alignment {
+            Alignment::Center => margin_left + (text_width - line.total_width) / 2.0,
+            Alignment::Right => margin_left + text_width - line.total_width,
+            Alignment::Left => margin_left,
+        };
+        for chunk in &line.chunks {
+            let x = line_start_x + chunk.x_offset;
+            content
+                .begin_text()
+                .set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size)
+                .next_line(x, y)
+                .show(Str(chunk.text.as_bytes()))
+                .end_text();
+        }
+    }
 }
 
 pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
@@ -149,109 +289,130 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
     let catalog_id = alloc();
     let pages_id = alloc();
-    let page_id = alloc();
-    let content_id = alloc();
 
-    // Collect unique font names in document order
+    // Phase 1: collect unique font names and embed them
     let mut seen_fonts: HashMap<String, FontEntry> = HashMap::new();
     let mut font_order: Vec<String> = Vec::new();
     for para in &doc.paragraphs {
         for run in &para.runs {
-            if !seen_fonts.contains_key(&run.font_name) {
+            let key = primary_font_name(&run.font_name).to_string();
+            if !seen_fonts.contains_key(&key) {
                 let idx = font_order.len() + 1;
                 let pdf_name = format!("F{}", idx);
                 let font_ref = alloc();
-                // Reserve two extra IDs (descriptor + data stream) for embedded fonts
                 let descriptor_ref = alloc();
                 let data_ref = alloc();
 
-                let embedded = find_font_file(&run.font_name)
+                let widths = find_font_file(&key)
                     .and_then(|path| {
                         embed_truetype(
                             &mut pdf,
                             font_ref,
                             descriptor_ref,
                             data_ref,
-                            &run.font_name,
+                            &key,
                             &path,
                         )
                     })
-                    .is_some();
-
-                if !embedded {
-                    // Fallback: standard Helvetica (descriptor_ref and data_ref are unused)
-                    pdf.type1_font(font_ref)
-                        .base_font(Name(b"Helvetica"))
-                        .encoding_predefined(Name(b"WinAnsiEncoding"));
-                }
+                    .unwrap_or_else(|| {
+                        pdf.type1_font(font_ref)
+                            .base_font(Name(b"Helvetica"))
+                            .encoding_predefined(Name(b"WinAnsiEncoding"));
+                        helvetica_widths()
+                    });
 
                 seen_fonts.insert(
-                    run.font_name.clone(),
-                    FontEntry { pdf_name: pdf_name.clone(), font_ref },
+                    key.clone(),
+                    FontEntry { pdf_name: pdf_name.clone(), font_ref, widths_1000: widths },
                 );
-                font_order.push(run.font_name.clone());
+                font_order.push(key);
             }
         }
     }
 
-    // If document has no text, register a default font
     if seen_fonts.is_empty() {
         let font_ref = alloc();
-        alloc(); // descriptor placeholder
-        alloc(); // data placeholder
+        alloc();
+        alloc();
         pdf.type1_font(font_ref)
             .base_font(Name(b"Helvetica"))
             .encoding_predefined(Name(b"WinAnsiEncoding"));
         seen_fonts.insert(
             "Helvetica".into(),
-            FontEntry { pdf_name: "F1".into(), font_ref },
+            FontEntry { pdf_name: "F1".into(), font_ref, widths_1000: helvetica_widths() },
         );
         font_order.push("Helvetica".into());
     }
 
-    // Build content stream
-    let mut content = Content::new();
+    let text_width = doc.page_width - doc.margin_left - doc.margin_right;
+    let text_right = doc.page_width - doc.margin_right;
 
+    // Phase 2: build multi-page content streams
+    let mut all_contents: Vec<Content> = Vec::new();
+    let mut current_content = Content::new();
     let mut slot_top = doc.page_height - doc.margin_top;
-    let cursor_x = doc.margin_left;
 
     for para in &doc.paragraphs {
-        slot_top -= para.space_before;
-
         let font_size = para.runs.first().map_or(12.0, |r| r.font_size);
-        let baseline_y = slot_top - font_size;
+        let line_h = (font_size * 1.2_f32).max(doc.line_pitch);
 
-        for run in &para.runs {
-            let entry = seen_fonts.get(&run.font_name).expect("font registered");
-            content
-                .begin_text()
-                .set_font(Name(entry.pdf_name.as_bytes()), run.font_size)
-                .next_line(cursor_x, baseline_y)
-                .show(Str(run.text.as_bytes()))
-                .end_text();
+        let content_h = if para.runs.is_empty() {
+            para.content_height.max(doc.line_pitch)
+        } else {
+            let n = count_lines(&para.runs, &seen_fonts, text_width);
+            n as f32 * line_h
+        };
+
+        let needed = para.space_before + content_h + para.space_after;
+        let at_page_top = (slot_top - (doc.page_height - doc.margin_top)).abs() < 1.0;
+
+        if !at_page_top && slot_top - needed < doc.margin_bottom {
+            all_contents.push(std::mem::replace(&mut current_content, Content::new()));
+            slot_top = doc.page_height - doc.margin_top;
         }
 
-        let line_pitch = (font_size * 1.2_f32).max(doc.line_pitch);
-        slot_top -= line_pitch;
+        slot_top -= para.space_before;
+
+        if !para.runs.is_empty() {
+            let baseline_y = slot_top - font_size;
+            render_paragraph_runs(
+                &mut current_content,
+                &para.runs,
+                &seen_fonts,
+                doc.margin_left,
+                text_right,
+                baseline_y,
+                line_h,
+            );
+        }
+
+        slot_top -= content_h;
         slot_top -= para.space_after;
     }
+    all_contents.push(current_content);
 
-    pdf.stream(content_id, &content.finish());
+    // Phase 3: allocate page and content IDs now that page count is known
+    let n = all_contents.len();
+    let page_ids: Vec<Ref> = (0..n).map(|_| alloc()).collect();
+    let content_ids: Vec<Ref> = (0..n).map(|_| alloc()).collect();
+
+    for (i, c) in all_contents.into_iter().enumerate() {
+        pdf.stream(content_ids[i], &c.finish());
+    }
 
     pdf.catalog(catalog_id).pages(pages_id);
-    pdf.pages(pages_id).kids([page_id]).count(1);
+    pdf.pages(pages_id).kids(page_ids.iter().copied()).count(n as i32);
 
-    // Collect font pairs before entering the page builder scope
     let font_pairs: Vec<(String, Ref)> = font_order
         .iter()
         .map(|name| (seen_fonts[name].pdf_name.clone(), seen_fonts[name].font_ref))
         .collect();
 
-    {
-        let mut page = pdf.page(page_id);
+    for i in 0..n {
+        let mut page = pdf.page(page_ids[i]);
         page.media_box(Rect::new(0.0, 0.0, doc.page_width, doc.page_height))
             .parent(pages_id)
-            .contents(content_id);
+            .contents(content_ids[i]);
         {
             let mut resources = page.resources();
             let mut fonts = resources.fonts();
