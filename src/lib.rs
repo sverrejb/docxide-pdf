@@ -1,14 +1,14 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+mod docx;
+mod error;
+mod model;
+mod pdf;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub use error::Error;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
+use std::path::Path;
+
+pub fn convert_docx_to_pdf(input: &Path, output: &Path) -> Result<(), Error> {
+    let doc = docx::parse(input)?;
+    let bytes = pdf::render(&doc)?;
+    std::fs::write(output, bytes).map_err(Error::Io)
 }

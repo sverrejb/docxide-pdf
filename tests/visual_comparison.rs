@@ -48,6 +48,8 @@ fn screenshot_pdf(pdf: &Path, output_dir: &Path) -> Result<(), String> {
     }
 }
 
+// Jaccard similarity on ink pixels: ignores white background, measures overlap
+// of dark (text/content) pixels between the two images.
 fn compare_images(a: &Path, b: &Path) -> Result<f64, String> {
     let img_a = image::open(a).map_err(|e| format!("Failed to open {}: {e}", a.display()))?;
     let img_b = image::open(b).map_err(|e| format!("Failed to open {}: {e}", b.display()))?;
@@ -61,20 +63,33 @@ fn compare_images(a: &Path, b: &Path) -> Result<f64, String> {
         ));
     }
 
-    let mut matching: u64 = 0;
-    let total = w as u64 * h as u64;
+    let mut intersection: u64 = 0;
+    let mut union: u64 = 0;
 
     for y in 0..h {
         for x in 0..w {
-            let pa = img_a.get_pixel(x, y);
-            let pb = img_b.get_pixel(x, y);
-            if pa == pb {
-                matching += 1;
+            let [ra, ga, ba, _] = img_a.get_pixel(x, y).0;
+            let [rb, gb, bb, _] = img_b.get_pixel(x, y).0;
+            let a_ink = is_ink(ra, ga, ba);
+            let b_ink = is_ink(rb, gb, bb);
+            if a_ink || b_ink {
+                union += 1;
+            }
+            if a_ink && b_ink {
+                intersection += 1;
             }
         }
     }
 
-    Ok(matching as f64 / total as f64)
+    if union == 0 {
+        return Ok(1.0);
+    }
+    Ok(intersection as f64 / union as f64)
+}
+
+fn is_ink(r: u8, g: u8, b: u8) -> bool {
+    let luma = 0.299 * r as f32 + 0.587 * g as f32 + 0.114 * b as f32;
+    luma < 200.0
 }
 
 fn save_diff_image(a: &Path, b: &Path, out: &Path) -> Result<(), String> {
@@ -230,7 +245,6 @@ fn visual_comparison() {
 }
 
 fn convert_docx_to_pdf(input: &Path, output: &Path) -> Result<(), String> {
-    let _ = (input, output);
-    Err("not implemented".into())
+    docxside_pdf::convert_docx_to_pdf(input, output).map_err(|e| e.to_string())
 }
 
