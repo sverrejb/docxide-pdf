@@ -345,7 +345,6 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     }
 
     let text_width = doc.page_width - doc.margin_left - doc.margin_right;
-    let text_right = doc.page_width - doc.margin_right;
 
     // Phase 2: build multi-page content streams
     let mut all_contents: Vec<Content> = Vec::new();
@@ -356,11 +355,16 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         let font_size = para.runs.first().map_or(12.0, |r| r.font_size);
         let line_h = (font_size * 1.2_f32).max(doc.line_pitch);
 
+        let lines = if para.runs.is_empty() {
+            vec![]
+        } else {
+            build_paragraph_lines(&para.runs, &seen_fonts, text_width)
+        };
+
         let content_h = if para.runs.is_empty() {
             para.content_height.max(doc.line_pitch)
         } else {
-            let n = count_lines(&para.runs, &seen_fonts, text_width);
-            n as f32 * line_h
+            lines.len() as f32 * line_h
         };
 
         let needed = para.space_before + content_h + para.space_after;
@@ -373,14 +377,21 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
         slot_top -= para.space_before;
 
-        if !para.runs.is_empty() {
+        if para.runs.is_empty() && para.content_height > 0.0 {
+            // Gray placeholder rectangle for drawings and tables
+            current_content
+                .set_fill_gray(0.5)
+                .rect(doc.margin_left, slot_top - content_h, text_width, content_h)
+                .fill_nonzero()
+                .set_fill_gray(0.0);
+        } else if !lines.is_empty() {
             let baseline_y = slot_top - font_size;
-            render_paragraph_runs(
+            render_paragraph_lines(
                 &mut current_content,
-                &para.runs,
-                &seen_fonts,
+                &lines,
+                &para.alignment,
                 doc.margin_left,
-                text_right,
+                text_width,
                 baseline_y,
                 line_h,
             );
