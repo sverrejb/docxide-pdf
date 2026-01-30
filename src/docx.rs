@@ -5,6 +5,18 @@ use std::path::Path;
 use crate::error::Error;
 use crate::model::{Alignment, Document, Paragraph, Run};
 
+struct LevelDef {
+    num_fmt: String,
+    lvl_text: String,
+    indent_left: f32,
+    indent_hanging: f32,
+}
+
+struct NumberingInfo {
+    abstract_nums: HashMap<String, HashMap<u8, LevelDef>>,
+    num_to_abstract: HashMap<String, String>,
+}
+
 const WML_NS: &str = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const DML_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/main";
 const WPD_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
@@ -32,6 +44,7 @@ struct StyleDefaults {
     font_size: f32,
     font_name: String,
     space_after: f32,
+    line_spacing: f32, // multiplier from w:spacing @line / 240
 }
 
 struct ParagraphStyle {
@@ -40,6 +53,7 @@ struct ParagraphStyle {
     space_before: f32,
     space_after: Option<f32>,
     alignment: Option<Alignment>,
+    contextual_spacing: bool,
 }
 
 struct StylesInfo {
@@ -129,8 +143,12 @@ fn parse_styles(
     zip: &mut zip::ZipArchive<std::fs::File>,
     theme: &ThemeFonts,
 ) -> StylesInfo {
-    let mut defaults =
-        StyleDefaults { font_size: 12.0, font_name: theme.minor.clone(), space_after: 8.0 };
+    let mut defaults = StyleDefaults {
+        font_size: 12.0,
+        font_name: theme.minor.clone(),
+        space_after: 8.0,
+        line_spacing: 1.2,
+    };
     let mut paragraph_styles = HashMap::new();
 
     let mut xml_content = String::new();
@@ -160,13 +178,20 @@ fn parse_styles(
                 defaults.font_name = resolve_font(ascii, ascii_theme, theme, &theme.minor);
             }
         }
-        if let Some(after_val) = wml(doc_defaults, "pPrDefault")
+        let default_spacing = wml(doc_defaults, "pPrDefault")
             .and_then(|n| wml(n, "pPr"))
-            .and_then(|n| wml(n, "spacing"))
+            .and_then(|n| wml(n, "spacing"));
+        if let Some(after_val) = default_spacing
             .and_then(|n| n.attribute((WML_NS, "after")))
             .and_then(|v| v.parse::<f32>().ok())
         {
             defaults.space_after = twips_to_pts(after_val);
+        }
+        if let Some(line_val) = default_spacing
+            .and_then(|n| n.attribute((WML_NS, "line")))
+            .and_then(|v| v.parse::<f32>().ok())
+        {
+            defaults.line_spacing = line_val / 240.0;
         }
     }
 
@@ -213,13 +238,103 @@ fn parse_styles(
             .and_then(|n| n.attribute((WML_NS, "val")))
             .map(parse_alignment);
 
+        let contextual_spacing = wml(style_node, "pPr")
+            .and_then(|ppr| wml(ppr, "contextualSpacing"))
+            .is_some();
+
         paragraph_styles.insert(
             style_id.to_string(),
-            ParagraphStyle { font_size, font_name, space_before, space_after, alignment },
+            ParagraphStyle {
+                font_size,
+                font_name,
+                space_before,
+                space_after,
+                alignment,
+                contextual_spacing,
+            },
         );
     }
 
     StylesInfo { defaults, paragraph_styles }
+}
+
+fn parse_numbering(zip: &mut zip::ZipArchive<std::fs::File>) -> NumberingInfo {
+    let mut abstract_nums: HashMap<String, HashMap<u8, LevelDef>> = HashMap::new();
+    let mut num_to_abstract: HashMap<String, String> = HashMap::new();
+
+    let mut xml_content = String::new();
+    let Ok(mut file) = zip.by_name("word/numbering.xml") else {
+        return NumberingInfo { abstract_nums, num_to_abstract };
+    };
+    if file.read_to_string(&mut xml_content).is_err() {
+        return NumberingInfo { abstract_nums, num_to_abstract };
+    }
+    let Ok(xml) = roxmltree::Document::parse(&xml_content) else {
+        return NumberingInfo { abstract_nums, num_to_abstract };
+    };
+
+    let root = xml.root_element();
+
+    for node in root.children() {
+        if node.tag_name().namespace() != Some(WML_NS) {
+            continue;
+        }
+        match node.tag_name().name() {
+            "abstractNum" => {
+                let Some(abs_id) = node.attribute((WML_NS, "abstractNumId")) else {
+                    continue;
+                };
+                let mut levels: HashMap<u8, LevelDef> = HashMap::new();
+                for lvl in node.children() {
+                    if lvl.tag_name().name() != "lvl" || lvl.tag_name().namespace() != Some(WML_NS)
+                    {
+                        continue;
+                    }
+                    let Some(ilvl_str) = lvl.attribute((WML_NS, "ilvl")) else {
+                        continue;
+                    };
+                    let Ok(ilvl) = ilvl_str.parse::<u8>() else {
+                        continue;
+                    };
+                    let num_fmt = wml(lvl, "numFmt")
+                        .and_then(|n| n.attribute((WML_NS, "val")))
+                        .unwrap_or("bullet")
+                        .to_string();
+                    let lvl_text = wml(lvl, "lvlText")
+                        .and_then(|n| n.attribute((WML_NS, "val")))
+                        .unwrap_or("")
+                        .to_string();
+                    let ind = wml(lvl, "pPr").and_then(|ppr| wml(ppr, "ind"));
+                    let indent_left = ind
+                        .and_then(|n| n.attribute((WML_NS, "left")))
+                        .and_then(|v| v.parse::<f32>().ok())
+                        .map(twips_to_pts)
+                        .unwrap_or(0.0);
+                    let indent_hanging = ind
+                        .and_then(|n| n.attribute((WML_NS, "hanging")))
+                        .and_then(|v| v.parse::<f32>().ok())
+                        .map(twips_to_pts)
+                        .unwrap_or(0.0);
+                    levels.insert(ilvl, LevelDef { num_fmt, lvl_text, indent_left, indent_hanging });
+                }
+                abstract_nums.insert(abs_id.to_string(), levels);
+            }
+            "num" => {
+                let Some(num_id) = node.attribute((WML_NS, "numId")) else {
+                    continue;
+                };
+                let Some(abs_id) = wml(node, "abstractNumId")
+                    .and_then(|n| n.attribute((WML_NS, "val")))
+                else {
+                    continue;
+                };
+                num_to_abstract.insert(num_id.to_string(), abs_id.to_string());
+            }
+            _ => {}
+        }
+    }
+
+    NumberingInfo { abstract_nums, num_to_abstract }
 }
 
 pub fn parse(path: &Path) -> Result<Document, Error> {
@@ -228,6 +343,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
 
     let theme = parse_theme(&mut zip);
     let styles = parse_styles(&mut zip, &theme);
+    let numbering = parse_numbering(&mut zip);
 
     let mut xml_content = String::new();
     zip.by_name("word/document.xml")?
@@ -299,6 +415,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
         };
 
     let mut paragraphs = Vec::new();
+    let mut counters: HashMap<(String, u8), u32> = HashMap::new();
 
     for node in body.children() {
         match node.tag_name().name() {
@@ -316,6 +433,10 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     space_after: 4.0,
                     content_height: estimated_height,
                     alignment: Alignment::Left,
+                    indent_left: 0.0,
+                    indent_hanging: 0.0,
+                    list_label: String::new(),
+                    contextual_spacing: false,
                 });
             }
             "p" if node.tag_name().namespace() == Some(WML_NS) => {
@@ -364,6 +485,76 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                         Alignment::Left => Alignment::Left,
                     }))
                     .unwrap_or(Alignment::Left);
+
+                let contextual_spacing = ppr
+                    .and_then(|ppr| wml(ppr, "contextualSpacing"))
+                    .is_some()
+                    || para_style.map_or(false, |s| s.contextual_spacing);
+
+                // Parse list indentation and label from w:numPr
+                let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
+                let (mut indent_left, mut indent_hanging, list_label) =
+                    if let Some(num_pr) = num_pr {
+                        let num_id = num_pr
+                            .children()
+                            .find(|n| {
+                                n.tag_name().name() == "numId"
+                                    && n.tag_name().namespace() == Some(WML_NS)
+                            })
+                            .and_then(|n| n.attribute((WML_NS, "val")));
+                        let ilvl = num_pr
+                            .children()
+                            .find(|n| {
+                                n.tag_name().name() == "ilvl"
+                                    && n.tag_name().namespace() == Some(WML_NS)
+                            })
+                            .and_then(|n| n.attribute((WML_NS, "val")))
+                            .and_then(|v| v.parse::<u8>().ok())
+                            .unwrap_or(0);
+
+                        if let Some(num_id) = num_id {
+                            let level_def = numbering
+                                .num_to_abstract
+                                .get(num_id)
+                                .and_then(|abs_id| numbering.abstract_nums.get(abs_id))
+                                .and_then(|levels| levels.get(&ilvl));
+
+                            if let Some(def) = level_def {
+                                let counter = counters
+                                    .entry((num_id.to_string(), ilvl))
+                                    .and_modify(|c| *c += 1)
+                                    .or_insert(1);
+                                let label = if def.num_fmt == "bullet" {
+                                    "\u{2022}".to_string() // bullet •, encoded to WinAnsi 0x95 at render time
+                                } else {
+                                    def.lvl_text.replace(&format!("%{}", ilvl + 1), &counter.to_string())
+                                };
+                                (def.indent_left, def.indent_hanging, label)
+                            } else {
+                                (0.0, 0.0, String::new())
+                            }
+                        } else {
+                            (0.0, 0.0, String::new())
+                        }
+                    } else {
+                        (0.0, 0.0, String::new())
+                    };
+
+                // Paragraph-level w:ind overrides level def
+                if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
+                    if let Some(v) = ind
+                        .attribute((WML_NS, "left"))
+                        .and_then(|v| v.parse::<f32>().ok())
+                    {
+                        indent_left = twips_to_pts(v);
+                    }
+                    if let Some(v) = ind
+                        .attribute((WML_NS, "hanging"))
+                        .and_then(|v| v.parse::<f32>().ok())
+                    {
+                        indent_hanging = twips_to_pts(v);
+                    }
+                }
 
                 let mut runs = Vec::new();
 
@@ -480,6 +671,10 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     space_after,
                     content_height: drawing_height,
                     alignment,
+                    indent_left,
+                    indent_hanging,
+                    list_label,
+                    contextual_spacing,
                 });
             }
             _ => {}
@@ -494,6 +689,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
         margin_left,
         margin_right,
         line_pitch,
+        line_spacing: styles.defaults.line_spacing,
         paragraphs,
     })
 }

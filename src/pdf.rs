@@ -11,6 +11,7 @@ struct FontEntry {
     pdf_name: String,
     font_ref: Ref,
     widths_1000: Vec<f32>, // 224 entries for WinAnsi chars 32..=255
+    line_h_ratio: Option<f32>, // (ascender - descender + lineGap) / UPM; None for Type1 fallback
 }
 
 /// Search the host system for a TTF/OTF file for the given font name.
@@ -70,6 +71,80 @@ fn find_font_file(font_name: &str) -> Option<PathBuf> {
     None
 }
 
+/// Windows-1252 (WinAnsi) byte to Unicode char mapping.
+/// Bytes 0x80–0x9F are remapped; all others map directly to their Unicode codepoint.
+fn winansi_to_char(byte: u8) -> char {
+    match byte {
+        0x80 => '\u{20AC}',
+        0x82 => '\u{201A}',
+        0x83 => '\u{0192}',
+        0x84 => '\u{201E}',
+        0x85 => '\u{2026}',
+        0x86 => '\u{2020}',
+        0x87 => '\u{2021}',
+        0x88 => '\u{02C6}',
+        0x89 => '\u{2030}',
+        0x8A => '\u{0160}',
+        0x8B => '\u{2039}',
+        0x8C => '\u{0152}',
+        0x8E => '\u{017D}',
+        0x91 => '\u{2018}',
+        0x92 => '\u{2019}',
+        0x93 => '\u{201C}',
+        0x94 => '\u{201D}',
+        0x95 => '\u{2022}', // bullet •
+        0x96 => '\u{2013}',
+        0x97 => '\u{2014}',
+        0x98 => '\u{02DC}',
+        0x99 => '\u{2122}',
+        0x9A => '\u{0161}',
+        0x9B => '\u{203A}',
+        0x9C => '\u{0153}',
+        0x9E => '\u{017E}',
+        0x9F => '\u{0178}',
+        _ => byte as char,
+    }
+}
+
+/// Convert a UTF-8 string to WinAnsi (Windows-1252) bytes for PDF Str encoding.
+/// Maps known Unicode characters back to their WinAnsi byte equivalents.
+fn to_winansi_bytes(s: &str) -> Vec<u8> {
+    s.chars()
+        .filter_map(|c| match c as u32 {
+            0x0000..=0x007F => Some(c as u8),
+            0x00A0..=0x00FF => Some(c as u8), // Latin-1 supplement maps directly
+            0x20AC => Some(0x80), // €
+            0x201A => Some(0x82),
+            0x0192 => Some(0x83),
+            0x201E => Some(0x84),
+            0x2026 => Some(0x85),
+            0x2020 => Some(0x86),
+            0x2021 => Some(0x87),
+            0x02C6 => Some(0x88),
+            0x2030 => Some(0x89),
+            0x0160 => Some(0x8A),
+            0x2039 => Some(0x8B),
+            0x0152 => Some(0x8C),
+            0x017D => Some(0x8E),
+            0x2018 => Some(0x91),
+            0x2019 => Some(0x92),
+            0x201C => Some(0x93),
+            0x201D => Some(0x94),
+            0x2022 => Some(0x95), // bullet •
+            0x2013 => Some(0x96),
+            0x2014 => Some(0x97),
+            0x02DC => Some(0x98),
+            0x2122 => Some(0x99),
+            0x0161 => Some(0x9A),
+            0x203A => Some(0x9B),
+            0x0153 => Some(0x9C),
+            0x017E => Some(0x9E),
+            0x0178 => Some(0x9F),
+            _ => None,
+        })
+        .collect()
+}
+
 /// Approximate Helvetica widths at 1000 units/em for WinAnsi chars 32..=255.
 /// Used as fallback when a font file cannot be found.
 fn helvetica_widths() -> Vec<f32> {
@@ -100,7 +175,7 @@ fn embed_truetype(
     data_ref: Ref,
     font_name: &str,
     font_path: &Path,
-) -> Option<Vec<f32>> {
+) -> Option<(Vec<f32>, f32)> {
     let font_data = std::fs::read(font_path).ok()?;
     let face = Face::parse(&font_data, 0).ok()?;
 
@@ -122,7 +197,7 @@ fn embed_truetype(
 
     let widths: Vec<f32> = (32u8..=255u8)
         .map(|byte| {
-            face.glyph_index(byte as char)
+            face.glyph_index(winansi_to_char(byte))
                 .and_then(|gid| face.glyph_hor_advance(gid))
                 .map(|adv| adv as f32 / units * 1000.0)
                 .unwrap_or(0.0)
@@ -160,7 +235,10 @@ fn embed_truetype(
         d.insert(Name(b"Widths")).array().items(widths.iter().copied());
     }
 
-    Some(widths)
+    let line_gap = face.line_gap() as f32;
+    let line_h_ratio = (face.ascender() as f32 - face.descender() as f32 + line_gap) / units;
+
+    Some((widths, line_h_ratio))
 }
 
 /// Normalize a font name: take the first name from a semicolon-separated list
@@ -303,7 +381,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 let descriptor_ref = alloc();
                 let data_ref = alloc();
 
-                let widths = find_font_file(&key)
+                let (widths, line_h_ratio) = find_font_file(&key)
                     .and_then(|path| {
                         embed_truetype(
                             &mut pdf,
@@ -314,16 +392,17 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             &path,
                         )
                     })
+                    .map(|(w, r)| (w, Some(r)))
                     .unwrap_or_else(|| {
                         pdf.type1_font(font_ref)
                             .base_font(Name(b"Helvetica"))
                             .encoding_predefined(Name(b"WinAnsiEncoding"));
-                        helvetica_widths()
+                        (helvetica_widths(), None)
                     });
 
                 seen_fonts.insert(
                     key.clone(),
-                    FontEntry { pdf_name: pdf_name.clone(), font_ref, widths_1000: widths },
+                    FontEntry { pdf_name: pdf_name.clone(), font_ref, widths_1000: widths, line_h_ratio },
                 );
                 font_order.push(key);
             }
@@ -339,7 +418,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             .encoding_predefined(Name(b"WinAnsiEncoding"));
         seen_fonts.insert(
             "Helvetica".into(),
-            FontEntry { pdf_name: "F1".into(), font_ref, widths_1000: helvetica_widths() },
+            FontEntry { pdf_name: "F1".into(), font_ref, widths_1000: helvetica_widths(), line_h_ratio: None },
         );
         font_order.push("Helvetica".into());
     }
@@ -351,14 +430,48 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     let mut current_content = Content::new();
     let mut slot_top = doc.page_height - doc.margin_top;
 
-    for para in &doc.paragraphs {
+    for (para_idx, para) in doc.paragraphs.iter().enumerate() {
+        let next_para = doc.paragraphs.get(para_idx + 1);
+        let prev_para = if para_idx > 0 { doc.paragraphs.get(para_idx - 1) } else { None };
+
+        let effective_space_before = if para.contextual_spacing
+            && prev_para.map_or(false, |p| p.contextual_spacing)
+        {
+            0.0
+        } else {
+            para.space_before
+        };
+        let effective_space_after = if para.contextual_spacing
+            && next_para.map_or(false, |p| p.contextual_spacing)
+        {
+            0.0
+        } else {
+            para.space_after
+        };
+
         let font_size = para.runs.first().map_or(12.0, |r| r.font_size);
-        let line_h = (font_size * 1.2_f32).max(doc.line_pitch);
+        // When font metrics are available, apply the document's line-spacing factor.
+        // For the Helvetica fallback (no metrics), 1.2 is already an approximation;
+        // multiplying by doc.line_spacing would overcount and shift subsequent paragraphs.
+        let line_h = match para
+            .runs
+            .first()
+            .map(|r| primary_font_name(&r.font_name))
+            .and_then(|k| seen_fonts.get(k))
+            .and_then(|e| e.line_h_ratio)
+        {
+            Some(ratio) => font_size * ratio * doc.line_spacing,
+            None => font_size * 1.2,
+        };
+
+        let para_text_x = doc.margin_left + para.indent_left;
+        let para_text_width = (text_width - para.indent_left).max(1.0);
+        let label_x = doc.margin_left + (para.indent_left - para.indent_hanging).max(0.0);
 
         let lines = if para.runs.is_empty() {
             vec![]
         } else {
-            build_paragraph_lines(&para.runs, &seen_fonts, text_width)
+            build_paragraph_lines(&para.runs, &seen_fonts, para_text_width)
         };
 
         let content_h = if para.runs.is_empty() {
@@ -367,7 +480,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             lines.len() as f32 * line_h
         };
 
-        let needed = para.space_before + content_h + para.space_after;
+        let needed = effective_space_before + content_h + effective_space_after;
         let at_page_top = (slot_top - (doc.page_height - doc.margin_top)).abs() < 1.0;
 
         if !at_page_top && slot_top - needed < doc.margin_bottom {
@@ -375,7 +488,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             slot_top = doc.page_height - doc.margin_top;
         }
 
-        slot_top -= para.space_before;
+        slot_top -= effective_space_before;
 
         if para.runs.is_empty() && para.content_height > 0.0 {
             // Gray placeholder rectangle for drawings and tables
@@ -386,19 +499,32 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 .set_fill_gray(0.0);
         } else if !lines.is_empty() {
             let baseline_y = slot_top - font_size;
+
+            if !para.list_label.is_empty() {
+                let key = primary_font_name(&para.runs[0].font_name);
+                let entry = seen_fonts.get(key).expect("font registered");
+                let label_bytes = to_winansi_bytes(&para.list_label);
+                current_content
+                    .begin_text()
+                    .set_font(Name(entry.pdf_name.as_bytes()), font_size)
+                    .next_line(label_x, baseline_y)
+                    .show(Str(&label_bytes))
+                    .end_text();
+            }
+
             render_paragraph_lines(
                 &mut current_content,
                 &lines,
                 &para.alignment,
-                doc.margin_left,
-                text_width,
+                para_text_x,
+                para_text_width,
                 baseline_y,
                 line_h,
             );
         }
 
         slot_top -= content_h;
-        slot_top -= para.space_after;
+        slot_top -= effective_space_after;
     }
     all_contents.push(current_content);
 

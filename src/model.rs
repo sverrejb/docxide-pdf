@@ -14,6 +14,7 @@ pub struct Document {
     pub margin_left: f32,
     pub margin_right: f32,
     pub line_pitch: f32,
+    pub line_spacing: f32, // auto line spacing factor (e.g. 278/240)
     pub paragraphs: Vec<Paragraph>,
 }
 
@@ -23,6 +24,10 @@ pub struct Paragraph {
     pub space_after: f32,
     pub content_height: f32,
     pub alignment: Alignment,
+    pub indent_left: f32,
+    pub indent_hanging: f32,
+    pub list_label: String,
+    pub contextual_spacing: bool,
 }
 
 #[allow(dead_code)]
