@@ -25,6 +25,16 @@ fn twips_to_pts(twips: f32) -> f32 {
     twips / 20.0
 }
 
+fn parse_hex_color(val: &str) -> Option<[u8; 3]> {
+    if val == "auto" || val.len() != 6 {
+        return None;
+    }
+    let r = u8::from_str_radix(&val[0..2], 16).ok()?;
+    let g = u8::from_str_radix(&val[2..4], 16).ok()?;
+    let b = u8::from_str_radix(&val[4..6], 16).ok()?;
+    Some([r, g, b])
+}
+
 fn wml<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
     node.children()
         .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(WML_NS))
@@ -50,6 +60,7 @@ struct StyleDefaults {
 struct ParagraphStyle {
     font_size: Option<f32>,
     font_name: Option<String>,
+    color: Option<[u8; 3]>,
     space_before: f32,
     space_after: Option<f32>,
     alignment: Option<Alignment>,
@@ -233,6 +244,11 @@ fn parse_styles(
             resolve_font(ascii, ascii_theme, theme, &defaults.font_name)
         });
 
+        let color = rpr
+            .and_then(|n| wml(n, "color"))
+            .and_then(|n| n.attribute((WML_NS, "val")))
+            .and_then(parse_hex_color);
+
         let alignment = wml(style_node, "pPr")
             .and_then(|ppr| wml(ppr, "jc"))
             .and_then(|n| n.attribute((WML_NS, "val")))
@@ -247,6 +263,7 @@ fn parse_styles(
             ParagraphStyle {
                 font_size,
                 font_name,
+                color,
                 space_before,
                 space_after,
                 alignment,
@@ -475,6 +492,8 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     .unwrap_or(&styles.defaults.font_name)
                     .to_string();
 
+                let style_color: Option<[u8; 3]> = para_style.and_then(|s| s.color);
+
                 let alignment = ppr
                     .and_then(|ppr| wml(ppr, "jc"))
                     .and_then(|n| n.attribute((WML_NS, "val")))
@@ -613,6 +632,12 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                         })
                         .unwrap_or(false);
 
+                    let color = rpr
+                        .and_then(|n| wml(n, "color"))
+                        .and_then(|n| n.attribute((WML_NS, "val")))
+                        .and_then(parse_hex_color)
+                        .or(style_color);
+
                     let text: String = run_node
                         .children()
                         .filter(|n| {
@@ -622,7 +647,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                         .collect();
 
                     if !text.is_empty() {
-                        runs.push(Run { text, font_size, font_name, bold, italic });
+                        runs.push(Run { text, font_size, font_name, bold, italic, color });
                     }
                 }
 

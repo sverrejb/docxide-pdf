@@ -37,4 +37,5 @@ pub struct Run {
     pub font_name: String,
     pub bold: bool,
     pub italic: bool,
+    pub color: Option<[u8; 3]>, // None = automatic (black)
 }

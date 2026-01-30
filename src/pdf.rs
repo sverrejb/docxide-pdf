@@ -33,6 +33,7 @@ fn find_font_file(font_name: &str) -> Option<PathBuf> {
                         p.extension().and_then(|e| e.to_str()),
                         Some("ttf") | Some("otf")
                     ) {
+                        eprintln!("find_font_file({:?}) -> CloudFonts {:?}", font_name, p);
                         return Some(p);
                     }
                 }
@@ -46,6 +47,7 @@ fn find_font_file(font_name: &str) -> Option<PathBuf> {
     for ext in &["ttf", "otf"] {
         let p = word_fonts.join(format!("{}.{}", normalized, ext));
         if p.exists() {
+            eprintln!("find_font_file({:?}) -> DFonts {:?}", font_name, p);
             return Some(p);
         }
     }
@@ -68,6 +70,7 @@ fn find_font_file(font_name: &str) -> Option<PathBuf> {
         }
     }
 
+    eprintln!("find_font_file({:?}) -> None", font_name);
     None
 }
 
@@ -251,6 +254,7 @@ struct WordChunk {
     pdf_font: String,
     text: String,
     font_size: f32,
+    color: Option<[u8; 3]>,
     x_offset: f32, // x relative to line start
     width: f32,
 }
@@ -288,6 +292,7 @@ fn build_paragraph_lines(
                     pdf_font: entry.pdf_name.clone(),
                     text: word.to_string(),
                     font_size: run.font_size,
+                    color: run.color,
                     x_offset: current_x,
                     width: ww,
                 });
@@ -305,6 +310,7 @@ fn build_paragraph_lines(
                     pdf_font: entry.pdf_name.clone(),
                     text: word.to_string(),
                     font_size: run.font_size,
+                    color: run.color,
                     x_offset: 0.0,
                     width: ww,
                 });
@@ -337,6 +343,9 @@ fn render_paragraph_lines(
     first_baseline_y: f32,
     line_pitch: f32,
 ) {
+    // Track current fill color to avoid redundant color commands
+    let mut current_color: Option<[u8; 3]> = None;
+
     for (line_num, line) in lines.iter().enumerate() {
         let y = first_baseline_y - line_num as f32 * line_pitch;
         let line_start_x = match alignment {
@@ -346,13 +355,30 @@ fn render_paragraph_lines(
         };
         for chunk in &line.chunks {
             let x = line_start_x + chunk.x_offset;
+            if chunk.color != current_color {
+                if let Some([r, g, b]) = chunk.color {
+                    content.set_fill_rgb(
+                        r as f32 / 255.0,
+                        g as f32 / 255.0,
+                        b as f32 / 255.0,
+                    );
+                } else {
+                    content.set_fill_gray(0.0);
+                }
+                current_color = chunk.color;
+            }
+            let text_bytes = to_winansi_bytes(&chunk.text);
             content
                 .begin_text()
                 .set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size)
                 .next_line(x, y)
-                .show(Str(chunk.text.as_bytes()))
+                .show(Str(&text_bytes))
                 .end_text();
         }
+    }
+    // Reset to black after paragraph
+    if current_color.is_some() {
+        content.set_fill_gray(0.0);
     }
 }
 
@@ -479,6 +505,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         } else {
             lines.len() as f32 * line_h
         };
+        eprintln!("para font={} size={} lines={} line_h={:.3} space_b={:.1} space_a={:.1} slot_top={:.3} content_h={:.3}",
+            para.runs.first().map(|r| r.font_name.as_str()).unwrap_or("?"),
+            font_size, lines.len(), line_h,
+            effective_space_before, effective_space_after,
+            slot_top, content_h);
 
         let needed = effective_space_before + content_h + effective_space_after;
         let at_page_top = (slot_top - (doc.page_height - doc.margin_top)).abs() < 1.0;
