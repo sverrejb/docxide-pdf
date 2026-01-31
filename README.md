@@ -10,7 +10,7 @@ Given a `.docx` file, produce a `.pdf` that is visually indistinguishable from w
 
 ## Current State
 
-Basic text rendering works for simple documents. Font embedding (Aptos, Aptos Display) is functional. Multi-paragraph layout with heading styles and spacing is supported. Complex content (tables, images, charts) is not yet handled.
+Basic text rendering works for simple documents. Font embedding is functional. Multi-paragraph layout with heading styles and spacing is supported. Complex content (tables, images, charts) is not yet handled.
 
 Similarity scores against Word-generated reference PDFs:
 
@@ -20,7 +20,7 @@ Similarity scores against Word-generated reference PDFs:
 | case2 (headings + body) | ~27% | ~24% |
 | case3 (multi-paragraph) | ~34% | ~29% |
 
-Scores reflect font shape differences (we embed the actual Aptos font files) and layout imprecision. There is meaningful room for improvement.
+Scores reflect font shape differences and layout imprecision. There is meaningful room for improvement.
 
 ## Showcase
 
