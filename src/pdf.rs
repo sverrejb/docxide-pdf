@@ -479,7 +479,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             para.space_after
         };
 
-        let inter_gap = f32::max(prev_space_after, effective_space_before);
+        let mut inter_gap = f32::max(prev_space_after, effective_space_before);
 
         let font_size = para.runs.first().map_or(12.0, |r| r.font_size);
         // When font metrics are available, apply the document's line-spacing factor.
@@ -523,7 +523,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         if !at_page_top && slot_top - needed < doc.margin_bottom {
             all_contents.push(std::mem::replace(&mut current_content, Content::new()));
             slot_top = doc.page_height - doc.margin_top;
-            prev_space_after = 0.0;
+            inter_gap = effective_space_before;
         }
 
         slot_top -= inter_gap;
