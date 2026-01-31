@@ -12,6 +12,7 @@ struct FontEntry {
     font_ref: Ref,
     widths_1000: Vec<f32>, // 224 entries for WinAnsi chars 32..=255
     line_h_ratio: Option<f32>, // (ascender - descender + lineGap) / UPM; None for Type1 fallback
+    ascender_ratio: Option<f32>, // ascender / UPM; used to place baseline within the slot
 }
 
 /// Search the host system for a TTF/OTF file for the given font name.
@@ -178,7 +179,7 @@ fn embed_truetype(
     data_ref: Ref,
     font_name: &str,
     font_path: &Path,
-) -> Option<(Vec<f32>, f32)> {
+) -> Option<(Vec<f32>, f32, f32)> {
     let font_data = std::fs::read(font_path).ok()?;
     let face = Face::parse(&font_data, 0).ok()?;
 
@@ -240,8 +241,9 @@ fn embed_truetype(
 
     let line_gap = face.line_gap() as f32;
     let line_h_ratio = (face.ascender() as f32 - face.descender() as f32 + line_gap) / units;
+    let ascender_ratio = face.ascender() as f32 / units;
 
-    Some((widths, line_h_ratio))
+    Some((widths, line_h_ratio, ascender_ratio))
 }
 
 /// Normalize a font name: take the first name from a semicolon-separated list
@@ -407,7 +409,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 let descriptor_ref = alloc();
                 let data_ref = alloc();
 
-                let (widths, line_h_ratio) = find_font_file(&key)
+                let (widths, line_h_ratio, ascender_ratio) = find_font_file(&key)
                     .and_then(|path| {
                         embed_truetype(
                             &mut pdf,
@@ -418,17 +420,17 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             &path,
                         )
                     })
-                    .map(|(w, r)| (w, Some(r)))
+                    .map(|(w, r, ar)| (w, Some(r), Some(ar)))
                     .unwrap_or_else(|| {
                         pdf.type1_font(font_ref)
                             .base_font(Name(b"Helvetica"))
                             .encoding_predefined(Name(b"WinAnsiEncoding"));
-                        (helvetica_widths(), None)
+                        (helvetica_widths(), None, None)
                     });
 
                 seen_fonts.insert(
                     key.clone(),
-                    FontEntry { pdf_name: pdf_name.clone(), font_ref, widths_1000: widths, line_h_ratio },
+                    FontEntry { pdf_name: pdf_name.clone(), font_ref, widths_1000: widths, line_h_ratio, ascender_ratio },
                 );
                 font_order.push(key);
             }
@@ -444,7 +446,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             .encoding_predefined(Name(b"WinAnsiEncoding"));
         seen_fonts.insert(
             "Helvetica".into(),
-            FontEntry { pdf_name: "F1".into(), font_ref, widths_1000: helvetica_widths(), line_h_ratio: None },
+            FontEntry { pdf_name: "F1".into(), font_ref, widths_1000: helvetica_widths(), line_h_ratio: None, ascender_ratio: None },
         );
         font_order.push("Helvetica".into());
     }
@@ -455,6 +457,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     let mut all_contents: Vec<Content> = Vec::new();
     let mut current_content = Content::new();
     let mut slot_top = doc.page_height - doc.margin_top;
+    // Word collapses adjacent paragraph spacing: gap = max(space_after_prev, space_before_next)
+    let mut prev_space_after: f32 = 0.0;
 
     for (para_idx, para) in doc.paragraphs.iter().enumerate() {
         let next_para = doc.paragraphs.get(para_idx + 1);
@@ -474,6 +478,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         } else {
             para.space_after
         };
+
+        let inter_gap = f32::max(prev_space_after, effective_space_before);
 
         let font_size = para.runs.first().map_or(12.0, |r| r.font_size);
         // When font metrics are available, apply the document's line-spacing factor.
@@ -505,21 +511,22 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         } else {
             lines.len() as f32 * line_h
         };
-        eprintln!("para font={} size={} lines={} line_h={:.3} space_b={:.1} space_a={:.1} slot_top={:.3} content_h={:.3}",
+        eprintln!("para font={} size={} lines={} line_h={:.3} inter_gap={:.1} space_a={:.1} slot_top={:.3} content_h={:.3}",
             para.runs.first().map(|r| r.font_name.as_str()).unwrap_or("?"),
             font_size, lines.len(), line_h,
-            effective_space_before, effective_space_after,
+            inter_gap, effective_space_after,
             slot_top, content_h);
 
-        let needed = effective_space_before + content_h + effective_space_after;
+        let needed = inter_gap + content_h + effective_space_after;
         let at_page_top = (slot_top - (doc.page_height - doc.margin_top)).abs() < 1.0;
 
         if !at_page_top && slot_top - needed < doc.margin_bottom {
             all_contents.push(std::mem::replace(&mut current_content, Content::new()));
             slot_top = doc.page_height - doc.margin_top;
+            prev_space_after = 0.0;
         }
 
-        slot_top -= effective_space_before;
+        slot_top -= inter_gap;
 
         if para.runs.is_empty() && para.content_height > 0.0 {
             // Gray placeholder rectangle for drawings and tables
@@ -529,7 +536,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 .fill_nonzero()
                 .set_fill_gray(0.0);
         } else if !lines.is_empty() {
-            let baseline_y = slot_top - font_size;
+            let ascender_ratio = para
+                .runs
+                .first()
+                .map(|r| primary_font_name(&r.font_name))
+                .and_then(|k| seen_fonts.get(k))
+                .and_then(|e| e.ascender_ratio)
+                .unwrap_or(0.75);
+            let baseline_y = slot_top - font_size * ascender_ratio;
 
             if !para.list_label.is_empty() {
                 let key = primary_font_name(&para.runs[0].font_name);
@@ -555,7 +569,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         }
 
         slot_top -= content_h;
-        slot_top -= effective_space_after;
+        prev_space_after = effective_space_after;
     }
     all_contents.push(current_content);
 
