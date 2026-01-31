@@ -437,6 +437,34 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         }
     }
 
+    // Register SymbolMT if any paragraph has a bullet list label
+    let has_bullets = doc.paragraphs.iter().any(|p| p.list_label == "\u{2022}");
+    if has_bullets && !seen_fonts.contains_key("Symbol") {
+        let idx = font_order.len() + 1;
+        let pdf_name = format!("F{}", idx);
+        let font_ref = alloc();
+        let descriptor_ref = alloc();
+        let data_ref = alloc();
+
+        let (widths, line_h_ratio, ascender_ratio) = find_font_file("Symbol")
+            .and_then(|path| {
+                embed_truetype(&mut pdf, font_ref, descriptor_ref, data_ref, "Symbol", &path)
+            })
+            .map(|(w, r, ar)| (w, Some(r), Some(ar)))
+            .unwrap_or_else(|| {
+                pdf.type1_font(font_ref)
+                    .base_font(Name(b"Helvetica"))
+                    .encoding_predefined(Name(b"WinAnsiEncoding"));
+                (helvetica_widths(), None, None)
+            });
+
+        seen_fonts.insert(
+            "Symbol".to_string(),
+            FontEntry { pdf_name: pdf_name.clone(), font_ref, widths_1000: widths, line_h_ratio, ascender_ratio },
+        );
+        font_order.push("Symbol".to_string());
+    }
+
     if seen_fonts.is_empty() {
         let font_ref = alloc();
         alloc();
@@ -485,7 +513,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         // When font metrics are available, apply the document's line-spacing factor.
         // For the Helvetica fallback (no metrics), 1.2 is already an approximation;
         // multiplying by doc.line_spacing would overcount and shift subsequent paragraphs.
-        let line_h = match para
+        let text_line_h = match para
             .runs
             .first()
             .map(|r| primary_font_name(&r.font_name))
@@ -494,6 +522,20 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         {
             Some(ratio) => font_size * ratio * doc.line_spacing,
             None => font_size * 1.2,
+        };
+        // Word uses max(text_font_line_h, bullet_font_line_h) for bullet paragraphs
+        let line_h = if para.list_label == "\u{2022}" {
+            if let Some(sym) = seen_fonts.get("Symbol") {
+                if let Some(sym_ratio) = sym.line_h_ratio {
+                    f32::max(text_line_h, font_size * sym_ratio * doc.line_spacing)
+                } else {
+                    text_line_h
+                }
+            } else {
+                text_line_h
+            }
+        } else {
+            text_line_h
         };
 
         let para_text_x = doc.margin_left + para.indent_left;
@@ -546,12 +588,23 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             let baseline_y = slot_top - font_size * ascender_ratio;
 
             if !para.list_label.is_empty() {
-                let key = primary_font_name(&para.runs[0].font_name);
-                let entry = seen_fonts.get(key).expect("font registered");
-                let label_bytes = to_winansi_bytes(&para.list_label);
+                let is_bullet = para.list_label == "\u{2022}";
+                let (label_font_name, label_bytes) = if is_bullet {
+                    if let Some(sym) = seen_fonts.get("Symbol") {
+                        (sym.pdf_name.as_str(), vec![0xB7u8])
+                    } else {
+                        let key = primary_font_name(&para.runs[0].font_name);
+                        let entry = seen_fonts.get(key).expect("font registered");
+                        (entry.pdf_name.as_str(), to_winansi_bytes(&para.list_label))
+                    }
+                } else {
+                    let key = primary_font_name(&para.runs[0].font_name);
+                    let entry = seen_fonts.get(key).expect("font registered");
+                    (entry.pdf_name.as_str(), to_winansi_bytes(&para.list_label))
+                };
                 current_content
                     .begin_text()
-                    .set_font(Name(entry.pdf_name.as_bytes()), font_size)
+                    .set_font(Name(label_font_name.as_bytes()), font_size)
                     .next_line(label_x, baseline_y)
                     .show(Str(&label_bytes))
                     .end_text();
