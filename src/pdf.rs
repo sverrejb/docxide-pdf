@@ -18,7 +18,6 @@ struct FontEntry {
 /// Search the host system for a TTF/OTF file for the given font name.
 /// Checks Microsoft Office bundled fonts and system font directories.
 fn find_font_file(font_name: &str) -> Option<PathBuf> {
-    // "Aptos Display" -> "AptosDisplay" for file-name lookups
     let normalized = font_name.replace(' ', "");
 
     // 1. Office CloudFonts (e.g. Aptos Display is downloaded here on Mac)
@@ -26,17 +25,17 @@ fn find_font_file(font_name: &str) -> Option<PathBuf> {
         let cloud_dir = PathBuf::from(&home)
             .join("Library/Group Containers/UBF8T346G9.Office/FontCache/4/CloudFonts")
             .join(font_name);
-        if cloud_dir.is_dir() {
-            if let Ok(entries) = std::fs::read_dir(&cloud_dir) {
-                for entry in entries.flatten() {
-                    let p = entry.path();
-                    if matches!(
-                        p.extension().and_then(|e| e.to_str()),
-                        Some("ttf") | Some("otf")
-                    ) {
-                        eprintln!("find_font_file({:?}) -> CloudFonts {:?}", font_name, p);
-                        return Some(p);
-                    }
+        if cloud_dir.is_dir()
+            && let Ok(entries) = std::fs::read_dir(&cloud_dir)
+        {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if matches!(
+                    p.extension().and_then(|e| e.to_str()),
+                    Some("ttf") | Some("otf")
+                ) {
+                    eprintln!("find_font_file({:?}) -> CloudFonts {:?}", font_name, p);
+                    return Some(p);
                 }
             }
         }
@@ -53,7 +52,7 @@ fn find_font_file(font_name: &str) -> Option<PathBuf> {
         }
     }
 
-    // 3. System font directories — try both "TimesNewRoman.ttf" and "Times New Roman.ttf"
+    // 3. System font directories
     let system_dirs = [
         "/Library/Fonts",
         "/Library/Fonts/Microsoft",
@@ -76,7 +75,7 @@ fn find_font_file(font_name: &str) -> Option<PathBuf> {
 }
 
 /// Windows-1252 (WinAnsi) byte to Unicode char mapping.
-/// Bytes 0x80–0x9F are remapped; all others map directly to their Unicode codepoint.
+/// Bytes 0x80-0x9F are remapped; all others map directly to their Unicode codepoint.
 fn winansi_to_char(byte: u8) -> char {
     match byte {
         0x80 => '\u{20AC}',
@@ -96,7 +95,7 @@ fn winansi_to_char(byte: u8) -> char {
         0x92 => '\u{2019}',
         0x93 => '\u{201C}',
         0x94 => '\u{201D}',
-        0x95 => '\u{2022}', // bullet •
+        0x95 => '\u{2022}', // bullet
         0x96 => '\u{2013}',
         0x97 => '\u{2014}',
         0x98 => '\u{02DC}',
@@ -111,13 +110,12 @@ fn winansi_to_char(byte: u8) -> char {
 }
 
 /// Convert a UTF-8 string to WinAnsi (Windows-1252) bytes for PDF Str encoding.
-/// Maps known Unicode characters back to their WinAnsi byte equivalents.
 fn to_winansi_bytes(s: &str) -> Vec<u8> {
     s.chars()
         .filter_map(|c| match c as u32 {
             0x0000..=0x007F => Some(c as u8),
             0x00A0..=0x00FF => Some(c as u8), // Latin-1 supplement maps directly
-            0x20AC => Some(0x80), // €
+            0x20AC => Some(0x80),
             0x201A => Some(0x82),
             0x0192 => Some(0x83),
             0x201E => Some(0x84),
@@ -134,7 +132,7 @@ fn to_winansi_bytes(s: &str) -> Vec<u8> {
             0x2019 => Some(0x92),
             0x201C => Some(0x93),
             0x201D => Some(0x94),
-            0x2022 => Some(0x95), // bullet •
+            0x2022 => Some(0x95), // bullet
             0x2013 => Some(0x96),
             0x2014 => Some(0x97),
             0x02DC => Some(0x98),
@@ -150,7 +148,6 @@ fn to_winansi_bytes(s: &str) -> Vec<u8> {
 }
 
 /// Approximate Helvetica widths at 1000 units/em for WinAnsi chars 32..=255.
-/// Used as fallback when a font file cannot be found.
 fn helvetica_widths() -> Vec<f32> {
     (32u8..=255u8)
         .map(|b| match b {
@@ -171,7 +168,6 @@ fn helvetica_widths() -> Vec<f32> {
 }
 
 /// Attempt to embed a TrueType/OpenType font into the PDF.
-/// Returns Some(widths) on success, None if the font couldn't be read or parsed.
 fn embed_truetype(
     pdf: &mut Pdf,
     font_ref: Ref,
@@ -208,11 +204,9 @@ fn embed_truetype(
         })
         .collect();
 
-    // Font data stream — Length1 is required for TrueType streams
     let data_len = i32::try_from(font_data.len()).ok()?;
     pdf.stream(data_ref, &font_data).pair(Name(b"Length1"), data_len);
 
-    // PostScript names must not contain spaces
     let ps_name = font_name.replace(' ', "");
 
     pdf.font_descriptor(descriptor_ref)
@@ -226,7 +220,6 @@ fn embed_truetype(
         .stem_v(80.0)
         .font_file2(data_ref);
 
-    // Write the font dict manually to use /Subtype /TrueType
     {
         let mut d = pdf.indirect(font_ref).dict();
         d.pair(Name(b"Type"), Name(b"Font"));
@@ -246,10 +239,33 @@ fn embed_truetype(
     Some((widths, line_h_ratio, ascender_ratio))
 }
 
-/// Normalize a font name: take the first name from a semicolon-separated list
-/// (e.g. "Liberation Sans;Arial" -> "Liberation Sans").
 fn primary_font_name(name: &str) -> &str {
-    name.split(';').next().map(str::trim).unwrap_or(name)
+    name.split(';').next().unwrap_or(name).trim()
+}
+
+fn register_font(
+    pdf: &mut Pdf,
+    font_name: &str,
+    pdf_name: String,
+    alloc: &mut impl FnMut() -> Ref,
+) -> FontEntry {
+    let font_ref = alloc();
+    let descriptor_ref = alloc();
+    let data_ref = alloc();
+
+    let (widths, line_h_ratio, ascender_ratio) = find_font_file(font_name)
+        .and_then(|path| {
+            embed_truetype(pdf, font_ref, descriptor_ref, data_ref, font_name, &path)
+        })
+        .map(|(w, r, ar)| (w, Some(r), Some(ar)))
+        .unwrap_or_else(|| {
+            pdf.type1_font(font_ref)
+                .base_font(Name(b"Helvetica"))
+                .encoding_predefined(Name(b"WinAnsiEncoding"));
+            (helvetica_widths(), None, None)
+        });
+
+    FontEntry { pdf_name, font_ref, widths_1000: widths, line_h_ratio, ascender_ratio }
 }
 
 struct WordChunk {
@@ -266,8 +282,15 @@ struct TextLine {
     total_width: f32,
 }
 
-/// Layout runs into wrapped lines. Each line records word chunks with relative x offsets
-/// and the total line width, allowing alignment to be applied at render time.
+fn finish_line(chunks: &mut Vec<WordChunk>) -> TextLine {
+    let total_width = chunks
+        .last()
+        .map(|c| c.x_offset + c.width)
+        .unwrap_or(0.0);
+    TextLine { chunks: std::mem::take(chunks), total_width }
+}
+
+/// Layout runs into wrapped lines.
 fn build_paragraph_lines(
     runs: &[Run],
     seen_fonts: &HashMap<String, FontEntry>,
@@ -289,44 +312,25 @@ fn build_paragraph_lines(
                 .map(|b| entry.widths_1000[(b - 32) as usize] * run.font_size / 1000.0)
                 .sum();
 
-            if current_chunks.is_empty() || current_x + ww <= max_width {
-                current_chunks.push(WordChunk {
-                    pdf_font: entry.pdf_name.clone(),
-                    text: word.to_string(),
-                    font_size: run.font_size,
-                    color: run.color,
-                    x_offset: current_x,
-                    width: ww,
-                });
-                current_x += ww + space_w;
-            } else {
-                let total_w = current_chunks
-                    .last()
-                    .map(|c| c.x_offset + c.width)
-                    .unwrap_or(0.0);
-                lines.push(TextLine {
-                    chunks: std::mem::take(&mut current_chunks),
-                    total_width: total_w,
-                });
-                current_chunks.push(WordChunk {
-                    pdf_font: entry.pdf_name.clone(),
-                    text: word.to_string(),
-                    font_size: run.font_size,
-                    color: run.color,
-                    x_offset: 0.0,
-                    width: ww,
-                });
-                current_x = ww + space_w;
+            if !current_chunks.is_empty() && current_x + ww > max_width {
+                lines.push(finish_line(&mut current_chunks));
+                current_x = 0.0;
             }
+
+            current_chunks.push(WordChunk {
+                pdf_font: entry.pdf_name.clone(),
+                text: word.to_string(),
+                font_size: run.font_size,
+                color: run.color,
+                x_offset: current_x,
+                width: ww,
+            });
+            current_x += ww + space_w;
         }
     }
 
     if !current_chunks.is_empty() {
-        let total_w = current_chunks
-            .last()
-            .map(|c| c.x_offset + c.width)
-            .unwrap_or(0.0);
-        lines.push(TextLine { chunks: current_chunks, total_width: total_w });
+        lines.push(finish_line(&mut current_chunks));
     }
 
     if lines.is_empty() {
@@ -345,7 +349,6 @@ fn render_paragraph_lines(
     first_baseline_y: f32,
     line_pitch: f32,
 ) {
-    // Track current fill color to avoid redundant color commands
     let mut current_color: Option<[u8; 3]> = None;
 
     for (line_num, line) in lines.iter().enumerate() {
@@ -378,10 +381,20 @@ fn render_paragraph_lines(
                 .end_text();
         }
     }
-    // Reset to black after paragraph
     if current_color.is_some() {
         content.set_fill_gray(0.0);
     }
+}
+
+fn font_metric(
+    runs: &[Run],
+    seen_fonts: &HashMap<String, FontEntry>,
+    get: impl Fn(&FontEntry) -> Option<f32>,
+) -> Option<f32> {
+    runs.first()
+        .map(|r| primary_font_name(&r.font_name))
+        .and_then(|k| seen_fonts.get(k))
+        .and_then(get)
 }
 
 pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
@@ -403,35 +416,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         for run in &para.runs {
             let key = primary_font_name(&run.font_name).to_string();
             if !seen_fonts.contains_key(&key) {
-                let idx = font_order.len() + 1;
-                let pdf_name = format!("F{}", idx);
-                let font_ref = alloc();
-                let descriptor_ref = alloc();
-                let data_ref = alloc();
-
-                let (widths, line_h_ratio, ascender_ratio) = find_font_file(&key)
-                    .and_then(|path| {
-                        embed_truetype(
-                            &mut pdf,
-                            font_ref,
-                            descriptor_ref,
-                            data_ref,
-                            &key,
-                            &path,
-                        )
-                    })
-                    .map(|(w, r, ar)| (w, Some(r), Some(ar)))
-                    .unwrap_or_else(|| {
-                        pdf.type1_font(font_ref)
-                            .base_font(Name(b"Helvetica"))
-                            .encoding_predefined(Name(b"WinAnsiEncoding"));
-                        (helvetica_widths(), None, None)
-                    });
-
-                seen_fonts.insert(
-                    key.clone(),
-                    FontEntry { pdf_name: pdf_name.clone(), font_ref, widths_1000: widths, line_h_ratio, ascender_ratio },
-                );
+                let pdf_name = format!("F{}", font_order.len() + 1);
+                let entry = register_font(&mut pdf, &key, pdf_name, &mut alloc);
+                seen_fonts.insert(key.clone(), entry);
                 font_order.push(key);
             }
         }
@@ -440,43 +427,17 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     // Register SymbolMT if any paragraph has a bullet list label
     let has_bullets = doc.paragraphs.iter().any(|p| p.list_label == "\u{2022}");
     if has_bullets && !seen_fonts.contains_key("Symbol") {
-        let idx = font_order.len() + 1;
-        let pdf_name = format!("F{}", idx);
-        let font_ref = alloc();
-        let descriptor_ref = alloc();
-        let data_ref = alloc();
-
-        let (widths, line_h_ratio, ascender_ratio) = find_font_file("Symbol")
-            .and_then(|path| {
-                embed_truetype(&mut pdf, font_ref, descriptor_ref, data_ref, "Symbol", &path)
-            })
-            .map(|(w, r, ar)| (w, Some(r), Some(ar)))
-            .unwrap_or_else(|| {
-                pdf.type1_font(font_ref)
-                    .base_font(Name(b"Helvetica"))
-                    .encoding_predefined(Name(b"WinAnsiEncoding"));
-                (helvetica_widths(), None, None)
-            });
-
-        seen_fonts.insert(
-            "Symbol".to_string(),
-            FontEntry { pdf_name: pdf_name.clone(), font_ref, widths_1000: widths, line_h_ratio, ascender_ratio },
-        );
+        let pdf_name = format!("F{}", font_order.len() + 1);
+        let entry = register_font(&mut pdf, "Symbol", pdf_name, &mut alloc);
+        seen_fonts.insert("Symbol".to_string(), entry);
         font_order.push("Symbol".to_string());
     }
 
     if seen_fonts.is_empty() {
-        let font_ref = alloc();
-        alloc();
-        alloc();
-        pdf.type1_font(font_ref)
-            .base_font(Name(b"Helvetica"))
-            .encoding_predefined(Name(b"WinAnsiEncoding"));
-        seen_fonts.insert(
-            "Helvetica".into(),
-            FontEntry { pdf_name: "F1".into(), font_ref, widths_1000: helvetica_widths(), line_h_ratio: None, ascender_ratio: None },
-        );
-        font_order.push("Helvetica".into());
+        let pdf_name = "F1".to_string();
+        let entry = register_font(&mut pdf, "Helvetica", pdf_name, &mut alloc);
+        seen_fonts.insert("Helvetica".to_string(), entry);
+        font_order.push("Helvetica".to_string());
     }
 
     let text_width = doc.page_width - doc.margin_left - doc.margin_right;
@@ -493,14 +454,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         let prev_para = if para_idx > 0 { doc.paragraphs.get(para_idx - 1) } else { None };
 
         let effective_space_before = if para.contextual_spacing
-            && prev_para.map_or(false, |p| p.contextual_spacing)
+            && prev_para.is_some_and(|p| p.contextual_spacing)
         {
             0.0
         } else {
             para.space_before
         };
         let effective_space_after = if para.contextual_spacing
-            && next_para.map_or(false, |p| p.contextual_spacing)
+            && next_para.is_some_and(|p| p.contextual_spacing)
         {
             0.0
         } else {
@@ -513,30 +474,19 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         // When font metrics are available, apply the document's line-spacing factor.
         // For the Helvetica fallback (no metrics), 1.2 is already an approximation;
         // multiplying by doc.line_spacing would overcount and shift subsequent paragraphs.
-        let text_line_h = match para
-            .runs
-            .first()
-            .map(|r| primary_font_name(&r.font_name))
-            .and_then(|k| seen_fonts.get(k))
-            .and_then(|e| e.line_h_ratio)
-        {
-            Some(ratio) => font_size * ratio * doc.line_spacing,
-            None => font_size * 1.2,
-        };
+        let text_line_h = font_metric(&para.runs, &seen_fonts, |e| e.line_h_ratio)
+            .map(|ratio| font_size * ratio * doc.line_spacing)
+            .unwrap_or(font_size * 1.2);
+
         // Word uses max(text_font_line_h, bullet_font_line_h) for bullet paragraphs
-        let line_h = if para.list_label == "\u{2022}" {
-            if let Some(sym) = seen_fonts.get("Symbol") {
-                if let Some(sym_ratio) = sym.line_h_ratio {
-                    f32::max(text_line_h, font_size * sym_ratio * doc.line_spacing)
-                } else {
-                    text_line_h
-                }
-            } else {
-                text_line_h
-            }
+        let bullet_line_h = if para.list_label == "\u{2022}" {
+            seen_fonts.get("Symbol")
+                .and_then(|sym| sym.line_h_ratio)
+                .map(|ratio| font_size * ratio * doc.line_spacing)
         } else {
-            text_line_h
+            None
         };
+        let line_h = bullet_line_h.map_or(text_line_h, |bh| f32::max(text_line_h, bh));
 
         let para_text_x = doc.margin_left + para.indent_left;
         let para_text_width = (text_width - para.indent_left).max(1.0);
@@ -571,37 +521,27 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         slot_top -= inter_gap;
 
         if para.runs.is_empty() && para.content_height > 0.0 {
-            // Gray placeholder rectangle for drawings and tables
             current_content
                 .set_fill_gray(0.5)
                 .rect(doc.margin_left, slot_top - content_h, text_width, content_h)
                 .fill_nonzero()
                 .set_fill_gray(0.0);
         } else if !lines.is_empty() {
-            let ascender_ratio = para
-                .runs
-                .first()
-                .map(|r| primary_font_name(&r.font_name))
-                .and_then(|k| seen_fonts.get(k))
-                .and_then(|e| e.ascender_ratio)
+            let ascender_ratio = font_metric(&para.runs, &seen_fonts, |e| e.ascender_ratio)
                 .unwrap_or(0.75);
             let baseline_y = slot_top - font_size * ascender_ratio;
 
             if !para.list_label.is_empty() {
-                let is_bullet = para.list_label == "\u{2022}";
-                let (label_font_name, label_bytes) = if is_bullet {
-                    if let Some(sym) = seen_fonts.get("Symbol") {
-                        (sym.pdf_name.as_str(), vec![0xB7u8])
+                let (label_font_name, label_bytes) =
+                    if para.list_label == "\u{2022}" {
+                        if let Some(sym) = seen_fonts.get("Symbol") {
+                            (sym.pdf_name.as_str(), vec![0xB7u8])
+                        } else {
+                            label_for_run(&para.runs[0], &seen_fonts, &para.list_label)
+                        }
                     } else {
-                        let key = primary_font_name(&para.runs[0].font_name);
-                        let entry = seen_fonts.get(key).expect("font registered");
-                        (entry.pdf_name.as_str(), to_winansi_bytes(&para.list_label))
-                    }
-                } else {
-                    let key = primary_font_name(&para.runs[0].font_name);
-                    let entry = seen_fonts.get(key).expect("font registered");
-                    (entry.pdf_name.as_str(), to_winansi_bytes(&para.list_label))
-                };
+                        label_for_run(&para.runs[0], &seen_fonts, &para.list_label)
+                    };
                 current_content
                     .begin_text()
                     .set_font(Name(label_font_name.as_bytes()), font_size)
@@ -658,4 +598,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     }
 
     Ok(pdf.finish())
+}
+
+fn label_for_run<'a>(
+    run: &Run,
+    seen_fonts: &'a HashMap<String, FontEntry>,
+    label: &str,
+) -> (&'a str, Vec<u8>) {
+    let key = primary_font_name(&run.font_name);
+    let entry = seen_fonts.get(key).expect("font registered");
+    (entry.pdf_name.as_str(), to_winansi_bytes(label))
 }

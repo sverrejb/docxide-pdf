@@ -11,16 +11,11 @@ const MUTOOL_DPI: &str = "150";
 
 fn discover_fixtures() -> io::Result<Vec<PathBuf>> {
     let fixtures_dir = Path::new("tests/fixtures");
-    let mut fixtures = Vec::new();
-
-    for entry in fs::read_dir(fixtures_dir)? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_dir() {
-            fixtures.push(path);
-        }
-    }
-
+    let mut fixtures: Vec<PathBuf> = fs::read_dir(fixtures_dir)?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.is_dir())
+        .collect();
     fixtures.sort();
     Ok(fixtures)
 }
@@ -134,35 +129,92 @@ fn save_diff_image(a: &Path, b: &Path, out: &Path) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-fn log_result(case: &str, pages: usize, avg_jaccard: f64, passed: bool) {
-    let csv_path = Path::new("tests/output/results.csv");
+fn log_csv(csv_name: &str, header: &str, row: &str) {
+    let csv_path = PathBuf::from("tests/output").join(csv_name);
     fs::create_dir_all("tests/output").ok();
     let write_header = !csv_path.exists();
     let mut file = fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(csv_path)
-        .expect("Cannot open tests/output/results.csv");
+        .open(&csv_path)
+        .expect("Cannot open CSV file");
     if write_header {
-        writeln!(file, "timestamp,case,pages,avg_jaccard,pass").unwrap();
+        writeln!(file, "{header}").unwrap();
     }
-    let ts = SystemTime::now()
+    writeln!(file, "{row}").unwrap();
+}
+
+fn timestamp() -> u64 {
+    SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
-        .as_secs();
-    writeln!(file, "{ts},{case},{pages},{avg_jaccard:.4},{passed}").unwrap();
+        .as_secs()
 }
 
 fn collect_page_pngs(dir: &Path) -> io::Result<Vec<PathBuf>> {
-    let mut pages = Vec::new();
-    for entry in fs::read_dir(dir)? {
-        let p = entry?.path();
-        if p.extension().and_then(|e| e.to_str()) == Some("png") {
-            pages.push(p);
-        }
-    }
+    let mut pages: Vec<PathBuf> = fs::read_dir(dir)?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("png"))
+        .collect();
     pages.sort();
     Ok(pages)
+}
+
+struct FixturePages {
+    name: String,
+    ref_pages: Vec<PathBuf>,
+    gen_pages: Vec<PathBuf>,
+    output_base: PathBuf,
+}
+
+fn prepare_fixture(fixture_dir: &Path, label: &str) -> Option<FixturePages> {
+    let name = fixture_dir.file_name().unwrap().to_string_lossy().to_string();
+    let input_docx = fixture_dir.join("input.docx");
+    let reference_pdf = fixture_dir.join("reference.pdf");
+
+    let output_base = PathBuf::from("tests/output").join(&name);
+    let reference_screenshots = output_base.join("reference");
+    let generated_screenshots = output_base.join("generated");
+
+    println!("\n=== {label}: {name} ===");
+
+    println!("  Screenshotting reference PDF...");
+    if let Err(e) = screenshot_pdf(&reference_pdf, &reference_screenshots) {
+        println!("  [ERROR] Failed to screenshot reference: {e}");
+        return None;
+    }
+
+    let generated_pdf = output_base.join("generated.pdf");
+    println!("  Converting DOCX...");
+    if let Err(e) = docxside_pdf::convert_docx_to_pdf(&input_docx, &generated_pdf) {
+        println!("  [SKIP] {name}: {e}");
+        return None;
+    }
+
+    println!("  Screenshotting generated PDF...");
+    if let Err(e) = screenshot_pdf(&generated_pdf, &generated_screenshots) {
+        println!("  [ERROR] Failed to screenshot generated: {e}");
+        return None;
+    }
+
+    let ref_pages = collect_page_pngs(&reference_screenshots).unwrap_or_default();
+    let gen_pages = collect_page_pngs(&generated_screenshots).unwrap_or_default();
+
+    if ref_pages.is_empty() {
+        println!("  [WARN] No reference pages found");
+        return None;
+    }
+
+    if ref_pages.len() != gen_pages.len() {
+        println!(
+            "  [WARN] Page count mismatch: reference={}, generated={}",
+            ref_pages.len(),
+            gen_pages.len()
+        );
+    }
+
+    Some(FixturePages { name, ref_pages, gen_pages, output_base })
 }
 
 #[test]
@@ -170,7 +222,7 @@ fn visual_comparison() {
     let fixtures = discover_fixtures().expect("Failed to read tests/fixtures");
 
     if fixtures.is_empty() {
-        println!("[INFO] No fixtures found — add DOCX+PDF pairs to tests/fixtures/<name>/");
+        println!("[INFO] No fixtures found -- add DOCX+PDF pairs to tests/fixtures/<name>/");
         return;
     }
 
@@ -178,61 +230,19 @@ fn visual_comparison() {
     let mut table_rows: Vec<(String, f64, bool)> = Vec::new();
 
     for fixture_dir in &fixtures {
-        let name = fixture_dir.file_name().unwrap().to_string_lossy();
-        let input_docx = fixture_dir.join("input.docx");
-        let reference_pdf = fixture_dir.join("reference.pdf");
-
-        let output_base = PathBuf::from("tests/output").join(name.as_ref());
-        let reference_screenshots = output_base.join("reference");
-        let generated_screenshots = output_base.join("generated");
-        let diff_dir = output_base.join("diff");
-
-        println!("\n=== Fixture: {name} ===");
-
-        // Screenshot the reference PDF
-        println!("  Screenshotting reference PDF...");
-        if let Err(e) = screenshot_pdf(&reference_pdf, &reference_screenshots) {
-            println!("  [ERROR] Failed to screenshot reference: {e}");
+        let Some(fixture) = prepare_fixture(fixture_dir, "Fixture") else {
             all_passed = false;
             continue;
-        }
+        };
+        let diff_dir = fixture.output_base.join("diff");
 
-        // Convert DOCX -> PDF via library
-        let generated_pdf = output_base.join("generated.pdf");
-        match convert_docx_to_pdf(&input_docx, &generated_pdf) {
-            Err(e) => {
-                println!("  [SKIP] {name}: {e}");
-                continue;
-            }
-            Ok(()) => {}
-        }
-
-        // Screenshot the generated PDF
-        println!("  Screenshotting generated PDF...");
-        if let Err(e) = screenshot_pdf(&generated_pdf, &generated_screenshots) {
-            println!("  [ERROR] Failed to screenshot generated: {e}");
-            all_passed = false;
-            continue;
-        }
-
-        // Compare pages
-        let ref_pages = collect_page_pngs(&reference_screenshots)
-            .unwrap_or_default();
-        let gen_pages = collect_page_pngs(&generated_screenshots)
-            .unwrap_or_default();
-
-        if ref_pages.is_empty() {
-            println!("  [WARN] No reference pages found");
-            continue;
-        }
-
-        let page_count = ref_pages.len().min(gen_pages.len());
+        let page_count = fixture.ref_pages.len().min(fixture.gen_pages.len());
         let mut scores: Vec<f64> = Vec::new();
 
         for i in 0..page_count {
-            let ref_page = &ref_pages[i];
-            let gen_page = &gen_pages[i];
-            let page_num = String::from(ref_page.file_stem().unwrap().to_str().unwrap());
+            let ref_page = &fixture.ref_pages[i];
+            let gen_page = &fixture.gen_pages[i];
+            let page_num = ref_page.file_stem().unwrap().to_str().unwrap();
             let diff_path = diff_dir.join(format!("{page_num}.png"));
 
             match compare_images(ref_page, gen_page) {
@@ -242,34 +252,31 @@ fn visual_comparison() {
                     let _ = save_diff_image(ref_page, gen_page, &diff_path);
                 }
                 Err(e) => {
-                    println!("  Page {}: comparison error — {e}", i + 1);
+                    println!("  Page {}: comparison error -- {e}", i + 1);
                 }
             }
         }
 
-        if ref_pages.len() != gen_pages.len() {
-            println!(
-                "  [WARN] Page count mismatch: reference={}, generated={}",
-                ref_pages.len(),
-                gen_pages.len()
-            );
-        }
-
         if !scores.is_empty() {
             let avg = scores.iter().sum::<f64>() / scores.len() as f64;
-            println!("  Average similarity: {:.2}%", avg * 100.0);
             let passed = avg >= SIMILARITY_THRESHOLD;
-            log_result(&name, scores.len(), avg, passed);
-            table_rows.push((name.to_string(), avg, passed));
-            if !passed {
+            println!("  Average similarity: {:.2}%", avg * 100.0);
+            log_csv(
+                "results.csv",
+                "timestamp,case,pages,avg_jaccard,pass",
+                &format!("{},{},{},{:.4},{}", timestamp(), fixture.name, scores.len(), avg, passed),
+            );
+            table_rows.push((fixture.name.clone(), avg, passed));
+            if passed {
+                println!("  [PASS] {}", fixture.name);
+            } else {
                 println!(
-                    "  [FAIL] {name}: average similarity {:.2}% below threshold {:.0}%",
+                    "  [FAIL] {}: average similarity {:.2}% below threshold {:.0}%",
+                    fixture.name,
                     avg * 100.0,
                     SIMILARITY_THRESHOLD * 100.0
                 );
                 all_passed = false;
-            } else {
-                println!("  [PASS] {name}");
             }
         }
     }
@@ -278,13 +285,8 @@ fn visual_comparison() {
     assert!(all_passed, "One or more fixtures failed visual comparison");
 }
 
-fn convert_docx_to_pdf(input: &Path, output: &Path) -> Result<(), String> {
-    docxside_pdf::convert_docx_to_pdf(input, output).map_err(|e| e.to_string())
-}
-
 fn print_summary_table(metric: &str, threshold: f64, rows: &[(String, f64, bool)]) {
     let name_w = rows.iter().map(|(n, _, _)| n.len()).max().unwrap_or(4).max(4);
-    // Format all scores first so we can measure the widest one
     let score_strs: Vec<String> = rows.iter().map(|(_, s, _)| format!("{:.1}%", s * 100.0)).collect();
     let metric_w = score_strs.iter().map(|s| s.len()).max().unwrap_or(0).max(metric.len());
     let sep = format!("+-{}-+-{}-+------+", "-".repeat(name_w), "-".repeat(metric_w));
@@ -292,7 +294,7 @@ fn print_summary_table(metric: &str, threshold: f64, rows: &[(String, f64, bool)
     println!("| {:<name_w$} | {:>metric_w$} | Pass |", "Case", metric);
     println!("{sep}");
     for ((name, _, passed), score_str) in rows.iter().zip(&score_strs) {
-        let mark = if *passed { "✓" } else { "✗" };
+        let mark = if *passed { "Y" } else { "N" };
         println!("| {:<name_w$} | {:>metric_w$} | {mark}    |", name, score_str);
     }
     println!("{sep}");
@@ -337,7 +339,6 @@ fn ssim_score(a: &Path, b: &Path) -> Result<f64, String> {
             let y0 = by * WINDOW;
             let n = (WINDOW * WINDOW) as f64;
 
-            // Only evaluate blocks where the reference has ink
             let has_ink = (y0..y0 + WINDOW).any(|y| {
                 (x0..x0 + WINDOW).any(|x| img_a.get_pixel(x, y).0[0] < 200)
             });
@@ -345,7 +346,6 @@ fn ssim_score(a: &Path, b: &Path) -> Result<f64, String> {
                 continue;
             }
 
-            // Compute reference block statistics once
             let mut sum_a = 0.0f64;
             for y in y0..y0 + WINDOW {
                 for x in x0..x0 + WINDOW {
@@ -362,7 +362,6 @@ fn ssim_score(a: &Path, b: &Path) -> Result<f64, String> {
             }
             var_a /= n;
 
-            // Find best SSIM among vertical shifts of the generated block
             let mut best_ssim = f64::NEG_INFINITY;
             for dy in -SEARCH_RADIUS..=SEARCH_RADIUS {
                 let sy0 = y0 as i32 + dy;
@@ -394,10 +393,7 @@ fn ssim_score(a: &Path, b: &Path) -> Result<f64, String> {
 
                 let num = (2.0 * mu_a * mu_b + c1) * (2.0 * cov + c2);
                 let den = (mu_a * mu_a + mu_b * mu_b + c1) * (var_a + var_b + c2);
-                let s = num / den;
-                if s > best_ssim {
-                    best_ssim = s;
-                }
+                best_ssim = best_ssim.max(num / den);
             }
             ssim_sum += best_ssim;
             count += 1;
@@ -408,25 +404,6 @@ fn ssim_score(a: &Path, b: &Path) -> Result<f64, String> {
         return Ok(1.0);
     }
     Ok(ssim_sum / count as f64)
-}
-
-fn log_ssim_result(case: &str, pages: usize, avg_ssim: f64) {
-    let csv_path = Path::new("tests/output/ssim_results.csv");
-    fs::create_dir_all("tests/output").ok();
-    let write_header = !csv_path.exists();
-    let mut file = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(csv_path)
-        .expect("Cannot open tests/output/ssim_results.csv");
-    if write_header {
-        writeln!(file, "timestamp,case,pages,avg_ssim").unwrap();
-    }
-    let ts = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    writeln!(file, "{ts},{case},{pages},{avg_ssim:.4}").unwrap();
 }
 
 #[test]
@@ -442,65 +419,21 @@ fn ssim_comparison() {
     let mut table_rows: Vec<(String, f64, bool)> = Vec::new();
 
     for fixture_dir in &fixtures {
-        let name = fixture_dir.file_name().unwrap().to_string_lossy();
-        let input_docx = fixture_dir.join("input.docx");
-        let reference_pdf = fixture_dir.join("reference.pdf");
-
-        let output_base = PathBuf::from("tests/output").join(name.as_ref());
-        let reference_screenshots = output_base.join("reference");
-        let generated_screenshots = output_base.join("generated");
-
-        println!("\n=== SSIM: {name} ===");
-
-        println!("  Screenshotting reference PDF...");
-        if let Err(e) = screenshot_pdf(&reference_pdf, &reference_screenshots) {
-            println!("  [ERROR] Failed to screenshot reference: {e}");
+        let Some(fixture) = prepare_fixture(fixture_dir, "SSIM") else {
             continue;
-        }
+        };
 
-        let generated_pdf = output_base.join("generated.pdf");
-        println!("  Converting DOCX...");
-        match convert_docx_to_pdf(&input_docx, &generated_pdf) {
-            Err(e) => {
-                println!("  [SKIP] {name}: {e}");
-                continue;
-            }
-            Ok(()) => {}
-        }
-
-        println!("  Screenshotting generated PDF...");
-        if let Err(e) = screenshot_pdf(&generated_pdf, &generated_screenshots) {
-            println!("  [ERROR] Failed to screenshot generated: {e}");
-            continue;
-        }
-
-        let ref_pages = collect_page_pngs(&reference_screenshots).unwrap_or_default();
-        let gen_pages = collect_page_pngs(&generated_screenshots).unwrap_or_default();
-
-        if ref_pages.is_empty() {
-            println!("  [WARN] No reference pages found");
-            continue;
-        }
-
-        if ref_pages.len() != gen_pages.len() {
-            println!(
-                "  [WARN] Page count mismatch: reference={}, generated={}",
-                ref_pages.len(),
-                gen_pages.len()
-            );
-        }
-
-        let page_count = ref_pages.len().min(gen_pages.len());
+        let page_count = fixture.ref_pages.len().min(fixture.gen_pages.len());
         let mut scores: Vec<f64> = Vec::new();
 
         for i in 0..page_count {
-            match ssim_score(&ref_pages[i], &gen_pages[i]) {
+            match ssim_score(&fixture.ref_pages[i], &fixture.gen_pages[i]) {
                 Ok(score) => {
                     println!("  Page {}: SSIM = {:.4}", i + 1, score);
                     scores.push(score);
                 }
                 Err(e) => {
-                    println!("  Page {}: SSIM error — {e}", i + 1);
+                    println!("  Page {}: SSIM error -- {e}", i + 1);
                 }
             }
         }
@@ -509,13 +442,18 @@ fn ssim_comparison() {
             let avg = scores.iter().sum::<f64>() / scores.len() as f64;
             let passed = avg >= SSIM_THRESHOLD;
             println!("  Average SSIM: {:.4}", avg);
-            log_ssim_result(&name, scores.len(), avg);
-            table_rows.push((name.to_string(), avg, passed));
+            log_csv(
+                "ssim_results.csv",
+                "timestamp,case,pages,avg_ssim",
+                &format!("{},{},{},{:.4}", timestamp(), fixture.name, scores.len(), avg),
+            );
+            table_rows.push((fixture.name.clone(), avg, passed));
             if passed {
-                println!("  [PASS] {name}");
+                println!("  [PASS] {}", fixture.name);
             } else {
                 println!(
-                    "  [FAIL] {name}: SSIM {:.2}% below threshold {:.0}%",
+                    "  [FAIL] {}: SSIM {:.2}% below threshold {:.0}%",
+                    fixture.name,
                     avg * 100.0,
                     SSIM_THRESHOLD * 100.0
                 );

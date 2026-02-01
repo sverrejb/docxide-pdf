@@ -1,11 +1,10 @@
-#[allow(dead_code)]
+#[derive(Clone, Copy)]
 pub enum Alignment {
     Left,
     Center,
     Right,
 }
 
-#[allow(dead_code)]
 pub struct Document {
     pub page_width: f32,
     pub page_height: f32,
