@@ -1,8 +1,9 @@
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Alignment {
     Left,
     Center,
     Right,
+    Justify,
 }
 
 pub struct Document {
@@ -17,6 +18,14 @@ pub struct Document {
     pub paragraphs: Vec<Paragraph>,
 }
 
+pub struct EmbeddedImage {
+    pub data: Vec<u8>,
+    pub pixel_width: u32,
+    pub pixel_height: u32,
+    pub display_width: f32,  // points
+    pub display_height: f32, // points
+}
+
 pub struct Paragraph {
     pub runs: Vec<Run>,
     pub space_before: f32,
@@ -27,6 +36,8 @@ pub struct Paragraph {
     pub indent_hanging: f32,
     pub list_label: String,
     pub contextual_spacing: bool,
+    pub line_spacing: Option<f32>, // per-paragraph override (e.g. 240/240 = 1.0)
+    pub image: Option<EmbeddedImage>,
 }
 
 #[allow(dead_code)]

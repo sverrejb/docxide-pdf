@@ -3,7 +3,7 @@ use std::io::Read;
 use std::path::Path;
 
 use crate::error::Error;
-use crate::model::{Alignment, Document, Paragraph, Run};
+use crate::model::{Alignment, Document, EmbeddedImage, Paragraph, Run};
 
 struct LevelDef {
     num_fmt: String,
@@ -50,6 +50,21 @@ fn twips_attr(node: roxmltree::Node, attr: &str) -> Option<f32> {
         .map(twips_to_pts)
 }
 
+fn border_bottom_extra(ppr: roxmltree::Node) -> f32 {
+    let pbdr = match wml(ppr, "pBdr") {
+        Some(n) => n,
+        None => return 0.0,
+    };
+    let bottom = match wml(pbdr, "bottom") {
+        Some(n) => n,
+        None => return 0.0,
+    };
+    bottom
+        .attribute((WML_NS, "space"))
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0.0)
+}
+
 fn dml<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
     node.children()
         .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(DML_NS))
@@ -81,6 +96,9 @@ struct ParagraphStyle {
     space_after: Option<f32>,
     alignment: Option<Alignment>,
     contextual_spacing: bool,
+    line_spacing: Option<f32>, // auto line spacing factor override
+    border_bottom_extra: f32,
+    based_on: Option<String>,
 }
 
 struct StylesInfo {
@@ -92,6 +110,7 @@ fn parse_alignment(val: &str) -> Alignment {
     match val {
         "center" => Alignment::Center,
         "right" | "end" => Alignment::Right,
+        "both" => Alignment::Justify,
         _ => Alignment::Left,
     }
 }
@@ -236,6 +255,7 @@ fn parse_styles(
             .and_then(|n| twips_attr(n, "before"))
             .unwrap_or(0.0);
         let space_after = spacing.and_then(|n| twips_attr(n, "after"));
+        let bdr_extra = ppr.map(border_bottom_extra).unwrap_or(0.0);
 
         let rpr = wml(style_node, "rPr");
 
@@ -260,6 +280,15 @@ fn parse_styles(
             .and_then(|ppr| wml(ppr, "contextualSpacing"))
             .is_some();
 
+        let line_spacing = spacing
+            .and_then(|n| n.attribute((WML_NS, "line")))
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(|val| val / 240.0);
+
+        let based_on = wml(style_node, "basedOn")
+            .and_then(|n| n.attribute((WML_NS, "val")))
+            .map(|s| s.to_string());
+
         paragraph_styles.insert(
             style_id.to_string(),
             ParagraphStyle {
@@ -270,11 +299,63 @@ fn parse_styles(
                 space_after,
                 alignment,
                 contextual_spacing,
+                line_spacing,
+                border_bottom_extra: bdr_extra,
+                based_on,
             },
         );
     }
 
+    resolve_based_on(&mut paragraph_styles);
+
     StylesInfo { defaults, paragraph_styles }
+}
+
+fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
+    let ids: Vec<String> = styles.keys().cloned().collect();
+    for id in ids {
+        let mut chain: Vec<String> = Vec::new();
+        let mut current = id.clone();
+        // Walk the basedOn chain collecting parent values
+        loop {
+            if chain.contains(&current) {
+                break; // cycle
+            }
+            chain.push(current.clone());
+            let next = styles.get(&current).and_then(|s| s.based_on.clone());
+            match next {
+                Some(parent) => current = parent,
+                None => break,
+            }
+        }
+        // Apply inheritance from furthest ancestor down to the style itself
+        let mut inherited_font_name: Option<String> = None;
+        let mut inherited_font_size: Option<f32> = None;
+        let mut inherited_color: Option<[u8; 3]> = None;
+        let mut inherited_alignment: Option<Alignment> = None;
+        let mut inherited_space_after: Option<f32> = None;
+        let mut inherited_line_spacing: Option<f32> = None;
+
+        for ancestor_id in chain.iter().rev() {
+            if let Some(s) = styles.get(ancestor_id) {
+                if s.font_name.is_some() { inherited_font_name = s.font_name.clone(); }
+                if s.font_size.is_some() { inherited_font_size = s.font_size; }
+                if s.color.is_some() { inherited_color = s.color; }
+                if s.alignment.is_some() { inherited_alignment = s.alignment; }
+                if s.space_after.is_some() { inherited_space_after = s.space_after; }
+                if s.line_spacing.is_some() { inherited_line_spacing = s.line_spacing; }
+            }
+        }
+
+        if let Some(s) = styles.get_mut(&id) {
+            if s.font_name.is_none() { s.font_name = inherited_font_name; }
+            if s.font_size.is_none() { s.font_size = inherited_font_size; }
+            if s.color.is_none() { s.color = inherited_color; }
+            if s.alignment.is_none() { s.alignment = inherited_alignment; }
+            if s.space_after.is_none() { s.space_after = inherited_space_after; }
+            if s.line_spacing.is_none() { s.line_spacing = inherited_line_spacing; }
+        }
+    }
 }
 
 fn parse_numbering(zip: &mut zip::ZipArchive<std::fs::File>) -> NumberingInfo {
@@ -344,6 +425,71 @@ fn parse_numbering(zip: &mut zip::ZipArchive<std::fs::File>) -> NumberingInfo {
     NumberingInfo { abstract_nums, num_to_abstract }
 }
 
+fn parse_runs(
+    para_node: roxmltree::Node,
+    styles: &StylesInfo,
+    theme: &ThemeFonts,
+) -> Vec<Run> {
+    let ppr = wml(para_node, "pPr");
+    let para_style = ppr
+        .and_then(|ppr| wml_attr(ppr, "pStyle"))
+        .and_then(|id| styles.paragraph_styles.get(id));
+
+    let style_font_size = para_style
+        .and_then(|s| s.font_size)
+        .unwrap_or(styles.defaults.font_size);
+    let style_font_name = para_style
+        .and_then(|s| s.font_name.as_deref())
+        .unwrap_or(&styles.defaults.font_name)
+        .to_string();
+    let style_color: Option<[u8; 3]> = para_style.and_then(|s| s.color);
+
+    let run_nodes: Vec<_> = para_node.children().flat_map(|child| {
+        if child.tag_name().name() == "r" && child.tag_name().namespace() == Some(WML_NS) {
+            vec![child]
+        } else if child.tag_name().name() == "hyperlink" && child.tag_name().namespace() == Some(WML_NS) {
+            child.children().filter(|n| n.tag_name().name() == "r" && n.tag_name().namespace() == Some(WML_NS)).collect()
+        } else {
+            vec![]
+        }
+    }).collect();
+
+    let mut runs = Vec::new();
+    for run_node in run_nodes {
+        let rpr = wml(run_node, "rPr");
+
+        let font_size = rpr
+            .and_then(|n| wml_attr(n, "sz"))
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(|hp| hp / 2.0)
+            .unwrap_or(style_font_size);
+
+        let font_name = rpr
+            .and_then(|n| wml(n, "rFonts"))
+            .map(|rfonts| resolve_font_from_node(rfonts, theme, &style_font_name))
+            .unwrap_or_else(|| style_font_name.clone());
+
+        let bold = rpr.and_then(|n| wml(n, "b")).is_some();
+        let italic = rpr.and_then(|n| wml(n, "i")).is_some();
+
+        let color = rpr
+            .and_then(|n| wml_attr(n, "color"))
+            .and_then(parse_hex_color)
+            .or(style_color);
+
+        let text: String = run_node
+            .children()
+            .filter(|n| n.tag_name().name() == "t" && n.tag_name().namespace() == Some(WML_NS))
+            .filter_map(|n| n.text())
+            .collect();
+
+        if !text.is_empty() {
+            runs.push(Run { text, font_size, font_name, bold, italic, color });
+        }
+    }
+    runs
+}
+
 pub fn parse(path: &Path) -> Result<Document, Error> {
     let file = std::fs::File::open(path)?;
     let mut zip = zip::ZipArchive::new(file)?;
@@ -351,6 +497,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
     let theme = parse_theme(&mut zip);
     let styles = parse_styles(&mut zip, &theme);
     let numbering = parse_numbering(&mut zip);
+    let rels = parse_relationships(&mut zip);
 
     let mut xml_content = String::new();
     zip.by_name("word/document.xml")?
@@ -393,28 +540,35 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
     let mut counters: HashMap<(String, u8), u32> = HashMap::new();
 
     for node in body.children() {
+        if node.tag_name().namespace() != Some(WML_NS) {
+            continue;
+        }
         match node.tag_name().name() {
-            "tbl" if node.tag_name().namespace() == Some(WML_NS) => {
-                let row_count = node
-                    .children()
-                    .filter(|n| {
-                        n.tag_name().name() == "tr" && n.tag_name().namespace() == Some(WML_NS)
-                    })
-                    .count();
-                let estimated_height = row_count as f32 * (10.5 * 1.6 + 4.0);
-                paragraphs.push(Paragraph {
-                    runs: vec![],
-                    space_before: 0.0,
-                    space_after: 4.0,
-                    content_height: estimated_height,
-                    alignment: Alignment::Left,
-                    indent_left: 0.0,
-                    indent_hanging: 0.0,
-                    list_label: String::new(),
-                    contextual_spacing: false,
-                });
+            "tbl" => {
+                for tr in node.children().filter(|n| n.tag_name().name() == "tr" && n.tag_name().namespace() == Some(WML_NS)) {
+                    for tc in tr.children().filter(|n| n.tag_name().name() == "tc" && n.tag_name().namespace() == Some(WML_NS)) {
+                        for p in tc.children().filter(|n| n.tag_name().name() == "p" && n.tag_name().namespace() == Some(WML_NS)) {
+                            let cell_runs = parse_runs(p, &styles, &theme);
+                            if !cell_runs.is_empty() {
+                                paragraphs.push(Paragraph {
+                                    runs: cell_runs,
+                                    space_before: 0.0,
+                                    space_after: 0.0,
+                                    content_height: 0.0,
+                                    alignment: Alignment::Left,
+                                    indent_left: 0.0,
+                                    indent_hanging: 0.0,
+                                    list_label: String::new(),
+                                    contextual_spacing: false,
+                                    line_spacing: None,
+                                    image: None,
+                                });
+                            }
+                        }
+                    }
+                }
             }
-            "p" if node.tag_name().namespace() == Some(WML_NS) => {
+            "p" => {
                 let ppr = wml(node, "pPr");
 
                 let para_style_id = ppr
@@ -429,19 +583,17 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     .or_else(|| para_style.map(|s| s.space_before))
                     .unwrap_or(0.0);
 
+                let inline_bdr_extra = ppr.map(border_bottom_extra).unwrap_or(0.0);
+                let bdr_extra = if inline_bdr_extra > 0.0 {
+                    inline_bdr_extra
+                } else {
+                    para_style.map(|s| s.border_bottom_extra).unwrap_or(0.0)
+                };
                 let space_after = inline_spacing
                     .and_then(|n| twips_attr(n, "after"))
                     .or_else(|| para_style.and_then(|s| s.space_after))
-                    .unwrap_or(styles.defaults.space_after);
-
-                let style_font_size = para_style
-                    .and_then(|s| s.font_size)
-                    .unwrap_or(styles.defaults.font_size);
-
-                let style_font_name = para_style
-                    .and_then(|s| s.font_name.as_deref())
-                    .unwrap_or(&styles.defaults.font_name)
-                    .to_string();
+                    .unwrap_or(styles.defaults.space_after)
+                    + bdr_extra;
 
                 let style_color: Option<[u8; 3]> = para_style.and_then(|s| s.color);
 
@@ -456,11 +608,16 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     .is_some()
                     || para_style.is_some_and(|s| s.contextual_spacing);
 
+                let line_spacing = inline_spacing
+                    .and_then(|n| n.attribute((WML_NS, "line")))
+                    .and_then(|v| v.parse::<f32>().ok())
+                    .map(|val| val / 240.0)
+                    .or_else(|| para_style.and_then(|s| s.line_spacing));
+
                 let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
                 let (mut indent_left, mut indent_hanging, list_label) =
                     parse_list_info(num_pr, &numbering, &mut counters);
 
-                // Paragraph-level w:ind overrides level def
                 if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
                     if let Some(v) = twips_attr(ind, "left") {
                         indent_left = v;
@@ -470,66 +627,29 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     }
                 }
 
-                let mut runs = Vec::new();
+                let mut runs = parse_runs(node, &styles, &theme);
 
-                for run_node in node.children() {
-                    if run_node.tag_name().name() != "r"
-                        || run_node.tag_name().namespace() != Some(WML_NS)
-                    {
-                        continue;
-                    }
-
-                    let rpr = wml(run_node, "rPr");
-
-                    let font_size = rpr
-                        .and_then(|n| wml_attr(n, "sz"))
-                        .and_then(|v| v.parse::<f32>().ok())
-                        .map(|hp| hp / 2.0)
-                        .unwrap_or(style_font_size);
-
-                    let font_name = rpr
-                        .and_then(|n| wml(n, "rFonts"))
-                        .map(|rfonts| resolve_font_from_node(rfonts, &theme, &style_font_name))
-                        .unwrap_or_else(|| style_font_name.clone());
-
-                    let bold = rpr
-                        .and_then(|n| wml(n, "b"))
-                        .is_some();
-
-                    let italic = rpr
-                        .and_then(|n| wml(n, "i"))
-                        .is_some();
-
-                    let color = rpr
-                        .and_then(|n| wml_attr(n, "color"))
-                        .and_then(parse_hex_color)
-                        .or(style_color);
-
-                    let text: String = run_node
-                        .children()
-                        .filter(|n| {
-                            n.tag_name().name() == "t" && n.tag_name().namespace() == Some(WML_NS)
-                        })
-                        .filter_map(|n| n.text())
-                        .collect();
-
-                    if !text.is_empty() {
-                        runs.push(Run { text, font_size, font_name, bold, italic, color });
+                // Override font defaults from style for runs that used doc defaults
+                for run in &mut runs {
+                    if run.color.is_none() && style_color.is_some() {
+                        run.color = style_color;
                     }
                 }
 
-                let drawing_height = compute_drawing_height(node);
+                let drawing = compute_drawing_info(node, &rels, &mut zip);
 
                 paragraphs.push(Paragraph {
                     runs,
                     space_before,
                     space_after,
-                    content_height: drawing_height,
+                    content_height: drawing.height,
                     alignment,
                     indent_left,
                     indent_hanging,
                     list_label,
                     contextual_spacing,
+                    line_spacing,
+                    image: drawing.image,
                 });
             }
             _ => {}
@@ -585,8 +705,77 @@ fn parse_list_info(
     (def.indent_left, def.indent_hanging, label)
 }
 
-fn compute_drawing_height(para_node: roxmltree::Node) -> f32 {
+const REL_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+fn parse_relationships(zip: &mut zip::ZipArchive<std::fs::File>) -> HashMap<String, String> {
+    let mut rels = HashMap::new();
+    let mut xml_content = String::new();
+    let Ok(mut file) = zip.by_name("word/_rels/document.xml.rels") else {
+        return rels;
+    };
+    if file.read_to_string(&mut xml_content).is_err() {
+        return rels;
+    }
+    let Ok(xml) = roxmltree::Document::parse(&xml_content) else {
+        return rels;
+    };
+    for node in xml.root_element().children() {
+        if node.tag_name().name() == "Relationship" {
+            if let (Some(id), Some(target)) = (node.attribute("Id"), node.attribute("Target")) {
+                rels.insert(id.to_string(), target.to_string());
+            }
+        }
+    }
+    rels
+}
+
+fn jpeg_dimensions(data: &[u8]) -> Option<(u32, u32)> {
+    if data.len() < 2 || data[0] != 0xFF || data[1] != 0xD8 {
+        return None;
+    }
+    let mut i = 2;
+    while i + 4 < data.len() {
+        if data[i] != 0xFF {
+            return None;
+        }
+        let marker = data[i + 1];
+        if marker == 0xD9 {
+            break;
+        }
+        let len = u16::from_be_bytes([data[i + 2], data[i + 3]]) as usize;
+        // SOF0, SOF1, SOF2 markers contain dimensions
+        if (marker == 0xC0 || marker == 0xC1 || marker == 0xC2) && i + 9 < data.len() {
+            let height = u16::from_be_bytes([data[i + 5], data[i + 6]]) as u32;
+            let width = u16::from_be_bytes([data[i + 7], data[i + 8]]) as u32;
+            return Some((width, height));
+        }
+        i += 2 + len;
+    }
+    None
+}
+
+fn find_blip_embed<'a>(container: roxmltree::Node<'a, 'a>) -> Option<&'a str> {
+    for desc in container.descendants() {
+        if desc.tag_name().name() == "blip" && desc.tag_name().namespace() == Some(DML_NS) {
+            return desc.attribute((REL_NS, "embed"));
+        }
+    }
+    None
+}
+
+struct DrawingInfo {
+    height: f32,
+    image: Option<EmbeddedImage>,
+}
+
+fn compute_drawing_info(
+    para_node: roxmltree::Node,
+    rels: &HashMap<String, String>,
+    zip: &mut zip::ZipArchive<std::fs::File>,
+) -> DrawingInfo {
     let mut max_height: f32 = 0.0;
+    let mut image: Option<EmbeddedImage> = None;
+
     for child in para_node.children() {
         let drawing_node = if child.tag_name().name() == "drawing"
             && child.tag_name().namespace() == Some(WML_NS)
@@ -605,18 +794,50 @@ fn compute_drawing_height(para_node: roxmltree::Node) -> f32 {
             let name = container.tag_name().name();
             if (name == "inline" || name == "anchor")
                 && container.tag_name().namespace() == Some(WPD_NS)
-                && let Some(cy) = container
-                    .children()
-                    .find(|n| {
-                        n.tag_name().name() == "extent"
-                            && n.tag_name().namespace() == Some(WPD_NS)
-                    })
+            {
+                let extent = container.children().find(|n| {
+                    n.tag_name().name() == "extent"
+                        && n.tag_name().namespace() == Some(WPD_NS)
+                });
+                let cx = extent
+                    .and_then(|n| n.attribute("cx"))
+                    .and_then(|v| v.parse::<f32>().ok())
+                    .unwrap_or(0.0);
+                let cy = extent
                     .and_then(|n| n.attribute("cy"))
                     .and_then(|v| v.parse::<f32>().ok())
-            {
-                max_height = max_height.max(cy / 12700.0);
+                    .unwrap_or(0.0);
+                let display_w = cx / 12700.0;
+                let display_h = cy / 12700.0;
+                max_height = max_height.max(display_h);
+
+                if image.is_none() {
+                    if let Some(embed_id) = find_blip_embed(container) {
+                        if let Some(target) = rels.get(embed_id) {
+                            let zip_path = if target.starts_with('/') {
+                                target[1..].to_string()
+                            } else {
+                                format!("word/{}", target)
+                            };
+                            if let Ok(mut entry) = zip.by_name(&zip_path) {
+                                let mut data = Vec::new();
+                                if entry.read_to_end(&mut data).is_ok() {
+                                    if let Some((pw, ph)) = jpeg_dimensions(&data) {
+                                        image = Some(EmbeddedImage {
+                                            data,
+                                            pixel_width: pw,
+                                            pixel_height: ph,
+                                            display_width: display_w,
+                                            display_height: display_h,
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
-    max_height
+    DrawingInfo { height: max_height, image }
 }

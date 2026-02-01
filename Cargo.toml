@@ -3,11 +3,25 @@ name = "docxside-pdf"
 version = "0.1.0"
 edition = "2024"
 
+[lib]
+name = "docxside_pdf"
+path = "src/lib.rs"
+
+[[bin]]
+name = "docxside-pdf"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[features]
+default = ["cli"]
+cli = ["clap"]
+
 [dependencies]
 zip = "2"
 roxmltree = "0.21"
 pdf-writer = "0.14"
 ttf-parser = "0.25"
+clap = { version = "4", features = ["derive"], optional = true }
 
 [dev-dependencies]
 image = "0.25"

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use pdf_writer::{Content, Name, Pdf, Rect, Ref, Str};
+use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str};
 use ttf_parser::Face;
 
 use crate::error::Error;
@@ -340,6 +340,7 @@ fn build_paragraph_lines(
 }
 
 /// Render pre-built lines applying the paragraph alignment.
+/// `total_line_count` is the full paragraph line count (for justify: last line stays left-aligned).
 fn render_paragraph_lines(
     content: &mut Content,
     lines: &[TextLine],
@@ -348,18 +349,34 @@ fn render_paragraph_lines(
     text_width: f32,
     first_baseline_y: f32,
     line_pitch: f32,
+    total_line_count: usize,
+    first_line_index: usize,
 ) {
     let mut current_color: Option<[u8; 3]> = None;
 
+    let last_line_idx = total_line_count.saturating_sub(1);
     for (line_num, line) in lines.iter().enumerate() {
         let y = first_baseline_y - line_num as f32 * line_pitch;
+        let global_line_idx = first_line_index + line_num;
+
+        let is_justified = *alignment == Alignment::Justify
+            && global_line_idx != last_line_idx
+            && line.chunks.len() > 1;
+
         let line_start_x = match alignment {
             Alignment::Center => margin_left + (text_width - line.total_width) / 2.0,
             Alignment::Right => margin_left + text_width - line.total_width,
-            Alignment::Left => margin_left,
+            Alignment::Left | Alignment::Justify => margin_left,
         };
-        for chunk in &line.chunks {
-            let x = line_start_x + chunk.x_offset;
+
+        let extra_per_gap = if is_justified {
+            (text_width - line.total_width) / (line.chunks.len() - 1) as f32
+        } else {
+            0.0
+        };
+
+        for (chunk_idx, chunk) in line.chunks.iter().enumerate() {
+            let x = line_start_x + chunk.x_offset + chunk_idx as f32 * extra_per_gap;
             if chunk.color != current_color {
                 if let Some([r, g, b]) = chunk.color {
                     content.set_fill_rgb(
@@ -424,15 +441,6 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         }
     }
 
-    // Register SymbolMT if any paragraph has a bullet list label
-    let has_bullets = doc.paragraphs.iter().any(|p| p.list_label == "\u{2022}");
-    if has_bullets && !seen_fonts.contains_key("Symbol") {
-        let pdf_name = format!("F{}", font_order.len() + 1);
-        let entry = register_font(&mut pdf, "Symbol", pdf_name, &mut alloc);
-        seen_fonts.insert("Symbol".to_string(), entry);
-        font_order.push("Symbol".to_string());
-    }
-
     if seen_fonts.is_empty() {
         let pdf_name = "F1".to_string();
         let entry = register_font(&mut pdf, "Helvetica", pdf_name, &mut alloc);
@@ -441,6 +449,29 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     }
 
     let text_width = doc.page_width - doc.margin_left - doc.margin_right;
+
+    // Phase 1b: embed images
+    struct ImageRef {
+        pdf_name: String,
+    }
+    let mut image_refs: HashMap<usize, ImageRef> = HashMap::new(); // para_idx -> ImageRef
+    let mut image_names: Vec<(String, Ref)> = Vec::new();
+    for (para_idx, para) in doc.paragraphs.iter().enumerate() {
+        if let Some(img) = &para.image {
+            let xobj_ref = alloc();
+            let pdf_name = format!("Im{}", image_names.len() + 1);
+
+            let mut xobj = pdf.image_xobject(xobj_ref, &img.data);
+            xobj.filter(Filter::DctDecode);
+            xobj.width(img.pixel_width as i32);
+            xobj.height(img.pixel_height as i32);
+            xobj.color_space().device_rgb();
+            xobj.bits_per_component(8);
+
+            image_names.push((pdf_name.clone(), xobj_ref));
+            image_refs.insert(para_idx, ImageRef { pdf_name });
+        }
+    }
 
     // Phase 2: build multi-page content streams
     let mut all_contents: Vec<Content> = Vec::new();
@@ -474,19 +505,12 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         // When font metrics are available, apply the document's line-spacing factor.
         // For the Helvetica fallback (no metrics), 1.2 is already an approximation;
         // multiplying by doc.line_spacing would overcount and shift subsequent paragraphs.
+        let effective_line_spacing = para.line_spacing.unwrap_or(doc.line_spacing);
         let text_line_h = font_metric(&para.runs, &seen_fonts, |e| e.line_h_ratio)
-            .map(|ratio| font_size * ratio * doc.line_spacing)
+            .map(|ratio| font_size * ratio * effective_line_spacing)
             .unwrap_or(font_size * 1.2);
 
-        // Word uses max(text_font_line_h, bullet_font_line_h) for bullet paragraphs
-        let bullet_line_h = if para.list_label == "\u{2022}" {
-            seen_fonts.get("Symbol")
-                .and_then(|sym| sym.line_h_ratio)
-                .map(|ratio| font_size * ratio * doc.line_spacing)
-        } else {
-            None
-        };
-        let line_h = bullet_line_h.map_or(text_line_h, |bh| f32::max(text_line_h, bh));
+        let line_h = text_line_h;
 
         let para_text_x = doc.margin_left + para.indent_left;
         let para_text_width = (text_width - para.indent_left).max(1.0);
@@ -513,6 +537,73 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         let at_page_top = (slot_top - (doc.page_height - doc.margin_top)).abs() < 1.0;
 
         if !at_page_top && slot_top - needed < doc.margin_bottom {
+            let available = slot_top - inter_gap - doc.margin_bottom;
+            let first_line_h = font_metric(&para.runs, &seen_fonts, |e| e.line_h_ratio)
+                .map(|ratio| font_size * ratio)
+                .unwrap_or(font_size);
+            let lines_that_fit = if line_h > 0.0 && available >= first_line_h {
+                1 + ((available - first_line_h) / line_h).floor() as usize
+            } else {
+                0
+            };
+
+            if lines_that_fit >= 2 && lines.len() > lines_that_fit + 1 {
+                // Split paragraph across pages
+                let first_part = &lines[..lines_that_fit];
+                slot_top -= inter_gap;
+                let ascender_ratio = font_metric(&para.runs, &seen_fonts, |e| e.ascender_ratio)
+                    .unwrap_or(0.75);
+                let baseline_y = slot_top - font_size * ascender_ratio;
+
+                if !para.list_label.is_empty() {
+                    let (label_font_name, label_bytes) =
+                        label_for_run(&para.runs[0], &seen_fonts, &para.list_label);
+                    current_content
+                        .begin_text()
+                        .set_font(Name(label_font_name.as_bytes()), font_size)
+                        .next_line(label_x, baseline_y)
+                        .show(Str(&label_bytes))
+                        .end_text();
+                }
+
+                render_paragraph_lines(
+                    &mut current_content,
+                    first_part,
+                    &para.alignment,
+                    para_text_x,
+                    para_text_width,
+                    baseline_y,
+                    line_h,
+                    lines.len(),
+                    0,
+                );
+
+                // Page break
+                all_contents.push(std::mem::replace(&mut current_content, Content::new()));
+                slot_top = doc.page_height - doc.margin_top;
+
+                // Render remaining lines on new page
+                let rest = &lines[lines_that_fit..];
+                let rest_content_h = rest.len() as f32 * line_h;
+                let baseline_y2 = slot_top - font_size * ascender_ratio;
+
+                render_paragraph_lines(
+                    &mut current_content,
+                    rest,
+                    &para.alignment,
+                    para_text_x,
+                    para_text_width,
+                    baseline_y2,
+                    line_h,
+                    lines.len(),
+                    lines_that_fit,
+                );
+
+                slot_top -= rest_content_h;
+                prev_space_after = effective_space_after;
+                continue;
+            }
+
             all_contents.push(std::mem::replace(&mut current_content, Content::new()));
             slot_top = doc.page_height - doc.margin_top;
             inter_gap = effective_space_before;
@@ -521,11 +612,25 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         slot_top -= inter_gap;
 
         if para.runs.is_empty() && para.content_height > 0.0 {
-            current_content
-                .set_fill_gray(0.5)
-                .rect(doc.margin_left, slot_top - content_h, text_width, content_h)
-                .fill_nonzero()
-                .set_fill_gray(0.0);
+            if let Some(img_ref) = image_refs.get(&para_idx) {
+                let img = para.image.as_ref().unwrap();
+                let y_bottom = slot_top - img.display_height;
+                let x = doc.margin_left + (text_width - img.display_width).max(0.0) / 2.0;
+                current_content.save_state();
+                current_content.transform([
+                    img.display_width, 0.0,
+                    0.0, img.display_height,
+                    x, y_bottom,
+                ]);
+                current_content.x_object(Name(img_ref.pdf_name.as_bytes()));
+                current_content.restore_state();
+            } else {
+                current_content
+                    .set_fill_gray(0.5)
+                    .rect(doc.margin_left, slot_top - content_h, text_width, content_h)
+                    .fill_nonzero()
+                    .set_fill_gray(0.0);
+            }
         } else if !lines.is_empty() {
             let ascender_ratio = font_metric(&para.runs, &seen_fonts, |e| e.ascender_ratio)
                 .unwrap_or(0.75);
@@ -533,15 +638,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
             if !para.list_label.is_empty() {
                 let (label_font_name, label_bytes) =
-                    if para.list_label == "\u{2022}" {
-                        if let Some(sym) = seen_fonts.get("Symbol") {
-                            (sym.pdf_name.as_str(), vec![0xB7u8])
-                        } else {
-                            label_for_run(&para.runs[0], &seen_fonts, &para.list_label)
-                        }
-                    } else {
-                        label_for_run(&para.runs[0], &seen_fonts, &para.list_label)
-                    };
+                    label_for_run(&para.runs[0], &seen_fonts, &para.list_label);
                 current_content
                     .begin_text()
                     .set_font(Name(label_font_name.as_bytes()), font_size)
@@ -558,6 +655,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 para_text_width,
                 baseline_y,
                 line_h,
+                lines.len(),
+                0,
             );
         }
 
@@ -590,9 +689,17 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             .contents(content_ids[i]);
         {
             let mut resources = page.resources();
-            let mut fonts = resources.fonts();
-            for (name, font_ref) in &font_pairs {
-                fonts.pair(Name(name.as_bytes()), *font_ref);
+            {
+                let mut fonts = resources.fonts();
+                for (name, font_ref) in &font_pairs {
+                    fonts.pair(Name(name.as_bytes()), *font_ref);
+                }
+            }
+            if !image_names.is_empty() {
+                let mut xobjects = resources.x_objects();
+                for (name, xobj_ref) in &image_names {
+                    xobjects.pair(Name(name.as_bytes()), *xobj_ref);
+                }
             }
         }
     }
