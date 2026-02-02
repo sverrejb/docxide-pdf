@@ -431,9 +431,10 @@ fn parse_runs(
     theme: &ThemeFonts,
 ) -> Vec<Run> {
     let ppr = wml(para_node, "pPr");
-    let para_style = ppr
+    let para_style_id = ppr
         .and_then(|ppr| wml_attr(ppr, "pStyle"))
-        .and_then(|id| styles.paragraph_styles.get(id));
+        .unwrap_or("Normal");
+    let para_style = styles.paragraph_styles.get(para_style_id);
 
     let style_font_size = para_style
         .and_then(|s| s.font_size)
@@ -572,9 +573,10 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                 let ppr = wml(node, "pPr");
 
                 let para_style_id = ppr
-                    .and_then(|ppr| wml_attr(ppr, "pStyle"));
+                    .and_then(|ppr| wml_attr(ppr, "pStyle"))
+                    .unwrap_or("Normal");
 
-                let para_style = para_style_id.and_then(|id| styles.paragraph_styles.get(id));
+                let para_style = styles.paragraph_styles.get(para_style_id);
 
                 let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
 
