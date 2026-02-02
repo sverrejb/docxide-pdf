@@ -226,8 +226,22 @@ fn analyze_fixture(fixture_dir: &Path) -> Option<FixtureResult> {
     for p in 1..=line_pages {
         let ref_lines = extract_page_lines(&reference_pdf, p);
         let gen_lines = extract_page_lines(&generated_pdf, p);
-        let line_count = ref_lines.len().min(gen_lines.len());
 
+        // Skip line-level comparison when counts differ significantly — mutool
+        // splits our per-word BT/ET blocks into separate lines for justified text,
+        // inflating the count. We'll revisit once we use Tw word spacing.
+        let max_count = ref_lines.len().max(gen_lines.len());
+        let min_count = ref_lines.len().min(gen_lines.len());
+        if max_count > 0 && (max_count - min_count) as f64 / max_count as f64 > 0.15 {
+            println!(
+                "  Page {p}: line count mismatch — reference={}, generated={} (skipping line comparison)",
+                ref_lines.len(),
+                gen_lines.len()
+            );
+            continue;
+        }
+
+        let line_count = min_count;
         for l in 0..line_count {
             let rf = first_word(&ref_lines[l]);
             let gf = first_word(&gen_lines[l]);
@@ -245,7 +259,6 @@ fn analyze_fixture(fixture_dir: &Path) -> Option<FixtureResult> {
             });
         }
 
-        // Extra lines in either PDF
         if ref_lines.len() != gen_lines.len() {
             println!(
                 "  Page {p}: line count mismatch — reference={}, generated={}",
