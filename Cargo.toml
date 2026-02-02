@@ -2,6 +2,20 @@
 name = "docxside-pdf"
 version = "0.1.0"
 edition = "2024"
+description = "Convert DOCX files to PDF, matching Microsoft Word's output as closely as possible"
+license = "Apache-2.0"
+repository = "https://github.com/sverrejb/docxside-pdf"
+keywords = ["docx", "pdf", "converter", "word"]
+categories = ["command-line-utilities", "document-processing"]
+exclude = [
+    "tools/",
+    "tests/",
+    "showcase/",
+    "lancedb/",
+    "models/",
+    "specs/",
+    "CLAUDE.md",
+]
 
 [lib]
 name = "docxside_pdf"
@@ -14,14 +28,16 @@ required-features = ["cli"]
 
 [features]
 default = ["cli"]
-cli = ["clap"]
+cli = ["clap", "env_logger"]
 
 [dependencies]
 zip = "2"
 roxmltree = "0.21"
 pdf-writer = "0.14"
 ttf-parser = "0.25"
+log = "0.4"
 clap = { version = "4", features = ["derive"], optional = true }
+env_logger = { version = "0.11", optional = true }
 
 [dev-dependencies]
 image = "0.25"

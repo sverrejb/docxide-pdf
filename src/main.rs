@@ -11,6 +11,7 @@ struct Args {
 }
 
 fn main() {
+    env_logger::init();
     let args = Args::parse();
     let output = args.output.unwrap_or_else(|| args.input.with_extension("pdf"));
 

@@ -34,7 +34,7 @@ fn find_font_file(font_name: &str) -> Option<PathBuf> {
                     p.extension().and_then(|e| e.to_str()),
                     Some("ttf") | Some("otf")
                 ) {
-                    eprintln!("find_font_file({:?}) -> CloudFonts {:?}", font_name, p);
+                    log::debug!("find_font_file({:?}) -> CloudFonts {:?}", font_name, p);
                     return Some(p);
                 }
             }
@@ -47,7 +47,7 @@ fn find_font_file(font_name: &str) -> Option<PathBuf> {
     for ext in &["ttf", "otf"] {
         let p = word_fonts.join(format!("{}.{}", normalized, ext));
         if p.exists() {
-            eprintln!("find_font_file({:?}) -> DFonts {:?}", font_name, p);
+            log::debug!("find_font_file({:?}) -> DFonts {:?}", font_name, p);
             return Some(p);
         }
     }
@@ -70,7 +70,7 @@ fn find_font_file(font_name: &str) -> Option<PathBuf> {
         }
     }
 
-    eprintln!("find_font_file({:?}) -> None", font_name);
+    log::debug!("find_font_file({:?}) -> None", font_name);
     None
 }
 
@@ -527,7 +527,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         } else {
             lines.len() as f32 * line_h
         };
-        eprintln!("para font={} size={} lines={} line_h={:.3} inter_gap={:.1} space_a={:.1} slot_top={:.3} content_h={:.3}",
+        log::debug!("para font={} size={} lines={} line_h={:.3} inter_gap={:.1} space_a={:.1} slot_top={:.3} content_h={:.3}",
             para.runs.first().map(|r| r.font_name.as_str()).unwrap_or("?"),
             font_size, lines.len(), line_h,
             inter_gap, effective_space_after,

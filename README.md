@@ -2,7 +2,7 @@
 
 > ⚠️ **Work in progress.** The API, output quality, and supported features are all actively changing.
 
-A Rust library for converting DOCX files to PDF, with the goal of matching Microsoft Word's PDF export as closely as possible.
+A Rust library and CLI tool for converting DOCX files to PDF, with the goal of matching Microsoft Word's PDF export as closely as possible.
 
 ## Goal
 
@@ -12,15 +12,6 @@ Given a `.docx` file, produce a `.pdf` that is visually indistinguishable from w
 
 Basic text rendering works for simple documents. Font embedding is functional. Multi-paragraph layout with heading styles and spacing is supported. Complex content (tables, images, charts) is not yet handled.
 
-Similarity scores against Word-generated reference PDFs:
-
-| Case | Jaccard | SSIM (ink blocks) |
-|------|---------|-------------------|
-| case1 (simple body text) | ~44% | ~42% |
-| case2 (headings + body) | ~27% | ~24% |
-| case3 (multi-paragraph) | ~34% | ~29% |
-
-Scores reflect font shape differences and layout imprecision. There is meaningful room for improvement.
 
 ## Showcase
 
@@ -38,13 +29,41 @@ Scores reflect font shape differences and layout imprecision. There is meaningfu
     <td align="center"><img src="showcase/case3_gen.png"/><br/><sub>case3 — 88.1% SSIM</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="showcase/case1_ref.png"/><br/><sub>case1 — reference</sub></td>
-    <td align="center"><img src="showcase/case1_gen.png"/><br/><sub>case1 — 61.2% SSIM</sub></td>
+    <td align="center"><img src="showcase/case4_ref.png"/><br/><sub>case4 — reference</sub></td>
+    <td align="center"><img src="showcase/case4_gen.png"/><br/><sub>case4 — 86.9% SSIM</sub></td>
   </tr>
 </table>
 <!-- showcase-end -->
 
+## Installation
+
+```bash
+# Install the CLI
+cargo install docxside-pdf
+```
+
 ## Usage
+
+### CLI
+
+```bash
+# Convert a DOCX file to PDF
+docxside-pdf input.docx
+
+# Specify output path (defaults to input.pdf)
+docxside-pdf input.docx output.pdf
+```
+
+### Library
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+docxside-pdf = { version = "0.1", default-features = false }
+```
+
+Setting `default-features = false` avoids pulling in the CLI dependency (`clap`).
 
 ```rust
 use docxside_pdf::convert_docx_to_pdf;
