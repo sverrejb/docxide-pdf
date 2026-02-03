@@ -1,6 +1,6 @@
 # docxside-pdf
 
-> ⚠️ **Work in progress.** The API, output quality, and supported features are all actively changing.
+## ⚠️ Work in progress — The API, output quality, and supported features are all actively changing.
 
 A Rust library and CLI tool for converting DOCX files to PDF, with the goal of matching Microsoft Word's PDF export as closely as possible.
 
