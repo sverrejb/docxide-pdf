@@ -1,6 +1,6 @@
 [package]
 name = "docxside-pdf"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Convert DOCX files to PDF, matching Microsoft Word's output as closely as possible"
 license = "Apache-2.0"
@@ -10,7 +10,6 @@ categories = ["command-line-utilities", "text-processing"]
 exclude = [
     "tools/",
     "tests/",
-    "showcase/",
     "lancedb/",
     "models/",
     "specs/",
