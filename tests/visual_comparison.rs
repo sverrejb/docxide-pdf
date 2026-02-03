@@ -9,7 +9,7 @@ const SIMILARITY_THRESHOLD: f64 = 0.25;
 const SSIM_THRESHOLD: f64 = 0.40;
 const MUTOOL_DPI: &str = "150";
 
-const SKIP_FIXTURES: &[&str] = &["case5"];
+const SKIP_FIXTURES: &[&str] = &[];
 
 fn discover_fixtures() -> io::Result<Vec<PathBuf>> {
     let fixtures_dir = Path::new("tests/fixtures");

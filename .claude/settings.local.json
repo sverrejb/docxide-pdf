@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(lsof:*)",
+      "mcp__local-rag__query_documents",
+      "mcp__local-rag__ingest_file",
+      "WebSearch",
+      "Bash(podman run --rm --entrypoint sh docxside-pdf-screenshot -c \"grep -n ''Image or Canvas'' /app/node_modules/pdfjs-dist/legacy/build/pdf.mjs | head -5\")",
+      "Bash(podman run --rm --entrypoint sh docxside-pdf-screenshot -c \"grep -n ''Image or Canvas'' /app/node_modules/canvas/build/Release/*.node 2>/dev/null || grep -rn ''Image or Canvas'' /app/node_modules/canvas/lib/ 2>/dev/null | head -10\")",
+      "Bash(podman run --rm --entrypoint sh docxside-pdf-screenshot -c \"grep -rn ''Image or Canvas'' /app/node_modules/canvas/ 2>/dev/null | head -10\")",
+      "Bash(podman run --rm --entrypoint sh docxside-pdf-screenshot -c \"sed -n ''18520,18545p'' /app/node_modules/pdfjs-dist/legacy/build/pdf.mjs\")",
+      "Bash(podman run --rm --entrypoint sh docxside-pdf-screenshot -c \"grep -n ''applyTransferMapsToCanvas\\\\|_scaleImage\\\\|function _scaleImage\\\\|scaleImage'' /app/node_modules/pdfjs-dist/legacy/build/pdf.mjs | head -20\")",
+      "Bash(podman run:*)",
+      "WebFetch(domain:lib.rs)",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:github.com)",
+      "Bash(mutool draw:*)",
+      "Bash(python3:*)",
+      "Bash(cargo test:*)",
+      "Bash(unzip:*)",
+      "Bash(xmllint:*)",
+      "Bash(grep:*)",
+      "Bash(cargo search:*)",
+      "Bash(mutool info:*)",
+      "Bash(cargo build:*)",
+      "Bash(cargo run:*)",
+      "Bash(cargo check:*)",
+      "Bash(mutool show:*)"
+    ]
+  }
+}

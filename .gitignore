@@ -5,3 +5,4 @@
 /lancedb
 /models
 tests/output/
+.claude/projects/

@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::{fs, io};
 
-const SKIP_FIXTURES: &[&str] = &["case5"];
+const SKIP_FIXTURES: &[&str] = &[];
 
 fn discover_fixtures() -> io::Result<Vec<PathBuf>> {
     let fixtures_dir = Path::new("tests/fixtures");
