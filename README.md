@@ -17,8 +17,6 @@ Basic text rendering works for simple documents. Font embedding is functional. M
 
 ## Showcase
 
-> Run `python tools/showcase.py` to regenerate.
-
 <!-- showcase-start -->
 <table>
   <tr><th>MS Word</th><th>Docxside-PDF</th></tr>
