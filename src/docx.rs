@@ -523,8 +523,19 @@ fn parse_runs(
 }
 
 pub fn parse(path: &Path) -> Result<Document, Error> {
-    let file = std::fs::File::open(path)?;
-    let mut zip = zip::ZipArchive::new(file)?;
+    let file = std::fs::File::open(path).map_err(|e| match e.kind() {
+        std::io::ErrorKind::NotFound => {
+            Error::Io(std::io::Error::new(e.kind(), format!("{}: {path}", e, path = path.display())))
+        }
+        std::io::ErrorKind::PermissionDenied => {
+            Error::Io(std::io::Error::new(e.kind(), format!("{}: {path}", e, path = path.display())))
+        }
+        _ => Error::Io(e),
+    })?;
+
+    let mut zip = zip::ZipArchive::new(file).map_err(|_| {
+        Error::InvalidDocx("file is not a ZIP archive".into())
+    })?;
 
     let theme = parse_theme(&mut zip);
     let styles = parse_styles(&mut zip, &theme);
@@ -532,7 +543,8 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
     let rels = parse_relationships(&mut zip);
 
     let mut xml_content = String::new();
-    zip.by_name("word/document.xml")?
+    zip.by_name("word/document.xml")
+        .map_err(|_| Error::InvalidDocx("missing word/document.xml (is this a DOCX file?)".into()))?
         .read_to_string(&mut xml_content)?;
 
     let xml = roxmltree::Document::parse(&xml_content)?;

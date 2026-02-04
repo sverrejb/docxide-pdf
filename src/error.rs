@@ -2,6 +2,8 @@ use std::fmt;
 
 #[derive(Debug)]
 pub enum Error {
+    /// The input file is not a valid DOCX file
+    InvalidDocx(String),
     Zip(zip::result::ZipError),
     Xml(roxmltree::Error),
     Pdf(String),
@@ -11,6 +13,7 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Error::InvalidDocx(reason) => write!(f, "not a valid DOCX file: {reason}"),
             Error::Zip(e) => write!(f, "ZIP error: {e}"),
             Error::Xml(e) => write!(f, "XML error: {e}"),
             Error::Pdf(e) => write!(f, "PDF error: {e}"),
