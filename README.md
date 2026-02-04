@@ -2,7 +2,9 @@
 
 ## ⚠️ Work in progress — The API, output quality, and supported features are all actively changing.
 
-A Rust library and CLI tool for converting DOCX files to PDF, with the goal of matching Microsoft Word's PDF export as closely as possible.
+A Rust library and CLI tool for converting DOCX files to PDF, with the goal of matching Microsoft Word's PDF export as closely as possible.<sup>*</sup>
+
+*<sub>Reference PDFs are generated using Microsoft Word for Mac (16.106.1) with the "Best for electronic distribution and accessibility (uses Microsoft online service)" export option.</sub>
 
 ## Goal
 
@@ -98,7 +100,7 @@ tools/
 
 ## Testing
 
-Tests require [muto](https://mupdf.com/docs/mutool.html) (`mutool`) on `PATH` for PDF-to-PNG rendering.
+Tests require [mutool](https://mupdf.com/docs/mutool.html) (`mutool`) on `PATH` for PDF-to-PNG rendering.
 
 ```bash
 # Run all tests
