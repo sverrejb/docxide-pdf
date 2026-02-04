@@ -36,6 +36,7 @@ pub struct Paragraph {
     pub indent_hanging: f32,
     pub list_label: String,
     pub contextual_spacing: bool,
+    pub keep_next: bool,
     pub line_spacing: Option<f32>, // per-paragraph override (e.g. 240/240 = 1.0)
     pub image: Option<EmbeddedImage>,
 }

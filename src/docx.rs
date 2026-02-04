@@ -98,6 +98,7 @@ struct ParagraphStyle {
     space_after: Option<f32>,
     alignment: Option<Alignment>,
     contextual_spacing: bool,
+    keep_next: bool,
     line_spacing: Option<f32>, // auto line spacing factor override
     border_bottom_extra: f32,
     based_on: Option<String>,
@@ -289,6 +290,10 @@ fn parse_styles(
             .and_then(|ppr| wml(ppr, "contextualSpacing"))
             .is_some();
 
+        let keep_next = ppr
+            .and_then(|ppr| wml(ppr, "keepNext"))
+            .is_some();
+
         let line_spacing = spacing
             .and_then(|n| n.attribute((WML_NS, "line")))
             .and_then(|v| v.parse::<f32>().ok())
@@ -310,6 +315,7 @@ fn parse_styles(
                 space_after,
                 alignment,
                 contextual_spacing,
+                keep_next,
                 line_spacing,
                 border_bottom_extra: bdr_extra,
                 based_on,
@@ -586,6 +592,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                                     indent_hanging: 0.0,
                                     list_label: String::new(),
                                     contextual_spacing: false,
+                                    keep_next: false,
                                     line_spacing: None,
                                     image: None,
                                 });
@@ -635,6 +642,11 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     .is_some()
                     || para_style.is_some_and(|s| s.contextual_spacing);
 
+                let keep_next = ppr
+                    .and_then(|ppr| wml(ppr, "keepNext"))
+                    .is_some()
+                    || para_style.is_some_and(|s| s.keep_next);
+
                 let line_spacing = inline_spacing
                     .and_then(|n| n.attribute((WML_NS, "line")))
                     .and_then(|v| v.parse::<f32>().ok())
@@ -675,6 +687,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     indent_hanging,
                     list_label,
                     contextual_spacing,
+                    keep_next,
                     line_spacing,
                     image: drawing.image,
                 });

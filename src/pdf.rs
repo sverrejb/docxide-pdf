@@ -567,7 +567,21 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         let needed = inter_gap + content_h + effective_space_after;
         let at_page_top = (slot_top - (doc.page_height - doc.margin_top)).abs() < 1.0;
 
-        if !at_page_top && slot_top - needed < doc.margin_bottom {
+        // keepNext: ensure the next paragraph's first line also fits on this page
+        let keep_next_extra = if para.keep_next {
+            next_para.map_or(0.0, |next| {
+                let next_font_size = next.runs.first().map_or(12.0, |r| r.font_size);
+                let next_inter = f32::max(effective_space_after, next.space_before);
+                let next_first_line_h = font_metric(&next.runs, &seen_fonts, |e| e.line_h_ratio)
+                    .map(|ratio| next_font_size * ratio)
+                    .unwrap_or(next_font_size * 1.2);
+                next_inter + next_first_line_h
+            })
+        } else {
+            0.0
+        };
+
+        if !at_page_top && slot_top - needed - keep_next_extra < doc.margin_bottom {
             let available = slot_top - inter_gap - doc.margin_bottom;
             let first_line_h = font_metric(&para.runs, &seen_fonts, |e| e.line_h_ratio)
                 .map(|ratio| font_size * ratio)
