@@ -2,7 +2,6 @@ use std::fmt;
 
 #[derive(Debug)]
 pub enum Error {
-    /// The input file is not a valid DOCX file
     InvalidDocx(String),
     Zip(zip::result::ZipError),
     Xml(roxmltree::Error),

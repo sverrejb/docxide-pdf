@@ -41,7 +41,6 @@ pub struct Paragraph {
     pub image: Option<EmbeddedImage>,
 }
 
-#[allow(dead_code)]
 pub struct Run {
     pub text: String,
     pub font_size: f32,

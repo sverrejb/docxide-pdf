@@ -41,7 +41,13 @@ fn pdf_page_count(pdf: &Path) -> usize {
 
 fn extract_page_words(pdf: &Path, page: usize) -> Vec<String> {
     let output = Command::new("mutool")
-        .args(["draw", "-F", "text", pdf.to_str().unwrap(), &page.to_string()])
+        .args([
+            "draw",
+            "-F",
+            "text",
+            pdf.to_str().unwrap(),
+            &page.to_string(),
+        ])
         .output()
         .expect("Failed to run mutool draw");
     String::from_utf8_lossy(&output.stdout)
@@ -52,7 +58,13 @@ fn extract_page_words(pdf: &Path, page: usize) -> Vec<String> {
 
 fn extract_page_lines(pdf: &Path, page: usize) -> Vec<String> {
     let output = Command::new("mutool")
-        .args(["draw", "-F", "stext", pdf.to_str().unwrap(), &page.to_string()])
+        .args([
+            "draw",
+            "-F",
+            "stext",
+            pdf.to_str().unwrap(),
+            &page.to_string(),
+        ])
         .output()
         .expect("Failed to run mutool draw -F stext");
     let xml = String::from_utf8_lossy(&output.stdout);
@@ -99,7 +111,10 @@ fn last_word(s: &str) -> String {
 }
 
 fn timestamp() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
 }
 
 fn log_csv(csv_name: &str, header: &str, row: &str) {
@@ -111,7 +126,9 @@ fn log_csv(csv_name: &str, header: &str, row: &str) {
         .append(true)
         .open(&csv_path)
         .expect("Cannot open CSV file");
-    if write_header { writeln!(file, "{header}").unwrap(); }
+    if write_header {
+        writeln!(file, "{header}").unwrap();
+    }
     writeln!(file, "{row}").unwrap();
 }
 
@@ -119,7 +136,9 @@ fn log_csv(csv_name: &str, header: &str, row: &str) {
 fn read_previous_scores(csv_name: &str, score_col: usize) -> HashMap<String, f64> {
     let csv_path = PathBuf::from("tests/output").join(csv_name);
     let mut latest: HashMap<String, f64> = HashMap::new();
-    let Ok(content) = fs::read_to_string(&csv_path) else { return latest };
+    let Ok(content) = fs::read_to_string(&csv_path) else {
+        return latest;
+    };
     for line in content.lines().skip(1) {
         let cols: Vec<&str> = line.split(',').collect();
         if cols.len() > score_col {
@@ -143,7 +162,11 @@ struct CaseResult {
 }
 
 fn analyze_fixture(fixture_dir: &Path) -> Option<CaseResult> {
-    let name = fixture_dir.file_name().unwrap().to_string_lossy().to_string();
+    let name = fixture_dir
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .to_string();
     let input_docx = fixture_dir.join("input.docx");
     let reference_pdf = fixture_dir.join("reference.pdf");
     let output_base = PathBuf::from("tests/output").join(&name);
@@ -221,9 +244,13 @@ fn delta_str(current: f64, previous: Option<f64>) -> String {
     match previous {
         Some(prev) => {
             let diff = (current - prev) * 100.0;
-            if diff.abs() < 0.05 { String::new() }
-            else if diff > 0.0 { format!(" (+{diff:.1}pp)") }
-            else { format!(" ({diff:.1}pp)") }
+            if diff.abs() < 0.05 {
+                String::new()
+            } else if diff > 0.0 {
+                format!(" (+{diff:.1}pp)")
+            } else {
+                format!(" ({diff:.1}pp)")
+            }
         }
         None => String::new(),
     }
@@ -232,7 +259,9 @@ fn delta_str(current: f64, previous: Option<f64>) -> String {
 #[test]
 fn text_boundaries_match() {
     let fixtures = discover_fixtures().expect("Failed to read tests/fixtures");
-    if fixtures.is_empty() { return; }
+    if fixtures.is_empty() {
+        return;
+    }
 
     let prev_scores = read_previous_scores("text_boundary_results.csv", 5);
     let mut results: Vec<CaseResult> = Vec::new();
@@ -250,10 +279,21 @@ fn text_boundaries_match() {
     }
 
     // Log to CSV and print summary
-    let name_w = results.iter().map(|r| r.name.len()).max().unwrap_or(4).max(4);
-    let sep = format!("+-{}-+-------+--------+--------------+-------+-------+-----------+", "-".repeat(name_w));
+    let name_w = results
+        .iter()
+        .map(|r| r.name.len())
+        .max()
+        .unwrap_or(4)
+        .max(4);
+    let sep = format!(
+        "+-{}-+-------+--------+--------------+-------+-------+-----------+",
+        "-".repeat(name_w)
+    );
     println!("\n{sep}");
-    println!("| {:<name_w$} | Pages | Breaks | Max drift    | Lines | Match | Delta     |", "Case");
+    println!(
+        "| {:<name_w$} | Pages | Breaks | Max drift    | Lines | Match | Delta     |",
+        "Case"
+    );
     println!("{sep}");
 
     for r in &results {
@@ -263,17 +303,23 @@ fn text_boundaries_match() {
             format!("{}/{}", r.ref_pages, r.gen_pages)
         };
 
-        let breaks_str = if r.ref_pages <= 1 { "-".to_string() }
-            else if r.max_break_drift == 0 { "OK".to_string() }
-            else { "MISS".to_string() };
+        let breaks_str = if r.ref_pages <= 1 {
+            "-".to_string()
+        } else if r.max_break_drift == 0 {
+            "OK".to_string()
+        } else {
+            "MISS".to_string()
+        };
 
-        let drift_str = if r.ref_pages <= 1 { "-".to_string() }
-            else if r.max_break_drift == 0 { "0".to_string() }
-            else {
-                let abs = r.max_break_drift.unsigned_abs();
-                let pct = abs as f64 / r.total_words.max(1) as f64 * 100.0;
-                format!("{abs}w ({pct:.1}%)")
-            };
+        let drift_str = if r.ref_pages <= 1 {
+            "-".to_string()
+        } else if r.max_break_drift == 0 {
+            "0".to_string()
+        } else {
+            let abs = r.max_break_drift.unsigned_abs();
+            let pct = abs as f64 / r.total_words.max(1) as f64 * 100.0;
+            format!("{abs}w ({pct:.1}%)")
+        };
 
         let line_pct = if r.total_lines > 0 {
             r.matching_lines as f64 / r.total_lines as f64
@@ -296,19 +342,31 @@ fn text_boundaries_match() {
         log_csv(
             "text_boundary_results.csv",
             "timestamp,case,ref_pages,gen_pages,max_drift,line_match_pct",
-            &format!("{},{},{},{},{},{:.4}",
-                timestamp(), r.name, r.ref_pages, r.gen_pages, r.max_break_drift, line_pct),
+            &format!(
+                "{},{},{},{},{},{:.4}",
+                timestamp(),
+                r.name,
+                r.ref_pages,
+                r.gen_pages,
+                r.max_break_drift,
+                line_pct
+            ),
         );
     }
 
     println!("{sep}");
 
-    let regressions: Vec<&str> = results.iter()
+    let regressions: Vec<&str> = results
+        .iter()
         .filter(|r| {
             let line_pct = if r.total_lines > 0 {
                 r.matching_lines as f64 / r.total_lines as f64
-            } else { 1.0 };
-            prev_scores.get(&r.name).is_some_and(|&p| line_pct < p - 0.005)
+            } else {
+                1.0
+            };
+            prev_scores
+                .get(&r.name)
+                .is_some_and(|&p| line_pct < p - 0.005)
         })
         .map(|r| r.name.as_str())
         .collect();

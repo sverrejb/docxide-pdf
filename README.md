@@ -10,10 +10,19 @@ A Rust library and CLI tool for converting DOCX files to PDF, with the goal of m
 
 Given a `.docx` file, produce a `.pdf` that is visually indistinguishable from what Word would export. This is harder than it sounds — Word's layout engine handles fonts, spacing, line breaking, and page geometry in ways that are not fully documented.
 
-## Current State
+## Supported Features
 
-Basic text rendering works for simple documents. Font embedding is functional. Multi-paragraph layout with heading styles and spacing is supported. Complex content (tables, images, charts) is not yet handled.
+- **Text**: font embedding (TTF/OTF), bold, italic, font size, text color, theme fonts
+- **Paragraphs**: left/center/right/justify alignment, space before/after, line spacing, indentation, contextual spacing, keep-next
+- **Styles**: paragraph style inheritance (`basedOn` chains), document defaults from `docDefaults`
+- **Lists**: bullet and numbered lists with nesting levels
+- **Tables**: basic structure, column widths, cell borders, cell content
+- **Images**: inline JPEG embedding with sizing
+- **Page layout**: page size, margins, document grid, automatic page breaking, multi-page output
 
+### Not yet supported
+
+Tables with merged cells, headers/footers, footnotes, sections, underline/strikethrough, tabs, hyperlinks, text boxes, charts, SmartArt, and many other advanced features.
 
 ## Showcase
 
@@ -152,4 +161,4 @@ cargo run --manifest-path tools/Cargo.toml --bin case-diff -- case1
 
 ## License
 
-Not yet specified.
+Apache-2.0

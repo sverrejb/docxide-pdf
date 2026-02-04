@@ -23,7 +23,9 @@ fn main() {
         std::process::exit(1);
     }
 
-    let output = args.output.unwrap_or_else(|| args.input.with_extension("pdf"));
+    let output = args
+        .output
+        .unwrap_or_else(|| args.input.with_extension("pdf"));
 
     if let Err(e) = docxside_pdf::convert_docx_to_pdf(&args.input, &output) {
         eprintln!("Error: {e}");
