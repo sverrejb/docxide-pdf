@@ -3,7 +3,7 @@ use std::io::Read;
 use std::path::Path;
 
 use crate::error::Error;
-use crate::model::{Alignment, Document, EmbeddedImage, Paragraph, Run};
+use crate::model::{Alignment, Block, Document, EmbeddedImage, Paragraph, Run, Table, TableCell, TableRow};
 
 struct LevelDef {
     num_fmt: String,
@@ -580,7 +580,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
         .and_then(|n| twips_attr(n, "linePitch"))
         .unwrap_or(styles.defaults.font_size * 1.2);
 
-    let mut paragraphs = Vec::new();
+    let mut blocks = Vec::new();
     let mut counters: HashMap<(String, u8), u32> = HashMap::new();
 
     for node in body.children() {
@@ -589,29 +589,55 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
         }
         match node.tag_name().name() {
             "tbl" => {
+                let col_widths: Vec<f32> = wml(node, "tblGrid")
+                    .into_iter()
+                    .flat_map(|grid| grid.children())
+                    .filter(|n| n.tag_name().name() == "gridCol" && n.tag_name().namespace() == Some(WML_NS))
+                    .filter_map(|n| twips_attr(n, "w"))
+                    .collect();
+
+                let mut rows = Vec::new();
                 for tr in node.children().filter(|n| n.tag_name().name() == "tr" && n.tag_name().namespace() == Some(WML_NS)) {
+                    let mut cells = Vec::new();
                     for tc in tr.children().filter(|n| n.tag_name().name() == "tc" && n.tag_name().namespace() == Some(WML_NS)) {
+                        let cell_width = wml(tc, "tcPr")
+                            .and_then(|pr| wml(pr, "tcW"))
+                            .and_then(|w| twips_attr(w, "w"))
+                            .unwrap_or_else(|| col_widths.get(cells.len()).copied().unwrap_or(72.0));
+
+                        let mut cell_paras = Vec::new();
                         for p in tc.children().filter(|n| n.tag_name().name() == "p" && n.tag_name().namespace() == Some(WML_NS)) {
-                            let cell_runs = parse_runs(p, &styles, &theme);
-                            if !cell_runs.is_empty() {
-                                paragraphs.push(Paragraph {
-                                    runs: cell_runs,
-                                    space_before: 0.0,
-                                    space_after: 0.0,
-                                    content_height: 0.0,
-                                    alignment: Alignment::Left,
-                                    indent_left: 0.0,
-                                    indent_hanging: 0.0,
-                                    list_label: String::new(),
-                                    contextual_spacing: false,
-                                    keep_next: false,
-                                    line_spacing: None,
-                                    image: None,
-                                });
-                            }
+                            let runs = parse_runs(p, &styles, &theme);
+                            let ppr = wml(p, "pPr");
+                            let para_style_id = ppr
+                                .and_then(|ppr| wml_attr(ppr, "pStyle"))
+                                .unwrap_or("Normal");
+                            let para_style = styles.paragraph_styles.get(para_style_id);
+                            let alignment = ppr
+                                .and_then(|ppr| wml_attr(ppr, "jc"))
+                                .map(parse_alignment)
+                                .or_else(|| para_style.and_then(|s| s.alignment))
+                                .unwrap_or(Alignment::Left);
+                            cell_paras.push(Paragraph {
+                                runs,
+                                space_before: 0.0,
+                                space_after: 0.0,
+                                content_height: 0.0,
+                                alignment,
+                                indent_left: 0.0,
+                                indent_hanging: 0.0,
+                                list_label: String::new(),
+                                contextual_spacing: false,
+                                keep_next: false,
+                                line_spacing: Some(1.0),
+                                image: None,
+                            });
                         }
+                        cells.push(TableCell { width: cell_width, paragraphs: cell_paras });
                     }
+                    rows.push(TableRow { cells });
                 }
+                blocks.push(Block::Table(Table { col_widths, rows }));
             }
             "p" => {
                 let ppr = wml(node, "pPr");
@@ -689,7 +715,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
 
                 let drawing = compute_drawing_info(node, &rels, &mut zip);
 
-                paragraphs.push(Paragraph {
+                blocks.push(Block::Paragraph(Paragraph {
                     runs,
                     space_before,
                     space_after,
@@ -702,7 +728,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     keep_next,
                     line_spacing,
                     image: drawing.image,
-                });
+                }));
             }
             _ => {}
         }
@@ -717,7 +743,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
         margin_right,
         line_pitch,
         line_spacing: styles.defaults.line_spacing,
-        paragraphs,
+        blocks,
     })
 }
 

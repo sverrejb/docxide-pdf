@@ -15,7 +15,7 @@ pub struct Document {
     pub margin_right: f32,
     pub line_pitch: f32,
     pub line_spacing: f32, // auto line spacing factor (e.g. 278/240)
-    pub paragraphs: Vec<Paragraph>,
+    pub blocks: Vec<Block>,
 }
 
 pub struct EmbeddedImage {
@@ -49,4 +49,23 @@ pub struct Run {
     pub bold: bool,
     pub italic: bool,
     pub color: Option<[u8; 3]>, // None = automatic (black)
+}
+
+pub struct Table {
+    pub col_widths: Vec<f32>, // points
+    pub rows: Vec<TableRow>,
+}
+
+pub struct TableRow {
+    pub cells: Vec<TableCell>,
+}
+
+pub struct TableCell {
+    pub width: f32, // points
+    pub paragraphs: Vec<Paragraph>,
+}
+
+pub enum Block {
+    Paragraph(Paragraph),
+    Table(Table),
 }

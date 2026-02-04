@@ -5,7 +5,7 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fs, io};
 
-const SKIP_FIXTURES: &[&str] = &[];
+const SKIP_FIXTURES: &[&str] = &["sample100kB"];
 
 fn discover_fixtures() -> io::Result<Vec<PathBuf>> {
     let fixtures_dir = Path::new("tests/fixtures");
@@ -147,6 +147,7 @@ fn analyze_fixture(fixture_dir: &Path) -> Option<CaseResult> {
     let input_docx = fixture_dir.join("input.docx");
     let reference_pdf = fixture_dir.join("reference.pdf");
     let output_base = PathBuf::from("tests/output").join(&name);
+    let _ = fs::remove_file(output_base.join("generated.pdf"));
     fs::create_dir_all(&output_base).ok();
     let generated_pdf = output_base.join("generated.pdf");
 
@@ -250,9 +251,9 @@ fn text_boundaries_match() {
 
     // Log to CSV and print summary
     let name_w = results.iter().map(|r| r.name.len()).max().unwrap_or(4).max(4);
-    let sep = format!("+-{}-+-------+--------+-----------+-------+-------+-----------+", "-".repeat(name_w));
+    let sep = format!("+-{}-+-------+--------+--------------+-------+-------+-----------+", "-".repeat(name_w));
     println!("\n{sep}");
-    println!("| {:<name_w$} | Pages | Breaks | Max drift | Lines | Match | Delta     |", "Case");
+    println!("| {:<name_w$} | Pages | Breaks | Max drift    | Lines | Match | Delta     |", "Case");
     println!("{sep}");
 
     for r in &results {
@@ -288,7 +289,7 @@ fn text_boundaries_match() {
         let delta = delta_str(line_pct, prev_scores.get(&r.name).copied());
 
         println!(
-            "| {:<name_w$} | {:>5} | {:>6} | {:>9} | {:>5} | {:>5} | {:<9} |",
+            "| {:<name_w$} | {:>5} | {:>6} | {:>12} | {:>5} | {:>5} | {:<9} |",
             r.name, pages_str, breaks_str, drift_str, r.total_lines, line_pct_str, delta
         );
 

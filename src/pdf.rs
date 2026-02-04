@@ -6,7 +6,7 @@ use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str};
 use ttf_parser::Face;
 
 use crate::error::Error;
-use crate::model::{Alignment, Document, Run};
+use crate::model::{Alignment, Block, Document, Run, Table};
 
 struct FontEntry {
     pdf_name: String,
@@ -444,6 +444,140 @@ fn font_metric(
         .and_then(get)
 }
 
+const TABLE_CELL_PAD_LEFT: f32 = 0.0;
+const TABLE_CELL_PAD_RIGHT: f32 = 0.0;
+const TABLE_CELL_PAD_TOP: f32 = 0.0;
+const TABLE_CELL_PAD_BOTTOM: f32 = 0.0;
+const TABLE_BORDER_WIDTH: f32 = 0.5;
+
+struct RowLayout {
+    height: f32,
+    cell_lines: Vec<(Vec<TextLine>, f32, f32)>, // (lines, line_h, font_size) per cell
+}
+
+fn compute_row_layouts(
+    table: &Table,
+    doc: &Document,
+    seen_fonts: &HashMap<String, FontEntry>,
+) -> Vec<RowLayout> {
+    table.rows.iter().map(|row| {
+        let mut max_h: f32 = 0.0;
+        let col_widths = &table.col_widths;
+        let cell_lines: Vec<(Vec<TextLine>, f32, f32)> = row.cells.iter().enumerate().map(|(ci, cell)| {
+            let col_w = col_widths.get(ci).copied().unwrap_or(cell.width);
+            let cell_text_w = (col_w - TABLE_CELL_PAD_LEFT - TABLE_CELL_PAD_RIGHT).max(1.0);
+            let mut total_h: f32 = TABLE_CELL_PAD_TOP + TABLE_CELL_PAD_BOTTOM;
+            let mut all_lines = Vec::new();
+            let mut first_font_size = 12.0f32;
+            let mut first_line_h = 14.4f32;
+
+            for para in &cell.paragraphs {
+                let font_size = para.runs.first().map_or(12.0, |r| r.font_size);
+                let effective_ls = para.line_spacing.unwrap_or(doc.line_spacing);
+                let line_h = font_metric(&para.runs, seen_fonts, |e| e.line_h_ratio)
+                    .map(|ratio| font_size * ratio * effective_ls)
+                    .unwrap_or(font_size * 1.2);
+
+                if all_lines.is_empty() {
+                    first_font_size = font_size;
+                    first_line_h = line_h;
+                }
+
+                if !para.runs.is_empty() {
+                    let lines = build_paragraph_lines(&para.runs, seen_fonts, cell_text_w);
+                    total_h += lines.len() as f32 * line_h;
+                    all_lines.extend(lines);
+                }
+            }
+
+            max_h = max_h.max(total_h);
+            (all_lines, first_line_h, first_font_size)
+        }).collect();
+
+        RowLayout { height: max_h + TABLE_BORDER_WIDTH, cell_lines }
+    }).collect()
+}
+
+fn render_table(
+    table: &Table,
+    doc: &Document,
+    seen_fonts: &HashMap<String, FontEntry>,
+    _text_width: f32,
+    content: &mut Content,
+    all_contents: &mut Vec<Content>,
+    slot_top: &mut f32,
+    prev_space_after: f32,
+) -> f32 {
+    let row_layouts = compute_row_layouts(table, doc, seen_fonts);
+    let inter_gap = prev_space_after;
+
+    *slot_top -= inter_gap;
+
+    let mut table_total_h: f32 = 0.0;
+    let col_widths = &table.col_widths;
+
+    for (ri, (row, layout)) in table.rows.iter().zip(row_layouts.iter()).enumerate() {
+        let row_h = layout.height;
+        log::debug!("TABLE row={} row_h={:.2} cells={} slot_top={:.2}", ri, row_h, layout.cell_lines.len(), *slot_top);
+        let at_page_top = (*slot_top - (doc.page_height - doc.margin_top)).abs() < 1.0;
+
+        if !at_page_top && *slot_top - row_h < doc.margin_bottom {
+            all_contents.push(std::mem::replace(content, Content::new()));
+            *slot_top = doc.page_height - doc.margin_top;
+        }
+
+        let row_top = *slot_top;
+        let row_bottom = row_top - row_h;
+
+        // Render cell contents
+        let mut cell_x = doc.margin_left;
+        for (ci, (cell, (lines, line_h, font_size))) in row.cells.iter().zip(layout.cell_lines.iter()).enumerate() {
+            let col_w = col_widths.get(ci).copied().unwrap_or(cell.width);
+            let cell_text_w = (col_w - TABLE_CELL_PAD_LEFT - TABLE_CELL_PAD_RIGHT).max(1.0);
+            let text_x = cell_x + TABLE_CELL_PAD_LEFT;
+
+            if !lines.is_empty() && !lines.iter().all(|l| l.chunks.is_empty()) {
+                let first_run = cell.paragraphs.first()
+                    .and_then(|p| p.runs.first());
+                let ascender_ratio = first_run
+                    .map(|r| font_key(r))
+                    .and_then(|k| seen_fonts.get(&k))
+                    .and_then(|e| e.ascender_ratio)
+                    .unwrap_or(0.75);
+                let baseline_y = row_top - TABLE_CELL_PAD_TOP - font_size * ascender_ratio;
+                let alignment = cell.paragraphs.first()
+                    .map(|p| p.alignment)
+                    .unwrap_or(Alignment::Left);
+
+                render_paragraph_lines(
+                    content, lines, &alignment,
+                    text_x, cell_text_w, baseline_y, *line_h, lines.len(), 0,
+                );
+            }
+
+            cell_x += col_w;
+        }
+
+        // Draw cell borders
+        content.save_state();
+        content.set_line_width(TABLE_BORDER_WIDTH);
+        let mut bx = doc.margin_left;
+        for (ci, cell) in row.cells.iter().enumerate() {
+            let col_w = col_widths.get(ci).copied().unwrap_or(cell.width);
+            content
+                .rect(bx, row_bottom, col_w, row_h)
+                .stroke();
+            bx += col_w;
+        }
+        content.restore_state();
+
+        *slot_top = row_bottom;
+        table_total_h += row_h;
+    }
+
+    table_total_h
+}
+
 pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     let mut pdf = Pdf::new();
     let mut next_id = 1i32;
@@ -459,16 +593,28 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     // Phase 1: collect unique font names (with variant) and embed them
     let mut seen_fonts: HashMap<String, FontEntry> = HashMap::new();
     let mut font_order: Vec<String> = Vec::new();
-    for para in &doc.paragraphs {
-        for run in &para.runs {
-            let key = font_key(run);
-            if !seen_fonts.contains_key(&key) {
-                let base = primary_font_name(&run.font_name);
-                let pdf_name = format!("F{}", font_order.len() + 1);
-                let entry = register_font(&mut pdf, base, run.bold, run.italic, pdf_name, &mut alloc);
-                seen_fonts.insert(key.clone(), entry);
-                font_order.push(key);
-            }
+
+    // Collect all runs from all blocks (paragraphs and table cells)
+    let all_runs: Vec<&Run> = doc.blocks.iter().flat_map(|block| -> Box<dyn Iterator<Item = &Run> + '_> {
+        match block {
+            Block::Paragraph(para) => Box::new(para.runs.iter()),
+            Block::Table(table) => Box::new(
+                table.rows.iter()
+                    .flat_map(|row| row.cells.iter())
+                    .flat_map(|cell| cell.paragraphs.iter())
+                    .flat_map(|para| para.runs.iter())
+            ),
+        }
+    }).collect();
+
+    for run in &all_runs {
+        let key = font_key(run);
+        if !seen_fonts.contains_key(&key) {
+            let base = primary_font_name(&run.font_name);
+            let pdf_name = format!("F{}", font_order.len() + 1);
+            let entry = register_font(&mut pdf, base, run.bold, run.italic, pdf_name, &mut alloc);
+            seen_fonts.insert(key.clone(), entry);
+            font_order.push(key);
         }
     }
 
@@ -485,22 +631,24 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     struct ImageRef {
         pdf_name: String,
     }
-    let mut image_refs: HashMap<usize, ImageRef> = HashMap::new(); // para_idx -> ImageRef
+    let mut image_refs: HashMap<usize, ImageRef> = HashMap::new(); // block_idx -> ImageRef
     let mut image_names: Vec<(String, Ref)> = Vec::new();
-    for (para_idx, para) in doc.paragraphs.iter().enumerate() {
-        if let Some(img) = &para.image {
-            let xobj_ref = alloc();
-            let pdf_name = format!("Im{}", image_names.len() + 1);
+    for (block_idx, block) in doc.blocks.iter().enumerate() {
+        if let Block::Paragraph(para) = block {
+            if let Some(img) = &para.image {
+                let xobj_ref = alloc();
+                let pdf_name = format!("Im{}", image_names.len() + 1);
 
-            let mut xobj = pdf.image_xobject(xobj_ref, &img.data);
-            xobj.filter(Filter::DctDecode);
-            xobj.width(img.pixel_width as i32);
-            xobj.height(img.pixel_height as i32);
-            xobj.color_space().device_rgb();
-            xobj.bits_per_component(8);
+                let mut xobj = pdf.image_xobject(xobj_ref, &img.data);
+                xobj.filter(Filter::DctDecode);
+                xobj.width(img.pixel_width as i32);
+                xobj.height(img.pixel_height as i32);
+                xobj.color_space().device_rgb();
+                xobj.bits_per_component(8);
 
-            image_names.push((pdf_name.clone(), xobj_ref));
-            image_refs.insert(para_idx, ImageRef { pdf_name });
+                image_names.push((pdf_name.clone(), xobj_ref));
+                image_refs.insert(block_idx, ImageRef { pdf_name });
+            }
         }
     }
 
@@ -508,205 +656,188 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     let mut all_contents: Vec<Content> = Vec::new();
     let mut current_content = Content::new();
     let mut slot_top = doc.page_height - doc.margin_top;
-    // Word collapses adjacent paragraph spacing: gap = max(space_after_prev, space_before_next)
     let mut prev_space_after: f32 = 0.0;
 
-    for (para_idx, para) in doc.paragraphs.iter().enumerate() {
-        let next_para = doc.paragraphs.get(para_idx + 1);
-        let prev_para = if para_idx > 0 { doc.paragraphs.get(para_idx - 1) } else { None };
+    // Helper: get the previous/next paragraph for contextual spacing and keepNext.
+    // Only considers adjacent Paragraph blocks (tables break the chain).
+    let prev_block_para = |idx: usize| -> Option<&crate::model::Paragraph> {
+        if idx > 0 {
+            if let Block::Paragraph(p) = &doc.blocks[idx - 1] { Some(p) } else { None }
+        } else { None }
+    };
+    let next_block_para = |idx: usize| -> Option<&crate::model::Paragraph> {
+        doc.blocks.get(idx + 1).and_then(|b| if let Block::Paragraph(p) = b { Some(p) } else { None })
+    };
 
-        let effective_space_before = if para.contextual_spacing
-            && prev_para.is_some_and(|p| p.contextual_spacing)
-        {
-            0.0
-        } else {
-            para.space_before
-        };
-        let effective_space_after = if para.contextual_spacing
-            && next_para.is_some_and(|p| p.contextual_spacing)
-        {
-            0.0
-        } else {
-            para.space_after
-        };
+    for (block_idx, block) in doc.blocks.iter().enumerate() {
+        match block {
+            Block::Paragraph(para) => {
+                let next_para = next_block_para(block_idx);
+                let prev_para = prev_block_para(block_idx);
 
-        let mut inter_gap = f32::max(prev_space_after, effective_space_before);
+                let effective_space_before = if para.contextual_spacing
+                    && prev_para.is_some_and(|p| p.contextual_spacing)
+                { 0.0 } else { para.space_before };
+                let effective_space_after = if para.contextual_spacing
+                    && next_para.is_some_and(|p| p.contextual_spacing)
+                { 0.0 } else { para.space_after };
 
-        let font_size = para.runs.first().map_or(12.0, |r| r.font_size);
-        // When font metrics are available, apply the document's line-spacing factor.
-        // For the Helvetica fallback (no metrics), 1.2 is already an approximation;
-        // multiplying by doc.line_spacing would overcount and shift subsequent paragraphs.
-        let effective_line_spacing = para.line_spacing.unwrap_or(doc.line_spacing);
-        let text_line_h = font_metric(&para.runs, &seen_fonts, |e| e.line_h_ratio)
-            .map(|ratio| font_size * ratio * effective_line_spacing)
-            .unwrap_or(font_size * 1.2);
+                let mut inter_gap = f32::max(prev_space_after, effective_space_before);
 
-        let line_h = text_line_h;
+                let font_size = para.runs.first().map_or(12.0, |r| r.font_size);
+                let effective_line_spacing = para.line_spacing.unwrap_or(doc.line_spacing);
+                let text_line_h = font_metric(&para.runs, &seen_fonts, |e| e.line_h_ratio)
+                    .map(|ratio| font_size * ratio * effective_line_spacing)
+                    .unwrap_or(font_size * 1.2);
+                let line_h = text_line_h;
 
-        let para_text_x = doc.margin_left + para.indent_left;
-        let para_text_width = (text_width - para.indent_left).max(1.0);
-        let label_x = doc.margin_left + (para.indent_left - para.indent_hanging).max(0.0);
+                let para_text_x = doc.margin_left + para.indent_left;
+                let para_text_width = (text_width - para.indent_left).max(1.0);
+                let label_x = doc.margin_left + (para.indent_left - para.indent_hanging).max(0.0);
 
-        let lines = if para.runs.is_empty() {
-            vec![]
-        } else {
-            build_paragraph_lines(&para.runs, &seen_fonts, para_text_width)
-        };
+                let lines = if para.runs.is_empty() {
+                    vec![]
+                } else {
+                    build_paragraph_lines(&para.runs, &seen_fonts, para_text_width)
+                };
 
-        let content_h = if para.runs.is_empty() {
-            para.content_height.max(doc.line_pitch)
-        } else {
-            lines.len() as f32 * line_h
-        };
-        log::debug!("para font={} size={} lines={} line_h={:.3} inter_gap={:.1} space_a={:.1} slot_top={:.3} content_h={:.3}",
-            para.runs.first().map(|r| r.font_name.as_str()).unwrap_or("?"),
-            font_size, lines.len(), line_h,
-            inter_gap, effective_space_after,
-            slot_top, content_h);
+                let content_h = if para.runs.is_empty() {
+                    para.content_height.max(doc.line_pitch)
+                } else {
+                    lines.len() as f32 * line_h
+                };
 
-        let needed = inter_gap + content_h + effective_space_after;
-        let at_page_top = (slot_top - (doc.page_height - doc.margin_top)).abs() < 1.0;
+                let needed = inter_gap + content_h + effective_space_after;
+                let at_page_top = (slot_top - (doc.page_height - doc.margin_top)).abs() < 1.0;
 
-        // keepNext: ensure the next paragraph's first line also fits on this page
-        let keep_next_extra = if para.keep_next {
-            next_para.map_or(0.0, |next| {
-                let next_font_size = next.runs.first().map_or(12.0, |r| r.font_size);
-                let next_inter = f32::max(effective_space_after, next.space_before);
-                let next_first_line_h = font_metric(&next.runs, &seen_fonts, |e| e.line_h_ratio)
-                    .map(|ratio| next_font_size * ratio)
-                    .unwrap_or(next_font_size * 1.2);
-                next_inter + next_first_line_h
-            })
-        } else {
-            0.0
-        };
+                let keep_next_extra = if para.keep_next {
+                    next_para.map_or(0.0, |next| {
+                        let next_font_size = next.runs.first().map_or(12.0, |r| r.font_size);
+                        let next_inter = f32::max(effective_space_after, next.space_before);
+                        let next_first_line_h = font_metric(&next.runs, &seen_fonts, |e| e.line_h_ratio)
+                            .map(|ratio| next_font_size * ratio)
+                            .unwrap_or(next_font_size * 1.2);
+                        next_inter + next_first_line_h
+                    })
+                } else { 0.0 };
 
-        if !at_page_top && slot_top - needed - keep_next_extra < doc.margin_bottom {
-            let available = slot_top - inter_gap - doc.margin_bottom;
-            let first_line_h = font_metric(&para.runs, &seen_fonts, |e| e.line_h_ratio)
-                .map(|ratio| font_size * ratio)
-                .unwrap_or(font_size);
-            let lines_that_fit = if line_h > 0.0 && available >= first_line_h {
-                1 + ((available - first_line_h) / line_h).floor() as usize
-            } else {
-                0
-            };
+                if !at_page_top && slot_top - needed - keep_next_extra < doc.margin_bottom {
+                    let available = slot_top - inter_gap - doc.margin_bottom;
+                    let first_line_h = font_metric(&para.runs, &seen_fonts, |e| e.line_h_ratio)
+                        .map(|ratio| font_size * ratio)
+                        .unwrap_or(font_size);
+                    let mut lines_that_fit = if line_h > 0.0 && available >= first_line_h {
+                        1 + ((available - first_line_h) / line_h).floor() as usize
+                    } else { 0 };
 
-            if lines_that_fit >= 2 && lines.len() > lines_that_fit + 1 {
-                // Split paragraph across pages
-                let first_part = &lines[..lines_that_fit];
-                slot_top -= inter_gap;
-                let ascender_ratio = font_metric(&para.runs, &seen_fonts, |e| e.ascender_ratio)
-                    .unwrap_or(0.75);
-                let baseline_y = slot_top - font_size * ascender_ratio;
+                    // Reduce to ensure at least 2 lines remain on next page (orphan control)
+                    if lines_that_fit > 0 && lines.len().saturating_sub(lines_that_fit) < 2 {
+                        lines_that_fit = lines.len().saturating_sub(2);
+                    }
 
-                if !para.list_label.is_empty() {
-                    let (label_font_name, label_bytes) =
-                        label_for_run(&para.runs[0], &seen_fonts, &para.list_label);
-                    current_content
-                        .begin_text()
-                        .set_font(Name(label_font_name.as_bytes()), font_size)
-                        .next_line(label_x, baseline_y)
-                        .show(Str(&label_bytes))
-                        .end_text();
+                    if lines_that_fit >= 2 && lines_that_fit < lines.len() {
+                        let first_part = &lines[..lines_that_fit];
+                        slot_top -= inter_gap;
+                        let ascender_ratio = font_metric(&para.runs, &seen_fonts, |e| e.ascender_ratio)
+                            .unwrap_or(0.75);
+                        let baseline_y = slot_top - font_size * ascender_ratio;
+
+                        if !para.list_label.is_empty() {
+                            let (label_font_name, label_bytes) =
+                                label_for_run(&para.runs[0], &seen_fonts, &para.list_label);
+                            current_content
+                                .begin_text()
+                                .set_font(Name(label_font_name.as_bytes()), font_size)
+                                .next_line(label_x, baseline_y)
+                                .show(Str(&label_bytes))
+                                .end_text();
+                        }
+
+                        render_paragraph_lines(
+                            &mut current_content, first_part, &para.alignment,
+                            para_text_x, para_text_width, baseline_y, line_h, lines.len(), 0,
+                        );
+
+                        all_contents.push(std::mem::replace(&mut current_content, Content::new()));
+                        slot_top = doc.page_height - doc.margin_top;
+
+                        let rest = &lines[lines_that_fit..];
+                        let rest_content_h = rest.len() as f32 * line_h;
+                        let baseline_y2 = slot_top - font_size * ascender_ratio;
+
+                        render_paragraph_lines(
+                            &mut current_content, rest, &para.alignment,
+                            para_text_x, para_text_width, baseline_y2, line_h, lines.len(), lines_that_fit,
+                        );
+
+                        slot_top -= rest_content_h;
+                        prev_space_after = effective_space_after;
+                        continue;
+                    }
+
+                    all_contents.push(std::mem::replace(&mut current_content, Content::new()));
+                    slot_top = doc.page_height - doc.margin_top;
+                    inter_gap = effective_space_before;
                 }
 
-                render_paragraph_lines(
-                    &mut current_content,
-                    first_part,
-                    &para.alignment,
-                    para_text_x,
-                    para_text_width,
-                    baseline_y,
-                    line_h,
-                    lines.len(),
-                    0,
-                );
+                slot_top -= inter_gap;
 
-                // Page break
-                all_contents.push(std::mem::replace(&mut current_content, Content::new()));
-                slot_top = doc.page_height - doc.margin_top;
+                if para.runs.is_empty() && para.content_height > 0.0 {
+                    if let Some(img_ref) = image_refs.get(&block_idx) {
+                        let img = para.image.as_ref().unwrap();
+                        let y_bottom = slot_top - img.display_height;
+                        let x = doc.margin_left + (text_width - img.display_width).max(0.0) / 2.0;
+                        current_content.save_state();
+                        current_content.transform([
+                            img.display_width, 0.0,
+                            0.0, img.display_height,
+                            x, y_bottom,
+                        ]);
+                        current_content.x_object(Name(img_ref.pdf_name.as_bytes()));
+                        current_content.restore_state();
+                    } else {
+                        current_content
+                            .set_fill_gray(0.5)
+                            .rect(doc.margin_left, slot_top - content_h, text_width, content_h)
+                            .fill_nonzero()
+                            .set_fill_gray(0.0);
+                    }
+                } else if !lines.is_empty() {
+                    let ascender_ratio = font_metric(&para.runs, &seen_fonts, |e| e.ascender_ratio)
+                        .unwrap_or(0.75);
+                    let baseline_y = slot_top - font_size * ascender_ratio;
 
-                // Render remaining lines on new page
-                let rest = &lines[lines_that_fit..];
-                let rest_content_h = rest.len() as f32 * line_h;
-                let baseline_y2 = slot_top - font_size * ascender_ratio;
+                    if !para.list_label.is_empty() {
+                        let (label_font_name, label_bytes) =
+                            label_for_run(&para.runs[0], &seen_fonts, &para.list_label);
+                        current_content
+                            .begin_text()
+                            .set_font(Name(label_font_name.as_bytes()), font_size)
+                            .next_line(label_x, baseline_y)
+                            .show(Str(&label_bytes))
+                            .end_text();
+                    }
 
-                render_paragraph_lines(
-                    &mut current_content,
-                    rest,
-                    &para.alignment,
-                    para_text_x,
-                    para_text_width,
-                    baseline_y2,
-                    line_h,
-                    lines.len(),
-                    lines_that_fit,
-                );
+                    render_paragraph_lines(
+                        &mut current_content, &lines, &para.alignment,
+                        para_text_x, para_text_width, baseline_y, line_h, lines.len(), 0,
+                    );
+                }
 
-                slot_top -= rest_content_h;
+                slot_top -= content_h;
                 prev_space_after = effective_space_after;
-                continue;
             }
 
-            all_contents.push(std::mem::replace(&mut current_content, Content::new()));
-            slot_top = doc.page_height - doc.margin_top;
-            inter_gap = effective_space_before;
+            Block::Table(table) => {
+                let table_h = render_table(
+                    table, doc, &seen_fonts, text_width,
+                    &mut current_content, &mut all_contents,
+                    &mut slot_top, prev_space_after,
+                );
+                let _ = table_h;
+                prev_space_after = 0.0;
+            }
         }
-
-        slot_top -= inter_gap;
-
-        if para.runs.is_empty() && para.content_height > 0.0 {
-            if let Some(img_ref) = image_refs.get(&para_idx) {
-                let img = para.image.as_ref().unwrap();
-                let y_bottom = slot_top - img.display_height;
-                let x = doc.margin_left + (text_width - img.display_width).max(0.0) / 2.0;
-                current_content.save_state();
-                current_content.transform([
-                    img.display_width, 0.0,
-                    0.0, img.display_height,
-                    x, y_bottom,
-                ]);
-                current_content.x_object(Name(img_ref.pdf_name.as_bytes()));
-                current_content.restore_state();
-            } else {
-                current_content
-                    .set_fill_gray(0.5)
-                    .rect(doc.margin_left, slot_top - content_h, text_width, content_h)
-                    .fill_nonzero()
-                    .set_fill_gray(0.0);
-            }
-        } else if !lines.is_empty() {
-            let ascender_ratio = font_metric(&para.runs, &seen_fonts, |e| e.ascender_ratio)
-                .unwrap_or(0.75);
-            let baseline_y = slot_top - font_size * ascender_ratio;
-
-            if !para.list_label.is_empty() {
-                let (label_font_name, label_bytes) =
-                    label_for_run(&para.runs[0], &seen_fonts, &para.list_label);
-                current_content
-                    .begin_text()
-                    .set_font(Name(label_font_name.as_bytes()), font_size)
-                    .next_line(label_x, baseline_y)
-                    .show(Str(&label_bytes))
-                    .end_text();
-            }
-
-            render_paragraph_lines(
-                &mut current_content,
-                &lines,
-                &para.alignment,
-                para_text_x,
-                para_text_width,
-                baseline_y,
-                line_h,
-                lines.len(),
-                0,
-            );
-        }
-
-        slot_top -= content_h;
-        prev_space_after = effective_space_after;
     }
     all_contents.push(current_content);
 

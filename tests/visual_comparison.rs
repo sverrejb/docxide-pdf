@@ -159,6 +159,10 @@ fn prepare_fixture(fixture_dir: &Path) -> Option<FixturePages> {
     let reference_screenshots = output_base.join("reference");
     let generated_screenshots = output_base.join("generated");
 
+    let _ = fs::remove_dir_all(&reference_screenshots);
+    let _ = fs::remove_dir_all(&generated_screenshots);
+    let _ = fs::remove_dir_all(&output_base.join("diff"));
+
     if let Err(e) = screenshot_pdf(&reference_pdf, &reference_screenshots) {
         println!("  [ERROR] {name}: screenshot reference failed: {e}");
         return None;
