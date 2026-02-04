@@ -21,16 +21,16 @@ Basic text rendering works for simple documents. Font embedding is functional. M
 <table>
   <tr><th>MS Word</th><th>Docxside-PDF</th></tr>
   <tr>
-    <td align="center"><img src="showcase/case2_ref.png"/><br/><sub>case2 — reference</sub></td>
-    <td align="center"><img src="showcase/case2_gen.png"/><br/><sub>case2 — 93.3% SSIM</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case2_ref.png"/><br/><sub>case2 — reference</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case2_gen.png"/><br/><sub>case2 — 93.3% SSIM</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="showcase/case3_ref.png"/><br/><sub>case3 — reference</sub></td>
-    <td align="center"><img src="showcase/case3_gen.png"/><br/><sub>case3 — 88.1% SSIM</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case3_ref.png"/><br/><sub>case3 — reference</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case3_gen.png"/><br/><sub>case3 — 88.1% SSIM</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="showcase/case4_ref.png"/><br/><sub>case4 — reference</sub></td>
-    <td align="center"><img src="showcase/case4_gen.png"/><br/><sub>case4 — 86.9% SSIM</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case4_ref.png"/><br/><sub>case4 — reference</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case4_gen.png"/><br/><sub>case4 — 86.9% SSIM</sub></td>
   </tr>
 </table>
 <!-- showcase-end -->
