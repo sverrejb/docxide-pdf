@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str};
 use ttf_parser::Face;
@@ -15,63 +16,80 @@ struct FontEntry {
     ascender_ratio: Option<f32>, // ascender / UPM; used to place baseline within the slot
 }
 
-/// Search the host system for a TTF/OTF file for the given font name.
-/// Checks Microsoft Office bundled fonts and system font directories.
-fn find_font_file(font_name: &str) -> Option<PathBuf> {
-    let normalized = font_name.replace(' ', "");
+/// (lowercase family name, bold, italic) -> file path
+type FontLookup = HashMap<(String, bool, bool), PathBuf>;
 
-    // 1. Office CloudFonts (e.g. Aptos Display is downloaded here on Mac)
-    if let Ok(home) = std::env::var("HOME") {
-        let cloud_dir = PathBuf::from(&home)
-            .join("Library/Group Containers/UBF8T346G9.Office/FontCache/4/CloudFonts")
-            .join(font_name);
-        if cloud_dir.is_dir()
-            && let Ok(entries) = std::fs::read_dir(&cloud_dir)
-        {
-            for entry in entries.flatten() {
-                let p = entry.path();
-                if matches!(
-                    p.extension().and_then(|e| e.to_str()),
-                    Some("ttf") | Some("otf")
-                ) {
-                    log::debug!("find_font_file({:?}) -> CloudFonts {:?}", font_name, p);
-                    return Some(p);
-                }
+static FONT_INDEX: OnceLock<FontLookup> = OnceLock::new();
+
+fn font_family_name(face: &Face) -> Option<String> {
+    // Use ID 1 (Family) — matches what DOCX references and distinguishes
+    // "Aptos Display" from "Aptos" from "Aptos Narrow".
+    // ID 16 (Typographic Family) groups all these under one name, causing collisions.
+    for name in face.names() {
+        if name.name_id == ttf_parser::name_id::FAMILY && name.is_unicode() {
+            if let Some(s) = name.to_string() {
+                return Some(s);
             }
         }
     }
-
-    // 2. Word app DFonts (Mac)
-    let word_fonts =
-        Path::new("/Applications/Microsoft Word.app/Contents/Resources/DFonts");
-    for ext in &["ttf", "otf"] {
-        let p = word_fonts.join(format!("{}.{}", normalized, ext));
-        if p.exists() {
-            log::debug!("find_font_file({:?}) -> DFonts {:?}", font_name, p);
-            return Some(p);
-        }
-    }
-
-    // 3. System font directories
-    let system_dirs = [
-        "/Library/Fonts",
-        "/Library/Fonts/Microsoft",
-        "/System/Library/Fonts",
-        "/System/Library/Fonts/Supplemental",
-    ];
-    for name_variant in &[normalized.as_str(), font_name] {
-        for dir in &system_dirs {
-            for ext in &["ttf", "otf"] {
-                let p = Path::new(dir).join(format!("{}.{}", name_variant, ext));
-                if p.exists() {
-                    return Some(p);
-                }
-            }
-        }
-    }
-
-    log::debug!("find_font_file({:?}) -> None", font_name);
     None
+}
+
+fn read_font_style(path: &Path) -> Option<(String, bool, bool)> {
+    let data = std::fs::read(path).ok()?;
+    let face = Face::parse(&data, 0).ok()?;
+    let family = font_family_name(&face)?;
+    Some((family, face.is_bold(), face.is_italic()))
+}
+
+fn scan_font_dirs() -> FontLookup {
+    let mut index = FontLookup::new();
+    let mut dirs: Vec<PathBuf> = vec![
+        "/Applications/Microsoft Word.app/Contents/Resources/DFonts".into(),
+        "/Library/Fonts".into(),
+        "/Library/Fonts/Microsoft".into(),
+        "/System/Library/Fonts".into(),
+        "/System/Library/Fonts/Supplemental".into(),
+    ];
+    if let Ok(home) = std::env::var("HOME") {
+        let cloud = PathBuf::from(&home)
+            .join("Library/Group Containers/UBF8T346G9.Office/FontCache/4/CloudFonts");
+        if let Ok(families) = std::fs::read_dir(&cloud) {
+            for entry in families.flatten() {
+                if entry.path().is_dir() {
+                    dirs.push(entry.path());
+                }
+            }
+        }
+    }
+    for dir in &dirs {
+        let Ok(entries) = std::fs::read_dir(dir) else { continue };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            match path.extension().and_then(|e| e.to_str()) {
+                Some("ttf" | "otf") => {}
+                _ => continue,
+            }
+            if let Some((family, bold, italic)) = read_font_style(&path) {
+                index.entry((family.to_lowercase(), bold, italic)).or_insert(path);
+            }
+        }
+    }
+    index
+}
+
+fn get_font_index() -> &'static FontLookup {
+    FONT_INDEX.get_or_init(scan_font_dirs)
+}
+
+/// Look up a font file by family name and style using the OS/2 table metadata index.
+/// Falls back to the regular variant if the requested bold/italic is not available.
+fn find_font_file(font_name: &str, bold: bool, italic: bool) -> Option<PathBuf> {
+    let index = get_font_index();
+    let key = font_name.to_lowercase();
+    index.get(&(key.clone(), bold, italic))
+        .or_else(|| if bold || italic { index.get(&(key, false, false)) } else { None })
+        .cloned()
 }
 
 /// Windows-1252 (WinAnsi) byte to Unicode char mapping.
@@ -243,9 +261,21 @@ fn primary_font_name(name: &str) -> &str {
     name.split(';').next().unwrap_or(name).trim()
 }
 
+fn font_key(run: &Run) -> String {
+    let base = primary_font_name(&run.font_name);
+    match (run.bold, run.italic) {
+        (true, true) => format!("{}/BI", base),
+        (true, false) => format!("{}/B", base),
+        (false, true) => format!("{}/I", base),
+        (false, false) => base.to_string(),
+    }
+}
+
 fn register_font(
     pdf: &mut Pdf,
     font_name: &str,
+    bold: bool,
+    italic: bool,
     pdf_name: String,
     alloc: &mut impl FnMut() -> Ref,
 ) -> FontEntry {
@@ -253,7 +283,7 @@ fn register_font(
     let descriptor_ref = alloc();
     let data_ref = alloc();
 
-    let (widths, line_h_ratio, ascender_ratio) = find_font_file(font_name)
+    let (widths, line_h_ratio, ascender_ratio) = find_font_file(font_name, bold, italic)
         .and_then(|path| {
             embed_truetype(pdf, font_ref, descriptor_ref, data_ref, font_name, &path)
         })
@@ -301,8 +331,8 @@ fn build_paragraph_lines(
     let mut current_x: f32 = 0.0;
 
     for run in runs {
-        let key = primary_font_name(&run.font_name);
-        let entry = seen_fonts.get(key).expect("font registered");
+        let key = font_key(run);
+        let entry = seen_fonts.get(&key).expect("font registered");
         let space_w = entry.widths_1000[0] * run.font_size / 1000.0;
 
         for word in run.text.split_whitespace() {
@@ -409,8 +439,8 @@ fn font_metric(
     get: impl Fn(&FontEntry) -> Option<f32>,
 ) -> Option<f32> {
     runs.first()
-        .map(|r| primary_font_name(&r.font_name))
-        .and_then(|k| seen_fonts.get(k))
+        .map(|r| font_key(r))
+        .and_then(|k| seen_fonts.get(&k))
         .and_then(get)
 }
 
@@ -426,15 +456,16 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     let catalog_id = alloc();
     let pages_id = alloc();
 
-    // Phase 1: collect unique font names and embed them
+    // Phase 1: collect unique font names (with variant) and embed them
     let mut seen_fonts: HashMap<String, FontEntry> = HashMap::new();
     let mut font_order: Vec<String> = Vec::new();
     for para in &doc.paragraphs {
         for run in &para.runs {
-            let key = primary_font_name(&run.font_name).to_string();
+            let key = font_key(run);
             if !seen_fonts.contains_key(&key) {
+                let base = primary_font_name(&run.font_name);
                 let pdf_name = format!("F{}", font_order.len() + 1);
-                let entry = register_font(&mut pdf, &key, pdf_name, &mut alloc);
+                let entry = register_font(&mut pdf, base, run.bold, run.italic, pdf_name, &mut alloc);
                 seen_fonts.insert(key.clone(), entry);
                 font_order.push(key);
             }
@@ -443,7 +474,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
     if seen_fonts.is_empty() {
         let pdf_name = "F1".to_string();
-        let entry = register_font(&mut pdf, "Helvetica", pdf_name, &mut alloc);
+        let entry = register_font(&mut pdf, "Helvetica", false, false, pdf_name, &mut alloc);
         seen_fonts.insert("Helvetica".to_string(), entry);
         font_order.push("Helvetica".to_string());
     }
@@ -712,7 +743,7 @@ fn label_for_run<'a>(
     seen_fonts: &'a HashMap<String, FontEntry>,
     label: &str,
 ) -> (&'a str, Vec<u8>) {
-    let key = primary_font_name(&run.font_name);
-    let entry = seen_fonts.get(key).expect("font registered");
+    let key = font_key(run);
+    let entry = seen_fonts.get(&key).expect("font registered");
     (entry.pdf_name.as_str(), to_winansi_bytes(label))
 }

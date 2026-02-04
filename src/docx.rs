@@ -91,6 +91,8 @@ struct StyleDefaults {
 struct ParagraphStyle {
     font_size: Option<f32>,
     font_name: Option<String>,
+    bold: Option<bool>,
+    italic: Option<bool>,
     color: Option<[u8; 3]>,
     space_before: f32,
     space_after: Option<f32>,
@@ -268,6 +270,13 @@ fn parse_styles(
             .and_then(|n| wml(n, "rFonts"))
             .map(|rfonts| resolve_font_from_node(rfonts, theme, &defaults.font_name));
 
+        let bold = rpr.and_then(|n| wml(n, "b")).map(|n| {
+            n.attribute((WML_NS, "val")).map_or(true, |v| v != "0" && v != "false")
+        });
+        let italic = rpr.and_then(|n| wml(n, "i")).map(|n| {
+            n.attribute((WML_NS, "val")).map_or(true, |v| v != "0" && v != "false")
+        });
+
         let color = rpr
             .and_then(|n| wml_attr(n, "color"))
             .and_then(parse_hex_color);
@@ -294,6 +303,8 @@ fn parse_styles(
             ParagraphStyle {
                 font_size,
                 font_name,
+                bold,
+                italic,
                 color,
                 space_before,
                 space_after,
@@ -331,6 +342,8 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
         // Apply inheritance from furthest ancestor down to the style itself
         let mut inherited_font_name: Option<String> = None;
         let mut inherited_font_size: Option<f32> = None;
+        let mut inherited_bold: Option<bool> = None;
+        let mut inherited_italic: Option<bool> = None;
         let mut inherited_color: Option<[u8; 3]> = None;
         let mut inherited_alignment: Option<Alignment> = None;
         let mut inherited_space_after: Option<f32> = None;
@@ -340,6 +353,8 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             if let Some(s) = styles.get(ancestor_id) {
                 if s.font_name.is_some() { inherited_font_name = s.font_name.clone(); }
                 if s.font_size.is_some() { inherited_font_size = s.font_size; }
+                if s.bold.is_some() { inherited_bold = s.bold; }
+                if s.italic.is_some() { inherited_italic = s.italic; }
                 if s.color.is_some() { inherited_color = s.color; }
                 if s.alignment.is_some() { inherited_alignment = s.alignment; }
                 if s.space_after.is_some() { inherited_space_after = s.space_after; }
@@ -350,6 +365,8 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
         if let Some(s) = styles.get_mut(&id) {
             if s.font_name.is_none() { s.font_name = inherited_font_name; }
             if s.font_size.is_none() { s.font_size = inherited_font_size; }
+            if s.bold.is_none() { s.bold = inherited_bold; }
+            if s.italic.is_none() { s.italic = inherited_italic; }
             if s.color.is_none() { s.color = inherited_color; }
             if s.alignment.is_none() { s.alignment = inherited_alignment; }
             if s.space_after.is_none() { s.space_after = inherited_space_after; }
@@ -443,6 +460,8 @@ fn parse_runs(
         .and_then(|s| s.font_name.as_deref())
         .unwrap_or(&styles.defaults.font_name)
         .to_string();
+    let style_bold = para_style.and_then(|s| s.bold).unwrap_or(false);
+    let style_italic = para_style.and_then(|s| s.italic).unwrap_or(false);
     let style_color: Option<[u8; 3]> = para_style.and_then(|s| s.color);
 
     let run_nodes: Vec<_> = para_node.children().flat_map(|child| {
@@ -470,8 +489,14 @@ fn parse_runs(
             .map(|rfonts| resolve_font_from_node(rfonts, theme, &style_font_name))
             .unwrap_or_else(|| style_font_name.clone());
 
-        let bold = rpr.and_then(|n| wml(n, "b")).is_some();
-        let italic = rpr.and_then(|n| wml(n, "i")).is_some();
+        let bold = match rpr.and_then(|n| wml(n, "b")) {
+            Some(n) => n.attribute((WML_NS, "val")).map_or(true, |v| v != "0" && v != "false"),
+            None => style_bold,
+        };
+        let italic = match rpr.and_then(|n| wml(n, "i")) {
+            Some(n) => n.attribute((WML_NS, "val")).map_or(true, |v| v != "0" && v != "false"),
+            None => style_italic,
+        };
 
         let color = rpr
             .and_then(|n| wml_attr(n, "color"))
