@@ -2,9 +2,9 @@
 """
 Generate showcase images for the README.
 
-Runs the test suite, picks the top 3 cases by SSIM score, resizes their
-reference and generated page PNGs, saves them to showcase/, and rewrites
-the <!-- showcase-start/end --> section in README.md.
+Runs the test suite, picks all passing cases (SSIM >= threshold) sorted by
+name, resizes their reference and generated page PNGs, saves them to
+showcase/, and rewrites the <!-- showcase-start/end --> section in README.md.
 """
 import csv
 import subprocess
@@ -17,6 +17,8 @@ SHOWCASE_DIR = ROOT / "showcase"
 SSIM_CSV = ROOT / "tests/output/ssim_results.csv"
 README = ROOT / "README.md"
 TARGET_W = 420
+SSIM_THRESHOLD = 0.40
+IMG_BASE = "https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase"
 START_MARKER = "<!-- showcase-start -->"
 END_MARKER = "<!-- showcase-end -->"
 
@@ -31,19 +33,19 @@ def run_tests():
         print("WARN: tests reported failures — using existing output", file=sys.stderr)
 
 
-def top_cases(n=3):
+def passing_cases():
     if not SSIM_CSV.exists():
         print(f"No SSIM results at {SSIM_CSV}", file=sys.stderr)
         sys.exit(1)
 
-    # Latest entry per case wins (CSV is append-only)
     best = {}
     with open(SSIM_CSV) as f:
         for row in csv.DictReader(f):
             best[row["case"]] = float(row["avg_ssim"])
 
-    ranked = sorted(best.items(), key=lambda x: x[1], reverse=True)
-    return ranked[:n]
+    passing = [(c, s) for c, s in best.items() if s >= SSIM_THRESHOLD]
+    passing.sort(key=lambda x: x[0])
+    return passing
 
 
 def resize(src: Path, dst: Path):
@@ -57,8 +59,8 @@ def build_section(rows):
     lines = ["<table>", "  <tr><th>MS Word</th><th>Docxside-PDF</th></tr>"]
     for case, score, ref_file, gen_file in rows:
         lines.append("  <tr>")
-        lines.append(f'    <td align="center"><img src="showcase/{ref_file}"/><br/><sub>{case} — reference</sub></td>')
-        lines.append(f'    <td align="center"><img src="showcase/{gen_file}"/><br/><sub>{case} — {score*100:.1f}% SSIM</sub></td>')
+        lines.append(f'    <td align="center"><img src="{IMG_BASE}/{ref_file}"/><br/><sub>{case} — reference</sub></td>')
+        lines.append(f'    <td align="center"><img src="{IMG_BASE}/{gen_file}"/><br/><sub>{case} — {score*100:.1f}% SSIM</sub></td>')
         lines.append("  </tr>")
     lines.append("</table>")
     return "\n".join(lines)
@@ -78,8 +80,8 @@ def update_readme(section):
 def main():
     run_tests()
 
-    cases = top_cases()
-    print("Top 3 by SSIM:")
+    cases = passing_cases()
+    print(f"Passing cases (SSIM >= {SSIM_THRESHOLD*100:.0f}%):")
     for case, score in cases:
         print(f"  {case}: {score*100:.1f}%")
 

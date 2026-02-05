@@ -30,6 +30,10 @@ Tables with merged cells, headers/footers, footnotes, sections, underline/strike
 <table>
   <tr><th>MS Word</th><th>Docxside-PDF</th></tr>
   <tr>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case1_ref.png"/><br/><sub>case1 — reference</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case1_gen.png"/><br/><sub>case1 — 61.2% SSIM</sub></td>
+  </tr>
+  <tr>
     <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case2_ref.png"/><br/><sub>case2 — reference</sub></td>
     <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case2_gen.png"/><br/><sub>case2 — 93.3% SSIM</sub></td>
   </tr>
@@ -39,7 +43,15 @@ Tables with merged cells, headers/footers, footnotes, sections, underline/strike
   </tr>
   <tr>
     <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case4_ref.png"/><br/><sub>case4 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case4_gen.png"/><br/><sub>case4 — 86.9% SSIM</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case4_gen.png"/><br/><sub>case4 — 88.7% SSIM</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case5_ref.png"/><br/><sub>case5 — reference</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case5_gen.png"/><br/><sub>case5 — 49.9% SSIM</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case6_ref.png"/><br/><sub>case6 — reference</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case6_gen.png"/><br/><sub>case6 — 46.2% SSIM</sub></td>
   </tr>
 </table>
 <!-- showcase-end -->
