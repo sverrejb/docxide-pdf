@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::OnceLock;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fs, io};
 
@@ -227,6 +228,17 @@ fn prepare_fixture(fixture_dir: &Path) -> Option<FixturePages> {
     })
 }
 
+fn prepared_fixtures() -> &'static Vec<FixturePages> {
+    static FIXTURES: OnceLock<Vec<FixturePages>> = OnceLock::new();
+    FIXTURES.get_or_init(|| {
+        let fixture_dirs = discover_fixtures().expect("Failed to read tests/fixtures");
+        fixture_dirs
+            .iter()
+            .filter_map(|d| prepare_fixture(d))
+            .collect()
+    })
+}
+
 fn delta_str(current: f64, previous: Option<f64>) -> String {
     match previous {
         Some(prev) => {
@@ -372,7 +384,7 @@ fn ssim_score(a: &Path, b: &Path) -> Result<f64, String> {
 
 #[test]
 fn visual_comparison() {
-    let fixtures = discover_fixtures().expect("Failed to read tests/fixtures");
+    let fixtures = prepared_fixtures();
     if fixtures.is_empty() {
         return;
     }
@@ -381,11 +393,7 @@ fn visual_comparison() {
     let mut all_passed = true;
     let mut table_rows: Vec<(String, f64, bool)> = Vec::new();
 
-    for fixture_dir in &fixtures {
-        let Some(fixture) = prepare_fixture(fixture_dir) else {
-            all_passed = false;
-            continue;
-        };
+    for fixture in fixtures {
         let diff_dir = fixture.output_base.join("diff");
         let page_count = fixture.ref_pages.len().min(fixture.gen_pages.len());
         let mut scores: Vec<f64> = Vec::new();
@@ -428,7 +436,7 @@ fn visual_comparison() {
 
 #[test]
 fn ssim_comparison() {
-    let fixtures = discover_fixtures().expect("Failed to read tests/fixtures");
+    let fixtures = prepared_fixtures();
     if fixtures.is_empty() {
         return;
     }
@@ -437,10 +445,7 @@ fn ssim_comparison() {
     let mut all_passed = true;
     let mut table_rows: Vec<(String, f64, bool)> = Vec::new();
 
-    for fixture_dir in &fixtures {
-        let Some(fixture) = prepare_fixture(fixture_dir) else {
-            continue;
-        };
+    for fixture in fixtures {
         let page_count = fixture.ref_pages.len().min(fixture.gen_pages.len());
         let mut scores: Vec<f64> = Vec::new();
         for i in 0..page_count {
