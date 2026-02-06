@@ -128,6 +128,37 @@ fn save_diff_image(a: &Path, b: &Path, out: &Path) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
+fn save_side_by_side(a: &Path, b: &Path, out: &Path) -> Result<(), String> {
+    let img_a = image::open(a).map_err(|e| format!("{e}"))?;
+    let img_b = image::open(b).map_err(|e| format!("{e}"))?;
+    let (wa, ha) = img_a.dimensions();
+    let (wb, hb) = img_b.dimensions();
+    let gap = 4u32;
+    let total_w = wa + gap + wb;
+    let total_h = ha.max(hb);
+    let mut canvas: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::from_pixel(
+        total_w,
+        total_h,
+        Rgba([220, 220, 220, 255]),
+    );
+    for y in 0..ha {
+        for x in 0..wa {
+            canvas.put_pixel(x, y, img_a.get_pixel(x, y));
+        }
+    }
+    for y in 0..hb {
+        for x in 0..wb {
+            canvas.put_pixel(wa + gap + x, y, img_b.get_pixel(x, y));
+        }
+    }
+    if let Some(parent) = out.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    DynamicImage::ImageRgba8(canvas)
+        .save(out)
+        .map_err(|e| e.to_string())
+}
+
 fn log_csv(csv_name: &str, header: &str, row: &str) {
     let csv_path = PathBuf::from("tests/output").join(csv_name);
     fs::create_dir_all("tests/output").ok();
@@ -201,6 +232,7 @@ fn prepare_fixture(fixture_dir: &Path) -> Option<FixturePages> {
     let _ = fs::remove_dir_all(&reference_screenshots);
     let _ = fs::remove_dir_all(&generated_screenshots);
     let _ = fs::remove_dir_all(&output_base.join("diff"));
+    let _ = fs::remove_dir_all(&output_base.join("comparison"));
 
     if let Err(e) = screenshot_pdf(&reference_pdf, &reference_screenshots) {
         println!("  [ERROR] {name}: screenshot reference failed: {e}");
@@ -395,6 +427,7 @@ fn visual_comparison() {
 
     for fixture in fixtures {
         let diff_dir = fixture.output_base.join("diff");
+        let comparison_dir = fixture.output_base.join("comparison");
         let page_count = fixture.ref_pages.len().min(fixture.gen_pages.len());
         let mut scores: Vec<f64> = Vec::new();
         for i in 0..page_count {
@@ -405,6 +438,11 @@ fn visual_comparison() {
                     &fixture.ref_pages[i],
                     &fixture.gen_pages[i],
                     &diff_dir.join(format!("{page_num}.png")),
+                );
+                let _ = save_side_by_side(
+                    &fixture.ref_pages[i],
+                    &fixture.gen_pages[i],
+                    &comparison_dir.join(format!("{page_num}.png")),
                 );
             }
         }
