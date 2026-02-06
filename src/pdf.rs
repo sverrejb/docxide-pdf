@@ -462,8 +462,8 @@ fn font_metric(
         .and_then(get)
 }
 
-const TABLE_CELL_PAD_LEFT: f32 = 0.0;
-const TABLE_CELL_PAD_RIGHT: f32 = 0.0;
+const TABLE_CELL_PAD_LEFT: f32 = 2.5;
+const TABLE_CELL_PAD_RIGHT: f32 = 2.5;
 const TABLE_CELL_PAD_TOP: f32 = 0.0;
 const TABLE_CELL_PAD_BOTTOM: f32 = 0.0;
 const TABLE_BORDER_WIDTH: f32 = 0.5;
@@ -562,14 +562,14 @@ fn render_table(
         let row_top = *slot_top;
         let row_bottom = row_top - row_h;
 
-        // Render cell contents
+        // Render cell contents — text inset by cell padding
         let mut cell_x = doc.margin_left;
         for (ci, (cell, (lines, line_h, font_size))) in
             row.cells.iter().zip(layout.cell_lines.iter()).enumerate()
         {
             let col_w = col_widths.get(ci).copied().unwrap_or(cell.width);
-            let cell_text_w = (col_w - TABLE_CELL_PAD_LEFT - TABLE_CELL_PAD_RIGHT).max(1.0);
             let text_x = cell_x + TABLE_CELL_PAD_LEFT;
+            let text_w = (col_w - TABLE_CELL_PAD_LEFT - TABLE_CELL_PAD_RIGHT).max(1.0);
 
             if !lines.is_empty() && !lines.iter().all(|l| l.chunks.is_empty()) {
                 let first_run = cell.paragraphs.first().and_then(|p| p.runs.first());
@@ -590,7 +590,7 @@ fn render_table(
                     lines,
                     &alignment,
                     text_x,
-                    cell_text_w,
+                    text_w,
                     baseline_y,
                     *line_h,
                     lines.len(),
@@ -601,14 +601,15 @@ fn render_table(
             cell_x += col_w;
         }
 
-        // Draw cell borders
+        // Draw cell borders at column boundaries
         content.save_state();
         content.set_line_width(TABLE_BORDER_WIDTH);
         let mut bx = doc.margin_left;
         for (ci, cell) in row.cells.iter().enumerate() {
             let col_w = col_widths.get(ci).copied().unwrap_or(cell.width);
-            content.rect(bx, row_bottom, col_w, row_h).stroke();
-            bx += col_w;
+            let border_w = col_w;
+            content.rect(bx, row_bottom, border_w, row_h).stroke();
+            bx += border_w;
         }
         content.restore_state();
 

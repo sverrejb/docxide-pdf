@@ -96,28 +96,32 @@ fn is_ink(r: u8, g: u8, b: u8) -> bool {
     luma < 200.0
 }
 
-fn save_diff_image(a: &Path, b: &Path, out: &Path) -> Result<(), String> {
-    let img_a = image::open(a).map_err(|e| format!("{e}"))?;
-    let img_b = image::open(b).map_err(|e| format!("{e}"))?;
-    let (w, h) = img_a.dimensions();
-    let (w2, h2) = img_b.dimensions();
+fn save_diff_image(ref_path: &Path, gen_path: &Path, out: &Path) -> Result<(), String> {
+    let img_ref = image::open(ref_path).map_err(|e| format!("{e}"))?;
+    let img_gen = image::open(gen_path).map_err(|e| format!("{e}"))?;
+    let (w, h) = img_ref.dimensions();
+    let (w2, h2) = img_gen.dimensions();
     let cw = w.min(w2);
     let ch = h.min(h2);
+    let ink_threshold = 200u8;
     let mut diff: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::new(cw, ch);
     for y in 0..ch {
         for x in 0..cw {
-            let Rgba([ra, ga, ba, aa]) = img_a.get_pixel(x, y).0.into();
-            let Rgba([rb, gb, bb, ab]) = img_b.get_pixel(x, y).0.into();
-            diff.put_pixel(
-                x,
-                y,
-                Rgba([
-                    ra.abs_diff(rb),
-                    ga.abs_diff(gb),
-                    ba.abs_diff(bb),
-                    aa.max(ab),
-                ]),
-            );
+            let Rgba([rr, gr, br, _]) = img_ref.get_pixel(x, y).0.into();
+            let Rgba([rg, gg, bg, _]) = img_gen.get_pixel(x, y).0.into();
+            let luma_ref: u8 =
+                ((rr as u32 * 299 + gr as u32 * 587 + br as u32 * 114) / 1000) as u8;
+            let luma_gen: u8 =
+                ((rg as u32 * 299 + gg as u32 * 587 + bg as u32 * 114) / 1000) as u8;
+            let ref_ink = luma_ref < ink_threshold;
+            let gen_ink = luma_gen < ink_threshold;
+            let pixel = match (ref_ink, gen_ink) {
+                (true, true) => Rgba([80, 80, 80, 255]),       // both: dark gray
+                (true, false) => Rgba([0, 80, 220, 255]),      // reference only: blue
+                (false, true) => Rgba([220, 40, 40, 255]),     // generated only: red
+                (false, false) => Rgba([255, 255, 255, 255]),  // neither: white
+            };
+            diff.put_pixel(x, y, pixel);
         }
     }
     if let Some(parent) = out.parent() {

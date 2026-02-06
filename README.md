@@ -1,6 +1,6 @@
 # docxside-pdf
 
-## ⚠️ Work in progress — The API, output quality, and supported features are all actively changing.
+## ⚠️ Work in progress. This is in no way ready for use in production. The API, output quality, and supported features are all actively changing.
 
 A Rust library and CLI tool for converting DOCX files to PDF, with the goal of matching Microsoft Word's PDF export as closely as possible.<sup>*</sup>
 
@@ -10,7 +10,13 @@ A Rust library and CLI tool for converting DOCX files to PDF, with the goal of m
 
 Given a `.docx` file, produce a `.pdf` that is visually indistinguishable from what Word would export. This is harder than it sounds — Word's layout engine handles fonts, spacing, line breaking, and page geometry in ways that are not fully documented.
 
-## Supported Features
+## Agent disclaimer 🤖
+
+While the idea, architecture, testing strategy and validation of output are all human, the vast majority of the code as of now is written by Claude Opus 4.6 with access to the PDF specification (ISO-32000) and the Office Open XML File Formats (ECMA-376).
+
+## Sort-of supported features ✅
+
+These *kind* of work:
 
 - **Text**: font embedding (TTF/OTF), bold, italic, font size, text color, theme fonts
 - **Paragraphs**: left/center/right/justify alignment, space before/after, line spacing, indentation, contextual spacing, keep-next
@@ -20,9 +26,10 @@ Given a `.docx` file, produce a `.pdf` that is visually indistinguishable from w
 - **Images**: inline JPEG embedding with sizing
 - **Page layout**: page size, margins, document grid, automatic page breaking, multi-page output
 
+
 ### Not yet supported
 
-Tables with merged cells, headers/footers, footnotes, sections, underline/strikethrough, tabs, hyperlinks, text boxes, charts, SmartArt, and many other advanced features.
+Tables with merged cells, headers/footers, footnotes, sections, underline/strikethrough, tabs, hyperlinks, text boxes, charts, SmartArt, and **many other advanced features**.
 
 ## Showcase
 

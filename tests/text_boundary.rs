@@ -158,7 +158,6 @@ struct CaseResult {
     total_words: usize,
     total_lines: usize,
     matching_lines: usize,
-    page_boundary_ok: bool,
 }
 
 fn analyze_fixture(fixture_dir: &Path) -> Option<CaseResult> {
@@ -182,18 +181,6 @@ fn analyze_fixture(fixture_dir: &Path) -> Option<CaseResult> {
     let ref_word_pages = extract_all_pages(&reference_pdf);
     let gen_word_pages = extract_all_pages(&generated_pdf);
     let common_pages = ref_word_pages.len().min(gen_word_pages.len());
-
-    // Page boundary check (first/last word per page)
-    let mut page_boundary_ok = ref_word_pages.len() == gen_word_pages.len();
-    for i in 0..common_pages {
-        let rf = ref_word_pages[i].first().map(|s| s.as_str());
-        let gf = gen_word_pages[i].first().map(|s| s.as_str());
-        let rl = ref_word_pages[i].last().map(|s| s.as_str());
-        let gl = gen_word_pages[i].last().map(|s| s.as_str());
-        if rf != gf || rl != gl {
-            page_boundary_ok = false;
-        }
-    }
 
     // Break offset analysis
     let ref_breaks = break_positions(&ref_word_pages);
@@ -236,7 +223,6 @@ fn analyze_fixture(fixture_dir: &Path) -> Option<CaseResult> {
         total_words,
         total_lines,
         matching_lines,
-        page_boundary_ok,
     })
 }
 
@@ -265,16 +251,11 @@ fn text_boundaries_match() {
 
     let prev_scores = read_previous_scores("text_boundary_results.csv", 5);
     let mut results: Vec<CaseResult> = Vec::new();
-    let mut all_passed = true;
 
     for fixture_dir in &fixtures {
         let Some(result) = analyze_fixture(fixture_dir) else {
-            all_passed = false;
             continue;
         };
-        if !result.page_boundary_ok {
-            all_passed = false;
-        }
         results.push(result);
     }
 
@@ -374,7 +355,14 @@ fn text_boundaries_match() {
         println!("  REGRESSION in: {}", regressions.join(", "));
     }
 
-    if !all_passed {
-        println!("  WARNING: some fixtures had page boundary mismatches");
-    }
+    let page_mismatches: Vec<String> = results
+        .iter()
+        .filter(|r| r.ref_pages != r.gen_pages)
+        .map(|r| format!("{} (ref={}, gen={})", r.name, r.ref_pages, r.gen_pages))
+        .collect();
+    assert!(
+        page_mismatches.is_empty(),
+        "Page count mismatch: {}",
+        page_mismatches.join(", ")
+    );
 }
