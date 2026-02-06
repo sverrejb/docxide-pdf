@@ -25,7 +25,8 @@
       "Bash(cargo build:*)",
       "Bash(cargo run:*)",
       "Bash(cargo check:*)",
-      "Bash(mutool show:*)"
+      "Bash(mutool show:*)",
+      "Bash(open:*)"
     ]
   }
 }

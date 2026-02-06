@@ -12,7 +12,7 @@ Given a `.docx` file, produce a `.pdf` that is visually indistinguishable from w
 
 ## Agent disclaimer 🤖
 
-While the idea, architecture, testing strategy and validation of output are all human, the vast majority of the code as of now is written by Claude Opus 4.6 with access to the PDF specification (ISO-32000) and the Office Open XML File Formats (ECMA-376).
+While the idea, architecture, testing strategy and validation of output are all human, the vast majority of the code as of now is written by Claude Opus 4.6 with access to the PDF specification (ISO-32000) and the Office Open XML File Formats specification (ECMA-376).
 
 ## Sort-of supported features ✅
 

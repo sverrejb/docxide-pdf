@@ -462,11 +462,84 @@ fn font_metric(
         .and_then(get)
 }
 
-const TABLE_CELL_PAD_LEFT: f32 = 2.5;
-const TABLE_CELL_PAD_RIGHT: f32 = 2.5;
+const TABLE_CELL_PAD_LEFT: f32 = 5.4;
 const TABLE_CELL_PAD_TOP: f32 = 0.0;
 const TABLE_CELL_PAD_BOTTOM: f32 = 0.0;
 const TABLE_BORDER_WIDTH: f32 = 0.5;
+
+/// Auto-fit column widths so that the longest non-breakable word in each column
+/// fits within the cell (including padding). Columns that need more space grow;
+/// other columns shrink proportionally. Total width is preserved.
+fn auto_fit_columns(
+    table: &Table,
+    seen_fonts: &HashMap<String, FontEntry>,
+) -> Vec<f32> {
+    let ncols = table.col_widths.len();
+    if ncols == 0 {
+        return table.col_widths.clone();
+    }
+
+    let mut min_widths = vec![0.0f32; ncols];
+
+    for row in &table.rows {
+        for (ci, cell) in row.cells.iter().enumerate() {
+            if ci >= ncols {
+                break;
+            }
+            for para in &cell.paragraphs {
+                for run in &para.runs {
+                    let key = font_key(run);
+                    let Some(entry) = seen_fonts.get(&key) else {
+                        continue;
+                    };
+                    for word in run.text.split_whitespace() {
+                        let ww: f32 = word
+                            .bytes()
+                            .filter(|&b| b >= 32)
+                            .map(|b| entry.widths_1000[(b - 32) as usize] * run.font_size / 1000.0)
+                            .sum();
+                        min_widths[ci] = min_widths[ci].max(ww);
+                    }
+                }
+            }
+        }
+    }
+
+    let total: f32 = table.col_widths.iter().sum();
+    let mut widths = table.col_widths.clone();
+
+    // Expand columns that need it, track how much extra space is needed
+    let mut extra_needed: f32 = 0.0;
+    let mut shrinkable: f32 = 0.0;
+    for i in 0..ncols {
+        if min_widths[i] > widths[i] {
+            extra_needed += min_widths[i] - widths[i];
+            widths[i] = min_widths[i];
+        } else {
+            shrinkable += widths[i] - min_widths[i];
+        }
+    }
+
+    if extra_needed > 0.0 && shrinkable > 0.0 {
+        let factor = extra_needed.min(shrinkable) / shrinkable;
+        for i in 0..ncols {
+            if widths[i] > min_widths[i] {
+                let available = widths[i] - min_widths[i];
+                widths[i] -= available * factor;
+            }
+        }
+        // Normalize to preserve total
+        let new_total: f32 = widths.iter().sum();
+        if (new_total - total).abs() > 0.01 {
+            let scale = total / new_total;
+            for w in &mut widths {
+                *w *= scale;
+            }
+        }
+    }
+
+    widths
+}
 
 struct RowLayout {
     height: f32,
@@ -475,6 +548,7 @@ struct RowLayout {
 
 fn compute_row_layouts(
     table: &Table,
+    col_widths: &[f32],
     doc: &Document,
     seen_fonts: &HashMap<String, FontEntry>,
 ) -> Vec<RowLayout> {
@@ -483,14 +557,13 @@ fn compute_row_layouts(
         .iter()
         .map(|row| {
             let mut max_h: f32 = 0.0;
-            let col_widths = &table.col_widths;
             let cell_lines: Vec<(Vec<TextLine>, f32, f32)> = row
                 .cells
                 .iter()
                 .enumerate()
                 .map(|(ci, cell)| {
                     let col_w = col_widths.get(ci).copied().unwrap_or(cell.width);
-                    let cell_text_w = (col_w - TABLE_CELL_PAD_LEFT - TABLE_CELL_PAD_RIGHT).max(1.0);
+                    let cell_text_w = col_w;
                     let mut total_h: f32 = TABLE_CELL_PAD_TOP + TABLE_CELL_PAD_BOTTOM;
                     let mut all_lines = Vec::new();
                     let mut first_font_size = 12.0f32;
@@ -537,11 +610,10 @@ fn render_table(
     slot_top: &mut f32,
     prev_space_after: f32,
 ) {
-    let row_layouts = compute_row_layouts(table, doc, seen_fonts);
+    let col_widths = auto_fit_columns(table, seen_fonts);
+    let row_layouts = compute_row_layouts(table, &col_widths, doc, seen_fonts);
 
     *slot_top -= prev_space_after;
-
-    let col_widths = &table.col_widths;
 
     for (ri, (row, layout)) in table.rows.iter().zip(row_layouts.iter()).enumerate() {
         let row_h = layout.height;
@@ -569,7 +641,7 @@ fn render_table(
         {
             let col_w = col_widths.get(ci).copied().unwrap_or(cell.width);
             let text_x = cell_x + TABLE_CELL_PAD_LEFT;
-            let text_w = (col_w - TABLE_CELL_PAD_LEFT - TABLE_CELL_PAD_RIGHT).max(1.0);
+            let text_w = col_w;
 
             if !lines.is_empty() && !lines.iter().all(|l| l.chunks.is_empty()) {
                 let first_run = cell.paragraphs.first().and_then(|p| p.runs.first());
@@ -601,13 +673,18 @@ fn render_table(
             cell_x += col_w;
         }
 
-        // Draw cell borders at column boundaries
+        // Draw cell borders — first cell extends left by pad_left,
+        // right border aligns with body text right edge.
         content.save_state();
         content.set_line_width(TABLE_BORDER_WIDTH);
-        let mut bx = doc.margin_left;
+        let mut bx = doc.margin_left - TABLE_CELL_PAD_LEFT;
         for (ci, cell) in row.cells.iter().enumerate() {
             let col_w = col_widths.get(ci).copied().unwrap_or(cell.width);
-            let border_w = col_w;
+            let border_w = if ci == 0 {
+                col_w + TABLE_CELL_PAD_LEFT
+            } else {
+                col_w
+            };
             content.rect(bx, row_bottom, border_w, row_h).stroke();
             bx += border_w;
         }
