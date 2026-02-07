@@ -302,6 +302,7 @@ fn register_font(
         .and_then(|path| embed_truetype(pdf, font_ref, descriptor_ref, data_ref, font_name, &path))
         .map(|(w, r, ar)| (w, Some(r), Some(ar)))
         .unwrap_or_else(|| {
+            log::warn!("Font not found: {font_name} bold={bold} italic={italic} — using Helvetica");
             pdf.type1_font(font_ref)
                 .base_font(Name(b"Helvetica"))
                 .encoding_predefined(Name(b"WinAnsiEncoding"));
@@ -355,10 +356,10 @@ fn build_paragraph_lines(
         let space_w = entry.widths_1000[0] * run.font_size / 1000.0;
 
         for word in run.text.split_whitespace() {
-            let ww: f32 = word
-                .bytes()
-                .filter(|&b| b >= 32)
-                .map(|b| entry.widths_1000[(b - 32) as usize] * run.font_size / 1000.0)
+            let ww: f32 = to_winansi_bytes(word)
+                .iter()
+                .filter(|&&b| b >= 32)
+                .map(|&b| entry.widths_1000[(b - 32) as usize] * run.font_size / 1000.0)
                 .sum();
 
             if !current_chunks.is_empty() && current_x + ww > max_width {
@@ -462,6 +463,32 @@ fn font_metric(
         .and_then(get)
 }
 
+/// Compute the effective font_size, line_h_ratio, and ascender_ratio for a set of runs
+/// by picking the run that produces the tallest visual ascent (font_size * ascender_ratio).
+fn tallest_run_metrics(
+    runs: &[Run],
+    seen_fonts: &HashMap<String, FontEntry>,
+) -> (f32, Option<f32>, Option<f32>) {
+    let mut best_font_size = runs.first().map_or(12.0, |r| r.font_size);
+    let mut best_ascent = 0.0f32;
+    let mut best_line_h_ratio: Option<f32> = None;
+    let mut best_ascender_ratio: Option<f32> = None;
+
+    for run in runs {
+        let key = font_key(run);
+        let entry = seen_fonts.get(&key);
+        let ar = entry.and_then(|e| e.ascender_ratio).unwrap_or(0.75);
+        let ascent = run.font_size * ar;
+        if ascent > best_ascent {
+            best_ascent = ascent;
+            best_font_size = run.font_size;
+            best_ascender_ratio = entry.and_then(|e| e.ascender_ratio);
+            best_line_h_ratio = entry.and_then(|e| e.line_h_ratio);
+        }
+    }
+    (best_font_size, best_line_h_ratio, best_ascender_ratio)
+}
+
 const TABLE_CELL_PAD_LEFT: f32 = 5.4;
 const TABLE_CELL_PAD_TOP: f32 = 0.0;
 const TABLE_CELL_PAD_BOTTOM: f32 = 0.0;
@@ -493,10 +520,10 @@ fn auto_fit_columns(
                         continue;
                     };
                     for word in run.text.split_whitespace() {
-                        let ww: f32 = word
-                            .bytes()
-                            .filter(|&b| b >= 32)
-                            .map(|b| entry.widths_1000[(b - 32) as usize] * run.font_size / 1000.0)
+                        let ww: f32 = to_winansi_bytes(word)
+                            .iter()
+                            .filter(|&&b| b >= 32)
+                            .map(|&b| entry.widths_1000[(b - 32) as usize] * run.font_size / 1000.0)
                             .sum();
                         min_widths[ci] = min_widths[ci].max(ww);
                     }
@@ -809,9 +836,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                 let mut inter_gap = f32::max(prev_space_after, effective_space_before);
 
-                let font_size = para.runs.first().map_or(12.0, |r| r.font_size);
+                let (font_size, tallest_lhr, tallest_ar) =
+                    tallest_run_metrics(&para.runs, &seen_fonts);
                 let effective_line_spacing = para.line_spacing.unwrap_or(doc.line_spacing);
-                let line_h = font_metric(&para.runs, &seen_fonts, |e| e.line_h_ratio)
+                let line_h = tallest_lhr
                     .map(|ratio| font_size * ratio * effective_line_spacing)
                     .unwrap_or(font_size * 1.2);
 
@@ -836,12 +864,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                 let keep_next_extra = if para.keep_next {
                     next_para.map_or(0.0, |next| {
-                        let next_font_size = next.runs.first().map_or(12.0, |r| r.font_size);
+                        let (nfs, nlhr, _) = tallest_run_metrics(&next.runs, &seen_fonts);
                         let next_inter = f32::max(effective_space_after, next.space_before);
-                        let next_first_line_h =
-                            font_metric(&next.runs, &seen_fonts, |e| e.line_h_ratio)
-                                .map(|ratio| next_font_size * ratio)
-                                .unwrap_or(next_font_size * 1.2);
+                        let next_first_line_h = nlhr
+                            .map(|ratio| nfs * ratio)
+                            .unwrap_or(nfs * 1.2);
                         next_inter + next_first_line_h
                     })
                 } else {
@@ -850,7 +877,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                 if !at_page_top && slot_top - needed - keep_next_extra < doc.margin_bottom {
                     let available = slot_top - inter_gap - doc.margin_bottom;
-                    let first_line_h = font_metric(&para.runs, &seen_fonts, |e| e.line_h_ratio)
+                    let first_line_h = tallest_lhr
                         .map(|ratio| font_size * ratio)
                         .unwrap_or(font_size);
                     let mut lines_that_fit = if line_h > 0.0 && available >= first_line_h {
@@ -867,9 +894,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     if lines_that_fit >= 2 && lines_that_fit < lines.len() {
                         let first_part = &lines[..lines_that_fit];
                         slot_top -= inter_gap;
-                        let ascender_ratio =
-                            font_metric(&para.runs, &seen_fonts, |e| e.ascender_ratio)
-                                .unwrap_or(0.75);
+                        let ascender_ratio = tallest_ar.unwrap_or(0.75);
                         let baseline_y = slot_top - font_size * ascender_ratio;
 
                         if !para.list_label.is_empty() {
@@ -950,8 +975,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             .set_fill_gray(0.0);
                     }
                 } else if !lines.is_empty() {
-                    let ascender_ratio =
-                        font_metric(&para.runs, &seen_fonts, |e| e.ascender_ratio).unwrap_or(0.75);
+                    let ascender_ratio = tallest_ar.unwrap_or(0.75);
                     let baseline_y = slot_top - font_size * ascender_ratio;
 
                     if !para.list_label.is_empty() {
