@@ -88,7 +88,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-docxside-pdf = { version = "0.1", default-features = false }
+docxside-pdf = { version = "0.2", default-features = false }
 ```
 
 Setting `default-features = false` avoids pulling in the CLI dependency (`clap`).
