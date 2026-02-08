@@ -1,6 +1,6 @@
 [package]
 name = "docxside-pdf"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2024"
 description = "Convert DOCX files to PDF, matching Microsoft Word's output as closely as possible"
 license = "Apache-2.0"
