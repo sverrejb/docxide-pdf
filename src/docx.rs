@@ -523,7 +523,7 @@ fn parse_font_table(
                 let Some(embed_node) = wml(font_node, embed_tag) else {
                     continue;
                 };
-                let Some(r_id) = embed_node.attribute((REL_NS, "embed")) else {
+                let Some(r_id) = embed_node.attribute((REL_NS, "id")) else {
                     continue;
                 };
                 let font_key = embed_node
