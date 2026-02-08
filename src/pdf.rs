@@ -43,34 +43,84 @@ fn read_font_style(path: &Path) -> Option<(String, bool, bool)> {
     Some((family, face.is_bold(), face.is_italic()))
 }
 
-fn scan_font_dirs() -> FontLookup {
-    let mut index = FontLookup::new();
-    let mut dirs: Vec<PathBuf> = vec![
-        "/Applications/Microsoft Word.app/Contents/Resources/DFonts".into(),
-        "/Library/Fonts".into(),
-        "/Library/Fonts/Microsoft".into(),
-        "/System/Library/Fonts".into(),
-        "/System/Library/Fonts/Supplemental".into(),
-    ];
-    if let Ok(home) = std::env::var("HOME") {
-        let cloud = PathBuf::from(&home)
-            .join("Library/Group Containers/UBF8T346G9.Office/FontCache/4/CloudFonts");
-        if let Ok(families) = std::fs::read_dir(&cloud) {
-            for entry in families.flatten() {
-                if entry.path().is_dir() {
-                    dirs.push(entry.path());
+fn font_directories() -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = Vec::new();
+
+    // 1. User-configured directories via DOCXSIDE_FONTS env var
+    if let Ok(val) = std::env::var("DOCXSIDE_FONTS") {
+        let sep = if cfg!(windows) { ';' } else { ':' };
+        for part in val.split(sep) {
+            let trimmed = part.trim();
+            if !trimmed.is_empty() {
+                dirs.push(PathBuf::from(trimmed));
+            }
+        }
+    }
+
+    // 2. Platform-specific system font directories
+    #[cfg(target_os = "macos")]
+    {
+        dirs.extend([
+            "/Applications/Microsoft Word.app/Contents/Resources/DFonts".into(),
+            "/Library/Fonts".into(),
+            "/Library/Fonts/Microsoft".into(),
+            "/System/Library/Fonts".into(),
+            "/System/Library/Fonts/Supplemental".into(),
+        ]);
+        if let Ok(home) = std::env::var("HOME") {
+            let cloud = PathBuf::from(&home)
+                .join("Library/Group Containers/UBF8T346G9.Office/FontCache/4/CloudFonts");
+            if let Ok(families) = std::fs::read_dir(&cloud) {
+                for entry in families.flatten() {
+                    if entry.path().is_dir() {
+                        dirs.push(entry.path());
+                    }
                 }
             }
         }
     }
-    for dir in &dirs {
-        let Ok(entries) = std::fs::read_dir(dir) else {
+
+    #[cfg(target_os = "linux")]
+    {
+        dirs.extend([
+            "/usr/share/fonts".into(),
+            "/usr/local/share/fonts".into(),
+        ]);
+        if let Ok(home) = std::env::var("HOME") {
+            dirs.push(PathBuf::from(home).join(".local/share/fonts"));
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Ok(windir) = std::env::var("WINDIR") {
+            dirs.push(PathBuf::from(windir).join("Fonts"));
+        } else {
+            dirs.push("C:\\Windows\\Fonts".into());
+        }
+    }
+
+    dirs
+}
+
+fn scan_font_dirs() -> FontLookup {
+    let mut index = FontLookup::new();
+    let dirs = font_directories();
+
+    // Recursive walk using a stack
+    let mut stack: Vec<PathBuf> = dirs;
+    while let Some(dir) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
             continue;
         };
         for entry in entries.flatten() {
             let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+                continue;
+            }
             match path.extension().and_then(|e| e.to_str()) {
-                Some("ttf" | "otf") => {}
+                Some("ttf" | "otf" | "TTF" | "OTF") => {}
                 _ => continue,
             }
             if let Some((family, bold, italic)) = read_font_style(&path) {
@@ -197,17 +247,16 @@ fn helvetica_widths() -> Vec<f32> {
         .collect()
 }
 
-/// Attempt to embed a TrueType/OpenType font into the PDF.
+/// Embed a TrueType/OpenType font (raw bytes) into the PDF.
 fn embed_truetype(
     pdf: &mut Pdf,
     font_ref: Ref,
     descriptor_ref: Ref,
     data_ref: Ref,
     font_name: &str,
-    font_path: &Path,
+    font_data: &[u8],
 ) -> Option<(Vec<f32>, f32, f32)> {
-    let font_data = std::fs::read(font_path).ok()?;
-    let face = Face::parse(&font_data, 0).ok()?;
+    let face = Face::parse(font_data, 0).ok()?;
 
     let units = face.units_per_em() as f32;
     let ascent = face.ascender() as f32 / units * 1000.0;
@@ -235,7 +284,7 @@ fn embed_truetype(
         .collect();
 
     let data_len = i32::try_from(font_data.len()).ok()?;
-    pdf.stream(data_ref, &font_data)
+    pdf.stream(data_ref, font_data)
         .pair(Name(b"Length1"), data_len);
 
     let ps_name = font_name.replace(' ', "");
@@ -286,6 +335,8 @@ fn font_key(run: &Run) -> String {
     }
 }
 
+type EmbeddedFonts = HashMap<(String, bool, bool), Vec<u8>>;
+
 fn register_font(
     pdf: &mut Pdf,
     font_name: &str,
@@ -293,13 +344,25 @@ fn register_font(
     italic: bool,
     pdf_name: String,
     alloc: &mut impl FnMut() -> Ref,
+    embedded_fonts: &EmbeddedFonts,
 ) -> FontEntry {
     let font_ref = alloc();
     let descriptor_ref = alloc();
     let data_ref = alloc();
 
-    let (widths, line_h_ratio, ascender_ratio) = find_font_file(font_name, bold, italic)
-        .and_then(|path| embed_truetype(pdf, font_ref, descriptor_ref, data_ref, font_name, &path))
+    let embedded_key = (font_name.to_lowercase(), bold, italic);
+    let embedded_data = embedded_fonts.get(&embedded_key);
+
+    let (widths, line_h_ratio, ascender_ratio) = embedded_data
+        .and_then(|data| {
+            embed_truetype(pdf, font_ref, descriptor_ref, data_ref, font_name, data)
+        })
+        .or_else(|| {
+            find_font_file(font_name, bold, italic).and_then(|path| {
+                let data = std::fs::read(&path).ok()?;
+                embed_truetype(pdf, font_ref, descriptor_ref, data_ref, font_name, &data)
+            })
+        })
         .map(|(w, r, ar)| (w, Some(r), Some(ar)))
         .unwrap_or_else(|| {
             log::warn!("Font not found: {font_name} bold={bold} italic={italic} — using Helvetica");
@@ -761,7 +824,15 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         if !seen_fonts.contains_key(&key) {
             let base = primary_font_name(&run.font_name);
             let pdf_name = format!("F{}", font_order.len() + 1);
-            let entry = register_font(&mut pdf, base, run.bold, run.italic, pdf_name, &mut alloc);
+            let entry = register_font(
+                &mut pdf,
+                base,
+                run.bold,
+                run.italic,
+                pdf_name,
+                &mut alloc,
+                &doc.embedded_fonts,
+            );
             seen_fonts.insert(key.clone(), entry);
             font_order.push(key);
         }
@@ -769,7 +840,15 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
     if seen_fonts.is_empty() {
         let pdf_name = "F1".to_string();
-        let entry = register_font(&mut pdf, "Helvetica", false, false, pdf_name, &mut alloc);
+        let entry = register_font(
+            &mut pdf,
+            "Helvetica",
+            false,
+            false,
+            pdf_name,
+            &mut alloc,
+            &doc.embedded_fonts,
+        );
         seen_fonts.insert("Helvetica".to_string(), entry);
         font_order.push("Helvetica".to_string());
     }

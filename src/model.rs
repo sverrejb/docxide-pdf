@@ -16,6 +16,9 @@ pub struct Document {
     pub line_pitch: f32,
     pub line_spacing: f32, // auto line spacing factor (e.g. 278/240)
     pub blocks: Vec<Block>,
+    /// Fonts embedded in the DOCX (deobfuscated TTF/OTF bytes).
+    /// Key: (lowercase_font_name, bold, italic)
+    pub embedded_fonts: std::collections::HashMap<(String, bool, bool), Vec<u8>>,
 }
 
 pub struct EmbeddedImage {
