@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
-Generate showcase images for the README.
+Generate showcase images and READMEs.
 
 Runs the test suite, picks all passing cases (SSIM >= threshold) sorted by
 name, resizes their reference and generated page PNGs, saves them to
-showcase/, and rewrites the <!-- showcase-start/end --> section in README.md.
+showcase/, rewrites the <!-- showcase-start/end --> section in README.md,
+and generates showcase/README.md with every case.
 """
 import csv
 import subprocess
@@ -77,6 +78,23 @@ def update_readme(section):
     README.write_text(updated)
 
 
+def write_showcase_readme(rows):
+    lines = [
+        "# All test cases",
+        "",
+        "Reference (MS Word) on the left, docxside-pdf on the right.",
+        "",
+    ]
+    for case, score, ref_file, gen_file in rows:
+        lines.append(f"## {case} — {score*100:.1f}% SSIM")
+        lines.append("")
+        lines.append(f'<img src="{ref_file}" width="420"/> <img src="{gen_file}" width="420"/>')
+        lines.append("")
+    readme = SHOWCASE_DIR / "README.md"
+    readme.write_text("\n".join(lines))
+    print(f"showcase/README.md updated ({len(rows)} cases).")
+
+
 def main():
     run_tests()
 
@@ -108,6 +126,8 @@ def main():
 
     update_readme(build_section(rows))
     print("README.md updated.")
+
+    write_showcase_readme(rows)
 
 
 if __name__ == "__main__":
