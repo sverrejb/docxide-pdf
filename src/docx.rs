@@ -758,6 +758,35 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
             });
         }
     }
+
+    // Empty paragraphs with explicit font sizing in their paragraph mark (pPr/rPr)
+    // need a synthetic run so the renderer computes the correct line height.
+    if runs.is_empty() {
+        let mark_rpr = ppr.and_then(|ppr| wml(ppr, "rPr"));
+        let has_explicit_sz = mark_rpr
+            .and_then(|n| wml_attr(n, "sz"))
+            .is_some();
+        if has_explicit_sz {
+            let mark_font_size = mark_rpr
+                .and_then(|n| wml_attr(n, "sz"))
+                .and_then(|v| v.parse::<f32>().ok())
+                .map(|hp| hp / 2.0)
+                .unwrap_or(style_font_size);
+            let mark_font_name = mark_rpr
+                .and_then(|n| wml(n, "rFonts"))
+                .map(|rfonts| resolve_font_from_node(rfonts, theme, &style_font_name))
+                .unwrap_or_else(|| style_font_name.clone());
+            runs.push(Run {
+                text: String::new(),
+                font_size: mark_font_size,
+                font_name: mark_font_name,
+                bold: style_bold,
+                italic: style_italic,
+                color: None,
+            });
+        }
+    }
+
     runs
 }
 

@@ -926,13 +926,13 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 let para_text_width = (text_width - para.indent_left).max(1.0);
                 let label_x = doc.margin_left + (para.indent_left - para.indent_hanging).max(0.0);
 
-                let lines = if para.runs.is_empty() {
+                let lines = if para.image.is_some() || para.runs.is_empty() {
                     vec![]
                 } else {
                     build_paragraph_lines(&para.runs, &seen_fonts, para_text_width)
                 };
 
-                let content_h = if para.runs.is_empty() {
+                let content_h = if para.image.is_some() || para.runs.is_empty() {
                     para.content_height.max(doc.line_pitch)
                 } else {
                     lines.len() as f32 * line_h
@@ -1030,7 +1030,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                 slot_top -= inter_gap;
 
-                if para.runs.is_empty() && para.content_height > 0.0 {
+                if (para.image.is_some() || para.runs.is_empty()) && para.content_height > 0.0 {
                     if let Some(pdf_name) = image_pdf_names.get(&block_idx) {
                         let img = para.image.as_ref().unwrap();
                         let y_bottom = slot_top - img.display_height;
