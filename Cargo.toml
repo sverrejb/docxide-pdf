@@ -1,11 +1,11 @@
 [package]
 name = "docxside-pdf"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2024"
 description = "Convert DOCX files to PDF, matching Microsoft Word's output as closely as possible"
 license = "Apache-2.0"
 repository = "https://github.com/sverrejb/docxside-pdf"
-keywords = ["docx", "pdf", "converter", "word"]
+keywords = ["experimental", "docx", "pdf", "converter", "conversion", "word", "msword", "OOXML", "Office Open XML", "WordprocessingML", "text-processing"]
 categories = ["command-line-utilities", "text-processing"]
 exclude = [
     "tools/",
