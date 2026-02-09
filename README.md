@@ -33,6 +33,8 @@ Tables with merged cells, headers/footers, footnotes, sections, underline/strike
 
 ## Showcase
 
+See all examples in the [showcase](https://github.com/sverrejb/docxside-pdf/tree/main/showcase)
+
 <!-- showcase-start -->
 <table>
   <tr><th>MS Word</th><th>Docxside-PDF</th></tr>
