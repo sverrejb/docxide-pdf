@@ -1081,6 +1081,22 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     );
                 }
 
+                // Draw bottom border if present
+                if let Some(bdr) = &para.border_bottom {
+                    let line_y = slot_top - content_h - bdr.space_pt;
+                    let [r, g, b] = bdr.color;
+                    current_content
+                        .set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0)
+                        .rect(
+                            doc.margin_left,
+                            line_y - bdr.width_pt,
+                            text_width,
+                            bdr.width_pt,
+                        )
+                        .fill_nonzero()
+                        .set_fill_rgb(0.0, 0.0, 0.0);
+                }
+
                 slot_top -= content_h;
                 prev_space_after = effective_space_after;
             }

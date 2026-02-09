@@ -29,6 +29,13 @@ pub struct EmbeddedImage {
     pub display_height: f32, // points
 }
 
+#[derive(Clone)]
+pub struct BorderBottom {
+    pub width_pt: f32,     // line thickness in points
+    pub space_pt: f32,     // gap between text and border in points
+    pub color: [u8; 3],    // RGB
+}
+
 pub struct Paragraph {
     pub runs: Vec<Run>,
     pub space_before: f32,
@@ -42,6 +49,7 @@ pub struct Paragraph {
     pub keep_next: bool,
     pub line_spacing: Option<f32>, // per-paragraph override (e.g. 240/240 = 1.0)
     pub image: Option<EmbeddedImage>,
+    pub border_bottom: Option<BorderBottom>,
 }
 
 pub struct Run {

@@ -52,11 +52,36 @@ fn twips_attr(node: roxmltree::Node, attr: &str) -> Option<f32> {
         .map(twips_to_pts)
 }
 
+fn parse_border_bottom(ppr: roxmltree::Node) -> Option<crate::model::BorderBottom> {
+    let bottom = wml(ppr, "pBdr").and_then(|pbdr| wml(pbdr, "bottom"))?;
+    let val = bottom.attribute((WML_NS, "val")).unwrap_or("none");
+    if val == "none" || val == "nil" {
+        return None;
+    }
+    // sz is in 1/8 of a point
+    let width_pt = bottom
+        .attribute((WML_NS, "sz"))
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(|v| v / 8.0)
+        .unwrap_or(0.5);
+    let space_pt = bottom
+        .attribute((WML_NS, "space"))
+        .and_then(|v| v.parse::<f32>().ok())
+        .unwrap_or(0.0);
+    let color = bottom
+        .attribute((WML_NS, "color"))
+        .and_then(parse_hex_color)
+        .unwrap_or([0, 0, 0]);
+    Some(crate::model::BorderBottom {
+        width_pt,
+        space_pt,
+        color,
+    })
+}
+
 fn border_bottom_extra(ppr: roxmltree::Node) -> f32 {
-    wml(ppr, "pBdr")
-        .and_then(|pbdr| wml(pbdr, "bottom"))
-        .and_then(|b| b.attribute((WML_NS, "space")))
-        .and_then(|v| v.parse().ok())
+    parse_border_bottom(ppr)
+        .map(|b| b.space_pt + b.width_pt)
         .unwrap_or(0.0)
 }
 
@@ -96,6 +121,7 @@ struct ParagraphStyle {
     keep_next: bool,
     line_spacing: Option<f32>, // auto line spacing factor override
     border_bottom_extra: f32,
+    border_bottom: Option<crate::model::BorderBottom>,
     based_on: Option<String>,
 }
 
@@ -261,6 +287,7 @@ fn parse_styles(zip: &mut zip::ZipArchive<std::fs::File>, theme: &ThemeFonts) ->
         let space_before = spacing.and_then(|n| twips_attr(n, "before")).unwrap_or(0.0);
         let space_after = spacing.and_then(|n| twips_attr(n, "after"));
         let bdr_extra = ppr.map(border_bottom_extra).unwrap_or(0.0);
+        let border_bottom = ppr.and_then(parse_border_bottom);
 
         let rpr = wml(style_node, "rPr");
 
@@ -316,6 +343,7 @@ fn parse_styles(zip: &mut zip::ZipArchive<std::fs::File>, theme: &ThemeFonts) ->
                 keep_next,
                 line_spacing,
                 border_bottom_extra: bdr_extra,
+                border_bottom,
                 based_on,
             },
         );
@@ -893,6 +921,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                                 keep_next: false,
                                 line_spacing: Some(1.0),
                                 image: None,
+                                border_bottom: None,
                             });
                         }
                         cells.push(TableCell {
@@ -920,11 +949,18 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     .or_else(|| para_style.map(|s| s.space_before))
                     .unwrap_or(0.0);
 
-                let inline_bdr_extra = ppr.map(border_bottom_extra).unwrap_or(0.0);
-                let bdr_extra = if inline_bdr_extra > 0.0 {
-                    inline_bdr_extra
+                let inline_bdr = ppr.and_then(parse_border_bottom);
+                let inline_bdr_extra = inline_bdr
+                    .as_ref()
+                    .map(|b| b.space_pt + b.width_pt)
+                    .unwrap_or(0.0);
+                let (bdr_extra, border_bottom) = if inline_bdr.is_some() {
+                    (inline_bdr_extra, inline_bdr)
                 } else {
-                    para_style.map(|s| s.border_bottom_extra).unwrap_or(0.0)
+                    (
+                        para_style.map(|s| s.border_bottom_extra).unwrap_or(0.0),
+                        para_style.and_then(|s| s.border_bottom.clone()),
+                    )
                 };
                 let space_after = inline_spacing
                     .and_then(|n| twips_attr(n, "after"))
@@ -990,6 +1026,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     keep_next,
                     line_spacing,
                     image: drawing.image,
+                    border_bottom,
                 }));
             }
             _ => {}
