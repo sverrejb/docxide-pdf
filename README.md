@@ -33,7 +33,7 @@ Tables with merged cells, headers/footers, footnotes, sections, underline/strike
 
 ## Showcase
 
-See all examples in the [showcase](https://github.com/sverrejb/docxside-pdf/tree/main/showcase)
+See all examples in the [showcase](https://github.com/sverrejb/docxside-pdf/tree/main/showcase#readme)
 
 <!-- showcase-start -->
 <table>
