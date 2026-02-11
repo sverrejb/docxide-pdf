@@ -43,6 +43,8 @@ fn screenshot_pdf(pdf: &Path, output_dir: &Path) -> Result<(), String> {
             output_pattern.to_str().unwrap(),
             pdf.to_str().unwrap(),
         ])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
         .status()
         .map_err(|e| format!("Failed to run mutool: {e}"))?;
     if status.success() {
