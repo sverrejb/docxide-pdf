@@ -38,37 +38,22 @@ See all examples in the [showcase](https://github.com/sverrejb/docxside-pdf/tree
 <!-- showcase-start -->
 <table>
   <tr><th>MS Word</th><th>Docxside-PDF</th></tr>
-  <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case1_ref.png"/><br/><sub>case1 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case1_gen.png"/><br/><sub>case1 — 61.2% SSIM</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case2_ref.png"/><br/><sub>case2 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case2_gen.png"/><br/><sub>case2 — 93.3% SSIM</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case4_ref.png"/><br/></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case4_gen.png"/><br/></td>
   </tr>
   <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case3_ref.png"/><br/><sub>case3 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case3_gen.png"/><br/><sub>case3 — 88.1% SSIM</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case6_ref.png"/><br/></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case6_gen.png"/><br/></td>
   </tr>
   <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case4_ref.png"/><br/><sub>case4 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case4_gen.png"/><br/><sub>case4 — 88.7% SSIM</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case7_ref.png"/><br/></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case7_gen.png"/><br/></td>
   </tr>
   <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case5_ref.png"/><br/><sub>case5 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case5_gen.png"/><br/><sub>case5 — 49.9% SSIM</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case6_ref.png"/><br/><sub>case6 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case6_gen.png"/><br/><sub>case6 — 54.8% SSIM</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case7_ref.png"/><br/><sub>case7 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case7_gen.png"/><br/><sub>case7 — 91.6% SSIM</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case8_ref.png"/><br/><sub>case8 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case8_gen.png"/><br/><sub>case8 — 94.1% SSIM</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case8_ref.png"/><br/></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case8_gen.png"/><br/></td>
   </tr>
 </table>
 <!-- showcase-end -->
