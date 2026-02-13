@@ -14,7 +14,7 @@ Reference (MS Word) on the left, docxside-pdf on the right.
 
 <img src="case3_ref.png" width="420"/> <img src="case3_gen.png" width="420"/>
 
-## case4 — 88.7% SSIM
+## case4 — 89.5% SSIM
 
 <img src="case4_ref.png" width="420"/> <img src="case4_gen.png" width="420"/>
 
@@ -26,10 +26,14 @@ Reference (MS Word) on the left, docxside-pdf on the right.
 
 <img src="case6_ref.png" width="420"/> <img src="case6_gen.png" width="420"/>
 
-## case7 — 91.6% SSIM
+## case7 — 91.7% SSIM
 
 <img src="case7_ref.png" width="420"/> <img src="case7_gen.png" width="420"/>
 
 ## case8 — 94.1% SSIM
 
 <img src="case8_ref.png" width="420"/> <img src="case8_gen.png" width="420"/>
+
+## case9 — 90.1% SSIM
+
+<img src="case9_ref.png" width="420"/> <img src="case9_gen.png" width="420"/>
