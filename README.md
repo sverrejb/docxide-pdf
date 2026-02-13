@@ -79,14 +79,11 @@ docxside-pdf input.docx output.pdf
 
 ### Library
 
-Add to your `Cargo.toml`:
-
-```toml
-[dependencies]
-docxside-pdf = { version = "0.2", default-features = false }
+```bash
+cargo add docxside-pdf --no-default-features
 ```
 
-Setting `default-features = false` avoids pulling in the CLI dependency (`clap`).
+This avoids pulling in the CLI dependency (`clap`).
 
 ```rust
 use docxside_pdf::convert_docx_to_pdf;

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str};
@@ -16,8 +16,8 @@ struct FontEntry {
     ascender_ratio: Option<f32>, // ascender / UPM; used to place baseline within the slot
 }
 
-/// (lowercase family name, bold, italic) -> file path
-type FontLookup = HashMap<(String, bool, bool), PathBuf>;
+/// (lowercase family name, bold, italic) -> (file path, face index within TTC)
+type FontLookup = HashMap<(String, bool, bool), (PathBuf, u32)>;
 
 static FONT_INDEX: OnceLock<FontLookup> = OnceLock::new();
 
@@ -36,9 +36,8 @@ fn font_family_name(face: &Face) -> Option<String> {
     None
 }
 
-fn read_font_style(path: &Path) -> Option<(String, bool, bool)> {
-    let data = std::fs::read(path).ok()?;
-    let face = Face::parse(&data, 0).ok()?;
+fn read_font_style(data: &[u8], face_index: u32) -> Option<(String, bool, bool)> {
+    let face = Face::parse(data, face_index).ok()?;
     let family = font_family_name(&face)?;
     Some((family, face.is_bold(), face.is_italic()))
 }
@@ -119,14 +118,25 @@ fn scan_font_dirs() -> FontLookup {
                 stack.push(path);
                 continue;
             }
-            match path.extension().and_then(|e| e.to_str()) {
-                Some("ttf" | "otf" | "TTF" | "OTF") => {}
+            let is_collection = match path.extension().and_then(|e| e.to_str()) {
+                Some("ttf" | "otf" | "TTF" | "OTF") => false,
+                Some("ttc" | "TTC") => true,
                 _ => continue,
-            }
-            if let Some((family, bold, italic)) = read_font_style(&path) {
-                index
-                    .entry((family.to_lowercase(), bold, italic))
-                    .or_insert(path);
+            };
+            let Ok(data) = std::fs::read(&path) else {
+                continue;
+            };
+            let face_count = if is_collection {
+                ttf_parser::fonts_in_collection(&data).unwrap_or(1)
+            } else {
+                1
+            };
+            for face_idx in 0..face_count {
+                if let Some((family, bold, italic)) = read_font_style(&data, face_idx) {
+                    index
+                        .entry((family.to_lowercase(), bold, italic))
+                        .or_insert((path.clone(), face_idx));
+                }
             }
         }
     }
@@ -139,7 +149,7 @@ fn get_font_index() -> &'static FontLookup {
 
 /// Look up a font file by family name and style using the OS/2 table metadata index.
 /// Falls back to the regular variant if the requested bold/italic is not available.
-fn find_font_file(font_name: &str, bold: bool, italic: bool) -> Option<PathBuf> {
+fn find_font_file(font_name: &str, bold: bool, italic: bool) -> Option<(PathBuf, u32)> {
     let index = get_font_index();
     let key = font_name.to_lowercase();
     index
@@ -255,8 +265,9 @@ fn embed_truetype(
     data_ref: Ref,
     font_name: &str,
     font_data: &[u8],
+    face_index: u32,
 ) -> Option<(Vec<f32>, f32, f32)> {
-    let face = Face::parse(font_data, 0).ok()?;
+    let face = Face::parse(font_data, face_index).ok()?;
 
     let units = face.units_per_em() as f32;
     let ascent = face.ascender() as f32 / units * 1000.0;
@@ -355,12 +366,12 @@ fn register_font(
 
     let (widths, line_h_ratio, ascender_ratio) = embedded_data
         .and_then(|data| {
-            embed_truetype(pdf, font_ref, descriptor_ref, data_ref, font_name, data)
+            embed_truetype(pdf, font_ref, descriptor_ref, data_ref, font_name, data, 0)
         })
         .or_else(|| {
-            find_font_file(font_name, bold, italic).and_then(|path| {
+            find_font_file(font_name, bold, italic).and_then(|(path, face_index)| {
                 let data = std::fs::read(&path).ok()?;
-                embed_truetype(pdf, font_ref, descriptor_ref, data_ref, font_name, &data)
+                embed_truetype(pdf, font_ref, descriptor_ref, data_ref, font_name, &data, face_index)
             })
         })
         .map(|(w, r, ar)| (w, Some(r), Some(ar)))
@@ -388,6 +399,8 @@ struct WordChunk {
     color: Option<[u8; 3]>,
     x_offset: f32, // x relative to line start
     width: f32,
+    underline: bool,
+    strikethrough: bool,
 }
 
 struct TextLine {
@@ -404,6 +417,9 @@ fn finish_line(chunks: &mut Vec<WordChunk>) -> TextLine {
 }
 
 /// Layout runs into wrapped lines.
+/// Handles cross-run contiguous text correctly: no space is inserted between
+/// runs unless the preceding text ended with whitespace or the new run starts
+/// with whitespace (e.g., "bold" + ", " → "bold," not "bold ,").
 fn build_paragraph_lines(
     runs: &[Run],
     seen_fonts: &HashMap<String, FontEntry>,
@@ -412,22 +428,45 @@ fn build_paragraph_lines(
     let mut lines: Vec<TextLine> = Vec::new();
     let mut current_chunks: Vec<WordChunk> = Vec::new();
     let mut current_x: f32 = 0.0;
+    let mut prev_ended_with_ws = false;
+    let mut prev_space_w: f32 = 0.0;
 
     for run in runs {
         let key = font_key(run);
         let entry = seen_fonts.get(&key).expect("font registered");
         let space_w = entry.widths_1000[0] * run.font_size / 1000.0;
+        let starts_with_ws = run.text.starts_with(char::is_whitespace);
 
-        for word in run.text.split_whitespace() {
+        for (i, word) in run.text.split_whitespace().enumerate() {
             let ww: f32 = to_winansi_bytes(word)
                 .iter()
                 .filter(|&&b| b >= 32)
                 .map(|&b| entry.widths_1000[(b - 32) as usize] * run.font_size / 1000.0)
                 .sum();
 
-            if !current_chunks.is_empty() && current_x + ww > max_width {
+            let need_space = !current_chunks.is_empty()
+                && (i > 0 || starts_with_ws || prev_ended_with_ws);
+
+            // Use the space width from the run that owns the space character:
+            // within a run (i > 0) or leading ws → this run's space_w;
+            // trailing ws from previous run → previous run's space_w
+            let effective_space_w = if i > 0 || starts_with_ws {
+                space_w
+            } else {
+                prev_space_w
+            };
+
+            let proposed_x = if need_space {
+                current_x + effective_space_w
+            } else {
+                current_x
+            };
+
+            if !current_chunks.is_empty() && proposed_x + ww > max_width {
                 lines.push(finish_line(&mut current_chunks));
                 current_x = 0.0;
+            } else {
+                current_x = proposed_x;
             }
 
             current_chunks.push(WordChunk {
@@ -437,9 +476,14 @@ fn build_paragraph_lines(
                 color: run.color,
                 x_offset: current_x,
                 width: ww,
+                underline: run.underline,
+                strikethrough: run.strikethrough,
             });
-            current_x += ww + space_w;
+            current_x += ww;
         }
+
+        prev_ended_with_ws = run.text.ends_with(char::is_whitespace);
+        prev_space_w = space_w;
     }
 
     if !current_chunks.is_empty() {
@@ -508,6 +552,21 @@ fn render_paragraph_lines(
                 .next_line(x, y)
                 .show(Str(&text_bytes))
                 .end_text();
+
+            if chunk.underline {
+                let thick = (chunk.font_size * 0.05).max(0.5);
+                let ul_y = y - chunk.font_size * 0.12;
+                content
+                    .rect(x, ul_y - thick, chunk.width, thick)
+                    .fill_nonzero();
+            }
+            if chunk.strikethrough {
+                let thick = (chunk.font_size * 0.05).max(0.5);
+                let st_y = y + chunk.font_size * 0.3;
+                content
+                    .rect(x, st_y, chunk.width, thick)
+                    .fill_nonzero();
+            }
         }
     }
     if current_color.is_some() {

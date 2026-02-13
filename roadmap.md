@@ -28,11 +28,28 @@ Generated PDFs are larger than Word's PDF export. Likely causes:
 
 ## Performance
 
-Profile and optimize conversion speed. Areas to investigate:
-- Font scanning (`scan_font_dirs`) — currently walks all system font directories on every invocation via `OnceLock`, but could be slow on first call
-- Font embedding — full TTF data is embedded per font; consider subsetting (related to file size above)
-- PDF generation — measure `pdf-writer` overhead vs our layout logic
-- Memory usage — large DOCX files with many images
+### Profiling setup
+- Add phase timing (`log::info!`) to parse/render split for quick feedback
+- Add Criterion benchmarks (full pipeline, parse-only, render-only, font scan) for regression tracking
+- Use `samply` for flamegraph profiling to identify actual bottlenecks
+
+### Known bottlenecks
+- **Font scanning** — `scan_font_dirs` reads entire font files just to extract name/style metadata. Read only the header, or cache the index to disk (path + mtime → family/style)
+- **Double font reads** — scan reads each font file for indexing, then `register_font` reads the same file again for embedding. Keep the data from the first read
+- **Kerning extraction** — O(n²) brute-force over all WinAnsi glyph pairs. Iterate actual kern table entries instead
+- **Per-word text objects** — each word emits its own BT/Tf/Td/Tj/ET sequence. Batch consecutive words sharing font+color into single text objects to reduce output size and CPU
+- **Repeated WinAnsi conversion** — same text is converted in line-building, rendering, and table auto-fit. Pre-compute once and store in `WordChunk`
+- **String allocations** — `font_key()` allocates on every call; `WordChunk` clones font name strings per word. Use indices or interning
+
+### Parallelism (rayon)
+- Font directory scanning — embarrassingly parallel, biggest win
+- Font metric computation — parse face, compute widths, extract kern pairs per font independently, then write to PDF sequentially
+- Paragraph line wrapping — independent per paragraph once font metrics are ready
+- ZIP decompression + XML parsing — read all entries into memory, parse in parallel
+
+### Other
+- Font subsetting (related to output file size)
+- Memory usage for large DOCX files with many images
 
 ## Test corpus
 

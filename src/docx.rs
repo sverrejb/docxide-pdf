@@ -763,6 +763,16 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
                 .is_none_or(|v| v != "0" && v != "false"),
             None => style_italic,
         };
+        let underline = rpr
+            .and_then(|n| wml(n, "u"))
+            .and_then(|n| n.attribute((WML_NS, "val")))
+            .is_some_and(|v| v != "none");
+        let strikethrough = rpr
+            .and_then(|n| wml(n, "strike"))
+            .is_some_and(|n| {
+                n.attribute((WML_NS, "val"))
+                    .is_none_or(|v| v != "0" && v != "false")
+            });
 
         let color = rpr
             .and_then(|n| wml_attr(n, "color"))
@@ -782,6 +792,8 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
                 font_name,
                 bold,
                 italic,
+                underline,
+                strikethrough,
                 color,
             });
         }
@@ -810,6 +822,8 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
                 font_name: mark_font_name,
                 bold: style_bold,
                 italic: style_italic,
+                underline: false,
+                strikethrough: false,
                 color: None,
             });
         }
