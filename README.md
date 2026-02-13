@@ -31,9 +31,9 @@ These *kind* of work:
 
 Tables with merged cells, headers/footers, footnotes, sections, underline/strikethrough, tabs, hyperlinks, text boxes, charts, SmartArt, and **many other advanced features**.
 
-## Showcase
+## Examples
 
-See all examples in the [showcase](https://github.com/sverrejb/docxside-pdf/tree/main/showcase#readme)
+See more examples in the [showcase](https://github.com/sverrejb/docxside-pdf/tree/main/showcase#readme)
 
 <!-- showcase-start -->
 <table>

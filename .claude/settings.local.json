@@ -26,7 +26,9 @@
       "Bash(cargo run:*)",
       "Bash(cargo check:*)",
       "Bash(mutool show:*)",
-      "Bash(open:*)"
+      "Bash(open:*)",
+      "Bash(/tmp/check_kern/Cargo.toml:*)",
+      "Bash(/tmp/check_kern/src/main.rs:*)"
     ]
   }
 }
