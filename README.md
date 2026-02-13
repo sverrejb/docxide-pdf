@@ -16,20 +16,20 @@ While the idea, architecture, testing strategy and validation of output are all 
 
 ## Sort-of supported features ✅
 
-These *kind* of work:
+These *kind of* work:
 
-- **Text**: font embedding (TTF/OTF), bold, italic, font size, text color, theme fonts
-- **Paragraphs**: left/center/right/justify alignment, space before/after, line spacing, indentation, contextual spacing, keep-next
+- **Text**: font embedding (TTF/OTF), bold, italic, underline, strikethrough, font size, text color, theme fonts
+- **Paragraphs**: left/center/right/justify alignment, space before/after, line spacing, indentation, contextual spacing, keep-next, bottom borders
 - **Styles**: paragraph style inheritance (`basedOn` chains), document defaults from `docDefaults`
 - **Lists**: bullet and numbered lists with nesting levels
-- **Tables**: basic structure, column widths, cell borders, cell content
+- **Tables**: column widths with auto-fit, cell borders, cell text with alignment
 - **Images**: inline JPEG embedding with sizing
-- **Page layout**: page size, margins, document grid, automatic page breaking, multi-page output
-
+- **Page layout**: page size, margins, document grid, automatic page breaking with widow/orphan control
+- **Fonts**: cross-platform font search (macOS/Linux/Windows), embedded DOCX font extraction, `DOCXSIDE_FONTS` env var for custom font directories
 
 ### Not yet supported
 
-Tables with merged cells, headers/footers, footnotes, sections, underline/strikethrough, tabs, hyperlinks, text boxes, charts, SmartArt, and **many other advanced features**.
+Explicit page/section breaks, headers/footers, footnotes, tab stops, clickable hyperlinks, non-JPEG images, table merged cells, table cell shading, text boxes, charts, SmartArt, superscript/subscript, multi-column layouts, and many other features.
 
 ## Examples
 
