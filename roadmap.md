@@ -19,11 +19,18 @@ Already implemented with layered strategy:
 
 Remaining: bundle open-source fallback fonts (Liberation, Noto) so output is consistent even without system fonts installed.
 
+## Output file size
+
+Generated PDFs are larger than Word's PDF export. Likely causes:
+- Full TTF font embedding — we embed the entire font file; Word subsets to only used glyphs
+- Investigate font subsetting (e.g. `subsetter` crate or manual subsetting)
+- Compare file sizes across test cases to quantify the overhead
+
 ## Performance
 
 Profile and optimize conversion speed. Areas to investigate:
 - Font scanning (`scan_font_dirs`) — currently walks all system font directories on every invocation via `OnceLock`, but could be slow on first call
-- Font embedding — full TTF data is embedded per font; consider subsetting
+- Font embedding — full TTF data is embedded per font; consider subsetting (related to file size above)
 - PDF generation — measure `pdf-writer` overhead vs our layout logic
 - Memory usage — large DOCX files with many images
 
