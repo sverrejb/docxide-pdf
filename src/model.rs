@@ -6,6 +6,28 @@ pub enum Alignment {
     Justify,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum TabAlignment {
+    Left,
+    Center,
+    Right,
+    Decimal,
+}
+
+#[derive(Clone, Debug)]
+pub struct TabStop {
+    pub position: f32,
+    pub alignment: TabAlignment,
+    pub leader: Option<char>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum VertAlign {
+    Baseline,
+    Superscript,
+    Subscript,
+}
+
 pub struct Document {
     pub page_width: f32,
     pub page_height: f32,
@@ -50,6 +72,8 @@ pub struct Paragraph {
     pub line_spacing: Option<f32>, // per-paragraph override (e.g. 240/240 = 1.0)
     pub image: Option<EmbeddedImage>,
     pub border_bottom: Option<BorderBottom>,
+    pub page_break_before: bool,
+    pub tab_stops: Vec<TabStop>,
 }
 
 pub struct Run {
@@ -61,6 +85,8 @@ pub struct Run {
     pub underline: bool,
     pub strikethrough: bool,
     pub color: Option<[u8; 3]>, // None = automatic (black)
+    pub is_tab: bool,
+    pub vertical_align: VertAlign,
 }
 
 pub struct Table {

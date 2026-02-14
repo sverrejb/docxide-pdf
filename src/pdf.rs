@@ -6,7 +6,7 @@ use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str};
 use ttf_parser::Face;
 
 use crate::error::Error;
-use crate::model::{Alignment, Block, Document, Run, Table};
+use crate::model::{Alignment, Block, Document, Run, TabAlignment, TabStop, Table, VertAlign};
 
 struct FontEntry {
     pdf_name: String,
@@ -401,7 +401,25 @@ struct WordChunk {
     width: f32,
     underline: bool,
     strikethrough: bool,
+    y_offset: f32, // vertical offset for superscript/subscript
 }
+
+fn effective_font_size(run: &Run) -> f32 {
+    match run.vertical_align {
+        VertAlign::Superscript | VertAlign::Subscript => run.font_size * 0.58,
+        VertAlign::Baseline => run.font_size,
+    }
+}
+
+fn vert_y_offset(run: &Run) -> f32 {
+    match run.vertical_align {
+        VertAlign::Superscript => run.font_size * 0.35,
+        VertAlign::Subscript => -run.font_size * 0.14,
+        VertAlign::Baseline => 0.0,
+    }
+}
+
+const DEFAULT_TAB_INTERVAL: f32 = 36.0; // 0.5 inches
 
 struct TextLine {
     chunks: Vec<WordChunk>,
@@ -432,16 +450,21 @@ fn build_paragraph_lines(
     let mut prev_space_w: f32 = 0.0;
 
     for run in runs {
+        if run.is_tab {
+            continue; // tabs handled in build_tabbed_line
+        }
         let key = font_key(run);
         let entry = seen_fonts.get(&key).expect("font registered");
-        let space_w = entry.widths_1000[0] * run.font_size / 1000.0;
+        let eff_fs = effective_font_size(run);
+        let space_w = entry.widths_1000[0] * eff_fs / 1000.0;
         let starts_with_ws = run.text.starts_with(char::is_whitespace);
+        let y_off = vert_y_offset(run);
 
         for (i, word) in run.text.split_whitespace().enumerate() {
             let ww: f32 = to_winansi_bytes(word)
                 .iter()
                 .filter(|&&b| b >= 32)
-                .map(|&b| entry.widths_1000[(b - 32) as usize] * run.font_size / 1000.0)
+                .map(|&b| entry.widths_1000[(b - 32) as usize] * eff_fs / 1000.0)
                 .sum();
 
             let need_space = !current_chunks.is_empty()
@@ -472,12 +495,13 @@ fn build_paragraph_lines(
             current_chunks.push(WordChunk {
                 pdf_font: entry.pdf_name.clone(),
                 text: word.to_string(),
-                font_size: run.font_size,
+                font_size: eff_fs,
                 color: run.color,
                 x_offset: current_x,
                 width: ww,
                 underline: run.underline,
                 strikethrough: run.strikethrough,
+                y_offset: y_off,
             });
             current_x += ww;
         }
@@ -497,6 +521,230 @@ fn build_paragraph_lines(
         });
     }
     lines
+}
+
+fn find_next_tab_stop<'a>(
+    current_x: f32,
+    tab_stops: &'a [TabStop],
+    indent_left: f32,
+) -> TabStop {
+    let abs_x = current_x + indent_left;
+    for stop in tab_stops {
+        if stop.position > abs_x + 0.5 {
+            return stop.clone();
+        }
+    }
+    let next_default = ((abs_x / DEFAULT_TAB_INTERVAL).floor() + 1.0) * DEFAULT_TAB_INTERVAL;
+    TabStop {
+        position: next_default,
+        alignment: TabAlignment::Left,
+        leader: None,
+    }
+}
+
+fn segment_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 {
+    let mut w: f32 = 0.0;
+    let mut first = true;
+    for run in runs {
+        let key = font_key(run);
+        let entry = seen_fonts.get(&key).expect("font registered");
+        let eff_fs = effective_font_size(run);
+        let space_w = entry.widths_1000[0] * eff_fs / 1000.0;
+        for (i, word) in run.text.split_whitespace().enumerate() {
+            if !first || i > 0 {
+                w += space_w;
+            }
+            w += to_winansi_bytes(word)
+                .iter()
+                .filter(|&&b| b >= 32)
+                .map(|&b| entry.widths_1000[(b - 32) as usize] * eff_fs / 1000.0)
+                .sum::<f32>();
+            first = false;
+        }
+    }
+    w
+}
+
+fn decimal_before_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 {
+    let full_text: String = runs.iter().map(|r| r.text.as_str()).collect();
+    let before = if let Some(dot_pos) = full_text.find('.') {
+        &full_text[..dot_pos]
+    } else {
+        &full_text
+    };
+    let mut w: f32 = 0.0;
+    let mut chars_remaining = before.len();
+    for run in runs {
+        let key = font_key(run);
+        let entry = seen_fonts.get(&key).expect("font registered");
+        let eff_fs = effective_font_size(run);
+        let text_to_measure = if run.text.len() <= chars_remaining {
+            chars_remaining -= run.text.len();
+            &run.text
+        } else {
+            let s = &run.text[..chars_remaining];
+            chars_remaining = 0;
+            s
+        };
+        for &b in to_winansi_bytes(text_to_measure).iter().filter(|&&b| b >= 32) {
+            w += entry.widths_1000[(b - 32) as usize] * eff_fs / 1000.0;
+        }
+        if chars_remaining == 0 {
+            break;
+        }
+    }
+    w
+}
+
+/// Build a single TextLine for a paragraph that contains tab characters.
+fn build_tabbed_line(
+    runs: &[Run],
+    seen_fonts: &HashMap<String, FontEntry>,
+    tab_stops: &[TabStop],
+    indent_left: f32,
+) -> Vec<TextLine> {
+    // Split runs into segments at tab markers
+    let mut segments: Vec<(Vec<&Run>, Option<TabStop>)> = Vec::new();
+    let mut current_seg: Vec<&Run> = Vec::new();
+    let mut pending_tab: Option<TabStop> = None;
+
+    for run in runs {
+        if run.is_tab {
+            segments.push((std::mem::take(&mut current_seg), pending_tab.take()));
+            // Find which tab stop this tab activates — we'll resolve position during layout
+            pending_tab = Some(TabStop {
+                position: 0.0, // placeholder, resolved below
+                alignment: TabAlignment::Left,
+                leader: None,
+            });
+        } else {
+            current_seg.push(run);
+        }
+    }
+    segments.push((std::mem::take(&mut current_seg), pending_tab.take()));
+
+    let mut all_chunks: Vec<WordChunk> = Vec::new();
+    let mut current_x: f32 = 0.0;
+
+    for (seg_idx, (seg_runs, tab_before)) in segments.iter().enumerate() {
+        if seg_idx > 0 {
+            let stop = find_next_tab_stop(current_x, tab_stops, indent_left);
+            let tab_target = stop.position - indent_left;
+
+            // Calculate where segment text will start based on alignment
+            let seg_start = match stop.alignment {
+                TabAlignment::Left => tab_target.max(current_x),
+                TabAlignment::Center => {
+                    let sw = segment_width(seg_runs, seen_fonts);
+                    (tab_target - sw / 2.0).max(current_x)
+                }
+                TabAlignment::Right => {
+                    let sw = segment_width(seg_runs, seen_fonts);
+                    (tab_target - sw).max(current_x)
+                }
+                TabAlignment::Decimal => {
+                    let bw = decimal_before_width(seg_runs, seen_fonts);
+                    (tab_target - bw).max(current_x)
+                }
+            };
+
+            // Draw leader fill between end of previous text and start of aligned text
+            if let Some(_) = tab_before {
+                let abs_x = current_x + indent_left;
+                let leader = tab_stops
+                    .iter()
+                    .find(|s| s.position > abs_x + 0.5)
+                    .and_then(|s| s.leader);
+
+                if let Some(leader_char) = leader {
+                    let font_run = seg_runs.first().or_else(|| {
+                        segments[..seg_idx]
+                            .iter()
+                            .rev()
+                            .flat_map(|(r, _)| r.last())
+                            .next()
+                    });
+                    if let Some(run) = font_run {
+                        let key = font_key(run);
+                        let entry = seen_fonts.get(&key).expect("font registered");
+                        let eff_fs = effective_font_size(run);
+                        let leader_bytes = to_winansi_bytes(&leader_char.to_string());
+                        if let Some(&byte) = leader_bytes.first() {
+                            if byte >= 32 {
+                                let char_w =
+                                    entry.widths_1000[(byte - 32) as usize] * eff_fs / 1000.0;
+                                let leader_gap = seg_start - current_x;
+                                if char_w > 0.0 && leader_gap > char_w * 2.0 {
+                                    let count =
+                                        ((leader_gap - char_w) / char_w).floor() as usize;
+                                    if count > 0 {
+                                        let leader_text: String = std::iter::repeat(leader_char)
+                                            .take(count)
+                                            .collect();
+                                        let leader_w = count as f32 * char_w;
+                                        let leader_start = seg_start - leader_w;
+                                        all_chunks.push(WordChunk {
+                                            pdf_font: entry.pdf_name.clone(),
+                                            text: leader_text,
+                                            font_size: eff_fs,
+                                            color: run.color,
+                                            x_offset: leader_start,
+                                            width: leader_w,
+                                            underline: false,
+                                            strikethrough: false,
+                                            y_offset: 0.0,
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            current_x = seg_start;
+        }
+
+        // Layout text in this segment from current_x
+        let mut prev_ws = false;
+        for run in seg_runs {
+            let key = font_key(run);
+            let entry = seen_fonts.get(&key).expect("font registered");
+            let eff_fs = effective_font_size(run);
+            let space_w = entry.widths_1000[0] * eff_fs / 1000.0;
+            let y_off = vert_y_offset(run);
+
+            for (i, word) in run.text.split_whitespace().enumerate() {
+                let ww: f32 = to_winansi_bytes(word)
+                    .iter()
+                    .filter(|&&b| b >= 32)
+                    .map(|&b| entry.widths_1000[(b - 32) as usize] * eff_fs / 1000.0)
+                    .sum();
+                if !all_chunks.is_empty() && (i > 0 || prev_ws || run.text.starts_with(char::is_whitespace)) {
+                    current_x += space_w;
+                }
+                all_chunks.push(WordChunk {
+                    pdf_font: entry.pdf_name.clone(),
+                    text: word.to_string(),
+                    font_size: eff_fs,
+                    color: run.color,
+                    x_offset: current_x,
+                    width: ww,
+                    underline: run.underline,
+                    strikethrough: run.strikethrough,
+                    y_offset: y_off,
+                });
+                current_x += ww;
+            }
+            prev_ws = run.text.ends_with(char::is_whitespace);
+        }
+    }
+
+    let total_width = all_chunks.last().map(|c| c.x_offset + c.width).unwrap_or(0.0);
+    vec![TextLine {
+        chunks: all_chunks,
+        total_width,
+    }]
 }
 
 /// Render pre-built lines applying the paragraph alignment.
@@ -549,7 +797,7 @@ fn render_paragraph_lines(
             content
                 .begin_text()
                 .set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size)
-                .next_line(x, y)
+                .next_line(x, y + chunk.y_offset)
                 .show(Str(&text_bytes))
                 .end_text();
 
@@ -952,6 +1200,23 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     for (block_idx, block) in doc.blocks.iter().enumerate() {
         match block {
             Block::Paragraph(para) => {
+                // Handle explicit page breaks
+                if para.page_break_before {
+                    let at_top = (slot_top - (doc.page_height - doc.margin_top)).abs() < 1.0;
+                    if !at_top {
+                        all_contents
+                            .push(std::mem::replace(&mut current_content, Content::new()));
+                        slot_top = doc.page_height - doc.margin_top;
+                    }
+                    prev_space_after = 0.0;
+                    // If the paragraph only contains the break (no text), skip rendering
+                    if para.runs.is_empty()
+                        || para.runs.iter().all(|r| r.is_tab || r.text.is_empty())
+                    {
+                        continue;
+                    }
+                }
+
                 let next_para = adjacent_para(block_idx + 1);
                 let prev_para = if block_idx > 0 {
                     adjacent_para(block_idx - 1)
@@ -985,8 +1250,16 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 let para_text_width = (text_width - para.indent_left).max(1.0);
                 let label_x = doc.margin_left + (para.indent_left - para.indent_hanging).max(0.0);
 
+                let has_tabs = para.runs.iter().any(|r| r.is_tab);
                 let lines = if para.image.is_some() || para.runs.is_empty() {
                     vec![]
+                } else if has_tabs {
+                    build_tabbed_line(
+                        &para.runs,
+                        &seen_fonts,
+                        &para.tab_stops,
+                        para.indent_left,
+                    )
                 } else {
                     build_paragraph_lines(&para.runs, &seen_fonts, para_text_width)
                 };
@@ -1084,7 +1357,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                     all_contents.push(std::mem::replace(&mut current_content, Content::new()));
                     slot_top = doc.page_height - doc.margin_top;
-                    inter_gap = effective_space_before;
+                    inter_gap = 0.0;
+                }
+
+                // Suppress space_before at the top of a page (after a page break, not first page)
+                let at_new_page_top = !all_contents.is_empty()
+                    && (slot_top - (doc.page_height - doc.margin_top)).abs() < 1.0;
+                if at_new_page_top {
+                    inter_gap = 0.0;
                 }
 
                 slot_top -= inter_gap;

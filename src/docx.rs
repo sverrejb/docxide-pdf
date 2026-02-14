@@ -4,7 +4,8 @@ use std::path::Path;
 
 use crate::error::Error;
 use crate::model::{
-    Alignment, Block, Document, EmbeddedImage, Paragraph, Run, Table, TableCell, TableRow,
+    Alignment, Block, Document, EmbeddedImage, Paragraph, Run, TabAlignment, TabStop, Table,
+    TableCell, TableRow, VertAlign,
 };
 
 struct LevelDef {
@@ -698,7 +699,48 @@ fn parse_numbering(zip: &mut zip::ZipArchive<std::fs::File>) -> NumberingInfo {
     }
 }
 
-fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFonts) -> Vec<Run> {
+fn parse_tab_stops(ppr: roxmltree::Node) -> Vec<TabStop> {
+    let Some(tabs) = wml(ppr, "tabs") else {
+        return vec![];
+    };
+    let mut stops: Vec<TabStop> = tabs
+        .children()
+        .filter(|n| n.tag_name().name() == "tab" && n.tag_name().namespace() == Some(WML_NS))
+        .filter_map(|n| {
+            let pos = twips_attr(n, "pos")?;
+            let val = n.attribute((WML_NS, "val")).unwrap_or("left");
+            if val == "clear" {
+                return None;
+            }
+            let alignment = match val {
+                "center" => TabAlignment::Center,
+                "right" => TabAlignment::Right,
+                "decimal" => TabAlignment::Decimal,
+                _ => TabAlignment::Left,
+            };
+            let leader = n.attribute((WML_NS, "leader")).and_then(|l| match l {
+                "dot" => Some('.'),
+                "hyphen" => Some('-'),
+                "underscore" => Some('_'),
+                _ => None,
+            });
+            Some(TabStop {
+                position: pos,
+                alignment,
+                leader,
+            })
+        })
+        .collect();
+    stops.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
+    stops
+}
+
+struct ParsedRuns {
+    runs: Vec<Run>,
+    has_page_break: bool,
+}
+
+fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFonts) -> ParsedRuns {
     let ppr = wml(para_node, "pPr");
     let para_style_id = ppr
         .and_then(|ppr| wml_attr(ppr, "pStyle"))
@@ -737,6 +779,8 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
         .collect();
 
     let mut runs = Vec::new();
+    let mut has_page_break = false;
+
     for run_node in run_nodes {
         let rpr = wml(run_node, "rPr");
 
@@ -779,15 +823,69 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
             .and_then(parse_hex_color)
             .or(style_color);
 
-        let text: String = run_node
-            .children()
-            .filter(|n| n.tag_name().name() == "t" && n.tag_name().namespace() == Some(WML_NS))
-            .filter_map(|n| n.text())
-            .collect();
+        let vertical_align = rpr
+            .and_then(|n| wml_attr(n, "vertAlign"))
+            .map(|v| match v {
+                "superscript" => VertAlign::Superscript,
+                "subscript" => VertAlign::Subscript,
+                _ => VertAlign::Baseline,
+            })
+            .unwrap_or(VertAlign::Baseline);
 
-        if !text.is_empty() {
+        // Iterate children in document order to handle w:t, w:tab, w:br
+        let mut pending_text = String::new();
+        for child in run_node.children() {
+            if child.tag_name().namespace() != Some(WML_NS) {
+                continue;
+            }
+            match child.tag_name().name() {
+                "t" => {
+                    if let Some(t) = child.text() {
+                        pending_text.push_str(t);
+                    }
+                }
+                "tab" => {
+                    // Flush any pending text before the tab
+                    if !pending_text.is_empty() {
+                        runs.push(Run {
+                            text: std::mem::take(&mut pending_text),
+                            font_size,
+                            font_name: font_name.clone(),
+                            bold,
+                            italic,
+                            underline,
+                            strikethrough,
+                            color,
+                            is_tab: false,
+                            vertical_align,
+                        });
+                    }
+                    // Insert tab marker run
+                    runs.push(Run {
+                        text: String::new(),
+                        font_size,
+                        font_name: font_name.clone(),
+                        bold: false,
+                        italic: false,
+                        underline: false,
+                        strikethrough: false,
+                        color: None,
+                        is_tab: true,
+                        vertical_align: VertAlign::Baseline,
+                    });
+                }
+                "br" => {
+                    if child.attribute((WML_NS, "type")) == Some("page") {
+                        has_page_break = true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        // Flush remaining text
+        if !pending_text.is_empty() {
             runs.push(Run {
-                text,
+                text: pending_text,
                 font_size,
                 font_name,
                 bold,
@@ -795,17 +893,28 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
                 underline,
                 strikethrough,
                 color,
+                is_tab: false,
+                vertical_align,
             });
         }
     }
 
+    // Also check for w:pageBreakBefore in paragraph properties
+    if ppr
+        .and_then(|ppr| wml(ppr, "pageBreakBefore"))
+        .is_some_and(|n| {
+            n.attribute((WML_NS, "val"))
+                .is_none_or(|v| v != "0" && v != "false")
+        })
+    {
+        has_page_break = true;
+    }
+
     // Empty paragraphs with explicit font sizing in their paragraph mark (pPr/rPr)
     // need a synthetic run so the renderer computes the correct line height.
-    if runs.is_empty() {
+    if runs.is_empty() && !has_page_break {
         let mark_rpr = ppr.and_then(|ppr| wml(ppr, "rPr"));
-        let has_explicit_sz = mark_rpr
-            .and_then(|n| wml_attr(n, "sz"))
-            .is_some();
+        let has_explicit_sz = mark_rpr.and_then(|n| wml_attr(n, "sz")).is_some();
         if has_explicit_sz {
             let mark_font_size = mark_rpr
                 .and_then(|n| wml_attr(n, "sz"))
@@ -825,11 +934,16 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
                 underline: false,
                 strikethrough: false,
                 color: None,
+                is_tab: false,
+                vertical_align: VertAlign::Baseline,
             });
         }
     }
 
-    runs
+    ParsedRuns {
+        runs,
+        has_page_break,
+    }
 }
 
 pub fn parse(path: &Path) -> Result<Document, Error> {
@@ -911,7 +1025,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                         for p in tc.children().filter(|n| {
                             n.tag_name().name() == "p" && n.tag_name().namespace() == Some(WML_NS)
                         }) {
-                            let runs = parse_runs(p, &styles, &theme);
+                            let parsed = parse_runs(p, &styles, &theme);
                             let ppr = wml(p, "pPr");
                             let para_style_id = ppr
                                 .and_then(|ppr| wml_attr(ppr, "pStyle"))
@@ -923,7 +1037,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                                 .or_else(|| para_style.and_then(|s| s.alignment))
                                 .unwrap_or(Alignment::Left);
                             cell_paras.push(Paragraph {
-                                runs,
+                                runs: parsed.runs,
                                 space_before: 0.0,
                                 space_after: 0.0,
                                 content_height: 0.0,
@@ -936,6 +1050,8 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                                 line_spacing: Some(1.0),
                                 image: None,
                                 border_bottom: None,
+                                page_break_before: false,
+                                tab_stops: vec![],
                             });
                         }
                         cells.push(TableCell {
@@ -1016,7 +1132,8 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     }
                 }
 
-                let mut runs = parse_runs(node, &styles, &theme);
+                let parsed = parse_runs(node, &styles, &theme);
+                let mut runs = parsed.runs;
 
                 // Override font defaults from style for runs that used doc defaults
                 for run in &mut runs {
@@ -1025,6 +1142,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     }
                 }
 
+                let tab_stops = ppr.map(parse_tab_stops).unwrap_or_default();
                 let drawing = compute_drawing_info(node, &rels, &mut zip);
 
                 blocks.push(Block::Paragraph(Paragraph {
@@ -1041,6 +1159,8 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     line_spacing,
                     image: drawing.image,
                     border_bottom,
+                    page_break_before: parsed.has_page_break,
+                    tab_stops,
                 }));
             }
             _ => {}
