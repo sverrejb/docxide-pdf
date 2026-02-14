@@ -124,9 +124,6 @@ def main():
 
         rows.append((case, score, ref_dst.name, gen_dst.name))
 
-    update_readme(build_section(rows))
-    print("README.md updated.")
-
     write_showcase_readme(rows)
 
 

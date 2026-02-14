@@ -39,24 +39,8 @@ See more examples in the [showcase](https://github.com/sverrejb/docxside-pdf/tre
 <table>
   <tr><th>MS Word</th><th>Docxside-PDF</th></tr>
   <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case1_ref.png"/><br/><sub>case1 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case1_gen.png"/><br/><sub>case1 — 61.2% SSIM</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case2_ref.png"/><br/><sub>case2 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case2_gen.png"/><br/><sub>case2 — 93.3% SSIM</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case3_ref.png"/><br/><sub>case3 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case3_gen.png"/><br/><sub>case3 — 88.1% SSIM</sub></td>
-  </tr>
-  <tr>
     <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case4_ref.png"/><br/><sub>case4 — reference</sub></td>
     <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case4_gen.png"/><br/><sub>case4 — 89.5% SSIM</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case5_ref.png"/><br/><sub>case5 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case5_gen.png"/><br/><sub>case5 — 49.9% SSIM</sub></td>
   </tr>
   <tr>
     <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case6_ref.png"/><br/><sub>case6 — reference</sub></td>
@@ -69,10 +53,6 @@ See more examples in the [showcase](https://github.com/sverrejb/docxside-pdf/tre
   <tr>
     <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case8_ref.png"/><br/><sub>case8 — reference</sub></td>
     <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case8_gen.png"/><br/><sub>case8 — 94.1% SSIM</sub></td>
-  </tr>
-  <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case9_ref.png"/><br/><sub>case9 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case9_gen.png"/><br/><sub>case9 — 90.1% SSIM</sub></td>
   </tr>
 </table>
 <!-- showcase-end -->
