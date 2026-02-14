@@ -16,12 +16,9 @@ from PIL import Image
 ROOT = Path(__file__).parent.parent
 SHOWCASE_DIR = ROOT / "showcase"
 SSIM_CSV = ROOT / "tests/output/ssim_results.csv"
-README = ROOT / "README.md"
 TARGET_W = 420
 SSIM_THRESHOLD = 0.40
 IMG_BASE = "https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase"
-START_MARKER = "<!-- showcase-start -->"
-END_MARKER = "<!-- showcase-end -->"
 
 
 def run_tests():
@@ -65,17 +62,6 @@ def build_section(rows):
         lines.append("  </tr>")
     lines.append("</table>")
     return "\n".join(lines)
-
-
-def update_readme(section):
-    text = README.read_text()
-    si = text.find(START_MARKER)
-    ei = text.find(END_MARKER)
-    if si == -1 or ei == -1:
-        print("Showcase markers not found in README.md", file=sys.stderr)
-        sys.exit(1)
-    updated = f"{text[:si + len(START_MARKER)]}\n{section}\n{END_MARKER}{text[ei + len(END_MARKER):]}"
-    README.write_text(updated)
 
 
 def write_showcase_readme(rows):

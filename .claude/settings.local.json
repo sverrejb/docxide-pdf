@@ -28,7 +28,12 @@
       "Bash(mutool show:*)",
       "Bash(open:*)",
       "Bash(/tmp/check_kern/Cargo.toml:*)",
-      "Bash(/tmp/check_kern/src/main.rs:*)"
+      "Bash(/tmp/check_kern/src/main.rs:*)",
+      "Bash(for case in 2 3 4 5 9)",
+      "Bash(do echo \"====== CASE $case ======\" cargo run --manifest-path tools/Cargo.toml --bin docx-fonts -- tests/fixtures/case$case/input.docx)",
+      "Bash(done)",
+      "Bash(ls:*)",
+      "Bash(pip3 show:*)"
     ]
   }
 }
