@@ -13,6 +13,16 @@ const MUTOOL_DPI: &str = "150";
 
 const SKIP_FIXTURES: &[&str] = &["sample100kB"];
 
+fn natural_cmp(a: &Path, b: &Path) -> std::cmp::Ordering {
+    let a = a.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    let b = b.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    let extract = |s: &str| -> (String, u64) {
+        let i = s.find(|c: char| c.is_ascii_digit()).unwrap_or(s.len());
+        (s[..i].to_string(), s[i..].parse().unwrap_or(0))
+    };
+    extract(a).cmp(&extract(b))
+}
+
 fn discover_fixtures() -> io::Result<Vec<PathBuf>> {
     let fixtures_dir = Path::new("tests/fixtures");
     let mut fixtures: Vec<PathBuf> = fs::read_dir(fixtures_dir)?
@@ -25,7 +35,7 @@ fn discover_fixtures() -> io::Result<Vec<PathBuf>> {
                     .map_or(true, |n| !SKIP_FIXTURES.contains(&n))
         })
         .collect();
-    fixtures.sort();
+    fixtures.sort_by(|a, b| natural_cmp(a, b));
     Ok(fixtures)
 }
 
