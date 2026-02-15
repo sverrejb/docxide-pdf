@@ -34,7 +34,9 @@
       "Bash(done)",
       "Bash(ls:*)",
       "Bash(pip3 show:*)",
-      "Bash(target/debug/docxside-pdf:*)"
+      "Bash(target/debug/docxside-pdf:*)",
+      "Bash(wc:*)",
+      "Bash(cargo clippy:*)"
     ]
   }
 }

@@ -2,7 +2,7 @@
 name = "docxside-pdf"
 version = "0.4.0"
 edition = "2024"
-description = "Convert DOCX files to PDF, matching Microsoft Word's output as closely as possible"
+description = "CLI and Library for converting DOCX files to PDF, matching Microsoft Word's output as closely as possible"
 license = "Apache-2.0"
 repository = "https://github.com/sverrejb/docxside-pdf"
 keywords = ["experimental", "docx", "pdf", "word", "converter"]

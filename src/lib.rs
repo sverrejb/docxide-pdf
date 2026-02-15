@@ -1,5 +1,6 @@
 mod docx;
 mod error;
+mod fonts;
 mod model;
 mod pdf;
 
