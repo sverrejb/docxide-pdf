@@ -33,7 +33,8 @@
       "Bash(do echo \"====== CASE $case ======\" cargo run --manifest-path tools/Cargo.toml --bin docx-fonts -- tests/fixtures/case$case/input.docx)",
       "Bash(done)",
       "Bash(ls:*)",
-      "Bash(pip3 show:*)"
+      "Bash(pip3 show:*)",
+      "Bash(target/debug/docxside-pdf:*)"
     ]
   }
 }

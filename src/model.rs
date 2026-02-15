@@ -28,6 +28,10 @@ pub enum VertAlign {
     Subscript,
 }
 
+pub struct HeaderFooter {
+    pub paragraphs: Vec<Paragraph>,
+}
+
 pub struct Document {
     pub page_width: f32,
     pub page_height: f32,
@@ -41,6 +45,13 @@ pub struct Document {
     /// Fonts embedded in the DOCX (deobfuscated TTF/OTF bytes).
     /// Key: (lowercase_font_name, bold, italic)
     pub embedded_fonts: std::collections::HashMap<(String, bool, bool), Vec<u8>>,
+    pub header_default: Option<HeaderFooter>,
+    pub header_first: Option<HeaderFooter>,
+    pub footer_default: Option<HeaderFooter>,
+    pub footer_first: Option<HeaderFooter>,
+    pub header_margin: f32,
+    pub footer_margin: f32,
+    pub different_first_page: bool,
 }
 
 pub struct EmbeddedImage {
@@ -87,6 +98,13 @@ pub struct Run {
     pub color: Option<[u8; 3]>, // None = automatic (black)
     pub is_tab: bool,
     pub vertical_align: VertAlign,
+    pub field_code: Option<FieldCode>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum FieldCode {
+    Page,
+    NumPages,
 }
 
 pub struct Table {

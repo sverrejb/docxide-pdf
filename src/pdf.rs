@@ -6,7 +6,10 @@ use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str};
 use ttf_parser::Face;
 
 use crate::error::Error;
-use crate::model::{Alignment, Block, Document, Run, TabAlignment, TabStop, Table, VertAlign};
+use crate::model::{
+    Alignment, Block, Document, FieldCode, HeaderFooter, Run, TabAlignment, TabStop, Table,
+    VertAlign,
+};
 
 struct FontEntry {
     pdf_name: String,
@@ -1091,6 +1094,93 @@ fn render_table(
     }
 }
 
+fn render_header_footer(
+    content: &mut Content,
+    hf: &HeaderFooter,
+    seen_fonts: &HashMap<String, FontEntry>,
+    doc: &Document,
+    is_header: bool,
+    page_num: usize,
+    total_pages: usize,
+) {
+    let text_width = doc.page_width - doc.margin_left - doc.margin_right;
+
+    for para in &hf.paragraphs {
+        if para.runs.is_empty() {
+            continue;
+        }
+
+        // Substitute field codes with actual values
+        let substituted_runs: Vec<Run> = para
+            .runs
+            .iter()
+            .map(|run| {
+                if let Some(ref fc) = run.field_code {
+                    let text = match fc {
+                        FieldCode::Page => page_num.to_string(),
+                        FieldCode::NumPages => total_pages.to_string(),
+                    };
+                    Run {
+                        text,
+                        font_size: run.font_size,
+                        font_name: run.font_name.clone(),
+                        bold: run.bold,
+                        italic: run.italic,
+                        underline: run.underline,
+                        strikethrough: run.strikethrough,
+                        color: run.color,
+                        is_tab: false,
+                        vertical_align: run.vertical_align,
+                        field_code: None,
+                    }
+                } else {
+                    Run {
+                        text: run.text.clone(),
+                        font_size: run.font_size,
+                        font_name: run.font_name.clone(),
+                        bold: run.bold,
+                        italic: run.italic,
+                        underline: run.underline,
+                        strikethrough: run.strikethrough,
+                        color: run.color,
+                        is_tab: run.is_tab,
+                        vertical_align: run.vertical_align,
+                        field_code: None,
+                    }
+                }
+            })
+            .collect();
+
+        let lines = build_paragraph_lines(&substituted_runs, seen_fonts, text_width);
+
+        let (font_size, _, tallest_ar) = tallest_run_metrics(&substituted_runs, seen_fonts);
+        let ascender_ratio = tallest_ar.unwrap_or(0.75);
+
+        let baseline_y = if is_header {
+            doc.page_height - doc.header_margin - font_size * ascender_ratio
+        } else {
+            doc.footer_margin + font_size * (1.0 - ascender_ratio)
+        };
+
+        let effective_ls = para.line_spacing.unwrap_or(doc.line_spacing);
+        let line_h = font_metric(&substituted_runs, seen_fonts, |e| e.line_h_ratio)
+            .map(|ratio| font_size * ratio * effective_ls)
+            .unwrap_or(font_size * 1.2);
+
+        render_paragraph_lines(
+            content,
+            &lines,
+            &para.alignment,
+            doc.margin_left,
+            text_width,
+            baseline_y,
+            line_h,
+            lines.len(),
+            0,
+        );
+    }
+}
+
 pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     let mut pdf = Pdf::new();
     let mut next_id = 1i32;
@@ -1107,7 +1197,19 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     let mut seen_fonts: HashMap<String, FontEntry> = HashMap::new();
     let mut font_order: Vec<String> = Vec::new();
 
-    // Collect all runs from all blocks (paragraphs and table cells)
+    // Collect all runs from all blocks (paragraphs, table cells, headers/footers)
+    let hf_options = [
+        &doc.header_default,
+        &doc.header_first,
+        &doc.footer_default,
+        &doc.footer_first,
+    ];
+    let hf_runs = hf_options
+        .iter()
+        .filter_map(|hf| hf.as_ref())
+        .flat_map(|hf| hf.paragraphs.iter())
+        .flat_map(|p| p.runs.iter());
+
     let all_runs: Vec<&Run> = doc
         .blocks
         .iter()
@@ -1124,6 +1226,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 ),
             }
         })
+        .chain(hf_runs)
         .collect();
 
     for run in &all_runs {
@@ -1455,6 +1558,56 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         }
     }
     all_contents.push(current_content);
+
+    // Phase 2b: render headers and footers on each page
+    let total_pages = all_contents.len();
+    let has_hf = doc.header_default.is_some()
+        || doc.header_first.is_some()
+        || doc.footer_default.is_some()
+        || doc.footer_first.is_some();
+
+    if has_hf {
+        for (page_idx, content) in all_contents.iter_mut().enumerate() {
+            let is_first = page_idx == 0;
+            let page_num = page_idx + 1;
+
+            // Header
+            let header = if is_first && doc.different_first_page {
+                doc.header_first.as_ref()
+            } else {
+                doc.header_default.as_ref()
+            };
+            if let Some(hf) = header {
+                render_header_footer(
+                    content,
+                    hf,
+                    &seen_fonts,
+                    doc,
+                    true,
+                    page_num,
+                    total_pages,
+                );
+            }
+
+            // Footer
+            let footer = if is_first && doc.different_first_page {
+                doc.footer_first.as_ref()
+            } else {
+                doc.footer_default.as_ref()
+            };
+            if let Some(hf) = footer {
+                render_header_footer(
+                    content,
+                    hf,
+                    &seen_fonts,
+                    doc,
+                    false,
+                    page_num,
+                    total_pages,
+                );
+            }
+        }
+    }
 
     // Phase 3: allocate page and content IDs now that page count is known
     let n = all_contents.len();

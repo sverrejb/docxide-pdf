@@ -4,8 +4,8 @@ use std::path::Path;
 
 use crate::error::Error;
 use crate::model::{
-    Alignment, Block, Document, EmbeddedImage, Paragraph, Run, TabAlignment, TabStop, Table,
-    TableCell, TableRow, VertAlign,
+    Alignment, Block, Document, EmbeddedImage, FieldCode, HeaderFooter, Paragraph, Run,
+    TabAlignment, TabStop, Table, TableCell, TableRow, VertAlign,
 };
 
 struct LevelDef {
@@ -780,6 +780,8 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
 
     let mut runs = Vec::new();
     let mut has_page_break = false;
+    let mut in_field = false;
+    let mut field_instr = String::new();
 
     for run_node in run_nodes {
         let rpr = wml(run_node, "rPr");
@@ -832,19 +834,78 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
             })
             .unwrap_or(VertAlign::Baseline);
 
-        // Iterate children in document order to handle w:t, w:tab, w:br
+        // Iterate children in document order to handle w:t, w:tab, w:br, w:fldChar, w:instrText
         let mut pending_text = String::new();
         for child in run_node.children() {
             if child.tag_name().namespace() != Some(WML_NS) {
                 continue;
             }
             match child.tag_name().name() {
-                "t" => {
+                "fldChar" => {
+                    match child.attribute((WML_NS, "fldCharType")) {
+                        Some("begin") => {
+                            // Flush pending text before entering field
+                            if !pending_text.is_empty() {
+                                runs.push(Run {
+                                    text: std::mem::take(&mut pending_text),
+                                    font_size,
+                                    font_name: font_name.clone(),
+                                    bold,
+                                    italic,
+                                    underline,
+                                    strikethrough,
+                                    color,
+                                    is_tab: false,
+                                    vertical_align,
+                                    field_code: None,
+                                });
+                            }
+                            in_field = true;
+                            field_instr.clear();
+                        }
+                        Some("end") => {
+                            if in_field {
+                                let trimmed = field_instr.trim();
+                                let fc = if trimmed.eq_ignore_ascii_case("PAGE") {
+                                    Some(FieldCode::Page)
+                                } else if trimmed.eq_ignore_ascii_case("NUMPAGES") {
+                                    Some(FieldCode::NumPages)
+                                } else {
+                                    None
+                                };
+                                if let Some(code) = fc {
+                                    runs.push(Run {
+                                        text: String::new(),
+                                        font_size,
+                                        font_name: font_name.clone(),
+                                        bold,
+                                        italic,
+                                        underline: false,
+                                        strikethrough: false,
+                                        color,
+                                        is_tab: false,
+                                        vertical_align: VertAlign::Baseline,
+                                        field_code: Some(code),
+                                    });
+                                }
+                                in_field = false;
+                                field_instr.clear();
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                "instrText" if in_field => {
+                    if let Some(t) = child.text() {
+                        field_instr.push_str(t);
+                    }
+                }
+                "t" if !in_field => {
                     if let Some(t) = child.text() {
                         pending_text.push_str(t);
                     }
                 }
-                "tab" => {
+                "tab" if !in_field => {
                     // Flush any pending text before the tab
                     if !pending_text.is_empty() {
                         runs.push(Run {
@@ -858,6 +919,7 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
                             color,
                             is_tab: false,
                             vertical_align,
+                            field_code: None,
                         });
                     }
                     // Insert tab marker run
@@ -872,9 +934,10 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
                         color: None,
                         is_tab: true,
                         vertical_align: VertAlign::Baseline,
+                        field_code: None,
                     });
                 }
-                "br" => {
+                "br" if !in_field => {
                     if child.attribute((WML_NS, "type")) == Some("page") {
                         has_page_break = true;
                     }
@@ -895,6 +958,7 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
                 color,
                 is_tab: false,
                 vertical_align,
+                field_code: None,
             });
         }
     }
@@ -936,6 +1000,7 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
                 color: None,
                 is_tab: false,
                 vertical_align: VertAlign::Baseline,
+                field_code: None,
             });
         }
     }
@@ -944,6 +1009,65 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
         runs,
         has_page_break,
     }
+}
+
+fn parse_header_footer_xml(
+    xml_content: &str,
+    styles: &StylesInfo,
+    theme: &ThemeFonts,
+) -> Option<HeaderFooter> {
+    let xml = roxmltree::Document::parse(xml_content).ok()?;
+    let root = xml.root_element();
+    let mut paragraphs = Vec::new();
+
+    for node in root.children() {
+        if node.tag_name().namespace() != Some(WML_NS) || node.tag_name().name() != "p" {
+            continue;
+        }
+        let ppr = wml(node, "pPr");
+        let para_style_id = ppr
+            .and_then(|ppr| wml_attr(ppr, "pStyle"))
+            .unwrap_or("Normal");
+        let para_style = styles.paragraph_styles.get(para_style_id);
+
+        let alignment = ppr
+            .and_then(|ppr| wml_attr(ppr, "jc"))
+            .map(parse_alignment)
+            .or_else(|| para_style.and_then(|s| s.alignment))
+            .unwrap_or(Alignment::Left);
+
+        let parsed = parse_runs(node, styles, theme);
+
+        paragraphs.push(Paragraph {
+            runs: parsed.runs,
+            space_before: 0.0,
+            space_after: 0.0,
+            content_height: 0.0,
+            alignment,
+            indent_left: 0.0,
+            indent_hanging: 0.0,
+            list_label: String::new(),
+            contextual_spacing: false,
+            keep_next: false,
+            line_spacing: None,
+            image: None,
+            border_bottom: None,
+            page_break_before: false,
+            tab_stops: vec![],
+        });
+    }
+
+    if paragraphs.is_empty() {
+        None
+    } else {
+        Some(HeaderFooter { paragraphs })
+    }
+}
+
+fn read_zip_text(zip: &mut zip::ZipArchive<std::fs::File>, name: &str) -> Option<String> {
+    let mut content = String::new();
+    zip.by_name(name).ok()?.read_to_string(&mut content).ok()?;
+    Some(content)
 }
 
 pub fn parse(path: &Path) -> Result<Document, Error> {
@@ -984,9 +1108,57 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
     let margin_bottom = pg_mar.and_then(|n| twips_attr(n, "bottom")).unwrap_or(72.0);
     let margin_left = pg_mar.and_then(|n| twips_attr(n, "left")).unwrap_or(72.0);
     let margin_right = pg_mar.and_then(|n| twips_attr(n, "right")).unwrap_or(72.0);
+    let header_margin = pg_mar.and_then(|n| twips_attr(n, "header")).unwrap_or(36.0);
+    let footer_margin = pg_mar.and_then(|n| twips_attr(n, "footer")).unwrap_or(36.0);
     let line_pitch = doc_grid
         .and_then(|n| twips_attr(n, "linePitch"))
         .unwrap_or(styles.defaults.font_size * 1.2);
+
+    let different_first_page = sect.and_then(|s| wml(s, "titlePg")).is_some();
+
+    // Parse header/footer references from sectPr
+    let mut header_default_rid = None;
+    let mut header_first_rid = None;
+    let mut footer_default_rid = None;
+    let mut footer_first_rid = None;
+    if let Some(sect) = sect {
+        for child in sect.children() {
+            if child.tag_name().namespace() != Some(WML_NS) {
+                continue;
+            }
+            let hf_type = child.attribute((WML_NS, "type")).unwrap_or("");
+            let rid = child.attribute((REL_NS, "id"));
+            match child.tag_name().name() {
+                "headerReference" => match hf_type {
+                    "default" => header_default_rid = rid,
+                    "first" => header_first_rid = rid,
+                    _ => {}
+                },
+                "footerReference" => match hf_type {
+                    "default" => footer_default_rid = rid,
+                    "first" => footer_first_rid = rid,
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+    }
+
+    let resolve_hf =
+        |rid: Option<&str>, zip: &mut zip::ZipArchive<std::fs::File>| -> Option<HeaderFooter> {
+            let target = rels.get(rid?)?;
+            let zip_path = target
+                .strip_prefix('/')
+                .map(String::from)
+                .unwrap_or_else(|| format!("word/{}", target));
+            let xml_text = read_zip_text(zip, &zip_path)?;
+            parse_header_footer_xml(&xml_text, &styles, &theme)
+        };
+
+    let header_default = resolve_hf(header_default_rid, &mut zip);
+    let header_first = resolve_hf(header_first_rid, &mut zip);
+    let footer_default = resolve_hf(footer_default_rid, &mut zip);
+    let footer_first = resolve_hf(footer_first_rid, &mut zip);
 
     let mut blocks = Vec::new();
     let mut counters: HashMap<(String, u8), u32> = HashMap::new();
@@ -1178,6 +1350,13 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
         line_spacing: styles.defaults.line_spacing,
         blocks,
         embedded_fonts,
+        header_default,
+        header_first,
+        footer_default,
+        footer_first,
+        header_margin,
+        footer_margin,
+        different_first_page,
     })
 }
 

@@ -168,6 +168,10 @@ fn analyze_fixture(fixture_dir: &Path) -> Option<CaseResult> {
         .to_string();
     let input_docx = fixture_dir.join("input.docx");
     let reference_pdf = fixture_dir.join("reference.pdf");
+    if !reference_pdf.exists() {
+        println!("  [SKIP] {name}: no reference.pdf");
+        return None;
+    }
     let output_base = PathBuf::from("tests/output").join(&name);
     let _ = fs::remove_file(output_base.join("generated.pdf"));
     fs::create_dir_all(&output_base).ok();
