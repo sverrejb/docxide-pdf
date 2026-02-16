@@ -987,7 +987,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     lines.len() as f32 * line_h
                 };
 
-                let needed = inter_gap + content_h + effective_space_after;
+                let needed = inter_gap + content_h;
                 let at_page_top = (slot_top - (doc.page_height - doc.margin_top)).abs() < 1.0;
 
                 let keep_next_extra = if para.keep_next {

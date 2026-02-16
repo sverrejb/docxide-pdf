@@ -36,7 +36,9 @@
       "Bash(pip3 show:*)",
       "Bash(target/debug/docxside-pdf:*)",
       "Bash(wc:*)",
-      "Bash(cargo clippy:*)"
+      "Bash(cargo clippy:*)",
+      "WebFetch(domain:silnrsi.github.io)",
+      "WebFetch(domain:www.tek-tips.com)"
     ]
   }
 }

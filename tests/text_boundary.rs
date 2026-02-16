@@ -49,23 +49,36 @@ fn extract_page_lines(pdf: &Path, page: usize) -> Vec<String> {
         .output()
         .expect("Failed to run mutool draw -F stext");
     let xml = String::from_utf8_lossy(&output.stdout);
-    let mut lines = Vec::new();
+    let mut lines: Vec<(f64, String)> = Vec::new();
     for xml_line in xml.lines() {
         let trimmed = xml_line.trim();
         if let Some(rest) = trimmed.strip_prefix("<line ") {
+            let y_top = rest
+                .strip_prefix("bbox=\"")
+                .and_then(|b| b.split_whitespace().nth(1))
+                .and_then(|v| v.parse::<f64>().ok())
+                .unwrap_or(0.0);
             if let Some(start) = rest.find("text=\"") {
                 let after_quote = &rest[start + 6..];
                 if let Some(end) = after_quote.find('"') {
                     let text = &after_quote[..end];
                     let text = text.trim();
                     if !text.is_empty() {
-                        lines.push(text.to_string());
+                        lines.push((y_top, text.to_string()));
                     }
                 }
             }
         }
     }
-    lines
+    lines.sort_by(|a, b| {
+        // Lines within 5pt are considered the same row; preserve original order
+        if (a.0 - b.0).abs() < 5.0 {
+            std::cmp::Ordering::Equal
+        } else {
+            a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)
+        }
+    });
+    lines.into_iter().map(|(_, text)| text).collect()
 }
 
 fn extract_all_pages(pdf: &Path) -> Vec<Vec<String>> {
