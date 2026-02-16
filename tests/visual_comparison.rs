@@ -1,43 +1,15 @@
+mod common;
+
 use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba};
 use std::collections::HashMap;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fs, io};
 
 const SIMILARITY_THRESHOLD: f64 = 0.25;
 const SSIM_THRESHOLD: f64 = 0.40;
 const MUTOOL_DPI: &str = "150";
-
-const SKIP_FIXTURES: &[&str] = &["sample100kB"];
-
-fn natural_cmp(a: &Path, b: &Path) -> std::cmp::Ordering {
-    let a = a.file_name().and_then(|n| n.to_str()).unwrap_or("");
-    let b = b.file_name().and_then(|n| n.to_str()).unwrap_or("");
-    let extract = |s: &str| -> (String, u64) {
-        let i = s.find(|c: char| c.is_ascii_digit()).unwrap_or(s.len());
-        (s[..i].to_string(), s[i..].parse().unwrap_or(0))
-    };
-    extract(a).cmp(&extract(b))
-}
-
-fn discover_fixtures() -> io::Result<Vec<PathBuf>> {
-    let fixtures_dir = Path::new("tests/fixtures");
-    let mut fixtures: Vec<PathBuf> = fs::read_dir(fixtures_dir)?
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| {
-            p.is_dir()
-                && p.file_name()
-                    .and_then(|n| n.to_str())
-                    .map_or(true, |n| !SKIP_FIXTURES.contains(&n))
-        })
-        .collect();
-    fixtures.sort_by(|a, b| natural_cmp(a, b));
-    Ok(fixtures)
-}
 
 fn screenshot_pdf(pdf: &Path, output_dir: &Path) -> Result<(), String> {
     fs::create_dir_all(output_dir).map_err(|e| e.to_string())?;
@@ -175,47 +147,6 @@ fn save_side_by_side(a: &Path, b: &Path, out: &Path) -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-fn log_csv(csv_name: &str, header: &str, row: &str) {
-    let csv_path = PathBuf::from("tests/output").join(csv_name);
-    fs::create_dir_all("tests/output").ok();
-    let write_header = !csv_path.exists();
-    let mut file = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&csv_path)
-        .expect("Cannot open CSV file");
-    if write_header {
-        writeln!(file, "{header}").unwrap();
-    }
-    writeln!(file, "{row}").unwrap();
-}
-
-/// Read last recorded score per case from a CSV file.
-/// Expects columns: timestamp,case,...,<score_col>
-fn read_previous_scores(csv_name: &str, score_col: usize) -> HashMap<String, f64> {
-    let csv_path = PathBuf::from("tests/output").join(csv_name);
-    let mut latest: HashMap<String, f64> = HashMap::new();
-    let Ok(content) = fs::read_to_string(&csv_path) else {
-        return latest;
-    };
-    for line in content.lines().skip(1) {
-        let cols: Vec<&str> = line.split(',').collect();
-        if cols.len() > score_col {
-            if let Ok(score) = cols[score_col].parse::<f64>() {
-                latest.insert(cols[1].to_string(), score);
-            }
-        }
-    }
-    latest
-}
-
-fn timestamp() -> u64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
-}
-
 fn collect_page_pngs(dir: &Path) -> io::Result<Vec<PathBuf>> {
     let mut pages: Vec<PathBuf> = fs::read_dir(dir)?
         .filter_map(|e| e.ok())
@@ -279,28 +210,12 @@ fn prepare_fixture(fixture_dir: &Path) -> Option<FixturePages> {
 fn prepared_fixtures() -> &'static Vec<FixturePages> {
     static FIXTURES: OnceLock<Vec<FixturePages>> = OnceLock::new();
     FIXTURES.get_or_init(|| {
-        let fixture_dirs = discover_fixtures().expect("Failed to read tests/fixtures");
+        let fixture_dirs = common::discover_fixtures().expect("Failed to read tests/fixtures");
         fixture_dirs
             .iter()
             .filter_map(|d| prepare_fixture(d))
             .collect()
     })
-}
-
-fn delta_str(current: f64, previous: Option<f64>) -> String {
-    match previous {
-        Some(prev) => {
-            let diff = (current - prev) * 100.0;
-            if diff.abs() < 0.05 {
-                String::new()
-            } else if diff > 0.0 {
-                format!(" (+{diff:.1}pp)")
-            } else {
-                format!(" ({diff:.1}pp)")
-            }
-        }
-        None => String::new(),
-    }
 }
 
 fn print_summary(
@@ -322,7 +237,7 @@ fn print_summary(
     for (name, score, passed) in rows {
         let score_str = format!("{:.1}%", score * 100.0);
         let mark = if *passed { "Y" } else { "N" };
-        let delta = delta_str(*score, prev.get(name).copied());
+        let delta = common::delta_str(*score, prev.get(name).copied());
         println!(
             "| {:<name_w$} | {:>7} | {mark}    | {:<9} |",
             name, score_str, delta
@@ -437,7 +352,7 @@ fn visual_comparison() {
         return;
     }
 
-    let prev_scores = read_previous_scores("results.csv", 3);
+    let prev_scores = common::read_previous_scores("results.csv", 3);
     let mut all_passed = true;
     let mut table_rows: Vec<(String, f64, bool)> = Vec::new();
 
@@ -465,12 +380,12 @@ fn visual_comparison() {
         if !scores.is_empty() {
             let avg = scores.iter().sum::<f64>() / scores.len() as f64;
             let passed = avg >= SIMILARITY_THRESHOLD;
-            log_csv(
+            common::log_csv(
                 "results.csv",
                 "timestamp,case,pages,avg_jaccard,pass",
                 &format!(
                     "{},{},{},{:.4},{}",
-                    timestamp(),
+                    common::timestamp(),
                     fixture.name,
                     scores.len(),
                     avg,
@@ -495,7 +410,7 @@ fn ssim_comparison() {
         return;
     }
 
-    let prev_scores = read_previous_scores("ssim_results.csv", 3);
+    let prev_scores = common::read_previous_scores("ssim_results.csv", 3);
     let mut all_passed = true;
     let mut table_rows: Vec<(String, f64, bool)> = Vec::new();
 
@@ -510,12 +425,12 @@ fn ssim_comparison() {
         if !scores.is_empty() {
             let avg = scores.iter().sum::<f64>() / scores.len() as f64;
             let passed = avg >= SSIM_THRESHOLD;
-            log_csv(
+            common::log_csv(
                 "ssim_results.csv",
                 "timestamp,case,pages,avg_ssim",
                 &format!(
                     "{},{},{},{:.4}",
-                    timestamp(),
+                    common::timestamp(),
                     fixture.name,
                     scores.len(),
                     avg
