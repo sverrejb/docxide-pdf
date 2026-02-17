@@ -54,8 +54,15 @@ pub struct Document {
     pub different_first_page: bool,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ImageFormat {
+    Jpeg,
+    Png,
+}
+
 pub struct EmbeddedImage {
     pub data: Vec<u8>,
+    pub format: ImageFormat,
     pub pixel_width: u32,
     pub pixel_height: u32,
     pub display_width: f32,  // points

@@ -8,9 +8,9 @@ A Rust library and CLI tool for converting DOCX files to PDF, with the goal of m
 
 ## Goals
 
-**Accurate** Given a `.docx` file, produce a `.pdf` that is visually identical to what Word would export. This is harder than it sounds — Word's layout engine handles fonts, spacing, line breaking, and page geometry in ways that are not fully documented.
+**Accurate:** Given a `.docx` file, produce a `.pdf` that is visually identical to what Word would export. This is harder than it sounds — Word's layout engine handles fonts, spacing, line breaking, and page geometry in ways that are not fully documented.
 
-**Fast.** Typical conversions complete in under 100ms.
+**Fast:** Typical conversions complete in under 100ms.
 
 ## Agent disclaimer 🤖
 
@@ -135,7 +135,12 @@ tools/
 
 ## Testing
 
-Tests require [mutool](https://mupdf.com/docs/mutool.html) (`mutool`) on `PATH` for PDF-to-PNG rendering.
+Tests require `mutool` on `PATH` for PDF-to-PNG rendering:
+
+```bash
+brew install mupdf        # macOS
+apt install mupdf-tools   # Debian/Ubuntu
+```
 
 ```bash
 # Run all tests

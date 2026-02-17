@@ -5,8 +5,8 @@ use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str};
 use crate::error::Error;
 use crate::fonts::{font_key, primary_font_name, register_font, to_winansi_bytes, FontEntry};
 use crate::model::{
-    Alignment, Block, Document, FieldCode, HeaderFooter, Run, TabAlignment, TabStop, Table,
-    VertAlign,
+    Alignment, Block, Document, FieldCode, HeaderFooter, ImageFormat, Run, TabAlignment, TabStop,
+    Table, VertAlign,
 };
 
 struct WordChunk {
@@ -894,12 +894,66 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             let xobj_ref = alloc();
             let pdf_name = format!("Im{}", image_xobjects.len() + 1);
 
-            let mut xobj = pdf.image_xobject(xobj_ref, &img.data);
-            xobj.filter(Filter::DctDecode);
-            xobj.width(img.pixel_width as i32);
-            xobj.height(img.pixel_height as i32);
-            xobj.color_space().device_rgb();
-            xobj.bits_per_component(8);
+            match img.format {
+                ImageFormat::Jpeg => {
+                    let mut xobj = pdf.image_xobject(xobj_ref, &img.data);
+                    xobj.filter(Filter::DctDecode);
+                    xobj.width(img.pixel_width as i32);
+                    xobj.height(img.pixel_height as i32);
+                    xobj.color_space().device_rgb();
+                    xobj.bits_per_component(8);
+                }
+                ImageFormat::Png => {
+                    let cursor = std::io::Cursor::new(&img.data);
+                    let reader = image::ImageReader::with_format(
+                        std::io::BufReader::new(cursor),
+                        image::ImageFormat::Png,
+                    );
+                    if let Ok(decoded) = reader.decode() {
+                        let rgba = decoded.to_rgba8();
+                        let (w, h) = (rgba.width(), rgba.height());
+                        let has_alpha = rgba.pixels().any(|p| p.0[3] < 255);
+
+                        let rgb_data: Vec<u8> = rgba
+                            .pixels()
+                            .flat_map(|p| [p.0[0], p.0[1], p.0[2]])
+                            .collect();
+                        let compressed_rgb = miniz_oxide::deflate::compress_to_vec_zlib(
+                            &rgb_data,
+                            6,
+                        );
+
+                        let smask_ref = if has_alpha {
+                            let alpha_data: Vec<u8> =
+                                rgba.pixels().map(|p| p.0[3]).collect();
+                            let compressed_alpha =
+                                miniz_oxide::deflate::compress_to_vec_zlib(&alpha_data, 6);
+                            let mask_ref = alloc();
+                            let mut mask = pdf.image_xobject(mask_ref, &compressed_alpha);
+                            mask.filter(Filter::FlateDecode);
+                            mask.width(w as i32);
+                            mask.height(h as i32);
+                            mask.color_space().device_gray();
+                            mask.bits_per_component(8);
+                            Some(mask_ref)
+                        } else {
+                            None
+                        };
+
+                        let mut xobj = pdf.image_xobject(xobj_ref, &compressed_rgb);
+                        xobj.filter(Filter::FlateDecode);
+                        xobj.width(w as i32);
+                        xobj.height(h as i32);
+                        xobj.color_space().device_rgb();
+                        xobj.bits_per_component(8);
+                        if let Some(mask_ref) = smask_ref {
+                            xobj.s_mask(mask_ref);
+                        }
+                    } else {
+                        continue;
+                    }
+                }
+            }
 
             image_xobjects.push((pdf_name.clone(), xobj_ref));
             image_pdf_names.insert(block_idx, pdf_name);
@@ -1097,7 +1151,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     if let Some(pdf_name) = image_pdf_names.get(&block_idx) {
                         let img = para.image.as_ref().unwrap();
                         let y_bottom = slot_top - img.display_height;
-                        let x = doc.margin_left + (text_width - img.display_width).max(0.0) / 2.0;
+                        let x = doc.margin_left + match para.alignment {
+                            Alignment::Center => (text_width - img.display_width).max(0.0) / 2.0,
+                            Alignment::Right => (text_width - img.display_width).max(0.0),
+                            _ => 0.0,
+                        };
                         current_content.save_state();
                         current_content.transform([
                             img.display_width,

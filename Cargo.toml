@@ -41,6 +41,8 @@ log = "0.4"
 clap = { version = "4", features = ["derive"], optional = true }
 env_logger = { version = "0.11", optional = true }
 memmap2 = "0.9.10"
+image = { version = "0.25", default-features = false, features = ["png"] }
+miniz_oxide = "0.8"
 
 [dev-dependencies]
-image = "0.25"
+image = { version = "0.25" }

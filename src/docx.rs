@@ -4,8 +4,8 @@ use std::path::Path;
 
 use crate::error::Error;
 use crate::model::{
-    Alignment, Block, Document, EmbeddedImage, FieldCode, HeaderFooter, Paragraph, Run,
-    TabAlignment, TabStop, Table, TableCell, TableRow, VertAlign,
+    Alignment, Block, Document, EmbeddedImage, FieldCode, HeaderFooter, ImageFormat, Paragraph,
+    Run, TabAlignment, TabStop, Table, TableCell, TableRow, VertAlign,
 };
 
 struct LevelDef {
@@ -1421,28 +1421,41 @@ fn parse_relationships(zip: &mut zip::ZipArchive<std::fs::File>) -> HashMap<Stri
     rels
 }
 
-fn jpeg_dimensions(data: &[u8]) -> Option<(u32, u32)> {
-    if data.len() < 2 || data[0] != 0xFF || data[1] != 0xD8 {
+fn image_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat)> {
+    // JPEG: starts with FF D8
+    if data.len() >= 2 && data[0] == 0xFF && data[1] == 0xD8 {
+        let mut i = 2;
+        while i + 4 < data.len() {
+            if data[i] != 0xFF {
+                return None;
+            }
+            let marker = data[i + 1];
+            if marker == 0xD9 {
+                break;
+            }
+            let len = u16::from_be_bytes([data[i + 2], data[i + 3]]) as usize;
+            if (marker == 0xC0 || marker == 0xC1 || marker == 0xC2) && i + 9 < data.len() {
+                let height = u16::from_be_bytes([data[i + 5], data[i + 6]]) as u32;
+                let width = u16::from_be_bytes([data[i + 7], data[i + 8]]) as u32;
+                return Some((width, height, ImageFormat::Jpeg));
+            }
+            i += 2 + len;
+        }
         return None;
     }
-    let mut i = 2;
-    while i + 4 < data.len() {
-        if data[i] != 0xFF {
-            return None;
-        }
-        let marker = data[i + 1];
-        if marker == 0xD9 {
-            break;
-        }
-        let len = u16::from_be_bytes([data[i + 2], data[i + 3]]) as usize;
-        // SOF0, SOF1, SOF2 markers contain dimensions
-        if (marker == 0xC0 || marker == 0xC1 || marker == 0xC2) && i + 9 < data.len() {
-            let height = u16::from_be_bytes([data[i + 5], data[i + 6]]) as u32;
-            let width = u16::from_be_bytes([data[i + 7], data[i + 8]]) as u32;
-            return Some((width, height));
-        }
-        i += 2 + len;
+
+    // PNG: starts with 89 50 4E 47, dimensions in IHDR chunk at bytes 16-23
+    if data.len() >= 24
+        && data[0] == 0x89
+        && data[1] == 0x50
+        && data[2] == 0x4E
+        && data[3] == 0x47
+    {
+        let width = u32::from_be_bytes([data[16], data[17], data[18], data[19]]);
+        let height = u32::from_be_bytes([data[20], data[21], data[22], data[23]]);
+        return Some((width, height, ImageFormat::Png));
     }
+
     None
 }
 
@@ -1508,10 +1521,11 @@ fn compute_drawing_info(
                     if let Ok(mut entry) = zip.by_name(&zip_path) {
                         let mut data = Vec::new();
                         if entry.read_to_end(&mut data).is_ok()
-                            && let Some((pw, ph)) = jpeg_dimensions(&data)
+                            && let Some((pw, ph, fmt)) = image_dimensions(&data)
                         {
                             image = Some(EmbeddedImage {
                                 data,
+                                format: fmt,
                                 pixel_width: pw,
                                 pixel_height: ph,
                                 display_width: display_w,

@@ -491,6 +491,7 @@ dependencies = [
  "image",
  "log",
  "memmap2",
+ "miniz_oxide",
  "pdf-writer",
  "roxmltree",
  "ttf-parser",
