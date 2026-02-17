@@ -38,7 +38,9 @@
       "Bash(wc:*)",
       "Bash(cargo clippy:*)",
       "WebFetch(domain:silnrsi.github.io)",
-      "WebFetch(domain:www.tek-tips.com)"
+      "WebFetch(domain:www.tek-tips.com)",
+      "Bash(RUST_LOG=docxside_pdf=info cargo run:*)",
+      "Bash(DOCXSIDE_NO_FONT_CACHE=1 RUST_LOG=info cargo run:*)"
     ]
   }
 }

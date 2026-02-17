@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
+use memmap2::Mmap;
 use pdf_writer::{Name, Pdf, Rect, Ref};
 use ttf_parser::Face;
 
@@ -101,44 +102,280 @@ fn font_directories() -> Vec<PathBuf> {
     dirs
 }
 
+struct CachedFace {
+    family: String,
+    bold: bool,
+    italic: bool,
+    face_index: u32,
+}
+
+struct CachedFile {
+    faces: Vec<CachedFace>,
+}
+
+struct FontCache {
+    dir_mtimes: HashMap<PathBuf, i64>,
+    files: HashMap<PathBuf, CachedFile>,
+}
+
+fn cache_path() -> Option<PathBuf> {
+    let dir = if cfg!(target_os = "macos") {
+        std::env::var("HOME")
+            .ok()
+            .map(|h| PathBuf::from(h).join("Library/Caches/docxside-pdf"))
+    } else if cfg!(target_os = "windows") {
+        std::env::var("LOCALAPPDATA")
+            .ok()
+            .map(|d| PathBuf::from(d).join("docxside-pdf/cache"))
+    } else {
+        std::env::var("XDG_CACHE_HOME")
+            .ok()
+            .map(PathBuf::from)
+            .or_else(|| std::env::var("HOME").ok().map(|h| PathBuf::from(h).join(".cache")))
+            .map(|d| d.join("docxside-pdf"))
+    };
+    dir.map(|d| d.join("font-index.tsv"))
+}
+
+const CACHE_VERSION: &str = "v1";
+
+fn load_cache() -> FontCache {
+    let mut fc = FontCache {
+        dir_mtimes: HashMap::new(),
+        files: HashMap::new(),
+    };
+    let Some(path) = cache_path() else {
+        return fc;
+    };
+    let Ok(content) = std::fs::read_to_string(&path) else {
+        return fc;
+    };
+    let mut lines = content.lines();
+    if lines.next() != Some(CACHE_VERSION) {
+        return fc;
+    }
+    for line in lines {
+        let parts: Vec<&str> = line.split('\t').collect();
+        match parts.first().copied() {
+            Some("D") if parts.len() == 3 => {
+                let Ok(mtime) = parts[2].parse::<i64>() else {
+                    continue;
+                };
+                fc.dir_mtimes.insert(PathBuf::from(parts[1]), mtime);
+            }
+            Some("F") if parts.len() == 6 => {
+                let file_path = PathBuf::from(parts[1]);
+                let family = parts[2].to_string();
+                let bold = parts[3] == "1";
+                let italic = parts[4] == "1";
+                let Ok(face_index) = parts[5].parse::<u32>() else {
+                    continue;
+                };
+                let entry = fc
+                    .files
+                    .entry(file_path)
+                    .or_insert(CachedFile { faces: Vec::new() });
+                entry.faces.push(CachedFace {
+                    family,
+                    bold,
+                    italic,
+                    face_index,
+                });
+            }
+            Some("F") if parts.len() == 3 && parts[2] == "-" => {
+                fc.files
+                    .entry(PathBuf::from(parts[1]))
+                    .or_insert(CachedFile { faces: Vec::new() });
+            }
+            _ => {}
+        }
+    }
+    fc
+}
+
+fn save_cache(cache: &FontCache) {
+    let Some(path) = cache_path() else {
+        return;
+    };
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let mut out = String::from(CACHE_VERSION);
+    out.push('\n');
+    for (dir_path, mtime) in &cache.dir_mtimes {
+        out.push_str(&format!("D\t{}\t{}\n", dir_path.to_string_lossy(), mtime));
+    }
+    for (file_path, cached) in &cache.files {
+        let path_str = file_path.to_string_lossy();
+        if cached.faces.is_empty() {
+            out.push_str(&format!("F\t{}\t-\n", path_str));
+        } else {
+            for face in &cached.faces {
+                out.push_str(&format!(
+                    "F\t{}\t{}\t{}\t{}\t{}\n",
+                    path_str,
+                    face.family,
+                    if face.bold { "1" } else { "0" },
+                    if face.italic { "1" } else { "0" },
+                    face.face_index,
+                ));
+            }
+        }
+    }
+    let _ = std::fs::write(&path, out);
+}
+
+fn dir_mtime(path: &std::path::Path) -> i64 {
+    std::fs::metadata(path)
+        .ok()
+        .and_then(|m| m.modified().ok())
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
 fn scan_font_dirs() -> FontLookup {
+    let t0 = std::time::Instant::now();
     let mut index = FontLookup::new();
     let dirs = font_directories();
 
-    // Recursive walk using a stack
+    let no_cache = std::env::var("DOCXSIDE_NO_FONT_CACHE").is_ok();
+
+    let cache = if no_cache {
+        FontCache {
+            dir_mtimes: HashMap::new(),
+            files: HashMap::new(),
+        }
+    } else {
+        load_cache()
+    };
+    let mut new_cache = FontCache {
+        dir_mtimes: HashMap::new(),
+        files: HashMap::new(),
+    };
+    let mut files_scanned = 0u32;
+    let mut dirs_cached = 0u32;
+    let mut dirs_scanned = 0u32;
+    let mut visited_dirs: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+
     let mut stack: Vec<PathBuf> = dirs;
     while let Some(dir) = stack.pop() {
+        if !visited_dirs.insert(dir.clone()) {
+            continue;
+        }
+
         let Ok(entries) = std::fs::read_dir(&dir) else {
             continue;
         };
+
+        // Collect directory listing: subdirs to recurse, font files to process
+        let mut subdirs = Vec::new();
+        let mut font_files = Vec::new();
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
-                stack.push(path);
+                subdirs.push(path);
+            } else {
+                match path.extension().and_then(|e| e.to_str()) {
+                    Some("ttf" | "otf" | "TTF" | "OTF" | "ttc" | "TTC") => {
+                        font_files.push(path);
+                    }
+                    _ => {}
+                }
+            }
+        }
+        stack.extend(subdirs);
+
+        if font_files.is_empty() {
+            continue;
+        }
+
+        let current_mtime = dir_mtime(&dir);
+
+        // If directory mtime matches cache, replay all cached file entries
+        if let Some(&cached_mtime) = cache.dir_mtimes.get(&dir) {
+            if cached_mtime == current_mtime {
+                dirs_cached += 1;
+                new_cache.dir_mtimes.insert(dir.clone(), current_mtime);
+                for file_path in &font_files {
+                    if let Some(cached_file) = cache.files.get(file_path) {
+                        for face in &cached_file.faces {
+                            index
+                                .entry((face.family.to_lowercase(), face.bold, face.italic))
+                                .or_insert((file_path.clone(), face.face_index));
+                        }
+                        new_cache.files.insert(
+                            file_path.clone(),
+                            CachedFile {
+                                faces: cached_file
+                                    .faces
+                                    .iter()
+                                    .map(|f| CachedFace {
+                                        family: f.family.clone(),
+                                        bold: f.bold,
+                                        italic: f.italic,
+                                        face_index: f.face_index,
+                                    })
+                                    .collect(),
+                            },
+                        );
+                    }
+                }
                 continue;
             }
-            let is_collection = match path.extension().and_then(|e| e.to_str()) {
-                Some("ttf" | "otf" | "TTF" | "OTF") => false,
-                Some("ttc" | "TTC") => true,
-                _ => continue,
-            };
-            let Ok(data) = std::fs::read(&path) else {
+        }
+
+        // Directory changed — scan all font files in it
+        dirs_scanned += 1;
+        new_cache.dir_mtimes.insert(dir, current_mtime);
+        for file_path in font_files {
+            files_scanned += 1;
+            let Ok(file) = std::fs::File::open(&file_path) else {
                 continue;
             };
+            let Ok(data) = (unsafe { Mmap::map(&file) }) else {
+                continue;
+            };
+            let is_collection = matches!(
+                file_path.extension().and_then(|e| e.to_str()),
+                Some("ttc" | "TTC")
+            );
             let face_count = if is_collection {
                 ttf_parser::fonts_in_collection(&data).unwrap_or(1)
             } else {
                 1
             };
+            let mut faces = Vec::new();
             for face_idx in 0..face_count {
                 if let Some((family, bold, italic)) = read_font_style(&data, face_idx) {
                     index
                         .entry((family.to_lowercase(), bold, italic))
-                        .or_insert((path.clone(), face_idx));
+                        .or_insert((file_path.clone(), face_idx));
+                    faces.push(CachedFace {
+                        family,
+                        bold,
+                        italic,
+                        face_index: face_idx,
+                    });
                 }
             }
+            new_cache.files.insert(file_path, CachedFile { faces });
         }
     }
+
+    if !no_cache {
+        save_cache(&new_cache);
+    }
+
+    log::info!(
+        "Font scan: {:.1}ms, {} dirs cached / {} scanned, {} files parsed → {} entries",
+        t0.elapsed().as_secs_f64() * 1000.0,
+        dirs_cached,
+        dirs_scanned,
+        files_scanned,
+        index.len(),
+    );
+
     index
 }
 
@@ -356,6 +593,7 @@ pub(crate) fn register_font(
     alloc: &mut impl FnMut() -> Ref,
     embedded_fonts: &EmbeddedFonts,
 ) -> FontEntry {
+    let t0 = std::time::Instant::now();
     let font_ref = alloc();
     let descriptor_ref = alloc();
     let data_ref = alloc();
@@ -381,6 +619,11 @@ pub(crate) fn register_font(
                 .encoding_predefined(Name(b"WinAnsiEncoding"));
             (helvetica_widths(), None, None)
         });
+
+    log::debug!(
+        "register_font: {font_name} bold={bold} italic={italic} → {:.1}ms",
+        t0.elapsed().as_secs_f64() * 1000.0,
+    );
 
     FontEntry {
         pdf_name,

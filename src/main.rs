@@ -45,9 +45,11 @@ fn main() {
         .unwrap_or_else(|| args.input.with_extension("pdf"));
     let output = available_path(output);
 
+    let t0 = std::time::Instant::now();
     if let Err(e) = docxside_pdf::convert_docx_to_pdf(&args.input, &output) {
         eprintln!("Error: {e}");
         std::process::exit(1);
     }
-    println!("Converted to {}", output.display());
+    let elapsed = t0.elapsed();
+    println!("Converted to {} in {:.0?}", output.display(), elapsed);
 }

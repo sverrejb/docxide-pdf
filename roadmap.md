@@ -34,7 +34,7 @@ Generated PDFs are larger than Word's PDF export. Likely causes:
 - Use `samply` for flamegraph profiling to identify actual bottlenecks
 
 ### Known bottlenecks
-- **Font scanning** — `scan_font_dirs` reads entire font files just to extract name/style metadata. Read only the header, or cache the index to disk (path + mtime → family/style)
+- **Font scanning** — ✅ Done. Directory-level disk cache (`font-index.tsv`) with mtime invalidation + mmap for font parsing. ~500ms → ~33ms warm cache (release). Disable with `DOCXSIDE_NO_FONT_CACHE=1`.
 - **Double font reads** — scan reads each font file for indexing, then `register_font` reads the same file again for embedding. Keep the data from the first read
 - **Kerning extraction** — O(n²) brute-force over all WinAnsi glyph pairs. Iterate actual kern table entries instead
 - **Per-word text objects** — each word emits its own BT/Tf/Td/Tj/ET sequence. Batch consecutive words sharing font+color into single text objects to reduce output size and CPU

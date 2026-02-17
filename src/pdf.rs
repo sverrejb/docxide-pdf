@@ -796,6 +796,7 @@ fn render_header_footer(
 }
 
 pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
+    let t0 = std::time::Instant::now();
     let mut pdf = Pdf::new();
     let mut next_id = 1i32;
     let mut alloc = || {
@@ -843,6 +844,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         .chain(hf_runs)
         .collect();
 
+    let t_collect = t0.elapsed();
+
     for run in &all_runs {
         let key = font_key(run);
         if !seen_fonts.contains_key(&key) {
@@ -877,6 +880,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         font_order.push("Helvetica".to_string());
     }
 
+    let t_fonts = t0.elapsed();
+
     let text_width = doc.page_width - doc.margin_left - doc.margin_right;
 
     // Phase 1b: embed images
@@ -900,6 +905,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             image_pdf_names.insert(block_idx, pdf_name);
         }
     }
+
+    let t_images = t0.elapsed();
 
     // Phase 2: build multi-page content streams
     let mut all_contents: Vec<Content> = Vec::new();
@@ -1173,6 +1180,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     }
     all_contents.push(current_content);
 
+    let t_layout = t0.elapsed();
+
     // Phase 2b: render headers and footers on each page
     let total_pages = all_contents.len();
     let has_hf = doc.header_default.is_some()
@@ -1223,6 +1232,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         }
     }
 
+    let t_headers = t0.elapsed();
+
     // Phase 3: allocate page and content IDs now that page count is known
     let n = all_contents.len();
     let page_ids: Vec<Ref> = (0..n).map(|_| alloc()).collect();
@@ -1263,6 +1274,18 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             }
         }
     }
+
+    let t_assembly = t0.elapsed();
+
+    log::info!(
+        "Render phases: collect_runs={:.1}ms, font_embed={:.1}ms, images={:.1}ms, layout={:.1}ms, headers={:.1}ms, assembly={:.1}ms",
+        t_collect.as_secs_f64() * 1000.0,
+        (t_fonts - t_collect).as_secs_f64() * 1000.0,
+        (t_images - t_fonts).as_secs_f64() * 1000.0,
+        (t_layout - t_images).as_secs_f64() * 1000.0,
+        (t_headers - t_layout).as_secs_f64() * 1000.0,
+        (t_assembly - t_headers).as_secs_f64() * 1000.0,
+    );
 
     Ok(pdf.finish())
 }

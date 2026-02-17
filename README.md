@@ -6,9 +6,11 @@ A Rust library and CLI tool for converting DOCX files to PDF, with the goal of m
 
 *<sub>Reference PDFs are generated using Microsoft Word for Mac (16.106.1) with the "Best for electronic distribution and accessibility (uses Microsoft online service)" export option.</sub>
 
-## Goal
+## Goals
 
-Given a `.docx` file, produce a `.pdf` that is visually indistinguishable from what Word would export. This is harder than it sounds — Word's layout engine handles fonts, spacing, line breaking, and page geometry in ways that are not fully documented.
+**Accurate** Given a `.docx` file, produce a `.pdf` that is visually identical to what Word would export. This is harder than it sounds — Word's layout engine handles fonts, spacing, line breaking, and page geometry in ways that are not fully documented.
+
+**Fast.** Typical conversions complete in under 100ms.
 
 ## Agent disclaimer 🤖
 
@@ -18,18 +20,20 @@ While the idea, architecture, testing strategy and validation of output are all 
 
 These *kind of* work:
 
-- **Text**: font embedding (TTF/OTF), bold, italic, underline, strikethrough, font size, text color, theme fonts
+- **Text**: font embedding (TTF/OTF), bold, italic, underline, strikethrough, font size, text color, superscript/subscript, theme fonts
 - **Paragraphs**: left/center/right/justify alignment, space before/after, line spacing, indentation, contextual spacing, keep-next, bottom borders
 - **Styles**: paragraph style inheritance (`basedOn` chains), document defaults from `docDefaults`
 - **Lists**: bullet and numbered lists with nesting levels
 - **Tables**: column widths with auto-fit, cell borders, cell text with alignment
 - **Images**: inline JPEG embedding with sizing
-- **Page layout**: page size, margins, document grid, automatic page breaking with widow/orphan control
-- **Fonts**: cross-platform font search (macOS/Linux/Windows), embedded DOCX font extraction, `DOCXSIDE_FONTS` env var for custom font directories
+- **Page layout**: page size, margins, document grid, explicit page breaks, automatic page breaking with widow/orphan control
+- **Headers/footers**: default and first-page variants, page number and page count fields
+- **Tab stops**: left, center, right, decimal with leader dots
+- **Fonts**: cross-platform font search (macOS/Linux/Windows), embedded DOCX font extraction, disk-cached font index
 
 ### Not yet supported
 
-Explicit page/section breaks, headers/footers, footnotes, tab stops, clickable hyperlinks, non-JPEG images, table merged cells, table cell shading, text boxes, charts, SmartArt, superscript/subscript, multi-column layouts, and many other features.
+Footnotes, clickable hyperlinks, non-JPEG images, table merged cells, table cell shading, text boxes, charts, SmartArt, multi-column layouts, section breaks with different page sizes/orientations, and many other features.
 
 ## Examples
 
@@ -93,6 +97,20 @@ convert_docx_to_pdf(
     Path::new("output.pdf"),
 )?;
 ```
+
+## Configuration
+
+### Environment Variables
+
+| Variable | Description |
+|---|---|
+| `DOCXSIDE_FONTS` | Additional font directories to search, colon-separated (`;` on Windows). Searched before system font directories. |
+| `DOCXSIDE_NO_FONT_CACHE` | Set to any value to disable the font index disk cache. Forces a full font scan on every conversion. Useful for debugging font resolution issues. |
+
+Font scanning results are cached to disk (per-directory, invalidated by mtime). The cache is stored at:
+- **macOS**: `~/Library/Caches/docxside-pdf/font-index.tsv`
+- **Linux**: `$XDG_CACHE_HOME/docxside-pdf/font-index.tsv` (default `~/.cache/`)
+- **Windows**: `%LOCALAPPDATA%\docxside-pdf\cache\font-index.tsv`
 
 ## Architecture
 

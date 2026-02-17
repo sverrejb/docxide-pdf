@@ -73,6 +73,11 @@ tests/
   output/<case>/        — generated.pdf, reference/, generated/, diff/ screenshots
 ```
 
+## Environment Variables
+
+- `DOCXSIDE_FONTS` — colon-separated (`;` on Windows) list of additional font directories to search
+- `DOCXSIDE_NO_FONT_CACHE` — set to any value to disable the font index disk cache (forces full scan every time)
+
 ## Dependencies
 
 - `zip = "2"` — DOCX is a ZIP container
