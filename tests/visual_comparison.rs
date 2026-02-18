@@ -7,8 +7,8 @@ use std::process::Command;
 use std::sync::OnceLock;
 use std::{fs, io};
 
-const SIMILARITY_THRESHOLD: f64 = 0.25;
-const SSIM_THRESHOLD: f64 = 0.40;
+const SIMILARITY_THRESHOLD: f64 = 0.27;
+const SSIM_THRESHOLD: f64 = 0.54;
 const MUTOOL_DPI: &str = "150";
 
 fn screenshot_pdf(pdf: &Path, output_dir: &Path) -> Result<(), String> {
