@@ -25,7 +25,7 @@ These *kind of* work:
 - **Styles**: paragraph style inheritance (`basedOn` chains), document defaults from `docDefaults`
 - **Lists**: bullet and numbered lists with nesting levels
 - **Tables**: column widths with auto-fit, cell borders, cell text with alignment
-- **Images**: inline JPEG embedding with sizing
+- **Images**: inline JPEG and PNG embedding with sizing and alpha transparency
 - **Page layout**: page size, margins, document grid, explicit page breaks, automatic page breaking with widow/orphan control
 - **Headers/footers**: default and first-page variants, page number and page count fields
 - **Tab stops**: left, center, right, decimal with leader dots
@@ -33,7 +33,7 @@ These *kind of* work:
 
 ### Not yet supported
 
-Footnotes, clickable hyperlinks, non-JPEG images, table merged cells, table cell shading, text boxes, charts, SmartArt, multi-column layouts, section breaks with different page sizes/orientations, and many other features.
+Footnotes, clickable hyperlinks, table merged cells, table cell shading, text boxes, charts, SmartArt, multi-column layouts, section breaks with different page sizes/orientations, and many other features.
 
 ## Examples
 

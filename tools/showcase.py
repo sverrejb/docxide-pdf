@@ -42,7 +42,7 @@ def passing_cases():
             best[row["case"]] = float(row["avg_ssim"])
 
     passing = [(c, s) for c, s in best.items() if s >= SSIM_THRESHOLD]
-    passing.sort(key=lambda x: x[0])
+    passing.sort(key=lambda x: int(x[0].removeprefix("case")))
     return passing
 
 
