@@ -6,7 +6,7 @@ description = "CLI and Library for converting DOCX files to PDF, matching Micros
 license = "Apache-2.0"
 repository = "https://github.com/sverrejb/docxside-pdf"
 keywords = ["experimental", "docx", "pdf", "word", "converter"]
-categories = ["command-line-utilities", "text-processing"]
+categories = ["command-line-utilities", "text-processing", "text-editors"]
 exclude = [
     "tools/",
     "tests/",
