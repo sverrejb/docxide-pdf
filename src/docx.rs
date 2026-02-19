@@ -740,7 +740,12 @@ struct ParsedRuns {
     has_page_break: bool,
 }
 
-fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFonts) -> ParsedRuns {
+fn parse_runs(
+    para_node: roxmltree::Node,
+    styles: &StylesInfo,
+    theme: &ThemeFonts,
+    rels: &HashMap<String, String>,
+) -> ParsedRuns {
     let ppr = wml(para_node, "pPr");
     let para_style_id = ppr
         .and_then(|ppr| wml_attr(ppr, "pStyle"))
@@ -758,19 +763,24 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
     let style_italic = para_style.and_then(|s| s.italic).unwrap_or(false);
     let style_color: Option<[u8; 3]> = para_style.and_then(|s| s.color);
 
-    let run_nodes: Vec<_> = para_node
+    let run_nodes: Vec<(roxmltree::Node, Option<String>)> = para_node
         .children()
         .flat_map(|child| {
             let name = child.tag_name().name();
             let is_wml = child.tag_name().namespace() == Some(WML_NS);
             if is_wml && name == "r" {
-                vec![child]
+                vec![(child, None)]
             } else if is_wml && name == "hyperlink" {
+                let url = child
+                    .attribute((REL_NS, "id"))
+                    .and_then(|rid| rels.get(rid))
+                    .cloned();
                 child
                     .children()
                     .filter(|n| {
                         n.tag_name().name() == "r" && n.tag_name().namespace() == Some(WML_NS)
                     })
+                    .map(move |n| (n, url.clone()))
                     .collect()
             } else {
                 vec![]
@@ -783,7 +793,7 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
     let mut in_field = false;
     let mut field_instr = String::new();
 
-    for run_node in run_nodes {
+    for (run_node, hyperlink_url) in run_nodes {
         let rpr = wml(run_node, "rPr");
 
         let font_size = rpr
@@ -858,6 +868,7 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
                                     is_tab: false,
                                     vertical_align,
                                     field_code: None,
+                                    hyperlink_url: hyperlink_url.clone(),
                                 });
                             }
                             in_field = true;
@@ -886,6 +897,7 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
                                         is_tab: false,
                                         vertical_align: VertAlign::Baseline,
                                         field_code: Some(code),
+                                        hyperlink_url: hyperlink_url.clone(),
                                     });
                                 }
                                 in_field = false;
@@ -920,6 +932,7 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
                             is_tab: false,
                             vertical_align,
                             field_code: None,
+                            hyperlink_url: hyperlink_url.clone(),
                         });
                     }
                     // Insert tab marker run
@@ -935,6 +948,7 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
                         is_tab: true,
                         vertical_align: VertAlign::Baseline,
                         field_code: None,
+                        hyperlink_url: None,
                     });
                 }
                 "br" if !in_field => {
@@ -959,6 +973,7 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
                 is_tab: false,
                 vertical_align,
                 field_code: None,
+                hyperlink_url: hyperlink_url.clone(),
             });
         }
     }
@@ -1001,6 +1016,7 @@ fn parse_runs(para_node: roxmltree::Node, styles: &StylesInfo, theme: &ThemeFont
                 is_tab: false,
                 vertical_align: VertAlign::Baseline,
                 field_code: None,
+                hyperlink_url: None,
             });
         }
     }
@@ -1015,6 +1031,7 @@ fn parse_header_footer_xml(
     xml_content: &str,
     styles: &StylesInfo,
     theme: &ThemeFonts,
+    rels: &HashMap<String, String>,
 ) -> Option<HeaderFooter> {
     let xml = roxmltree::Document::parse(xml_content).ok()?;
     let root = xml.root_element();
@@ -1036,7 +1053,7 @@ fn parse_header_footer_xml(
             .or_else(|| para_style.and_then(|s| s.alignment))
             .unwrap_or(Alignment::Left);
 
-        let parsed = parse_runs(node, styles, theme);
+        let parsed = parse_runs(node, styles, theme, rels);
 
         paragraphs.push(Paragraph {
             runs: parsed.runs,
@@ -1152,7 +1169,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                 .map(String::from)
                 .unwrap_or_else(|| format!("word/{}", target));
             let xml_text = read_zip_text(zip, &zip_path)?;
-            parse_header_footer_xml(&xml_text, &styles, &theme)
+            parse_header_footer_xml(&xml_text, &styles, &theme, &HashMap::new())
         };
 
     let header_default = resolve_hf(header_default_rid, &mut zip);
@@ -1197,7 +1214,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                         for p in tc.children().filter(|n| {
                             n.tag_name().name() == "p" && n.tag_name().namespace() == Some(WML_NS)
                         }) {
-                            let parsed = parse_runs(p, &styles, &theme);
+                            let parsed = parse_runs(p, &styles, &theme, &rels);
                             let ppr = wml(p, "pPr");
                             let para_style_id = ppr
                                 .and_then(|ppr| wml_attr(ppr, "pStyle"))
@@ -1304,7 +1321,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     }
                 }
 
-                let parsed = parse_runs(node, &styles, &theme);
+                let parsed = parse_runs(node, &styles, &theme, &rels);
                 let mut runs = parsed.runs;
 
                 // Override font defaults from style for runs that used doc defaults

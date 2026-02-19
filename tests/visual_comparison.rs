@@ -347,6 +347,7 @@ fn ssim_score(a: &Path, b: &Path) -> Result<f64, String> {
 
 #[test]
 fn visual_comparison() {
+    let _ = env_logger::try_init();
     let fixtures = prepared_fixtures();
     if fixtures.is_empty() {
         return;
@@ -405,6 +406,7 @@ fn visual_comparison() {
 
 #[test]
 fn ssim_comparison() {
+    let _ = env_logger::try_init();
     let fixtures = prepared_fixtures();
     if fixtures.is_empty() {
         return;

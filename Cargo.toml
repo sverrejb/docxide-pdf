@@ -46,3 +46,4 @@ miniz_oxide = "0.8"
 
 [dev-dependencies]
 image = { version = "0.25" }
+env_logger = "0.11"

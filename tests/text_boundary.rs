@@ -184,6 +184,7 @@ fn analyze_fixture(fixture_dir: &Path) -> Option<CaseResult> {
 
 #[test]
 fn text_boundaries_match() {
+    let _ = env_logger::try_init();
     let fixtures = common::discover_fixtures().expect("Failed to read tests/fixtures");
     if fixtures.is_empty() {
         return;

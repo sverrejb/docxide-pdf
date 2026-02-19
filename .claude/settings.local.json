@@ -41,7 +41,10 @@
       "WebFetch(domain:www.tek-tips.com)",
       "Bash(RUST_LOG=docxside_pdf=info cargo run:*)",
       "Bash(DOCXSIDE_NO_FONT_CACHE=1 RUST_LOG=info cargo run:*)",
-      "Bash(find /Users/sverrejb/workspace/docxside/docxside-pdf/tests -name \"*.docx\" -exec sh -c 'zipinfo -1 \"\"$1\"\" | grep -i \"\"word/media\"\" | head -5' _ {} ;)"
+      "Bash(find /Users/sverrejb/workspace/docxside/docxside-pdf/tests -name \"*.docx\" -exec sh -c 'zipinfo -1 \"\"$1\"\" | grep -i \"\"word/media\"\" | head -5' _ {} ;)",
+      "Bash(RUST_LOG=docxside_pdf=debug cargo run:*)",
+      "Bash(RUST_LOG=docxside_pdf::docx=debug cargo run:*)",
+      "Bash(cargo clean:*)"
     ]
   }
 }

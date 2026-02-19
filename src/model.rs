@@ -106,6 +106,7 @@ pub struct Run {
     pub is_tab: bool,
     pub vertical_align: VertAlign,
     pub field_code: Option<FieldCode>,
+    pub hyperlink_url: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

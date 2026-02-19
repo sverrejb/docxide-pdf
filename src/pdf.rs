@@ -19,6 +19,12 @@ struct WordChunk {
     underline: bool,
     strikethrough: bool,
     y_offset: f32, // vertical offset for superscript/subscript
+    hyperlink_url: Option<String>,
+}
+
+struct LinkAnnotation {
+    rect: Rect,
+    url: String,
 }
 
 fn effective_font_size(run: &Run) -> f32 {
@@ -119,6 +125,7 @@ fn build_paragraph_lines(
                 underline: run.underline,
                 strikethrough: run.strikethrough,
                 y_offset: y_off,
+                hyperlink_url: run.hyperlink_url.clone(),
             });
             current_x += ww;
         }
@@ -310,6 +317,7 @@ fn build_tabbed_line(
                                             underline: false,
                                             strikethrough: false,
                                             y_offset: 0.0,
+                                            hyperlink_url: None,
                                         });
                                     }
                                 }
@@ -350,6 +358,7 @@ fn build_tabbed_line(
                     underline: run.underline,
                     strikethrough: run.strikethrough,
                     y_offset: y_off,
+                    hyperlink_url: run.hyperlink_url.clone(),
                 });
                 current_x += ww;
             }
@@ -376,6 +385,7 @@ fn render_paragraph_lines(
     line_pitch: f32,
     total_line_count: usize,
     first_line_index: usize,
+    links: &mut Vec<LinkAnnotation>,
 ) {
     let mut current_color: Option<[u8; 3]> = None;
 
@@ -431,6 +441,23 @@ fn render_paragraph_lines(
                 content
                     .rect(x, st_y, chunk.width, thick)
                     .fill_nonzero();
+            }
+
+            if let Some(ref url) = chunk.hyperlink_url {
+                let bottom = y - chunk.font_size * 0.2;
+                let top = y + chunk.font_size * 0.8;
+                let merged = links.last_mut().filter(|prev| {
+                    prev.url == *url
+                        && (prev.rect.y1 - bottom).abs() < 1.0
+                });
+                if let Some(prev) = merged {
+                    prev.rect.x2 = x + chunk.width;
+                } else {
+                    links.push(LinkAnnotation {
+                        rect: Rect::new(x, bottom, x + chunk.width, top),
+                        url: url.clone(),
+                    });
+                }
             }
         }
     }
@@ -621,6 +648,8 @@ fn render_table(
     seen_fonts: &HashMap<String, FontEntry>,
     content: &mut Content,
     all_contents: &mut Vec<Content>,
+    all_page_links: &mut Vec<Vec<LinkAnnotation>>,
+    current_page_links: &mut Vec<LinkAnnotation>,
     slot_top: &mut f32,
     prev_space_after: f32,
 ) {
@@ -642,6 +671,7 @@ fn render_table(
 
         if !at_page_top && *slot_top - row_h < doc.margin_bottom {
             all_contents.push(std::mem::replace(content, Content::new()));
+            all_page_links.push(std::mem::take(current_page_links));
             *slot_top = doc.page_height - doc.margin_top;
         }
 
@@ -681,6 +711,7 @@ fn render_table(
                     *line_h,
                     lines.len(),
                     0,
+                    &mut Vec::new(),
                 );
             }
 
@@ -746,6 +777,7 @@ fn render_header_footer(
                         is_tab: false,
                         vertical_align: run.vertical_align,
                         field_code: None,
+                        hyperlink_url: run.hyperlink_url.clone(),
                     }
                 } else {
                     Run {
@@ -760,6 +792,7 @@ fn render_header_footer(
                         is_tab: run.is_tab,
                         vertical_align: run.vertical_align,
                         field_code: None,
+                        hyperlink_url: run.hyperlink_url.clone(),
                     }
                 }
             })
@@ -791,6 +824,7 @@ fn render_header_footer(
             line_h,
             lines.len(),
             0,
+            &mut Vec::new(),
         );
     }
 }
@@ -967,6 +1001,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     let mut current_content = Content::new();
     let mut slot_top = doc.page_height - doc.margin_top;
     let mut prev_space_after: f32 = 0.0;
+    let mut all_page_links: Vec<Vec<LinkAnnotation>> = Vec::new();
+    let mut current_page_links: Vec<LinkAnnotation> = Vec::new();
 
     let adjacent_para = |idx: usize| -> Option<&crate::model::Paragraph> {
         match doc.blocks.get(idx)? {
@@ -984,6 +1020,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     if !at_top {
                         all_contents
                             .push(std::mem::replace(&mut current_content, Content::new()));
+                        all_page_links.push(std::mem::take(&mut current_page_links));
                         slot_top = doc.page_height - doc.margin_top;
                     }
                     prev_space_after = 0.0;
@@ -1107,9 +1144,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             line_h,
                             lines.len(),
                             0,
+                            &mut current_page_links,
                         );
 
                         all_contents.push(std::mem::replace(&mut current_content, Content::new()));
+                        all_page_links.push(std::mem::take(&mut current_page_links));
                         slot_top = doc.page_height - doc.margin_top;
 
                         let rest = &lines[lines_that_fit..];
@@ -1126,6 +1165,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             line_h,
                             lines.len(),
                             lines_that_fit,
+                            &mut current_page_links,
                         );
 
                         slot_top -= rest_content_h;
@@ -1134,6 +1174,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     }
 
                     all_contents.push(std::mem::replace(&mut current_content, Content::new()));
+                    all_page_links.push(std::mem::take(&mut current_page_links));
                     slot_top = doc.page_height - doc.margin_top;
                     inter_gap = 0.0;
                 }
@@ -1199,6 +1240,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         line_h,
                         lines.len(),
                         0,
+                        &mut current_page_links,
                     );
                 }
 
@@ -1229,6 +1271,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     &seen_fonts,
                     &mut current_content,
                     &mut all_contents,
+                    &mut all_page_links,
+                    &mut current_page_links,
                     &mut slot_top,
                     prev_space_after,
                 );
@@ -1237,6 +1281,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         }
     }
     all_contents.push(current_content);
+    all_page_links.push(current_page_links);
 
     let t_layout = t0.elapsed();
 
@@ -1297,6 +1342,29 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     let page_ids: Vec<Ref> = (0..n).map(|_| alloc()).collect();
     let content_ids: Vec<Ref> = (0..n).map(|_| alloc()).collect();
 
+    // Allocate annotation refs and write annotation objects
+    let page_annot_refs: Vec<Vec<Ref>> = all_page_links
+        .iter()
+        .map(|links| {
+            links
+                .iter()
+                .map(|link| {
+                    let annot_ref = alloc();
+                    let mut annot = pdf.annotation(annot_ref);
+                    annot
+                        .subtype(pdf_writer::types::AnnotationType::Link)
+                        .rect(link.rect)
+                        .border(0.0, 0.0, 0.0, None);
+                    annot
+                        .action()
+                        .action_type(pdf_writer::types::ActionType::Uri)
+                        .uri(Str(link.url.as_bytes()));
+                    annot_ref
+                })
+                .collect()
+        })
+        .collect();
+
     for (i, c) in all_contents.into_iter().enumerate() {
         pdf.stream(content_ids[i], &c.finish());
     }
@@ -1316,6 +1384,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         page.media_box(Rect::new(0.0, 0.0, doc.page_width, doc.page_height))
             .parent(pages_id)
             .contents(content_ids[i]);
+        if !page_annot_refs[i].is_empty() {
+            page.annotations(page_annot_refs[i].iter().copied());
+        }
         {
             let mut resources = page.resources();
             {
