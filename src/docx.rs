@@ -126,9 +126,20 @@ struct ParagraphStyle {
     based_on: Option<String>,
 }
 
+struct CharacterStyle {
+    font_size: Option<f32>,
+    font_name: Option<String>,
+    bold: Option<bool>,
+    italic: Option<bool>,
+    underline: Option<bool>,
+    strikethrough: Option<bool>,
+    color: Option<[u8; 3]>,
+}
+
 struct StylesInfo {
     defaults: StyleDefaults,
     paragraph_styles: HashMap<String, ParagraphStyle>,
+    character_styles: HashMap<String, CharacterStyle>,
 }
 
 fn parse_alignment(val: &str) -> Alignment {
@@ -222,24 +233,28 @@ fn parse_styles(zip: &mut zip::ZipArchive<std::fs::File>, theme: &ThemeFonts) ->
         line_spacing: 1.2,
     };
     let mut paragraph_styles = HashMap::new();
+    let mut character_styles = HashMap::new();
 
     let mut xml_content = String::new();
     let Ok(mut file) = zip.by_name("word/styles.xml") else {
         return StylesInfo {
             defaults,
             paragraph_styles,
+            character_styles,
         };
     };
     if file.read_to_string(&mut xml_content).is_err() {
         return StylesInfo {
             defaults,
             paragraph_styles,
+            character_styles,
         };
     }
     let Ok(xml) = roxmltree::Document::parse(&xml_content) else {
         return StylesInfo {
             defaults,
             paragraph_styles,
+            character_styles,
         };
     };
 
@@ -352,9 +367,62 @@ fn parse_styles(zip: &mut zip::ZipArchive<std::fs::File>, theme: &ThemeFonts) ->
 
     resolve_based_on(&mut paragraph_styles);
 
+    // Parse character styles (e.g., "Hyperlink")
+    for style_node in root.children() {
+        if style_node.tag_name().name() != "style"
+            || style_node.tag_name().namespace() != Some(WML_NS)
+        {
+            continue;
+        }
+        if style_node.attribute((WML_NS, "type")) != Some("character") {
+            continue;
+        }
+        let Some(style_id) = style_node.attribute((WML_NS, "styleId")) else {
+            continue;
+        };
+        let Some(rpr) = wml(style_node, "rPr") else {
+            continue;
+        };
+        let font_size = wml_attr(rpr, "sz")
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(|hp| hp / 2.0);
+        let font_name = wml(rpr, "rFonts")
+            .map(|rfonts| resolve_font_from_node(rfonts, theme, &defaults.font_name));
+        let bold = wml(rpr, "b").map(|n| {
+            n.attribute((WML_NS, "val"))
+                .is_none_or(|v| v != "0" && v != "false")
+        });
+        let italic = wml(rpr, "i").map(|n| {
+            n.attribute((WML_NS, "val"))
+                .is_none_or(|v| v != "0" && v != "false")
+        });
+        let underline = wml(rpr, "u")
+            .and_then(|n| n.attribute((WML_NS, "val")))
+            .map(|v| v != "none");
+        let strikethrough = wml(rpr, "strike").map(|n| {
+            n.attribute((WML_NS, "val"))
+                .is_none_or(|v| v != "0" && v != "false")
+        });
+        let color = wml_attr(rpr, "color").and_then(parse_hex_color);
+
+        character_styles.insert(
+            style_id.to_string(),
+            CharacterStyle {
+                font_size,
+                font_name,
+                bold,
+                italic,
+                underline,
+                strikethrough,
+                color,
+            },
+        );
+    }
+
     StylesInfo {
         defaults,
         paragraph_styles,
+        character_styles,
     }
 }
 
@@ -796,43 +864,60 @@ fn parse_runs(
     for (run_node, hyperlink_url) in run_nodes {
         let rpr = wml(run_node, "rPr");
 
+        let char_style = rpr
+            .and_then(|n| wml_attr(n, "rStyle"))
+            .and_then(|id| styles.character_styles.get(id));
+
         let font_size = rpr
             .and_then(|n| wml_attr(n, "sz"))
             .and_then(|v| v.parse::<f32>().ok())
             .map(|hp| hp / 2.0)
+            .or_else(|| char_style.and_then(|cs| cs.font_size))
             .unwrap_or(style_font_size);
 
         let font_name = rpr
             .and_then(|n| wml(n, "rFonts"))
             .map(|rfonts| resolve_font_from_node(rfonts, theme, &style_font_name))
+            .or_else(|| char_style.and_then(|cs| cs.font_name.clone()))
             .unwrap_or_else(|| style_font_name.clone());
 
         let bold = match rpr.and_then(|n| wml(n, "b")) {
             Some(n) => n
                 .attribute((WML_NS, "val"))
                 .is_none_or(|v| v != "0" && v != "false"),
-            None => style_bold,
+            None => char_style
+                .and_then(|cs| cs.bold)
+                .unwrap_or(style_bold),
         };
         let italic = match rpr.and_then(|n| wml(n, "i")) {
             Some(n) => n
                 .attribute((WML_NS, "val"))
                 .is_none_or(|v| v != "0" && v != "false"),
-            None => style_italic,
+            None => char_style
+                .and_then(|cs| cs.italic)
+                .unwrap_or(style_italic),
         };
-        let underline = rpr
-            .and_then(|n| wml(n, "u"))
-            .and_then(|n| n.attribute((WML_NS, "val")))
-            .is_some_and(|v| v != "none");
-        let strikethrough = rpr
-            .and_then(|n| wml(n, "strike"))
-            .is_some_and(|n| {
-                n.attribute((WML_NS, "val"))
-                    .is_none_or(|v| v != "0" && v != "false")
-            });
+        let underline = match rpr.and_then(|n| wml(n, "u")) {
+            Some(n) => n
+                .attribute((WML_NS, "val"))
+                .is_some_and(|v| v != "none"),
+            None => char_style
+                .and_then(|cs| cs.underline)
+                .unwrap_or(false),
+        };
+        let strikethrough = match rpr.and_then(|n| wml(n, "strike")) {
+            Some(n) => n
+                .attribute((WML_NS, "val"))
+                .is_none_or(|v| v != "0" && v != "false"),
+            None => char_style
+                .and_then(|cs| cs.strikethrough)
+                .unwrap_or(false),
+        };
 
         let color = rpr
             .and_then(|n| wml_attr(n, "color"))
             .and_then(parse_hex_color)
+            .or_else(|| char_style.and_then(|cs| cs.color))
             .or(style_color);
 
         let vertical_align = rpr
