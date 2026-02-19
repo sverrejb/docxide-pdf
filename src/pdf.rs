@@ -430,7 +430,11 @@ fn render_paragraph_lines(
 
             if chunk.underline {
                 let thick = (chunk.font_size * 0.05).max(0.5);
-                let ul_y = y - chunk.font_size * 0.12;
+                let ul_y = if chunk.hyperlink_url.is_some() {
+                    y - chunk.font_size * 0.08
+                } else {
+                    y - chunk.font_size * 0.12
+                };
                 content
                     .rect(x, ul_y - thick, chunk.width, thick)
                     .fill_nonzero();
