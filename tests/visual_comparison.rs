@@ -39,9 +39,7 @@ fn screenshot_pdf(pdf: &Path, output_dir: &Path) -> Result<(), String> {
     }
 }
 
-fn compare_images(a: &Path, b: &Path) -> Result<f64, String> {
-    let img_a = image::open(a).map_err(|e| format!("Failed to open {}: {e}", a.display()))?;
-    let img_b = image::open(b).map_err(|e| format!("Failed to open {}: {e}", b.display()))?;
+fn compare_images_loaded(img_a: &DynamicImage, img_b: &DynamicImage) -> Result<f64, String> {
     let (w, h) = img_a.dimensions();
     let (w2, h2) = img_b.dimensions();
     if w.abs_diff(w2) > 2 || h.abs_diff(h2) > 2 {
@@ -80,9 +78,7 @@ fn is_ink(r: u8, g: u8, b: u8) -> bool {
     luma < 200.0
 }
 
-fn save_diff_image(ref_path: &Path, gen_path: &Path, out: &Path) -> Result<(), String> {
-    let img_ref = image::open(ref_path).map_err(|e| format!("{e}"))?;
-    let img_gen = image::open(gen_path).map_err(|e| format!("{e}"))?;
+fn save_diff_image(img_ref: &DynamicImage, img_gen: &DynamicImage, out: &Path) -> Result<(), String> {
     let (w, h) = img_ref.dimensions();
     let (w2, h2) = img_gen.dimensions();
     let cw = w.min(w2);
@@ -116,9 +112,7 @@ fn save_diff_image(ref_path: &Path, gen_path: &Path, out: &Path) -> Result<(), S
         .map_err(|e| e.to_string())
 }
 
-fn save_side_by_side(a: &Path, b: &Path, out: &Path) -> Result<(), String> {
-    let img_a = image::open(a).map_err(|e| format!("{e}"))?;
-    let img_b = image::open(b).map_err(|e| format!("{e}"))?;
+fn save_side_by_side(img_a: &DynamicImage, img_b: &DynamicImage, out: &Path) -> Result<(), String> {
     let (wa, ha) = img_a.dimensions();
     let (wb, hb) = img_b.dimensions();
     let gap = 4u32;
@@ -164,6 +158,30 @@ struct FixturePages {
     output_base: PathBuf,
 }
 
+fn ref_screenshots_fresh(reference_pdf: &Path, screenshot_dir: &Path) -> bool {
+    let Ok(pdf_meta) = fs::metadata(reference_pdf) else {
+        return false;
+    };
+    let Ok(pdf_mtime) = pdf_meta.modified() else {
+        return false;
+    };
+    let Ok(entries) = fs::read_dir(screenshot_dir) else {
+        return false;
+    };
+    let pngs: Vec<_> = entries
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("png"))
+        .collect();
+    if pngs.is_empty() {
+        return false;
+    }
+    pngs.iter().all(|e| {
+        e.metadata()
+            .and_then(|m| m.modified())
+            .map_or(false, |t| t >= pdf_mtime)
+    })
+}
+
 fn prepare_fixture(fixture_dir: &Path) -> Option<FixturePages> {
     let name = fixture_dir
         .file_name()
@@ -176,14 +194,18 @@ fn prepare_fixture(fixture_dir: &Path) -> Option<FixturePages> {
     let reference_screenshots = output_base.join("reference");
     let generated_screenshots = output_base.join("generated");
 
-    let _ = fs::remove_dir_all(&reference_screenshots);
     let _ = fs::remove_dir_all(&generated_screenshots);
     let _ = fs::remove_dir_all(&output_base.join("diff"));
     let _ = fs::remove_dir_all(&output_base.join("comparison"));
 
-    if let Err(e) = screenshot_pdf(&reference_pdf, &reference_screenshots) {
-        println!("  [ERROR] {name}: screenshot reference failed: {e}");
-        return None;
+    if ref_screenshots_fresh(&reference_pdf, &reference_screenshots) {
+        println!("  {name}: reference screenshots cached");
+    } else {
+        let _ = fs::remove_dir_all(&reference_screenshots);
+        if let Err(e) = screenshot_pdf(&reference_pdf, &reference_screenshots) {
+            println!("  [ERROR] {name}: screenshot reference failed: {e}");
+            return None;
+        }
     }
     let generated_pdf = output_base.join("generated.pdf");
     if let Err(e) = docxside_pdf::convert_docx_to_pdf(&input_docx, &generated_pdf) {
@@ -256,13 +278,9 @@ fn print_summary(
     }
 }
 
-fn ssim_score(a: &Path, b: &Path) -> Result<f64, String> {
-    let img_a = image::open(a)
-        .map_err(|e| format!("Failed to open {}: {e}", a.display()))?
-        .to_luma8();
-    let img_b = image::open(b)
-        .map_err(|e| format!("Failed to open {}: {e}", b.display()))?
-        .to_luma8();
+fn ssim_score(img_a_dyn: &DynamicImage, img_b_dyn: &DynamicImage) -> Result<f64, String> {
+    let img_a = img_a_dyn.to_luma8();
+    let img_b = img_b_dyn.to_luma8();
     let (w, h) = img_a.dimensions();
     let (w2, h2) = img_b.dimensions();
     if w.abs_diff(w2) > 2 || h.abs_diff(h2) > 2 {
@@ -345,6 +363,8 @@ fn ssim_score(a: &Path, b: &Path) -> Result<f64, String> {
     Ok(ssim_sum / count as f64)
 }
 
+const MAX_DIFF_PAGES: usize = 20;
+
 #[test]
 fn visual_comparison() {
     let _ = env_logger::try_init();
@@ -361,23 +381,47 @@ fn visual_comparison() {
         let diff_dir = fixture.output_base.join("diff");
         let comparison_dir = fixture.output_base.join("comparison");
         let page_count = fixture.ref_pages.len().min(fixture.gen_pages.len());
-        let mut scores: Vec<f64> = Vec::new();
+        let mut page_scores: Vec<(usize, f64)> = Vec::new();
         for i in 0..page_count {
-            if let Ok(score) = compare_images(&fixture.ref_pages[i], &fixture.gen_pages[i]) {
-                scores.push(score);
-                let page_num = fixture.ref_pages[i].file_stem().unwrap().to_str().unwrap();
-                let _ = save_diff_image(
-                    &fixture.ref_pages[i],
-                    &fixture.gen_pages[i],
-                    &diff_dir.join(format!("{page_num}.png")),
-                );
-                let _ = save_side_by_side(
-                    &fixture.ref_pages[i],
-                    &fixture.gen_pages[i],
-                    &comparison_dir.join(format!("{page_num}.png")),
-                );
+            let Ok(img_ref) = image::open(&fixture.ref_pages[i]) else {
+                continue;
+            };
+            let Ok(img_gen) = image::open(&fixture.gen_pages[i]) else {
+                continue;
+            };
+            if let Ok(score) = compare_images_loaded(&img_ref, &img_gen) {
+                page_scores.push((i, score));
             }
         }
+        // Generate diff/comparison images for the worst-scoring pages only
+        let mut worst: Vec<usize> = page_scores.iter().map(|&(i, _)| i).collect();
+        worst.sort_by(|&a, &b| {
+            let sa = page_scores.iter().find(|&&(i, _)| i == a).unwrap().1;
+            let sb = page_scores.iter().find(|&&(i, _)| i == b).unwrap().1;
+            sa.partial_cmp(&sb).unwrap()
+        });
+        worst.truncate(MAX_DIFF_PAGES);
+        for &i in &worst {
+            let Ok(img_ref) = image::open(&fixture.ref_pages[i]) else {
+                continue;
+            };
+            let Ok(img_gen) = image::open(&fixture.gen_pages[i]) else {
+                continue;
+            };
+            let page_num = fixture.ref_pages[i].file_stem().unwrap().to_str().unwrap();
+            let _ = save_diff_image(
+                &img_ref,
+                &img_gen,
+                &diff_dir.join(format!("{page_num}.png")),
+            );
+            let _ = save_side_by_side(
+                &img_ref,
+                &img_gen,
+                &comparison_dir.join(format!("{page_num}.png")),
+            );
+        }
+
+        let scores: Vec<f64> = page_scores.iter().map(|&(_, s)| s).collect();
         if !scores.is_empty() {
             let avg = scores.iter().sum::<f64>() / scores.len() as f64;
             let passed = avg >= SIMILARITY_THRESHOLD;
@@ -420,7 +464,13 @@ fn ssim_comparison() {
         let page_count = fixture.ref_pages.len().min(fixture.gen_pages.len());
         let mut scores: Vec<f64> = Vec::new();
         for i in 0..page_count {
-            if let Ok(score) = ssim_score(&fixture.ref_pages[i], &fixture.gen_pages[i]) {
+            let Ok(img_ref) = image::open(&fixture.ref_pages[i]) else {
+                continue;
+            };
+            let Ok(img_gen) = image::open(&fixture.gen_pages[i]) else {
+                continue;
+            };
+            if let Ok(score) = ssim_score(&img_ref, &img_gen) {
                 scores.push(score);
             }
         }
