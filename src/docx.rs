@@ -115,7 +115,7 @@ struct ParagraphStyle {
     bold: Option<bool>,
     italic: Option<bool>,
     color: Option<[u8; 3]>,
-    space_before: f32,
+    space_before: Option<f32>,
     space_after: Option<f32>,
     alignment: Option<Alignment>,
     contextual_spacing: bool,
@@ -229,8 +229,8 @@ fn parse_styles(zip: &mut zip::ZipArchive<std::fs::File>, theme: &ThemeFonts) ->
     let mut defaults = StyleDefaults {
         font_size: 12.0,
         font_name: theme.minor.clone(),
-        space_after: 8.0,
-        line_spacing: 1.2,
+        space_after: 0.0,
+        line_spacing: 1.0,
     };
     let mut paragraph_styles = HashMap::new();
     let mut character_styles = HashMap::new();
@@ -300,7 +300,7 @@ fn parse_styles(zip: &mut zip::ZipArchive<std::fs::File>, theme: &ThemeFonts) ->
 
         let ppr = wml(style_node, "pPr");
         let spacing = ppr.and_then(|n| wml(n, "spacing"));
-        let space_before = spacing.and_then(|n| twips_attr(n, "before")).unwrap_or(0.0);
+        let space_before = spacing.and_then(|n| twips_attr(n, "before"));
         let space_after = spacing.and_then(|n| twips_attr(n, "after"));
         let bdr_extra = ppr.map(border_bottom_extra).unwrap_or(0.0);
         let border_bottom = ppr.and_then(parse_border_bottom);
@@ -450,6 +450,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
         let mut inherited_italic: Option<bool> = None;
         let mut inherited_color: Option<[u8; 3]> = None;
         let mut inherited_alignment: Option<Alignment> = None;
+        let mut inherited_space_before: Option<f32> = None;
         let mut inherited_space_after: Option<f32> = None;
         let mut inherited_line_spacing: Option<f32> = None;
 
@@ -472,6 +473,9 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                 }
                 if s.alignment.is_some() {
                     inherited_alignment = s.alignment;
+                }
+                if s.space_before.is_some() {
+                    inherited_space_before = s.space_before;
                 }
                 if s.space_after.is_some() {
                     inherited_space_after = s.space_after;
@@ -500,6 +504,9 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             }
             if s.alignment.is_none() {
                 s.alignment = inherited_alignment;
+            }
+            if s.space_before.is_none() {
+                s.space_before = inherited_space_before;
             }
             if s.space_after.is_none() {
                 s.space_after = inherited_space_after;
@@ -1403,7 +1410,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
 
                 let space_before = inline_spacing
                     .and_then(|n| twips_attr(n, "before"))
-                    .or_else(|| para_style.map(|s| s.space_before))
+                    .or_else(|| para_style.and_then(|s| s.space_before))
                     .unwrap_or(0.0);
 
                 let inline_bdr = ppr.and_then(parse_border_bottom);
