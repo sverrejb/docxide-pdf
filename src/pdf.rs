@@ -1108,14 +1108,30 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 let at_page_top = (slot_top - (doc.page_height - doc.margin_top)).abs() < 1.0;
 
                 let keep_next_extra = if para.keep_next {
-                    next_para.map_or(0.0, |next| {
+                    let mut extra = 0.0;
+                    let mut prev_sa = effective_space_after;
+                    let mut i = block_idx + 1;
+                    loop {
+                        let Some(next) = adjacent_para(i) else { break };
                         let (nfs, nlhr, _) = tallest_run_metrics(&next.runs, &seen_fonts);
-                        let next_inter = f32::max(effective_space_after, next.space_before);
+                        let next_inter = f32::max(prev_sa, next.space_before);
                         let next_first_line_h = nlhr
                             .map(|ratio| nfs * ratio)
                             .unwrap_or(nfs * 1.2);
-                        next_inter + next_first_line_h
-                    })
+                        if !next.keep_next {
+                            // Terminal paragraph: require 2 lines (orphan control)
+                            let next_ls = next.line_spacing.unwrap_or(doc.line_spacing);
+                            let next_line_h = nlhr
+                                .map(|ratio| nfs * ratio * next_ls)
+                                .unwrap_or(nfs * 1.2 * next_ls);
+                            extra += next_inter + next_first_line_h + next_line_h;
+                            break;
+                        }
+                        extra += next_inter + next_first_line_h;
+                        prev_sa = next.space_after;
+                        i += 1;
+                    }
+                    extra
                 } else {
                     0.0
                 };

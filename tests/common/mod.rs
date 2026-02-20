@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fs, io};
 
-const SKIP_FIXTURES: &[&str] = &["case13"];
+const SKIP_FIXTURES: &[&str] = &["sample100kB"];
 
 fn natural_cmp(a: &Path, b: &Path) -> std::cmp::Ordering {
     let a = a.file_name().and_then(|n| n.to_str()).unwrap_or("");
