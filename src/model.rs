@@ -92,6 +92,7 @@ pub struct Paragraph {
     pub border_bottom: Option<BorderBottom>,
     pub page_break_before: bool,
     pub tab_stops: Vec<TabStop>,
+    pub extra_line_breaks: u32,
 }
 
 pub struct Run {
@@ -115,9 +116,33 @@ pub enum FieldCode {
     NumPages,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CellBorders {
+    pub top: bool,
+    pub bottom: bool,
+    pub left: bool,
+    pub right: bool,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct CellMargins {
+    pub top: f32,
+    pub left: f32,
+    pub bottom: f32,
+    pub right: f32,
+}
+
+impl Default for CellMargins {
+    fn default() -> Self {
+        Self { top: 0.0, left: 5.4, bottom: 0.0, right: 5.4 }
+    }
+}
+
 pub struct Table {
     pub col_widths: Vec<f32>, // points
     pub rows: Vec<TableRow>,
+    pub table_indent: f32,
+    pub cell_margins: CellMargins,
 }
 
 pub struct TableRow {
@@ -127,6 +152,7 @@ pub struct TableRow {
 pub struct TableCell {
     pub width: f32, // points
     pub paragraphs: Vec<Paragraph>,
+    pub borders: CellBorders,
 }
 
 pub enum Block {

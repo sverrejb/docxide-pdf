@@ -4,8 +4,8 @@ use std::path::Path;
 
 use crate::error::Error;
 use crate::model::{
-    Alignment, Block, Document, EmbeddedImage, FieldCode, HeaderFooter, ImageFormat, Paragraph,
-    Run, TabAlignment, TabStop, Table, TableCell, TableRow, VertAlign,
+    Alignment, Block, CellBorders, CellMargins, Document, EmbeddedImage, FieldCode, HeaderFooter,
+    ImageFormat, Paragraph, Run, TabAlignment, TabStop, Table, TableCell, TableRow, VertAlign,
 };
 
 struct LevelDef {
@@ -806,6 +806,7 @@ fn parse_tab_stops(ppr: roxmltree::Node) -> Vec<TabStop> {
 struct ParsedRuns {
     runs: Vec<Run>,
     has_page_break: bool,
+    line_break_count: u32,
 }
 
 fn parse_runs(
@@ -858,6 +859,7 @@ fn parse_runs(
 
     let mut runs = Vec::new();
     let mut has_page_break = false;
+    let mut line_break_count: u32 = 0;
     let mut in_field = false;
     let mut field_instr = String::new();
 
@@ -1039,6 +1041,8 @@ fn parse_runs(
                 "br" if !in_field => {
                     if child.attribute((WML_NS, "type")) == Some("page") {
                         has_page_break = true;
+                    } else {
+                        line_break_count += 1;
                     }
                 }
                 _ => {}
@@ -1109,6 +1113,7 @@ fn parse_runs(
     ParsedRuns {
         runs,
         has_page_break,
+        line_break_count,
     }
 }
 
@@ -1156,6 +1161,7 @@ fn parse_header_footer_xml(
             border_bottom: None,
             page_break_before: false,
             tab_stops: vec![],
+            extra_line_breaks: parsed.line_break_count,
         });
     }
 
@@ -1280,6 +1286,24 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     .filter_map(|n| twips_attr(n, "w"))
                     .collect();
 
+                let tbl_pr = wml(node, "tblPr");
+                let table_indent = tbl_pr
+                    .and_then(|pr| wml(pr, "tblInd"))
+                    .and_then(|ind| twips_attr(ind, "w"))
+                    .unwrap_or(0.0);
+
+                let cell_margins = tbl_pr
+                    .and_then(|pr| wml(pr, "tblCellMar"))
+                    .map(|mar| CellMargins {
+                        top: wml(mar, "top").and_then(|n| twips_attr(n, "w")).unwrap_or(0.0),
+                        left: wml(mar, "left").or_else(|| wml(mar, "start"))
+                            .and_then(|n| twips_attr(n, "w")).unwrap_or(5.4),
+                        bottom: wml(mar, "bottom").and_then(|n| twips_attr(n, "w")).unwrap_or(0.0),
+                        right: wml(mar, "right").or_else(|| wml(mar, "end"))
+                            .and_then(|n| twips_attr(n, "w")).unwrap_or(5.4),
+                    })
+                    .unwrap_or_default();
+
                 let mut rows = Vec::new();
                 for tr in node.children().filter(|n| {
                     n.tag_name().name() == "tr" && n.tag_name().namespace() == Some(WML_NS)
@@ -1288,12 +1312,30 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     for tc in tr.children().filter(|n| {
                         n.tag_name().name() == "tc" && n.tag_name().namespace() == Some(WML_NS)
                     }) {
-                        let cell_width = wml(tc, "tcPr")
+                        let tc_pr = wml(tc, "tcPr");
+                        let cell_width = tc_pr
                             .and_then(|pr| wml(pr, "tcW"))
                             .and_then(|w| twips_attr(w, "w"))
                             .unwrap_or_else(|| {
                                 col_widths.get(cells.len()).copied().unwrap_or(72.0)
                             });
+
+                        let borders = tc_pr
+                            .and_then(|pr| wml(pr, "tcBorders"))
+                            .map(|bdr| {
+                                let is_border = |name: &str| {
+                                    wml(bdr, name)
+                                        .map(|n| wml_attr(n, "val") != Some("nil"))
+                                        .unwrap_or(false)
+                                };
+                                CellBorders {
+                                    top: is_border("top"),
+                                    bottom: is_border("bottom"),
+                                    left: is_border("left") || is_border("start"),
+                                    right: is_border("right") || is_border("end"),
+                                }
+                            })
+                            .unwrap_or_default();
 
                         let mut cell_paras = Vec::new();
                         for p in tc.children().filter(|n| {
@@ -1310,6 +1352,15 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                                 .map(parse_alignment)
                                 .or_else(|| para_style.and_then(|s| s.alignment))
                                 .unwrap_or(Alignment::Left);
+                            let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
+                            let line_spacing = Some(
+                                inline_spacing
+                                    .and_then(|n| n.attribute((WML_NS, "line")))
+                                    .and_then(|v| v.parse::<f32>().ok())
+                                    .map(|val| val / 240.0)
+                                    .or_else(|| para_style.and_then(|s| s.line_spacing))
+                                    .unwrap_or(1.0),
+                            );
                             cell_paras.push(Paragraph {
                                 runs: parsed.runs,
                                 space_before: 0.0,
@@ -1321,21 +1372,23 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                                 list_label: String::new(),
                                 contextual_spacing: false,
                                 keep_next: false,
-                                line_spacing: Some(1.0),
+                                line_spacing,
                                 image: None,
                                 border_bottom: None,
                                 page_break_before: false,
                                 tab_stops: vec![],
+                                extra_line_breaks: parsed.line_break_count,
                             });
                         }
                         cells.push(TableCell {
                             width: cell_width,
                             paragraphs: cell_paras,
+                            borders,
                         });
                     }
                     rows.push(TableRow { cells });
                 }
-                blocks.push(Block::Table(Table { col_widths, rows }));
+                blocks.push(Block::Table(Table { col_widths, rows, table_indent, cell_margins }));
             }
             "p" => {
                 let ppr = wml(node, "pPr");
@@ -1435,6 +1488,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     border_bottom,
                     page_break_before: parsed.has_page_break,
                     tab_stops,
+                    extra_line_breaks: parsed.line_break_count,
                 }));
             }
             _ => {}

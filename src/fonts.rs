@@ -67,6 +67,7 @@ fn font_directories() -> Vec<PathBuf> {
             "/System/Library/Fonts/Supplemental".into(),
         ]);
         if let Ok(home) = std::env::var("HOME") {
+            dirs.push(PathBuf::from(&home).join("Library/Fonts"));
             let cloud = PathBuf::from(&home)
                 .join("Library/Group Containers/UBF8T346G9.Office/FontCache/4/CloudFonts");
             if let Ok(families) = std::fs::read_dir(&cloud) {
@@ -598,19 +599,38 @@ pub(crate) fn register_font(
     let descriptor_ref = alloc();
     let data_ref = alloc();
 
-    let embedded_key = (font_name.to_lowercase(), bold, italic);
-    let embedded_data = embedded_fonts.get(&embedded_key);
+    let font_candidates: Vec<&str> = font_name.split(';').map(|s| s.trim()).collect();
 
-    let (widths, line_h_ratio, ascender_ratio) = embedded_data
-        .and_then(|data| {
-            embed_truetype(pdf, font_ref, descriptor_ref, data_ref, font_name, data, 0)
-        })
-        .or_else(|| {
-            find_font_file(font_name, bold, italic).and_then(|(path, face_index)| {
-                let data = std::fs::read(&path).ok()?;
-                embed_truetype(pdf, font_ref, descriptor_ref, data_ref, font_name, &data, face_index)
+    let mut result = None;
+    for candidate in &font_candidates {
+        let embedded_key = (candidate.to_lowercase(), bold, italic);
+        let embedded_data = embedded_fonts.get(&embedded_key);
+
+        let found = embedded_data
+            .and_then(|data| {
+                embed_truetype(pdf, font_ref, descriptor_ref, data_ref, candidate, data, 0)
             })
-        })
+            .or_else(|| {
+                find_font_file(candidate, bold, italic).and_then(|(path, face_index)| {
+                    let data = std::fs::read(&path).ok()?;
+                    embed_truetype(
+                        pdf,
+                        font_ref,
+                        descriptor_ref,
+                        data_ref,
+                        candidate,
+                        &data,
+                        face_index,
+                    )
+                })
+            });
+        if let Some(metrics) = found {
+            result = Some(metrics);
+            break;
+        }
+    }
+
+    let (widths, line_h_ratio, ascender_ratio) = result
         .map(|(w, r, ar)| (w, Some(r), Some(ar)))
         .unwrap_or_else(|| {
             log::warn!("Font not found: {font_name} bold={bold} italic={italic} — using Helvetica");

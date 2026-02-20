@@ -17,7 +17,16 @@ Already implemented with layered strategy:
 3. Cross-platform system font search (macOS, Linux, Windows) — ✅
 4. Helvetica Type1 fallback — ✅
 
-Remaining: bundle open-source fallback fonts (Liberation, Noto) so output is consistent even without system fonts installed.
+Remaining:
+- **Font substitution** — when a font isn't found (embedded or system), we unconditionally fall back to Helvetica (a built-in PDF Type1 font with no TrueType metrics). Word instead uses a sophisticated substitution system that picks the closest available font based on family, metrics, and panose classification. This causes two problems:
+  1. **Wrong font family** — a missing sans-serif font (e.g. DejaVu Sans) gets Helvetica, which is OK, but a missing serif font (e.g. Liberation Serif) also gets Helvetica instead of Times New Roman. Should at least respect serif/sans-serif/monospace family.
+  2. **No TrueType metrics** — Helvetica fallback returns `line_h_ratio: None` and `ascender_ratio: None`, forcing the renderer to use a `font_size * 1.2` estimate for line height. This compounds across pages and causes layout drift (wrong page breaks, wrong vertical positions). Real font metrics are critical for accurate layout.
+
+  Implementation ideas:
+  - Minimal: map font family → default system font (serif→Times New Roman, sans→Arial, mono→Courier New)
+  - Better: parse the font's panose classification from the DOCX `fontTable.xml` and match against installed fonts
+  - Best: bundle fallback fonts (Liberation, Noto) so output is consistent without system fonts installed
+  - The semicolon-separated fallback lists in font names (e.g. `"Liberation Serif;Times New Roman"`) are now tried in order, but many DOCX fonts have no fallback list (e.g. `"DejaVu Sans"` with no alternative)
 
 ## Output file size
 

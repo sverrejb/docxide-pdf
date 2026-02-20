@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str};
 
 use crate::error::Error;
-use crate::fonts::{font_key, primary_font_name, register_font, to_winansi_bytes, FontEntry};
+use crate::fonts::{font_key, register_font, to_winansi_bytes, FontEntry};
 use crate::model::{
     Alignment, Block, Document, FieldCode, HeaderFooter, ImageFormat, Run, TabAlignment, TabStop,
     Table, VertAlign,
@@ -507,9 +507,6 @@ fn tallest_run_metrics(
     (best_font_size, best_line_h_ratio, best_ascender_ratio)
 }
 
-const TABLE_CELL_PAD_LEFT: f32 = 5.4;
-const TABLE_CELL_PAD_TOP: f32 = 0.0;
-const TABLE_CELL_PAD_BOTTOM: f32 = 0.0;
 const TABLE_BORDER_WIDTH: f32 = 0.5;
 
 /// Auto-fit column widths so that the longest non-breakable word in each column
@@ -597,6 +594,7 @@ fn compute_row_layouts(
     doc: &Document,
     seen_fonts: &HashMap<String, FontEntry>,
 ) -> Vec<RowLayout> {
+    let cm = &table.cell_margins;
     table
         .rows
         .iter()
@@ -608,8 +606,8 @@ fn compute_row_layouts(
                 .enumerate()
                 .map(|(ci, cell)| {
                     let col_w = col_widths.get(ci).copied().unwrap_or(cell.width);
-                    let cell_text_w = col_w;
-                    let mut total_h: f32 = TABLE_CELL_PAD_TOP + TABLE_CELL_PAD_BOTTOM;
+                    let cell_text_w = (col_w - cm.left - cm.right).max(0.0);
+                    let mut total_h: f32 = cm.top + cm.bottom;
                     let mut all_lines = Vec::new();
                     let mut first_font_size = 12.0f32;
                     let mut first_line_h = 14.4f32;
@@ -619,7 +617,7 @@ fn compute_row_layouts(
                         let effective_ls = para.line_spacing.unwrap_or(doc.line_spacing);
                         let line_h = font_metric(&para.runs, seen_fonts, |e| e.line_h_ratio)
                             .map(|ratio| font_size * ratio * effective_ls)
-                            .unwrap_or(font_size * 1.2);
+                            .unwrap_or(font_size * 1.2 * effective_ls);
 
                         if all_lines.is_empty() {
                             first_font_size = font_size;
@@ -659,6 +657,8 @@ fn render_table(
 ) {
     let col_widths = auto_fit_columns(table, seen_fonts);
     let row_layouts = compute_row_layouts(table, &col_widths, doc, seen_fonts);
+    let cm = &table.cell_margins;
+    let table_left = doc.margin_left + table.table_indent;
 
     *slot_top -= prev_space_after;
 
@@ -682,14 +682,13 @@ fn render_table(
         let row_top = *slot_top;
         let row_bottom = row_top - row_h;
 
-        // Render cell contents — text inset by cell padding
-        let mut cell_x = doc.margin_left;
+        let mut cell_x = table_left;
         for (ci, (cell, (lines, line_h, font_size))) in
             row.cells.iter().zip(layout.cell_lines.iter()).enumerate()
         {
             let col_w = col_widths.get(ci).copied().unwrap_or(cell.width);
-            let text_x = cell_x + TABLE_CELL_PAD_LEFT;
-            let text_w = col_w;
+            let text_x = cell_x + cm.left;
+            let text_w = (col_w - cm.left - cm.right).max(0.0);
 
             if !lines.is_empty() && !lines.iter().all(|l| l.chunks.is_empty()) {
                 let first_run = cell.paragraphs.first().and_then(|p| p.runs.first());
@@ -698,7 +697,7 @@ fn render_table(
                     .and_then(|k| seen_fonts.get(&k))
                     .and_then(|e| e.ascender_ratio)
                     .unwrap_or(0.75);
-                let baseline_y = row_top - TABLE_CELL_PAD_TOP - font_size * ascender_ratio;
+                let baseline_y = row_top - cm.top - font_size * ascender_ratio;
                 let alignment = cell
                     .paragraphs
                     .first()
@@ -722,20 +721,34 @@ fn render_table(
             cell_x += col_w;
         }
 
-        // Draw cell borders — first cell extends left by pad_left,
-        // right border aligns with body text right edge.
+        // Draw per-cell borders as individual line segments
         content.save_state();
         content.set_line_width(TABLE_BORDER_WIDTH);
-        let mut bx = doc.margin_left - TABLE_CELL_PAD_LEFT;
+        let mut bx = table_left;
         for (ci, cell) in row.cells.iter().enumerate() {
             let col_w = col_widths.get(ci).copied().unwrap_or(cell.width);
-            let border_w = if ci == 0 {
-                col_w + TABLE_CELL_PAD_LEFT
-            } else {
-                col_w
-            };
-            content.rect(bx, row_bottom, border_w, row_h).stroke();
-            bx += border_w;
+            let b = &cell.borders;
+            if b.top {
+                content.move_to(bx, row_top);
+                content.line_to(bx + col_w, row_top);
+                content.stroke();
+            }
+            if b.bottom {
+                content.move_to(bx, row_bottom);
+                content.line_to(bx + col_w, row_bottom);
+                content.stroke();
+            }
+            if b.left {
+                content.move_to(bx, row_top);
+                content.line_to(bx, row_bottom);
+                content.stroke();
+            }
+            if b.right {
+                content.move_to(bx + col_w, row_top);
+                content.line_to(bx + col_w, row_bottom);
+                content.stroke();
+            }
+            bx += col_w;
         }
         content.restore_state();
 
@@ -816,7 +829,7 @@ fn render_header_footer(
         let effective_ls = para.line_spacing.unwrap_or(doc.line_spacing);
         let line_h = font_metric(&substituted_runs, seen_fonts, |e| e.line_h_ratio)
             .map(|ratio| font_size * ratio * effective_ls)
-            .unwrap_or(font_size * 1.2);
+            .unwrap_or(font_size * 1.2 * effective_ls);
 
         render_paragraph_lines(
             content,
@@ -887,11 +900,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     for run in &all_runs {
         let key = font_key(run);
         if !seen_fonts.contains_key(&key) {
-            let base = primary_font_name(&run.font_name);
             let pdf_name = format!("F{}", font_order.len() + 1);
             let entry = register_font(
                 &mut pdf,
-                base,
+                &run.font_name,
                 run.bold,
                 run.italic,
                 pdf_name,
@@ -1063,7 +1075,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 let effective_line_spacing = para.line_spacing.unwrap_or(doc.line_spacing);
                 let line_h = tallest_lhr
                     .map(|ratio| font_size * ratio * effective_line_spacing)
-                    .unwrap_or(font_size * 1.2);
+                    .unwrap_or(font_size * 1.2 * effective_line_spacing);
 
                 let para_text_x = doc.margin_left + para.indent_left;
                 let para_text_width = (text_width - para.indent_left).max(1.0);
@@ -1083,10 +1095,13 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     build_paragraph_lines(&para.runs, &seen_fonts, para_text_width)
                 };
 
-                let content_h = if para.image.is_some() || para.runs.is_empty() {
+                let content_h = if para.image.is_some() {
                     para.content_height.max(doc.line_pitch)
+                } else if para.runs.is_empty() {
+                    doc.line_pitch
                 } else {
-                    lines.len() as f32 * line_h
+                    let min_lines = 1 + para.extra_line_breaks as usize;
+                    lines.len().max(min_lines) as f32 * line_h
                 };
 
                 let needed = inter_gap + content_h;
