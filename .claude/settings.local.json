@@ -49,7 +49,8 @@
       "Bash(do echo \"=== GENERATED PAGE $page ===\" mutool draw -F text -o - tests/output/sample100kB/generated.pdf \"$page\")",
       "Bash(grep sample100:*)",
       "Bash(DOCXSIDE_NO_FONT_CACHE=1 cargo test:*)",
-      "Bash(head:*)"
+      "Bash(head:*)",
+      "Bash(tail:*)"
     ]
   }
 }

@@ -39,9 +39,18 @@ fn screenshot_pdf(pdf: &Path, output_dir: &Path) -> Result<(), String> {
     }
 }
 
-fn compare_images_loaded(img_a: &DynamicImage, img_b: &DynamicImage) -> Result<f64, String> {
-    let (w, h) = img_a.dimensions();
-    let (w2, h2) = img_b.dimensions();
+fn is_ink_luma(r: u8, g: u8, b: u8) -> bool {
+    (r as u32 * 299 + g as u32 * 587 + b as u32 * 114) < 200_000
+}
+
+struct PageResult {
+    jaccard: f64,
+    diff_img: ImageBuffer<Rgba<u8>, Vec<u8>>,
+}
+
+fn compare_and_diff(img_ref: &DynamicImage, img_gen: &DynamicImage) -> Result<PageResult, String> {
+    let (w, h) = img_ref.dimensions();
+    let (w2, h2) = img_gen.dimensions();
     if w.abs_diff(w2) > 2 || h.abs_diff(h2) > 2 {
         return Err(format!(
             "Image dimensions differ: {:?} vs {:?}",
@@ -51,92 +60,91 @@ fn compare_images_loaded(img_a: &DynamicImage, img_b: &DynamicImage) -> Result<f
     }
     let cw = w.min(w2);
     let ch = h.min(h2);
+    let ref_rgba = img_ref.to_rgba8();
+    let gen_rgba = img_gen.to_rgba8();
+    let ref_buf = ref_rgba.as_raw();
+    let gen_buf = gen_rgba.as_raw();
+    let stride_ref = (w * 4) as usize;
+    let stride_gen = (w2 * 4) as usize;
+
     let mut intersection: u64 = 0;
     let mut union: u64 = 0;
-    for y in 0..ch {
-        for x in 0..cw {
-            let [ra, ga, ba, _] = img_a.get_pixel(x, y).0;
-            let [rb, gb, bb, _] = img_b.get_pixel(x, y).0;
-            let a_ink = is_ink(ra, ga, ba);
-            let b_ink = is_ink(rb, gb, bb);
-            if a_ink || b_ink {
+    let mut diff_buf: Vec<u8> = vec![255; (cw * ch * 4) as usize];
+
+    for y in 0..ch as usize {
+        let ref_row = &ref_buf[y * stride_ref..];
+        let gen_row = &gen_buf[y * stride_gen..];
+        let diff_row = &mut diff_buf[y * (cw as usize * 4)..];
+        for x in 0..cw as usize {
+            let ri = x * 4;
+            let (rr, gr, br) = (ref_row[ri], ref_row[ri + 1], ref_row[ri + 2]);
+            let (rg, gg, bg) = (gen_row[ri], gen_row[ri + 1], gen_row[ri + 2]);
+            let ref_ink = is_ink_luma(rr, gr, br);
+            let gen_ink = is_ink_luma(rg, gg, bg);
+            if ref_ink || gen_ink {
                 union += 1;
             }
-            if a_ink && b_ink {
+            if ref_ink && gen_ink {
                 intersection += 1;
             }
-        }
-    }
-    if union == 0 {
-        return Ok(1.0);
-    }
-    Ok(intersection as f64 / union as f64)
-}
-
-fn is_ink(r: u8, g: u8, b: u8) -> bool {
-    let luma = 0.299 * r as f32 + 0.587 * g as f32 + 0.114 * b as f32;
-    luma < 200.0
-}
-
-fn save_diff_image(img_ref: &DynamicImage, img_gen: &DynamicImage, out: &Path) -> Result<(), String> {
-    let (w, h) = img_ref.dimensions();
-    let (w2, h2) = img_gen.dimensions();
-    let cw = w.min(w2);
-    let ch = h.min(h2);
-    let ink_threshold = 200u8;
-    let mut diff: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::new(cw, ch);
-    for y in 0..ch {
-        for x in 0..cw {
-            let Rgba([rr, gr, br, _]) = img_ref.get_pixel(x, y).0.into();
-            let Rgba([rg, gg, bg, _]) = img_gen.get_pixel(x, y).0.into();
-            let luma_ref: u8 =
-                ((rr as u32 * 299 + gr as u32 * 587 + br as u32 * 114) / 1000) as u8;
-            let luma_gen: u8 =
-                ((rg as u32 * 299 + gg as u32 * 587 + bg as u32 * 114) / 1000) as u8;
-            let ref_ink = luma_ref < ink_threshold;
-            let gen_ink = luma_gen < ink_threshold;
             let pixel = match (ref_ink, gen_ink) {
-                (true, true) => Rgba([80, 80, 80, 255]),       // both: dark gray
-                (true, false) => Rgba([0, 80, 220, 255]),      // reference only: blue
-                (false, true) => Rgba([220, 40, 40, 255]),     // generated only: red
-                (false, false) => Rgba([255, 255, 255, 255]),  // neither: white
+                (true, true) => [80, 80, 80, 255],
+                (true, false) => [0, 80, 220, 255],
+                (false, true) => [220, 40, 40, 255],
+                (false, false) => [255, 255, 255, 255],
             };
-            diff.put_pixel(x, y, pixel);
+            diff_row[ri..ri + 4].copy_from_slice(&pixel);
         }
     }
-    if let Some(parent) = out.parent() {
-        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-    }
-    DynamicImage::ImageRgba8(diff)
-        .save(out)
-        .map_err(|e| e.to_string())
+
+    let jaccard = if union == 0 {
+        1.0
+    } else {
+        intersection as f64 / union as f64
+    };
+    let diff_img = ImageBuffer::from_raw(cw, ch, diff_buf)
+        .ok_or_else(|| "failed to create diff image".to_string())?;
+    Ok(PageResult { jaccard, diff_img })
 }
 
 fn save_side_by_side(img_a: &DynamicImage, img_b: &DynamicImage, out: &Path) -> Result<(), String> {
     let (wa, ha) = img_a.dimensions();
     let (wb, hb) = img_b.dimensions();
+    let buf_a = img_a.to_rgba8();
+    let buf_b = img_b.to_rgba8();
     let gap = 4u32;
     let total_w = wa + gap + wb;
     let total_h = ha.max(hb);
-    let mut canvas: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::from_pixel(
-        total_w,
-        total_h,
-        Rgba([220, 220, 220, 255]),
-    );
-    for y in 0..ha {
-        for x in 0..wa {
-            canvas.put_pixel(x, y, img_a.get_pixel(x, y));
-        }
+    let bpp = 4usize;
+    let row_bytes = total_w as usize * bpp;
+    let mut canvas = vec![220u8; total_h as usize * row_bytes];
+    // fill alpha channel to 255
+    for px in canvas.chunks_exact_mut(4) {
+        px[3] = 255;
     }
-    for y in 0..hb {
-        for x in 0..wb {
-            canvas.put_pixel(wa + gap + x, y, img_b.get_pixel(x, y));
-        }
+    let stride_a = wa as usize * bpp;
+    let stride_b = wb as usize * bpp;
+    let a_raw = buf_a.as_raw();
+    let b_raw = buf_b.as_raw();
+    for y in 0..ha as usize {
+        let dst_offset = y * row_bytes;
+        let src_offset = y * stride_a;
+        canvas[dst_offset..dst_offset + stride_a]
+            .copy_from_slice(&a_raw[src_offset..src_offset + stride_a]);
+    }
+    let x_offset = (wa + gap) as usize * bpp;
+    for y in 0..hb as usize {
+        let dst_offset = y * row_bytes + x_offset;
+        let src_offset = y * stride_b;
+        canvas[dst_offset..dst_offset + stride_b]
+            .copy_from_slice(&b_raw[src_offset..src_offset + stride_b]);
     }
     if let Some(parent) = out.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
-    DynamicImage::ImageRgba8(canvas)
+    let img: ImageBuffer<Rgba<u8>, _> =
+        ImageBuffer::from_raw(total_w, total_h, canvas).ok_or("canvas alloc")?;
+    DynamicImage::ImageRgba8(img)
         .save(out)
         .map_err(|e| e.to_string())
 }
@@ -363,8 +371,6 @@ fn ssim_score(img_a_dyn: &DynamicImage, img_b_dyn: &DynamicImage) -> Result<f64,
     Ok(ssim_sum / count as f64)
 }
 
-const MAX_DIFF_PAGES: usize = 20;
-
 #[test]
 fn visual_comparison() {
     let _ = env_logger::try_init();
@@ -381,7 +387,8 @@ fn visual_comparison() {
         let diff_dir = fixture.output_base.join("diff");
         let comparison_dir = fixture.output_base.join("comparison");
         let page_count = fixture.ref_pages.len().min(fixture.gen_pages.len());
-        let mut page_scores: Vec<(usize, f64)> = Vec::new();
+        let mut scores: Vec<f64> = Vec::new();
+
         for i in 0..page_count {
             let Ok(img_ref) = image::open(&fixture.ref_pages[i]) else {
                 continue;
@@ -389,31 +396,20 @@ fn visual_comparison() {
             let Ok(img_gen) = image::open(&fixture.gen_pages[i]) else {
                 continue;
             };
-            if let Ok(score) = compare_images_loaded(&img_ref, &img_gen) {
-                page_scores.push((i, score));
-            }
-        }
-        // Generate diff/comparison images for the worst-scoring pages only
-        let mut worst: Vec<usize> = page_scores.iter().map(|&(i, _)| i).collect();
-        worst.sort_by(|&a, &b| {
-            let sa = page_scores.iter().find(|&&(i, _)| i == a).unwrap().1;
-            let sb = page_scores.iter().find(|&&(i, _)| i == b).unwrap().1;
-            sa.partial_cmp(&sb).unwrap()
-        });
-        worst.truncate(MAX_DIFF_PAGES);
-        for &i in &worst {
-            let Ok(img_ref) = image::open(&fixture.ref_pages[i]) else {
-                continue;
-            };
-            let Ok(img_gen) = image::open(&fixture.gen_pages[i]) else {
-                continue;
-            };
             let page_num = fixture.ref_pages[i].file_stem().unwrap().to_str().unwrap();
-            let _ = save_diff_image(
-                &img_ref,
-                &img_gen,
-                &diff_dir.join(format!("{page_num}.png")),
-            );
+
+            match compare_and_diff(&img_ref, &img_gen) {
+                Ok(result) => {
+                    scores.push(result.jaccard);
+                    let _ = fs::create_dir_all(&diff_dir);
+                    let _ = DynamicImage::ImageRgba8(result.diff_img)
+                        .save(diff_dir.join(format!("{page_num}.png")));
+                }
+                Err(e) => {
+                    println!("  {}: page {} compare failed: {e}", fixture.name, i + 1);
+                }
+            }
+
             let _ = save_side_by_side(
                 &img_ref,
                 &img_gen,
@@ -421,7 +417,6 @@ fn visual_comparison() {
             );
         }
 
-        let scores: Vec<f64> = page_scores.iter().map(|&(_, s)| s).collect();
         if !scores.is_empty() {
             let avg = scores.iter().sum::<f64>() / scores.len() as f64;
             let passed = avg >= SIMILARITY_THRESHOLD;
