@@ -1,6 +1,7 @@
 mod common;
 
 use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba};
+use rayon::prelude::*;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -11,31 +12,55 @@ const SIMILARITY_THRESHOLD: f64 = 0.27;
 const SSIM_THRESHOLD: f64 = 0.54;
 const MUTOOL_DPI: &str = "150";
 
+fn pdf_page_count(pdf: &Path) -> Result<usize, String> {
+    let output = Command::new("mutool")
+        .args(["info", pdf.to_str().unwrap()])
+        .output()
+        .map_err(|e| format!("Failed to run mutool info: {e}"))?;
+    let text = String::from_utf8_lossy(&output.stdout);
+    for line in text.lines() {
+        if let Some(rest) = line.strip_prefix("Pages:") {
+            if let Ok(n) = rest.trim().parse::<usize>() {
+                return Ok(n);
+            }
+        }
+    }
+    Err("Could not determine page count".to_string())
+}
+
 fn screenshot_pdf(pdf: &Path, output_dir: &Path) -> Result<(), String> {
     fs::create_dir_all(output_dir).map_err(|e| e.to_string())?;
-    let output_pattern = output_dir.join("page_%03d.png");
-    let status = Command::new("mutool")
-        .args([
-            "draw",
-            "-F",
-            "png",
-            "-r",
-            MUTOOL_DPI,
-            "-o",
-            output_pattern.to_str().unwrap(),
-            pdf.to_str().unwrap(),
-        ])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .map_err(|e| format!("Failed to run mutool: {e}"))?;
-    if status.success() {
+    let n = pdf_page_count(pdf)?;
+    let errors: Vec<String> = (1..=n)
+        .into_par_iter()
+        .filter_map(|page| {
+            let out_file = output_dir.join(format!("page_{:03}.png", page));
+            let status = Command::new("mutool")
+                .args([
+                    "draw",
+                    "-F",
+                    "png",
+                    "-r",
+                    MUTOOL_DPI,
+                    "-o",
+                    out_file.to_str().unwrap(),
+                    pdf.to_str().unwrap(),
+                    &page.to_string(),
+                ])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status();
+            match status {
+                Ok(s) if s.success() => None,
+                Ok(s) => Some(format!("page {page}: exit {}", s.code().unwrap_or(-1))),
+                Err(e) => Some(format!("page {page}: {e}")),
+            }
+        })
+        .collect();
+    if errors.is_empty() {
         Ok(())
     } else {
-        Err(format!(
-            "mutool exited with status {}",
-            status.code().unwrap_or(-1)
-        ))
+        Err(errors.join("; "))
     }
 }
 
@@ -242,7 +267,7 @@ fn prepared_fixtures() -> &'static Vec<FixturePages> {
     FIXTURES.get_or_init(|| {
         let fixture_dirs = common::discover_fixtures().expect("Failed to read tests/fixtures");
         fixture_dirs
-            .iter()
+            .par_iter()
             .filter_map(|d| prepare_fixture(d))
             .collect()
     })
@@ -380,67 +405,72 @@ fn visual_comparison() {
     }
 
     let prev_scores = common::read_previous_scores("results.csv", 3);
-    let mut all_passed = true;
-    let mut table_rows: Vec<(String, f64, bool)> = Vec::new();
 
-    for fixture in fixtures {
-        let diff_dir = fixture.output_base.join("diff");
-        let comparison_dir = fixture.output_base.join("comparison");
-        let page_count = fixture.ref_pages.len().min(fixture.gen_pages.len());
-        let mut scores: Vec<f64> = Vec::new();
+    let results: Vec<(String, f64, bool, usize)> = fixtures
+        .par_iter()
+        .filter_map(|fixture| {
+            let diff_dir = fixture.output_base.join("diff");
+            let comparison_dir = fixture.output_base.join("comparison");
+            let _ = fs::create_dir_all(&diff_dir);
+            let _ = fs::create_dir_all(&comparison_dir);
+            let page_count = fixture.ref_pages.len().min(fixture.gen_pages.len());
 
-        for i in 0..page_count {
-            let Ok(img_ref) = image::open(&fixture.ref_pages[i]) else {
-                continue;
-            };
-            let Ok(img_gen) = image::open(&fixture.gen_pages[i]) else {
-                continue;
-            };
-            let page_num = fixture.ref_pages[i].file_stem().unwrap().to_str().unwrap();
+            let scores: Vec<f64> = (0..page_count)
+                .into_par_iter()
+                .filter_map(|i| {
+                    let img_ref = image::open(&fixture.ref_pages[i]).ok()?;
+                    let img_gen = image::open(&fixture.gen_pages[i]).ok()?;
+                    let page_num = fixture.ref_pages[i]
+                        .file_stem()?
+                        .to_str()?
+                        .to_string();
 
-            match compare_and_diff(&img_ref, &img_gen) {
-                Ok(result) => {
-                    scores.push(result.jaccard);
-                    let _ = fs::create_dir_all(&diff_dir);
+                    let result = compare_and_diff(&img_ref, &img_gen).ok()?;
+                    let jaccard = result.jaccard;
                     let _ = DynamicImage::ImageRgba8(result.diff_img)
                         .save(diff_dir.join(format!("{page_num}.png")));
-                }
-                Err(e) => {
-                    println!("  {}: page {} compare failed: {e}", fixture.name, i + 1);
-                }
+                    let _ = save_side_by_side(
+                        &img_ref,
+                        &img_gen,
+                        &comparison_dir.join(format!("{page_num}.png")),
+                    );
+                    Some(jaccard)
+                })
+                .collect();
+
+            if scores.is_empty() {
+                return None;
             }
-
-            let _ = save_side_by_side(
-                &img_ref,
-                &img_gen,
-                &comparison_dir.join(format!("{page_num}.png")),
-            );
-        }
-
-        if !scores.is_empty() {
             let avg = scores.iter().sum::<f64>() / scores.len() as f64;
             let passed = avg >= SIMILARITY_THRESHOLD;
-            common::log_csv(
-                "results.csv",
-                "timestamp,case,pages,avg_jaccard,pass",
-                &format!(
-                    "{},{},{},{:.4},{}",
-                    common::timestamp(),
-                    fixture.name,
-                    scores.len(),
-                    avg,
-                    passed
-                ),
-            );
-            table_rows.push((fixture.name.clone(), avg, passed));
-            if !passed {
-                all_passed = false;
-            }
-        }
+            Some((fixture.name.clone(), avg, passed, scores.len()))
+        })
+        .collect();
+
+    for (name, avg, passed, page_count) in &results {
+        common::log_csv(
+            "results.csv",
+            "timestamp,case,pages,avg_jaccard,pass",
+            &format!(
+                "{},{},{},{:.4},{}",
+                common::timestamp(),
+                name,
+                page_count,
+                avg,
+                passed
+            ),
+        );
     }
 
+    let table_rows: Vec<(String, f64, bool)> = results
+        .iter()
+        .map(|(n, a, p, _)| (n.clone(), *a, *p))
+        .collect();
     print_summary("Jaccard", SIMILARITY_THRESHOLD, &table_rows, &prev_scores);
-    assert!(all_passed, "One or more fixtures failed visual comparison");
+    assert!(
+        table_rows.iter().all(|(_, _, p)| *p),
+        "One or more fixtures failed visual comparison"
+    );
 }
 
 #[test]
@@ -452,44 +482,51 @@ fn ssim_comparison() {
     }
 
     let prev_scores = common::read_previous_scores("ssim_results.csv", 3);
-    let mut all_passed = true;
-    let mut table_rows: Vec<(String, f64, bool)> = Vec::new();
 
-    for fixture in fixtures {
-        let page_count = fixture.ref_pages.len().min(fixture.gen_pages.len());
-        let mut scores: Vec<f64> = Vec::new();
-        for i in 0..page_count {
-            let Ok(img_ref) = image::open(&fixture.ref_pages[i]) else {
-                continue;
-            };
-            let Ok(img_gen) = image::open(&fixture.gen_pages[i]) else {
-                continue;
-            };
-            if let Ok(score) = ssim_score(&img_ref, &img_gen) {
-                scores.push(score);
+    let results: Vec<(String, f64, bool, usize)> = fixtures
+        .par_iter()
+        .filter_map(|fixture| {
+            let page_count = fixture.ref_pages.len().min(fixture.gen_pages.len());
+
+            let scores: Vec<f64> = (0..page_count)
+                .into_par_iter()
+                .filter_map(|i| {
+                    let img_ref = image::open(&fixture.ref_pages[i]).ok()?;
+                    let img_gen = image::open(&fixture.gen_pages[i]).ok()?;
+                    ssim_score(&img_ref, &img_gen).ok()
+                })
+                .collect();
+
+            if scores.is_empty() {
+                return None;
             }
-        }
-        if !scores.is_empty() {
             let avg = scores.iter().sum::<f64>() / scores.len() as f64;
             let passed = avg >= SSIM_THRESHOLD;
-            common::log_csv(
-                "ssim_results.csv",
-                "timestamp,case,pages,avg_ssim",
-                &format!(
-                    "{},{},{},{:.4}",
-                    common::timestamp(),
-                    fixture.name,
-                    scores.len(),
-                    avg
-                ),
-            );
-            table_rows.push((fixture.name.clone(), avg, passed));
-            if !passed {
-                all_passed = false;
-            }
-        }
+            Some((fixture.name.clone(), avg, passed, scores.len()))
+        })
+        .collect();
+
+    for (name, avg, _, page_count) in &results {
+        common::log_csv(
+            "ssim_results.csv",
+            "timestamp,case,pages,avg_ssim",
+            &format!(
+                "{},{},{},{:.4}",
+                common::timestamp(),
+                name,
+                page_count,
+                avg
+            ),
+        );
     }
 
+    let table_rows: Vec<(String, f64, bool)> = results
+        .iter()
+        .map(|(n, a, p, _)| (n.clone(), *a, *p))
+        .collect();
     print_summary("SSIM", SSIM_THRESHOLD, &table_rows, &prev_scores);
-    assert!(all_passed, "One or more fixtures failed SSIM comparison");
+    assert!(
+        table_rows.iter().all(|(_, _, p)| *p),
+        "One or more fixtures failed SSIM comparison"
+    );
 }

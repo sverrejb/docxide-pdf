@@ -1,5 +1,6 @@
 mod common;
 
+use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::fs;
@@ -191,14 +192,11 @@ fn text_boundaries_match() {
     }
 
     let prev_scores = common::read_previous_scores("text_boundary_results.csv", 5);
-    let mut results: Vec<CaseResult> = Vec::new();
 
-    for fixture_dir in &fixtures {
-        let Some(result) = analyze_fixture(fixture_dir) else {
-            continue;
-        };
-        results.push(result);
-    }
+    let results: Vec<CaseResult> = fixtures
+        .par_iter()
+        .filter_map(|fixture_dir| analyze_fixture(fixture_dir))
+        .collect();
 
     let name_w = results
         .iter()

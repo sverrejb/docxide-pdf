@@ -47,6 +47,7 @@ miniz_oxide = "0.8"
 [dev-dependencies]
 image = { version = "0.25" }
 env_logger = "0.11"
+rayon = "1"
 
 # Optimize deps in dev/test builds — image processing is ~10× slower without this
 [profile.dev.package."*"]

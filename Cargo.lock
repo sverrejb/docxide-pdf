@@ -493,6 +493,7 @@ dependencies = [
  "memmap2",
  "miniz_oxide",
  "pdf-writer",
+ "rayon",
  "roxmltree",
  "ttf-parser",
  "zip",
