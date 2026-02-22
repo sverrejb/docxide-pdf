@@ -192,6 +192,10 @@ cargo run --manifest-path tools/Cargo.toml --bin jaccard -- a.png b.png
 cargo run --manifest-path tools/Cargo.toml --bin case-diff -- case1
 ```
 
+## Contributing
+
+Pull requests are welcome! If you have a `.docx` file that produces bad output, that's especially interesting — feel free to open an issue or PR with the file included.
+
 ## License
 
 Apache-2.0
