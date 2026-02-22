@@ -1,9 +1,9 @@
 mod common;
 
 use rayon::prelude::*;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::fs;
 
 fn pdf_page_count(pdf: &Path) -> usize {
     let output = Command::new("mutool")

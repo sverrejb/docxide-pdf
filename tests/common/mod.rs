@@ -24,15 +24,13 @@ pub fn discover_fixtures() -> io::Result<Vec<PathBuf>> {
         .map(|e| e.path())
         .filter(|p| {
             p.is_dir()
-                && p.file_name()
-                    .and_then(|n| n.to_str())
-                    .map_or(true, |n| {
-                        if let Some(ref filter) = case_filter {
-                            n == filter.as_str()
-                        } else {
-                            !SKIP_FIXTURES.contains(&n)
-                        }
-                    })
+                && p.file_name().and_then(|n| n.to_str()).map_or(true, |n| {
+                    if let Some(ref filter) = case_filter {
+                        n == filter.as_str()
+                    } else {
+                        !SKIP_FIXTURES.contains(&n)
+                    }
+                })
         })
         .collect();
     fixtures.sort_by(|a, b| natural_cmp(a, b));

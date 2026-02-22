@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str};
 
 use crate::error::Error;
-use crate::fonts::{font_key, register_font, to_winansi_bytes, FontEntry};
+use crate::fonts::{FontEntry, font_key, register_font, to_winansi_bytes};
 use crate::model::{
     Alignment, Block, Document, FieldCode, HeaderFooter, ImageFormat, Run, TabAlignment, TabStop,
     Table, VertAlign,
@@ -65,6 +65,7 @@ fn build_paragraph_lines(
     runs: &[Run],
     seen_fonts: &HashMap<String, FontEntry>,
     max_width: f32,
+    first_line_hanging: f32,
 ) -> Vec<TextLine> {
     let mut lines: Vec<TextLine> = Vec::new();
     let mut current_chunks: Vec<WordChunk> = Vec::new();
@@ -90,8 +91,8 @@ fn build_paragraph_lines(
                 .map(|&b| entry.widths_1000[(b - 32) as usize] * eff_fs / 1000.0)
                 .sum();
 
-            let need_space = !current_chunks.is_empty()
-                && (i > 0 || starts_with_ws || prev_ended_with_ws);
+            let need_space =
+                !current_chunks.is_empty() && (i > 0 || starts_with_ws || prev_ended_with_ws);
 
             // Use the space width from the run that owns the space character:
             // within a run (i > 0) or leading ws → this run's space_w;
@@ -108,7 +109,12 @@ fn build_paragraph_lines(
                 current_x
             };
 
-            if !current_chunks.is_empty() && proposed_x + ww > max_width {
+            let line_max = if lines.is_empty() {
+                max_width + first_line_hanging
+            } else {
+                max_width
+            };
+            if !current_chunks.is_empty() && proposed_x + ww > line_max {
                 lines.push(finish_line(&mut current_chunks));
                 current_x = 0.0;
             } else {
@@ -147,11 +153,7 @@ fn build_paragraph_lines(
     lines
 }
 
-fn find_next_tab_stop<'a>(
-    current_x: f32,
-    tab_stops: &'a [TabStop],
-    indent_left: f32,
-) -> TabStop {
+fn find_next_tab_stop(current_x: f32, tab_stops: &[TabStop], indent_left: f32) -> TabStop {
     let abs_x = current_x + indent_left;
     for stop in tab_stops {
         if stop.position > abs_x + 0.5 {
@@ -210,7 +212,10 @@ fn decimal_before_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) 
             chars_remaining = 0;
             s
         };
-        for &b in to_winansi_bytes(text_to_measure).iter().filter(|&&b| b >= 32) {
+        for &b in to_winansi_bytes(text_to_measure)
+            .iter()
+            .filter(|&&b| b >= 32)
+        {
             w += entry.widths_1000[(b - 32) as usize] * eff_fs / 1000.0;
         }
         if chars_remaining == 0 {
@@ -273,7 +278,7 @@ fn build_tabbed_line(
             };
 
             // Draw leader fill between end of previous text and start of aligned text
-            if let Some(_) = tab_before {
+            if tab_before.is_some() {
                 let abs_x = current_x + indent_left;
                 let leader = tab_stops
                     .iter()
@@ -293,33 +298,30 @@ fn build_tabbed_line(
                         let entry = seen_fonts.get(&key).expect("font registered");
                         let eff_fs = effective_font_size(run);
                         let leader_bytes = to_winansi_bytes(&leader_char.to_string());
-                        if let Some(&byte) = leader_bytes.first() {
-                            if byte >= 32 {
-                                let char_w =
-                                    entry.widths_1000[(byte - 32) as usize] * eff_fs / 1000.0;
-                                let leader_gap = seg_start - current_x;
-                                if char_w > 0.0 && leader_gap > char_w * 2.0 {
-                                    let count =
-                                        ((leader_gap - char_w) / char_w).floor() as usize;
-                                    if count > 0 {
-                                        let leader_text: String = std::iter::repeat(leader_char)
-                                            .take(count)
-                                            .collect();
-                                        let leader_w = count as f32 * char_w;
-                                        let leader_start = seg_start - leader_w;
-                                        all_chunks.push(WordChunk {
-                                            pdf_font: entry.pdf_name.clone(),
-                                            text: leader_text,
-                                            font_size: eff_fs,
-                                            color: run.color,
-                                            x_offset: leader_start,
-                                            width: leader_w,
-                                            underline: false,
-                                            strikethrough: false,
-                                            y_offset: 0.0,
-                                            hyperlink_url: None,
-                                        });
-                                    }
+                        if let Some(&byte) = leader_bytes.first()
+                            && byte >= 32
+                        {
+                            let char_w = entry.widths_1000[(byte - 32) as usize] * eff_fs / 1000.0;
+                            let leader_gap = seg_start - current_x;
+                            if char_w > 0.0 && leader_gap > char_w * 2.0 {
+                                let count = ((leader_gap - char_w) / char_w).floor() as usize;
+                                if count > 0 {
+                                    let leader_text: String =
+                                        std::iter::repeat_n(leader_char, count).collect();
+                                    let leader_w = count as f32 * char_w;
+                                    let leader_start = seg_start - leader_w;
+                                    all_chunks.push(WordChunk {
+                                        pdf_font: entry.pdf_name.clone(),
+                                        text: leader_text,
+                                        font_size: eff_fs,
+                                        color: run.color,
+                                        x_offset: leader_start,
+                                        width: leader_w,
+                                        underline: false,
+                                        strikethrough: false,
+                                        y_offset: 0.0,
+                                        hyperlink_url: None,
+                                    });
                                 }
                             }
                         }
@@ -345,7 +347,9 @@ fn build_tabbed_line(
                     .filter(|&&b| b >= 32)
                     .map(|&b| entry.widths_1000[(b - 32) as usize] * eff_fs / 1000.0)
                     .sum();
-                if !all_chunks.is_empty() && (i > 0 || prev_ws || run.text.starts_with(char::is_whitespace)) {
+                if !all_chunks.is_empty()
+                    && (i > 0 || prev_ws || run.text.starts_with(char::is_whitespace))
+                {
                     current_x += space_w;
                 }
                 all_chunks.push(WordChunk {
@@ -366,7 +370,10 @@ fn build_tabbed_line(
         }
     }
 
-    let total_width = all_chunks.last().map(|c| c.x_offset + c.width).unwrap_or(0.0);
+    let total_width = all_chunks
+        .last()
+        .map(|c| c.x_offset + c.width)
+        .unwrap_or(0.0);
     vec![TextLine {
         chunks: all_chunks,
         total_width,
@@ -386,6 +393,7 @@ fn render_paragraph_lines(
     total_line_count: usize,
     first_line_index: usize,
     links: &mut Vec<LinkAnnotation>,
+    first_line_hanging: f32,
 ) {
     let mut current_color: Option<[u8; 3]> = None;
 
@@ -398,14 +406,20 @@ fn render_paragraph_lines(
             && global_line_idx != last_line_idx
             && line.chunks.len() > 1;
 
+        let (eff_margin, eff_width) = if global_line_idx == 0 && first_line_hanging > 0.0 {
+            (margin_left - first_line_hanging, text_width + first_line_hanging)
+        } else {
+            (margin_left, text_width)
+        };
+
         let line_start_x = match alignment {
-            Alignment::Center => margin_left + (text_width - line.total_width) / 2.0,
-            Alignment::Right => margin_left + text_width - line.total_width,
-            Alignment::Left | Alignment::Justify => margin_left,
+            Alignment::Center => eff_margin + (eff_width - line.total_width) / 2.0,
+            Alignment::Right => eff_margin + eff_width - line.total_width,
+            Alignment::Left | Alignment::Justify => eff_margin,
         };
 
         let extra_per_gap = if is_justified {
-            (text_width - line.total_width) / (line.chunks.len() - 1) as f32
+            (eff_width - line.total_width) / (line.chunks.len() - 1) as f32
         } else {
             0.0
         };
@@ -442,18 +456,15 @@ fn render_paragraph_lines(
             if chunk.strikethrough {
                 let thick = (chunk.font_size * 0.05).max(0.5);
                 let st_y = y + chunk.font_size * 0.3;
-                content
-                    .rect(x, st_y, chunk.width, thick)
-                    .fill_nonzero();
+                content.rect(x, st_y, chunk.width, thick).fill_nonzero();
             }
 
             if let Some(ref url) = chunk.hyperlink_url {
                 let bottom = y - chunk.font_size * 0.2;
                 let top = y + chunk.font_size * 0.8;
-                let merged = links.last_mut().filter(|prev| {
-                    prev.url == *url
-                        && (prev.rect.y1 - bottom).abs() < 1.0
-                });
+                let merged = links
+                    .last_mut()
+                    .filter(|prev| prev.url == *url && (prev.rect.y1 - bottom).abs() < 1.0);
                 if let Some(prev) = merged {
                     prev.rect.x2 = x + chunk.width;
                 } else {
@@ -512,10 +523,7 @@ const TABLE_BORDER_WIDTH: f32 = 0.5;
 /// Auto-fit column widths so that the longest non-breakable word in each column
 /// fits within the cell (including padding). Columns that need more space grow;
 /// other columns shrink proportionally. Total width is preserved.
-fn auto_fit_columns(
-    table: &Table,
-    seen_fonts: &HashMap<String, FontEntry>,
-) -> Vec<f32> {
+fn auto_fit_columns(table: &Table, seen_fonts: &HashMap<String, FontEntry>) -> Vec<f32> {
     let ncols = table.col_widths.len();
     if ncols == 0 {
         return table.col_widths.clone();
@@ -625,7 +633,7 @@ fn compute_row_layouts(
                         }
 
                         if !para.runs.is_empty() {
-                            let lines = build_paragraph_lines(&para.runs, seen_fonts, cell_text_w);
+                            let lines = build_paragraph_lines(&para.runs, seen_fonts, cell_text_w, 0.0);
                             total_h += lines.len() as f32 * line_h;
                             all_lines.extend(lines);
                         }
@@ -690,6 +698,20 @@ fn render_table(
             let text_x = cell_x + cm.left;
             let text_w = (col_w - cm.left - cm.right).max(0.0);
 
+            if let Some([r, g, b]) = cell.shading {
+                let inset = TABLE_BORDER_WIDTH / 2.0;
+                content.save_state();
+                content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+                content.rect(
+                    cell_x + inset,
+                    row_bottom + inset,
+                    col_w - 2.0 * inset,
+                    row_h - 2.0 * inset,
+                );
+                content.fill_nonzero();
+                content.restore_state();
+            }
+
             if !lines.is_empty() && !lines.iter().all(|l| l.chunks.is_empty()) {
                 let first_run = cell.paragraphs.first().and_then(|p| p.runs.first());
                 let ascender_ratio = first_run
@@ -715,6 +737,7 @@ fn render_table(
                     lines.len(),
                     0,
                     &mut Vec::new(),
+                    0.0,
                 );
             }
 
@@ -772,50 +795,23 @@ fn render_header_footer(
             continue;
         }
 
-        // Substitute field codes with actual values
         let substituted_runs: Vec<Run> = para
             .runs
             .iter()
             .map(|run| {
+                let mut r = run.clone();
+                r.field_code = None;
                 if let Some(ref fc) = run.field_code {
-                    let text = match fc {
+                    r.text = match fc {
                         FieldCode::Page => page_num.to_string(),
                         FieldCode::NumPages => total_pages.to_string(),
                     };
-                    Run {
-                        text,
-                        font_size: run.font_size,
-                        font_name: run.font_name.clone(),
-                        bold: run.bold,
-                        italic: run.italic,
-                        underline: run.underline,
-                        strikethrough: run.strikethrough,
-                        color: run.color,
-                        is_tab: false,
-                        vertical_align: run.vertical_align,
-                        field_code: None,
-                        hyperlink_url: run.hyperlink_url.clone(),
-                    }
-                } else {
-                    Run {
-                        text: run.text.clone(),
-                        font_size: run.font_size,
-                        font_name: run.font_name.clone(),
-                        bold: run.bold,
-                        italic: run.italic,
-                        underline: run.underline,
-                        strikethrough: run.strikethrough,
-                        color: run.color,
-                        is_tab: run.is_tab,
-                        vertical_align: run.vertical_align,
-                        field_code: None,
-                        hyperlink_url: run.hyperlink_url.clone(),
-                    }
                 }
+                r
             })
             .collect();
 
-        let lines = build_paragraph_lines(&substituted_runs, seen_fonts, text_width);
+        let lines = build_paragraph_lines(&substituted_runs, seen_fonts, text_width, 0.0);
 
         let (font_size, _, tallest_ar) = tallest_run_metrics(&substituted_runs, seen_fonts);
         let ascender_ratio = tallest_ar.unwrap_or(0.75);
@@ -842,6 +838,7 @@ fn render_header_footer(
             lines.len(),
             0,
             &mut Vec::new(),
+            0.0,
         );
     }
 }
@@ -968,14 +965,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             .pixels()
                             .flat_map(|p| [p.0[0], p.0[1], p.0[2]])
                             .collect();
-                        let compressed_rgb = miniz_oxide::deflate::compress_to_vec_zlib(
-                            &rgb_data,
-                            6,
-                        );
+                        let compressed_rgb =
+                            miniz_oxide::deflate::compress_to_vec_zlib(&rgb_data, 6);
 
                         let smask_ref = if has_alpha {
-                            let alpha_data: Vec<u8> =
-                                rgba.pixels().map(|p| p.0[3]).collect();
+                            let alpha_data: Vec<u8> = rgba.pixels().map(|p| p.0[3]).collect();
                             let compressed_alpha =
                                 miniz_oxide::deflate::compress_to_vec_zlib(&alpha_data, 6);
                             let mask_ref = alloc();
@@ -1034,8 +1028,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 if para.page_break_before {
                     let at_top = (slot_top - (doc.page_height - doc.margin_top)).abs() < 1.0;
                     if !at_top {
-                        all_contents
-                            .push(std::mem::replace(&mut current_content, Content::new()));
+                        all_contents.push(std::mem::replace(&mut current_content, Content::new()));
                         all_page_links.push(std::mem::take(&mut current_page_links));
                         slot_top = doc.page_height - doc.margin_top;
                     }
@@ -1079,20 +1072,22 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                 let para_text_x = doc.margin_left + para.indent_left;
                 let para_text_width = (text_width - para.indent_left).max(1.0);
-                let label_x = doc.margin_left + (para.indent_left - para.indent_hanging).max(0.0);
+                let label_x = doc.margin_left + para.indent_left - para.indent_hanging;
+                // Only apply hanging first-line shift when there's no visible label;
+                // with a visible label, the hanging area is for the label only.
+                let text_hanging = if para.list_label.is_empty() {
+                    para.indent_hanging
+                } else {
+                    0.0
+                };
 
                 let has_tabs = para.runs.iter().any(|r| r.is_tab);
                 let lines = if para.image.is_some() || para.runs.is_empty() {
                     vec![]
                 } else if has_tabs {
-                    build_tabbed_line(
-                        &para.runs,
-                        &seen_fonts,
-                        &para.tab_stops,
-                        para.indent_left,
-                    )
+                    build_tabbed_line(&para.runs, &seen_fonts, &para.tab_stops, para.indent_left)
                 } else {
-                    build_paragraph_lines(&para.runs, &seen_fonts, para_text_width)
+                    build_paragraph_lines(&para.runs, &seen_fonts, para_text_width, text_hanging)
                 };
 
                 let content_h = if para.image.is_some() {
@@ -1111,15 +1106,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     let mut extra = 0.0;
                     let mut prev_sa = effective_space_after;
                     let mut i = block_idx + 1;
-                    loop {
-                        let Some(next) = adjacent_para(i) else { break };
+                    while let Some(next) = adjacent_para(i) {
                         let (nfs, nlhr, _) = tallest_run_metrics(&next.runs, &seen_fonts);
                         let next_inter = f32::max(prev_sa, next.space_before);
-                        let next_first_line_h = nlhr
-                            .map(|ratio| nfs * ratio)
-                            .unwrap_or(nfs * 1.2);
+                        let next_first_line_h = nlhr.map(|ratio| nfs * ratio).unwrap_or(nfs * 1.2);
                         if !next.keep_next {
-                            // Terminal paragraph: require 2 lines (orphan control)
                             let next_ls = next.line_spacing.unwrap_or(doc.line_spacing);
                             let next_line_h = nlhr
                                 .map(|ratio| nfs * ratio * next_ls)
@@ -1180,6 +1171,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             lines.len(),
                             0,
                             &mut current_page_links,
+                            text_hanging,
                         );
 
                         all_contents.push(std::mem::replace(&mut current_content, Content::new()));
@@ -1201,6 +1193,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             lines.len(),
                             lines_that_fit,
                             &mut current_page_links,
+                            text_hanging,
                         );
 
                         slot_top -= rest_content_h;
@@ -1227,11 +1220,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     if let Some(pdf_name) = image_pdf_names.get(&block_idx) {
                         let img = para.image.as_ref().unwrap();
                         let y_bottom = slot_top - img.display_height;
-                        let x = doc.margin_left + match para.alignment {
-                            Alignment::Center => (text_width - img.display_width).max(0.0) / 2.0,
-                            Alignment::Right => (text_width - img.display_width).max(0.0),
-                            _ => 0.0,
-                        };
+                        let x = doc.margin_left
+                            + match para.alignment {
+                                Alignment::Center => {
+                                    (text_width - img.display_width).max(0.0) / 2.0
+                                }
+                                Alignment::Right => (text_width - img.display_width).max(0.0),
+                                _ => 0.0,
+                            };
                         current_content.save_state();
                         current_content.transform([
                             img.display_width,
@@ -1276,6 +1272,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         lines.len(),
                         0,
                         &mut current_page_links,
+                        text_hanging,
                     );
                 }
 
@@ -1339,15 +1336,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 doc.header_default.as_ref()
             };
             if let Some(hf) = header {
-                render_header_footer(
-                    content,
-                    hf,
-                    &seen_fonts,
-                    doc,
-                    true,
-                    page_num,
-                    total_pages,
-                );
+                render_header_footer(content, hf, &seen_fonts, doc, true, page_num, total_pages);
             }
 
             // Footer
@@ -1357,15 +1346,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 doc.footer_default.as_ref()
             };
             if let Some(hf) = footer {
-                render_header_footer(
-                    content,
-                    hf,
-                    &seen_fonts,
-                    doc,
-                    false,
-                    page_num,
-                    total_pages,
-                );
+                render_header_footer(content, hf, &seen_fonts, doc, false, page_num, total_pages);
             }
         }
     }

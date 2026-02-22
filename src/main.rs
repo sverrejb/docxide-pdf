@@ -14,8 +14,15 @@ fn available_path(path: PathBuf) -> PathBuf {
     if !path.exists() {
         return path;
     }
-    let stem = path.file_stem().unwrap_or_default().to_string_lossy().to_string();
-    let ext = path.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+    let stem = path
+        .file_stem()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .to_string();
+    let ext = path
+        .extension()
+        .map(|e| format!(".{}", e.to_string_lossy()))
+        .unwrap_or_default();
     let parent = path.parent().unwrap_or(std::path::Path::new("."));
     let mut n = 2;
     loop {

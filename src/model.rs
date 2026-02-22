@@ -71,9 +71,9 @@ pub struct EmbeddedImage {
 
 #[derive(Clone)]
 pub struct BorderBottom {
-    pub width_pt: f32,     // line thickness in points
-    pub space_pt: f32,     // gap between text and border in points
-    pub color: [u8; 3],    // RGB
+    pub width_pt: f32,  // line thickness in points
+    pub space_pt: f32,  // gap between text and border in points
+    pub color: [u8; 3], // RGB
 }
 
 pub struct Paragraph {
@@ -95,6 +95,7 @@ pub struct Paragraph {
     pub extra_line_breaks: u32,
 }
 
+#[derive(Clone)]
 pub struct Run {
     pub text: String,
     pub font_size: f32,
@@ -134,7 +135,12 @@ pub struct CellMargins {
 
 impl Default for CellMargins {
     fn default() -> Self {
-        Self { top: 0.0, left: 5.4, bottom: 0.0, right: 5.4 }
+        Self {
+            top: 0.0,
+            left: 5.4,
+            bottom: 0.0,
+            right: 5.4,
+        }
     }
 }
 
@@ -153,6 +159,7 @@ pub struct TableCell {
     pub width: f32, // points
     pub paragraphs: Vec<Paragraph>,
     pub borders: CellBorders,
+    pub shading: Option<[u8; 3]>,
 }
 
 pub enum Block {

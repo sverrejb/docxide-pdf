@@ -8,8 +8,8 @@ use std::process::Command;
 use std::sync::OnceLock;
 use std::{fs, io};
 
-const SIMILARITY_THRESHOLD: f64 = 0.27;
-const SSIM_THRESHOLD: f64 = 0.54;
+const SIMILARITY_THRESHOLD: f64 = 0.29;
+const SSIM_THRESHOLD: f64 = 0.61;
 const MUTOOL_DPI: &str = "150";
 
 fn pdf_page_count(pdf: &Path) -> Result<usize, String> {
@@ -231,9 +231,7 @@ fn prepare_fixture(fixture_dir: &Path) -> Option<FixturePages> {
     let _ = fs::remove_dir_all(&output_base.join("diff"));
     let _ = fs::remove_dir_all(&output_base.join("comparison"));
 
-    if ref_screenshots_fresh(&reference_pdf, &reference_screenshots) {
-        println!("  {name}: reference screenshots cached");
-    } else {
+    if !ref_screenshots_fresh(&reference_pdf, &reference_screenshots) {
         let _ = fs::remove_dir_all(&reference_screenshots);
         if let Err(e) = screenshot_pdf(&reference_pdf, &reference_screenshots) {
             println!("  [ERROR] {name}: screenshot reference failed: {e}");
@@ -420,10 +418,7 @@ fn visual_comparison() {
                 .filter_map(|i| {
                     let img_ref = image::open(&fixture.ref_pages[i]).ok()?;
                     let img_gen = image::open(&fixture.gen_pages[i]).ok()?;
-                    let page_num = fixture.ref_pages[i]
-                        .file_stem()?
-                        .to_str()?
-                        .to_string();
+                    let page_num = fixture.ref_pages[i].file_stem()?.to_str()?.to_string();
 
                     let result = compare_and_diff(&img_ref, &img_gen).ok()?;
                     let jaccard = result.jaccard;
@@ -510,13 +505,7 @@ fn ssim_comparison() {
         common::log_csv(
             "ssim_results.csv",
             "timestamp,case,pages,avg_ssim",
-            &format!(
-                "{},{},{},{:.4}",
-                common::timestamp(),
-                name,
-                page_count,
-                avg
-            ),
+            &format!("{},{},{},{:.4}", common::timestamp(), name, page_count, avg),
         );
     }
 

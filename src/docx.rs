@@ -38,6 +38,15 @@ fn parse_hex_color(val: &str) -> Option<[u8; 3]> {
     Some([r, g, b])
 }
 
+/// Parse a WML boolean toggle element (e.g., w:b, w:i, w:strike).
+/// Present with no val or val != "0"/"false" means true.
+fn wml_bool(parent: roxmltree::Node, name: &str) -> Option<bool> {
+    wml(parent, name).map(|n| {
+        n.attribute((WML_NS, "val"))
+            .is_none_or(|v| v != "0" && v != "false")
+    })
+}
+
 fn wml<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
     node.children()
         .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(WML_NS))
@@ -136,10 +145,20 @@ struct CharacterStyle {
     color: Option<[u8; 3]>,
 }
 
+struct TableBordersDef {
+    top: bool,
+    bottom: bool,
+    left: bool,
+    right: bool,
+    inside_h: bool,
+    inside_v: bool,
+}
+
 struct StylesInfo {
     defaults: StyleDefaults,
     paragraph_styles: HashMap<String, ParagraphStyle>,
     character_styles: HashMap<String, CharacterStyle>,
+    table_border_styles: HashMap<String, TableBordersDef>,
 }
 
 fn parse_alignment(val: &str) -> Alignment {
@@ -155,21 +174,13 @@ fn parse_theme(zip: &mut zip::ZipArchive<std::fs::File>) -> ThemeFonts {
     let mut major = String::from("Aptos Display");
     let mut minor = String::from("Aptos");
 
-    let mut xml_content = String::new();
     let names: Vec<String> = zip.file_names().map(|s| s.to_string()).collect();
-    let Some(theme_name) = names
+    let theme_name = names
         .iter()
-        .find(|n| n.starts_with("word/theme/") && n.ends_with(".xml"))
-    else {
+        .find(|n| n.starts_with("word/theme/") && n.ends_with(".xml"));
+    let Some(xml_content) = theme_name.and_then(|name| read_zip_text(zip, name)) else {
         return ThemeFonts { major, minor };
     };
-    let theme_name = theme_name.clone();
-    let Ok(mut file) = zip.by_name(&theme_name) else {
-        return ThemeFonts { major, minor };
-    };
-    if file.read_to_string(&mut xml_content).is_err() {
-        return ThemeFonts { major, minor };
-    }
     let Ok(xml) = roxmltree::Document::parse(&xml_content) else {
         return ThemeFonts { major, minor };
     };
@@ -235,26 +246,20 @@ fn parse_styles(zip: &mut zip::ZipArchive<std::fs::File>, theme: &ThemeFonts) ->
     let mut paragraph_styles = HashMap::new();
     let mut character_styles = HashMap::new();
 
-    let mut xml_content = String::new();
-    let Ok(mut file) = zip.by_name("word/styles.xml") else {
+    let Some(xml_content) = read_zip_text(zip, "word/styles.xml") else {
         return StylesInfo {
             defaults,
             paragraph_styles,
             character_styles,
+            table_border_styles: HashMap::new(),
         };
     };
-    if file.read_to_string(&mut xml_content).is_err() {
-        return StylesInfo {
-            defaults,
-            paragraph_styles,
-            character_styles,
-        };
-    }
     let Ok(xml) = roxmltree::Document::parse(&xml_content) else {
         return StylesInfo {
             defaults,
             paragraph_styles,
             character_styles,
+            table_border_styles: HashMap::new(),
         };
     };
 
@@ -316,14 +321,8 @@ fn parse_styles(zip: &mut zip::ZipArchive<std::fs::File>, theme: &ThemeFonts) ->
             .and_then(|n| wml(n, "rFonts"))
             .map(|rfonts| resolve_font_from_node(rfonts, theme, &defaults.font_name));
 
-        let bold = rpr.and_then(|n| wml(n, "b")).map(|n| {
-            n.attribute((WML_NS, "val"))
-                .is_none_or(|v| v != "0" && v != "false")
-        });
-        let italic = rpr.and_then(|n| wml(n, "i")).map(|n| {
-            n.attribute((WML_NS, "val"))
-                .is_none_or(|v| v != "0" && v != "false")
-        });
+        let bold = rpr.and_then(|n| wml_bool(n, "b"));
+        let italic = rpr.and_then(|n| wml_bool(n, "i"));
 
         let color = rpr
             .and_then(|n| wml_attr(n, "color"))
@@ -388,21 +387,12 @@ fn parse_styles(zip: &mut zip::ZipArchive<std::fs::File>, theme: &ThemeFonts) ->
             .map(|hp| hp / 2.0);
         let font_name = wml(rpr, "rFonts")
             .map(|rfonts| resolve_font_from_node(rfonts, theme, &defaults.font_name));
-        let bold = wml(rpr, "b").map(|n| {
-            n.attribute((WML_NS, "val"))
-                .is_none_or(|v| v != "0" && v != "false")
-        });
-        let italic = wml(rpr, "i").map(|n| {
-            n.attribute((WML_NS, "val"))
-                .is_none_or(|v| v != "0" && v != "false")
-        });
+        let bold = wml_bool(rpr, "b");
+        let italic = wml_bool(rpr, "i");
         let underline = wml(rpr, "u")
             .and_then(|n| n.attribute((WML_NS, "val")))
             .map(|v| v != "none");
-        let strikethrough = wml(rpr, "strike").map(|n| {
-            n.attribute((WML_NS, "val"))
-                .is_none_or(|v| v != "0" && v != "false")
-        });
+        let strikethrough = wml_bool(rpr, "strike");
         let color = wml_attr(rpr, "color").and_then(parse_hex_color);
 
         character_styles.insert(
@@ -419,10 +409,46 @@ fn parse_styles(zip: &mut zip::ZipArchive<std::fs::File>, theme: &ThemeFonts) ->
         );
     }
 
+    let mut table_border_styles = HashMap::new();
+    for style_node in root.children() {
+        if style_node.tag_name().name() != "style"
+            || style_node.tag_name().namespace() != Some(WML_NS)
+        {
+            continue;
+        }
+        if style_node.attribute((WML_NS, "type")) != Some("table") {
+            continue;
+        }
+        let Some(style_id) = style_node.attribute((WML_NS, "styleId")) else {
+            continue;
+        };
+        if let Some(tbl_borders) =
+            wml(style_node, "tblPr").and_then(|pr| wml(pr, "tblBorders"))
+        {
+            let has = |name: &str| {
+                wml(tbl_borders, name)
+                    .map(|n| wml_attr(n, "val") != Some("nil") && wml_attr(n, "val") != Some("none"))
+                    .unwrap_or(false)
+            };
+            table_border_styles.insert(
+                style_id.to_string(),
+                TableBordersDef {
+                    top: has("top"),
+                    bottom: has("bottom"),
+                    left: has("left") || has("start"),
+                    right: has("right") || has("end"),
+                    inside_h: has("insideH"),
+                    inside_v: has("insideV"),
+                },
+            );
+        }
+    }
+
     StylesInfo {
         defaults,
         paragraph_styles,
         character_styles,
+        table_border_styles,
     }
 }
 
@@ -431,89 +457,68 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
     for id in ids {
         let mut chain: Vec<String> = Vec::new();
         let mut current = id.clone();
-        // Walk the basedOn chain collecting parent values
         loop {
             if chain.contains(&current) {
-                break; // cycle
+                break;
             }
             chain.push(current.clone());
-            let next = styles.get(&current).and_then(|s| s.based_on.clone());
-            match next {
+            match styles.get(&current).and_then(|s| s.based_on.clone()) {
                 Some(parent) => current = parent,
                 None => break,
             }
         }
-        // Apply inheritance from furthest ancestor down to the style itself
-        let mut inherited_font_name: Option<String> = None;
-        let mut inherited_font_size: Option<f32> = None;
-        let mut inherited_bold: Option<bool> = None;
-        let mut inherited_italic: Option<bool> = None;
-        let mut inherited_color: Option<[u8; 3]> = None;
-        let mut inherited_alignment: Option<Alignment> = None;
-        let mut inherited_space_before: Option<f32> = None;
-        let mut inherited_space_after: Option<f32> = None;
-        let mut inherited_line_spacing: Option<f32> = None;
+
+        // Walk ancestors from furthest to closest, accumulating inherited values.
+        // Each closer ancestor overrides the further one.
+        macro_rules! inherit {
+            ($field:ident, $inherited:expr, $s:expr) => {
+                if $s.$field.is_some() {
+                    $inherited = $s.$field.clone();
+                }
+            };
+        }
+
+        let mut inh = ParagraphStyle {
+            font_size: None,
+            font_name: None,
+            bold: None,
+            italic: None,
+            color: None,
+            space_before: None,
+            space_after: None,
+            alignment: None,
+            contextual_spacing: false,
+            keep_next: false,
+            line_spacing: None,
+            border_bottom_extra: 0.0,
+            border_bottom: None,
+            based_on: None,
+        };
 
         for ancestor_id in chain.iter().rev() {
             if let Some(s) = styles.get(ancestor_id) {
-                if s.font_name.is_some() {
-                    inherited_font_name = s.font_name.clone();
-                }
-                if s.font_size.is_some() {
-                    inherited_font_size = s.font_size;
-                }
-                if s.bold.is_some() {
-                    inherited_bold = s.bold;
-                }
-                if s.italic.is_some() {
-                    inherited_italic = s.italic;
-                }
-                if s.color.is_some() {
-                    inherited_color = s.color;
-                }
-                if s.alignment.is_some() {
-                    inherited_alignment = s.alignment;
-                }
-                if s.space_before.is_some() {
-                    inherited_space_before = s.space_before;
-                }
-                if s.space_after.is_some() {
-                    inherited_space_after = s.space_after;
-                }
-                if s.line_spacing.is_some() {
-                    inherited_line_spacing = s.line_spacing;
-                }
+                inherit!(font_name, inh.font_name, s);
+                inherit!(font_size, inh.font_size, s);
+                inherit!(bold, inh.bold, s);
+                inherit!(italic, inh.italic, s);
+                inherit!(color, inh.color, s);
+                inherit!(alignment, inh.alignment, s);
+                inherit!(space_before, inh.space_before, s);
+                inherit!(space_after, inh.space_after, s);
+                inherit!(line_spacing, inh.line_spacing, s);
             }
         }
 
         if let Some(s) = styles.get_mut(&id) {
-            if s.font_name.is_none() {
-                s.font_name = inherited_font_name;
-            }
-            if s.font_size.is_none() {
-                s.font_size = inherited_font_size;
-            }
-            if s.bold.is_none() {
-                s.bold = inherited_bold;
-            }
-            if s.italic.is_none() {
-                s.italic = inherited_italic;
-            }
-            if s.color.is_none() {
-                s.color = inherited_color;
-            }
-            if s.alignment.is_none() {
-                s.alignment = inherited_alignment;
-            }
-            if s.space_before.is_none() {
-                s.space_before = inherited_space_before;
-            }
-            if s.space_after.is_none() {
-                s.space_after = inherited_space_after;
-            }
-            if s.line_spacing.is_none() {
-                s.line_spacing = inherited_line_spacing;
-            }
+            s.font_name = s.font_name.take().or(inh.font_name);
+            s.font_size = s.font_size.or(inh.font_size);
+            s.bold = s.bold.or(inh.bold);
+            s.italic = s.italic.or(inh.italic);
+            s.color = s.color.or(inh.color);
+            s.alignment = s.alignment.or(inh.alignment);
+            s.space_before = s.space_before.or(inh.space_before);
+            s.space_after = s.space_after.or(inh.space_after);
+            s.line_spacing = s.line_spacing.or(inh.line_spacing);
         }
     }
 }
@@ -556,13 +561,9 @@ fn deobfuscate_font(data: &mut [u8], key: &[u8; 16]) {
 /// Parse word/_rels/fontTable.xml.rels to get relationship ID → target path mapping.
 fn parse_font_table_rels(zip: &mut zip::ZipArchive<std::fs::File>) -> HashMap<String, String> {
     let mut rels = HashMap::new();
-    let mut xml_content = String::new();
-    let Ok(mut file) = zip.by_name("word/_rels/fontTable.xml.rels") else {
+    let Some(xml_content) = read_zip_text(zip, "word/_rels/fontTable.xml.rels") else {
         return rels;
     };
-    if file.read_to_string(&mut xml_content).is_err() {
-        return rels;
-    }
     let Ok(xml) = roxmltree::Document::parse(&xml_content) else {
         return rels;
     };
@@ -590,17 +591,10 @@ fn parse_font_table(
 ) -> HashMap<(String, bool, bool), Vec<u8>> {
     let mut result = HashMap::new();
 
-    // Phase 1: parse XML to collect embed info (drops borrow on zip before phase 2)
     let embeds = {
-        let mut xml_content = String::new();
-        let Ok(mut file) = zip.by_name("word/fontTable.xml") else {
+        let Some(xml_content) = read_zip_text(zip, "word/fontTable.xml") else {
             return result;
         };
-        if file.read_to_string(&mut xml_content).is_err() {
-            return result;
-        }
-        drop(file);
-
         let Ok(xml) = roxmltree::Document::parse(&xml_content) else {
             return result;
         };
@@ -685,7 +679,10 @@ fn parse_font_table(
             info.italic,
             data.len()
         );
-        result.insert((info.font_name.to_lowercase(), info.bold, info.italic), data);
+        result.insert(
+            (info.font_name.to_lowercase(), info.bold, info.italic),
+            data,
+        );
     }
 
     result
@@ -695,19 +692,12 @@ fn parse_numbering(zip: &mut zip::ZipArchive<std::fs::File>) -> NumberingInfo {
     let mut abstract_nums: HashMap<String, HashMap<u8, LevelDef>> = HashMap::new();
     let mut num_to_abstract: HashMap<String, String> = HashMap::new();
 
-    let mut xml_content = String::new();
-    let Ok(mut file) = zip.by_name("word/numbering.xml") else {
+    let Some(xml_content) = read_zip_text(zip, "word/numbering.xml") else {
         return NumberingInfo {
             abstract_nums,
             num_to_abstract,
         };
     };
-    if file.read_to_string(&mut xml_content).is_err() {
-        return NumberingInfo {
-            abstract_nums,
-            num_to_abstract,
-        };
-    }
     let Ok(xml) = roxmltree::Document::parse(&xml_content) else {
         return NumberingInfo {
             abstract_nums,
@@ -890,38 +880,26 @@ fn parse_runs(
             .or_else(|| char_style.and_then(|cs| cs.font_name.clone()))
             .unwrap_or_else(|| style_font_name.clone());
 
-        let bold = match rpr.and_then(|n| wml(n, "b")) {
-            Some(n) => n
-                .attribute((WML_NS, "val"))
-                .is_none_or(|v| v != "0" && v != "false"),
-            None => char_style
-                .and_then(|cs| cs.bold)
-                .unwrap_or(style_bold),
-        };
-        let italic = match rpr.and_then(|n| wml(n, "i")) {
-            Some(n) => n
-                .attribute((WML_NS, "val"))
-                .is_none_or(|v| v != "0" && v != "false"),
-            None => char_style
-                .and_then(|cs| cs.italic)
-                .unwrap_or(style_italic),
-        };
-        let underline = match rpr.and_then(|n| wml(n, "u")) {
-            Some(n) => n
-                .attribute((WML_NS, "val"))
-                .is_some_and(|v| v != "none"),
-            None => char_style
-                .and_then(|cs| cs.underline)
-                .unwrap_or(false),
-        };
-        let strikethrough = match rpr.and_then(|n| wml(n, "strike")) {
-            Some(n) => n
-                .attribute((WML_NS, "val"))
-                .is_none_or(|v| v != "0" && v != "false"),
-            None => char_style
-                .and_then(|cs| cs.strikethrough)
-                .unwrap_or(false),
-        };
+        let bold = rpr
+            .and_then(|n| wml_bool(n, "b"))
+            .or_else(|| char_style.and_then(|cs| cs.bold))
+            .unwrap_or(style_bold);
+        let italic = rpr
+            .and_then(|n| wml_bool(n, "i"))
+            .or_else(|| char_style.and_then(|cs| cs.italic))
+            .unwrap_or(style_italic);
+        let underline = rpr
+            .and_then(|n| {
+                wml(n, "u")
+                    .and_then(|u| u.attribute((WML_NS, "val")))
+                    .map(|v| v != "none")
+            })
+            .or_else(|| char_style.and_then(|cs| cs.underline))
+            .unwrap_or(false);
+        let strikethrough = rpr
+            .and_then(|n| wml_bool(n, "strike"))
+            .or_else(|| char_style.and_then(|cs| cs.strikethrough))
+            .unwrap_or(false);
 
         let color = rpr
             .and_then(|n| wml_attr(n, "color"))
@@ -1074,13 +1052,9 @@ fn parse_runs(
         }
     }
 
-    // Also check for w:pageBreakBefore in paragraph properties
     if ppr
-        .and_then(|ppr| wml(ppr, "pageBreakBefore"))
-        .is_some_and(|n| {
-            n.attribute((WML_NS, "val"))
-                .is_none_or(|v| v != "0" && v != "false")
-        })
+        .and_then(|ppr| wml_bool(ppr, "pageBreakBefore"))
+        .unwrap_or(false)
     {
         has_page_break = true;
     }
@@ -1302,23 +1276,44 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                 let cell_margins = tbl_pr
                     .and_then(|pr| wml(pr, "tblCellMar"))
                     .map(|mar| CellMargins {
-                        top: wml(mar, "top").and_then(|n| twips_attr(n, "w")).unwrap_or(0.0),
-                        left: wml(mar, "left").or_else(|| wml(mar, "start"))
-                            .and_then(|n| twips_attr(n, "w")).unwrap_or(5.4),
-                        bottom: wml(mar, "bottom").and_then(|n| twips_attr(n, "w")).unwrap_or(0.0),
-                        right: wml(mar, "right").or_else(|| wml(mar, "end"))
-                            .and_then(|n| twips_attr(n, "w")).unwrap_or(5.4),
+                        top: wml(mar, "top")
+                            .and_then(|n| twips_attr(n, "w"))
+                            .unwrap_or(0.0),
+                        left: wml(mar, "left")
+                            .or_else(|| wml(mar, "start"))
+                            .and_then(|n| twips_attr(n, "w"))
+                            .unwrap_or(5.4),
+                        bottom: wml(mar, "bottom")
+                            .and_then(|n| twips_attr(n, "w"))
+                            .unwrap_or(0.0),
+                        right: wml(mar, "right")
+                            .or_else(|| wml(mar, "end"))
+                            .and_then(|n| twips_attr(n, "w"))
+                            .unwrap_or(5.4),
                     })
                     .unwrap_or_default();
 
+                let tbl_style_borders = tbl_pr
+                    .and_then(|pr| wml_attr(pr, "tblStyle"))
+                    .and_then(|id| styles.table_border_styles.get(id));
+
+                let tbl_rows: Vec<_> = node
+                    .children()
+                    .filter(|n| {
+                        n.tag_name().name() == "tr"
+                            && n.tag_name().namespace() == Some(WML_NS)
+                    })
+                    .collect();
+                let num_rows = tbl_rows.len();
+                let num_cols = col_widths.len();
+
                 let mut rows = Vec::new();
-                for tr in node.children().filter(|n| {
-                    n.tag_name().name() == "tr" && n.tag_name().namespace() == Some(WML_NS)
-                }) {
+                for (ri, tr) in tbl_rows.iter().enumerate() {
                     let mut cells = Vec::new();
                     for tc in tr.children().filter(|n| {
                         n.tag_name().name() == "tc" && n.tag_name().namespace() == Some(WML_NS)
                     }) {
+                        let ci = cells.len();
                         let tc_pr = wml(tc, "tcPr");
                         let cell_width = tc_pr
                             .and_then(|pr| wml(pr, "tcW"))
@@ -1342,7 +1337,34 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                                     right: is_border("right") || is_border("end"),
                                 }
                             })
-                            .unwrap_or_default();
+                            .unwrap_or_else(|| {
+                                if let Some(tb) = tbl_style_borders {
+                                    CellBorders {
+                                        top: if ri == 0 { tb.top } else { tb.inside_h },
+                                        bottom: if ri == num_rows - 1 { tb.bottom } else { tb.inside_h },
+                                        left: if ci == 0 { tb.left } else { tb.inside_v },
+                                        right: if ci + 1 >= num_cols { tb.right } else { tb.inside_v },
+                                    }
+                                } else {
+                                    CellBorders::default()
+                                }
+                            });
+
+                        let shading = tc_pr
+                            .and_then(|pr| wml(pr, "shd"))
+                            .and_then(|shd| shd.attribute((WML_NS, "fill")))
+                            .filter(|f| *f != "auto" && *f != "none")
+                            .and_then(|hex| {
+                                if hex.len() == 6 {
+                                    Some([
+                                        u8::from_str_radix(&hex[0..2], 16).ok()?,
+                                        u8::from_str_radix(&hex[2..4], 16).ok()?,
+                                        u8::from_str_radix(&hex[4..6], 16).ok()?,
+                                    ])
+                                } else {
+                                    None
+                                }
+                            });
 
                         let mut cell_paras = Vec::new();
                         for p in tc.children().filter(|n| {
@@ -1391,11 +1413,17 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                             width: cell_width,
                             paragraphs: cell_paras,
                             borders,
+                            shading,
                         });
                     }
                     rows.push(TableRow { cells });
                 }
-                blocks.push(Block::Table(Table { col_widths, rows, table_indent, cell_margins }));
+                blocks.push(Block::Table(Table {
+                    col_widths,
+                    rows,
+                    table_indent,
+                    cell_margins,
+                }));
             }
             "p" => {
                 let ppr = wml(node, "pPr");
@@ -1564,13 +1592,9 @@ const REL_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/rela
 
 fn parse_relationships(zip: &mut zip::ZipArchive<std::fs::File>) -> HashMap<String, String> {
     let mut rels = HashMap::new();
-    let mut xml_content = String::new();
-    let Ok(mut file) = zip.by_name("word/_rels/document.xml.rels") else {
+    let Some(xml_content) = read_zip_text(zip, "word/_rels/document.xml.rels") else {
         return rels;
     };
-    if file.read_to_string(&mut xml_content).is_err() {
-        return rels;
-    }
     let Ok(xml) = roxmltree::Document::parse(&xml_content) else {
         return rels;
     };
@@ -1608,11 +1632,7 @@ fn image_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat)> {
     }
 
     // PNG: starts with 89 50 4E 47, dimensions in IHDR chunk at bytes 16-23
-    if data.len() >= 24
-        && data[0] == 0x89
-        && data[1] == 0x50
-        && data[2] == 0x4E
-        && data[3] == 0x47
+    if data.len() >= 24 && data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47
     {
         let width = u32::from_be_bytes([data[16], data[17], data[18], data[19]]);
         let height = u32::from_be_bytes([data[20], data[21], data[22], data[23]]);

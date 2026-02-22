@@ -82,10 +82,7 @@ fn font_directories() -> Vec<PathBuf> {
 
     #[cfg(target_os = "linux")]
     {
-        dirs.extend([
-            "/usr/share/fonts".into(),
-            "/usr/local/share/fonts".into(),
-        ]);
+        dirs.extend(["/usr/share/fonts".into(), "/usr/local/share/fonts".into()]);
         if let Ok(home) = std::env::var("HOME") {
             dirs.push(PathBuf::from(home).join(".local/share/fonts"));
         }
@@ -132,7 +129,11 @@ fn cache_path() -> Option<PathBuf> {
         std::env::var("XDG_CACHE_HOME")
             .ok()
             .map(PathBuf::from)
-            .or_else(|| std::env::var("HOME").ok().map(|h| PathBuf::from(h).join(".cache")))
+            .or_else(|| {
+                std::env::var("HOME")
+                    .ok()
+                    .map(|h| PathBuf::from(h).join(".cache"))
+            })
             .map(|d| d.join("docxside-pdf"))
     };
     dir.map(|d| d.join("font-index.tsv"))
@@ -235,6 +236,22 @@ fn dir_mtime(path: &std::path::Path) -> i64 {
         .unwrap_or(0)
 }
 
+fn is_font_file(path: &std::path::Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|e| e.to_str())
+            .map(|e| e.to_ascii_lowercase())
+            .as_deref(),
+        Some("ttf" | "otf" | "ttc")
+    )
+}
+
+fn is_font_collection(path: &std::path::Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("ttc"))
+}
+
 fn scan_font_dirs() -> FontLookup {
     let t0 = std::time::Instant::now();
     let mut index = FontLookup::new();
@@ -276,13 +293,8 @@ fn scan_font_dirs() -> FontLookup {
             let path = entry.path();
             if path.is_dir() {
                 subdirs.push(path);
-            } else {
-                match path.extension().and_then(|e| e.to_str()) {
-                    Some("ttf" | "otf" | "TTF" | "OTF" | "ttc" | "TTC") => {
-                        font_files.push(path);
-                    }
-                    _ => {}
-                }
+            } else if is_font_file(&path) {
+                font_files.push(path);
             }
         }
         stack.extend(subdirs);
@@ -293,37 +305,36 @@ fn scan_font_dirs() -> FontLookup {
 
         let current_mtime = dir_mtime(&dir);
 
-        // If directory mtime matches cache, replay all cached file entries
-        if let Some(&cached_mtime) = cache.dir_mtimes.get(&dir) {
-            if cached_mtime == current_mtime {
-                dirs_cached += 1;
-                new_cache.dir_mtimes.insert(dir.clone(), current_mtime);
-                for file_path in &font_files {
-                    if let Some(cached_file) = cache.files.get(file_path) {
-                        for face in &cached_file.faces {
-                            index
-                                .entry((face.family.to_lowercase(), face.bold, face.italic))
-                                .or_insert((file_path.clone(), face.face_index));
-                        }
-                        new_cache.files.insert(
-                            file_path.clone(),
-                            CachedFile {
-                                faces: cached_file
-                                    .faces
-                                    .iter()
-                                    .map(|f| CachedFace {
-                                        family: f.family.clone(),
-                                        bold: f.bold,
-                                        italic: f.italic,
-                                        face_index: f.face_index,
-                                    })
-                                    .collect(),
-                            },
-                        );
+        if let Some(&cached_mtime) = cache.dir_mtimes.get(&dir)
+            && cached_mtime == current_mtime
+        {
+            dirs_cached += 1;
+            new_cache.dir_mtimes.insert(dir.clone(), current_mtime);
+            for file_path in &font_files {
+                if let Some(cached_file) = cache.files.get(file_path) {
+                    for face in &cached_file.faces {
+                        index
+                            .entry((face.family.to_lowercase(), face.bold, face.italic))
+                            .or_insert((file_path.clone(), face.face_index));
                     }
+                    new_cache.files.insert(
+                        file_path.clone(),
+                        CachedFile {
+                            faces: cached_file
+                                .faces
+                                .iter()
+                                .map(|f| CachedFace {
+                                    family: f.family.clone(),
+                                    bold: f.bold,
+                                    italic: f.italic,
+                                    face_index: f.face_index,
+                                })
+                                .collect(),
+                        },
+                    );
                 }
-                continue;
             }
+            continue;
         }
 
         // Directory changed — scan all font files in it
@@ -337,11 +348,7 @@ fn scan_font_dirs() -> FontLookup {
             let Ok(data) = (unsafe { Mmap::map(&file) }) else {
                 continue;
             };
-            let is_collection = matches!(
-                file_path.extension().and_then(|e| e.to_str()),
-                Some("ttc" | "TTC")
-            );
-            let face_count = if is_collection {
+            let face_count = if is_font_collection(&file_path) {
                 ttf_parser::fonts_in_collection(&data).unwrap_or(1)
             } else {
                 1

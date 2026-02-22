@@ -50,7 +50,9 @@
       "Bash(grep sample100:*)",
       "Bash(DOCXSIDE_NO_FONT_CACHE=1 cargo test:*)",
       "Bash(head:*)",
-      "Bash(tail:*)"
+      "Bash(tail:*)",
+      "Bash(DOCXSIDE_CASE=case6 cargo test:)",
+      "Bash(DOCXSIDE_CASE=case6 cargo test:*)"
     ]
   }
 }
