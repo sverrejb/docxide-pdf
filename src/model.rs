@@ -117,12 +117,53 @@ pub enum FieldCode {
     NumPages,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum VMerge {
+    None,
+    Restart,
+    Continue,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CellVAlign {
+    Top,
+    Center,
+    Bottom,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct CellBorder {
+    pub present: bool,
+    pub color: Option<[u8; 3]>,
+    pub width: f32,
+}
+
+impl Default for CellBorder {
+    fn default() -> Self {
+        Self {
+            present: false,
+            color: None,
+            width: 0.5,
+        }
+    }
+}
+
+impl CellBorder {
+    pub fn visible(color: Option<[u8; 3]>, width: f32) -> Self {
+        Self {
+            present: true,
+            color,
+            width,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CellBorders {
-    pub top: bool,
-    pub bottom: bool,
-    pub left: bool,
-    pub right: bool,
+    pub top: CellBorder,
+    pub bottom: CellBorder,
+    pub left: CellBorder,
+    pub right: CellBorder,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -153,6 +194,8 @@ pub struct Table {
 
 pub struct TableRow {
     pub cells: Vec<TableCell>,
+    pub height: Option<f32>,
+    pub height_exact: bool,
 }
 
 pub struct TableCell {
@@ -160,6 +203,9 @@ pub struct TableCell {
     pub paragraphs: Vec<Paragraph>,
     pub borders: CellBorders,
     pub shading: Option<[u8; 3]>,
+    pub grid_span: u16,
+    pub v_merge: VMerge,
+    pub v_align: CellVAlign,
 }
 
 pub enum Block {

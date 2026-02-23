@@ -12,7 +12,7 @@ A Rust library and CLI tool for converting DOCX files to PDF, with the goal of m
 
 **Fast:** Typical conversions complete in under 100ms.
 
-## Agent disclaimer 🤖
+## AI useage disclaimer 🤖
 
 While the idea, architecture, testing strategy and validation of output are all human, the vast majority of the code as of now is written by Claude Opus 4.6 with access to the PDF specification (ISO-32000) and the Office Open XML File Formats specification (ECMA-376).
 
@@ -194,7 +194,11 @@ cargo run --manifest-path tools/Cargo.toml --bin case-diff -- case1
 
 ## Contributing
 
-Pull requests are welcome! If you have a `.docx` file that produces bad output, that's especially interesting — feel free to open an issue or PR with the file included.
+Pull requests are welcome!
+
+### Got a weird DOCX?
+
+If you have a `.docx` file that produces ugly, broken, or just plain wrong output, send it to me! Real-world documents with surprising formatting are the best way to improve the converter. Open an issue or PR with the file included and I will try to make it work.
 
 ## License
 

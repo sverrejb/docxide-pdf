@@ -8,7 +8,7 @@ use std::process::Command;
 use std::sync::OnceLock;
 use std::{fs, io};
 
-const SIMILARITY_THRESHOLD: f64 = 0.29;
+const SIMILARITY_THRESHOLD: f64 = 0.20;
 const SSIM_THRESHOLD: f64 = 0.61;
 const MUTOOL_DPI: &str = "150";
 

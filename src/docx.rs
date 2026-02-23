@@ -4,8 +4,9 @@ use std::path::Path;
 
 use crate::error::Error;
 use crate::model::{
-    Alignment, Block, CellBorders, CellMargins, Document, EmbeddedImage, FieldCode, HeaderFooter,
-    ImageFormat, Paragraph, Run, TabAlignment, TabStop, Table, TableCell, TableRow, VertAlign,
+    Alignment, Block, CellBorder, CellBorders, CellMargins, CellVAlign, Document, EmbeddedImage,
+    FieldCode, HeaderFooter, ImageFormat, Paragraph, Run, TabAlignment, TabStop, Table, TableCell,
+    TableRow, VMerge, VertAlign,
 };
 
 struct LevelDef {
@@ -146,12 +147,12 @@ struct CharacterStyle {
 }
 
 struct TableBordersDef {
-    top: bool,
-    bottom: bool,
-    left: bool,
-    right: bool,
-    inside_h: bool,
-    inside_v: bool,
+    top: CellBorder,
+    bottom: CellBorder,
+    left: CellBorder,
+    right: CellBorder,
+    inside_h: CellBorder,
+    inside_v: CellBorder,
 }
 
 struct StylesInfo {
@@ -425,20 +426,37 @@ fn parse_styles(zip: &mut zip::ZipArchive<std::fs::File>, theme: &ThemeFonts) ->
         if let Some(tbl_borders) =
             wml(style_node, "tblPr").and_then(|pr| wml(pr, "tblBorders"))
         {
-            let has = |name: &str| {
-                wml(tbl_borders, name)
-                    .map(|n| wml_attr(n, "val") != Some("nil") && wml_attr(n, "val") != Some("none"))
-                    .unwrap_or(false)
+            let parse_bdr = |name: &str| -> CellBorder {
+                let Some(n) = wml(tbl_borders, name) else {
+                    return CellBorder::default();
+                };
+                let val = n.attribute((WML_NS, "val")).unwrap_or("none");
+                if val == "nil" || val == "none" {
+                    return CellBorder::default();
+                }
+                let width = n
+                    .attribute((WML_NS, "sz"))
+                    .and_then(|v| v.parse::<f32>().ok())
+                    .map(|v| v / 8.0)
+                    .unwrap_or(0.5);
+                let color = n
+                    .attribute((WML_NS, "color"))
+                    .and_then(parse_hex_color);
+                CellBorder::visible(color, width)
             };
+            let left = parse_bdr("left");
+            let left = if left.present { left } else { parse_bdr("start") };
+            let right = parse_bdr("right");
+            let right = if right.present { right } else { parse_bdr("end") };
             table_border_styles.insert(
                 style_id.to_string(),
                 TableBordersDef {
-                    top: has("top"),
-                    bottom: has("bottom"),
-                    left: has("left") || has("start"),
-                    right: has("right") || has("end"),
-                    inside_h: has("insideH"),
-                    inside_v: has("insideV"),
+                    top: parse_bdr("top"),
+                    bottom: parse_bdr("bottom"),
+                    left,
+                    right,
+                    inside_h: parse_bdr("insideH"),
+                    inside_v: parse_bdr("insideV"),
                 },
             );
         }
@@ -1307,48 +1325,107 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                 let num_rows = tbl_rows.len();
                 let num_cols = col_widths.len();
 
+                let parse_cell_border = |bdr_node: roxmltree::Node, name: &str| -> CellBorder {
+                    let Some(n) = wml(bdr_node, name) else {
+                        return CellBorder::default();
+                    };
+                    let val = n.attribute((WML_NS, "val")).unwrap_or("none");
+                    if val == "nil" || val == "none" {
+                        return CellBorder::default();
+                    }
+                    let width = n
+                        .attribute((WML_NS, "sz"))
+                        .and_then(|v| v.parse::<f32>().ok())
+                        .map(|v| v / 8.0)
+                        .unwrap_or(0.5);
+                    let color = n
+                        .attribute((WML_NS, "color"))
+                        .and_then(parse_hex_color);
+                    CellBorder::visible(color, width)
+                };
+
                 let mut rows = Vec::new();
                 for (ri, tr) in tbl_rows.iter().enumerate() {
+                    let tr_pr = wml(*tr, "trPr");
+                    let (row_height, height_exact) = tr_pr
+                        .and_then(|pr| wml(pr, "trHeight"))
+                        .map(|h| {
+                            let val = h
+                                .attribute((WML_NS, "val"))
+                                .and_then(|v| v.parse::<f32>().ok())
+                                .map(twips_to_pts);
+                            let exact = h.attribute((WML_NS, "hRule")) == Some("exact");
+                            (val, exact)
+                        })
+                        .unwrap_or((None, false));
+
                     let mut cells = Vec::new();
+                    let mut grid_col = 0usize;
                     for tc in tr.children().filter(|n| {
                         n.tag_name().name() == "tc" && n.tag_name().namespace() == Some(WML_NS)
                     }) {
-                        let ci = cells.len();
+                        let ci = grid_col;
                         let tc_pr = wml(tc, "tcPr");
                         let cell_width = tc_pr
                             .and_then(|pr| wml(pr, "tcW"))
                             .and_then(|w| twips_attr(w, "w"))
                             .unwrap_or_else(|| {
-                                col_widths.get(cells.len()).copied().unwrap_or(72.0)
+                                col_widths.get(ci).copied().unwrap_or(72.0)
                             });
+
+                        let grid_span = tc_pr
+                            .and_then(|pr| wml(pr, "gridSpan"))
+                            .and_then(|n| n.attribute((WML_NS, "val")))
+                            .and_then(|v| v.parse::<u16>().ok())
+                            .unwrap_or(1);
+
+                        let v_merge = tc_pr
+                            .and_then(|pr| wml(pr, "vMerge"))
+                            .map(|n| {
+                                match n.attribute((WML_NS, "val")) {
+                                    Some("restart") => VMerge::Restart,
+                                    _ => VMerge::Continue,
+                                }
+                            })
+                            .unwrap_or(VMerge::None);
+
+                        let v_align = tc_pr
+                            .and_then(|pr| wml(pr, "vAlign"))
+                            .and_then(|n| n.attribute((WML_NS, "val")))
+                            .map(|v| match v {
+                                "center" => CellVAlign::Center,
+                                "bottom" => CellVAlign::Bottom,
+                                _ => CellVAlign::Top,
+                            })
+                            .unwrap_or(CellVAlign::Top);
+
+                        let span_end = ci + grid_span as usize;
+
+                        let style_borders = tbl_style_borders.map(|tb| CellBorders {
+                            top: if ri == 0 { tb.top } else { tb.inside_h },
+                            bottom: if ri == num_rows - 1 { tb.bottom } else { tb.inside_h },
+                            left: if ci == 0 { tb.left } else { tb.inside_v },
+                            right: if span_end >= num_cols { tb.right } else { tb.inside_v },
+                        });
 
                         let borders = tc_pr
                             .and_then(|pr| wml(pr, "tcBorders"))
                             .map(|bdr| {
-                                let is_border = |name: &str| {
-                                    wml(bdr, name)
-                                        .map(|n| wml_attr(n, "val") != Some("nil"))
-                                        .unwrap_or(false)
-                                };
+                                let fallback = style_borders.unwrap_or_default();
+                                let top = parse_cell_border(bdr, "top");
+                                let bottom = parse_cell_border(bdr, "bottom");
+                                let left = parse_cell_border(bdr, "left");
+                                let left = if left.present { left } else { parse_cell_border(bdr, "start") };
+                                let right = parse_cell_border(bdr, "right");
+                                let right = if right.present { right } else { parse_cell_border(bdr, "end") };
                                 CellBorders {
-                                    top: is_border("top"),
-                                    bottom: is_border("bottom"),
-                                    left: is_border("left") || is_border("start"),
-                                    right: is_border("right") || is_border("end"),
+                                    top: if top.present { top } else { fallback.top },
+                                    bottom: if bottom.present { bottom } else { fallback.bottom },
+                                    left: if left.present { left } else { fallback.left },
+                                    right: if right.present { right } else { fallback.right },
                                 }
                             })
-                            .unwrap_or_else(|| {
-                                if let Some(tb) = tbl_style_borders {
-                                    CellBorders {
-                                        top: if ri == 0 { tb.top } else { tb.inside_h },
-                                        bottom: if ri == num_rows - 1 { tb.bottom } else { tb.inside_h },
-                                        left: if ci == 0 { tb.left } else { tb.inside_v },
-                                        right: if ci + 1 >= num_cols { tb.right } else { tb.inside_v },
-                                    }
-                                } else {
-                                    CellBorders::default()
-                                }
-                            });
+                            .unwrap_or_else(|| style_borders.unwrap_or_default());
 
                         let shading = tc_pr
                             .and_then(|pr| wml(pr, "shd"))
@@ -1414,9 +1491,17 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                             paragraphs: cell_paras,
                             borders,
                             shading,
+                            grid_span,
+                            v_merge,
+                            v_align,
                         });
+                        grid_col += grid_span as usize;
                     }
-                    rows.push(TableRow { cells });
+                    rows.push(TableRow {
+                        cells,
+                        height: row_height,
+                        height_exact,
+                    });
                 }
                 blocks.push(Block::Table(Table {
                     col_widths,
