@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str};
 
 use crate::error::Error;
-use crate::fonts::{FontEntry, font_key, register_font, to_winansi_bytes};
+use crate::fonts::{FontEntry, encode_as_gids, font_key, register_font, to_winansi_bytes};
 use crate::model::{
     Alignment, Block, CellVAlign, Document, FieldCode, HeaderFooter, ImageFormat, Run,
     TabAlignment, TabStop, Table, VMerge, VertAlign,
@@ -387,6 +387,14 @@ fn build_tabbed_line(
 
 /// Render pre-built lines applying the paragraph alignment.
 /// `total_line_count` is the full paragraph line count (for justify: last line stays left-aligned).
+fn encode_text_for_pdf(text: &str, pdf_font: &str, seen_fonts: &HashMap<String, FontEntry>) -> Vec<u8> {
+    let entry = seen_fonts.values().find(|e| e.pdf_name == pdf_font);
+    match entry.and_then(|e| e.char_to_gid.as_ref()) {
+        Some(map) => encode_as_gids(text, map),
+        None => to_winansi_bytes(text),
+    }
+}
+
 fn render_paragraph_lines(
     content: &mut Content,
     lines: &[TextLine],
@@ -399,6 +407,7 @@ fn render_paragraph_lines(
     first_line_index: usize,
     links: &mut Vec<LinkAnnotation>,
     first_line_hanging: f32,
+    seen_fonts: &HashMap<String, FontEntry>,
 ) {
     let mut current_color: Option<[u8; 3]> = None;
 
@@ -439,7 +448,7 @@ fn render_paragraph_lines(
                 }
                 current_color = chunk.color;
             }
-            let text_bytes = to_winansi_bytes(&chunk.text);
+            let text_bytes = encode_text_for_pdf(&chunk.text, &chunk.pdf_font, seen_fonts);
             content
                 .begin_text()
                 .set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size)
@@ -795,6 +804,7 @@ fn render_table(
                     0,
                     &mut Vec::new(),
                     0.0,
+                    seen_fonts,
                 );
             }
         }
@@ -902,6 +912,7 @@ fn render_header_footer(
             0,
             &mut Vec::new(),
             0.0,
+            seen_fonts,
         );
     }
 }
@@ -957,10 +968,79 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
     let t_collect = t0.elapsed();
 
+    // Collect used characters per font key for subsetting
+    let mut used_chars_per_font: HashMap<String, HashSet<char>> = HashMap::new();
+    for run in &all_runs {
+        let key = font_key(run);
+        let chars = used_chars_per_font.entry(key).or_default();
+        chars.extend(run.text.chars());
+        if let Some(ref fc) = run.field_code {
+            match fc {
+                FieldCode::Page | FieldCode::NumPages => {
+                    chars.extend('0'..='9');
+                }
+            }
+        }
+    }
+    // List labels and leader characters from paragraphs
+    let all_paras = doc.blocks.iter().flat_map(|block| -> Box<dyn Iterator<Item = &crate::model::Paragraph> + '_> {
+        match block {
+            Block::Paragraph(p) => Box::new(std::iter::once(p)),
+            Block::Table(t) => Box::new(
+                t.rows.iter()
+                    .flat_map(|row| row.cells.iter())
+                    .flat_map(|cell| cell.paragraphs.iter()),
+            ),
+        }
+    });
+    for para in all_paras {
+        if !para.list_label.is_empty()
+            && let Some(run) = para.runs.first()
+        {
+            let key = font_key(run);
+            used_chars_per_font
+                .entry(key)
+                .or_default()
+                .extend(para.list_label.chars());
+        }
+        for stop in &para.tab_stops {
+            if let Some(leader_char) = stop.leader
+                && let Some(run) = para.runs.first()
+            {
+                let key = font_key(run);
+                used_chars_per_font
+                    .entry(key)
+                    .or_default()
+                    .insert(leader_char);
+            }
+        }
+    }
+    for hf in hf_options.iter().copied().flatten() {
+        for para in &hf.paragraphs {
+            for run in &para.runs {
+                let key = font_key(run);
+                let chars = used_chars_per_font.entry(key).or_default();
+                chars.extend(run.text.chars());
+                if let Some(ref fc) = run.field_code {
+                    match fc {
+                        FieldCode::Page | FieldCode::NumPages => {
+                            chars.extend('0'..='9');
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // Ensure space is always included
+    for chars in used_chars_per_font.values_mut() {
+        chars.insert(' ');
+    }
+
     for run in &all_runs {
         let key = font_key(run);
         if !seen_fonts.contains_key(&key) {
             let pdf_name = format!("F{}", font_order.len() + 1);
+            let used = used_chars_per_font.get(&key).cloned().unwrap_or_default();
             let entry = register_font(
                 &mut pdf,
                 &run.font_name,
@@ -969,6 +1049,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 pdf_name,
                 &mut alloc,
                 &doc.embedded_fonts,
+                &used,
             );
             seen_fonts.insert(key.clone(), entry);
             font_order.push(key);
@@ -985,6 +1066,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             pdf_name,
             &mut alloc,
             &doc.embedded_fonts,
+            &HashSet::new(),
         );
         seen_fonts.insert("Helvetica".to_string(), entry);
         font_order.push("Helvetica".to_string());
@@ -1234,6 +1316,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             0,
                             &mut current_page_links,
                             text_hanging,
+                            &seen_fonts,
                         );
 
                         all_contents.push(std::mem::replace(&mut current_content, Content::new()));
@@ -1256,6 +1339,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             lines_that_fit,
                             &mut current_page_links,
                             text_hanging,
+                            &seen_fonts,
                         );
 
                         slot_top -= rest_content_h;
@@ -1335,6 +1419,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         0,
                         &mut current_page_links,
                         text_hanging,
+                        &seen_fonts,
                     );
                 }
 
@@ -1504,5 +1589,9 @@ fn label_for_run<'a>(
 ) -> (&'a str, Vec<u8>) {
     let key = font_key(run);
     let entry = seen_fonts.get(&key).expect("font registered");
-    (entry.pdf_name.as_str(), to_winansi_bytes(label))
+    let bytes = match &entry.char_to_gid {
+        Some(map) => encode_as_gids(label, map),
+        None => to_winansi_bytes(label),
+    };
+    (entry.pdf_name.as_str(), bytes)
 }

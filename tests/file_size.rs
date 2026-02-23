@@ -4,7 +4,7 @@ use rayon::prelude::*;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const SIZE_RATIO_THRESHOLD: f64 = 35.0;
+const SIZE_RATIO_THRESHOLD: f64 = 10.0;
 
 struct SizeResult {
     name: String,
@@ -64,10 +64,9 @@ fn analyze_fixture(fixture_dir: &Path) -> Option<SizeResult> {
     })
 }
 
-/// ANSI 256-color gradient from green (ratio ≤ 3) to dark red (ratio ≥ 35).
+/// ANSI 256-color gradient from green (ratio ≤ 1) to dark red (ratio ≥ 10).
 fn color_ratio(ratio: f64, text: &str) -> String {
-    // t=0.0 at ratio 3 (good), t=1.0 at ratio 35 (bad)
-    let t = ((ratio - 3.0) / 32.0).clamp(0.0, 1.0);
+    let t = ((ratio - 1.0) / 9.0).clamp(0.0, 1.0);
     let r = (80.0 + 175.0 * t) as u8;
     let g = (200.0 * (1.0 - t)) as u8;
     let b = (80.0 * (1.0 - t)) as u8;

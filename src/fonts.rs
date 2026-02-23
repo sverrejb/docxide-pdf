@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
@@ -14,6 +14,7 @@ pub(crate) struct FontEntry {
     pub(crate) widths_1000: Vec<f32>,
     pub(crate) line_h_ratio: Option<f32>,
     pub(crate) ascender_ratio: Option<f32>,
+    pub(crate) char_to_gid: Option<HashMap<char, u16>>,
 }
 
 /// (lowercase family name, bold, italic) -> (file path, face index within TTC)
@@ -481,6 +482,17 @@ pub(crate) fn to_winansi_bytes(s: &str) -> Vec<u8> {
         .collect()
 }
 
+/// Encode UTF-8 text as big-endian 2-byte glyph IDs for CIDFont content streams.
+pub(crate) fn encode_as_gids(text: &str, char_to_gid: &HashMap<char, u16>) -> Vec<u8> {
+    let mut out = Vec::with_capacity(text.len() * 2);
+    for ch in text.chars() {
+        let gid = char_to_gid.get(&ch).copied().unwrap_or(0);
+        out.push((gid >> 8) as u8);
+        out.push((gid & 0xFF) as u8);
+    }
+    out
+}
+
 /// Approximate Helvetica widths at 1000 units/em for WinAnsi chars 32..=255.
 fn helvetica_widths() -> Vec<f32> {
     (32u8..=255u8)
@@ -501,7 +513,8 @@ fn helvetica_widths() -> Vec<f32> {
         .collect()
 }
 
-/// Embed a TrueType/OpenType font (raw bytes) into the PDF.
+/// Embed a TrueType/OpenType font as a CIDFont (Type0 composite) with Identity-H encoding.
+/// The font data is subsetted to only include glyphs used in the document.
 fn embed_truetype(
     pdf: &mut Pdf,
     font_ref: Ref,
@@ -510,7 +523,9 @@ fn embed_truetype(
     font_name: &str,
     font_data: &[u8],
     face_index: u32,
-) -> Option<(Vec<f32>, f32, f32)> {
+    used_chars: &HashSet<char>,
+    alloc: &mut impl FnMut() -> Ref,
+) -> Option<(Vec<f32>, f32, f32, HashMap<char, u16>)> {
     let face = Face::parse(font_data, face_index).ok()?;
 
     let units = face.units_per_em() as f32;
@@ -529,7 +544,8 @@ fn embed_truetype(
         bb.y_max as f32 / units * 1000.0,
     );
 
-    let widths: Vec<f32> = (32u8..=255u8)
+    // WinAnsi widths for layout (unchanged — layout uses these)
+    let widths_1000: Vec<f32> = (32u8..=255u8)
         .map(|byte| {
             face.glyph_index(winansi_to_char(byte))
                 .and_then(|gid| face.glyph_hor_advance(gid))
@@ -538,12 +554,30 @@ fn embed_truetype(
         })
         .collect();
 
-    let data_len = i32::try_from(font_data.len()).ok()?;
-    pdf.stream(data_ref, font_data)
+    // Build GlyphRemapper and char_to_gid map from used_chars
+    let mut remapper = subsetter::GlyphRemapper::new();
+    let mut char_to_gid = HashMap::new();
+    for &ch in used_chars {
+        if let Some(gid) = face.glyph_index(ch) {
+            let new_gid = remapper.remap(gid.0);
+            char_to_gid.insert(ch, new_gid);
+        }
+    }
+
+    // Subset the font
+    let subset_data = subsetter::subset(font_data, face_index, &remapper)
+        .unwrap_or_else(|e| {
+            log::warn!("Font subsetting failed for {font_name}: {e} — embedding full font");
+            font_data.to_vec()
+        });
+
+    let data_len = i32::try_from(subset_data.len()).ok()?;
+    pdf.stream(data_ref, &subset_data)
         .pair(Name(b"Length1"), data_len);
 
     let ps_name = font_name.replace(' ', "");
 
+    // FontDescriptor
     pdf.font_descriptor(descriptor_ref)
         .name(Name(ps_name.as_bytes()))
         .flags(pdf_writer::types::FontFlags::NON_SYMBOLIC)
@@ -555,25 +589,68 @@ fn embed_truetype(
         .stem_v(80.0)
         .font_file2(data_ref);
 
+    // CIDFont dict
+    let cid_font_ref = alloc();
+    let system_info = pdf_writer::types::SystemInfo {
+        registry: pdf_writer::Str(b"Adobe"),
+        ordering: pdf_writer::Str(b"Identity"),
+        supplement: 0,
+    };
     {
-        let mut d = pdf.indirect(font_ref).dict();
-        d.pair(Name(b"Type"), Name(b"Font"));
-        d.pair(Name(b"Subtype"), Name(b"TrueType"));
-        d.pair(Name(b"BaseFont"), Name(ps_name.as_bytes()));
-        d.pair(Name(b"Encoding"), Name(b"WinAnsiEncoding"));
-        d.pair(Name(b"FirstChar"), 32i32);
-        d.pair(Name(b"LastChar"), 255i32);
-        d.pair(Name(b"FontDescriptor"), descriptor_ref);
-        d.insert(Name(b"Widths"))
-            .array()
-            .items(widths.iter().copied());
+        let mut cid = pdf.cid_font(cid_font_ref);
+        cid.subtype(pdf_writer::types::CidFontType::Type2);
+        cid.base_font(Name(ps_name.as_bytes()));
+        cid.system_info(system_info);
+        cid.font_descriptor(descriptor_ref);
+        cid.default_width(0.0);
+        cid.cid_to_gid_map_predefined(Name(b"Identity"));
+        // Write per-glyph widths
+        let mut gid_widths: Vec<(u16, f32)> = char_to_gid
+            .iter()
+            .filter_map(|(&ch, &new_gid)| {
+                face.glyph_index(ch)
+                    .and_then(|gid| face.glyph_hor_advance(gid))
+                    .map(|adv| (new_gid, adv as f32 / units * 1000.0))
+            })
+            .collect();
+        gid_widths.sort_by_key(|&(gid, _)| gid);
+        if !gid_widths.is_empty() {
+            let mut w = cid.widths();
+            for &(gid, width) in &gid_widths {
+                w.consecutive(gid, [width]);
+            }
+        }
     }
+
+    // ToUnicode CMap
+    let tounicode_ref = alloc();
+    let cmap_name = format!("{}-UTF16", ps_name);
+    let mut cmap = pdf_writer::types::UnicodeCmap::new(
+        Name(cmap_name.as_bytes()),
+        pdf_writer::types::SystemInfo {
+            registry: pdf_writer::Str(b"Adobe"),
+            ordering: pdf_writer::Str(b"Identity"),
+            supplement: 0,
+        },
+    );
+    for (&ch, &new_gid) in &char_to_gid {
+        cmap.pair(new_gid, ch);
+    }
+    let cmap_data = cmap.finish();
+    pdf.stream(tounicode_ref, cmap_data.as_slice());
+
+    // Type0 (composite) font dict
+    pdf.type0_font(font_ref)
+        .base_font(Name(ps_name.as_bytes()))
+        .encoding_predefined(Name(b"Identity-H"))
+        .descendant_font(cid_font_ref)
+        .to_unicode(tounicode_ref);
 
     let line_gap = face.line_gap() as f32;
     let line_h_ratio = (face.ascender() as f32 - face.descender() as f32 + line_gap) / units;
     let ascender_ratio = face.ascender() as f32 / units;
 
-    Some((widths, line_h_ratio, ascender_ratio))
+    Some((widths_1000, line_h_ratio, ascender_ratio, char_to_gid))
 }
 
 pub(crate) fn primary_font_name(name: &str) -> &str {
@@ -600,6 +677,7 @@ pub(crate) fn register_font(
     pdf_name: String,
     alloc: &mut impl FnMut() -> Ref,
     embedded_fonts: &EmbeddedFonts,
+    used_chars: &HashSet<char>,
 ) -> FontEntry {
     let t0 = std::time::Instant::now();
     let font_ref = alloc();
@@ -615,7 +693,10 @@ pub(crate) fn register_font(
 
         let found = embedded_data
             .and_then(|data| {
-                embed_truetype(pdf, font_ref, descriptor_ref, data_ref, candidate, data, 0)
+                embed_truetype(
+                    pdf, font_ref, descriptor_ref, data_ref, candidate, data, 0,
+                    used_chars, alloc,
+                )
             })
             .or_else(|| {
                 find_font_file(candidate, bold, italic).and_then(|(path, face_index)| {
@@ -628,6 +709,8 @@ pub(crate) fn register_font(
                         candidate,
                         &data,
                         face_index,
+                        used_chars,
+                        alloc,
                     )
                 })
             });
@@ -637,14 +720,14 @@ pub(crate) fn register_font(
         }
     }
 
-    let (widths, line_h_ratio, ascender_ratio) = result
-        .map(|(w, r, ar)| (w, Some(r), Some(ar)))
+    let (widths, line_h_ratio, ascender_ratio, char_to_gid) = result
+        .map(|(w, r, ar, m)| (w, Some(r), Some(ar), Some(m)))
         .unwrap_or_else(|| {
             log::warn!("Font not found: {font_name} bold={bold} italic={italic} — using Helvetica");
             pdf.type1_font(font_ref)
                 .base_font(Name(b"Helvetica"))
                 .encoding_predefined(Name(b"WinAnsiEncoding"));
-            (helvetica_widths(), None, None)
+            (helvetica_widths(), None, None, None)
         });
 
     log::debug!(
@@ -658,5 +741,6 @@ pub(crate) fn register_font(
         widths_1000: widths,
         line_h_ratio,
         ascender_ratio,
+        char_to_gid,
     }
 }
