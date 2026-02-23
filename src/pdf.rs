@@ -27,6 +27,11 @@ struct LinkAnnotation {
     url: String,
 }
 
+/// True when a paragraph has no visible text (may still have phantom font-info runs).
+fn is_text_empty(runs: &[Run]) -> bool {
+    runs.iter().all(|r| r.text.is_empty() && !r.is_tab)
+}
+
 fn effective_font_size(run: &Run) -> f32 {
     match run.vertical_align {
         VertAlign::Superscript | VertAlign::Subscript => run.font_size * 0.58,
@@ -644,7 +649,7 @@ fn compute_row_layouts(
                             first_line_h = line_h;
                         }
 
-                        if !para.runs.is_empty() {
+                        if !is_text_empty(&para.runs) {
                             let lines = build_paragraph_lines(&para.runs, seen_fonts, cell_text_w, 0.0);
                             total_h += lines.len() as f32 * line_h;
                             all_lines.extend(lines);
@@ -656,8 +661,8 @@ fn compute_row_layouts(
                 })
                 .collect();
 
-            // Word adds implicit cell padding even when tblCellMar top/bottom
-            // are 0, likely from WinMetrics vs typographic ascender differences.
+            // Word's row height includes the end-of-cell paragraph mark glyph,
+            // adding roughly 0.5pt beyond the content metrics.
             let content_h = max_h + 0.5;
             let height = match (row.height, row.height_exact) {
                 (Some(h), true) => h,
@@ -849,7 +854,7 @@ fn render_header_footer(
     let text_width = doc.page_width - doc.margin_left - doc.margin_right;
 
     for para in &hf.paragraphs {
-        if para.runs.is_empty() {
+        if is_text_empty(&para.runs) {
             continue;
         }
 
@@ -1092,9 +1097,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     }
                     prev_space_after = 0.0;
                     // If the paragraph only contains the break (no text), skip rendering
-                    if para.runs.is_empty()
-                        || para.runs.iter().all(|r| r.is_tab || r.text.is_empty())
-                    {
+                    if is_text_empty(&para.runs) {
                         continue;
                     }
                 }
@@ -1139,8 +1142,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     0.0
                 };
 
+                let text_empty = is_text_empty(&para.runs);
                 let has_tabs = para.runs.iter().any(|r| r.is_tab);
-                let lines = if para.image.is_some() || para.runs.is_empty() {
+                let lines = if para.image.is_some() || text_empty {
                     vec![]
                 } else if has_tabs {
                     build_tabbed_line(&para.runs, &seen_fonts, &para.tab_stops, para.indent_left)
@@ -1150,7 +1154,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                 let content_h = if para.image.is_some() {
                     para.content_height.max(doc.line_pitch)
-                } else if para.runs.is_empty() {
+                } else if text_empty {
                     line_h
                 } else {
                     let min_lines = 1 + para.extra_line_breaks as usize;
@@ -1274,7 +1278,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                 slot_top -= inter_gap;
 
-                if (para.image.is_some() || para.runs.is_empty()) && para.content_height > 0.0 {
+                if (para.image.is_some() || text_empty) && para.content_height > 0.0 {
                     if let Some(pdf_name) = image_pdf_names.get(&block_idx) {
                         let img = para.image.as_ref().unwrap();
                         let y_bottom = slot_top - img.display_height;

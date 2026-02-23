@@ -1109,6 +1109,25 @@ fn parse_runs(
         }
     }
 
+    // Word's paragraph mark (¶) uses the paragraph style's font even in empty
+    // paragraphs; ensure we carry that font info so line height is correct.
+    if runs.is_empty() {
+        runs.push(Run {
+            text: String::new(),
+            font_size: style_font_size,
+            font_name: style_font_name.clone(),
+            bold: style_bold,
+            italic: style_italic,
+            underline: false,
+            strikethrough: false,
+            color: None,
+            is_tab: false,
+            vertical_align: VertAlign::Baseline,
+            field_code: None,
+            hyperlink_url: None,
+        });
+    }
+
     ParsedRuns {
         runs,
         has_page_break,
