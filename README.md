@@ -12,6 +12,8 @@ A Rust library and CLI tool for converting DOCX files to PDF, with the goal of m
 
 **Fast:** Typical conversions complete in under 100ms.
 
+**Small files:** Output PDFs should be the same size or smaller than Word's exports. Font subsetting and content stream compression keep file sizes down.
+
 ## AI useage disclaimer 🤖
 
 While the idea, architecture, testing strategy and validation of output are all human, the vast majority of the code as of now is written by Claude Opus 4.6 with access to the PDF specification (ISO-32000) and the Office Open XML File Formats specification (ECMA-376).
@@ -24,16 +26,17 @@ These *kind of* work:
 - **Paragraphs**: left/center/right/justify alignment, space before/after, line spacing, indentation, contextual spacing, keep-next, bottom borders
 - **Styles**: paragraph style inheritance (`basedOn` chains), document defaults from `docDefaults`
 - **Lists**: bullet and numbered lists with nesting levels
-- **Tables**: column widths with auto-fit, cell borders, cell text with alignment
+- **Tables**: column widths with auto-fit, merged cells (horizontal and vertical), row heights, cell borders with color/width, cell shading, vertical alignment, cell text with alignment
 - **Images**: inline JPEG and PNG embedding with sizing and alpha transparency
 - **Page layout**: page size, margins, document grid, explicit page breaks, automatic page breaking with widow/orphan control
 - **Headers/footers**: default and first-page variants, page number and page count fields
 - **Tab stops**: left, center, right, decimal with leader dots
-- **Fonts**: cross-platform font search (macOS/Linux/Windows), embedded DOCX font extraction, disk-cached font index
+- **Fonts**: cross-platform font search (macOS/Linux/Windows), embedded DOCX font extraction, font subsetting, disk-cached font index
+- **Output optimization**: font subsetting, content stream compression
 
 ### Not yet supported
 
-Footnotes, clickable hyperlinks, table merged cells, table cell shading, text boxes, charts, SmartArt, multi-column layouts, section breaks with different page sizes/orientations, and many other features.
+Footnotes, clickable hyperlinks, text boxes, charts, SmartArt, multi-column layouts, section breaks with different page sizes/orientations, and many other features.
 
 ## Examples
 
@@ -116,11 +119,17 @@ Font scanning results are cached to disk (per-directory, invalidated by mtime). 
 
 ```
 src/
-  lib.rs      — public API
-  error.rs    — Error enum
-  model.rs    — Document/Paragraph/Run intermediate representation
-  docx.rs     — DOCX ZIP + XML → Document parser
-  pdf.rs      — Document → PDF renderer
+  lib.rs          — public API
+  error.rs        — Error enum
+  model.rs        — Document/Paragraph/Run intermediate representation
+  fonts.rs        — font discovery, metrics, subsetting
+  docx/
+    mod.rs        — DOCX ZIP + XML → Document parser
+    styles.rs     — theme, style parsing, style inheritance
+  pdf/
+    mod.rs        — main render loop, header/footer rendering
+    layout.rs     — text layout, line building, paragraph rendering
+    table.rs      — table layout, auto-fit, table rendering
 tests/
   visual_comparison.rs  — Jaccard + SSIM comparison against Word reference PDFs
   fixtures/<case>/      — input.docx + reference.pdf pairs
