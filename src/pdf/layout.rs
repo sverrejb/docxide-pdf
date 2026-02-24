@@ -406,6 +406,8 @@ pub(super) fn render_paragraph_lines(
     seen_fonts: &HashMap<String, FontEntry>,
 ) {
     let mut current_color: Option<[u8; 3]> = None;
+    let mut cur_font_name = String::new();
+    let mut cur_font_size: f32 = -1.0;
 
     let last_line_idx = total_line_count.saturating_sub(1);
     for (line_num, line) in lines.iter().enumerate() {
@@ -434,56 +436,93 @@ pub(super) fn render_paragraph_lines(
             0.0
         };
 
-        for (chunk_idx, chunk) in line.chunks.iter().enumerate() {
-            let x = line_start_x + chunk.x_offset + chunk_idx as f32 * extra_per_gap;
-            if chunk.color != current_color {
-                if let Some([r, g, b]) = chunk.color {
-                    content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+        let mut decorations: Vec<(f32, f32, f32, f32, Option<[u8; 3]>)> = Vec::new();
+
+        if !line.chunks.is_empty() {
+            content.begin_text();
+            let mut td_x = 0.0_f32;
+            let mut td_y = 0.0_f32;
+
+            for (chunk_idx, chunk) in line.chunks.iter().enumerate() {
+                let x = line_start_x + chunk.x_offset + chunk_idx as f32 * extra_per_gap;
+                let cy = y + chunk.y_offset;
+
+                if chunk.color != current_color {
+                    if let Some([r, g, b]) = chunk.color {
+                        content.set_fill_rgb(
+                            r as f32 / 255.0,
+                            g as f32 / 255.0,
+                            b as f32 / 255.0,
+                        );
+                    } else {
+                        content.set_fill_gray(0.0);
+                    }
+                    current_color = chunk.color;
+                }
+
+                if cur_font_name != chunk.pdf_font || cur_font_size != chunk.font_size {
+                    content.set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size);
+                    cur_font_name.clear();
+                    cur_font_name.push_str(&chunk.pdf_font);
+                    cur_font_size = chunk.font_size;
+                }
+
+                content.next_line(x - td_x, cy - td_y);
+                td_x = x;
+                td_y = cy;
+
+                let text_bytes =
+                    encode_text_for_pdf(&chunk.text, &chunk.pdf_font, seen_fonts);
+                content.show(Str(&text_bytes));
+
+                if chunk.underline {
+                    let thick = (chunk.font_size * 0.05).max(0.5);
+                    let ul_y = if chunk.hyperlink_url.is_some() {
+                        y - chunk.font_size * 0.08
+                    } else {
+                        y - chunk.font_size * 0.12
+                    };
+                    decorations.push((x, ul_y - thick, chunk.width, thick, chunk.color));
+                }
+                if chunk.strikethrough {
+                    let thick = (chunk.font_size * 0.05).max(0.5);
+                    let st_y = y + chunk.font_size * 0.3;
+                    decorations.push((x, st_y, chunk.width, thick, chunk.color));
+                }
+
+                if let Some(ref url) = chunk.hyperlink_url {
+                    let bottom = y - chunk.font_size * 0.2;
+                    let top = y + chunk.font_size * 0.8;
+                    let merged = links
+                        .last_mut()
+                        .filter(|prev| prev.url == *url && (prev.rect.y1 - bottom).abs() < 1.0);
+                    if let Some(prev) = merged {
+                        prev.rect.x2 = x + chunk.width;
+                    } else {
+                        links.push(LinkAnnotation {
+                            rect: Rect::new(x, bottom, x + chunk.width, top),
+                            url: url.clone(),
+                        });
+                    }
+                }
+            }
+            content.end_text();
+        }
+
+        for &(dx, dy, dw, dh, dcolor) in &decorations {
+            if dcolor != current_color {
+                if let Some([r, g, b]) = dcolor {
+                    content.set_fill_rgb(
+                        r as f32 / 255.0,
+                        g as f32 / 255.0,
+                        b as f32 / 255.0,
+                    );
                 } else {
                     content.set_fill_gray(0.0);
                 }
-                current_color = chunk.color;
+                current_color = dcolor;
             }
-            let text_bytes = encode_text_for_pdf(&chunk.text, &chunk.pdf_font, seen_fonts);
-            content
-                .begin_text()
-                .set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size)
-                .next_line(x, y + chunk.y_offset)
-                .show(Str(&text_bytes))
-                .end_text();
-
-            if chunk.underline {
-                let thick = (chunk.font_size * 0.05).max(0.5);
-                let ul_y = if chunk.hyperlink_url.is_some() {
-                    y - chunk.font_size * 0.08
-                } else {
-                    y - chunk.font_size * 0.12
-                };
-                content
-                    .rect(x, ul_y - thick, chunk.width, thick)
-                    .fill_nonzero();
-            }
-            if chunk.strikethrough {
-                let thick = (chunk.font_size * 0.05).max(0.5);
-                let st_y = y + chunk.font_size * 0.3;
-                content.rect(x, st_y, chunk.width, thick).fill_nonzero();
-            }
-
-            if let Some(ref url) = chunk.hyperlink_url {
-                let bottom = y - chunk.font_size * 0.2;
-                let top = y + chunk.font_size * 0.8;
-                let merged = links
-                    .last_mut()
-                    .filter(|prev| prev.url == *url && (prev.rect.y1 - bottom).abs() < 1.0);
-                if let Some(prev) = merged {
-                    prev.rect.x2 = x + chunk.width;
-                } else {
-                    links.push(LinkAnnotation {
-                        rect: Rect::new(x, bottom, x + chunk.width, top),
-                        url: url.clone(),
-                    });
-                }
-            }
+            content.rect(dx, dy, dw, dh).fill_nonzero();
         }
     }
     if current_color.is_some() {
