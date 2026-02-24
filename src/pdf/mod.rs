@@ -694,7 +694,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         .collect();
 
     for (i, c) in all_contents.into_iter().enumerate() {
-        pdf.stream(content_ids[i], &c.finish());
+        let raw = c.finish();
+        let compressed = miniz_oxide::deflate::compress_to_vec_zlib(raw.as_slice(), 6);
+        pdf.stream(content_ids[i], &compressed).filter(Filter::FlateDecode);
     }
 
     pdf.catalog(catalog_id).pages(pages_id);

@@ -56,7 +56,8 @@
       "Bash(DOCXSIDE_CASE=case15 cargo test:*)",
       "Bash(xargs -I{} python3 -c \" from fontTools.ttLib import TTFont try: f = TTFont\\(''{}'', fontNumber=0\\) n = f[''name''] for r in n.names: if r.nameID == 1 and ''Calibri'' in str\\(r\\): print\\(''{}''\\) break except: pass \")",
       "WebFetch(domain:raw.githubusercontent.com)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(DOCXSIDE_CASE=case13 cargo test:*)"
     ]
   }
 }
