@@ -8,11 +8,11 @@ A Rust library and CLI tool for converting DOCX files to PDF, with the goal of m
 
 ## Goals
 
-**Accurate:** Given a `.docx` file, produce a `.pdf` that is visually identical to what Word would export. This is harder than it sounds — Word's layout engine handles fonts, spacing, line breaking, and page geometry in ways that are not fully documented.
+**Accurate:** Given a `.docx` file, produce a `.pdf` that is visually identical to what Word would export.
 
 **Fast:** Typical conversions complete in under 100ms.
 
-**Small files:** Output PDFs should be the same size or smaller than Word's exports. Font subsetting and content stream compression keep file sizes down.
+**Small files:** Output PDFs should be the same size or smaller than Word's export.
 
 ## AI useage disclaimer 🤖
 
