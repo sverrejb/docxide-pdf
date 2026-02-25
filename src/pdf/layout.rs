@@ -16,6 +16,8 @@ pub(super) struct WordChunk {
     pub(super) strikethrough: bool,
     pub(super) y_offset: f32, // vertical offset for superscript/subscript
     pub(super) hyperlink_url: Option<String>,
+    pub(super) inline_image_name: Option<String>,
+    pub(super) inline_image_height: f32,
 }
 
 pub(super) struct LinkAnnotation {
@@ -30,7 +32,8 @@ pub(super) struct TextLine {
 
 /// True when a paragraph has no visible text (may still have phantom font-info runs).
 pub(super) fn is_text_empty(runs: &[Run]) -> bool {
-    runs.iter().all(|r| r.text.is_empty() && !r.is_tab)
+    runs.iter()
+        .all(|r| r.text.is_empty() && !r.is_tab && r.inline_image.is_none())
 }
 
 fn effective_font_size(run: &Run) -> f32 {
@@ -67,6 +70,7 @@ pub(super) fn build_paragraph_lines(
     seen_fonts: &HashMap<String, FontEntry>,
     max_width: f32,
     first_line_hanging: f32,
+    inline_image_names: &HashMap<usize, String>,
 ) -> Vec<TextLine> {
     let mut lines: Vec<TextLine> = Vec::new();
     let mut current_chunks: Vec<WordChunk> = Vec::new();
@@ -74,10 +78,54 @@ pub(super) fn build_paragraph_lines(
     let mut prev_ended_with_ws = false;
     let mut prev_space_w: f32 = 0.0;
 
-    for run in runs {
+    for (run_idx, run) in runs.iter().enumerate() {
         if run.is_tab {
             continue; // tabs handled in build_tabbed_line
         }
+
+        // Handle inline images as single block elements in the line
+        if let Some(img) = &run.inline_image {
+            if let Some(pdf_name) = inline_image_names.get(&run_idx) {
+                let img_w = img.display_width;
+                let need_space = !current_chunks.is_empty() && prev_ended_with_ws;
+                let proposed_x = if need_space {
+                    current_x + prev_space_w
+                } else {
+                    current_x
+                };
+
+                let line_max = if lines.is_empty() {
+                    max_width + first_line_hanging
+                } else {
+                    max_width
+                };
+                if !current_chunks.is_empty() && proposed_x + img_w > line_max {
+                    lines.push(finish_line(&mut current_chunks));
+                    current_x = 0.0;
+                } else {
+                    current_x = proposed_x;
+                }
+
+                current_chunks.push(WordChunk {
+                    pdf_font: String::new(),
+                    text: String::new(),
+                    font_size: run.font_size,
+                    color: None,
+                    x_offset: current_x,
+                    width: img_w,
+                    underline: false,
+                    strikethrough: false,
+                    y_offset: 0.0,
+                    hyperlink_url: None,
+                    inline_image_name: Some(pdf_name.clone()),
+                    inline_image_height: img.display_height,
+                });
+                current_x += img_w;
+                prev_ended_with_ws = false;
+            }
+            continue;
+        }
+
         let key = font_key(run);
         let entry = seen_fonts.get(&key).expect("font registered");
         let eff_fs = effective_font_size(run);
@@ -133,6 +181,8 @@ pub(super) fn build_paragraph_lines(
                 strikethrough: run.strikethrough,
                 y_offset: y_off,
                 hyperlink_url: run.hyperlink_url.clone(),
+                inline_image_name: None,
+                inline_image_height: 0.0,
             });
             current_x += ww;
         }
@@ -322,6 +372,8 @@ pub(super) fn build_tabbed_line(
                                         strikethrough: false,
                                         y_offset: 0.0,
                                         hyperlink_url: None,
+                                        inline_image_name: None,
+                                        inline_image_height: 0.0,
                                     });
                                 }
                             }
@@ -364,6 +416,8 @@ pub(super) fn build_tabbed_line(
                     strikethrough: run.strikethrough,
                     y_offset: y_off,
                     hyperlink_url: run.hyperlink_url.clone(),
+                    inline_image_name: None,
+                    inline_image_height: 0.0,
                 });
                 current_x += ww;
             }
@@ -409,9 +463,22 @@ pub(super) fn render_paragraph_lines(
     let mut cur_font_name = String::new();
     let mut cur_font_size: f32 = -1.0;
 
+    // Pre-compute per-line y offsets accounting for inline images making lines taller
+    let mut line_y_offsets: Vec<f32> = Vec::with_capacity(lines.len());
+    let mut cumulative_y = 0.0f32;
+    for (i, line) in lines.iter().enumerate() {
+        line_y_offsets.push(cumulative_y);
+        let img_h = line.chunks.iter()
+            .map(|c| c.inline_image_height)
+            .fold(0.0f32, f32::max);
+        cumulative_y += if img_h > line_pitch { img_h } else { line_pitch };
+        // First line offset is always 0
+        if i == 0 { cumulative_y = line_pitch.max(img_h); line_y_offsets[0] = 0.0; }
+    }
+
     let last_line_idx = total_line_count.saturating_sub(1);
     for (line_num, line) in lines.iter().enumerate() {
-        let y = first_baseline_y - line_num as f32 * line_pitch;
+        let y = first_baseline_y - line_y_offsets[line_num];
         let global_line_idx = first_line_index + line_num;
 
         let is_justified = *alignment == Alignment::Justify
@@ -437,13 +504,20 @@ pub(super) fn render_paragraph_lines(
         };
 
         let mut decorations: Vec<(f32, f32, f32, f32, Option<[u8; 3]>)> = Vec::new();
+        let mut image_draws: Vec<(f32, f32, f32, f32, &str)> = Vec::new();
 
-        if !line.chunks.is_empty() {
+        let has_text_chunks = line.chunks.iter().any(|c| c.inline_image_name.is_none() && !c.text.is_empty());
+
+        if has_text_chunks {
             content.begin_text();
             let mut td_x = 0.0_f32;
             let mut td_y = 0.0_f32;
 
             for (chunk_idx, chunk) in line.chunks.iter().enumerate() {
+                if chunk.inline_image_name.is_some() {
+                    continue;
+                }
+
                 let x = line_start_x + chunk.x_offset + chunk_idx as f32 * extra_per_gap;
                 let cy = y + chunk.y_offset;
 
@@ -507,6 +581,23 @@ pub(super) fn render_paragraph_lines(
                 }
             }
             content.end_text();
+        }
+
+        // Collect inline image draws
+        for (chunk_idx, chunk) in line.chunks.iter().enumerate() {
+            if let Some(ref img_name) = chunk.inline_image_name {
+                let x = line_start_x + chunk.x_offset + chunk_idx as f32 * extra_per_gap;
+                let img_bottom = y - (chunk.inline_image_height - chunk.font_size);
+                image_draws.push((x, img_bottom, chunk.width, chunk.inline_image_height, img_name));
+            }
+        }
+
+        // Draw inline images outside text block
+        for &(ix, iy, iw, ih, ref img_name) in &image_draws {
+            content.save_state();
+            content.transform([iw, 0.0, 0.0, ih, ix, iy]);
+            content.x_object(Name(img_name.as_bytes()));
+            content.restore_state();
         }
 
         for &(dx, dy, dw, dh, dcolor) in &decorations {

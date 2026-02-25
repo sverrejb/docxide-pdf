@@ -390,6 +390,7 @@ fn parse_runs(
     styles: &StylesInfo,
     theme: &ThemeFonts,
     rels: &HashMap<String, String>,
+    zip: &mut zip::ZipArchive<std::fs::File>,
 ) -> ParsedRuns {
     let ppr = wml(para_node, "pPr");
     let para_style_id = ppr
@@ -520,6 +521,7 @@ fn parse_runs(
                                     vertical_align,
                                     field_code: None,
                                     hyperlink_url: hyperlink_url.clone(),
+                                    inline_image: None,
                                 });
                             }
                             in_field = true;
@@ -549,6 +551,7 @@ fn parse_runs(
                                         vertical_align: VertAlign::Baseline,
                                         field_code: Some(code),
                                         hyperlink_url: hyperlink_url.clone(),
+                                        inline_image: None,
                                     });
                                 }
                                 in_field = false;
@@ -584,6 +587,7 @@ fn parse_runs(
                             vertical_align,
                             field_code: None,
                             hyperlink_url: hyperlink_url.clone(),
+                            inline_image: None,
                         });
                     }
                     // Insert tab marker run
@@ -600,6 +604,7 @@ fn parse_runs(
                         vertical_align: VertAlign::Baseline,
                         field_code: None,
                         hyperlink_url: None,
+                        inline_image: None,
                     });
                 }
                 "br" if !in_field => {
@@ -607,6 +612,42 @@ fn parse_runs(
                         has_page_break = true;
                     } else {
                         line_break_count += 1;
+                    }
+                }
+                "drawing" if !in_field => {
+                    if !pending_text.is_empty() {
+                        runs.push(Run {
+                            text: std::mem::take(&mut pending_text),
+                            font_size,
+                            font_name: font_name.clone(),
+                            bold,
+                            italic,
+                            underline,
+                            strikethrough,
+                            color,
+                            is_tab: false,
+                            vertical_align,
+                            field_code: None,
+                            hyperlink_url: hyperlink_url.clone(),
+                            inline_image: None,
+                        });
+                    }
+                    if let Some(img) = parse_run_drawing(child, rels, zip) {
+                        runs.push(Run {
+                            text: String::new(),
+                            font_size,
+                            font_name: font_name.clone(),
+                            bold: false,
+                            italic: false,
+                            underline: false,
+                            strikethrough: false,
+                            color: None,
+                            is_tab: false,
+                            vertical_align: VertAlign::Baseline,
+                            field_code: None,
+                            hyperlink_url: None,
+                            inline_image: Some(img),
+                        });
                     }
                 }
                 _ => {}
@@ -627,6 +668,7 @@ fn parse_runs(
                 vertical_align,
                 field_code: None,
                 hyperlink_url: hyperlink_url.clone(),
+                inline_image: None,
             });
         }
     }
@@ -666,6 +708,7 @@ fn parse_runs(
                 vertical_align: VertAlign::Baseline,
                 field_code: None,
                 hyperlink_url: None,
+                inline_image: None,
             });
         }
     }
@@ -686,6 +729,7 @@ fn parse_runs(
             vertical_align: VertAlign::Baseline,
             field_code: None,
             hyperlink_url: None,
+            inline_image: None,
         });
     }
 
@@ -701,6 +745,7 @@ fn parse_header_footer_xml(
     styles: &StylesInfo,
     theme: &ThemeFonts,
     rels: &HashMap<String, String>,
+    zip: &mut zip::ZipArchive<std::fs::File>,
 ) -> Option<HeaderFooter> {
     let xml = roxmltree::Document::parse(xml_content).ok()?;
     let root = xml.root_element();
@@ -722,7 +767,7 @@ fn parse_header_footer_xml(
             .or_else(|| para_style.and_then(|s| s.alignment))
             .unwrap_or(Alignment::Left);
 
-        let parsed = parse_runs(node, styles, theme, rels);
+        let parsed = parse_runs(node, styles, theme, rels, zip);
 
         paragraphs.push(Paragraph {
             runs: parsed.runs,
@@ -839,7 +884,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                 .map(String::from)
                 .unwrap_or_else(|| format!("word/{}", target));
             let xml_text = read_zip_text(zip, &zip_path)?;
-            parse_header_footer_xml(&xml_text, &styles, &theme, &HashMap::new())
+            parse_header_footer_xml(&xml_text, &styles, &theme, &HashMap::new(), zip)
         };
 
     let header_default = resolve_hf(header_default_rid, &mut zip);
@@ -1027,7 +1072,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                         for p in tc.children().filter(|n| {
                             n.tag_name().name() == "p" && n.tag_name().namespace() == Some(WML_NS)
                         }) {
-                            let parsed = parse_runs(p, &styles, &theme, &rels);
+                            let parsed = parse_runs(p, &styles, &theme, &rels, &mut zip);
                             let ppr = wml(p, "pPr");
                             let para_style_id = ppr
                                 .and_then(|ppr| wml_attr(ppr, "pStyle"))
@@ -1159,7 +1204,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     }
                 }
 
-                let parsed = parse_runs(node, &styles, &theme, &rels);
+                let parsed = parse_runs(node, &styles, &theme, &rels, &mut zip);
                 let mut runs = parsed.runs;
 
                 // Override font defaults from style for runs that used doc defaults
@@ -1170,13 +1215,31 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                 }
 
                 let tab_stops = ppr.map(parse_tab_stops).unwrap_or_default();
-                let drawing = compute_drawing_info(node, &rels, &mut zip);
+
+                // Determine if this is an image-only paragraph or mixed text+image
+                let has_text = runs.iter().any(|r| !r.text.is_empty() || r.is_tab);
+                let has_inline_images = runs.iter().any(|r| r.inline_image.is_some());
+
+                let (para_image, content_height) = if has_inline_images && !has_text {
+                    // Image-only paragraph: extract image for block-level rendering
+                    let img_run_idx = runs.iter().position(|r| r.inline_image.is_some());
+                    let img = img_run_idx.and_then(|i| runs[i].inline_image.take());
+                    let h = img.as_ref().map(|i| i.display_height).unwrap_or(0.0);
+                    (img, h)
+                } else if has_inline_images {
+                    // Mixed text+image: images stay in runs, no paragraph-level image
+                    (None, 0.0)
+                } else {
+                    // No images: check for legacy drawing info (e.g. drawings not in runs)
+                    let drawing = compute_drawing_info(node, &rels, &mut zip);
+                    (drawing.image, drawing.height)
+                };
 
                 blocks.push(Block::Paragraph(Paragraph {
                     runs,
                     space_before,
                     space_after,
-                    content_height: drawing.height,
+                    content_height,
                     alignment,
                     indent_left,
                     indent_hanging,
@@ -1184,7 +1247,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     contextual_spacing,
                     keep_next,
                     line_spacing,
-                    image: drawing.image,
+                    image: para_image,
                     border_bottom,
                     page_break_before: parsed.has_page_break,
                     tab_stops,
@@ -1304,6 +1367,58 @@ fn image_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat)> {
         return Some((width, height, ImageFormat::Png));
     }
 
+    None
+}
+
+fn parse_run_drawing(
+    drawing_node: roxmltree::Node,
+    rels: &HashMap<String, String>,
+    zip: &mut zip::ZipArchive<std::fs::File>,
+) -> Option<EmbeddedImage> {
+    for container in drawing_node.children() {
+        let name = container.tag_name().name();
+        if (name == "inline" || name == "anchor")
+            && container.tag_name().namespace() == Some(WPD_NS)
+        {
+            let extent = container.children().find(|n| {
+                n.tag_name().name() == "extent" && n.tag_name().namespace() == Some(WPD_NS)
+            });
+            let cx = extent
+                .and_then(|n| n.attribute("cx"))
+                .and_then(|v| v.parse::<f32>().ok())
+                .unwrap_or(0.0);
+            let cy = extent
+                .and_then(|n| n.attribute("cy"))
+                .and_then(|v| v.parse::<f32>().ok())
+                .unwrap_or(0.0);
+            let display_w = cx / 12700.0;
+            let display_h = cy / 12700.0;
+
+            if let Some(embed_id) = find_blip_embed(container)
+                && let Some(target) = rels.get(embed_id)
+            {
+                let zip_path = target
+                    .strip_prefix('/')
+                    .map(String::from)
+                    .unwrap_or_else(|| format!("word/{}", target));
+                if let Ok(mut entry) = zip.by_name(&zip_path) {
+                    let mut data = Vec::new();
+                    if entry.read_to_end(&mut data).is_ok()
+                        && let Some((pw, ph, fmt)) = image_dimensions(&data)
+                    {
+                        return Some(EmbeddedImage {
+                            data,
+                            format: fmt,
+                            pixel_width: pw,
+                            pixel_height: ph,
+                            display_width: display_w,
+                            display_height: display_h,
+                        });
+                    }
+                }
+            }
+        }
+    }
     None
 }
 

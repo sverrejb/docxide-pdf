@@ -60,6 +60,7 @@ pub enum ImageFormat {
     Png,
 }
 
+#[derive(Clone)]
 pub struct EmbeddedImage {
     pub data: Vec<u8>,
     pub format: ImageFormat,
@@ -109,6 +110,7 @@ pub struct Run {
     pub vertical_align: VertAlign,
     pub field_code: Option<FieldCode>,
     pub hyperlink_url: Option<String>,
+    pub inline_image: Option<EmbeddedImage>,
 }
 
 #[derive(Clone, Debug, PartialEq)]

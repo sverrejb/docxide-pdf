@@ -137,7 +137,7 @@ fn compute_row_layouts(
                         }
 
                         if !is_text_empty(&para.runs) {
-                            let lines = build_paragraph_lines(&para.runs, seen_fonts, cell_text_w, 0.0);
+                            let lines = build_paragraph_lines(&para.runs, seen_fonts, cell_text_w, 0.0, &std::collections::HashMap::new());
                             total_h += lines.len() as f32 * line_h;
                             all_lines.extend(lines);
                         }

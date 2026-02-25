@@ -8,7 +8,7 @@ use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str};
 use crate::error::Error;
 use crate::fonts::{FontEntry, encode_as_gids, font_key, register_font, to_winansi_bytes};
 use crate::model::{
-    Alignment, Block, Document, FieldCode, HeaderFooter, ImageFormat, Run,
+    Alignment, Block, Document, EmbeddedImage, FieldCode, HeaderFooter, ImageFormat, Run,
 };
 
 use layout::{
@@ -50,7 +50,7 @@ fn render_header_footer(
             })
             .collect();
 
-        let lines = build_paragraph_lines(&substituted_runs, seen_fonts, text_width, 0.0);
+        let lines = build_paragraph_lines(&substituted_runs, seen_fonts, text_width, 0.0, &HashMap::new());
 
         let (font_size, _, tallest_ar) = tallest_run_metrics(&substituted_runs, seen_fonts);
         let ascender_ratio = tallest_ar.unwrap_or(0.75);
@@ -244,74 +244,93 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
     // Phase 1b: embed images
     let mut image_pdf_names: HashMap<usize, String> = HashMap::new();
+    let mut inline_image_pdf_names: HashMap<(usize, usize), String> = HashMap::new();
     let mut image_xobjects: Vec<(String, Ref)> = Vec::new();
-    for (block_idx, block) in doc.blocks.iter().enumerate() {
-        if let Block::Paragraph(para) = block
-            && let Some(img) = &para.image
-        {
-            let xobj_ref = alloc();
-            let pdf_name = format!("Im{}", image_xobjects.len() + 1);
 
-            match img.format {
-                ImageFormat::Jpeg => {
-                    let mut xobj = pdf.image_xobject(xobj_ref, &img.data);
-                    xobj.filter(Filter::DctDecode);
-                    xobj.width(img.pixel_width as i32);
-                    xobj.height(img.pixel_height as i32);
+    let embed_image = |img: &EmbeddedImage,
+                           image_xobjects: &mut Vec<(String, Ref)>,
+                           pdf: &mut Pdf,
+                           alloc: &mut dyn FnMut() -> Ref|
+     -> String {
+        let xobj_ref = alloc();
+        let pdf_name = format!("Im{}", image_xobjects.len() + 1);
+
+        match img.format {
+            ImageFormat::Jpeg => {
+                let mut xobj = pdf.image_xobject(xobj_ref, &img.data);
+                xobj.filter(Filter::DctDecode);
+                xobj.width(img.pixel_width as i32);
+                xobj.height(img.pixel_height as i32);
+                xobj.color_space().device_rgb();
+                xobj.bits_per_component(8);
+            }
+            ImageFormat::Png => {
+                let cursor = std::io::Cursor::new(&img.data);
+                let reader = image::ImageReader::with_format(
+                    std::io::BufReader::new(cursor),
+                    image::ImageFormat::Png,
+                );
+                if let Ok(decoded) = reader.decode() {
+                    let rgba: image::RgbaImage = decoded.to_rgba8();
+                    let (w, h) = (rgba.width(), rgba.height());
+                    let has_alpha = rgba.pixels().any(|p| p.0[3] < 255);
+
+                    let rgb_data: Vec<u8> = rgba
+                        .pixels()
+                        .flat_map(|p| [p.0[0], p.0[1], p.0[2]])
+                        .collect();
+                    let compressed_rgb =
+                        miniz_oxide::deflate::compress_to_vec_zlib(&rgb_data, 6);
+
+                    let smask_ref = if has_alpha {
+                        let alpha_data: Vec<u8> = rgba.pixels().map(|p| p.0[3]).collect();
+                        let compressed_alpha =
+                            miniz_oxide::deflate::compress_to_vec_zlib(&alpha_data, 6);
+                        let mask_ref = alloc();
+                        let mut mask = pdf.image_xobject(mask_ref, &compressed_alpha);
+                        mask.filter(Filter::FlateDecode);
+                        mask.width(w as i32);
+                        mask.height(h as i32);
+                        mask.color_space().device_gray();
+                        mask.bits_per_component(8);
+                        Some(mask_ref)
+                    } else {
+                        None
+                    };
+
+                    let mut xobj = pdf.image_xobject(xobj_ref, &compressed_rgb);
+                    xobj.filter(Filter::FlateDecode);
+                    xobj.width(w as i32);
+                    xobj.height(h as i32);
                     xobj.color_space().device_rgb();
                     xobj.bits_per_component(8);
-                }
-                ImageFormat::Png => {
-                    let cursor = std::io::Cursor::new(&img.data);
-                    let reader = image::ImageReader::with_format(
-                        std::io::BufReader::new(cursor),
-                        image::ImageFormat::Png,
-                    );
-                    if let Ok(decoded) = reader.decode() {
-                        let rgba = decoded.to_rgba8();
-                        let (w, h) = (rgba.width(), rgba.height());
-                        let has_alpha = rgba.pixels().any(|p| p.0[3] < 255);
-
-                        let rgb_data: Vec<u8> = rgba
-                            .pixels()
-                            .flat_map(|p| [p.0[0], p.0[1], p.0[2]])
-                            .collect();
-                        let compressed_rgb =
-                            miniz_oxide::deflate::compress_to_vec_zlib(&rgb_data, 6);
-
-                        let smask_ref = if has_alpha {
-                            let alpha_data: Vec<u8> = rgba.pixels().map(|p| p.0[3]).collect();
-                            let compressed_alpha =
-                                miniz_oxide::deflate::compress_to_vec_zlib(&alpha_data, 6);
-                            let mask_ref = alloc();
-                            let mut mask = pdf.image_xobject(mask_ref, &compressed_alpha);
-                            mask.filter(Filter::FlateDecode);
-                            mask.width(w as i32);
-                            mask.height(h as i32);
-                            mask.color_space().device_gray();
-                            mask.bits_per_component(8);
-                            Some(mask_ref)
-                        } else {
-                            None
-                        };
-
-                        let mut xobj = pdf.image_xobject(xobj_ref, &compressed_rgb);
-                        xobj.filter(Filter::FlateDecode);
-                        xobj.width(w as i32);
-                        xobj.height(h as i32);
-                        xobj.color_space().device_rgb();
-                        xobj.bits_per_component(8);
-                        if let Some(mask_ref) = smask_ref {
-                            xobj.s_mask(mask_ref);
-                        }
-                    } else {
-                        continue;
+                    if let Some(mask_ref) = smask_ref {
+                        xobj.s_mask(mask_ref);
                     }
                 }
             }
+        }
 
-            image_xobjects.push((pdf_name.clone(), xobj_ref));
-            image_pdf_names.insert(block_idx, pdf_name);
+        image_xobjects.push((pdf_name.clone(), xobj_ref));
+        pdf_name
+    };
+
+    for (block_idx, block) in doc.blocks.iter().enumerate() {
+        if let Block::Paragraph(para) = block {
+            // Paragraph-level images
+            if let Some(img) = &para.image {
+                let name =
+                    embed_image(img, &mut image_xobjects, &mut pdf, &mut alloc);
+                image_pdf_names.insert(block_idx, name);
+            }
+            // Inline images in runs
+            for (run_idx, run) in para.runs.iter().enumerate() {
+                if let Some(img) = &run.inline_image {
+                    let name =
+                        embed_image(img, &mut image_xobjects, &mut pdf, &mut alloc);
+                    inline_image_pdf_names.insert((block_idx, run_idx), name);
+                }
+            }
         }
     }
 
@@ -391,18 +410,39 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                 let text_empty = is_text_empty(&para.runs);
                 let has_tabs = para.runs.iter().any(|r| r.is_tab);
+                let block_inline_images: HashMap<usize, String> = inline_image_pdf_names
+                    .iter()
+                    .filter(|((bi, _), _)| *bi == block_idx)
+                    .map(|((_, ri), name)| (*ri, name.clone()))
+                    .collect();
                 let lines = if para.image.is_some() || text_empty {
                     vec![]
                 } else if has_tabs {
                     build_tabbed_line(&para.runs, &seen_fonts, &para.tab_stops, para.indent_left)
                 } else {
-                    build_paragraph_lines(&para.runs, &seen_fonts, para_text_width, text_hanging)
+                    build_paragraph_lines(&para.runs, &seen_fonts, para_text_width, text_hanging, &block_inline_images)
                 };
+
+                // For lines containing inline images, use the tallest element as line height
+                let max_inline_img_h = lines.iter()
+                    .flat_map(|l| l.chunks.iter())
+                    .map(|c| c.inline_image_height)
+                    .fold(0.0f32, f32::max);
 
                 let content_h = if para.image.is_some() {
                     para.content_height.max(doc.line_pitch)
                 } else if text_empty {
                     line_h
+                } else if max_inline_img_h > 0.0 {
+                    // Lines with inline images: sum per-line heights
+                    let mut h = 0.0f32;
+                    for line in &lines {
+                        let img_h = line.chunks.iter()
+                            .map(|c| c.inline_image_height)
+                            .fold(0.0f32, f32::max);
+                        h += if img_h > line_h { img_h } else { line_h };
+                    }
+                    h
                 } else {
                     let min_lines = 1 + para.extra_line_breaks as usize;
                     lines.len().max(min_lines) as f32 * line_h
