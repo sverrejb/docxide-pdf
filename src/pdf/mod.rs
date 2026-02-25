@@ -8,7 +8,7 @@ use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str};
 use crate::error::Error;
 use crate::fonts::{FontEntry, encode_as_gids, font_key, register_font, to_winansi_bytes};
 use crate::model::{
-    Alignment, Block, Document, EmbeddedImage, FieldCode, HeaderFooter, ImageFormat, Run,
+    Alignment, Block, Document, EmbeddedImage, FieldCode, Footnote, HeaderFooter, ImageFormat, Run,
 };
 
 use layout::{
@@ -113,6 +113,12 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         .flat_map(|hf| hf.paragraphs.iter())
         .flat_map(|p| p.runs.iter());
 
+    let footnote_runs = doc
+        .footnotes
+        .values()
+        .flat_map(|fn_| fn_.paragraphs.iter())
+        .flat_map(|p| p.runs.iter());
+
     let all_runs: Vec<&Run> = doc
         .blocks
         .iter()
@@ -130,6 +136,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             }
         })
         .chain(hf_runs)
+        .chain(footnote_runs)
         .collect();
 
     let t_collect = t0.elapsed();
@@ -146,6 +153,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     chars.extend('0'..='9');
                 }
             }
+        }
+        if run.footnote_id.is_some() || run.is_footnote_ref_mark {
+            chars.extend('0'..='9');
         }
     }
     // List labels and leader characters from paragraphs
@@ -336,6 +346,31 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
     let t_images = t0.elapsed();
 
+    // Pre-compute footnote display order: scan body runs for footnote_id, assign sequential numbers
+    let mut footnote_display_order: HashMap<u32, u32> = HashMap::new();
+    {
+        let mut next_fn_num = 1u32;
+        for block in &doc.blocks {
+            let runs: Box<dyn Iterator<Item = &Run>> = match block {
+                Block::Paragraph(p) => Box::new(p.runs.iter()),
+                Block::Table(t) => Box::new(
+                    t.rows.iter()
+                        .flat_map(|row| row.cells.iter())
+                        .flat_map(|cell| cell.paragraphs.iter())
+                        .flat_map(|p| p.runs.iter()),
+                ),
+            };
+            for run in runs {
+                if let Some(id) = run.footnote_id {
+                    if !footnote_display_order.contains_key(&id) {
+                        footnote_display_order.insert(id, next_fn_num);
+                        next_fn_num += 1;
+                    }
+                }
+            }
+        }
+    }
+
     // Phase 2: build multi-page content streams
     let mut all_contents: Vec<Content> = Vec::new();
     let mut current_content = Content::new();
@@ -343,6 +378,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     let mut prev_space_after: f32 = 0.0;
     let mut all_page_links: Vec<Vec<LinkAnnotation>> = Vec::new();
     let mut current_page_links: Vec<LinkAnnotation> = Vec::new();
+
+    // Per-page footnote tracking
+    let mut all_page_footnote_ids: Vec<Vec<u32>> = Vec::new();
+    let mut current_page_footnote_ids: Vec<u32> = Vec::new();
+    let mut effective_margin_bottom: f32 = doc.margin_bottom;
 
     let adjacent_para = |idx: usize| -> Option<&crate::model::Paragraph> {
         match doc.blocks.get(idx)? {
@@ -360,7 +400,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     if !at_top {
                         all_contents.push(std::mem::replace(&mut current_content, Content::new()));
                         all_page_links.push(std::mem::take(&mut current_page_links));
+                        all_page_footnote_ids.push(std::mem::take(&mut current_page_footnote_ids));
                         slot_top = doc.page_height - doc.margin_top;
+                        effective_margin_bottom = doc.margin_bottom;
                     }
                     prev_space_after = 0.0;
                     if is_text_empty(&para.runs) {
@@ -408,8 +450,30 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     0.0
                 };
 
-                let text_empty = is_text_empty(&para.runs);
-                let has_tabs = para.runs.iter().any(|r| r.is_tab);
+                // Substitute footnote reference runs with display numbers
+                let has_footnote_refs = para.runs.iter().any(|r| r.footnote_id.is_some());
+                let effective_runs: std::borrow::Cow<'_, Vec<Run>> = if has_footnote_refs {
+                    let substituted: Vec<Run> = para
+                        .runs
+                        .iter()
+                        .map(|run| {
+                            if let Some(id) = run.footnote_id {
+                                let num = footnote_display_order.get(&id).copied().unwrap_or(0);
+                                let mut r = run.clone();
+                                r.text = num.to_string();
+                                r
+                            } else {
+                                run.clone()
+                            }
+                        })
+                        .collect();
+                    std::borrow::Cow::Owned(substituted)
+                } else {
+                    std::borrow::Cow::Borrowed(&para.runs)
+                };
+
+                let text_empty = is_text_empty(&effective_runs);
+                let has_tabs = effective_runs.iter().any(|r| r.is_tab);
                 let block_inline_images: HashMap<usize, String> = inline_image_pdf_names
                     .iter()
                     .filter(|((bi, _), _)| *bi == block_idx)
@@ -418,9 +482,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 let lines = if para.image.is_some() || text_empty {
                     vec![]
                 } else if has_tabs {
-                    build_tabbed_line(&para.runs, &seen_fonts, &para.tab_stops, para.indent_left)
+                    build_tabbed_line(&effective_runs, &seen_fonts, &para.tab_stops, para.indent_left)
                 } else {
-                    build_paragraph_lines(&para.runs, &seen_fonts, para_text_width, text_hanging, &block_inline_images)
+                    build_paragraph_lines(&effective_runs, &seen_fonts, para_text_width, text_hanging, &block_inline_images)
                 };
 
                 // For lines containing inline images, use the tallest element as line height
@@ -491,8 +555,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     0.0
                 };
 
-                if !at_page_top && slot_top - needed - keep_next_extra < doc.margin_bottom {
-                    let available = slot_top - inter_gap - doc.margin_bottom;
+                if !at_page_top && slot_top - needed - keep_next_extra < effective_margin_bottom {
+                    let available = slot_top - inter_gap - effective_margin_bottom;
                     let first_line_h = tallest_lhr
                         .map(|ratio| font_size * ratio)
                         .unwrap_or(font_size);
@@ -541,7 +605,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                         all_contents.push(std::mem::replace(&mut current_content, Content::new()));
                         all_page_links.push(std::mem::take(&mut current_page_links));
+                        all_page_footnote_ids.push(std::mem::take(&mut current_page_footnote_ids));
                         slot_top = doc.page_height - doc.margin_top;
+                        effective_margin_bottom = doc.margin_bottom;
 
                         let rest = &lines[lines_that_fit..];
                         let rest_content_h = rest.len() as f32 * line_h;
@@ -569,7 +635,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                     all_contents.push(std::mem::replace(&mut current_content, Content::new()));
                     all_page_links.push(std::mem::take(&mut current_page_links));
+                    all_page_footnote_ids.push(std::mem::take(&mut current_page_footnote_ids));
                     slot_top = doc.page_height - doc.margin_top;
+                    effective_margin_bottom = doc.margin_bottom;
                     inter_gap = 0.0;
                 }
 
@@ -716,6 +784,26 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                 slot_top -= content_h + bdr_top_pad;
                 prev_space_after = effective_space_after;
+
+                // Track footnotes referenced on this page
+                for run in para.runs.iter() {
+                    if let Some(id) = run.footnote_id {
+                        if !current_page_footnote_ids.contains(&id) {
+                            current_page_footnote_ids.push(id);
+                            if let Some(footnote) = doc.footnotes.get(&id) {
+                                let fn_height = compute_footnote_height(
+                                    footnote, &seen_fonts, text_width, doc.line_spacing,
+                                );
+                                let separator_h = if current_page_footnote_ids.len() == 1 {
+                                    12.0
+                                } else {
+                                    0.0
+                                };
+                                effective_margin_bottom += separator_h + fn_height;
+                            }
+                        }
+                    }
+                }
             }
 
             Block::Table(table) => {
@@ -736,6 +824,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     }
     all_contents.push(current_content);
     all_page_links.push(current_page_links);
+    all_page_footnote_ids.push(current_page_footnote_ids);
 
     let t_layout = t0.elapsed();
 
@@ -769,6 +858,108 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             };
             if let Some(hf) = footer {
                 render_header_footer(content, hf, &seen_fonts, doc, false, page_num, total_pages);
+            }
+        }
+    }
+
+    // Phase 2c: render footnotes at page bottom
+    // Pad footnote tracking to match page count (table renderer may add pages)
+    while all_page_footnote_ids.len() < all_contents.len() {
+        all_page_footnote_ids.push(Vec::new());
+    }
+    for (page_idx, content) in all_contents.iter_mut().enumerate() {
+        let fn_ids = &all_page_footnote_ids[page_idx];
+        if fn_ids.is_empty() {
+            continue;
+        }
+
+        // Compute total footnote block height
+        let mut total_fn_height = 0.0f32;
+        for fn_id in fn_ids {
+            if let Some(footnote) = doc.footnotes.get(fn_id) {
+                total_fn_height +=
+                    compute_footnote_height(footnote, &seen_fonts, text_width, doc.line_spacing);
+            }
+        }
+        let separator_gap = 12.0f32;
+        let block_top = doc.margin_bottom + total_fn_height + separator_gap;
+
+        // Draw separator line: 0.5pt black, ~1/3 page width
+        let sep_y = block_top - 3.0;
+        let sep_width = 144.0f32.min(text_width);
+        content.save_state();
+        content.set_line_width(0.5);
+        content.move_to(doc.margin_left, sep_y);
+        content.line_to(doc.margin_left + sep_width, sep_y);
+        content.stroke();
+        content.restore_state();
+
+        // Render footnote paragraphs top-down from below separator
+        let mut fn_y = sep_y - 9.0;
+        for fn_id in fn_ids {
+            let Some(footnote) = doc.footnotes.get(fn_id) else {
+                continue;
+            };
+            let display_num = footnote_display_order.get(fn_id).copied().unwrap_or(0);
+
+            for para in &footnote.paragraphs {
+                // Substitute is_footnote_ref_mark runs with display number
+                let substituted_runs: Vec<Run> = para
+                    .runs
+                    .iter()
+                    .map(|run| {
+                        if run.is_footnote_ref_mark {
+                            let mut r = run.clone();
+                            r.text = display_num.to_string();
+                            r
+                        } else {
+                            run.clone()
+                        }
+                    })
+                    .collect();
+
+                if is_text_empty(&substituted_runs) {
+                    continue;
+                }
+
+                let (fs, tallest_lhr, tallest_ar) =
+                    tallest_run_metrics(&substituted_runs, &seen_fonts);
+                let effective_ls = para.line_spacing.unwrap_or(1.0);
+                let lh = tallest_lhr
+                    .map(|ratio| fs * ratio * effective_ls)
+                    .unwrap_or(fs * 1.2 * effective_ls);
+
+                let lines = build_paragraph_lines(
+                    &substituted_runs,
+                    &seen_fonts,
+                    text_width,
+                    0.0,
+                    &HashMap::new(),
+                );
+
+                if lines.is_empty() {
+                    continue;
+                }
+
+                let ascender_ratio = tallest_ar.unwrap_or(0.75);
+                let baseline_y = fn_y - fs * ascender_ratio;
+
+                render_paragraph_lines(
+                    content,
+                    &lines,
+                    &para.alignment,
+                    doc.margin_left,
+                    text_width,
+                    baseline_y,
+                    lh,
+                    lines.len(),
+                    0,
+                    &mut Vec::new(),
+                    0.0,
+                    &seen_fonts,
+                );
+
+                fn_y -= lines.len() as f32 * lh;
             }
         }
     }
@@ -871,4 +1062,26 @@ fn label_for_run<'a>(
         None => to_winansi_bytes(label),
     };
     (entry.pdf_name.as_str(), bytes)
+}
+
+fn compute_footnote_height(
+    footnote: &Footnote,
+    seen_fonts: &HashMap<String, FontEntry>,
+    text_width: f32,
+    _doc_line_spacing: f32,
+) -> f32 {
+    let mut height = 0.0f32;
+    for para in &footnote.paragraphs {
+        if is_text_empty(&para.runs) {
+            continue;
+        }
+        let (fs, tallest_lhr, _) = tallest_run_metrics(&para.runs, seen_fonts);
+        let effective_ls = para.line_spacing.unwrap_or(1.0);
+        let lh = tallest_lhr
+            .map(|ratio| fs * ratio * effective_ls)
+            .unwrap_or(fs * 1.2 * effective_ls);
+        let lines = build_paragraph_lines(&para.runs, seen_fonts, text_width, 0.0, &HashMap::new());
+        height += lines.len().max(1) as f32 * lh;
+    }
+    height
 }

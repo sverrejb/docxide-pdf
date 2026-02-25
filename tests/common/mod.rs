@@ -5,6 +5,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fs, io};
 
 const SKIP_FIXTURES: &[&str] = &["sample100kB"];
+const SKIP_GROUPS: &[&str] = &["scraped"];
 
 fn natural_cmp(a: &Path, b: &Path) -> std::cmp::Ordering {
     let a = a.file_name().and_then(|n| n.to_str()).unwrap_or("");
@@ -23,6 +24,10 @@ pub fn discover_fixtures() -> io::Result<Vec<PathBuf>> {
     for group_entry in fs::read_dir(fixtures_dir)? {
         let group = group_entry?.path();
         if !group.is_dir() {
+            continue;
+        }
+        let group_name = group.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if SKIP_GROUPS.contains(&group_name) {
             continue;
         }
         for entry in fs::read_dir(&group)? {

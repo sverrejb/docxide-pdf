@@ -7,8 +7,8 @@ use std::path::Path;
 use crate::error::Error;
 use crate::model::{
     Alignment, Block, CellBorder, CellBorders, CellMargins, CellVAlign, Document, EmbeddedImage,
-    FieldCode, HeaderFooter, ImageFormat, Paragraph, ParagraphBorder, ParagraphBorders, Run,
-    TabAlignment, TabStop, Table, TableCell, TableRow, VMerge, VertAlign,
+    FieldCode, Footnote, HeaderFooter, ImageFormat, Paragraph, ParagraphBorder, ParagraphBorders,
+    Run, TabAlignment, TabStop, Table, TableCell, TableRow, VMerge, VertAlign,
 };
 
 use styles::{
@@ -562,6 +562,8 @@ fn parse_runs(
                                     hyperlink_url: hyperlink_url.clone(),
                                     highlight,
                                     inline_image: None,
+                                    footnote_id: None,
+                                    is_footnote_ref_mark: false,
                                 });
                             }
                             in_field = true;
@@ -593,6 +595,8 @@ fn parse_runs(
                                         hyperlink_url: hyperlink_url.clone(),
                                         highlight: None,
                                         inline_image: None,
+                                        footnote_id: None,
+                                        is_footnote_ref_mark: false,
                                     });
                                 }
                                 in_field = false;
@@ -632,6 +636,8 @@ fn parse_runs(
                             hyperlink_url: hyperlink_url.clone(),
                             highlight,
                             inline_image: None,
+                            footnote_id: None,
+                            is_footnote_ref_mark: false,
                         });
                     }
                     // Insert tab marker run
@@ -650,6 +656,8 @@ fn parse_runs(
                         hyperlink_url: None,
                         highlight: None,
                         inline_image: None,
+                        footnote_id: None,
+                        is_footnote_ref_mark: false,
                     });
                 }
                 "br" if !in_field => {
@@ -676,6 +684,8 @@ fn parse_runs(
                             hyperlink_url: hyperlink_url.clone(),
                             highlight,
                             inline_image: None,
+                            footnote_id: None,
+                            is_footnote_ref_mark: false,
                         });
                     }
                     if let Some(img) = parse_run_drawing(child, rels, zip) {
@@ -694,8 +704,95 @@ fn parse_runs(
                             hyperlink_url: None,
                             highlight: None,
                             inline_image: Some(img),
+                            footnote_id: None,
+                            is_footnote_ref_mark: false,
                         });
                     }
+                }
+                "footnoteReference" if !in_field => {
+                    if !pending_text.is_empty() {
+                        runs.push(Run {
+                            text: std::mem::take(&mut pending_text),
+                            font_size,
+                            font_name: font_name.clone(),
+                            bold,
+                            italic,
+                            underline,
+                            strikethrough,
+                            color,
+                            is_tab: false,
+                            vertical_align,
+                            field_code: None,
+                            hyperlink_url: hyperlink_url.clone(),
+                            highlight,
+                            inline_image: None,
+                            footnote_id: None,
+                            is_footnote_ref_mark: false,
+                        });
+                    }
+                    if let Some(id) = child
+                        .attribute((WML_NS, "id"))
+                        .and_then(|v| v.parse::<u32>().ok())
+                    {
+                        runs.push(Run {
+                            text: String::new(),
+                            font_size,
+                            font_name: font_name.clone(),
+                            bold,
+                            italic,
+                            underline: false,
+                            strikethrough: false,
+                            color,
+                            is_tab: false,
+                            vertical_align: VertAlign::Superscript,
+                            field_code: None,
+                            hyperlink_url: None,
+                            highlight: None,
+                            inline_image: None,
+                            footnote_id: Some(id),
+                            is_footnote_ref_mark: false,
+                        });
+                    }
+                }
+                "footnoteRef" if !in_field => {
+                    if !pending_text.is_empty() {
+                        runs.push(Run {
+                            text: std::mem::take(&mut pending_text),
+                            font_size,
+                            font_name: font_name.clone(),
+                            bold,
+                            italic,
+                            underline,
+                            strikethrough,
+                            color,
+                            is_tab: false,
+                            vertical_align,
+                            field_code: None,
+                            hyperlink_url: hyperlink_url.clone(),
+                            highlight,
+                            inline_image: None,
+                            footnote_id: None,
+                            is_footnote_ref_mark: false,
+                        });
+                    }
+                    runs.push(Run {
+                        text: String::new(),
+                        font_size,
+                        font_name: font_name.clone(),
+                        bold,
+                        italic,
+                        underline: false,
+                        strikethrough: false,
+                        color,
+                        is_tab: false,
+                        vertical_align: VertAlign::Superscript,
+                        field_code: None,
+                        hyperlink_url: None,
+                        highlight: None,
+                        inline_image: None,
+                        footnote_id: None,
+                        is_footnote_ref_mark: true,
+                    });
                 }
                 _ => {}
             }
@@ -717,6 +814,8 @@ fn parse_runs(
                 hyperlink_url: hyperlink_url.clone(),
                 highlight,
                 inline_image: None,
+                footnote_id: None,
+                is_footnote_ref_mark: false,
             });
         }
     }
@@ -758,6 +857,8 @@ fn parse_runs(
                 field_code: None,
                 hyperlink_url: None,
                 inline_image: None,
+                footnote_id: None,
+                is_footnote_ref_mark: false,
             });
         }
     }
@@ -780,6 +881,8 @@ fn parse_runs(
             field_code: None,
             hyperlink_url: None,
             inline_image: None,
+            footnote_id: None,
+            is_footnote_ref_mark: false,
         });
     }
 
@@ -847,6 +950,100 @@ fn parse_header_footer_xml(
     }
 }
 
+fn parse_footnotes(
+    zip: &mut zip::ZipArchive<std::fs::File>,
+    styles: &StylesInfo,
+    theme: &ThemeFonts,
+) -> HashMap<u32, Footnote> {
+    let mut footnotes = HashMap::new();
+    let Some(xml_text) = read_zip_text(zip, "word/footnotes.xml") else {
+        return footnotes;
+    };
+    let Ok(xml) = roxmltree::Document::parse(&xml_text) else {
+        return footnotes;
+    };
+    let root = xml.root_element();
+
+    for node in root.children() {
+        if node.tag_name().namespace() != Some(WML_NS) || node.tag_name().name() != "footnote" {
+            continue;
+        }
+        // Skip separator/continuationSeparator footnotes (type attribute, IDs 0 and 1)
+        if node.attribute((WML_NS, "type")).is_some() {
+            continue;
+        }
+        let Some(id) = node
+            .attribute((WML_NS, "id"))
+            .and_then(|v| v.parse::<u32>().ok())
+        else {
+            continue;
+        };
+
+        let mut paragraphs = Vec::new();
+        let empty_rels = HashMap::new();
+        for p in node.children() {
+            if p.tag_name().namespace() != Some(WML_NS) || p.tag_name().name() != "p" {
+                continue;
+            }
+            let ppr = wml(p, "pPr");
+            let para_style_id = ppr
+                .and_then(|ppr| wml_attr(ppr, "pStyle"))
+                .unwrap_or("FootnoteText");
+            let para_style = styles.paragraph_styles.get(para_style_id);
+
+            let alignment = ppr
+                .and_then(|ppr| wml_attr(ppr, "jc"))
+                .map(parse_alignment)
+                .or_else(|| para_style.and_then(|s| s.alignment))
+                .unwrap_or(Alignment::Left);
+
+            let parsed = parse_runs(p, styles, theme, &empty_rels, zip);
+
+            let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
+            let space_before = inline_spacing
+                .and_then(|n| twips_attr(n, "before"))
+                .or_else(|| para_style.and_then(|s| s.space_before))
+                .unwrap_or(0.0);
+            let space_after = inline_spacing
+                .and_then(|n| twips_attr(n, "after"))
+                .or_else(|| para_style.and_then(|s| s.space_after))
+                .unwrap_or(0.0);
+            let line_spacing = inline_spacing
+                .and_then(|n| n.attribute((WML_NS, "line")))
+                .and_then(|v| v.parse::<f32>().ok())
+                .map(|val| val / 240.0)
+                .or_else(|| para_style.and_then(|s| s.line_spacing))
+                .or(Some(1.0));
+
+            paragraphs.push(Paragraph {
+                runs: parsed.runs,
+                space_before,
+                space_after,
+                content_height: 0.0,
+                alignment,
+                indent_left: 0.0,
+                indent_hanging: 0.0,
+                list_label: String::new(),
+                contextual_spacing: false,
+                keep_next: false,
+                line_spacing,
+                image: None,
+                borders: ParagraphBorders::default(),
+                shading: None,
+                page_break_before: false,
+                tab_stops: vec![],
+                extra_line_breaks: parsed.line_break_count,
+            });
+        }
+
+        if !paragraphs.is_empty() {
+            footnotes.insert(id, Footnote { paragraphs });
+        }
+    }
+
+    footnotes
+}
+
 pub(super) fn read_zip_text(zip: &mut zip::ZipArchive<std::fs::File>, name: &str) -> Option<String> {
     let mut content = String::new();
     zip.by_name(name).ok()?.read_to_string(&mut content).ok()?;
@@ -869,6 +1066,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
     let numbering = parse_numbering(&mut zip);
     let rels = parse_relationships(&mut zip);
     let embedded_fonts = parse_font_table(&mut zip);
+    let footnotes = parse_footnotes(&mut zip, &styles, &theme);
 
     let mut xml_content = String::new();
     zip.by_name("word/document.xml")
@@ -1337,6 +1535,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
         header_margin,
         footer_margin,
         different_first_page,
+        footnotes,
     })
 }
 

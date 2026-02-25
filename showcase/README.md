@@ -22,7 +22,7 @@ Reference (MS Word) on the left, docxide-pdf on the right.
 
 <img src="case5_ref.png" width="420"/> <img src="case5_gen.png" width="420"/>
 
-## case6 — 54.8% SSIM
+## case6 — 85.3% SSIM
 
 <img src="case6_ref.png" width="420"/> <img src="case6_gen.png" width="420"/>
 
@@ -38,7 +38,7 @@ Reference (MS Word) on the left, docxide-pdf on the right.
 
 <img src="case9_ref.png" width="420"/> <img src="case9_gen.png" width="420"/>
 
-## case10 — 82.5% SSIM
+## case10 — 83.5% SSIM
 
 <img src="case10_ref.png" width="420"/> <img src="case10_gen.png" width="420"/>
 
@@ -49,3 +49,27 @@ Reference (MS Word) on the left, docxide-pdf on the right.
 ## case12 — 99.6% SSIM
 
 <img src="case12_ref.png" width="420"/> <img src="case12_gen.png" width="420"/>
+
+## case13 — 91.7% SSIM
+
+<img src="case13_ref.png" width="420"/> <img src="case13_gen.png" width="420"/>
+
+## case14 — 88.2% SSIM
+
+<img src="case14_ref.png" width="420"/> <img src="case14_gen.png" width="420"/>
+
+## case15 — 87.5% SSIM
+
+<img src="case15_ref.png" width="420"/> <img src="case15_gen.png" width="420"/>
+
+## case16 — 75.8% SSIM
+
+<img src="case16_ref.png" width="420"/> <img src="case16_gen.png" width="420"/>
+
+## case17 — 95.2% SSIM
+
+<img src="case17_ref.png" width="420"/> <img src="case17_gen.png" width="420"/>
+
+## case18 — 67.4% SSIM
+
+<img src="case18_ref.png" width="420"/> <img src="case18_gen.png" width="420"/>

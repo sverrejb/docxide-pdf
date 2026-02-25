@@ -69,8 +69,15 @@ Additional fixture ideas:
 - ~~Headers and footers~~ — covered by case11
 - ~~Mixed inline formatting within a single line~~ — covered by case9
 - ~~Inline images (PNG, JPEG, varying sizes)~~ — covered by case16
+- ~~Paragraph borders and shading (all sides, combined with background color)~~ — covered by case17
 - Multi-section documents (different page sizes/orientations per section)
 - Deep style inheritance (3+ level chains with run vs style vs paragraph conflicts)
-- Paragraph borders and shading (all sides, not just bottom; combined with background color)
 - Hyperlinks and bookmarks
 - Multi-column layouts
+- Footnotes and endnotes (parsing `footnotes.xml`, separator line, superscript references, page-bottom rendering)
+- Nested/multi-level lists (outline numbering: `1. → a. → i. → •`)
+- Line spacing modes (`w:lineRule="exact"` and `"atLeast"`, not just `"auto"`)
+- First-line indent (`w:ind @firstLine`) and right indent (`w:ind @right`)
+- Soft line breaks (`w:br` without type attribute)
+- Nested tables (tables inside table cells)
+- Table of Contents (right-aligned tabs + dot leaders + page field codes)

@@ -61,7 +61,8 @@
       "Bash(DOCXSIDE_CASE=case16 cargo test:*)",
       "Bash(cd:*)",
       "Bash(DOCXIDE_CASE=case1 cargo test:*)",
-      "Bash(DOCXSIDE_CASE=case17 cargo test:*)"
+      "Bash(DOCXSIDE_CASE=case17 cargo test:*)",
+      "Bash(DOCXSIDE_CASE=case18 cargo test:*)"
     ]
   }
 }

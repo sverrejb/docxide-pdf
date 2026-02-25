@@ -32,6 +32,10 @@ pub struct HeaderFooter {
     pub paragraphs: Vec<Paragraph>,
 }
 
+pub struct Footnote {
+    pub paragraphs: Vec<Paragraph>,
+}
+
 pub struct Document {
     pub page_width: f32,
     pub page_height: f32,
@@ -52,6 +56,7 @@ pub struct Document {
     pub header_margin: f32,
     pub footer_margin: f32,
     pub different_first_page: bool,
+    pub footnotes: std::collections::HashMap<u32, Footnote>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -121,6 +126,8 @@ pub struct Run {
     pub field_code: Option<FieldCode>,
     pub hyperlink_url: Option<String>,
     pub inline_image: Option<EmbeddedImage>,
+    pub footnote_id: Option<u32>,
+    pub is_footnote_ref_mark: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
