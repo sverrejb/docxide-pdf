@@ -837,10 +837,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     HorizontalPosition::Offset(o) => sp.margin_left + o,
                                 },
                             };
+                            // OOXML: positive offset = downward; PDF: Y increases upward
                             let fi_y_top = match fi.v_relative_from {
-                                "page" => sp.page_height + fi.v_offset_pt,
-                                "margin" | "topMargin" => sp.page_height - sp.margin_top + fi.v_offset_pt,
-                                _ => slot_top + fi.v_offset_pt,
+                                "page" => sp.page_height - fi.v_offset_pt,
+                                "margin" | "topMargin" => sp.page_height - sp.margin_top - fi.v_offset_pt,
+                                _ => slot_top - fi.v_offset_pt,
                             };
                             let fi_y_bottom = fi_y_top - img.display_height;
                             current_content.save_state();
