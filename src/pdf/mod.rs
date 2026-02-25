@@ -8,8 +8,8 @@ use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str};
 use crate::error::Error;
 use crate::fonts::{FontEntry, encode_as_gids, font_key, register_font, to_winansi_bytes};
 use crate::model::{
-    Alignment, Block, Document, EmbeddedImage, FieldCode, Footnote, HeaderFooter, ImageFormat,
-    LineSpacing, Run, SectionBreakType, SectionProperties,
+    Alignment, Block, Document, EmbeddedImage, FieldCode, Footnote, HeaderFooter,
+    HorizontalPosition, ImageFormat, LineSpacing, Run, SectionBreakType, SectionProperties,
 };
 
 use layout::{
@@ -393,6 +393,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         pdf_name
     };
 
+    // Key: (global_block_idx, floating_img_idx) → pdf xobject name
+    let mut floating_image_pdf_names: HashMap<(usize, usize), String> = HashMap::new();
     {
         let mut global_block_idx = 0usize;
         for section in &doc.sections {
@@ -409,6 +411,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 embed_image(img, &mut image_xobjects, &mut pdf, &mut alloc);
                             inline_image_pdf_names.insert((global_block_idx, run_idx), name);
                         }
+                    }
+                    for (fi_idx, fi) in para.floating_images.iter().enumerate() {
+                        let name = embed_image(&fi.image, &mut image_xobjects, &mut pdf, &mut alloc);
+                        floating_image_pdf_names.insert((global_block_idx, fi_idx), name);
                     }
                 }
                 global_block_idx += 1;
@@ -808,6 +814,47 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         );
                         current_content.fill_nonzero();
                         current_content.restore_state();
+                    }
+
+                    for (fi_idx, fi) in para.floating_images.iter().enumerate() {
+                        if let Some(pdf_name) = floating_image_pdf_names.get(&(global_block_idx, fi_idx)) {
+                            let img = &fi.image;
+                            let fi_x = match fi.h_relative_from {
+                                "page" => match fi.h_position {
+                                    HorizontalPosition::AlignCenter => (sp.page_width - img.display_width) / 2.0,
+                                    HorizontalPosition::AlignRight => sp.page_width - img.display_width,
+                                    HorizontalPosition::AlignLeft => 0.0,
+                                    HorizontalPosition::Offset(o) => o,
+                                },
+                                "margin" | "column" | _ => match fi.h_position {
+                                    HorizontalPosition::AlignCenter => {
+                                        sp.margin_left + (text_width - img.display_width) / 2.0
+                                    }
+                                    HorizontalPosition::AlignRight => {
+                                        sp.margin_left + text_width - img.display_width
+                                    }
+                                    HorizontalPosition::AlignLeft => sp.margin_left,
+                                    HorizontalPosition::Offset(o) => sp.margin_left + o,
+                                },
+                            };
+                            let fi_y_top = match fi.v_relative_from {
+                                "page" => sp.page_height + fi.v_offset_pt,
+                                "margin" | "topMargin" => sp.page_height - sp.margin_top + fi.v_offset_pt,
+                                _ => slot_top + fi.v_offset_pt,
+                            };
+                            let fi_y_bottom = fi_y_top - img.display_height;
+                            current_content.save_state();
+                            current_content.transform([
+                                img.display_width,
+                                0.0,
+                                0.0,
+                                img.display_height,
+                                fi_x,
+                                fi_y_bottom,
+                            ]);
+                            current_content.x_object(Name(pdf_name.as_bytes()));
+                            current_content.restore_state();
+                        }
                     }
 
                     if (para.image.is_some() || text_empty) && para.content_height > 0.0 {

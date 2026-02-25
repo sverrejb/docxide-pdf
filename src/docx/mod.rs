@@ -7,9 +7,9 @@ use std::path::Path;
 use crate::error::Error;
 use crate::model::{
     Alignment, Block, CellBorder, CellBorders, CellMargins, CellVAlign, Document, EmbeddedImage,
-    FieldCode, Footnote, HeaderFooter, ImageFormat, LineSpacing, Paragraph, ParagraphBorder,
-    ParagraphBorders, Run, Section, SectionBreakType, SectionProperties, TabAlignment, TabStop,
-    Table, TableCell, TableRow, VMerge, VertAlign,
+    FieldCode, FloatingImage, Footnote, HeaderFooter, HorizontalPosition, ImageFormat, LineSpacing,
+    Paragraph, ParagraphBorder, ParagraphBorders, Run, Section, SectionBreakType,
+    SectionProperties, TabAlignment, TabStop, Table, TableCell, TableRow, VMerge, VertAlign,
 };
 
 use styles::{
@@ -420,6 +420,7 @@ struct ParsedRuns {
     runs: Vec<Run>,
     has_page_break: bool,
     line_break_count: u32,
+    floating_images: Vec<FloatingImage>,
 }
 
 fn parse_runs(
@@ -472,6 +473,7 @@ fn parse_runs(
         .collect();
 
     let mut runs = Vec::new();
+    let mut floating_images: Vec<FloatingImage> = Vec::new();
     let mut has_page_break = false;
     let mut line_break_count: u32 = 0;
     let mut in_field = false;
@@ -690,25 +692,31 @@ fn parse_runs(
                             is_footnote_ref_mark: false,
                         });
                     }
-                    if let Some(img) = parse_run_drawing(child, rels, zip) {
-                        runs.push(Run {
-                            text: String::new(),
-                            font_size,
-                            font_name: font_name.clone(),
-                            bold: false,
-                            italic: false,
-                            underline: false,
-                            strikethrough: false,
-                            color: None,
-                            is_tab: false,
-                            vertical_align: VertAlign::Baseline,
-                            field_code: None,
-                            hyperlink_url: None,
-                            highlight: None,
-                            inline_image: Some(img),
-                            footnote_id: None,
-                            is_footnote_ref_mark: false,
-                        });
+                    match parse_run_drawing(child, rels, zip) {
+                        Some(RunDrawingResult::Inline(img)) => {
+                            runs.push(Run {
+                                text: String::new(),
+                                font_size,
+                                font_name: font_name.clone(),
+                                bold: false,
+                                italic: false,
+                                underline: false,
+                                strikethrough: false,
+                                color: None,
+                                is_tab: false,
+                                vertical_align: VertAlign::Baseline,
+                                field_code: None,
+                                hyperlink_url: None,
+                                highlight: None,
+                                inline_image: Some(img),
+                                footnote_id: None,
+                                is_footnote_ref_mark: false,
+                            });
+                        }
+                        Some(RunDrawingResult::Floating(fi)) => {
+                            floating_images.push(fi);
+                        }
+                        None => {}
                     }
                 }
                 "footnoteReference" if !in_field => {
@@ -892,6 +900,7 @@ fn parse_runs(
         runs,
         has_page_break,
         line_break_count,
+        floating_images,
     }
 }
 
@@ -924,6 +933,7 @@ fn parse_header_footer_xml(
 
         let parsed = parse_runs(node, styles, theme, rels, zip);
         let mut runs = parsed.runs;
+        let mut floating_images = parsed.floating_images;
 
         let has_inline_images = runs.iter().any(|r| r.inline_image.is_some());
         let has_text = runs.iter().any(|r| !r.text.is_empty());
@@ -936,6 +946,7 @@ fn parse_header_footer_xml(
             (None, 0.0)
         } else {
             let drawing = compute_drawing_info(node, rels, zip);
+            floating_images.extend(drawing.floating_images);
             (drawing.image, drawing.height)
         };
 
@@ -959,6 +970,7 @@ fn parse_header_footer_xml(
             page_break_before: false,
             tab_stops: vec![],
             extra_line_breaks: parsed.line_break_count,
+            floating_images,
         });
     }
 
@@ -1056,6 +1068,7 @@ fn parse_footnotes(
                 page_break_before: false,
                 tab_stops: vec![],
                 extra_line_breaks: parsed.line_break_count,
+                floating_images: vec![],
             });
         }
 
@@ -1423,6 +1436,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                                 page_break_before: false,
                                 tab_stops: vec![],
                                 extra_line_breaks: parsed.line_break_count,
+                                floating_images: vec![],
                             });
                         }
                         cells.push(TableCell {
@@ -1567,6 +1581,8 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                 let has_text = runs.iter().any(|r| !r.text.is_empty() || r.is_tab);
                 let has_inline_images = runs.iter().any(|r| r.inline_image.is_some());
 
+                let mut floating_images = parsed.floating_images;
+
                 let (para_image, content_height) = if has_inline_images && !has_text {
                     // Image-only paragraph: extract image for block-level rendering
                     let img_run_idx = runs.iter().position(|r| r.inline_image.is_some());
@@ -1577,8 +1593,8 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     // Mixed text+image: images stay in runs, no paragraph-level image
                     (None, 0.0)
                 } else {
-                    // No images: check for legacy drawing info (e.g. drawings not in runs)
                     let drawing = compute_drawing_info(node, &rels, &mut zip);
+                    floating_images.extend(drawing.floating_images);
                     (drawing.image, drawing.height)
                 };
 
@@ -1602,6 +1618,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     page_break_before: parsed.has_page_break,
                     tab_stops,
                     extra_line_breaks: parsed.line_break_count,
+                    floating_images,
                 }));
 
                 // Mid-document section break: sectPr inside pPr ends the current section
@@ -1771,52 +1788,66 @@ fn image_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat)> {
     None
 }
 
+enum RunDrawingResult {
+    Inline(EmbeddedImage),
+    Floating(FloatingImage),
+}
+
 fn parse_run_drawing(
     drawing_node: roxmltree::Node,
     rels: &HashMap<String, String>,
     zip: &mut zip::ZipArchive<std::fs::File>,
-) -> Option<EmbeddedImage> {
+) -> Option<RunDrawingResult> {
     for container in drawing_node.children() {
         let name = container.tag_name().name();
-        if (name == "inline" || name == "anchor")
-            && container.tag_name().namespace() == Some(WPD_NS)
-        {
-            let extent = container.children().find(|n| {
-                n.tag_name().name() == "extent" && n.tag_name().namespace() == Some(WPD_NS)
-            });
-            let cx = extent
-                .and_then(|n| n.attribute("cx"))
-                .and_then(|v| v.parse::<f32>().ok())
-                .unwrap_or(0.0);
-            let cy = extent
-                .and_then(|n| n.attribute("cy"))
-                .and_then(|v| v.parse::<f32>().ok())
-                .unwrap_or(0.0);
-            let display_w = cx / 12700.0;
-            let display_h = cy / 12700.0;
+        if name != "inline" && name != "anchor" {
+            continue;
+        }
+        if container.tag_name().namespace() != Some(WPD_NS) {
+            continue;
+        }
 
-            if let Some(embed_id) = find_blip_embed(container)
-                && let Some(target) = rels.get(embed_id)
-            {
-                let zip_path = target
-                    .strip_prefix('/')
-                    .map(String::from)
-                    .unwrap_or_else(|| format!("word/{}", target));
-                if let Ok(mut entry) = zip.by_name(&zip_path) {
-                    let mut data = Vec::new();
-                    if entry.read_to_end(&mut data).is_ok()
-                        && let Some((pw, ph, fmt)) = image_dimensions(&data)
-                    {
-                        return Some(EmbeddedImage {
-                            data,
-                            format: fmt,
-                            pixel_width: pw,
-                            pixel_height: ph,
-                            display_width: display_w,
-                            display_height: display_h,
-                        });
+        let extent = container.children().find(|n| {
+            n.tag_name().name() == "extent" && n.tag_name().namespace() == Some(WPD_NS)
+        });
+        let cx = extent
+            .and_then(|n| n.attribute("cx"))
+            .and_then(|v| v.parse::<f32>().ok())
+            .unwrap_or(0.0);
+        let cy = extent
+            .and_then(|n| n.attribute("cy"))
+            .and_then(|v| v.parse::<f32>().ok())
+            .unwrap_or(0.0);
+        let display_w = cx / 12700.0;
+        let display_h = cy / 12700.0;
+
+        if name == "anchor" {
+            let has_wrap_none = container.children().any(|n| {
+                n.tag_name().name() == "wrapNone"
+                    && n.tag_name().namespace() == Some(WPD_NS)
+            });
+            if has_wrap_none {
+                if let Some(embed_id) = find_blip_embed(container) {
+                    if let Some(img) = read_image_from_zip(embed_id, rels, zip, display_w, display_h) {
+                        let (h_position, h_relative, v_offset, v_relative, behind_doc) =
+                            parse_anchor_position(container);
+                        return Some(RunDrawingResult::Floating(FloatingImage {
+                            image: img,
+                            h_position,
+                            h_relative_from: h_relative,
+                            v_offset_pt: v_offset,
+                            v_relative_from: v_relative,
+                            behind_doc,
+                        }));
                     }
                 }
+                continue;
+            }
+        }
+
+        if let Some(embed_id) = find_blip_embed(container) {
+            if let Some(img) = read_image_from_zip(embed_id, rels, zip, display_w, display_h) {
+                return Some(RunDrawingResult::Inline(img));
             }
         }
     }
@@ -1833,6 +1864,75 @@ fn find_blip_embed<'a>(container: roxmltree::Node<'a, 'a>) -> Option<&'a str> {
 struct DrawingInfo {
     height: f32,
     image: Option<EmbeddedImage>,
+    floating_images: Vec<FloatingImage>,
+}
+
+fn parse_anchor_position(container: roxmltree::Node) -> (HorizontalPosition, &'static str, f32, &'static str, bool) {
+    let behind_doc = container.attribute("behindDoc") == Some("1");
+
+    let pos_h = container.children().find(|n| {
+        n.tag_name().name() == "positionH" && n.tag_name().namespace() == Some(WPD_NS)
+    });
+    let h_relative = match pos_h.and_then(|n| n.attribute("relativeFrom")) {
+        Some("page") => "page",
+        Some("margin") => "margin",
+        _ => "column",
+    };
+    let h_position = if let Some(align_node) = pos_h.and_then(|n| n.children().find(|c| c.tag_name().name() == "align")) {
+        match align_node.text().unwrap_or("") {
+            "center" => HorizontalPosition::AlignCenter,
+            "right" => HorizontalPosition::AlignRight,
+            _ => HorizontalPosition::AlignLeft,
+        }
+    } else if let Some(offset_node) = pos_h.and_then(|n| n.children().find(|c| c.tag_name().name() == "posOffset")) {
+        let emu = offset_node.text().unwrap_or("0").parse::<f32>().unwrap_or(0.0);
+        HorizontalPosition::Offset(emu / 12700.0)
+    } else {
+        HorizontalPosition::AlignLeft
+    };
+
+    let pos_v = container.children().find(|n| {
+        n.tag_name().name() == "positionV" && n.tag_name().namespace() == Some(WPD_NS)
+    });
+    let v_relative = match pos_v.and_then(|n| n.attribute("relativeFrom")) {
+        Some("page") => "page",
+        Some("margin") => "margin",
+        Some("topMargin") => "topMargin",
+        _ => "paragraph",
+    };
+    let v_offset = if let Some(offset_node) = pos_v.and_then(|n| n.children().find(|c| c.tag_name().name() == "posOffset")) {
+        offset_node.text().unwrap_or("0").parse::<f32>().unwrap_or(0.0) / 12700.0
+    } else {
+        0.0
+    };
+
+    (h_position, h_relative, v_offset, v_relative, behind_doc)
+}
+
+fn read_image_from_zip(
+    embed_id: &str,
+    rels: &HashMap<String, String>,
+    zip: &mut zip::ZipArchive<std::fs::File>,
+    display_w: f32,
+    display_h: f32,
+) -> Option<EmbeddedImage> {
+    let target = rels.get(embed_id)?;
+    let zip_path = target
+        .strip_prefix('/')
+        .map(String::from)
+        .unwrap_or_else(|| format!("word/{}", target));
+    let mut entry = zip.by_name(&zip_path).ok()?;
+    let mut data = Vec::new();
+    entry.read_to_end(&mut data).ok()?;
+    let (pw, ph, fmt) = image_dimensions(&data)?;
+    Some(EmbeddedImage {
+        data,
+        format: fmt,
+        pixel_width: pw,
+        pixel_height: ph,
+        display_width: display_w,
+        display_height: display_h,
+    })
 }
 
 fn compute_drawing_info(
@@ -1842,6 +1942,7 @@ fn compute_drawing_info(
 ) -> DrawingInfo {
     let mut max_height: f32 = 0.0;
     let mut image: Option<EmbeddedImage> = None;
+    let mut floating_images: Vec<FloatingImage> = Vec::new();
 
     for child in para_node.children() {
         let is_wml = child.tag_name().namespace() == Some(WML_NS);
@@ -1856,47 +1957,58 @@ fn compute_drawing_info(
         };
         for container in drawing.children() {
             let name = container.tag_name().name();
-            if (name == "inline" || name == "anchor")
-                && container.tag_name().namespace() == Some(WPD_NS)
-            {
-                let extent = container.children().find(|n| {
-                    n.tag_name().name() == "extent" && n.tag_name().namespace() == Some(WPD_NS)
-                });
-                let cx = extent
-                    .and_then(|n| n.attribute("cx"))
-                    .and_then(|v| v.parse::<f32>().ok())
-                    .unwrap_or(0.0);
-                let cy = extent
-                    .and_then(|n| n.attribute("cy"))
-                    .and_then(|v| v.parse::<f32>().ok())
-                    .unwrap_or(0.0);
-                let display_w = cx / 12700.0;
-                let display_h = cy / 12700.0;
-                max_height = max_height.max(display_h);
+            if name != "inline" && name != "anchor" {
+                continue;
+            }
+            if container.tag_name().namespace() != Some(WPD_NS) {
+                continue;
+            }
 
-                if image.is_none()
-                    && let Some(embed_id) = find_blip_embed(container)
-                    && let Some(target) = rels.get(embed_id)
-                {
-                    let zip_path = target
-                        .strip_prefix('/')
-                        .map(String::from)
-                        .unwrap_or_else(|| format!("word/{}", target));
-                    if let Ok(mut entry) = zip.by_name(&zip_path) {
-                        let mut data = Vec::new();
-                        if entry.read_to_end(&mut data).is_ok()
-                            && let Some((pw, ph, fmt)) = image_dimensions(&data)
-                        {
-                            image = Some(EmbeddedImage {
-                                data,
-                                format: fmt,
-                                pixel_width: pw,
-                                pixel_height: ph,
-                                display_width: display_w,
-                                display_height: display_h,
+            let extent = container.children().find(|n| {
+                n.tag_name().name() == "extent" && n.tag_name().namespace() == Some(WPD_NS)
+            });
+            let cx = extent
+                .and_then(|n| n.attribute("cx"))
+                .and_then(|v| v.parse::<f32>().ok())
+                .unwrap_or(0.0);
+            let cy = extent
+                .and_then(|n| n.attribute("cy"))
+                .and_then(|v| v.parse::<f32>().ok())
+                .unwrap_or(0.0);
+            let display_w = cx / 12700.0;
+            let display_h = cy / 12700.0;
+
+            // Anchored images with wrapNone float independently — they don't
+            // affect paragraph layout height (text flows as if they're absent).
+            if name == "anchor" {
+                let has_wrap_none = container.children().any(|n| {
+                    n.tag_name().name() == "wrapNone"
+                        && n.tag_name().namespace() == Some(WPD_NS)
+                });
+                if has_wrap_none {
+                    if let Some(embed_id) = find_blip_embed(container) {
+                        if let Some(img) = read_image_from_zip(embed_id, rels, zip, display_w, display_h) {
+                            let (h_position, h_relative, v_offset, v_relative, behind_doc) =
+                                parse_anchor_position(container);
+                            floating_images.push(FloatingImage {
+                                image: img,
+                                h_position,
+                                h_relative_from: h_relative,
+                                v_offset_pt: v_offset,
+                                v_relative_from: v_relative,
+                                behind_doc,
                             });
                         }
                     }
+                    continue;
+                }
+            }
+
+            max_height = max_height.max(display_h);
+
+            if image.is_none() {
+                if let Some(embed_id) = find_blip_embed(container) {
+                    image = read_image_from_zip(embed_id, rels, zip, display_w, display_h);
                 }
             }
         }
@@ -1904,5 +2016,6 @@ fn compute_drawing_info(
     DrawingInfo {
         height: max_height,
         image,
+        floating_images,
     }
 }

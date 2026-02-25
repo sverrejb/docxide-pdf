@@ -74,7 +74,7 @@ The largest category. Run `analyze-fixtures --audit` for full feature prevalence
 
 **Highest-impact unimplemented features** (by failing fixture count from audit):
 - `w:spacing` (character spacing/letter-spacing) — 15 failing, 5770 hits. Affects glyph-level positioning.
-- `w:ind w:right` (right indent) — 15 failing, 335 hits. Reduces available text width → wrong line breaks.
+- ~~`w:ind w:right` (right indent)~~ — ✅ Done. Reduces available text width → wrong line breaks.
 - `w:kern` — 7 failing, 268 hits. Needs GPOS (see Kerning section above).
 - `w:caps` / `w:smallCaps` — 4 failing, 82+20 hits. Text transform not applied.
 - `w:vanish` (hidden text) — 2 failing, 25 hits. Hidden text rendered visibly.
@@ -110,7 +110,7 @@ Additional fixture ideas:
 - Footnotes and endnotes (parsing `footnotes.xml`, separator line, superscript references, page-bottom rendering)
 - Nested/multi-level lists (outline numbering: `1. → a. → i. → •`)
 - Line spacing modes (`w:lineRule="exact"` and `"atLeast"`, not just `"auto"`)
-- First-line indent (`w:ind @firstLine`) and right indent (`w:ind @right`)
+- First-line indent (`w:ind @firstLine`) and ~~right indent (`w:ind @right`)~~ ✅
 - Soft line breaks (`w:br` without type attribute)
 - Nested tables (tables inside table cells)
 - Table of Contents (right-aligned tabs + dot leaders + page field codes)

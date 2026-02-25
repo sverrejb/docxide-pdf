@@ -99,6 +99,24 @@ pub struct EmbeddedImage {
     pub display_height: f32, // points
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum HorizontalPosition {
+    Offset(f32),
+    AlignCenter,
+    AlignLeft,
+    AlignRight,
+}
+
+#[derive(Clone)]
+pub struct FloatingImage {
+    pub image: EmbeddedImage,
+    pub h_position: HorizontalPosition,
+    pub h_relative_from: &'static str,
+    pub v_offset_pt: f32,
+    pub v_relative_from: &'static str,
+    pub behind_doc: bool,
+}
+
 #[derive(Clone)]
 pub struct ParagraphBorder {
     pub width_pt: f32,  // line thickness in points
@@ -134,6 +152,7 @@ pub struct Paragraph {
     pub page_break_before: bool,
     pub tab_stops: Vec<TabStop>,
     pub extra_line_breaks: u32,
+    pub floating_images: Vec<FloatingImage>,
 }
 
 #[derive(Clone)]
