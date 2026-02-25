@@ -28,12 +28,12 @@ Remaining:
   - Best: bundle fallback fonts (Liberation, Noto) so output is consistent without system fonts installed
   - The semicolon-separated fallback lists in font names (e.g. `"Liberation Serif;Times New Roman"`) are now tried in order, but many DOCX fonts have no fallback list (e.g. `"DejaVu Sans"` with no alternative)
 
-## Output file size
+## Output file size — ✅ Done
 
-Generated PDFs are larger than Word's PDF export. Likely causes:
-- Full TTF font embedding — we embed the entire font file; Word subsets to only used glyphs
-- Investigate font subsetting (e.g. `subsetter` crate or manual subsetting)
-- Compare file sizes across test cases to quantify the overhead
+Font subsetting (CIDFont/Type0/Identity-H via `subsetter` crate), FlateDecode content stream compression, and BT/ET consolidation (one per line instead of per word). Case13 went from 7.5MB (7.6× reference) to 1.0MB (1.0× reference). Most cases are at or below Word's output size.
+
+Remaining:
+- Compress font file streams with FlateDecode (currently uncompressed, ~38kB for case13)
 
 ## Performance
 
@@ -46,7 +46,7 @@ Generated PDFs are larger than Word's PDF export. Likely causes:
 - **Font scanning** — ✅ Done. Directory-level disk cache (`font-index.tsv`) with mtime invalidation + mmap for font parsing. ~500ms → ~33ms warm cache (release). Disable with `DOCXSIDE_NO_FONT_CACHE=1`.
 - **Double font reads** — scan reads each font file for indexing, then `register_font` reads the same file again for embedding. Keep the data from the first read
 - **Kerning extraction** — O(n²) brute-force over all WinAnsi glyph pairs. Iterate actual kern table entries instead
-- **Per-word text objects** — each word emits its own BT/Tf/Td/Tj/ET sequence. Batch consecutive words sharing font+color into single text objects to reduce output size and CPU
+- **Per-word text objects** — ✅ Done. One BT/ET per line with relative Td positioning and deduplicated Tf calls
 - **Repeated WinAnsi conversion** — same text is converted in line-building, rendering, and table auto-fit. Pre-compute once and store in `WordChunk`
 - **String allocations** — `font_key()` allocates on every call; `WordChunk` clones font name strings per word. Use indices or interning
 
@@ -65,9 +65,12 @@ Generated PDFs are larger than Word's PDF export. Likely causes:
 Build a larger, more diverse test corpus by scraping public DOCX files from the internet. Current fixtures (case1-9) cover limited scenarios. A broad corpus would surface edge cases in layout, font handling, and feature coverage that manual test cases miss.
 
 Additional fixture ideas:
-- Explicit page breaks (`w:br w:type="page"`)
-- Headers and footers
-- Mixed inline formatting within a single line (multiple font sizes, styles, colors mid-sentence)
+- ~~Explicit page breaks (`w:br w:type="page"`)~~ — covered by case10
+- ~~Headers and footers~~ — covered by case11
+- ~~Mixed inline formatting within a single line~~ — covered by case9
+- ~~Inline images (PNG, JPEG, varying sizes)~~ — covered by case16
+- Multi-section documents (different page sizes/orientations per section)
+- Deep style inheritance (3+ level chains with run vs style vs paragraph conflicts)
+- Paragraph borders and shading (all sides, not just bottom; combined with background color)
 - Hyperlinks and bookmarks
-- Multi-section documents (different page sizes/orientations)
 - Multi-column layouts
