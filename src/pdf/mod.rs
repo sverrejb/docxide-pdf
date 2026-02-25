@@ -448,7 +448,22 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     lines.len().max(min_lines) as f32 * line_h
                 };
 
-                let needed = inter_gap + content_h;
+                // Border padding: top border pushes text down within the content area,
+                // bottom border extends into space_after (already in bdr_bottom_extra)
+                let bdr_top_pad = para
+                    .borders
+                    .top
+                    .as_ref()
+                    .map(|b| b.space_pt + b.width_pt / 2.0)
+                    .unwrap_or(0.0);
+                let bdr_bottom_pad = para
+                    .borders
+                    .bottom
+                    .as_ref()
+                    .map(|b| b.space_pt + b.width_pt / 2.0)
+                    .unwrap_or(0.0);
+
+                let needed = inter_gap + bdr_top_pad + content_h;
                 let at_page_top = (slot_top - (doc.page_height - doc.margin_top)).abs() < 1.0;
 
                 let keep_next_extra = if para.keep_next {
@@ -567,6 +582,23 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                 slot_top -= inter_gap;
 
+                // Draw paragraph shading (background)
+                if let Some([r, g, b]) = para.shading {
+                    let shd_top = slot_top;
+                    let shd_bottom = slot_top - bdr_top_pad - content_h - bdr_bottom_pad;
+                    current_content.save_state();
+                    current_content
+                        .set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+                    current_content.rect(
+                        doc.margin_left,
+                        shd_bottom,
+                        text_width,
+                        shd_top - shd_bottom,
+                    );
+                    current_content.fill_nonzero();
+                    current_content.restore_state();
+                }
+
                 if (para.image.is_some() || text_empty) && para.content_height > 0.0 {
                     if let Some(pdf_name) = image_pdf_names.get(&block_idx) {
                         let img = para.image.as_ref().unwrap();
@@ -599,7 +631,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     }
                 } else if !lines.is_empty() {
                     let ascender_ratio = tallest_ar.unwrap_or(0.75);
-                    let baseline_y = slot_top - font_size * ascender_ratio;
+                    let baseline_y = slot_top - bdr_top_pad - font_size * ascender_ratio;
 
                     if !para.list_label.is_empty() {
                         let (label_font_name, label_bytes) =
@@ -628,23 +660,61 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     );
                 }
 
-                // Draw bottom border if present
-                if let Some(bdr) = &para.border_bottom {
-                    let line_y = slot_top - content_h - bdr.space_pt;
-                    let [r, g, b] = bdr.color;
-                    current_content
-                        .set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0)
-                        .rect(
-                            doc.margin_left,
-                            line_y - bdr.width_pt,
-                            text_width,
-                            bdr.width_pt,
-                        )
-                        .fill_nonzero()
-                        .set_fill_rgb(0.0, 0.0, 0.0);
+                // Draw paragraph borders
+                {
+                    let bdr = &para.borders;
+                    let box_top = slot_top;
+                    let box_bottom = slot_top - bdr_top_pad - content_h - bdr_bottom_pad;
+                    let box_left = doc.margin_left;
+                    let box_right = doc.margin_left + text_width;
+
+                    let draw_h_border =
+                        |content: &mut Content, b: &crate::model::ParagraphBorder, y: f32| {
+                            let [r, g, b_c] = b.color;
+                            content.save_state();
+                            content.set_line_width(b.width_pt);
+                            content.set_stroke_rgb(
+                                r as f32 / 255.0,
+                                g as f32 / 255.0,
+                                b_c as f32 / 255.0,
+                            );
+                            content.move_to(box_left, y);
+                            content.line_to(box_right, y);
+                            content.stroke();
+                            content.restore_state();
+                        };
+                    let draw_v_border = |content: &mut Content,
+                                         b: &crate::model::ParagraphBorder,
+                                         x: f32| {
+                        let [r, g, b_c] = b.color;
+                        content.save_state();
+                        content.set_line_width(b.width_pt);
+                        content.set_stroke_rgb(
+                            r as f32 / 255.0,
+                            g as f32 / 255.0,
+                            b_c as f32 / 255.0,
+                        );
+                        content.move_to(x, box_top);
+                        content.line_to(x, box_bottom);
+                        content.stroke();
+                        content.restore_state();
+                    };
+
+                    if let Some(b) = &bdr.top {
+                        draw_h_border(&mut current_content, b, box_top);
+                    }
+                    if let Some(b) = &bdr.bottom {
+                        draw_h_border(&mut current_content, b, box_bottom);
+                    }
+                    if let Some(b) = &bdr.left {
+                        draw_v_border(&mut current_content, b, box_left);
+                    }
+                    if let Some(b) = &bdr.right {
+                        draw_v_border(&mut current_content, b, box_right);
+                    }
                 }
 
-                slot_top -= content_h;
+                slot_top -= content_h + bdr_top_pad;
                 prev_space_after = effective_space_after;
             }
 

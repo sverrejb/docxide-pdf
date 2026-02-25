@@ -71,10 +71,18 @@ pub struct EmbeddedImage {
 }
 
 #[derive(Clone)]
-pub struct BorderBottom {
+pub struct ParagraphBorder {
     pub width_pt: f32,  // line thickness in points
     pub space_pt: f32,  // gap between text and border in points
     pub color: [u8; 3], // RGB
+}
+
+#[derive(Clone, Default)]
+pub struct ParagraphBorders {
+    pub top: Option<ParagraphBorder>,
+    pub bottom: Option<ParagraphBorder>,
+    pub left: Option<ParagraphBorder>,
+    pub right: Option<ParagraphBorder>,
 }
 
 pub struct Paragraph {
@@ -90,7 +98,8 @@ pub struct Paragraph {
     pub keep_next: bool,
     pub line_spacing: Option<f32>, // per-paragraph override (e.g. 240/240 = 1.0)
     pub image: Option<EmbeddedImage>,
-    pub border_bottom: Option<BorderBottom>,
+    pub borders: ParagraphBorders,
+    pub shading: Option<[u8; 3]>,
     pub page_break_before: bool,
     pub tab_stops: Vec<TabStop>,
     pub extra_line_breaks: u32,
@@ -106,6 +115,7 @@ pub struct Run {
     pub underline: bool,
     pub strikethrough: bool,
     pub color: Option<[u8; 3]>, // None = automatic (black)
+    pub highlight: Option<[u8; 3]>,
     pub is_tab: bool,
     pub vertical_align: VertAlign,
     pub field_code: Option<FieldCode>,

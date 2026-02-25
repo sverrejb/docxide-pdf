@@ -19,20 +19,27 @@ fn natural_cmp(a: &Path, b: &Path) -> std::cmp::Ordering {
 pub fn discover_fixtures() -> io::Result<Vec<PathBuf>> {
     let fixtures_dir = Path::new("tests/fixtures");
     let case_filter = std::env::var("DOCXIDE_CASE").ok();
-    let mut fixtures: Vec<PathBuf> = fs::read_dir(fixtures_dir)?
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| {
-            p.is_dir()
-                && p.file_name().and_then(|n| n.to_str()).map_or(true, |n| {
-                    if let Some(ref filter) = case_filter {
-                        n == filter.as_str()
-                    } else {
-                        !SKIP_FIXTURES.contains(&n)
-                    }
-                })
-        })
-        .collect();
+    let mut fixtures: Vec<PathBuf> = Vec::new();
+    for group_entry in fs::read_dir(fixtures_dir)? {
+        let group = group_entry?.path();
+        if !group.is_dir() {
+            continue;
+        }
+        for entry in fs::read_dir(&group)? {
+            let path = entry?.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if let Some(ref filter) = case_filter {
+                if name == filter.as_str() {
+                    fixtures.push(path);
+                }
+            } else if !SKIP_FIXTURES.contains(&name) {
+                fixtures.push(path);
+            }
+        }
+    }
     fixtures.sort_by(|a, b| natural_cmp(a, b));
     Ok(fixtures)
 }

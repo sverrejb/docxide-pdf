@@ -7,8 +7,8 @@ use std::path::Path;
 use crate::error::Error;
 use crate::model::{
     Alignment, Block, CellBorder, CellBorders, CellMargins, CellVAlign, Document, EmbeddedImage,
-    FieldCode, HeaderFooter, ImageFormat, Paragraph, Run, TabAlignment, TabStop, Table, TableCell,
-    TableRow, VMerge, VertAlign,
+    FieldCode, HeaderFooter, ImageFormat, Paragraph, ParagraphBorder, ParagraphBorders, Run,
+    TabAlignment, TabStop, Table, TableCell, TableRow, VMerge, VertAlign,
 };
 
 use styles::{
@@ -45,6 +45,28 @@ pub(super) fn parse_hex_color(val: &str) -> Option<[u8; 3]> {
     Some([r, g, b])
 }
 
+fn highlight_color(name: &str) -> Option<[u8; 3]> {
+    match name {
+        "yellow" => Some([255, 255, 0]),
+        "green" => Some([0, 255, 0]),
+        "cyan" => Some([0, 255, 255]),
+        "magenta" => Some([255, 0, 255]),
+        "red" => Some([255, 0, 0]),
+        "blue" => Some([0, 0, 255]),
+        "darkYellow" => Some([128, 128, 0]),
+        "darkGreen" => Some([0, 128, 0]),
+        "darkCyan" => Some([0, 128, 128]),
+        "darkMagenta" => Some([128, 0, 128]),
+        "darkRed" => Some([128, 0, 0]),
+        "darkBlue" => Some([0, 0, 128]),
+        "lightGray" => Some([192, 192, 192]),
+        "darkGray" => Some([128, 128, 128]),
+        "black" => Some([0, 0, 0]),
+        "white" => Some([255, 255, 255]),
+        _ => None,
+    }
+}
+
 /// Parse a WML boolean toggle element (e.g., w:b, w:i, w:strike).
 /// Present with no val or val != "0"/"false" means true.
 pub(super) fn wml_bool(parent: roxmltree::Node, name: &str) -> Option<bool> {
@@ -69,35 +91,48 @@ pub(super) fn twips_attr(node: roxmltree::Node, attr: &str) -> Option<f32> {
         .map(twips_to_pts)
 }
 
-pub(super) fn parse_border_bottom(ppr: roxmltree::Node) -> Option<crate::model::BorderBottom> {
-    let bottom = wml(ppr, "pBdr").and_then(|pbdr| wml(pbdr, "bottom"))?;
-    let val = bottom.attribute((WML_NS, "val")).unwrap_or("none");
+fn parse_one_border(node: roxmltree::Node) -> Option<ParagraphBorder> {
+    let val = node.attribute((WML_NS, "val")).unwrap_or("none");
     if val == "none" || val == "nil" {
         return None;
     }
-    // sz is in 1/8 of a point
-    let width_pt = bottom
+    let width_pt = node
         .attribute((WML_NS, "sz"))
         .and_then(|v| v.parse::<f32>().ok())
         .map(|v| v / 8.0)
         .unwrap_or(0.5);
-    let space_pt = bottom
+    let space_pt = node
         .attribute((WML_NS, "space"))
         .and_then(|v| v.parse::<f32>().ok())
         .unwrap_or(0.0);
-    let color = bottom
+    let color = node
         .attribute((WML_NS, "color"))
         .and_then(parse_hex_color)
         .unwrap_or([0, 0, 0]);
-    Some(crate::model::BorderBottom {
+    Some(ParagraphBorder {
         width_pt,
         space_pt,
         color,
     })
 }
 
-pub(super) fn border_bottom_extra(ppr: roxmltree::Node) -> f32 {
-    parse_border_bottom(ppr)
+pub(super) fn parse_paragraph_borders(ppr: roxmltree::Node) -> ParagraphBorders {
+    let Some(pbdr) = wml(ppr, "pBdr") else {
+        return ParagraphBorders::default();
+    };
+    ParagraphBorders {
+        top: wml(pbdr, "top").and_then(parse_one_border),
+        bottom: wml(pbdr, "bottom").and_then(parse_one_border),
+        left: wml(pbdr, "left").and_then(parse_one_border),
+        right: wml(pbdr, "right").and_then(parse_one_border),
+    }
+}
+
+pub(super) fn paragraph_borders_extra(ppr: roxmltree::Node) -> f32 {
+    let borders = parse_paragraph_borders(ppr);
+    borders
+        .bottom
+        .as_ref()
         .map(|b| b.space_pt + b.width_pt)
         .unwrap_or(0.0)
 }
@@ -496,6 +531,10 @@ fn parse_runs(
             })
             .unwrap_or(VertAlign::Baseline);
 
+        let highlight = rpr
+            .and_then(|n| wml_attr(n, "highlight"))
+            .and_then(highlight_color);
+
         // Iterate children in document order to handle w:t, w:tab, w:br, w:fldChar, w:instrText
         let mut pending_text = String::new();
         for child in run_node.children() {
@@ -521,6 +560,7 @@ fn parse_runs(
                                     vertical_align,
                                     field_code: None,
                                     hyperlink_url: hyperlink_url.clone(),
+                                    highlight,
                                     inline_image: None,
                                 });
                             }
@@ -551,6 +591,7 @@ fn parse_runs(
                                         vertical_align: VertAlign::Baseline,
                                         field_code: Some(code),
                                         hyperlink_url: hyperlink_url.clone(),
+                                        highlight: None,
                                         inline_image: None,
                                     });
                                 }
@@ -568,7 +609,9 @@ fn parse_runs(
                 }
                 "t" if !in_field => {
                     if let Some(t) = child.text() {
-                        pending_text.push_str(t);
+                        // Word treats newlines in w:t as whitespace; only w:br creates line breaks
+                        let normalized = t.replace('\n', " ");
+                        pending_text.push_str(&normalized);
                     }
                 }
                 "tab" if !in_field => {
@@ -587,6 +630,7 @@ fn parse_runs(
                             vertical_align,
                             field_code: None,
                             hyperlink_url: hyperlink_url.clone(),
+                            highlight,
                             inline_image: None,
                         });
                     }
@@ -604,6 +648,7 @@ fn parse_runs(
                         vertical_align: VertAlign::Baseline,
                         field_code: None,
                         hyperlink_url: None,
+                        highlight: None,
                         inline_image: None,
                     });
                 }
@@ -629,6 +674,7 @@ fn parse_runs(
                             vertical_align,
                             field_code: None,
                             hyperlink_url: hyperlink_url.clone(),
+                            highlight,
                             inline_image: None,
                         });
                     }
@@ -646,6 +692,7 @@ fn parse_runs(
                             vertical_align: VertAlign::Baseline,
                             field_code: None,
                             hyperlink_url: None,
+                            highlight: None,
                             inline_image: Some(img),
                         });
                     }
@@ -668,6 +715,7 @@ fn parse_runs(
                 vertical_align,
                 field_code: None,
                 hyperlink_url: hyperlink_url.clone(),
+                highlight,
                 inline_image: None,
             });
         }
@@ -704,6 +752,7 @@ fn parse_runs(
                 underline: false,
                 strikethrough: false,
                 color: None,
+                highlight: None,
                 is_tab: false,
                 vertical_align: VertAlign::Baseline,
                 field_code: None,
@@ -725,6 +774,7 @@ fn parse_runs(
             underline: false,
             strikethrough: false,
             color: None,
+            highlight: None,
             is_tab: false,
             vertical_align: VertAlign::Baseline,
             field_code: None,
@@ -782,7 +832,8 @@ fn parse_header_footer_xml(
             keep_next: false,
             line_spacing: None,
             image: None,
-            border_bottom: None,
+            borders: ParagraphBorders::default(),
+            shading: None,
             page_break_before: false,
             tab_stops: vec![],
             extra_line_breaks: parsed.line_break_count,
@@ -1105,7 +1156,8 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                                 keep_next: false,
                                 line_spacing,
                                 image: None,
-                                border_bottom: None,
+                                borders: ParagraphBorders::default(),
+                                shading: None,
                                 page_break_before: false,
                                 tab_stops: vec![],
                                 extra_line_breaks: parsed.line_break_count,
@@ -1146,29 +1198,37 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
 
                 let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
 
+                let inline_borders = ppr.map(parse_paragraph_borders).unwrap_or_default();
+                let has_inline_borders = inline_borders.top.is_some()
+                    || inline_borders.bottom.is_some()
+                    || inline_borders.left.is_some()
+                    || inline_borders.right.is_some();
+                let borders = if has_inline_borders {
+                    inline_borders
+                } else {
+                    para_style
+                        .map(|s| s.borders.clone())
+                        .unwrap_or_default()
+                };
+                let bdr_bottom_extra = borders
+                    .bottom
+                    .as_ref()
+                    .map(|b| b.space_pt + b.width_pt)
+                    .unwrap_or(0.0);
                 let space_before = inline_spacing
                     .and_then(|n| twips_attr(n, "before"))
                     .or_else(|| para_style.and_then(|s| s.space_before))
                     .unwrap_or(0.0);
 
-                let inline_bdr = ppr.and_then(parse_border_bottom);
-                let inline_bdr_extra = inline_bdr
-                    .as_ref()
-                    .map(|b| b.space_pt + b.width_pt)
-                    .unwrap_or(0.0);
-                let (bdr_extra, border_bottom) = if inline_bdr.is_some() {
-                    (inline_bdr_extra, inline_bdr)
-                } else {
-                    (
-                        para_style.map(|s| s.border_bottom_extra).unwrap_or(0.0),
-                        para_style.and_then(|s| s.border_bottom.clone()),
-                    )
-                };
+                let para_shading = ppr
+                    .and_then(|ppr| wml(ppr, "shd"))
+                    .and_then(|shd| shd.attribute((WML_NS, "fill")))
+                    .and_then(parse_hex_color);
                 let space_after = inline_spacing
                     .and_then(|n| twips_attr(n, "after"))
                     .or_else(|| para_style.and_then(|s| s.space_after))
                     .unwrap_or(styles.defaults.space_after)
-                    + bdr_extra;
+                    + bdr_bottom_extra;
 
                 let style_color: Option<[u8; 3]> = para_style.and_then(|s| s.color);
 
@@ -1248,7 +1308,8 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     keep_next,
                     line_spacing,
                     image: para_image,
-                    border_bottom,
+                    borders,
+                    shading: para_shading,
                     page_break_before: parsed.has_page_break,
                     tab_stops,
                     extra_line_breaks: parsed.line_break_count,

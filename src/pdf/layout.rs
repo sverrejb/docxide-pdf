@@ -10,6 +10,7 @@ pub(super) struct WordChunk {
     pub(super) text: String,
     pub(super) font_size: f32,
     pub(super) color: Option<[u8; 3]>,
+    pub(super) highlight: Option<[u8; 3]>,
     pub(super) x_offset: f32, // x relative to line start
     pub(super) width: f32,
     pub(super) underline: bool,
@@ -111,6 +112,7 @@ pub(super) fn build_paragraph_lines(
                     text: String::new(),
                     font_size: run.font_size,
                     color: None,
+                    highlight: None,
                     x_offset: current_x,
                     width: img_w,
                     underline: false,
@@ -175,6 +177,7 @@ pub(super) fn build_paragraph_lines(
                 text: word.to_string(),
                 font_size: eff_fs,
                 color: run.color,
+                highlight: run.highlight,
                 x_offset: current_x,
                 width: ww,
                 underline: run.underline,
@@ -366,6 +369,7 @@ pub(super) fn build_tabbed_line(
                                         text: leader_text,
                                         font_size: eff_fs,
                                         color: run.color,
+                                        highlight: None,
                                         x_offset: leader_start,
                                         width: leader_w,
                                         underline: false,
@@ -410,6 +414,7 @@ pub(super) fn build_tabbed_line(
                     text: word.to_string(),
                     font_size: eff_fs,
                     color: run.color,
+                    highlight: run.highlight,
                     x_offset: current_x,
                     width: ww,
                     underline: run.underline,
@@ -505,6 +510,56 @@ pub(super) fn render_paragraph_lines(
 
         let mut decorations: Vec<(f32, f32, f32, f32, Option<[u8; 3]>)> = Vec::new();
         let mut image_draws: Vec<(f32, f32, f32, f32, &str)> = Vec::new();
+
+        // Draw run highlights as merged spans (contiguous same-color highlights)
+        {
+            let mut hl_start_x = 0.0f32;
+            let mut hl_color: Option<[u8; 3]> = None;
+            let mut hl_end_x = 0.0f32;
+            let mut hl_fs = 0.0f32;
+
+            let flush_hl = |content: &mut Content,
+                            color: [u8; 3],
+                            sx: f32,
+                            ex: f32,
+                            fs: f32,
+                            y: f32| {
+                let hl_bottom = y - fs * 0.2;
+                let hl_height = fs * 1.15;
+                content.save_state();
+                content.set_fill_rgb(
+                    color[0] as f32 / 255.0,
+                    color[1] as f32 / 255.0,
+                    color[2] as f32 / 255.0,
+                );
+                content.rect(sx, hl_bottom, ex - sx, hl_height);
+                content.fill_nonzero();
+                content.restore_state();
+            };
+
+            for (chunk_idx, chunk) in line.chunks.iter().enumerate() {
+                let x = line_start_x + chunk.x_offset + chunk_idx as f32 * extra_per_gap;
+                if chunk.highlight == hl_color && hl_color.is_some() {
+                    hl_end_x = x + chunk.width;
+                    hl_fs = hl_fs.max(chunk.font_size);
+                } else {
+                    if let Some(c) = hl_color {
+                        flush_hl(content, c, hl_start_x, hl_end_x, hl_fs, y);
+                    }
+                    if let Some(c) = chunk.highlight {
+                        hl_start_x = x;
+                        hl_end_x = x + chunk.width;
+                        hl_fs = chunk.font_size;
+                        hl_color = Some(c);
+                    } else {
+                        hl_color = None;
+                    }
+                }
+            }
+            if let Some(c) = hl_color {
+                flush_hl(content, c, hl_start_x, hl_end_x, hl_fs, y);
+            }
+        }
 
         let has_text_chunks = line.chunks.iter().any(|c| c.inline_image_name.is_none() && !c.text.is_empty());
 

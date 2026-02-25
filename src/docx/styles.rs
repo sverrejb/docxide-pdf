@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use crate::model::{Alignment, CellBorder};
 
 use super::{
-    DML_NS, WML_NS, border_bottom_extra, parse_border_bottom, parse_hex_color, read_zip_text,
-    twips_attr, wml, wml_attr, wml_bool,
+    DML_NS, WML_NS, parse_paragraph_borders, parse_hex_color, read_zip_text, twips_attr, wml,
+    wml_attr, wml_bool,
 };
 
 fn dml<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
@@ -42,8 +42,8 @@ pub(super) struct ParagraphStyle {
     pub(super) contextual_spacing: bool,
     pub(super) keep_next: bool,
     pub(super) line_spacing: Option<f32>,
-    pub(super) border_bottom_extra: f32,
-    pub(super) border_bottom: Option<crate::model::BorderBottom>,
+    pub(super) borders_extra: f32,
+    pub(super) borders: crate::model::ParagraphBorders,
     pub(super) based_on: Option<String>,
 }
 
@@ -222,8 +222,12 @@ pub(super) fn parse_styles(
         let spacing = ppr.and_then(|n| wml(n, "spacing"));
         let space_before = spacing.and_then(|n| twips_attr(n, "before"));
         let space_after = spacing.and_then(|n| twips_attr(n, "after"));
-        let bdr_extra = ppr.map(border_bottom_extra).unwrap_or(0.0);
-        let border_bottom = ppr.and_then(parse_border_bottom);
+        let borders = ppr.map(parse_paragraph_borders).unwrap_or_default();
+        let bdr_extra = borders
+            .bottom
+            .as_ref()
+            .map(|b| b.space_pt + b.width_pt)
+            .unwrap_or(0.0);
 
         let rpr = wml(style_node, "rPr");
 
@@ -272,8 +276,8 @@ pub(super) fn parse_styles(
                 contextual_spacing,
                 keep_next,
                 line_spacing,
-                border_bottom_extra: bdr_extra,
-                border_bottom,
+                borders_extra: bdr_extra,
+                borders,
                 based_on,
             },
         );
@@ -422,8 +426,8 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             contextual_spacing: false,
             keep_next: false,
             line_spacing: None,
-            border_bottom_extra: 0.0,
-            border_bottom: None,
+            borders_extra: 0.0,
+            borders: crate::model::ParagraphBorders::default(),
             based_on: None,
         };
 
