@@ -62,27 +62,35 @@ Remaining:
 
 ## Scraped fixture improvements
 
-Priority improvements identified from analysis of failing scraped DOCX fixtures.
+Status: 9 passing, 15 failing, 10 skipped (font issues) out of 34 scraped fixtures.
+Run `./tools/target/debug/analyze-fixtures --failing --fonts` for current breakdown.
 
-### 1. Multi-section support — ✅ Done
-Documents with mid-document `w:sectPr` (in `w:pPr`) that change page geometry, margins, headers/footers, or orientation between sections.
+### Done
+- **Multi-section support** — mid-document `w:sectPr` with different page geometry/margins/headers per section
+- **Header/footer images** — relationship file loading, image parsing, XObject rendering in headers/footers
 
-### 2. Header/footer images — ✅ Done
-Header/footer relationship files are now loaded, images (logos, letterheads) are parsed from `w:drawing`/`wp:inline`, and rendered as XObjects.
+### 1. Text/layout precision (HIGH — 7 failing fixtures are "text/layout only")
+The largest category. Run `analyze-fixtures --audit` for full feature prevalence.
 
-### 3. Textbox rendering (HIGH — 4 fixtures)
-VML textboxes (`v:textbox`, `w:txbxContent`) and `mc:AlternateContent` with `w:drawing` textbox content are completely unhandled. Some documents have all visible content inside textboxes.
+**Highest-impact unimplemented features** (by failing fixture count from audit):
+- `w:spacing` (character spacing/letter-spacing) — 15 failing, 5770 hits. Affects glyph-level positioning.
+- `w:ind w:right` (right indent) — 15 failing, 335 hits. Reduces available text width → wrong line breaks.
+- `w:kern` — 7 failing, 268 hits. Needs GPOS (see Kerning section above).
+- `w:caps` / `w:smallCaps` — 4 failing, 82+20 hits. Text transform not applied.
+- `w:vanish` (hidden text) — 2 failing, 25 hits. Hidden text rendered visibly.
+- `w:dstrike` (double strikethrough) — 2 failing, 22 hits.
+- `w:sdtContent` (structured doc tags) — 1 failing, 14 hits. Content in SDT blocks may be skipped.
 
-### 4. Justified text precision (MEDIUM — 10+ fixtures)
-Word spacing for `Alignment::Justify` doesn't match Word precisely. Likely needs GPOS kerning (see Kerning section) and more accurate word/character spacing distribution.
+### 2. Textbox rendering (MEDIUM — 2 failing, 4 total)
+VML textboxes (`v:textbox`, `w:txbxContent`) and `mc:AlternateContent` with `wps:txbx` content are completely unhandled. Some documents have all visible content inside textboxes. Two fixtures have 14+ textboxes with most content inside them.
 
-### 5. Floating tables (MEDIUM — 2 fixtures)
+### 3. Anchored image positioning (MEDIUM — 3 failing, 11 total w/ anchors)
+`wp:anchor` images lack proper positioning (horizontal/vertical offsets relative to page/column/margin) and text wrapping. Currently rendered inline. Many passing fixtures also have anchored images but don't depend on them for layout.
+
+### 4. Floating tables (MEDIUM — 2 failing)
 Tables with `w:tblpPr` positioning attributes are rendered as normal flow tables instead of being positioned absolutely on the page.
 
-### 6. Anchored image positioning (HIGH — 5 fixtures)
-`wp:anchor` images lack proper positioning (horizontal/vertical offsets relative to page/column/margin) and text wrapping. Currently rendered inline.
-
-### 7. Tab stop precision (LOW — 3 fixtures)
+### 5. Tab stop precision (LOW)
 Tab stop alignment and leader rendering has small positioning errors that accumulate in tab-heavy documents (e.g. table of contents).
 
 ## Test corpus

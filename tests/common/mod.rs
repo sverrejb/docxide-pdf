@@ -28,7 +28,7 @@ fn natural_cmp(a: &Path, b: &Path) -> std::cmp::Ordering {
         let i = s.find(|c: char| c.is_ascii_digit()).unwrap_or(s.len());
         (s[..i].to_string(), s[i..].parse().unwrap_or(0))
     };
-    extract(a).cmp(&extract(b))
+    extract(a).cmp(&extract(b)).then_with(|| a.cmp(b))
 }
 
 pub fn discover_fixtures() -> io::Result<Vec<PathBuf>> {

@@ -946,6 +946,7 @@ fn parse_header_footer_xml(
             content_height,
             alignment,
             indent_left: 0.0,
+            indent_right: 0.0,
             indent_hanging: 0.0,
             indent_first_line: 0.0,
             list_label: String::new(),
@@ -1042,6 +1043,7 @@ fn parse_footnotes(
                 content_height: 0.0,
                 alignment,
                 indent_left: 0.0,
+                indent_right: 0.0,
                 indent_hanging: 0.0,
                 indent_first_line: 0.0,
                 list_label: String::new(),
@@ -1408,6 +1410,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                                 content_height: 0.0,
                                 alignment,
                                 indent_left: 0.0,
+                                indent_right: 0.0,
                                 indent_hanging: 0.0,
                                 indent_first_line: 0.0,
                                 list_label: String::new(),
@@ -1517,9 +1520,13 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     parse_list_info(num_pr, &numbering, &mut counters);
 
                 let mut indent_first_line = 0.0f32;
+                let mut indent_right = 0.0f32;
                 if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
                     if let Some(v) = twips_attr(ind, "left") {
                         indent_left = v;
+                    }
+                    if let Some(v) = twips_attr(ind, "right") {
+                        indent_right = v;
                     }
                     if let Some(v) = twips_attr(ind, "hanging") {
                         indent_hanging = v;
@@ -1532,6 +1539,9 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                 {
                     if let Some(v) = s.indent_left {
                         indent_left = v;
+                    }
+                    if let Some(v) = s.indent_right {
+                        indent_right = v;
                     }
                     if let Some(v) = s.indent_hanging {
                         indent_hanging = v;
@@ -1579,6 +1589,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     content_height,
                     alignment,
                     indent_left,
+                    indent_right,
                     indent_hanging,
                     indent_first_line,
                     list_label,

@@ -29,6 +29,16 @@ cargo fmt
 
 # Run linter
 cargo clippy
+
+# Build analysis tools
+cd tools && cargo build && cd ..
+
+# Analyze scraped fixture features and scores
+./tools/target/debug/analyze-fixtures              # full table
+./tools/target/debug/analyze-fixtures --failing    # only failing fixtures
+./tools/target/debug/analyze-fixtures --fonts      # include font lists
+./tools/target/debug/analyze-fixtures --audit      # feature audit: which XML features appear in failing vs passing
+./tools/target/debug/analyze-fixtures --grep "w:caps"  # search for specific XML pattern across all fixtures
 ```
 
 ## Architecture

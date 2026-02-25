@@ -22,6 +22,10 @@ path = "src/bin/jaccard.rs"
 name = "case-diff"
 path = "src/bin/case_diff.rs"
 
+[[bin]]
+name = "analyze-fixtures"
+path = "src/bin/analyze_fixtures.rs"
+
 [dependencies]
 zip = "2"
 roxmltree = "0.21"

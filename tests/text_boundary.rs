@@ -71,15 +71,21 @@ fn extract_page_lines(pdf: &Path, page: usize) -> Vec<String> {
             }
         }
     }
-    lines.sort_by(|a, b| {
-        // Lines within 5pt are considered the same row; preserve original order
-        if (a.0 - b.0).abs() < 5.0 {
-            std::cmp::Ordering::Equal
-        } else {
-            a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal)
+    // Sort by y-position, then merge lines within 5pt into the same row
+    lines.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    // Cluster lines within 5pt tolerance
+    let mut clustered: Vec<(f64, String)> = Vec::new();
+    for (y, text) in lines {
+        if let Some(last) = clustered.last_mut() {
+            if (y - last.0).abs() < 5.0 {
+                last.1.push(' ');
+                last.1.push_str(&text);
+                continue;
+            }
         }
-    });
-    lines.into_iter().map(|(_, text)| text).collect()
+        clustered.push((y, text));
+    }
+    clustered.into_iter().map(|(_, text)| text).collect()
 }
 
 fn extract_all_pages(pdf: &Path) -> Vec<Vec<String>> {

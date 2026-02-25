@@ -121,6 +121,7 @@ pub struct Paragraph {
     pub content_height: f32,
     pub alignment: Alignment,
     pub indent_left: f32,
+    pub indent_right: f32,
     pub indent_hanging: f32,
     pub indent_first_line: f32,
     pub list_label: String,

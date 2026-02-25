@@ -63,7 +63,9 @@
       "Bash(DOCXIDE_CASE=case1 cargo test:*)",
       "Bash(DOCXSIDE_CASE=case17 cargo test:*)",
       "Bash(DOCXSIDE_CASE=case18 cargo test:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(cd /Users/sverrejb/workspace/docxside/docxside-pdf && ./tools/target/debug/analyze-fixtures*)",
+      "Bash(./tools/target/debug/analyze-fixtures:*)"
     ]
   }
 }

@@ -43,6 +43,7 @@ pub(super) struct ParagraphStyle {
     pub(super) keep_next: bool,
     pub(super) line_spacing: Option<LineSpacing>,
     pub(super) indent_left: Option<f32>,
+    pub(super) indent_right: Option<f32>,
     pub(super) indent_hanging: Option<f32>,
     pub(super) indent_first_line: Option<f32>,
     pub(super) borders_extra: f32,
@@ -272,6 +273,7 @@ pub(super) fn parse_styles(
 
         let ind = ppr.and_then(|n| wml(n, "ind"));
         let indent_left = ind.and_then(|n| twips_attr(n, "left"));
+        let indent_right = ind.and_then(|n| twips_attr(n, "right"));
         let indent_hanging = ind.and_then(|n| twips_attr(n, "hanging"));
         let indent_first_line = ind.and_then(|n| twips_attr(n, "firstLine"));
 
@@ -294,6 +296,7 @@ pub(super) fn parse_styles(
                 keep_next,
                 line_spacing,
                 indent_left,
+                indent_right,
                 indent_hanging,
                 indent_first_line,
                 borders_extra: bdr_extra,
@@ -447,6 +450,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             keep_next: false,
             line_spacing: None,
             indent_left: None,
+            indent_right: None,
             indent_hanging: None,
             indent_first_line: None,
             borders_extra: 0.0,
@@ -466,6 +470,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                 inherit!(space_after, inh.space_after, s);
                 inherit!(line_spacing, inh.line_spacing, s);
                 inherit!(indent_left, inh.indent_left, s);
+                inherit!(indent_right, inh.indent_right, s);
                 inherit!(indent_hanging, inh.indent_hanging, s);
                 inherit!(indent_first_line, inh.indent_first_line, s);
             }
@@ -482,6 +487,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             s.space_after = s.space_after.or(inh.space_after);
             s.line_spacing = s.line_spacing.or(inh.line_spacing);
             s.indent_left = s.indent_left.or(inh.indent_left);
+            s.indent_right = s.indent_right.or(inh.indent_right);
             s.indent_hanging = s.indent_hanging.or(inh.indent_hanging);
             s.indent_first_line = s.indent_first_line.or(inh.indent_first_line);
         }

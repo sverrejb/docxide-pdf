@@ -583,7 +583,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
 
                     let para_text_x = sp.margin_left + para.indent_left;
-                    let para_text_width = (text_width - para.indent_left).max(1.0);
+                    let para_text_width = (text_width - para.indent_left - para.indent_right).max(1.0);
                     let label_x = sp.margin_left + para.indent_left - para.indent_hanging;
                     let text_hanging = if !para.list_label.is_empty() {
                         0.0
