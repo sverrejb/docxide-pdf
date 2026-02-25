@@ -18,7 +18,7 @@ SHOWCASE_DIR = ROOT / "showcase"
 SSIM_CSV = ROOT / "tests/output/ssim_results.csv"
 TARGET_W = 420
 SSIM_THRESHOLD = 0.40
-IMG_BASE = "https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase"
+IMG_BASE = "https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase"
 
 
 def run_tests():
@@ -68,7 +68,7 @@ def write_showcase_readme(rows):
     lines = [
         "# All test cases",
         "",
-        "Reference (MS Word) on the left, docxside-pdf on the right.",
+        "Reference (MS Word) on the left, docxide-pdf on the right.",
         "",
     ]
     for case, score, ref_file, gen_file in rows:

@@ -1,4 +1,4 @@
-# docxside-pdf
+# docxide-pdf
 
 ## ⚠️ Work in progress. This is in no way ready for use in production. The API, output quality, and supported features are all actively changing.
 
@@ -40,26 +40,26 @@ Footnotes, clickable hyperlinks, text boxes, charts, SmartArt, multi-column layo
 
 ## Examples
 
-See more examples in the [showcase](https://github.com/sverrejb/docxside-pdf/tree/main/showcase#readme)
+See more examples in the [showcase](https://github.com/sverrejb/docxide-pdf/tree/main/showcase#readme)
 
 <!-- showcase-start -->
 <table>
   <tr><th>MS Word</th><th>Docxside-PDF</th></tr>
   <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case4_ref.png"/><br/><sub>case4 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case4_gen.png"/><br/><sub>case4 — 89.5% SSIM</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case4_ref.png"/><br/><sub>case4 — reference</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case4_gen.png"/><br/><sub>case4 — 89.5% SSIM</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case6_ref.png"/><br/><sub>case6 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case6_gen.png"/><br/><sub>case6 — 54.8% SSIM</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case6_ref.png"/><br/><sub>case6 — reference</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case6_gen.png"/><br/><sub>case6 — 54.8% SSIM</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case7_ref.png"/><br/><sub>case7 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case7_gen.png"/><br/><sub>case7 — 91.7% SSIM</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case7_ref.png"/><br/><sub>case7 — reference</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case7_gen.png"/><br/><sub>case7 — 91.7% SSIM</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case8_ref.png"/><br/><sub>case8 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxside-pdf/main/showcase/case8_gen.png"/><br/><sub>case8 — 94.1% SSIM</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case8_ref.png"/><br/><sub>case8 — reference</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case8_gen.png"/><br/><sub>case8 — 94.1% SSIM</sub></td>
   </tr>
 </table>
 <!-- showcase-end -->
@@ -68,7 +68,7 @@ See more examples in the [showcase](https://github.com/sverrejb/docxside-pdf/tre
 
 ```bash
 # Install the CLI
-cargo install docxside-pdf
+cargo install docxide-pdf
 ```
 
 ## Usage
@@ -77,22 +77,22 @@ cargo install docxside-pdf
 
 ```bash
 # Convert a DOCX file to PDF
-docxside-pdf input.docx
+docxide-pdf input.docx
 
 # Specify output path (defaults to input.pdf)
-docxside-pdf input.docx output.pdf
+docxide-pdf input.docx output.pdf
 ```
 
 ### Library
 
 ```bash
-cargo add docxside-pdf --no-default-features
+cargo add docxide-pdf --no-default-features
 ```
 
 This avoids pulling in the CLI dependency (`clap`).
 
 ```rust
-use docxside_pdf::convert_docx_to_pdf;
+use docxide_pdf::convert_docx_to_pdf;
 use std::path::Path;
 
 convert_docx_to_pdf(
@@ -111,9 +111,9 @@ convert_docx_to_pdf(
 | `DOCXSIDE_NO_FONT_CACHE` | Set to any value to disable the font index disk cache. Forces a full font scan on every conversion. Useful for debugging font resolution issues. |
 
 Font scanning results are cached to disk (per-directory, invalidated by mtime). The cache is stored at:
-- **macOS**: `~/Library/Caches/docxside-pdf/font-index.tsv`
-- **Linux**: `$XDG_CACHE_HOME/docxside-pdf/font-index.tsv` (default `~/.cache/`)
-- **Windows**: `%LOCALAPPDATA%\docxside-pdf\cache\font-index.tsv`
+- **macOS**: `~/Library/Caches/docxide-pdf/font-index.tsv`
+- **Linux**: `$XDG_CACHE_HOME/docxide-pdf/font-index.tsv` (default `~/.cache/`)
+- **Windows**: `%LOCALAPPDATA%\docxide-pdf\cache\font-index.tsv`
 
 ## Architecture
 

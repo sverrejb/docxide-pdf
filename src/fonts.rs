@@ -121,11 +121,11 @@ fn cache_path() -> Option<PathBuf> {
     let dir = if cfg!(target_os = "macos") {
         std::env::var("HOME")
             .ok()
-            .map(|h| PathBuf::from(h).join("Library/Caches/docxside-pdf"))
+            .map(|h| PathBuf::from(h).join("Library/Caches/docxide-pdf"))
     } else if cfg!(target_os = "windows") {
         std::env::var("LOCALAPPDATA")
             .ok()
-            .map(|d| PathBuf::from(d).join("docxside-pdf/cache"))
+            .map(|d| PathBuf::from(d).join("docxide-pdf/cache"))
     } else {
         std::env::var("XDG_CACHE_HOME")
             .ok()
@@ -135,7 +135,7 @@ fn cache_path() -> Option<PathBuf> {
                     .ok()
                     .map(|h| PathBuf::from(h).join(".cache"))
             })
-            .map(|d| d.join("docxside-pdf"))
+            .map(|d| d.join("docxide-pdf"))
     };
     dir.map(|d| d.join("font-index.tsv"))
 }

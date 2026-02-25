@@ -1,6 +1,6 @@
 # All test cases
 
-Reference (MS Word) on the left, docxside-pdf on the right.
+Reference (MS Word) on the left, docxide-pdf on the right.
 
 ## case1 — 61.2% SSIM
 

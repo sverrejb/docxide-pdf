@@ -239,7 +239,7 @@ fn prepare_fixture(fixture_dir: &Path) -> Option<FixturePages> {
         }
     }
     let generated_pdf = output_base.join("generated.pdf");
-    if let Err(e) = docxside_pdf::convert_docx_to_pdf(&input_docx, &generated_pdf) {
+    if let Err(e) = docxide_pdf::convert_docx_to_pdf(&input_docx, &generated_pdf) {
         println!("  [SKIP] {name}: {e}");
         return None;
     }

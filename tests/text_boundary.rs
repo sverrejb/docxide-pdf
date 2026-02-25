@@ -132,7 +132,7 @@ fn analyze_fixture(fixture_dir: &Path) -> Option<CaseResult> {
     fs::create_dir_all(&output_base).ok();
     let generated_pdf = output_base.join("generated.pdf");
 
-    if let Err(e) = docxside_pdf::convert_docx_to_pdf(&input_docx, &generated_pdf) {
+    if let Err(e) = docxide_pdf::convert_docx_to_pdf(&input_docx, &generated_pdf) {
         println!("  [SKIP] {name}: {e}");
         return None;
     }

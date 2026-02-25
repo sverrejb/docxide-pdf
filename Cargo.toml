@@ -1,10 +1,10 @@
 [package]
-name = "docxside-pdf"
+name = "docxide-pdf"
 version = "0.6.0"
 edition = "2024"
 description = "CLI and Library for converting DOCX files to PDF, matching Microsoft Word's output as closely as possible"
 license = "Apache-2.0"
-repository = "https://github.com/sverrejb/docxside-pdf"
+repository = "https://github.com/sverrejb/docxide-pdf"
 keywords = ["experimental", "docx", "pdf", "word", "converter"]
 categories = ["command-line-utilities", "text-processing", "text-editors"]
 exclude = [
@@ -20,11 +20,11 @@ exclude = [
 ]
 
 [lib]
-name = "docxside_pdf"
+name = "docxide_pdf"
 path = "src/lib.rs"
 
 [[bin]]
-name = "docxside-pdf"
+name = "docxide-pdf"
 path = "src/main.rs"
 required-features = ["cli"]
 

@@ -40,7 +40,7 @@ fn analyze_fixture(fixture_dir: &Path) -> Option<SizeResult> {
         pdf_mtime < docx_mtime
     };
     if needs_convert {
-        if let Err(e) = docxside_pdf::convert_docx_to_pdf(&input_docx, &generated_pdf) {
+        if let Err(e) = docxide_pdf::convert_docx_to_pdf(&input_docx, &generated_pdf) {
             println!("  [SKIP] {name}: {e}");
             return None;
         }

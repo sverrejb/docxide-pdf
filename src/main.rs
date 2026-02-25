@@ -2,7 +2,7 @@ use clap::Parser;
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(name = "docxside-pdf", about = "Convert DOCX files to PDF")]
+#[command(name = "docxide-pdf", about = "Convert DOCX files to PDF")]
 struct Args {
     /// Input DOCX file
     input: PathBuf,
@@ -53,7 +53,7 @@ fn main() {
     let output = available_path(output);
 
     let t0 = std::time::Instant::now();
-    if let Err(e) = docxside_pdf::convert_docx_to_pdf(&args.input, &output) {
+    if let Err(e) = docxide_pdf::convert_docx_to_pdf(&args.input, &output) {
         eprintln!("Error: {e}");
         std::process::exit(1);
     }

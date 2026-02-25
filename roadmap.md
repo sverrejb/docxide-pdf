@@ -13,7 +13,7 @@ To do kerning properly:
 
 Already implemented with layered strategy:
 1. Embedded fonts from DOCX — ✅
-2. `DOCXSIDE_FONTS` env var — ✅
+2. `DOCXIDE_FONTS` env var — ✅
 3. Cross-platform system font search (macOS, Linux, Windows) — ✅
 4. Helvetica Type1 fallback — ✅
 
@@ -43,7 +43,7 @@ Remaining:
 - Use `samply` for flamegraph profiling to identify actual bottlenecks
 
 ### Known bottlenecks
-- **Font scanning** — ✅ Done. Directory-level disk cache (`font-index.tsv`) with mtime invalidation + mmap for font parsing. ~500ms → ~33ms warm cache (release). Disable with `DOCXSIDE_NO_FONT_CACHE=1`.
+- **Font scanning** — ✅ Done. Directory-level disk cache (`font-index.tsv`) with mtime invalidation + mmap for font parsing. ~500ms → ~33ms warm cache (release). Disable with `DOCXIDE_NO_FONT_CACHE=1`.
 - **Double font reads** — scan reads each font file for indexing, then `register_font` reads the same file again for embedding. Keep the data from the first read
 - **Kerning extraction** — O(n²) brute-force over all WinAnsi glyph pairs. Iterate actual kern table entries instead
 - **Per-word text objects** — ✅ Done. One BT/ET per line with relative Td positioning and deduplicated Tf calls

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-docxside-pdf is a Rust library for converting DOCX files to PDF with the goal of matching Microsoft Word's PDF export as closely as possible. The project is in early development.
+docxide-pdf is a Rust library for converting DOCX files to PDF with the goal of matching Microsoft Word's PDF export as closely as possible. The project is in early development.
 
 ## Common Commands
 
