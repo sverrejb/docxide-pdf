@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use pdf_writer::Content;
 
-use crate::fonts::{FontEntry, font_key, to_winansi_bytes};
+use crate::fonts::{FontEntry, font_key};
 use crate::model::{Alignment, CellVAlign, LineSpacing, SectionProperties, Table, VMerge};
 
 use super::resolve_line_h;
@@ -38,11 +38,7 @@ fn auto_fit_columns(table: &Table, seen_fonts: &HashMap<String, FontEntry>) -> V
                         continue;
                     };
                     for word in run.text.split_whitespace() {
-                        let ww: f32 = to_winansi_bytes(word)
-                            .iter()
-                            .filter(|&&b| b >= 32)
-                            .map(|&b| entry.widths_1000[(b - 32) as usize] * run.font_size / 1000.0)
-                            .sum();
+                        let ww = entry.word_width(word, run.font_size);
                         min_widths[grid_col] = min_widths[grid_col].max(ww);
                     }
                 }

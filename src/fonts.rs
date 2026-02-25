@@ -15,6 +15,36 @@ pub(crate) struct FontEntry {
     pub(crate) line_h_ratio: Option<f32>,
     pub(crate) ascender_ratio: Option<f32>,
     pub(crate) char_to_gid: Option<HashMap<char, u16>>,
+    pub(crate) char_widths_1000: Option<HashMap<char, f32>>,
+}
+
+impl FontEntry {
+    /// Width of a single character in 1000-units. Uses the per-char cache (covers
+    /// all Unicode chars seen in the document), falls back to the WinAnsi table.
+    pub(crate) fn char_width_1000(&self, ch: char) -> f32 {
+        if let Some(ref map) = self.char_widths_1000 {
+            if let Some(&w) = map.get(&ch) {
+                return w;
+            }
+        }
+        // Fallback: WinAnsi lookup (Helvetica or chars not in used_chars)
+        let byte = char_to_winansi(ch);
+        if byte >= 32 {
+            self.widths_1000[(byte - 32) as usize]
+        } else {
+            0.0
+        }
+    }
+
+    pub(crate) fn word_width(&self, word: &str, font_size: f32) -> f32 {
+        word.chars()
+            .map(|ch| self.char_width_1000(ch) * font_size / 1000.0)
+            .sum()
+    }
+
+    pub(crate) fn space_width(&self, font_size: f32) -> f32 {
+        self.char_width_1000(' ') * font_size / 1000.0
+    }
 }
 
 /// (lowercase family name, bold, italic) -> (file path, face index within TTC)
@@ -444,6 +474,42 @@ fn winansi_to_char(byte: u8) -> char {
     }
 }
 
+/// Map a single Unicode char to its WinAnsi byte, or 0 if unmappable.
+fn char_to_winansi(c: char) -> u8 {
+    match c as u32 {
+        0x0020..=0x007F => c as u8,
+        0x00A0..=0x00FF => c as u8,
+        0x20AC => 0x80,
+        0x201A => 0x82,
+        0x0192 => 0x83,
+        0x201E => 0x84,
+        0x2026 => 0x85,
+        0x2020 => 0x86,
+        0x2021 => 0x87,
+        0x02C6 => 0x88,
+        0x2030 => 0x89,
+        0x0160 => 0x8A,
+        0x2039 => 0x8B,
+        0x0152 => 0x8C,
+        0x017D => 0x8E,
+        0x2018 => 0x91,
+        0x2019 => 0x92,
+        0x201C => 0x93,
+        0x201D => 0x94,
+        0x2022 => 0x95,
+        0x2013 => 0x96,
+        0x2014 => 0x97,
+        0x02DC => 0x98,
+        0x2122 => 0x99,
+        0x0161 => 0x9A,
+        0x203A => 0x9B,
+        0x0153 => 0x9C,
+        0x017E => 0x9E,
+        0x0178 => 0x9F,
+        _ => 0,
+    }
+}
+
 /// Convert a UTF-8 string to WinAnsi (Windows-1252) bytes for PDF Str encoding.
 pub(crate) fn to_winansi_bytes(s: &str) -> Vec<u8> {
     s.chars()
@@ -525,7 +591,7 @@ fn embed_truetype(
     face_index: u32,
     used_chars: &HashSet<char>,
     alloc: &mut impl FnMut() -> Ref,
-) -> Option<(Vec<f32>, f32, f32, HashMap<char, u16>)> {
+) -> Option<(Vec<f32>, f32, f32, HashMap<char, u16>, HashMap<char, f32>)> {
     let face = Face::parse(font_data, face_index).ok()?;
 
     let units = face.units_per_em() as f32;
@@ -554,13 +620,19 @@ fn embed_truetype(
         })
         .collect();
 
-    // Build GlyphRemapper and char_to_gid map from used_chars
+    // Build GlyphRemapper, char_to_gid, and char_widths_1000 maps from used_chars
     let mut remapper = subsetter::GlyphRemapper::new();
     let mut char_to_gid = HashMap::new();
+    let mut char_widths_1000 = HashMap::new();
     for &ch in used_chars {
         if let Some(gid) = face.glyph_index(ch) {
             let new_gid = remapper.remap(gid.0);
             char_to_gid.insert(ch, new_gid);
+            let w = face
+                .glyph_hor_advance(gid)
+                .map(|adv| adv as f32 / units * 1000.0)
+                .unwrap_or(0.0);
+            char_widths_1000.insert(ch, w);
         }
     }
 
@@ -650,7 +722,7 @@ fn embed_truetype(
     let line_h_ratio = (face.ascender() as f32 - face.descender() as f32 + line_gap) / units;
     let ascender_ratio = face.ascender() as f32 / units;
 
-    Some((widths_1000, line_h_ratio, ascender_ratio, char_to_gid))
+    Some((widths_1000, line_h_ratio, ascender_ratio, char_to_gid, char_widths_1000))
 }
 
 pub(crate) fn primary_font_name(name: &str) -> &str {
@@ -720,14 +792,14 @@ pub(crate) fn register_font(
         }
     }
 
-    let (widths, line_h_ratio, ascender_ratio, char_to_gid) = result
-        .map(|(w, r, ar, m)| (w, Some(r), Some(ar), Some(m)))
+    let (widths, line_h_ratio, ascender_ratio, char_to_gid, char_widths_1000) = result
+        .map(|(w, r, ar, m, cw)| (w, Some(r), Some(ar), Some(m), Some(cw)))
         .unwrap_or_else(|| {
             log::warn!("Font not found: {font_name} bold={bold} italic={italic} — using Helvetica");
             pdf.type1_font(font_ref)
                 .base_font(Name(b"Helvetica"))
                 .encoding_predefined(Name(b"WinAnsiEncoding"));
-            (helvetica_widths(), None, None, None)
+            (helvetica_widths(), None, None, None, None)
         });
 
     log::debug!(
@@ -742,5 +814,6 @@ pub(crate) fn register_font(
         line_h_ratio,
         ascender_ratio,
         char_to_gid,
+        char_widths_1000,
     }
 }

@@ -64,11 +64,11 @@ Remaining:
 
 Priority improvements identified from analysis of failing scraped DOCX fixtures.
 
-### 1. Multi-section support (HIGH — 8 fixtures)
-Documents with mid-document `w:sectPr` (in `w:pPr`) that change page geometry, margins, headers/footers, or orientation between sections. Currently only the final body `w:sectPr` is parsed. Planning in progress.
+### 1. Multi-section support — ✅ Done
+Documents with mid-document `w:sectPr` (in `w:pPr`) that change page geometry, margins, headers/footers, or orientation between sections.
 
-### 2. Header/footer images (MEDIUM — 4 fixtures)
-`render_header_footer()` only processes text runs. Need to handle `w:drawing`/`wp:inline` in header/footer paragraphs (logos, letterheads).
+### 2. Header/footer images — ✅ Done
+Header/footer relationship files are now loaded, images (logos, letterheads) are parsed from `w:drawing`/`wp:inline`, and rendered as XObjects.
 
 ### 3. Textbox rendering (HIGH — 4 fixtures)
 VML textboxes (`v:textbox`, `w:txbxContent`) and `mc:AlternateContent` with `w:drawing` textbox content are completely unhandled. Some documents have all visible content inside textboxes.

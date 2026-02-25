@@ -131,16 +131,12 @@ pub(super) fn build_paragraph_lines(
         let key = font_key(run);
         let entry = seen_fonts.get(&key).expect("font registered");
         let eff_fs = effective_font_size(run);
-        let space_w = entry.widths_1000[0] * eff_fs / 1000.0;
+        let space_w = entry.space_width(eff_fs);
         let starts_with_ws = run.text.starts_with(char::is_whitespace);
         let y_off = vert_y_offset(run);
 
         for (i, word) in run.text.split_whitespace().enumerate() {
-            let ww: f32 = to_winansi_bytes(word)
-                .iter()
-                .filter(|&&b| b >= 32)
-                .map(|&b| entry.widths_1000[(b - 32) as usize] * eff_fs / 1000.0)
-                .sum();
+            let ww = entry.word_width(word, eff_fs);
 
             let need_space =
                 !current_chunks.is_empty() && (i > 0 || starts_with_ws || prev_ended_with_ws);
@@ -229,16 +225,12 @@ fn segment_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 
         let key = font_key(run);
         let entry = seen_fonts.get(&key).expect("font registered");
         let eff_fs = effective_font_size(run);
-        let space_w = entry.widths_1000[0] * eff_fs / 1000.0;
+        let space_w = entry.space_width(eff_fs);
         for (i, word) in run.text.split_whitespace().enumerate() {
             if !first || i > 0 {
                 w += space_w;
             }
-            w += to_winansi_bytes(word)
-                .iter()
-                .filter(|&&b| b >= 32)
-                .map(|&b| entry.widths_1000[(b - 32) as usize] * eff_fs / 1000.0)
-                .sum::<f32>();
+            w += entry.word_width(word, eff_fs);
             first = false;
         }
     }
@@ -266,12 +258,7 @@ fn decimal_before_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) 
             chars_remaining = 0;
             s
         };
-        for &b in to_winansi_bytes(text_to_measure)
-            .iter()
-            .filter(|&&b| b >= 32)
-        {
-            w += entry.widths_1000[(b - 32) as usize] * eff_fs / 1000.0;
-        }
+        w += entry.word_width(text_to_measure, eff_fs);
         if chars_remaining == 0 {
             break;
         }
@@ -351,11 +338,8 @@ pub(super) fn build_tabbed_line(
                         let key = font_key(run);
                         let entry = seen_fonts.get(&key).expect("font registered");
                         let eff_fs = effective_font_size(run);
-                        let leader_bytes = to_winansi_bytes(&leader_char.to_string());
-                        if let Some(&byte) = leader_bytes.first()
-                            && byte >= 32
                         {
-                            let char_w = entry.widths_1000[(byte - 32) as usize] * eff_fs / 1000.0;
+                            let char_w = entry.char_width_1000(leader_char) * eff_fs / 1000.0;
                             let leader_gap = seg_start - current_x;
                             if char_w > 0.0 && leader_gap > char_w * 2.0 {
                                 let count = ((leader_gap - char_w) / char_w).floor() as usize;
@@ -395,15 +379,11 @@ pub(super) fn build_tabbed_line(
             let key = font_key(run);
             let entry = seen_fonts.get(&key).expect("font registered");
             let eff_fs = effective_font_size(run);
-            let space_w = entry.widths_1000[0] * eff_fs / 1000.0;
+            let space_w = entry.space_width(eff_fs);
             let y_off = vert_y_offset(run);
 
             for (i, word) in run.text.split_whitespace().enumerate() {
-                let ww: f32 = to_winansi_bytes(word)
-                    .iter()
-                    .filter(|&&b| b >= 32)
-                    .map(|&b| entry.widths_1000[(b - 32) as usize] * eff_fs / 1000.0)
-                    .sum();
+                let ww = entry.word_width(word, eff_fs);
                 if !all_chunks.is_empty()
                     && (i > 0 || prev_ws || run.text.starts_with(char::is_whitespace))
                 {

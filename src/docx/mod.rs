@@ -923,12 +923,27 @@ fn parse_header_footer_xml(
             .unwrap_or(Alignment::Left);
 
         let parsed = parse_runs(node, styles, theme, rels, zip);
+        let mut runs = parsed.runs;
+
+        let has_inline_images = runs.iter().any(|r| r.inline_image.is_some());
+        let has_text = runs.iter().any(|r| !r.text.is_empty());
+        let (para_image, content_height) = if has_inline_images && !has_text {
+            let img_run_idx = runs.iter().position(|r| r.inline_image.is_some());
+            let img = img_run_idx.and_then(|i| runs[i].inline_image.take());
+            let h = img.as_ref().map(|i| i.display_height).unwrap_or(0.0);
+            (img, h)
+        } else if has_inline_images {
+            (None, 0.0)
+        } else {
+            let drawing = compute_drawing_info(node, rels, zip);
+            (drawing.image, drawing.height)
+        };
 
         paragraphs.push(Paragraph {
-            runs: parsed.runs,
+            runs,
             space_before: 0.0,
             space_after: 0.0,
-            content_height: 0.0,
+            content_height,
             alignment,
             indent_left: 0.0,
             indent_hanging: 0.0,
@@ -937,7 +952,7 @@ fn parse_header_footer_xml(
             contextual_spacing: false,
             keep_next: false,
             line_spacing: None,
-            image: None,
+            image: para_image,
             borders: ParagraphBorders::default(),
             shading: None,
             page_break_before: false,
@@ -1124,8 +1139,9 @@ fn parse_section_properties(
                 .strip_prefix('/')
                 .map(String::from)
                 .unwrap_or_else(|| format!("word/{}", target));
+            let part_rels = parse_part_relationships(zip, &zip_path);
             let xml_text = read_zip_text(zip, &zip_path)?;
-            parse_header_footer_xml(&xml_text, styles, theme, &HashMap::new(), zip)
+            parse_header_footer_xml(&xml_text, styles, theme, &part_rels, zip)
         };
 
     let header_default = resolve_hf(header_default_rid, zip);
@@ -1668,12 +1684,9 @@ fn parse_list_info(
 
 const REL_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
-fn parse_relationships(zip: &mut zip::ZipArchive<std::fs::File>) -> HashMap<String, String> {
+fn parse_rels_xml(xml_content: &str) -> HashMap<String, String> {
     let mut rels = HashMap::new();
-    let Some(xml_content) = read_zip_text(zip, "word/_rels/document.xml.rels") else {
-        return rels;
-    };
-    let Ok(xml) = roxmltree::Document::parse(&xml_content) else {
+    let Ok(xml) = roxmltree::Document::parse(xml_content) else {
         return rels;
     };
     for node in xml.root_element().children() {
@@ -1684,6 +1697,33 @@ fn parse_relationships(zip: &mut zip::ZipArchive<std::fs::File>) -> HashMap<Stri
         }
     }
     rels
+}
+
+fn parse_relationships(zip: &mut zip::ZipArchive<std::fs::File>) -> HashMap<String, String> {
+    let Some(xml_content) = read_zip_text(zip, "word/_rels/document.xml.rels") else {
+        return HashMap::new();
+    };
+    parse_rels_xml(&xml_content)
+}
+
+/// Load relationships for a part like "word/header1.xml" → "word/_rels/header1.xml.rels"
+fn parse_part_relationships(
+    zip: &mut zip::ZipArchive<std::fs::File>,
+    part_path: &str,
+) -> HashMap<String, String> {
+    let (dir, file) = match part_path.rsplit_once('/') {
+        Some((d, f)) => (d, f),
+        None => ("", part_path),
+    };
+    let rels_path = if dir.is_empty() {
+        format!("_rels/{}.rels", file)
+    } else {
+        format!("{}/_rels/{}.rels", dir, file)
+    };
+    let Some(xml_content) = read_zip_text(zip, &rels_path) else {
+        return HashMap::new();
+    };
+    parse_rels_xml(&xml_content)
 }
 
 fn image_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat)> {

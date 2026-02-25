@@ -62,7 +62,8 @@
       "Bash(cd:*)",
       "Bash(DOCXIDE_CASE=case1 cargo test:*)",
       "Bash(DOCXSIDE_CASE=case17 cargo test:*)",
-      "Bash(DOCXSIDE_CASE=case18 cargo test:*)"
+      "Bash(DOCXSIDE_CASE=case18 cargo test:*)",
+      "Bash(git stash:*)"
     ]
   }
 }

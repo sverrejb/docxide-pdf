@@ -43,13 +43,14 @@ fn render_header_footer(
     is_header: bool,
     page_num: usize,
     total_pages: usize,
+    para_image_names: &HashMap<usize, String>,
+    inline_image_names: &HashMap<(usize, usize), String>,
 ) {
     let text_width = sp.page_width - sp.margin_left - sp.margin_right;
 
-    for para in &hf.paragraphs {
-        if is_text_empty(&para.runs) {
-            continue;
-        }
+    for (pi, para) in hf.paragraphs.iter().enumerate() {
+        let has_para_image = para.image.is_some();
+        let text_empty = is_text_empty(&para.runs);
 
         let substituted_runs: Vec<Run> = para
             .runs
@@ -67,8 +68,6 @@ fn render_header_footer(
             })
             .collect();
 
-        let lines = build_paragraph_lines(&substituted_runs, seen_fonts, text_width, 0.0, &HashMap::new());
-
         let (font_size, _, tallest_ar) = tallest_run_metrics(&substituted_runs, seen_fonts);
         let ascender_ratio = tallest_ar.unwrap_or(0.75);
 
@@ -77,6 +76,43 @@ fn render_header_footer(
         } else {
             sp.footer_margin + font_size * (1.0 - ascender_ratio)
         };
+
+        if (has_para_image || text_empty) && para.content_height > 0.0 {
+            if let Some(pdf_name) = para_image_names.get(&pi) {
+                let img = para.image.as_ref().unwrap();
+                let y_bottom = baseline_y + font_size * ascender_ratio - img.display_height;
+                let x = sp.margin_left
+                    + match para.alignment {
+                        Alignment::Center => (text_width - img.display_width).max(0.0) / 2.0,
+                        Alignment::Right => (text_width - img.display_width).max(0.0),
+                        _ => 0.0,
+                    };
+                content.save_state();
+                content.transform([
+                    img.display_width,
+                    0.0,
+                    0.0,
+                    img.display_height,
+                    x,
+                    y_bottom,
+                ]);
+                content.x_object(Name(pdf_name.as_bytes()));
+                content.restore_state();
+            }
+            continue;
+        }
+
+        if text_empty {
+            continue;
+        }
+
+        let block_inline_images: HashMap<usize, String> = inline_image_names
+            .iter()
+            .filter(|((pi2, _), _)| *pi2 == pi)
+            .map(|((_, ri), name)| (*ri, name.clone()))
+            .collect();
+
+        let lines = build_paragraph_lines(&substituted_runs, seen_fonts, text_width, 0.0, &block_inline_images);
 
         let effective_ls = para.line_spacing.unwrap_or(doc_line_spacing);
         let tallest_lhr = font_metric(&substituted_runs, seen_fonts, |e| e.line_h_ratio);
@@ -376,6 +412,39 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     }
                 }
                 global_block_idx += 1;
+            }
+        }
+    }
+
+    // Embed header/footer images
+    // Key: (section_idx, hf_type, para_idx) for paragraph images
+    // Key: (section_idx, hf_type, para_idx, run_idx) for inline images
+    // hf_type: 0=header_default, 1=header_first, 2=footer_default, 3=footer_first
+    let mut hf_image_names: HashMap<(usize, u8, usize), String> = HashMap::new();
+    let mut hf_inline_image_names: HashMap<(usize, u8, usize, usize), String> = HashMap::new();
+    {
+        let hf_variants: [(u8, fn(&SectionProperties) -> Option<&HeaderFooter>); 4] = [
+            (0, |sp| sp.header_default.as_ref()),
+            (1, |sp| sp.header_first.as_ref()),
+            (2, |sp| sp.footer_default.as_ref()),
+            (3, |sp| sp.footer_first.as_ref()),
+        ];
+        for (si, section) in doc.sections.iter().enumerate() {
+            for &(hf_type, accessor) in &hf_variants {
+                if let Some(hf) = accessor(&section.properties) {
+                    for (pi, para) in hf.paragraphs.iter().enumerate() {
+                        if let Some(img) = &para.image {
+                            let name = embed_image(img, &mut image_xobjects, &mut pdf, &mut alloc);
+                            hf_image_names.insert((si, hf_type, pi), name);
+                        }
+                        for (ri, run) in para.runs.iter().enumerate() {
+                            if let Some(img) = &run.inline_image {
+                                let name = embed_image(img, &mut image_xobjects, &mut pdf, &mut alloc);
+                                hf_inline_image_names.insert((si, hf_type, pi, ri), name);
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -917,29 +986,45 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         page_section_indices.push((last, false));
     }
 
+    let build_hf_maps = |si: usize, hf_type: u8| -> (HashMap<usize, String>, HashMap<(usize, usize), String>) {
+        let para_imgs: HashMap<usize, String> = hf_image_names
+            .iter()
+            .filter(|((s, ht, _), _)| *s == si && *ht == hf_type)
+            .map(|((_, _, pi), name)| (*pi, name.clone()))
+            .collect();
+        let inline_imgs: HashMap<(usize, usize), String> = hf_inline_image_names
+            .iter()
+            .filter(|((s, ht, _, _), _)| *s == si && *ht == hf_type)
+            .map(|((_, _, pi, ri), name)| ((*pi, *ri), name.clone()))
+            .collect();
+        (para_imgs, inline_imgs)
+    };
+
     for (page_idx, content) in all_contents.iter_mut().enumerate() {
         let (si, is_first) = page_section_indices[page_idx];
         let sp = &doc.sections[si].properties;
         let page_num = page_idx + 1;
 
         // Header
-        let header = if is_first && sp.different_first_page {
-            sp.header_first.as_ref()
+        let (header, hdr_type) = if is_first && sp.different_first_page {
+            (sp.header_first.as_ref(), 1u8)
         } else {
-            sp.header_default.as_ref()
+            (sp.header_default.as_ref(), 0u8)
         };
         if let Some(hf) = header {
-            render_header_footer(content, hf, &seen_fonts, sp, doc.line_spacing, true, page_num, total_pages);
+            let (pi_map, ii_map) = build_hf_maps(si, hdr_type);
+            render_header_footer(content, hf, &seen_fonts, sp, doc.line_spacing, true, page_num, total_pages, &pi_map, &ii_map);
         }
 
         // Footer
-        let footer = if is_first && sp.different_first_page {
-            sp.footer_first.as_ref()
+        let (footer, ftr_type) = if is_first && sp.different_first_page {
+            (sp.footer_first.as_ref(), 3u8)
         } else {
-            sp.footer_default.as_ref()
+            (sp.footer_default.as_ref(), 2u8)
         };
         if let Some(hf) = footer {
-            render_header_footer(content, hf, &seen_fonts, sp, doc.line_spacing, false, page_num, total_pages);
+            let (pi_map, ii_map) = build_hf_maps(si, ftr_type);
+            render_header_footer(content, hf, &seen_fonts, sp, doc.line_spacing, false, page_num, total_pages, &pi_map, &ii_map);
         }
     }
 
