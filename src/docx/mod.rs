@@ -7,12 +7,14 @@ use std::path::Path;
 use crate::error::Error;
 use crate::model::{
     Alignment, Block, CellBorder, CellBorders, CellMargins, CellVAlign, Document, EmbeddedImage,
-    FieldCode, Footnote, HeaderFooter, ImageFormat, Paragraph, ParagraphBorder, ParagraphBorders,
-    Run, TabAlignment, TabStop, Table, TableCell, TableRow, VMerge, VertAlign,
+    FieldCode, Footnote, HeaderFooter, ImageFormat, LineSpacing, Paragraph, ParagraphBorder,
+    ParagraphBorders, Run, Section, SectionBreakType, SectionProperties, TabAlignment, TabStop,
+    Table, TableCell, TableRow, VMerge, VertAlign,
 };
 
 use styles::{
-    StylesInfo, ThemeFonts, parse_alignment, parse_styles, parse_theme, resolve_font_from_node,
+    StylesInfo, ThemeFonts, parse_alignment, parse_line_spacing, parse_styles, parse_theme,
+    resolve_font_from_node,
 };
 
 struct LevelDef {
@@ -930,6 +932,7 @@ fn parse_header_footer_xml(
             alignment,
             indent_left: 0.0,
             indent_hanging: 0.0,
+            indent_first_line: 0.0,
             list_label: String::new(),
             contextual_spacing: false,
             keep_next: false,
@@ -1009,11 +1012,13 @@ fn parse_footnotes(
                 .or_else(|| para_style.and_then(|s| s.space_after))
                 .unwrap_or(0.0);
             let line_spacing = inline_spacing
-                .and_then(|n| n.attribute((WML_NS, "line")))
-                .and_then(|v| v.parse::<f32>().ok())
-                .map(|val| val / 240.0)
+                .and_then(|n| {
+                    n.attribute((WML_NS, "line"))
+                        .and_then(|v| v.parse::<f32>().ok())
+                        .map(|line_val| parse_line_spacing(n, line_val))
+                })
                 .or_else(|| para_style.and_then(|s| s.line_spacing))
-                .or(Some(1.0));
+                .or(Some(LineSpacing::Auto(1.0)));
 
             paragraphs.push(Paragraph {
                 runs: parsed.runs,
@@ -1023,6 +1028,7 @@ fn parse_footnotes(
                 alignment,
                 indent_left: 0.0,
                 indent_hanging: 0.0,
+                indent_first_line: 0.0,
                 list_label: String::new(),
                 contextual_spacing: false,
                 keep_next: false,
@@ -1048,6 +1054,102 @@ pub(super) fn read_zip_text(zip: &mut zip::ZipArchive<std::fs::File>, name: &str
     let mut content = String::new();
     zip.by_name(name).ok()?.read_to_string(&mut content).ok()?;
     Some(content)
+}
+
+fn parse_section_properties(
+    sect_node: roxmltree::Node,
+    rels: &HashMap<String, String>,
+    styles: &StylesInfo,
+    theme: &ThemeFonts,
+    zip: &mut zip::ZipArchive<std::fs::File>,
+    default_line_pitch: f32,
+) -> SectionProperties {
+    let pg_sz = wml(sect_node, "pgSz");
+    let pg_mar = wml(sect_node, "pgMar");
+    let doc_grid = wml(sect_node, "docGrid");
+
+    let page_width = pg_sz.and_then(|n| twips_attr(n, "w")).unwrap_or(612.0);
+    let page_height = pg_sz.and_then(|n| twips_attr(n, "h")).unwrap_or(792.0);
+    let margin_top = pg_mar.and_then(|n| twips_attr(n, "top")).unwrap_or(72.0);
+    let margin_bottom = pg_mar.and_then(|n| twips_attr(n, "bottom")).unwrap_or(72.0);
+    let margin_left = pg_mar.and_then(|n| twips_attr(n, "left")).unwrap_or(72.0);
+    let margin_right = pg_mar.and_then(|n| twips_attr(n, "right")).unwrap_or(72.0);
+    let header_margin = pg_mar.and_then(|n| twips_attr(n, "header")).unwrap_or(36.0);
+    let footer_margin = pg_mar.and_then(|n| twips_attr(n, "footer")).unwrap_or(36.0);
+    let line_pitch = doc_grid
+        .and_then(|n| twips_attr(n, "linePitch"))
+        .unwrap_or(default_line_pitch);
+
+    let different_first_page = wml(sect_node, "titlePg").is_some();
+
+    let break_type = wml(sect_node, "type")
+        .and_then(|n| n.attribute((WML_NS, "val")))
+        .map(|v| match v {
+            "continuous" => SectionBreakType::Continuous,
+            "oddPage" => SectionBreakType::OddPage,
+            "evenPage" => SectionBreakType::EvenPage,
+            _ => SectionBreakType::NextPage,
+        })
+        .unwrap_or(SectionBreakType::NextPage);
+
+    let mut header_default_rid = None;
+    let mut header_first_rid = None;
+    let mut footer_default_rid = None;
+    let mut footer_first_rid = None;
+    for child in sect_node.children() {
+        if child.tag_name().namespace() != Some(WML_NS) {
+            continue;
+        }
+        let hf_type = child.attribute((WML_NS, "type")).unwrap_or("");
+        let rid = child.attribute((REL_NS, "id"));
+        match child.tag_name().name() {
+            "headerReference" => match hf_type {
+                "default" => header_default_rid = rid,
+                "first" => header_first_rid = rid,
+                _ => {}
+            },
+            "footerReference" => match hf_type {
+                "default" => footer_default_rid = rid,
+                "first" => footer_first_rid = rid,
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+
+    let resolve_hf =
+        |rid: Option<&str>, zip: &mut zip::ZipArchive<std::fs::File>| -> Option<HeaderFooter> {
+            let target = rels.get(rid?)?;
+            let zip_path = target
+                .strip_prefix('/')
+                .map(String::from)
+                .unwrap_or_else(|| format!("word/{}", target));
+            let xml_text = read_zip_text(zip, &zip_path)?;
+            parse_header_footer_xml(&xml_text, styles, theme, &HashMap::new(), zip)
+        };
+
+    let header_default = resolve_hf(header_default_rid, zip);
+    let header_first = resolve_hf(header_first_rid, zip);
+    let footer_default = resolve_hf(footer_default_rid, zip);
+    let footer_first = resolve_hf(footer_first_rid, zip);
+
+    SectionProperties {
+        page_width,
+        page_height,
+        margin_top,
+        margin_bottom,
+        margin_left,
+        margin_right,
+        header_margin,
+        footer_margin,
+        header_default,
+        header_first,
+        footer_default,
+        footer_first,
+        different_first_page,
+        line_pitch,
+        break_type,
+    }
 }
 
 pub fn parse(path: &Path) -> Result<Document, Error> {
@@ -1078,69 +1180,9 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
 
     let body = wml(root, "body").ok_or_else(|| Error::Pdf("Missing w:body".into()))?;
 
-    let sect = wml(body, "sectPr");
-    let pg_sz = sect.and_then(|s| wml(s, "pgSz"));
-    let pg_mar = sect.and_then(|s| wml(s, "pgMar"));
-    let doc_grid = sect.and_then(|s| wml(s, "docGrid"));
+    let default_line_pitch = styles.defaults.font_size * 1.2;
 
-    let page_width = pg_sz.and_then(|n| twips_attr(n, "w")).unwrap_or(612.0);
-    let page_height = pg_sz.and_then(|n| twips_attr(n, "h")).unwrap_or(792.0);
-    let margin_top = pg_mar.and_then(|n| twips_attr(n, "top")).unwrap_or(72.0);
-    let margin_bottom = pg_mar.and_then(|n| twips_attr(n, "bottom")).unwrap_or(72.0);
-    let margin_left = pg_mar.and_then(|n| twips_attr(n, "left")).unwrap_or(72.0);
-    let margin_right = pg_mar.and_then(|n| twips_attr(n, "right")).unwrap_or(72.0);
-    let header_margin = pg_mar.and_then(|n| twips_attr(n, "header")).unwrap_or(36.0);
-    let footer_margin = pg_mar.and_then(|n| twips_attr(n, "footer")).unwrap_or(36.0);
-    let line_pitch = doc_grid
-        .and_then(|n| twips_attr(n, "linePitch"))
-        .unwrap_or(styles.defaults.font_size * 1.2);
-
-    let different_first_page = sect.and_then(|s| wml(s, "titlePg")).is_some();
-
-    // Parse header/footer references from sectPr
-    let mut header_default_rid = None;
-    let mut header_first_rid = None;
-    let mut footer_default_rid = None;
-    let mut footer_first_rid = None;
-    if let Some(sect) = sect {
-        for child in sect.children() {
-            if child.tag_name().namespace() != Some(WML_NS) {
-                continue;
-            }
-            let hf_type = child.attribute((WML_NS, "type")).unwrap_or("");
-            let rid = child.attribute((REL_NS, "id"));
-            match child.tag_name().name() {
-                "headerReference" => match hf_type {
-                    "default" => header_default_rid = rid,
-                    "first" => header_first_rid = rid,
-                    _ => {}
-                },
-                "footerReference" => match hf_type {
-                    "default" => footer_default_rid = rid,
-                    "first" => footer_first_rid = rid,
-                    _ => {}
-                },
-                _ => {}
-            }
-        }
-    }
-
-    let resolve_hf =
-        |rid: Option<&str>, zip: &mut zip::ZipArchive<std::fs::File>| -> Option<HeaderFooter> {
-            let target = rels.get(rid?)?;
-            let zip_path = target
-                .strip_prefix('/')
-                .map(String::from)
-                .unwrap_or_else(|| format!("word/{}", target));
-            let xml_text = read_zip_text(zip, &zip_path)?;
-            parse_header_footer_xml(&xml_text, &styles, &theme, &HashMap::new(), zip)
-        };
-
-    let header_default = resolve_hf(header_default_rid, &mut zip);
-    let header_first = resolve_hf(header_first_rid, &mut zip);
-    let footer_default = resolve_hf(footer_default_rid, &mut zip);
-    let footer_first = resolve_hf(footer_first_rid, &mut zip);
-
+    let mut sections: Vec<Section> = Vec::new();
     let mut blocks = Vec::new();
     let mut counters: HashMap<(String, u8), u32> = HashMap::new();
 
@@ -1335,11 +1377,13 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                             let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
                             let line_spacing = Some(
                                 inline_spacing
-                                    .and_then(|n| n.attribute((WML_NS, "line")))
-                                    .and_then(|v| v.parse::<f32>().ok())
-                                    .map(|val| val / 240.0)
+                                    .and_then(|n| {
+                                        n.attribute((WML_NS, "line"))
+                                            .and_then(|v| v.parse::<f32>().ok())
+                                            .map(|line_val| parse_line_spacing(n, line_val))
+                                    })
                                     .or_else(|| para_style.and_then(|s| s.line_spacing))
-                                    .unwrap_or(1.0),
+                                    .unwrap_or(LineSpacing::Auto(1.0)),
                             );
                             cell_paras.push(Paragraph {
                                 runs: parsed.runs,
@@ -1349,6 +1393,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                                 alignment,
                                 indent_left: 0.0,
                                 indent_hanging: 0.0,
+                                indent_first_line: 0.0,
                                 list_label: String::new(),
                                 contextual_spacing: false,
                                 keep_next: false,
@@ -1444,21 +1489,39 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     || para_style.is_some_and(|s| s.keep_next);
 
                 let line_spacing = inline_spacing
-                    .and_then(|n| n.attribute((WML_NS, "line")))
-                    .and_then(|v| v.parse::<f32>().ok())
-                    .map(|val| val / 240.0)
+                    .and_then(|n| {
+                        n.attribute((WML_NS, "line"))
+                            .and_then(|v| v.parse::<f32>().ok())
+                            .map(|line_val| parse_line_spacing(n, line_val))
+                    })
                     .or_else(|| para_style.and_then(|s| s.line_spacing));
 
                 let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
                 let (mut indent_left, mut indent_hanging, list_label) =
                     parse_list_info(num_pr, &numbering, &mut counters);
 
+                let mut indent_first_line = 0.0f32;
                 if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
                     if let Some(v) = twips_attr(ind, "left") {
                         indent_left = v;
                     }
                     if let Some(v) = twips_attr(ind, "hanging") {
                         indent_hanging = v;
+                    }
+                    if let Some(v) = twips_attr(ind, "firstLine") {
+                        indent_first_line = v;
+                    }
+                } else if list_label.is_empty()
+                    && let Some(s) = para_style
+                {
+                    if let Some(v) = s.indent_left {
+                        indent_left = v;
+                    }
+                    if let Some(v) = s.indent_hanging {
+                        indent_hanging = v;
+                    }
+                    if let Some(v) = s.indent_first_line {
+                        indent_first_line = v;
                     }
                 }
 
@@ -1501,6 +1564,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     alignment,
                     indent_left,
                     indent_hanging,
+                    indent_first_line,
                     list_label,
                     contextual_spacing,
                     keep_next,
@@ -1512,29 +1576,55 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     tab_stops,
                     extra_line_breaks: parsed.line_break_count,
                 }));
+
+                // Mid-document section break: sectPr inside pPr ends the current section
+                if let Some(sect_node) = ppr.and_then(|ppr| wml(ppr, "sectPr")) {
+                    let props = parse_section_properties(
+                        sect_node, &rels, &styles, &theme, &mut zip, default_line_pitch,
+                    );
+                    sections.push(Section {
+                        properties: props,
+                        blocks: std::mem::take(&mut blocks),
+                    });
+                }
             }
             _ => {}
         }
     }
 
-    Ok(Document {
-        page_width,
-        page_height,
-        margin_top,
-        margin_bottom,
-        margin_left,
-        margin_right,
-        line_pitch,
-        line_spacing: styles.defaults.line_spacing,
+    // Final section: body-level sectPr
+    let final_props = if let Some(sect_node) = wml(body, "sectPr") {
+        parse_section_properties(
+            sect_node, &rels, &styles, &theme, &mut zip, default_line_pitch,
+        )
+    } else {
+        SectionProperties {
+            page_width: 612.0,
+            page_height: 792.0,
+            margin_top: 72.0,
+            margin_bottom: 72.0,
+            margin_left: 72.0,
+            margin_right: 72.0,
+            header_margin: 36.0,
+            footer_margin: 36.0,
+            header_default: None,
+            header_first: None,
+            footer_default: None,
+            footer_first: None,
+            different_first_page: false,
+            line_pitch: default_line_pitch,
+            break_type: SectionBreakType::NextPage,
+        }
+    };
+    sections.push(Section {
+        properties: final_props,
         blocks,
+    });
+
+    Ok(Document {
+        sections,
+        line_spacing: styles.defaults.line_spacing,
         embedded_fonts,
-        header_default,
-        header_first,
-        footer_default,
-        footer_first,
-        header_margin,
-        footer_margin,
-        different_first_page,
         footnotes,
     })
 }

@@ -60,6 +60,31 @@ Remaining:
 - Font subsetting (related to output file size)
 - Memory usage for large DOCX files with many images
 
+## Scraped fixture improvements
+
+Priority improvements identified from analysis of failing scraped DOCX fixtures.
+
+### 1. Multi-section support (HIGH — 8 fixtures)
+Documents with mid-document `w:sectPr` (in `w:pPr`) that change page geometry, margins, headers/footers, or orientation between sections. Currently only the final body `w:sectPr` is parsed. Planning in progress.
+
+### 2. Header/footer images (MEDIUM — 4 fixtures)
+`render_header_footer()` only processes text runs. Need to handle `w:drawing`/`wp:inline` in header/footer paragraphs (logos, letterheads).
+
+### 3. Textbox rendering (HIGH — 4 fixtures)
+VML textboxes (`v:textbox`, `w:txbxContent`) and `mc:AlternateContent` with `w:drawing` textbox content are completely unhandled. Some documents have all visible content inside textboxes.
+
+### 4. Justified text precision (MEDIUM — 10+ fixtures)
+Word spacing for `Alignment::Justify` doesn't match Word precisely. Likely needs GPOS kerning (see Kerning section) and more accurate word/character spacing distribution.
+
+### 5. Floating tables (MEDIUM — 2 fixtures)
+Tables with `w:tblpPr` positioning attributes are rendered as normal flow tables instead of being positioned absolutely on the page.
+
+### 6. Anchored image positioning (HIGH — 5 fixtures)
+`wp:anchor` images lack proper positioning (horizontal/vertical offsets relative to page/column/margin) and text wrapping. Currently rendered inline.
+
+### 7. Tab stop precision (LOW — 3 fixtures)
+Tab stop alignment and leader rendering has small positioning errors that accumulate in tab-heavy documents (e.g. table of contents).
+
 ## Test corpus
 
 Build a larger, more diverse test corpus by scraping public DOCX files from the internet. Current fixtures (case1-9) cover limited scenarios. A broad corpus would surface edge cases in layout, font handling, and feature coverage that manual test cases miss.
@@ -69,7 +94,7 @@ Additional fixture ideas:
 - ~~Headers and footers~~ — covered by case11
 - ~~Mixed inline formatting within a single line~~ — covered by case9
 - ~~Inline images (PNG, JPEG, varying sizes)~~ — covered by case16
-- ~~Paragraph borders and shading (all sides, combined with background color)~~ — covered by case17
+- ~~Paragraph borders and shading (all sides, combined with background color)~~ — covered by case17 (TODO: revisit margins on colored boxes)
 - Multi-section documents (different page sizes/orientations per section)
 - Deep style inheritance (3+ level chains with run vs style vs paragraph conflicts)
 - Hyperlinks and bookmarks

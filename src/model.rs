@@ -36,26 +36,50 @@ pub struct Footnote {
     pub paragraphs: Vec<Paragraph>,
 }
 
-pub struct Document {
+#[derive(Clone, Copy, Debug)]
+pub enum LineSpacing {
+    Auto(f32),     // multiplier (e.g. 1.0 = single, 1.15 = default)
+    Exact(f32),    // fixed height in points
+    AtLeast(f32),  // minimum height in points
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SectionBreakType {
+    NextPage,
+    Continuous,
+    OddPage,
+    EvenPage,
+}
+
+pub struct SectionProperties {
     pub page_width: f32,
     pub page_height: f32,
     pub margin_top: f32,
     pub margin_bottom: f32,
     pub margin_left: f32,
     pub margin_right: f32,
-    pub line_pitch: f32,
-    pub line_spacing: f32, // auto line spacing factor (e.g. 278/240)
-    pub blocks: Vec<Block>,
-    /// Fonts embedded in the DOCX (deobfuscated TTF/OTF bytes).
-    /// Key: (lowercase_font_name, bold, italic)
-    pub embedded_fonts: std::collections::HashMap<(String, bool, bool), Vec<u8>>,
+    pub header_margin: f32,
+    pub footer_margin: f32,
     pub header_default: Option<HeaderFooter>,
     pub header_first: Option<HeaderFooter>,
     pub footer_default: Option<HeaderFooter>,
     pub footer_first: Option<HeaderFooter>,
-    pub header_margin: f32,
-    pub footer_margin: f32,
     pub different_first_page: bool,
+    pub line_pitch: f32,
+    pub break_type: SectionBreakType,
+}
+
+pub struct Section {
+    pub properties: SectionProperties,
+    pub blocks: Vec<Block>,
+}
+
+pub struct Document {
+    pub sections: Vec<Section>,
+    pub line_spacing: LineSpacing,
+    /// Fonts embedded in the DOCX (deobfuscated TTF/OTF bytes).
+    /// Key: (lowercase_font_name, bold, italic)
+    pub embedded_fonts: std::collections::HashMap<(String, bool, bool), Vec<u8>>,
     pub footnotes: std::collections::HashMap<u32, Footnote>,
 }
 
@@ -98,10 +122,11 @@ pub struct Paragraph {
     pub alignment: Alignment,
     pub indent_left: f32,
     pub indent_hanging: f32,
+    pub indent_first_line: f32,
     pub list_label: String,
     pub contextual_spacing: bool,
     pub keep_next: bool,
-    pub line_spacing: Option<f32>, // per-paragraph override (e.g. 240/240 = 1.0)
+    pub line_spacing: Option<LineSpacing>,
     pub image: Option<EmbeddedImage>,
     pub borders: ParagraphBorders,
     pub shading: Option<[u8; 3]>,

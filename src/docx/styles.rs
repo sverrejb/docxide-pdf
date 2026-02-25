@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::model::{Alignment, CellBorder};
+use crate::model::{Alignment, CellBorder, LineSpacing};
 
 use super::{
     DML_NS, WML_NS, parse_paragraph_borders, parse_hex_color, read_zip_text, twips_attr, wml,
@@ -27,7 +27,7 @@ pub(super) struct StyleDefaults {
     pub(super) font_size: f32,
     pub(super) font_name: String,
     pub(super) space_after: f32,
-    pub(super) line_spacing: f32, // multiplier from w:spacing @line / 240
+    pub(super) line_spacing: LineSpacing,
 }
 
 pub(super) struct ParagraphStyle {
@@ -41,7 +41,10 @@ pub(super) struct ParagraphStyle {
     pub(super) alignment: Option<Alignment>,
     pub(super) contextual_spacing: bool,
     pub(super) keep_next: bool,
-    pub(super) line_spacing: Option<f32>,
+    pub(super) line_spacing: Option<LineSpacing>,
+    pub(super) indent_left: Option<f32>,
+    pub(super) indent_hanging: Option<f32>,
+    pub(super) indent_first_line: Option<f32>,
     pub(super) borders_extra: f32,
     pub(super) borders: crate::model::ParagraphBorders,
     pub(super) based_on: Option<String>,
@@ -148,6 +151,14 @@ pub(super) fn resolve_font_from_node(
     )
 }
 
+pub(super) fn parse_line_spacing(spacing_node: roxmltree::Node, line_val: f32) -> LineSpacing {
+    match spacing_node.attribute((WML_NS, "lineRule")) {
+        Some("exact") => LineSpacing::Exact(line_val / 20.0),
+        Some("atLeast") => LineSpacing::AtLeast(line_val / 20.0),
+        _ => LineSpacing::Auto(line_val / 240.0),
+    }
+}
+
 pub(super) fn parse_styles(
     zip: &mut zip::ZipArchive<std::fs::File>,
     theme: &ThemeFonts,
@@ -156,7 +167,7 @@ pub(super) fn parse_styles(
         font_size: 12.0,
         font_name: theme.minor.clone(),
         space_after: 0.0,
-        line_spacing: 1.0,
+        line_spacing: LineSpacing::Auto(1.0),
     };
     let mut paragraph_styles = HashMap::new();
     let mut character_styles = HashMap::new();
@@ -200,7 +211,7 @@ pub(super) fn parse_styles(
                 .attribute((WML_NS, "line"))
                 .and_then(|v| v.parse::<f32>().ok())
             {
-                defaults.line_spacing = line_val / 240.0;
+                defaults.line_spacing = parse_line_spacing(spacing, line_val);
             }
         }
     }
@@ -253,10 +264,16 @@ pub(super) fn parse_styles(
 
         let keep_next = ppr.and_then(|ppr| wml(ppr, "keepNext")).is_some();
 
-        let line_spacing = spacing
-            .and_then(|n| n.attribute((WML_NS, "line")))
-            .and_then(|v| v.parse::<f32>().ok())
-            .map(|val| val / 240.0);
+        let line_spacing = spacing.and_then(|n| {
+            n.attribute((WML_NS, "line"))
+                .and_then(|v| v.parse::<f32>().ok())
+                .map(|line_val| parse_line_spacing(n, line_val))
+        });
+
+        let ind = ppr.and_then(|n| wml(n, "ind"));
+        let indent_left = ind.and_then(|n| twips_attr(n, "left"));
+        let indent_hanging = ind.and_then(|n| twips_attr(n, "hanging"));
+        let indent_first_line = ind.and_then(|n| twips_attr(n, "firstLine"));
 
         let based_on = wml(style_node, "basedOn")
             .and_then(|n| n.attribute((WML_NS, "val")))
@@ -276,6 +293,9 @@ pub(super) fn parse_styles(
                 contextual_spacing,
                 keep_next,
                 line_spacing,
+                indent_left,
+                indent_hanging,
+                indent_first_line,
                 borders_extra: bdr_extra,
                 borders,
                 based_on,
@@ -426,6 +446,9 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             contextual_spacing: false,
             keep_next: false,
             line_spacing: None,
+            indent_left: None,
+            indent_hanging: None,
+            indent_first_line: None,
             borders_extra: 0.0,
             borders: crate::model::ParagraphBorders::default(),
             based_on: None,
@@ -442,6 +465,9 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                 inherit!(space_before, inh.space_before, s);
                 inherit!(space_after, inh.space_after, s);
                 inherit!(line_spacing, inh.line_spacing, s);
+                inherit!(indent_left, inh.indent_left, s);
+                inherit!(indent_hanging, inh.indent_hanging, s);
+                inherit!(indent_first_line, inh.indent_first_line, s);
             }
         }
 
@@ -455,6 +481,9 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             s.space_before = s.space_before.or(inh.space_before);
             s.space_after = s.space_after.or(inh.space_after);
             s.line_spacing = s.line_spacing.or(inh.line_spacing);
+            s.indent_left = s.indent_left.or(inh.indent_left);
+            s.indent_hanging = s.indent_hanging.or(inh.indent_hanging);
+            s.indent_first_line = s.indent_first_line.or(inh.indent_first_line);
         }
     }
 }

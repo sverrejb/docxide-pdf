@@ -3,7 +3,9 @@ use std::collections::HashMap;
 use pdf_writer::Content;
 
 use crate::fonts::{FontEntry, font_key, to_winansi_bytes};
-use crate::model::{Alignment, CellVAlign, Document, Table, VMerge};
+use crate::model::{Alignment, CellVAlign, LineSpacing, SectionProperties, Table, VMerge};
+
+use super::resolve_line_h;
 
 use super::layout::{
     LinkAnnotation, TextLine, build_paragraph_lines, font_metric, is_text_empty,
@@ -93,7 +95,7 @@ struct RowLayout {
 fn compute_row_layouts(
     table: &Table,
     col_widths: &[f32],
-    doc: &Document,
+    doc_line_spacing: LineSpacing,
     seen_fonts: &HashMap<String, FontEntry>,
 ) -> Vec<RowLayout> {
     let cm = &table.cell_margins;
@@ -126,10 +128,9 @@ fn compute_row_layouts(
 
                     for para in &cell.paragraphs {
                         let font_size = para.runs.first().map_or(12.0, |r| r.font_size);
-                        let effective_ls = para.line_spacing.unwrap_or(doc.line_spacing);
-                        let line_h = font_metric(&para.runs, seen_fonts, |e| e.line_h_ratio)
-                            .map(|ratio| font_size * ratio * effective_ls)
-                            .unwrap_or(font_size * 1.2 * effective_ls);
+                        let effective_ls = para.line_spacing.unwrap_or(doc_line_spacing);
+                        let tallest_lhr = font_metric(&para.runs, seen_fonts, |e| e.line_h_ratio);
+                        let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
 
                         if all_lines.is_empty() {
                             first_font_size = font_size;
@@ -167,20 +168,23 @@ fn compute_row_layouts(
 
 pub(super) fn render_table(
     table: &Table,
-    doc: &Document,
+    sp: &SectionProperties,
+    doc_line_spacing: LineSpacing,
     seen_fonts: &HashMap<String, FontEntry>,
     content: &mut Content,
     all_contents: &mut Vec<Content>,
     all_page_links: &mut Vec<Vec<LinkAnnotation>>,
     current_page_links: &mut Vec<LinkAnnotation>,
+    page_section_indices: &mut Vec<(usize, bool)>,
+    sect_idx: usize,
+    is_first_page_of_section: &mut bool,
     slot_top: &mut f32,
     prev_space_after: f32,
 ) {
     let col_widths = auto_fit_columns(table, seen_fonts);
-    let row_layouts = compute_row_layouts(table, &col_widths, doc, seen_fonts);
+    let row_layouts = compute_row_layouts(table, &col_widths, doc_line_spacing, seen_fonts);
     let cm = &table.cell_margins;
-    // Word positions tables so cell text aligns with the paragraph margin
-    let table_left = doc.margin_left + table.table_indent - cm.left;
+    let table_left = sp.margin_left + table.table_indent - cm.left;
 
     *slot_top -= prev_space_after;
 
@@ -193,12 +197,14 @@ pub(super) fn render_table(
             layout.cell_lines.len(),
             *slot_top
         );
-        let at_page_top = (*slot_top - (doc.page_height - doc.margin_top)).abs() < 1.0;
+        let at_page_top = (*slot_top - (sp.page_height - sp.margin_top)).abs() < 1.0;
 
-        if !at_page_top && *slot_top - row_h < doc.margin_bottom {
+        if !at_page_top && *slot_top - row_h < sp.margin_bottom {
             all_contents.push(std::mem::replace(content, Content::new()));
             all_page_links.push(std::mem::take(current_page_links));
-            *slot_top = doc.page_height - doc.margin_top;
+            page_section_indices.push((sect_idx, *is_first_page_of_section));
+            *is_first_page_of_section = false;
+            *slot_top = sp.page_height - sp.margin_top;
         }
 
         let row_top = *slot_top;

@@ -3,6 +3,7 @@
 
 /specs
 /lancedb
+/downloads
 /models
 tests/output/
 tests/fixtures/scraped/

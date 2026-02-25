@@ -490,7 +490,7 @@ pub(super) fn render_paragraph_lines(
             && global_line_idx != last_line_idx
             && line.chunks.len() > 1;
 
-        let (eff_margin, eff_width) = if global_line_idx == 0 && first_line_hanging > 0.0 {
+        let (eff_margin, eff_width) = if global_line_idx == 0 && first_line_hanging.abs() > 0.001 {
             (margin_left - first_line_hanging, text_width + first_line_hanging)
         } else {
             (margin_left, text_width)
