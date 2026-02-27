@@ -35,7 +35,6 @@ fn pdf_mediabox(pdf: &Path) -> Option<(f32, f32)> {
 #[test]
 fn page_geometry_comparison() {
     let fixtures = common::discover_fixtures().expect("discover fixtures");
-    let out_root = Path::new("tests/output");
 
     println!();
     println!(
@@ -54,7 +53,7 @@ fn page_geometry_comparison() {
     let mut mismatches = Vec::new();
 
     for fixture in &fixtures {
-        let name = fixture.file_name().and_then(|n| n.to_str()).unwrap_or("?");
+        let name = common::display_name(fixture);
         let input = fixture.join("input.docx");
         let reference = fixture.join("reference.pdf");
 
@@ -70,7 +69,7 @@ fn page_geometry_comparison() {
             }
         };
 
-        let case_out = out_root.join(name);
+        let case_out = common::output_dir(fixture);
         std::fs::create_dir_all(&case_out).ok();
         let gen_pdf = case_out.join("generated.pdf");
 

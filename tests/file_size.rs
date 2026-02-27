@@ -2,7 +2,7 @@ mod common;
 
 use rayon::prelude::*;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 const SIZE_RATIO_THRESHOLD: f64 = 10.0;
 
@@ -15,18 +15,14 @@ struct SizeResult {
 }
 
 fn analyze_fixture(fixture_dir: &Path) -> Option<SizeResult> {
-    let name = fixture_dir
-        .file_name()
-        .unwrap()
-        .to_string_lossy()
-        .to_string();
+    let name = common::display_name(fixture_dir);
     let input_docx = fixture_dir.join("input.docx");
     let reference_pdf = fixture_dir.join("reference.pdf");
     if !input_docx.exists() || !reference_pdf.exists() {
         return None;
     }
 
-    let output_dir = PathBuf::from("tests/output").join(&name);
+    let output_dir = common::output_dir(fixture_dir);
     fs::create_dir_all(&output_dir).ok();
     let generated_pdf = output_dir.join("generated.pdf");
 
@@ -91,10 +87,11 @@ fn file_size_within_threshold() {
         return;
     }
 
-    let results: Vec<SizeResult> = fixtures
+    let mut results: Vec<SizeResult> = fixtures
         .par_iter()
         .filter_map(|f| analyze_fixture(f))
         .collect();
+    results.sort_by(|a, b| a.name.cmp(&b.name));
 
     let ts = common::timestamp();
     let name_w = results

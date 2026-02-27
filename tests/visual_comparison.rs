@@ -216,14 +216,10 @@ fn ref_screenshots_fresh(reference_pdf: &Path, screenshot_dir: &Path) -> bool {
 }
 
 fn prepare_fixture(fixture_dir: &Path) -> Option<FixturePages> {
-    let name = fixture_dir
-        .file_name()
-        .unwrap()
-        .to_string_lossy()
-        .to_string();
+    let name = common::display_name(fixture_dir);
     let input_docx = fixture_dir.join("input.docx");
     let reference_pdf = fixture_dir.join("reference.pdf");
-    let output_base = PathBuf::from("tests/output").join(&name);
+    let output_base = common::output_dir(fixture_dir);
     let reference_screenshots = output_base.join("reference");
     let generated_screenshots = output_base.join("generated");
 
@@ -457,10 +453,11 @@ fn visual_comparison() {
         );
     }
 
-    let table_rows: Vec<(String, f64, bool)> = results
+    let mut table_rows: Vec<(String, f64, bool)> = results
         .iter()
         .map(|(n, a, p, _)| (n.clone(), *a, *p))
         .collect();
+    table_rows.sort_by(|a, b| a.0.cmp(&b.0));
     print_summary("Jaccard", SIMILARITY_THRESHOLD, &table_rows, &prev_scores);
     assert!(
         table_rows.iter().all(|(_, _, p)| *p),
@@ -509,10 +506,11 @@ fn ssim_comparison() {
         );
     }
 
-    let table_rows: Vec<(String, f64, bool)> = results
+    let mut table_rows: Vec<(String, f64, bool)> = results
         .iter()
         .map(|(n, a, p, _)| (n.clone(), *a, *p))
         .collect();
+    table_rows.sort_by(|a, b| a.0.cmp(&b.0));
     print_summary("SSIM", SSIM_THRESHOLD, &table_rows, &prev_scores);
     assert!(
         table_rows.iter().all(|(_, _, p)| *p),

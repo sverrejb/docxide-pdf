@@ -78,7 +78,9 @@
       "Bash(/Users/sverrejb/workspace/docxside/docxside-pdf/tools/target/debug/analyze-fixtures:*)",
       "Bash(DOCXSIDE_CASE=9aa15 cargo test:*)",
       "Bash(/usr/bin/log show:*)",
-      "Bash(DOCXSIDE_CASE=case20 cargo test:*)"
+      "Bash(DOCXSIDE_CASE=case20 cargo test:*)",
+      "Bash(DOCXSIDE_CASE=case1 cargo test:*)",
+      "Bash(DOCXIDE_GROUP=cases cargo test:*)"
     ]
   }
 }

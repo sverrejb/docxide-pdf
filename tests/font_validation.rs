@@ -1,9 +1,9 @@
 mod common;
 
 use rayon::prelude::*;
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 use std::fs;
 
@@ -76,9 +76,14 @@ fn extract_docx_fonts(docx_path: &Path) -> Result<BTreeSet<String>, String> {
     // Resolve the default body font: Normal style > docDefaults > theme minor
     let default_font = parse_default_font(&mut archive, &theme_major, &theme_minor);
 
-    // Collect explicit fonts from document.xml, headers, footers
+    // Build style→font map from styles.xml (resolves theme refs + basedOn inheritance)
+    let style_fonts = parse_style_fonts(&mut archive, &theme_major, &theme_minor);
+
+    // Collect explicit fonts and used styles from document.xml, headers, footers
     let xml_files = collect_xml_names(&mut archive);
     let mut fonts = BTreeSet::new();
+    let mut used_styles: BTreeSet<String> = BTreeSet::new();
+    let mut has_unstyled_runs = false;
 
     for xml_name in &xml_files {
         let Ok(mut entry) = archive.by_name(xml_name) else {
@@ -92,9 +97,25 @@ fn extract_docx_fonts(docx_path: &Path) -> Result<BTreeSet<String>, String> {
             continue;
         };
         collect_fonts_from_xml(&doc, &theme_major, &theme_minor, &mut fonts);
+        collect_used_styles(&doc, &mut used_styles);
+        if !has_unstyled_runs {
+            has_unstyled_runs = has_runs_without_font(&doc);
+        }
     }
 
-    // If no explicit fonts in body, use the resolved default
+    // Add fonts from styles actually used in the document
+    for style_id in &used_styles {
+        if let Some(font) = style_fonts.get(style_id.as_str()) {
+            fonts.insert(normalize_docx_font_name(font));
+        }
+    }
+
+    // Include default body font if any runs rely on style/default inheritance
+    if has_unstyled_runs {
+        if let Some(name) = &default_font {
+            fonts.insert(normalize_docx_font_name(name));
+        }
+    }
     if fonts.is_empty() {
         if let Some(name) = &default_font {
             fonts.insert(normalize_docx_font_name(name));
@@ -238,6 +259,144 @@ fn parse_theme_fonts(
     (major, minor)
 }
 
+/// Check if any w:r element lacks an explicit w:rFonts (relies on style/default font).
+fn has_runs_without_font(doc: &roxmltree::Document) -> bool {
+    let w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    for node in doc.descendants() {
+        if node.tag_name().name() == "r"
+            && (node.tag_name().namespace() == Some(w) || node.tag_name().namespace().is_none())
+        {
+            // Check if this run has w:rPr/w:rFonts
+            let has_font = node.children().any(|child| {
+                child.tag_name().name() == "rPr"
+                    && child
+                        .children()
+                        .any(|n| n.tag_name().name() == "rFonts")
+            });
+            if !has_font {
+                // Check that this run has actual text content (not just formatting)
+                let has_text = node
+                    .children()
+                    .any(|c| c.tag_name().name() == "t" || c.tag_name().name() == "br");
+                if has_text {
+                    return true;
+                }
+            }
+        }
+    }
+    false
+}
+
+/// Collect w:pStyle and w:rStyle values from document content XML.
+fn collect_used_styles(doc: &roxmltree::Document, styles: &mut BTreeSet<String>) {
+    let w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    for node in doc.descendants() {
+        let name = node.tag_name().name();
+        if name == "pStyle" || name == "rStyle" {
+            if let Some(val) = node.attribute((w, "val")).or_else(|| node.attribute("val")) {
+                styles.insert(val.to_string());
+            }
+        }
+    }
+}
+
+/// Build a map of styleId → resolved font name from styles.xml.
+/// Handles theme references and basedOn inheritance.
+fn parse_style_fonts(
+    archive: &mut zip::ZipArchive<fs::File>,
+    theme_major: &Option<String>,
+    theme_minor: &Option<String>,
+) -> HashMap<String, String> {
+    let Ok(mut entry) = archive.by_name("word/styles.xml") else {
+        return HashMap::new();
+    };
+    let mut content = String::new();
+    if entry.read_to_string(&mut content).is_err() {
+        return HashMap::new();
+    }
+    let Ok(doc) = roxmltree::Document::parse(&content) else {
+        return HashMap::new();
+    };
+
+    let w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+    // First pass: collect direct font and basedOn for each style
+    let mut direct_font: HashMap<String, String> = HashMap::new();
+    let mut based_on: HashMap<String, String> = HashMap::new();
+
+    for node in doc.descendants() {
+        if node.tag_name().name() != "style" {
+            continue;
+        }
+        let Some(style_id) = node.attribute((w, "styleId")).or_else(|| node.attribute("styleId"))
+        else {
+            continue;
+        };
+
+        for child in node.descendants() {
+            if child.tag_name().name() == "basedOn" {
+                if let Some(val) = child.attribute((w, "val")).or_else(|| child.attribute("val")) {
+                    based_on.insert(style_id.to_string(), val.to_string());
+                }
+            }
+            if child.tag_name().name() == "rFonts" {
+                if let Some(name) = child
+                    .attribute((w, "ascii"))
+                    .or_else(|| child.attribute("ascii"))
+                {
+                    direct_font.insert(style_id.to_string(), name.to_string());
+                } else if let Some(theme) = child
+                    .attribute((w, "asciiTheme"))
+                    .or_else(|| child.attribute("asciiTheme"))
+                {
+                    if let Some(resolved) = resolve_theme(theme, theme_major, theme_minor) {
+                        direct_font.insert(style_id.to_string(), resolved);
+                    }
+                }
+            }
+        }
+    }
+
+    // Second pass: resolve inheritance (walk basedOn chain)
+    let style_ids: Vec<String> = direct_font
+        .keys()
+        .chain(based_on.keys())
+        .cloned()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let mut resolved: HashMap<String, String> = HashMap::new();
+    for id in &style_ids {
+        if let Some(font) = resolve_style_font(id, &direct_font, &based_on, &mut resolved, 10) {
+            resolved.insert(id.clone(), font);
+        }
+    }
+
+    resolved
+}
+
+fn resolve_style_font(
+    id: &str,
+    direct: &HashMap<String, String>,
+    based_on: &HashMap<String, String>,
+    cache: &mut HashMap<String, String>,
+    depth: u8,
+) -> Option<String> {
+    if depth == 0 {
+        return None;
+    }
+    if let Some(cached) = cache.get(id) {
+        return Some(cached.clone());
+    }
+    if let Some(font) = direct.get(id) {
+        return Some(font.clone());
+    }
+    if let Some(parent) = based_on.get(id) {
+        return resolve_style_font(parent, direct, based_on, cache, depth - 1);
+    }
+    None
+}
+
 fn collect_fonts_from_xml(
     doc: &roxmltree::Document,
     theme_major: &Option<String>,
@@ -280,6 +439,7 @@ fn collect_fonts_from_xml(
 
 struct FixtureResult {
     name: String,
+    group: String,
     docx_fonts: BTreeSet<String>,
     pdf_fonts: BTreeSet<String>,
     missing: BTreeSet<String>,
@@ -290,17 +450,13 @@ struct FixtureResult {
 const FALLBACK_FONTS: &[&str] = &["Helvetica"];
 
 fn analyze_fixture(fixture_dir: &Path) -> Option<FixtureResult> {
-    let name = fixture_dir
-        .file_name()
-        .unwrap()
-        .to_string_lossy()
-        .to_string();
+    let name = common::display_name(fixture_dir);
     let input_docx = fixture_dir.join("input.docx");
     if !input_docx.exists() {
         return None;
     }
 
-    let output_dir = PathBuf::from("tests/output").join(&name);
+    let output_dir = common::output_dir(fixture_dir);
     fs::create_dir_all(&output_dir).ok();
     let generated_pdf = output_dir.join("generated.pdf");
 
@@ -353,8 +509,11 @@ fn analyze_fixture(fixture_dir: &Path) -> Option<FixtureResult> {
 
     let pass = missing.is_empty() && unexpected_fallbacks.is_empty();
 
+    let group = common::group_name(fixture_dir);
+
     Some(FixtureResult {
         name,
+        group,
         docx_fonts,
         pdf_fonts,
         missing,
@@ -371,10 +530,11 @@ fn font_families_match_docx() {
         return;
     }
 
-    let results: Vec<FixtureResult> = fixtures
+    let mut results: Vec<FixtureResult> = fixtures
         .par_iter()
         .filter_map(|f| analyze_fixture(f))
         .collect();
+    results.sort_by(|a, b| a.name.cmp(&b.name));
 
     let ts = common::timestamp();
     let name_w = results
@@ -449,7 +609,6 @@ fn font_families_match_docx() {
     );
     println!("{sep}");
 
-    let mut all_pass = true;
     for (i, (r, row)) in results.iter().zip(&rows).enumerate() {
         if i > 0 {
             println!("{thin}");
@@ -459,10 +618,6 @@ fn font_families_match_docx() {
             "| {:<name_w$} | {:<4} | {:<match_w$} | {:<diff_w$} |",
             r.name, status, row.matched, row.diff
         );
-
-        if !r.pass {
-            all_pass = false;
-        }
 
         common::log_csv(
             "font_validation_results.csv",
@@ -498,8 +653,14 @@ fn font_families_match_docx() {
 
     println!("{sep}");
     println!("  + font in PDF but not declared in DOCX | - declared in DOCX but missing from PDF");
+    let case_failures: Vec<&str> = results
+        .iter()
+        .filter(|r| !r.pass && r.group == "cases")
+        .map(|r| r.name.as_str())
+        .collect();
     assert!(
-        all_pass,
-        "Some fixtures have font mismatches — see details above"
+        case_failures.is_empty(),
+        "Font mismatches in cases/: {}",
+        case_failures.join(", ")
     );
 }

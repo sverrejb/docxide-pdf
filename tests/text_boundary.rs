@@ -2,7 +2,7 @@ mod common;
 
 use rayon::prelude::*;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 fn pdf_page_count(pdf: &Path) -> usize {
@@ -122,18 +122,14 @@ struct CaseResult {
 }
 
 fn analyze_fixture(fixture_dir: &Path) -> Option<CaseResult> {
-    let name = fixture_dir
-        .file_name()
-        .unwrap()
-        .to_string_lossy()
-        .to_string();
+    let name = common::display_name(fixture_dir);
     let input_docx = fixture_dir.join("input.docx");
     let reference_pdf = fixture_dir.join("reference.pdf");
     if !reference_pdf.exists() {
         println!("  [SKIP] {name}: no reference.pdf");
         return None;
     }
-    let output_base = PathBuf::from("tests/output").join(&name);
+    let output_base = common::output_dir(fixture_dir);
     let _ = fs::remove_file(output_base.join("generated.pdf"));
     fs::create_dir_all(&output_base).ok();
     let generated_pdf = output_base.join("generated.pdf");
@@ -199,10 +195,11 @@ fn text_boundaries_match() {
 
     let prev_scores = common::read_previous_scores("text_boundary_results.csv", 5);
 
-    let results: Vec<CaseResult> = fixtures
+    let mut results: Vec<CaseResult> = fixtures
         .par_iter()
         .filter_map(|fixture_dir| analyze_fixture(fixture_dir))
         .collect();
+    results.sort_by(|a, b| a.name.cmp(&b.name));
 
     let name_w = results
         .iter()

@@ -2,7 +2,7 @@ mod common;
 
 use rayon::prelude::*;
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 use std::{fs, io};
 
@@ -41,11 +41,7 @@ struct ImageResult {
 }
 
 fn analyze_fixture(fixture_dir: &Path) -> Option<ImageResult> {
-    let name = fixture_dir
-        .file_name()
-        .unwrap()
-        .to_string_lossy()
-        .to_string();
+    let name = common::display_name(fixture_dir);
     let input_docx = fixture_dir.join("input.docx");
     let reference_pdf = fixture_dir.join("reference.pdf");
     if !input_docx.exists() || !reference_pdf.exists() {
@@ -58,7 +54,7 @@ fn analyze_fixture(fixture_dir: &Path) -> Option<ImageResult> {
         return None;
     }
 
-    let output_dir = PathBuf::from("tests/output").join(&name);
+    let output_dir = common::output_dir(fixture_dir);
     fs::create_dir_all(&output_dir).ok();
     let generated_pdf = output_dir.join("generated.pdf");
 
@@ -105,10 +101,11 @@ fn image_count_and_placement() {
         return;
     }
 
-    let results: Vec<ImageResult> = fixtures
+    let mut results: Vec<ImageResult> = fixtures
         .par_iter()
         .filter_map(|f| analyze_fixture(f))
         .collect();
+    results.sort_by(|a, b| a.name.cmp(&b.name));
 
     if results.is_empty() {
         println!("No fixtures contain images — skipping.");

@@ -19,30 +19,65 @@ const SKIP_FIXTURES: &[&str] = &[
     "5ba6b6915b4c096de47db896b65dc7484f23d2578d868e0a741b377eed19f8bb", // no matched fonts, falls back to Helvetica
     "347593422a3890bcb721834b94978c528bd6cc4bfd59e4f9f3e8bc647c3be5b9", // missing lemming font, falls back to Calibri/Helvetica
 ];
-const SKIP_GROUPS: &[&str] = &[];
+
+pub fn group_name(fixture: &Path) -> String {
+    fixture
+        .parent()
+        .and_then(|p| p.file_name())
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_string()
+}
+
+/// Output directory: tests/output/<group>/<case>/
+pub fn output_dir(fixture: &Path) -> PathBuf {
+    let case = fixture.file_name().unwrap().to_string_lossy();
+    PathBuf::from("tests/output")
+        .join(group_name(fixture))
+        .join(case.as_ref())
+}
+
+/// Display name for tables: group/case (hashes truncated to 16 chars)
+pub fn display_name(fixture: &Path) -> String {
+    let case = fixture.file_name().unwrap().to_string_lossy();
+    let short = if case.len() > 16 {
+        format!("{}..", &case[..16])
+    } else {
+        case.to_string()
+    };
+    format!("{}/{}", group_name(fixture), short)
+}
 
 fn natural_cmp(a: &Path, b: &Path) -> std::cmp::Ordering {
-    let a = a.file_name().and_then(|n| n.to_str()).unwrap_or("");
-    let b = b.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    let ag = group_name(a);
+    let bg = group_name(b);
+    let a_name = a.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    let b_name = b.file_name().and_then(|n| n.to_str()).unwrap_or("");
     let extract = |s: &str| -> (String, u64) {
         let i = s.find(|c: char| c.is_ascii_digit()).unwrap_or(s.len());
         (s[..i].to_string(), s[i..].parse().unwrap_or(0))
     };
-    extract(a).cmp(&extract(b)).then_with(|| a.cmp(b))
+    ag.cmp(&bg)
+        .then_with(|| extract(a_name).cmp(&extract(b_name)))
+        .then_with(|| a_name.cmp(b_name))
 }
 
+/// Discover fixtures. Filter with DOCXSIDE_CASE (case name) and DOCXSIDE_GROUP (folder name).
 pub fn discover_fixtures() -> io::Result<Vec<PathBuf>> {
     let fixtures_dir = Path::new("tests/fixtures");
     let case_filter = std::env::var("DOCXIDE_CASE").ok();
+    let group_filter = std::env::var("DOCXSIDE_GROUP").ok();
     let mut fixtures: Vec<PathBuf> = Vec::new();
     for group_entry in fs::read_dir(fixtures_dir)? {
         let group = group_entry?.path();
         if !group.is_dir() {
             continue;
         }
-        let group_name = group.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if SKIP_GROUPS.contains(&group_name) {
-            continue;
+        let gname = group.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        if let Some(ref gf) = group_filter {
+            if gname != gf.as_str() {
+                continue;
+            }
         }
         for entry in fs::read_dir(&group)? {
             let path = entry?.path();
