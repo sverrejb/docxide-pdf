@@ -203,7 +203,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     for run in &all_runs {
         let key = font_key(run);
         let chars = used_chars_per_font.entry(key).or_default();
-        chars.extend(run.text.chars());
+        if run.caps || run.small_caps {
+            chars.extend(run.text.to_uppercase().chars());
+        } else {
+            chars.extend(run.text.chars());
+        }
         if let Some(ref fc) = run.field_code {
             match fc {
                 FieldCode::Page | FieldCode::NumPages => {
@@ -264,7 +268,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 for run in &para.runs {
                     let key = font_key(run);
                     let chars = used_chars_per_font.entry(key).or_default();
-                    chars.extend(run.text.chars());
+                    if run.caps || run.small_caps {
+                        chars.extend(run.text.to_uppercase().chars());
+                    } else {
+                        chars.extend(run.text.chars());
+                    }
                     if let Some(ref fc) = run.field_code {
                         match fc {
                             FieldCode::Page | FieldCode::NumPages => {

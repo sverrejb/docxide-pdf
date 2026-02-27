@@ -37,8 +37,18 @@ fn auto_fit_columns(table: &Table, seen_fonts: &HashMap<String, FontEntry>) -> V
                     let Some(entry) = seen_fonts.get(&key) else {
                         continue;
                     };
-                    for word in run.text.split_whitespace() {
-                        let ww = entry.word_width(word, run.font_size);
+                    let text = if run.caps || run.small_caps {
+                        std::borrow::Cow::Owned(run.text.to_uppercase())
+                    } else {
+                        std::borrow::Cow::Borrowed(&run.text)
+                    };
+                    let fs = if run.small_caps {
+                        (run.font_size - 2.0).max(1.0)
+                    } else {
+                        run.font_size
+                    };
+                    for word in text.split_whitespace() {
+                        let ww = entry.word_width(word, fs);
                         min_widths[grid_col] = min_widths[grid_col].max(ww);
                     }
                 }

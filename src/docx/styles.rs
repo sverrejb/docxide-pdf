@@ -35,6 +35,8 @@ pub(super) struct ParagraphStyle {
     pub(super) font_name: Option<String>,
     pub(super) bold: Option<bool>,
     pub(super) italic: Option<bool>,
+    pub(super) caps: Option<bool>,
+    pub(super) small_caps: Option<bool>,
     pub(super) color: Option<[u8; 3]>,
     pub(super) space_before: Option<f32>,
     pub(super) space_after: Option<f32>,
@@ -58,6 +60,8 @@ pub(super) struct CharacterStyle {
     pub(super) italic: Option<bool>,
     pub(super) underline: Option<bool>,
     pub(super) strikethrough: Option<bool>,
+    pub(super) caps: Option<bool>,
+    pub(super) small_caps: Option<bool>,
     pub(super) color: Option<[u8; 3]>,
 }
 
@@ -254,6 +258,8 @@ pub(super) fn parse_styles(
 
         let bold = rpr.and_then(|n| wml_bool(n, "b"));
         let italic = rpr.and_then(|n| wml_bool(n, "i"));
+        let caps = rpr.and_then(|n| wml_bool(n, "caps"));
+        let small_caps = rpr.and_then(|n| wml_bool(n, "smallCaps"));
 
         let color = rpr
             .and_then(|n| wml_attr(n, "color"))
@@ -288,6 +294,8 @@ pub(super) fn parse_styles(
                 font_name,
                 bold,
                 italic,
+                caps,
+                small_caps,
                 color,
                 space_before,
                 space_after,
@@ -335,6 +343,8 @@ pub(super) fn parse_styles(
             .and_then(|n| n.attribute((WML_NS, "val")))
             .map(|v| v != "none");
         let strikethrough = wml_bool(rpr, "strike");
+        let caps = wml_bool(rpr, "caps");
+        let small_caps = wml_bool(rpr, "smallCaps");
         let color = wml_attr(rpr, "color").and_then(parse_hex_color);
 
         character_styles.insert(
@@ -346,6 +356,8 @@ pub(super) fn parse_styles(
                 italic,
                 underline,
                 strikethrough,
+                caps,
+                small_caps,
                 color,
             },
         );
@@ -442,6 +454,8 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             font_name: None,
             bold: None,
             italic: None,
+            caps: None,
+            small_caps: None,
             color: None,
             space_before: None,
             space_after: None,
@@ -464,6 +478,8 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                 inherit!(font_size, inh.font_size, s);
                 inherit!(bold, inh.bold, s);
                 inherit!(italic, inh.italic, s);
+                inherit!(caps, inh.caps, s);
+                inherit!(small_caps, inh.small_caps, s);
                 inherit!(color, inh.color, s);
                 inherit!(alignment, inh.alignment, s);
                 inherit!(space_before, inh.space_before, s);
@@ -481,6 +497,8 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             s.font_size = s.font_size.or(inh.font_size);
             s.bold = s.bold.or(inh.bold);
             s.italic = s.italic.or(inh.italic);
+            s.caps = s.caps.or(inh.caps);
+            s.small_caps = s.small_caps.or(inh.small_caps);
             s.color = s.color.or(inh.color);
             s.alignment = s.alignment.or(inh.alignment);
             s.space_before = s.space_before.or(inh.space_before);

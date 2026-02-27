@@ -22,6 +22,7 @@ struct LevelDef {
     lvl_text: String,
     indent_left: f32,
     indent_hanging: f32,
+    start: u32,
 }
 
 struct NumberingInfo {
@@ -346,6 +347,9 @@ fn parse_numbering(zip: &mut zip::ZipArchive<std::fs::File>) -> NumberingInfo {
                     };
                     let num_fmt = wml_attr(lvl, "numFmt").unwrap_or("bullet").to_string();
                     let lvl_text = wml_attr(lvl, "lvlText").unwrap_or("").to_string();
+                    let start = wml_attr(lvl, "start")
+                        .and_then(|v| v.parse::<u32>().ok())
+                        .unwrap_or(1);
                     let ind = wml(lvl, "pPr").and_then(|ppr| wml(ppr, "ind"));
                     let indent_left = ind.and_then(|n| twips_attr(n, "left")).unwrap_or(0.0);
                     let indent_hanging = ind.and_then(|n| twips_attr(n, "hanging")).unwrap_or(0.0);
@@ -356,6 +360,7 @@ fn parse_numbering(zip: &mut zip::ZipArchive<std::fs::File>) -> NumberingInfo {
                             lvl_text,
                             indent_left,
                             indent_hanging,
+                            start,
                         },
                     );
                 }
@@ -445,6 +450,8 @@ fn parse_runs(
         .to_string();
     let style_bold = para_style.and_then(|s| s.bold).unwrap_or(false);
     let style_italic = para_style.and_then(|s| s.italic).unwrap_or(false);
+    let style_caps = para_style.and_then(|s| s.caps).unwrap_or(false);
+    let style_small_caps = para_style.and_then(|s| s.small_caps).unwrap_or(false);
     let style_color: Option<[u8; 3]> = para_style.and_then(|s| s.color);
 
     let run_nodes: Vec<(roxmltree::Node, Option<String>)> = para_node
@@ -519,6 +526,14 @@ fn parse_runs(
             .and_then(|n| wml_bool(n, "strike"))
             .or_else(|| char_style.and_then(|cs| cs.strikethrough))
             .unwrap_or(false);
+        let caps = rpr
+            .and_then(|n| wml_bool(n, "caps"))
+            .or_else(|| char_style.and_then(|cs| cs.caps))
+            .unwrap_or(style_caps);
+        let small_caps = rpr
+            .and_then(|n| wml_bool(n, "smallCaps"))
+            .or_else(|| char_style.and_then(|cs| cs.small_caps))
+            .unwrap_or(style_small_caps);
 
         let color = rpr
             .and_then(|n| wml_attr(n, "color"))
@@ -559,6 +574,8 @@ fn parse_runs(
                                     italic,
                                     underline,
                                     strikethrough,
+                                    caps,
+                                    small_caps,
                                     color,
                                     is_tab: false,
                                     vertical_align,
@@ -592,6 +609,8 @@ fn parse_runs(
                                         italic,
                                         underline: false,
                                         strikethrough: false,
+                                        caps: false,
+                                        small_caps: false,
                                         color,
                                         is_tab: false,
                                         vertical_align: VertAlign::Baseline,
@@ -633,6 +652,8 @@ fn parse_runs(
                             italic,
                             underline,
                             strikethrough,
+                            caps,
+                            small_caps,
                             color,
                             is_tab: false,
                             vertical_align,
@@ -653,6 +674,8 @@ fn parse_runs(
                         italic: false,
                         underline: false,
                         strikethrough: false,
+                        caps: false,
+                        small_caps: false,
                         color: None,
                         is_tab: true,
                         vertical_align: VertAlign::Baseline,
@@ -681,6 +704,8 @@ fn parse_runs(
                             italic,
                             underline,
                             strikethrough,
+                            caps,
+                            small_caps,
                             color,
                             is_tab: false,
                             vertical_align,
@@ -702,6 +727,8 @@ fn parse_runs(
                                 italic: false,
                                 underline: false,
                                 strikethrough: false,
+                                caps: false,
+                                small_caps: false,
                                 color: None,
                                 is_tab: false,
                                 vertical_align: VertAlign::Baseline,
@@ -729,6 +756,8 @@ fn parse_runs(
                             italic,
                             underline,
                             strikethrough,
+                            caps,
+                            small_caps,
                             color,
                             is_tab: false,
                             vertical_align,
@@ -752,6 +781,8 @@ fn parse_runs(
                             italic,
                             underline: false,
                             strikethrough: false,
+                            caps: false,
+                            small_caps: false,
                             color,
                             is_tab: false,
                             vertical_align: VertAlign::Superscript,
@@ -774,6 +805,8 @@ fn parse_runs(
                             italic,
                             underline,
                             strikethrough,
+                            caps,
+                            small_caps,
                             color,
                             is_tab: false,
                             vertical_align,
@@ -793,6 +826,8 @@ fn parse_runs(
                         italic,
                         underline: false,
                         strikethrough: false,
+                        caps: false,
+                        small_caps: false,
                         color,
                         is_tab: false,
                         vertical_align: VertAlign::Superscript,
@@ -817,6 +852,8 @@ fn parse_runs(
                 italic,
                 underline,
                 strikethrough,
+                caps,
+                small_caps,
                 color,
                 is_tab: false,
                 vertical_align,
@@ -860,6 +897,8 @@ fn parse_runs(
                 italic: style_italic,
                 underline: false,
                 strikethrough: false,
+                caps: false,
+                small_caps: false,
                 color: None,
                 highlight: None,
                 is_tab: false,
@@ -884,6 +923,8 @@ fn parse_runs(
             italic: style_italic,
             underline: false,
             strikethrough: false,
+            caps: false,
+            small_caps: false,
             color: None,
             highlight: None,
             is_tab: false,
@@ -1216,6 +1257,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
     let mut sections: Vec<Section> = Vec::new();
     let mut blocks = Vec::new();
     let mut counters: HashMap<(String, u8), u32> = HashMap::new();
+    let mut last_seen_level: HashMap<String, u8> = HashMap::new();
 
     for node in body.children() {
         if node.tag_name().namespace() != Some(WML_NS) {
@@ -1531,7 +1573,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
 
                 let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
                 let (mut indent_left, mut indent_hanging, list_label) =
-                    parse_list_info(num_pr, &numbering, &mut counters);
+                    parse_list_info(num_pr, &numbering, &mut counters, &mut last_seen_level);
 
                 let mut indent_first_line = 0.0f32;
                 let mut indent_right = 0.0f32;
@@ -1673,10 +1715,91 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
     })
 }
 
+fn to_roman(mut n: u32) -> String {
+    const TABLE: &[(u32, &str)] = &[
+        (1000, "m"),
+        (900, "cm"),
+        (500, "d"),
+        (400, "cd"),
+        (100, "c"),
+        (90, "xc"),
+        (50, "l"),
+        (40, "xl"),
+        (10, "x"),
+        (9, "ix"),
+        (5, "v"),
+        (4, "iv"),
+        (1, "i"),
+    ];
+    let mut result = String::new();
+    for &(value, numeral) in TABLE {
+        while n >= value {
+            result.push_str(numeral);
+            n -= value;
+        }
+    }
+    result
+}
+
+fn format_number(value: u32, num_fmt: &str) -> String {
+    match num_fmt {
+        "decimal" => value.to_string(),
+        "decimalZero" => format!("{value:02}"),
+        "lowerLetter" => {
+            if value == 0 {
+                return String::new();
+            }
+            let mut n = value - 1;
+            let mut result = String::new();
+            loop {
+                result.insert(0, (b'a' + (n % 26) as u8) as char);
+                if n < 26 {
+                    break;
+                }
+                n = n / 26 - 1;
+            }
+            result
+        }
+        "upperLetter" => {
+            if value == 0 {
+                return String::new();
+            }
+            let mut n = value - 1;
+            let mut result = String::new();
+            loop {
+                result.insert(0, (b'A' + (n % 26) as u8) as char);
+                if n < 26 {
+                    break;
+                }
+                n = n / 26 - 1;
+            }
+            result
+        }
+        "lowerRoman" => to_roman(value),
+        "upperRoman" => to_roman(value).to_uppercase(),
+        "none" => String::new(),
+        _ => value.to_string(),
+    }
+}
+
+fn normalize_bullet_text(text: &str) -> String {
+    text.chars()
+        .map(|c| {
+            let cp = c as u32;
+            if (0xF000..=0xF0FF).contains(&cp) {
+                char::from_u32(cp - 0xF000).unwrap_or(c)
+            } else {
+                c
+            }
+        })
+        .collect()
+}
+
 fn parse_list_info(
     num_pr: Option<roxmltree::Node>,
     numbering: &NumberingInfo,
     counters: &mut HashMap<(String, u8), u32>,
+    last_seen_level: &mut HashMap<String, u8>,
 ) -> (f32, f32, String) {
     let Some(num_pr) = num_pr else {
         return (0.0, 0.0, String::new());
@@ -1684,28 +1807,70 @@ fn parse_list_info(
     let Some(num_id) = wml_attr(num_pr, "numId") else {
         return (0.0, 0.0, String::new());
     };
+    if num_id == "0" {
+        return (0.0, 0.0, String::new());
+    }
     let ilvl = wml_attr(num_pr, "ilvl")
         .and_then(|v| v.parse::<u8>().ok())
         .unwrap_or(0);
 
-    let Some(def) = numbering
-        .num_to_abstract
-        .get(num_id)
-        .and_then(|abs_id| numbering.abstract_nums.get(abs_id))
-        .and_then(|levels| levels.get(&ilvl))
-    else {
+    let Some(abs_id) = numbering.num_to_abstract.get(num_id) else {
+        return (0.0, 0.0, String::new());
+    };
+    let Some(levels) = numbering.abstract_nums.get(abs_id.as_str()) else {
+        return (0.0, 0.0, String::new());
+    };
+    let Some(def) = levels.get(&ilvl) else {
         return (0.0, 0.0, String::new());
     };
 
-    let counter = counters
+    // Reset deeper-level counters when returning to a higher level
+    let prev_level = last_seen_level.get(num_id).copied();
+    if let Some(prev) = prev_level {
+        if ilvl <= prev {
+            for deeper in (ilvl + 1)..=prev {
+                counters.remove(&(num_id.to_string(), deeper));
+            }
+        }
+    }
+    last_seen_level.insert(num_id.to_string(), ilvl);
+
+    // Increment or initialize counter using the level's start value
+    let start = def.start;
+    let current_counter = *counters
         .entry((num_id.to_string(), ilvl))
         .and_modify(|c| *c += 1)
-        .or_insert(1);
+        .or_insert(start);
+
     let label = if def.num_fmt == "bullet" {
-        "\u{2022}".to_string()
+        let text = normalize_bullet_text(&def.lvl_text);
+        if text.is_empty() { "\u{2022}".to_string() } else { text }
     } else {
-        def.lvl_text
-            .replace(&format!("%{}", ilvl + 1), &counter.to_string())
+        let mut label = def.lvl_text.clone();
+        for lvl_idx in 0..9u8 {
+            let placeholder = format!("%{}", lvl_idx + 1);
+            if label.contains(&placeholder) {
+                let lvl_counter = if lvl_idx == ilvl {
+                    current_counter
+                } else {
+                    counters
+                        .get(&(num_id.to_string(), lvl_idx))
+                        .copied()
+                        .unwrap_or(
+                            levels
+                                .get(&lvl_idx)
+                                .map(|d| d.start)
+                                .unwrap_or(1),
+                        )
+                };
+                let lvl_fmt = levels
+                    .get(&lvl_idx)
+                    .map(|d| d.num_fmt.as_str())
+                    .unwrap_or("decimal");
+                label = label.replace(&placeholder, &format_number(lvl_counter, lvl_fmt));
+            }
+        }
+        label
     };
     (def.indent_left, def.indent_hanging, label)
 }

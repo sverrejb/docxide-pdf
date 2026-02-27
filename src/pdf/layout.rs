@@ -38,9 +38,23 @@ pub(super) fn is_text_empty(runs: &[Run]) -> bool {
 }
 
 fn effective_font_size(run: &Run) -> f32 {
-    match run.vertical_align {
+    let base = match run.vertical_align {
         VertAlign::Superscript | VertAlign::Subscript => run.font_size * 0.58,
         VertAlign::Baseline => run.font_size,
+    };
+    if run.small_caps {
+        (base - 2.0).max(1.0)
+    } else {
+        base
+    }
+}
+
+/// Returns the text to use for layout/rendering, applying caps/smallCaps transforms.
+fn effective_text(run: &Run) -> std::borrow::Cow<'_, str> {
+    if run.caps || run.small_caps {
+        std::borrow::Cow::Owned(run.text.to_uppercase())
+    } else {
+        std::borrow::Cow::Borrowed(&run.text)
     }
 }
 
@@ -132,10 +146,11 @@ pub(super) fn build_paragraph_lines(
         let entry = seen_fonts.get(&key).expect("font registered");
         let eff_fs = effective_font_size(run);
         let space_w = entry.space_width(eff_fs);
-        let starts_with_ws = run.text.starts_with(char::is_whitespace);
+        let text = effective_text(run);
+        let starts_with_ws = text.starts_with(char::is_whitespace);
         let y_off = vert_y_offset(run);
 
-        for (i, word) in run.text.split_whitespace().enumerate() {
+        for (i, word) in text.split_whitespace().enumerate() {
             let ww = entry.word_width(word, eff_fs);
 
             let need_space =
@@ -186,7 +201,7 @@ pub(super) fn build_paragraph_lines(
             current_x += ww;
         }
 
-        prev_ended_with_ws = run.text.ends_with(char::is_whitespace);
+        prev_ended_with_ws = text.ends_with(char::is_whitespace);
         prev_space_w = space_w;
     }
 
@@ -226,7 +241,8 @@ fn segment_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 
         let entry = seen_fonts.get(&key).expect("font registered");
         let eff_fs = effective_font_size(run);
         let space_w = entry.space_width(eff_fs);
-        for (i, word) in run.text.split_whitespace().enumerate() {
+        let text = effective_text(run);
+        for (i, word) in text.split_whitespace().enumerate() {
             if !first || i > 0 {
                 w += space_w;
             }
@@ -238,7 +254,8 @@ fn segment_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 
 }
 
 fn decimal_before_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 {
-    let full_text: String = runs.iter().map(|r| r.text.as_str()).collect();
+    let texts: Vec<std::borrow::Cow<'_, str>> = runs.iter().map(|r| effective_text(r)).collect();
+    let full_text: String = texts.iter().map(|t| t.as_ref()).collect();
     let before = if let Some(dot_pos) = full_text.find('.') {
         &full_text[..dot_pos]
     } else {
@@ -246,15 +263,15 @@ fn decimal_before_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) 
     };
     let mut w: f32 = 0.0;
     let mut chars_remaining = before.len();
-    for run in runs {
+    for (run, text) in runs.iter().zip(texts.iter()) {
         let key = font_key(run);
         let entry = seen_fonts.get(&key).expect("font registered");
         let eff_fs = effective_font_size(run);
-        let text_to_measure = if run.text.len() <= chars_remaining {
-            chars_remaining -= run.text.len();
-            &run.text
+        let text_to_measure = if text.len() <= chars_remaining {
+            chars_remaining -= text.len();
+            text.as_ref()
         } else {
-            let s = &run.text[..chars_remaining];
+            let s = &text[..chars_remaining];
             chars_remaining = 0;
             s
         };
@@ -381,11 +398,12 @@ pub(super) fn build_tabbed_line(
             let eff_fs = effective_font_size(run);
             let space_w = entry.space_width(eff_fs);
             let y_off = vert_y_offset(run);
+            let text = effective_text(run);
 
-            for (i, word) in run.text.split_whitespace().enumerate() {
+            for (i, word) in text.split_whitespace().enumerate() {
                 let ww = entry.word_width(word, eff_fs);
                 if !all_chunks.is_empty()
-                    && (i > 0 || prev_ws || run.text.starts_with(char::is_whitespace))
+                    && (i > 0 || prev_ws || text.starts_with(char::is_whitespace))
                 {
                     current_x += space_w;
                 }
@@ -406,7 +424,7 @@ pub(super) fn build_tabbed_line(
                 });
                 current_x += ww;
             }
-            prev_ws = run.text.ends_with(char::is_whitespace);
+            prev_ws = text.ends_with(char::is_whitespace);
         }
     }
 

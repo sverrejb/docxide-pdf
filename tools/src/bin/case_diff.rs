@@ -214,10 +214,28 @@ fn main() {
         }
     } else {
         let case_name = &args[1];
-        let fixture = fixtures_dir.join(case_name);
+        let mut fixture = fixtures_dir.join(case_name);
         if !fixture.exists() {
-            eprintln!("Fixture not found: {}", fixture.display());
-            process::exit(1);
+            // Search subdirectories (e.g. tests/fixtures/scraped/<name>)
+            let found = fs::read_dir(&fixtures_dir)
+                .ok()
+                .and_then(|entries| {
+                    entries
+                        .filter_map(|e| e.ok())
+                        .map(|e| e.path())
+                        .filter(|p| p.is_dir())
+                        .find_map(|group| {
+                            let candidate = group.join(case_name);
+                            candidate.exists().then_some(candidate)
+                        })
+                });
+            match found {
+                Some(f) => fixture = f,
+                None => {
+                    eprintln!("Fixture not found: {}", fixture.display());
+                    process::exit(1);
+                }
+            }
         }
         let out = output_dir_base.join(case_name);
         compare_case(&fixture, &out, fresh);
