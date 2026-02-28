@@ -82,7 +82,8 @@
       "Bash(DOCXSIDE_CASE=case1 cargo test:*)",
       "Bash(DOCXIDE_GROUP=cases cargo test:*)",
       "Bash(DOCXIDE_CASE=74f79a76bad799740efd1c62573198f11f3529a81a8f497ea2d186c9c24e3bac cargo test:*)",
-      "Bash(DOCXSIDE_CASE=74f79a76 cargo test:*)"
+      "Bash(DOCXSIDE_CASE=74f79a76 cargo test:*)",
+      "Bash(DOCXIDE_CASE=case3 cargo test:*)"
     ]
   }
 }

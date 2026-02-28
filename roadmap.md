@@ -93,6 +93,19 @@ Tables with `w:tblpPr` positioning attributes are rendered as normal flow tables
 ### 5. Tab stop precision (LOW)
 Tab stop alignment and leader rendering has small positioning errors that accumulate in tab-heavy documents (e.g. table of contents).
 
+## Visual comparison findings (Feb 2026)
+
+From thorough review of all handcrafted case diffs and several scraped fixtures:
+
+### Character width / kerning drift (HIGH — affects case4,5,9,11,13,14)
+Across dense-text cases, text starts aligned at the left then progressively drifts right by a few pixels per line. Cumulative character-width error from missing GPOS kerning. This is the single biggest factor limiting Jaccard scores (each case loses ~5-10pp). See Kerning section above.
+
+### CJK font fallback (MEDIUM — scraped fixture 0ad33844)
+CJK characters render as blanks. The Japanese library form has correct table structure but all CJK text is missing. Need fallback to system CJK fonts (Hiragino on macOS, Noto CJK on Linux).
+
+### Header tab positioning (LOW — scraped fixture 9aa15063)
+Right-aligned text in headers appears at the left margin instead of the right. Header tab stops (center/right) need proper handling to position text correctly across the header width.
+
 ## Test corpus
 
 Build a larger, more diverse test corpus by scraping public DOCX files from the internet. Current fixtures (case1-9) cover limited scenarios. A broad corpus would surface edge cases in layout, font handling, and feature coverage that manual test cases miss.

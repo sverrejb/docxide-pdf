@@ -1832,12 +1832,25 @@ fn normalize_bullet_text(text: &str) -> String {
         .map(|c| {
             let cp = c as u32;
             if (0xF000..=0xF0FF).contains(&cp) {
-                char::from_u32(cp - 0xF000).unwrap_or(c)
+                symbol_pua_to_unicode(cp).unwrap_or(c)
             } else {
                 c
             }
         })
         .collect()
+}
+
+fn symbol_pua_to_unicode(cp: u32) -> Option<char> {
+    let sym = cp - 0xF000;
+    let mapped = match sym {
+        0xB7 => '\u{2022}', // bullet •
+        0xA7 => '\u{25A0}', // black square ■ (Wingdings §)
+        0xA8 => '\u{25CB}', // white circle ○
+        0xD8 => '\u{2666}', // diamond ◆
+        0x76 => '\u{221A}', // check mark √
+        _ => return char::from_u32(sym),
+    };
+    Some(mapped)
 }
 
 fn parse_list_info(
