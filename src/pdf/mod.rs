@@ -540,6 +540,24 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         cur_sp = sp;
         let text_width = sp.page_width - sp.margin_left - sp.margin_right;
 
+        // Column geometry: vec of (x_offset, width) for each column
+        let col_config = sp.columns.as_ref();
+        let col_count = col_config.map(|c| c.columns.len()).unwrap_or(1);
+        let col_geometry: Vec<(f32, f32)> = if let Some(cfg) = col_config {
+            let mut x = sp.margin_left;
+            cfg.columns
+                .iter()
+                .map(|col| {
+                    let result = (x, col.width);
+                    x += col.width + col.space;
+                    result
+                })
+                .collect()
+        } else {
+            vec![(sp.margin_left, text_width)]
+        };
+        let mut current_col: usize = 0;
+
         let adjacent_para = |idx: usize| -> Option<&crate::model::Paragraph> {
             match section.blocks.get(idx)? {
                 Block::Paragraph(p) => Some(p),
@@ -561,11 +579,31 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             slot_top = cur_sp.page_height - cur_sp.margin_top;
                             effective_margin_bottom = cur_sp.margin_bottom;
                             is_first_page_of_section = false;
+                            current_col = 0;
                         }
                         prev_space_after = 0.0;
                         if is_text_empty(&para.runs) {
                             global_block_idx += 1;
                             continue;
+                        }
+                    }
+
+                    // Handle explicit column breaks
+                    if para.column_break_before && col_count > 1 {
+                        if current_col + 1 < col_count {
+                            current_col += 1;
+                            slot_top = cur_sp.page_height - cur_sp.margin_top;
+                            prev_space_after = 0.0;
+                        } else {
+                            current_col = 0;
+                            all_contents.push(std::mem::replace(&mut current_content, Content::new()));
+                            all_page_links.push(std::mem::take(&mut current_page_links));
+                            all_page_footnote_ids.push(std::mem::take(&mut current_page_footnote_ids));
+                            page_section_indices.push((sect_idx, is_first_page_of_section));
+                            slot_top = cur_sp.page_height - cur_sp.margin_top;
+                            effective_margin_bottom = cur_sp.margin_bottom;
+                            is_first_page_of_section = false;
+                            prev_space_after = 0.0;
                         }
                     }
 
@@ -596,9 +634,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     let effective_ls = para.line_spacing.unwrap_or(doc.line_spacing);
                     let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
 
-                    let para_text_x = sp.margin_left + para.indent_left;
-                    let para_text_width = (text_width - para.indent_left - para.indent_right).max(1.0);
-                    let label_x = sp.margin_left + para.indent_left - para.indent_hanging;
+                    let (col_x, col_w) = col_geometry[current_col];
+                    let para_text_x = col_x + para.indent_left;
+                    let para_text_width = (col_w - para.indent_left - para.indent_right).max(1.0);
+                    let label_x = col_x + para.indent_left - para.indent_hanging;
                     let text_hanging = if !para.list_label.is_empty() {
                         0.0
                     } else if para.indent_hanging > 0.0 {
@@ -755,24 +794,34 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 &seen_fonts,
                             );
 
-                            all_contents.push(std::mem::replace(&mut current_content, Content::new()));
-                            all_page_links.push(std::mem::take(&mut current_page_links));
-                            all_page_footnote_ids.push(std::mem::take(&mut current_page_footnote_ids));
-                            page_section_indices.push((sect_idx, is_first_page_of_section));
-                            slot_top = cur_sp.page_height - cur_sp.margin_top;
-                            effective_margin_bottom = cur_sp.margin_bottom;
-                            is_first_page_of_section = false;
+                            if current_col + 1 < col_count {
+                                current_col += 1;
+                                slot_top = cur_sp.page_height - cur_sp.margin_top;
+                            } else {
+                                current_col = 0;
+                                all_contents.push(std::mem::replace(&mut current_content, Content::new()));
+                                all_page_links.push(std::mem::take(&mut current_page_links));
+                                all_page_footnote_ids.push(std::mem::take(&mut current_page_footnote_ids));
+                                page_section_indices.push((sect_idx, is_first_page_of_section));
+                                slot_top = cur_sp.page_height - cur_sp.margin_top;
+                                effective_margin_bottom = cur_sp.margin_bottom;
+                                is_first_page_of_section = false;
+                            }
 
                             let rest = &lines[lines_that_fit..];
                             let rest_content_h = rest.len() as f32 * line_h;
                             let baseline_y2 = slot_top - font_size * ascender_ratio;
 
+                            let (rest_col_x, rest_col_w) = col_geometry[current_col];
+                            let rest_text_x = rest_col_x + para.indent_left;
+                            let rest_text_width = (rest_col_w - para.indent_left - para.indent_right).max(1.0);
+
                             render_paragraph_lines(
                                 &mut current_content,
                                 rest,
                                 &para.alignment,
-                                para_text_x,
-                                para_text_width,
+                                rest_text_x,
+                                rest_text_width,
                                 baseline_y2,
                                 line_h,
                                 lines.len(),
@@ -788,13 +837,19 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             continue;
                         }
 
-                        all_contents.push(std::mem::replace(&mut current_content, Content::new()));
-                        all_page_links.push(std::mem::take(&mut current_page_links));
-                        all_page_footnote_ids.push(std::mem::take(&mut current_page_footnote_ids));
-                        page_section_indices.push((sect_idx, is_first_page_of_section));
-                        slot_top = cur_sp.page_height - cur_sp.margin_top;
-                        effective_margin_bottom = cur_sp.margin_bottom;
-                        is_first_page_of_section = false;
+                        if current_col + 1 < col_count {
+                            current_col += 1;
+                            slot_top = cur_sp.page_height - cur_sp.margin_top;
+                        } else {
+                            current_col = 0;
+                            all_contents.push(std::mem::replace(&mut current_content, Content::new()));
+                            all_page_links.push(std::mem::take(&mut current_page_links));
+                            all_page_footnote_ids.push(std::mem::take(&mut current_page_footnote_ids));
+                            page_section_indices.push((sect_idx, is_first_page_of_section));
+                            slot_top = cur_sp.page_height - cur_sp.margin_top;
+                            effective_margin_bottom = cur_sp.margin_bottom;
+                            is_first_page_of_section = false;
+                        }
                         inter_gap = 0.0;
                     }
 
@@ -807,6 +862,12 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                     slot_top -= inter_gap;
 
+                    // Re-fetch column geometry (may have changed after overflow)
+                    let (col_x, col_w) = col_geometry[current_col];
+                    let para_text_x = col_x + para.indent_left;
+                    let para_text_width = (col_w - para.indent_left - para.indent_right).max(1.0);
+                    let label_x = col_x + para.indent_left - para.indent_hanging;
+
                     // Draw paragraph shading (background)
                     if let Some([r, g, b]) = para.shading {
                         let shd_top = slot_top;
@@ -815,9 +876,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         current_content
                             .set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
                         current_content.rect(
-                            sp.margin_left,
+                            col_x,
                             shd_bottom,
-                            text_width,
+                            col_w,
                             shd_top - shd_bottom,
                         );
                         current_content.fill_nonzero();
@@ -834,7 +895,17 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     HorizontalPosition::AlignLeft => 0.0,
                                     HorizontalPosition::Offset(o) => o,
                                 },
-                                "margin" | "column" | _ => match fi.h_position {
+                                "column" => match fi.h_position {
+                                    HorizontalPosition::AlignCenter => {
+                                        col_x + (col_w - img.display_width) / 2.0
+                                    }
+                                    HorizontalPosition::AlignRight => {
+                                        col_x + col_w - img.display_width
+                                    }
+                                    HorizontalPosition::AlignLeft => col_x,
+                                    HorizontalPosition::Offset(o) => col_x + o,
+                                },
+                                "margin" | _ => match fi.h_position {
                                     HorizontalPosition::AlignCenter => {
                                         sp.margin_left + (text_width - img.display_width) / 2.0
                                     }
@@ -870,12 +941,12 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         if let Some(pdf_name) = image_pdf_names.get(&global_block_idx) {
                             let img = para.image.as_ref().unwrap();
                             let y_bottom = slot_top - img.display_height;
-                            let x = sp.margin_left
+                            let x = col_x
                                 + match para.alignment {
                                     Alignment::Center => {
-                                        (text_width - img.display_width).max(0.0) / 2.0
+                                        (col_w - img.display_width).max(0.0) / 2.0
                                     }
-                                    Alignment::Right => (text_width - img.display_width).max(0.0),
+                                    Alignment::Right => (col_w - img.display_width).max(0.0),
                                     _ => 0.0,
                                 };
                             current_content.save_state();
@@ -892,7 +963,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         } else {
                             current_content
                                 .set_fill_gray(0.5)
-                                .rect(sp.margin_left, slot_top - content_h, text_width, content_h)
+                                .rect(col_x, slot_top - content_h, col_w, content_h)
                                 .fill_nonzero()
                                 .set_fill_gray(0.0);
                         }
@@ -932,8 +1003,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         let bdr = &para.borders;
                         let box_top = slot_top;
                         let box_bottom = slot_top - bdr_top_pad - content_h - bdr_bottom_pad;
-                        let box_left = sp.margin_left;
-                        let box_right = sp.margin_left + text_width;
+                        let box_left = col_x;
+                        let box_right = col_x + col_w;
 
                         let draw_h_border =
                             |content: &mut Content, b: &crate::model::ParagraphBorder, y: f32| {
@@ -1081,6 +1152,26 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         if let Some(hf) = footer {
             let (pi_map, ii_map) = build_hf_maps(si, ftr_type);
             render_header_footer(content, hf, &seen_fonts, sp, doc.line_spacing, false, page_num, total_pages, &pi_map, &ii_map);
+        }
+
+        // Column separator lines
+        if let Some(cfg) = &sp.columns {
+            if cfg.sep {
+                let mut x = sp.margin_left;
+                for (i, col) in cfg.columns.iter().enumerate() {
+                    x += col.width;
+                    if i < cfg.columns.len() - 1 {
+                        let mid_x = x + col.space / 2.0;
+                        content.save_state();
+                        content.set_line_width(0.5);
+                        content.move_to(mid_x, sp.margin_bottom);
+                        content.line_to(mid_x, sp.page_height - sp.margin_top);
+                        content.stroke();
+                        content.restore_state();
+                        x += col.space;
+                    }
+                }
+            }
         }
     }
 

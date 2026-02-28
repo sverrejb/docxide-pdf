@@ -51,6 +51,16 @@ pub enum SectionBreakType {
     EvenPage,
 }
 
+pub struct ColumnDef {
+    pub width: f32, // points
+    pub space: f32, // gap after this column, in points
+}
+
+pub struct ColumnsConfig {
+    pub columns: Vec<ColumnDef>,
+    pub sep: bool,
+}
+
 pub struct SectionProperties {
     pub page_width: f32,
     pub page_height: f32,
@@ -67,6 +77,7 @@ pub struct SectionProperties {
     pub different_first_page: bool,
     pub line_pitch: f32,
     pub break_type: SectionBreakType,
+    pub columns: Option<ColumnsConfig>,
 }
 
 pub struct Section {
@@ -150,6 +161,7 @@ pub struct Paragraph {
     pub borders: ParagraphBorders,
     pub shading: Option<[u8; 3]>,
     pub page_break_before: bool,
+    pub column_break_before: bool,
     pub tab_stops: Vec<TabStop>,
     pub extra_line_breaks: u32,
     pub floating_images: Vec<FloatingImage>,

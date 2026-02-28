@@ -6,10 +6,11 @@ use std::path::Path;
 
 use crate::error::Error;
 use crate::model::{
-    Alignment, Block, CellBorder, CellBorders, CellMargins, CellVAlign, Document, EmbeddedImage,
-    FieldCode, FloatingImage, Footnote, HeaderFooter, HorizontalPosition, ImageFormat, LineSpacing,
-    Paragraph, ParagraphBorder, ParagraphBorders, Run, Section, SectionBreakType,
-    SectionProperties, TabAlignment, TabStop, Table, TableCell, TableRow, VMerge, VertAlign,
+    Alignment, Block, CellBorder, CellBorders, CellMargins, CellVAlign, ColumnDef, ColumnsConfig,
+    Document, EmbeddedImage, FieldCode, FloatingImage, Footnote, HeaderFooter, HorizontalPosition,
+    ImageFormat, LineSpacing, Paragraph, ParagraphBorder, ParagraphBorders, Run, Section,
+    SectionBreakType, SectionProperties, TabAlignment, TabStop, Table, TableCell, TableRow, VMerge,
+    VertAlign,
 };
 
 use styles::{
@@ -446,6 +447,7 @@ fn collect_block_nodes<'a>(parent: roxmltree::Node<'a, 'a>) -> Vec<roxmltree::No
 struct ParsedRuns {
     runs: Vec<Run>,
     has_page_break: bool,
+    has_column_break: bool,
     line_break_count: u32,
     floating_images: Vec<FloatingImage>,
 }
@@ -510,6 +512,7 @@ fn parse_runs(
     let mut runs = Vec::new();
     let mut floating_images: Vec<FloatingImage> = Vec::new();
     let mut has_page_break = false;
+    let mut has_column_break = false;
     let mut line_break_count: u32 = 0;
     let mut in_field = false;
     let mut field_instr = String::new();
@@ -724,10 +727,10 @@ fn parse_runs(
                     });
                 }
                 "br" if !in_field => {
-                    if child.attribute((WML_NS, "type")) == Some("page") {
-                        has_page_break = true;
-                    } else {
-                        line_break_count += 1;
+                    match child.attribute((WML_NS, "type")) {
+                        Some("page") => has_page_break = true,
+                        Some("column") => has_column_break = true,
+                        _ => line_break_count += 1,
                     }
                 }
                 "drawing" if !in_field => {
@@ -985,6 +988,7 @@ fn parse_runs(
     ParsedRuns {
         runs,
         has_page_break,
+        has_column_break,
         line_break_count,
         floating_images,
     }
@@ -1054,6 +1058,7 @@ fn parse_header_footer_xml(
             borders: ParagraphBorders::default(),
             shading: None,
             page_break_before: false,
+            column_break_before: false,
             tab_stops: vec![],
             extra_line_breaks: parsed.line_break_count,
             floating_images,
@@ -1152,6 +1157,7 @@ fn parse_footnotes(
                 borders: ParagraphBorders::default(),
                 shading: None,
                 page_break_before: false,
+                column_break_before: false,
                 tab_stops: vec![],
                 extra_line_breaks: parsed.line_break_count,
                 floating_images: vec![],
@@ -1207,6 +1213,58 @@ fn parse_section_properties(
             _ => SectionBreakType::NextPage,
         })
         .unwrap_or(SectionBreakType::NextPage);
+
+    let available = page_width - margin_left - margin_right;
+    let columns = wml(sect_node, "cols").and_then(|cols_node| {
+        let num: u32 = cols_node
+            .attribute((WML_NS, "num"))
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1);
+        let equal_width = cols_node
+            .attribute((WML_NS, "equalWidth"))
+            .map(|v| v == "1" || v == "true")
+            .unwrap_or(true);
+        let sep = cols_node
+            .attribute((WML_NS, "sep"))
+            .map(|v| v == "1" || v == "true")
+            .unwrap_or(false);
+
+        let child_cols: Vec<_> = cols_node
+            .children()
+            .filter(|c| c.tag_name().name() == "col" && c.tag_name().namespace() == Some(WML_NS))
+            .collect();
+
+        let col_defs: Vec<ColumnDef> = if !equal_width && !child_cols.is_empty() {
+            child_cols
+                .iter()
+                .map(|c| {
+                    let w = twips_attr(*c, "w").unwrap_or(0.0);
+                    let sp = twips_attr(*c, "space").unwrap_or(0.0);
+                    ColumnDef { width: w, space: sp }
+                })
+                .collect()
+        } else if num > 1 {
+            let default_space = cols_node
+                .attribute((WML_NS, "space"))
+                .and_then(|v| v.parse::<f32>().ok())
+                .map(twips_to_pts)
+                .unwrap_or(36.0);
+            let col_width = (available - (num - 1) as f32 * default_space) / num as f32;
+            (0..num)
+                .map(|i| ColumnDef {
+                    width: col_width.max(1.0),
+                    space: if i < num - 1 { default_space } else { 0.0 },
+                })
+                .collect()
+        } else {
+            return None;
+        };
+
+        Some(ColumnsConfig {
+            columns: col_defs,
+            sep,
+        })
+    });
 
     let mut header_default_rid = None;
     let mut header_first_rid = None;
@@ -1266,6 +1324,7 @@ fn parse_section_properties(
         different_first_page,
         line_pitch,
         break_type,
+        columns,
     }
 }
 
@@ -1521,6 +1580,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                                 borders: ParagraphBorders::default(),
                                 shading: None,
                                 page_break_before: false,
+                                column_break_before: false,
                                 tab_stops: vec![],
                                 extra_line_breaks: parsed.line_break_count,
                                 floating_images: vec![],
@@ -1703,6 +1763,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     borders,
                     shading: para_shading,
                     page_break_before: parsed.has_page_break,
+                    column_break_before: parsed.has_column_break,
                     tab_stops,
                     extra_line_breaks: parsed.line_break_count,
                     floating_images,
@@ -1745,6 +1806,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
             different_first_page: false,
             line_pitch: default_line_pitch,
             break_type: SectionBreakType::NextPage,
+            columns: None,
         }
     };
     sections.push(Section {
