@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use crate::model::{Alignment, CellBorder, LineSpacing};
 
 use super::{
-    DML_NS, WML_NS, parse_paragraph_borders, parse_hex_color, read_zip_text, twips_attr, wml,
-    wml_attr, wml_bool,
+    DML_NS, WML_NS, parse_paragraph_borders, parse_hex_color, parse_text_color, read_zip_text,
+    twips_attr, wml, wml_attr, wml_bool,
 };
 
 fn dml<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
@@ -266,7 +266,7 @@ pub(super) fn parse_styles(
 
         let color = rpr
             .and_then(|n| wml_attr(n, "color"))
-            .and_then(parse_hex_color);
+            .and_then(parse_text_color);
 
         let alignment = ppr.and_then(|ppr| wml_attr(ppr, "jc")).map(parse_alignment);
 
@@ -350,7 +350,7 @@ pub(super) fn parse_styles(
         let caps = wml_bool(rpr, "caps");
         let small_caps = wml_bool(rpr, "smallCaps");
         let vanish = wml_bool(rpr, "vanish");
-        let color = wml_attr(rpr, "color").and_then(parse_hex_color);
+        let color = wml_attr(rpr, "color").and_then(parse_text_color);
 
         character_styles.insert(
             style_id.to_string(),

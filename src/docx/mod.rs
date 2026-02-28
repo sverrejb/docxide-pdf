@@ -48,6 +48,13 @@ pub(super) fn parse_hex_color(val: &str) -> Option<[u8; 3]> {
     Some([r, g, b])
 }
 
+pub(super) fn parse_text_color(val: &str) -> Option<[u8; 3]> {
+    if val == "auto" {
+        return Some([0, 0, 0]);
+    }
+    parse_hex_color(val)
+}
+
 fn highlight_color(name: &str) -> Option<[u8; 3]> {
     match name {
         "yellow" => Some([255, 255, 0]),
@@ -562,7 +569,7 @@ fn parse_runs(
 
         let color = rpr
             .and_then(|n| wml_attr(n, "color"))
-            .and_then(parse_hex_color)
+            .and_then(parse_text_color)
             .or_else(|| char_style.and_then(|cs| cs.color))
             .or(style_color);
 
