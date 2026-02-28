@@ -34,7 +34,7 @@ pub(super) struct TextLine {
 /// True when a paragraph has no visible text (may still have phantom font-info runs).
 pub(super) fn is_text_empty(runs: &[Run]) -> bool {
     runs.iter()
-        .all(|r| r.text.is_empty() && !r.is_tab && r.inline_image.is_none())
+        .all(|r| r.vanish || (r.text.is_empty() && !r.is_tab && r.inline_image.is_none()))
 }
 
 fn effective_font_size(run: &Run) -> f32 {
@@ -94,8 +94,8 @@ pub(super) fn build_paragraph_lines(
     let mut prev_space_w: f32 = 0.0;
 
     for (run_idx, run) in runs.iter().enumerate() {
-        if run.is_tab {
-            continue; // tabs handled in build_tabbed_line
+        if run.vanish || run.is_tab {
+            continue; // vanished runs hidden; tabs handled in build_tabbed_line
         }
 
         // Handle inline images as single block elements in the line
@@ -296,9 +296,11 @@ pub(super) fn build_tabbed_line(
     let mut pending_tab: Option<TabStop> = None;
 
     for run in runs {
+        if run.vanish {
+            continue;
+        }
         if run.is_tab {
             segments.push((std::mem::take(&mut current_seg), pending_tab.take()));
-            // Find which tab stop this tab activates — we'll resolve position during layout
             pending_tab = Some(TabStop {
                 position: 0.0, // placeholder, resolved below
                 alignment: TabAlignment::Left,

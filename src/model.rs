@@ -166,6 +166,7 @@ pub struct Run {
     pub strikethrough: bool,
     pub caps: bool,
     pub small_caps: bool,
+    pub vanish: bool,
     pub color: Option<[u8; 3]>, // None = automatic (black)
     pub highlight: Option<[u8; 3]>,
     pub is_tab: bool,

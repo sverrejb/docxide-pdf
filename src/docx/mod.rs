@@ -421,6 +421,21 @@ fn parse_tab_stops(ppr: roxmltree::Node) -> Vec<TabStop> {
     stops
 }
 
+/// Flatten SDT wrappers: descend into w:sdtContent and collect effective children.
+fn collect_block_nodes<'a>(parent: roxmltree::Node<'a, 'a>) -> Vec<roxmltree::Node<'a, 'a>> {
+    let mut nodes = Vec::new();
+    for child in parent.children() {
+        if child.tag_name().name() == "sdt" && child.tag_name().namespace() == Some(WML_NS) {
+            if let Some(content) = wml(child, "sdtContent") {
+                nodes.extend(collect_block_nodes(content));
+            }
+        } else {
+            nodes.push(child);
+        }
+    }
+    nodes
+}
+
 struct ParsedRuns {
     runs: Vec<Run>,
     has_page_break: bool,
@@ -452,32 +467,38 @@ fn parse_runs(
     let style_italic = para_style.and_then(|s| s.italic).unwrap_or(false);
     let style_caps = para_style.and_then(|s| s.caps).unwrap_or(false);
     let style_small_caps = para_style.and_then(|s| s.small_caps).unwrap_or(false);
+    let style_vanish = para_style.and_then(|s| s.vanish).unwrap_or(false);
     let style_color: Option<[u8; 3]> = para_style.and_then(|s| s.color);
 
-    let run_nodes: Vec<(roxmltree::Node, Option<String>)> = para_node
-        .children()
-        .flat_map(|child| {
+    fn collect_run_nodes<'a>(
+        parent: roxmltree::Node<'a, 'a>,
+        rels: &HashMap<String, String>,
+        out: &mut Vec<(roxmltree::Node<'a, 'a>, Option<String>)>,
+    ) {
+        for child in parent.children() {
             let name = child.tag_name().name();
             let is_wml = child.tag_name().namespace() == Some(WML_NS);
             if is_wml && name == "r" {
-                vec![(child, None)]
+                out.push((child, None));
             } else if is_wml && name == "hyperlink" {
                 let url = child
                     .attribute((REL_NS, "id"))
                     .and_then(|rid| rels.get(rid))
                     .cloned();
-                child
-                    .children()
-                    .filter(|n| {
-                        n.tag_name().name() == "r" && n.tag_name().namespace() == Some(WML_NS)
-                    })
-                    .map(move |n| (n, url.clone()))
-                    .collect()
-            } else {
-                vec![]
+                for n in child.children().filter(|n| {
+                    n.tag_name().name() == "r" && n.tag_name().namespace() == Some(WML_NS)
+                }) {
+                    out.push((n, url.clone()));
+                }
+            } else if is_wml && name == "sdt" {
+                if let Some(content) = wml(child, "sdtContent") {
+                    collect_run_nodes(content, rels, out);
+                }
             }
-        })
-        .collect();
+        }
+    }
+    let mut run_nodes: Vec<(roxmltree::Node, Option<String>)> = Vec::new();
+    collect_run_nodes(para_node, rels, &mut run_nodes);
 
     let mut runs = Vec::new();
     let mut floating_images: Vec<FloatingImage> = Vec::new();
@@ -534,6 +555,10 @@ fn parse_runs(
             .and_then(|n| wml_bool(n, "smallCaps"))
             .or_else(|| char_style.and_then(|cs| cs.small_caps))
             .unwrap_or(style_small_caps);
+        let vanish = rpr
+            .and_then(|n| wml_bool(n, "vanish"))
+            .or_else(|| char_style.and_then(|cs| cs.vanish))
+            .unwrap_or(style_vanish);
 
         let color = rpr
             .and_then(|n| wml_attr(n, "color"))
@@ -576,6 +601,7 @@ fn parse_runs(
                                     strikethrough,
                                     caps,
                                     small_caps,
+                                    vanish,
                                     color,
                                     is_tab: false,
                                     vertical_align,
@@ -611,6 +637,7 @@ fn parse_runs(
                                         strikethrough: false,
                                         caps: false,
                                         small_caps: false,
+                                        vanish: false,
                                         color,
                                         is_tab: false,
                                         vertical_align: VertAlign::Baseline,
@@ -654,6 +681,7 @@ fn parse_runs(
                             strikethrough,
                             caps,
                             small_caps,
+                            vanish,
                             color,
                             is_tab: false,
                             vertical_align,
@@ -676,6 +704,7 @@ fn parse_runs(
                         strikethrough: false,
                         caps: false,
                         small_caps: false,
+                        vanish: false,
                         color: None,
                         is_tab: true,
                         vertical_align: VertAlign::Baseline,
@@ -706,6 +735,7 @@ fn parse_runs(
                             strikethrough,
                             caps,
                             small_caps,
+                            vanish,
                             color,
                             is_tab: false,
                             vertical_align,
@@ -729,6 +759,7 @@ fn parse_runs(
                                 strikethrough: false,
                                 caps: false,
                                 small_caps: false,
+                                vanish: false,
                                 color: None,
                                 is_tab: false,
                                 vertical_align: VertAlign::Baseline,
@@ -758,6 +789,7 @@ fn parse_runs(
                             strikethrough,
                             caps,
                             small_caps,
+                            vanish,
                             color,
                             is_tab: false,
                             vertical_align,
@@ -783,6 +815,7 @@ fn parse_runs(
                             strikethrough: false,
                             caps: false,
                             small_caps: false,
+                            vanish: false,
                             color,
                             is_tab: false,
                             vertical_align: VertAlign::Superscript,
@@ -807,6 +840,7 @@ fn parse_runs(
                             strikethrough,
                             caps,
                             small_caps,
+                            vanish,
                             color,
                             is_tab: false,
                             vertical_align,
@@ -828,6 +862,7 @@ fn parse_runs(
                         strikethrough: false,
                         caps: false,
                         small_caps: false,
+                        vanish: false,
                         color,
                         is_tab: false,
                         vertical_align: VertAlign::Superscript,
@@ -854,6 +889,7 @@ fn parse_runs(
                 strikethrough,
                 caps,
                 small_caps,
+                vanish,
                 color,
                 is_tab: false,
                 vertical_align,
@@ -899,6 +935,7 @@ fn parse_runs(
                 strikethrough: false,
                 caps: false,
                 small_caps: false,
+                vanish: false,
                 color: None,
                 highlight: None,
                 is_tab: false,
@@ -925,6 +962,7 @@ fn parse_runs(
             strikethrough: false,
             caps: false,
             small_caps: false,
+            vanish: false,
             color: None,
             highlight: None,
             is_tab: false,
@@ -1259,7 +1297,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
     let mut counters: HashMap<(String, u8), u32> = HashMap::new();
     let mut last_seen_level: HashMap<String, u8> = HashMap::new();
 
-    for node in body.children() {
+    for node in collect_block_nodes(body) {
         if node.tag_name().namespace() != Some(WML_NS) {
             continue;
         }
@@ -1304,8 +1342,8 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     .and_then(|pr| wml_attr(pr, "tblStyle"))
                     .and_then(|id| styles.table_border_styles.get(id));
 
-                let tbl_rows: Vec<_> = node
-                    .children()
+                let tbl_rows: Vec<_> = collect_block_nodes(node)
+                    .into_iter()
                     .filter(|n| {
                         n.tag_name().name() == "tr"
                             && n.tag_name().namespace() == Some(WML_NS)
@@ -1350,7 +1388,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
 
                     let mut cells = Vec::new();
                     let mut grid_col = 0usize;
-                    for tc in tr.children().filter(|n| {
+                    for tc in collect_block_nodes(*tr).into_iter().filter(|n| {
                         n.tag_name().name() == "tc" && n.tag_name().namespace() == Some(WML_NS)
                     }) {
                         let ci = grid_col;
