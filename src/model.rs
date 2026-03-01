@@ -268,11 +268,19 @@ impl Default for CellMargins {
     }
 }
 
+pub struct TablePosition {
+    pub h_position: HorizontalPosition,
+    pub h_anchor: &'static str,  // "page", "margin", or "column"
+    pub v_offset_pt: f32,
+    pub v_anchor: &'static str,  // "page", "margin", or "text"
+}
+
 pub struct Table {
     pub col_widths: Vec<f32>, // points
     pub rows: Vec<TableRow>,
     pub table_indent: f32,
     pub cell_margins: CellMargins,
+    pub position: Option<TablePosition>,
 }
 
 pub struct TableRow {

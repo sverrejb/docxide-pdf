@@ -9,8 +9,8 @@ use crate::model::{
     Alignment, Block, CellBorder, CellBorders, CellMargins, CellVAlign, ColumnDef, ColumnsConfig,
     Document, EmbeddedImage, FieldCode, FloatingImage, Footnote, HeaderFooter, HorizontalPosition,
     ImageFormat, LineSpacing, Paragraph, ParagraphBorder, ParagraphBorders, Run, Section,
-    SectionBreakType, SectionProperties, TabAlignment, TabStop, Table, TableCell, TableRow, VMerge,
-    VertAlign,
+    SectionBreakType, SectionProperties, TabAlignment, TabStop, Table, TableCell, TablePosition,
+    TableRow, VMerge, VertAlign,
 };
 
 use styles::{
@@ -1463,6 +1463,46 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     })
                     .unwrap_or_default();
 
+                let table_position = tbl_pr
+                    .and_then(|pr| wml(pr, "tblpPr"))
+                    .map(|tblp| {
+                        let v_anchor = match tblp.attribute((WML_NS, "vertAnchor")) {
+                            Some("page") => "page",
+                            Some("text") => "text",
+                            _ => "margin",
+                        };
+                        let h_anchor = match tblp.attribute((WML_NS, "horzAnchor")) {
+                            Some("page") => "page",
+                            Some("margin") => "margin",
+                            _ => "column",
+                        };
+                        let v_offset_pt = tblp
+                            .attribute((WML_NS, "tblpY"))
+                            .and_then(|v| v.parse::<f32>().ok())
+                            .map(twips_to_pts)
+                            .unwrap_or(0.0);
+                        let h_position = if let Some(spec) = tblp.attribute((WML_NS, "tblpXSpec")) {
+                            match spec {
+                                "center" => HorizontalPosition::AlignCenter,
+                                "right" => HorizontalPosition::AlignRight,
+                                _ => HorizontalPosition::AlignLeft,
+                            }
+                        } else {
+                            let offset = tblp
+                                .attribute((WML_NS, "tblpX"))
+                                .and_then(|v| v.parse::<f32>().ok())
+                                .map(twips_to_pts)
+                                .unwrap_or(0.0);
+                            HorizontalPosition::Offset(offset)
+                        };
+                        TablePosition {
+                            h_position,
+                            h_anchor,
+                            v_offset_pt,
+                            v_anchor,
+                        }
+                    });
+
                 let tbl_style_borders = tbl_pr
                     .and_then(|pr| wml_attr(pr, "tblStyle"))
                     .and_then(|id| styles.table_border_styles.get(id));
@@ -1668,6 +1708,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     rows,
                     table_indent,
                     cell_margins,
+                    position: table_position,
                 }));
             }
             "p" => {

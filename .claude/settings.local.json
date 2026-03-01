@@ -91,7 +91,12 @@
       "Bash(DOCXSIDE_CASE=case24 cargo test:*)",
       "Bash(DOCXIDE_CASE=case24 cargo test:*)",
       "Bash(DOCXIDE_CASE=case23 cargo test:*)",
-      "Bash(DOCXIDE_CASE=case17 cargo test:*)"
+      "Bash(DOCXIDE_CASE=case17 cargo test:*)",
+      "Bash(DOCXIDE_CASE=2917e3e5 cargo test:*)",
+      "Bash(DOCXIDE_CASE=42f46dc2 cargo test:*)",
+      "Bash(DOCXIDE_CASE=50d8bc19 cargo test:*)",
+      "Bash(DOCXIDE_CASE=1bb388ab cargo test:*)",
+      "Bash(DOCXIDE_CASE=3027a800 cargo test:*)"
     ]
   }
 }

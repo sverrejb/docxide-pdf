@@ -1122,6 +1122,38 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 }
 
                 Block::Table(table) => {
+                    let override_pos = table.position.as_ref().map(|pos| {
+                        let table_total_w: f32 = table.col_widths.iter().sum();
+                        let x = match pos.h_anchor {
+                            "page" => match pos.h_position {
+                                HorizontalPosition::AlignCenter => (sp.page_width - table_total_w) / 2.0,
+                                HorizontalPosition::AlignRight => sp.page_width - table_total_w,
+                                HorizontalPosition::AlignLeft => 0.0,
+                                HorizontalPosition::Offset(o) => o,
+                            },
+                            "margin" => match pos.h_position {
+                                HorizontalPosition::AlignCenter => sp.margin_left + (text_width - table_total_w) / 2.0,
+                                HorizontalPosition::AlignRight => sp.margin_left + text_width - table_total_w,
+                                HorizontalPosition::AlignLeft => sp.margin_left,
+                                HorizontalPosition::Offset(o) => sp.margin_left + o,
+                            },
+                            _ => {
+                                let (col_x, col_w) = col_geometry[current_col];
+                                match pos.h_position {
+                                    HorizontalPosition::AlignCenter => col_x + (col_w - table_total_w) / 2.0,
+                                    HorizontalPosition::AlignRight => col_x + col_w - table_total_w,
+                                    HorizontalPosition::AlignLeft => col_x,
+                                    HorizontalPosition::Offset(o) => col_x + o,
+                                }
+                            }
+                        };
+                        let y = match pos.v_anchor {
+                            "page" => sp.page_height - pos.v_offset_pt,
+                            "margin" => sp.page_height - sp.margin_top - pos.v_offset_pt,
+                            _ => slot_top - pos.v_offset_pt,
+                        };
+                        (x, y)
+                    });
                     render_table(
                         table,
                         sp,
@@ -1136,8 +1168,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         &mut is_first_page_of_section,
                         &mut slot_top,
                         prev_space_after,
+                        override_pos,
                     );
-                    prev_space_after = 0.0;
+                    if override_pos.is_none() {
+                        prev_space_after = 0.0;
+                    }
                 }
             }
             global_block_idx += 1;
