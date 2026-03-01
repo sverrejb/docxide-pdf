@@ -90,7 +90,7 @@ Reference (MS Word) on the left, docxide-pdf on the right.
 
 <img src="case22_ref.png" width="420"/> <img src="case22_gen.png" width="420"/>
 
-## case23 — 51.5% SSIM
+## case23 — 89.4% SSIM
 
 <img src="case23_ref.png" width="420"/> <img src="case23_gen.png" width="420"/>
 
