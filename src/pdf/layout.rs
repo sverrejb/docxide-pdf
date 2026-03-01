@@ -163,7 +163,7 @@ pub(super) fn build_paragraph_lines(
         for (i, word) in text.split_whitespace().enumerate() {
             let char_count = word.chars().count();
             let ww = entry.word_width(word, eff_fs) * ts
-                + if char_count > 1 { cs * (char_count - 1) as f32 } else { 0.0 };
+                + cs * char_count as f32;
 
             let need_space =
                 !current_chunks.is_empty() && (i > 0 || starts_with_ws || prev_ended_with_ws);
@@ -426,7 +426,7 @@ pub(super) fn build_tabbed_line(
             for (i, word) in text.split_whitespace().enumerate() {
                 let char_count = word.chars().count();
                 let ww = entry.word_width(word, eff_fs) * ts
-                    + if char_count > 1 { cs * (char_count - 1) as f32 } else { 0.0 };
+                    + cs * char_count as f32;
                 if !all_chunks.is_empty()
                     && (i > 0 || prev_ws || text.starts_with(char::is_whitespace))
                 {
