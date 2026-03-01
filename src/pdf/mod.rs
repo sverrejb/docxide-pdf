@@ -9,7 +9,8 @@ use crate::error::Error;
 use crate::fonts::{FontEntry, encode_as_gids, font_key, register_font, to_winansi_bytes};
 use crate::model::{
     Alignment, Block, Document, EmbeddedImage, FieldCode, Footnote, HeaderFooter,
-    HorizontalPosition, ImageFormat, LineSpacing, Run, SectionBreakType, SectionProperties,
+    HorizontalPosition, ImageFormat, LineSpacing, Paragraph, Run, SectionBreakType,
+    SectionProperties,
 };
 
 use layout::{
@@ -159,6 +160,23 @@ fn render_header_footer(
                 let tb_ascender = tb_ar.unwrap_or(0.75);
                 let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_ar);
                 let tb_baseline = cursor_y - tp.space_before - tb_fs * tb_ascender;
+                if !tp.list_label.is_empty() {
+                    let label_x = content_x + tp.indent_left - tp.indent_hanging;
+                    let (label_font_name, label_bytes) =
+                        label_for_paragraph(tp, seen_fonts);
+                    if let Some([r, g, b]) = tp.runs.first().and_then(|r| r.color) {
+                        content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+                    }
+                    content
+                        .begin_text()
+                        .set_font(Name(label_font_name.as_bytes()), tb_fs)
+                        .next_line(label_x, tb_baseline)
+                        .show(Str(&label_bytes))
+                        .end_text();
+                    if tp.runs.first().and_then(|r| r.color).is_some() {
+                        content.set_fill_gray(0.0);
+                    }
+                }
                 render_paragraph_lines(
                     content, &tb_lines, &tp.alignment, content_x, content_w,
                     tb_baseline, tb_line_h, tb_lines.len(), 0,
@@ -353,24 +371,38 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             chars.extend('0'..='9');
         }
     }
-    // List labels and leader characters from paragraphs
-    let all_paras = doc.sections.iter()
-        .flat_map(|s| s.blocks.iter())
-        .flat_map(|block| -> Box<dyn Iterator<Item = &crate::model::Paragraph> + '_> {
-            match block {
-                Block::Paragraph(p) => Box::new(std::iter::once(p)),
-                Block::Table(t) => Box::new(
-                    t.rows.iter()
-                        .flat_map(|row| row.cells.iter())
-                        .flat_map(|cell| cell.paragraphs.iter()),
-                ),
+    // List labels and leader characters from paragraphs (including textbox paragraphs)
+    fn collect_paras(para: &Paragraph) -> Vec<&Paragraph> {
+        let mut out = vec![para];
+        for tb in &para.textboxes {
+            for tp in &tb.paragraphs {
+                out.extend(collect_paras(tp));
             }
-        });
-    for para in all_paras {
-        if !para.list_label.is_empty()
-            && let Some(run) = para.runs.first()
-        {
-            let key = font_key(run);
+        }
+        out
+    }
+    let all_paras: Vec<&Paragraph> = doc.sections.iter()
+        .flat_map(|s| s.blocks.iter())
+        .flat_map(|block| -> Vec<&Paragraph> {
+            match block {
+                Block::Paragraph(p) => collect_paras(p),
+                Block::Table(t) => t.rows.iter()
+                    .flat_map(|row| row.cells.iter())
+                    .flat_map(|cell| cell.paragraphs.iter())
+                    .flat_map(|p| collect_paras(p))
+                    .collect(),
+            }
+        })
+        .collect();
+    for para in &all_paras {
+        if !para.list_label.is_empty() {
+            let key = if let Some(ref bf) = para.list_label_font {
+                bf.clone()
+            } else if let Some(run) = para.runs.first() {
+                font_key(run)
+            } else {
+                continue;
+            };
             used_chars_per_font
                 .entry(key)
                 .or_default()
@@ -440,6 +472,25 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             );
             seen_fonts.insert(key.clone(), entry);
             font_order.push(key);
+        }
+    }
+
+    // Register fonts referenced only by list labels (e.g. Wingdings bullet fonts)
+    for (key, used) in &used_chars_per_font {
+        if !seen_fonts.contains_key(key) {
+            let pdf_name = format!("F{}", font_order.len() + 1);
+            let entry = register_font(
+                &mut pdf,
+                key,
+                false,
+                false,
+                pdf_name,
+                &mut alloc,
+                &doc.embedded_fonts,
+                used,
+            );
+            seen_fonts.insert(key.clone(), entry);
+            font_order.push(key.clone());
         }
     }
 
@@ -914,13 +965,19 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                             if !para.list_label.is_empty() {
                                 let (label_font_name, label_bytes) =
-                                    label_for_run(&para.runs[0], &seen_fonts, &para.list_label);
+                                    label_for_paragraph(para, &seen_fonts);
+                                if let Some([r, g, b]) = para.runs.first().and_then(|r| r.color) {
+                                    current_content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+                                }
                                 current_content
                                     .begin_text()
                                     .set_font(Name(label_font_name.as_bytes()), font_size)
                                     .next_line(label_x, baseline_y)
                                     .show(Str(&label_bytes))
                                     .end_text();
+                                if para.runs.first().and_then(|r| r.color).is_some() {
+                                    current_content.set_fill_gray(0.0);
+                                }
                             }
 
                             render_paragraph_lines(
@@ -1137,20 +1194,29 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         let empty_inline_imgs: HashMap<usize, String> = HashMap::new();
                         for tp in &tb.paragraphs {
                             let tp_ls = tp.line_spacing.unwrap_or(doc.line_spacing);
+                            let tp_text_x = content_x + tp.indent_left;
+                            let tp_text_w = (content_w - tp.indent_left - tp.indent_right).max(1.0);
+                            let text_hanging = if !tp.list_label.is_empty() {
+                                0.0
+                            } else if tp.indent_hanging > 0.0 {
+                                tp.indent_hanging
+                            } else {
+                                -tp.indent_first_line
+                            };
                             let has_tabs = tp.runs.iter().any(|r| r.is_tab);
                             let tb_lines = if has_tabs {
                                 build_tabbed_line(
                                     &tp.runs,
                                     &seen_fonts,
                                     &tp.tab_stops,
-                                    0.0,
+                                    text_hanging,
                                 )
                             } else {
                                 build_paragraph_lines(
                                     &tp.runs,
                                     &seen_fonts,
-                                    content_w,
-                                    0.0,
+                                    tp_text_w,
+                                    text_hanging,
                                     &empty_inline_imgs,
                                 )
                             };
@@ -1164,12 +1230,29 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             let tb_ascender = tb_ar.unwrap_or(0.75);
                             let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_ar);
                             let tb_baseline = cursor_y - tp.space_before - tb_fs * tb_ascender;
+                            if !tp.list_label.is_empty() {
+                                let label_x = content_x + tp.indent_left - tp.indent_hanging;
+                                let (label_font_name, label_bytes) =
+                                    label_for_paragraph(tp, &seen_fonts);
+                                if let Some([r, g, b]) = tp.runs.first().and_then(|r| r.color) {
+                                    current_content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+                                }
+                                current_content
+                                    .begin_text()
+                                    .set_font(Name(label_font_name.as_bytes()), tb_fs)
+                                    .next_line(label_x, tb_baseline)
+                                    .show(Str(&label_bytes))
+                                    .end_text();
+                                if tp.runs.first().and_then(|r| r.color).is_some() {
+                                    current_content.set_fill_gray(0.0);
+                                }
+                            }
                             render_paragraph_lines(
                                 &mut current_content,
                                 &tb_lines,
                                 &tp.alignment,
-                                content_x,
-                                content_w,
+                                tp_text_x,
+                                tp_text_w,
                                 tb_baseline,
                                 tb_line_h,
                                 tb_lines.len(),
@@ -1218,13 +1301,19 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                         if !para.list_label.is_empty() {
                             let (label_font_name, label_bytes) =
-                                label_for_run(&para.runs[0], &seen_fonts, &para.list_label);
+                                label_for_paragraph(para, &seen_fonts);
+                            if let Some([r, g, b]) = para.runs.first().and_then(|r| r.color) {
+                                current_content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+                            }
                             current_content
                                 .begin_text()
                                 .set_font(Name(label_font_name.as_bytes()), font_size)
                                 .next_line(label_x, baseline_y)
                                 .show(Str(&label_bytes))
                                 .end_text();
+                            if para.runs.first().and_then(|r| r.color).is_some() {
+                                current_content.set_fill_gray(0.0);
+                            }
                         }
 
                         render_paragraph_lines(
@@ -1699,6 +1788,22 @@ fn label_for_run<'a>(
         None => to_winansi_bytes(label),
     };
     (entry.pdf_name.as_str(), bytes)
+}
+
+fn label_for_paragraph<'a>(
+    para: &Paragraph,
+    seen_fonts: &'a HashMap<String, FontEntry>,
+) -> (&'a str, Vec<u8>) {
+    if let Some(ref bf) = para.list_label_font {
+        if let Some(entry) = seen_fonts.get(bf.as_str()) {
+            let bytes = match &entry.char_to_gid {
+                Some(map) => encode_as_gids(&para.list_label, map),
+                None => to_winansi_bytes(&para.list_label),
+            };
+            return (entry.pdf_name.as_str(), bytes);
+        }
+    }
+    label_for_run(&para.runs[0], seen_fonts, &para.list_label)
 }
 
 fn compute_footnote_height(

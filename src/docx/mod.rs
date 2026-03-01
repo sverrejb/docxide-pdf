@@ -24,8 +24,10 @@ struct LevelDef {
     indent_left: f32,
     indent_hanging: f32,
     start: u32,
+    bullet_font: Option<String>,
 }
 
+#[derive(Default)]
 struct NumberingInfo {
     abstract_nums: HashMap<String, HashMap<u8, LevelDef>>,
     num_to_abstract: HashMap<String, String>,
@@ -353,6 +355,13 @@ fn parse_numbering<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Num
                     let ind = wml(lvl, "pPr").and_then(|ppr| wml(ppr, "ind"));
                     let indent_left = ind.and_then(|n| twips_attr(n, "left")).unwrap_or(0.0);
                     let indent_hanging = ind.and_then(|n| twips_attr(n, "hanging")).unwrap_or(0.0);
+                    let bullet_font = wml(lvl, "rPr")
+                        .and_then(|rpr| wml(rpr, "rFonts"))
+                        .and_then(|rf| {
+                            rf.attribute((WML_NS, "ascii"))
+                                .or_else(|| rf.attribute((WML_NS, "hAnsi")))
+                        })
+                        .map(|s| s.to_string());
                     levels.insert(
                         ilvl,
                         LevelDef {
@@ -361,6 +370,7 @@ fn parse_numbering<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Num
                             indent_left,
                             indent_hanging,
                             start,
+                            bullet_font,
                         },
                     );
                 }
@@ -451,6 +461,7 @@ fn parse_runs<R: Read + std::io::Seek>(
     theme: &ThemeFonts,
     rels: &HashMap<String, String>,
     zip: &mut zip::ZipArchive<R>,
+    numbering: &NumberingInfo,
 ) -> ParsedRuns {
     let ppr = wml(para_node, "pPr");
     let para_style_id = ppr
@@ -626,7 +637,7 @@ fn parse_runs<R: Read + std::io::Seek>(
                     for drawing in branch.children().filter(|n| {
                         n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "drawing"
                     }) {
-                        match parse_run_drawing(drawing, rels, zip, styles, theme) {
+                        match parse_run_drawing(drawing, rels, zip, styles, theme, numbering) {
                             Some(RunDrawingResult::Inline(img)) => {
                                 runs.push(Run {
                                     text: String::new(),
@@ -666,7 +677,7 @@ fn parse_runs<R: Read + std::io::Seek>(
                     for pict in branch.descendants().filter(|n| {
                         n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "pict"
                     }) {
-                        if let Some(tb) = parse_textbox_from_vml(pict, rels, zip, styles, theme) {
+                        if let Some(tb) = parse_textbox_from_vml(pict, rels, zip, styles, theme, numbering) {
                             textboxes.push(tb);
                         }
                     }
@@ -854,7 +865,7 @@ fn parse_runs<R: Read + std::io::Seek>(
                             is_footnote_ref_mark: false,
                         });
                     }
-                    match parse_run_drawing(child, rels, zip, styles, theme) {
+                    match parse_run_drawing(child, rels, zip, styles, theme, numbering) {
                         Some(RunDrawingResult::Inline(img)) => {
                             runs.push(Run {
                                 text: String::new(),
@@ -891,7 +902,7 @@ fn parse_runs<R: Read + std::io::Seek>(
                     }
                 }
                 "pict" if !in_field => {
-                    if let Some(tb) = parse_textbox_from_vml(child, rels, zip, styles, theme) {
+                    if let Some(tb) = parse_textbox_from_vml(child, rels, zip, styles, theme, numbering) {
                         textboxes.push(tb);
                     }
                 }
@@ -1151,7 +1162,7 @@ fn parse_header_footer_xml<R: Read + std::io::Seek>(
             .or_else(|| para_style.and_then(|s| s.alignment))
             .unwrap_or(Alignment::Left);
 
-        let parsed = parse_runs(node, styles, theme, rels, zip);
+        let parsed = parse_runs(node, styles, theme, rels, zip, &NumberingInfo::default());
 
         paragraphs.push(Paragraph {
             runs: parsed.runs,
@@ -1164,6 +1175,7 @@ fn parse_header_footer_xml<R: Read + std::io::Seek>(
             indent_hanging: 0.0,
             indent_first_line: 0.0,
             list_label: String::new(),
+            list_label_font: None,
             contextual_spacing: false,
             keep_next: false,
             keep_lines: false,
@@ -1234,7 +1246,7 @@ fn parse_footnotes<R: Read + std::io::Seek>(
                 .or_else(|| para_style.and_then(|s| s.alignment))
                 .unwrap_or(Alignment::Left);
 
-            let parsed = parse_runs(p, styles, theme, &empty_rels, zip);
+            let parsed = parse_runs(p, styles, theme, &empty_rels, zip, &NumberingInfo::default());
 
             let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
             let space_before = inline_spacing
@@ -1265,6 +1277,7 @@ fn parse_footnotes<R: Read + std::io::Seek>(
                 indent_hanging: 0.0,
                 indent_first_line: 0.0,
                 list_label: String::new(),
+                list_label_font: None,
                 contextual_spacing: false,
                 keep_next: false,
                 keep_lines: false,
@@ -1710,7 +1723,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                         for p in tc.children().filter(|n| {
                             n.tag_name().name() == "p" && n.tag_name().namespace() == Some(WML_NS)
                         }) {
-                            let parsed = parse_runs(p, &styles, &theme, &rels, zip);
+                            let parsed = parse_runs(p, &styles, &theme, &rels, zip, &numbering);
                             let ppr = wml(p, "pPr");
                             let para_style_id = ppr
                                 .and_then(|ppr| wml_attr(ppr, "pStyle"))
@@ -1732,17 +1745,37 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                                     .or_else(|| para_style.and_then(|s| s.line_spacing))
                                     .unwrap_or(LineSpacing::Auto(1.0)),
                             );
+                            let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
+                            let (mut indent_left, mut indent_hanging, list_label, list_label_font) =
+                                parse_list_info(num_pr, &numbering, &mut counters, &mut last_seen_level);
+                            let mut indent_first_line = 0.0f32;
+                            let mut indent_right = 0.0f32;
+                            if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
+                                if let Some(v) = twips_attr(ind, "left") {
+                                    indent_left = v;
+                                }
+                                if let Some(v) = twips_attr(ind, "right") {
+                                    indent_right = v;
+                                }
+                                if let Some(v) = twips_attr(ind, "hanging") {
+                                    indent_hanging = v;
+                                }
+                                if let Some(v) = twips_attr(ind, "firstLine") {
+                                    indent_first_line = v;
+                                }
+                            }
                             cell_paras.push(Paragraph {
                                 runs: parsed.runs,
                                 space_before: 0.0,
                                 space_after: 0.0,
                                 content_height: 0.0,
                                 alignment,
-                                indent_left: 0.0,
-                                indent_right: 0.0,
-                                indent_hanging: 0.0,
-                                indent_first_line: 0.0,
-                                list_label: String::new(),
+                                indent_left,
+                                indent_right,
+                                indent_hanging,
+                                indent_first_line,
+                                list_label,
+                                list_label_font,
                                 contextual_spacing: false,
                                 keep_next: false,
                                 keep_lines: false,
@@ -1853,7 +1886,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     .or_else(|| para_style.and_then(|s| s.line_spacing));
 
                 let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
-                let (mut indent_left, mut indent_hanging, list_label) =
+                let (mut indent_left, mut indent_hanging, list_label, list_label_font) =
                     parse_list_info(num_pr, &numbering, &mut counters, &mut last_seen_level);
 
                 let mut indent_first_line = 0.0f32;
@@ -1888,7 +1921,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     }
                 }
 
-                let parsed = parse_runs(node, &styles, &theme, &rels, zip);
+                let parsed = parse_runs(node, &styles, &theme, &rels, zip, &numbering);
                 let mut runs = parsed.runs;
 
                 // Override font defaults from style for runs that used doc defaults
@@ -1932,6 +1965,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     indent_hanging,
                     indent_first_line,
                     list_label,
+                    list_label_font,
                     contextual_spacing,
                     keep_next,
                     keep_lines,
@@ -1946,7 +1980,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     floating_images,
                     textboxes: {
                         let mut tbs = parsed.textboxes;
-                        tbs.extend(collect_textboxes_from_paragraph(node, &rels, zip, &styles, &theme));
+                        tbs.extend(collect_textboxes_from_paragraph(node, &rels, zip, &styles, &theme, &numbering));
                         tbs
                     },
                 }));
@@ -2071,12 +2105,20 @@ fn format_number(value: u32, num_fmt: &str) -> String {
     }
 }
 
-fn normalize_bullet_text(text: &str) -> String {
+fn normalize_bullet_text(text: &str, bullet_font: Option<&str>) -> String {
+    let is_symbol_font = bullet_font.is_some_and(|f| {
+        let lower = f.to_lowercase();
+        lower.contains("wingdings") || lower.contains("symbol") || lower.contains("webdings")
+    });
     text.chars()
         .map(|c| {
             let cp = c as u32;
             if (0xF000..=0xF0FF).contains(&cp) {
-                symbol_pua_to_unicode(cp).unwrap_or(c)
+                if is_symbol_font {
+                    c
+                } else {
+                    symbol_pua_to_unicode(cp).unwrap_or(c)
+                }
             } else {
                 c
             }
@@ -2102,28 +2144,28 @@ fn parse_list_info(
     numbering: &NumberingInfo,
     counters: &mut HashMap<(String, u8), u32>,
     last_seen_level: &mut HashMap<String, u8>,
-) -> (f32, f32, String) {
+) -> (f32, f32, String, Option<String>) {
     let Some(num_pr) = num_pr else {
-        return (0.0, 0.0, String::new());
+        return (0.0, 0.0, String::new(), None);
     };
     let Some(num_id) = wml_attr(num_pr, "numId") else {
-        return (0.0, 0.0, String::new());
+        return (0.0, 0.0, String::new(), None);
     };
     if num_id == "0" {
-        return (0.0, 0.0, String::new());
+        return (0.0, 0.0, String::new(), None);
     }
     let ilvl = wml_attr(num_pr, "ilvl")
         .and_then(|v| v.parse::<u8>().ok())
         .unwrap_or(0);
 
     let Some(abs_id) = numbering.num_to_abstract.get(num_id) else {
-        return (0.0, 0.0, String::new());
+        return (0.0, 0.0, String::new(), None);
     };
     let Some(levels) = numbering.abstract_nums.get(abs_id.as_str()) else {
-        return (0.0, 0.0, String::new());
+        return (0.0, 0.0, String::new(), None);
     };
     let Some(def) = levels.get(&ilvl) else {
-        return (0.0, 0.0, String::new());
+        return (0.0, 0.0, String::new(), None);
     };
 
     // Reset deeper-level counters when returning to a higher level
@@ -2145,7 +2187,7 @@ fn parse_list_info(
         .or_insert(start);
 
     let label = if def.num_fmt == "bullet" {
-        let text = normalize_bullet_text(&def.lvl_text);
+        let text = normalize_bullet_text(&def.lvl_text, def.bullet_font.as_deref());
         if text.is_empty() { "\u{2022}".to_string() } else { text }
     } else {
         let mut label = def.lvl_text.clone();
@@ -2174,7 +2216,12 @@ fn parse_list_info(
         }
         label
     };
-    (def.indent_left, def.indent_hanging, label)
+    let bullet_font = if def.num_fmt == "bullet" {
+        def.bullet_font.clone()
+    } else {
+        None
+    };
+    (def.indent_left, def.indent_hanging, label, bullet_font)
 }
 
 const REL_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -2261,12 +2308,15 @@ fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
     theme: &ThemeFonts,
     rels: &HashMap<String, String>,
     zip: &mut zip::ZipArchive<R>,
+    numbering: &NumberingInfo,
 ) -> Vec<Paragraph> {
     let mut paragraphs = Vec::new();
+    let mut counters: HashMap<(String, u8), u32> = HashMap::new();
+    let mut last_seen_level: HashMap<String, u8> = HashMap::new();
     for p in txbx_content.children().filter(|n| {
         n.tag_name().name() == "p" && n.tag_name().namespace() == Some(WML_NS)
     }) {
-        let parsed = parse_runs(p, styles, theme, rels, zip);
+        let parsed = parse_runs(p, styles, theme, rels, zip, numbering);
         let ppr = wml(p, "pPr");
         let para_style_id = ppr
             .and_then(|ppr| wml_attr(ppr, "pStyle"))
@@ -2301,17 +2351,52 @@ fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
                 .unwrap_or(LineSpacing::Auto(1.0)),
         );
         let tab_stops = ppr.map(parse_tab_stops).unwrap_or_default();
+        let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
+        let (mut indent_left, mut indent_hanging, list_label, list_label_font) =
+            parse_list_info(num_pr, numbering, &mut counters, &mut last_seen_level);
+        let mut indent_first_line = 0.0f32;
+        let mut indent_right = 0.0f32;
+        if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
+            if let Some(v) = twips_attr(ind, "left") {
+                indent_left = v;
+            }
+            if let Some(v) = twips_attr(ind, "right") {
+                indent_right = v;
+            }
+            if let Some(v) = twips_attr(ind, "hanging") {
+                indent_hanging = v;
+            }
+            if let Some(v) = twips_attr(ind, "firstLine") {
+                indent_first_line = v;
+            }
+        } else if list_label.is_empty() {
+            if let Some(s) = para_style {
+                if let Some(v) = s.indent_left {
+                    indent_left = v;
+                }
+                if let Some(v) = s.indent_right {
+                    indent_right = v;
+                }
+                if let Some(v) = s.indent_hanging {
+                    indent_hanging = v;
+                }
+                if let Some(v) = s.indent_first_line {
+                    indent_first_line = v;
+                }
+            }
+        }
         paragraphs.push(Paragraph {
             runs: parsed.runs,
             space_before,
             space_after,
             content_height: 0.0,
             alignment,
-            indent_left: 0.0,
-            indent_right: 0.0,
-            indent_hanging: 0.0,
-            indent_first_line: 0.0,
-            list_label: String::new(),
+            indent_left,
+            indent_right,
+            indent_hanging,
+            indent_first_line,
+            list_label,
+            list_label_font,
             contextual_spacing: false,
             keep_next: false,
             keep_lines: false,
@@ -2428,6 +2513,7 @@ fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
     zip: &mut zip::ZipArchive<R>,
     styles: &StylesInfo,
     theme: &ThemeFonts,
+    numbering: &NumberingInfo,
 ) -> Option<WspResult> {
     let wsp = anchor.descendants().find(|n| {
         n.tag_name().name() == "wsp" && n.tag_name().namespace() == Some(WPS_NS)
@@ -2451,7 +2537,7 @@ fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
         .and_then(|txbx| txbx.children().find(|n| {
             n.tag_name().name() == "txbxContent" && n.tag_name().namespace() == Some(WML_NS)
         }))
-        .map(|tc| parse_txbx_content_paragraphs(tc, styles, theme, rels, zip))
+        .map(|tc| parse_txbx_content_paragraphs(tc, styles, theme, rels, zip, numbering))
         .unwrap_or_default();
 
     // Return if there's text content OR a visible fill
@@ -2478,6 +2564,7 @@ fn parse_textbox_from_vml<R: Read + std::io::Seek>(
     zip: &mut zip::ZipArchive<R>,
     styles: &StylesInfo,
     theme: &ThemeFonts,
+    numbering: &NumberingInfo,
 ) -> Option<Textbox> {
     let shape = pict_node.children().find(|n| {
         n.tag_name().namespace() == Some(VML_NS)
@@ -2530,7 +2617,7 @@ fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         }
     }
 
-    let paragraphs = parse_txbx_content_paragraphs(txbx_content, styles, theme, rels, zip);
+    let paragraphs = parse_txbx_content_paragraphs(txbx_content, styles, theme, rels, zip, numbering);
     if paragraphs.is_empty() {
         return None;
     }
@@ -2564,6 +2651,7 @@ fn parse_run_drawing<R: Read + std::io::Seek>(
     zip: &mut zip::ZipArchive<R>,
     styles: &StylesInfo,
     theme: &ThemeFonts,
+    numbering: &NumberingInfo,
 ) -> Option<RunDrawingResult> {
     for container in drawing_node.children() {
         let name = container.tag_name().name();
@@ -2590,7 +2678,7 @@ fn parse_run_drawing<R: Read + std::io::Seek>(
 
         if name == "anchor" {
             // Check for textbox/shape content (any wrap mode)
-            if let Some(wsp) = parse_textbox_from_wsp(container, rels, zip, styles, theme) {
+            if let Some(wsp) = parse_textbox_from_wsp(container, rels, zip, styles, theme, numbering) {
                 let (h_position, h_relative, v_offset, v_relative) =
                     parse_anchor_position(container);
                 return Some(RunDrawingResult::TextBox(Textbox {
@@ -2720,6 +2808,7 @@ fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
     zip: &mut zip::ZipArchive<R>,
     styles: &StylesInfo,
     theme: &ThemeFonts,
+    numbering: &NumberingInfo,
 ) -> Vec<Textbox> {
     let mut textboxes = Vec::new();
 
@@ -2756,7 +2845,7 @@ fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                         let display_w = cx / 12700.0;
                         let display_h = cy / 12700.0;
 
-                        if let Some(wsp) = parse_textbox_from_wsp(container, rels, zip, styles, theme) {
+                        if let Some(wsp) = parse_textbox_from_wsp(container, rels, zip, styles, theme, numbering) {
                             let (h_position, h_relative, v_offset, v_relative) =
                                 parse_anchor_position(container);
                             textboxes.push(Textbox {
@@ -2781,7 +2870,7 @@ fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                 for pict in branch.children().filter(|n| {
                     n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "pict"
                 }) {
-                    if let Some(tb) = parse_textbox_from_vml(pict, rels, zip, styles, theme) {
+                    if let Some(tb) = parse_textbox_from_vml(pict, rels, zip, styles, theme, numbering) {
                         textboxes.push(tb);
                     }
                 }
@@ -2792,7 +2881,7 @@ fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                     for pict in r.children().filter(|n| {
                         n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "pict"
                     }) {
-                        if let Some(tb) = parse_textbox_from_vml(pict, rels, zip, styles, theme) {
+                        if let Some(tb) = parse_textbox_from_vml(pict, rels, zip, styles, theme, numbering) {
                             textboxes.push(tb);
                         }
                     }

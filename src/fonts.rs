@@ -624,8 +624,28 @@ fn embed_truetype(
     let mut remapper = subsetter::GlyphRemapper::new();
     let mut char_to_gid = HashMap::new();
     let mut char_widths_1000 = HashMap::new();
+    // For symbol fonts, try direct cmap subtable lookup as a fallback
+    let symbol_cmap_lookup = |ch: char| -> Option<ttf_parser::GlyphId> {
+        if let Some(cmap) = face.tables().cmap {
+            for subtable in cmap.subtables {
+                if let Some(gid) = subtable.glyph_index(ch as u32) {
+                    return Some(gid);
+                }
+            }
+        }
+        None
+    };
     for &ch in used_chars {
-        if let Some(gid) = face.glyph_index(ch) {
+        let gid = face.glyph_index(ch).or_else(|| {
+            let cp = ch as u32;
+            if (0xF000..=0xF0FF).contains(&cp) {
+                let low_ch = char::from_u32(cp - 0xF000)?;
+                face.glyph_index(low_ch)
+            } else {
+                None
+            }
+        }).or_else(|| symbol_cmap_lookup(ch));
+        if let Some(gid) = gid {
             let new_gid = remapper.remap(gid.0);
             char_to_gid.insert(ch, new_gid);
             let w = face

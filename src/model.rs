@@ -170,6 +170,7 @@ pub struct Paragraph {
     pub indent_hanging: f32,
     pub indent_first_line: f32,
     pub list_label: String,
+    pub list_label_font: Option<String>,
     pub contextual_spacing: bool,
     pub keep_next: bool,
     pub keep_lines: bool,
