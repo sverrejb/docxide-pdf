@@ -63,6 +63,7 @@ def redraw(_frame=None):
 
     if jaccard_csv.exists():
         df = pd.read_csv(jaccard_csv)
+        df = df[df["case"].str.startswith("case")]
         df["time"] = pd.to_datetime(df["timestamp"], unit="s")
         ax = axes[0][plot_idx]
         ax.cla()
@@ -80,6 +81,7 @@ def redraw(_frame=None):
 
     if ssim_csv.exists():
         df = pd.read_csv(ssim_csv)
+        df = df[df["case"].str.startswith("case")]
         df["time"] = pd.to_datetime(df["timestamp"], unit="s")
         ax = axes[0][plot_idx]
         ax.cla()

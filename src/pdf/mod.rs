@@ -544,7 +544,6 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     page_section_indices.push((sect_idx - 1, is_first_page_of_section));
                     slot_top = sp.page_height - sp.margin_top;
                     effective_margin_bottom = sp.margin_bottom;
-                    prev_space_after = 0.0;
                 }
                 SectionBreakType::Continuous => {
                     // No forced break; geometry updates on next page
@@ -874,11 +873,16 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         inter_gap = 0.0;
                     }
 
-                    // Suppress space_before at the top of a page (after a page break, not first page)
+                    // Suppress space_before at the top of a page
                     let at_new_page_top = !all_contents.is_empty()
                         && (slot_top - (cur_sp.page_height - cur_sp.margin_top)).abs() < 1.0;
                     if at_new_page_top {
-                        inter_gap = 0.0;
+                        if is_first_page_of_section {
+                            // Section break: collapse with the previous section's trailing space_after
+                            inter_gap = (effective_space_before - prev_space_after).max(0.0);
+                        } else {
+                            inter_gap = 0.0;
+                        }
                     }
 
                     slot_top -= inter_gap;
