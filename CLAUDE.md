@@ -56,7 +56,7 @@ Testing strategy emphasizes:
 
 ## Roadmap
 
-See `roadmap.md` for planned work: kerning (GPOS), performance profiling, test corpus expansion, and bundled fallback fonts.
+See `roadmap.md` for planned work prioritized by impact. **Always consult the roadmap** before starting work to understand priorities and avoid duplicating completed work. **Update the roadmap** when completing items, discovering new issues, or when priorities shift.
 
 ## Reference Material
 

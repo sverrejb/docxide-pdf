@@ -10,7 +10,7 @@ use crate::model::{
     Document, EmbeddedImage, FieldCode, FloatingImage, Footnote, HeaderFooter, HorizontalPosition,
     ImageFormat, LineSpacing, Paragraph, ParagraphBorder, ParagraphBorders, Run, Section,
     SectionBreakType, SectionProperties, TabAlignment, TabStop, Table, TableCell, TablePosition,
-    TableRow, VMerge, VertAlign,
+    TableRow, Textbox, VMerge, VertAlign,
 };
 
 use styles::{
@@ -442,6 +442,7 @@ struct ParsedRuns {
     has_column_break: bool,
     line_break_count: u32,
     floating_images: Vec<FloatingImage>,
+    textboxes: Vec<Textbox>,
 }
 
 fn parse_runs<R: Read + std::io::Seek>(
@@ -471,6 +472,8 @@ fn parse_runs<R: Read + std::io::Seek>(
     let style_vanish = para_style.and_then(|s| s.vanish).unwrap_or(false);
     let style_color: Option<[u8; 3]> = para_style.and_then(|s| s.color);
 
+    const MC_NS: &str = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+
     fn collect_run_nodes<'a>(
         parent: roxmltree::Node<'a, 'a>,
         rels: &HashMap<String, String>,
@@ -478,7 +481,8 @@ fn parse_runs<R: Read + std::io::Seek>(
     ) {
         for child in parent.children() {
             let name = child.tag_name().name();
-            let is_wml = child.tag_name().namespace() == Some(WML_NS);
+            let ns = child.tag_name().namespace();
+            let is_wml = ns == Some(WML_NS);
             if is_wml && name == "r" {
                 out.push((child, None));
             } else if is_wml && name == "hyperlink" {
@@ -495,6 +499,17 @@ fn parse_runs<R: Read + std::io::Seek>(
                 if let Some(content) = wml(child, "sdtContent") {
                     collect_run_nodes(content, rels, out);
                 }
+            } else if ns == Some(MC_NS) && name == "AlternateContent" {
+                let choice = child.children().find(|n| {
+                    n.tag_name().namespace() == Some(MC_NS) && n.tag_name().name() == "Choice"
+                });
+                let fallback = child.children().find(|n| {
+                    n.tag_name().namespace() == Some(MC_NS) && n.tag_name().name() == "Fallback"
+                });
+                let branch = choice.or(fallback);
+                if let Some(branch) = branch {
+                    collect_run_nodes(branch, rels, out);
+                }
             }
         }
     }
@@ -503,6 +518,7 @@ fn parse_runs<R: Read + std::io::Seek>(
 
     let mut runs = Vec::new();
     let mut floating_images: Vec<FloatingImage> = Vec::new();
+    let mut textboxes: Vec<Textbox> = Vec::new();
     let mut has_page_break = false;
     let mut has_column_break = false;
     let mut line_break_count: u32 = 0;
@@ -597,7 +613,67 @@ fn parse_runs<R: Read + std::io::Seek>(
         // Iterate children in document order to handle w:t, w:tab, w:br, w:fldChar, w:instrText
         let mut pending_text = String::new();
         for child in run_node.children() {
-            if child.tag_name().namespace() != Some(WML_NS) {
+            let child_ns = child.tag_name().namespace();
+            // Handle mc:AlternateContent inside runs (e.g. textboxes)
+            if child_ns == Some(MC_NS) && child.tag_name().name() == "AlternateContent" {
+                let choice = child.children().find(|n| {
+                    n.tag_name().namespace() == Some(MC_NS) && n.tag_name().name() == "Choice"
+                });
+                let fallback = child.children().find(|n| {
+                    n.tag_name().namespace() == Some(MC_NS) && n.tag_name().name() == "Fallback"
+                });
+                if let Some(branch) = choice {
+                    for drawing in branch.children().filter(|n| {
+                        n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "drawing"
+                    }) {
+                        match parse_run_drawing(drawing, rels, zip, styles, theme) {
+                            Some(RunDrawingResult::Inline(img)) => {
+                                runs.push(Run {
+                                    text: String::new(),
+                                    font_size,
+                                    font_name: font_name.clone(),
+                                    bold: false,
+                                    italic: false,
+                                    underline: false,
+                                    strikethrough: false,
+                                    dstrike: false,
+                                    char_spacing: 0.0,
+                                    text_scale: 100.0,
+                                    caps: false,
+                                    small_caps: false,
+                                    vanish: false,
+                                    color: None,
+                                    is_tab: false,
+                                    vertical_align: VertAlign::Baseline,
+                                    field_code: None,
+                                    hyperlink_url: None,
+                                    highlight: None,
+                                    inline_image: Some(img),
+                                    footnote_id: None,
+                                    is_footnote_ref_mark: false,
+                                });
+                            }
+                            Some(RunDrawingResult::Floating(fi)) => {
+                                floating_images.push(fi);
+                            }
+                            Some(RunDrawingResult::TextBox(tb)) => {
+                                textboxes.push(tb);
+                            }
+                            None => {}
+                        }
+                    }
+                } else if let Some(branch) = fallback {
+                    for pict in branch.descendants().filter(|n| {
+                        n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "pict"
+                    }) {
+                        if let Some(tb) = parse_textbox_from_vml(pict, rels, zip, styles, theme) {
+                            textboxes.push(tb);
+                        }
+                    }
+                }
+                continue;
+            }
+            if child_ns != Some(WML_NS) {
                 continue;
             }
             match child.tag_name().name() {
@@ -777,7 +853,7 @@ fn parse_runs<R: Read + std::io::Seek>(
                             is_footnote_ref_mark: false,
                         });
                     }
-                    match parse_run_drawing(child, rels, zip) {
+                    match parse_run_drawing(child, rels, zip, styles, theme) {
                         Some(RunDrawingResult::Inline(img)) => {
                             runs.push(Run {
                                 text: String::new(),
@@ -807,7 +883,15 @@ fn parse_runs<R: Read + std::io::Seek>(
                         Some(RunDrawingResult::Floating(fi)) => {
                             floating_images.push(fi);
                         }
+                        Some(RunDrawingResult::TextBox(tb)) => {
+                            textboxes.push(tb);
+                        }
                         None => {}
+                    }
+                }
+                "pict" if !in_field => {
+                    if let Some(tb) = parse_textbox_from_vml(child, rels, zip, styles, theme) {
+                        textboxes.push(tb);
                     }
                 }
                 "footnoteReference" if !in_field => {
@@ -1035,6 +1119,7 @@ fn parse_runs<R: Read + std::io::Seek>(
         has_column_break,
         line_break_count,
         floating_images,
+        textboxes,
     }
 }
 
@@ -1107,6 +1192,7 @@ fn parse_header_footer_xml<R: Read + std::io::Seek>(
             tab_stops: vec![],
             extra_line_breaks: parsed.line_break_count,
             floating_images,
+            textboxes: parsed.textboxes,
         });
     }
 
@@ -1207,6 +1293,7 @@ fn parse_footnotes<R: Read + std::io::Seek>(
                 tab_stops: vec![],
                 extra_line_breaks: parsed.line_break_count,
                 floating_images: vec![],
+                textboxes: vec![],
             });
         }
 
@@ -1684,6 +1771,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                                 tab_stops: vec![],
                                 extra_line_breaks: parsed.line_break_count,
                                 floating_images: vec![],
+                                textboxes: vec![],
                             });
                         }
                         cells.push(TableCell {
@@ -1872,6 +1960,11 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     tab_stops,
                     extra_line_breaks: parsed.line_break_count,
                     floating_images,
+                    textboxes: {
+                        let mut tbs = parsed.textboxes;
+                        tbs.extend(collect_textboxes_from_paragraph(node, &rels, zip, &styles, &theme));
+                        tbs
+                    },
                 }));
 
                 // Mid-document section break: sectPr inside pPr ends the current section
@@ -2178,15 +2271,194 @@ fn image_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat)> {
     None
 }
 
+fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
+    txbx_content: roxmltree::Node,
+    styles: &StylesInfo,
+    theme: &ThemeFonts,
+    rels: &HashMap<String, String>,
+    zip: &mut zip::ZipArchive<R>,
+) -> Vec<Paragraph> {
+    let mut paragraphs = Vec::new();
+    for p in txbx_content.children().filter(|n| {
+        n.tag_name().name() == "p" && n.tag_name().namespace() == Some(WML_NS)
+    }) {
+        let parsed = parse_runs(p, styles, theme, rels, zip);
+        let ppr = wml(p, "pPr");
+        let para_style_id = ppr
+            .and_then(|ppr| wml_attr(ppr, "pStyle"))
+            .unwrap_or("Normal");
+        let para_style = styles.paragraph_styles.get(para_style_id);
+        let alignment = ppr
+            .and_then(|ppr| wml_attr(ppr, "jc"))
+            .map(parse_alignment)
+            .or_else(|| para_style.and_then(|s| s.alignment))
+            .unwrap_or(Alignment::Left);
+        let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
+        let space_before = inline_spacing
+            .and_then(|n| n.attribute((WML_NS, "before")))
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(twips_to_pts)
+            .or_else(|| para_style.and_then(|s| s.space_before))
+            .unwrap_or(0.0);
+        let space_after = inline_spacing
+            .and_then(|n| n.attribute((WML_NS, "after")))
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(twips_to_pts)
+            .or_else(|| para_style.and_then(|s| s.space_after))
+            .unwrap_or(0.0);
+        let line_spacing = Some(
+            inline_spacing
+                .and_then(|n| {
+                    n.attribute((WML_NS, "line"))
+                        .and_then(|v| v.parse::<f32>().ok())
+                        .map(|line_val| parse_line_spacing(n, line_val))
+                })
+                .or_else(|| para_style.and_then(|s| s.line_spacing))
+                .unwrap_or(LineSpacing::Auto(1.0)),
+        );
+        let tab_stops = ppr.map(parse_tab_stops).unwrap_or_default();
+        paragraphs.push(Paragraph {
+            runs: parsed.runs,
+            space_before,
+            space_after,
+            content_height: 0.0,
+            alignment,
+            indent_left: 0.0,
+            indent_right: 0.0,
+            indent_hanging: 0.0,
+            indent_first_line: 0.0,
+            list_label: String::new(),
+            contextual_spacing: false,
+            keep_next: false,
+            keep_lines: false,
+            line_spacing,
+            image: None,
+            borders: ParagraphBorders::default(),
+            shading: None,
+            page_break_before: false,
+            column_break_before: false,
+            tab_stops,
+            extra_line_breaks: parsed.line_break_count,
+            floating_images: parsed.floating_images,
+            textboxes: parsed.textboxes,
+        });
+    }
+    paragraphs
+}
+
+fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
+    anchor: roxmltree::Node,
+    rels: &HashMap<String, String>,
+    zip: &mut zip::ZipArchive<R>,
+    styles: &StylesInfo,
+    theme: &ThemeFonts,
+) -> Option<Vec<Paragraph>> {
+    let wsp = anchor.descendants().find(|n| {
+        n.tag_name().name() == "wsp" && n.tag_name().namespace() == Some(WPS_NS)
+    })?;
+    let txbx = wsp.children().find(|n| {
+        n.tag_name().name() == "txbx" && n.tag_name().namespace() == Some(WPS_NS)
+    })?;
+    let txbx_content = txbx.children().find(|n| {
+        n.tag_name().name() == "txbxContent" && n.tag_name().namespace() == Some(WML_NS)
+    })?;
+    let paragraphs = parse_txbx_content_paragraphs(txbx_content, styles, theme, rels, zip);
+    if paragraphs.is_empty() {
+        None
+    } else {
+        Some(paragraphs)
+    }
+}
+
+const VML_NS: &str = "urn:schemas-microsoft-com:vml";
+
+fn parse_textbox_from_vml<R: Read + std::io::Seek>(
+    pict_node: roxmltree::Node,
+    rels: &HashMap<String, String>,
+    zip: &mut zip::ZipArchive<R>,
+    styles: &StylesInfo,
+    theme: &ThemeFonts,
+) -> Option<Textbox> {
+    let shape = pict_node.children().find(|n| {
+        n.tag_name().namespace() == Some(VML_NS)
+            && (n.tag_name().name() == "shape" || n.tag_name().name() == "rect")
+    })?;
+    let textbox = shape.children().find(|n| {
+        n.tag_name().name() == "textbox" && n.tag_name().namespace() == Some(VML_NS)
+    })?;
+    let txbx_content = textbox.children().find(|n| {
+        n.tag_name().name() == "txbxContent" && n.tag_name().namespace() == Some(WML_NS)
+    })?;
+
+    let style_str = shape.attribute("style").unwrap_or("");
+    let mut width = 0.0_f32;
+    let mut height = 0.0_f32;
+    let mut margin_left = 0.0_f32;
+    let mut margin_top = 0.0_f32;
+    let mut h_relative = "column";
+    let mut v_relative = "paragraph";
+
+    for part in style_str.split(';') {
+        let part = part.trim();
+        if let Some((key, val)) = part.split_once(':') {
+            let key = key.trim();
+            let val = val.trim();
+            let parse_pt = |s: &str| -> f32 {
+                s.trim_end_matches("pt").parse::<f32>().unwrap_or(0.0)
+            };
+            match key {
+                "width" => width = parse_pt(val),
+                "height" => height = parse_pt(val),
+                "margin-left" => margin_left = parse_pt(val),
+                "margin-top" => margin_top = parse_pt(val),
+                "mso-position-horizontal-relative" => {
+                    h_relative = match val {
+                        "page" => "page",
+                        "margin" => "margin",
+                        _ => "column",
+                    };
+                }
+                "mso-position-vertical-relative" => {
+                    v_relative = match val {
+                        "page" => "page",
+                        "margin" => "margin",
+                        _ => "paragraph",
+                    };
+                }
+                _ => {}
+            }
+        }
+    }
+
+    let paragraphs = parse_txbx_content_paragraphs(txbx_content, styles, theme, rels, zip);
+    if paragraphs.is_empty() {
+        return None;
+    }
+    Some(Textbox {
+        paragraphs,
+        width_pt: width,
+        height_pt: height,
+        h_position: HorizontalPosition::Offset(margin_left),
+        h_relative_from: h_relative,
+        v_offset_pt: margin_top,
+        v_relative_from: v_relative,
+    })
+}
+
 enum RunDrawingResult {
     Inline(EmbeddedImage),
     Floating(FloatingImage),
+    TextBox(Textbox),
 }
+
+const WPS_NS: &str = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape";
 
 fn parse_run_drawing<R: Read + std::io::Seek>(
     drawing_node: roxmltree::Node,
     rels: &HashMap<String, String>,
     zip: &mut zip::ZipArchive<R>,
+    styles: &StylesInfo,
+    theme: &ThemeFonts,
 ) -> Option<RunDrawingResult> {
     for container in drawing_node.children() {
         let name = container.tag_name().name();
@@ -2212,6 +2484,20 @@ fn parse_run_drawing<R: Read + std::io::Seek>(
         let display_h = cy / 12700.0;
 
         if name == "anchor" {
+            // Check for textbox content (any wrap mode)
+            if let Some(txbx) = parse_textbox_from_wsp(container, rels, zip, styles, theme) {
+                let (h_position, h_relative, v_offset, v_relative) =
+                    parse_anchor_position(container);
+                return Some(RunDrawingResult::TextBox(Textbox {
+                    paragraphs: txbx,
+                    width_pt: display_w,
+                    height_pt: display_h,
+                    h_position,
+                    h_relative_from: h_relative,
+                    v_offset_pt: v_offset,
+                    v_relative_from: v_relative,
+                }));
+            }
             let has_wrap_none = container.children().any(|n| {
                 n.tag_name().name() == "wrapNone"
                     && n.tag_name().namespace() == Some(WPD_NS)
@@ -2320,6 +2606,92 @@ fn read_image_from_zip<R: Read + std::io::Seek>(
         display_width: display_w,
         display_height: display_h,
     })
+}
+
+const MC_NS_TOP: &str = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+
+fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
+    para_node: roxmltree::Node,
+    rels: &HashMap<String, String>,
+    zip: &mut zip::ZipArchive<R>,
+    styles: &StylesInfo,
+    theme: &ThemeFonts,
+) -> Vec<Textbox> {
+    let mut textboxes = Vec::new();
+
+    for child in para_node.children() {
+        let ns = child.tag_name().namespace();
+        let name = child.tag_name().name();
+        if ns == Some(MC_NS_TOP) && name == "AlternateContent" {
+            let choice = child.children().find(|n| {
+                n.tag_name().namespace() == Some(MC_NS_TOP) && n.tag_name().name() == "Choice"
+            });
+            let fallback = child.children().find(|n| {
+                n.tag_name().namespace() == Some(MC_NS_TOP) && n.tag_name().name() == "Fallback"
+            });
+
+            if let Some(branch) = choice {
+                // DrawingML path: mc:Choice → w:drawing → wp:anchor → wps:wsp → wps:txbx
+                for drawing in branch.children().filter(|n| {
+                    n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "drawing"
+                }) {
+                    for container in drawing.children().filter(|n| {
+                        n.tag_name().namespace() == Some(WPD_NS) && n.tag_name().name() == "anchor"
+                    }) {
+                        let extent = container.children().find(|n| {
+                            n.tag_name().name() == "extent" && n.tag_name().namespace() == Some(WPD_NS)
+                        });
+                        let cx = extent
+                            .and_then(|n| n.attribute("cx"))
+                            .and_then(|v| v.parse::<f32>().ok())
+                            .unwrap_or(0.0);
+                        let cy = extent
+                            .and_then(|n| n.attribute("cy"))
+                            .and_then(|v| v.parse::<f32>().ok())
+                            .unwrap_or(0.0);
+                        let display_w = cx / 12700.0;
+                        let display_h = cy / 12700.0;
+
+                        if let Some(paras) = parse_textbox_from_wsp(container, rels, zip, styles, theme) {
+                            let (h_position, h_relative, v_offset, v_relative) =
+                                parse_anchor_position(container);
+                            textboxes.push(Textbox {
+                                paragraphs: paras,
+                                width_pt: display_w,
+                                height_pt: display_h,
+                                h_position,
+                                h_relative_from: h_relative,
+                                v_offset_pt: v_offset,
+                                v_relative_from: v_relative,
+                            });
+                        }
+                    }
+                }
+            } else if let Some(branch) = fallback {
+                // VML fallback: mc:Fallback → w:pict → v:shape → v:textbox
+                for pict in branch.children().filter(|n| {
+                    n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "pict"
+                }) {
+                    if let Some(tb) = parse_textbox_from_vml(pict, rels, zip, styles, theme) {
+                        textboxes.push(tb);
+                    }
+                }
+                // Also check for w:r/w:pict inside fallback
+                for r in branch.children().filter(|n| {
+                    n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "r"
+                }) {
+                    for pict in r.children().filter(|n| {
+                        n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "pict"
+                    }) {
+                        if let Some(tb) = parse_textbox_from_vml(pict, rels, zip, styles, theme) {
+                            textboxes.push(tb);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    textboxes
 }
 
 fn compute_drawing_info<R: Read + std::io::Seek>(

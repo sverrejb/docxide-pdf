@@ -7,4 +7,5 @@
 /models
 tests/output/
 tests/fixtures/scraped/
-.claude/projects/
+.claude/projects
+.claude/worktrees

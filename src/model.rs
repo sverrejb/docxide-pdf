@@ -127,6 +127,16 @@ pub struct FloatingImage {
     pub v_relative_from: &'static str,
 }
 
+pub struct Textbox {
+    pub paragraphs: Vec<Paragraph>,
+    pub width_pt: f32,
+    pub height_pt: f32,
+    pub h_position: HorizontalPosition,
+    pub h_relative_from: &'static str,
+    pub v_offset_pt: f32,
+    pub v_relative_from: &'static str,
+}
+
 #[derive(Clone)]
 pub struct ParagraphBorder {
     pub width_pt: f32,  // line thickness in points
@@ -166,6 +176,7 @@ pub struct Paragraph {
     pub tab_stops: Vec<TabStop>,
     pub extra_line_breaks: u32,
     pub floating_images: Vec<FloatingImage>,
+    pub textboxes: Vec<Textbox>,
 }
 
 #[derive(Clone)]

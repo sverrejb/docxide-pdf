@@ -96,7 +96,10 @@
       "Bash(DOCXIDE_CASE=42f46dc2 cargo test:*)",
       "Bash(DOCXIDE_CASE=50d8bc19 cargo test:*)",
       "Bash(DOCXIDE_CASE=1bb388ab cargo test:*)",
-      "Bash(DOCXIDE_CASE=3027a800 cargo test:*)"
+      "Bash(DOCXIDE_CASE=3027a800 cargo test:*)",
+      "Bash(DOCXIDE_CASE=f271d69a cargo test:*)",
+      "Bash(do echo:*)",
+      "Bash(DOCXIDE_CASE=f271d69a2fca4461c732d9431b6cc1e59e27e86cfba6cf06859863645146bb35 cargo test:*)"
     ]
   }
 }

@@ -191,21 +191,30 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         .flat_map(|fn_| fn_.paragraphs.iter())
         .flat_map(|p| p.runs.iter());
 
+    fn para_runs_with_textboxes(para: &crate::model::Paragraph) -> Vec<&Run> {
+        let mut out: Vec<&Run> = para.runs.iter().collect();
+        for tb in &para.textboxes {
+            for tp in &tb.paragraphs {
+                out.extend(para_runs_with_textboxes(tp));
+            }
+        }
+        out
+    }
+
     let all_runs: Vec<&Run> = doc
         .sections
         .iter()
         .flat_map(|s| s.blocks.iter())
-        .flat_map(|block| -> Box<dyn Iterator<Item = &Run> + '_> {
+        .flat_map(|block| -> Vec<&Run> {
             match block {
-                Block::Paragraph(para) => Box::new(para.runs.iter()),
-                Block::Table(table) => Box::new(
-                    table
-                        .rows
-                        .iter()
-                        .flat_map(|row| row.cells.iter())
-                        .flat_map(|cell| cell.paragraphs.iter())
-                        .flat_map(|para| para.runs.iter()),
-                ),
+                Block::Paragraph(para) => para_runs_with_textboxes(para),
+                Block::Table(table) => table
+                    .rows
+                    .iter()
+                    .flat_map(|row| row.cells.iter())
+                    .flat_map(|cell| cell.paragraphs.iter())
+                    .flat_map(|para| para_runs_with_textboxes(para))
+                    .collect(),
             }
         })
         .chain(hf_runs)
@@ -963,6 +972,82 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             ]);
                             current_content.x_object(Name(pdf_name.as_bytes()));
                             current_content.restore_state();
+                        }
+                    }
+
+                    for tb in &para.textboxes {
+                        let tb_x = match tb.h_relative_from {
+                            "page" => match tb.h_position {
+                                HorizontalPosition::AlignCenter => (sp.page_width - tb.width_pt) / 2.0,
+                                HorizontalPosition::AlignRight => sp.page_width - tb.width_pt,
+                                HorizontalPosition::AlignLeft => 0.0,
+                                HorizontalPosition::Offset(o) => o,
+                            },
+                            "column" => match tb.h_position {
+                                HorizontalPosition::AlignCenter => col_x + (col_w - tb.width_pt) / 2.0,
+                                HorizontalPosition::AlignRight => col_x + col_w - tb.width_pt,
+                                HorizontalPosition::AlignLeft => col_x,
+                                HorizontalPosition::Offset(o) => col_x + o,
+                            },
+                            "margin" | _ => match tb.h_position {
+                                HorizontalPosition::AlignCenter => sp.margin_left + (text_width - tb.width_pt) / 2.0,
+                                HorizontalPosition::AlignRight => sp.margin_left + text_width - tb.width_pt,
+                                HorizontalPosition::AlignLeft => sp.margin_left,
+                                HorizontalPosition::Offset(o) => sp.margin_left + o,
+                            },
+                        };
+                        let tb_y_top = match tb.v_relative_from {
+                            "page" => sp.page_height - tb.v_offset_pt,
+                            "margin" | "topMargin" => sp.page_height - sp.margin_top - tb.v_offset_pt,
+                            _ => slot_top - tb.v_offset_pt,
+                        };
+
+                        let mut cursor_y = tb_y_top;
+                        let empty_inline_imgs: HashMap<usize, String> = HashMap::new();
+                        for tp in &tb.paragraphs {
+                            let tp_ls = tp.line_spacing.unwrap_or(doc.line_spacing);
+                            let has_tabs = tp.runs.iter().any(|r| r.is_tab);
+                            let tb_lines = if has_tabs {
+                                build_tabbed_line(
+                                    &tp.runs,
+                                    &seen_fonts,
+                                    &tp.tab_stops,
+                                    0.0,
+                                )
+                            } else {
+                                build_paragraph_lines(
+                                    &tp.runs,
+                                    &seen_fonts,
+                                    tb.width_pt,
+                                    0.0,
+                                    &empty_inline_imgs,
+                                )
+                            };
+                            if tb_lines.is_empty() {
+                                let (fs, _, _) = tallest_run_metrics(&tp.runs, &seen_fonts);
+                                let lh = resolve_line_h(tp_ls, fs, None);
+                                cursor_y -= tp.space_before + lh + tp.space_after;
+                                continue;
+                            }
+                            let (tb_fs, _, tb_ar) = tallest_run_metrics(&tp.runs, &seen_fonts);
+                            let tb_ascender = tb_ar.unwrap_or(0.75);
+                            let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_ar);
+                            let tb_baseline = cursor_y - tp.space_before - tb_fs * tb_ascender;
+                            render_paragraph_lines(
+                                &mut current_content,
+                                &tb_lines,
+                                &tp.alignment,
+                                tb_x,
+                                tb.width_pt,
+                                tb_baseline,
+                                tb_line_h,
+                                tb_lines.len(),
+                                0,
+                                &mut current_page_links,
+                                0.0,
+                                &seen_fonts,
+                            );
+                            cursor_y -= tp.space_before + (tb_lines.len() as f32) * tb_line_h + tp.space_after;
                         }
                     }
 
