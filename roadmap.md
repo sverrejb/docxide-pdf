@@ -23,20 +23,20 @@ Related: CJK characters render as blanks — need fallback to system CJK fonts (
 
 ## Scraped Fixture Improvements
 
-9 passing, ~25 failing, 10 skipped (font issues) out of ~44 scraped fixtures.
+8 passing, ~22 failing out of ~30 non-skipped scraped fixtures.
 Run `./tools/target/debug/analyze-fixtures --failing --fonts` for current breakdown.
 
 ### Floating Tables (MEDIUM — 5 failing)
 
 Tables with `w:tblpPr` positioning attributes render as normal flow tables instead of being positioned absolutely. Existing table rendering can be reused; only the positioning pass needs to be added.
 
-### Textbox Rendering (MEDIUM — 3 failing)
+### Textbox / Shape Rendering (DONE — fills, margins, header z-order)
 
-VML textboxes (`v:textbox`, `w:txbxContent`) and DrawingML `wps:txbx` content are unhandled. Content inside `w:txbxContent` is regular WordprocessingML so existing rendering can be reused in a clipped bounding box.
+DrawingML textboxes (`wps:txbx` → `w:txbxContent`) and VML fallback (`v:textbox`) render text content at the correct anchor position. Shape fills (`a:solidFill` with `a:srgbClr` and `a:schemeClr` theme colors including lumMod/lumOff modifiers) render as filled rectangles. Textbox body margins (`wps:bodyPr` lIns/tIns/rIns/bIns) are respected. Header/footer content renders behind body content via content stream prepending (correct z-order). Floating images render after textbox shapes for correct layering (images on top of fills). c9211737 scores 91.5% Jaccard; 5811dabc/d0252e2f/f271d69a remain skipped (page count mismatches / font issues). Remaining gaps: text wrapping around textboxes, clipping to bounding box, shape borders/outlines, proper z-index interleaving of shapes and images.
 
-### Anchored Image Positioning (MEDIUM — 10 failing w/ anchors)
+### Anchored Image Positioning (DONE — all wrap modes)
 
-`wp:anchor` images lack proper positioning (horizontal/vertical offsets relative to page/column/margin) and text wrapping. Currently rendered inline.
+`wp:anchor` images are now positioned absolutely regardless of wrap mode (wrapNone, wrapTight, wrapSquare, etc.). Previously only `wrapNone` anchors were treated as floating; all others fell through to inline rendering. `compute_drawing_info()` now skips all anchors (parse_runs handles them), preventing image duplication. Remaining gap: text wrapping around anchored images is not implemented (content flows through/behind images).
 
 ### Tab Stop Precision (LOW)
 

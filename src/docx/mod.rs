@@ -826,7 +826,8 @@ fn parse_runs<R: Read + std::io::Seek>(
                         _ => line_break_count += 1,
                     }
                 }
-                "drawing" if !in_field => {
+                "drawing" if in_field => {}
+                "drawing" => {
                     if !pending_text.is_empty() {
                         runs.push(Run {
                             text: std::mem::take(&mut pending_text),
@@ -1151,29 +1152,12 @@ fn parse_header_footer_xml<R: Read + std::io::Seek>(
             .unwrap_or(Alignment::Left);
 
         let parsed = parse_runs(node, styles, theme, rels, zip);
-        let mut runs = parsed.runs;
-        let mut floating_images = parsed.floating_images;
-
-        let has_inline_images = runs.iter().any(|r| r.inline_image.is_some());
-        let has_text = runs.iter().any(|r| !r.text.is_empty());
-        let (para_image, content_height) = if has_inline_images && !has_text {
-            let img_run_idx = runs.iter().position(|r| r.inline_image.is_some());
-            let img = img_run_idx.and_then(|i| runs[i].inline_image.take());
-            let h = img.as_ref().map(|i| i.display_height).unwrap_or(0.0);
-            (img, h)
-        } else if has_inline_images {
-            (None, 0.0)
-        } else {
-            let drawing = compute_drawing_info(node, rels, zip);
-            floating_images.extend(drawing.floating_images);
-            (drawing.image, drawing.height)
-        };
 
         paragraphs.push(Paragraph {
-            runs,
+            runs: parsed.runs,
             space_before: 0.0,
             space_after: 0.0,
-            content_height,
+            content_height: 0.0,
             alignment,
             indent_left: 0.0,
             indent_right: 0.0,
@@ -1184,14 +1168,14 @@ fn parse_header_footer_xml<R: Read + std::io::Seek>(
             keep_next: false,
             keep_lines: false,
             line_spacing: None,
-            image: para_image,
+            image: None,
             borders: ParagraphBorders::default(),
             shading: None,
             page_break_before: false,
             column_break_before: false,
             tab_stops: vec![],
             extra_line_breaks: parsed.line_break_count,
-            floating_images,
+            floating_images: parsed.floating_images,
             textboxes: parsed.textboxes,
         });
     }
@@ -2346,28 +2330,144 @@ fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
     paragraphs
 }
 
+fn resolve_scheme_color(base: [u8; 3], fill_node: roxmltree::Node) -> [u8; 3] {
+    let mut lum_mod: Option<f32> = None;
+    let mut lum_off: Option<f32> = None;
+    for child in fill_node.children() {
+        if child.tag_name().namespace() != Some(DML_NS) {
+            continue;
+        }
+        match child.tag_name().name() {
+            "lumMod" => {
+                lum_mod = child.attribute("val").and_then(|v| v.parse::<f32>().ok()).map(|v| v / 100_000.0);
+            }
+            "lumOff" => {
+                lum_off = child.attribute("val").and_then(|v| v.parse::<f32>().ok()).map(|v| v / 100_000.0);
+            }
+            _ => {}
+        }
+    }
+    if lum_mod.is_none() && lum_off.is_none() {
+        return base;
+    }
+    let m = lum_mod.unwrap_or(1.0);
+    let o = lum_off.unwrap_or(0.0);
+    [
+        ((base[0] as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8,
+        ((base[1] as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8,
+        ((base[2] as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8,
+    ]
+}
+
+fn parse_solid_fill(sp_pr: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]> {
+    let fill = sp_pr.children().find(|n| {
+        n.tag_name().name() == "solidFill" && n.tag_name().namespace() == Some(DML_NS)
+    })?;
+    // Direct sRGB color
+    if let Some(srgb) = fill.children().find(|n| {
+        n.tag_name().name() == "srgbClr" && n.tag_name().namespace() == Some(DML_NS)
+    }) {
+        return srgb.attribute("val").and_then(parse_hex_color);
+    }
+    // Theme color reference
+    if let Some(scheme) = fill.children().find(|n| {
+        n.tag_name().name() == "schemeClr" && n.tag_name().namespace() == Some(DML_NS)
+    }) {
+        let val = scheme.attribute("val")?;
+        // Map OOXML scheme names to theme element names
+        let theme_key = match val {
+            "dk1" => "dk1",
+            "lt1" => "lt1",
+            "dk2" => "dk2",
+            "lt2" => "lt2",
+            "tx1" => "dk1",
+            "tx2" => "dk2",
+            "bg1" => "lt1",
+            "bg2" => "lt2",
+            other => other,
+        };
+        let base = *theme.colors.get(theme_key)?;
+        return Some(resolve_scheme_color(base, scheme));
+    }
+    None
+}
+
+fn parse_body_margins(wsp: roxmltree::Node) -> (f32, f32, f32, f32) {
+    let body_pr = wsp.children().find(|n| {
+        n.tag_name().name() == "bodyPr" && n.tag_name().namespace() == Some(WPS_NS)
+    });
+    let Some(bp) = body_pr else {
+        return (3.6, 7.2, 3.6, 7.2); // Word defaults: 0.05" top/bottom, 0.1" left/right
+    };
+    let emu_to_pt = |attr: &str, default: f32| -> f32 {
+        bp.attribute(attr)
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(|emu| emu / 12700.0)
+            .unwrap_or(default)
+    };
+    (
+        emu_to_pt("tIns", 3.6),
+        emu_to_pt("lIns", 7.2),
+        emu_to_pt("bIns", 3.6),
+        emu_to_pt("rIns", 7.2),
+    )
+}
+
+struct WspResult {
+    paragraphs: Vec<Paragraph>,
+    fill_color: Option<[u8; 3]>,
+    margin_top: f32,
+    margin_left: f32,
+    margin_bottom: f32,
+    margin_right: f32,
+}
+
 fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
     anchor: roxmltree::Node,
     rels: &HashMap<String, String>,
     zip: &mut zip::ZipArchive<R>,
     styles: &StylesInfo,
     theme: &ThemeFonts,
-) -> Option<Vec<Paragraph>> {
+) -> Option<WspResult> {
     let wsp = anchor.descendants().find(|n| {
         n.tag_name().name() == "wsp" && n.tag_name().namespace() == Some(WPS_NS)
     })?;
-    let txbx = wsp.children().find(|n| {
-        n.tag_name().name() == "txbx" && n.tag_name().namespace() == Some(WPS_NS)
-    })?;
-    let txbx_content = txbx.children().find(|n| {
-        n.tag_name().name() == "txbxContent" && n.tag_name().namespace() == Some(WML_NS)
-    })?;
-    let paragraphs = parse_txbx_content_paragraphs(txbx_content, styles, theme, rels, zip);
-    if paragraphs.is_empty() {
-        None
-    } else {
-        Some(paragraphs)
+
+    // Extract fill color from spPr
+    let sp_pr = wsp.children().find(|n| {
+        n.tag_name().name() == "spPr" && n.tag_name().namespace() == Some(WPS_NS)
+            || n.tag_name().name() == "spPr" && n.tag_name().namespace() == Some(DML_NS)
+    });
+    let fill_color = sp_pr.and_then(|sp| parse_solid_fill(sp, theme));
+    let has_no_fill = sp_pr.is_some_and(|sp| {
+        sp.children().any(|n| n.tag_name().name() == "noFill" && n.tag_name().namespace() == Some(DML_NS))
+    });
+
+    let (margin_top, margin_left, margin_bottom, margin_right) = parse_body_margins(wsp);
+
+    // Try to get textbox content
+    let paragraphs = wsp.children()
+        .find(|n| n.tag_name().name() == "txbx" && n.tag_name().namespace() == Some(WPS_NS))
+        .and_then(|txbx| txbx.children().find(|n| {
+            n.tag_name().name() == "txbxContent" && n.tag_name().namespace() == Some(WML_NS)
+        }))
+        .map(|tc| parse_txbx_content_paragraphs(tc, styles, theme, rels, zip))
+        .unwrap_or_default();
+
+    // Return if there's text content OR a visible fill
+    if paragraphs.is_empty() && (has_no_fill || fill_color.is_none()) {
+        return None;
     }
+
+
+    Some(WspResult {
+        paragraphs,
+        fill_color,
+        margin_top,
+        margin_left,
+        margin_bottom,
+        margin_right,
+    })
 }
 
 const VML_NS: &str = "urn:schemas-microsoft-com:vml";
@@ -2442,6 +2542,11 @@ fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         h_relative_from: h_relative,
         v_offset_pt: margin_top,
         v_relative_from: v_relative,
+        fill_color: None,
+        margin_left: 7.2,
+        margin_right: 7.2,
+        margin_top: 3.6,
+        margin_bottom: 3.6,
     })
 }
 
@@ -2484,40 +2589,39 @@ fn parse_run_drawing<R: Read + std::io::Seek>(
         let display_h = cy / 12700.0;
 
         if name == "anchor" {
-            // Check for textbox content (any wrap mode)
-            if let Some(txbx) = parse_textbox_from_wsp(container, rels, zip, styles, theme) {
+            // Check for textbox/shape content (any wrap mode)
+            if let Some(wsp) = parse_textbox_from_wsp(container, rels, zip, styles, theme) {
                 let (h_position, h_relative, v_offset, v_relative) =
                     parse_anchor_position(container);
                 return Some(RunDrawingResult::TextBox(Textbox {
-                    paragraphs: txbx,
+                    paragraphs: wsp.paragraphs,
                     width_pt: display_w,
                     height_pt: display_h,
                     h_position,
                     h_relative_from: h_relative,
                     v_offset_pt: v_offset,
                     v_relative_from: v_relative,
+                    fill_color: wsp.fill_color,
+                    margin_left: wsp.margin_left,
+                    margin_right: wsp.margin_right,
+                    margin_top: wsp.margin_top,
+                    margin_bottom: wsp.margin_bottom,
                 }));
             }
-            let has_wrap_none = container.children().any(|n| {
-                n.tag_name().name() == "wrapNone"
-                    && n.tag_name().namespace() == Some(WPD_NS)
-            });
-            if has_wrap_none {
-                if let Some(embed_id) = find_blip_embed(container) {
-                    if let Some(img) = read_image_from_zip(embed_id, rels, zip, display_w, display_h) {
-                        let (h_position, h_relative, v_offset, v_relative) =
-                            parse_anchor_position(container);
-                        return Some(RunDrawingResult::Floating(FloatingImage {
-                            image: img,
-                            h_position,
-                            h_relative_from: h_relative,
-                            v_offset_pt: v_offset,
-                            v_relative_from: v_relative,
-                        }));
-                    }
+            if let Some(embed_id) = find_blip_embed(container) {
+                if let Some(img) = read_image_from_zip(embed_id, rels, zip, display_w, display_h) {
+                    let (h_position, h_relative, v_offset, v_relative) =
+                        parse_anchor_position(container);
+                    return Some(RunDrawingResult::Floating(FloatingImage {
+                        image: img,
+                        h_position,
+                        h_relative_from: h_relative,
+                        v_offset_pt: v_offset,
+                        v_relative_from: v_relative,
+                    }));
                 }
-                continue;
             }
+            continue;
         }
 
         if let Some(embed_id) = find_blip_embed(container) {
@@ -2652,17 +2756,22 @@ fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                         let display_w = cx / 12700.0;
                         let display_h = cy / 12700.0;
 
-                        if let Some(paras) = parse_textbox_from_wsp(container, rels, zip, styles, theme) {
+                        if let Some(wsp) = parse_textbox_from_wsp(container, rels, zip, styles, theme) {
                             let (h_position, h_relative, v_offset, v_relative) =
                                 parse_anchor_position(container);
                             textboxes.push(Textbox {
-                                paragraphs: paras,
+                                paragraphs: wsp.paragraphs,
                                 width_pt: display_w,
                                 height_pt: display_h,
                                 h_position,
                                 h_relative_from: h_relative,
                                 v_offset_pt: v_offset,
                                 v_relative_from: v_relative,
+                                fill_color: wsp.fill_color,
+                                margin_left: wsp.margin_left,
+                                margin_right: wsp.margin_right,
+                                margin_top: wsp.margin_top,
+                                margin_bottom: wsp.margin_bottom,
                             });
                         }
                     }
@@ -2701,7 +2810,7 @@ fn compute_drawing_info<R: Read + std::io::Seek>(
 ) -> DrawingInfo {
     let mut max_height: f32 = 0.0;
     let mut image: Option<EmbeddedImage> = None;
-    let mut floating_images: Vec<FloatingImage> = Vec::new();
+    let floating_images: Vec<FloatingImage> = Vec::new();
 
     for child in para_node.children() {
         let is_wml = child.tag_name().namespace() == Some(WML_NS);
@@ -2737,29 +2846,10 @@ fn compute_drawing_info<R: Read + std::io::Seek>(
             let display_w = cx / 12700.0;
             let display_h = cy / 12700.0;
 
-            // Anchored images with wrapNone float independently — they don't
-            // affect paragraph layout height (text flows as if they're absent).
+            // Anchored images are handled by parse_runs() — skip them here
+            // to avoid duplication. Only process inline drawings.
             if name == "anchor" {
-                let has_wrap_none = container.children().any(|n| {
-                    n.tag_name().name() == "wrapNone"
-                        && n.tag_name().namespace() == Some(WPD_NS)
-                });
-                if has_wrap_none {
-                    if let Some(embed_id) = find_blip_embed(container) {
-                        if let Some(img) = read_image_from_zip(embed_id, rels, zip, display_w, display_h) {
-                            let (h_position, h_relative, v_offset, v_relative) =
-                                parse_anchor_position(container);
-                            floating_images.push(FloatingImage {
-                                image: img,
-                                h_position,
-                                h_relative_from: h_relative,
-                                v_offset_pt: v_offset,
-                                v_relative_from: v_relative,
-                            });
-                        }
-                    }
-                    continue;
-                }
+                continue;
             }
 
             max_height = max_height.max(display_h);

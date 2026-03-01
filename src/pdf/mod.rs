@@ -61,6 +61,7 @@ fn render_header_footer(
     total_pages: usize,
     para_image_names: &HashMap<usize, String>,
     inline_image_names: &HashMap<(usize, usize), String>,
+    floating_image_names: &HashMap<(usize, usize), String>,
 ) {
     let text_width = sp.page_width - sp.margin_left - sp.margin_right;
 
@@ -92,6 +93,114 @@ fn render_header_footer(
         } else {
             sp.footer_margin + font_size * (1.0 - ascender_ratio)
         };
+
+        let slot_top = if is_header {
+            sp.page_height - sp.header_margin
+        } else {
+            sp.footer_margin + font_size
+        };
+
+        // Render textboxes (shapes with fills and/or text content)
+        for tb in &para.textboxes {
+            let tb_x = match tb.h_relative_from {
+                "page" => match tb.h_position {
+                    HorizontalPosition::AlignCenter => (sp.page_width - tb.width_pt) / 2.0,
+                    HorizontalPosition::AlignRight => sp.page_width - tb.width_pt,
+                    HorizontalPosition::AlignLeft => 0.0,
+                    HorizontalPosition::Offset(o) => o,
+                },
+                "column" => match tb.h_position {
+                    HorizontalPosition::AlignCenter => sp.margin_left + (text_width - tb.width_pt) / 2.0,
+                    HorizontalPosition::AlignRight => sp.margin_left + text_width - tb.width_pt,
+                    HorizontalPosition::AlignLeft => sp.margin_left,
+                    HorizontalPosition::Offset(o) => sp.margin_left + o,
+                },
+                "margin" | _ => match tb.h_position {
+                    HorizontalPosition::AlignCenter => sp.margin_left + (text_width - tb.width_pt) / 2.0,
+                    HorizontalPosition::AlignRight => sp.margin_left + text_width - tb.width_pt,
+                    HorizontalPosition::AlignLeft => sp.margin_left,
+                    HorizontalPosition::Offset(o) => sp.margin_left + o,
+                },
+            };
+            let tb_y_top = match tb.v_relative_from {
+                "page" => sp.page_height - tb.v_offset_pt,
+                "margin" | "topMargin" => sp.page_height - sp.margin_top - tb.v_offset_pt,
+                _ => slot_top - tb.v_offset_pt,
+            };
+
+            if let Some([r, g, b]) = tb.fill_color {
+                content.save_state();
+                content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+                let rect_y = tb_y_top - tb.height_pt;
+                content.rect(tb_x, rect_y, tb.width_pt, tb.height_pt);
+                content.fill_nonzero();
+                content.restore_state();
+            }
+
+            let content_x = tb_x + tb.margin_left;
+            let content_w = (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0);
+            let mut cursor_y = tb_y_top - tb.margin_top;
+            let empty_inline_imgs: HashMap<usize, String> = HashMap::new();
+            for tp in &tb.paragraphs {
+                let tp_ls = tp.line_spacing.unwrap_or(doc_line_spacing);
+                let has_tabs = tp.runs.iter().any(|r| r.is_tab);
+                let tb_lines = if has_tabs {
+                    build_tabbed_line(&tp.runs, seen_fonts, &tp.tab_stops, 0.0)
+                } else {
+                    build_paragraph_lines(&tp.runs, seen_fonts, content_w, 0.0, &empty_inline_imgs)
+                };
+                if tb_lines.is_empty() {
+                    let (fs, _, _) = tallest_run_metrics(&tp.runs, seen_fonts);
+                    let lh = resolve_line_h(tp_ls, fs, None);
+                    cursor_y -= tp.space_before + lh + tp.space_after;
+                    continue;
+                }
+                let (tb_fs, _, tb_ar) = tallest_run_metrics(&tp.runs, seen_fonts);
+                let tb_ascender = tb_ar.unwrap_or(0.75);
+                let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_ar);
+                let tb_baseline = cursor_y - tp.space_before - tb_fs * tb_ascender;
+                render_paragraph_lines(
+                    content, &tb_lines, &tp.alignment, content_x, content_w,
+                    tb_baseline, tb_line_h, tb_lines.len(), 0,
+                    &mut Vec::new(), 0.0, seen_fonts,
+                );
+                cursor_y -= tp.space_before + (tb_lines.len() as f32) * tb_line_h + tp.space_after;
+            }
+        }
+
+        // Render floating images after textboxes so images appear on top of shape fills
+        for (fi_idx, fi) in para.floating_images.iter().enumerate() {
+            if let Some(pdf_name) = floating_image_names.get(&(pi, fi_idx)) {
+                let img = &fi.image;
+                let fi_x = match fi.h_relative_from {
+                    "page" => match fi.h_position {
+                        HorizontalPosition::AlignCenter => (sp.page_width - img.display_width) / 2.0,
+                        HorizontalPosition::AlignRight => sp.page_width - img.display_width,
+                        HorizontalPosition::AlignLeft => 0.0,
+                        HorizontalPosition::Offset(o) => o,
+                    },
+                    "margin" | _ => match fi.h_position {
+                        HorizontalPosition::AlignCenter => sp.margin_left + (text_width - img.display_width) / 2.0,
+                        HorizontalPosition::AlignRight => sp.margin_left + text_width - img.display_width,
+                        HorizontalPosition::AlignLeft => sp.margin_left,
+                        HorizontalPosition::Offset(o) => sp.margin_left + o,
+                    },
+                };
+                let fi_y_top = match fi.v_relative_from {
+                    "page" => sp.page_height - fi.v_offset_pt,
+                    "margin" | "topMargin" => sp.page_height - sp.margin_top - fi.v_offset_pt,
+                    _ => slot_top - fi.v_offset_pt,
+                };
+                let fi_y_bottom = fi_y_top - img.display_height;
+                content.save_state();
+                content.transform([
+                    img.display_width, 0.0, 0.0, img.display_height,
+                    fi_x, fi_y_bottom,
+                ]);
+                content.x_object(Name(pdf_name.as_bytes()));
+                content.restore_state();
+            }
+        }
 
         if (has_para_image || text_empty) && para.content_height > 0.0 {
             if let Some(pdf_name) = para_image_names.get(&pi) {
@@ -458,9 +567,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     // Embed header/footer images
     // Key: (section_idx, hf_type, para_idx) for paragraph images
     // Key: (section_idx, hf_type, para_idx, run_idx) for inline images
+    // Key: (section_idx, hf_type, para_idx, floating_idx) for floating images
     // hf_type: 0=header_default, 1=header_first, 2=footer_default, 3=footer_first
     let mut hf_image_names: HashMap<(usize, u8, usize), String> = HashMap::new();
     let mut hf_inline_image_names: HashMap<(usize, u8, usize, usize), String> = HashMap::new();
+    let mut hf_floating_image_names: HashMap<(usize, u8, usize, usize), String> = HashMap::new();
     {
         let hf_variants: [(u8, fn(&SectionProperties) -> Option<&HeaderFooter>); 4] = [
             (0, |sp| sp.header_default.as_ref()),
@@ -481,6 +592,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 let name = embed_image(img, &mut image_xobjects, &mut pdf, &mut alloc);
                                 hf_inline_image_names.insert((si, hf_type, pi, ri), name);
                             }
+                        }
+                        for (fi, floating) in para.floating_images.iter().enumerate() {
+                            let name = embed_image(&floating.image, &mut image_xobjects, &mut pdf, &mut alloc);
+                            hf_floating_image_names.insert((si, hf_type, pi, fi), name);
                         }
                     }
                 }
@@ -1002,7 +1117,23 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             _ => slot_top - tb.v_offset_pt,
                         };
 
-                        let mut cursor_y = tb_y_top;
+                        // Draw fill background
+                        if let Some([r, g, b]) = tb.fill_color {
+                            current_content.save_state();
+                            current_content.set_fill_rgb(
+                                r as f32 / 255.0,
+                                g as f32 / 255.0,
+                                b as f32 / 255.0,
+                            );
+                            let rect_y = tb_y_top - tb.height_pt;
+                            current_content.rect(tb_x, rect_y, tb.width_pt, tb.height_pt);
+                            current_content.fill_nonzero();
+                            current_content.restore_state();
+                        }
+
+                        let content_x = tb_x + tb.margin_left;
+                        let content_w = (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0);
+                        let mut cursor_y = tb_y_top - tb.margin_top;
                         let empty_inline_imgs: HashMap<usize, String> = HashMap::new();
                         for tp in &tb.paragraphs {
                             let tp_ls = tp.line_spacing.unwrap_or(doc.line_spacing);
@@ -1018,7 +1149,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 build_paragraph_lines(
                                     &tp.runs,
                                     &seen_fonts,
-                                    tb.width_pt,
+                                    content_w,
                                     0.0,
                                     &empty_inline_imgs,
                                 )
@@ -1037,8 +1168,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 &mut current_content,
                                 &tb_lines,
                                 &tp.alignment,
-                                tb_x,
-                                tb.width_pt,
+                                content_x,
+                                content_w,
                                 tb_baseline,
                                 tb_line_h,
                                 tb_lines.len(),
@@ -1270,56 +1401,17 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
     let t_layout = t0.elapsed();
 
-    // Phase 2b: render headers and footers on each page (per-section)
-    let total_pages = all_contents.len();
     // Pad section indices if table renderer added pages
-    while page_section_indices.len() < total_pages {
+    while page_section_indices.len() < all_contents.len() {
         let last = page_section_indices.last().map(|&(si, _)| si).unwrap_or(0);
         page_section_indices.push((last, false));
     }
 
-    let build_hf_maps = |si: usize, hf_type: u8| -> (HashMap<usize, String>, HashMap<(usize, usize), String>) {
-        let para_imgs: HashMap<usize, String> = hf_image_names
-            .iter()
-            .filter(|((s, ht, _), _)| *s == si && *ht == hf_type)
-            .map(|((_, _, pi), name)| (*pi, name.clone()))
-            .collect();
-        let inline_imgs: HashMap<(usize, usize), String> = hf_inline_image_names
-            .iter()
-            .filter(|((s, ht, _, _), _)| *s == si && *ht == hf_type)
-            .map(|((_, _, pi, ri), name)| ((*pi, *ri), name.clone()))
-            .collect();
-        (para_imgs, inline_imgs)
-    };
-
+    // Phase 2b: column separator lines
     for (page_idx, content) in all_contents.iter_mut().enumerate() {
-        let (si, is_first) = page_section_indices[page_idx];
+        let (si, _) = page_section_indices[page_idx];
         let sp = &doc.sections[si].properties;
-        let page_num = page_idx + 1;
 
-        // Header
-        let (header, hdr_type) = if is_first && sp.different_first_page {
-            (sp.header_first.as_ref(), 1u8)
-        } else {
-            (sp.header_default.as_ref(), 0u8)
-        };
-        if let Some(hf) = header {
-            let (pi_map, ii_map) = build_hf_maps(si, hdr_type);
-            render_header_footer(content, hf, &seen_fonts, sp, doc.line_spacing, true, page_num, total_pages, &pi_map, &ii_map);
-        }
-
-        // Footer
-        let (footer, ftr_type) = if is_first && sp.different_first_page {
-            (sp.footer_first.as_ref(), 3u8)
-        } else {
-            (sp.footer_default.as_ref(), 2u8)
-        };
-        if let Some(hf) = footer {
-            let (pi_map, ii_map) = build_hf_maps(si, ftr_type);
-            render_header_footer(content, hf, &seen_fonts, sp, doc.line_spacing, false, page_num, total_pages, &pi_map, &ii_map);
-        }
-
-        // Column separator lines
         if let Some(cfg) = &sp.columns {
             if cfg.sep {
                 let mut x = sp.margin_left;
@@ -1444,6 +1536,60 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
     let t_headers = t0.elapsed();
 
+    // Phase 2d: render headers/footers into separate content streams (behind body)
+    let total_pages = all_contents.len();
+    let build_hf_maps = |si: usize, hf_type: u8| -> (HashMap<usize, String>, HashMap<(usize, usize), String>, HashMap<(usize, usize), String>) {
+        let pi_map: HashMap<usize, String> = hf_image_names.iter()
+            .filter(|((s, t, _), _)| *s == si && *t == hf_type)
+            .map(|((_, _, pi), name)| (*pi, name.clone()))
+            .collect();
+        let ii_map: HashMap<(usize, usize), String> = hf_inline_image_names.iter()
+            .filter(|((s, t, _, _), _)| *s == si && *t == hf_type)
+            .map(|((_, _, pi, ri), name)| ((*pi, *ri), name.clone()))
+            .collect();
+        let fi_map: HashMap<(usize, usize), String> = hf_floating_image_names.iter()
+            .filter(|((s, t, _, _), _)| *s == si && *t == hf_type)
+            .map(|((_, _, pi, fi), name)| ((*pi, *fi), name.clone()))
+            .collect();
+        (pi_map, ii_map, fi_map)
+    };
+
+    let mut all_hf_contents: Vec<Option<Content>> = (0..total_pages).map(|_| None).collect();
+    for (page_idx, hf_content) in all_hf_contents.iter_mut().enumerate() {
+        let (si, is_first) = page_section_indices[page_idx];
+        let sp = &doc.sections[si].properties;
+        let page_num = page_idx + 1;
+
+        let mut hf = Content::new();
+        let mut has_hf = false;
+
+        let (header, hdr_type) = if is_first && sp.different_first_page {
+            (sp.header_first.as_ref(), 1u8)
+        } else {
+            (sp.header_default.as_ref(), 0u8)
+        };
+        if let Some(header_data) = header {
+            let (pi_map, ii_map, fi_map) = build_hf_maps(si, hdr_type);
+            render_header_footer(&mut hf, header_data, &seen_fonts, sp, doc.line_spacing, true, page_num, total_pages, &pi_map, &ii_map, &fi_map);
+            has_hf = true;
+        }
+
+        let (footer, ftr_type) = if is_first && sp.different_first_page {
+            (sp.footer_first.as_ref(), 3u8)
+        } else {
+            (sp.footer_default.as_ref(), 2u8)
+        };
+        if let Some(footer_data) = footer {
+            let (pi_map, ii_map, fi_map) = build_hf_maps(si, ftr_type);
+            render_header_footer(&mut hf, footer_data, &seen_fonts, sp, doc.line_spacing, false, page_num, total_pages, &pi_map, &ii_map, &fi_map);
+            has_hf = true;
+        }
+
+        if has_hf {
+            *hf_content = Some(hf);
+        }
+    }
+
     // Phase 3: allocate page and content IDs now that page count is known
     let n = all_contents.len();
     let page_ids: Vec<Ref> = (0..n).map(|_| alloc()).collect();
@@ -1473,9 +1619,19 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         .collect();
 
     for (i, c) in all_contents.into_iter().enumerate() {
-        let raw = c.finish();
-        let compressed = miniz_oxide::deflate::compress_to_vec_zlib(raw.as_slice(), 6);
-        pdf.stream(content_ids[i], &compressed).filter(Filter::FlateDecode);
+        let body_raw = c.finish();
+        if let Some(hf) = all_hf_contents[i].take() {
+            let hf_raw = hf.finish();
+            let mut combined = Vec::with_capacity(hf_raw.len() + 1 + body_raw.len());
+            combined.extend_from_slice(hf_raw.as_slice());
+            combined.push(b'\n');
+            combined.extend_from_slice(body_raw.as_slice());
+            let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&combined, 6);
+            pdf.stream(content_ids[i], &compressed).filter(Filter::FlateDecode);
+        } else {
+            let compressed = miniz_oxide::deflate::compress_to_vec_zlib(body_raw.as_slice(), 6);
+            pdf.stream(content_ids[i], &compressed).filter(Filter::FlateDecode);
+        }
     }
 
     pdf.catalog(catalog_id).pages(pages_id);

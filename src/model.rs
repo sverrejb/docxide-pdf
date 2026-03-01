@@ -135,6 +135,12 @@ pub struct Textbox {
     pub h_relative_from: &'static str,
     pub v_offset_pt: f32,
     pub v_relative_from: &'static str,
+    pub fill_color: Option<[u8; 3]>,
+    pub margin_left: f32,
+    pub margin_right: f32,
+    pub margin_top: f32,
+    #[allow(dead_code)]
+    pub margin_bottom: f32,
 }
 
 #[derive(Clone)]

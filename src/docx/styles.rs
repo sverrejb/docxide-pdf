@@ -21,6 +21,7 @@ fn latin_typeface<'a>(node: roxmltree::Node<'a, 'a>) -> Option<&'a str> {
 pub(super) struct ThemeFonts {
     pub(super) major: String,
     pub(super) minor: String,
+    pub(super) colors: HashMap<String, [u8; 3]>,
 }
 
 pub(super) struct StyleDefaults {
@@ -95,16 +96,17 @@ pub(super) fn parse_alignment(val: &str) -> Alignment {
 pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> ThemeFonts {
     let mut major = String::from("Aptos Display");
     let mut minor = String::from("Aptos");
+    let mut colors = HashMap::new();
 
     let names: Vec<String> = zip.file_names().map(|s| s.to_string()).collect();
     let theme_name = names
         .iter()
         .find(|n| n.starts_with("word/theme/") && n.ends_with(".xml"));
     let Some(xml_content) = theme_name.and_then(|name| read_zip_text(zip, name)) else {
-        return ThemeFonts { major, minor };
+        return ThemeFonts { major, minor, colors };
     };
     let Ok(xml) = roxmltree::Document::parse(&xml_content) else {
-        return ThemeFonts { major, minor };
+        return ThemeFonts { major, minor, colors };
     };
 
     for node in xml.descendants() {
@@ -122,11 +124,30 @@ pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(zip: &mut zip::ZipAr
                     minor = tf.to_string();
                 }
             }
+            "clrScheme" => {
+                for child in node.children() {
+                    if child.tag_name().namespace() != Some(DML_NS) {
+                        continue;
+                    }
+                    let scheme_name = child.tag_name().name();
+                    // a:srgbClr or a:sysClr child holds the color value
+                    if let Some(srgb) = dml(child, "srgbClr") {
+                        if let Some(hex) = srgb.attribute("val").and_then(super::parse_hex_color) {
+                            colors.insert(scheme_name.to_string(), hex);
+                        }
+                    } else if let Some(hex) = dml(child, "sysClr")
+                        .and_then(|sys| sys.attribute("lastClr"))
+                        .and_then(super::parse_hex_color)
+                    {
+                        colors.insert(scheme_name.to_string(), hex);
+                    }
+                }
+            }
             _ => {}
         }
     }
 
-    ThemeFonts { major, minor }
+    ThemeFonts { major, minor, colors }
 }
 
 pub(super) fn resolve_font(
