@@ -140,15 +140,6 @@ pub(super) fn parse_paragraph_borders(ppr: roxmltree::Node) -> ParagraphBorders 
     }
 }
 
-pub(super) fn paragraph_borders_extra(ppr: roxmltree::Node) -> f32 {
-    let borders = parse_paragraph_borders(ppr);
-    borders
-        .bottom
-        .as_ref()
-        .map(|b| b.space_pt + b.width_pt)
-        .unwrap_or(0.0)
-}
-
 /// Parse GUID string like "{302EE813-EB4A-4642-A93A-89EF99B2457E}" into 16 bytes.
 /// Returns bytes in standard GUID mixed-endian layout, then reversed to big-endian.
 fn parse_guid_to_bytes(guid: &str) -> Option<[u8; 16]> {
@@ -2187,7 +2178,7 @@ fn parse_run_drawing<R: Read + std::io::Seek>(
             if has_wrap_none {
                 if let Some(embed_id) = find_blip_embed(container) {
                     if let Some(img) = read_image_from_zip(embed_id, rels, zip, display_w, display_h) {
-                        let (h_position, h_relative, v_offset, v_relative, behind_doc) =
+                        let (h_position, h_relative, v_offset, v_relative) =
                             parse_anchor_position(container);
                         return Some(RunDrawingResult::Floating(FloatingImage {
                             image: img,
@@ -2195,7 +2186,6 @@ fn parse_run_drawing<R: Read + std::io::Seek>(
                             h_relative_from: h_relative,
                             v_offset_pt: v_offset,
                             v_relative_from: v_relative,
-                            behind_doc,
                         }));
                     }
                 }
@@ -2225,9 +2215,7 @@ struct DrawingInfo {
     floating_images: Vec<FloatingImage>,
 }
 
-fn parse_anchor_position(container: roxmltree::Node) -> (HorizontalPosition, &'static str, f32, &'static str, bool) {
-    let behind_doc = container.attribute("behindDoc") == Some("1");
-
+fn parse_anchor_position(container: roxmltree::Node) -> (HorizontalPosition, &'static str, f32, &'static str) {
     let pos_h = container.children().find(|n| {
         n.tag_name().name() == "positionH" && n.tag_name().namespace() == Some(WPD_NS)
     });
@@ -2264,7 +2252,7 @@ fn parse_anchor_position(container: roxmltree::Node) -> (HorizontalPosition, &'s
         0.0
     };
 
-    (h_position, h_relative, v_offset, v_relative, behind_doc)
+    (h_position, h_relative, v_offset, v_relative)
 }
 
 fn read_image_from_zip<R: Read + std::io::Seek>(
@@ -2346,7 +2334,7 @@ fn compute_drawing_info<R: Read + std::io::Seek>(
                 if has_wrap_none {
                     if let Some(embed_id) = find_blip_embed(container) {
                         if let Some(img) = read_image_from_zip(embed_id, rels, zip, display_w, display_h) {
-                            let (h_position, h_relative, v_offset, v_relative, behind_doc) =
+                            let (h_position, h_relative, v_offset, v_relative) =
                                 parse_anchor_position(container);
                             floating_images.push(FloatingImage {
                                 image: img,
@@ -2354,7 +2342,6 @@ fn compute_drawing_info<R: Read + std::io::Seek>(
                                 h_relative_from: h_relative,
                                 v_offset_pt: v_offset,
                                 v_relative_from: v_relative,
-                                behind_doc,
                             });
                         }
                     }

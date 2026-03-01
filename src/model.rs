@@ -125,7 +125,6 @@ pub struct FloatingImage {
     pub h_relative_from: &'static str,
     pub v_offset_pt: f32,
     pub v_relative_from: &'static str,
-    pub behind_doc: bool,
 }
 
 #[derive(Clone)]

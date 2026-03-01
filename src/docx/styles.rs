@@ -50,7 +50,6 @@ pub(super) struct ParagraphStyle {
     pub(super) indent_right: Option<f32>,
     pub(super) indent_hanging: Option<f32>,
     pub(super) indent_first_line: Option<f32>,
-    pub(super) borders_extra: f32,
     pub(super) borders: crate::model::ParagraphBorders,
     pub(super) based_on: Option<String>,
 }
@@ -242,11 +241,6 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         let space_before = spacing.and_then(|n| twips_attr(n, "before"));
         let space_after = spacing.and_then(|n| twips_attr(n, "after"));
         let borders = ppr.map(parse_paragraph_borders).unwrap_or_default();
-        let bdr_extra = borders
-            .bottom
-            .as_ref()
-            .map(|b| b.space_pt + b.width_pt)
-            .unwrap_or(0.0);
 
         let rpr = wml(style_node, "rPr");
 
@@ -314,7 +308,6 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                 indent_right,
                 indent_hanging,
                 indent_first_line,
-                borders_extra: bdr_extra,
                 borders,
                 based_on,
             },
@@ -478,7 +471,6 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             indent_right: None,
             indent_hanging: None,
             indent_first_line: None,
-            borders_extra: 0.0,
             borders: crate::model::ParagraphBorders::default(),
             based_on: None,
         };

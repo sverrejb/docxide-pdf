@@ -2,9 +2,9 @@
 """
 Generate showcase images and READMEs.
 
-Runs the test suite, picks all passing cases (SSIM >= threshold) sorted by
-name, resizes their reference and generated page PNGs, saves them to
-showcase/, rewrites the <!-- showcase-start/end --> section in README.md,
+Runs the test suite, picks all passing crafted cases (SSIM >= threshold)
+sorted by name, resizes their reference and generated page PNGs, saves them
+to showcase/, rewrites the <!-- showcase-start/end --> section in README.md,
 and generates showcase/README.md with every case.
 """
 import csv
@@ -39,7 +39,12 @@ def passing_cases():
     best = {}
     with open(SSIM_CSV) as f:
         for row in csv.DictReader(f):
-            best[row["case"]] = float(row["avg_ssim"])
+            raw = row["case"]
+            # Normalize: "cases/case1" -> "case1", "case1" -> "case1"
+            name = raw.split("/")[-1]
+            if not name.startswith("case"):
+                continue
+            best[name] = float(row["avg_ssim"])
 
     passing = [(c, s) for c, s in best.items() if s >= SSIM_THRESHOLD]
     passing.sort(key=lambda x: int(x[0].removeprefix("case")))
@@ -93,8 +98,8 @@ def main():
 
     rows = []
     for case, score in cases:
-        ref_src = ROOT / "tests/output" / case / "reference" / "page_001.png"
-        gen_src = ROOT / "tests/output" / case / "generated" / "page_001.png"
+        ref_src = ROOT / "tests/output/cases" / case / "reference" / "page_001.png"
+        gen_src = ROOT / "tests/output/cases" / case / "generated" / "page_001.png"
 
         if not ref_src.exists() or not gen_src.exists():
             print(f"WARN: PNGs missing for {case}, skipping", file=sys.stderr)
