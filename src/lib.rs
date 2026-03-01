@@ -9,16 +9,17 @@ pub use error::Error;
 use std::path::Path;
 use std::time::Instant;
 
-pub fn convert_docx_to_pdf(input: &Path, output: &Path) -> Result<(), Error> {
+pub fn convert_docx_to_pdf(input: impl AsRef<Path>, path: impl AsRef<Path>) -> Result<(), Error> {
+    let path = path.as_ref().with_extension("pdf");
     let t0 = Instant::now();
 
-    let doc = docx::parse(input)?;
+    let doc = docx::parse(input.as_ref())?;
     let t_parse = t0.elapsed();
 
     let bytes = pdf::render(&doc)?;
     let t_render = t0.elapsed();
 
-    std::fs::write(output, &bytes).map_err(Error::Io)?;
+    std::fs::write(&path, &bytes).map_err(Error::Io)?;
     let t_total = t0.elapsed();
 
     log::info!(
@@ -33,7 +34,8 @@ pub fn convert_docx_to_pdf(input: &Path, output: &Path) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn convert_docx_bytes_to_pdf(input: &[u8], output: &Path) -> Result<(), Error> {
+pub fn convert_docx_bytes_to_pdf(input: &[u8], path: impl AsRef<Path>) -> Result<(), Error> {
+    let path = path.as_ref().with_extension("pdf");
     let t0 = Instant::now();
 
     let doc = docx::parse_bytes(input)?;
@@ -42,7 +44,7 @@ pub fn convert_docx_bytes_to_pdf(input: &[u8], output: &Path) -> Result<(), Erro
     let bytes = pdf::render(&doc)?;
     let t_render = t0.elapsed();
 
-    std::fs::write(output, &bytes).map_err(Error::Io)?;
+    std::fs::write(&path, &bytes).map_err(Error::Io)?;
     let t_total = t0.elapsed();
 
     log::info!(
