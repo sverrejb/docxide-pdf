@@ -90,7 +90,8 @@
       "Bash(DOCXSIDE_CASE=case23 cargo test:*)",
       "Bash(DOCXSIDE_CASE=case24 cargo test:*)",
       "Bash(DOCXIDE_CASE=case24 cargo test:*)",
-      "Bash(DOCXIDE_CASE=case23 cargo test:*)"
+      "Bash(DOCXIDE_CASE=case23 cargo test:*)",
+      "Bash(DOCXIDE_CASE=case17 cargo test:*)"
     ]
   }
 }

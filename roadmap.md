@@ -73,6 +73,8 @@ Run `./tools/target/debug/analyze-fixtures --failing --fonts` for current breakd
 - **`w:sdtContent` (structured doc tags)** — content in SDT blocks now rendered ✅
 - **`w:color w:val="auto"`** — auto color now treated as black, overrides inherited style colors ✅
 - **Symbol PUA bullet mapping** — U+F0B7 → U+2022 (bullet) instead of middle dot ✅
+- **Section break spacing** — space_before at section breaks now collapsed with previous section's trailing space_after (matching Word's behavior) instead of being fully suppressed ✅
+- **Mixed page sizes/orientations** — Landscape, A4, Legal, and mixed sizes within one document ✅ (case25, case26)
 
 ### 1. Text/layout precision (HIGH — 7 failing fixtures are "text/layout only")
 The largest category. Run `analyze-fixtures --audit` for full feature prevalence.
@@ -83,14 +85,14 @@ The largest category. Run `analyze-fixtures --audit` for full feature prevalence
 - ~~`w:dstrike` (double strikethrough)~~ — ✅ Done.
 - `w:kern` — 7 failing, 268 hits. Needs GPOS (see Kerning section above).
 
-### 2. Textbox rendering (MEDIUM — 2 failing, 4 total)
-VML textboxes (`v:textbox`, `w:txbxContent`) and `mc:AlternateContent` with `wps:txbx` content are completely unhandled. Some documents have all visible content inside textboxes. Two fixtures have 14+ textboxes with most content inside them.
+### 2. Floating tables (MEDIUM — 5 failing)
+Tables with `w:tblpPr` positioning attributes are rendered as normal flow tables instead of being positioned absolutely on the page. Attributes define horizontal/vertical anchor (`page`, `margin`, `column`/`text`), alignment or offset, and overlap behavior. Existing table rendering can be reused; only the positioning pass needs to be added.
 
-### 3. Anchored image positioning (MEDIUM — 3 failing, 11 total w/ anchors)
+### 3. Textbox rendering (MEDIUM — 3 failing, ~50 textboxes across corpus)
+VML textboxes (`v:textbox`, `w:txbxContent`) and DrawingML `wps:txbx` content are completely unhandled. Some documents have all visible content inside textboxes. One fixture (f271d69a) has 21 textboxes and scores 0%. The content inside `w:txbxContent` is regular WordprocessingML (paragraphs, tables) so existing rendering can be reused in a clipped bounding box.
+
+### 4. Anchored image positioning (MEDIUM — 10 failing w/ anchors)
 `wp:anchor` images lack proper positioning (horizontal/vertical offsets relative to page/column/margin) and text wrapping. Currently rendered inline. Many passing fixtures also have anchored images but don't depend on them for layout.
-
-### 4. Floating tables (MEDIUM — 2 failing)
-Tables with `w:tblpPr` positioning attributes are rendered as normal flow tables instead of being positioned absolutely on the page.
 
 ### 5. Tab stop precision (LOW)
 Tab stop alignment and leader rendering has small positioning errors that accumulate in tab-heavy documents (e.g. table of contents).

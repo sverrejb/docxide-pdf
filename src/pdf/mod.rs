@@ -893,17 +893,21 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     let para_text_width = (col_w - para.indent_left - para.indent_right).max(1.0);
                     let label_x = col_x + para.indent_left - para.indent_hanging;
 
-                    // Draw paragraph shading (background)
+                    // Draw paragraph shading (background), extending outward to match borders
                     if let Some([r, g, b]) = para.shading {
+                        let shd_left_outset = para.borders.left.as_ref().map(|b| b.space_pt).unwrap_or(0.0);
+                        let shd_right_outset = para.borders.right.as_ref().map(|b| b.space_pt).unwrap_or(0.0);
+                        let shd_left = col_x - shd_left_outset;
+                        let shd_right = col_x + col_w + shd_right_outset;
                         let shd_top = slot_top;
                         let shd_bottom = slot_top - bdr_top_pad - content_h - bdr_bottom_pad;
                         current_content.save_state();
                         current_content
                             .set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
                         current_content.rect(
-                            col_x,
+                            shd_left,
                             shd_bottom,
-                            col_w,
+                            shd_right - shd_left,
                             shd_top - shd_bottom,
                         );
                         current_content.fill_nonzero();
@@ -1023,13 +1027,16 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         );
                     }
 
-                    // Draw paragraph borders
+                    // Draw paragraph borders — left/right borders extend outward
+                    // from the text area so text inside stays aligned with text outside
                     {
                         let bdr = &para.borders;
                         let box_top = slot_top;
                         let box_bottom = slot_top - bdr_top_pad - content_h - bdr_bottom_pad;
-                        let box_left = col_x;
-                        let box_right = col_x + col_w;
+                        let bdr_left_outset = bdr.left.as_ref().map(|b| b.space_pt + b.width_pt / 2.0).unwrap_or(0.0);
+                        let bdr_right_outset = bdr.right.as_ref().map(|b| b.space_pt + b.width_pt / 2.0).unwrap_or(0.0);
+                        let box_left = col_x - bdr_left_outset;
+                        let box_right = col_x + col_w + bdr_right_outset;
 
                         let draw_h_border =
                             |content: &mut Content, b: &crate::model::ParagraphBorder, y: f32| {
