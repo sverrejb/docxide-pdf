@@ -15,6 +15,9 @@ pub(super) struct WordChunk {
     pub(super) width: f32,
     pub(super) underline: bool,
     pub(super) strikethrough: bool,
+    pub(super) dstrike: bool,
+    pub(super) char_spacing: f32,
+    pub(super) text_scale: f32, // percentage, 100.0 = normal
     pub(super) y_offset: f32, // vertical offset for superscript/subscript
     pub(super) hyperlink_url: Option<String>,
     pub(super) inline_image_name: Option<String>,
@@ -131,6 +134,9 @@ pub(super) fn build_paragraph_lines(
                     width: img_w,
                     underline: false,
                     strikethrough: false,
+                    dstrike: false,
+                    char_spacing: 0.0,
+                    text_scale: 100.0,
                     y_offset: 0.0,
                     hyperlink_url: None,
                     inline_image_name: Some(pdf_name.clone()),
@@ -150,8 +156,14 @@ pub(super) fn build_paragraph_lines(
         let starts_with_ws = text.starts_with(char::is_whitespace);
         let y_off = vert_y_offset(run);
 
+        let cs = run.char_spacing;
+        let ts = run.text_scale / 100.0;
+        let space_w_cs = space_w * ts + cs;
+
         for (i, word) in text.split_whitespace().enumerate() {
-            let ww = entry.word_width(word, eff_fs);
+            let char_count = word.chars().count();
+            let ww = entry.word_width(word, eff_fs) * ts
+                + if char_count > 1 { cs * (char_count - 1) as f32 } else { 0.0 };
 
             let need_space =
                 !current_chunks.is_empty() && (i > 0 || starts_with_ws || prev_ended_with_ws);
@@ -160,7 +172,7 @@ pub(super) fn build_paragraph_lines(
             // within a run (i > 0) or leading ws → this run's space_w;
             // trailing ws from previous run → previous run's space_w
             let effective_space_w = if i > 0 || starts_with_ws {
-                space_w
+                space_w_cs
             } else {
                 prev_space_w
             };
@@ -193,6 +205,9 @@ pub(super) fn build_paragraph_lines(
                 width: ww,
                 underline: run.underline,
                 strikethrough: run.strikethrough,
+                dstrike: run.dstrike,
+                char_spacing: cs,
+                text_scale: run.text_scale,
                 y_offset: y_off,
                 hyperlink_url: run.hyperlink_url.clone(),
                 inline_image_name: None,
@@ -202,7 +217,7 @@ pub(super) fn build_paragraph_lines(
         }
 
         prev_ended_with_ws = text.ends_with(char::is_whitespace);
-        prev_space_w = space_w;
+        prev_space_w = space_w_cs;
     }
 
     if !current_chunks.is_empty() {
@@ -240,13 +255,14 @@ fn segment_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 
         let key = font_key(run);
         let entry = seen_fonts.get(&key).expect("font registered");
         let eff_fs = effective_font_size(run);
-        let space_w = entry.space_width(eff_fs);
+        let ts = run.text_scale / 100.0;
+        let space_w = entry.space_width(eff_fs) * ts;
         let text = effective_text(run);
         for (i, word) in text.split_whitespace().enumerate() {
             if !first || i > 0 {
                 w += space_w;
             }
-            w += entry.word_width(word, eff_fs);
+            w += entry.word_width(word, eff_fs) * ts;
             first = false;
         }
     }
@@ -377,6 +393,9 @@ pub(super) fn build_tabbed_line(
                                         width: leader_w,
                                         underline: false,
                                         strikethrough: false,
+                                        dstrike: false,
+                                        char_spacing: 0.0,
+                                        text_scale: 100.0,
                                         y_offset: 0.0,
                                         hyperlink_url: None,
                                         inline_image_name: None,
@@ -402,12 +421,16 @@ pub(super) fn build_tabbed_line(
             let y_off = vert_y_offset(run);
             let text = effective_text(run);
 
+            let cs = run.char_spacing;
+            let ts = run.text_scale / 100.0;
             for (i, word) in text.split_whitespace().enumerate() {
-                let ww = entry.word_width(word, eff_fs);
+                let char_count = word.chars().count();
+                let ww = entry.word_width(word, eff_fs) * ts
+                    + if char_count > 1 { cs * (char_count - 1) as f32 } else { 0.0 };
                 if !all_chunks.is_empty()
                     && (i > 0 || prev_ws || text.starts_with(char::is_whitespace))
                 {
-                    current_x += space_w;
+                    current_x += space_w * ts + cs;
                 }
                 all_chunks.push(WordChunk {
                     pdf_font: entry.pdf_name.clone(),
@@ -419,6 +442,9 @@ pub(super) fn build_tabbed_line(
                     width: ww,
                     underline: run.underline,
                     strikethrough: run.strikethrough,
+                    dstrike: run.dstrike,
+                    char_spacing: cs,
+                    text_scale: run.text_scale,
                     y_offset: y_off,
                     hyperlink_url: run.hyperlink_url.clone(),
                     inline_image_name: None,
@@ -467,6 +493,8 @@ pub(super) fn render_paragraph_lines(
     let mut current_color: Option<[u8; 3]> = None;
     let mut cur_font_name = String::new();
     let mut cur_font_size: f32 = -1.0;
+    let mut cur_char_spacing: f32 = 0.0;
+    let mut cur_text_scale: f32 = 100.0;
 
     // Pre-compute per-line y offsets accounting for inline images making lines taller
     let mut line_y_offsets: Vec<f32> = Vec::with_capacity(lines.len());
@@ -589,6 +617,15 @@ pub(super) fn render_paragraph_lines(
                     current_color = chunk.color;
                 }
 
+                if chunk.char_spacing != cur_char_spacing {
+                    content.set_char_spacing(chunk.char_spacing);
+                    cur_char_spacing = chunk.char_spacing;
+                }
+                if chunk.text_scale != cur_text_scale {
+                    content.set_horizontal_scaling(chunk.text_scale);
+                    cur_text_scale = chunk.text_scale;
+                }
+
                 if cur_font_name != chunk.pdf_font || cur_font_size != chunk.font_size {
                     content.set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size);
                     cur_font_name.clear();
@@ -618,6 +655,13 @@ pub(super) fn render_paragraph_lines(
                     let st_y = y + chunk.font_size * 0.3;
                     decorations.push((x, st_y, chunk.width, thick, chunk.color));
                 }
+                if chunk.dstrike {
+                    let thick = (chunk.font_size * 0.05).max(0.5);
+                    let gap = thick * 1.5;
+                    let mid_y = y + chunk.font_size * 0.3;
+                    decorations.push((x, mid_y - gap / 2.0, chunk.width, thick, chunk.color));
+                    decorations.push((x, mid_y + gap / 2.0, chunk.width, thick, chunk.color));
+                }
 
                 if let Some(ref url) = chunk.hyperlink_url {
                     let bottom = y - chunk.font_size * 0.2;
@@ -634,6 +678,14 @@ pub(super) fn render_paragraph_lines(
                         });
                     }
                 }
+            }
+            if cur_char_spacing != 0.0 {
+                content.set_char_spacing(0.0);
+                cur_char_spacing = 0.0;
+            }
+            if cur_text_scale != 100.0 {
+                content.set_horizontal_scaling(100.0);
+                cur_text_scale = 100.0;
             }
             content.end_text();
         }

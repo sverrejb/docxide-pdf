@@ -136,6 +136,7 @@ pub(super) fn parse_paragraph_borders(ppr: roxmltree::Node) -> ParagraphBorders 
         bottom: wml(pbdr, "bottom").and_then(parse_one_border),
         left: wml(pbdr, "left").and_then(parse_one_border),
         right: wml(pbdr, "right").and_then(parse_one_border),
+        between: wml(pbdr, "between").and_then(parse_one_border),
     }
 }
 
@@ -184,7 +185,7 @@ fn deobfuscate_font(data: &mut [u8], key: &[u8; 16]) {
 }
 
 /// Parse word/_rels/fontTable.xml.rels to get relationship ID → target path mapping.
-fn parse_font_table_rels(zip: &mut zip::ZipArchive<std::fs::File>) -> HashMap<String, String> {
+fn parse_font_table_rels<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> HashMap<String, String> {
     let mut rels = HashMap::new();
     let Some(xml_content) = read_zip_text(zip, "word/_rels/fontTable.xml.rels") else {
         return rels;
@@ -211,8 +212,8 @@ struct EmbedInfo {
 }
 
 /// Parse word/fontTable.xml for embedded fonts, extract and deobfuscate them.
-fn parse_font_table(
-    zip: &mut zip::ZipArchive<std::fs::File>,
+fn parse_font_table<R: Read + std::io::Seek>(
+    zip: &mut zip::ZipArchive<R>,
 ) -> HashMap<(String, bool, bool), Vec<u8>> {
     let mut result = HashMap::new();
 
@@ -313,7 +314,7 @@ fn parse_font_table(
     result
 }
 
-fn parse_numbering(zip: &mut zip::ZipArchive<std::fs::File>) -> NumberingInfo {
+fn parse_numbering<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> NumberingInfo {
     let mut abstract_nums: HashMap<String, HashMap<u8, LevelDef>> = HashMap::new();
     let mut num_to_abstract: HashMap<String, String> = HashMap::new();
 
@@ -452,12 +453,12 @@ struct ParsedRuns {
     floating_images: Vec<FloatingImage>,
 }
 
-fn parse_runs(
+fn parse_runs<R: Read + std::io::Seek>(
     para_node: roxmltree::Node,
     styles: &StylesInfo,
     theme: &ThemeFonts,
     rels: &HashMap<String, String>,
-    zip: &mut zip::ZipArchive<std::fs::File>,
+    zip: &mut zip::ZipArchive<R>,
 ) -> ParsedRuns {
     let ppr = wml(para_node, "pPr");
     let para_style_id = ppr
@@ -557,6 +558,19 @@ fn parse_runs(
             .and_then(|n| wml_bool(n, "strike"))
             .or_else(|| char_style.and_then(|cs| cs.strikethrough))
             .unwrap_or(false);
+        let dstrike = rpr
+            .and_then(|n| wml_bool(n, "dstrike"))
+            .unwrap_or(false);
+        let char_spacing = rpr
+            .and_then(|n| wml(n, "spacing"))
+            .and_then(|n| n.attribute((WML_NS, "val")))
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(twips_to_pts)
+            .unwrap_or(0.0);
+        let text_scale = rpr
+            .and_then(|n| wml_attr(n, "w"))
+            .and_then(|v| v.trim_end_matches('%').parse::<f32>().ok())
+            .unwrap_or(100.0);
         let caps = rpr
             .and_then(|n| wml_bool(n, "caps"))
             .or_else(|| char_style.and_then(|cs| cs.caps))
@@ -609,6 +623,9 @@ fn parse_runs(
                                     italic,
                                     underline,
                                     strikethrough,
+                                    dstrike,
+                                    char_spacing,
+                                    text_scale,
                                     caps,
                                     small_caps,
                                     vanish,
@@ -645,6 +662,9 @@ fn parse_runs(
                                         italic,
                                         underline: false,
                                         strikethrough: false,
+                                        dstrike: false,
+                                        char_spacing: 0.0,
+                                        text_scale: 100.0,
                                         caps: false,
                                         small_caps: false,
                                         vanish: false,
@@ -689,6 +709,9 @@ fn parse_runs(
                             italic,
                             underline,
                             strikethrough,
+                            dstrike,
+                            char_spacing,
+                            text_scale,
                             caps,
                             small_caps,
                             vanish,
@@ -712,6 +735,9 @@ fn parse_runs(
                         italic: false,
                         underline: false,
                         strikethrough: false,
+                        dstrike: false,
+                        char_spacing: 0.0,
+                        text_scale: 100.0,
                         caps: false,
                         small_caps: false,
                         vanish: false,
@@ -743,6 +769,9 @@ fn parse_runs(
                             italic,
                             underline,
                             strikethrough,
+                            dstrike,
+                            char_spacing,
+                            text_scale,
                             caps,
                             small_caps,
                             vanish,
@@ -767,6 +796,9 @@ fn parse_runs(
                                 italic: false,
                                 underline: false,
                                 strikethrough: false,
+                                dstrike: false,
+                                char_spacing: 0.0,
+                                text_scale: 100.0,
                                 caps: false,
                                 small_caps: false,
                                 vanish: false,
@@ -797,6 +829,9 @@ fn parse_runs(
                             italic,
                             underline,
                             strikethrough,
+                            dstrike,
+                            char_spacing,
+                            text_scale,
                             caps,
                             small_caps,
                             vanish,
@@ -823,6 +858,9 @@ fn parse_runs(
                             italic,
                             underline: false,
                             strikethrough: false,
+                            dstrike: false,
+                            char_spacing: 0.0,
+                            text_scale: 100.0,
                             caps: false,
                             small_caps: false,
                             vanish: false,
@@ -848,6 +886,9 @@ fn parse_runs(
                             italic,
                             underline,
                             strikethrough,
+                            dstrike,
+                            char_spacing,
+                            text_scale,
                             caps,
                             small_caps,
                             vanish,
@@ -870,6 +911,9 @@ fn parse_runs(
                         italic,
                         underline: false,
                         strikethrough: false,
+                        dstrike: false,
+                        char_spacing: 0.0,
+                        text_scale: 100.0,
                         caps: false,
                         small_caps: false,
                         vanish: false,
@@ -897,6 +941,9 @@ fn parse_runs(
                 italic,
                 underline,
                 strikethrough,
+                dstrike,
+                char_spacing,
+                text_scale,
                 caps,
                 small_caps,
                 vanish,
@@ -943,6 +990,9 @@ fn parse_runs(
                 italic: style_italic,
                 underline: false,
                 strikethrough: false,
+                dstrike: false,
+                char_spacing: 0.0,
+                text_scale: 100.0,
                 caps: false,
                 small_caps: false,
                 vanish: false,
@@ -970,6 +1020,9 @@ fn parse_runs(
             italic: style_italic,
             underline: false,
             strikethrough: false,
+            dstrike: false,
+            char_spacing: 0.0,
+            text_scale: 100.0,
             caps: false,
             small_caps: false,
             vanish: false,
@@ -994,12 +1047,12 @@ fn parse_runs(
     }
 }
 
-fn parse_header_footer_xml(
+fn parse_header_footer_xml<R: Read + std::io::Seek>(
     xml_content: &str,
     styles: &StylesInfo,
     theme: &ThemeFonts,
     rels: &HashMap<String, String>,
-    zip: &mut zip::ZipArchive<std::fs::File>,
+    zip: &mut zip::ZipArchive<R>,
 ) -> Option<HeaderFooter> {
     let xml = roxmltree::Document::parse(xml_content).ok()?;
     let root = xml.root_element();
@@ -1053,6 +1106,7 @@ fn parse_header_footer_xml(
             list_label: String::new(),
             contextual_spacing: false,
             keep_next: false,
+            keep_lines: false,
             line_spacing: None,
             image: para_image,
             borders: ParagraphBorders::default(),
@@ -1072,8 +1126,8 @@ fn parse_header_footer_xml(
     }
 }
 
-fn parse_footnotes(
-    zip: &mut zip::ZipArchive<std::fs::File>,
+fn parse_footnotes<R: Read + std::io::Seek>(
+    zip: &mut zip::ZipArchive<R>,
     styles: &StylesInfo,
     theme: &ThemeFonts,
 ) -> HashMap<u32, Footnote> {
@@ -1152,6 +1206,7 @@ fn parse_footnotes(
                 list_label: String::new(),
                 contextual_spacing: false,
                 keep_next: false,
+                keep_lines: false,
                 line_spacing,
                 image: None,
                 borders: ParagraphBorders::default(),
@@ -1172,18 +1227,18 @@ fn parse_footnotes(
     footnotes
 }
 
-pub(super) fn read_zip_text(zip: &mut zip::ZipArchive<std::fs::File>, name: &str) -> Option<String> {
+pub(super) fn read_zip_text<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>, name: &str) -> Option<String> {
     let mut content = String::new();
     zip.by_name(name).ok()?.read_to_string(&mut content).ok()?;
     Some(content)
 }
 
-fn parse_section_properties(
+fn parse_section_properties<R: Read + std::io::Seek>(
     sect_node: roxmltree::Node,
     rels: &HashMap<String, String>,
     styles: &StylesInfo,
     theme: &ThemeFonts,
-    zip: &mut zip::ZipArchive<std::fs::File>,
+    zip: &mut zip::ZipArchive<R>,
     default_line_pitch: f32,
 ) -> SectionProperties {
     let pg_sz = wml(sect_node, "pgSz");
@@ -1292,7 +1347,7 @@ fn parse_section_properties(
     }
 
     let resolve_hf =
-        |rid: Option<&str>, zip: &mut zip::ZipArchive<std::fs::File>| -> Option<HeaderFooter> {
+        |rid: Option<&str>, zip: &mut zip::ZipArchive<R>| -> Option<HeaderFooter> {
             let target = rels.get(rid?)?;
             let zip_path = target
                 .strip_prefix('/')
@@ -1339,12 +1394,25 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
     let mut zip = zip::ZipArchive::new(file)
         .map_err(|_| Error::InvalidDocx("file is not a ZIP archive".into()))?;
 
-    let theme = parse_theme(&mut zip);
-    let styles = parse_styles(&mut zip, &theme);
-    let numbering = parse_numbering(&mut zip);
-    let rels = parse_relationships(&mut zip);
-    let embedded_fonts = parse_font_table(&mut zip);
-    let footnotes = parse_footnotes(&mut zip, &styles, &theme);
+    parse_zip(&mut zip)
+}
+
+pub fn parse_bytes(bytes: &[u8]) -> Result<Document, Error> {
+    let cursor = std::io::Cursor::new(bytes);
+    let mut zip = zip::ZipArchive::new(cursor)
+        .map_err(|_| Error::InvalidDocx("data is not a valid ZIP/DOCX archive".into()))?;
+
+    parse_zip(&mut zip)
+}
+
+fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Document, Error> {
+
+    let theme = parse_theme(zip);
+    let styles = parse_styles(zip, &theme);
+    let numbering = parse_numbering(zip);
+    let rels = parse_relationships(zip);
+    let embedded_fonts = parse_font_table(zip);
+    let footnotes = parse_footnotes(zip, &styles, &theme);
 
     let mut xml_content = String::new();
     zip.by_name("word/document.xml")
@@ -1540,7 +1608,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                         for p in tc.children().filter(|n| {
                             n.tag_name().name() == "p" && n.tag_name().namespace() == Some(WML_NS)
                         }) {
-                            let parsed = parse_runs(p, &styles, &theme, &rels, &mut zip);
+                            let parsed = parse_runs(p, &styles, &theme, &rels, zip);
                             let ppr = wml(p, "pPr");
                             let para_style_id = ppr
                                 .and_then(|ppr| wml_attr(ppr, "pStyle"))
@@ -1575,6 +1643,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                                 list_label: String::new(),
                                 contextual_spacing: false,
                                 keep_next: false,
+                                keep_lines: false,
                                 line_spacing,
                                 image: None,
                                 borders: ParagraphBorders::default(),
@@ -1668,6 +1737,9 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                 let keep_next = ppr.and_then(|ppr| wml(ppr, "keepNext")).is_some()
                     || para_style.is_some_and(|s| s.keep_next);
 
+                let keep_lines = ppr.and_then(|ppr| wml(ppr, "keepLines")).is_some()
+                    || para_style.is_some_and(|s| s.keep_lines);
+
                 let line_spacing = inline_spacing
                     .and_then(|n| {
                         n.attribute((WML_NS, "line"))
@@ -1712,7 +1784,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     }
                 }
 
-                let parsed = parse_runs(node, &styles, &theme, &rels, &mut zip);
+                let parsed = parse_runs(node, &styles, &theme, &rels, zip);
                 let mut runs = parsed.runs;
 
                 // Override font defaults from style for runs that used doc defaults
@@ -1740,7 +1812,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     // Mixed text+image: images stay in runs, no paragraph-level image
                     (None, 0.0)
                 } else {
-                    let drawing = compute_drawing_info(node, &rels, &mut zip);
+                    let drawing = compute_drawing_info(node, &rels, zip);
                     floating_images.extend(drawing.floating_images);
                     (drawing.image, drawing.height)
                 };
@@ -1758,6 +1830,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                     list_label,
                     contextual_spacing,
                     keep_next,
+                    keep_lines,
                     line_spacing,
                     image: para_image,
                     borders,
@@ -1772,7 +1845,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
                 // Mid-document section break: sectPr inside pPr ends the current section
                 if let Some(sect_node) = ppr.and_then(|ppr| wml(ppr, "sectPr")) {
                     let props = parse_section_properties(
-                        sect_node, &rels, &styles, &theme, &mut zip, default_line_pitch,
+                        sect_node, &rels, &styles, &theme, zip, default_line_pitch,
                     );
                     sections.push(Section {
                         properties: props,
@@ -1787,7 +1860,7 @@ pub fn parse(path: &Path) -> Result<Document, Error> {
     // Final section: body-level sectPr
     let final_props = if let Some(sect_node) = wml(body, "sectPr") {
         parse_section_properties(
-            sect_node, &rels, &styles, &theme, &mut zip, default_line_pitch,
+            sect_node, &rels, &styles, &theme, zip, default_line_pitch,
         )
     } else {
         SectionProperties {
@@ -2012,7 +2085,7 @@ fn parse_rels_xml(xml_content: &str) -> HashMap<String, String> {
     rels
 }
 
-fn parse_relationships(zip: &mut zip::ZipArchive<std::fs::File>) -> HashMap<String, String> {
+fn parse_relationships<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> HashMap<String, String> {
     let Some(xml_content) = read_zip_text(zip, "word/_rels/document.xml.rels") else {
         return HashMap::new();
     };
@@ -2020,8 +2093,8 @@ fn parse_relationships(zip: &mut zip::ZipArchive<std::fs::File>) -> HashMap<Stri
 }
 
 /// Load relationships for a part like "word/header1.xml" → "word/_rels/header1.xml.rels"
-fn parse_part_relationships(
-    zip: &mut zip::ZipArchive<std::fs::File>,
+fn parse_part_relationships<R: Read + std::io::Seek>(
+    zip: &mut zip::ZipArchive<R>,
     part_path: &str,
 ) -> HashMap<String, String> {
     let (dir, file) = match part_path.rsplit_once('/') {
@@ -2078,10 +2151,10 @@ enum RunDrawingResult {
     Floating(FloatingImage),
 }
 
-fn parse_run_drawing(
+fn parse_run_drawing<R: Read + std::io::Seek>(
     drawing_node: roxmltree::Node,
     rels: &HashMap<String, String>,
-    zip: &mut zip::ZipArchive<std::fs::File>,
+    zip: &mut zip::ZipArchive<R>,
 ) -> Option<RunDrawingResult> {
     for container in drawing_node.children() {
         let name = container.tag_name().name();
@@ -2194,10 +2267,10 @@ fn parse_anchor_position(container: roxmltree::Node) -> (HorizontalPosition, &'s
     (h_position, h_relative, v_offset, v_relative, behind_doc)
 }
 
-fn read_image_from_zip(
+fn read_image_from_zip<R: Read + std::io::Seek>(
     embed_id: &str,
     rels: &HashMap<String, String>,
-    zip: &mut zip::ZipArchive<std::fs::File>,
+    zip: &mut zip::ZipArchive<R>,
     display_w: f32,
     display_h: f32,
 ) -> Option<EmbeddedImage> {
@@ -2220,10 +2293,10 @@ fn read_image_from_zip(
     })
 }
 
-fn compute_drawing_info(
+fn compute_drawing_info<R: Read + std::io::Seek>(
     para_node: roxmltree::Node,
     rels: &HashMap<String, String>,
-    zip: &mut zip::ZipArchive<std::fs::File>,
+    zip: &mut zip::ZipArchive<R>,
 ) -> DrawingInfo {
     let mut max_height: f32 = 0.0;
     let mut image: Option<EmbeddedImage> = None;

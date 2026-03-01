@@ -78,10 +78,10 @@ Run `./tools/target/debug/analyze-fixtures --failing --fonts` for current breakd
 The largest category. Run `analyze-fixtures --audit` for full feature prevalence.
 
 **Highest-impact unimplemented features** (by failing fixture count from audit):
-- `w:spacing @w:val` on `w:rPr` (character spacing/letter-spacing) — 15 failing, 5770 hits. Parsed but **not applied during rendering**. Needs PDF `Tc` operator for inter-character spacing. Twips → points, applied per-run in text positioning.
+- ~~`w:spacing @w:val` on `w:rPr`~~ — ✅ Done. PDF `Tc` operator.
 - ~~`w:ind w:right` (right indent)~~ — ✅ Done.
+- ~~`w:dstrike` (double strikethrough)~~ — ✅ Done.
 - `w:kern` — 7 failing, 268 hits. Needs GPOS (see Kerning section above).
-- `w:dstrike` (double strikethrough) — 2 failing, 22 hits.
 
 ### 2. Textbox rendering (MEDIUM — 2 failing, 4 total)
 VML textboxes (`v:textbox`, `w:txbxContent`) and `mc:AlternateContent` with `wps:txbx` content are completely unhandled. Some documents have all visible content inside textboxes. Two fixtures have 14+ textboxes with most content inside them.
@@ -113,14 +113,14 @@ Right-aligned text in headers appears at the left margin instead of the right. H
 Features identified from OOXML/PDF spec review that are missing or incomplete:
 
 ### Not yet implemented
-- **`w:spacing @w:val` on rPr** (character spacing) — parsed into `Run.spacing` but never applied in PDF rendering. Needs PDF `Tc` operator. HIGH impact (5770 hits across fixtures).
-- **`w:cols`** (multi-column layout) — `w:sectPr/w:cols` with `@num`, `@space`, `@equalWidth`, child `w:col` elements. Completely unhandled. Affects several scraped fixtures.
+- ~~**`w:spacing @w:val` on rPr**~~ — ✅ Done. PDF `Tc` operator applied per-run, char_spacing in width calculations.
+- ~~**`w:cols`**~~ — ✅ Done. Multi-column layout with equal/variable widths, column breaks, separator lines.
+- ~~**`w:dstrike`**~~ — ✅ Done. Double strikethrough rendered as two parallel lines.
 - **`w:tblLook` / `w:tblStylePr`** (table conditional formatting) — table styles can have conditional overrides for firstRow, lastRow, firstCol, lastCol, band1Vert/Horz, etc. Not parsed or applied.
 - **`w:jc val="distribute"`** — distribute alignment (equal spacing between characters including edges). Different from "both" (justified). Not handled.
-- **`w:dstrike`** (double strikethrough) — two parallel lines through text. Not rendered.
-- **`w:between` border** (inter-paragraph border) — horizontal rule between consecutive paragraphs with the same border definition. Not parsed.
-- **`w:keepLines`** — parsed but not enforced during page breaking. Paragraphs with keepLines should not be split across pages.
-- **`w:w`** (text expansion/compression) — `w:rPr/w:w @val` percentage scaling of character widths. Needs PDF `Tz` operator.
+- ~~**`w:between` border**~~ — ✅ Done. Parsed and rendered: draws between border instead of top/bottom when adjacent paragraphs have identical borders.
+- ~~**`w:keepLines`**~~ — ✅ Done. Parsed and enforced — paragraphs with keepLines move to next column/page instead of splitting.
+- ~~**`w:w`**~~ (text expansion/compression) — ✅ Done. PDF `Tz` operator, width calculations scaled by percentage.
 - **`w:textDirection`** — text direction in table cells (btLr, tbRl). Completely unhandled.
 - **`w:vAlign` on sectPr** — vertical alignment of text on the page (top/center/bottom/both). Not implemented.
 
@@ -142,7 +142,7 @@ Additional fixture ideas:
 - Multi-section documents (different page sizes/orientations per section)
 - Deep style inheritance (3+ level chains with run vs style vs paragraph conflicts)
 - Hyperlinks and bookmarks
-- Multi-column layouts
+- ~~Multi-column layouts~~ — covered by case21 (2-col + col break) and case22 (3-col + separators)
 - Footnotes and endnotes (parsing `footnotes.xml`, separator line, superscript references, page-bottom rendering)
 - Nested/multi-level lists (outline numbering: `1. → a. → i. → •`)
 - Line spacing modes (`w:lineRule="exact"` and `"atLeast"`, not just `"auto"`)

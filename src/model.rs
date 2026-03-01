@@ -141,6 +141,7 @@ pub struct ParagraphBorders {
     pub bottom: Option<ParagraphBorder>,
     pub left: Option<ParagraphBorder>,
     pub right: Option<ParagraphBorder>,
+    pub between: Option<ParagraphBorder>,
 }
 
 pub struct Paragraph {
@@ -156,6 +157,7 @@ pub struct Paragraph {
     pub list_label: String,
     pub contextual_spacing: bool,
     pub keep_next: bool,
+    pub keep_lines: bool,
     pub line_spacing: Option<LineSpacing>,
     pub image: Option<EmbeddedImage>,
     pub borders: ParagraphBorders,
@@ -176,6 +178,9 @@ pub struct Run {
     pub italic: bool,
     pub underline: bool,
     pub strikethrough: bool,
+    pub dstrike: bool,
+    pub char_spacing: f32,
+    pub text_scale: f32, // percentage, 100.0 = normal
     pub caps: bool,
     pub small_caps: bool,
     pub vanish: bool,

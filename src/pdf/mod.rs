@@ -19,6 +19,22 @@ use layout::{
 };
 use table::render_table;
 
+fn border_eq(a: &Option<crate::model::ParagraphBorder>, b: &Option<crate::model::ParagraphBorder>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a), Some(b)) => a.width_pt == b.width_pt && a.color == b.color,
+        _ => false,
+    }
+}
+
+fn borders_match(a: &crate::model::ParagraphBorders, b: &crate::model::ParagraphBorders) -> bool {
+    border_eq(&a.top, &b.top)
+        && border_eq(&a.bottom, &b.bottom)
+        && border_eq(&a.left, &b.left)
+        && border_eq(&a.right, &b.right)
+        && border_eq(&a.between, &b.between)
+}
+
 fn resolve_line_h(ls: LineSpacing, font_size: f32, tallest_lhr: Option<f32>) -> f32 {
     match ls {
         LineSpacing::Auto(mult) => tallest_lhr
@@ -762,6 +778,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             lines_that_fit = lines.len().saturating_sub(2);
                         }
 
+                        // keepLines: don't split — move entire paragraph to next column/page
+                        if para.keep_lines {
+                            lines_that_fit = 0;
+                        }
+
                         if lines_that_fit >= 2 && lines_that_fit < lines.len() {
                             let first_part = &lines[..lines_that_fit];
                             slot_top -= inter_gap;
@@ -1038,10 +1059,23 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             content.restore_state();
                         };
 
-                        if let Some(b) = &bdr.top {
-                            draw_h_border(&mut current_content, b, box_top);
+                        let prev_has_between = prev_para.is_some_and(|pp| {
+                            pp.borders.between.is_some() && borders_match(&pp.borders, &para.borders)
+                        });
+                        let next_has_between = next_para.is_some_and(|np| {
+                            bdr.between.is_some() && borders_match(&para.borders, &np.borders)
+                        });
+
+                        if !prev_has_between {
+                            if let Some(b) = &bdr.top {
+                                draw_h_border(&mut current_content, b, box_top);
+                            }
                         }
-                        if let Some(b) = &bdr.bottom {
+                        if next_has_between {
+                            if let Some(b) = &bdr.between {
+                                draw_h_border(&mut current_content, b, box_bottom);
+                            }
+                        } else if let Some(b) = &bdr.bottom {
                             draw_h_border(&mut current_content, b, box_bottom);
                         }
                         if let Some(b) = &bdr.left {

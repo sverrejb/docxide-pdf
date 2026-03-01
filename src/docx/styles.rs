@@ -44,6 +44,7 @@ pub(super) struct ParagraphStyle {
     pub(super) alignment: Option<Alignment>,
     pub(super) contextual_spacing: bool,
     pub(super) keep_next: bool,
+    pub(super) keep_lines: bool,
     pub(super) line_spacing: Option<LineSpacing>,
     pub(super) indent_left: Option<f32>,
     pub(super) indent_right: Option<f32>,
@@ -92,7 +93,7 @@ pub(super) fn parse_alignment(val: &str) -> Alignment {
     }
 }
 
-pub(super) fn parse_theme(zip: &mut zip::ZipArchive<std::fs::File>) -> ThemeFonts {
+pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> ThemeFonts {
     let mut major = String::from("Aptos Display");
     let mut minor = String::from("Aptos");
 
@@ -166,8 +167,8 @@ pub(super) fn parse_line_spacing(spacing_node: roxmltree::Node, line_val: f32) -
     }
 }
 
-pub(super) fn parse_styles(
-    zip: &mut zip::ZipArchive<std::fs::File>,
+pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
+    zip: &mut zip::ZipArchive<R>,
     theme: &ThemeFonts,
 ) -> StylesInfo {
     let mut defaults = StyleDefaults {
@@ -273,6 +274,7 @@ pub(super) fn parse_styles(
         let contextual_spacing = ppr.and_then(|ppr| wml(ppr, "contextualSpacing")).is_some();
 
         let keep_next = ppr.and_then(|ppr| wml(ppr, "keepNext")).is_some();
+        let keep_lines = ppr.and_then(|ppr| wml(ppr, "keepLines")).is_some();
 
         let line_spacing = spacing.and_then(|n| {
             n.attribute((WML_NS, "line"))
@@ -306,6 +308,7 @@ pub(super) fn parse_styles(
                 alignment,
                 contextual_spacing,
                 keep_next,
+                keep_lines,
                 line_spacing,
                 indent_left,
                 indent_right,
@@ -469,6 +472,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             alignment: None,
             contextual_spacing: false,
             keep_next: false,
+            keep_lines: false,
             line_spacing: None,
             indent_left: None,
             indent_right: None,

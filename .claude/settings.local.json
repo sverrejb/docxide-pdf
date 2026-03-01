@@ -84,7 +84,12 @@
       "Bash(DOCXIDE_CASE=74f79a76bad799740efd1c62573198f11f3529a81a8f497ea2d186c9c24e3bac cargo test:*)",
       "Bash(DOCXSIDE_CASE=74f79a76 cargo test:*)",
       "Bash(DOCXIDE_CASE=case3 cargo test:*)",
-      "Bash(tools/target/debug/docx-inspect:*)"
+      "Bash(tools/target/debug/docx-inspect:*)",
+      "Bash(DOCXSIDE_CASE=case21 cargo test:*)",
+      "Bash(DOCXSIDE_CASE=case22 cargo test:*)",
+      "Bash(DOCXSIDE_CASE=case23 cargo test:*)",
+      "Bash(DOCXSIDE_CASE=case24 cargo test:*)",
+      "Bash(DOCXIDE_CASE=case24 cargo test:*)"
     ]
   }
 }
