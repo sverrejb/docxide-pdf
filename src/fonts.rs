@@ -8,6 +8,12 @@ use ttf_parser::Face;
 
 use crate::model::Run;
 
+pub(crate) struct ShapedWord {
+    pub(crate) advances: Vec<f32>,
+    #[allow(dead_code)]
+    pub(crate) total_width_1000: f32,
+}
+
 pub(crate) struct FontEntry {
     pub(crate) pdf_name: String,
     pub(crate) font_ref: Ref,
@@ -16,6 +22,8 @@ pub(crate) struct FontEntry {
     pub(crate) ascender_ratio: Option<f32>,
     pub(crate) char_to_gid: Option<HashMap<char, u16>>,
     pub(crate) char_widths_1000: Option<HashMap<char, f32>>,
+    pub(crate) font_data: Option<Vec<u8>>,
+    pub(crate) face_index: u32,
 }
 
 impl FontEntry {
@@ -44,6 +52,49 @@ impl FontEntry {
 
     pub(crate) fn space_width(&self, font_size: f32) -> f32 {
         self.char_width_1000(' ') * font_size / 1000.0
+    }
+
+    pub(crate) fn shape_word(&self, word: &str) -> Option<ShapedWord> {
+        let data = self.font_data.as_ref()?;
+        let face = rustybuzz::Face::from_slice(data, self.face_index)?;
+
+        let mut buffer = rustybuzz::UnicodeBuffer::new();
+        buffer.push_str(word);
+
+        let features = [
+            rustybuzz::Feature::new(ttf_parser::Tag::from_bytes(b"kern"), 1, ..),
+            rustybuzz::Feature::new(ttf_parser::Tag::from_bytes(b"liga"), 0, ..),
+            rustybuzz::Feature::new(ttf_parser::Tag::from_bytes(b"clig"), 0, ..),
+            rustybuzz::Feature::new(ttf_parser::Tag::from_bytes(b"calt"), 0, ..),
+        ];
+
+        let output = rustybuzz::shape(&face, &features, buffer);
+
+        if output.len() != word.chars().count() {
+            return None;
+        }
+
+        let units = face.units_per_em() as f32;
+        let advances: Vec<f32> = output
+            .glyph_positions()
+            .iter()
+            .map(|pos| pos.x_advance as f32 / units * 1000.0)
+            .collect();
+        let total = advances.iter().sum();
+
+        Some(ShapedWord {
+            advances,
+            total_width_1000: total,
+        })
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn word_width_kerned(&self, word: &str, font_size: f32) -> f32 {
+        if let Some(shaped) = self.shape_word(word) {
+            shaped.total_width_1000 * font_size / 1000.0
+        } else {
+            self.word_width(word, font_size)
+        }
     }
 }
 
@@ -759,36 +810,36 @@ pub(crate) fn register_font(
     let font_candidates: Vec<&str> = font_name.split(';').map(|s| s.trim()).collect();
 
     let mut result = None;
+    let mut font_data_for_shaping: Option<Vec<u8>> = None;
+    let mut font_face_index: u32 = 0;
+
     for candidate in &font_candidates {
         let embedded_key = (candidate.to_lowercase(), bold, italic);
-        let embedded_data = embedded_fonts.get(&embedded_key);
 
-        let found = embedded_data
-            .and_then(|data| {
-                embed_truetype(
-                    pdf, font_ref, descriptor_ref, data_ref, candidate, data, 0,
-                    used_chars, alloc,
-                )
-            })
-            .or_else(|| {
-                find_font_file(candidate, bold, italic).and_then(|(path, face_index)| {
-                    let data = std::fs::read(&path).ok()?;
-                    embed_truetype(
-                        pdf,
-                        font_ref,
-                        descriptor_ref,
-                        data_ref,
-                        candidate,
-                        &data,
-                        face_index,
-                        used_chars,
-                        alloc,
-                    )
-                })
-            });
-        if let Some(metrics) = found {
-            result = Some(metrics);
-            break;
+        if let Some(data) = embedded_fonts.get(&embedded_key) {
+            if let Some(metrics) = embed_truetype(
+                pdf, font_ref, descriptor_ref, data_ref, candidate, data, 0,
+                used_chars, alloc,
+            ) {
+                font_data_for_shaping = Some(data.clone());
+                font_face_index = 0;
+                result = Some(metrics);
+                break;
+            }
+        }
+
+        if let Some((path, face_index)) = find_font_file(candidate, bold, italic) {
+            if let Ok(data) = std::fs::read(&path) {
+                if let Some(metrics) = embed_truetype(
+                    pdf, font_ref, descriptor_ref, data_ref, candidate,
+                    &data, face_index, used_chars, alloc,
+                ) {
+                    font_face_index = face_index;
+                    font_data_for_shaping = Some(data);
+                    result = Some(metrics);
+                    break;
+                }
+            }
         }
     }
 
@@ -815,5 +866,7 @@ pub(crate) fn register_font(
         ascender_ratio,
         char_to_gid,
         char_widths_1000,
+        font_data: font_data_for_shaping,
+        face_index: font_face_index,
     }
 }

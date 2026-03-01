@@ -1,12 +1,14 @@
 # Roadmap
 
-## Kerning / GPOS (HIGH)
+## Kerning / GPOS (PARTIALLY DONE)
 
-The single biggest factor limiting Jaccard scores — text progressively drifts right across dense-text cases, losing ~5-10pp each. A prototype using the legacy `kern` table was implemented and reverted (improved Aptos but regressed Calibri) because Word uses GPOS kerning, not the legacy table.
+Render-only GPOS kerning is implemented via `rustybuzz`: per-word shaping extracts GPOS kern adjustments and emits TJ operators with per-glyph positioning. Line breaking still uses unkerned widths.
 
-To do it properly:
-1. Use GPOS table for kerning lookups (requires OpenType layout engine, e.g. `rustybuzz`)
-2. Apply kerning to both word width calculation (line breaking) and PDF rendering (TJ operator)
+**Why render-only**: Full kerning (layout + rendering) was tested but caused widespread line-break regressions. Investigation revealed Word's kerning values differ from standard GPOS — Word kerns pairs (e.g. e→l, l→o in Aptos) that have no GPOS table entry at all. The source of Word's extra kerning is unknown (possibly proprietary heuristics, or the malformed legacy kern table).
+
+Remaining work:
+1. **Match Word's kerning source** — investigate where Word gets kerning for pairs absent from the GPOS table; once understood, apply to both layout and rendering
+2. **Cross-word kerning** — currently shape per-word; shaping full runs would capture comma→space and space→W adjustments that Word includes
 
 ## Font Substitution (HIGH)
 

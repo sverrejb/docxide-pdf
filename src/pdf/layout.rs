@@ -474,6 +474,68 @@ fn encode_text_for_pdf(text: &str, pdf_font: &str, seen_fonts: &HashMap<String, 
     }
 }
 
+fn render_text_kerned(
+    content: &mut Content,
+    text: &str,
+    pdf_font: &str,
+    seen_fonts: &HashMap<String, FontEntry>,
+) {
+    let entry = seen_fonts.values().find(|e| e.pdf_name == pdf_font);
+    let shaped = entry.and_then(|e| e.shape_word(text));
+
+    let (entry, shaped) = match (entry, shaped) {
+        (Some(e), Some(s)) => (e, s),
+        _ => {
+            let text_bytes = encode_text_for_pdf(text, pdf_font, seen_fonts);
+            content.show(Str(&text_bytes));
+            return;
+        }
+    };
+
+    let chars: Vec<char> = text.chars().collect();
+    let mut has_adjustment = false;
+    let mut adjustments: Vec<f32> = Vec::with_capacity(chars.len());
+
+    for (i, &ch) in chars.iter().enumerate() {
+        let default_w = entry.char_width_1000(ch);
+        let adj = default_w - shaped.advances[i];
+        adjustments.push(adj);
+        if i < chars.len() - 1 && adj.abs() > 0.5 {
+            has_adjustment = true;
+        }
+    }
+
+    if !has_adjustment {
+        let text_bytes = encode_text_for_pdf(text, pdf_font, seen_fonts);
+        content.show(Str(&text_bytes));
+        return;
+    }
+
+    let char_to_gid = entry.char_to_gid.as_ref().unwrap();
+
+    {
+        let mut positioned = content.show_positioned();
+        let mut items = positioned.items();
+        let mut pending: Vec<u8> = Vec::new();
+
+        for (i, &ch) in chars.iter().enumerate() {
+            let gid = char_to_gid.get(&ch).copied().unwrap_or(0);
+            pending.push((gid >> 8) as u8);
+            pending.push((gid & 0xFF) as u8);
+
+            if i < chars.len() - 1 && adjustments[i].abs() > 0.5 {
+                items.show(Str(&pending));
+                items.adjust(adjustments[i]);
+                pending.clear();
+            }
+        }
+
+        if !pending.is_empty() {
+            items.show(Str(&pending));
+        }
+    }
+}
+
 /// Render pre-built lines applying the paragraph alignment.
 /// `total_line_count` is the full paragraph line count (for justify: last line stays left-aligned).
 pub(super) fn render_paragraph_lines(
@@ -637,9 +699,7 @@ pub(super) fn render_paragraph_lines(
                 td_x = x;
                 td_y = cy;
 
-                let text_bytes =
-                    encode_text_for_pdf(&chunk.text, &chunk.pdf_font, seen_fonts);
-                content.show(Str(&text_bytes));
+                render_text_kerned(content, &chunk.text, &chunk.pdf_font, seen_fonts);
 
                 if chunk.underline {
                     let thick = (chunk.font_size * 0.05).max(0.5);
