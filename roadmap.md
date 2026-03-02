@@ -54,6 +54,19 @@ Tab stop alignment and leader rendering has small positioning errors that accumu
 - **Line spacing** — Auto and Exact work. AtLeast parsed but may not enforce minimum correctly.
 - **Tab stops** — basic left/center/right tabs work but leader rendering and decimal alignment have precision issues.
 
+## Code Structure
+
+### Refactor `pdf/mod.rs` `render()` (LOW)
+
+The `render()` function in `pdf/mod.rs` is ~1450 lines with many closures and shared mutable state (`y`, `current_page`, `effective_margin_bottom`, etc.). It could benefit from extraction into submodules:
+
+- `pdf/headers_footers.rs` — `render_header_footer` (~220 lines, already a free fn)
+- `pdf/footnotes.rs` — footnote height computation + rendering (~120 lines)
+- `pdf/images.rs` — `embed_image` closure → free fn (~140 lines)
+- `pdf/list_labels.rs` — `label_for_run`, `label_for_paragraph` (~30 lines)
+
+The core page loop is tightly coupled through shared state, so breaking it into phases would require introducing a render context struct — a bigger undertaking that should be done incrementally.
+
 ## Performance
 
 ### Known Bottlenecks
