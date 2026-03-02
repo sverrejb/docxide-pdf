@@ -21,8 +21,9 @@ pub struct TabStop {
     pub leader: Option<char>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum VertAlign {
+    #[default]
     Baseline,
     Superscript,
     Subscript,
@@ -186,6 +187,37 @@ pub struct Paragraph {
     pub textboxes: Vec<Textbox>,
 }
 
+impl Default for Paragraph {
+    fn default() -> Self {
+        Self {
+            runs: Vec::new(),
+            space_before: 0.0,
+            space_after: 0.0,
+            content_height: 0.0,
+            alignment: Alignment::Left,
+            indent_left: 0.0,
+            indent_right: 0.0,
+            indent_hanging: 0.0,
+            indent_first_line: 0.0,
+            list_label: String::new(),
+            list_label_font: None,
+            contextual_spacing: false,
+            keep_next: false,
+            keep_lines: false,
+            line_spacing: None,
+            image: None,
+            borders: ParagraphBorders::default(),
+            shading: None,
+            page_break_before: false,
+            column_break_before: false,
+            tab_stops: Vec::new(),
+            extra_line_breaks: 0,
+            floating_images: Vec::new(),
+            textboxes: Vec::new(),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Run {
     pub text: String,
@@ -210,6 +242,35 @@ pub struct Run {
     pub inline_image: Option<EmbeddedImage>,
     pub footnote_id: Option<u32>,
     pub is_footnote_ref_mark: bool,
+}
+
+impl Default for Run {
+    fn default() -> Self {
+        Self {
+            text: String::new(),
+            font_size: 0.0,
+            font_name: String::new(),
+            bold: false,
+            italic: false,
+            underline: false,
+            strikethrough: false,
+            dstrike: false,
+            char_spacing: 0.0,
+            text_scale: 100.0,
+            caps: false,
+            small_caps: false,
+            vanish: false,
+            color: None,
+            highlight: None,
+            is_tab: false,
+            vertical_align: VertAlign::Baseline,
+            field_code: None,
+            hyperlink_url: None,
+            inline_image: None,
+            footnote_id: None,
+            is_footnote_ref_mark: false,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

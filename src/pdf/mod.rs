@@ -534,6 +534,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 xobj.height(img.pixel_height as i32);
                 xobj.color_space().device_rgb();
                 xobj.bits_per_component(8);
+                xobj.interpolate(true);
             }
             ImageFormat::Png => {
                 let cursor = std::io::Cursor::new(&img.data);
@@ -575,6 +576,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     xobj.height(h as i32);
                     xobj.color_space().device_rgb();
                     xobj.bits_per_component(8);
+                    xobj.interpolate(true);
                     if let Some(mask_ref) = smask_ref {
                         xobj.s_mask(mask_ref);
                     }

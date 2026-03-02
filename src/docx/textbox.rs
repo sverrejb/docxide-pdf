@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io::Read;
 
 use crate::model::{
-    Alignment, HorizontalPosition, LineSpacing, Paragraph, ParagraphBorders, Textbox,
+    Alignment, HorizontalPosition, LineSpacing, Paragraph, Textbox,
 };
 
 use super::{DML_NS, WML_NS, WPD_NS, WPS_NS, MC_NS_TOP, twips_to_pts, twips_attr, wml, wml_attr};
@@ -105,7 +105,6 @@ pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
             runs: parsed.runs,
             space_before,
             space_after,
-            content_height: 0.0,
             alignment,
             indent_left,
             indent_right,
@@ -113,19 +112,12 @@ pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
             indent_first_line,
             list_label,
             list_label_font,
-            contextual_spacing: false,
-            keep_next: false,
-            keep_lines: false,
             line_spacing,
-            image: None,
-            borders: ParagraphBorders::default(),
-            shading: None,
-            page_break_before: false,
-            column_break_before: false,
             tab_stops,
             extra_line_breaks: parsed.line_break_count,
             floating_images: parsed.floating_images,
             textboxes: parsed.textboxes,
+            ..Paragraph::default()
         });
     }
     paragraphs

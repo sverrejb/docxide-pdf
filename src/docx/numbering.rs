@@ -20,21 +20,15 @@ pub(super) struct NumberingInfo {
 pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
     zip: &mut zip::ZipArchive<R>,
 ) -> NumberingInfo {
-    let mut abstract_nums: HashMap<String, HashMap<u8, LevelDef>> = HashMap::new();
-    let mut num_to_abstract: HashMap<String, String> = HashMap::new();
-
     let Some(xml_content) = super::read_zip_text(zip, "word/numbering.xml") else {
-        return NumberingInfo {
-            abstract_nums,
-            num_to_abstract,
-        };
+        return NumberingInfo::default();
     };
     let Ok(xml) = roxmltree::Document::parse(&xml_content) else {
-        return NumberingInfo {
-            abstract_nums,
-            num_to_abstract,
-        };
+        return NumberingInfo::default();
     };
+
+    let mut abstract_nums: HashMap<String, HashMap<u8, LevelDef>> = HashMap::new();
+    let mut num_to_abstract: HashMap<String, String> = HashMap::new();
 
     let root = xml.root_element();
 

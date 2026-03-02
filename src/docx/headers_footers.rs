@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io::Read;
 
 use crate::model::{
-    Alignment, Footnote, HeaderFooter, LineSpacing, Paragraph, ParagraphBorders,
+    Alignment, Footnote, HeaderFooter, LineSpacing, Paragraph,
 };
 
 use super::{WML_NS, twips_attr, wml, wml_attr};
@@ -41,29 +41,11 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
 
         paragraphs.push(Paragraph {
             runs: parsed.runs,
-            space_before: 0.0,
-            space_after: 0.0,
-            content_height: 0.0,
             alignment,
-            indent_left: 0.0,
-            indent_right: 0.0,
-            indent_hanging: 0.0,
-            indent_first_line: 0.0,
-            list_label: String::new(),
-            list_label_font: None,
-            contextual_spacing: false,
-            keep_next: false,
-            keep_lines: false,
-            line_spacing: None,
-            image: None,
-            borders: ParagraphBorders::default(),
-            shading: None,
-            page_break_before: false,
-            column_break_before: false,
-            tab_stops: vec![],
             extra_line_breaks: parsed.line_break_count,
             floating_images: parsed.floating_images,
             textboxes: parsed.textboxes,
+            ..Paragraph::default()
         });
     }
 
@@ -145,27 +127,10 @@ pub(super) fn parse_footnotes<R: Read + std::io::Seek>(
                 runs: parsed.runs,
                 space_before,
                 space_after,
-                content_height: 0.0,
                 alignment,
-                indent_left: 0.0,
-                indent_right: 0.0,
-                indent_hanging: 0.0,
-                indent_first_line: 0.0,
-                list_label: String::new(),
-                list_label_font: None,
-                contextual_spacing: false,
-                keep_next: false,
-                keep_lines: false,
                 line_spacing,
-                image: None,
-                borders: ParagraphBorders::default(),
-                shading: None,
-                page_break_before: false,
-                column_break_before: false,
-                tab_stops: vec![],
                 extra_line_breaks: parsed.line_break_count,
-                floating_images: vec![],
-                textboxes: vec![],
+                ..Paragraph::default()
             });
         }
 

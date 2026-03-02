@@ -523,18 +523,8 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                         let shading = tc_pr
                             .and_then(|pr| wml(pr, "shd"))
                             .and_then(|shd| shd.attribute((WML_NS, "fill")))
-                            .filter(|f| *f != "auto" && *f != "none")
-                            .and_then(|hex| {
-                                if hex.len() == 6 {
-                                    Some([
-                                        u8::from_str_radix(&hex[0..2], 16).ok()?,
-                                        u8::from_str_radix(&hex[2..4], 16).ok()?,
-                                        u8::from_str_radix(&hex[4..6], 16).ok()?,
-                                    ])
-                                } else {
-                                    None
-                                }
-                            });
+                            .filter(|f| *f != "none")
+                            .and_then(parse_hex_color);
 
                         let mut cell_paras = Vec::new();
                         for p in tc.children().filter(|n| {
@@ -594,9 +584,6 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                             }
                             cell_paras.push(Paragraph {
                                 runs: parsed.runs,
-                                space_before: 0.0,
-                                space_after: 0.0,
-                                content_height: 0.0,
                                 alignment,
                                 indent_left,
                                 indent_right,
@@ -604,19 +591,9 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                                 indent_first_line,
                                 list_label,
                                 list_label_font,
-                                contextual_spacing: false,
-                                keep_next: false,
-                                keep_lines: false,
                                 line_spacing,
-                                image: None,
-                                borders: ParagraphBorders::default(),
-                                shading: None,
-                                page_break_before: false,
-                                column_break_before: false,
-                                tab_stops: vec![],
                                 extra_line_breaks: parsed.line_break_count,
-                                floating_images: vec![],
-                                textboxes: vec![],
+                                ..Paragraph::default()
                             });
                         }
                         cells.push(TableCell {

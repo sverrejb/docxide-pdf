@@ -20,6 +20,60 @@ pub(super) struct ParsedRuns {
     pub(super) textboxes: Vec<Textbox>,
 }
 
+/// Resolved formatting for the current run, used to build Run structs concisely.
+struct RunFormat {
+    font_size: f32,
+    font_name: String,
+    bold: bool,
+    italic: bool,
+    underline: bool,
+    strikethrough: bool,
+    dstrike: bool,
+    char_spacing: f32,
+    text_scale: f32,
+    caps: bool,
+    small_caps: bool,
+    vanish: bool,
+    color: Option<[u8; 3]>,
+    vertical_align: VertAlign,
+    highlight: Option<[u8; 3]>,
+}
+
+impl RunFormat {
+    /// Build a text run with the full formatting applied.
+    fn text_run(&self, text: String, hyperlink_url: Option<String>) -> Run {
+        Run {
+            text,
+            font_size: self.font_size,
+            font_name: self.font_name.clone(),
+            bold: self.bold,
+            italic: self.italic,
+            underline: self.underline,
+            strikethrough: self.strikethrough,
+            dstrike: self.dstrike,
+            char_spacing: self.char_spacing,
+            text_scale: self.text_scale,
+            caps: self.caps,
+            small_caps: self.small_caps,
+            vanish: self.vanish,
+            color: self.color,
+            vertical_align: self.vertical_align,
+            highlight: self.highlight,
+            hyperlink_url,
+            ..Run::default()
+        }
+    }
+
+    /// Build a minimal run that only carries font identity (for images, tabs, field codes).
+    fn minimal_run(&self) -> Run {
+        Run {
+            font_size: self.font_size,
+            font_name: self.font_name.clone(),
+            ..Run::default()
+        }
+    }
+}
+
 pub(super) fn parse_runs<R: Read + std::io::Seek>(
     para_node: roxmltree::Node,
     styles: &StylesInfo,
@@ -85,8 +139,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                 let fallback = child.children().find(|n| {
                     n.tag_name().namespace() == Some(MC_NS) && n.tag_name().name() == "Fallback"
                 });
-                let branch = choice.or(fallback);
-                if let Some(branch) = branch {
+                if let Some(branch) = choice.or(fallback) {
                     collect_run_nodes(branch, rels, out);
                 }
             }
@@ -111,89 +164,90 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
             .and_then(|n| wml_attr(n, "rStyle"))
             .and_then(|id| styles.character_styles.get(id));
 
-        let font_size = rpr
-            .and_then(|n| wml_attr(n, "sz"))
-            .and_then(|v| v.parse::<f32>().ok())
-            .map(|hp| hp / 2.0)
-            .or_else(|| char_style.and_then(|cs| cs.font_size))
-            .unwrap_or(style_font_size);
+        let fmt = RunFormat {
+            font_size: rpr
+                .and_then(|n| wml_attr(n, "sz"))
+                .and_then(|v| v.parse::<f32>().ok())
+                .map(|hp| hp / 2.0)
+                .or_else(|| char_style.and_then(|cs| cs.font_size))
+                .unwrap_or(style_font_size),
+            font_name: rpr
+                .and_then(|n| wml(n, "rFonts"))
+                .map(|rfonts| resolve_font_from_node(rfonts, theme, &style_font_name))
+                .or_else(|| char_style.and_then(|cs| cs.font_name.clone()))
+                .unwrap_or_else(|| style_font_name.clone()),
+            bold: rpr
+                .and_then(|n| wml_bool(n, "b"))
+                .or_else(|| char_style.and_then(|cs| cs.bold))
+                .unwrap_or(style_bold),
+            italic: rpr
+                .and_then(|n| wml_bool(n, "i"))
+                .or_else(|| char_style.and_then(|cs| cs.italic))
+                .unwrap_or(style_italic),
+            underline: rpr
+                .and_then(|n| {
+                    wml(n, "u")
+                        .and_then(|u| u.attribute((WML_NS, "val")))
+                        .map(|v| v != "none")
+                })
+                .or_else(|| char_style.and_then(|cs| cs.underline))
+                .unwrap_or(false),
+            strikethrough: rpr
+                .and_then(|n| wml_bool(n, "strike"))
+                .or_else(|| char_style.and_then(|cs| cs.strikethrough))
+                .unwrap_or(false),
+            dstrike: rpr
+                .and_then(|n| wml_bool(n, "dstrike"))
+                .unwrap_or(false),
+            char_spacing: rpr
+                .and_then(|n| wml(n, "spacing"))
+                .and_then(|n| n.attribute((WML_NS, "val")))
+                .and_then(|v| v.parse::<f32>().ok())
+                .map(twips_to_pts)
+                .unwrap_or(0.0),
+            text_scale: rpr
+                .and_then(|n| wml_attr(n, "w"))
+                .and_then(|v| v.trim_end_matches('%').parse::<f32>().ok())
+                .unwrap_or(100.0),
+            caps: rpr
+                .and_then(|n| wml_bool(n, "caps"))
+                .or_else(|| char_style.and_then(|cs| cs.caps))
+                .unwrap_or(style_caps),
+            small_caps: rpr
+                .and_then(|n| wml_bool(n, "smallCaps"))
+                .or_else(|| char_style.and_then(|cs| cs.small_caps))
+                .unwrap_or(style_small_caps),
+            vanish: rpr
+                .and_then(|n| wml_bool(n, "vanish"))
+                .or_else(|| char_style.and_then(|cs| cs.vanish))
+                .unwrap_or(style_vanish),
+            color: rpr
+                .and_then(|n| wml_attr(n, "color"))
+                .and_then(parse_text_color)
+                .or_else(|| char_style.and_then(|cs| cs.color))
+                .or(style_color),
+            vertical_align: rpr
+                .and_then(|n| wml_attr(n, "vertAlign"))
+                .map(|v| match v {
+                    "superscript" => VertAlign::Superscript,
+                    "subscript" => VertAlign::Subscript,
+                    _ => VertAlign::Baseline,
+                })
+                .unwrap_or(VertAlign::Baseline),
+            highlight: rpr
+                .and_then(|n| wml_attr(n, "highlight"))
+                .and_then(highlight_color),
+        };
 
-        let font_name = rpr
-            .and_then(|n| wml(n, "rFonts"))
-            .map(|rfonts| resolve_font_from_node(rfonts, theme, &style_font_name))
-            .or_else(|| char_style.and_then(|cs| cs.font_name.clone()))
-            .unwrap_or_else(|| style_font_name.clone());
+        let flush_pending = |pending: &mut String, runs: &mut Vec<Run>| {
+            if !pending.is_empty() {
+                runs.push(fmt.text_run(std::mem::take(pending), hyperlink_url.clone()));
+            }
+        };
 
-        let bold = rpr
-            .and_then(|n| wml_bool(n, "b"))
-            .or_else(|| char_style.and_then(|cs| cs.bold))
-            .unwrap_or(style_bold);
-        let italic = rpr
-            .and_then(|n| wml_bool(n, "i"))
-            .or_else(|| char_style.and_then(|cs| cs.italic))
-            .unwrap_or(style_italic);
-        let underline = rpr
-            .and_then(|n| {
-                wml(n, "u")
-                    .and_then(|u| u.attribute((WML_NS, "val")))
-                    .map(|v| v != "none")
-            })
-            .or_else(|| char_style.and_then(|cs| cs.underline))
-            .unwrap_or(false);
-        let strikethrough = rpr
-            .and_then(|n| wml_bool(n, "strike"))
-            .or_else(|| char_style.and_then(|cs| cs.strikethrough))
-            .unwrap_or(false);
-        let dstrike = rpr
-            .and_then(|n| wml_bool(n, "dstrike"))
-            .unwrap_or(false);
-        let char_spacing = rpr
-            .and_then(|n| wml(n, "spacing"))
-            .and_then(|n| n.attribute((WML_NS, "val")))
-            .and_then(|v| v.parse::<f32>().ok())
-            .map(twips_to_pts)
-            .unwrap_or(0.0);
-        let text_scale = rpr
-            .and_then(|n| wml_attr(n, "w"))
-            .and_then(|v| v.trim_end_matches('%').parse::<f32>().ok())
-            .unwrap_or(100.0);
-        let caps = rpr
-            .and_then(|n| wml_bool(n, "caps"))
-            .or_else(|| char_style.and_then(|cs| cs.caps))
-            .unwrap_or(style_caps);
-        let small_caps = rpr
-            .and_then(|n| wml_bool(n, "smallCaps"))
-            .or_else(|| char_style.and_then(|cs| cs.small_caps))
-            .unwrap_or(style_small_caps);
-        let vanish = rpr
-            .and_then(|n| wml_bool(n, "vanish"))
-            .or_else(|| char_style.and_then(|cs| cs.vanish))
-            .unwrap_or(style_vanish);
-
-        let color = rpr
-            .and_then(|n| wml_attr(n, "color"))
-            .and_then(parse_text_color)
-            .or_else(|| char_style.and_then(|cs| cs.color))
-            .or(style_color);
-
-        let vertical_align = rpr
-            .and_then(|n| wml_attr(n, "vertAlign"))
-            .map(|v| match v {
-                "superscript" => VertAlign::Superscript,
-                "subscript" => VertAlign::Subscript,
-                _ => VertAlign::Baseline,
-            })
-            .unwrap_or(VertAlign::Baseline);
-
-        let highlight = rpr
-            .and_then(|n| wml_attr(n, "highlight"))
-            .and_then(highlight_color);
-
-        // Iterate children in document order to handle w:t, w:tab, w:br, w:fldChar, w:instrText
         let mut pending_text = String::new();
         for child in run_node.children() {
             let child_ns = child.tag_name().namespace();
-            // Handle mc:AlternateContent inside runs (e.g. textboxes)
             if child_ns == Some(MC_NS) && child.tag_name().name() == "AlternateContent" {
                 let choice = child.children().find(|n| {
                     n.tag_name().namespace() == Some(MC_NS) && n.tag_name().name() == "Choice"
@@ -209,28 +263,8 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                         match parse_run_drawing(drawing, rels, zip, styles, theme, numbering) {
                             Some(RunDrawingResult::Inline(img)) => {
                                 runs.push(Run {
-                                    text: String::new(),
-                                    font_size,
-                                    font_name: font_name.clone(),
-                                    bold: false,
-                                    italic: false,
-                                    underline: false,
-                                    strikethrough: false,
-                                    dstrike: false,
-                                    char_spacing: 0.0,
-                                    text_scale: 100.0,
-                                    caps: false,
-                                    small_caps: false,
-                                    vanish: false,
-                                    color: None,
-                                    is_tab: false,
-                                    vertical_align: VertAlign::Baseline,
-                                    field_code: None,
-                                    hyperlink_url: None,
-                                    highlight: None,
                                     inline_image: Some(img),
-                                    footnote_id: None,
-                                    is_footnote_ref_mark: false,
+                                    ..fmt.minimal_run()
                                 });
                             }
                             Some(RunDrawingResult::Floating(fi)) => {
@@ -263,33 +297,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                 "fldChar" => {
                     match child.attribute((WML_NS, "fldCharType")) {
                         Some("begin") => {
-                            // Flush pending text before entering field
-                            if !pending_text.is_empty() {
-                                runs.push(Run {
-                                    text: std::mem::take(&mut pending_text),
-                                    font_size,
-                                    font_name: font_name.clone(),
-                                    bold,
-                                    italic,
-                                    underline,
-                                    strikethrough,
-                                    dstrike,
-                                    char_spacing,
-                                    text_scale,
-                                    caps,
-                                    small_caps,
-                                    vanish,
-                                    color,
-                                    is_tab: false,
-                                    vertical_align,
-                                    field_code: None,
-                                    hyperlink_url: hyperlink_url.clone(),
-                                    highlight,
-                                    inline_image: None,
-                                    footnote_id: None,
-                                    is_footnote_ref_mark: false,
-                                });
-                            }
+                            flush_pending(&mut pending_text, &mut runs);
                             in_field = true;
                             field_instr.clear();
                         }
@@ -305,28 +313,14 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                                 };
                                 if let Some(code) = fc {
                                     runs.push(Run {
-                                        text: String::new(),
-                                        font_size,
-                                        font_name: font_name.clone(),
-                                        bold,
-                                        italic,
-                                        underline: false,
-                                        strikethrough: false,
-                                        dstrike: false,
-                                        char_spacing: 0.0,
-                                        text_scale: 100.0,
-                                        caps: false,
-                                        small_caps: false,
-                                        vanish: false,
-                                        color,
-                                        is_tab: false,
-                                        vertical_align: VertAlign::Baseline,
+                                        font_size: fmt.font_size,
+                                        font_name: fmt.font_name.clone(),
+                                        bold: fmt.bold,
+                                        italic: fmt.italic,
+                                        color: fmt.color,
                                         field_code: Some(code),
                                         hyperlink_url: hyperlink_url.clone(),
-                                        highlight: None,
-                                        inline_image: None,
-                                        footnote_id: None,
-                                        is_footnote_ref_mark: false,
+                                        ..Run::default()
                                     });
                                 }
                                 in_field = false;
@@ -349,57 +343,10 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                     }
                 }
                 "tab" if !in_field => {
-                    // Flush any pending text before the tab
-                    if !pending_text.is_empty() {
-                        runs.push(Run {
-                            text: std::mem::take(&mut pending_text),
-                            font_size,
-                            font_name: font_name.clone(),
-                            bold,
-                            italic,
-                            underline,
-                            strikethrough,
-                            dstrike,
-                            char_spacing,
-                            text_scale,
-                            caps,
-                            small_caps,
-                            vanish,
-                            color,
-                            is_tab: false,
-                            vertical_align,
-                            field_code: None,
-                            hyperlink_url: hyperlink_url.clone(),
-                            highlight,
-                            inline_image: None,
-                            footnote_id: None,
-                            is_footnote_ref_mark: false,
-                        });
-                    }
-                    // Insert tab marker run
+                    flush_pending(&mut pending_text, &mut runs);
                     runs.push(Run {
-                        text: String::new(),
-                        font_size,
-                        font_name: font_name.clone(),
-                        bold: false,
-                        italic: false,
-                        underline: false,
-                        strikethrough: false,
-                        dstrike: false,
-                        char_spacing: 0.0,
-                        text_scale: 100.0,
-                        caps: false,
-                        small_caps: false,
-                        vanish: false,
-                        color: None,
                         is_tab: true,
-                        vertical_align: VertAlign::Baseline,
-                        field_code: None,
-                        hyperlink_url: None,
-                        highlight: None,
-                        inline_image: None,
-                        footnote_id: None,
-                        is_footnote_ref_mark: false,
+                        ..fmt.minimal_run()
                     });
                 }
                 "br" if !in_field => {
@@ -411,57 +358,12 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                 }
                 "drawing" if in_field => {}
                 "drawing" => {
-                    if !pending_text.is_empty() {
-                        runs.push(Run {
-                            text: std::mem::take(&mut pending_text),
-                            font_size,
-                            font_name: font_name.clone(),
-                            bold,
-                            italic,
-                            underline,
-                            strikethrough,
-                            dstrike,
-                            char_spacing,
-                            text_scale,
-                            caps,
-                            small_caps,
-                            vanish,
-                            color,
-                            is_tab: false,
-                            vertical_align,
-                            field_code: None,
-                            hyperlink_url: hyperlink_url.clone(),
-                            highlight,
-                            inline_image: None,
-                            footnote_id: None,
-                            is_footnote_ref_mark: false,
-                        });
-                    }
+                    flush_pending(&mut pending_text, &mut runs);
                     match parse_run_drawing(child, rels, zip, styles, theme, numbering) {
                         Some(RunDrawingResult::Inline(img)) => {
                             runs.push(Run {
-                                text: String::new(),
-                                font_size,
-                                font_name: font_name.clone(),
-                                bold: false,
-                                italic: false,
-                                underline: false,
-                                strikethrough: false,
-                                dstrike: false,
-                                char_spacing: 0.0,
-                                text_scale: 100.0,
-                                caps: false,
-                                small_caps: false,
-                                vanish: false,
-                                color: None,
-                                is_tab: false,
-                                vertical_align: VertAlign::Baseline,
-                                field_code: None,
-                                hyperlink_url: None,
-                                highlight: None,
                                 inline_image: Some(img),
-                                footnote_id: None,
-                                is_footnote_ref_mark: false,
+                                ..fmt.minimal_run()
                             });
                         }
                         Some(RunDrawingResult::Floating(fi)) => {
@@ -481,112 +383,34 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                     }
                 }
                 "footnoteReference" if !in_field => {
-                    if !pending_text.is_empty() {
-                        runs.push(Run {
-                            text: std::mem::take(&mut pending_text),
-                            font_size,
-                            font_name: font_name.clone(),
-                            bold,
-                            italic,
-                            underline,
-                            strikethrough,
-                            dstrike,
-                            char_spacing,
-                            text_scale,
-                            caps,
-                            small_caps,
-                            vanish,
-                            color,
-                            is_tab: false,
-                            vertical_align,
-                            field_code: None,
-                            hyperlink_url: hyperlink_url.clone(),
-                            highlight,
-                            inline_image: None,
-                            footnote_id: None,
-                            is_footnote_ref_mark: false,
-                        });
-                    }
+                    flush_pending(&mut pending_text, &mut runs);
                     if let Some(id) = child
                         .attribute((WML_NS, "id"))
                         .and_then(|v| v.parse::<u32>().ok())
                     {
                         runs.push(Run {
-                            text: String::new(),
-                            font_size,
-                            font_name: font_name.clone(),
-                            bold,
-                            italic,
-                            underline: false,
-                            strikethrough: false,
-                            dstrike: false,
-                            char_spacing: 0.0,
-                            text_scale: 100.0,
-                            caps: false,
-                            small_caps: false,
-                            vanish: false,
-                            color,
-                            is_tab: false,
+                            font_size: fmt.font_size,
+                            font_name: fmt.font_name.clone(),
+                            bold: fmt.bold,
+                            italic: fmt.italic,
+                            color: fmt.color,
                             vertical_align: VertAlign::Superscript,
-                            field_code: None,
-                            hyperlink_url: None,
-                            highlight: None,
-                            inline_image: None,
                             footnote_id: Some(id),
-                            is_footnote_ref_mark: false,
+                            ..Run::default()
                         });
                     }
                 }
                 "footnoteRef" if !in_field => {
-                    if !pending_text.is_empty() {
-                        runs.push(Run {
-                            text: std::mem::take(&mut pending_text),
-                            font_size,
-                            font_name: font_name.clone(),
-                            bold,
-                            italic,
-                            underline,
-                            strikethrough,
-                            dstrike,
-                            char_spacing,
-                            text_scale,
-                            caps,
-                            small_caps,
-                            vanish,
-                            color,
-                            is_tab: false,
-                            vertical_align,
-                            field_code: None,
-                            hyperlink_url: hyperlink_url.clone(),
-                            highlight,
-                            inline_image: None,
-                            footnote_id: None,
-                            is_footnote_ref_mark: false,
-                        });
-                    }
+                    flush_pending(&mut pending_text, &mut runs);
                     runs.push(Run {
-                        text: String::new(),
-                        font_size,
-                        font_name: font_name.clone(),
-                        bold,
-                        italic,
-                        underline: false,
-                        strikethrough: false,
-                        dstrike: false,
-                        char_spacing: 0.0,
-                        text_scale: 100.0,
-                        caps: false,
-                        small_caps: false,
-                        vanish: false,
-                        color,
-                        is_tab: false,
+                        font_size: fmt.font_size,
+                        font_name: fmt.font_name.clone(),
+                        bold: fmt.bold,
+                        italic: fmt.italic,
+                        color: fmt.color,
                         vertical_align: VertAlign::Superscript,
-                        field_code: None,
-                        hyperlink_url: None,
-                        highlight: None,
-                        inline_image: None,
-                        footnote_id: None,
                         is_footnote_ref_mark: true,
+                        ..Run::default()
                     });
                 }
                 _ => {}
@@ -594,30 +418,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
         }
         // Flush remaining text
         if !pending_text.is_empty() {
-            runs.push(Run {
-                text: pending_text,
-                font_size,
-                font_name,
-                bold,
-                italic,
-                underline,
-                strikethrough,
-                dstrike,
-                char_spacing,
-                text_scale,
-                caps,
-                small_caps,
-                vanish,
-                color,
-                is_tab: false,
-                vertical_align,
-                field_code: None,
-                hyperlink_url: hyperlink_url.clone(),
-                highlight,
-                inline_image: None,
-                footnote_id: None,
-                is_footnote_ref_mark: false,
-            });
+            runs.push(fmt.text_run(pending_text, hyperlink_url.clone()));
         }
     }
 
@@ -632,8 +433,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
     // need a synthetic run so the renderer computes the correct line height.
     if runs.is_empty() && !has_page_break {
         let mark_rpr = ppr.and_then(|ppr| wml(ppr, "rPr"));
-        let has_explicit_sz = mark_rpr.and_then(|n| wml_attr(n, "sz")).is_some();
-        if has_explicit_sz {
+        if mark_rpr.and_then(|n| wml_attr(n, "sz")).is_some() {
             let mark_font_size = mark_rpr
                 .and_then(|n| wml_attr(n, "sz"))
                 .and_then(|v| v.parse::<f32>().ok())
@@ -644,58 +444,24 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                 .map(|rfonts| resolve_font_from_node(rfonts, theme, &style_font_name))
                 .unwrap_or_else(|| style_font_name.clone());
             runs.push(Run {
-                text: String::new(),
                 font_size: mark_font_size,
                 font_name: mark_font_name,
                 bold: style_bold,
                 italic: style_italic,
-                underline: false,
-                strikethrough: false,
-                dstrike: false,
-                char_spacing: 0.0,
-                text_scale: 100.0,
-                caps: false,
-                small_caps: false,
-                vanish: false,
-                color: None,
-                highlight: None,
-                is_tab: false,
-                vertical_align: VertAlign::Baseline,
-                field_code: None,
-                hyperlink_url: None,
-                inline_image: None,
-                footnote_id: None,
-                is_footnote_ref_mark: false,
+                ..Run::default()
             });
         }
     }
 
-    // Word's paragraph mark (¶) uses the paragraph style's font even in empty
+    // Word's paragraph mark uses the paragraph style's font even in empty
     // paragraphs; ensure we carry that font info so line height is correct.
     if runs.is_empty() {
         runs.push(Run {
-            text: String::new(),
             font_size: style_font_size,
             font_name: style_font_name.clone(),
             bold: style_bold,
             italic: style_italic,
-            underline: false,
-            strikethrough: false,
-            dstrike: false,
-            char_spacing: 0.0,
-            text_scale: 100.0,
-            caps: false,
-            small_caps: false,
-            vanish: false,
-            color: None,
-            highlight: None,
-            is_tab: false,
-            vertical_align: VertAlign::Baseline,
-            field_code: None,
-            hyperlink_url: None,
-            inline_image: None,
-            footnote_id: None,
-            is_footnote_ref_mark: false,
+            ..Run::default()
         });
     }
 

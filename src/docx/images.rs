@@ -229,7 +229,6 @@ pub(super) fn compute_drawing_info<R: Read + std::io::Seek>(
 ) -> DrawingInfo {
     let mut max_height: f32 = 0.0;
     let mut image: Option<EmbeddedImage> = None;
-    let floating_images: Vec<FloatingImage> = Vec::new();
 
     for child in para_node.children() {
         let is_wml = child.tag_name().namespace() == Some(WML_NS);
@@ -283,6 +282,6 @@ pub(super) fn compute_drawing_info<R: Read + std::io::Seek>(
     DrawingInfo {
         height: max_height,
         image,
-        floating_images,
+        floating_images: Vec::new(),
     }
 }
