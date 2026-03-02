@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use pdf_writer::{Content, Name, Rect, Str};
 
-use crate::fonts::{FontEntry, encode_as_gids, font_key, to_winansi_bytes};
+use crate::fonts::{FontEntry, encode_as_gids, font_key, font_key_buf, to_winansi_bytes};
 use crate::model::{Alignment, Run, TabAlignment, TabStop, VertAlign};
 
 pub(super) struct WordChunk {
@@ -95,6 +95,7 @@ pub(super) fn build_paragraph_lines(
     let mut current_x: f32 = 0.0;
     let mut prev_ended_with_ws = false;
     let mut prev_space_w: f32 = 0.0;
+    let mut key_buf = String::new();
 
     for (run_idx, run) in runs.iter().enumerate() {
         if run.vanish || run.is_tab {
@@ -148,8 +149,8 @@ pub(super) fn build_paragraph_lines(
             continue;
         }
 
-        let key = font_key(run);
-        let entry = seen_fonts.get(&key).expect("font registered");
+        let key = font_key_buf(run, &mut key_buf);
+        let entry = seen_fonts.get(key).expect("font registered");
         let eff_fs = effective_font_size(run);
         let space_w = entry.space_width(eff_fs);
         let text = effective_text(run);
@@ -251,9 +252,10 @@ fn find_next_tab_stop(current_x: f32, tab_stops: &[TabStop], indent_left: f32) -
 fn segment_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 {
     let mut w: f32 = 0.0;
     let mut first = true;
+    let mut key_buf = String::new();
     for run in runs {
-        let key = font_key(run);
-        let entry = seen_fonts.get(&key).expect("font registered");
+        let key = font_key_buf(run, &mut key_buf);
+        let entry = seen_fonts.get(key).expect("font registered");
         let eff_fs = effective_font_size(run);
         let ts = run.text_scale / 100.0;
         let space_w = entry.space_width(eff_fs) * ts;
@@ -279,9 +281,10 @@ fn decimal_before_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) 
     };
     let mut w: f32 = 0.0;
     let mut chars_remaining = before.len();
+    let mut key_buf = String::new();
     for (run, text) in runs.iter().zip(texts.iter()) {
-        let key = font_key(run);
-        let entry = seen_fonts.get(&key).expect("font registered");
+        let key = font_key_buf(run, &mut key_buf);
+        let entry = seen_fonts.get(key).expect("font registered");
         let eff_fs = effective_font_size(run);
         let text_to_measure = if text.len() <= chars_remaining {
             chars_remaining -= text.len();
@@ -330,6 +333,7 @@ pub(super) fn build_tabbed_line(
 
     let mut all_chunks: Vec<WordChunk> = Vec::new();
     let mut current_x: f32 = 0.0;
+    let mut key_buf = String::new();
 
     for (seg_idx, (seg_runs, tab_before)) in segments.iter().enumerate() {
         if seg_idx > 0 {
@@ -370,8 +374,8 @@ pub(super) fn build_tabbed_line(
                             .next()
                     });
                     if let Some(run) = font_run {
-                        let key = font_key(run);
-                        let entry = seen_fonts.get(&key).expect("font registered");
+                        let key = font_key_buf(run, &mut key_buf);
+                        let entry = seen_fonts.get(key).expect("font registered");
                         let eff_fs = effective_font_size(run);
                         {
                             let char_w = entry.char_width_1000(leader_char) * eff_fs / 1000.0;
@@ -414,8 +418,8 @@ pub(super) fn build_tabbed_line(
         // Layout text in this segment from current_x
         let mut prev_ws = false;
         for run in seg_runs {
-            let key = font_key(run);
-            let entry = seen_fonts.get(&key).expect("font registered");
+            let key = font_key_buf(run, &mut key_buf);
+            let entry = seen_fonts.get(key).expect("font registered");
             let eff_fs = effective_font_size(run);
             let space_w = entry.space_width(eff_fs);
             let y_off = vert_y_offset(run);
@@ -466,9 +470,8 @@ pub(super) fn build_tabbed_line(
     }]
 }
 
-fn encode_text_for_pdf(text: &str, pdf_font: &str, seen_fonts: &HashMap<String, FontEntry>) -> Vec<u8> {
-    let entry = seen_fonts.values().find(|e| e.pdf_name == pdf_font);
-    match entry.and_then(|e| e.char_to_gid.as_ref()) {
+fn encode_text_for_pdf(text: &str, pdf_font: &str, pdf_name_to_entry: &HashMap<&str, &FontEntry>) -> Vec<u8> {
+    match pdf_name_to_entry.get(pdf_font).and_then(|e| e.char_to_gid.as_ref()) {
         Some(map) => encode_as_gids(text, map),
         None => to_winansi_bytes(text),
     }
@@ -495,6 +498,11 @@ pub(super) fn render_paragraph_lines(
     let mut cur_font_size: f32 = -1.0;
     let mut cur_char_spacing: f32 = 0.0;
     let mut cur_text_scale: f32 = 100.0;
+
+    let pdf_name_to_entry: HashMap<&str, &FontEntry> = seen_fonts
+        .values()
+        .map(|e| (e.pdf_name.as_str(), e))
+        .collect();
 
     // Pre-compute per-line y offsets accounting for inline images making lines taller
     let mut line_y_offsets: Vec<f32> = Vec::with_capacity(lines.len());
@@ -638,7 +646,7 @@ pub(super) fn render_paragraph_lines(
                 td_y = cy;
 
                 let text_bytes =
-                    encode_text_for_pdf(&chunk.text, &chunk.pdf_font, seen_fonts);
+                    encode_text_for_pdf(&chunk.text, &chunk.pdf_font, &pdf_name_to_entry);
                 content.show(Str(&text_bytes));
 
                 if chunk.underline {
@@ -749,10 +757,11 @@ pub(super) fn tallest_run_metrics(
     let mut best_ascent = 0.0f32;
     let mut best_line_h_ratio: Option<f32> = None;
     let mut best_ascender_ratio: Option<f32> = None;
+    let mut key_buf = String::new();
 
     for run in runs {
-        let key = font_key(run);
-        let entry = seen_fonts.get(&key);
+        let key = font_key_buf(run, &mut key_buf);
+        let entry = seen_fonts.get(key);
         let ar = entry.and_then(|e| e.ascender_ratio).unwrap_or(0.75);
         let ascent = run.font_size * ar;
         if ascent > best_ascent {

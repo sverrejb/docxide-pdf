@@ -286,10 +286,16 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
 
         let alignment = ppr.and_then(|ppr| wml_attr(ppr, "jc")).map(parse_alignment);
 
-        let contextual_spacing = ppr.and_then(|ppr| wml(ppr, "contextualSpacing")).is_some();
+        let contextual_spacing = ppr
+            .and_then(|ppr| wml_bool(ppr, "contextualSpacing"))
+            .unwrap_or(false);
 
-        let keep_next = ppr.and_then(|ppr| wml(ppr, "keepNext")).is_some();
-        let keep_lines = ppr.and_then(|ppr| wml(ppr, "keepLines")).is_some();
+        let keep_next = ppr
+            .and_then(|ppr| wml_bool(ppr, "keepNext"))
+            .unwrap_or(false);
+        let keep_lines = ppr
+            .and_then(|ppr| wml_bool(ppr, "keepLines"))
+            .unwrap_or(false);
 
         let line_spacing = spacing.and_then(|n| {
             n.attribute((WML_NS, "line"))
@@ -298,8 +304,8 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         });
 
         let ind = ppr.and_then(|n| wml(n, "ind"));
-        let indent_left = ind.and_then(|n| twips_attr(n, "left"));
-        let indent_right = ind.and_then(|n| twips_attr(n, "right"));
+        let indent_left = ind.and_then(|n| twips_attr(n, "start").or_else(|| twips_attr(n, "left")));
+        let indent_right = ind.and_then(|n| twips_attr(n, "end").or_else(|| twips_attr(n, "right")));
         let indent_hanging = ind.and_then(|n| twips_attr(n, "hanging"));
         let indent_first_line = ind.and_then(|n| twips_attr(n, "firstLine"));
 

@@ -103,7 +103,7 @@ pub enum ImageFormat {
 
 #[derive(Clone)]
 pub struct EmbeddedImage {
-    pub data: Vec<u8>,
+    pub data: std::sync::Arc<Vec<u8>>,
     pub format: ImageFormat,
     pub pixel_width: u32,
     pub pixel_height: u32,

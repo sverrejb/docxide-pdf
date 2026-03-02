@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str};
 
 use crate::error::Error;
-use crate::fonts::{FontEntry, encode_as_gids, font_key, register_font, to_winansi_bytes};
+use crate::fonts::{FontEntry, encode_as_gids, font_key, font_key_buf, register_font, to_winansi_bytes};
 use crate::model::{
     Alignment, Block, Document, EmbeddedImage, FieldCode, Footnote, HeaderFooter,
     HorizontalPosition, ImageFormat, LineSpacing, Paragraph, Run, SectionBreakType,
@@ -352,9 +352,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
     // Collect used characters per font key for subsetting
     let mut used_chars_per_font: HashMap<String, HashSet<char>> = HashMap::new();
+    let mut key_buf = String::new();
     for run in &all_runs {
-        let key = font_key(run);
-        let chars = used_chars_per_font.entry(key).or_default();
+        let key = font_key_buf(run, &mut key_buf);
+        let chars = used_chars_per_font.entry(key.to_string()).or_default();
         if run.caps || run.small_caps {
             chars.extend(run.text.to_uppercase().chars());
         } else {
@@ -399,7 +400,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             let key = if let Some(ref bf) = para.list_label_font {
                 bf.clone()
             } else if let Some(run) = para.runs.first() {
-                font_key(run)
+                font_key_buf(run, &mut key_buf).to_string()
             } else {
                 continue;
             };
@@ -412,7 +413,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             if let Some(leader_char) = stop.leader
                 && let Some(run) = para.runs.first()
             {
-                let key = font_key(run);
+                let key = font_key_buf(run, &mut key_buf).to_string();
                 used_chars_per_font
                     .entry(key)
                     .or_default()
@@ -432,8 +433,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         {
             for para in &hf.paragraphs {
                 for run in &para.runs {
-                    let key = font_key(run);
-                    let chars = used_chars_per_font.entry(key).or_default();
+                    let key = font_key_buf(run, &mut key_buf);
+                    let chars = used_chars_per_font.entry(key.to_string()).or_default();
                     if run.caps || run.small_caps {
                         chars.extend(run.text.to_uppercase().chars());
                     } else {
@@ -456,10 +457,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     }
 
     for run in &all_runs {
-        let key = font_key(run);
-        if !seen_fonts.contains_key(&key) {
+        let key = font_key_buf(run, &mut key_buf);
+        if !seen_fonts.contains_key(key) {
+            let key_owned = key.to_string();
             let pdf_name = format!("F{}", font_order.len() + 1);
-            let used = used_chars_per_font.get(&key).cloned().unwrap_or_default();
+            let used = used_chars_per_font.get(&key_owned).cloned().unwrap_or_default();
             let entry = register_font(
                 &mut pdf,
                 &run.font_name,
@@ -470,8 +472,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 &doc.embedded_fonts,
                 &used,
             );
-            seen_fonts.insert(key.clone(), entry);
-            font_order.push(key);
+            font_order.push(key_owned.clone());
+            seen_fonts.insert(key_owned, entry);
         }
     }
 
@@ -528,7 +530,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
         match img.format {
             ImageFormat::Jpeg => {
-                let mut xobj = pdf.image_xobject(xobj_ref, &img.data);
+                let mut xobj = pdf.image_xobject(xobj_ref, &*img.data);
                 xobj.filter(Filter::DctDecode);
                 xobj.width(img.pixel_width as i32);
                 xobj.height(img.pixel_height as i32);
@@ -537,49 +539,60 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 xobj.interpolate(true);
             }
             ImageFormat::Png => {
-                let cursor = std::io::Cursor::new(&img.data);
+                let cursor = std::io::Cursor::new(img.data.as_slice());
                 let reader = image::ImageReader::with_format(
                     std::io::BufReader::new(cursor),
                     image::ImageFormat::Png,
                 );
-                if let Ok(decoded) = reader.decode() {
-                    let rgba: image::RgbaImage = decoded.to_rgba8();
-                    let (w, h) = (rgba.width(), rgba.height());
-                    let has_alpha = rgba.pixels().any(|p| p.0[3] < 255);
-
-                    let rgb_data: Vec<u8> = rgba
-                        .pixels()
-                        .flat_map(|p| [p.0[0], p.0[1], p.0[2]])
-                        .collect();
-                    let compressed_rgb =
-                        miniz_oxide::deflate::compress_to_vec_zlib(&rgb_data, 6);
-
-                    let smask_ref = if has_alpha {
-                        let alpha_data: Vec<u8> = rgba.pixels().map(|p| p.0[3]).collect();
-                        let compressed_alpha =
-                            miniz_oxide::deflate::compress_to_vec_zlib(&alpha_data, 6);
-                        let mask_ref = alloc();
-                        let mut mask = pdf.image_xobject(mask_ref, &compressed_alpha);
-                        mask.filter(Filter::FlateDecode);
-                        mask.width(w as i32);
-                        mask.height(h as i32);
-                        mask.color_space().device_gray();
-                        mask.bits_per_component(8);
-                        Some(mask_ref)
-                    } else {
-                        None
-                    };
-
-                    let mut xobj = pdf.image_xobject(xobj_ref, &compressed_rgb);
-                    xobj.filter(Filter::FlateDecode);
-                    xobj.width(w as i32);
-                    xobj.height(h as i32);
-                    xobj.color_space().device_rgb();
-                    xobj.bits_per_component(8);
-                    xobj.interpolate(true);
-                    if let Some(mask_ref) = smask_ref {
-                        xobj.s_mask(mask_ref);
+                let decoded = match reader.decode() {
+                    Ok(d) => d,
+                    Err(e) => {
+                        log::warn!("PNG decode failed: {e} — writing 1x1 placeholder");
+                        let mut xobj = pdf.image_xobject(xobj_ref, &[255, 255, 255]);
+                        xobj.width(1);
+                        xobj.height(1);
+                        xobj.color_space().device_rgb();
+                        xobj.bits_per_component(8);
+                        image_xobjects.push((pdf_name.clone(), xobj_ref));
+                        return pdf_name;
                     }
+                };
+                let rgba: image::RgbaImage = decoded.to_rgba8();
+                let (w, h) = (rgba.width(), rgba.height());
+                let has_alpha = rgba.pixels().any(|p| p.0[3] < 255);
+
+                let rgb_data: Vec<u8> = rgba
+                    .pixels()
+                    .flat_map(|p| [p.0[0], p.0[1], p.0[2]])
+                    .collect();
+                let compressed_rgb =
+                    miniz_oxide::deflate::compress_to_vec_zlib(&rgb_data, 6);
+
+                let smask_ref = if has_alpha {
+                    let alpha_data: Vec<u8> = rgba.pixels().map(|p| p.0[3]).collect();
+                    let compressed_alpha =
+                        miniz_oxide::deflate::compress_to_vec_zlib(&alpha_data, 6);
+                    let mask_ref = alloc();
+                    let mut mask = pdf.image_xobject(mask_ref, &compressed_alpha);
+                    mask.filter(Filter::FlateDecode);
+                    mask.width(w as i32);
+                    mask.height(h as i32);
+                    mask.color_space().device_gray();
+                    mask.bits_per_component(8);
+                    Some(mask_ref)
+                } else {
+                    None
+                };
+
+                let mut xobj = pdf.image_xobject(xobj_ref, &compressed_rgb);
+                xobj.filter(Filter::FlateDecode);
+                xobj.width(w as i32);
+                xobj.height(h as i32);
+                xobj.color_space().device_rgb();
+                xobj.bits_per_component(8);
+                xobj.interpolate(true);
+                if let Some(mask_ref) = smask_ref {
+                    xobj.s_mask(mask_ref);
                 }
             }
         }
@@ -1783,7 +1796,7 @@ fn label_for_run<'a>(
     seen_fonts: &'a HashMap<String, FontEntry>,
     label: &str,
 ) -> (&'a str, Vec<u8>) {
-    let key = font_key(run);
+    let key = font_key(run); // not on hot path — called once per labeled paragraph
     let entry = seen_fonts.get(&key).expect("font registered");
     let bytes = match &entry.char_to_gid {
         Some(map) => encode_as_gids(label, map),
@@ -1805,7 +1818,10 @@ fn label_for_paragraph<'a>(
             return (entry.pdf_name.as_str(), bytes);
         }
     }
-    label_for_run(&para.runs[0], seen_fonts, &para.list_label)
+    let Some(first_run) = para.runs.first() else {
+        return ("", vec![]);
+    };
+    label_for_run(first_run, seen_fonts, &para.list_label)
 }
 
 fn compute_footnote_height(

@@ -59,7 +59,7 @@ pub(super) fn read_image_from_zip<R: Read + std::io::Seek>(
     entry.read_to_end(&mut data).ok()?;
     let (pw, ph, fmt) = image_dimensions(&data)?;
     Some(EmbeddedImage {
-        data,
+        data: std::sync::Arc::new(data),
         format: fmt,
         pixel_width: pw,
         pixel_height: ph,

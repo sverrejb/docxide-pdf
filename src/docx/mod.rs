@@ -169,7 +169,7 @@ fn parse_tab_stops(ppr: roxmltree::Node) -> Vec<TabStop> {
             })
         })
         .collect();
-    stops.sort_by(|a, b| a.position.partial_cmp(&b.position).unwrap());
+    stops.sort_by(|a, b| a.position.total_cmp(&b.position));
     stops
 }
 
@@ -569,10 +569,10 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                             let mut indent_first_line = 0.0f32;
                             let mut indent_right = 0.0f32;
                             if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
-                                if let Some(v) = twips_attr(ind, "left") {
+                                if let Some(v) = twips_attr(ind, "start").or_else(|| twips_attr(ind, "left")) {
                                     indent_left = v;
                                 }
-                                if let Some(v) = twips_attr(ind, "right") {
+                                if let Some(v) = twips_attr(ind, "end").or_else(|| twips_attr(ind, "right")) {
                                     indent_right = v;
                                 }
                                 if let Some(v) = twips_attr(ind, "hanging") {
@@ -673,15 +673,17 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     .or_else(|| para_style.and_then(|s| s.alignment))
                     .unwrap_or(Alignment::Left);
 
-                let contextual_spacing =
-                    ppr.and_then(|ppr| wml(ppr, "contextualSpacing")).is_some()
-                        || para_style.is_some_and(|s| s.contextual_spacing);
+                let contextual_spacing = ppr
+                    .and_then(|ppr| wml_bool(ppr, "contextualSpacing"))
+                    .unwrap_or_else(|| para_style.is_some_and(|s| s.contextual_spacing));
 
-                let keep_next = ppr.and_then(|ppr| wml(ppr, "keepNext")).is_some()
-                    || para_style.is_some_and(|s| s.keep_next);
+                let keep_next = ppr
+                    .and_then(|ppr| wml_bool(ppr, "keepNext"))
+                    .unwrap_or_else(|| para_style.is_some_and(|s| s.keep_next));
 
-                let keep_lines = ppr.and_then(|ppr| wml(ppr, "keepLines")).is_some()
-                    || para_style.is_some_and(|s| s.keep_lines);
+                let keep_lines = ppr
+                    .and_then(|ppr| wml_bool(ppr, "keepLines"))
+                    .unwrap_or_else(|| para_style.is_some_and(|s| s.keep_lines));
 
                 let line_spacing = inline_spacing
                     .and_then(|n| {
@@ -703,10 +705,10 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                 let mut indent_first_line = 0.0f32;
                 let mut indent_right = 0.0f32;
                 if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
-                    if let Some(v) = twips_attr(ind, "left") {
+                    if let Some(v) = twips_attr(ind, "start").or_else(|| twips_attr(ind, "left")) {
                         indent_left = v;
                     }
-                    if let Some(v) = twips_attr(ind, "right") {
+                    if let Some(v) = twips_attr(ind, "end").or_else(|| twips_attr(ind, "right")) {
                         indent_right = v;
                     }
                     if let Some(v) = twips_attr(ind, "hanging") {

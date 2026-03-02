@@ -749,14 +749,24 @@ pub(crate) fn primary_font_name(name: &str) -> &str {
     name.split(';').next().unwrap_or(name).trim()
 }
 
-pub(crate) fn font_key(run: &Run) -> String {
-    let base = primary_font_name(&run.font_name);
+/// Write the font key for a run into the provided buffer, returning it as a `&str`.
+/// Avoids per-call heap allocation when callers reuse the buffer.
+pub(crate) fn font_key_buf<'a>(run: &Run, buf: &'a mut String) -> &'a str {
+    buf.clear();
+    buf.push_str(primary_font_name(&run.font_name));
     match (run.bold, run.italic) {
-        (true, true) => format!("{}/BI", base),
-        (true, false) => format!("{}/B", base),
-        (false, true) => format!("{}/I", base),
-        (false, false) => base.to_string(),
+        (true, true) => buf.push_str("/BI"),
+        (true, false) => buf.push_str("/B"),
+        (false, true) => buf.push_str("/I"),
+        (false, false) => {}
     }
+    buf.as_str()
+}
+
+pub(crate) fn font_key(run: &Run) -> String {
+    let mut buf = String::new();
+    font_key_buf(run, &mut buf);
+    buf
 }
 
 pub(crate) type EmbeddedFonts = HashMap<(String, bool, bool), Vec<u8>>;

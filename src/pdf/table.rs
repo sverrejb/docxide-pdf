@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use pdf_writer::Content;
 
-use crate::fonts::{FontEntry, font_key};
+use crate::fonts::{FontEntry, font_key_buf};
 use crate::model::{Alignment, CellVAlign, LineSpacing, SectionProperties, Table, VMerge};
 
 use super::resolve_line_h;
@@ -31,10 +31,11 @@ fn auto_fit_columns(table: &Table, seen_fonts: &HashMap<String, FontEntry>) -> V
                 grid_col += span;
                 continue;
             }
+            let mut key_buf = String::new();
             for para in &cell.paragraphs {
                 for run in &para.runs {
-                    let key = font_key(run);
-                    let Some(entry) = seen_fonts.get(&key) else {
+                    let key = font_key_buf(run, &mut key_buf);
+                    let Some(entry) = seen_fonts.get(key) else {
                         continue;
                     };
                     let text = if run.caps || run.small_caps {
@@ -265,9 +266,10 @@ pub(super) fn render_table(
                 let text_x = cell_x + cm.left;
                 let text_w = (col_w - cm.left - cm.right).max(0.0);
                 let first_run = cell.paragraphs.first().and_then(|p| p.runs.first());
+                let mut kb = String::new();
                 let ascender_ratio = first_run
-                    .map(font_key)
-                    .and_then(|k| seen_fonts.get(&k))
+                    .map(|r| font_key_buf(r, &mut kb))
+                    .and_then(|k| seen_fonts.get(k))
                     .and_then(|e| e.ascender_ratio)
                     .unwrap_or(0.75);
 
