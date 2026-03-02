@@ -134,14 +134,15 @@ pub(super) fn parse_font_table<R: Read + std::io::Seek>(
             .map(String::from)
             .unwrap_or_else(|| format!("word/{}", target));
 
-        let Ok(mut entry) = zip.by_name(&zip_path) else {
-            continue;
-        };
         let mut data = Vec::new();
-        if entry.read_to_end(&mut data).is_err() {
-            continue;
+        {
+            let Ok(mut entry) = zip.by_name(&zip_path) else {
+                continue;
+            };
+            if entry.read_to_end(&mut data).is_err() {
+                continue;
+            }
         }
-        drop(entry);
 
         if let Some(ref guid_str) = info.font_key
             && let Some(key) = parse_guid_to_bytes(guid_str)

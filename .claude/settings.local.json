@@ -103,7 +103,13 @@
       "Bash(DOCXIDE_CASE=c9211737 cargo test:*)",
       "Bash(DOCXIDE_CASE=c9211737403e64cd4c3eb0a0b3514396aac446583da3e0379ce4e0443b4d20d0 cargo test:*)",
       "Bash(DOCXIDE_CASE=scraped/mongolian_human cargo test:*)",
-      "Bash(DOCXIDE_CASE=cases/case12 cargo test:*)"
+      "Bash(DOCXIDE_CASE=cases/case12 cargo test:*)",
+      "WebFetch(domain:picsum.photos)",
+      "Bash(mkdir:*)",
+      "Bash(DOCXIDE_CASE=case25 cargo test:*)",
+      "Bash(DOCXIDE_CASE=case10 cargo test:*)",
+      "Bash(DOCXIDE_CASE=case19 cargo run:*)",
+      "Bash(DOCXIDE_CASE=case27 cargo test:*)"
     ]
   }
 }

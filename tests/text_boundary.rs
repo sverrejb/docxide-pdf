@@ -50,42 +50,53 @@ fn extract_page_lines(pdf: &Path, page: usize) -> Vec<String> {
         .output()
         .expect("Failed to run mutool draw -F stext");
     let xml = String::from_utf8_lossy(&output.stdout);
-    let mut lines: Vec<(f64, String)> = Vec::new();
+    let mut lines: Vec<(f64, f64, String)> = Vec::new(); // (x_left, y_top, text)
     for xml_line in xml.lines() {
         let trimmed = xml_line.trim();
         if let Some(rest) = trimmed.strip_prefix("<line ") {
-            let y_top = rest
-                .strip_prefix("bbox=\"")
-                .and_then(|b| b.split_whitespace().nth(1))
-                .and_then(|v| v.parse::<f64>().ok())
-                .unwrap_or(0.0);
+            let bbox_vals: Option<(f64, f64)> = rest.strip_prefix("bbox=\"").and_then(|b| {
+                let mut parts = b.split_whitespace();
+                let x = parts.next()?.parse::<f64>().ok()?;
+                let y = parts.next()?.parse::<f64>().ok()?;
+                Some((x, y))
+            });
+            let (x_left, y_top) = bbox_vals.unwrap_or((0.0, 0.0));
             if let Some(start) = rest.find("text=\"") {
                 let after_quote = &rest[start + 6..];
                 if let Some(end) = after_quote.find('"') {
                     let text = &after_quote[..end];
                     let text = text.trim();
                     if !text.is_empty() {
-                        lines.push((y_top, text.to_string()));
+                        lines.push((x_left, y_top, text.to_string()));
                     }
                 }
             }
         }
     }
-    // Sort by y-position, then merge lines within 5pt into the same row
-    lines.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
-    // Cluster lines within 5pt tolerance
-    let mut clustered: Vec<(f64, String)> = Vec::new();
-    for (y, text) in lines {
-        if let Some(last) = clustered.last_mut() {
-            if (y - last.0).abs() < 5.0 {
-                last.1.push(' ');
-                last.1.push_str(&text);
+    // Sort by y, cluster lines within 8pt y-tolerance, then sort each
+    // cluster by x so super/subscript fragments recombine left-to-right
+    // (e.g. "xi" + "2 + yj" + "3 = zk").
+    lines.sort_by(|a, b| {
+        a.1.partial_cmp(&b.1)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let mut clusters: Vec<Vec<(f64, f64, String)>> = Vec::new();
+    for item in lines {
+        if let Some(last) = clusters.last_mut() {
+            if (item.1 - last[0].1).abs() < 8.0 {
+                last.push(item);
                 continue;
             }
         }
-        clustered.push((y, text));
+        clusters.push(vec![item]);
     }
-    clustered.into_iter().map(|(_, text)| text).collect()
+    clusters
+        .into_iter()
+        .map(|mut cluster| {
+            cluster.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+            cluster.into_iter().map(|(_, _, t)| t).collect::<Vec<_>>().join(" ")
+        })
+        .collect()
 }
 
 fn extract_all_pages(pdf: &Path) -> Vec<Vec<String>> {
@@ -103,12 +114,41 @@ fn break_positions(pages: &[Vec<String>]) -> Vec<usize> {
     pos
 }
 
+/// Replace tab-leader dots (runs of 3+) with a space so comparison focuses on text content.
+fn normalize_leaders(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut dots = 0usize;
+    for c in s.chars() {
+        if c == '.' {
+            dots += 1;
+        } else {
+            if dots >= 3 {
+                out.push(' ');
+            } else {
+                for _ in 0..dots {
+                    out.push('.');
+                }
+            }
+            dots = 0;
+            out.push(c);
+        }
+    }
+    if dots > 0 && dots < 3 {
+        for _ in 0..dots {
+            out.push('.');
+        }
+    }
+    out
+}
+
 fn first_word(s: &str) -> String {
-    s.split_whitespace().next().unwrap_or_default().to_string()
+    let n = normalize_leaders(s);
+    n.split_whitespace().next().unwrap_or_default().to_string()
 }
 
 fn last_word(s: &str) -> String {
-    s.split_whitespace().last().unwrap_or_default().to_string()
+    let n = normalize_leaders(s);
+    n.split_whitespace().last().unwrap_or_default().to_string()
 }
 
 struct CaseResult {

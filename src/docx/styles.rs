@@ -98,11 +98,11 @@ pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(zip: &mut zip::ZipAr
     let mut minor = String::from("Aptos");
     let mut colors = HashMap::new();
 
-    let names: Vec<String> = zip.file_names().map(|s| s.to_string()).collect();
+    let names: Vec<String> = zip.file_names().map(|s: &str| s.to_string()).collect();
     let theme_name = names
         .iter()
-        .find(|n| n.starts_with("word/theme/") && n.ends_with(".xml"));
-    let Some(xml_content) = theme_name.and_then(|name| read_zip_text(zip, name)) else {
+        .find(|n: &&String| n.starts_with("word/theme/") && n.ends_with(".xml"));
+    let Some(xml_content) = theme_name.and_then(|name| read_zip_text(zip, name.as_str())) else {
         return ThemeFonts { major, minor, colors };
     };
     let Ok(xml) = roxmltree::Document::parse(&xml_content) else {

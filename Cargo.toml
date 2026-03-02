@@ -34,7 +34,7 @@ default = ["cli"]
 cli = ["clap", "env_logger"]
 
 [dependencies]
-zip = "2"
+zip = "8.1.0"
 roxmltree = "0.21"
 pdf-writer = "0.14"
 ttf-parser = "0.25"
@@ -50,7 +50,7 @@ miniz_oxide = "0.8"
 image = { version = "0.25" }
 env_logger = "0.11"
 rayon = "1"
-zip = "2"
+zip = "8.1.0"
 roxmltree = "0.21"
 
 # Optimize deps in dev/test builds — image processing is ~10× slower without this
