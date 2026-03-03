@@ -16,7 +16,7 @@ use crate::model::{
 use layout::{
     LinkAnnotation,
     build_paragraph_lines, build_tabbed_line,
-    font_metric, is_text_empty, render_paragraph_lines, tallest_run_metrics,
+    is_text_empty, render_paragraph_lines, tallest_run_metrics,
 };
 use table::render_table;
 
@@ -68,7 +68,8 @@ fn render_header_footer(
 
     for (pi, para) in hf.paragraphs.iter().enumerate() {
         let has_para_image = para.image.is_some();
-        let text_empty = is_text_empty(&para.runs);
+        let has_field_code = para.runs.iter().any(|r| r.field_code.is_some());
+        let text_empty = !has_field_code && is_text_empty(&para.runs);
 
         let substituted_runs: Vec<Run> = para
             .runs
@@ -86,19 +87,21 @@ fn render_header_footer(
             })
             .collect();
 
-        let (font_size, _, tallest_ar) = tallest_run_metrics(&substituted_runs, seen_fonts);
+        let (font_size, tallest_lhr, tallest_ar) = tallest_run_metrics(&substituted_runs, seen_fonts);
         let ascender_ratio = tallest_ar.unwrap_or(0.75);
+        let effective_ls = para.line_spacing.unwrap_or(doc_line_spacing);
+        let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
 
         let baseline_y = if is_header {
             sp.page_height - sp.header_margin - font_size * ascender_ratio
         } else {
-            sp.footer_margin + font_size * (1.0 - ascender_ratio)
+            sp.footer_margin + line_h - font_size * ascender_ratio
         };
 
         let slot_top = if is_header {
             sp.page_height - sp.header_margin
         } else {
-            sp.footer_margin + font_size
+            sp.footer_margin + line_h
         };
 
         // Render textboxes (shapes with fills and/or text content)
@@ -256,10 +259,6 @@ fn render_header_footer(
             .collect();
 
         let lines = build_paragraph_lines(&substituted_runs, seen_fonts, text_width, 0.0, &block_inline_images);
-
-        let effective_ls = para.line_spacing.unwrap_or(doc_line_spacing);
-        let tallest_lhr = font_metric(&substituted_runs, seen_fonts, |e| e.line_h_ratio);
-        let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
 
         render_paragraph_lines(
             content,

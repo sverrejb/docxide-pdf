@@ -21,10 +21,27 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
     let root = xml.root_element();
     let mut paragraphs = Vec::new();
 
-    for node in root.children() {
-        if node.tag_name().namespace() != Some(WML_NS) || node.tag_name().name() != "p" {
+    let mut top_nodes: Vec<roxmltree::Node> = Vec::new();
+    for child in root.children() {
+        if child.tag_name().namespace() != Some(WML_NS) {
             continue;
         }
+        if child.tag_name().name() == "sdt" {
+            if let Some(content) = wml(child, "sdtContent") {
+                for inner in content.children() {
+                    if inner.tag_name().namespace() == Some(WML_NS)
+                        && inner.tag_name().name() == "p"
+                    {
+                        top_nodes.push(inner);
+                    }
+                }
+            }
+        } else if child.tag_name().name() == "p" {
+            top_nodes.push(child);
+        }
+    }
+
+    for node in top_nodes {
         let ppr = wml(node, "pPr");
         let para_style_id = ppr
             .and_then(|ppr| wml_attr(ppr, "pStyle"))
@@ -37,11 +54,21 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
             .or_else(|| para_style.and_then(|s| s.alignment))
             .unwrap_or(Alignment::Left);
 
+        let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
+        let line_spacing = inline_spacing
+            .and_then(|n| {
+                n.attribute((WML_NS, "line"))
+                    .and_then(|v| v.parse::<f32>().ok())
+                    .map(|line_val| parse_line_spacing(n, line_val))
+            })
+            .or_else(|| para_style.and_then(|s| s.line_spacing));
+
         let parsed = parse_runs(node, styles, theme, rels, zip, &NumberingInfo::default());
 
         paragraphs.push(Paragraph {
             runs: parsed.runs,
             alignment,
+            line_spacing,
             extra_line_breaks: parsed.line_break_count,
             floating_images: parsed.floating_images,
             textboxes: parsed.textboxes,

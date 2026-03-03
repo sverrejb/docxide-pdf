@@ -314,10 +314,10 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                         }
                         Some("end") => {
                             if in_field {
-                                let trimmed = field_instr.trim();
-                                let fc = if trimmed.eq_ignore_ascii_case("PAGE") {
+                                let keyword = field_instr.split_whitespace().next().unwrap_or("");
+                                let fc = if keyword.eq_ignore_ascii_case("PAGE") {
                                     Some(FieldCode::Page)
-                                } else if trimmed.eq_ignore_ascii_case("NUMPAGES") {
+                                } else if keyword.eq_ignore_ascii_case("NUMPAGES") {
                                     Some(FieldCode::NumPages)
                                 } else {
                                     None

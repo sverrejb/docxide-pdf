@@ -1,12 +1,24 @@
 # Roadmap
 
-## Kerning / GPOS (HIGH)
+## Kerning (DONE — conditional via `w:kern`)
 
-The single biggest factor limiting Jaccard scores — text progressively drifts right across dense-text cases, losing ~5-10pp each. A prototype using the legacy `kern` table was implemented and reverted (improved Aptos but regressed Calibri) because Word uses GPOS kerning, not the legacy table.
+Kern pairs extracted from both legacy `kern` table and GPOS PairAdjustment (Format1 + Format2) during font embedding. Applied conditionally in `word_width()` when `w:kern` threshold is met. Parsed from `docDefaults`, paragraph/character styles (with `basedOn` inheritance), and inline run properties.
 
-To do it properly:
-1. Use GPOS table for kerning lookups (requires OpenType layout engine, e.g. `rustybuzz`)
-2. Apply kerning to both word width calculation (line breaking) and PDF rendering (TJ operator)
+Results: case1 +14.4pp, case18 +13.6pp, zero regressions.
+
+Remaining:
+- **PDF rendering kerning**: currently kerning only affects line breaking (text measurement). Rendering still uses `Tj` without kern adjustments. Adding `TJ` arrays with positioning would improve visual quality for justified text.
+- **`enableOpenTypeFeatures`**: this compat setting controls ligatures/contextual alternates, NOT kerning. Investigated and confirmed — all test documents have it enabled but Word does not use it to trigger kerning.
+
+## The Mongolian Case
+
+The `mongolian_human_rights_law` scraped fixture scores 13.6% Jaccard (needs 20%). Page numbers now render (centered footer via `w:sdt` + PAGE field code), but body text line breaks still diverge.
+
+The `w:kern val="3"` is in a custom "Standard" style (LibreOffice's name for Normal) that no paragraph references. Paragraphs use "NormalWeb" (basedOn "Normal"), "NoSpacing" (no basedOn), and "Title". The kern threshold doesn't cascade through standard OOXML style inheritance.
+
+Two paths forward:
+1. **Recognize "Standard" as a Normal-equivalent** — LibreOffice documents use styleId "Standard" where Word uses "Normal". Could fall back to "Standard" when resolving the default style, which would make its `w:kern` cascade. Risk: could misapply formatting from other custom styles named "Standard".
+2. **Investigate non-kerning causes** — even with unconditional kerning forced on, mongolian only reached 17.7% (still below 20%). Other factors likely contribute: character width precision, line break algorithm edge cases, or missing features in this specific document.
 
 ## Font Substitution (HIGH)
 

@@ -109,7 +109,11 @@
       "Bash(DOCXIDE_CASE=case25 cargo test:*)",
       "Bash(DOCXIDE_CASE=case10 cargo test:*)",
       "Bash(DOCXIDE_CASE=case19 cargo run:*)",
-      "Bash(DOCXIDE_CASE=case27 cargo test:*)"
+      "Bash(DOCXIDE_CASE=case27 cargo test:*)",
+      "Bash(DOCXIDE_CASE=mongolian_human_rights_law cargo test:*)",
+      "Bash(DOCXIDE_CASE=mongolian_human_rights_law RUST_LOG=debug cargo test:*)",
+      "Bash(DOCXIDE_CASE=case28 cargo test:*)",
+      "Bash(DOCXIDE_CASE=case28 RUST_LOG=debug cargo test:*)"
     ]
   }
 }
