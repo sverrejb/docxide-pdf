@@ -212,6 +212,11 @@ fn parse_chart_space(xml_content: &str) -> Option<Chart> {
         let val_axis = chart_child(plot_area, "valAx").map(parse_axis);
         let legend = chart_child(chart_node, "legend").map(parse_legend);
 
+        let plot_border_color = plot_area
+            .children()
+            .find(|n| n.tag_name().name() == "spPr" && n.tag_name().namespace() == Some(CHART_NS))
+            .and_then(extract_line_color);
+
         return Some(Chart {
             chart_type: ChartType::Bar {
                 horizontal,
@@ -222,6 +227,7 @@ fn parse_chart_space(xml_content: &str) -> Option<Chart> {
             val_axis,
             legend,
             gap_width_pct,
+            plot_border_color,
         });
     }
 

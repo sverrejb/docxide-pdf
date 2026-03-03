@@ -83,24 +83,6 @@ pub(super) fn render_chart(
         .as_ref()
         .is_some_and(|l| l.position == LegendPosition::Bottom);
 
-    let margin_left = w * 0.08;
-    let margin_right = if has_legend && legend_on_right {
-        w * 0.25
-    } else {
-        w * 0.05
-    };
-    let margin_top = h * 0.12;
-    let margin_bottom = if has_legend && legend_on_bottom {
-        h * 0.28
-    } else {
-        h * 0.22
-    };
-
-    let plot_x = x + margin_left;
-    let plot_y = y - h + margin_bottom;
-    let plot_w = w - margin_left - margin_right;
-    let plot_h = h - margin_top - margin_bottom;
-
     let max_val = c
         .series
         .iter()
@@ -115,6 +97,34 @@ pub(super) fn render_chart(
     }
 
     let ChartType::Bar { horizontal, .. } = c.chart_type;
+
+    // Compute margins based on content
+    let max_tick_label = if tick_step.fract() == 0.0 {
+        format!("{}", axis_max as i32)
+    } else {
+        format!("{:.1}", axis_max)
+    };
+    let val_label_w = text_width_approx(&max_tick_label, font_size) + 6.0;
+
+    let cat_label_h = font_size + 6.0;
+
+    let margin_left = if !horizontal { val_label_w } else { w * 0.12 };
+    let margin_right = if has_legend && legend_on_right {
+        w * 0.22
+    } else {
+        4.0
+    };
+    let margin_top = h * 0.05;
+    let margin_bottom = if has_legend && legend_on_bottom {
+        h * 0.22
+    } else {
+        cat_label_h + 4.0
+    };
+
+    let plot_x = x + margin_left;
+    let plot_y = y - h + margin_bottom;
+    let plot_w = w - margin_left - margin_right;
+    let plot_h = h - margin_top - margin_bottom;
 
     content.save_state();
 
@@ -186,26 +196,36 @@ pub(super) fn render_chart(
         }
     }
 
-    // Axes
-    let axis_color = c
-        .val_axis
-        .as_ref()
-        .and_then(|a| a.line_color)
-        .unwrap_or([179, 179, 179]);
-    content.set_line_width(0.75);
-    content.set_stroke_rgb(
-        axis_color[0] as f32 / 255.0,
-        axis_color[1] as f32 / 255.0,
-        axis_color[2] as f32 / 255.0,
-    );
-    // Left axis
-    content.move_to(plot_x, plot_y);
-    content.line_to(plot_x, plot_y + plot_h);
-    content.stroke();
-    // Bottom axis
-    content.move_to(plot_x, plot_y);
-    content.line_to(plot_x + plot_w, plot_y);
-    content.stroke();
+    // Plot area border
+    if let Some(border) = c.plot_border_color {
+        content.set_line_width(0.75);
+        content.set_stroke_rgb(
+            border[0] as f32 / 255.0,
+            border[1] as f32 / 255.0,
+            border[2] as f32 / 255.0,
+        );
+        content.rect(plot_x, plot_y, plot_w, plot_h);
+        content.stroke();
+    } else {
+        // Fallback: just left + bottom axes
+        let axis_color = c
+            .val_axis
+            .as_ref()
+            .and_then(|a| a.line_color)
+            .unwrap_or([179, 179, 179]);
+        content.set_line_width(0.75);
+        content.set_stroke_rgb(
+            axis_color[0] as f32 / 255.0,
+            axis_color[1] as f32 / 255.0,
+            axis_color[2] as f32 / 255.0,
+        );
+        content.move_to(plot_x, plot_y);
+        content.line_to(plot_x, plot_y + plot_h);
+        content.stroke();
+        content.move_to(plot_x, plot_y);
+        content.line_to(plot_x + plot_w, plot_y);
+        content.stroke();
+    }
 
     // Axis labels (only if we have the font)
     if has_font {

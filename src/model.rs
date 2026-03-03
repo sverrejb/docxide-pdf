@@ -423,6 +423,7 @@ pub struct Chart {
     pub val_axis: Option<ChartAxis>,
     pub legend: Option<ChartLegend>,
     pub gap_width_pct: f32,
+    pub plot_border_color: Option<[u8; 3]>,
 }
 
 pub struct InlineChart {
