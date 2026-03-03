@@ -12,13 +12,11 @@ Remaining:
 
 ## The Mongolian Case
 
-The `mongolian_human_rights_law` scraped fixture scores 13.6% Jaccard (needs 20%). Page numbers now render (centered footer via `w:sdt` + PAGE field code), but body text line breaks still diverge.
+The `mongolian_human_rights_law` scraped fixture scores 17.9% Jaccard (needs 20%). Improved from 13.6% via:
+1. **"Standard" style recognition** (DONE) — LibreOffice exports its default paragraph style as a custom `w:customStyle="1"` style named "Standard". When the document's `docDefaults` lacks `w:kern`, we now merge `kern_threshold` from "Standard" if present. Found in 4/39 scraped fixtures; 2 of those carry `w:kern val="3"`.
+2. **Multi-space preservation** (DONE) — `build_paragraph_lines` previously used `split_whitespace()` which collapsed consecutive spaces to single gaps. Now uses `split_preserving_spaces()` which counts actual space characters between words and accumulates space width across runs. Fixed the date line (66 consecutive spaces used for positioning) wrapping correctly.
 
-The `w:kern val="3"` is in a custom "Standard" style (LibreOffice's name for Normal) that no paragraph references. Paragraphs use "NormalWeb" (basedOn "Normal"), "NoSpacing" (no basedOn), and "Title". The kern threshold doesn't cascade through standard OOXML style inheritance.
-
-Two paths forward:
-1. **Recognize "Standard" as a Normal-equivalent** — LibreOffice documents use styleId "Standard" where Word uses "Normal". Could fall back to "Standard" when resolving the default style, which would make its `w:kern` cascade. Risk: could misapply formatting from other custom styles named "Standard".
-2. **Investigate non-kerning causes** — even with unconditional kerning forced on, mongolian only reached 17.7% (still below 20%). Other factors likely contribute: character width precision, line break algorithm edge cases, or missing features in this specific document.
+Remaining gap to 20%: page 1 scores 47.6% but pages 2-8 score 7-13% due to cascading vertical shifts from multiple small differences: title formatting (missing space in "МОНГОЛ УЛСЫНХУУЛЬ"), header image positioning, paragraph spacing precision, and font metrics differences between Word and our rendering.
 
 ## Font Substitution (HIGH)
 

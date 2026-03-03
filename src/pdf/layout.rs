@@ -5,6 +5,35 @@ use pdf_writer::{Content, Name, Rect, Str};
 use crate::fonts::{FontEntry, encode_as_gids, font_key, font_key_buf, to_winansi_bytes};
 use crate::model::{Alignment, Run, TabAlignment, TabStop, VertAlign};
 
+/// Split text into (preceding_space_count, word) pairs.
+/// Leading and inter-word spaces are counted. Trailing spaces (after the last word)
+/// are handled separately by the caller.
+fn split_preserving_spaces(text: &str) -> Vec<(usize, &str)> {
+    let mut result = Vec::new();
+    let mut chars = text.char_indices().peekable();
+    let mut space_count: usize = 0;
+
+    while let Some(&(i, c)) = chars.peek() {
+        if c.is_whitespace() {
+            space_count += 1;
+            chars.next();
+        } else {
+            let start = i;
+            while let Some(&(_, c)) = chars.peek() {
+                if c.is_whitespace() {
+                    break;
+                }
+                chars.next();
+            }
+            let end = chars.peek().map(|&(i, _)| i).unwrap_or(text.len());
+            result.push((space_count, &text[start..end]));
+            space_count = 0;
+        }
+    }
+
+    result
+}
+
 pub(super) struct WordChunk {
     pub(super) pdf_font: String,
     pub(super) text: String,
@@ -93,8 +122,7 @@ pub(super) fn build_paragraph_lines(
     let mut lines: Vec<TextLine> = Vec::new();
     let mut current_chunks: Vec<WordChunk> = Vec::new();
     let mut current_x: f32 = 0.0;
-    let mut prev_ended_with_ws = false;
-    let mut prev_space_w: f32 = 0.0;
+    let mut pending_space_w: f32 = 0.0;
     let mut key_buf = String::new();
 
     for (run_idx, run) in runs.iter().enumerate() {
@@ -106,9 +134,9 @@ pub(super) fn build_paragraph_lines(
         if let Some(img) = &run.inline_image {
             if let Some(pdf_name) = inline_image_names.get(&run_idx) {
                 let img_w = img.display_width;
-                let need_space = !current_chunks.is_empty() && prev_ended_with_ws;
+                let need_space = !current_chunks.is_empty() && pending_space_w > 0.0;
                 let proposed_x = if need_space {
-                    current_x + prev_space_w
+                    current_x + pending_space_w
                 } else {
                     current_x
                 };
@@ -124,6 +152,7 @@ pub(super) fn build_paragraph_lines(
                 } else {
                     current_x = proposed_x;
                 }
+                pending_space_w = 0.0;
 
                 current_chunks.push(WordChunk {
                     pdf_font: String::new(),
@@ -144,7 +173,6 @@ pub(super) fn build_paragraph_lines(
                     inline_image_height: img.display_height,
                 });
                 current_x += img_w;
-                prev_ended_with_ws = false;
             }
             continue;
         }
@@ -154,33 +182,24 @@ pub(super) fn build_paragraph_lines(
         let eff_fs = effective_font_size(run);
         let space_w = entry.space_width(eff_fs);
         let text = effective_text(run);
-        let starts_with_ws = text.starts_with(char::is_whitespace);
         let y_off = vert_y_offset(run);
 
         let cs = run.char_spacing;
         let ts = run.text_scale / 100.0;
         let space_w_cs = space_w * ts + cs;
 
-        for (i, word) in text.split_whitespace().enumerate() {
+        for (space_count, word) in split_preserving_spaces(&text) {
+            pending_space_w += space_count as f32 * space_w_cs;
+
             let char_count = word.chars().count();
             let kern = run.kern_threshold.is_some_and(|t| eff_fs >= t);
             let ww = entry.word_width(word, eff_fs, kern) * ts
                 + cs * char_count as f32;
 
-            let need_space =
-                !current_chunks.is_empty() && (i > 0 || starts_with_ws || prev_ended_with_ws);
-
-            // Use the space width from the run that owns the space character:
-            // within a run (i > 0) or leading ws → this run's space_w;
-            // trailing ws from previous run → previous run's space_w
-            let effective_space_w = if i > 0 || starts_with_ws {
-                space_w_cs
-            } else {
-                prev_space_w
-            };
+            let need_space = !current_chunks.is_empty() && pending_space_w > 0.0;
 
             let proposed_x = if need_space {
-                current_x + effective_space_w
+                current_x + pending_space_w
             } else {
                 current_x
             };
@@ -196,6 +215,7 @@ pub(super) fn build_paragraph_lines(
             } else {
                 current_x = proposed_x;
             }
+            pending_space_w = 0.0;
 
             current_chunks.push(WordChunk {
                 pdf_font: entry.pdf_name.clone(),
@@ -218,8 +238,9 @@ pub(super) fn build_paragraph_lines(
             current_x += ww;
         }
 
-        prev_ended_with_ws = text.ends_with(char::is_whitespace);
-        prev_space_w = space_w_cs;
+        // Accumulate trailing whitespace for the next run
+        let trailing_spaces = text.chars().rev().take_while(|c| c.is_whitespace()).count();
+        pending_space_w += trailing_spaces as f32 * space_w_cs;
     }
 
     if !current_chunks.is_empty() {

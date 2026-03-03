@@ -355,6 +355,17 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
 
     resolve_based_on(&mut paragraph_styles);
 
+    // LibreOffice exports its default paragraph style as a custom style named "Standard".
+    // Properties like w:kern can end up orphaned there when the actual w:default="1" style
+    // doesn't carry them. Merge kern_threshold into defaults if missing.
+    if defaults.kern_threshold.is_none() {
+        if let Some(standard) = paragraph_styles.get("Standard") {
+            if standard.kern_threshold.is_some() {
+                defaults.kern_threshold = standard.kern_threshold;
+            }
+        }
+    }
+
     // Parse character styles (e.g., "Hyperlink")
     for style_node in root.children() {
         if style_node.tag_name().name() != "style"
