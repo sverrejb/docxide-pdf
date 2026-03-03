@@ -1,3 +1,4 @@
+mod alt_chunk;
 mod embedded_fonts;
 mod headers_footers;
 mod images;
@@ -810,6 +811,11 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                         properties: props,
                         blocks: std::mem::take(&mut blocks),
                     });
+                }
+            }
+            "altChunk" => {
+                if let Some(id) = node.attribute((REL_NS, "id")) {
+                    blocks.extend(alt_chunk::parse_alt_chunk(id, &rels, zip));
                 }
             }
             _ => {}

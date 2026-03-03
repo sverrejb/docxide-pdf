@@ -8,8 +8,8 @@ use std::process::Command;
 use std::sync::OnceLock;
 use std::{fs, io};
 
-const SIMILARITY_THRESHOLD: f64 = 0.20;
-const SSIM_THRESHOLD: f64 = 0.61;
+const SIMILARITY_THRESHOLD: f64 = 0.205;
+const SSIM_THRESHOLD: f64 = 0.75;
 const MUTOOL_DPI: &str = "150";
 
 fn pdf_page_count(pdf: &Path) -> Result<usize, String> {
