@@ -277,16 +277,16 @@ pub(super) fn render_chart(
 
         // Legend
         if let Some(ref legend) = c.legend {
-            let legend_fs = 9.0;
-            let swatch = 7.0;
-            let spacing = 4.0;
-            let line_h = legend_fs + 9.0;
+            let legend_fs = 10.0;
+            let swatch = 5.5;
+            let spacing = 2.5;
+            let line_h = 18.0;
 
             match legend.position {
                 LegendPosition::Right => {
-                    let lx = plot_x + plot_w + 8.0;
+                    let lx = plot_x + plot_w + 21.0;
                     let block_h = swatch + (num_series as f32 - 1.0) * line_h;
-                    let ly_start = plot_y + plot_h / 2.0 + block_h / 2.0 - swatch + line_h / 2.5 - 2.0;
+                    let ly_start = plot_y + plot_h / 2.0 + block_h / 2.0 - swatch + 5.0;
                     for (si, series) in c.series.iter().enumerate() {
                         let ly = ly_start - si as f32 * line_h;
                         if let Some([r, g, b]) = series.color {
@@ -304,7 +304,7 @@ pub(super) fn render_chart(
                         content
                             .begin_text()
                             .set_font(Name(label_font_key.as_bytes()), legend_fs)
-                            .next_line(lx + swatch + spacing, ly + 1.0)
+                            .next_line(lx + swatch + spacing, ly - 0.3)
                             .show(Str(&bytes))
                             .end_text();
                     }
