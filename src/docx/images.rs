@@ -1,12 +1,15 @@
 use std::collections::HashMap;
 use std::io::Read;
 
-use crate::model::{EmbeddedImage, FloatingImage, HorizontalPosition, ImageFormat};
+use crate::model::{EmbeddedImage, FloatingImage, HorizontalPosition, ImageFormat, InlineChart};
 
 use super::{DML_NS, REL_NS, WML_NS, WPD_NS, wml};
+use super::charts::parse_chart_from_zip;
 use super::styles::{StylesInfo, ThemeFonts};
 use super::numbering::NumberingInfo;
 use super::textbox::parse_textbox_from_wsp;
+
+const CHART_URI: &str = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 
 pub(super) fn image_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat)> {
     // JPEG: starts with FF D8
@@ -142,6 +145,7 @@ pub(super) enum RunDrawingResult {
     Inline(EmbeddedImage),
     Floating(FloatingImage),
     TextBox(crate::model::Textbox),
+    Chart(InlineChart),
 }
 
 pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
@@ -218,8 +222,25 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
                 return Some(RunDrawingResult::Inline(img));
             }
         }
+
+        if let Some(chart_rid) = find_chart_ref(container) {
+            if let Some(ic) = parse_chart_from_zip(chart_rid, rels, zip, display_w, display_h) {
+                return Some(RunDrawingResult::Chart(ic));
+            }
+        }
     }
     None
+}
+
+fn find_chart_ref<'a>(container: roxmltree::Node<'a, 'a>) -> Option<&'a str> {
+    container
+        .descendants()
+        .find(|n| n.tag_name().name() == "graphicData" && n.tag_name().namespace() == Some(DML_NS) && n.attribute("uri") == Some(CHART_URI))
+        .and_then(|gd| {
+            gd.children()
+                .find(|n| n.tag_name().name() == "chart")
+                .and_then(|c| c.attribute((REL_NS, "id")))
+        })
 }
 
 pub(super) fn compute_drawing_info<R: Read + std::io::Seek>(

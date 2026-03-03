@@ -460,10 +460,20 @@ fn convert_paragraph(
         color: props.color,
     };
     collect_runs(node, &ctx, &mut runs);
+    trim_block_whitespace(&mut runs);
 
-    let line_spacing = props
-        .line_height_pct
-        .map(|pct| crate::model::LineSpacing::Auto(pct / 100.0));
+    let max_run_fs = runs.iter().map(|r| r.font_size).fold(0.0f32, f32::max);
+
+    let line_spacing = if max_run_fs > 0.0 && font_size > max_run_fs + 0.1 {
+        // Paragraph CSS font-size exceeds tallest run (e.g. 30pt paragraph
+        // with 16pt spans) — use it as minimum line height.
+        Some(crate::model::LineSpacing::AtLeast(font_size))
+    } else if let Some(pct) = props.line_height_pct {
+        Some(crate::model::LineSpacing::Auto(pct / 100.0))
+    } else {
+        // Default for HTML content without explicit line-height
+        Some(crate::model::LineSpacing::Auto(1.1))
+    };
 
     Paragraph {
         runs,
@@ -541,6 +551,17 @@ fn collect_text(node: roxmltree::Node) -> String {
         }
     }
     out
+}
+
+/// Strip leading/trailing whitespace-only runs from a block element's run list.
+/// Matches HTML rendering: whitespace at the start/end of block elements is ignored.
+fn trim_block_whitespace(runs: &mut Vec<Run>) {
+    while runs.first().is_some_and(|r| r.text.trim().is_empty()) {
+        runs.remove(0);
+    }
+    while runs.last().is_some_and(|r| r.text.trim().is_empty()) {
+        runs.pop();
+    }
 }
 
 fn collapse_whitespace(s: &str) -> String {

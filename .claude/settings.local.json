@@ -116,7 +116,8 @@
       "Bash(DOCXIDE_CASE=case28 RUST_LOG=debug cargo test:*)",
       "Bash(DOCXIDE_CASE=waste_management_request cargo test:*)",
       "Bash(DOCXIDE_CASE=croatian_regulations_altchunk cargo test:*)",
-      "Bash(read f:*)"
+      "Bash(read f:*)",
+      "Bash(DOCXIDE_CASE=sample500kB cargo test:*)"
     ]
   }
 }

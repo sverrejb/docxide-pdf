@@ -185,6 +185,7 @@ pub struct Paragraph {
     pub extra_line_breaks: u32,
     pub floating_images: Vec<FloatingImage>,
     pub textboxes: Vec<Textbox>,
+    pub inline_chart: Option<InlineChart>,
 }
 
 impl Default for Paragraph {
@@ -214,6 +215,7 @@ impl Default for Paragraph {
             extra_line_breaks: 0,
             floating_images: Vec::new(),
             textboxes: Vec::new(),
+            inline_chart: None,
         }
     }
 }
@@ -383,4 +385,48 @@ pub struct TableCell {
 pub enum Block {
     Paragraph(Paragraph),
     Table(Table),
+}
+
+pub struct ChartSeries {
+    pub label: String,
+    pub color: Option<[u8; 3]>,
+    pub values: Vec<f32>,
+}
+
+pub enum ChartType {
+    Bar { horizontal: bool, stacked: bool },
+}
+
+pub struct ChartAxis {
+    pub labels: Vec<String>,
+    pub delete: bool,
+    pub gridline_color: Option<[u8; 3]>,
+    pub line_color: Option<[u8; 3]>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum LegendPosition {
+    Right,
+    Bottom,
+    Top,
+    Left,
+}
+
+pub struct ChartLegend {
+    pub position: LegendPosition,
+}
+
+pub struct Chart {
+    pub chart_type: ChartType,
+    pub series: Vec<ChartSeries>,
+    pub cat_axis: Option<ChartAxis>,
+    pub val_axis: Option<ChartAxis>,
+    pub legend: Option<ChartLegend>,
+    pub gap_width_pct: f32,
+}
+
+pub struct InlineChart {
+    pub chart: Chart,
+    pub display_width: f32,
+    pub display_height: f32,
 }

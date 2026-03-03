@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io::Read;
 
 use crate::model::{
-    FieldCode, FloatingImage, Run, Textbox, VertAlign,
+    FieldCode, FloatingImage, InlineChart, Run, Textbox, VertAlign,
 };
 
 use super::{WML_NS, highlight_color, parse_text_color, twips_to_pts, wml, wml_attr, wml_bool};
@@ -18,6 +18,7 @@ pub(super) struct ParsedRuns {
     pub(super) line_break_count: u32,
     pub(super) floating_images: Vec<FloatingImage>,
     pub(super) textboxes: Vec<Textbox>,
+    pub(super) inline_chart: Option<InlineChart>,
 }
 
 /// Resolved formatting for the current run, used to build Run structs concisely.
@@ -156,6 +157,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
     let mut runs = Vec::new();
     let mut floating_images: Vec<FloatingImage> = Vec::new();
     let mut textboxes: Vec<Textbox> = Vec::new();
+    let mut inline_chart: Option<InlineChart> = None;
     let mut has_page_break = false;
     let mut has_column_break = false;
     let mut line_break_count: u32 = 0;
@@ -284,6 +286,9 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                             Some(RunDrawingResult::TextBox(tb)) => {
                                 textboxes.push(tb);
                             }
+                            Some(RunDrawingResult::Chart(ic)) => {
+                                inline_chart = Some(ic);
+                            }
                             None => {}
                         }
                     }
@@ -382,6 +387,9 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                         }
                         Some(RunDrawingResult::TextBox(tb)) => {
                             textboxes.push(tb);
+                        }
+                        Some(RunDrawingResult::Chart(ic)) => {
+                            inline_chart = Some(ic);
                         }
                         None => {}
                     }
@@ -483,5 +491,6 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
         line_break_count,
         floating_images,
         textboxes,
+        inline_chart,
     }
 }

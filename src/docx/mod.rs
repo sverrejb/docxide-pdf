@@ -1,4 +1,5 @@
 mod alt_chunk;
+mod charts;
 mod embedded_fonts;
 mod headers_footers;
 mod images;
@@ -751,7 +752,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
 
                 let mut floating_images = parsed.floating_images;
 
-                let (para_image, content_height) = if has_inline_images && !has_text {
+                let (para_image, mut content_height) = if has_inline_images && !has_text {
                     let img_run_idx = runs.iter().position(|r| r.inline_image.is_some());
                     let img = img_run_idx.and_then(|i| runs[i].inline_image.take());
                     let h = img.as_ref().map(|i| i.display_height).unwrap_or(0.0);
@@ -763,6 +764,10 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     floating_images.extend(drawing.floating_images);
                     (drawing.image, drawing.height)
                 };
+
+                if let Some(ref ic) = parsed.inline_chart {
+                    content_height = content_height.max(ic.display_height);
+                }
 
                 blocks.push(Block::Paragraph(Paragraph {
                     runs,
@@ -795,6 +800,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                         ));
                         tbs
                     },
+                    inline_chart: parsed.inline_chart,
                 }));
 
                 // Mid-document section break: sectPr inside pPr ends the current section
