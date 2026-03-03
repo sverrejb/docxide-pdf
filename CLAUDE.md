@@ -71,16 +71,34 @@ The repository includes:
 
 ```
 src/
-  lib.rs      — public API: convert_docx_to_pdf(input: &Path, output: &Path)
-  error.rs    — Error enum (Zip, Xml, Pdf, Io variants)
-  model.rs    — Document, Paragraph, Run intermediate representation
-  docx.rs     — parse DOCX ZIP + XML → Document
-  pdf.rs      — render Document → PDF bytes
+  lib.rs              — public API: convert_docx_to_pdf(input: &Path, output: &Path)
+  error.rs            — Error enum (Zip, Xml, Pdf, Io variants)
+  model.rs            — Document, Paragraph, Run, Chart intermediate representation
+  fonts.rs            — font discovery, metrics, subsetting
+  main.rs             — CLI binary (behind `cli` feature)
+  docx/
+    mod.rs            — XML utils, relationships, parse orchestrator, table+paragraph parsing
+    styles.rs         — theme parsing, style structs, style inheritance
+    runs.rs           — run-level XML → Vec<Run>
+    numbering.rs      — list/numbering parsing, counter management
+    images.rs         — image/chart drawing detection, floating/inline extraction
+    charts.rs         — parse c:chartSpace XML → Chart model (bar/line/pie/area)
+    textbox.rs        — DrawingML + VML textbox parsing
+    embedded_fonts.rs — embedded font extraction and deobfuscation
+    sections.rs       — section properties (page size, margins, columns)
+    headers_footers.rs — header/footer/footnote XML parsing
+    alt_chunk.rs      — altChunk HTML content parsing
+  pdf/
+    mod.rs            — main render loop, header/footer rendering
+    layout.rs         — text layout, line building, paragraph rendering
+    table.rs          — table layout, auto-fit columns, table rendering
+    charts.rs         — Chart → PDF content stream (bar/line/pie/area)
 tests/
-  visual_comparison.rs  — Jaccard similarity test against Word-generated reference PDFs
-  fixtures/case1/       — Hello world, Letter page (Aptos 12pt)
-  fixtures/case2/       — Complex document (charts/images, currently partially rendered)
-  output/<case>/        — generated.pdf, reference/, generated/, diff/ screenshots
+  visual_comparison.rs — Jaccard/SSIM similarity test against Word-generated reference PDFs
+  text_boundary.rs     — text boundary test (page/line level)
+  fixtures/caseN/      — handcrafted test cases (30 cases)
+  fixtures/samples/    — scraped real-world DOCX files
+  output/<case>/       — generated.pdf, reference/, generated/, diff/ screenshots
 ```
 
 ## Environment Variables
@@ -98,9 +116,9 @@ tests/
 ## Development Notes
 
 - Rust edition: 2024
-- Test output is compared using **Jaccard similarity on ink pixels** (luma < 200 = ink). This ignores the white background and scores based on overlap of actual text/content pixels. Run tests with `cargo test -- --nocapture` to see scores.
-- Current similarity threshold: **50%** (defined as `SIMILARITY_THRESHOLD` in `tests/visual_comparison.rs`)
-- case1 currently scores ~40% — visually close but limited by Helvetica ≠ Aptos font shapes
+- Test output is compared using **Jaccard similarity on ink pixels** (luma < 200 = ink) and **SSIM** with spatial tolerance (±8px). Run tests with `cargo test -- --nocapture` to see scores.
+- Jaccard threshold: **20%**, SSIM threshold: **61%** (defined in `tests/common/mod.rs`)
+- 30 handcrafted test cases covering text, tables, images, charts, and more
 
 ## Word Layout Learnings
 

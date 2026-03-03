@@ -224,7 +224,10 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
         }
 
         if let Some(chart_rid) = find_chart_ref(container) {
-            if let Some(ic) = parse_chart_from_zip(chart_rid, rels, zip, display_w, display_h) {
+            let accent_colors: Vec<[u8; 3]> = (1..=6)
+                .filter_map(|i| theme.colors.get(&format!("accent{i}")).copied())
+                .collect();
+            if let Some(ic) = parse_chart_from_zip(chart_rid, rels, zip, display_w, display_h, accent_colors) {
                 return Some(RunDrawingResult::Chart(ic));
             }
         }

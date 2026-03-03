@@ -387,16 +387,41 @@ pub enum Block {
     Table(Table),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum MarkerSymbol {
+    Circle,
+    Square,
+    Diamond,
+    Triangle,
+    Plus,
+    Star,
+    X,
+    Dash,
+    Dot,
+    None,
+}
+
 pub struct ChartSeries {
     pub label: String,
     pub color: Option<[u8; 3]>,
     pub values: Vec<f32>,
+    pub x_values: Option<Vec<f32>>,
+    pub bubble_sizes: Option<Vec<f32>>,
+    pub marker: Option<MarkerSymbol>,
 }
 
 pub enum ChartType {
     Bar { horizontal: bool, stacked: bool },
+    Line,
+    Pie,
+    Area,
+    Scatter,
+    Bubble,
+    Doughnut { hole_size_pct: f32 },
+    Radar,
 }
 
+#[derive(Clone)]
 pub struct ChartAxis {
     pub labels: Vec<String>,
     pub delete: bool,
@@ -424,6 +449,7 @@ pub struct Chart {
     pub legend: Option<ChartLegend>,
     pub gap_width_pct: f32,
     pub plot_border_color: Option<[u8; 3]>,
+    pub accent_colors: Vec<[u8; 3]>,
 }
 
 pub struct InlineChart {

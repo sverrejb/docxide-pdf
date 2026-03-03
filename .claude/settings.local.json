@@ -118,7 +118,10 @@
       "Bash(DOCXIDE_CASE=croatian_regulations_altchunk cargo test:*)",
       "Bash(read f:*)",
       "Bash(DOCXIDE_CASE=sample500kB cargo test:*)",
-      "Bash(DOCXIDE_CASE=case29 cargo test:*)"
+      "Bash(DOCXIDE_CASE=case29 cargo test:*)",
+      "Bash(DOCXIDE_CASE=case30 cargo test:*)",
+      "Bash(mutool trace:*)",
+      "Bash(DOCXIDE_CASE=case31 cargo test:*)"
     ]
   }
 }
