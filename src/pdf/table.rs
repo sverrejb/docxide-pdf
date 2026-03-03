@@ -49,7 +49,8 @@ fn auto_fit_columns(table: &Table, seen_fonts: &HashMap<String, FontEntry>) -> V
                         run.font_size
                     };
                     for word in text.split_whitespace() {
-                        let ww = entry.word_width(word, fs);
+                        let kern = run.kern_threshold.is_some_and(|t| fs >= t);
+                        let ww = entry.word_width(word, fs, kern);
                         min_widths[grid_col] = min_widths[grid_col].max(ww);
                     }
                 }

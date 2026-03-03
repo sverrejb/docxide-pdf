@@ -163,7 +163,8 @@ pub(super) fn build_paragraph_lines(
 
         for (i, word) in text.split_whitespace().enumerate() {
             let char_count = word.chars().count();
-            let ww = entry.word_width(word, eff_fs) * ts
+            let kern = run.kern_threshold.is_some_and(|t| eff_fs >= t);
+            let ww = entry.word_width(word, eff_fs, kern) * ts
                 + cs * char_count as f32;
 
             let need_space =
@@ -264,7 +265,8 @@ fn segment_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 
             if !first || i > 0 {
                 w += space_w;
             }
-            w += entry.word_width(word, eff_fs) * ts;
+            let kern = run.kern_threshold.is_some_and(|t| eff_fs >= t);
+            w += entry.word_width(word, eff_fs, kern) * ts;
             first = false;
         }
     }
@@ -294,7 +296,8 @@ fn decimal_before_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) 
             chars_remaining = 0;
             s
         };
-        w += entry.word_width(text_to_measure, eff_fs);
+        let kern = run.kern_threshold.is_some_and(|t| eff_fs >= t);
+        w += entry.word_width(text_to_measure, eff_fs, kern);
         if chars_remaining == 0 {
             break;
         }
@@ -429,7 +432,8 @@ pub(super) fn build_tabbed_line(
             let ts = run.text_scale / 100.0;
             for (i, word) in text.split_whitespace().enumerate() {
                 let char_count = word.chars().count();
-                let ww = entry.word_width(word, eff_fs) * ts
+                let kern = run.kern_threshold.is_some_and(|t| eff_fs >= t);
+                let ww = entry.word_width(word, eff_fs, kern) * ts
                     + cs * char_count as f32;
                 if !all_chunks.is_empty()
                     && (i > 0 || prev_ws || text.starts_with(char::is_whitespace))

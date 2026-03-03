@@ -242,6 +242,7 @@ pub struct Run {
     pub inline_image: Option<EmbeddedImage>,
     pub footnote_id: Option<u32>,
     pub is_footnote_ref_mark: bool,
+    pub kern_threshold: Option<f32>,
 }
 
 impl Default for Run {
@@ -269,6 +270,7 @@ impl Default for Run {
             inline_image: None,
             footnote_id: None,
             is_footnote_ref_mark: false,
+            kern_threshold: None,
         }
     }
 }

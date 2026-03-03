@@ -37,6 +37,7 @@ struct RunFormat {
     color: Option<[u8; 3]>,
     vertical_align: VertAlign,
     highlight: Option<[u8; 3]>,
+    kern_threshold: Option<f32>,
 }
 
 impl RunFormat {
@@ -59,6 +60,7 @@ impl RunFormat {
             color: self.color,
             vertical_align: self.vertical_align,
             highlight: self.highlight,
+            kern_threshold: self.kern_threshold,
             hyperlink_url,
             ..Run::default()
         }
@@ -101,6 +103,9 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
     let style_small_caps = para_style.and_then(|s| s.small_caps).unwrap_or(false);
     let style_vanish = para_style.and_then(|s| s.vanish).unwrap_or(false);
     let style_color: Option<[u8; 3]> = para_style.and_then(|s| s.color);
+    let style_kern_threshold: Option<f32> = para_style
+        .and_then(|s| s.kern_threshold)
+        .or(styles.defaults.kern_threshold);
 
     const MC_NS: &str = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 
@@ -237,6 +242,12 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
             highlight: rpr
                 .and_then(|n| wml_attr(n, "highlight"))
                 .and_then(highlight_color),
+            kern_threshold: rpr
+                .and_then(|n| wml_attr(n, "kern"))
+                .and_then(|v| v.parse::<f32>().ok())
+                .map(|hp| hp / 2.0)
+                .or_else(|| char_style.and_then(|cs| cs.kern_threshold))
+                .or(style_kern_threshold),
         };
 
         let flush_pending = |pending: &mut String, runs: &mut Vec<Run>| {

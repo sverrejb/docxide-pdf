@@ -16,6 +16,7 @@ pub(crate) struct FontEntry {
     pub(crate) ascender_ratio: Option<f32>,
     pub(crate) char_to_gid: Option<HashMap<char, u16>>,
     pub(crate) char_widths_1000: Option<HashMap<char, f32>>,
+    pub(crate) kern_pairs: Option<HashMap<(u16, u16), f32>>,
 }
 
 impl FontEntry {
@@ -36,10 +37,37 @@ impl FontEntry {
         }
     }
 
-    pub(crate) fn word_width(&self, word: &str, font_size: f32) -> f32 {
-        word.chars()
-            .map(|ch| self.char_width_1000(ch) * font_size / 1000.0)
-            .sum()
+    pub(crate) fn word_width(&self, word: &str, font_size: f32, kern: bool) -> f32 {
+        if !kern || self.kern_pairs.is_none() {
+            return word.chars()
+                .map(|ch| self.char_width_1000(ch) * font_size / 1000.0)
+                .sum();
+        }
+        let chars: Vec<char> = word.chars().collect();
+        let mut w: f32 = 0.0;
+        for (i, &ch) in chars.iter().enumerate() {
+            w += self.char_width_1000(ch) * font_size / 1000.0;
+            if i + 1 < chars.len() {
+                w += self.kern_1000(ch, chars[i + 1]) * font_size / 1000.0;
+            }
+        }
+        w
+    }
+
+    fn kern_1000(&self, left: char, right: char) -> f32 {
+        let Some(ref pairs) = self.kern_pairs else {
+            return 0.0;
+        };
+        let Some(ref c2g) = self.char_to_gid else {
+            return 0.0;
+        };
+        let Some(&l) = c2g.get(&left) else {
+            return 0.0;
+        };
+        let Some(&r) = c2g.get(&right) else {
+            return 0.0;
+        };
+        pairs.get(&(l, r)).copied().unwrap_or(0.0)
     }
 
     pub(crate) fn space_width(&self, font_size: f32) -> f32 {
@@ -591,7 +619,7 @@ fn embed_truetype(
     face_index: u32,
     used_chars: &HashSet<char>,
     alloc: &mut impl FnMut() -> Ref,
-) -> Option<(Vec<f32>, f32, f32, HashMap<char, u16>, HashMap<char, f32>)> {
+) -> Option<(Vec<f32>, f32, f32, HashMap<char, u16>, HashMap<char, f32>, HashMap<(u16, u16), f32>)> {
     let face = Face::parse(font_data, face_index).ok()?;
 
     let units = face.units_per_em() as f32;
@@ -656,6 +684,102 @@ fn embed_truetype(
         }
     }
 
+    // Extract kern pairs from kern table + GPOS PairAdjustment (keyed by remapped gids)
+    let mut kern_pairs = HashMap::new();
+    let char_gids: Vec<(char, ttf_parser::GlyphId, u16)> = char_to_gid
+        .iter()
+        .filter_map(|(&ch, &new_gid)| {
+            face.glyph_index(ch).map(|orig| (ch, orig, new_gid))
+        })
+        .collect();
+
+    // Legacy kern table
+    if let Some(kern) = face.tables().kern {
+        for &(_, l_orig, l_new) in &char_gids {
+            for &(_, r_orig, r_new) in &char_gids {
+                let mut total: i16 = 0;
+                for subtable in kern.subtables {
+                    if subtable.horizontal && !subtable.variable {
+                        if let Some(val) = subtable.glyphs_kerning(l_orig, r_orig) {
+                            total += val;
+                        }
+                    }
+                }
+                if total != 0 {
+                    kern_pairs.insert((l_new, r_new), total as f32 / units * 1000.0);
+                }
+            }
+        }
+    }
+
+    // GPOS PairAdjustment (covers fonts with kerning only in GPOS, e.g. Cyrillic in Arial)
+    if let Some(gpos) = face.tables().gpos {
+        use ttf_parser::gpos::PairAdjustment;
+        use ttf_parser::gpos::PositioningSubtable;
+        for lookup_idx in 0..gpos.lookups.len() {
+            let Some(lookup) = gpos.lookups.get(lookup_idx) else {
+                continue;
+            };
+            for st_idx in 0..lookup.subtables.len() {
+                let Some(PositioningSubtable::Pair(pair)) =
+                    lookup.subtables.get::<PositioningSubtable>(st_idx)
+                else {
+                    continue;
+                };
+                match pair {
+                    PairAdjustment::Format1 { coverage, sets } => {
+                        for &(_, l_orig, l_new) in &char_gids {
+                            let Some(cov_idx) = coverage.get(l_orig) else {
+                                continue;
+                            };
+                            let Some(pair_set) = sets.get(cov_idx) else {
+                                continue;
+                            };
+                            for &(_, r_orig, r_new) in &char_gids {
+                                if let Some((val1, _)) = pair_set.get(r_orig) {
+                                    if val1.x_advance != 0 {
+                                        kern_pairs
+                                            .entry((l_new, r_new))
+                                            .or_insert(val1.x_advance as f32 / units * 1000.0);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    PairAdjustment::Format2 {
+                        coverage,
+                        classes,
+                        matrix,
+                    } => {
+                        for &(_, l_orig, l_new) in &char_gids {
+                            if coverage.get(l_orig).is_none() {
+                                continue;
+                            }
+                            let c1 = classes.0.get(l_orig);
+                            for &(_, r_orig, r_new) in &char_gids {
+                                let c2 = classes.1.get(r_orig);
+                                if let Some((val1, _)) = matrix.get((c1, c2)) {
+                                    if val1.x_advance != 0 {
+                                        kern_pairs
+                                            .entry((l_new, r_new))
+                                            .or_insert(val1.x_advance as f32 / units * 1000.0);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if !kern_pairs.is_empty() {
+        log::info!(
+            "Kerning for {font_name}: {} pairs from {} chars",
+            kern_pairs.len(),
+            char_gids.len(),
+        );
+    }
     // Subset the font
     let subset_data = subsetter::subset(font_data, face_index, &remapper)
         .unwrap_or_else(|e| {
@@ -742,7 +866,7 @@ fn embed_truetype(
     let line_h_ratio = (face.ascender() as f32 - face.descender() as f32 + line_gap) / units;
     let ascender_ratio = face.ascender() as f32 / units;
 
-    Some((widths_1000, line_h_ratio, ascender_ratio, char_to_gid, char_widths_1000))
+    Some((widths_1000, line_h_ratio, ascender_ratio, char_to_gid, char_widths_1000, kern_pairs))
 }
 
 pub(crate) fn primary_font_name(name: &str) -> &str {
@@ -822,14 +946,17 @@ pub(crate) fn register_font(
         }
     }
 
-    let (widths, line_h_ratio, ascender_ratio, char_to_gid, char_widths_1000) = result
-        .map(|(w, r, ar, m, cw)| (w, Some(r), Some(ar), Some(m), Some(cw)))
+    let (widths, line_h_ratio, ascender_ratio, char_to_gid, char_widths_1000, kern_pairs) = result
+        .map(|(w, r, ar, m, cw, kp)| {
+            let kp_opt = if kp.is_empty() { None } else { Some(kp) };
+            (w, Some(r), Some(ar), Some(m), Some(cw), kp_opt)
+        })
         .unwrap_or_else(|| {
             log::warn!("Font not found: {font_name} bold={bold} italic={italic} — using Helvetica");
             pdf.type1_font(font_ref)
                 .base_font(Name(b"Helvetica"))
                 .encoding_predefined(Name(b"WinAnsiEncoding"));
-            (helvetica_widths(), None, None, None, None)
+            (helvetica_widths(), None, None, None, None, None)
         });
 
     log::debug!(
@@ -845,5 +972,6 @@ pub(crate) fn register_font(
         ascender_ratio,
         char_to_gid,
         char_widths_1000,
+        kern_pairs,
     }
 }

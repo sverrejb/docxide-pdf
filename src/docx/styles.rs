@@ -29,6 +29,7 @@ pub(super) struct StyleDefaults {
     pub(super) font_name: String,
     pub(super) space_after: f32,
     pub(super) line_spacing: LineSpacing,
+    pub(super) kern_threshold: Option<f32>,
 }
 
 pub(super) struct ParagraphStyle {
@@ -53,6 +54,7 @@ pub(super) struct ParagraphStyle {
     pub(super) indent_first_line: Option<f32>,
     pub(super) borders: crate::model::ParagraphBorders,
     pub(super) based_on: Option<String>,
+    pub(super) kern_threshold: Option<f32>,
 }
 
 pub(super) struct CharacterStyle {
@@ -66,6 +68,7 @@ pub(super) struct CharacterStyle {
     pub(super) small_caps: Option<bool>,
     pub(super) vanish: Option<bool>,
     pub(super) color: Option<[u8; 3]>,
+    pub(super) kern_threshold: Option<f32>,
 }
 
 pub(super) struct TableBordersDef {
@@ -196,6 +199,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         font_name: theme.minor.clone(),
         space_after: 0.0,
         line_spacing: LineSpacing::Auto(1.0),
+        kern_threshold: None,
     };
     let mut paragraph_styles = HashMap::new();
     let mut character_styles = HashMap::new();
@@ -227,6 +231,9 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
             if let Some(rfonts) = wml(rpr, "rFonts") {
                 defaults.font_name = resolve_font_from_node(rfonts, theme, &theme.minor);
             }
+            defaults.kern_threshold = wml_attr(rpr, "kern")
+                .and_then(|v| v.parse::<f32>().ok())
+                .map(|hp| hp / 2.0);
         }
         let default_spacing = wml(doc_defaults, "pPrDefault")
             .and_then(|n| wml(n, "pPr"))
@@ -279,6 +286,10 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         let caps = rpr.and_then(|n| wml_bool(n, "caps"));
         let small_caps = rpr.and_then(|n| wml_bool(n, "smallCaps"));
         let vanish = rpr.and_then(|n| wml_bool(n, "vanish"));
+        let kern_threshold = rpr
+            .and_then(|n| wml_attr(n, "kern"))
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(|hp| hp / 2.0);
 
         let color = rpr
             .and_then(|n| wml_attr(n, "color"))
@@ -337,6 +348,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                 indent_first_line,
                 borders,
                 based_on,
+                kern_threshold,
             },
         );
     }
@@ -374,6 +386,9 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         let small_caps = wml_bool(rpr, "smallCaps");
         let vanish = wml_bool(rpr, "vanish");
         let color = wml_attr(rpr, "color").and_then(parse_text_color);
+        let kern_threshold = wml_attr(rpr, "kern")
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(|hp| hp / 2.0);
 
         character_styles.insert(
             style_id.to_string(),
@@ -388,6 +403,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                 small_caps,
                 vanish,
                 color,
+                kern_threshold,
             },
         );
     }
@@ -500,6 +516,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             indent_first_line: None,
             borders: crate::model::ParagraphBorders::default(),
             based_on: None,
+            kern_threshold: None,
         };
 
         for ancestor_id in chain.iter().rev() {
@@ -520,6 +537,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                 inherit!(indent_right, inh.indent_right, s);
                 inherit!(indent_hanging, inh.indent_hanging, s);
                 inherit!(indent_first_line, inh.indent_first_line, s);
+                inherit!(kern_threshold, inh.kern_threshold, s);
             }
         }
 
@@ -540,6 +558,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             s.indent_right = s.indent_right.or(inh.indent_right);
             s.indent_hanging = s.indent_hanging.or(inh.indent_hanging);
             s.indent_first_line = s.indent_first_line.or(inh.indent_first_line);
+            s.kern_threshold = s.kern_threshold.or(inh.kern_threshold);
         }
     }
 }
