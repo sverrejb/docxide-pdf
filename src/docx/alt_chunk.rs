@@ -593,9 +593,28 @@ fn convert_table(
         return None;
     }
 
-    // First pass: determine column widths from the row with the most cells
+    // First pass: determine max column count
     let mut max_cols = 0usize;
-    let mut col_widths_from_cells: Vec<f32> = Vec::new();
+    for tr in &tr_nodes {
+        let total: usize = tr
+            .children()
+            .filter(|n| n.is_element() && (n.tag_name().name() == "td" || n.tag_name().name() == "th"))
+            .map(|td| {
+                td.attribute("colspan")
+                    .and_then(|v| v.parse::<usize>().ok())
+                    .unwrap_or(1)
+            })
+            .sum();
+        if total > max_cols {
+            max_cols = total;
+        }
+    }
+
+    // Second pass: extract column widths from the row with the most individual
+    // (non-colspan) cells, so we get real per-column widths rather than
+    // dividing a spanning cell evenly.
+    let mut col_widths_from_cells: Vec<f32> = vec![72.0; max_cols];
+    let mut best_individual_cells = 0usize;
 
     for tr in &tr_nodes {
         let tds: Vec<_> = tr
@@ -603,18 +622,18 @@ fn convert_table(
             .filter(|n| n.is_element() && (n.tag_name().name() == "td" || n.tag_name().name() == "th"))
             .collect();
 
-        let total_cols: usize = tds
+        let individual_cells = tds
             .iter()
-            .map(|td| {
+            .filter(|td| {
                 td.attribute("colspan")
                     .and_then(|v| v.parse::<usize>().ok())
                     .unwrap_or(1)
+                    == 1
             })
-            .sum();
+            .count();
 
-        if total_cols > max_cols {
-            max_cols = total_cols;
-            col_widths_from_cells.clear();
+        if individual_cells > best_individual_cells {
+            best_individual_cells = individual_cells;
             let mut col_idx = 0;
             for td in &tds {
                 let td_css = resolve_css(*td, css);
@@ -625,27 +644,20 @@ fn convert_table(
                 let w_px = td_css.width_px.unwrap_or(100.0);
                 let w_pt = w_px * 0.75;
                 if colspan == 1 {
-                    if col_idx < col_widths_from_cells.len() {
+                    if col_idx < max_cols {
                         col_widths_from_cells[col_idx] = w_pt;
-                    } else {
-                        while col_widths_from_cells.len() < col_idx {
-                            col_widths_from_cells.push(72.0);
-                        }
-                        col_widths_from_cells.push(w_pt);
                     }
                 } else {
                     let per_col = w_pt / colspan as f32;
-                    for _ in 0..colspan {
-                        col_widths_from_cells.push(per_col);
+                    for i in 0..colspan {
+                        if col_idx + i < max_cols {
+                            col_widths_from_cells[col_idx + i] = per_col;
+                        }
                     }
                 }
                 col_idx += colspan;
             }
         }
-    }
-
-    while col_widths_from_cells.len() < max_cols {
-        col_widths_from_cells.push(72.0);
     }
 
     // Second pass: build rows
