@@ -60,10 +60,7 @@ fn extract_html_from_mht(raw: &str) -> Option<String> {
             continue;
         };
         let headers = &part[..header_end];
-        if !headers
-            .lines()
-            .any(|l| l.contains("text/html"))
-        {
+        if !headers.lines().any(|l| l.contains("text/html")) {
             continue;
         }
 
@@ -97,7 +94,6 @@ fn decode_quoted_printable(input: &str) -> String {
                 let hi = bytes[i + 1];
                 let lo = bytes[i + 2];
                 if hi == b'\r' || hi == b'\n' {
-                    // soft line break
                     i += 2;
                     if i < bytes.len() && bytes[i] == b'\n' {
                         i += 1;
@@ -173,7 +169,7 @@ fn fix_xhtml_void_tags(html: &str) -> String {
 struct CssProperties {
     font_size_pt: Option<f32>,
     font_family: Option<String>,
-    font_weight: Option<String>,
+    bold: Option<bool>,
     text_align: Option<String>,
     text_indent_pt: Option<f32>,
     margin_top_pt: Option<f32>,
@@ -189,9 +185,10 @@ struct CssProperties {
     border_left: Option<CellBorder>,
 }
 
-fn parse_css_value(val: &str) -> f32 {
-    let s = val.replace(',', ".").trim().to_string();
-    let numeric: String = s
+fn parse_css_numeric(val: &str) -> f32 {
+    let numeric: String = val
+        .trim()
+        .replace(',', ".")
         .chars()
         .take_while(|c| c.is_ascii_digit() || *c == '.' || *c == '-')
         .collect();
@@ -200,20 +197,23 @@ fn parse_css_value(val: &str) -> f32 {
 
 fn parse_css_length_pt(val: &str) -> f32 {
     let val = val.trim();
-    let normalized = val.replace(',', ".");
-    if normalized.ends_with("pt") {
-        parse_css_value(&normalized)
-    } else if normalized.ends_with("px") {
-        parse_css_value(&normalized) * 0.75
-    } else if normalized.ends_with("in") {
-        parse_css_value(&normalized) * 72.0
+    let n = parse_css_numeric(val);
+    if val.ends_with("pt") {
+        n
+    } else if val.ends_with("px") {
+        n * 0.75
+    } else if val.ends_with("in") {
+        n * 72.0
     } else {
-        parse_css_value(&normalized)
+        n
     }
 }
 
+fn parse_font_weight_bold(val: &str) -> bool {
+    val == "bold" || val.parse::<u32>().is_ok_and(|n| n >= 700)
+}
+
 fn parse_css_border(val: &str) -> Option<CellBorder> {
-    // e.g. "solid windowtext 1px" or "none"
     let parts: Vec<&str> = val.split_whitespace().collect();
     if parts.is_empty() || parts[0] == "none" {
         return None;
@@ -240,9 +240,10 @@ fn parse_css_properties(decl_block: &str) -> CssProperties {
             "font-size" => props.font_size_pt = Some(parse_css_length_pt(val)),
             "font-family" => {
                 let first = val.split(',').next().unwrap_or(val);
-                props.font_family = Some(first.trim().trim_matches('\'').trim_matches('"').to_string());
+                props.font_family =
+                    Some(first.trim().trim_matches('\'').trim_matches('"').to_string());
             }
-            "font-weight" => props.font_weight = Some(val.to_string()),
+            "font-weight" => props.bold = Some(parse_font_weight_bold(val)),
             "text-align" => props.text_align = Some(val.to_string()),
             "text-indent" => props.text_indent_pt = Some(parse_css_length_pt(val)),
             "margin-top" => props.margin_top_pt = Some(parse_css_length_pt(val)),
@@ -258,7 +259,7 @@ fn parse_css_properties(decl_block: &str) -> CssProperties {
                 let c = val.trim_start_matches('#');
                 props.color = parse_hex_color(c);
             }
-            "width" => props.width_px = Some(parse_css_value(&val.replace(',', "."))),
+            "width" => props.width_px = Some(parse_css_numeric(val)),
             "vertical-align" => props.vertical_align = Some(val.to_string()),
             "border-top" => props.border_top = parse_css_border(val),
             "border-right" => props.border_right = parse_css_border(val),
@@ -374,8 +375,8 @@ fn merge_css(base: &mut CssProperties, over: &CssProperties) {
     if over.font_family.is_some() {
         base.font_family.clone_from(&over.font_family);
     }
-    if over.font_weight.is_some() {
-        base.font_weight.clone_from(&over.font_weight);
+    if over.bold.is_some() {
+        base.bold = over.bold;
     }
     if over.text_align.is_some() {
         base.text_align.clone_from(&over.text_align);
@@ -398,6 +399,34 @@ fn merge_css(base: &mut CssProperties, over: &CssProperties) {
     if over.color.is_some() {
         base.color = over.color;
     }
+    if over.width_px.is_some() {
+        base.width_px = over.width_px;
+    }
+    if over.vertical_align.is_some() {
+        base.vertical_align.clone_from(&over.vertical_align);
+    }
+    if over.border_top.is_some() {
+        base.border_top = over.border_top;
+    }
+    if over.border_right.is_some() {
+        base.border_right = over.border_right;
+    }
+    if over.border_bottom.is_some() {
+        base.border_bottom = over.border_bottom;
+    }
+    if over.border_left.is_some() {
+        base.border_left = over.border_left;
+    }
+}
+
+struct RunContext<'a> {
+    css: &'a HashMap<String, CssProperties>,
+    font_size: f32,
+    font_name: &'a str,
+    bold: bool,
+    italic: bool,
+    underline: bool,
+    color: Option<[u8; 3]>,
 }
 
 fn convert_paragraph(
@@ -418,17 +447,23 @@ fn convert_paragraph(
         .font_family
         .clone()
         .unwrap_or_else(|| "Times New Roman".to_string());
-    let bold = props
-        .font_weight
-        .as_deref()
-        .is_some_and(|w| w == "bold" || w.parse::<u32>().is_ok_and(|n| n >= 700));
+    let bold = props.bold.unwrap_or(false);
 
     let mut runs = Vec::new();
-    collect_runs(node, css, font_size, &font_name, bold, props.color, &mut runs);
+    let ctx = RunContext {
+        css,
+        font_size,
+        font_name: &font_name,
+        bold,
+        italic: false,
+        underline: false,
+        color: props.color,
+    };
+    collect_runs(node, &ctx, &mut runs);
 
-    let line_spacing = props.line_height_pct.map(|pct| {
-        crate::model::LineSpacing::Auto(pct / 100.0)
-    });
+    let line_spacing = props
+        .line_height_pct
+        .map(|pct| crate::model::LineSpacing::Auto(pct / 100.0));
 
     Paragraph {
         runs,
@@ -442,25 +477,19 @@ fn convert_paragraph(
     }
 }
 
-fn collect_runs(
-    node: roxmltree::Node,
-    css: &HashMap<String, CssProperties>,
-    parent_font_size: f32,
-    parent_font_name: &str,
-    parent_bold: bool,
-    parent_color: Option<[u8; 3]>,
-    runs: &mut Vec<Run>,
-) {
+fn collect_runs(node: roxmltree::Node, ctx: &RunContext, runs: &mut Vec<Run>) {
     for child in node.children() {
         if child.is_text() {
             let text = collapse_whitespace(child.text().unwrap_or(""));
             if !text.is_empty() {
                 runs.push(Run {
                     text,
-                    font_size: parent_font_size,
-                    font_name: parent_font_name.to_string(),
-                    bold: parent_bold,
-                    color: parent_color,
+                    font_size: ctx.font_size,
+                    font_name: ctx.font_name.to_string(),
+                    bold: ctx.bold,
+                    italic: ctx.italic,
+                    underline: ctx.underline,
+                    color: ctx.color,
                     ..Run::default()
                 });
             }
@@ -473,60 +502,30 @@ fn collect_runs(
         let tag = child.tag_name().name();
         match tag {
             "span" | "b" | "strong" | "i" | "em" | "a" | "u" => {
-                let span_css = resolve_css(child, css);
-                let fs = span_css.font_size_pt.unwrap_or(parent_font_size);
-                let fn_ = span_css
-                    .font_family
-                    .as_deref()
-                    .unwrap_or(parent_font_name);
-                let bld = span_css
-                    .font_weight
-                    .as_deref()
-                    .map(|w| w == "bold" || w.parse::<u32>().is_ok_and(|n| n >= 700))
-                    .unwrap_or(parent_bold)
-                    || tag == "b"
-                    || tag == "strong";
-                let italic = tag == "i" || tag == "em";
-                let underline = tag == "u";
-                let color = span_css.color.or(parent_color);
-
-                // Check if this span has direct text or just children
-                let has_element_children = child.children().any(|c| c.is_element());
-                if has_element_children {
-                    collect_runs(child, css, fs, fn_, bld, color, runs);
-                    // Apply italic/underline to collected runs
-                    if italic || underline {
-                        // We need to set these on runs we just added.
-                        // This is approximate but good enough for this HTML.
-                    }
-                } else {
-                    let text = collect_text(child);
-                    let text = collapse_whitespace(&text);
-                    if !text.is_empty() {
-                        runs.push(Run {
-                            text,
-                            font_size: fs,
-                            font_name: fn_.to_string(),
-                            bold: bld,
-                            italic,
-                            underline,
-                            color,
-                            ..Run::default()
-                        });
-                    }
-                }
+                let span_css = resolve_css(child, ctx.css);
+                let child_ctx = RunContext {
+                    css: ctx.css,
+                    font_size: span_css.font_size_pt.unwrap_or(ctx.font_size),
+                    font_name: span_css.font_family.as_deref().unwrap_or(ctx.font_name),
+                    bold: span_css.bold.unwrap_or(ctx.bold)
+                        || tag == "b"
+                        || tag == "strong",
+                    italic: ctx.italic || tag == "i" || tag == "em",
+                    underline: ctx.underline || tag == "u",
+                    color: span_css.color.or(ctx.color),
+                };
+                collect_runs(child, &child_ctx, runs);
             }
             "br" => {
-                // Line break within a paragraph — append newline to force a break
                 runs.push(Run {
                     text: "\n".to_string(),
-                    font_size: parent_font_size,
-                    font_name: parent_font_name.to_string(),
+                    font_size: ctx.font_size,
+                    font_name: ctx.font_name.to_string(),
                     ..Run::default()
                 });
             }
             _ => {
-                collect_runs(child, css, parent_font_size, parent_font_name, parent_bold, parent_color, runs);
+                collect_runs(child, ctx, runs);
             }
         }
     }
@@ -578,6 +577,16 @@ fn find_element<'a>(
 
 // --- Table conversion ---
 
+fn is_table_cell(n: &roxmltree::Node) -> bool {
+    n.is_element() && (n.tag_name().name() == "td" || n.tag_name().name() == "th")
+}
+
+fn cell_colspan(td: &roxmltree::Node) -> usize {
+    td.attribute("colspan")
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(1)
+}
+
 fn convert_table(
     table_node: roxmltree::Node,
     css: &HashMap<String, CssProperties>,
@@ -593,65 +602,42 @@ fn convert_table(
         return None;
     }
 
-    // First pass: determine max column count
-    let mut max_cols = 0usize;
-    for tr in &tr_nodes {
-        let total: usize = tr
-            .children()
-            .filter(|n| n.is_element() && (n.tag_name().name() == "td" || n.tag_name().name() == "th"))
-            .map(|td| {
-                td.attribute("colspan")
-                    .and_then(|v| v.parse::<usize>().ok())
-                    .unwrap_or(1)
-            })
-            .sum();
-        if total > max_cols {
-            max_cols = total;
-        }
-    }
+    // Collect td/th nodes per row once, reused across passes.
+    let rows_tds: Vec<Vec<_>> = tr_nodes
+        .iter()
+        .map(|tr| tr.children().filter(|n| is_table_cell(n)).collect())
+        .collect();
 
-    // Second pass: extract column widths from the row with the most individual
-    // (non-colspan) cells, so we get real per-column widths rather than
-    // dividing a spanning cell evenly.
-    let mut col_widths_from_cells: Vec<f32> = vec![72.0; max_cols];
+    // First pass: determine max column count and extract column widths from
+    // the row with the most individual (non-colspan) cells.
+    let mut max_cols = 0usize;
+    let mut col_widths: Vec<f32> = Vec::new();
     let mut best_individual_cells = 0usize;
 
-    for tr in &tr_nodes {
-        let tds: Vec<_> = tr
-            .children()
-            .filter(|n| n.is_element() && (n.tag_name().name() == "td" || n.tag_name().name() == "th"))
-            .collect();
+    for tds in &rows_tds {
+        let total_cols: usize = tds.iter().map(|td| cell_colspan(td)).sum();
+        if total_cols > max_cols {
+            max_cols = total_cols;
+        }
 
-        let individual_cells = tds
-            .iter()
-            .filter(|td| {
-                td.attribute("colspan")
-                    .and_then(|v| v.parse::<usize>().ok())
-                    .unwrap_or(1)
-                    == 1
-            })
-            .count();
-
-        if individual_cells > best_individual_cells {
-            best_individual_cells = individual_cells;
+        let individual = tds.iter().filter(|td| cell_colspan(td) == 1).count();
+        if individual > best_individual_cells {
+            best_individual_cells = individual;
+            col_widths = vec![72.0; max_cols.max(total_cols)];
             let mut col_idx = 0;
-            for td in &tds {
+            for td in tds {
                 let td_css = resolve_css(*td, css);
-                let colspan = td
-                    .attribute("colspan")
-                    .and_then(|v| v.parse::<usize>().ok())
-                    .unwrap_or(1);
-                let w_px = td_css.width_px.unwrap_or(100.0);
-                let w_pt = w_px * 0.75;
+                let colspan = cell_colspan(td);
+                let w_pt = td_css.width_px.unwrap_or(100.0) * 0.75;
                 if colspan == 1 {
-                    if col_idx < max_cols {
-                        col_widths_from_cells[col_idx] = w_pt;
+                    if col_idx < col_widths.len() {
+                        col_widths[col_idx] = w_pt;
                     }
                 } else {
                     let per_col = w_pt / colspan as f32;
                     for i in 0..colspan {
-                        if col_idx + i < max_cols {
-                            col_widths_from_cells[col_idx + i] = per_col;
+                        if col_idx + i < col_widths.len() {
+                            col_widths[col_idx + i] = per_col;
                         }
                     }
                 }
@@ -660,24 +646,17 @@ fn convert_table(
         }
     }
 
-    // Second pass: build rows
+    // Ensure col_widths covers all columns
+    col_widths.resize(max_cols, 72.0);
+
+    // Build rows
     let mut rows = Vec::new();
-    for tr in &tr_nodes {
-        let tds: Vec<_> = tr
-            .children()
-            .filter(|n| n.is_element() && (n.tag_name().name() == "td" || n.tag_name().name() == "th"))
-            .collect();
-
+    for tds in &rows_tds {
         let mut cells = Vec::new();
-        for td in &tds {
+        for td in tds {
             let td_css = resolve_css(*td, css);
-            let colspan = td
-                .attribute("colspan")
-                .and_then(|v| v.parse::<u16>().ok())
-                .unwrap_or(1);
-
-            let w_px = td_css.width_px.unwrap_or(100.0);
-            let w_pt = w_px * 0.75;
+            let colspan = cell_colspan(td);
+            let w_pt = td_css.width_px.unwrap_or(100.0) * 0.75;
 
             let borders = CellBorders {
                 top: td_css.border_top.unwrap_or_default(),
@@ -704,7 +683,6 @@ fn convert_table(
                 }
             }
             if cell_paras.is_empty() {
-                // Bare text in a td
                 let text = collect_text(*td);
                 let text = collapse_whitespace(&text);
                 cell_paras.push(Paragraph {
@@ -726,7 +704,7 @@ fn convert_table(
                 paragraphs: cell_paras,
                 borders,
                 shading: None,
-                grid_span: colspan,
+                grid_span: colspan as u16,
                 v_merge: crate::model::VMerge::None,
                 v_align,
             });
@@ -740,7 +718,7 @@ fn convert_table(
     }
 
     Some(Table {
-        col_widths: col_widths_from_cells,
+        col_widths,
         rows,
         table_indent: 0.0,
         cell_margins: CellMargins::default(),
