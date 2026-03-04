@@ -165,6 +165,7 @@ fn compute_row_layouts(
                         prev_space_after = para.space_after;
                     }
 
+                    total_h += prev_space_after;
                     max_h = max_h.max(total_h);
                     (all_lines, first_line_h, first_font_size)
                 })
@@ -198,21 +199,22 @@ pub(super) fn render_table(
     is_first_page_of_section: &mut bool,
     slot_top: &mut f32,
     prev_space_after: f32,
-    override_pos: Option<(f32, f32)>,
+    override_pos: Option<(f32, f32, bool)>,
 ) {
     let col_widths = auto_fit_columns(table, seen_fonts);
     let row_layouts = compute_row_layouts(table, &col_widths, doc_line_spacing, seen_fonts);
     let cm = &table.cell_margins;
 
-    let (table_left, saved_slot_top) = if let Some((x, y)) = override_pos {
-        let saved = *slot_top;
+    let is_truly_floating = override_pos.is_some_and(|(.., restore)| restore);
+    let (table_left, saved_slot_top) = if let Some((x, y, restore)) = override_pos {
+        let saved = if restore { Some(*slot_top) } else { None };
         *slot_top = y;
-        (x - cm.left, Some(saved))
+        (x - cm.left, saved)
     } else {
         (sp.margin_left + table.table_indent - cm.left, None)
     };
 
-    if override_pos.is_none() {
+    if !is_truly_floating {
         *slot_top -= prev_space_after;
     }
 
@@ -227,7 +229,7 @@ pub(super) fn render_table(
         );
         let at_page_top = (*slot_top - (sp.page_height - sp.margin_top)).abs() < 1.0;
 
-        if override_pos.is_none() && !at_page_top && *slot_top - row_h < sp.margin_bottom {
+        if !is_truly_floating && !at_page_top && *slot_top - row_h < sp.margin_bottom {
             all_contents.push(std::mem::replace(content, Content::new()));
             all_page_links.push(std::mem::take(current_page_links));
             page_section_indices.push((sect_idx, *is_first_page_of_section));

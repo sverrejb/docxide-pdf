@@ -128,7 +128,10 @@
       "Bash(DOCXIDE_CASE=samples/sample500kB RUST_LOG=info cargo test:*)",
       "Bash(DOCXIDE_CASE=scraped/czech_expert_witness_law cargo test:*)",
       "Bash(./target/release/docxide-pdf:*)",
-      "Bash(cargo fmt:*)"
+      "Bash(cargo fmt:*)",
+      "Bash(DOCXIDE_CASE=italian_project_proposal cargo test:*)",
+      "Bash(DOCXIDE_CASE=polish_municipal_letter cargo test:*)",
+      "Bash(DOCXIDE_CASE=case32 cargo test:*)"
     ]
   }
 }

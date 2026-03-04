@@ -36,9 +36,9 @@ Related: CJK characters render as blanks — need fallback to system CJK fonts (
 8 passing, ~22 failing out of ~30 non-skipped scraped fixtures.
 Run `./tools/target/debug/analyze-fixtures --failing --fonts` for current breakdown.
 
-### Floating Tables (MEDIUM — 5 failing)
+### Floating Tables (DONE — positioning; inline `w:tblBorders` DONE)
 
-Tables with `w:tblpPr` positioning attributes render as normal flow tables instead of being positioned absolutely. Existing table rendering can be reused; only the positioning pass needs to be added.
+Floating table positioning (`w:tblpPr`) was already implemented. Inline `w:tblBorders` (borders specified directly on `w:tblPr` rather than via a named `w:tblStyle`) are now parsed and merged with style borders (inline overrides style). Test case32 covers floating table + inline borders. Affected scraped fixtures (`italian_project_proposal`, `polish_municipal_letter`, etc.) still score below 20% Jaccard due to other gaps (font metrics, complex layout).
 
 ### Textbox / Shape Rendering (DONE — fills, margins, header z-order)
 

@@ -19,7 +19,7 @@ use crate::model::{
     SectionProperties, TabAlignment, TabStop, Table, TableCell, TablePosition, TableRow, VMerge,
 };
 
-use styles::{parse_alignment, parse_line_spacing, parse_styles, parse_theme};
+use styles::{parse_alignment, parse_line_spacing, parse_styles, parse_theme, TableBordersDef};
 
 use embedded_fonts::parse_font_table;
 use headers_footers::parse_footnotes;
@@ -381,9 +381,60 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     }
                 });
 
+                let has_tbl_style = tbl_pr
+                    .and_then(|pr| wml_attr(pr, "tblStyle"))
+                    .is_some();
                 let tbl_style_borders = tbl_pr
                     .and_then(|pr| wml_attr(pr, "tblStyle"))
                     .and_then(|id| styles.table_border_styles.get(id));
+
+                let inline_tbl_borders =
+                    tbl_pr
+                        .and_then(|pr| wml(pr, "tblBorders"))
+                        .map(|bdr_node| {
+                            let parse_bdr =
+                                |name: &str| -> CellBorder {
+                                    let Some(n) = wml(bdr_node, name) else {
+                                        return CellBorder::default();
+                                    };
+                                    let val =
+                                        n.attribute((WML_NS, "val")).unwrap_or("none");
+                                    if val == "nil" || val == "none" {
+                                        return CellBorder::default();
+                                    }
+                                    let width = n
+                                        .attribute((WML_NS, "sz"))
+                                        .and_then(|v| v.parse::<f32>().ok())
+                                        .map(|v| v / 8.0)
+                                        .unwrap_or(0.5);
+                                    let color =
+                                        n.attribute((WML_NS, "color")).and_then(parse_hex_color);
+                                    CellBorder::visible(color, width)
+                                };
+                            let left = parse_bdr("left");
+                            let left = if left.present {
+                                left
+                            } else {
+                                parse_bdr("start")
+                            };
+                            let right = parse_bdr("right");
+                            let right = if right.present {
+                                right
+                            } else {
+                                parse_bdr("end")
+                            };
+                            TableBordersDef {
+                                top: parse_bdr("top"),
+                                bottom: parse_bdr("bottom"),
+                                left,
+                                right,
+                                inside_h: parse_bdr("insideH"),
+                                inside_v: parse_bdr("insideV"),
+                            }
+                        });
+
+                let effective_tbl_borders: Option<&TableBordersDef> =
+                    inline_tbl_borders.as_ref().or(tbl_style_borders);
 
                 let tbl_rows: Vec<_> = collect_block_nodes(node)
                     .into_iter()
@@ -464,7 +515,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
 
                         let span_end = ci + grid_span as usize;
 
-                        let style_borders = tbl_style_borders.map(|tb| CellBorders {
+                        let style_borders = effective_tbl_borders.map(|tb| CellBorders {
                             top: if ri == 0 { tb.top } else { tb.inside_h },
                             bottom: if ri == num_rows - 1 {
                                 tb.bottom
@@ -570,6 +621,20 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                                     indent_first_line = v;
                                 }
                             }
+                            let space_before = inline_spacing
+                                .and_then(|n| twips_attr(n, "before"))
+                                .or_else(|| para_style.and_then(|s| s.space_before))
+                                .unwrap_or(0.0);
+                            let space_after = inline_spacing
+                                .and_then(|n| twips_attr(n, "after"))
+                                .or_else(|| para_style.and_then(|s| s.space_after))
+                                .unwrap_or_else(|| {
+                                    if has_tbl_style {
+                                        0.0
+                                    } else {
+                                        styles.defaults.space_after
+                                    }
+                                });
                             cell_paras.push(Paragraph {
                                 runs: parsed.runs,
                                 alignment,
@@ -580,6 +645,8 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                                 list_label,
                                 list_label_font,
                                 line_spacing,
+                                space_before,
+                                space_after,
                                 extra_line_breaks: parsed.line_break_count,
                                 ..Paragraph::default()
                             });

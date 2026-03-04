@@ -1633,12 +1633,13 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 }
                             }
                         };
+                        let restore = pos.v_anchor != "text";
                         let y = match pos.v_anchor {
                             "page" => sp.page_height - pos.v_offset_pt,
                             "margin" => sp.page_height - sp.margin_top - pos.v_offset_pt,
                             _ => slot_top - pos.v_offset_pt,
                         };
-                        (x, y)
+                        (x, y, restore)
                     });
                     render_table(
                         table,
