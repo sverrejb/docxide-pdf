@@ -1,5 +1,6 @@
 use pdf_writer::Content;
 
+use crate::fonts::FontEntry;
 use crate::model::{InlineChart, LegendPosition};
 
 use super::charts::{fill_rgb, resolve_accent_colors, show_text, text_width_approx};
@@ -14,7 +15,19 @@ struct RadialLayout {
     labels: Vec<String>,
 }
 
-fn setup_radial_chart(chart: &InlineChart, x: f32, y: f32) -> Option<RadialLayout> {
+fn text_width(text: &str, font_size: f32, font: Option<&FontEntry>) -> f32 {
+    match font {
+        Some(f) => f.word_width(text, font_size, false),
+        None => text_width_approx(text, font_size),
+    }
+}
+
+fn setup_radial_chart(
+    chart: &InlineChart,
+    x: f32,
+    y: f32,
+    label_font: Option<&FontEntry>,
+) -> Option<RadialLayout> {
     let c = &chart.chart;
     let w = chart.display_width;
     let h = chart.display_height;
@@ -45,7 +58,7 @@ fn setup_radial_chart(chart: &InlineChart, x: f32, y: f32) -> Option<RadialLayou
         let spacing = 2.5;
         let max_label_w = labels
             .iter()
-            .map(|l| text_width_approx(l, legend_fs))
+            .map(|l| text_width(l, legend_fs, label_font))
             .fold(0.0f32, f32::max);
         let legend_area = (swatch + spacing + max_label_w + 10.0).max(w * 0.143);
         let pie_area_w = w - legend_area;
@@ -73,6 +86,7 @@ fn render_radial_legend(
     cx: f32,
     y: f32,
     h: f32,
+    label_font: Option<&FontEntry>,
 ) {
     if !layout.has_legend || layout.labels.is_empty() {
         return;
@@ -107,7 +121,7 @@ fn render_radial_legend(
         let total_w: f32 = layout
             .labels
             .iter()
-            .map(|l| swatch + spacing + text_width_approx(l, legend_fs) + 12.0)
+            .map(|l| swatch + spacing + text_width(l, legend_fs, label_font) + 12.0)
             .sum();
         let mut lx = cx - total_w / 2.0;
         let ly = y - h + 4.0;
@@ -125,7 +139,7 @@ fn render_radial_legend(
                 ly + 1.0,
                 label,
             );
-            lx += swatch + spacing + text_width_approx(label, legend_fs) + 12.0;
+            lx += swatch + spacing + text_width(label, legend_fs, label_font) + 12.0;
         }
     }
 }
@@ -138,8 +152,9 @@ pub(super) fn render_pie(
     has_font: bool,
     label_font_key: &str,
     _font_size: f32,
+    label_font: Option<&FontEntry>,
 ) {
-    let Some(layout) = setup_radial_chart(chart, x, y) else {
+    let Some(layout) = setup_radial_chart(chart, x, y, label_font) else {
         return;
     };
     let c = &chart.chart;
@@ -172,7 +187,7 @@ pub(super) fn render_pie(
     }
 
     if has_font {
-        render_radial_legend(content, &layout, label_font_key, layout.cx, y, h);
+        render_radial_legend(content, &layout, label_font_key, layout.cx, y, h, label_font);
     }
 
     content.set_fill_gray(0.0);
@@ -188,8 +203,9 @@ pub(super) fn render_doughnut(
     label_font_key: &str,
     _font_size: f32,
     hole_size_pct: f32,
+    label_font: Option<&FontEntry>,
 ) {
-    let Some(layout) = setup_radial_chart(chart, x, y) else {
+    let Some(layout) = setup_radial_chart(chart, x, y, label_font) else {
         return;
     };
     let c = &chart.chart;
@@ -239,7 +255,7 @@ pub(super) fn render_doughnut(
     }
 
     if has_font {
-        render_radial_legend(content, &layout, label_font_key, layout.cx, y, h);
+        render_radial_legend(content, &layout, label_font_key, layout.cx, y, h, label_font);
     }
 
     content.set_fill_gray(0.0);

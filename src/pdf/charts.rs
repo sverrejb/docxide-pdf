@@ -34,6 +34,13 @@ pub(super) fn text_width_approx(text: &str, font_size: f32) -> f32 {
     text.len() as f32 * font_size * 0.5
 }
 
+fn text_width(text: &str, font_size: f32, font: Option<&FontEntry>) -> f32 {
+    match font {
+        Some(f) => f.word_width(text, font_size, false),
+        None => text_width_approx(text, font_size),
+    }
+}
+
 fn format_tick_label(val: f32, step: f32) -> String {
     if step.fract() == 0.0 {
         format!("{}", val as i32)
@@ -235,6 +242,7 @@ pub(super) fn render_chart(
         .map(|s| s.as_str())
         .unwrap_or(default_font_name);
     let has_font = seen_fonts.contains_key(label_font_key);
+    let label_font = seen_fonts.get(label_font_key);
 
     let num_categories = c
         .cat_axis
@@ -253,7 +261,9 @@ pub(super) fn render_chart(
 
     match c.chart_type {
         ChartType::Pie => {
-            charts_radial::render_pie(chart, content, x, y, has_font, label_font_key, font_size);
+            charts_radial::render_pie(
+                chart, content, x, y, has_font, label_font_key, font_size, label_font,
+            );
             return;
         }
         ChartType::Doughnut { hole_size_pct } => {
@@ -266,11 +276,12 @@ pub(super) fn render_chart(
                 label_font_key,
                 font_size,
                 hole_size_pct,
+                label_font,
             );
             return;
         }
         ChartType::Radar => {
-            render_radar(chart, content, x, y, has_font, label_font_key, font_size);
+            render_radar(chart, content, x, y, has_font, label_font_key, font_size, label_font);
             return;
         }
         _ => {}
@@ -329,7 +340,7 @@ pub(super) fn render_chart(
     };
 
     let max_tick_label = format_tick_label(axis_max, tick_step);
-    let val_label_w = text_width_approx(&max_tick_label, font_size) + 18.0;
+    let val_label_w = text_width(&max_tick_label, font_size, label_font) + 18.0;
     let cat_label_h = font_size + 6.0;
 
     let is_point_chart = matches!(
@@ -343,7 +354,7 @@ pub(super) fn render_chart(
         let max_label_w = c
             .series
             .iter()
-            .map(|s| text_width_approx(&s.label, 10.0))
+            .map(|s| text_width(&s.label, 10.0, label_font))
             .fold(0.0f32, f32::max);
         let computed = legend_gap + legend_swatch + 4.0 + max_label_w + 8.0;
         if is_point_chart {
@@ -665,7 +676,7 @@ pub(super) fn render_chart(
         for i in 0..=num_ticks {
             let val = i as f32 * tick_step;
             let label = format_tick_label(val, tick_step);
-            let tw = text_width_approx(&label, font_size);
+            let tw = text_width(&label, font_size, label_font);
             let frac = val / axis_max;
 
             if !horizontal {
@@ -685,7 +696,7 @@ pub(super) fn render_chart(
             for i in 0..=num_x_ticks {
                 let val = i as f32 * x_tick_step;
                 let label = format_tick_label(val, x_tick_step);
-                let tw = text_width_approx(&label, font_size);
+                let tw = text_width(&label, font_size, label_font);
                 let frac = val / x_axis_max;
                 let lx = plot_x + frac * plot_w - tw / 2.0;
                 let ly = plot_y - font_size - 3.0;
@@ -697,7 +708,7 @@ pub(super) fn render_chart(
         let is_point_chart = matches!(c.chart_type, ChartType::Line | ChartType::Area);
         if !is_scatter_like && let Some(ref cat_axis) = c.cat_axis {
             for (ci, label) in cat_axis.labels.iter().enumerate() {
-                let tw = text_width_approx(label, font_size);
+                let tw = text_width(label, font_size, label_font);
                 if !horizontal {
                     let cx = if is_point_chart && num_categories > 1 {
                         let cat_w = plot_w / (num_categories - 1) as f32;
@@ -729,6 +740,7 @@ pub(super) fn render_chart(
             plot_h,
             y,
             h,
+            label_font,
         );
     }
 
@@ -744,6 +756,7 @@ fn render_radar(
     has_font: bool,
     label_font_key: &str,
     _font_size: f32,
+    label_font: Option<&FontEntry>,
 ) {
     let c = &chart.chart;
     let w = chart.display_width;
@@ -887,7 +900,7 @@ fn render_radar(
                 let sin_a = a.sin();
                 let lx = cx + label_r * cos_a;
                 let ly = cy + label_r * sin_a;
-                let tw = text_width_approx(label, font_size);
+                let tw = text_width(label, font_size, label_font);
                 // Horizontal: smoothly right-align on left side, left-align on right
                 let tx = lx - tw * (1.0 - cos_a) / 2.0;
                 // Vertical: top labels sit above vertex, bottom labels hang below
@@ -906,7 +919,7 @@ fn render_radar(
         let val_gap = 12.0;
         {
             let label = "0".to_string();
-            let tw = text_width_approx(&label, font_size);
+            let tw = text_width(&label, font_size, label_font);
             show_text(
                 content,
                 label_font_key,
@@ -921,7 +934,7 @@ fn render_radar(
             let label = format_tick_label(val, tick_step);
             let r = radius * (ti as f32 / num_ticks as f32);
             let ly = cy + r - font_size * 0.3;
-            let tw = text_width_approx(&label, font_size);
+            let tw = text_width(&label, font_size, label_font);
             show_text(
                 content,
                 label_font_key,
@@ -976,7 +989,7 @@ fn render_radar(
                     .series
                     .iter()
                     .map(|s| {
-                        swatch + entry_extra + spacing + text_width_approx(&s.label, legend_fs)
+                        swatch + entry_extra + spacing + text_width(&s.label, legend_fs, label_font)
                             + 12.0
                     })
                     .sum();
@@ -1006,7 +1019,7 @@ fn render_radar(
                         &series.label,
                     );
                     lx += swatch + entry_extra + spacing
-                        + text_width_approx(&series.label, legend_fs)
+                        + text_width(&series.label, legend_fs, label_font)
                         + 12.0;
                 }
             }
@@ -1028,6 +1041,7 @@ fn render_legend(
     plot_h: f32,
     y: f32,
     h: f32,
+    label_font: Option<&FontEntry>,
 ) {
     let Some(ref legend) = c.legend else { return };
     let legend_fs = 10.0;
@@ -1095,7 +1109,7 @@ fn render_legend(
             let total_w: f32 = c
                 .series
                 .iter()
-                .map(|s| swatch + spacing + text_width_approx(&s.label, legend_fs) + 12.0)
+                .map(|s| swatch + spacing + text_width(&s.label, legend_fs, label_font) + 12.0)
                 .sum();
             let mut lx = plot_x + (plot_w - total_w) / 2.0;
             let ly = y - h + 4.0;
@@ -1128,7 +1142,7 @@ fn render_legend(
                     ly + 1.0,
                     &series.label,
                 );
-                lx += swatch + spacing + text_width_approx(&series.label, legend_fs) + 12.0;
+                lx += swatch + spacing + text_width(&series.label, legend_fs, label_font) + 12.0;
             }
         }
     }
