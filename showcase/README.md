@@ -2,15 +2,15 @@
 
 Reference (MS Word) on the left, docxide-pdf on the right.
 
-## case1 — 61.2% SSIM
+## case1 — 85.8% SSIM
 
 <img src="case1_ref.png" width="420"/> <img src="case1_gen.png" width="420"/>
 
-## case2 — 93.3% SSIM
+## case2 — 94.3% SSIM
 
 <img src="case2_ref.png" width="420"/> <img src="case2_gen.png" width="420"/>
 
-## case3 — 88.1% SSIM
+## case3 — 89.4% SSIM
 
 <img src="case3_ref.png" width="420"/> <img src="case3_gen.png" width="420"/>
 
@@ -42,11 +42,11 @@ Reference (MS Word) on the left, docxide-pdf on the right.
 
 <img src="case10_ref.png" width="420"/> <img src="case10_gen.png" width="420"/>
 
-## case11 — 92.0% SSIM
+## case11 — 91.5% SSIM
 
 <img src="case11_ref.png" width="420"/> <img src="case11_gen.png" width="420"/>
 
-## case12 — 99.6% SSIM
+## case12 — 99.5% SSIM
 
 <img src="case12_ref.png" width="420"/> <img src="case12_gen.png" width="420"/>
 
@@ -66,11 +66,11 @@ Reference (MS Word) on the left, docxide-pdf on the right.
 
 <img src="case16_ref.png" width="420"/> <img src="case16_gen.png" width="420"/>
 
-## case17 — 95.2% SSIM
+## case17 — 96.8% SSIM
 
 <img src="case17_ref.png" width="420"/> <img src="case17_gen.png" width="420"/>
 
-## case18 — 67.4% SSIM
+## case18 — 80.6% SSIM
 
 <img src="case18_ref.png" width="420"/> <img src="case18_gen.png" width="420"/>
 
@@ -97,3 +97,35 @@ Reference (MS Word) on the left, docxide-pdf on the right.
 ## case24 — 93.1% SSIM
 
 <img src="case24_ref.png" width="420"/> <img src="case24_gen.png" width="420"/>
+
+## case25 — 89.2% SSIM
+
+<img src="case25_ref.png" width="420"/> <img src="case25_gen.png" width="420"/>
+
+## case26 — 91.4% SSIM
+
+<img src="case26_ref.png" width="420"/> <img src="case26_gen.png" width="420"/>
+
+## case27 — 99.0% SSIM
+
+<img src="case27_ref.png" width="420"/> <img src="case27_gen.png" width="420"/>
+
+## case28 — 90.1% SSIM
+
+<img src="case28_ref.png" width="420"/> <img src="case28_gen.png" width="420"/>
+
+## case29 — 69.3% SSIM
+
+<img src="case29_ref.png" width="420"/> <img src="case29_gen.png" width="420"/>
+
+## case30 — 82.3% SSIM
+
+<img src="case30_ref.png" width="420"/> <img src="case30_gen.png" width="420"/>
+
+## case31 — 76.1% SSIM
+
+<img src="case31_ref.png" width="420"/> <img src="case31_gen.png" width="420"/>
+
+## case32 — 76.0% SSIM
+
+<img src="case32_ref.png" width="420"/> <img src="case32_gen.png" width="420"/>
