@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::io::Read;
 
-use crate::model::{Alignment, Footnote, HeaderFooter, LineSpacing, Paragraph};
+use crate::model::{Alignment, Block, Footnote, HeaderFooter, LineSpacing, Paragraph};
 
 use super::numbering::NumberingInfo;
+use super::parse_table_node;
 use super::runs::parse_runs;
 use super::styles::{StylesInfo, ThemeFonts, parse_alignment, parse_line_spacing};
 use super::{WML_NS, twips_attr, wml, wml_attr};
@@ -17,7 +18,7 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
 ) -> Option<HeaderFooter> {
     let xml = roxmltree::Document::parse(xml_content).ok()?;
     let root = xml.root_element();
-    let mut paragraphs = Vec::new();
+    let mut blocks = Vec::new();
 
     let mut top_nodes: Vec<roxmltree::Node> = Vec::new();
     for child in root.children() {
@@ -28,56 +29,79 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
             if let Some(content) = wml(child, "sdtContent") {
                 for inner in content.children() {
                     if inner.tag_name().namespace() == Some(WML_NS)
-                        && inner.tag_name().name() == "p"
+                        && (inner.tag_name().name() == "p" || inner.tag_name().name() == "tbl")
                     {
                         top_nodes.push(inner);
                     }
                 }
             }
-        } else if child.tag_name().name() == "p" {
+        } else if child.tag_name().name() == "p" || child.tag_name().name() == "tbl" {
             top_nodes.push(child);
         }
     }
 
+    let numbering = NumberingInfo::default();
+    let mut counters = HashMap::new();
+    let mut last_seen_level = HashMap::new();
+
     for node in top_nodes {
-        let ppr = wml(node, "pPr");
-        let para_style_id = ppr
-            .and_then(|ppr| wml_attr(ppr, "pStyle"))
-            .unwrap_or("Normal");
-        let para_style = styles.paragraph_styles.get(para_style_id);
+        match node.tag_name().name() {
+            "tbl" => {
+                let table = parse_table_node(
+                    node,
+                    styles,
+                    theme,
+                    rels,
+                    zip,
+                    &numbering,
+                    &mut counters,
+                    &mut last_seen_level,
+                );
+                blocks.push(Block::Table(table));
+            }
+            "p" => {
+                let ppr = wml(node, "pPr");
+                let para_style_id = ppr
+                    .and_then(|ppr| wml_attr(ppr, "pStyle"))
+                    .unwrap_or("Normal");
+                let para_style = styles.paragraph_styles.get(para_style_id);
 
-        let alignment = ppr
-            .and_then(|ppr| wml_attr(ppr, "jc"))
-            .map(parse_alignment)
-            .or_else(|| para_style.and_then(|s| s.alignment))
-            .unwrap_or(Alignment::Left);
+                let alignment = ppr
+                    .and_then(|ppr| wml_attr(ppr, "jc"))
+                    .map(parse_alignment)
+                    .or_else(|| para_style.and_then(|s| s.alignment))
+                    .unwrap_or(Alignment::Left);
 
-        let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
-        let line_spacing = inline_spacing
-            .and_then(|n| {
-                n.attribute((WML_NS, "line"))
-                    .and_then(|v| v.parse::<f32>().ok())
-                    .map(|line_val| parse_line_spacing(n, line_val))
-            })
-            .or_else(|| para_style.and_then(|s| s.line_spacing));
+                let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
+                let line_spacing = inline_spacing
+                    .and_then(|n| {
+                        n.attribute((WML_NS, "line"))
+                            .and_then(|v| v.parse::<f32>().ok())
+                            .map(|line_val| parse_line_spacing(n, line_val))
+                    })
+                    .or_else(|| para_style.and_then(|s| s.line_spacing));
 
-        let parsed = parse_runs(node, styles, theme, rels, zip, &NumberingInfo::default());
+                let parsed =
+                    parse_runs(node, styles, theme, rels, zip, &NumberingInfo::default());
 
-        paragraphs.push(Paragraph {
-            runs: parsed.runs,
-            alignment,
-            line_spacing,
-            extra_line_breaks: parsed.line_break_count,
-            floating_images: parsed.floating_images,
-            textboxes: parsed.textboxes,
-            ..Paragraph::default()
-        });
+                blocks.push(Block::Paragraph(Paragraph {
+                    runs: parsed.runs,
+                    alignment,
+                    line_spacing,
+                    extra_line_breaks: parsed.line_break_count,
+                    floating_images: parsed.floating_images,
+                    textboxes: parsed.textboxes,
+                    ..Paragraph::default()
+                }));
+            }
+            _ => {}
+        }
     }
 
-    if paragraphs.is_empty() {
+    if blocks.is_empty() {
         None
     } else {
-        Some(HeaderFooter { paragraphs })
+        Some(HeaderFooter { blocks })
     }
 }
 

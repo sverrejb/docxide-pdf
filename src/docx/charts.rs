@@ -41,6 +41,13 @@ fn extract_srgb_fill(sp_pr: roxmltree::Node) -> Option<[u8; 3]> {
     srgb.attribute("val").and_then(parse_hex_color_dml)
 }
 
+fn extract_fill_alpha(sp_pr: roxmltree::Node) -> Option<f32> {
+    let srgb = dml_child(dml_child(sp_pr, "solidFill")?, "srgbClr")?;
+    let alpha_node = dml_child(srgb, "alpha")?;
+    let val: f32 = alpha_node.attribute("val")?.parse().ok()?;
+    Some(val / 100_000.0)
+}
+
 fn extract_line_color(sp_pr: roxmltree::Node) -> Option<[u8; 3]> {
     let ln = dml_child(sp_pr, "ln")?;
     // noFill means no line
@@ -90,13 +97,16 @@ fn parse_series(ser_node: roxmltree::Node) -> (ChartSeries, Vec<String>) {
 
     let marker_node = chart_child(ser_node, "marker");
 
-    let color = chart_child(ser_node, "spPr")
+    let sp_pr = chart_child(ser_node, "spPr");
+    let color = sp_pr
         .and_then(extract_srgb_fill)
+        .or_else(|| sp_pr.and_then(extract_line_color))
         .or_else(|| {
             marker_node
                 .and_then(|m| chart_child(m, "spPr"))
                 .and_then(extract_srgb_fill)
         });
+    let fill_alpha = sp_pr.and_then(extract_fill_alpha);
 
     let marker = marker_node
         .and_then(|m| chart_attr(m, "symbol"))
@@ -131,6 +141,7 @@ fn parse_series(ser_node: roxmltree::Node) -> (ChartSeries, Vec<String>) {
         ChartSeries {
             label,
             color,
+            fill_alpha,
             values,
             x_values,
             bubble_sizes,

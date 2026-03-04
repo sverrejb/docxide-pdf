@@ -325,12 +325,14 @@ fn decimal_before_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) 
     w
 }
 
-/// Build a single TextLine for a paragraph that contains tab characters.
+/// Build TextLines for a paragraph that contains tab characters.
+/// Wraps to new lines when content exceeds `max_width`.
 pub(super) fn build_tabbed_line(
     runs: &[Run],
     seen_fonts: &HashMap<String, FontEntry>,
     tab_stops: &[TabStop],
     indent_left: f32,
+    max_width: f32,
 ) -> Vec<TextLine> {
     // Split runs into segments at tab markers
     let mut segments: Vec<(Vec<&Run>, Option<TabStop>)> = Vec::new();
@@ -354,6 +356,7 @@ pub(super) fn build_tabbed_line(
     }
     segments.push((std::mem::take(&mut current_seg), pending_tab.take()));
 
+    let mut result_lines: Vec<TextLine> = Vec::new();
     let mut all_chunks: Vec<WordChunk> = Vec::new();
     let mut current_x: f32 = 0.0;
     let mut key_buf = String::new();
@@ -364,7 +367,7 @@ pub(super) fn build_tabbed_line(
             let tab_target = stop.position - indent_left;
 
             // Calculate where segment text will start based on alignment
-            let seg_start = match stop.alignment {
+            let mut seg_start = match stop.alignment {
                 TabAlignment::Left => tab_target.max(current_x),
                 TabAlignment::Center => {
                     let sw = segment_width(seg_runs, seen_fonts);
@@ -379,6 +382,37 @@ pub(super) fn build_tabbed_line(
                     (tab_target - bw).max(current_x)
                 }
             };
+
+            // Wrap to new line if tab pushes past max_width
+            if seg_start > max_width && !all_chunks.is_empty() {
+                let total_width = all_chunks
+                    .last()
+                    .map(|c| c.x_offset + c.width)
+                    .unwrap_or(0.0);
+                result_lines.push(TextLine {
+                    chunks: std::mem::take(&mut all_chunks),
+                    total_width,
+                });
+                current_x = 0.0;
+                // Re-resolve the tab stop from position 0 on the new line
+                let new_stop = find_next_tab_stop(0.0, tab_stops, indent_left);
+                let new_target = new_stop.position - indent_left;
+                seg_start = match new_stop.alignment {
+                    TabAlignment::Left => new_target.max(0.0),
+                    TabAlignment::Center => {
+                        let sw = segment_width(seg_runs, seen_fonts);
+                        (new_target - sw / 2.0).max(0.0)
+                    }
+                    TabAlignment::Right => {
+                        let sw = segment_width(seg_runs, seen_fonts);
+                        (new_target - sw).max(0.0)
+                    }
+                    TabAlignment::Decimal => {
+                        let bw = decimal_before_width(seg_runs, seen_fonts);
+                        (new_target - bw).max(0.0)
+                    }
+                };
+            }
 
             // Draw leader fill between end of previous text and start of aligned text
             if tab_before.is_some() {
@@ -459,6 +493,18 @@ pub(super) fn build_tabbed_line(
                 {
                     current_x += space_w * ts + cs;
                 }
+                // Wrap word to new line if it exceeds max_width
+                if current_x + ww > max_width && !all_chunks.is_empty() {
+                    let total_width = all_chunks
+                        .last()
+                        .map(|c| c.x_offset + c.width)
+                        .unwrap_or(0.0);
+                    result_lines.push(TextLine {
+                        chunks: std::mem::take(&mut all_chunks),
+                        total_width,
+                    });
+                    current_x = 0.0;
+                }
                 all_chunks.push(WordChunk {
                     pdf_font: entry.pdf_name.clone(),
                     text: word.to_string(),
@@ -483,14 +529,24 @@ pub(super) fn build_tabbed_line(
         }
     }
 
-    let total_width = all_chunks
-        .last()
-        .map(|c| c.x_offset + c.width)
-        .unwrap_or(0.0);
-    vec![TextLine {
-        chunks: all_chunks,
-        total_width,
-    }]
+    // Finalize remaining chunks into the last line
+    if !all_chunks.is_empty() {
+        let total_width = all_chunks
+            .last()
+            .map(|c| c.x_offset + c.width)
+            .unwrap_or(0.0);
+        result_lines.push(TextLine {
+            chunks: all_chunks,
+            total_width,
+        });
+    } else if result_lines.is_empty() {
+        result_lines.push(TextLine {
+            chunks: vec![],
+            total_width: 0.0,
+        });
+    }
+
+    result_lines
 }
 
 fn encode_text_for_pdf(

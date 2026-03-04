@@ -48,6 +48,10 @@ DrawingML textboxes (`wps:txbx` → `w:txbxContent`) and VML fallback (`v:textbo
 
 `wp:anchor` images are now positioned absolutely regardless of wrap mode (wrapNone, wrapTight, wrapSquare, etc.). Previously only `wrapNone` anchors were treated as floating; all others fell through to inline rendering. `compute_drawing_info()` now skips all anchors (parse_runs handles them), preventing image duplication. Remaining gap: text wrapping around anchored images is not implemented (content flows through/behind images).
 
+### Tab Stop Line Wrapping (MEDIUM — causes 42.5% SSIM on czech_tree_cutting_permit)
+
+When many consecutive tabs cause content to overflow a line, Word wraps the content to the next line. Our renderer fails to handle this — tab-wrapped content is lost or pushed off-page. This is the primary cause of the worst SSIM score among non-skipped fixtures. Affects tab-heavy form-layout documents.
+
 ### Tab Stop Precision (LOW)
 
 Tab stop alignment and leader rendering has small positioning errors that accumulate in tab-heavy documents (e.g. table of contents). Header tab stops (center/right) also need proper handling.
@@ -71,6 +75,14 @@ Remaining:
 - **Data labels on chart**: not parsed or rendered
 - **Chart title**: not parsed or rendered
 - **Secondary axes**: not handled
+- **Radar axis auto-scale** (DONE): headroom threshold changed from 0.9 to 0.98 to match scatter charts, fixing axis max 12→10 for case31 data.
+- **Bubble chart legend markers** (DONE): bubble chart legend now renders circles instead of diamond/square.
+- **Radar chart "0" label** (DONE): renders "0" at center of radar chart axis.
+- **Radar legend line+marker style** (DONE): radar chart legend now draws line segments through markers, matching Word's style.
+- **Bubble chart fill alpha** (DONE): parses `a:alpha` from series `c:spPr`, renders via PDF ExtGState `/ca` fill opacity. Bubble chart stroke outlines also rendered.
+- **Axis tick marks** (DONE): outward tick marks rendered on both axes for all cartesian chart types.
+- case31 SSIM improved from 64.1% → 76.1%. Radar chart: pentagon size, label placement (angle-based continuous formula), value label gap, legend stroke colors, legend line length all tuned. Fixture colors updated to match python-docx theme accents.
+- **Chart label positioning**: axis labels on all case31 charts (scatter, doughnut, radar, bubble) still have small offsets vs Word. `text_width_approx` (len × fs × 0.5) is crude — real font metrics would help. Revisit per-chart-type label placement.
 - **Legend placement fine-tuning**: pie and line/bar chart legends have small positional offsets vs Word (few pt). Centering formula and spacing need per-chart-type calibration.
 - **Font selection in chart labels**: picks arbitrary font from seen_fonts, not theme font
 

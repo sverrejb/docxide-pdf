@@ -131,7 +131,12 @@
       "Bash(cargo fmt:*)",
       "Bash(DOCXIDE_CASE=italian_project_proposal cargo test:*)",
       "Bash(DOCXIDE_CASE=polish_municipal_letter cargo test:*)",
-      "Bash(DOCXIDE_CASE=case32 cargo test:*)"
+      "Bash(DOCXIDE_CASE=case32 cargo test:*)",
+      "Bash(DOCXIDE_CASE=czech_tree_cutting_permit cargo test:*)",
+      "Bash(DOCXIDE_CASE=czech_cafeteria_notice cargo test:*)",
+      "Bash(echo === $c ===:*)",
+      "Bash(./tools/target/debug/docx-fonts:*)",
+      "Bash(DOCXIDE_CASE=mandated_reporter_child_abuse cargo test:*)"
     ]
   }
 }

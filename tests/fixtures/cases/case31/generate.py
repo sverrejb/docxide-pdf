@@ -191,7 +191,7 @@ def build_radar_series_xml(idx, label, color_hex, categories, values):
 
 
 def build_radar_chart_xml(series_list, categories, legend_pos="b", radar_style="marker"):
-    colors = ["4472C4", "ED7D31", "A5A5A5"]
+    colors = ["4F81BD", "C0504D", "9BBB59"]
     series_xml = ""
     for i, (label, values) in enumerate(series_list):
         color = colors[i % len(colors)]

@@ -30,7 +30,7 @@ pub enum VertAlign {
 }
 
 pub struct HeaderFooter {
-    pub paragraphs: Vec<Paragraph>,
+    pub blocks: Vec<Block>,
 }
 
 pub struct Footnote {
@@ -414,12 +414,14 @@ pub enum MarkerSymbol {
 pub struct ChartSeries {
     pub label: String,
     pub color: Option<[u8; 3]>,
+    pub fill_alpha: Option<f32>,
     pub values: Vec<f32>,
     pub x_values: Option<Vec<f32>>,
     pub bubble_sizes: Option<Vec<f32>>,
     pub marker: Option<MarkerSymbol>,
 }
 
+#[allow(dead_code)]
 pub enum ChartType {
     Bar { horizontal: bool, stacked: bool },
     Line,
@@ -432,6 +434,7 @@ pub enum ChartType {
 }
 
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct ChartAxis {
     pub labels: Vec<String>,
     pub delete: bool,

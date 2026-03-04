@@ -40,7 +40,14 @@ fn setup_radial_chart(chart: &InlineChart, x: f32, y: f32) -> Option<RadialLayou
     let colors = resolve_accent_colors(&c.accent_colors).to_vec();
 
     let (cx, legend_x) = if has_legend && legend_on_right {
-        let legend_area = w * 0.143;
+        let legend_fs = 10.0;
+        let swatch = 5.274;
+        let spacing = 2.5;
+        let max_label_w = labels
+            .iter()
+            .map(|l| text_width_approx(l, legend_fs))
+            .fold(0.0f32, f32::max);
+        let legend_area = (swatch + spacing + max_label_w + 10.0).max(w * 0.143);
         let pie_area_w = w - legend_area;
         (x + pie_area_w / 2.0, x + w - legend_area)
     } else {

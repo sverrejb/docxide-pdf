@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use pdf_writer::{Content, Name, Str};
 
@@ -219,6 +219,7 @@ pub(super) fn render_chart(
     y: f32,
     seen_fonts: &HashMap<String, FontEntry>,
     default_font_name: &str,
+    alpha_states: &mut HashSet<u8>,
 ) {
     let c = &chart.chart;
     let w = chart.display_width;
@@ -390,6 +391,53 @@ pub(super) fn render_chart(
         }
     }
 
+    // Y-axis tick marks
+    if let Some(ref val_axis) = c.val_axis {
+        let color = val_axis.line_color.unwrap_or([179, 179, 179]);
+        stroke_rgb(content, color);
+        content.set_line_width(0.5);
+        let num_ticks = (axis_max / tick_step).round() as usize;
+        let tick_len = 4.0;
+        for i in 0..=num_ticks {
+            let frac = (i as f32 * tick_step) / axis_max;
+            if !horizontal {
+                let gy = plot_y + frac * plot_h;
+                content.move_to(plot_x - tick_len, gy);
+                content.line_to(plot_x, gy);
+            } else {
+                let gx = plot_x + frac * plot_w;
+                content.move_to(gx, plot_y - tick_len);
+                content.line_to(gx, plot_y);
+            }
+            content.stroke();
+        }
+    }
+
+    // X-axis tick marks for category/scatter axes
+    {
+        let axis_color = c.cat_axis.as_ref().and_then(|a| a.line_color).unwrap_or([179, 179, 179]);
+        stroke_rgb(content, axis_color);
+        content.set_line_width(0.5);
+        let tick_len = 4.0;
+        if is_scatter_like {
+            let num_ticks = (x_axis_max / x_tick_step).round() as usize;
+            for i in 0..=num_ticks {
+                let frac = (i as f32 * x_tick_step) / x_axis_max;
+                let gx = plot_x + frac * plot_w;
+                content.move_to(gx, plot_y - tick_len);
+                content.line_to(gx, plot_y);
+                content.stroke();
+            }
+        } else if !horizontal {
+            for ci in 0..=num_categories {
+                let gx = plot_x + (ci as f32 / num_categories as f32) * plot_w;
+                content.move_to(gx, plot_y - tick_len);
+                content.line_to(gx, plot_y);
+                content.stroke();
+            }
+        }
+    }
+
     // Vertical gridlines for scatter/bubble
     if is_scatter_like && let Some(color) = c.cat_axis.as_ref().and_then(|a| a.gridline_color) {
         content.set_line_width(0.5);
@@ -547,11 +595,21 @@ pub(super) fn render_chart(
                 .filter_map(|s| s.bubble_sizes.as_ref())
                 .flat_map(|bs| bs.iter().copied())
                 .fold(0.0f32, f32::max);
-            let min_r = 3.0;
-            let max_r = 15.0;
+            let min_r = 4.0;
+            let max_r = 22.0;
 
             for series in &c.series {
                 set_color(content, series.color);
+                if let Some(alpha) = series.fill_alpha {
+                    let pct = (alpha * 100.0).round() as u8;
+                    let gs_name = format!("GSa{pct}");
+                    content.set_parameters(Name(gs_name.as_bytes()));
+                    alpha_states.insert(pct);
+                }
+                if let Some(color) = series.color {
+                    stroke_rgb(content, color);
+                }
+                content.set_line_width(1.0);
                 if let (Some(x_vals), Some(bsizes)) = (&series.x_values, &series.bubble_sizes) {
                     for ((&xv, &yv), &bs) in
                         x_vals.iter().zip(series.values.iter()).zip(bsizes.iter())
@@ -564,8 +622,12 @@ pub(super) fn render_chart(
                             min_r
                         };
                         draw_circle(content, px, py, r);
-                        content.fill_nonzero();
+                        content.fill_nonzero_and_stroke();
                     }
+                }
+                if series.fill_alpha.is_some() {
+                    content.set_parameters(Name(b"GSa100"));
+                    alpha_states.insert(100);
                 }
             }
         }
@@ -681,11 +743,12 @@ fn render_radar(
     y: f32,
     has_font: bool,
     label_font_key: &str,
-    font_size: f32,
+    _font_size: f32,
 ) {
     let c = &chart.chart;
     let w = chart.display_width;
     let h = chart.display_height;
+    let font_size = 9.0;
 
     let num_categories = c
         .cat_axis
@@ -712,7 +775,7 @@ fn render_radar(
         .flat_map(|s| s.values.iter())
         .copied()
         .fold(0.0f32, f32::max);
-    let (tick_step, axis_max) = compute_axis_range(max_val, 4, 0.9);
+    let (tick_step, axis_max) = compute_axis_range(max_val, 4, 0.98);
     if axis_max <= 0.0 {
         return;
     }
@@ -732,7 +795,7 @@ fn render_radar(
 
     let avail_w = w - margin_left - margin_right;
     let avail_h = h - margin_top - margin_bottom;
-    let radius = avail_w.min(avail_h) / 2.0;
+    let radius = avail_w.min(avail_h) / 2.0 - 4.0;
     let cx = x + margin_left + avail_w / 2.0;
     let cy = y - margin_top - avail_h / 2.0;
 
@@ -808,33 +871,51 @@ fn render_radar(
             let val = series.values.get(ci).copied().unwrap_or(0.0);
             let r = (val / axis_max) * radius;
             let a = cat_angle(ci);
-            draw_marker(content, sym, cx + r * a.cos(), cy + r * a.sin(), 3.0);
+            draw_marker(content, sym, cx + r * a.cos(), cy + r * a.sin(), 4.0);
         }
     }
 
     if has_font {
         content.set_fill_gray(0.0);
 
-        // Category labels at perimeter
+        // Category labels at perimeter — position based on spoke angle
         if let Some(ref cat_axis) = c.cat_axis {
-            let label_r = radius + 8.0;
+            let label_r = radius + 4.0;
             for (ci, label) in cat_axis.labels.iter().enumerate() {
                 let a = cat_angle(ci);
-                let lx = cx + label_r * a.cos();
-                let ly = cy + label_r * a.sin();
+                let cos_a = a.cos();
+                let sin_a = a.sin();
+                let lx = cx + label_r * cos_a;
+                let ly = cy + label_r * sin_a;
                 let tw = text_width_approx(label, font_size);
-                show_text(
-                    content,
-                    label_font_key,
-                    font_size,
-                    lx - tw / 2.0,
-                    ly - font_size * 0.3,
-                    label,
-                );
+                // Horizontal: smoothly right-align on left side, left-align on right
+                let tx = lx - tw * (1.0 - cos_a) / 2.0;
+                // Vertical: top labels sit above vertex, bottom labels hang below
+                let ty = if sin_a > 0.5 {
+                    ly + font_size * 0.25
+                } else if sin_a < -0.3 {
+                    ly - font_size * 0.15
+                } else {
+                    ly - font_size * 0.3
+                };
+                show_text(content, label_font_key, font_size, tx, ty, label);
             }
         }
 
-        // Value labels along the 12 o'clock spoke
+        // Value labels along the 12 o'clock spoke (including "0" at center)
+        let val_gap = 12.0;
+        {
+            let label = "0".to_string();
+            let tw = text_width_approx(&label, font_size);
+            show_text(
+                content,
+                label_font_key,
+                font_size,
+                cx - tw - val_gap,
+                cy - font_size * 0.3,
+                &label,
+            );
+        }
         for ti in 1..=num_ticks {
             let val = ti as f32 * tick_step;
             let label = format_tick_label(val, tick_step);
@@ -845,7 +926,7 @@ fn render_radar(
                 content,
                 label_font_key,
                 font_size,
-                cx - tw - 2.0,
+                cx - tw - val_gap,
                 ly,
                 &label,
             );
@@ -859,6 +940,7 @@ fn render_radar(
             let spacing = 2.5;
             let line_h = 18.0;
 
+            let line_ext = 12.0;
             if legend_on_right {
                 let lx = x + w - margin_right + 10.0;
                 let block_h = swatch + (num_series as f32 - 1.0) * line_h;
@@ -869,55 +951,63 @@ fn render_radar(
                         .color
                         .unwrap_or(accent_colors[si % accent_colors.len()]);
                     set_color(content, Some(color));
+                    set_stroke_color(content, Some(color));
+                    let mcx = lx + swatch / 2.0;
+                    let mcy = ly + swatch / 2.0;
+                    content.set_line_width(1.5);
+                    content.move_to(mcx - line_ext, mcy);
+                    content.line_to(mcx + line_ext, mcy);
+                    content.stroke();
                     let sym = resolve_marker(series.marker, si);
-                    draw_marker(
-                        content,
-                        sym,
-                        lx + swatch / 2.0,
-                        ly + swatch / 2.0,
-                        swatch / 2.0,
-                    );
+                    draw_marker(content, sym, mcx, mcy, swatch / 2.0);
                     content.set_fill_gray(0.0);
                     show_text(
                         content,
                         label_font_key,
                         legend_fs,
-                        lx + swatch + spacing,
+                        lx + swatch + spacing + line_ext,
                         ly - 0.3,
                         &series.label,
                     );
                 }
             } else {
+                let entry_extra = line_ext * 2.0;
                 let total_w: f32 = c
                     .series
                     .iter()
-                    .map(|s| swatch + spacing + text_width_approx(&s.label, legend_fs) + 12.0)
+                    .map(|s| {
+                        swatch + entry_extra + spacing + text_width_approx(&s.label, legend_fs)
+                            + 12.0
+                    })
                     .sum();
                 let mut lx = cx - total_w / 2.0;
-                let ly = y - h + 4.0;
+                let ly = y - h + 12.0;
                 for (si, series) in c.series.iter().enumerate() {
                     let color = series
                         .color
                         .unwrap_or(accent_colors[si % accent_colors.len()]);
                     set_color(content, Some(color));
+                    set_stroke_color(content, Some(color));
+                    let mcx = lx + swatch / 2.0;
+                    let mcy = ly + swatch / 2.0;
+                    content.set_line_width(1.5);
+                    content.move_to(mcx - line_ext, mcy);
+                    content.line_to(mcx + line_ext, mcy);
+                    content.stroke();
                     let sym = resolve_marker(series.marker, si);
-                    draw_marker(
-                        content,
-                        sym,
-                        lx + swatch / 2.0,
-                        ly + swatch / 2.0,
-                        swatch / 2.0,
-                    );
+                    draw_marker(content, sym, mcx, mcy, swatch / 2.0);
                     content.set_fill_gray(0.0);
                     show_text(
                         content,
                         label_font_key,
                         legend_fs,
-                        lx + swatch + spacing,
+                        lx + swatch + spacing + line_ext,
                         ly + 1.0,
                         &series.label,
                     );
-                    lx += swatch + spacing + text_width_approx(&series.label, legend_fs) + 12.0;
+                    lx += swatch + entry_extra + spacing
+                        + text_width_approx(&series.label, legend_fs)
+                        + 12.0;
                 }
             }
         }
@@ -949,17 +1039,35 @@ fn render_legend(
         c.chart_type,
         ChartType::Line | ChartType::Scatter | ChartType::Bubble | ChartType::Radar
     );
+    let is_bubble = matches!(c.chart_type, ChartType::Bubble);
+    let reverse_legend = matches!(
+        c.chart_type,
+        ChartType::Bar {
+            horizontal: true,
+            ..
+        }
+    );
+
+    let series_order: Vec<(usize, &crate::model::ChartSeries)> = if reverse_legend {
+        c.series.iter().enumerate().rev().collect()
+    } else {
+        c.series.iter().enumerate().collect()
+    };
 
     match legend.position {
         LegendPosition::Right => {
             let lx = plot_x + plot_w + 21.0;
             let block_h = swatch + (num_series as f32 - 1.0) * line_h;
             let ly_start = plot_y + plot_h / 2.0 + block_h / 2.0 - swatch + 5.0;
-            for (si, series) in c.series.iter().enumerate() {
-                let ly = ly_start - si as f32 * line_h;
+            for (ei, &(si, series)) in series_order.iter().enumerate() {
+                let ly = ly_start - ei as f32 * line_h;
                 set_color(content, series.color);
                 if is_line {
-                    let sym = resolve_marker(series.marker, si);
+                    let sym = if is_bubble {
+                        MarkerSymbol::Circle
+                    } else {
+                        resolve_marker(series.marker, si)
+                    };
                     draw_marker(
                         content,
                         sym,
@@ -991,10 +1099,14 @@ fn render_legend(
                 .sum();
             let mut lx = plot_x + (plot_w - total_w) / 2.0;
             let ly = y - h + 4.0;
-            for (si, series) in c.series.iter().enumerate() {
+            for &(si, series) in &series_order {
                 set_color(content, series.color);
                 if is_line {
-                    let sym = resolve_marker(series.marker, si);
+                    let sym = if is_bubble {
+                        MarkerSymbol::Circle
+                    } else {
+                        resolve_marker(series.marker, si)
+                    };
                     draw_marker(
                         content,
                         sym,
