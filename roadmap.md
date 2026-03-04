@@ -52,18 +52,21 @@ DrawingML textboxes (`wps:txbx` → `w:txbxContent`) and VML fallback (`v:textbo
 
 Tab stop alignment and leader rendering has small positioning errors that accumulate in tab-heavy documents (e.g. table of contents). Header tab stops (center/right) also need proper handling.
 
-## Charts (DONE — Bar, Line, Pie, Area)
+## Charts (DONE — Bar, Line, Pie, Area, Doughnut, Radar, Scatter, Bubble)
 
-Inline charts parsed from DrawingML chart parts (`word/charts/chartN.xml`). Detected via `a:graphicData` URI in `images.rs`, parsed in `docx/charts.rs`, rendered in `pdf/charts.rs`.
+Inline charts parsed from DrawingML chart parts (`word/charts/chartN.xml`). Detected via `a:graphicData` URI in `images.rs`, parsed in `docx/charts.rs`, rendered in `pdf/charts.rs` (radial charts in `pdf/charts_radial.rs`).
 
-Supported chart types: `c:barChart` (vertical/horizontal, clustered/stacked), `c:lineChart`, `c:pieChart`/`c:pie3DChart`, `c:areaChart`. Series data, category labels, axis config, legend, plot borders all extracted.
+Supported chart types: `c:barChart` (vertical/horizontal, clustered/stacked), `c:lineChart`, `c:pieChart`/`c:pie3DChart`, `c:areaChart`, `c:doughnutChart`, `c:radarChart`, `c:scatterChart`, `c:bubbleChart`. Series data, category labels, axis config, legend, plot borders all extracted.
 
-Rendering: bar rects, line smooth Catmull-Rom curves with per-series markers, pie polygon wedges with theme accent colors, area filled polygons. Content-aware margins, nice tick steps, gridlines, axis labels, legend (right/bottom).
+Rendering: bar rects, line smooth Catmull-Rom curves with per-series markers, pie/doughnut polygon wedges with theme accent colors, area filled polygons, radar polygons with concentric gridlines, scatter/bubble point markers. Content-aware margins, nice tick steps, gridlines, axis labels, legend (right/bottom).
 
 Test fixtures: case29 (4 bar chart variations), case30 (line + pie + area).
 
 Remaining:
-- **Scatter/bubble/radar charts**: not yet parsed
+- **Edge cases**: charts with very many bars/sectors (50+), verify rendering doesn't break
+- **3D charts**: `c:bar3DChart`, `c:line3DChart`, `c:area3DChart`, `c:surface3DChart` — not parsed
+- **Stock charts**: `c:stockChart` — not parsed
+- **Combo charts**: two chart types overlaid on the same plot area — not handled
 - **Stacked bar rendering**: parsed but rendering treats as clustered
 - **Data labels on chart**: not parsed or rendered
 - **Chart title**: not parsed or rendered
@@ -130,5 +133,5 @@ Additional fixture ideas not yet covered:
 - Nested/multi-level lists (outline numbering: `1. → a. → i. → •`)
 - Nested tables (tables inside table cells)
 - Table of Contents (right-aligned tabs + dot leaders + page field codes)
-- Scatter/bubble/radar chart types
 - Stacked bar chart rendering
+- Charts with extreme data (50+ categories, very small/large values)

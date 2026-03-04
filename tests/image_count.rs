@@ -24,7 +24,11 @@ fn pdf_images_per_page(pdf: &Path) -> io::Result<HashMap<u32, u32>> {
             if trimmed.is_empty() || (!trimmed.starts_with(|c: char| c.is_ascii_digit())) {
                 break;
             }
-            if let Some(page) = trimmed.split_whitespace().next().and_then(|s| s.parse::<u32>().ok()) {
+            if let Some(page) = trimmed
+                .split_whitespace()
+                .next()
+                .and_then(|s| s.parse::<u32>().ok())
+            {
                 *counts.entry(page).or_insert(0) += 1;
             }
         }
@@ -67,7 +71,11 @@ fn analyze_fixture(fixture_dir: &Path) -> Option<ImageResult> {
     let gen_total: u32 = gen_images.values().sum();
 
     let all_pages: Vec<u32> = {
-        let mut pages: Vec<u32> = ref_images.keys().chain(gen_images.keys()).copied().collect();
+        let mut pages: Vec<u32> = ref_images
+            .keys()
+            .chain(gen_images.keys())
+            .copied()
+            .collect();
         pages.sort();
         pages.dedup();
         pages
@@ -138,7 +146,8 @@ fn image_count_and_placement() {
         let mismatch_str = if r.page_mismatches.is_empty() {
             String::new()
         } else {
-            let parts: Vec<String> = r.page_mismatches
+            let parts: Vec<String> = r
+                .page_mismatches
                 .iter()
                 .take(5)
                 .map(|(p, rc, gc)| format!("p{p}:{rc}→{gc}"))

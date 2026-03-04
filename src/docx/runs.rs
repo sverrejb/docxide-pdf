@@ -1,15 +1,13 @@
 use std::collections::HashMap;
 use std::io::Read;
 
-use crate::model::{
-    FieldCode, FloatingImage, InlineChart, Run, Textbox, VertAlign,
-};
+use crate::model::{FieldCode, FloatingImage, InlineChart, Run, Textbox, VertAlign};
 
-use super::{WML_NS, highlight_color, parse_text_color, twips_to_pts, wml, wml_attr, wml_bool};
-use super::images::{parse_run_drawing, RunDrawingResult};
+use super::images::{RunDrawingResult, parse_run_drawing};
 use super::numbering::NumberingInfo;
 use super::styles::{StylesInfo, ThemeFonts, resolve_font_from_node};
 use super::textbox::parse_textbox_from_vml;
+use super::{WML_NS, highlight_color, parse_text_color, twips_to_pts, wml, wml_attr, wml_bool};
 
 pub(super) struct ParsedRuns {
     pub(super) runs: Vec<Run>,
@@ -203,9 +201,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                 .and_then(|n| wml_bool(n, "strike"))
                 .or_else(|| char_style.and_then(|cs| cs.strikethrough))
                 .unwrap_or(false),
-            dstrike: rpr
-                .and_then(|n| wml_bool(n, "dstrike"))
-                .unwrap_or(false),
+            dstrike: rpr.and_then(|n| wml_bool(n, "dstrike")).unwrap_or(false),
             char_spacing: rpr
                 .and_then(|n| wml(n, "spacing"))
                 .and_then(|n| n.attribute((WML_NS, "val")))
@@ -270,8 +266,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                 });
                 if let Some(branch) = choice {
                     for drawing in branch.children().filter(|n| {
-                        n.tag_name().namespace() == Some(WML_NS)
-                            && n.tag_name().name() == "drawing"
+                        n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "drawing"
                     }) {
                         match parse_run_drawing(drawing, rels, zip, styles, theme, numbering) {
                             Some(RunDrawingResult::Inline(img)) => {
@@ -294,8 +289,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                     }
                 } else if let Some(branch) = fallback {
                     for pict in branch.descendants().filter(|n| {
-                        n.tag_name().namespace() == Some(WML_NS)
-                            && n.tag_name().name() == "pict"
+                        n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "pict"
                     }) {
                         if let Some(tb) =
                             parse_textbox_from_vml(pict, rels, zip, styles, theme, numbering)
@@ -310,42 +304,40 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                 continue;
             }
             match child.tag_name().name() {
-                "fldChar" => {
-                    match child.attribute((WML_NS, "fldCharType")) {
-                        Some("begin") => {
-                            flush_pending(&mut pending_text, &mut runs);
-                            in_field = true;
+                "fldChar" => match child.attribute((WML_NS, "fldCharType")) {
+                    Some("begin") => {
+                        flush_pending(&mut pending_text, &mut runs);
+                        in_field = true;
+                        field_instr.clear();
+                    }
+                    Some("end") => {
+                        if in_field {
+                            let keyword = field_instr.split_whitespace().next().unwrap_or("");
+                            let fc = if keyword.eq_ignore_ascii_case("PAGE") {
+                                Some(FieldCode::Page)
+                            } else if keyword.eq_ignore_ascii_case("NUMPAGES") {
+                                Some(FieldCode::NumPages)
+                            } else {
+                                None
+                            };
+                            if let Some(code) = fc {
+                                runs.push(Run {
+                                    font_size: fmt.font_size,
+                                    font_name: fmt.font_name.clone(),
+                                    bold: fmt.bold,
+                                    italic: fmt.italic,
+                                    color: fmt.color,
+                                    field_code: Some(code),
+                                    hyperlink_url: hyperlink_url.clone(),
+                                    ..Run::default()
+                                });
+                            }
+                            in_field = false;
                             field_instr.clear();
                         }
-                        Some("end") => {
-                            if in_field {
-                                let keyword = field_instr.split_whitespace().next().unwrap_or("");
-                                let fc = if keyword.eq_ignore_ascii_case("PAGE") {
-                                    Some(FieldCode::Page)
-                                } else if keyword.eq_ignore_ascii_case("NUMPAGES") {
-                                    Some(FieldCode::NumPages)
-                                } else {
-                                    None
-                                };
-                                if let Some(code) = fc {
-                                    runs.push(Run {
-                                        font_size: fmt.font_size,
-                                        font_name: fmt.font_name.clone(),
-                                        bold: fmt.bold,
-                                        italic: fmt.italic,
-                                        color: fmt.color,
-                                        field_code: Some(code),
-                                        hyperlink_url: hyperlink_url.clone(),
-                                        ..Run::default()
-                                    });
-                                }
-                                in_field = false;
-                                field_instr.clear();
-                            }
-                        }
-                        _ => {}
                     }
-                }
+                    _ => {}
+                },
                 "instrText" if in_field => {
                     if let Some(t) = child.text() {
                         field_instr.push_str(t);
@@ -365,13 +357,11 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                         ..fmt.minimal_run()
                     });
                 }
-                "br" if !in_field => {
-                    match child.attribute((WML_NS, "type")) {
-                        Some("page") => has_page_break = true,
-                        Some("column") => has_column_break = true,
-                        _ => line_break_count += 1,
-                    }
-                }
+                "br" if !in_field => match child.attribute((WML_NS, "type")) {
+                    Some("page") => has_page_break = true,
+                    Some("column") => has_column_break = true,
+                    _ => line_break_count += 1,
+                },
                 "drawing" if in_field => {}
                 "drawing" => {
                     flush_pending(&mut pending_text, &mut runs);

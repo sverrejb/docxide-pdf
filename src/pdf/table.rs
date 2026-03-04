@@ -133,8 +133,9 @@ fn compute_row_layouts(
                     let mut all_lines = Vec::new();
                     let mut first_font_size = 12.0f32;
                     let mut first_line_h = 14.4f32;
+                    let mut prev_space_after = 0.0f32;
 
-                    for para in &cell.paragraphs {
+                    for (pi, para) in cell.paragraphs.iter().enumerate() {
                         let font_size = para.runs.first().map_or(12.0, |r| r.font_size);
                         let effective_ls = para.line_spacing.unwrap_or(doc_line_spacing);
                         let tallest_lhr = font_metric(&para.runs, seen_fonts, |e| e.line_h_ratio);
@@ -145,11 +146,23 @@ fn compute_row_layouts(
                             first_line_h = line_h;
                         }
 
+                        if pi > 0 {
+                            total_h += f32::max(prev_space_after, para.space_before);
+                        }
+
                         if !is_text_empty(&para.runs) {
-                            let lines = build_paragraph_lines(&para.runs, seen_fonts, cell_text_w, 0.0, &std::collections::HashMap::new());
+                            let lines = build_paragraph_lines(
+                                &para.runs,
+                                seen_fonts,
+                                cell_text_w,
+                                0.0,
+                                &std::collections::HashMap::new(),
+                            );
                             total_h += lines.len() as f32 * line_h;
                             all_lines.extend(lines);
                         }
+
+                        prev_space_after = para.space_after;
                     }
 
                     max_h = max_h.max(total_h);
@@ -166,10 +179,7 @@ fn compute_row_layouts(
                 _ => content_h,
             };
 
-            RowLayout {
-                height,
-                cell_lines,
-            }
+            RowLayout { height, cell_lines }
         })
         .collect()
 }
@@ -229,9 +239,7 @@ pub(super) fn render_table(
         let row_bottom = row_top - row_h;
 
         let mut grid_col = 0usize;
-        for (cell, (lines, line_h, font_size)) in
-            row.cells.iter().zip(layout.cell_lines.iter())
-        {
+        for (cell, (lines, line_h, font_size)) in row.cells.iter().zip(layout.cell_lines.iter()) {
             let span = cell.grid_span.max(1) as usize;
             let col_w: f32 = col_widths[grid_col..col_widths.len().min(grid_col + span)]
                 .iter()
@@ -248,8 +256,10 @@ pub(super) fn render_table(
 
             if let Some([r, g, b]) = cell.shading {
                 let b_borders = &cell.borders;
-                let inset = (b_borders.top.width + b_borders.bottom.width
-                    + b_borders.left.width + b_borders.right.width)
+                let inset = (b_borders.top.width
+                    + b_borders.bottom.width
+                    + b_borders.left.width
+                    + b_borders.right.width)
                     / 8.0;
                 content.save_state();
                 content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
@@ -326,29 +336,39 @@ pub(super) fn render_table(
             grid_col += span;
 
             let b = &cell.borders;
-            let draw_border =
-                |content: &mut Content, border: &crate::model::CellBorder, x1, y1, x2, y2| {
-                    if !border.present {
-                        return;
-                    }
-                    content.save_state();
-                    content.set_line_width(border.width);
-                    if let Some([r, g, b]) = border.color {
-                        content
-                            .set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-                    }
-                    content.move_to(x1, y1);
-                    content.line_to(x2, y2);
-                    content.stroke();
-                    content.restore_state();
-                };
+            let draw_border = |content: &mut Content,
+                               border: &crate::model::CellBorder,
+                               x1,
+                               y1,
+                               x2,
+                               y2| {
+                if !border.present {
+                    return;
+                }
+                content.save_state();
+                content.set_line_width(border.width);
+                if let Some([r, g, b]) = border.color {
+                    content.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+                }
+                content.move_to(x1, y1);
+                content.line_to(x2, y2);
+                content.stroke();
+                content.restore_state();
+            };
 
             if cell.v_merge != VMerge::Continue {
                 draw_border(content, &b.top, bx, row_top, bx + col_w, row_top);
             }
             draw_border(content, &b.bottom, bx, row_bottom, bx + col_w, row_bottom);
             draw_border(content, &b.left, bx, row_top, bx, row_bottom);
-            draw_border(content, &b.right, bx + col_w, row_top, bx + col_w, row_bottom);
+            draw_border(
+                content,
+                &b.right,
+                bx + col_w,
+                row_top,
+                bx + col_w,
+                row_bottom,
+            );
         }
 
         *slot_top = row_bottom;

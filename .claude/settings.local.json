@@ -121,7 +121,14 @@
       "Bash(DOCXIDE_CASE=case29 cargo test:*)",
       "Bash(DOCXIDE_CASE=case30 cargo test:*)",
       "Bash(mutool trace:*)",
-      "Bash(DOCXIDE_CASE=case31 cargo test:*)"
+      "Bash(DOCXIDE_CASE=case31 cargo test:*)",
+      "Bash(DOCXIDE_CASE=sample100kB cargo test:*)",
+      "Bash(mutool clean:*)",
+      "Bash(DOCXIDE_CASE=samples/sample500kB cargo test:*)",
+      "Bash(DOCXIDE_CASE=samples/sample500kB RUST_LOG=info cargo test:*)",
+      "Bash(DOCXIDE_CASE=scraped/czech_expert_witness_law cargo test:*)",
+      "Bash(./target/release/docxide-pdf:*)",
+      "Bash(cargo fmt:*)"
     ]
   }
 }

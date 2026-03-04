@@ -39,9 +39,9 @@ pub struct Footnote {
 
 #[derive(Clone, Copy, Debug)]
 pub enum LineSpacing {
-    Auto(f32),     // multiplier (e.g. 1.0 = single, 1.15 = default)
-    Exact(f32),    // fixed height in points
-    AtLeast(f32),  // minimum height in points
+    Auto(f32),    // multiplier (e.g. 1.0 = single, 1.15 = default)
+    Exact(f32),   // fixed height in points
+    AtLeast(f32), // minimum height in points
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -119,6 +119,15 @@ pub enum HorizontalPosition {
     AlignRight,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum WrapType {
+    None,
+    Square,
+    Tight,
+    Through,
+    TopAndBottom,
+}
+
 #[derive(Clone)]
 pub struct FloatingImage {
     pub image: EmbeddedImage,
@@ -126,6 +135,7 @@ pub struct FloatingImage {
     pub h_relative_from: &'static str,
     pub v_offset_pt: f32,
     pub v_relative_from: &'static str,
+    pub wrap_type: WrapType,
 }
 
 pub struct Textbox {
@@ -353,9 +363,9 @@ impl Default for CellMargins {
 
 pub struct TablePosition {
     pub h_position: HorizontalPosition,
-    pub h_anchor: &'static str,  // "page", "margin", or "column"
+    pub h_anchor: &'static str, // "page", "margin", or "column"
     pub v_offset_pt: f32,
-    pub v_anchor: &'static str,  // "page", "margin", or "text"
+    pub v_anchor: &'static str, // "page", "margin", or "text"
 }
 
 pub struct Table {

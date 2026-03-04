@@ -2,10 +2,10 @@ mod common;
 
 use rayon::prelude::*;
 use std::collections::{BTreeSet, HashMap};
+use std::fs;
 use std::io::Read;
 use std::path::Path;
 use std::process::Command;
-use std::fs;
 
 /// Extract unique font family names from a PDF using `mutool info`.
 fn extract_pdf_fonts(pdf: &Path) -> Result<BTreeSet<String>, String> {
@@ -167,12 +167,14 @@ fn parse_default_font(
         if node.tag_name().name() == "docDefaults" {
             for rpr_default in node.descendants() {
                 if rpr_default.tag_name().name() == "rFonts" {
-                    if let Some(name) = rpr_default.attribute((w, "ascii"))
+                    if let Some(name) = rpr_default
+                        .attribute((w, "ascii"))
                         .or_else(|| rpr_default.attribute("ascii"))
                     {
                         doc_default_font = Some(name.to_string());
                     } else {
-                        let theme = rpr_default.attribute((w, "asciiTheme"))
+                        let theme = rpr_default
+                            .attribute((w, "asciiTheme"))
                             .or_else(|| rpr_default.attribute("asciiTheme"));
                         if let Some(t) = theme {
                             doc_default_font = resolve_theme(t, theme_major, theme_minor);
@@ -186,17 +188,20 @@ fn parse_default_font(
     // 2. Normal style font (overrides docDefaults)
     for node in doc.descendants() {
         if node.tag_name().name() == "style" {
-            let style_id = node.attribute((w, "styleId"))
+            let style_id = node
+                .attribute((w, "styleId"))
                 .or_else(|| node.attribute("styleId"));
             if style_id == Some("Normal") {
                 for rfonts in node.descendants() {
                     if rfonts.tag_name().name() == "rFonts" {
-                        if let Some(name) = rfonts.attribute((w, "ascii"))
+                        if let Some(name) = rfonts
+                            .attribute((w, "ascii"))
                             .or_else(|| rfonts.attribute("ascii"))
                         {
                             return Some(name.to_string());
                         }
-                        let theme = rfonts.attribute((w, "asciiTheme"))
+                        let theme = rfonts
+                            .attribute((w, "asciiTheme"))
                             .or_else(|| rfonts.attribute("asciiTheme"));
                         if let Some(t) = theme {
                             if let Some(resolved) = resolve_theme(t, theme_major, theme_minor) {
@@ -224,9 +229,7 @@ fn resolve_theme(
     }
 }
 
-fn parse_theme_fonts(
-    archive: &mut zip::ZipArchive<fs::File>,
-) -> (Option<String>, Option<String>) {
+fn parse_theme_fonts(archive: &mut zip::ZipArchive<fs::File>) -> (Option<String>, Option<String>) {
     let Ok(mut entry) = archive.by_name("word/theme/theme1.xml") else {
         return (None, None);
     };
@@ -269,9 +272,7 @@ fn has_runs_without_font(doc: &roxmltree::Document) -> bool {
             // Check if this run has w:rPr/w:rFonts
             let has_font = node.children().any(|child| {
                 child.tag_name().name() == "rPr"
-                    && child
-                        .children()
-                        .any(|n| n.tag_name().name() == "rFonts")
+                    && child.children().any(|n| n.tag_name().name() == "rFonts")
             });
             if !has_font {
                 // Check that this run has actual text content (not just formatting)
@@ -328,14 +329,19 @@ fn parse_style_fonts(
         if node.tag_name().name() != "style" {
             continue;
         }
-        let Some(style_id) = node.attribute((w, "styleId")).or_else(|| node.attribute("styleId"))
+        let Some(style_id) = node
+            .attribute((w, "styleId"))
+            .or_else(|| node.attribute("styleId"))
         else {
             continue;
         };
 
         for child in node.descendants() {
             if child.tag_name().name() == "basedOn" {
-                if let Some(val) = child.attribute((w, "val")).or_else(|| child.attribute("val")) {
+                if let Some(val) = child
+                    .attribute((w, "val"))
+                    .or_else(|| child.attribute("val"))
+                {
                     based_on.insert(style_id.to_string(), val.to_string());
                 }
             }
@@ -434,7 +440,6 @@ fn collect_fonts_from_xml(
             }
         }
     }
-
 }
 
 struct FixtureResult {
@@ -582,12 +587,7 @@ fn font_families_match_docx() {
         .max()
         .unwrap_or(7)
         .max(7);
-    let diff_w = rows
-        .iter()
-        .map(|r| r.diff.len())
-        .max()
-        .unwrap_or(4)
-        .max(4);
+    let diff_w = rows.iter().map(|r| r.diff.len()).max().unwrap_or(4).max(4);
 
     let sep = format!(
         "+-{}-+------+-{}-+-{}-+",
@@ -627,21 +627,9 @@ fn font_families_match_docx() {
                 ts,
                 r.name,
                 r.pass,
-                r.docx_fonts
-                    .iter()
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join(";"),
-                r.pdf_fonts
-                    .iter()
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join(";"),
-                r.missing
-                    .iter()
-                    .cloned()
-                    .collect::<Vec<_>>()
-                    .join(";"),
+                r.docx_fonts.iter().cloned().collect::<Vec<_>>().join(";"),
+                r.pdf_fonts.iter().cloned().collect::<Vec<_>>().join(";"),
+                r.missing.iter().cloned().collect::<Vec<_>>().join(";"),
                 r.unexpected_fallbacks
                     .iter()
                     .cloned()

@@ -251,7 +251,11 @@ pub(super) fn parse_list_info(
 
     let label = if def.num_fmt == "bullet" {
         let text = normalize_bullet_text(&def.lvl_text, def.bullet_font.as_deref());
-        if text.is_empty() { "\u{2022}".to_string() } else { text }
+        if text.is_empty() {
+            "\u{2022}".to_string()
+        } else {
+            text
+        }
     } else {
         let mut label = def.lvl_text.clone();
         for lvl_idx in 0..9u8 {
@@ -263,12 +267,7 @@ pub(super) fn parse_list_info(
                     counters
                         .get(&(num_id.to_string(), lvl_idx))
                         .copied()
-                        .unwrap_or(
-                            levels
-                                .get(&lvl_idx)
-                                .map(|d| d.start)
-                                .unwrap_or(1),
-                        )
+                        .unwrap_or(levels.get(&lvl_idx).map(|d| d.start).unwrap_or(1))
                 };
                 let lvl_fmt = levels
                     .get(&lvl_idx)

@@ -1,13 +1,15 @@
 use std::collections::HashMap;
 use std::io::Read;
 
-use crate::model::{EmbeddedImage, FloatingImage, HorizontalPosition, ImageFormat, InlineChart};
+use crate::model::{
+    EmbeddedImage, FloatingImage, HorizontalPosition, ImageFormat, InlineChart, WrapType,
+};
 
-use super::{DML_NS, REL_NS, WML_NS, WPD_NS, wml};
 use super::charts::parse_chart_from_zip;
-use super::styles::{StylesInfo, ThemeFonts};
 use super::numbering::NumberingInfo;
+use super::styles::{StylesInfo, ThemeFonts};
 use super::textbox::parse_textbox_from_wsp;
+use super::{DML_NS, REL_NS, WML_NS, WPD_NS, wml};
 
 const CHART_URI: &str = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 
@@ -87,25 +89,25 @@ pub(super) struct DrawingInfo {
 pub(super) fn parse_anchor_position(
     container: roxmltree::Node,
 ) -> (HorizontalPosition, &'static str, f32, &'static str) {
-    let pos_h = container.children().find(|n| {
-        n.tag_name().name() == "positionH" && n.tag_name().namespace() == Some(WPD_NS)
-    });
+    let pos_h = container
+        .children()
+        .find(|n| n.tag_name().name() == "positionH" && n.tag_name().namespace() == Some(WPD_NS));
     let h_relative = match pos_h.and_then(|n| n.attribute("relativeFrom")) {
         Some("page") => "page",
         Some("margin") => "margin",
         _ => "column",
     };
-    let h_position = if let Some(align_node) = pos_h.and_then(|n| {
-        n.children().find(|c| c.tag_name().name() == "align")
-    }) {
+    let h_position = if let Some(align_node) =
+        pos_h.and_then(|n| n.children().find(|c| c.tag_name().name() == "align"))
+    {
         match align_node.text().unwrap_or("") {
             "center" => HorizontalPosition::AlignCenter,
             "right" => HorizontalPosition::AlignRight,
             _ => HorizontalPosition::AlignLeft,
         }
-    } else if let Some(offset_node) = pos_h.and_then(|n| {
-        n.children().find(|c| c.tag_name().name() == "posOffset")
-    }) {
+    } else if let Some(offset_node) =
+        pos_h.and_then(|n| n.children().find(|c| c.tag_name().name() == "posOffset"))
+    {
         let emu = offset_node
             .text()
             .unwrap_or("0")
@@ -116,18 +118,18 @@ pub(super) fn parse_anchor_position(
         HorizontalPosition::AlignLeft
     };
 
-    let pos_v = container.children().find(|n| {
-        n.tag_name().name() == "positionV" && n.tag_name().namespace() == Some(WPD_NS)
-    });
+    let pos_v = container
+        .children()
+        .find(|n| n.tag_name().name() == "positionV" && n.tag_name().namespace() == Some(WPD_NS));
     let v_relative = match pos_v.and_then(|n| n.attribute("relativeFrom")) {
         Some("page") => "page",
         Some("margin") => "margin",
         Some("topMargin") => "topMargin",
         _ => "paragraph",
     };
-    let v_offset = if let Some(offset_node) = pos_v.and_then(|n| {
-        n.children().find(|c| c.tag_name().name() == "posOffset")
-    }) {
+    let v_offset = if let Some(offset_node) =
+        pos_v.and_then(|n| n.children().find(|c| c.tag_name().name() == "posOffset"))
+    {
         offset_node
             .text()
             .unwrap_or("0")
@@ -139,6 +141,23 @@ pub(super) fn parse_anchor_position(
     };
 
     (h_position, h_relative, v_offset, v_relative)
+}
+
+fn parse_wrap_type(container: roxmltree::Node) -> WrapType {
+    for child in container.children() {
+        if child.tag_name().namespace() != Some(WPD_NS) {
+            continue;
+        }
+        match child.tag_name().name() {
+            "wrapSquare" => return WrapType::Square,
+            "wrapTight" => return WrapType::Tight,
+            "wrapThrough" => return WrapType::Through,
+            "wrapTopAndBottom" => return WrapType::TopAndBottom,
+            "wrapNone" => return WrapType::None,
+            _ => {}
+        }
+    }
+    WrapType::None
 }
 
 pub(super) enum RunDrawingResult {
@@ -165,9 +184,9 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
             continue;
         }
 
-        let extent = container.children().find(|n| {
-            n.tag_name().name() == "extent" && n.tag_name().namespace() == Some(WPD_NS)
-        });
+        let extent = container
+            .children()
+            .find(|n| n.tag_name().name() == "extent" && n.tag_name().namespace() == Some(WPD_NS));
         let cx = extent
             .and_then(|n| n.attribute("cx"))
             .and_then(|v| v.parse::<f32>().ok())
@@ -205,12 +224,14 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
                 if let Some(img) = read_image_from_zip(embed_id, rels, zip, display_w, display_h) {
                     let (h_position, h_relative, v_offset, v_relative) =
                         parse_anchor_position(container);
+                    let wrap_type = parse_wrap_type(container);
                     return Some(RunDrawingResult::Floating(FloatingImage {
                         image: img,
                         h_position,
                         h_relative_from: h_relative,
                         v_offset_pt: v_offset,
                         v_relative_from: v_relative,
+                        wrap_type,
                     }));
                 }
             }
@@ -227,7 +248,9 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
             let accent_colors: Vec<[u8; 3]> = (1..=6)
                 .filter_map(|i| theme.colors.get(&format!("accent{i}")).copied())
                 .collect();
-            if let Some(ic) = parse_chart_from_zip(chart_rid, rels, zip, display_w, display_h, accent_colors) {
+            if let Some(ic) =
+                parse_chart_from_zip(chart_rid, rels, zip, display_w, display_h, accent_colors)
+            {
                 return Some(RunDrawingResult::Chart(ic));
             }
         }
@@ -238,7 +261,11 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
 fn find_chart_ref<'a>(container: roxmltree::Node<'a, 'a>) -> Option<&'a str> {
     container
         .descendants()
-        .find(|n| n.tag_name().name() == "graphicData" && n.tag_name().namespace() == Some(DML_NS) && n.attribute("uri") == Some(CHART_URI))
+        .find(|n| {
+            n.tag_name().name() == "graphicData"
+                && n.tag_name().namespace() == Some(DML_NS)
+                && n.attribute("uri") == Some(CHART_URI)
+        })
         .and_then(|gd| {
             gd.children()
                 .find(|n| n.tag_name().name() == "chart")

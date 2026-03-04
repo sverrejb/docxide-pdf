@@ -37,18 +37,12 @@ fn page_geometry_comparison() {
     let fixtures = common::discover_fixtures().expect("discover fixtures");
 
     println!();
-    println!(
-        "+{:-<66}+{:-<16}+{:-<16}+{:-<7}+",
-        "", "", "", ""
-    );
+    println!("+{:-<66}+{:-<16}+{:-<16}+{:-<7}+", "", "", "", "");
     println!(
         "| {:<64} | {:<14} | {:<14} | {:<5} |",
         "Case", "Reference", "Generated", "Match"
     );
-    println!(
-        "+{:-<66}+{:-<16}+{:-<16}+{:-<7}+",
-        "", "", "", ""
-    );
+    println!("+{:-<66}+{:-<16}+{:-<16}+{:-<7}+", "", "", "", "");
 
     let mut mismatches = Vec::new();
 
@@ -64,7 +58,10 @@ fn page_geometry_comparison() {
         let ref_dims = match pdf_mediabox(&reference) {
             Some(d) => d,
             None => {
-                println!("| {:<64} | {:<14} | {:<14} | {:<5} |", name, "?", "?", "SKIP");
+                println!(
+                    "| {:<64} | {:<14} | {:<14} | {:<5} |",
+                    name, "?", "?", "SKIP"
+                );
                 continue;
             }
         };
@@ -121,10 +118,7 @@ fn page_geometry_comparison() {
         );
     }
 
-    println!(
-        "+{:-<66}+{:-<16}+{:-<16}+{:-<7}+",
-        "", "", "", ""
-    );
+    println!("+{:-<66}+{:-<16}+{:-<16}+{:-<7}+", "", "", "", "");
 
     if !mismatches.is_empty() {
         println!("\nPage size mismatches ({}):", mismatches.len());

@@ -39,7 +39,8 @@ impl FontEntry {
 
     pub(crate) fn word_width(&self, word: &str, font_size: f32, kern: bool) -> f32 {
         if !kern || self.kern_pairs.is_none() {
-            return word.chars()
+            return word
+                .chars()
                 .map(|ch| self.char_width_1000(ch) * font_size / 1000.0)
                 .sum();
         }
@@ -619,7 +620,14 @@ fn embed_truetype(
     face_index: u32,
     used_chars: &HashSet<char>,
     alloc: &mut impl FnMut() -> Ref,
-) -> Option<(Vec<f32>, f32, f32, HashMap<char, u16>, HashMap<char, f32>, HashMap<(u16, u16), f32>)> {
+) -> Option<(
+    Vec<f32>,
+    f32,
+    f32,
+    HashMap<char, u16>,
+    HashMap<char, f32>,
+    HashMap<(u16, u16), f32>,
+)> {
     let face = Face::parse(font_data, face_index).ok()?;
 
     let units = face.units_per_em() as f32;
@@ -664,15 +672,18 @@ fn embed_truetype(
         None
     };
     for &ch in used_chars {
-        let gid = face.glyph_index(ch).or_else(|| {
-            let cp = ch as u32;
-            if (0xF000..=0xF0FF).contains(&cp) {
-                let low_ch = char::from_u32(cp - 0xF000)?;
-                face.glyph_index(low_ch)
-            } else {
-                None
-            }
-        }).or_else(|| symbol_cmap_lookup(ch));
+        let gid = face
+            .glyph_index(ch)
+            .or_else(|| {
+                let cp = ch as u32;
+                if (0xF000..=0xF0FF).contains(&cp) {
+                    let low_ch = char::from_u32(cp - 0xF000)?;
+                    face.glyph_index(low_ch)
+                } else {
+                    None
+                }
+            })
+            .or_else(|| symbol_cmap_lookup(ch));
         if let Some(gid) = gid {
             let new_gid = remapper.remap(gid.0);
             char_to_gid.insert(ch, new_gid);
@@ -688,9 +699,7 @@ fn embed_truetype(
     let mut kern_pairs = HashMap::new();
     let char_gids: Vec<(char, ttf_parser::GlyphId, u16)> = char_to_gid
         .iter()
-        .filter_map(|(&ch, &new_gid)| {
-            face.glyph_index(ch).map(|orig| (ch, orig, new_gid))
-        })
+        .filter_map(|(&ch, &new_gid)| face.glyph_index(ch).map(|orig| (ch, orig, new_gid)))
         .collect();
 
     // Legacy kern table
@@ -781,11 +790,10 @@ fn embed_truetype(
         );
     }
     // Subset the font
-    let subset_data = subsetter::subset(font_data, face_index, &remapper)
-        .unwrap_or_else(|e| {
-            log::warn!("Font subsetting failed for {font_name}: {e} — embedding full font");
-            font_data.to_vec()
-        });
+    let subset_data = subsetter::subset(font_data, face_index, &remapper).unwrap_or_else(|e| {
+        log::warn!("Font subsetting failed for {font_name}: {e} — embedding full font");
+        font_data.to_vec()
+    });
 
     let data_len = i32::try_from(subset_data.len()).ok()?;
     pdf.stream(data_ref, &subset_data)
@@ -866,7 +874,14 @@ fn embed_truetype(
     let line_h_ratio = (face.ascender() as f32 - face.descender() as f32 + line_gap) / units;
     let ascender_ratio = face.ascender() as f32 / units;
 
-    Some((widths_1000, line_h_ratio, ascender_ratio, char_to_gid, char_widths_1000, kern_pairs))
+    Some((
+        widths_1000,
+        line_h_ratio,
+        ascender_ratio,
+        char_to_gid,
+        char_widths_1000,
+        kern_pairs,
+    ))
 }
 
 pub(crate) fn primary_font_name(name: &str) -> &str {
@@ -920,8 +935,15 @@ pub(crate) fn register_font(
         let found = embedded_data
             .and_then(|data| {
                 embed_truetype(
-                    pdf, font_ref, descriptor_ref, data_ref, candidate, data, 0,
-                    used_chars, alloc,
+                    pdf,
+                    font_ref,
+                    descriptor_ref,
+                    data_ref,
+                    candidate,
+                    data,
+                    0,
+                    used_chars,
+                    alloc,
                 )
             })
             .or_else(|| {

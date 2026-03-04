@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::model::{Alignment, CellBorder, LineSpacing};
 
 use super::{
-    DML_NS, WML_NS, parse_paragraph_borders, parse_hex_color, parse_text_color, read_zip_text,
+    DML_NS, WML_NS, parse_hex_color, parse_paragraph_borders, parse_text_color, read_zip_text,
     twips_attr, wml, wml_attr, wml_bool,
 };
 
@@ -96,7 +96,9 @@ pub(super) fn parse_alignment(val: &str) -> Alignment {
     }
 }
 
-pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> ThemeFonts {
+pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(
+    zip: &mut zip::ZipArchive<R>,
+) -> ThemeFonts {
     let mut major = String::from("Aptos Display");
     let mut minor = String::from("Aptos");
     let mut colors = HashMap::new();
@@ -106,10 +108,18 @@ pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(zip: &mut zip::ZipAr
         .iter()
         .find(|n: &&String| n.starts_with("word/theme/") && n.ends_with(".xml"));
     let Some(xml_content) = theme_name.and_then(|name| read_zip_text(zip, name.as_str())) else {
-        return ThemeFonts { major, minor, colors };
+        return ThemeFonts {
+            major,
+            minor,
+            colors,
+        };
     };
     let Ok(xml) = roxmltree::Document::parse(&xml_content) else {
-        return ThemeFonts { major, minor, colors };
+        return ThemeFonts {
+            major,
+            minor,
+            colors,
+        };
     };
 
     for node in xml.descendants() {
@@ -150,7 +160,11 @@ pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(zip: &mut zip::ZipAr
         }
     }
 
-    ThemeFonts { major, minor, colors }
+    ThemeFonts {
+        major,
+        minor,
+        colors,
+    }
 }
 
 pub(super) fn resolve_font(
@@ -315,8 +329,10 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         });
 
         let ind = ppr.and_then(|n| wml(n, "ind"));
-        let indent_left = ind.and_then(|n| twips_attr(n, "start").or_else(|| twips_attr(n, "left")));
-        let indent_right = ind.and_then(|n| twips_attr(n, "end").or_else(|| twips_attr(n, "right")));
+        let indent_left =
+            ind.and_then(|n| twips_attr(n, "start").or_else(|| twips_attr(n, "left")));
+        let indent_right =
+            ind.and_then(|n| twips_attr(n, "end").or_else(|| twips_attr(n, "right")));
         let indent_hanging = ind.and_then(|n| twips_attr(n, "hanging"));
         let indent_first_line = ind.and_then(|n| twips_attr(n, "firstLine"));
 
@@ -432,9 +448,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         let Some(style_id) = style_node.attribute((WML_NS, "styleId")) else {
             continue;
         };
-        if let Some(tbl_borders) =
-            wml(style_node, "tblPr").and_then(|pr| wml(pr, "tblBorders"))
-        {
+        if let Some(tbl_borders) = wml(style_node, "tblPr").and_then(|pr| wml(pr, "tblBorders")) {
             let parse_bdr = |name: &str| -> CellBorder {
                 let Some(n) = wml(tbl_borders, name) else {
                     return CellBorder::default();
@@ -448,15 +462,21 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                     .and_then(|v| v.parse::<f32>().ok())
                     .map(|v| v / 8.0)
                     .unwrap_or(0.5);
-                let color = n
-                    .attribute((WML_NS, "color"))
-                    .and_then(parse_hex_color);
+                let color = n.attribute((WML_NS, "color")).and_then(parse_hex_color);
                 CellBorder::visible(color, width)
             };
             let left = parse_bdr("left");
-            let left = if left.present { left } else { parse_bdr("start") };
+            let left = if left.present {
+                left
+            } else {
+                parse_bdr("start")
+            };
             let right = parse_bdr("right");
-            let right = if right.present { right } else { parse_bdr("end") };
+            let right = if right.present {
+                right
+            } else {
+                parse_bdr("end")
+            };
             table_border_styles.insert(
                 style_id.to_string(),
                 TableBordersDef {

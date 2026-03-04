@@ -6,14 +6,11 @@ use crate::model::{
     MarkerSymbol,
 };
 
-use super::{read_zip_text, DML_NS};
+use super::{DML_NS, read_zip_text};
 
 const CHART_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 
-fn chart_child<'a>(
-    parent: roxmltree::Node<'a, 'a>,
-    name: &str,
-) -> Option<roxmltree::Node<'a, 'a>> {
+fn chart_child<'a>(parent: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
     parent
         .children()
         .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(CHART_NS))
@@ -33,36 +30,31 @@ fn parse_hex_color_dml(val: &str) -> Option<[u8; 3]> {
     Some([r, g, b])
 }
 
+fn dml_child<'a>(parent: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
+    parent
+        .children()
+        .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(DML_NS))
+}
+
 fn extract_srgb_fill(sp_pr: roxmltree::Node) -> Option<[u8; 3]> {
-    let solid_fill = sp_pr.children().find(|n| {
-        n.tag_name().name() == "solidFill" && n.tag_name().namespace() == Some(DML_NS)
-    })?;
-    let srgb = solid_fill.children().find(|n| {
-        n.tag_name().name() == "srgbClr" && n.tag_name().namespace() == Some(DML_NS)
-    })?;
+    let srgb = dml_child(dml_child(sp_pr, "solidFill")?, "srgbClr")?;
     srgb.attribute("val").and_then(parse_hex_color_dml)
 }
 
 fn extract_line_color(sp_pr: roxmltree::Node) -> Option<[u8; 3]> {
-    let ln = sp_pr
-        .children()
-        .find(|n| n.tag_name().name() == "ln" && n.tag_name().namespace() == Some(DML_NS))?;
+    let ln = dml_child(sp_pr, "ln")?;
     // noFill means no line
-    if ln.children().any(|n| {
-        n.tag_name().name() == "noFill" && n.tag_name().namespace() == Some(DML_NS)
-    }) {
+    if dml_child(ln, "noFill").is_some() {
         return None;
     }
     extract_srgb_fill(ln)
 }
 
 fn parse_num_cache(parent: roxmltree::Node, child_name: &str) -> Vec<f32> {
-    let Some(container) = chart_child(parent, child_name) else {
-        return Vec::new();
-    };
-    let Some(num_cache) = chart_child(container, "numRef")
-        .and_then(|nr| chart_child(nr, "numCache"))
-    else {
+    let num_cache = chart_child(parent, child_name)
+        .and_then(|c| chart_child(c, "numRef"))
+        .and_then(|nr| chart_child(nr, "numCache"));
+    let Some(num_cache) = num_cache else {
         return Vec::new();
     };
     let mut pts: Vec<(usize, f32)> = num_cache
@@ -70,14 +62,7 @@ fn parse_num_cache(parent: roxmltree::Node, child_name: &str) -> Vec<f32> {
         .filter(|n| n.tag_name().name() == "pt" && n.tag_name().namespace() == Some(CHART_NS))
         .filter_map(|pt| {
             let idx = pt.attribute("idx")?.parse::<usize>().ok()?;
-            let v = pt
-                .children()
-                .find(|n| {
-                    n.tag_name().name() == "v" && n.tag_name().namespace() == Some(CHART_NS)
-                })?
-                .text()?
-                .parse::<f32>()
-                .ok()?;
+            let v = chart_child(pt, "v")?.text()?.parse::<f32>().ok()?;
             Some((idx, v))
         })
         .collect();
@@ -97,9 +82,7 @@ fn parse_series(ser_node: roxmltree::Node) -> (ChartSeries, Vec<String>) {
         .and_then(|cache| {
             cache
                 .descendants()
-                .find(|n| {
-                    n.tag_name().name() == "v" && n.tag_name().namespace() == Some(CHART_NS)
-                })
+                .find(|n| n.tag_name().name() == "v" && n.tag_name().namespace() == Some(CHART_NS))
                 .and_then(|v| v.text())
         })
         .unwrap_or("")
@@ -139,47 +122,10 @@ fn parse_series(ser_node: roxmltree::Node) -> (ChartSeries, Vec<String>) {
         parse_num_cache(ser_node, "val")
     };
 
-    let x_values = {
-        let xv = parse_num_cache(ser_node, "xVal");
-        if xv.is_empty() { None } else { Some(xv) }
-    };
+    let x_values = non_empty_vec(parse_num_cache(ser_node, "xVal"));
+    let bubble_sizes = non_empty_vec(parse_num_cache(ser_node, "bubbleSize"));
 
-    let bubble_sizes = {
-        let bs = parse_num_cache(ser_node, "bubbleSize");
-        if bs.is_empty() { None } else { Some(bs) }
-    };
-
-    let mut cat_labels = Vec::new();
-    if let Some(cat_node) = chart_child(ser_node, "cat") {
-        if let Some(str_cache) = chart_child(cat_node, "strRef")
-            .and_then(|sr| chart_child(sr, "strCache"))
-        {
-            let mut pts: Vec<(usize, String)> = str_cache
-                .children()
-                .filter(|n| {
-                    n.tag_name().name() == "pt" && n.tag_name().namespace() == Some(CHART_NS)
-                })
-                .filter_map(|pt| {
-                    let idx = pt.attribute("idx")?.parse::<usize>().ok()?;
-                    let v = pt
-                        .children()
-                        .find(|n| {
-                            n.tag_name().name() == "v"
-                                && n.tag_name().namespace() == Some(CHART_NS)
-                        })?
-                        .text()?
-                        .to_string();
-                    Some((idx, v))
-                })
-                .collect();
-            pts.sort_by_key(|(idx, _)| *idx);
-            let count = pts.last().map(|(idx, _)| idx + 1).unwrap_or(0);
-            cat_labels.resize(count, String::new());
-            for (idx, v) in pts {
-                cat_labels[idx] = v;
-            }
-        }
-    }
+    let cat_labels = parse_str_cache(chart_child(ser_node, "cat"));
 
     (
         ChartSeries {
@@ -192,6 +138,35 @@ fn parse_series(ser_node: roxmltree::Node) -> (ChartSeries, Vec<String>) {
         },
         cat_labels,
     )
+}
+
+fn non_empty_vec(v: Vec<f32>) -> Option<Vec<f32>> {
+    if v.is_empty() { None } else { Some(v) }
+}
+
+fn parse_str_cache(container: Option<roxmltree::Node>) -> Vec<String> {
+    let str_cache = container
+        .and_then(|c| chart_child(c, "strRef"))
+        .and_then(|sr| chart_child(sr, "strCache"));
+    let Some(str_cache) = str_cache else {
+        return Vec::new();
+    };
+    let mut pts: Vec<(usize, String)> = str_cache
+        .children()
+        .filter(|n| n.tag_name().name() == "pt" && n.tag_name().namespace() == Some(CHART_NS))
+        .filter_map(|pt| {
+            let idx = pt.attribute("idx")?.parse::<usize>().ok()?;
+            let v = chart_child(pt, "v")?.text()?.to_string();
+            Some((idx, v))
+        })
+        .collect();
+    pts.sort_by_key(|(idx, _)| *idx);
+    let count = pts.last().map(|(idx, _)| idx + 1).unwrap_or(0);
+    let mut labels = vec![String::new(); count];
+    for (idx, v) in pts {
+        labels[idx] = v;
+    }
+    labels
 }
 
 fn parse_axis(ax_node: roxmltree::Node) -> ChartAxis {
@@ -221,162 +196,135 @@ fn parse_legend(legend_node: roxmltree::Node) -> ChartLegend {
     ChartLegend { position }
 }
 
+fn collect_series(type_node: roxmltree::Node) -> (Vec<ChartSeries>, Vec<String>) {
+    let mut series_list = Vec::new();
+    let mut cat_labels = Vec::new();
+    for ser_node in type_node
+        .children()
+        .filter(|n| n.tag_name().name() == "ser" && n.tag_name().namespace() == Some(CHART_NS))
+    {
+        let (series, labels) = parse_series(ser_node);
+        if cat_labels.is_empty() && !labels.is_empty() {
+            cat_labels = labels;
+        }
+        series_list.push(series);
+    }
+    (series_list, cat_labels)
+}
+
+fn assign_cat_labels(cat_axis: &mut Option<ChartAxis>, cat_labels: Vec<String>) {
+    if let Some(ref mut ax) = *cat_axis {
+        if ax.labels.is_empty() {
+            ax.labels = cat_labels;
+        }
+    } else if !cat_labels.is_empty() {
+        *cat_axis = Some(ChartAxis {
+            labels: cat_labels,
+            delete: true,
+            gridline_color: None,
+            line_color: None,
+        });
+    }
+}
+
+fn extract_plot_border(plot_area: roxmltree::Node) -> Option<[u8; 3]> {
+    plot_area
+        .children()
+        .find(|n| n.tag_name().name() == "spPr" && n.tag_name().namespace() == Some(CHART_NS))
+        .and_then(extract_line_color)
+}
+
 fn parse_chart_space(xml_content: &str, accent_colors: Vec<[u8; 3]>) -> Option<Chart> {
     let doc = roxmltree::Document::parse(xml_content).ok()?;
     let chart_space = doc.root_element();
     let chart_node = chart_child(chart_space, "chart")?;
     let plot_area = chart_child(chart_node, "plotArea")?;
 
-    // Find chart type element in plotArea
-    if let Some(bar_chart) = chart_child(plot_area, "barChart") {
-        let horizontal = chart_attr(bar_chart, "barDir") == Some("bar");
+    let (type_node, chart_type, gap_width_pct) = detect_chart_type(plot_area)?;
+
+    let (series_list, cat_labels) = collect_series(type_node);
+    let is_scatter_like = matches!(chart_type, ChartType::Scatter | ChartType::Bubble);
+
+    // Scatter/bubble have two valAx; use first as cat_axis, second as val_axis
+    let (mut cat_axis, val_axis) = if is_scatter_like {
+        let val_axes: Vec<_> = plot_area
+            .children()
+            .filter(|n| {
+                n.tag_name().name() == "valAx" && n.tag_name().namespace() == Some(CHART_NS)
+            })
+            .map(parse_axis)
+            .collect();
+        (val_axes.first().cloned(), val_axes.get(1).cloned())
+    } else {
+        (
+            chart_child(plot_area, "catAx").map(parse_axis),
+            chart_child(plot_area, "valAx").map(parse_axis),
+        )
+    };
+
+    assign_cat_labels(&mut cat_axis, cat_labels);
+
+    Some(Chart {
+        chart_type,
+        series: series_list,
+        cat_axis,
+        val_axis,
+        legend: chart_child(chart_node, "legend").map(parse_legend),
+        gap_width_pct,
+        plot_border_color: extract_plot_border(plot_area),
+        accent_colors,
+    })
+}
+
+fn detect_chart_type<'a>(
+    plot_area: roxmltree::Node<'a, 'a>,
+) -> Option<(roxmltree::Node<'a, 'a>, ChartType, f32)> {
+    if let Some(n) = chart_child(plot_area, "barChart") {
+        let horizontal = chart_attr(n, "barDir") == Some("bar");
         let stacked = matches!(
-            chart_attr(bar_chart, "grouping"),
+            chart_attr(n, "grouping"),
             Some("stacked") | Some("percentStacked")
         );
-        let gap_width_pct = chart_attr(bar_chart, "gapWidth")
+        let gap_width_pct = chart_attr(n, "gapWidth")
             .and_then(|v| v.parse::<f32>().ok())
             .unwrap_or(150.0);
-
-        let mut series_list = Vec::new();
-        let mut cat_labels = Vec::new();
-
-        for ser_node in bar_chart.children().filter(|n| {
-            n.tag_name().name() == "ser" && n.tag_name().namespace() == Some(CHART_NS)
-        }) {
-            let (series, labels) = parse_series(ser_node);
-            if cat_labels.is_empty() && !labels.is_empty() {
-                cat_labels = labels;
-            }
-            series_list.push(series);
-        }
-
-        let mut cat_axis = chart_child(plot_area, "catAx").map(parse_axis);
-        if let Some(ref mut ax) = cat_axis {
-            ax.labels = cat_labels.clone();
-        } else if !cat_labels.is_empty() {
-            cat_axis = Some(ChartAxis {
-                labels: cat_labels,
-                delete: true,
-                gridline_color: None,
-                line_color: None,
-            });
-        }
-        let val_axis = chart_child(plot_area, "valAx").map(parse_axis);
-        let legend = chart_child(chart_node, "legend").map(parse_legend);
-
-        let plot_border_color = plot_area
-            .children()
-            .find(|n| n.tag_name().name() == "spPr" && n.tag_name().namespace() == Some(CHART_NS))
-            .and_then(extract_line_color);
-
-        return Some(Chart {
-            chart_type: ChartType::Bar {
+        return Some((
+            n,
+            ChartType::Bar {
                 horizontal,
                 stacked,
             },
-            series: series_list,
-            cat_axis,
-            val_axis,
-            legend,
             gap_width_pct,
-            plot_border_color,
-            accent_colors: accent_colors.clone(),
-        });
+        ));
     }
 
-    // Line, pie, area, doughnut, radar, scatter, bubble charts
-    let (chart_type_node, chart_type) =
-        if let Some(n) = chart_child(plot_area, "lineChart") {
-            (Some(n), Some(ChartType::Line))
-        } else if let Some(n) = chart_child(plot_area, "pieChart")
-            .or_else(|| chart_child(plot_area, "pie3DChart"))
-        {
-            (Some(n), Some(ChartType::Pie))
-        } else if let Some(n) = chart_child(plot_area, "areaChart") {
-            (Some(n), Some(ChartType::Area))
-        } else if let Some(n) = chart_child(plot_area, "doughnutChart") {
-            let hole_size_pct = chart_attr(n, "holeSize")
-                .and_then(|v| v.parse::<f32>().ok())
-                .unwrap_or(50.0);
-            (Some(n), Some(ChartType::Doughnut { hole_size_pct }))
-        } else if let Some(n) = chart_child(plot_area, "radarChart") {
-            (Some(n), Some(ChartType::Radar))
-        } else if let Some(n) = chart_child(plot_area, "scatterChart") {
-            (Some(n), Some(ChartType::Scatter))
-        } else if let Some(n) = chart_child(plot_area, "bubbleChart") {
-            (Some(n), Some(ChartType::Bubble))
-        } else {
-            (None, None)
-        };
-
-    if let (Some(type_node), Some(chart_type)) = (chart_type_node, chart_type) {
-        let mut series_list = Vec::new();
-        let mut cat_labels = Vec::new();
-
-        for ser_node in type_node.children().filter(|n| {
-            n.tag_name().name() == "ser" && n.tag_name().namespace() == Some(CHART_NS)
-        }) {
-            let (series, labels) = parse_series(ser_node);
-            if cat_labels.is_empty() && !labels.is_empty() {
-                cat_labels = labels;
-            }
-            series_list.push(series);
-        }
-
-        let is_scatter_like = matches!(chart_type, ChartType::Scatter | ChartType::Bubble);
-
-        // Scatter/bubble have two valAx; use first as cat_axis, second as val_axis
-        let (mut cat_axis, val_axis) = if is_scatter_like {
-            let val_axes: Vec<_> = plot_area
-                .children()
-                .filter(|n| {
-                    n.tag_name().name() == "valAx"
-                        && n.tag_name().namespace() == Some(CHART_NS)
-                })
-                .map(parse_axis)
-                .collect();
-            let first = val_axes.first().cloned();
-            let second = val_axes.get(1).cloned();
-            (first, second)
-        } else {
-            (
-                chart_child(plot_area, "catAx").map(parse_axis),
-                chart_child(plot_area, "valAx").map(parse_axis),
-            )
-        };
-
-        if let Some(ref mut ax) = cat_axis {
-            if ax.labels.is_empty() {
-                ax.labels = cat_labels.clone();
-            }
-        } else if !cat_labels.is_empty() {
-            cat_axis = Some(ChartAxis {
-                labels: cat_labels,
-                delete: true,
-                gridline_color: None,
-                line_color: None,
-            });
-        }
-        let legend = chart_child(chart_node, "legend").map(parse_legend);
-
-        let plot_border_color = plot_area
-            .children()
-            .find(|n| n.tag_name().name() == "spPr" && n.tag_name().namespace() == Some(CHART_NS))
-            .and_then(extract_line_color);
-
-        return Some(Chart {
-            chart_type,
-            series: series_list,
-            cat_axis,
-            val_axis,
-            legend,
-            gap_width_pct: 150.0,
-            plot_border_color,
-            accent_colors,
-        });
+    let default_gap = 150.0;
+    if let Some(n) = chart_child(plot_area, "lineChart") {
+        return Some((n, ChartType::Line, default_gap));
     }
-
+    if let Some(n) =
+        chart_child(plot_area, "pieChart").or_else(|| chart_child(plot_area, "pie3DChart"))
+    {
+        return Some((n, ChartType::Pie, default_gap));
+    }
+    if let Some(n) = chart_child(plot_area, "areaChart") {
+        return Some((n, ChartType::Area, default_gap));
+    }
+    if let Some(n) = chart_child(plot_area, "doughnutChart") {
+        let hole_size_pct = chart_attr(n, "holeSize")
+            .and_then(|v| v.parse::<f32>().ok())
+            .unwrap_or(50.0);
+        return Some((n, ChartType::Doughnut { hole_size_pct }, default_gap));
+    }
+    if let Some(n) = chart_child(plot_area, "radarChart") {
+        return Some((n, ChartType::Radar, default_gap));
+    }
+    if let Some(n) = chart_child(plot_area, "scatterChart") {
+        return Some((n, ChartType::Scatter, default_gap));
+    }
+    if let Some(n) = chart_child(plot_area, "bubbleChart") {
+        return Some((n, ChartType::Bubble, default_gap));
+    }
     None
 }
 

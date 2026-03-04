@@ -76,10 +76,7 @@ fn extract_page_lines(pdf: &Path, page: usize) -> Vec<String> {
     // Sort by y, cluster lines within 8pt y-tolerance, then sort each
     // cluster by x so super/subscript fragments recombine left-to-right
     // (e.g. "xi" + "2 + yj" + "3 = zk").
-    lines.sort_by(|a, b| {
-        a.1.partial_cmp(&b.1)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    lines.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
     let mut clusters: Vec<Vec<(f64, f64, String)>> = Vec::new();
     for item in lines {
         if let Some(last) = clusters.last_mut() {
@@ -94,7 +91,11 @@ fn extract_page_lines(pdf: &Path, page: usize) -> Vec<String> {
         .into_iter()
         .map(|mut cluster| {
             cluster.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
-            cluster.into_iter().map(|(_, _, t)| t).collect::<Vec<_>>().join(" ")
+            cluster
+                .into_iter()
+                .map(|(_, _, t)| t)
+                .collect::<Vec<_>>()
+                .join(" ")
         })
         .collect()
 }

@@ -3,10 +3,10 @@ use std::io::Read;
 
 use crate::model::{ColumnDef, ColumnsConfig, HeaderFooter, SectionBreakType, SectionProperties};
 
-use super::{REL_NS, WML_NS, read_zip_text, twips_attr, twips_to_pts, wml};
 use super::headers_footers::parse_header_footer_xml;
 use super::relationships::parse_part_relationships;
 use super::styles::{StylesInfo, ThemeFonts};
+use super::{REL_NS, WML_NS, read_zip_text, twips_attr, twips_to_pts, wml};
 
 pub(super) fn parse_section_properties<R: Read + std::io::Seek>(
     sect_node: roxmltree::Node,
@@ -61,9 +61,7 @@ pub(super) fn parse_section_properties<R: Read + std::io::Seek>(
 
         let child_cols: Vec<_> = cols_node
             .children()
-            .filter(|c| {
-                c.tag_name().name() == "col" && c.tag_name().namespace() == Some(WML_NS)
-            })
+            .filter(|c| c.tag_name().name() == "col" && c.tag_name().namespace() == Some(WML_NS))
             .collect();
 
         let col_defs: Vec<ColumnDef> = if !equal_width && !child_cols.is_empty() {
@@ -72,7 +70,10 @@ pub(super) fn parse_section_properties<R: Read + std::io::Seek>(
                 .map(|c| {
                     let w = twips_attr(*c, "w").unwrap_or(0.0);
                     let sp = twips_attr(*c, "space").unwrap_or(0.0);
-                    ColumnDef { width: w, space: sp }
+                    ColumnDef {
+                        width: w,
+                        space: sp,
+                    }
                 })
                 .collect()
         } else if num > 1 {
@@ -123,17 +124,16 @@ pub(super) fn parse_section_properties<R: Read + std::io::Seek>(
         }
     }
 
-    let resolve_hf =
-        |rid: Option<&str>, zip: &mut zip::ZipArchive<R>| -> Option<HeaderFooter> {
-            let target = rels.get(rid?)?;
-            let zip_path = target
-                .strip_prefix('/')
-                .map(String::from)
-                .unwrap_or_else(|| format!("word/{}", target));
-            let part_rels = parse_part_relationships(zip, &zip_path);
-            let xml_text = read_zip_text(zip, &zip_path)?;
-            parse_header_footer_xml(&xml_text, styles, theme, &part_rels, zip)
-        };
+    let resolve_hf = |rid: Option<&str>, zip: &mut zip::ZipArchive<R>| -> Option<HeaderFooter> {
+        let target = rels.get(rid?)?;
+        let zip_path = target
+            .strip_prefix('/')
+            .map(String::from)
+            .unwrap_or_else(|| format!("word/{}", target));
+        let part_rels = parse_part_relationships(zip, &zip_path);
+        let xml_text = read_zip_text(zip, &zip_path)?;
+        parse_header_footer_xml(&xml_text, styles, theme, &part_rels, zip)
+    };
 
     let header_default = resolve_hf(header_default_rid, zip);
     let header_first = resolve_hf(header_first_rid, zip);

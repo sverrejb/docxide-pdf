@@ -86,7 +86,10 @@ pub(super) fn wml_bool(parent: roxmltree::Node, name: &str) -> Option<bool> {
     })
 }
 
-pub(super) fn wml<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
+pub(super) fn wml<'a>(
+    node: roxmltree::Node<'a, 'a>,
+    name: &str,
+) -> Option<roxmltree::Node<'a, 'a>> {
     node.children()
         .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(WML_NS))
 }
@@ -213,8 +216,7 @@ mod relationships {
         };
         for node in xml.root_element().children() {
             if node.tag_name().name() == "Relationship"
-                && let (Some(id), Some(target)) =
-                    (node.attribute("Id"), node.attribute("Target"))
+                && let (Some(id), Some(target)) = (node.attribute("Id"), node.attribute("Target"))
             {
                 rels.insert(id.to_string(), target.to_string());
             }
@@ -285,9 +287,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
 
     let mut xml_content = String::new();
     zip.by_name("word/document.xml")
-        .map_err(|_| {
-            Error::InvalidDocx("missing word/document.xml (is this a DOCX file?)".into())
-        })?
+        .map_err(|_| Error::InvalidDocx("missing word/document.xml (is this a DOCX file?)".into()))?
         .read_to_string(&mut xml_content)?;
 
     let xml = roxmltree::Document::parse(&xml_content)?;
@@ -312,8 +312,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     .into_iter()
                     .flat_map(|grid| grid.children())
                     .filter(|n| {
-                        n.tag_name().name() == "gridCol"
-                            && n.tag_name().namespace() == Some(WML_NS)
+                        n.tag_name().name() == "gridCol" && n.tag_name().namespace() == Some(WML_NS)
                     })
                     .filter_map(|n| twips_attr(n, "w"))
                     .collect();
@@ -344,46 +343,43 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     })
                     .unwrap_or_default();
 
-                let table_position = tbl_pr
-                    .and_then(|pr| wml(pr, "tblpPr"))
-                    .map(|tblp| {
-                        let v_anchor = match tblp.attribute((WML_NS, "vertAnchor")) {
-                            Some("page") => "page",
-                            Some("text") => "text",
-                            _ => "margin",
-                        };
-                        let h_anchor = match tblp.attribute((WML_NS, "horzAnchor")) {
-                            Some("page") => "page",
-                            Some("margin") => "margin",
-                            _ => "column",
-                        };
-                        let v_offset_pt = tblp
-                            .attribute((WML_NS, "tblpY"))
+                let table_position = tbl_pr.and_then(|pr| wml(pr, "tblpPr")).map(|tblp| {
+                    let v_anchor = match tblp.attribute((WML_NS, "vertAnchor")) {
+                        Some("page") => "page",
+                        Some("text") => "text",
+                        _ => "margin",
+                    };
+                    let h_anchor = match tblp.attribute((WML_NS, "horzAnchor")) {
+                        Some("page") => "page",
+                        Some("margin") => "margin",
+                        _ => "column",
+                    };
+                    let v_offset_pt = tblp
+                        .attribute((WML_NS, "tblpY"))
+                        .and_then(|v| v.parse::<f32>().ok())
+                        .map(twips_to_pts)
+                        .unwrap_or(0.0);
+                    let h_position = if let Some(spec) = tblp.attribute((WML_NS, "tblpXSpec")) {
+                        match spec {
+                            "center" => HorizontalPosition::AlignCenter,
+                            "right" => HorizontalPosition::AlignRight,
+                            _ => HorizontalPosition::AlignLeft,
+                        }
+                    } else {
+                        let offset = tblp
+                            .attribute((WML_NS, "tblpX"))
                             .and_then(|v| v.parse::<f32>().ok())
                             .map(twips_to_pts)
                             .unwrap_or(0.0);
-                        let h_position =
-                            if let Some(spec) = tblp.attribute((WML_NS, "tblpXSpec")) {
-                                match spec {
-                                    "center" => HorizontalPosition::AlignCenter,
-                                    "right" => HorizontalPosition::AlignRight,
-                                    _ => HorizontalPosition::AlignLeft,
-                                }
-                            } else {
-                                let offset = tblp
-                                    .attribute((WML_NS, "tblpX"))
-                                    .and_then(|v| v.parse::<f32>().ok())
-                                    .map(twips_to_pts)
-                                    .unwrap_or(0.0);
-                                HorizontalPosition::Offset(offset)
-                            };
-                        TablePosition {
-                            h_position,
-                            h_anchor,
-                            v_offset_pt,
-                            v_anchor,
-                        }
-                    });
+                        HorizontalPosition::Offset(offset)
+                    };
+                    TablePosition {
+                        h_position,
+                        h_anchor,
+                        v_offset_pt,
+                        v_anchor,
+                    }
+                });
 
                 let tbl_style_borders = tbl_pr
                     .and_then(|pr| wml_attr(pr, "tblStyle"))
@@ -392,8 +388,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                 let tbl_rows: Vec<_> = collect_block_nodes(node)
                     .into_iter()
                     .filter(|n| {
-                        n.tag_name().name() == "tr"
-                            && n.tag_name().namespace() == Some(WML_NS)
+                        n.tag_name().name() == "tr" && n.tag_name().namespace() == Some(WML_NS)
                     })
                     .collect();
                 let num_rows = tbl_rows.len();
@@ -412,9 +407,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                         .and_then(|v| v.parse::<f32>().ok())
                         .map(|v| v / 8.0)
                         .unwrap_or(0.5);
-                    let color = n
-                        .attribute((WML_NS, "color"))
-                        .and_then(parse_hex_color);
+                    let color = n.attribute((WML_NS, "color")).and_then(parse_hex_color);
                     CellBorder::visible(color, width)
                 };
 
@@ -436,8 +429,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     let mut cells = Vec::new();
                     let mut grid_col = 0usize;
                     for tc in collect_block_nodes(*tr).into_iter().filter(|n| {
-                        n.tag_name().name() == "tc"
-                            && n.tag_name().namespace() == Some(WML_NS)
+                        n.tag_name().name() == "tc" && n.tag_name().namespace() == Some(WML_NS)
                     }) {
                         let ci = grid_col;
                         let tc_pr = wml(tc, "tcPr");
@@ -513,11 +505,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                                         fallback.bottom
                                     },
                                     left: if left.present { left } else { fallback.left },
-                                    right: if right.present {
-                                        right
-                                    } else {
-                                        fallback.right
-                                    },
+                                    right: if right.present { right } else { fallback.right },
                                 }
                             })
                             .unwrap_or_else(|| style_borders.unwrap_or_default());
@@ -530,11 +518,9 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
 
                         let mut cell_paras = Vec::new();
                         for p in tc.children().filter(|n| {
-                            n.tag_name().name() == "p"
-                                && n.tag_name().namespace() == Some(WML_NS)
+                            n.tag_name().name() == "p" && n.tag_name().namespace() == Some(WML_NS)
                         }) {
-                            let parsed =
-                                parse_runs(p, &styles, &theme, &rels, zip, &numbering);
+                            let parsed = parse_runs(p, &styles, &theme, &rels, zip, &numbering);
                             let ppr = wml(p, "pPr");
                             let para_style_id = ppr
                                 .and_then(|ppr| wml_attr(ppr, "pStyle"))
@@ -557,24 +543,24 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                                     .unwrap_or(LineSpacing::Auto(1.0)),
                             );
                             let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
-                            let (
-                                mut indent_left,
-                                mut indent_hanging,
-                                list_label,
-                                list_label_font,
-                            ) = parse_list_info(
-                                num_pr,
-                                &numbering,
-                                &mut counters,
-                                &mut last_seen_level,
-                            );
+                            let (mut indent_left, mut indent_hanging, list_label, list_label_font) =
+                                parse_list_info(
+                                    num_pr,
+                                    &numbering,
+                                    &mut counters,
+                                    &mut last_seen_level,
+                                );
                             let mut indent_first_line = 0.0f32;
                             let mut indent_right = 0.0f32;
                             if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
-                                if let Some(v) = twips_attr(ind, "start").or_else(|| twips_attr(ind, "left")) {
+                                if let Some(v) =
+                                    twips_attr(ind, "start").or_else(|| twips_attr(ind, "left"))
+                                {
                                     indent_left = v;
                                 }
-                                if let Some(v) = twips_attr(ind, "end").or_else(|| twips_attr(ind, "right")) {
+                                if let Some(v) =
+                                    twips_attr(ind, "end").or_else(|| twips_attr(ind, "right"))
+                                {
                                     indent_right = v;
                                 }
                                 if let Some(v) = twips_attr(ind, "hanging") {
@@ -634,8 +620,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
 
                 let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
 
-                let inline_borders =
-                    ppr.map(parse_paragraph_borders).unwrap_or_default();
+                let inline_borders = ppr.map(parse_paragraph_borders).unwrap_or_default();
                 let has_inline_borders = inline_borders.top.is_some()
                     || inline_borders.bottom.is_some()
                     || inline_borders.left.is_some()
@@ -643,9 +628,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                 let borders = if has_inline_borders {
                     inline_borders
                 } else {
-                    para_style
-                        .map(|s| s.borders.clone())
-                        .unwrap_or_default()
+                    para_style.map(|s| s.borders.clone()).unwrap_or_default()
                 };
                 let bdr_bottom_extra = borders
                     .bottom
@@ -697,12 +680,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
 
                 let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
                 let (mut indent_left, mut indent_hanging, list_label, list_label_font) =
-                    parse_list_info(
-                        num_pr,
-                        &numbering,
-                        &mut counters,
-                        &mut last_seen_level,
-                    );
+                    parse_list_info(num_pr, &numbering, &mut counters, &mut last_seen_level);
 
                 let mut indent_first_line = 0.0f32;
                 let mut indent_right = 0.0f32;

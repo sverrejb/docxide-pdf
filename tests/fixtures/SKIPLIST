@@ -2,8 +2,6 @@
 # Each line is either a case name or a group name (skips all fixtures in that group).
 # Blank lines and lines starting with # are ignored.
 
-sample100kB
-
 # Scraped fixtures parked while focusing on usep_handbook.
 # Re-enable individually as features improve.
 stem_partnerships_guide
@@ -35,8 +33,8 @@ italian_evaluation_minutes
 education_consultant_posting
 indonesian_benchmarking_guide
 transition_to_work_deed
-polish_council_resolution
-czech_tree_cutting_permit
+# polish_council_resolution
+# czech_tree_cutting_permit
 # czech_expert_witness_law
 learning_cultures_dissertation
 federal_procurement_terms

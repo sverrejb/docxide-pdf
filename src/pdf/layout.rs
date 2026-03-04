@@ -47,7 +47,7 @@ pub(super) struct WordChunk {
     pub(super) dstrike: bool,
     pub(super) char_spacing: f32,
     pub(super) text_scale: f32, // percentage, 100.0 = normal
-    pub(super) y_offset: f32, // vertical offset for superscript/subscript
+    pub(super) y_offset: f32,   // vertical offset for superscript/subscript
     pub(super) hyperlink_url: Option<String>,
     pub(super) inline_image_name: Option<String>,
     pub(super) inline_image_height: f32,
@@ -193,8 +193,7 @@ pub(super) fn build_paragraph_lines(
 
             let char_count = word.chars().count();
             let kern = run.kern_threshold.is_some_and(|t| eff_fs >= t);
-            let ww = entry.word_width(word, eff_fs, kern) * ts
-                + cs * char_count as f32;
+            let ww = entry.word_width(word, eff_fs, kern) * ts + cs * char_count as f32;
 
             let need_space = !current_chunks.is_empty() && pending_space_w > 0.0;
 
@@ -454,8 +453,7 @@ pub(super) fn build_tabbed_line(
             for (i, word) in text.split_whitespace().enumerate() {
                 let char_count = word.chars().count();
                 let kern = run.kern_threshold.is_some_and(|t| eff_fs >= t);
-                let ww = entry.word_width(word, eff_fs, kern) * ts
-                    + cs * char_count as f32;
+                let ww = entry.word_width(word, eff_fs, kern) * ts + cs * char_count as f32;
                 if !all_chunks.is_empty()
                     && (i > 0 || prev_ws || text.starts_with(char::is_whitespace))
                 {
@@ -495,8 +493,15 @@ pub(super) fn build_tabbed_line(
     }]
 }
 
-fn encode_text_for_pdf(text: &str, pdf_font: &str, pdf_name_to_entry: &HashMap<&str, &FontEntry>) -> Vec<u8> {
-    match pdf_name_to_entry.get(pdf_font).and_then(|e| e.char_to_gid.as_ref()) {
+fn encode_text_for_pdf(
+    text: &str,
+    pdf_font: &str,
+    pdf_name_to_entry: &HashMap<&str, &FontEntry>,
+) -> Vec<u8> {
+    match pdf_name_to_entry
+        .get(pdf_font)
+        .and_then(|e| e.char_to_gid.as_ref())
+    {
         Some(map) => encode_as_gids(text, map),
         None => to_winansi_bytes(text),
     }
@@ -534,12 +539,21 @@ pub(super) fn render_paragraph_lines(
     let mut cumulative_y = 0.0f32;
     for (i, line) in lines.iter().enumerate() {
         line_y_offsets.push(cumulative_y);
-        let img_h = line.chunks.iter()
+        let img_h = line
+            .chunks
+            .iter()
             .map(|c| c.inline_image_height)
             .fold(0.0f32, f32::max);
-        cumulative_y += if img_h > line_pitch { img_h } else { line_pitch };
+        cumulative_y += if img_h > line_pitch {
+            img_h
+        } else {
+            line_pitch
+        };
         // First line offset is always 0
-        if i == 0 { cumulative_y = line_pitch.max(img_h); line_y_offsets[0] = 0.0; }
+        if i == 0 {
+            cumulative_y = line_pitch.max(img_h);
+            line_y_offsets[0] = 0.0;
+        }
     }
 
     let last_line_idx = total_line_count.saturating_sub(1);
@@ -552,7 +566,10 @@ pub(super) fn render_paragraph_lines(
             && line.chunks.len() > 1;
 
         let (eff_margin, eff_width) = if global_line_idx == 0 && first_line_hanging.abs() > 0.001 {
-            (margin_left - first_line_hanging, text_width + first_line_hanging)
+            (
+                margin_left - first_line_hanging,
+                text_width + first_line_hanging,
+            )
         } else {
             (margin_left, text_width)
         };
@@ -579,24 +596,20 @@ pub(super) fn render_paragraph_lines(
             let mut hl_end_x = 0.0f32;
             let mut hl_fs = 0.0f32;
 
-            let flush_hl = |content: &mut Content,
-                            color: [u8; 3],
-                            sx: f32,
-                            ex: f32,
-                            fs: f32,
-                            y: f32| {
-                let hl_bottom = y - fs * 0.2;
-                let hl_height = fs * 1.15;
-                content.save_state();
-                content.set_fill_rgb(
-                    color[0] as f32 / 255.0,
-                    color[1] as f32 / 255.0,
-                    color[2] as f32 / 255.0,
-                );
-                content.rect(sx, hl_bottom, ex - sx, hl_height);
-                content.fill_nonzero();
-                content.restore_state();
-            };
+            let flush_hl =
+                |content: &mut Content, color: [u8; 3], sx: f32, ex: f32, fs: f32, y: f32| {
+                    let hl_bottom = y - fs * 0.2;
+                    let hl_height = fs * 1.15;
+                    content.save_state();
+                    content.set_fill_rgb(
+                        color[0] as f32 / 255.0,
+                        color[1] as f32 / 255.0,
+                        color[2] as f32 / 255.0,
+                    );
+                    content.rect(sx, hl_bottom, ex - sx, hl_height);
+                    content.fill_nonzero();
+                    content.restore_state();
+                };
 
             for (chunk_idx, chunk) in line.chunks.iter().enumerate() {
                 let x = line_start_x + chunk.x_offset + chunk_idx as f32 * extra_per_gap;
@@ -622,7 +635,10 @@ pub(super) fn render_paragraph_lines(
             }
         }
 
-        let has_text_chunks = line.chunks.iter().any(|c| c.inline_image_name.is_none() && !c.text.is_empty());
+        let has_text_chunks = line
+            .chunks
+            .iter()
+            .any(|c| c.inline_image_name.is_none() && !c.text.is_empty());
 
         if has_text_chunks {
             content.begin_text();
@@ -639,11 +655,7 @@ pub(super) fn render_paragraph_lines(
 
                 if chunk.color != current_color {
                     if let Some([r, g, b]) = chunk.color {
-                        content.set_fill_rgb(
-                            r as f32 / 255.0,
-                            g as f32 / 255.0,
-                            b as f32 / 255.0,
-                        );
+                        content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
                     } else {
                         content.set_fill_gray(0.0);
                     }
@@ -728,7 +740,13 @@ pub(super) fn render_paragraph_lines(
             if let Some(ref img_name) = chunk.inline_image_name {
                 let x = line_start_x + chunk.x_offset + chunk_idx as f32 * extra_per_gap;
                 let img_bottom = y - (chunk.inline_image_height - chunk.font_size);
-                image_draws.push((x, img_bottom, chunk.width, chunk.inline_image_height, img_name));
+                image_draws.push((
+                    x,
+                    img_bottom,
+                    chunk.width,
+                    chunk.inline_image_height,
+                    img_name,
+                ));
             }
         }
 
@@ -743,11 +761,7 @@ pub(super) fn render_paragraph_lines(
         for &(dx, dy, dw, dh, dcolor) in &decorations {
             if dcolor != current_color {
                 if let Some([r, g, b]) = dcolor {
-                    content.set_fill_rgb(
-                        r as f32 / 255.0,
-                        g as f32 / 255.0,
-                        b as f32 / 255.0,
-                    );
+                    content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
                 } else {
                     content.set_fill_gray(0.0);
                 }

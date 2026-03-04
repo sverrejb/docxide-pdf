@@ -1,14 +1,12 @@
 use std::collections::HashMap;
 use std::io::Read;
 
-use crate::model::{
-    Alignment, Footnote, HeaderFooter, LineSpacing, Paragraph,
-};
+use crate::model::{Alignment, Footnote, HeaderFooter, LineSpacing, Paragraph};
 
-use super::{WML_NS, twips_attr, wml, wml_attr};
 use super::numbering::NumberingInfo;
 use super::runs::parse_runs;
 use super::styles::{StylesInfo, ThemeFonts, parse_alignment, parse_line_spacing};
+use super::{WML_NS, twips_attr, wml, wml_attr};
 
 pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
     xml_content: &str,
@@ -130,7 +128,14 @@ pub(super) fn parse_footnotes<R: Read + std::io::Seek>(
                 .or_else(|| para_style.and_then(|s| s.alignment))
                 .unwrap_or(Alignment::Left);
 
-            let parsed = parse_runs(p, styles, theme, &empty_rels, zip, &NumberingInfo::default());
+            let parsed = parse_runs(
+                p,
+                styles,
+                theme,
+                &empty_rels,
+                zip,
+                &NumberingInfo::default(),
+            );
 
             let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
             let space_before = inline_spacing

@@ -82,7 +82,7 @@ src/
     runs.rs           — run-level XML → Vec<Run>
     numbering.rs      — list/numbering parsing, counter management
     images.rs         — image/chart drawing detection, floating/inline extraction
-    charts.rs         — parse c:chartSpace XML → Chart model (bar/line/pie/area)
+    charts.rs         — parse c:chartSpace XML → Chart model (bar/line/pie/area/doughnut/radar/scatter/bubble)
     textbox.rs        — DrawingML + VML textbox parsing
     embedded_fonts.rs — embedded font extraction and deobfuscation
     sections.rs       — section properties (page size, margins, columns)
@@ -92,7 +92,8 @@ src/
     mod.rs            — main render loop, header/footer rendering
     layout.rs         — text layout, line building, paragraph rendering
     table.rs          — table layout, auto-fit columns, table rendering
-    charts.rs         — Chart → PDF content stream (bar/line/pie/area)
+    charts.rs         — Chart → PDF content stream (cartesian: bar/line/area/scatter/bubble + radar)
+    charts_radial.rs  — Radial chart rendering (pie/doughnut)
 tests/
   visual_comparison.rs — Jaccard/SSIM similarity test against Word-generated reference PDFs
   text_boundary.rs     — text boundary test (page/line level)
@@ -117,7 +118,7 @@ tests/
 
 - Rust edition: 2024
 - Test output is compared using **Jaccard similarity on ink pixels** (luma < 200 = ink) and **SSIM** with spatial tolerance (±8px). Run tests with `cargo test -- --nocapture` to see scores.
-- Jaccard threshold: **20%**, SSIM threshold: **61%** (defined in `tests/common/mod.rs`)
+- Jaccard threshold: **20%**, SSIM threshold: **75%** (defined in `tests/visual_comparison.rs`)
 - 30 handcrafted test cases covering text, tables, images, charts, and more
 
 ## Word Layout Learnings

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io::Read;
 
-use super::{WML_NS, REL_NS, read_zip_text, wml};
+use super::{REL_NS, WML_NS, read_zip_text, wml};
 
 fn parse_guid_to_bytes(guid: &str) -> Option<[u8; 16]> {
     let hex: String = guid.chars().filter(|c| c.is_ascii_hexdigit()).collect();

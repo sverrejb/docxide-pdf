@@ -240,8 +240,13 @@ fn parse_css_properties(decl_block: &str) -> CssProperties {
             "font-size" => props.font_size_pt = Some(parse_css_length_pt(val)),
             "font-family" => {
                 let first = val.split(',').next().unwrap_or(val);
-                props.font_family =
-                    Some(first.trim().trim_matches('\'').trim_matches('"').to_string());
+                props.font_family = Some(
+                    first
+                        .trim()
+                        .trim_matches('\'')
+                        .trim_matches('"')
+                        .to_string(),
+                );
             }
             "font-weight" => props.bold = Some(parse_font_weight_bold(val)),
             "text-align" => props.text_align = Some(val.to_string()),
@@ -279,7 +284,9 @@ fn extract_css(doc: &roxmltree::Document) -> HashMap<String, CssProperties> {
                 parse_css_block(text, &mut map);
             }
             for child in node.children() {
-                if child.is_text() && let Some(t) = child.text() {
+                if child.is_text()
+                    && let Some(t) = child.text()
+                {
                     parse_css_block(t, &mut map);
                 }
             }
@@ -344,10 +351,7 @@ fn convert_children_to_blocks(
     }
 }
 
-fn resolve_css(
-    node: roxmltree::Node,
-    css: &HashMap<String, CssProperties>,
-) -> CssProperties {
+fn resolve_css(node: roxmltree::Node, css: &HashMap<String, CssProperties>) -> CssProperties {
     let tag = node.tag_name().name();
     let class = node.attribute("class").unwrap_or("");
 
@@ -429,10 +433,7 @@ struct RunContext<'a> {
     color: Option<[u8; 3]>,
 }
 
-fn convert_paragraph(
-    node: roxmltree::Node,
-    css: &HashMap<String, CssProperties>,
-) -> Paragraph {
+fn convert_paragraph(node: roxmltree::Node, css: &HashMap<String, CssProperties>) -> Paragraph {
     let props = resolve_css(node, css);
 
     let alignment = match props.text_align.as_deref() {
@@ -517,9 +518,7 @@ fn collect_runs(node: roxmltree::Node, ctx: &RunContext, runs: &mut Vec<Run>) {
                     css: ctx.css,
                     font_size: span_css.font_size_pt.unwrap_or(ctx.font_size),
                     font_name: span_css.font_family.as_deref().unwrap_or(ctx.font_name),
-                    bold: span_css.bold.unwrap_or(ctx.bold)
-                        || tag == "b"
-                        || tag == "strong",
+                    bold: span_css.bold.unwrap_or(ctx.bold) || tag == "b" || tag == "strong",
                     italic: ctx.italic || tag == "i" || tag == "em",
                     underline: ctx.underline || tag == "u",
                     color: span_css.color.or(ctx.color),
@@ -581,10 +580,7 @@ fn collapse_whitespace(s: &str) -> String {
     out
 }
 
-fn find_element<'a>(
-    node: roxmltree::Node<'a, 'a>,
-    name: &str,
-) -> Option<roxmltree::Node<'a, 'a>> {
+fn find_element<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
     for child in node.children() {
         if child.is_element() && child.tag_name().name() == name {
             return Some(child);
