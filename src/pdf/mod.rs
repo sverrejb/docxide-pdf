@@ -549,6 +549,36 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     all_page_footnote_ids.push(std::mem::take(&mut current_page_footnote_ids));
                     all_page_alpha_states.push(std::mem::take(&mut current_alpha_states));
                     page_section_indices.push((sect_idx - 1, is_first_page_of_section));
+
+                    // Insert blank page for odd/even page alignment
+                    let need_odd = match sp.break_type {
+                        SectionBreakType::OddPage => true,
+                        // evenAndOddHeaders + explicit page number restart:
+                        // ensure section starts on matching parity page
+                        _ if doc.even_and_odd_headers && sp.page_num_start.is_some() => {
+                            sp.page_num_start.unwrap() % 2 == 1
+                        }
+                        _ => false,
+                    };
+                    let need_even = match sp.break_type {
+                        SectionBreakType::EvenPage => true,
+                        _ if doc.even_and_odd_headers && sp.page_num_start.is_some() => {
+                            sp.page_num_start.unwrap() % 2 == 0
+                        }
+                        _ => false,
+                    };
+                    if need_odd || need_even {
+                        let next_phys = all_contents.len() + 1;
+                        let next_is_odd = next_phys % 2 == 1;
+                        if (need_odd && !next_is_odd) || (need_even && next_is_odd) {
+                            all_contents.push(Content::new());
+                            all_page_links.push(Vec::new());
+                            all_page_footnote_ids.push(Vec::new());
+                            all_page_alpha_states.push(std::collections::HashSet::new());
+                            page_section_indices.push((sect_idx - 1, false));
+                        }
+                    }
+
                     slot_top = effective_slot_top(sp, true, &seen_fonts, doc.line_spacing);
                     effective_margin_bottom = compute_effective_margin_bottom(sp, true, &seen_fonts, doc.line_spacing);
                 }

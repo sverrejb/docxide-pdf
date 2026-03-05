@@ -96,6 +96,23 @@ Remaining:
 - **Paragraph-level changes** — `w:ins`/`w:del` wrapping entire `w:p` elements at `w:body` level (not seen in test fixtures yet)
 - **Property changes** — `w:rPrChange`, `w:pPrChange`, `w:sectPrChange`, `w:tblPrChange` (formatting revisions)
 
+## Field Code Display Results (DONE)
+
+Text between `fldChar separate` and `fldChar end` is now rendered for non-dynamic fields (STYLEREF, DocProperty, etc.). Previously all text inside field regions was suppressed. Dynamic fields (PAGE, NUMPAGES) still use computed values. Affects 4 scraped fixtures.
+
+## Document Settings (DONE — `word/settings.xml`)
+
+New module `src/docx/settings.rs` parses `word/settings.xml` into `DocumentSettings`:
+- `even_and_odd_headers` — different headers for even/odd pages
+- `default_tab_stop` — default tab stop interval in points
+- `mirror_margins` — mirror margins for book-style layout
+
+`even_and_odd_headers` combined with `pgNumType w:start` triggers blank page insertion for odd/even page alignment in section breaks.
+
+## Odd/Even Page Section Breaks (DONE)
+
+`SectionBreakType::OddPage`/`EvenPage` now insert blank pages when the next physical page has wrong parity. Also handles implicit odd-page alignment when `evenAndOddHeaders` is enabled and the section has an explicit `pgNumType w:start`.
+
 ## Unimplemented Spec Features
 
 - **`w:tblLook` / `w:tblStylePr`** — table conditional formatting (firstRow, lastRow, firstCol, bands, etc.)

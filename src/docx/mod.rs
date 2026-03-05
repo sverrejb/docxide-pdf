@@ -6,6 +6,7 @@ mod images;
 mod numbering;
 mod runs;
 mod sections;
+mod settings;
 mod styles;
 mod tables;
 mod textbox;
@@ -27,6 +28,7 @@ use images::compute_drawing_info;
 use numbering::{parse_list_info, parse_numbering};
 use runs::parse_runs;
 use sections::parse_section_properties;
+use settings::parse_settings;
 use tables::parse_table_node;
 use textbox::collect_textboxes_from_paragraph;
 
@@ -288,6 +290,8 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
     let font_table = font_table_result.font_table;
     let footnotes = parse_footnotes(zip, &styles, &theme);
 
+    let settings = parse_settings(zip);
+
     let mut xml_content = String::new();
     zip.by_name("word/document.xml")
         .map_err(|_| Error::InvalidDocx("missing word/document.xml (is this a DOCX file?)".into()))?
@@ -541,6 +545,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
             line_pitch: default_line_pitch,
             break_type: SectionBreakType::NextPage,
             columns: None,
+            page_num_start: None,
         }
     };
     sections.push(Section {
@@ -554,5 +559,6 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         embedded_fonts,
         footnotes,
         font_table,
+        even_and_odd_headers: settings.even_and_odd_headers,
     })
 }

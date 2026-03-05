@@ -79,6 +79,7 @@ pub struct SectionProperties {
     pub line_pitch: f32,
     pub break_type: SectionBreakType,
     pub columns: Option<ColumnsConfig>,
+    pub page_num_start: Option<u32>,
 }
 
 pub struct Section {
