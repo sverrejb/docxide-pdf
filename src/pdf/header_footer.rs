@@ -21,14 +21,13 @@ pub(super) fn compute_header_height(
     doc_line_spacing: LineSpacing,
 ) -> f32 {
     let mut height = 0.0f32;
-    for (bi, block) in hf.blocks.iter().enumerate() {
+    for block in &hf.blocks {
         match block {
             Block::Paragraph(para) => {
                 let (font_size, tallest_lhr, _) =
                     tallest_run_metrics(&para.runs, seen_fonts);
                 let effective_ls = para.line_spacing.unwrap_or(doc_line_spacing);
                 let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
-                eprintln!("  HF block[{bi}] para: font_size={font_size:.1}, line_h={line_h:.2}, space_before={:.1}, space_after={:.1}", para.space_before, para.space_after);
                 height += line_h;
             }
             Block::Table(table) => {
@@ -37,12 +36,10 @@ pub(super) fn compute_header_height(
                     doc_line_spacing,
                     seen_fonts,
                 );
-                eprintln!("  HF block[{bi}] table: height={row_layouts:.2}, rows={}", table.rows.len());
                 height += row_layouts;
             }
         }
     }
-    eprintln!("  => total header_height = {height:.2}");
     height
 }
 
@@ -62,7 +59,6 @@ pub(super) fn effective_slot_top(
         let hdr_h = compute_header_height(hf, seen_fonts, doc_line_spacing);
         let hdr_bottom = sp.page_height - sp.header_margin - hdr_h;
         let result = base.min(hdr_bottom);
-        eprintln!("effective_slot_top: page_h={:.1}, margin_top={:.1}, header_margin={:.1}, hdr_h={hdr_h:.2}, base={base:.1}, hdr_bottom={hdr_bottom:.2}, result={result:.2} (body starts {:.1}pt from top)", sp.page_height, sp.margin_top, sp.header_margin, sp.page_height - result);
         result
     } else {
         base

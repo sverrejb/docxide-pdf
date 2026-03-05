@@ -94,6 +94,10 @@ Remaining:
 - **`w:textDirection`** — text direction in table cells (btLr, tbRl)
 - **`w:vAlign` on sectPr** — vertical alignment of text on the page (top/center/bottom/both)
 
+### Line Height: OS/2 Win Metrics (MEDIUM — correct but causes regressions)
+
+Word computes line height using OS/2 `usWinAscent + usWinDescent` when the font's `USE_TYPO_METRICS` flag is not set (most fonts). We currently use `hhea ascender - descender + line_gap`, which produces tighter line spacing. The fix is straightforward in `src/fonts/embed.rs` (`face.tables().os2` → `windows_ascender()`/`windows_descender()`; note `windows_descender()` returns a negated value so use `win_asc - win_desc`). However, changing this globally causes 23 regressions (some -50pp) because other layout code has been calibrated against the wrong `line_h_ratio`. Should be landed alongside a pass to fix compensating layout issues.
+
 ### Partially Implemented
 
 - **Line spacing** — Auto and Exact work. AtLeast parsed but may not enforce minimum correctly.

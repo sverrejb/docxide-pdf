@@ -1144,14 +1144,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 )
                             };
                             if tb_lines.is_empty() {
-                                let (fs, _, _) = tallest_run_metrics(&tp.runs, &seen_fonts);
-                                let lh = resolve_line_h(tp_ls, fs, None);
+                                let (fs, lhr, _) = tallest_run_metrics(&tp.runs, &seen_fonts);
+                                let lh = resolve_line_h(tp_ls, fs, lhr);
                                 cursor_y -= tp.space_before + lh + tp.space_after;
                                 continue;
                             }
-                            let (tb_fs, _, tb_ar) = tallest_run_metrics(&tp.runs, &seen_fonts);
+                            let (tb_fs, tb_lhr, tb_ar) = tallest_run_metrics(&tp.runs, &seen_fonts);
                             let tb_ascender = tb_ar.unwrap_or(0.75);
-                            let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_ar);
+                            let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_lhr);
                             let tb_baseline = cursor_y - tp.space_before - tb_fs * tb_ascender;
                             if !tp.list_label.is_empty() {
                                 let label_x = content_x + tp.indent_left - tp.indent_hanging;

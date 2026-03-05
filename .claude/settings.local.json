@@ -136,7 +136,12 @@
       "Bash(DOCXIDE_CASE=czech_cafeteria_notice cargo test:*)",
       "Bash(echo === $c ===:*)",
       "Bash(./tools/target/debug/docx-fonts:*)",
-      "Bash(DOCXIDE_CASE=mandated_reporter_child_abuse cargo test:*)"
+      "Bash(DOCXIDE_CASE=mandated_reporter_child_abuse cargo test:*)",
+      "Bash(DOCXIDE_CASE=classroom_weekly_newsletter cargo test:*)",
+      "Read(//Library/Fonts/**)",
+      "Bash(fc-list)",
+      "Bash(DOCXIDE_CASE=case32 RUST_LOG=debug cargo test:*)",
+      "Bash(git checkout:*)"
     ]
   }
 }
