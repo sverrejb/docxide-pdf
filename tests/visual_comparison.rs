@@ -313,6 +313,11 @@ fn print_summary(
     if !regressions.is_empty() {
         println!("  REGRESSION in: {}", regressions.join(", "));
     }
+    assert!(
+        regressions.is_empty(),
+        "{metric} regression in: {}",
+        regressions.join(", ")
+    );
 }
 
 fn ssim_score(img_a_dyn: &DynamicImage, img_b_dyn: &DynamicImage) -> Result<f64, String> {

@@ -5,6 +5,7 @@ use pdf_writer::{Content, Name, Str};
 use crate::fonts::{FontEntry, to_winansi_bytes};
 use crate::model::{ChartType, InlineChart, LegendPosition, MarkerSymbol};
 
+use super::chart_legend::{LegendItem, LegendPlacement, SwatchStyle, render_chart_legend};
 use super::charts_radial;
 
 fn ceil_nice(val: f32) -> f32 {
@@ -34,7 +35,7 @@ pub(super) fn text_width_approx(text: &str, font_size: f32) -> f32 {
     text.len() as f32 * font_size * 0.5
 }
 
-fn text_width(text: &str, font_size: f32, font: Option<&FontEntry>) -> f32 {
+pub(super) fn text_width(text: &str, font_size: f32, font: Option<&FontEntry>) -> f32 {
     match font {
         Some(f) => f.word_width(text, font_size, false),
         None => text_width_approx(text, font_size),
@@ -57,7 +58,7 @@ pub(super) fn fill_rgb(content: &mut Content, color: [u8; 3]) {
     );
 }
 
-fn stroke_rgb(content: &mut Content, color: [u8; 3]) {
+pub(super) fn stroke_rgb(content: &mut Content, color: [u8; 3]) {
     content.set_stroke_rgb(
         color[0] as f32 / 255.0,
         color[1] as f32 / 255.0,
@@ -87,7 +88,7 @@ fn resolve_marker(marker: Option<MarkerSymbol>, series_index: usize) -> MarkerSy
     marker.unwrap_or(DEFAULT_MARKER_CYCLE[series_index % DEFAULT_MARKER_CYCLE.len()])
 }
 
-fn draw_marker(content: &mut Content, symbol: MarkerSymbol, x: f32, y: f32, r: f32) {
+pub(super) fn draw_marker(content: &mut Content, symbol: MarkerSymbol, x: f32, y: f32, r: f32) {
     match symbol {
         MarkerSymbol::None => {}
         MarkerSymbol::Circle | MarkerSymbol::Dot => {
@@ -729,19 +730,63 @@ pub(super) fn render_chart(
         }
 
         // Legend
-        render_legend(
-            c,
-            content,
-            label_font_key,
-            num_series,
-            plot_x,
-            plot_y,
-            plot_w,
-            plot_h,
-            y,
-            h,
-            label_font,
-        );
+        if let Some(ref legend) = c.legend {
+            let is_line = matches!(
+                c.chart_type,
+                ChartType::Line | ChartType::Scatter | ChartType::Bubble | ChartType::Radar
+            );
+            let is_bubble = matches!(c.chart_type, ChartType::Bubble);
+            let reverse_legend = matches!(
+                c.chart_type,
+                ChartType::Bar {
+                    horizontal: true,
+                    ..
+                }
+            );
+            let series_order: Vec<(usize, &crate::model::ChartSeries)> = if reverse_legend {
+                c.series.iter().enumerate().rev().collect()
+            } else {
+                c.series.iter().enumerate().collect()
+            };
+            let items: Vec<LegendItem> = series_order
+                .iter()
+                .map(|&(si, series)| {
+                    let swatch = if is_line {
+                        SwatchStyle::Marker(if is_bubble {
+                            MarkerSymbol::Circle
+                        } else {
+                            resolve_marker(series.marker, si)
+                        })
+                    } else {
+                        SwatchStyle::Rect
+                    };
+                    LegendItem {
+                        label: &series.label,
+                        color: series.color.unwrap_or([0, 0, 0]),
+                        swatch,
+                    }
+                })
+                .collect();
+            let placement = match legend.position {
+                LegendPosition::Right => LegendPlacement::Right {
+                    x: plot_x + plot_w + 21.0,
+                    center_y: plot_y + plot_h / 2.0,
+                },
+                _ => LegendPlacement::Bottom {
+                    center_x: plot_x + plot_w / 2.0,
+                    y: y - h + 4.0,
+                },
+            };
+            render_chart_legend(
+                content,
+                &items,
+                placement,
+                label_font_key,
+                label_font,
+                5.5,
+                18.0,
+            );
+        }
     }
 
     content.set_fill_gray(0.0);
@@ -946,83 +991,42 @@ fn render_radar(
         }
 
         // Legend
-        let num_series = c.series.len();
         if has_legend {
-            let legend_fs = 10.0;
-            let swatch = 5.5;
-            let spacing = 2.5;
-            let line_h = 18.0;
-
-            let line_ext = 12.0;
-            if legend_on_right {
-                let lx = x + w - margin_right + 10.0;
-                let block_h = swatch + (num_series as f32 - 1.0) * line_h;
-                let ly_start = cy + block_h / 2.0 - swatch + 5.0;
-                for (si, series) in c.series.iter().enumerate() {
-                    let ly = ly_start - si as f32 * line_h;
+            let items: Vec<LegendItem> = c
+                .series
+                .iter()
+                .enumerate()
+                .map(|(si, series)| {
                     let color = series
                         .color
                         .unwrap_or(accent_colors[si % accent_colors.len()]);
-                    set_color(content, Some(color));
-                    set_stroke_color(content, Some(color));
-                    let mcx = lx + swatch / 2.0;
-                    let mcy = ly + swatch / 2.0;
-                    content.set_line_width(1.5);
-                    content.move_to(mcx - line_ext, mcy);
-                    content.line_to(mcx + line_ext, mcy);
-                    content.stroke();
-                    let sym = resolve_marker(series.marker, si);
-                    draw_marker(content, sym, mcx, mcy, swatch / 2.0);
-                    content.set_fill_gray(0.0);
-                    show_text(
-                        content,
-                        label_font_key,
-                        legend_fs,
-                        lx + swatch + spacing + line_ext,
-                        ly - 0.3,
-                        &series.label,
-                    );
+                    LegendItem {
+                        label: &series.label,
+                        color,
+                        swatch: SwatchStyle::LineMarker(resolve_marker(series.marker, si)),
+                    }
+                })
+                .collect();
+            let placement = if legend_on_right {
+                LegendPlacement::Right {
+                    x: x + w - margin_right + 10.0,
+                    center_y: cy,
                 }
             } else {
-                let entry_extra = line_ext * 2.0;
-                let total_w: f32 = c
-                    .series
-                    .iter()
-                    .map(|s| {
-                        swatch + entry_extra + spacing + text_width(&s.label, legend_fs, label_font)
-                            + 12.0
-                    })
-                    .sum();
-                let mut lx = cx - total_w / 2.0;
-                let ly = y - h + 12.0;
-                for (si, series) in c.series.iter().enumerate() {
-                    let color = series
-                        .color
-                        .unwrap_or(accent_colors[si % accent_colors.len()]);
-                    set_color(content, Some(color));
-                    set_stroke_color(content, Some(color));
-                    let mcx = lx + swatch / 2.0;
-                    let mcy = ly + swatch / 2.0;
-                    content.set_line_width(1.5);
-                    content.move_to(mcx - line_ext, mcy);
-                    content.line_to(mcx + line_ext, mcy);
-                    content.stroke();
-                    let sym = resolve_marker(series.marker, si);
-                    draw_marker(content, sym, mcx, mcy, swatch / 2.0);
-                    content.set_fill_gray(0.0);
-                    show_text(
-                        content,
-                        label_font_key,
-                        legend_fs,
-                        lx + swatch + spacing + line_ext,
-                        ly + 1.0,
-                        &series.label,
-                    );
-                    lx += swatch + entry_extra + spacing
-                        + text_width(&series.label, legend_fs, label_font)
-                        + 12.0;
+                LegendPlacement::Bottom {
+                    center_x: cx,
+                    y: y - h + 12.0,
                 }
-            }
+            };
+            render_chart_legend(
+                content,
+                &items,
+                placement,
+                label_font_key,
+                label_font,
+                5.5,
+                18.0,
+            );
         }
     }
 
@@ -1030,120 +1034,3 @@ fn render_radar(
     content.restore_state();
 }
 
-fn render_legend(
-    c: &crate::model::Chart,
-    content: &mut Content,
-    label_font_key: &str,
-    num_series: usize,
-    plot_x: f32,
-    plot_y: f32,
-    plot_w: f32,
-    plot_h: f32,
-    y: f32,
-    h: f32,
-    label_font: Option<&FontEntry>,
-) {
-    let Some(ref legend) = c.legend else { return };
-    let legend_fs = 10.0;
-    let swatch = 5.5;
-    let spacing = 2.5;
-    let line_h = 18.0;
-
-    let is_line = matches!(
-        c.chart_type,
-        ChartType::Line | ChartType::Scatter | ChartType::Bubble | ChartType::Radar
-    );
-    let is_bubble = matches!(c.chart_type, ChartType::Bubble);
-    let reverse_legend = matches!(
-        c.chart_type,
-        ChartType::Bar {
-            horizontal: true,
-            ..
-        }
-    );
-
-    let series_order: Vec<(usize, &crate::model::ChartSeries)> = if reverse_legend {
-        c.series.iter().enumerate().rev().collect()
-    } else {
-        c.series.iter().enumerate().collect()
-    };
-
-    match legend.position {
-        LegendPosition::Right => {
-            let lx = plot_x + plot_w + 21.0;
-            let block_h = swatch + (num_series as f32 - 1.0) * line_h;
-            let ly_start = plot_y + plot_h / 2.0 + block_h / 2.0 - swatch + 5.0;
-            for (ei, &(si, series)) in series_order.iter().enumerate() {
-                let ly = ly_start - ei as f32 * line_h;
-                set_color(content, series.color);
-                if is_line {
-                    let sym = if is_bubble {
-                        MarkerSymbol::Circle
-                    } else {
-                        resolve_marker(series.marker, si)
-                    };
-                    draw_marker(
-                        content,
-                        sym,
-                        lx + swatch / 2.0,
-                        ly + swatch / 2.0,
-                        swatch / 2.0,
-                    );
-                } else {
-                    content.rect(lx, ly, swatch, swatch);
-                    content.fill_nonzero();
-                }
-
-                content.set_fill_gray(0.0);
-                show_text(
-                    content,
-                    label_font_key,
-                    legend_fs,
-                    lx + swatch + spacing,
-                    ly - 0.3,
-                    &series.label,
-                );
-            }
-        }
-        _ => {
-            let total_w: f32 = c
-                .series
-                .iter()
-                .map(|s| swatch + spacing + text_width(&s.label, legend_fs, label_font) + 12.0)
-                .sum();
-            let mut lx = plot_x + (plot_w - total_w) / 2.0;
-            let ly = y - h + 4.0;
-            for &(si, series) in &series_order {
-                set_color(content, series.color);
-                if is_line {
-                    let sym = if is_bubble {
-                        MarkerSymbol::Circle
-                    } else {
-                        resolve_marker(series.marker, si)
-                    };
-                    draw_marker(
-                        content,
-                        sym,
-                        lx + swatch / 2.0,
-                        ly + swatch / 2.0,
-                        swatch / 2.0,
-                    );
-                } else {
-                    content.rect(lx, ly, swatch, swatch);
-                    content.fill_nonzero();
-                }
-
-                content.set_fill_gray(0.0);
-                show_text(
-                    content,
-                    label_font_key,
-                    legend_fs,
-                    lx + swatch + spacing,
-                    ly + 1.0,
-                    &series.label,
-                );
-                lx += swatch + spacing + text_width(&series.label, legend_fs, label_font) + 12.0;
-            }
-        }
-    }
-}

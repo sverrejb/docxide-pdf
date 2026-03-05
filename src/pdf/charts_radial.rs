@@ -3,7 +3,8 @@ use pdf_writer::Content;
 use crate::fonts::FontEntry;
 use crate::model::{InlineChart, LegendPosition};
 
-use super::charts::{fill_rgb, resolve_accent_colors, show_text, text_width_approx};
+use super::chart_legend::{LegendItem, LegendPlacement, SwatchStyle, render_chart_legend};
+use super::charts::{fill_rgb, resolve_accent_colors, text_width};
 
 struct RadialLayout {
     cx: f32,
@@ -13,13 +14,6 @@ struct RadialLayout {
     has_legend: bool,
     legend_on_right: bool,
     labels: Vec<String>,
-}
-
-fn text_width(text: &str, font_size: f32, font: Option<&FontEntry>) -> f32 {
-    match font {
-        Some(f) => f.word_width(text, font_size, false),
-        None => text_width_approx(text, font_size),
-    }
 }
 
 fn setup_radial_chart(
@@ -83,7 +77,6 @@ fn render_radial_legend(
     content: &mut Content,
     layout: &RadialLayout,
     label_font_key: &str,
-    cx: f32,
     y: f32,
     h: f32,
     label_font: Option<&FontEntry>,
@@ -91,57 +84,28 @@ fn render_radial_legend(
     if !layout.has_legend || layout.labels.is_empty() {
         return;
     }
-
-    let legend_fs = 10.0;
-    let swatch = 5.274;
-    let spacing = 2.5;
-    let line_h = 17.6;
-
-    if layout.legend_on_right {
-        let lx = layout.legend_x;
-        let num_items = layout.labels.len();
-        let ly_start = layout.cy + (num_items as f32 - 1.0) / 2.0 * line_h;
-        for (i, label) in layout.labels.iter().enumerate() {
-            let ly = ly_start - i as f32 * line_h;
-            fill_rgb(content, layout.colors[i % layout.colors.len()]);
-            content.rect(lx, ly, swatch, swatch);
-            content.fill_nonzero();
-
-            content.set_fill_gray(0.0);
-            show_text(
-                content,
-                label_font_key,
-                legend_fs,
-                lx + swatch + spacing,
-                ly - 0.3,
-                label,
-            );
+    let items: Vec<LegendItem> = layout
+        .labels
+        .iter()
+        .enumerate()
+        .map(|(i, label)| LegendItem {
+            label: label.as_str(),
+            color: layout.colors[i % layout.colors.len()],
+            swatch: SwatchStyle::Rect,
+        })
+        .collect();
+    let placement = if layout.legend_on_right {
+        LegendPlacement::Right {
+            x: layout.legend_x,
+            center_y: layout.cy,
         }
     } else {
-        let total_w: f32 = layout
-            .labels
-            .iter()
-            .map(|l| swatch + spacing + text_width(l, legend_fs, label_font) + 12.0)
-            .sum();
-        let mut lx = cx - total_w / 2.0;
-        let ly = y - h + 4.0;
-        for (i, label) in layout.labels.iter().enumerate() {
-            fill_rgb(content, layout.colors[i % layout.colors.len()]);
-            content.rect(lx, ly, swatch, swatch);
-            content.fill_nonzero();
-
-            content.set_fill_gray(0.0);
-            show_text(
-                content,
-                label_font_key,
-                legend_fs,
-                lx + swatch + spacing,
-                ly + 1.0,
-                label,
-            );
-            lx += swatch + spacing + text_width(label, legend_fs, label_font) + 12.0;
+        LegendPlacement::Bottom {
+            center_x: layout.cx,
+            y: y - h + 4.0,
         }
-    }
+    };
+    render_chart_legend(content, &items, placement, label_font_key, label_font, 5.274, 17.6);
 }
 
 pub(super) fn render_pie(
@@ -187,7 +151,7 @@ pub(super) fn render_pie(
     }
 
     if has_font {
-        render_radial_legend(content, &layout, label_font_key, layout.cx, y, h, label_font);
+        render_radial_legend(content, &layout, label_font_key, y, h, label_font);
     }
 
     content.set_fill_gray(0.0);
@@ -255,7 +219,7 @@ pub(super) fn render_doughnut(
     }
 
     if has_font {
-        render_radial_legend(content, &layout, label_font_key, layout.cx, y, h, label_font);
+        render_radial_legend(content, &layout, label_font_key, y, h, label_font);
     }
 
     content.set_fill_gray(0.0);
