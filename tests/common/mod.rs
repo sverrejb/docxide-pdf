@@ -136,6 +136,31 @@ pub fn read_previous_scores(csv_name: &str, score_col: usize) -> HashMap<String,
     latest
 }
 
+/// Convert DOCX→PDF only if the generated PDF is missing or older than input.docx.
+pub fn ensure_generated_pdf(fixture_dir: &Path) -> Result<PathBuf, String> {
+    let input_docx = fixture_dir.join("input.docx");
+    let out = output_dir(fixture_dir);
+    fs::create_dir_all(&out).map_err(|e| e.to_string())?;
+    let generated_pdf = out.join("generated.pdf");
+
+    let needs_convert = !generated_pdf.exists() || {
+        let docx_mtime = fs::metadata(&input_docx)
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        let pdf_mtime = fs::metadata(&generated_pdf)
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        pdf_mtime < docx_mtime
+    };
+
+    if needs_convert {
+        docxide_pdf::convert_docx_to_pdf(&input_docx, &generated_pdf)
+            .map_err(|e| e.to_string())?;
+    }
+
+    Ok(generated_pdf)
+}
+
 pub fn delta_str(current: f64, previous: Option<f64>) -> String {
     match previous {
         Some(prev) => {

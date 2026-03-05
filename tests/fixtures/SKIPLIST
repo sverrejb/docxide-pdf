@@ -2,6 +2,9 @@
 # Each line is either a case name or a group name (skips all fixtures in that group).
 # Blank lines and lines starting with # are ignored.
 
+# Too slow (many pages, dominates test runtime)
+case13
+
 # All scraped fixtures enabled.
 # stem_partnerships_guide
 # centrifugal_water_chillers

@@ -22,25 +22,13 @@ fn analyze_fixture(fixture_dir: &Path) -> Option<SizeResult> {
         return None;
     }
 
-    let output_dir = common::output_dir(fixture_dir);
-    fs::create_dir_all(&output_dir).ok();
-    let generated_pdf = output_dir.join("generated.pdf");
-
-    let needs_convert = !generated_pdf.exists() || {
-        let docx_mtime = fs::metadata(&input_docx)
-            .and_then(|m| m.modified())
-            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
-        let pdf_mtime = fs::metadata(&generated_pdf)
-            .and_then(|m| m.modified())
-            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
-        pdf_mtime < docx_mtime
-    };
-    if needs_convert {
-        if let Err(e) = docxide_pdf::convert_docx_to_pdf(&input_docx, &generated_pdf) {
+    let generated_pdf = match common::ensure_generated_pdf(fixture_dir) {
+        Ok(p) => p,
+        Err(e) => {
             println!("  [SKIP] {name}: {e}");
             return None;
         }
-    }
+    };
 
     let gen_bytes = fs::metadata(&generated_pdf).map(|m| m.len()).unwrap_or(0);
     let ref_bytes = fs::metadata(&reference_pdf).map(|m| m.len()).unwrap_or(0);
@@ -101,24 +89,17 @@ fn file_size_within_threshold() {
         .unwrap_or(4)
         .max(4);
 
-    let sep = format!(
-        "+-{}-+------+-----------+-----------+-------+",
-        "-".repeat(name_w)
-    );
-
-    println!("\n{sep}");
     println!(
-        "| {:<name_w$} | Pass | {:<9} | {:<9} | Ratio |",
+        "\n  {:<name_w$}  Pass  {:<9}  {:<9}  Ratio",
         "Case", "Generated", "Reference"
     );
-    println!("{sep}");
 
     for r in &results {
         let status = if r.pass { "Y" } else { "N" };
         let ratio_str = format!("{:>5.1}", r.ratio);
         let colored_ratio = color_ratio(r.ratio, &ratio_str);
         println!(
-            "| {:<name_w$} | {:<4} | {:>9} | {:>9} | {} |",
+            "  {:<name_w$}  {:<4}  {:>9}  {:>9}  {}",
             r.name,
             status,
             human_size(r.gen_bytes),
@@ -136,6 +117,5 @@ fn file_size_within_threshold() {
         );
     }
 
-    println!("{sep}");
     println!("  threshold: generated <= {SIZE_RATIO_THRESHOLD:.0}x reference");
 }

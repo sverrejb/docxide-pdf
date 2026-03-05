@@ -4,7 +4,7 @@ use rayon::prelude::*;
 use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
-use std::{fs, io};
+use std::io;
 
 /// Parse `mutool info` output and return a map of page_number → image_count.
 fn pdf_images_per_page(pdf: &Path) -> io::Result<HashMap<u32, u32>> {
@@ -58,14 +58,13 @@ fn analyze_fixture(fixture_dir: &Path) -> Option<ImageResult> {
         return None;
     }
 
-    let output_dir = common::output_dir(fixture_dir);
-    fs::create_dir_all(&output_dir).ok();
-    let generated_pdf = output_dir.join("generated.pdf");
-
-    if let Err(e) = docxide_pdf::convert_docx_to_pdf(&input_docx, &generated_pdf) {
-        println!("  [SKIP] {name}: {e}");
-        return None;
-    }
+    let generated_pdf = match common::ensure_generated_pdf(fixture_dir) {
+        Ok(p) => p,
+        Err(e) => {
+            println!("  [SKIP] {name}: {e}");
+            return None;
+        }
+    };
 
     let gen_images = pdf_images_per_page(&generated_pdf).ok()?;
     let gen_total: u32 = gen_images.values().sum();
@@ -127,17 +126,10 @@ fn image_count_and_placement() {
         .unwrap_or(4)
         .max(4);
 
-    let sep = format!(
-        "+-{}-+------+-----+-----+---------------------------------+",
-        "-".repeat(name_w)
-    );
-
-    println!("\n{sep}");
     println!(
-        "| {:<name_w$} | Pass | Ref | Gen | Page mismatches                 |",
+        "\n  {:<name_w$}  Pass  Ref  Gen  Page mismatches",
         "Case"
     );
-    println!("{sep}");
 
     let mut failures = Vec::new();
 
@@ -161,7 +153,7 @@ fn image_count_and_placement() {
         };
 
         println!(
-            "| {:<name_w$} | {:<4} | {:>3} | {:>3} | {:<31} |",
+            "  {:<name_w$}  {:<4}  {:>3}  {:>3}  {}",
             r.name, status, r.ref_total, r.gen_total, mismatch_str
         );
 
@@ -172,8 +164,6 @@ fn image_count_and_placement() {
             ));
         }
     }
-
-    println!("{sep}");
 
     if !failures.is_empty() {
         println!("\nImage count/placement mismatches ({}):", failures.len());

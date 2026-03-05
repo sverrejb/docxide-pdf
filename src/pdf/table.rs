@@ -209,7 +209,7 @@ pub(super) fn render_table(
     let (table_left, saved_slot_top) = if let Some((x, y, restore)) = override_pos {
         let saved = if restore { Some(*slot_top) } else { None };
         *slot_top = y;
-        (x - cm.left, saved)
+        (x, saved)
     } else {
         (sp.margin_left + table.table_indent - cm.left, None)
     };

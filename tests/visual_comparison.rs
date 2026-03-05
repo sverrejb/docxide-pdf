@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
+use std::time::Instant;
 use std::{fs, io};
 
 const SIMILARITY_THRESHOLD: f64 = 0.205;
@@ -189,6 +190,8 @@ struct FixturePages {
     ref_pages: Vec<PathBuf>,
     gen_pages: Vec<PathBuf>,
     output_base: PathBuf,
+    convert_ms: u64,
+    screenshot_ms: u64,
 }
 
 fn ref_screenshots_fresh(reference_pdf: &Path, screenshot_dir: &Path) -> bool {
@@ -225,7 +228,9 @@ fn prepare_fixture(fixture_dir: &Path) -> Option<FixturePages> {
 
     let _ = fs::remove_dir_all(&generated_screenshots);
     let _ = fs::remove_dir_all(&output_base.join("diff"));
-    let _ = fs::remove_dir_all(&output_base.join("comparison"));
+    if save_side_by_side_images() {
+        let _ = fs::remove_dir_all(&output_base.join("comparison"));
+    }
 
     if !ref_screenshots_fresh(&reference_pdf, &reference_screenshots) {
         let _ = fs::remove_dir_all(&reference_screenshots);
@@ -235,14 +240,18 @@ fn prepare_fixture(fixture_dir: &Path) -> Option<FixturePages> {
         }
     }
     let generated_pdf = output_base.join("generated.pdf");
+    let t0 = Instant::now();
     if let Err(e) = docxide_pdf::convert_docx_to_pdf(&input_docx, &generated_pdf) {
         println!("  [SKIP] {name}: {e}");
         return None;
     }
+    let convert_ms = t0.elapsed().as_millis() as u64;
+    let t1 = Instant::now();
     if let Err(e) = screenshot_pdf(&generated_pdf, &generated_screenshots) {
         println!("  [ERROR] {name}: screenshot generated failed: {e}");
         return None;
     }
+    let screenshot_ms = t1.elapsed().as_millis() as u64;
     let ref_pages = collect_page_pngs(&reference_screenshots).unwrap_or_default();
     let gen_pages = collect_page_pngs(&generated_screenshots).unwrap_or_default();
     if ref_pages.is_empty() {
@@ -253,6 +262,8 @@ fn prepare_fixture(fixture_dir: &Path) -> Option<FixturePages> {
         ref_pages,
         gen_pages,
         output_base,
+        convert_ms,
+        screenshot_ms,
     })
 }
 
@@ -288,21 +299,17 @@ fn print_summary(
         .max()
         .unwrap_or(4)
         .max(4);
-    let sep = format!("+-{}-+---------+------+-----------+", "-".repeat(name_w));
-    println!("\n{sep}");
-    println!("| {:<name_w$} | {:>7} | Pass | Delta     |", "Case", metric);
-    println!("{sep}");
+    println!("\n  {:<name_w$}  {:>7}  Pass  Delta", "Case", metric);
     for (name, score, passed) in rows {
         let score_str = format!("{:.1}%", score * 100.0);
         let colored_score = color_score(*score, &format!("{:>7}", score_str));
         let mark = if *passed { "Y" } else { "N" };
         let delta = common::delta_str(*score, prev.get(name).copied());
         println!(
-            "| {:<name_w$} | {} | {mark}    | {:<9} |",
+            "  {:<name_w$}  {}  {mark}     {:<9}",
             name, colored_score, delta
         );
     }
-    println!("{sep}");
     println!("  threshold: {:.0}%", threshold * 100.0);
 
     let regressions: Vec<&str> = rows
@@ -410,65 +417,113 @@ struct FixtureResult {
     jaccard: f64,
     ssim: f64,
     page_count: usize,
+    jaccard_ms: u64,
+    ssim_ms: u64,
+    diff_save_ms: u64,
+}
+
+fn save_side_by_side_images() -> bool {
+    std::env::var("DOCXIDE_IMAGES").is_ok()
+}
+
+struct PageTiming {
+    jaccard: f64,
+    ssim: f64,
+    jaccard_ms: u64,
+    ssim_ms: u64,
+    diff_save_ms: u64,
 }
 
 fn score_fixture(fixture: &FixturePages) -> Option<FixtureResult> {
+    let save_comparison = save_side_by_side_images();
     let diff_dir = fixture.output_base.join("diff");
     let comparison_dir = fixture.output_base.join("comparison");
     let _ = fs::create_dir_all(&diff_dir);
-    let _ = fs::create_dir_all(&comparison_dir);
+    if save_comparison {
+        let _ = fs::create_dir_all(&comparison_dir);
+    }
     let page_count = fixture.ref_pages.len().min(fixture.gen_pages.len());
 
-    let page_scores: Vec<(f64, f64)> = (0..page_count)
+    let page_timings: Vec<PageTiming> = (0..page_count)
         .into_par_iter()
         .filter_map(|i| {
             let img_ref = image::open(&fixture.ref_pages[i]).ok()?;
             let img_gen = image::open(&fixture.gen_pages[i]).ok()?;
             let page_num = fixture.ref_pages[i].file_stem()?.to_str()?.to_string();
 
+            let t0 = Instant::now();
             let result = compare_and_diff(&img_ref, &img_gen).ok()?;
             let jaccard = result.jaccard;
+            let jaccard_ms = t0.elapsed().as_millis() as u64;
+
+            let t1 = Instant::now();
             let _ = DynamicImage::ImageRgba8(result.diff_img)
                 .save(diff_dir.join(format!("{page_num}.png")));
-            let _ = save_side_by_side(
-                &img_ref,
-                &img_gen,
-                &comparison_dir.join(format!("{page_num}.png")),
-            );
+            if save_comparison {
+                let _ = save_side_by_side(
+                    &img_ref,
+                    &img_gen,
+                    &comparison_dir.join(format!("{page_num}.png")),
+                );
+            }
+            let diff_save_ms = t1.elapsed().as_millis() as u64;
 
+            let t2 = Instant::now();
             let ssim = ssim_score(&img_ref, &img_gen).ok()?;
-            Some((jaccard, ssim))
+            let ssim_ms = t2.elapsed().as_millis() as u64;
+
+            Some(PageTiming { jaccard, ssim, jaccard_ms, ssim_ms, diff_save_ms })
         })
         .collect();
 
-    if page_scores.is_empty() {
+    if page_timings.is_empty() {
         return None;
     }
-    let avg_jaccard = page_scores.iter().map(|(j, _)| j).sum::<f64>() / page_scores.len() as f64;
-    let avg_ssim = page_scores.iter().map(|(_, s)| s).sum::<f64>() / page_scores.len() as f64;
+    let n = page_timings.len() as f64;
+    let avg_jaccard = page_timings.iter().map(|t| t.jaccard).sum::<f64>() / n;
+    let avg_ssim = page_timings.iter().map(|t| t.ssim).sum::<f64>() / n;
+    let jaccard_ms = page_timings.iter().map(|t| t.jaccard_ms).sum();
+    let ssim_ms = page_timings.iter().map(|t| t.ssim_ms).sum();
+    let diff_save_ms = page_timings.iter().map(|t| t.diff_save_ms).sum();
     Some(FixtureResult {
         name: fixture.name.clone(),
         jaccard: avg_jaccard,
         ssim: avg_ssim,
-        page_count: page_scores.len(),
+        page_count: page_timings.len(),
+        jaccard_ms,
+        ssim_ms,
+        diff_save_ms,
     })
 }
 
 #[test]
 fn visual_comparison() {
     let _ = env_logger::try_init();
+    let t_prep = Instant::now();
     let fixtures = prepared_fixtures();
+    let _prep_ms = t_prep.elapsed().as_millis() as u64;
     if fixtures.is_empty() {
         return;
+    }
+
+    if !save_side_by_side_images() {
+        let has_stale = fixtures
+            .iter()
+            .any(|f| f.output_base.join("comparison").exists());
+        if has_stale {
+            println!("  [STALE] comparison/ dirs exist from a previous run (set DOCXIDE_IMAGES=1 to regenerate)");
+        }
     }
 
     let prev_jaccard = common::read_previous_scores("results.csv", 3);
     let prev_ssim = common::read_previous_scores("ssim_results.csv", 3);
 
+    let t_score = Instant::now();
     let mut results: Vec<FixtureResult> = fixtures
         .par_iter()
         .filter_map(|fixture| score_fixture(fixture))
         .collect();
+    let _score_ms = t_score.elapsed().as_millis() as u64;
     results.sort_by(|a, b| a.name.cmp(&b.name));
 
     for r in &results {
@@ -509,6 +564,37 @@ fn visual_comparison() {
         .map(|r| (r.name.clone(), r.ssim, r.ssim >= SSIM_THRESHOLD))
         .collect();
     print_summary("SSIM", SSIM_THRESHOLD, &ssim_rows, &prev_ssim);
+
+    // // Timing breakdown
+    // let name_w = results
+    //     .iter()
+    //     .map(|r| r.name.len())
+    //     .max()
+    //     .unwrap_or(4)
+    //     .max(4);
+    // let total_convert: u64 = fixtures.iter().map(|f| f.convert_ms).sum();
+    // let total_screenshot: u64 = fixtures.iter().map(|f| f.screenshot_ms).sum();
+    // let total_jaccard: u64 = results.iter().map(|r| r.jaccard_ms).sum();
+    // let total_ssim: u64 = results.iter().map(|r| r.ssim_ms).sum();
+    // let total_diff_save: u64 = results.iter().map(|r| r.diff_save_ms).sum();
+    //
+    // println!("\n  Timing (wall: prep {:.1}s, score {:.1}s)", prep_ms as f64 / 1000.0, score_ms as f64 / 1000.0);
+    // println!(
+    //     "  {:<name_w$}  {:>6}  {:>6}  {:>6}  {:>6}  {:>6}",
+    //     "Case", "Conv", "Scrn", "Jacc", "Diff", "SSIM"
+    // );
+    // for fixture in fixtures.iter() {
+    //     let r = results.iter().find(|r| r.name == fixture.name);
+    //     let (jms, dms, sms) = r.map_or((0, 0, 0), |r| (r.jaccard_ms, r.diff_save_ms, r.ssim_ms));
+    //     println!(
+    //         "  {:<name_w$}  {:>5}ms {:>5}ms {:>5}ms {:>5}ms {:>5}ms",
+    //         fixture.name, fixture.convert_ms, fixture.screenshot_ms, jms, dms, sms
+    //     );
+    // }
+    // println!(
+    //     "  {:<name_w$}  {:>5}ms {:>5}ms {:>5}ms {:>5}ms {:>5}ms  (cpu totals)",
+    //     "TOTAL", total_convert, total_screenshot, total_jaccard, total_diff_save, total_ssim
+    // );
 }
 
 #[test]

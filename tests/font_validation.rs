@@ -589,33 +589,15 @@ fn font_families_match_docx() {
         .max(7);
     let diff_w = rows.iter().map(|r| r.diff.len()).max().unwrap_or(4).max(4);
 
-    let sep = format!(
-        "+-{}-+------+-{}-+-{}-+",
-        "-".repeat(name_w),
-        "-".repeat(match_w),
-        "-".repeat(diff_w)
-    );
-    let thin = format!(
-        "+-{}-+------+-{}-+-{}-+",
-        "-".repeat(name_w),
-        "-".repeat(match_w),
-        "-".repeat(diff_w)
-    );
-
-    println!("\n{sep}");
     println!(
-        "| {:<name_w$} | Pass | {:<match_w$} | {:<diff_w$} |",
+        "\n  {:<name_w$}  Pass  {:<match_w$}  {:<diff_w$}",
         "Case", "Matched", "Diff"
     );
-    println!("{sep}");
 
-    for (i, (r, row)) in results.iter().zip(&rows).enumerate() {
-        if i > 0 {
-            println!("{thin}");
-        }
+    for (r, row) in results.iter().zip(&rows) {
         let status = if r.pass { "Y" } else { "N" };
         println!(
-            "| {:<name_w$} | {:<4} | {:<match_w$} | {:<diff_w$} |",
+            "  {:<name_w$}  {:<4}  {:<match_w$}  {:<diff_w$}",
             r.name, status, row.matched, row.diff
         );
 
@@ -639,7 +621,6 @@ fn font_families_match_docx() {
         );
     }
 
-    println!("{sep}");
     println!("  + font in PDF but not declared in DOCX | - declared in DOCX but missing from PDF");
     let case_failures: Vec<&str> = results
         .iter()

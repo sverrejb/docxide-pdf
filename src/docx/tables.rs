@@ -292,16 +292,14 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                     .or_else(|| para_style.and_then(|s| s.alignment))
                     .unwrap_or(Alignment::Left);
                 let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
-                let line_spacing = Some(
-                    inline_spacing
-                        .and_then(|n| {
-                            n.attribute((WML_NS, "line"))
-                                .and_then(|v| v.parse::<f32>().ok())
-                                .map(|line_val| parse_line_spacing(n, line_val))
-                        })
-                        .or_else(|| para_style.and_then(|s| s.line_spacing))
-                        .unwrap_or(LineSpacing::Auto(1.0)),
-                );
+                let line_spacing = inline_spacing
+                    .and_then(|n| {
+                        n.attribute((WML_NS, "line"))
+                            .and_then(|v| v.parse::<f32>().ok())
+                            .map(|line_val| parse_line_spacing(n, line_val))
+                    })
+                    .or_else(|| para_style.and_then(|s| s.line_spacing))
+                    .or_else(|| if has_tbl_style { Some(LineSpacing::Auto(1.0)) } else { None });
                 let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
                 let (mut indent_left, mut indent_hanging, list_label, list_label_font) =
                     parse_list_info(num_pr, numbering, counters, last_seen_level);

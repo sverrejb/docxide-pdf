@@ -1,7 +1,6 @@
 mod common;
 
 use rayon::prelude::*;
-use std::fs;
 use std::path::Path;
 use std::process::Command;
 
@@ -164,21 +163,18 @@ struct CaseResult {
 
 fn analyze_fixture(fixture_dir: &Path) -> Option<CaseResult> {
     let name = common::display_name(fixture_dir);
-    let input_docx = fixture_dir.join("input.docx");
     let reference_pdf = fixture_dir.join("reference.pdf");
     if !reference_pdf.exists() {
         println!("  [SKIP] {name}: no reference.pdf");
         return None;
     }
-    let output_base = common::output_dir(fixture_dir);
-    let _ = fs::remove_file(output_base.join("generated.pdf"));
-    fs::create_dir_all(&output_base).ok();
-    let generated_pdf = output_base.join("generated.pdf");
-
-    if let Err(e) = docxide_pdf::convert_docx_to_pdf(&input_docx, &generated_pdf) {
-        println!("  [SKIP] {name}: {e}");
-        return None;
-    }
+    let generated_pdf = match common::ensure_generated_pdf(fixture_dir) {
+        Ok(p) => p,
+        Err(e) => {
+            println!("  [SKIP] {name}: {e}");
+            return None;
+        }
+    };
 
     let ref_word_pages = extract_all_pages(&reference_pdf);
     let gen_word_pages = extract_all_pages(&generated_pdf);
@@ -248,16 +244,10 @@ fn text_boundaries_match() {
         .max()
         .unwrap_or(4)
         .max(4);
-    let sep = format!(
-        "+-{}-+-------+--------+--------------+-------+-------+-----------+",
-        "-".repeat(name_w)
-    );
-    println!("\n{sep}");
     println!(
-        "| {:<name_w$} | Pages | Breaks | Max drift    | Lines | Match | Delta     |",
+        "\n  {:<name_w$}  Pages  Breaks  Max drift      Lines  Match  Delta",
         "Case"
     );
-    println!("{sep}");
 
     for r in &results {
         let pages_str = if r.ref_pages == r.gen_pages {
@@ -298,7 +288,7 @@ fn text_boundaries_match() {
         let delta = common::delta_str(line_pct, prev_scores.get(&r.name).copied());
 
         println!(
-            "| {:<name_w$} | {:>5} | {:>6} | {:>12} | {:>5} | {:>5} | {:<9} |",
+            "  {:<name_w$}  {:>5}  {:>6}  {:>12}  {:>5}  {:>5}  {:<9}",
             r.name, pages_str, breaks_str, drift_str, r.total_lines, line_pct_str, delta
         );
 
@@ -316,8 +306,6 @@ fn text_boundaries_match() {
             ),
         );
     }
-
-    println!("{sep}");
 
     let regressions: Vec<&str> = results
         .iter()

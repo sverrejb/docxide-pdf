@@ -37,12 +37,10 @@ fn page_geometry_comparison() {
     let fixtures = common::discover_fixtures().expect("discover fixtures");
 
     println!();
-    println!("+{:-<66}+{:-<16}+{:-<16}+{:-<7}+", "", "", "", "");
     println!(
-        "| {:<64} | {:<14} | {:<14} | {:<5} |",
+        "  {:<64}  {:<14}  {:<14}  {:<5}",
         "Case", "Reference", "Generated", "Match"
     );
-    println!("+{:-<66}+{:-<16}+{:-<16}+{:-<7}+", "", "", "", "");
 
     let mut mismatches = Vec::new();
 
@@ -59,35 +57,34 @@ fn page_geometry_comparison() {
             Some(d) => d,
             None => {
                 println!(
-                    "| {:<64} | {:<14} | {:<14} | {:<5} |",
+                    "  {:<64}  {:<14}  {:<14}  {:<5}",
                     name, "?", "?", "SKIP"
                 );
                 continue;
             }
         };
 
-        let case_out = common::output_dir(fixture);
-        std::fs::create_dir_all(&case_out).ok();
-        let gen_pdf = case_out.join("generated.pdf");
-
-        if let Err(e) = docxide_pdf::convert_docx_to_pdf(&input, &gen_pdf) {
-            println!(
-                "| {:<64} | {:>5.1}x{:<6.1} | {:<14} | {:<5} |",
-                name,
-                ref_dims.0,
-                ref_dims.1,
-                format!("ERR:{e}"),
-                "FAIL"
-            );
-            mismatches.push(format!("{name}: conversion error: {e}"));
-            continue;
-        }
+        let gen_pdf = match common::ensure_generated_pdf(fixture) {
+            Ok(p) => p,
+            Err(e) => {
+                println!(
+                    "  {:<64}  {:>5.1}x{:<6.1}  {:<14}  {:<5}",
+                    name,
+                    ref_dims.0,
+                    ref_dims.1,
+                    format!("ERR:{e}"),
+                    "FAIL"
+                );
+                mismatches.push(format!("{name}: conversion error: {e}"));
+                continue;
+            }
+        };
 
         let gen_dims = match pdf_mediabox(&gen_pdf) {
             Some(d) => d,
             None => {
                 println!(
-                    "| {:<64} | {:>5.1}x{:<6.1} | {:<14} | {:<5} |",
+                    "  {:<64}  {:>5.1}x{:<6.1}  {:<14}  {:<5}",
                     name, ref_dims.0, ref_dims.1, "?", "FAIL"
                 );
                 mismatches.push(format!("{name}: could not read generated mediabox"));
@@ -113,12 +110,10 @@ fn page_geometry_comparison() {
         }
 
         println!(
-            "| {:<64} | {:>5.1}x{:<6.1} | {:>5.1}x{:<6.1} | {:<5} |",
+            "  {:<64}  {:>5.1}x{:<6.1}  {:>5.1}x{:<6.1}  {:<5}",
             name, ref_dims.0, ref_dims.1, gen_dims.0, gen_dims.1, status
         );
     }
-
-    println!("+{:-<66}+{:-<16}+{:-<16}+{:-<7}+", "", "", "", "");
 
     if !mismatches.is_empty() {
         println!("\nPage size mismatches ({}):", mismatches.len());
