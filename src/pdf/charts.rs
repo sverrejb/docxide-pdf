@@ -233,7 +233,7 @@ pub(super) fn render_chart(
     let w = chart.display_width;
     let h = chart.display_height;
 
-    let font_size = 8.0;
+    let font_size = 10.0;
     let label_font_key = seen_fonts
         .keys()
         .find(|k| {
@@ -341,7 +341,7 @@ pub(super) fn render_chart(
     };
 
     let max_tick_label = format_tick_label(axis_max, tick_step);
-    let val_label_w = text_width(&max_tick_label, font_size, label_font) + 18.0;
+    let val_label_w = text_width(&max_tick_label, font_size, label_font) + 15.0;
     let cat_label_h = font_size + 6.0;
 
     let is_point_chart = matches!(
@@ -351,18 +351,14 @@ pub(super) fn render_chart(
     let margin_left = if !horizontal { val_label_w } else { w * 0.12 };
     let margin_right = if has_legend && legend_on_right {
         let legend_swatch = 5.5;
-        let legend_gap = 21.0;
+        let legend_gap = 8.0;
         let max_label_w = c
             .series
             .iter()
             .map(|s| text_width(&s.label, 10.0, label_font))
             .fold(0.0f32, f32::max);
         let computed = legend_gap + legend_swatch + 4.0 + max_label_w + 8.0;
-        if is_point_chart {
-            computed.max(w * 0.12)
-        } else {
-            w * 0.22
-        }
+        computed.max(w * 0.12)
     } else if is_point_chart {
         (w * 0.06).max(20.0)
     } else {
@@ -372,7 +368,7 @@ pub(super) fn render_chart(
     let margin_bottom = if has_legend && legend_on_bottom {
         h * 0.22
     } else {
-        cat_label_h + 10.0
+        cat_label_h + 8.0
     };
 
     let plot_x = x + margin_left;
@@ -682,11 +678,11 @@ pub(super) fn render_chart(
 
             if !horizontal {
                 let ly = plot_y + frac * plot_h - font_size * 0.3;
-                let lx = plot_x - tw - 4.0;
+                let lx = plot_x - tw - 9.0;
                 show_text(content, label_font_key, font_size, lx, ly, &label);
             } else {
                 let lx = plot_x + frac * plot_w - tw / 2.0;
-                let ly = plot_y - font_size - 3.0;
+                let ly = plot_y - font_size - 8.0;
                 show_text(content, label_font_key, font_size, lx, ly, &label);
             }
         }
@@ -700,7 +696,7 @@ pub(super) fn render_chart(
                 let tw = text_width(&label, font_size, label_font);
                 let frac = val / x_axis_max;
                 let lx = plot_x + frac * plot_w - tw / 2.0;
-                let ly = plot_y - font_size - 3.0;
+                let ly = plot_y - font_size - 8.0;
                 show_text(content, label_font_key, font_size, lx, ly, &label);
             }
         }
@@ -718,12 +714,12 @@ pub(super) fn render_chart(
                         let group_w = plot_w / num_categories as f32;
                         plot_x + ci as f32 * group_w + group_w / 2.0 - tw / 2.0
                     };
-                    let cy = plot_y - font_size - 3.0;
+                    let cy = plot_y - font_size - 8.0;
                     show_text(content, label_font_key, font_size, cx, cy, label);
                 } else {
                     let group_h = plot_h / num_categories as f32;
                     let cy = plot_y + ci as f32 * group_h + group_h / 2.0 - font_size * 0.3;
-                    let cx = plot_x - tw - 4.0;
+                    let cx = plot_x - tw - 9.0;
                     show_text(content, label_font_key, font_size, cx, cy, label);
                 }
             }
@@ -769,7 +765,7 @@ pub(super) fn render_chart(
                 .collect();
             let placement = match legend.position {
                 LegendPosition::Right => LegendPlacement::Right {
-                    x: plot_x + plot_w + 21.0,
+                    x: plot_x + plot_w + 5.0,
                     center_y: plot_y + plot_h / 2.0,
                 },
                 _ => LegendPlacement::Bottom {
@@ -806,7 +802,7 @@ fn render_radar(
     let c = &chart.chart;
     let w = chart.display_width;
     let h = chart.display_height;
-    let font_size = 9.0;
+    let font_size = 10.0;
 
     let num_categories = c
         .cat_axis
