@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::io::Read;
 
+use crate::model::{FontFamily, FontTable, FontTableEntry};
+
 use super::{REL_NS, WML_NS, read_zip_text, wml};
 
 fn parse_guid_to_bytes(guid: &str) -> Option<[u8; 16]> {
@@ -63,17 +65,29 @@ struct EmbedInfo {
     font_key: Option<String>,
 }
 
+pub(super) struct FontTableResult {
+    pub embedded_fonts: HashMap<(String, bool, bool), Vec<u8>>,
+    pub font_table: FontTable,
+}
+
 pub(super) fn parse_font_table<R: Read + std::io::Seek>(
     zip: &mut zip::ZipArchive<R>,
-) -> HashMap<(String, bool, bool), Vec<u8>> {
+) -> FontTableResult {
     let mut result = HashMap::new();
+    let mut font_table = FontTable::new();
 
     let embeds = {
         let Some(xml_content) = read_zip_text(zip, "word/fontTable.xml") else {
-            return result;
+            return FontTableResult {
+                embedded_fonts: result,
+                font_table,
+            };
         };
         let Ok(xml) = roxmltree::Document::parse(&xml_content) else {
-            return result;
+            return FontTableResult {
+                embedded_fonts: result,
+                font_table,
+            };
         };
 
         let embed_variants: &[(&str, bool, bool)] = &[
@@ -93,6 +107,25 @@ pub(super) fn parse_font_table<R: Read + std::io::Seek>(
             let Some(font_name) = font_node.attribute((WML_NS, "name")) else {
                 continue;
             };
+
+            let alt_name = wml(font_node, "altName")
+                .and_then(|n| n.attribute((WML_NS, "val")))
+                .map(|s| s.to_string());
+            let family = wml(font_node, "family")
+                .and_then(|n| n.attribute((WML_NS, "val")))
+                .map(|v| match v {
+                    "roman" => FontFamily::Roman,
+                    "swiss" => FontFamily::Swiss,
+                    "modern" => FontFamily::Modern,
+                    "script" => FontFamily::Script,
+                    "decorative" => FontFamily::Decorative,
+                    _ => FontFamily::Auto,
+                })
+                .unwrap_or(FontFamily::Auto);
+            font_table.insert(
+                font_name.to_string(),
+                FontTableEntry { alt_name, family },
+            );
 
             for &(embed_tag, bold, italic) in embed_variants {
                 let Some(embed_node) = wml(font_node, embed_tag) else {
@@ -118,7 +151,10 @@ pub(super) fn parse_font_table<R: Read + std::io::Seek>(
     };
 
     if embeds.is_empty() {
-        return result;
+        return FontTableResult {
+            embedded_fonts: result,
+            font_table,
+        };
     }
 
     // Phase 2: resolve relationships and extract font data
@@ -163,5 +199,8 @@ pub(super) fn parse_font_table<R: Read + std::io::Seek>(
         );
     }
 
-    result
+    FontTableResult {
+        embedded_fonts: result,
+        font_table,
+    }
 }

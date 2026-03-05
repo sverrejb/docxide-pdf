@@ -188,9 +188,15 @@ pub(super) fn resolve_font_from_node(
     theme: &ThemeFonts,
     default_font: &str,
 ) -> String {
+    let ascii = rfonts.attribute((WML_NS, "ascii"));
+    let ascii_theme = rfonts.attribute((WML_NS, "asciiTheme"));
+    if ascii.is_some() || ascii_theme.is_some() {
+        return resolve_font(ascii, ascii_theme, theme, default_font);
+    }
+    // Fall back to hAnsi/hAnsiTheme when ascii variants are absent
     resolve_font(
-        rfonts.attribute((WML_NS, "ascii")),
-        rfonts.attribute((WML_NS, "asciiTheme")),
+        rfonts.attribute((WML_NS, "hAnsi")),
+        rfonts.attribute((WML_NS, "hAnsiTheme")),
         theme,
         default_font,
     )

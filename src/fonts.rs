@@ -6,7 +6,7 @@ use memmap2::Mmap;
 use pdf_writer::{Name, Pdf, Rect, Ref};
 use ttf_parser::Face;
 
-use crate::model::Run;
+use crate::model::{FontFamily, FontTable, Run};
 
 pub(crate) struct FontEntry {
     pub(crate) pdf_name: String,
@@ -910,6 +910,82 @@ pub(crate) fn font_key(run: &Run) -> String {
 
 pub(crate) type EmbeddedFonts = HashMap<(String, bool, bool), Vec<u8>>;
 
+fn try_font(
+    pdf: &mut Pdf,
+    candidate: &str,
+    bold: bool,
+    italic: bool,
+    font_ref: Ref,
+    descriptor_ref: Ref,
+    data_ref: Ref,
+    alloc: &mut impl FnMut() -> Ref,
+    embedded_fonts: &EmbeddedFonts,
+    used_chars: &HashSet<char>,
+) -> Option<(
+    Vec<f32>,
+    f32,
+    f32,
+    HashMap<char, u16>,
+    HashMap<char, f32>,
+    HashMap<(u16, u16), f32>,
+)> {
+    let embedded_key = (candidate.to_lowercase(), bold, italic);
+    let embedded_data = embedded_fonts.get(&embedded_key);
+
+    embedded_data
+        .and_then(|data| {
+            embed_truetype(
+                pdf,
+                font_ref,
+                descriptor_ref,
+                data_ref,
+                candidate,
+                data,
+                0,
+                used_chars,
+                alloc,
+            )
+        })
+        .or_else(|| {
+            find_font_file(candidate, bold, italic).and_then(|(path, face_index)| {
+                let data = std::fs::read(&path).ok()?;
+                embed_truetype(
+                    pdf,
+                    font_ref,
+                    descriptor_ref,
+                    data_ref,
+                    candidate,
+                    &data,
+                    face_index,
+                    used_chars,
+                    alloc,
+                )
+            })
+        })
+}
+
+fn lookup_font_table<'a>(
+    font_table: &'a FontTable,
+    name: &str,
+) -> Option<&'a crate::model::FontTableEntry> {
+    font_table.get(name).or_else(|| {
+        let lower = name.to_lowercase();
+        font_table
+            .iter()
+            .find(|(k, _)| k.to_lowercase() == lower)
+            .map(|(_, v)| v)
+    })
+}
+
+fn family_fallback(family: FontFamily) -> Option<&'static str> {
+    match family {
+        FontFamily::Roman => Some("Times New Roman"),
+        FontFamily::Swiss => Some("Arial"),
+        FontFamily::Modern => Some("Courier New"),
+        _ => None,
+    }
+}
+
 pub(crate) fn register_font(
     pdf: &mut Pdf,
     font_name: &str,
@@ -919,6 +995,7 @@ pub(crate) fn register_font(
     alloc: &mut impl FnMut() -> Ref,
     embedded_fonts: &EmbeddedFonts,
     used_chars: &HashSet<char>,
+    font_table: &FontTable,
 ) -> FontEntry {
     let t0 = std::time::Instant::now();
     let font_ref = alloc();
@@ -929,42 +1006,53 @@ pub(crate) fn register_font(
 
     let mut result = None;
     for candidate in &font_candidates {
-        let embedded_key = (candidate.to_lowercase(), bold, italic);
-        let embedded_data = embedded_fonts.get(&embedded_key);
-
-        let found = embedded_data
-            .and_then(|data| {
-                embed_truetype(
-                    pdf,
-                    font_ref,
-                    descriptor_ref,
-                    data_ref,
-                    candidate,
-                    data,
-                    0,
-                    used_chars,
-                    alloc,
-                )
-            })
-            .or_else(|| {
-                find_font_file(candidate, bold, italic).and_then(|(path, face_index)| {
-                    let data = std::fs::read(&path).ok()?;
-                    embed_truetype(
-                        pdf,
-                        font_ref,
-                        descriptor_ref,
-                        data_ref,
-                        candidate,
-                        &data,
-                        face_index,
-                        used_chars,
-                        alloc,
-                    )
-                })
-            });
+        let found = try_font(
+            pdf,
+            candidate,
+            bold,
+            italic,
+            font_ref,
+            descriptor_ref,
+            data_ref,
+            alloc,
+            embedded_fonts,
+            used_chars,
+        );
         if let Some(metrics) = found {
             result = Some(metrics);
             break;
+        }
+    }
+
+    // Consult fontTable.xml for substitution hints
+    if result.is_none() {
+        let primary = primary_font_name(font_name);
+        if let Some(entry) = lookup_font_table(font_table, primary) {
+            // Try altName first
+            if let Some(ref alt) = entry.alt_name {
+                if let Some(metrics) = try_font(
+                    pdf, alt, bold, italic, font_ref, descriptor_ref, data_ref, alloc,
+                    embedded_fonts, used_chars,
+                ) {
+                    log::info!("Font substitution: {primary} → altName \"{alt}\"");
+                    result = Some(metrics);
+                }
+            }
+            // Try family-class fallback
+            if result.is_none() {
+                if let Some(fallback) = family_fallback(entry.family) {
+                    if let Some(metrics) = try_font(
+                        pdf, fallback, bold, italic, font_ref, descriptor_ref, data_ref, alloc,
+                        embedded_fonts, used_chars,
+                    ) {
+                        log::info!(
+                            "Font substitution: {primary} → family {:?} fallback \"{fallback}\"",
+                            entry.family
+                        );
+                        result = Some(metrics);
+                    }
+                }
+            }
         }
     }
 

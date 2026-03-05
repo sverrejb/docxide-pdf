@@ -659,6 +659,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 &mut alloc,
                 &doc.embedded_fonts,
                 &used,
+                &doc.font_table,
             );
             font_order.push(key_owned.clone());
             seen_fonts.insert(key_owned, entry);
@@ -678,6 +679,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 &mut alloc,
                 &doc.embedded_fonts,
                 used,
+                &doc.font_table,
             );
             seen_fonts.insert(key.clone(), entry);
             font_order.push(key.clone());
@@ -695,6 +697,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             &mut alloc,
             &doc.embedded_fonts,
             &HashSet::new(),
+            &doc.font_table,
         );
         seen_fonts.insert("Helvetica".to_string(), entry);
         font_order.push("Helvetica".to_string());
@@ -1841,9 +1844,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         prev_space_after,
                         override_pos,
                     );
-                    if override_pos.is_none() {
-                        prev_space_after = 0.0;
-                    }
+                    prev_space_after = 0.0;
                 }
             }
             global_block_idx += 1;

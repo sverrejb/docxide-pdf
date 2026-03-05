@@ -18,18 +18,19 @@ The `mongolian_human_rights_law` scraped fixture scores 17.9% Jaccard (needs 20%
 
 Remaining gap to 20%: page 1 scores 47.6% but pages 2-8 score 7-13% due to cascading vertical shifts from multiple small differences: title formatting (missing space in "МОНГОЛ УЛСЫНХУУЛЬ"), header image positioning, paragraph spacing precision, and font metrics differences between Word and our rendering.
 
-## Font Substitution (HIGH)
+## Font Substitution (DONE — fontTable.xml altName + family fallback)
 
-When a font isn't found, we fall back unconditionally to Helvetica (built-in PDF Type1, no TrueType metrics). This causes two problems:
-1. **Wrong font family** — serif fonts get Helvetica instead of a serif fallback
-2. **No TrueType metrics** — forces `font_size * 1.2` line height estimate, causing layout drift across pages
+Parses `word/fontTable.xml` metadata (`w:altName`, `w:family`) into `FontTable` on the `Document` model. When a font isn't found via the semicolon-split candidate list or system font index, the substitution chain tries:
+1. `altName` from fontTable.xml (e.g. "Liberation Serif" → "Times New Roman")
+2. Family-class fallback: roman→"Times New Roman", swiss→"Arial", modern→"Courier New"
+3. Only then falls back to Helvetica
 
-Implementation ideas (increasing quality):
-- Map font family → system default (serif→Times New Roman, sans→Arial, mono→Courier New)
-- Parse panose classification from `fontTable.xml` and match against installed fonts
-- Bundle fallback fonts (Liberation, Noto) for consistent output without system fonts
+Also added `w:hAnsi`/`w:hAnsiTheme` fallback in `resolve_font_from_node()` for documents that only specify hAnsi font variants.
 
-Related: CJK characters render as blanks — need fallback to system CJK fonts (Hiragino on macOS, Noto CJK on Linux).
+Remaining:
+- **Panose matching** — fontTable.xml also contains panose classification bytes; could use these for more precise substitution
+- **Bundle fallback fonts** (Liberation, Noto) for consistent output without system fonts
+- **CJK fallback** — CJK characters render as blanks; need fallback to system CJK fonts (Hiragino on macOS, Noto CJK on Linux)
 
 ## Scraped Fixture Improvements
 

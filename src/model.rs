@@ -86,6 +86,24 @@ pub struct Section {
     pub blocks: Vec<Block>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum FontFamily {
+    Auto,
+    Roman,
+    Swiss,
+    Modern,
+    Script,
+    Decorative,
+}
+
+#[derive(Clone, Debug)]
+pub struct FontTableEntry {
+    pub alt_name: Option<String>,
+    pub family: FontFamily,
+}
+
+pub type FontTable = std::collections::HashMap<String, FontTableEntry>;
+
 pub struct Document {
     pub sections: Vec<Section>,
     pub line_spacing: LineSpacing,
@@ -93,6 +111,7 @@ pub struct Document {
     /// Key: (lowercase_font_name, bold, italic)
     pub embedded_fonts: std::collections::HashMap<(String, bool, bool), Vec<u8>>,
     pub footnotes: std::collections::HashMap<u32, Footnote>,
+    pub font_table: FontTable,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

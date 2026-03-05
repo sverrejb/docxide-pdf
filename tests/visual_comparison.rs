@@ -400,6 +400,55 @@ fn ssim_score(img_a_dyn: &DynamicImage, img_b_dyn: &DynamicImage) -> Result<f64,
     Ok(ssim_sum / count as f64)
 }
 
+struct FixtureResult {
+    name: String,
+    jaccard: f64,
+    ssim: f64,
+    page_count: usize,
+}
+
+fn score_fixture(fixture: &FixturePages) -> Option<FixtureResult> {
+    let diff_dir = fixture.output_base.join("diff");
+    let comparison_dir = fixture.output_base.join("comparison");
+    let _ = fs::create_dir_all(&diff_dir);
+    let _ = fs::create_dir_all(&comparison_dir);
+    let page_count = fixture.ref_pages.len().min(fixture.gen_pages.len());
+
+    let page_scores: Vec<(f64, f64)> = (0..page_count)
+        .into_par_iter()
+        .filter_map(|i| {
+            let img_ref = image::open(&fixture.ref_pages[i]).ok()?;
+            let img_gen = image::open(&fixture.gen_pages[i]).ok()?;
+            let page_num = fixture.ref_pages[i].file_stem()?.to_str()?.to_string();
+
+            let result = compare_and_diff(&img_ref, &img_gen).ok()?;
+            let jaccard = result.jaccard;
+            let _ = DynamicImage::ImageRgba8(result.diff_img)
+                .save(diff_dir.join(format!("{page_num}.png")));
+            let _ = save_side_by_side(
+                &img_ref,
+                &img_gen,
+                &comparison_dir.join(format!("{page_num}.png")),
+            );
+
+            let ssim = ssim_score(&img_ref, &img_gen).ok()?;
+            Some((jaccard, ssim))
+        })
+        .collect();
+
+    if page_scores.is_empty() {
+        return None;
+    }
+    let avg_jaccard = page_scores.iter().map(|(j, _)| j).sum::<f64>() / page_scores.len() as f64;
+    let avg_ssim = page_scores.iter().map(|(_, s)| s).sum::<f64>() / page_scores.len() as f64;
+    Some(FixtureResult {
+        name: fixture.name.clone(),
+        jaccard: avg_jaccard,
+        ssim: avg_ssim,
+        page_count: page_scores.len(),
+    })
+}
+
 #[test]
 fn visual_comparison() {
     let _ = env_logger::try_init();
@@ -408,117 +457,63 @@ fn visual_comparison() {
         return;
     }
 
-    let prev_scores = common::read_previous_scores("results.csv", 3);
+    let prev_jaccard = common::read_previous_scores("results.csv", 3);
+    let prev_ssim = common::read_previous_scores("ssim_results.csv", 3);
 
-    let results: Vec<(String, f64, bool, usize)> = fixtures
+    let mut results: Vec<FixtureResult> = fixtures
         .par_iter()
-        .filter_map(|fixture| {
-            let diff_dir = fixture.output_base.join("diff");
-            let comparison_dir = fixture.output_base.join("comparison");
-            let _ = fs::create_dir_all(&diff_dir);
-            let _ = fs::create_dir_all(&comparison_dir);
-            let page_count = fixture.ref_pages.len().min(fixture.gen_pages.len());
-
-            let scores: Vec<f64> = (0..page_count)
-                .into_par_iter()
-                .filter_map(|i| {
-                    let img_ref = image::open(&fixture.ref_pages[i]).ok()?;
-                    let img_gen = image::open(&fixture.gen_pages[i]).ok()?;
-                    let page_num = fixture.ref_pages[i].file_stem()?.to_str()?.to_string();
-
-                    let result = compare_and_diff(&img_ref, &img_gen).ok()?;
-                    let jaccard = result.jaccard;
-                    let _ = DynamicImage::ImageRgba8(result.diff_img)
-                        .save(diff_dir.join(format!("{page_num}.png")));
-                    let _ = save_side_by_side(
-                        &img_ref,
-                        &img_gen,
-                        &comparison_dir.join(format!("{page_num}.png")),
-                    );
-                    Some(jaccard)
-                })
-                .collect();
-
-            if scores.is_empty() {
-                return None;
-            }
-            let avg = scores.iter().sum::<f64>() / scores.len() as f64;
-            let passed = avg >= SIMILARITY_THRESHOLD;
-            Some((fixture.name.clone(), avg, passed, scores.len()))
-        })
+        .filter_map(|fixture| score_fixture(fixture))
         .collect();
+    results.sort_by(|a, b| a.name.cmp(&b.name));
 
-    for (name, avg, passed, page_count) in &results {
+    for r in &results {
+        let jaccard_pass = r.jaccard >= SIMILARITY_THRESHOLD;
         common::log_csv(
             "results.csv",
             "timestamp,case,pages,avg_jaccard,pass",
             &format!(
                 "{},{},{},{:.4},{}",
                 common::timestamp(),
-                name,
-                page_count,
-                avg,
-                passed
+                r.name,
+                r.page_count,
+                r.jaccard,
+                jaccard_pass
+            ),
+        );
+        common::log_csv(
+            "ssim_results.csv",
+            "timestamp,case,pages,avg_ssim",
+            &format!(
+                "{},{},{},{:.4}",
+                common::timestamp(),
+                r.name,
+                r.page_count,
+                r.ssim
             ),
         );
     }
 
-    let mut table_rows: Vec<(String, f64, bool)> = results
+    let jaccard_rows: Vec<(String, f64, bool)> = results
         .iter()
-        .map(|(n, a, p, _)| (n.clone(), *a, *p))
+        .map(|r| (r.name.clone(), r.jaccard, r.jaccard >= SIMILARITY_THRESHOLD))
         .collect();
-    table_rows.sort_by(|a, b| a.0.cmp(&b.0));
-    print_summary("Jaccard", SIMILARITY_THRESHOLD, &table_rows, &prev_scores);
+    print_summary("Jaccard", SIMILARITY_THRESHOLD, &jaccard_rows, &prev_jaccard);
+
+    let ssim_rows: Vec<(String, f64, bool)> = results
+        .iter()
+        .map(|r| (r.name.clone(), r.ssim, r.ssim >= SSIM_THRESHOLD))
+        .collect();
+    print_summary("SSIM", SSIM_THRESHOLD, &ssim_rows, &prev_ssim);
 }
 
 #[test]
 fn ssim_comparison() {
+    // Merged into visual_comparison — this test is kept for backwards compatibility
+    // with `cargo test ssim` filtering. It shares prepared_fixtures() via OnceLock
+    // so no duplicate work if visual_comparison already ran.
     let _ = env_logger::try_init();
     let fixtures = prepared_fixtures();
     if fixtures.is_empty() {
         return;
     }
-
-    let prev_scores = common::read_previous_scores("ssim_results.csv", 3);
-
-    let results: Vec<(String, f64, bool, usize)> = fixtures
-        .par_iter()
-        .filter_map(|fixture| {
-            let page_count = fixture.ref_pages.len().min(fixture.gen_pages.len());
-
-            let scores: Vec<f64> = (0..page_count)
-                .into_par_iter()
-                .filter_map(|i| {
-                    let img_ref = image::open(&fixture.ref_pages[i]).ok()?;
-                    let img_gen = image::open(&fixture.gen_pages[i]).ok()?;
-                    ssim_score(&img_ref, &img_gen).ok()
-                })
-                .collect();
-
-            if scores.is_empty() {
-                return None;
-            }
-            for (i, s) in scores.iter().enumerate() {
-                eprintln!("  {} page {}: SSIM {:.1}%", fixture.name, i + 1, s * 100.0);
-            }
-            let avg = scores.iter().sum::<f64>() / scores.len() as f64;
-            let passed = avg >= SSIM_THRESHOLD;
-            Some((fixture.name.clone(), avg, passed, scores.len()))
-        })
-        .collect();
-
-    for (name, avg, _, page_count) in &results {
-        common::log_csv(
-            "ssim_results.csv",
-            "timestamp,case,pages,avg_ssim",
-            &format!("{},{},{},{:.4}", common::timestamp(), name, page_count, avg),
-        );
-    }
-
-    let mut table_rows: Vec<(String, f64, bool)> = results
-        .iter()
-        .map(|(n, a, p, _)| (n.clone(), *a, *p))
-        .collect();
-    table_rows.sort_by(|a, b| a.0.cmp(&b.0));
-    print_summary("SSIM", SSIM_THRESHOLD, &table_rows, &prev_scores);
 }

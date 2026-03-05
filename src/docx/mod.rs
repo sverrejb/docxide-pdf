@@ -646,7 +646,9 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
     let styles = parse_styles(zip, &theme);
     let numbering = parse_numbering(zip);
     let rels = parse_relationships(zip);
-    let embedded_fonts = parse_font_table(zip);
+    let font_table_result = parse_font_table(zip);
+    let embedded_fonts = font_table_result.embedded_fonts;
+    let font_table = font_table_result.font_table;
     let footnotes = parse_footnotes(zip, &styles, &theme);
 
     let mut xml_content = String::new();
@@ -914,5 +916,6 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         line_spacing: styles.defaults.line_spacing,
         embedded_fonts,
         footnotes,
+        font_table,
     })
 }
