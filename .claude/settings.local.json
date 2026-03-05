@@ -147,7 +147,11 @@
       "Bash(DOCXIDE_CASE=case15 DOCXIDE_IMAGES=1 cargo test:*)",
       "Bash(DOCXIDE_CASE=scraped/polish_municipal_letter cargo test:*)",
       "Bash(DOCXIDE_CASE=case29 DOCXIDE_IMAGES=1 cargo test:*)",
-      "Bash(DOCXIDE_IMAGES=1 cargo test:*)"
+      "Bash(DOCXIDE_IMAGES=1 cargo test:*)",
+      "Bash(for case in 3 6 8 15 17)",
+      "Read(//Users/sverrejb/workspace/docxside/docxside-pdf/tests/output/cases/**)",
+      "Bash(DOCXIDE_CASE=bush_fires_act_comparison cargo test:*)",
+      "Bash(DOCXIDE_CASE=bush_fires_act_comparison DOCXIDE_IMAGES=1 cargo test:*)"
     ]
   }
 }

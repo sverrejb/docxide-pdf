@@ -87,6 +87,15 @@ Remaining:
 - **Legend placement fine-tuning**: pie and line/bar chart legends have small positional offsets vs Word (few pt). Centering formula and spacing need per-chart-type calibration.
 - **Font selection in chart labels**: picks arbitrary font from seen_fonts, not theme font
 
+## Track Changes (DONE — final mode)
+
+`w:ins` (insertions) and `w:del` (deletions) are now handled in `collect_run_nodes()` in `src/docx/runs.rs`. Final mode: inserted content is included as normal text, deleted content is skipped entirely. This matches Word's "Accept All Changes" / PDF export behavior.
+
+Remaining:
+- **Markup mode** — rendering deletions with red strikethrough, insertions with red underline (for documents exported with markup visible)
+- **Paragraph-level changes** — `w:ins`/`w:del` wrapping entire `w:p` elements at `w:body` level (not seen in test fixtures yet)
+- **Property changes** — `w:rPrChange`, `w:pPrChange`, `w:sectPrChange`, `w:tblPrChange` (formatting revisions)
+
 ## Unimplemented Spec Features
 
 - **`w:tblLook` / `w:tblStylePr`** — table conditional formatting (firstRow, lastRow, firstCol, bands, etc.)

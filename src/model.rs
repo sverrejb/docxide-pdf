@@ -112,6 +112,7 @@ pub struct Document {
     pub embedded_fonts: std::collections::HashMap<(String, bool, bool), Vec<u8>>,
     pub footnotes: std::collections::HashMap<u32, Footnote>,
     pub font_table: FontTable,
+    pub even_and_odd_headers: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

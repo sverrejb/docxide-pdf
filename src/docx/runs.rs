@@ -9,6 +9,11 @@ use super::styles::{StylesInfo, ThemeFonts, resolve_font_from_node};
 use super::textbox::parse_textbox_from_vml;
 use super::{WML_NS, highlight_color, parse_text_color, twips_to_pts, wml, wml_attr, wml_bool};
 
+fn is_dynamic_field(instr: &str) -> bool {
+    let keyword = instr.split_whitespace().next().unwrap_or("");
+    keyword.eq_ignore_ascii_case("PAGE") || keyword.eq_ignore_ascii_case("NUMPAGES")
+}
+
 pub(super) struct ParsedRuns {
     pub(super) runs: Vec<Run>,
     pub(super) has_page_break: bool,
@@ -132,6 +137,10 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                 }) {
                     out.push((n, url.clone()));
                 }
+            } else if is_wml && name == "ins" {
+                collect_run_nodes(child, rels, out);
+            } else if is_wml && name == "del" {
+                // Final mode: skip deleted content entirely
             } else if is_wml && name == "sdt" {
                 if let Some(content) = wml(child, "sdtContent") {
                     collect_run_nodes(content, rels, out);
@@ -160,6 +169,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
     let mut has_column_break = false;
     let mut line_break_count: u32 = 0;
     let mut in_field = false;
+    let mut in_field_result = false;
     let mut field_instr = String::new();
 
     for (run_node, hyperlink_url) in run_nodes {
@@ -308,7 +318,11 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                     Some("begin") => {
                         flush_pending(&mut pending_text, &mut runs);
                         in_field = true;
+                        in_field_result = false;
                         field_instr.clear();
+                    }
+                    Some("separate") => {
+                        in_field_result = true;
                     }
                     Some("end") => {
                         if in_field {
@@ -333,19 +347,19 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                                 });
                             }
                             in_field = false;
+                            in_field_result = false;
                             field_instr.clear();
                         }
                     }
                     _ => {}
                 },
-                "instrText" if in_field => {
+                "instrText" if in_field && !in_field_result => {
                     if let Some(t) = child.text() {
                         field_instr.push_str(t);
                     }
                 }
-                "t" if !in_field => {
+                "t" if !in_field || (in_field_result && !is_dynamic_field(&field_instr)) => {
                     if let Some(t) = child.text() {
-                        // Word treats newlines in w:t as whitespace; only w:br creates line breaks
                         let normalized = t.replace('\n', " ");
                         pending_text.push_str(&normalized);
                     }
@@ -425,7 +439,6 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                 _ => {}
             }
         }
-        // Flush remaining text
         if !pending_text.is_empty() {
             runs.push(fmt.text_run(pending_text, hyperlink_url.clone()));
         }
