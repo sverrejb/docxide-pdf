@@ -26,7 +26,13 @@ path = "src/bin/case_diff.rs"
 name = "analyze-fixtures"
 path = "src/bin/analyze_fixtures.rs"
 
+[[bin]]
+name = "case-browser"
+path = "src/bin/case_browser.rs"
+
 [dependencies]
 zip = "2"
 roxmltree = "0.21"
 image = "0.25"
+eframe = "0.31"
+egui_extras = { version = "0.31", features = ["image"] }
