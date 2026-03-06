@@ -47,6 +47,7 @@ pub(super) struct ParagraphStyle {
     pub(super) contextual_spacing: bool,
     pub(super) keep_next: bool,
     pub(super) keep_lines: bool,
+    pub(super) page_break_before: bool,
     pub(super) line_spacing: Option<LineSpacing>,
     pub(super) indent_left: Option<f32>,
     pub(super) indent_right: Option<f32>,
@@ -340,6 +341,9 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         let keep_lines = ppr
             .and_then(|ppr| wml_bool(ppr, "keepLines"))
             .unwrap_or(false);
+        let page_break_before = ppr
+            .and_then(|ppr| wml_bool(ppr, "pageBreakBefore"))
+            .unwrap_or(false);
 
         let line_spacing = spacing.and_then(|n| {
             n.attribute((WML_NS, "line"))
@@ -376,6 +380,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                 contextual_spacing,
                 keep_next,
                 keep_lines,
+                page_break_before,
                 line_spacing,
                 indent_left,
                 indent_right,
@@ -560,6 +565,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             contextual_spacing: false,
             keep_next: false,
             keep_lines: false,
+            page_break_before: false,
             line_spacing: None,
             indent_left: None,
             indent_right: None,

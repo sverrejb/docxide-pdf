@@ -1,9 +1,22 @@
 #![allow(dead_code)]
-use std::collections::{HashMap, HashSet};
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fs, io};
+
+pub const REGRESSION_SLACK: f64 = 0.02;
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+pub struct Baselines {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jaccard: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ssim: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub text_boundary: Option<f64>,
+}
 
 fn load_skiplist() -> HashSet<String> {
     let path = Path::new("tests/fixtures/SKIPLIST");
@@ -119,21 +132,35 @@ pub fn log_csv(csv_name: &str, header: &str, row: &str) {
     writeln!(file, "{row}").unwrap();
 }
 
-pub fn read_previous_scores(csv_name: &str, score_col: usize) -> HashMap<String, f64> {
-    let csv_path = PathBuf::from("tests/output").join(csv_name);
-    let mut latest: HashMap<String, f64> = HashMap::new();
-    let Ok(content) = fs::read_to_string(&csv_path) else {
-        return latest;
+pub fn read_baselines() -> HashMap<String, Baselines> {
+    let path = Path::new("tests/baselines.json");
+    let Ok(content) = fs::read_to_string(path) else {
+        return HashMap::new();
     };
-    for line in content.lines().skip(1) {
-        let cols: Vec<&str> = line.split(',').collect();
-        if cols.len() > score_col {
-            if let Ok(score) = cols[score_col].parse::<f64>() {
-                latest.insert(cols[1].to_string(), score);
-            }
-        }
+    serde_json::from_str(&content).unwrap_or_default()
+}
+
+fn round4(v: f64) -> f64 {
+    (v * 10000.0).round() / 10000.0
+}
+
+fn merge_max(existing: &mut Option<f64>, new_val: Option<f64>) {
+    if let Some(v) = new_val {
+        *existing = Some(round4(existing.map_or(v, |b| b.max(v))));
     }
-    latest
+}
+
+pub fn update_baselines(updates: &HashMap<String, Baselines>) {
+    let mut baselines = read_baselines();
+    for (name, new) in updates {
+        let entry = baselines.entry(name.clone()).or_default();
+        merge_max(&mut entry.jaccard, new.jaccard);
+        merge_max(&mut entry.ssim, new.ssim);
+        merge_max(&mut entry.text_boundary, new.text_boundary);
+    }
+    let sorted: BTreeMap<_, _> = baselines.into_iter().collect();
+    let json = serde_json::to_string_pretty(&sorted).expect("Failed to serialize baselines");
+    fs::write("tests/baselines.json", json + "\n").expect("Failed to write baselines.json");
 }
 
 /// Convert DOCX→PDF only if the generated PDF is missing or older than input.docx.
@@ -154,8 +181,7 @@ pub fn ensure_generated_pdf(fixture_dir: &Path) -> Result<PathBuf, String> {
     };
 
     if needs_convert {
-        docxide_pdf::convert_docx_to_pdf(&input_docx, &generated_pdf)
-            .map_err(|e| e.to_string())?;
+        docxide_pdf::convert_docx_to_pdf(&input_docx, &generated_pdf).map_err(|e| e.to_string())?;
     }
 
     Ok(generated_pdf)

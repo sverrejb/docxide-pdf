@@ -48,7 +48,14 @@ pub(super) fn render_chart_legend(
                 render_swatch(content, &item.swatch, item.color, lx, ly, swatch_size);
                 let text_x = lx + swatch_size + spacing + line_extension(&item.swatch);
                 content.set_fill_gray(0.0);
-                show_text(content, label_font_key, legend_fs, text_x, ly - 0.3, item.label);
+                show_text(
+                    content,
+                    label_font_key,
+                    legend_fs,
+                    text_x,
+                    ly - 0.3,
+                    item.label,
+                );
             }
         }
         LegendPlacement::Bottom { center_x, y: ly } => {
@@ -68,7 +75,14 @@ pub(super) fn render_chart_legend(
                 let ext = line_extension(&item.swatch);
                 let text_x = lx + swatch_size + spacing + ext;
                 content.set_fill_gray(0.0);
-                show_text(content, label_font_key, legend_fs, text_x, ly + 1.0, item.label);
+                show_text(
+                    content,
+                    label_font_key,
+                    legend_fs,
+                    text_x,
+                    ly + 1.0,
+                    item.label,
+                );
                 lx += swatch_size
                     + ext * 2.0
                     + spacing

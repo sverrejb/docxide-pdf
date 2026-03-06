@@ -2,9 +2,9 @@ mod common;
 
 use rayon::prelude::*;
 use std::collections::HashMap;
+use std::io;
 use std::path::Path;
 use std::process::Command;
-use std::io;
 
 /// Parse `mutool info` output and return a map of page_number → image_count.
 fn pdf_images_per_page(pdf: &Path) -> io::Result<HashMap<u32, u32>> {
@@ -126,10 +126,7 @@ fn image_count_and_placement() {
         .unwrap_or(4)
         .max(4);
 
-    println!(
-        "\n  {:<name_w$}  Pass  Ref  Gen  Page mismatches",
-        "Case"
-    );
+    println!("\n  {:<name_w$}  Pass  Ref  Gen  Page mismatches", "Case");
 
     let mut failures = Vec::new();
 

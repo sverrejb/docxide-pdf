@@ -263,7 +263,14 @@ pub(super) fn render_chart(
     match c.chart_type {
         ChartType::Pie => {
             charts_radial::render_pie(
-                chart, content, x, y, has_font, label_font_key, font_size, label_font,
+                chart,
+                content,
+                x,
+                y,
+                has_font,
+                label_font_key,
+                font_size,
+                label_font,
             );
             return;
         }
@@ -282,7 +289,16 @@ pub(super) fn render_chart(
             return;
         }
         ChartType::Radar => {
-            render_radar(chart, content, x, y, has_font, label_font_key, font_size, label_font);
+            render_radar(
+                chart,
+                content,
+                x,
+                y,
+                has_font,
+                label_font_key,
+                font_size,
+                label_font,
+            );
             return;
         }
         _ => {}
@@ -423,7 +439,11 @@ pub(super) fn render_chart(
 
     // X-axis tick marks for category/scatter axes
     {
-        let axis_color = c.cat_axis.as_ref().and_then(|a| a.line_color).unwrap_or([179, 179, 179]);
+        let axis_color = c
+            .cat_axis
+            .as_ref()
+            .and_then(|a| a.line_color)
+            .unwrap_or([179, 179, 179]);
         stroke_rgb(content, axis_color);
         content.set_line_width(0.5);
         let tick_len = 4.0;
@@ -1029,4 +1049,3 @@ fn render_radar(
     content.set_fill_gray(0.0);
     content.restore_state();
 }
-

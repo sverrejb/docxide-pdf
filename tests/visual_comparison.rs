@@ -314,7 +314,10 @@ fn print_summary(
 
     let regressions: Vec<&str> = rows
         .iter()
-        .filter(|(name, score, _)| prev.get(name).is_some_and(|&p| *score < p - 0.005))
+        .filter(|(name, score, _)| {
+            prev.get(name)
+                .is_some_and(|&p| *score < p - common::REGRESSION_SLACK)
+        })
         .map(|(name, _, _)| name.as_str())
         .collect();
     if !regressions.is_empty() {
@@ -472,7 +475,13 @@ fn score_fixture(fixture: &FixturePages) -> Option<FixtureResult> {
             let ssim = ssim_score(&img_ref, &img_gen).ok()?;
             let ssim_ms = t2.elapsed().as_millis() as u64;
 
-            Some(PageTiming { jaccard, ssim, jaccard_ms, ssim_ms, diff_save_ms })
+            Some(PageTiming {
+                jaccard,
+                ssim,
+                jaccard_ms,
+                ssim_ms,
+                diff_save_ms,
+            })
         })
         .collect();
 
@@ -511,12 +520,21 @@ fn visual_comparison() {
             .iter()
             .any(|f| f.output_base.join("comparison").exists());
         if has_stale {
-            println!("  [STALE] comparison/ dirs exist from a previous run (set DOCXIDE_IMAGES=1 to regenerate)");
+            println!(
+                "  [STALE] comparison/ dirs exist from a previous run (set DOCXIDE_IMAGES=1 to regenerate)"
+            );
         }
     }
 
-    let prev_jaccard = common::read_previous_scores("results.csv", 3);
-    let prev_ssim = common::read_previous_scores("ssim_results.csv", 3);
+    let baselines = common::read_baselines();
+    let prev_jaccard: HashMap<String, f64> = baselines
+        .iter()
+        .filter_map(|(k, v)| v.jaccard.map(|j| (k.clone(), j)))
+        .collect();
+    let prev_ssim: HashMap<String, f64> = baselines
+        .iter()
+        .filter_map(|(k, v)| v.ssim.map(|s| (k.clone(), s)))
+        .collect();
 
     let t_score = Instant::now();
     let mut results: Vec<FixtureResult> = fixtures
@@ -553,11 +571,29 @@ fn visual_comparison() {
         );
     }
 
+    let mut baseline_updates: HashMap<String, common::Baselines> = HashMap::new();
+    for r in &results {
+        baseline_updates.insert(
+            r.name.clone(),
+            common::Baselines {
+                jaccard: Some(r.jaccard),
+                ssim: Some(r.ssim),
+                text_boundary: None,
+            },
+        );
+    }
+    common::update_baselines(&baseline_updates);
+
     let jaccard_rows: Vec<(String, f64, bool)> = results
         .iter()
         .map(|r| (r.name.clone(), r.jaccard, r.jaccard >= SIMILARITY_THRESHOLD))
         .collect();
-    print_summary("Jaccard", SIMILARITY_THRESHOLD, &jaccard_rows, &prev_jaccard);
+    print_summary(
+        "Jaccard",
+        SIMILARITY_THRESHOLD,
+        &jaccard_rows,
+        &prev_jaccard,
+    );
 
     let ssim_rows: Vec<(String, f64, bool)> = results
         .iter()

@@ -149,7 +149,10 @@ fn compute_row_layouts(
                         let substituted;
                         let runs = if let Some(sub) = hf_sub {
                             substituted = substitute_hf_runs(
-                                &para.runs, sub.page_num, sub.total_pages, sub.styleref_values,
+                                &para.runs,
+                                sub.page_num,
+                                sub.total_pages,
+                                sub.styleref_values,
                             );
                             &substituted
                         } else {
@@ -422,9 +425,17 @@ pub(super) fn render_header_footer_table(
     styleref_values: &HashMap<String, String>,
 ) {
     let col_widths = auto_fit_columns(table, seen_fonts);
-    let hf_sub = HfSubstitution { page_num, total_pages, styleref_values };
+    let hf_sub = HfSubstitution {
+        page_num,
+        total_pages,
+        styleref_values,
+    };
     let row_layouts = compute_row_layouts(
-        table, &col_widths, doc_line_spacing, seen_fonts, Some(&hf_sub),
+        table,
+        &col_widths,
+        doc_line_spacing,
+        seen_fonts,
+        Some(&hf_sub),
     );
     let cm = &table.cell_margins;
     let table_left = sp.margin_left + table.table_indent - cm.left;
@@ -521,25 +532,25 @@ pub(super) fn render_header_footer_table(
             grid_col += span;
 
             let b = &cell.borders;
-            let draw_border =
-                |content: &mut Content, border: &crate::model::CellBorder, x1, y1, x2, y2| {
-                    if !border.present {
-                        return;
-                    }
-                    content.save_state();
-                    content.set_line_width(border.width);
-                    if let Some([r, g, b]) = border.color {
-                        content.set_stroke_rgb(
-                            r as f32 / 255.0,
-                            g as f32 / 255.0,
-                            b as f32 / 255.0,
-                        );
-                    }
-                    content.move_to(x1, y1);
-                    content.line_to(x2, y2);
-                    content.stroke();
-                    content.restore_state();
-                };
+            let draw_border = |content: &mut Content,
+                               border: &crate::model::CellBorder,
+                               x1,
+                               y1,
+                               x2,
+                               y2| {
+                if !border.present {
+                    return;
+                }
+                content.save_state();
+                content.set_line_width(border.width);
+                if let Some([r, g, b]) = border.color {
+                    content.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+                }
+                content.move_to(x1, y1);
+                content.line_to(x2, y2);
+                content.stroke();
+                content.restore_state();
+            };
 
             if cell.v_merge != VMerge::Continue && ri == 0 {
                 draw_border(content, &b.top, bx, row_top, bx + col_w, row_top);

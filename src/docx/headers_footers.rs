@@ -7,7 +7,7 @@ use super::numbering::NumberingInfo;
 use super::parse_table_node;
 use super::runs::parse_runs;
 use super::styles::{StylesInfo, ThemeFonts, parse_alignment, parse_line_spacing};
-use super::{WML_NS, twips_attr, wml, wml_attr};
+use super::{WML_NS, parse_paragraph_borders, parse_tab_stops, twips_attr, wml, wml_attr};
 
 pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
     xml_content: &str,
@@ -81,13 +81,17 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
                     })
                     .or_else(|| para_style.and_then(|s| s.line_spacing));
 
-                let parsed =
-                    parse_runs(node, styles, theme, rels, zip, &NumberingInfo::default());
+                let parsed = parse_runs(node, styles, theme, rels, zip, &NumberingInfo::default());
+
+                let borders = ppr.map(parse_paragraph_borders).unwrap_or_default();
+                let tab_stops = ppr.map(parse_tab_stops).unwrap_or_default();
 
                 blocks.push(Block::Paragraph(Paragraph {
                     runs: parsed.runs,
                     alignment,
                     line_spacing,
+                    borders,
+                    tab_stops,
                     extra_line_breaks: parsed.line_break_count,
                     floating_images: parsed.floating_images,
                     textboxes: parsed.textboxes,

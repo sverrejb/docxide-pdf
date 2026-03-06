@@ -105,7 +105,15 @@ fn render_radial_legend(
             y: y - h + 4.0,
         }
     };
-    render_chart_legend(content, &items, placement, label_font_key, label_font, 5.274, 17.6);
+    render_chart_legend(
+        content,
+        &items,
+        placement,
+        label_font_key,
+        label_font,
+        5.274,
+        17.6,
+    );
 }
 
 pub(super) fn render_pie(

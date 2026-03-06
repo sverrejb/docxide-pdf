@@ -122,10 +122,7 @@ pub(super) fn parse_font_table<R: Read + std::io::Seek>(
                     _ => FontFamily::Auto,
                 })
                 .unwrap_or(FontFamily::Auto);
-            font_table.insert(
-                font_name.to_string(),
-                FontTableEntry { alt_name, family },
-            );
+            font_table.insert(font_name.to_string(), FontTableEntry { alt_name, family });
 
             for &(embed_tag, bold, italic) in embed_variants {
                 let Some(embed_node) = wml(font_node, embed_tag) else {

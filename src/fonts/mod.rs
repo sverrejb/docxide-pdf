@@ -226,8 +226,16 @@ pub(crate) fn register_font(
             // Try altName first
             if let Some(ref alt) = entry.alt_name {
                 if let Some(metrics) = try_font(
-                    pdf, alt, bold, italic, font_ref, descriptor_ref, data_ref, alloc,
-                    embedded_fonts, used_chars,
+                    pdf,
+                    alt,
+                    bold,
+                    italic,
+                    font_ref,
+                    descriptor_ref,
+                    data_ref,
+                    alloc,
+                    embedded_fonts,
+                    used_chars,
                 ) {
                     log::info!("Font substitution: {primary} → altName \"{alt}\"");
                     result = Some(metrics);
@@ -237,8 +245,16 @@ pub(crate) fn register_font(
             if result.is_none() {
                 if let Some(fallback) = family_fallback(entry.family) {
                     if let Some(metrics) = try_font(
-                        pdf, fallback, bold, italic, font_ref, descriptor_ref, data_ref, alloc,
-                        embedded_fonts, used_chars,
+                        pdf,
+                        fallback,
+                        bold,
+                        italic,
+                        font_ref,
+                        descriptor_ref,
+                        data_ref,
+                        alloc,
+                        embedded_fonts,
+                        used_chars,
                     ) {
                         log::info!(
                             "Font substitution: {primary} → family {:?} fallback \"{fallback}\"",

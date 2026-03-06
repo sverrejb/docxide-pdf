@@ -105,8 +105,10 @@ pub(super) fn parse_section_properties<R: Read + std::io::Seek>(
 
     let mut header_default_rid = None;
     let mut header_first_rid = None;
+    let mut header_even_rid = None;
     let mut footer_default_rid = None;
     let mut footer_first_rid = None;
+    let mut footer_even_rid = None;
     for child in sect_node.children() {
         if child.tag_name().namespace() != Some(WML_NS) {
             continue;
@@ -117,11 +119,13 @@ pub(super) fn parse_section_properties<R: Read + std::io::Seek>(
             "headerReference" => match hf_type {
                 "default" => header_default_rid = rid,
                 "first" => header_first_rid = rid,
+                "even" => header_even_rid = rid,
                 _ => {}
             },
             "footerReference" => match hf_type {
                 "default" => footer_default_rid = rid,
                 "first" => footer_first_rid = rid,
+                "even" => footer_even_rid = rid,
                 _ => {}
             },
             _ => {}
@@ -141,8 +145,10 @@ pub(super) fn parse_section_properties<R: Read + std::io::Seek>(
 
     let header_default = resolve_hf(header_default_rid, zip);
     let header_first = resolve_hf(header_first_rid, zip);
+    let header_even = resolve_hf(header_even_rid, zip);
     let footer_default = resolve_hf(footer_default_rid, zip);
     let footer_first = resolve_hf(footer_first_rid, zip);
+    let footer_even = resolve_hf(footer_even_rid, zip);
 
     SectionProperties {
         page_width,
@@ -155,8 +161,10 @@ pub(super) fn parse_section_properties<R: Read + std::io::Seek>(
         footer_margin,
         header_default,
         header_first,
+        header_even,
         footer_default,
         footer_first,
+        footer_even,
         different_first_page,
         line_pitch,
         break_type,

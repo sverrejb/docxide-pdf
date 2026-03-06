@@ -145,7 +145,7 @@ pub(super) fn parse_paragraph_borders(ppr: roxmltree::Node) -> ParagraphBorders 
     }
 }
 
-fn parse_tab_stops(ppr: roxmltree::Node) -> Vec<TabStop> {
+pub(super) fn parse_tab_stops(ppr: roxmltree::Node) -> Vec<TabStop> {
     let Some(tabs) = wml(ppr, "tabs") else {
         return vec![];
     };
@@ -181,7 +181,9 @@ fn parse_tab_stops(ppr: roxmltree::Node) -> Vec<TabStop> {
     stops
 }
 
-pub(super) fn collect_block_nodes<'a>(parent: roxmltree::Node<'a, 'a>) -> Vec<roxmltree::Node<'a, 'a>> {
+pub(super) fn collect_block_nodes<'a>(
+    parent: roxmltree::Node<'a, 'a>,
+) -> Vec<roxmltree::Node<'a, 'a>> {
     let mut nodes = Vec::new();
     for child in parent.children() {
         if child.tag_name().name() == "sdt" && child.tag_name().namespace() == Some(WML_NS) {
@@ -485,7 +487,8 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     image: para_image,
                     borders,
                     shading: para_shading,
-                    page_break_before: parsed.has_page_break,
+                    page_break_before: parsed.has_page_break
+                        || para_style.is_some_and(|s| s.page_break_before),
                     column_break_before: parsed.has_column_break,
                     tab_stops,
                     extra_line_breaks: parsed.line_break_count,
@@ -540,8 +543,10 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
             footer_margin: 36.0,
             header_default: None,
             header_first: None,
+            header_even: None,
             footer_default: None,
             footer_first: None,
+            footer_even: None,
             different_first_page: false,
             line_pitch: default_line_pitch,
             break_type: SectionBreakType::NextPage,

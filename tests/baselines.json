@@ -1,0 +1,172 @@
+{
+  "cases/case1": {
+    "jaccard": 0.591,
+    "ssim": 0.8579,
+    "text_boundary": 1.0
+  },
+  "cases/case10": {
+    "jaccard": 0.7174,
+    "ssim": 0.8464,
+    "text_boundary": 0.9688
+  },
+  "cases/case11": {
+    "jaccard": 0.7218,
+    "ssim": 0.9154,
+    "text_boundary": 1.0
+  },
+  "cases/case12": {
+    "jaccard": 0.9826,
+    "ssim": 0.995,
+    "text_boundary": 1.0
+  },
+  "cases/case14": {
+    "jaccard": 0.6379,
+    "ssim": 0.8821,
+    "text_boundary": 1.0
+  },
+  "cases/case15": {
+    "jaccard": 0.2065,
+    "ssim": 0.875,
+    "text_boundary": 1.0
+  },
+  "cases/case16": {
+    "jaccard": 0.9088,
+    "ssim": 0.7575,
+    "text_boundary": 1.0
+  },
+  "cases/case17": {
+    "jaccard": 0.473,
+    "ssim": 0.9675,
+    "text_boundary": 1.0
+  },
+  "cases/case18": {
+    "jaccard": 0.6471,
+    "ssim": 0.8062,
+    "text_boundary": 0.9545
+  },
+  "cases/case19": {
+    "jaccard": 0.8152,
+    "ssim": 0.9986,
+    "text_boundary": 1.0
+  },
+  "cases/case2": {
+    "jaccard": 0.8905,
+    "ssim": 0.9433,
+    "text_boundary": 1.0
+  },
+  "cases/case20": {
+    "jaccard": 0.8064,
+    "ssim": 0.9979,
+    "text_boundary": 1.0
+  },
+  "cases/case21": {
+    "jaccard": 0.7707,
+    "ssim": 0.9386,
+    "text_boundary": 1.0
+  },
+  "cases/case22": {
+    "jaccard": 0.6831,
+    "ssim": 0.9326,
+    "text_boundary": 1.0
+  },
+  "cases/case23": {
+    "jaccard": 0.6822,
+    "ssim": 0.8944,
+    "text_boundary": 0.6875
+  },
+  "cases/case24": {
+    "jaccard": 0.7401,
+    "ssim": 0.9306,
+    "text_boundary": 1.0
+  },
+  "cases/case25": {
+    "jaccard": 0.7309,
+    "ssim": 0.8919,
+    "text_boundary": 1.0
+  },
+  "cases/case26": {
+    "jaccard": 0.7866,
+    "ssim": 0.9138,
+    "text_boundary": 1.0
+  },
+  "cases/case27": {
+    "jaccard": 0.9634,
+    "ssim": 0.99,
+    "text_boundary": 1.0
+  },
+  "cases/case28": {
+    "jaccard": 0.7347,
+    "ssim": 0.9015,
+    "text_boundary": 1.0
+  },
+  "cases/case29": {
+    "jaccard": 0.704,
+    "ssim": 0.7245,
+    "text_boundary": 0.9474
+  },
+  "cases/case3": {
+    "jaccard": 0.2513,
+    "ssim": 0.8941,
+    "text_boundary": 0.6
+  },
+  "cases/case30": {
+    "jaccard": 0.8192,
+    "ssim": 0.833,
+    "text_boundary": 0.963
+  },
+  "cases/case31": {
+    "jaccard": 0.5659,
+    "ssim": 0.7472,
+    "text_boundary": 0.875
+  },
+  "cases/case32": {
+    "jaccard": 0.5504,
+    "ssim": 0.9225,
+    "text_boundary": 1.0
+  },
+  "cases/case4": {
+    "jaccard": 0.7153,
+    "ssim": 0.8946,
+    "text_boundary": 1.0
+  },
+  "cases/case5": {
+    "jaccard": 0.7607,
+    "ssim": 0.9027,
+    "text_boundary": 1.0
+  },
+  "cases/case6": {
+    "jaccard": 0.3951,
+    "ssim": 0.8526,
+    "text_boundary": 0.9909
+  },
+  "cases/case7": {
+    "jaccard": 0.693,
+    "ssim": 0.9171,
+    "text_boundary": 1.0
+  },
+  "cases/case8": {
+    "jaccard": 0.4707,
+    "ssim": 0.9406,
+    "text_boundary": 1.0
+  },
+  "cases/case9": {
+    "jaccard": 0.7053,
+    "ssim": 0.9007,
+    "text_boundary": 1.0
+  },
+  "samples/sample500kB": {
+    "jaccard": 0.3258,
+    "ssim": 0.5152,
+    "text_boundary": 0.7816
+  },
+  "scraped/bush_fires_act_c..": {
+    "jaccard": 0.0871,
+    "ssim": 0.21,
+    "text_boundary": 0.0959
+  },
+  "scraped/classroom_weekly..": {
+    "jaccard": 0.9437,
+    "ssim": 0.963,
+    "text_boundary": 0.2609
+  }
+}

@@ -56,10 +56,7 @@ fn page_geometry_comparison() {
         let ref_dims = match pdf_mediabox(&reference) {
             Some(d) => d,
             None => {
-                println!(
-                    "  {:<64}  {:<14}  {:<14}  {:<5}",
-                    name, "?", "?", "SKIP"
-                );
+                println!("  {:<64}  {:<14}  {:<14}  {:<5}", name, "?", "?", "SKIP");
                 continue;
             }
         };

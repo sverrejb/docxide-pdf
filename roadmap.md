@@ -98,7 +98,11 @@ Remaining:
 
 ## Field Code Display Results (DONE)
 
-Text between `fldChar separate` and `fldChar end` is now rendered for non-dynamic fields (STYLEREF, DocProperty, etc.). Previously all text inside field regions was suppressed. Dynamic fields (PAGE, NUMPAGES) still use computed values. Affects 4 scraped fixtures.
+Text between `fldChar separate` and `fldChar end` is now rendered for non-dynamic fields (DocProperty, etc.). Previously all text inside field regions was suppressed. Dynamic fields (PAGE, NUMPAGES, STYLEREF) suppress cached result text and use computed values at render time. The cached text is still stored in the field_code run via `field_result_text` accumulator for body text display. Affects 4 scraped fixtures.
+
+## Even/Odd Headers & STYLEREF Resolution (DONE)
+
+Even-page headers/footers (`w:evenAndOddHeaders` + `type="even"` references) are now parsed and rendered. Section-relative page numbers are computed when `pgNumType w:start` is explicitly set. STYLEREF fields in headers/footers resolve per spec §17.16.5.59: search current page top-to-bottom first, then backward through previous pages. Tracked via per-page `styleref_running` and `styleref_page_first` maps. bush_fires_act_comparison improved from 8.4% → 8.7% Jaccard, 20.5% → 21.0% SSIM.
 
 ## Document Settings (DONE — `word/settings.xml`)
 

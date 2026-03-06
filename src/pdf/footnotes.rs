@@ -93,8 +93,7 @@ pub(super) fn render_page_footnotes(
                 continue;
             }
 
-            let (fs, tallest_lhr, tallest_ar) =
-                tallest_run_metrics(&substituted_runs, seen_fonts);
+            let (fs, tallest_lhr, tallest_ar) = tallest_run_metrics(&substituted_runs, seen_fonts);
             let effective_ls = para.line_spacing.unwrap_or(LineSpacing::Auto(1.0));
             let lh = resolve_line_h(effective_ls, fs, tallest_lhr);
 

@@ -11,7 +11,9 @@ use super::{WML_NS, highlight_color, parse_text_color, twips_to_pts, wml, wml_at
 
 fn is_dynamic_field(instr: &str) -> bool {
     let keyword = instr.split_whitespace().next().unwrap_or("");
-    keyword.eq_ignore_ascii_case("PAGE") || keyword.eq_ignore_ascii_case("NUMPAGES")
+    keyword.eq_ignore_ascii_case("PAGE")
+        || keyword.eq_ignore_ascii_case("NUMPAGES")
+        || keyword.eq_ignore_ascii_case("STYLEREF")
 }
 
 fn parse_styleref_arg(instr: &str) -> Option<String> {
@@ -188,6 +190,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
     let mut in_field = false;
     let mut in_field_result = false;
     let mut field_instr = String::new();
+    let mut field_result_text = String::new();
 
     for (run_node, hyperlink_url) in run_nodes {
         let rpr = wml(run_node, "rPr");
@@ -337,6 +340,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                         in_field = true;
                         in_field_result = false;
                         field_instr.clear();
+                        field_result_text.clear();
                     }
                     Some("separate") => {
                         in_field_result = true;
@@ -349,19 +353,12 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                             } else if keyword.eq_ignore_ascii_case("NUMPAGES") {
                                 Some(FieldCode::NumPages)
                             } else if keyword.eq_ignore_ascii_case("STYLEREF") {
-                                parse_styleref_arg(&field_instr)
-                                    .map(FieldCode::StyleRef)
+                                parse_styleref_arg(&field_instr).map(FieldCode::StyleRef)
                             } else {
                                 None
                             };
                             if let Some(code) = fc {
-                                // For STYLEREF, the display text was kept in pending_text;
-                                // flush it into a run that also carries the field code.
-                                let text = if matches!(code, FieldCode::StyleRef(_)) {
-                                    std::mem::take(&mut pending_text)
-                                } else {
-                                    String::new()
-                                };
+                                let text = std::mem::take(&mut field_result_text);
                                 runs.push(Run {
                                     text,
                                     font_size: fmt.font_size,
@@ -390,6 +387,11 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                     if let Some(t) = child.text() {
                         let normalized = t.replace('\n', " ");
                         pending_text.push_str(&normalized);
+                    }
+                }
+                "t" if in_field_result && is_dynamic_field(&field_instr) => {
+                    if let Some(t) = child.text() {
+                        field_result_text.push_str(t);
                     }
                 }
                 "tab" if !in_field => {

@@ -1,6 +1,7 @@
 mod common;
 
 use rayon::prelude::*;
+use std::collections::HashMap;
 use std::path::Path;
 use std::process::Command;
 
@@ -161,6 +162,16 @@ struct CaseResult {
     matching_lines: usize,
 }
 
+impl CaseResult {
+    fn line_match_pct(&self) -> f64 {
+        if self.total_lines > 0 {
+            self.matching_lines as f64 / self.total_lines as f64
+        } else {
+            1.0
+        }
+    }
+}
+
 fn analyze_fixture(fixture_dir: &Path) -> Option<CaseResult> {
     let name = common::display_name(fixture_dir);
     let reference_pdf = fixture_dir.join("reference.pdf");
@@ -230,7 +241,11 @@ fn text_boundaries_match() {
         return;
     }
 
-    let prev_scores = common::read_previous_scores("text_boundary_results.csv", 5);
+    let baselines = common::read_baselines();
+    let prev_scores: HashMap<String, f64> = baselines
+        .iter()
+        .filter_map(|(k, v)| v.text_boundary.map(|t| (k.clone(), t)))
+        .collect();
 
     let mut results: Vec<CaseResult> = fixtures
         .par_iter()
@@ -274,11 +289,7 @@ fn text_boundaries_match() {
             format!("{abs}w ({pct:.1}%)")
         };
 
-        let line_pct = if r.total_lines > 0 {
-            r.matching_lines as f64 / r.total_lines as f64
-        } else {
-            1.0
-        };
+        let line_pct = r.line_match_pct();
         let line_pct_str = if r.total_lines > 0 {
             format!("{:.0}%", line_pct * 100.0)
         } else {
@@ -307,17 +318,25 @@ fn text_boundaries_match() {
         );
     }
 
+    let mut baseline_updates: HashMap<String, common::Baselines> = HashMap::new();
+    for r in &results {
+        baseline_updates.insert(
+            r.name.clone(),
+            common::Baselines {
+                jaccard: None,
+                ssim: None,
+                text_boundary: Some(r.line_match_pct()),
+            },
+        );
+    }
+    common::update_baselines(&baseline_updates);
+
     let regressions: Vec<&str> = results
         .iter()
         .filter(|r| {
-            let line_pct = if r.total_lines > 0 {
-                r.matching_lines as f64 / r.total_lines as f64
-            } else {
-                1.0
-            };
             prev_scores
                 .get(&r.name)
-                .is_some_and(|&p| line_pct < p - 0.005)
+                .is_some_and(|&p| r.line_match_pct() < p - common::REGRESSION_SLACK)
         })
         .map(|r| r.name.as_str())
         .collect();

@@ -30,28 +30,48 @@ use layout::{
 };
 use table::render_table;
 
+fn styleref_insert(
+    map: &mut HashMap<String, String>,
+    id: &str,
+    text: &str,
+    style_id_to_name: &HashMap<String, String>,
+) {
+    map.insert(id.to_string(), text.to_string());
+    if let Some(name) = style_id_to_name.get(id) {
+        map.insert(name.clone(), text.to_string());
+    }
+}
+
 fn update_styleref_from_para(
     running: &mut HashMap<String, String>,
+    page_first: &mut HashMap<String, String>,
     para: &Paragraph,
     style_id_to_name: &HashMap<String, String>,
 ) {
-    let mut insert = |id: &str, text: &str| {
-        running.insert(id.to_string(), text.to_string());
-        if let Some(name) = style_id_to_name.get(id) {
-            running.insert(name.clone(), text.to_string());
-        }
-    };
-
     if let Some(ref sid) = para.style_id {
         let text: String = para.runs.iter().map(|r| r.text.as_str()).collect();
         if !text.is_empty() {
-            insert(sid, &text);
+            styleref_insert(running, sid, &text, style_id_to_name);
+            page_first
+                .entry(sid.to_string())
+                .or_insert_with(|| text.clone());
+            if let Some(name) = style_id_to_name.get(sid.as_str()) {
+                page_first.entry(name.clone()).or_insert_with(|| text.clone());
+            }
         }
     }
     for run in &para.runs {
         if let Some(ref csid) = run.char_style_id {
             if !run.text.is_empty() {
-                insert(csid, &run.text);
+                styleref_insert(running, csid, &run.text, style_id_to_name);
+                page_first
+                    .entry(csid.to_string())
+                    .or_insert_with(|| run.text.clone());
+                if let Some(name) = style_id_to_name.get(csid.as_str()) {
+                    page_first
+                        .entry(name.clone())
+                        .or_insert_with(|| run.text.clone());
+                }
             }
         }
     }
@@ -91,7 +111,6 @@ fn resolve_line_h(ls: LineSpacing, font_size: f32, tallest_lhr: Option<f32>) -> 
     }
 }
 
-
 pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     let t0 = std::time::Instant::now();
     let mut pdf = Pdf::new();
@@ -114,8 +133,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         [
             &s.properties.header_default,
             &s.properties.header_first,
+            &s.properties.header_even,
             &s.properties.footer_default,
             &s.properties.footer_first,
+            &s.properties.footer_even,
         ]
         .into_iter()
         .filter_map(|hf| hf.as_ref())
@@ -243,8 +264,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         for hf in [
             &section.properties.header_default,
             &section.properties.header_first,
+            &section.properties.header_even,
             &section.properties.footer_default,
             &section.properties.footer_first,
+            &section.properties.footer_even,
         ]
         .into_iter()
         .flatten()
@@ -462,16 +485,19 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     // Key: (section_idx, hf_type, para_idx) for paragraph images
     // Key: (section_idx, hf_type, para_idx, run_idx) for inline images
     // Key: (section_idx, hf_type, para_idx, floating_idx) for floating images
-    // hf_type: 0=header_default, 1=header_first, 2=footer_default, 3=footer_first
+    // hf_type: 0=header_default, 1=header_first, 2=footer_default, 3=footer_first,
+    //          4=header_even, 5=footer_even
     let mut hf_image_names: HashMap<(usize, u8, usize), String> = HashMap::new();
     let mut hf_inline_image_names: HashMap<(usize, u8, usize, usize), String> = HashMap::new();
     let mut hf_floating_image_names: HashMap<(usize, u8, usize, usize), String> = HashMap::new();
     {
-        let hf_variants: [(u8, fn(&SectionProperties) -> Option<&HeaderFooter>); 4] = [
+        let hf_variants: [(u8, fn(&SectionProperties) -> Option<&HeaderFooter>); 6] = [
             (0, |sp| sp.header_default.as_ref()),
             (1, |sp| sp.header_first.as_ref()),
             (2, |sp| sp.footer_default.as_ref()),
             (3, |sp| sp.footer_first.as_ref()),
+            (4, |sp| sp.header_even.as_ref()),
+            (5, |sp| sp.footer_even.as_ref()),
         ];
         for (si, section) in doc.sections.iter().enumerate() {
             for &(hf_type, accessor) in &hf_variants {
@@ -486,14 +512,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             }
                             for (ri, run) in para.runs.iter().enumerate() {
                                 if let Some(img) = &run.inline_image {
-                                    let name = embed_image(
-                                        img,
-                                        &mut image_xobjects,
-                                        &mut pdf,
-                                        &mut alloc,
-                                    );
-                                    hf_inline_image_names
-                                        .insert((si, hf_type, pi, ri), name);
+                                    let name =
+                                        embed_image(img, &mut image_xobjects, &mut pdf, &mut alloc);
+                                    hf_inline_image_names.insert((si, hf_type, pi, ri), name);
                                 }
                             }
                             for (fi, floating) in para.floating_images.iter().enumerate() {
@@ -503,8 +524,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     &mut pdf,
                                     &mut alloc,
                                 );
-                                hf_floating_image_names
-                                    .insert((si, hf_type, pi, fi), name);
+                                hf_floating_image_names.insert((si, hf_type, pi, fi), name);
                             }
                             pi += 1;
                         }
@@ -562,15 +582,19 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     // Track which section each page belongs to, and whether it's the first page of that section
     let mut page_section_indices: Vec<(usize, bool)> = Vec::new();
 
-    // STYLEREF: running map of style_id/name → text, accumulated as body content is laid out
+    // STYLEREF: running map (last seen per style through end of page) + first-on-page map.
+    // Per spec, headers/footers search current page top-to-bottom first, then backward.
     let mut styleref_running: HashMap<String, String> = HashMap::new();
+    let mut styleref_page_first: HashMap<String, String> = HashMap::new();
     let mut all_page_styleref: Vec<HashMap<String, String>> = Vec::new();
+    let mut all_page_first_styleref: Vec<HashMap<String, String>> = Vec::new();
 
     // Initialize from first section
     let first_sp = &doc.sections[0].properties;
     let mut cur_sp = first_sp;
     let mut slot_top = effective_slot_top(cur_sp, true, &seen_fonts, doc.line_spacing);
-    let mut effective_margin_bottom: f32 = compute_effective_margin_bottom(cur_sp, true, &seen_fonts, doc.line_spacing);
+    let mut effective_margin_bottom: f32 =
+        compute_effective_margin_bottom(cur_sp, true, &seen_fonts, doc.line_spacing);
     let mut is_first_page_of_section = true;
     let mut global_block_idx: usize = 0;
 
@@ -590,6 +614,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     all_page_alpha_states.push(std::mem::take(&mut current_alpha_states));
                     page_section_indices.push((sect_idx - 1, is_first_page_of_section));
                     all_page_styleref.push(styleref_running.clone());
+                    all_page_first_styleref.push(std::mem::take(&mut styleref_page_first));
 
                     // Insert blank page for odd/even page alignment
                     let need_odd = match sp.break_type {
@@ -618,11 +643,13 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             all_page_alpha_states.push(std::collections::HashSet::new());
                             page_section_indices.push((sect_idx - 1, false));
                             all_page_styleref.push(styleref_running.clone());
+                            all_page_first_styleref.push(std::mem::take(&mut styleref_page_first));
                         }
                     }
 
                     slot_top = effective_slot_top(sp, true, &seen_fonts, doc.line_spacing);
-                    effective_margin_bottom = compute_effective_margin_bottom(sp, true, &seen_fonts, doc.line_spacing);
+                    effective_margin_bottom =
+                        compute_effective_margin_bottom(sp, true, &seen_fonts, doc.line_spacing);
                 }
                 SectionBreakType::Continuous => {
                     // No forced break; geometry updates on next page
@@ -672,12 +699,18 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             all_page_links.push(std::mem::take(&mut current_page_links));
                             all_page_footnote_ids
                                 .push(std::mem::take(&mut current_page_footnote_ids));
-                            all_page_alpha_states
-                                .push(std::mem::take(&mut current_alpha_states));
+                            all_page_alpha_states.push(std::mem::take(&mut current_alpha_states));
                             page_section_indices.push((sect_idx, is_first_page_of_section));
                             all_page_styleref.push(styleref_running.clone());
-                            slot_top = effective_slot_top(cur_sp, false, &seen_fonts, doc.line_spacing);
-                            effective_margin_bottom = compute_effective_margin_bottom(cur_sp, false, &seen_fonts, doc.line_spacing);
+                            all_page_first_styleref.push(std::mem::take(&mut styleref_page_first));
+                            slot_top =
+                                effective_slot_top(cur_sp, false, &seen_fonts, doc.line_spacing);
+                            effective_margin_bottom = compute_effective_margin_bottom(
+                                cur_sp,
+                                false,
+                                &seen_fonts,
+                                doc.line_spacing,
+                            );
                             is_first_page_of_section = false;
                             current_col = 0;
                         }
@@ -692,7 +725,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     if para.column_break_before && col_count > 1 {
                         if current_col + 1 < col_count {
                             current_col += 1;
-                            slot_top = effective_slot_top(cur_sp, false, &seen_fonts, doc.line_spacing);
+                            slot_top =
+                                effective_slot_top(cur_sp, false, &seen_fonts, doc.line_spacing);
                             prev_space_after = 0.0;
                         } else {
                             current_col = 0;
@@ -701,12 +735,18 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             all_page_links.push(std::mem::take(&mut current_page_links));
                             all_page_footnote_ids
                                 .push(std::mem::take(&mut current_page_footnote_ids));
-                            all_page_alpha_states
-                                .push(std::mem::take(&mut current_alpha_states));
+                            all_page_alpha_states.push(std::mem::take(&mut current_alpha_states));
                             page_section_indices.push((sect_idx, is_first_page_of_section));
                             all_page_styleref.push(styleref_running.clone());
-                            slot_top = effective_slot_top(cur_sp, false, &seen_fonts, doc.line_spacing);
-                            effective_margin_bottom = compute_effective_margin_bottom(cur_sp, false, &seen_fonts, doc.line_spacing);
+                            all_page_first_styleref.push(std::mem::take(&mut styleref_page_first));
+                            slot_top =
+                                effective_slot_top(cur_sp, false, &seen_fonts, doc.line_spacing);
+                            effective_margin_bottom = compute_effective_margin_bottom(
+                                cur_sp,
+                                false,
+                                &seen_fonts,
+                                doc.line_spacing,
+                            );
                             is_first_page_of_section = false;
                             prev_space_after = 0.0;
                         }
@@ -953,7 +993,12 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                             if current_col + 1 < col_count {
                                 current_col += 1;
-                                slot_top = effective_slot_top(cur_sp, false, &seen_fonts, doc.line_spacing);
+                                slot_top = effective_slot_top(
+                                    cur_sp,
+                                    false,
+                                    &seen_fonts,
+                                    doc.line_spacing,
+                                );
                             } else {
                                 current_col = 0;
                                 all_contents
@@ -965,8 +1010,19 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     .push(std::mem::take(&mut current_alpha_states));
                                 page_section_indices.push((sect_idx, is_first_page_of_section));
                                 all_page_styleref.push(styleref_running.clone());
-                                slot_top = effective_slot_top(cur_sp, false, &seen_fonts, doc.line_spacing);
-                                effective_margin_bottom = compute_effective_margin_bottom(cur_sp, false, &seen_fonts, doc.line_spacing);
+                                all_page_first_styleref.push(std::mem::take(&mut styleref_page_first));
+                                slot_top = effective_slot_top(
+                                    cur_sp,
+                                    false,
+                                    &seen_fonts,
+                                    doc.line_spacing,
+                                );
+                                effective_margin_bottom = compute_effective_margin_bottom(
+                                    cur_sp,
+                                    false,
+                                    &seen_fonts,
+                                    doc.line_spacing,
+                                );
                                 is_first_page_of_section = false;
                             }
 
@@ -1002,7 +1058,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                         if current_col + 1 < col_count {
                             current_col += 1;
-                            slot_top = effective_slot_top(cur_sp, false, &seen_fonts, doc.line_spacing);
+                            slot_top =
+                                effective_slot_top(cur_sp, false, &seen_fonts, doc.line_spacing);
                         } else {
                             current_col = 0;
                             all_contents
@@ -1010,12 +1067,18 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             all_page_links.push(std::mem::take(&mut current_page_links));
                             all_page_footnote_ids
                                 .push(std::mem::take(&mut current_page_footnote_ids));
-                            all_page_alpha_states
-                                .push(std::mem::take(&mut current_alpha_states));
+                            all_page_alpha_states.push(std::mem::take(&mut current_alpha_states));
                             page_section_indices.push((sect_idx, is_first_page_of_section));
                             all_page_styleref.push(styleref_running.clone());
-                            slot_top = effective_slot_top(cur_sp, false, &seen_fonts, doc.line_spacing);
-                            effective_margin_bottom = compute_effective_margin_bottom(cur_sp, false, &seen_fonts, doc.line_spacing);
+                            all_page_first_styleref.push(std::mem::take(&mut styleref_page_first));
+                            slot_top =
+                                effective_slot_top(cur_sp, false, &seen_fonts, doc.line_spacing);
+                            effective_margin_bottom = compute_effective_margin_bottom(
+                                cur_sp,
+                                false,
+                                &seen_fonts,
+                                doc.line_spacing,
+                            );
                             is_first_page_of_section = false;
                         }
                         inter_gap = 0.0;
@@ -1464,7 +1527,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         }
                     }
 
-                    update_styleref_from_para(&mut styleref_running, para, &doc.style_id_to_name);
+                    update_styleref_from_para(&mut styleref_running, &mut styleref_page_first, para, &doc.style_id_to_name);
                 }
 
                 Block::Table(table) => {
@@ -1530,13 +1593,19 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     for row in &table.rows {
                         for cell in &row.cells {
                             for p in &cell.paragraphs {
-                                update_styleref_from_para(&mut styleref_running, p, &doc.style_id_to_name);
+                                update_styleref_from_para(
+                                    &mut styleref_running,
+                                    &mut styleref_page_first,
+                                    p,
+                                    &doc.style_id_to_name,
+                                );
                             }
                         }
                     }
                     // Pad styleref snapshots for any pages added by the table renderer
                     while all_page_styleref.len() < page_section_indices.len() {
                         all_page_styleref.push(styleref_running.clone());
+                        all_page_first_styleref.push(std::mem::take(&mut styleref_page_first));
                     }
                 }
             }
@@ -1549,6 +1618,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     all_page_alpha_states.push(current_alpha_states);
     page_section_indices.push((doc.sections.len() - 1, is_first_page_of_section));
     all_page_styleref.push(styleref_running.clone());
+    all_page_first_styleref.push(std::mem::take(&mut styleref_page_first));
 
     let t_layout = t0.elapsed();
 
@@ -1557,6 +1627,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         let last = page_section_indices.last().map(|&(si, _)| si).unwrap_or(0);
         page_section_indices.push((last, false));
         all_page_styleref.push(styleref_running.clone());
+        all_page_first_styleref.push(std::mem::take(&mut styleref_page_first));
     }
 
     // Phase 2b: column separator lines
@@ -1639,14 +1710,43 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     for (page_idx, hf_content) in all_hf_contents.iter_mut().enumerate() {
         let (si, is_first) = page_section_indices[page_idx];
         let sp = &doc.sections[si].properties;
-        let page_num = page_idx + 1;
-        let page_styleref = all_page_styleref.get(page_idx).unwrap_or(&empty_styleref);
+
+        let page_num = if let Some(start) = sp.page_num_start {
+            // Section specifies explicit start: count pages within this section
+            let pages_before_in_section = page_section_indices[..page_idx]
+                .iter()
+                .filter(|&&(s, _)| s == si)
+                .count();
+            start as usize + pages_before_in_section
+        } else {
+            // No explicit start: continue absolute numbering
+            page_idx + 1
+        };
+
+        // Per spec §17.16.5.59: in headers/footers of a printed document, STYLEREF
+        // searches the current page top-to-bottom first, then backward to doc start.
+        let page_first = all_page_first_styleref
+            .get(page_idx)
+            .unwrap_or(&empty_styleref);
+        let prev_running = if page_idx > 0 {
+            all_page_styleref.get(page_idx - 1).unwrap_or(&empty_styleref)
+        } else {
+            &empty_styleref
+        };
+        let mut page_styleref_merged = prev_running.clone();
+        // Current-page first occurrences take priority (top-to-bottom search)
+        for (k, v) in page_first {
+            page_styleref_merged.insert(k.clone(), v.clone());
+        }
+        let page_styleref = &page_styleref_merged;
 
         let mut hf = Content::new();
         let mut has_hf = false;
 
         let (header, hdr_type) = if is_first && sp.different_first_page {
             (sp.header_first.as_ref(), 1u8)
+        } else if doc.even_and_odd_headers && page_num % 2 == 0 && sp.header_even.is_some() {
+            (sp.header_even.as_ref(), 4u8)
         } else {
             (sp.header_default.as_ref(), 0u8)
         };
@@ -1671,6 +1771,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
         let (footer, ftr_type) = if is_first && sp.different_first_page {
             (sp.footer_first.as_ref(), 3u8)
+        } else if doc.even_and_odd_headers && page_num % 2 == 0 && sp.footer_even.is_some() {
+            (sp.footer_even.as_ref(), 5u8)
         } else {
             (sp.footer_default.as_ref(), 2u8)
         };
@@ -1854,4 +1956,3 @@ fn label_for_paragraph<'a>(
     };
     label_for_run(first_run, seen_fonts, &para.list_label)
 }
-

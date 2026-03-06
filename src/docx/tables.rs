@@ -8,9 +8,9 @@ use crate::model::{
 
 use super::numbering::{self, parse_list_info};
 use super::runs::parse_runs;
-use super::styles::{self, parse_alignment, parse_line_spacing, TableBordersDef};
+use super::styles::{self, TableBordersDef, parse_alignment, parse_line_spacing};
 use super::{
-    collect_block_nodes, parse_hex_color, twips_attr, twips_to_pts, wml, wml_attr, WML_NS,
+    WML_NS, collect_block_nodes, parse_hex_color, twips_attr, twips_to_pts, wml, wml_attr,
 };
 
 pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
@@ -26,9 +26,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
     let col_widths: Vec<f32> = wml(node, "tblGrid")
         .into_iter()
         .flat_map(|grid| grid.children())
-        .filter(|n| {
-            n.tag_name().name() == "gridCol" && n.tag_name().namespace() == Some(WML_NS)
-        })
+        .filter(|n| n.tag_name().name() == "gridCol" && n.tag_name().namespace() == Some(WML_NS))
         .filter_map(|n| twips_attr(n, "w"))
         .collect();
 
@@ -96,53 +94,49 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
         }
     });
 
-    let has_tbl_style = tbl_pr
-        .and_then(|pr| wml_attr(pr, "tblStyle"))
-        .is_some();
+    let has_tbl_style = tbl_pr.and_then(|pr| wml_attr(pr, "tblStyle")).is_some();
     let tbl_style_borders = tbl_pr
         .and_then(|pr| wml_attr(pr, "tblStyle"))
         .and_then(|id| styles.table_border_styles.get(id));
 
-    let inline_tbl_borders = tbl_pr
-        .and_then(|pr| wml(pr, "tblBorders"))
-        .map(|bdr_node| {
-            let parse_bdr = |name: &str| -> CellBorder {
-                let Some(n) = wml(bdr_node, name) else {
-                    return CellBorder::default();
-                };
-                let val = n.attribute((WML_NS, "val")).unwrap_or("none");
-                if val == "nil" || val == "none" {
-                    return CellBorder::default();
-                }
-                let width = n
-                    .attribute((WML_NS, "sz"))
-                    .and_then(|v| v.parse::<f32>().ok())
-                    .map(|v| v / 8.0)
-                    .unwrap_or(0.5);
-                let color = n.attribute((WML_NS, "color")).and_then(parse_hex_color);
-                CellBorder::visible(color, width)
+    let inline_tbl_borders = tbl_pr.and_then(|pr| wml(pr, "tblBorders")).map(|bdr_node| {
+        let parse_bdr = |name: &str| -> CellBorder {
+            let Some(n) = wml(bdr_node, name) else {
+                return CellBorder::default();
             };
-            let left = parse_bdr("left");
-            let left = if left.present {
-                left
-            } else {
-                parse_bdr("start")
-            };
-            let right = parse_bdr("right");
-            let right = if right.present {
-                right
-            } else {
-                parse_bdr("end")
-            };
-            TableBordersDef {
-                top: parse_bdr("top"),
-                bottom: parse_bdr("bottom"),
-                left,
-                right,
-                inside_h: parse_bdr("insideH"),
-                inside_v: parse_bdr("insideV"),
+            let val = n.attribute((WML_NS, "val")).unwrap_or("none");
+            if val == "nil" || val == "none" {
+                return CellBorder::default();
             }
-        });
+            let width = n
+                .attribute((WML_NS, "sz"))
+                .and_then(|v| v.parse::<f32>().ok())
+                .map(|v| v / 8.0)
+                .unwrap_or(0.5);
+            let color = n.attribute((WML_NS, "color")).and_then(parse_hex_color);
+            CellBorder::visible(color, width)
+        };
+        let left = parse_bdr("left");
+        let left = if left.present {
+            left
+        } else {
+            parse_bdr("start")
+        };
+        let right = parse_bdr("right");
+        let right = if right.present {
+            right
+        } else {
+            parse_bdr("end")
+        };
+        TableBordersDef {
+            top: parse_bdr("top"),
+            bottom: parse_bdr("bottom"),
+            left,
+            right,
+            inside_h: parse_bdr("insideH"),
+            inside_v: parse_bdr("insideV"),
+        }
+    });
 
     let effective_tbl_borders: Option<&TableBordersDef> =
         inline_tbl_borders.as_ref().or(tbl_style_borders);
@@ -188,9 +182,10 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
 
         let mut cells = Vec::new();
         let mut grid_col = 0usize;
-        for tc in collect_block_nodes(*tr).into_iter().filter(|n| {
-            n.tag_name().name() == "tc" && n.tag_name().namespace() == Some(WML_NS)
-        }) {
+        for tc in collect_block_nodes(*tr)
+            .into_iter()
+            .filter(|n| n.tag_name().name() == "tc" && n.tag_name().namespace() == Some(WML_NS))
+        {
             let ci = grid_col;
             let tc_pr = wml(tc, "tcPr");
             let cell_width = tc_pr
@@ -277,9 +272,10 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                 .and_then(parse_hex_color);
 
             let mut cell_paras = Vec::new();
-            for p in tc.children().filter(|n| {
-                n.tag_name().name() == "p" && n.tag_name().namespace() == Some(WML_NS)
-            }) {
+            for p in tc
+                .children()
+                .filter(|n| n.tag_name().name() == "p" && n.tag_name().namespace() == Some(WML_NS))
+            {
                 let parsed = parse_runs(p, styles, theme, rels, zip, numbering);
                 let ppr = wml(p, "pPr");
                 let para_style_id = ppr
@@ -299,7 +295,13 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                             .map(|line_val| parse_line_spacing(n, line_val))
                     })
                     .or_else(|| para_style.and_then(|s| s.line_spacing))
-                    .or_else(|| if has_tbl_style { Some(LineSpacing::Auto(1.0)) } else { None });
+                    .or_else(|| {
+                        if has_tbl_style {
+                            Some(LineSpacing::Auto(1.0))
+                        } else {
+                            None
+                        }
+                    });
                 let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
                 let (mut indent_left, mut indent_hanging, list_label, list_label_font) =
                     parse_list_info(num_pr, numbering, counters, last_seen_level);
