@@ -11,9 +11,7 @@ use super::{WML_NS, highlight_color, parse_text_color, twips_to_pts, wml, wml_at
 
 fn is_dynamic_field(instr: &str) -> bool {
     let keyword = instr.split_whitespace().next().unwrap_or("");
-    keyword.eq_ignore_ascii_case("PAGE")
-        || keyword.eq_ignore_ascii_case("NUMPAGES")
-        || keyword.eq_ignore_ascii_case("STYLEREF")
+    keyword.eq_ignore_ascii_case("PAGE") || keyword.eq_ignore_ascii_case("NUMPAGES")
 }
 
 fn parse_styleref_arg(instr: &str) -> Option<String> {
@@ -357,7 +355,15 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                                 None
                             };
                             if let Some(code) = fc {
+                                // For STYLEREF, the display text was kept in pending_text;
+                                // flush it into a run that also carries the field code.
+                                let text = if matches!(code, FieldCode::StyleRef(_)) {
+                                    std::mem::take(&mut pending_text)
+                                } else {
+                                    String::new()
+                                };
                                 runs.push(Run {
+                                    text,
                                     font_size: fmt.font_size,
                                     font_name: fmt.font_name.clone(),
                                     bold: fmt.bold,
