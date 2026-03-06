@@ -467,6 +467,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
 
                 blocks.push(Block::Paragraph(Paragraph {
                     runs,
+                    style_id: Some(para_style_id.to_string()),
                     space_before,
                     space_after,
                     content_height,
@@ -560,5 +561,6 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         footnotes,
         font_table,
         even_and_odd_headers: settings.even_and_odd_headers,
+        style_id_to_name: styles.style_id_to_name,
     })
 }

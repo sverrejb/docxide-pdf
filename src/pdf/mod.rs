@@ -30,6 +30,33 @@ use layout::{
 };
 use table::render_table;
 
+fn update_styleref_from_para(
+    running: &mut HashMap<String, String>,
+    para: &Paragraph,
+    style_id_to_name: &HashMap<String, String>,
+) {
+    let mut insert = |id: &str, text: &str| {
+        running.insert(id.to_string(), text.to_string());
+        if let Some(name) = style_id_to_name.get(id) {
+            running.insert(name.clone(), text.to_string());
+        }
+    };
+
+    if let Some(ref sid) = para.style_id {
+        let text: String = para.runs.iter().map(|r| r.text.as_str()).collect();
+        if !text.is_empty() {
+            insert(sid, &text);
+        }
+    }
+    for run in &para.runs {
+        if let Some(ref csid) = run.char_style_id {
+            if !run.text.is_empty() {
+                insert(csid, &run.text);
+            }
+        }
+    }
+}
+
 fn border_eq(
     a: &Option<crate::model::ParagraphBorder>,
     b: &Option<crate::model::ParagraphBorder>,
@@ -150,6 +177,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 FieldCode::Page | FieldCode::NumPages => {
                     chars.extend('0'..='9');
                 }
+                FieldCode::StyleRef(_) => {
+                    // Characters will be included from the body text runs
+                }
             }
         }
         if run.footnote_id.is_some() || run.is_footnote_ref_mark {
@@ -232,6 +262,12 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         match fc {
                             FieldCode::Page | FieldCode::NumPages => {
                                 chars.extend('0'..='9');
+                            }
+                            FieldCode::StyleRef(_) => {
+                                chars.extend('0'..='9');
+                                chars.extend('A'..='Z');
+                                chars.extend('a'..='z');
+                                chars.extend([' ', '.', ',', '/', '-', '(', ')']);
                             }
                         }
                     }
@@ -526,6 +562,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     // Track which section each page belongs to, and whether it's the first page of that section
     let mut page_section_indices: Vec<(usize, bool)> = Vec::new();
 
+    // STYLEREF: running map of style_id/name → text, accumulated as body content is laid out
+    let mut styleref_running: HashMap<String, String> = HashMap::new();
+    let mut all_page_styleref: Vec<HashMap<String, String>> = Vec::new();
+
     // Initialize from first section
     let first_sp = &doc.sections[0].properties;
     let mut cur_sp = first_sp;
@@ -549,6 +589,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     all_page_footnote_ids.push(std::mem::take(&mut current_page_footnote_ids));
                     all_page_alpha_states.push(std::mem::take(&mut current_alpha_states));
                     page_section_indices.push((sect_idx - 1, is_first_page_of_section));
+                    all_page_styleref.push(styleref_running.clone());
 
                     // Insert blank page for odd/even page alignment
                     let need_odd = match sp.break_type {
@@ -576,6 +617,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             all_page_footnote_ids.push(Vec::new());
                             all_page_alpha_states.push(std::collections::HashSet::new());
                             page_section_indices.push((sect_idx - 1, false));
+                            all_page_styleref.push(styleref_running.clone());
                         }
                     }
 
@@ -633,6 +675,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             all_page_alpha_states
                                 .push(std::mem::take(&mut current_alpha_states));
                             page_section_indices.push((sect_idx, is_first_page_of_section));
+                            all_page_styleref.push(styleref_running.clone());
                             slot_top = effective_slot_top(cur_sp, false, &seen_fonts, doc.line_spacing);
                             effective_margin_bottom = compute_effective_margin_bottom(cur_sp, false, &seen_fonts, doc.line_spacing);
                             is_first_page_of_section = false;
@@ -661,6 +704,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             all_page_alpha_states
                                 .push(std::mem::take(&mut current_alpha_states));
                             page_section_indices.push((sect_idx, is_first_page_of_section));
+                            all_page_styleref.push(styleref_running.clone());
                             slot_top = effective_slot_top(cur_sp, false, &seen_fonts, doc.line_spacing);
                             effective_margin_bottom = compute_effective_margin_bottom(cur_sp, false, &seen_fonts, doc.line_spacing);
                             is_first_page_of_section = false;
@@ -920,6 +964,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 all_page_alpha_states
                                     .push(std::mem::take(&mut current_alpha_states));
                                 page_section_indices.push((sect_idx, is_first_page_of_section));
+                                all_page_styleref.push(styleref_running.clone());
                                 slot_top = effective_slot_top(cur_sp, false, &seen_fonts, doc.line_spacing);
                                 effective_margin_bottom = compute_effective_margin_bottom(cur_sp, false, &seen_fonts, doc.line_spacing);
                                 is_first_page_of_section = false;
@@ -968,6 +1013,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             all_page_alpha_states
                                 .push(std::mem::take(&mut current_alpha_states));
                             page_section_indices.push((sect_idx, is_first_page_of_section));
+                            all_page_styleref.push(styleref_running.clone());
                             slot_top = effective_slot_top(cur_sp, false, &seen_fonts, doc.line_spacing);
                             effective_margin_bottom = compute_effective_margin_bottom(cur_sp, false, &seen_fonts, doc.line_spacing);
                             is_first_page_of_section = false;
@@ -1417,6 +1463,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             }
                         }
                     }
+
+                    update_styleref_from_para(&mut styleref_running, para, &doc.style_id_to_name);
                 }
 
                 Block::Table(table) => {
@@ -1478,6 +1526,18 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         override_pos,
                     );
                     prev_space_after = 0.0;
+
+                    for row in &table.rows {
+                        for cell in &row.cells {
+                            for p in &cell.paragraphs {
+                                update_styleref_from_para(&mut styleref_running, p, &doc.style_id_to_name);
+                            }
+                        }
+                    }
+                    // Pad styleref snapshots for any pages added by the table renderer
+                    while all_page_styleref.len() < page_section_indices.len() {
+                        all_page_styleref.push(styleref_running.clone());
+                    }
                 }
             }
             global_block_idx += 1;
@@ -1488,6 +1548,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     all_page_footnote_ids.push(current_page_footnote_ids);
     all_page_alpha_states.push(current_alpha_states);
     page_section_indices.push((doc.sections.len() - 1, is_first_page_of_section));
+    all_page_styleref.push(styleref_running.clone());
 
     let t_layout = t0.elapsed();
 
@@ -1495,6 +1556,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     while page_section_indices.len() < all_contents.len() {
         let last = page_section_indices.last().map(|&(si, _)| si).unwrap_or(0);
         page_section_indices.push((last, false));
+        all_page_styleref.push(styleref_running.clone());
     }
 
     // Phase 2b: column separator lines
@@ -1572,11 +1634,13 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         (pi_map, ii_map, fi_map)
     };
 
+    let empty_styleref: HashMap<String, String> = HashMap::new();
     let mut all_hf_contents: Vec<Option<Content>> = (0..total_pages).map(|_| None).collect();
     for (page_idx, hf_content) in all_hf_contents.iter_mut().enumerate() {
         let (si, is_first) = page_section_indices[page_idx];
         let sp = &doc.sections[si].properties;
         let page_num = page_idx + 1;
+        let page_styleref = all_page_styleref.get(page_idx).unwrap_or(&empty_styleref);
 
         let mut hf = Content::new();
         let mut has_hf = false;
@@ -1600,6 +1664,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 &pi_map,
                 &ii_map,
                 &fi_map,
+                page_styleref,
             );
             has_hf = true;
         }
@@ -1623,6 +1688,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 &pi_map,
                 &ii_map,
                 &fi_map,
+                page_styleref,
             );
             has_hf = true;
         }

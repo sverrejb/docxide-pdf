@@ -114,6 +114,8 @@ pub struct Document {
     pub footnotes: std::collections::HashMap<u32, Footnote>,
     pub font_table: FontTable,
     pub even_and_odd_headers: bool,
+    /// Maps style IDs to display names (for STYLEREF resolution)
+    pub style_id_to_name: std::collections::HashMap<String, String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -193,6 +195,7 @@ pub struct ParagraphBorders {
 
 pub struct Paragraph {
     pub runs: Vec<Run>,
+    pub style_id: Option<String>,
     pub space_before: f32,
     pub space_after: f32,
     pub content_height: f32,
@@ -223,6 +226,7 @@ impl Default for Paragraph {
     fn default() -> Self {
         Self {
             runs: Vec::new(),
+            style_id: None,
             space_before: 0.0,
             space_after: 0.0,
             content_height: 0.0,
@@ -276,6 +280,7 @@ pub struct Run {
     pub footnote_id: Option<u32>,
     pub is_footnote_ref_mark: bool,
     pub kern_threshold: Option<f32>,
+    pub char_style_id: Option<String>,
 }
 
 impl Default for Run {
@@ -304,6 +309,7 @@ impl Default for Run {
             footnote_id: None,
             is_footnote_ref_mark: false,
             kern_threshold: None,
+            char_style_id: None,
         }
     }
 }
@@ -312,6 +318,7 @@ impl Default for Run {
 pub enum FieldCode {
     Page,
     NumPages,
+    StyleRef(String),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

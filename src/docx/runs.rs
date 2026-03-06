@@ -11,7 +11,24 @@ use super::{WML_NS, highlight_color, parse_text_color, twips_to_pts, wml, wml_at
 
 fn is_dynamic_field(instr: &str) -> bool {
     let keyword = instr.split_whitespace().next().unwrap_or("");
-    keyword.eq_ignore_ascii_case("PAGE") || keyword.eq_ignore_ascii_case("NUMPAGES")
+    keyword.eq_ignore_ascii_case("PAGE")
+        || keyword.eq_ignore_ascii_case("NUMPAGES")
+        || keyword.eq_ignore_ascii_case("STYLEREF")
+}
+
+fn parse_styleref_arg(instr: &str) -> Option<String> {
+    let trimmed = instr.trim();
+    let kw = trimmed.split_whitespace().next()?;
+    if !kw.eq_ignore_ascii_case("styleref") {
+        return None;
+    }
+    let rest = trimmed[kw.len()..].trim();
+    if let Some(quoted) = rest.strip_prefix('"') {
+        let end = quoted.find('"')?;
+        Some(quoted[..end].to_string())
+    } else {
+        Some(rest.split_whitespace().next()?.to_string())
+    }
 }
 
 pub(super) struct ParsedRuns {
@@ -42,6 +59,7 @@ struct RunFormat {
     vertical_align: VertAlign,
     highlight: Option<[u8; 3]>,
     kern_threshold: Option<f32>,
+    char_style_id: Option<String>,
 }
 
 impl RunFormat {
@@ -65,6 +83,7 @@ impl RunFormat {
             vertical_align: self.vertical_align,
             highlight: self.highlight,
             kern_threshold: self.kern_threshold,
+            char_style_id: self.char_style_id.clone(),
             hyperlink_url,
             ..Run::default()
         }
@@ -175,9 +194,8 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
     for (run_node, hyperlink_url) in run_nodes {
         let rpr = wml(run_node, "rPr");
 
-        let char_style = rpr
-            .and_then(|n| wml_attr(n, "rStyle"))
-            .and_then(|id| styles.character_styles.get(id));
+        let char_style_id_str = rpr.and_then(|n| wml_attr(n, "rStyle"));
+        let char_style = char_style_id_str.and_then(|id| styles.character_styles.get(id));
 
         let fmt = RunFormat {
             font_size: rpr
@@ -256,6 +274,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                 .map(|hp| hp / 2.0)
                 .or_else(|| char_style.and_then(|cs| cs.kern_threshold))
                 .or(style_kern_threshold),
+            char_style_id: char_style_id_str.map(|s| s.to_string()),
         };
 
         let flush_pending = |pending: &mut String, runs: &mut Vec<Run>| {
@@ -331,6 +350,9 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                                 Some(FieldCode::Page)
                             } else if keyword.eq_ignore_ascii_case("NUMPAGES") {
                                 Some(FieldCode::NumPages)
+                            } else if keyword.eq_ignore_ascii_case("STYLEREF") {
+                                parse_styleref_arg(&field_instr)
+                                    .map(FieldCode::StyleRef)
                             } else {
                                 None
                             };

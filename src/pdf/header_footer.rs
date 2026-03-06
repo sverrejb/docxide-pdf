@@ -15,6 +15,30 @@ use super::layout::{
 use super::table;
 use super::{label_for_paragraph, resolve_line_h};
 
+pub(super) fn substitute_hf_runs(
+    runs: &[Run],
+    page_num: usize,
+    total_pages: usize,
+    styleref_values: &HashMap<String, String>,
+) -> Vec<Run> {
+    runs.iter()
+        .map(|run| {
+            let mut r = run.clone();
+            if let Some(ref fc) = run.field_code {
+                r.field_code = None;
+                r.text = match fc {
+                    FieldCode::Page => page_num.to_string(),
+                    FieldCode::NumPages => total_pages.to_string(),
+                    FieldCode::StyleRef(name) => {
+                        styleref_values.get(name).cloned().unwrap_or_default()
+                    }
+                };
+            }
+            r
+        })
+        .collect()
+}
+
 pub(super) fn compute_header_height(
     hf: &HeaderFooter,
     seen_fonts: &HashMap<String, FontEntry>,
@@ -117,6 +141,7 @@ pub(super) fn render_header_footer(
     para_image_names: &HashMap<usize, String>,
     inline_image_names: &HashMap<(usize, usize), String>,
     floating_image_names: &HashMap<(usize, usize), String>,
+    styleref_values: &HashMap<String, String>,
 ) {
     let text_width = sp.page_width - sp.margin_left - sp.margin_right;
     let mut cursor_y = if is_header {
@@ -136,6 +161,9 @@ pub(super) fn render_header_footer(
                     seen_fonts,
                     content,
                     &mut cursor_y,
+                    page_num,
+                    total_pages,
+                    styleref_values,
                 );
             }
             Block::Paragraph(para) => {
@@ -143,21 +171,9 @@ pub(super) fn render_header_footer(
                 let has_field_code = para.runs.iter().any(|r| r.field_code.is_some());
                 let text_empty = !has_field_code && is_text_empty(&para.runs);
 
-                let substituted_runs: Vec<Run> = para
-                    .runs
-                    .iter()
-                    .map(|run| {
-                        let mut r = run.clone();
-                        r.field_code = None;
-                        if let Some(ref fc) = run.field_code {
-                            r.text = match fc {
-                                FieldCode::Page => page_num.to_string(),
-                                FieldCode::NumPages => total_pages.to_string(),
-                            };
-                        }
-                        r
-                    })
-                    .collect();
+                let substituted_runs = substitute_hf_runs(
+                    &para.runs, page_num, total_pages, styleref_values,
+                );
 
                 let (font_size, tallest_lhr, tallest_ar) =
                     tallest_run_metrics(&substituted_runs, seen_fonts);

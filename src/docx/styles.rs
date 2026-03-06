@@ -85,6 +85,8 @@ pub(super) struct StylesInfo {
     pub(super) paragraph_styles: HashMap<String, ParagraphStyle>,
     pub(super) character_styles: HashMap<String, CharacterStyle>,
     pub(super) table_border_styles: HashMap<String, TableBordersDef>,
+    /// Maps style ID → display name (for STYLEREF resolution)
+    pub(super) style_id_to_name: HashMap<String, String>,
 }
 
 pub(super) fn parse_alignment(val: &str) -> Alignment {
@@ -223,6 +225,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
     };
     let mut paragraph_styles = HashMap::new();
     let mut character_styles = HashMap::new();
+    let mut style_id_to_name: HashMap<String, String> = HashMap::new();
 
     let Some(xml_content) = read_zip_text(zip, "word/styles.xml") else {
         return StylesInfo {
@@ -230,6 +233,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
             paragraph_styles,
             character_styles,
             table_border_styles: HashMap::new(),
+            style_id_to_name,
         };
     };
     let Ok(xml) = roxmltree::Document::parse(&xml_content) else {
@@ -238,6 +242,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
             paragraph_styles,
             character_styles,
             table_border_styles: HashMap::new(),
+            style_id_to_name,
         };
     };
 
@@ -277,6 +282,14 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         {
             continue;
         }
+
+        // Collect style ID -> display name for all style types (used by STYLEREF)
+        if let Some(id) = style_node.attribute((WML_NS, "styleId"))
+            && let Some(name) = wml(style_node, "name").and_then(|n| n.attribute((WML_NS, "val")))
+        {
+            style_id_to_name.insert(id.to_string(), name.to_string());
+        }
+
         if style_node.attribute((WML_NS, "type")) != Some("paragraph") {
             continue;
         }
@@ -502,6 +515,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         paragraph_styles,
         character_styles,
         table_border_styles,
+        style_id_to_name,
     }
 }
 

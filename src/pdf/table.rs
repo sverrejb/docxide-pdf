@@ -5,6 +5,7 @@ use pdf_writer::Content;
 use crate::fonts::{FontEntry, font_key_buf};
 use crate::model::{Alignment, CellVAlign, LineSpacing, SectionProperties, Table, VMerge};
 
+use super::header_footer::substitute_hf_runs;
 use super::resolve_line_h;
 
 use super::layout::{
@@ -100,11 +101,20 @@ struct RowLayout {
     cell_lines: Vec<(Vec<TextLine>, f32, f32)>, // (lines, line_h, font_size) per cell
 }
 
+/// When provided, field codes in header/footer table runs are substituted with
+/// their resolved values before layout.
+struct HfSubstitution<'a> {
+    page_num: usize,
+    total_pages: usize,
+    styleref_values: &'a HashMap<String, String>,
+}
+
 fn compute_row_layouts(
     table: &Table,
     col_widths: &[f32],
     doc_line_spacing: LineSpacing,
     seen_fonts: &HashMap<String, FontEntry>,
+    hf_sub: Option<&HfSubstitution>,
 ) -> Vec<RowLayout> {
     let cm = &table.cell_margins;
     table
@@ -136,9 +146,18 @@ fn compute_row_layouts(
                     let mut prev_space_after = 0.0f32;
 
                     for (pi, para) in cell.paragraphs.iter().enumerate() {
-                        let font_size = para.runs.first().map_or(12.0, |r| r.font_size);
+                        let substituted;
+                        let runs = if let Some(sub) = hf_sub {
+                            substituted = substitute_hf_runs(
+                                &para.runs, sub.page_num, sub.total_pages, sub.styleref_values,
+                            );
+                            &substituted
+                        } else {
+                            &para.runs
+                        };
+                        let font_size = runs.first().map_or(12.0, |r| r.font_size);
                         let effective_ls = para.line_spacing.unwrap_or(doc_line_spacing);
-                        let tallest_lhr = font_metric(&para.runs, seen_fonts, |e| e.line_h_ratio);
+                        let tallest_lhr = font_metric(runs, seen_fonts, |e| e.line_h_ratio);
                         let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
 
                         if all_lines.is_empty() {
@@ -150,9 +169,9 @@ fn compute_row_layouts(
                             total_h += f32::max(prev_space_after, para.space_before);
                         }
 
-                        if !is_text_empty(&para.runs) {
+                        if !is_text_empty(runs) {
                             let lines = build_paragraph_lines(
-                                &para.runs,
+                                runs,
                                 seen_fonts,
                                 cell_text_w,
                                 0.0,
@@ -202,7 +221,7 @@ pub(super) fn render_table(
     override_pos: Option<(f32, f32, bool)>,
 ) {
     let col_widths = auto_fit_columns(table, seen_fonts);
-    let row_layouts = compute_row_layouts(table, &col_widths, doc_line_spacing, seen_fonts);
+    let row_layouts = compute_row_layouts(table, &col_widths, doc_line_spacing, seen_fonts, None);
     let cm = &table.cell_margins;
 
     let is_truly_floating = override_pos.is_some_and(|(.., restore)| restore);
@@ -387,7 +406,7 @@ pub(super) fn compute_hf_table_height(
     seen_fonts: &HashMap<String, FontEntry>,
 ) -> f32 {
     let col_widths = auto_fit_columns(table, seen_fonts);
-    let row_layouts = compute_row_layouts(table, &col_widths, doc_line_spacing, seen_fonts);
+    let row_layouts = compute_row_layouts(table, &col_widths, doc_line_spacing, seen_fonts, None);
     row_layouts.iter().map(|r| r.height).sum()
 }
 
@@ -398,9 +417,15 @@ pub(super) fn render_header_footer_table(
     seen_fonts: &HashMap<String, FontEntry>,
     content: &mut Content,
     cursor_y: &mut f32,
+    page_num: usize,
+    total_pages: usize,
+    styleref_values: &HashMap<String, String>,
 ) {
     let col_widths = auto_fit_columns(table, seen_fonts);
-    let row_layouts = compute_row_layouts(table, &col_widths, doc_line_spacing, seen_fonts);
+    let hf_sub = HfSubstitution { page_num, total_pages, styleref_values };
+    let row_layouts = compute_row_layouts(
+        table, &col_widths, doc_line_spacing, seen_fonts, Some(&hf_sub),
+    );
     let cm = &table.cell_margins;
     let table_left = sp.margin_left + table.table_indent - cm.left;
 
