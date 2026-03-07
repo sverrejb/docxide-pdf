@@ -161,7 +161,10 @@
       "Bash(DOCXIDE_CASE=mongolian_human_rights_law DOCXIDE_IMAGES=1 cargo test:*)",
       "Bash(do if:*)",
       "mcp__local-rag__list_files",
-      "Bash(DOCXIDE_CASE=centrifugal_water_chillers DOCXIDE_IMAGES=1 cargo test:*)"
+      "Bash(DOCXIDE_CASE=centrifugal_water_chillers DOCXIDE_IMAGES=1 cargo test:*)",
+      "Bash(file:*)",
+      "Bash(DOCXIDE_CASE=croatian_grant_guidelines DOCXIDE_IMAGES=1 cargo test:*)",
+      "Bash(DOCXIDE_CASE=croatian_grant_guidelines DOCXIDE_IMAGES=1 RUST_LOG=debug cargo test:*)"
     ]
   }
 }

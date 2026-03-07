@@ -334,18 +334,24 @@ pub(super) fn build_tabbed_line(
     indent_left: f32,
     max_width: f32,
     first_line_hanging: f32,
+    inline_image_names: &HashMap<usize, String>,
 ) -> Vec<TextLine> {
-    // Split runs into segments at tab markers
-    let mut segments: Vec<(Vec<&Run>, Option<TabStop>)> = Vec::new();
+    // Split runs into segments at tab markers, tracking original run indices
+    let mut segments: Vec<(Vec<&Run>, Vec<usize>, Option<TabStop>)> = Vec::new();
     let mut current_seg: Vec<&Run> = Vec::new();
+    let mut current_indices: Vec<usize> = Vec::new();
     let mut pending_tab: Option<TabStop> = None;
 
-    for run in runs {
+    for (global_idx, run) in runs.iter().enumerate() {
         if run.vanish {
             continue;
         }
         if run.is_tab {
-            segments.push((std::mem::take(&mut current_seg), pending_tab.take()));
+            segments.push((
+                std::mem::take(&mut current_seg),
+                std::mem::take(&mut current_indices),
+                pending_tab.take(),
+            ));
             pending_tab = Some(TabStop {
                 position: 0.0, // placeholder, resolved below
                 alignment: TabAlignment::Left,
@@ -353,9 +359,14 @@ pub(super) fn build_tabbed_line(
             });
         } else {
             current_seg.push(run);
+            current_indices.push(global_idx);
         }
     }
-    segments.push((std::mem::take(&mut current_seg), pending_tab.take()));
+    segments.push((
+        std::mem::take(&mut current_seg),
+        std::mem::take(&mut current_indices),
+        pending_tab.take(),
+    ));
 
     let mut result_lines: Vec<TextLine> = Vec::new();
     let mut all_chunks: Vec<WordChunk> = Vec::new();
@@ -363,7 +374,7 @@ pub(super) fn build_tabbed_line(
     let mut key_buf = String::new();
     let mut is_first_line = true;
 
-    for (seg_idx, (seg_runs, tab_before)) in segments.iter().enumerate() {
+    for (seg_idx, (seg_runs, seg_indices, tab_before)) in segments.iter().enumerate() {
         let line_max = if is_first_line {
             max_width + first_line_hanging
         } else {
@@ -441,7 +452,7 @@ pub(super) fn build_tabbed_line(
                         segments[..seg_idx]
                             .iter()
                             .rev()
-                            .flat_map(|(r, _)| r.last())
+                            .flat_map(|(r, _, _)| r.last())
                             .next()
                     });
                     if let Some(run) = font_run {
@@ -488,7 +499,33 @@ pub(super) fn build_tabbed_line(
 
         // Layout text in this segment from current_x
         let mut prev_ws = false;
-        for run in seg_runs {
+        for (local_idx, run) in seg_runs.iter().enumerate() {
+            // Handle inline images (same pattern as build_paragraph_lines)
+            if let Some(img) = &run.inline_image {
+                if let Some(pdf_name) = inline_image_names.get(&seg_indices[local_idx]) {
+                    all_chunks.push(WordChunk {
+                        pdf_font: String::new(),
+                        text: String::new(),
+                        font_size: run.font_size,
+                        color: None,
+                        highlight: None,
+                        x_offset: current_x,
+                        width: img.display_width,
+                        underline: false,
+                        strikethrough: false,
+                        dstrike: false,
+                        char_spacing: 0.0,
+                        text_scale: 100.0,
+                        y_offset: 0.0,
+                        hyperlink_url: None,
+                        inline_image_name: Some(pdf_name.clone()),
+                        inline_image_height: img.display_height,
+                    });
+                    current_x += img.display_width;
+                }
+                continue;
+            }
+
             let key = font_key_buf(run, &mut key_buf);
             let entry = seen_fonts.get(key).expect("font registered");
             let eff_fs = effective_font_size(run);

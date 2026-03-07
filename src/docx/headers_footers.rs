@@ -81,6 +81,15 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
                     })
                     .or_else(|| para_style.and_then(|s| s.line_spacing));
 
+                let space_before = inline_spacing
+                    .and_then(|n| twips_attr(n, "before"))
+                    .or_else(|| para_style.and_then(|s| s.space_before))
+                    .unwrap_or(0.0);
+                let space_after = inline_spacing
+                    .and_then(|n| twips_attr(n, "after"))
+                    .or_else(|| para_style.and_then(|s| s.space_after))
+                    .unwrap_or(0.0);
+
                 let parsed = parse_runs(node, styles, theme, rels, zip, &NumberingInfo::default());
 
                 let borders = ppr.map(parse_paragraph_borders).unwrap_or_default();
@@ -90,6 +99,8 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
                     runs: parsed.runs,
                     alignment,
                     line_spacing,
+                    space_before,
+                    space_after,
                     borders,
                     tab_stops,
                     extra_line_breaks: parsed.line_break_count,

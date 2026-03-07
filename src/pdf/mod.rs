@@ -832,6 +832,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             para.indent_left,
                             para_text_width,
                             text_hanging,
+                            &block_inline_images,
                         )
                     } else {
                         build_paragraph_lines(
@@ -1274,6 +1275,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     tp.indent_left,
                                     tp_text_w,
                                     text_hanging,
+                                    &empty_inline_imgs,
                                 )
                             } else {
                                 build_paragraph_lines(

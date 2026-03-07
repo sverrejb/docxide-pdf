@@ -189,8 +189,8 @@
     "text_boundary": 0.2609
   },
   "scraped/croatian_grant_g..": {
-    "jaccard": 0.0683,
-    "ssim": 0.1776,
+    "jaccard": 0.0714,
+    "ssim": 0.1849,
     "text_boundary": 0.0026
   },
   "scraped/croatian_regulat..": {
@@ -249,8 +249,8 @@
     "text_boundary": 0.3629
   },
   "scraped/italian_evaluati..": {
-    "jaccard": 0.1073,
-    "ssim": 0.3136,
+    "jaccard": 0.1074,
+    "ssim": 0.3142,
     "text_boundary": 0.2613
   },
   "scraped/italian_project_..": {
@@ -304,8 +304,8 @@
     "text_boundary": 0.1304
   },
   "scraped/polish_tender_de..": {
-    "jaccard": 0.198,
-    "ssim": 0.2886,
+    "jaccard": 0.3197,
+    "ssim": 0.4165,
     "text_boundary": 0.2
   },
   "scraped/russian_sports_r..": {
@@ -334,8 +334,8 @@
     "text_boundary": 0.1941
   },
   "scraped/transition_to_wo..": {
-    "jaccard": 0.0654,
-    "ssim": 0.1866,
+    "jaccard": 0.0676,
+    "ssim": 0.1887,
     "text_boundary": 0.0238
   },
   "scraped/ukraine_humanita..": {
@@ -344,8 +344,8 @@
     "text_boundary": 0.2407
   },
   "scraped/usep_handbook": {
-    "jaccard": 0.171,
-    "ssim": 0.3012,
+    "jaccard": 0.3977,
+    "ssim": 0.473,
     "text_boundary": 0.0
   },
   "scraped/vaccines_history..": {

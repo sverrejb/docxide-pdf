@@ -45,18 +45,29 @@ pub(super) fn compute_header_height(
     doc_line_spacing: LineSpacing,
 ) -> f32 {
     let mut height = 0.0f32;
+    let mut prev_space_after = 0.0f32;
     for block in &hf.blocks {
         match block {
             Block::Paragraph(para) => {
+                let inter_gap = f32::max(prev_space_after, para.space_before);
+                height += inter_gap;
                 let (font_size, tallest_lhr, _) = tallest_run_metrics(&para.runs, seen_fonts);
                 let effective_ls = para.line_spacing.unwrap_or(doc_line_spacing);
                 let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
-                height += line_h;
+                let max_img_h = para
+                    .runs
+                    .iter()
+                    .filter_map(|r| r.inline_image.as_ref())
+                    .map(|img| img.display_height)
+                    .fold(0.0f32, f32::max);
+                height += if max_img_h > line_h { max_img_h } else { line_h };
+                prev_space_after = para.space_after;
             }
             Block::Table(table) => {
                 let row_layouts =
                     table::compute_hf_table_height(table, doc_line_spacing, seen_fonts);
                 height += row_layouts;
+                prev_space_after = 0.0;
             }
         }
     }
@@ -146,6 +157,7 @@ pub(super) fn render_header_footer(
     };
 
     let mut pi = 0usize;
+    let mut prev_space_after = 0.0f32;
     for block in &hf.blocks {
         match block {
             Block::Table(table) => {
@@ -160,11 +172,15 @@ pub(super) fn render_header_footer(
                     total_pages,
                     styleref_values,
                 );
+                prev_space_after = 0.0;
             }
             Block::Paragraph(para) => {
                 let has_para_image = para.image.is_some();
                 let has_field_code = para.runs.iter().any(|r| r.field_code.is_some());
                 let text_empty = !has_field_code && is_text_empty(&para.runs);
+
+                let inter_gap = f32::max(prev_space_after, para.space_before);
+                cursor_y -= inter_gap;
 
                 let substituted_runs =
                     substitute_hf_runs(&para.runs, page_num, total_pages, styleref_values);
@@ -231,7 +247,7 @@ pub(super) fn render_header_footer(
                         let tp_ls = tp.line_spacing.unwrap_or(doc_line_spacing);
                         let has_tabs = tp.runs.iter().any(|r| r.is_tab);
                         let tb_lines = if has_tabs {
-                            build_tabbed_line(&tp.runs, seen_fonts, &tp.tab_stops, 0.0, content_w, 0.0)
+                            build_tabbed_line(&tp.runs, seen_fonts, &tp.tab_stops, 0.0, content_w, 0.0, &empty_inline_imgs)
                         } else {
                             build_paragraph_lines(
                                 &tp.runs,
@@ -362,6 +378,7 @@ pub(super) fn render_header_footer(
                         content.restore_state();
                     }
                     cursor_y -= line_h;
+                    prev_space_after = para.space_after;
                     pi += 1;
                     continue;
                 }
@@ -398,6 +415,7 @@ pub(super) fn render_header_footer(
 
                 if text_empty {
                     cursor_y -= line_h;
+                    prev_space_after = para.space_after;
                     pi += 1;
                     continue;
                 }
@@ -417,6 +435,7 @@ pub(super) fn render_header_footer(
                         0.0,
                         text_width,
                         0.0,
+                        &block_inline_images,
                     )
                 } else {
                     build_paragraph_lines(
@@ -443,7 +462,14 @@ pub(super) fn render_header_footer(
                     seen_fonts,
                 );
 
-                cursor_y -= lines.len().max(1) as f32 * line_h;
+                let max_img_h = lines
+                    .iter()
+                    .flat_map(|l| l.chunks.iter())
+                    .map(|c| c.inline_image_height)
+                    .fold(0.0f32, f32::max);
+                let effective_line_h = if max_img_h > line_h { max_img_h } else { line_h };
+                cursor_y -= lines.len().max(1) as f32 * effective_line_h;
+                prev_space_after = para.space_after;
                 pi += 1;
             }
         }
