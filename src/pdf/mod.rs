@@ -831,6 +831,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             &para.tab_stops,
                             para.indent_left,
                             para_text_width,
+                            text_hanging,
                         )
                     } else {
                         build_paragraph_lines(
@@ -1270,8 +1271,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     &tp.runs,
                                     &seen_fonts,
                                     &tp.tab_stops,
-                                    text_hanging,
+                                    tp.indent_left,
                                     tp_text_w,
+                                    text_hanging,
                                 )
                             } else {
                                 build_paragraph_lines(

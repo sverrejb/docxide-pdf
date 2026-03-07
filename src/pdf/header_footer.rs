@@ -142,7 +142,7 @@ pub(super) fn render_header_footer(
     let mut cursor_y = if is_header {
         sp.page_height - sp.header_margin
     } else {
-        sp.footer_margin
+        sp.footer_margin + compute_header_height(hf, seen_fonts, doc_line_spacing)
     };
 
     let mut pi = 0usize;
@@ -231,7 +231,7 @@ pub(super) fn render_header_footer(
                         let tp_ls = tp.line_spacing.unwrap_or(doc_line_spacing);
                         let has_tabs = tp.runs.iter().any(|r| r.is_tab);
                         let tb_lines = if has_tabs {
-                            build_tabbed_line(&tp.runs, seen_fonts, &tp.tab_stops, 0.0, content_w)
+                            build_tabbed_line(&tp.runs, seen_fonts, &tp.tab_stops, 0.0, content_w, 0.0)
                         } else {
                             build_paragraph_lines(
                                 &tp.runs,
@@ -416,6 +416,7 @@ pub(super) fn render_header_footer(
                         &para.tab_stops,
                         0.0,
                         text_width,
+                        0.0,
                     )
                 } else {
                     build_paragraph_lines(

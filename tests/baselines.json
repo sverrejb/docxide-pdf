@@ -10,8 +10,8 @@
     "text_boundary": 0.9688
   },
   "cases/case11": {
-    "jaccard": 0.7218,
-    "ssim": 0.9154,
+    "jaccard": 0.7273,
+    "ssim": 0.9196,
     "text_boundary": 1.0
   },
   "cases/case12": {
@@ -95,8 +95,8 @@
     "text_boundary": 1.0
   },
   "cases/case28": {
-    "jaccard": 0.7347,
-    "ssim": 0.9015,
+    "jaccard": 0.7485,
+    "ssim": 0.9119,
     "text_boundary": 1.0
   },
   "cases/case29": {
@@ -160,9 +160,9 @@
     "text_boundary": 0.7816
   },
   "scraped/bush_fires_act_c..": {
-    "jaccard": 0.0871,
-    "ssim": 0.21,
-    "text_boundary": 0.0959
+    "jaccard": 0.3715,
+    "ssim": 0.7284,
+    "text_boundary": 0.7801
   },
   "scraped/classroom_weekly..": {
     "jaccard": 0.9437,

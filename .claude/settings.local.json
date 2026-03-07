@@ -154,7 +154,8 @@
       "Bash(DOCXIDE_CASE=bush_fires_act_comparison DOCXIDE_IMAGES=1 cargo test:*)",
       "Bash(cargo doc:*)",
       "Bash(cargo package:*)",
-      "Bash(git diff:*)"
+      "Bash(git diff:*)",
+      "Bash(xargs:*)"
     ]
   }
 }

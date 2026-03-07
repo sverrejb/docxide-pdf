@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use crate::model::{Alignment, CellBorder, LineSpacing};
+use crate::model::{Alignment, CellBorder, LineSpacing, TabStop};
 
 use super::{
-    DML_NS, WML_NS, parse_hex_color, parse_paragraph_borders, parse_text_color, read_zip_text,
-    twips_attr, wml, wml_attr, wml_bool,
+    DML_NS, WML_NS, parse_hex_color, parse_paragraph_borders, parse_tab_stops, parse_text_color,
+    read_zip_text, twips_attr, wml, wml_attr, wml_bool,
 };
 
 fn dml<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
@@ -56,6 +56,7 @@ pub(super) struct ParagraphStyle {
     pub(super) borders: crate::model::ParagraphBorders,
     pub(super) based_on: Option<String>,
     pub(super) kern_threshold: Option<f32>,
+    pub(super) tab_stops: Vec<TabStop>,
 }
 
 pub(super) struct CharacterStyle {
@@ -359,6 +360,8 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         let indent_hanging = ind.and_then(|n| twips_attr(n, "hanging"));
         let indent_first_line = ind.and_then(|n| twips_attr(n, "firstLine"));
 
+        let tab_stops = ppr.map(parse_tab_stops).unwrap_or_default();
+
         let based_on = wml(style_node, "basedOn")
             .and_then(|n| n.attribute((WML_NS, "val")))
             .map(|s| s.to_string());
@@ -389,6 +392,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                 borders,
                 based_on,
                 kern_threshold,
+                tab_stops,
             },
         );
     }
@@ -574,6 +578,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             borders: crate::model::ParagraphBorders::default(),
             based_on: None,
             kern_threshold: None,
+            tab_stops: Vec::new(),
         };
 
         for ancestor_id in chain.iter().rev() {
@@ -595,8 +600,22 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                 inherit!(indent_hanging, inh.indent_hanging, s);
                 inherit!(indent_first_line, inh.indent_first_line, s);
                 inherit!(kern_threshold, inh.kern_threshold, s);
+                // Tab stops are additive: accumulate from ancestors, child overrides at same pos
+                for ts in &s.tab_stops {
+                    if let Some(existing) = inh
+                        .tab_stops
+                        .iter_mut()
+                        .find(|t| (t.position - ts.position).abs() < 0.5)
+                    {
+                        *existing = ts.clone();
+                    } else {
+                        inh.tab_stops.push(ts.clone());
+                    }
+                }
             }
         }
+        inh.tab_stops
+            .sort_by(|a, b| a.position.total_cmp(&b.position));
 
         if let Some(s) = styles.get_mut(&id) {
             s.font_name = s.font_name.take().or(inh.font_name);
@@ -616,6 +635,9 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             s.indent_hanging = s.indent_hanging.or(inh.indent_hanging);
             s.indent_first_line = s.indent_first_line.or(inh.indent_first_line);
             s.kern_threshold = s.kern_threshold.or(inh.kern_threshold);
+            if s.tab_stops.is_empty() {
+                s.tab_stops = inh.tab_stops;
+            }
         }
     }
 }

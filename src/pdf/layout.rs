@@ -333,6 +333,7 @@ pub(super) fn build_tabbed_line(
     tab_stops: &[TabStop],
     indent_left: f32,
     max_width: f32,
+    first_line_hanging: f32,
 ) -> Vec<TextLine> {
     // Split runs into segments at tab markers
     let mut segments: Vec<(Vec<&Run>, Option<TabStop>)> = Vec::new();
@@ -360,11 +361,23 @@ pub(super) fn build_tabbed_line(
     let mut all_chunks: Vec<WordChunk> = Vec::new();
     let mut current_x: f32 = 0.0;
     let mut key_buf = String::new();
+    let mut is_first_line = true;
 
     for (seg_idx, (seg_runs, tab_before)) in segments.iter().enumerate() {
+        let line_max = if is_first_line {
+            max_width + first_line_hanging
+        } else {
+            max_width
+        };
+        let line_indent = if is_first_line {
+            indent_left - first_line_hanging
+        } else {
+            indent_left
+        };
+
         if seg_idx > 0 {
-            let stop = find_next_tab_stop(current_x, tab_stops, indent_left);
-            let tab_target = stop.position - indent_left;
+            let stop = find_next_tab_stop(current_x, tab_stops, line_indent);
+            let tab_target = stop.position - line_indent;
 
             // Calculate where segment text will start based on alignment
             let mut seg_start = match stop.alignment {
@@ -383,8 +396,8 @@ pub(super) fn build_tabbed_line(
                 }
             };
 
-            // Wrap to new line if tab pushes past max_width
-            if seg_start > max_width && !all_chunks.is_empty() {
+            // Wrap to new line if tab pushes past line_max
+            if seg_start > line_max && !all_chunks.is_empty() {
                 let total_width = all_chunks
                     .last()
                     .map(|c| c.x_offset + c.width)
@@ -394,6 +407,7 @@ pub(super) fn build_tabbed_line(
                     total_width,
                 });
                 current_x = 0.0;
+                is_first_line = false;
                 // Re-resolve the tab stop from position 0 on the new line
                 let new_stop = find_next_tab_stop(0.0, tab_stops, indent_left);
                 let new_target = new_stop.position - indent_left;
@@ -416,7 +430,7 @@ pub(super) fn build_tabbed_line(
 
             // Draw leader fill between end of previous text and start of aligned text
             if tab_before.is_some() {
-                let abs_x = current_x + indent_left;
+                let abs_x = current_x + line_indent;
                 let leader = tab_stops
                     .iter()
                     .find(|s| s.position > abs_x + 0.5)
@@ -493,8 +507,13 @@ pub(super) fn build_tabbed_line(
                 {
                     current_x += space_w * ts + cs;
                 }
+                let cur_line_max = if is_first_line {
+                    max_width + first_line_hanging
+                } else {
+                    max_width
+                };
                 // Wrap word to new line if it exceeds max_width
-                if current_x + ww > max_width && !all_chunks.is_empty() {
+                if current_x + ww > cur_line_max && !all_chunks.is_empty() {
                     let total_width = all_chunks
                         .last()
                         .map(|c| c.x_offset + c.width)
@@ -504,6 +523,7 @@ pub(super) fn build_tabbed_line(
                         total_width,
                     });
                     current_x = 0.0;
+                    is_first_line = false;
                 }
                 all_chunks.push(WordChunk {
                     pdf_font: entry.pdf_name.clone(),

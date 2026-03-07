@@ -443,7 +443,24 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     }
                 }
 
-                let tab_stops = ppr.map(parse_tab_stops).unwrap_or_default();
+                let mut tab_stops = ppr.map(parse_tab_stops).unwrap_or_default();
+                if tab_stops.is_empty() {
+                    if let Some(s) = para_style {
+                        tab_stops = s.tab_stops.clone();
+                    }
+                }
+                // OOXML §17.3.1.38: hanging indent implicitly creates a tab stop
+                if indent_hanging > 0.0 {
+                    let hang_pos = indent_left;
+                    if !tab_stops.iter().any(|t| (t.position - hang_pos).abs() < 0.5) {
+                        tab_stops.push(TabStop {
+                            position: hang_pos,
+                            alignment: TabAlignment::Left,
+                            leader: None,
+                        });
+                        tab_stops.sort_by(|a, b| a.position.total_cmp(&b.position));
+                    }
+                }
 
                 let has_text = runs.iter().any(|r| !r.text.is_empty() || r.is_tab);
                 let has_inline_images = runs.iter().any(|r| r.inline_image.is_some());
