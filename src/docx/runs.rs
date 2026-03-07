@@ -236,6 +236,8 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                 collect_run_nodes(child, rels, out);
             } else if is_wml && name == "del" {
                 // Final mode: skip deleted content entirely
+            } else if is_wml && name == "smartTag" {
+                collect_run_nodes(child, rels, out);
             } else if is_wml && name == "sdt" {
                 if let Some(content) = wml(child, "sdtContent") {
                     collect_run_nodes(content, rels, out);
