@@ -1,6 +1,7 @@
 use eframe::egui;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 fn main() -> eframe::Result<()> {
     let output_dir = find_output_dir();
@@ -158,6 +159,7 @@ struct App {
     scroll_to_current: bool,
     show_grid: bool,
     grid_spacing: f32,
+    refresh_flash: f32,
 }
 
 impl App {
@@ -172,6 +174,7 @@ impl App {
             scroll_to_current: true,
             show_grid: false,
             grid_spacing: 18.0,
+            refresh_flash: 0.0,
         }
     }
 
@@ -192,6 +195,7 @@ impl App {
     fn refresh(&mut self) {
         self.texture_cache.clear();
         self.overlay_cache.clear();
+        self.refresh_flash = 1.0;
     }
 
     fn page_path(&self, subdir: &str, page: usize) -> PathBuf {
@@ -261,7 +265,7 @@ impl eframe::App for App {
             if i.key_pressed(egui::Key::Num4) || i.key_pressed(egui::Key::O) {
                 self.view_mode = ViewMode::Overlay;
             }
-            if i.key_pressed(egui::Key::F5) {
+            if i.key_pressed(egui::Key::F5) || i.key_pressed(egui::Key::F) {
                 self.refresh();
             }
             if i.key_pressed(egui::Key::L) {
@@ -333,9 +337,21 @@ impl eframe::App for App {
                     ui.label(format!("Grid: {:.0}px (+/-)", self.grid_spacing));
                 }
                 ui.separator();
-                ui.label("[L]ines overlay");
+                ui.label("[L]ines overlay  [F]refresh");
+                if self.refresh_flash > 0.0 {
+                    let alpha = (self.refresh_flash * 255.0) as u8;
+                    ui.label(
+                        egui::RichText::new("Refreshed")
+                            .color(egui::Color32::from_rgba_unmultiplied(0, 180, 0, alpha)),
+                    );
+                }
             });
         });
+
+        if self.refresh_flash > 0.0 {
+            self.refresh_flash = (self.refresh_flash - 0.05).max(0.0);
+            ctx.request_repaint();
+        }
 
         // Bottom bar: page number
         egui::TopBottomPanel::bottom("bottom_bar").show(ctx, |ui| {
@@ -427,7 +443,11 @@ fn show_image(
 }
 
 fn show_single(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, path: &PathBuf, label: &str) {
-    ui.label(label);
+    let age = file_age(path).unwrap_or_default();
+    ui.horizontal(|ui| {
+        ui.label(label);
+        ui.label(egui::RichText::new(age).weak());
+    });
     let available = ui.available_size();
     egui::ScrollArea::both().show(ui, |ui| {
         show_image(app, ctx, ui, path, available.x, available.y - 20.0);
@@ -445,6 +465,8 @@ fn show_side_by_side(
     let gen_tex = app.load_texture(ctx, gen_path);
     let show_grid = app.show_grid;
     let grid_spacing = app.grid_spacing;
+    let ref_age = file_age(ref_path).unwrap_or_default();
+    let gen_age = file_age(gen_path).unwrap_or_default();
 
     let available = ui.available_size();
     let half_w = (available.x - 10.0) / 2.0;
@@ -452,7 +474,10 @@ fn show_side_by_side(
 
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
-            ui.label("Reference");
+            ui.horizontal(|ui| {
+                ui.label("Reference");
+                ui.label(egui::RichText::new(&ref_age).weak());
+            });
             if let Some(tex) = &ref_tex {
                 let size = fit_size(tex, half_w, max_h);
                 let resp = ui.image(egui::load::SizedTexture::new(tex.id(), size));
@@ -467,7 +492,10 @@ fn show_side_by_side(
         ui.separator();
 
         ui.vertical(|ui| {
-            ui.label("Generated");
+            ui.horizontal(|ui| {
+                ui.label("Generated");
+                ui.label(egui::RichText::new(&gen_age).weak());
+            });
             if let Some(tex) = &gen_tex {
                 let size = fit_size(tex, half_w, max_h);
                 let resp = ui.image(egui::load::SizedTexture::new(tex.id(), size));
@@ -517,6 +545,19 @@ fn build_overlay_texture(
 
 fn luma(r: u8, g: u8, b: u8) -> u8 {
     ((r as u16 * 77 + g as u16 * 150 + b as u16 * 29) >> 8) as u8
+}
+
+fn file_age(path: &Path) -> Option<String> {
+    let modified = std::fs::metadata(path).ok()?.modified().ok()?;
+    let elapsed = SystemTime::now().duration_since(modified).ok()?;
+    let total_mins = elapsed.as_secs() / 60;
+    let hours = total_mins / 60;
+    let mins = total_mins % 60;
+    if hours > 0 {
+        Some(format!("{}h {}m ago", hours, mins))
+    } else {
+        Some(format!("{}m ago", mins))
+    }
 }
 
 fn show_overlay(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: usize) {
