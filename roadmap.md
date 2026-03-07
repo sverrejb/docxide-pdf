@@ -139,6 +139,10 @@ New module `src/docx/settings.rs` parses `word/settings.xml` into `DocumentSetti
 - **`w:textDirection`** — text direction in table cells (btLr, tbRl)
 - **`w:vAlign` on sectPr** — vertical alignment of text on the page (top/center/bottom/both)
 
+### Header Height Trailing space_after (DONE)
+
+`compute_header_height` now includes the last header paragraph's `space_after` in the returned height. Previously this trailing spacing was excluded, causing `effective_slot_top` to be too high when the header constrains body text positioning. Improved croatian_grant_guidelines page 1 alignment (+0.1pp Jaccard, +0.2pp SSIM). Pages 2+ offset remains (~2-3pt) — caused by the OS/2 Win Metrics issue below.
+
 ### Line Height: OS/2 Win Metrics (MEDIUM — correct but causes regressions)
 
 Word computes line height using OS/2 `usWinAscent + usWinDescent` when the font's `USE_TYPO_METRICS` flag is not set (most fonts). We currently use `hhea ascender - descender + line_gap`, which produces tighter line spacing. The fix is straightforward in `src/fonts/embed.rs` (`face.tables().os2` → `windows_ascender()`/`windows_descender()`; note `windows_descender()` returns a negated value so use `win_asc - win_desc`). However, changing this globally causes 23 regressions (some -50pp) because other layout code has been calibrated against the wrong `line_h_ratio`. Should be landed alongside a pass to fix compensating layout issues.

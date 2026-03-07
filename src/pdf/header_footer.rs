@@ -71,7 +71,9 @@ pub(super) fn compute_header_height(
             }
         }
     }
-    height
+    // Include trailing space_after: the header's last paragraph's space_after
+    // represents the extent of the header region and affects where body text starts.
+    height + prev_space_after
 }
 
 pub(super) fn effective_slot_top(

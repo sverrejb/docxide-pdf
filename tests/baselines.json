@@ -189,8 +189,8 @@
     "text_boundary": 0.2609
   },
   "scraped/croatian_grant_g..": {
-    "jaccard": 0.0714,
-    "ssim": 0.1849,
+    "jaccard": 0.0726,
+    "ssim": 0.187,
     "text_boundary": 0.0026
   },
   "scraped/croatian_regulat..": {
