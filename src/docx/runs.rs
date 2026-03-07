@@ -5,7 +5,8 @@ use crate::model::{FieldCode, FloatingImage, InlineChart, Run, Textbox, VertAlig
 
 use super::images::{RunDrawingResult, parse_run_drawing};
 use super::numbering::NumberingInfo;
-use super::styles::{StylesInfo, ThemeFonts, resolve_font_from_node};
+use super::is_east_asian_char;
+use super::styles::{StylesInfo, ThemeFonts, resolve_east_asia_font_from_node, resolve_font_from_node};
 use super::textbox::parse_textbox_from_vml;
 use super::{WML_NS, highlight_color, parse_text_color, twips_to_pts, wml, wml_attr, wml_bool};
 
@@ -45,6 +46,7 @@ pub(super) struct ParsedRuns {
 struct RunFormat {
     font_size: f32,
     font_name: String,
+    east_asia_font_name: Option<String>,
     bold: bool,
     italic: bool,
     underline: bool,
@@ -69,6 +71,7 @@ impl RunFormat {
             text,
             font_size: self.font_size,
             font_name: self.font_name.clone(),
+            east_asia_font_name: self.east_asia_font_name.clone(),
             bold: self.bold,
             italic: self.italic,
             underline: self.underline,
@@ -96,6 +99,72 @@ impl RunFormat {
             font_name: self.font_name.clone(),
             ..Run::default()
         }
+    }
+}
+
+fn split_run_by_script(run: Run) -> Vec<Run> {
+    let ea_font = match &run.east_asia_font_name {
+        Some(f) if f != &run.font_name => f.clone(),
+        _ => return vec![run],
+    };
+
+    let text = &run.text;
+    if text.is_empty() {
+        return vec![run];
+    }
+
+    let mut result: Vec<Run> = Vec::new();
+    let mut segment_start = 0;
+    let mut in_ea = false;
+    let mut first = true;
+
+    for (i, ch) in text.char_indices() {
+        let ch_is_ea = if ch.is_whitespace() {
+            // Whitespace inherits current script context
+            in_ea
+        } else {
+            is_east_asian_char(ch)
+        };
+
+        if first {
+            in_ea = ch_is_ea;
+            first = false;
+            continue;
+        }
+
+        if ch_is_ea != in_ea {
+            let segment = &text[segment_start..i];
+            if !segment.is_empty() {
+                let mut sub = run.clone();
+                sub.text = segment.to_string();
+                if in_ea {
+                    sub.font_name = ea_font.clone();
+                }
+                sub.east_asia_font_name = None;
+                result.push(sub);
+            }
+            segment_start = i;
+            in_ea = ch_is_ea;
+        }
+    }
+
+    let segment = &text[segment_start..];
+    if !segment.is_empty() {
+        let mut sub = run.clone();
+        sub.text = segment.to_string();
+        if in_ea {
+            sub.font_name = ea_font;
+        }
+        sub.east_asia_font_name = None;
+        result.push(sub);
+    }
+
+    if result.is_empty() {
+        let mut r = run;
+        r.east_asia_font_name = None;
+        vec![r]
+    } else {
+        result
     }
 }
 
@@ -129,6 +198,9 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
     let style_kern_threshold: Option<f32> = para_style
         .and_then(|s| s.kern_threshold)
         .or(styles.defaults.kern_threshold);
+    let style_east_asia_font: Option<&str> = para_style
+        .and_then(|s| s.east_asia_font.as_deref())
+        .or(styles.defaults.east_asia_font.as_deref());
 
     const MC_NS: &str = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 
@@ -205,11 +277,20 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                 .map(|hp| hp / 2.0)
                 .or_else(|| char_style.and_then(|cs| cs.font_size))
                 .unwrap_or(style_font_size),
-            font_name: rpr
-                .and_then(|n| wml(n, "rFonts"))
-                .map(|rfonts| resolve_font_from_node(rfonts, theme, &style_font_name))
-                .or_else(|| char_style.and_then(|cs| cs.font_name.clone()))
-                .unwrap_or_else(|| style_font_name.clone()),
+            font_name: {
+                let rfonts_node = rpr.and_then(|n| wml(n, "rFonts"));
+                rfonts_node
+                    .map(|rfonts| resolve_font_from_node(rfonts, theme, &style_font_name))
+                    .or_else(|| char_style.and_then(|cs| cs.font_name.clone()))
+                    .unwrap_or_else(|| style_font_name.clone())
+            },
+            east_asia_font_name: {
+                let rfonts_node = rpr.and_then(|n| wml(n, "rFonts"));
+                rfonts_node
+                    .and_then(|rfonts| resolve_east_asia_font_from_node(rfonts, theme))
+                    .or_else(|| char_style.and_then(|cs| cs.east_asia_font.clone()))
+                    .or_else(|| style_east_asia_font.map(|s| s.to_string()))
+            },
             bold: rpr
                 .and_then(|n| wml_bool(n, "b"))
                 .or_else(|| char_style.and_then(|cs| cs.bold))
@@ -280,7 +361,8 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
 
         let flush_pending = |pending: &mut String, runs: &mut Vec<Run>| {
             if !pending.is_empty() {
-                runs.push(fmt.text_run(std::mem::take(pending), hyperlink_url.clone()));
+                let run = fmt.text_run(std::mem::take(pending), hyperlink_url.clone());
+                runs.extend(split_run_by_script(run));
             }
         };
 
@@ -470,7 +552,8 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
             }
         }
         if !pending_text.is_empty() {
-            runs.push(fmt.text_run(pending_text, hyperlink_url.clone()));
+            let run = fmt.text_run(pending_text, hyperlink_url.clone());
+            runs.extend(split_run_by_script(run));
         }
     }
 

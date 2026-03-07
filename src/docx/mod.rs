@@ -43,6 +43,33 @@ pub(super) fn twips_to_pts(twips: f32) -> f32 {
     twips / 20.0
 }
 
+pub(crate) fn is_east_asian_char(ch: char) -> bool {
+    matches!(ch as u32,
+        0x2E80..=0x2EFF   // CJK Radicals Supplement
+        | 0x2F00..=0x2FDF // Kangxi Radicals
+        | 0x2FF0..=0x2FFF // Ideographic Description Characters
+        | 0x3000..=0x303F // CJK Symbols and Punctuation
+        | 0x3040..=0x309F // Hiragana
+        | 0x30A0..=0x30FF // Katakana
+        | 0x3100..=0x312F // Bopomofo
+        | 0x3130..=0x318F // Hangul Compatibility Jamo
+        | 0x31A0..=0x31BF // Bopomofo Extended
+        | 0x31F0..=0x31FF // Katakana Phonetic Extensions
+        | 0x3200..=0x32FF // Enclosed CJK Letters and Months
+        | 0x3300..=0x33FF // CJK Compatibility
+        | 0x3400..=0x4DBF // CJK Unified Ideographs Extension A
+        | 0x4E00..=0x9FFF // CJK Unified Ideographs
+        | 0xAC00..=0xD7AF // Hangul Syllables
+        | 0xF900..=0xFAFF // CJK Compatibility Ideographs
+        | 0xFE30..=0xFE4F // CJK Compatibility Forms
+        | 0xFF00..=0xFFEF // Halfwidth and Fullwidth Forms
+        | 0x1100..=0x11FF // Hangul Jamo
+        | 0x20000..=0x2A6DF // CJK Unified Ideographs Extension B
+        | 0x2A700..=0x2B73F // CJK Unified Ideographs Extension C
+        | 0x2B740..=0x2B81F // CJK Unified Ideographs Extension D
+    )
+}
+
 pub(super) fn parse_hex_color(val: &str) -> Option<[u8; 3]> {
     if val == "auto" || val.len() != 6 {
         return None;
@@ -283,7 +310,8 @@ pub fn parse_bytes(bytes: &[u8]) -> Result<Document, Error> {
 }
 
 fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Document, Error> {
-    let theme = parse_theme(zip);
+    let settings = parse_settings(zip);
+    let theme = parse_theme(zip, settings.east_asia_lang.as_deref());
     let styles = parse_styles(zip, &theme);
     let numbering = parse_numbering(zip);
     let rels = parse_relationships(zip);
@@ -291,8 +319,6 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
     let embedded_fonts = font_table_result.embedded_fonts;
     let font_table = font_table_result.font_table;
     let footnotes = parse_footnotes(zip, &styles, &theme);
-
-    let settings = parse_settings(zip);
 
     let mut xml_content = String::new();
     zip.by_name("word/document.xml")
