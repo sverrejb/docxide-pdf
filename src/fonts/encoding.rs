@@ -73,40 +73,7 @@ pub(super) fn char_to_winansi(c: char) -> u8 {
 
 /// Convert a UTF-8 string to WinAnsi (Windows-1252) bytes for PDF Str encoding.
 pub(crate) fn to_winansi_bytes(s: &str) -> Vec<u8> {
-    s.chars()
-        .filter_map(|c| match c as u32 {
-            0x0000..=0x007F => Some(c as u8),
-            0x00A0..=0x00FF => Some(c as u8), // Latin-1 supplement maps directly
-            0x20AC => Some(0x80),
-            0x201A => Some(0x82),
-            0x0192 => Some(0x83),
-            0x201E => Some(0x84),
-            0x2026 => Some(0x85),
-            0x2020 => Some(0x86),
-            0x2021 => Some(0x87),
-            0x02C6 => Some(0x88),
-            0x2030 => Some(0x89),
-            0x0160 => Some(0x8A),
-            0x2039 => Some(0x8B),
-            0x0152 => Some(0x8C),
-            0x017D => Some(0x8E),
-            0x2018 => Some(0x91),
-            0x2019 => Some(0x92),
-            0x201C => Some(0x93),
-            0x201D => Some(0x94),
-            0x2022 => Some(0x95), // bullet
-            0x2013 => Some(0x96),
-            0x2014 => Some(0x97),
-            0x02DC => Some(0x98),
-            0x2122 => Some(0x99),
-            0x0161 => Some(0x9A),
-            0x203A => Some(0x9B),
-            0x0153 => Some(0x9C),
-            0x017E => Some(0x9E),
-            0x0178 => Some(0x9F),
-            _ => None,
-        })
-        .collect()
+    s.chars().map(char_to_winansi).filter(|&b| b != 0).collect()
 }
 
 /// Encode UTF-8 text as big-endian 2-byte glyph IDs for CIDFont content streams.

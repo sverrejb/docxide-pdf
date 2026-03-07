@@ -127,40 +127,28 @@ fn to_roman(mut n: u32) -> String {
     result
 }
 
+fn to_letter(value: u32, base: u8) -> String {
+    if value == 0 {
+        return String::new();
+    }
+    let mut n = value - 1;
+    let mut result = String::new();
+    loop {
+        result.insert(0, (base + (n % 26) as u8) as char);
+        if n < 26 {
+            break;
+        }
+        n = n / 26 - 1;
+    }
+    result
+}
+
 fn format_number(value: u32, num_fmt: &str) -> String {
     match num_fmt {
         "decimal" => value.to_string(),
         "decimalZero" => format!("{value:02}"),
-        "lowerLetter" => {
-            if value == 0 {
-                return String::new();
-            }
-            let mut n = value - 1;
-            let mut result = String::new();
-            loop {
-                result.insert(0, (b'a' + (n % 26) as u8) as char);
-                if n < 26 {
-                    break;
-                }
-                n = n / 26 - 1;
-            }
-            result
-        }
-        "upperLetter" => {
-            if value == 0 {
-                return String::new();
-            }
-            let mut n = value - 1;
-            let mut result = String::new();
-            loop {
-                result.insert(0, (b'A' + (n % 26) as u8) as char);
-                if n < 26 {
-                    break;
-                }
-                n = n / 26 - 1;
-            }
-            result
-        }
+        "lowerLetter" => to_letter(value, b'a'),
+        "upperLetter" => to_letter(value, b'A'),
         "lowerRoman" => to_roman(value),
         "upperRoman" => to_roman(value).to_uppercase(),
         "none" => String::new(),

@@ -56,7 +56,9 @@ fn update_styleref_from_para(
                 .entry(sid.to_string())
                 .or_insert_with(|| text.clone());
             if let Some(name) = style_id_to_name.get(sid.as_str()) {
-                page_first.entry(name.clone()).or_insert_with(|| text.clone());
+                page_first
+                    .entry(name.clone())
+                    .or_insert_with(|| text.clone());
             }
         }
     }
@@ -1012,7 +1014,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     .push(std::mem::take(&mut current_alpha_states));
                                 page_section_indices.push((sect_idx, is_first_page_of_section));
                                 all_page_styleref.push(styleref_running.clone());
-                                all_page_first_styleref.push(std::mem::take(&mut styleref_page_first));
+                                all_page_first_styleref
+                                    .push(std::mem::take(&mut styleref_page_first));
                                 slot_top = effective_slot_top(
                                     cur_sp,
                                     false,
@@ -1531,7 +1534,12 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         }
                     }
 
-                    update_styleref_from_para(&mut styleref_running, &mut styleref_page_first, para, &doc.style_id_to_name);
+                    update_styleref_from_para(
+                        &mut styleref_running,
+                        &mut styleref_page_first,
+                        para,
+                        &doc.style_id_to_name,
+                    );
                 }
 
                 Block::Table(table) => {
@@ -1733,7 +1741,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             .get(page_idx)
             .unwrap_or(&empty_styleref);
         let prev_running = if page_idx > 0 {
-            all_page_styleref.get(page_idx - 1).unwrap_or(&empty_styleref)
+            all_page_styleref
+                .get(page_idx - 1)
+                .unwrap_or(&empty_styleref)
         } else {
             &empty_styleref
         };

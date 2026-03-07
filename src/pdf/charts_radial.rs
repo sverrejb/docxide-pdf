@@ -123,7 +123,6 @@ pub(super) fn render_pie(
     y: f32,
     has_font: bool,
     label_font_key: &str,
-    _font_size: f32,
     label_font: Option<&FontEntry>,
 ) {
     let Some(layout) = setup_radial_chart(chart, x, y, label_font) else {
@@ -173,7 +172,6 @@ pub(super) fn render_doughnut(
     y: f32,
     has_font: bool,
     label_font_key: &str,
-    _font_size: f32,
     hole_size_pct: f32,
     label_font: Option<&FontEntry>,
 ) {

@@ -8,6 +8,7 @@ pub(super) struct CachedFace {
     pub(super) face_index: u32,
 }
 
+#[derive(Default)]
 pub(super) struct CachedFile {
     pub(super) faces: Vec<CachedFace>,
 }
@@ -74,10 +75,7 @@ pub(super) fn load_cache() -> FontCache {
                 let Ok(face_index) = parts[5].parse::<u32>() else {
                     continue;
                 };
-                let entry = fc
-                    .files
-                    .entry(file_path)
-                    .or_insert(CachedFile { faces: Vec::new() });
+                let entry = fc.files.entry(file_path).or_default();
                 entry.faces.push(CachedFace {
                     family,
                     bold,
@@ -86,9 +84,7 @@ pub(super) fn load_cache() -> FontCache {
                 });
             }
             Some("F") if parts.len() == 3 && parts[2] == "-" => {
-                fc.files
-                    .entry(PathBuf::from(parts[1]))
-                    .or_insert(CachedFile { faces: Vec::new() });
+                fc.files.entry(PathBuf::from(parts[1])).or_default();
             }
             _ => {}
         }

@@ -3,11 +3,11 @@ use std::io::Read;
 
 use crate::model::{Alignment, HorizontalPosition, LineSpacing, Paragraph, Textbox};
 
-use super::images::parse_anchor_position;
+use super::images::{extent_dimensions, parse_anchor_position};
 use super::numbering::NumberingInfo;
 use super::runs::parse_runs;
 use super::styles::{StylesInfo, ThemeFonts, parse_alignment, parse_line_spacing};
-use super::{DML_NS, MC_NS_TOP, WML_NS, WPD_NS, WPS_NS, twips_attr, twips_to_pts, wml, wml_attr};
+use super::{DML_NS, MC_NS_TOP, WML_NS, WPD_NS, WPS_NS, twips_attr, wml, wml_attr};
 
 pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
     txbx_content: roxmltree::Node,
@@ -37,15 +37,11 @@ pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
             .unwrap_or(Alignment::Left);
         let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
         let space_before = inline_spacing
-            .and_then(|n| n.attribute((WML_NS, "before")))
-            .and_then(|v| v.parse::<f32>().ok())
-            .map(twips_to_pts)
+            .and_then(|n| twips_attr(n, "before"))
             .or_else(|| para_style.and_then(|s| s.space_before))
             .unwrap_or(0.0);
         let space_after = inline_spacing
-            .and_then(|n| n.attribute((WML_NS, "after")))
-            .and_then(|v| v.parse::<f32>().ok())
-            .map(twips_to_pts)
+            .and_then(|n| twips_attr(n, "after"))
             .or_else(|| para_style.and_then(|s| s.space_after))
             .unwrap_or(0.0);
         let line_spacing = Some(
@@ -382,20 +378,7 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                     for container in drawing.children().filter(|n| {
                         n.tag_name().namespace() == Some(WPD_NS) && n.tag_name().name() == "anchor"
                     }) {
-                        let extent = container.children().find(|n| {
-                            n.tag_name().name() == "extent"
-                                && n.tag_name().namespace() == Some(WPD_NS)
-                        });
-                        let cx = extent
-                            .and_then(|n| n.attribute("cx"))
-                            .and_then(|v| v.parse::<f32>().ok())
-                            .unwrap_or(0.0);
-                        let cy = extent
-                            .and_then(|n| n.attribute("cy"))
-                            .and_then(|v| v.parse::<f32>().ok())
-                            .unwrap_or(0.0);
-                        let display_w = cx / 12700.0;
-                        let display_h = cy / 12700.0;
+                        let (display_w, display_h) = extent_dimensions(container);
 
                         if let Some(wsp) =
                             parse_textbox_from_wsp(container, rels, zip, styles, theme, numbering)

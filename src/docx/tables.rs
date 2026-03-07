@@ -2,15 +2,16 @@ use std::collections::HashMap;
 use std::io::Read;
 
 use crate::model::{
-    Alignment, CellBorder, CellBorders, CellMargins, CellVAlign, HorizontalPosition, LineSpacing,
-    Paragraph, Table, TableCell, TablePosition, TableRow, VMerge,
+    Alignment, CellBorders, CellMargins, CellVAlign, HorizontalPosition, LineSpacing, Paragraph,
+    Table, TableCell, TablePosition, TableRow, VMerge,
 };
 
 use super::numbering::{self, parse_list_info};
 use super::runs::parse_runs;
 use super::styles::{self, TableBordersDef, parse_alignment, parse_line_spacing};
 use super::{
-    WML_NS, collect_block_nodes, parse_hex_color, twips_attr, twips_to_pts, wml, wml_attr,
+    WML_NS, collect_block_nodes, parse_cell_border, parse_cell_border_left,
+    parse_cell_border_right, parse_hex_color, twips_attr, twips_to_pts, wml, wml_attr,
 };
 
 pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
@@ -99,44 +100,17 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
         .and_then(|pr| wml_attr(pr, "tblStyle"))
         .and_then(|id| styles.table_border_styles.get(id));
 
-    let inline_tbl_borders = tbl_pr.and_then(|pr| wml(pr, "tblBorders")).map(|bdr_node| {
-        let parse_bdr = |name: &str| -> CellBorder {
-            let Some(n) = wml(bdr_node, name) else {
-                return CellBorder::default();
-            };
-            let val = n.attribute((WML_NS, "val")).unwrap_or("none");
-            if val == "nil" || val == "none" {
-                return CellBorder::default();
-            }
-            let width = n
-                .attribute((WML_NS, "sz"))
-                .and_then(|v| v.parse::<f32>().ok())
-                .map(|v| v / 8.0)
-                .unwrap_or(0.5);
-            let color = n.attribute((WML_NS, "color")).and_then(parse_hex_color);
-            CellBorder::visible(color, width)
-        };
-        let left = parse_bdr("left");
-        let left = if left.present {
-            left
-        } else {
-            parse_bdr("start")
-        };
-        let right = parse_bdr("right");
-        let right = if right.present {
-            right
-        } else {
-            parse_bdr("end")
-        };
-        TableBordersDef {
-            top: parse_bdr("top"),
-            bottom: parse_bdr("bottom"),
-            left,
-            right,
-            inside_h: parse_bdr("insideH"),
-            inside_v: parse_bdr("insideV"),
-        }
-    });
+    let inline_tbl_borders =
+        tbl_pr
+            .and_then(|pr| wml(pr, "tblBorders"))
+            .map(|bdr_node| TableBordersDef {
+                top: parse_cell_border(bdr_node, "top"),
+                bottom: parse_cell_border(bdr_node, "bottom"),
+                left: parse_cell_border_left(bdr_node),
+                right: parse_cell_border_right(bdr_node),
+                inside_h: parse_cell_border(bdr_node, "insideH"),
+                inside_v: parse_cell_border(bdr_node, "insideV"),
+            });
 
     let effective_tbl_borders: Option<&TableBordersDef> =
         inline_tbl_borders.as_ref().or(tbl_style_borders);
@@ -147,23 +121,6 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
         .collect();
     let num_rows = tbl_rows.len();
     let num_cols = col_widths.len();
-
-    let parse_cell_border = |bdr_node: roxmltree::Node, name: &str| -> CellBorder {
-        let Some(n) = wml(bdr_node, name) else {
-            return CellBorder::default();
-        };
-        let val = n.attribute((WML_NS, "val")).unwrap_or("none");
-        if val == "nil" || val == "none" {
-            return CellBorder::default();
-        }
-        let width = n
-            .attribute((WML_NS, "sz"))
-            .and_then(|v| v.parse::<f32>().ok())
-            .map(|v| v / 8.0)
-            .unwrap_or(0.5);
-        let color = n.attribute((WML_NS, "color")).and_then(parse_hex_color);
-        CellBorder::visible(color, width)
-    };
 
     let mut rows = Vec::new();
     for (ri, tr) in tbl_rows.iter().enumerate() {
@@ -240,18 +197,8 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                     let fallback = style_borders.unwrap_or_default();
                     let top = parse_cell_border(bdr, "top");
                     let bottom = parse_cell_border(bdr, "bottom");
-                    let left = parse_cell_border(bdr, "left");
-                    let left = if left.present {
-                        left
-                    } else {
-                        parse_cell_border(bdr, "start")
-                    };
-                    let right = parse_cell_border(bdr, "right");
-                    let right = if right.present {
-                        right
-                    } else {
-                        parse_cell_border(bdr, "end")
-                    };
+                    let left = parse_cell_border_left(bdr);
+                    let right = parse_cell_border_right(bdr);
                     CellBorders {
                         top: if top.present { top } else { fallback.top },
                         bottom: if bottom.present {

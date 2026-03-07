@@ -172,6 +172,43 @@ pub(super) fn parse_paragraph_borders(ppr: roxmltree::Node) -> ParagraphBorders 
     }
 }
 
+pub(super) fn parse_cell_border(parent: roxmltree::Node, name: &str) -> crate::model::CellBorder {
+    let Some(n) = wml(parent, name) else {
+        return crate::model::CellBorder::default();
+    };
+    let val = n.attribute((WML_NS, "val")).unwrap_or("none");
+    if val == "nil" || val == "none" {
+        return crate::model::CellBorder::default();
+    }
+    let width = n
+        .attribute((WML_NS, "sz"))
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(|v| v / 8.0)
+        .unwrap_or(0.5);
+    let color = n.attribute((WML_NS, "color")).and_then(parse_hex_color);
+    crate::model::CellBorder::visible(color, width)
+}
+
+/// Parse left border with "start" fallback per OOXML bidi naming.
+pub(super) fn parse_cell_border_left(parent: roxmltree::Node) -> crate::model::CellBorder {
+    let left = parse_cell_border(parent, "left");
+    if left.present {
+        left
+    } else {
+        parse_cell_border(parent, "start")
+    }
+}
+
+/// Parse right border with "end" fallback per OOXML bidi naming.
+pub(super) fn parse_cell_border_right(parent: roxmltree::Node) -> crate::model::CellBorder {
+    let right = parse_cell_border(parent, "right");
+    if right.present {
+        right
+    } else {
+        parse_cell_border(parent, "end")
+    }
+}
+
 pub(super) fn parse_tab_stops(ppr: roxmltree::Node) -> Vec<TabStop> {
     let Some(tabs) = wml(ppr, "tabs") else {
         return vec![];
@@ -232,8 +269,6 @@ pub(super) fn read_zip_text<R: Read + std::io::Seek>(
     zip.by_name(name).ok()?.read_to_string(&mut content).ok()?;
     Some(content)
 }
-
-// --- Relationship parsing (too small for own module) ---
 
 mod relationships {
     use std::collections::HashMap;
@@ -478,7 +513,10 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                 // OOXML §17.3.1.38: hanging indent implicitly creates a tab stop
                 if indent_hanging > 0.0 {
                     let hang_pos = indent_left;
-                    if !tab_stops.iter().any(|t| (t.position - hang_pos).abs() < 0.5) {
+                    if !tab_stops
+                        .iter()
+                        .any(|t| (t.position - hang_pos).abs() < 0.5)
+                    {
                         tab_stops.push(TabStop {
                             position: hang_pos,
                             alignment: TabAlignment::Left,

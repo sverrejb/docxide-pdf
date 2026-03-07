@@ -11,6 +11,17 @@ use crate::model::{FontFamily, FontTable, Run};
 
 pub(crate) use encoding::{encode_as_gids, to_winansi_bytes};
 
+/// Metrics returned from font embedding: widths, line-height ratio, ascender ratio,
+/// char-to-gid mapping, per-char widths, and kerning pairs.
+pub(crate) struct FontMetrics {
+    pub(crate) widths_1000: Vec<f32>,
+    pub(crate) line_h_ratio: f32,
+    pub(crate) ascender_ratio: f32,
+    pub(crate) char_to_gid: HashMap<char, u16>,
+    pub(crate) char_widths_1000: HashMap<char, f32>,
+    pub(crate) kern_pairs: HashMap<(u16, u16), f32>,
+}
+
 pub(crate) struct FontEntry {
     pub(crate) pdf_name: String,
     pub(crate) font_ref: Ref,
@@ -26,12 +37,9 @@ impl FontEntry {
     /// Width of a single character in 1000-units. Uses the per-char cache (covers
     /// all Unicode chars seen in the document), falls back to the WinAnsi table.
     pub(crate) fn char_width_1000(&self, ch: char) -> f32 {
-        if let Some(ref map) = self.char_widths_1000 {
-            if let Some(&w) = map.get(&ch) {
-                return w;
-            }
+        if let Some(w) = self.char_widths_1000.as_ref().and_then(|m| m.get(&ch)) {
+            return *w;
         }
-        // Fallback: WinAnsi lookup (Helvetica or chars not in used_chars)
         let byte = encoding::char_to_winansi(ch);
         if byte >= 32 {
             self.widths_1000[(byte - 32) as usize]
@@ -116,14 +124,7 @@ fn try_font(
     alloc: &mut impl FnMut() -> Ref,
     embedded_fonts: &EmbeddedFonts,
     used_chars: &HashSet<char>,
-) -> Option<(
-    Vec<f32>,
-    f32,
-    f32,
-    HashMap<char, u16>,
-    HashMap<char, f32>,
-    HashMap<(u16, u16), f32>,
-)> {
+) -> Option<FontMetrics> {
     let embedded_key = (candidate.to_lowercase(), bold, italic);
     let embedded_data = embedded_fonts.get(&embedded_key);
 
@@ -267,32 +268,46 @@ pub(crate) fn register_font(
         }
     }
 
-    let (widths, line_h_ratio, ascender_ratio, char_to_gid, char_widths_1000, kern_pairs) = result
-        .map(|(w, r, ar, m, cw, kp)| {
-            let kp_opt = if kp.is_empty() { None } else { Some(kp) };
-            (w, Some(r), Some(ar), Some(m), Some(cw), kp_opt)
-        })
-        .unwrap_or_else(|| {
+    let entry = match result {
+        Some(m) => {
+            let kern_pairs = if m.kern_pairs.is_empty() {
+                None
+            } else {
+                Some(m.kern_pairs)
+            };
+            FontEntry {
+                pdf_name,
+                font_ref,
+                widths_1000: m.widths_1000,
+                line_h_ratio: Some(m.line_h_ratio),
+                ascender_ratio: Some(m.ascender_ratio),
+                char_to_gid: Some(m.char_to_gid),
+                char_widths_1000: Some(m.char_widths_1000),
+                kern_pairs,
+            }
+        }
+        None => {
             log::warn!("Font not found: {font_name} bold={bold} italic={italic} — using Helvetica");
             pdf.type1_font(font_ref)
                 .base_font(Name(b"Helvetica"))
                 .encoding_predefined(Name(b"WinAnsiEncoding"));
-            (encoding::helvetica_widths(), None, None, None, None, None)
-        });
+            FontEntry {
+                pdf_name,
+                font_ref,
+                widths_1000: encoding::helvetica_widths(),
+                line_h_ratio: None,
+                ascender_ratio: None,
+                char_to_gid: None,
+                char_widths_1000: None,
+                kern_pairs: None,
+            }
+        }
+    };
 
     log::debug!(
         "register_font: {font_name} bold={bold} italic={italic} → {:.1}ms",
         t0.elapsed().as_secs_f64() * 1000.0,
     );
 
-    FontEntry {
-        pdf_name,
-        font_ref,
-        widths_1000: widths,
-        line_h_ratio,
-        ascender_ratio,
-        char_to_gid,
-        char_widths_1000,
-        kern_pairs,
-    }
+    entry
 }

@@ -3,6 +3,7 @@ use std::io::Read;
 
 use crate::model::{FontFamily, FontTable, FontTableEntry};
 
+use super::relationships::parse_part_relationships;
 use super::{REL_NS, WML_NS, read_zip_text, wml};
 
 fn parse_guid_to_bytes(guid: &str) -> Option<[u8; 16]> {
@@ -35,26 +36,6 @@ fn deobfuscate_font(data: &mut [u8], key: &[u8; 16]) {
     for i in 16..32.min(data.len()) {
         data[i] ^= key[i - 16];
     }
-}
-
-fn parse_font_table_rels<R: Read + std::io::Seek>(
-    zip: &mut zip::ZipArchive<R>,
-) -> HashMap<String, String> {
-    let mut rels = HashMap::new();
-    let Some(xml_content) = read_zip_text(zip, "word/_rels/fontTable.xml.rels") else {
-        return rels;
-    };
-    let Ok(xml) = roxmltree::Document::parse(&xml_content) else {
-        return rels;
-    };
-    for node in xml.root_element().children() {
-        if node.tag_name().name() == "Relationship"
-            && let (Some(id), Some(target)) = (node.attribute("Id"), node.attribute("Target"))
-        {
-            rels.insert(id.to_string(), target.to_string());
-        }
-    }
-    rels
 }
 
 struct EmbedInfo {
@@ -155,7 +136,7 @@ pub(super) fn parse_font_table<R: Read + std::io::Seek>(
     }
 
     // Phase 2: resolve relationships and extract font data
-    let font_rels = parse_font_table_rels(zip);
+    let font_rels = parse_part_relationships(zip, "word/fontTable.xml");
 
     for info in embeds {
         let Some(target) = font_rels.get(&info.rel_id) else {

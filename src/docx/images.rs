@@ -13,6 +13,22 @@ use super::{DML_NS, REL_NS, WML_NS, WPD_NS, wml};
 
 const CHART_URI: &str = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 
+/// Extract display dimensions (in points) from a wp:inline or wp:anchor element.
+pub(super) fn extent_dimensions(container: roxmltree::Node) -> (f32, f32) {
+    let extent = container
+        .children()
+        .find(|n| n.tag_name().name() == "extent" && n.tag_name().namespace() == Some(WPD_NS));
+    let cx = extent
+        .and_then(|n| n.attribute("cx"))
+        .and_then(|v| v.parse::<f32>().ok())
+        .unwrap_or(0.0);
+    let cy = extent
+        .and_then(|n| n.attribute("cy"))
+        .and_then(|v| v.parse::<f32>().ok())
+        .unwrap_or(0.0);
+    (cx / 12700.0, cy / 12700.0)
+}
+
 pub(super) fn image_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat)> {
     // JPEG: starts with FF D8
     if data.len() >= 2 && data[0] == 0xFF && data[1] == 0xD8 {
@@ -184,22 +200,9 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
             continue;
         }
 
-        let extent = container
-            .children()
-            .find(|n| n.tag_name().name() == "extent" && n.tag_name().namespace() == Some(WPD_NS));
-        let cx = extent
-            .and_then(|n| n.attribute("cx"))
-            .and_then(|v| v.parse::<f32>().ok())
-            .unwrap_or(0.0);
-        let cy = extent
-            .and_then(|n| n.attribute("cy"))
-            .and_then(|v| v.parse::<f32>().ok())
-            .unwrap_or(0.0);
-        let display_w = cx / 12700.0;
-        let display_h = cy / 12700.0;
+        let (display_w, display_h) = extent_dimensions(container);
 
         if name == "anchor" {
-            // Check for textbox/shape content (any wrap mode)
             if let Some(wsp) =
                 parse_textbox_from_wsp(container, rels, zip, styles, theme, numbering)
             {
@@ -301,19 +304,7 @@ pub(super) fn compute_drawing_info<R: Read + std::io::Seek>(
                 continue;
             }
 
-            let extent = container.children().find(|n| {
-                n.tag_name().name() == "extent" && n.tag_name().namespace() == Some(WPD_NS)
-            });
-            let cx = extent
-                .and_then(|n| n.attribute("cx"))
-                .and_then(|v| v.parse::<f32>().ok())
-                .unwrap_or(0.0);
-            let cy = extent
-                .and_then(|n| n.attribute("cy"))
-                .and_then(|v| v.parse::<f32>().ok())
-                .unwrap_or(0.0);
-            let display_w = cx / 12700.0;
-            let display_h = cy / 12700.0;
+            let (display_w, display_h) = extent_dimensions(container);
 
             // Anchored images are handled by parse_runs() — skip them here
             // to avoid duplication. Only process inline drawings.

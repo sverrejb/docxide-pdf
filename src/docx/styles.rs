@@ -3,8 +3,9 @@ use std::collections::HashMap;
 use crate::model::{Alignment, CellBorder, LineSpacing, TabStop};
 
 use super::{
-    DML_NS, WML_NS, parse_hex_color, parse_paragraph_borders, parse_tab_stops, parse_text_color,
-    read_zip_text, twips_attr, twips_to_pts, wml, wml_attr, wml_bool,
+    DML_NS, WML_NS, parse_cell_border, parse_cell_border_left, parse_cell_border_right,
+    parse_paragraph_borders, parse_tab_stops, parse_text_color, read_zip_text, twips_attr,
+    twips_to_pts, wml, wml_attr, wml_bool,
 };
 
 fn dml<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
@@ -24,10 +25,7 @@ fn ea_typeface<'a>(node: roxmltree::Node<'a, 'a>) -> Option<&'a str> {
         .filter(|tf| !tf.is_empty())
 }
 
-fn script_font_typeface<'a>(
-    font_group: roxmltree::Node<'a, 'a>,
-    script: &str,
-) -> Option<&'a str> {
+fn script_font_typeface<'a>(font_group: roxmltree::Node<'a, 'a>, script: &str) -> Option<&'a str> {
     font_group
         .children()
         .find(|n| {
@@ -80,6 +78,7 @@ pub(super) struct StyleDefaults {
     pub(super) char_spacing: f32,
 }
 
+#[derive(Default)]
 pub(super) struct ParagraphStyle {
     pub(super) font_size: Option<f32>,
     pub(super) font_name: Option<String>,
@@ -170,71 +169,59 @@ pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(
     let script = east_asia_lang.map(lang_to_script).unwrap_or("Jpan");
 
     let names: Vec<String> = zip.file_names().map(|s: &str| s.to_string()).collect();
-    let theme_name = names
+    let xml_content = names
         .iter()
-        .find(|n: &&String| n.starts_with("word/theme/") && n.ends_with(".xml"));
-    let Some(xml_content) = theme_name.and_then(|name| read_zip_text(zip, name.as_str())) else {
-        return ThemeFonts {
-            major,
-            minor,
-            major_east_asia,
-            minor_east_asia,
-            colors,
-        };
-    };
-    let Ok(xml) = roxmltree::Document::parse(&xml_content) else {
-        return ThemeFonts {
-            major,
-            minor,
-            major_east_asia,
-            minor_east_asia,
-            colors,
-        };
-    };
+        .find(|n: &&String| n.starts_with("word/theme/") && n.ends_with(".xml"))
+        .and_then(|name| read_zip_text(zip, name.as_str()));
 
-    for node in xml.descendants() {
-        if node.tag_name().namespace() != Some(DML_NS) {
-            continue;
-        }
-        match node.tag_name().name() {
-            "majorFont" => {
-                if let Some(tf) = latin_typeface(node) {
-                    major = tf.to_string();
-                }
-                major_east_asia = ea_typeface(node)
-                    .or_else(|| script_font_typeface(node, script))
-                    .unwrap_or("")
-                    .to_string();
+    if let Some(xml_content) = xml_content
+        && let Ok(xml) = roxmltree::Document::parse(&xml_content)
+    {
+        for node in xml.descendants() {
+            if node.tag_name().namespace() != Some(DML_NS) {
+                continue;
             }
-            "minorFont" => {
-                if let Some(tf) = latin_typeface(node) {
-                    minor = tf.to_string();
-                }
-                minor_east_asia = ea_typeface(node)
-                    .or_else(|| script_font_typeface(node, script))
-                    .unwrap_or("")
-                    .to_string();
-            }
-            "clrScheme" => {
-                for child in node.children() {
-                    if child.tag_name().namespace() != Some(DML_NS) {
-                        continue;
+            match node.tag_name().name() {
+                "majorFont" => {
+                    if let Some(tf) = latin_typeface(node) {
+                        major = tf.to_string();
                     }
-                    let scheme_name = child.tag_name().name();
-                    // a:srgbClr or a:sysClr child holds the color value
-                    if let Some(srgb) = dml(child, "srgbClr") {
-                        if let Some(hex) = srgb.attribute("val").and_then(super::parse_hex_color) {
+                    major_east_asia = ea_typeface(node)
+                        .or_else(|| script_font_typeface(node, script))
+                        .unwrap_or("")
+                        .to_string();
+                }
+                "minorFont" => {
+                    if let Some(tf) = latin_typeface(node) {
+                        minor = tf.to_string();
+                    }
+                    minor_east_asia = ea_typeface(node)
+                        .or_else(|| script_font_typeface(node, script))
+                        .unwrap_or("")
+                        .to_string();
+                }
+                "clrScheme" => {
+                    for child in node.children() {
+                        if child.tag_name().namespace() != Some(DML_NS) {
+                            continue;
+                        }
+                        let scheme_name = child.tag_name().name();
+                        if let Some(srgb) = dml(child, "srgbClr") {
+                            if let Some(hex) =
+                                srgb.attribute("val").and_then(super::parse_hex_color)
+                            {
+                                colors.insert(scheme_name.to_string(), hex);
+                            }
+                        } else if let Some(hex) = dml(child, "sysClr")
+                            .and_then(|sys| sys.attribute("lastClr"))
+                            .and_then(super::parse_hex_color)
+                        {
                             colors.insert(scheme_name.to_string(), hex);
                         }
-                    } else if let Some(hex) = dml(child, "sysClr")
-                        .and_then(|sys| sys.attribute("lastClr"))
-                        .and_then(super::parse_hex_color)
-                    {
-                        colors.insert(scheme_name.to_string(), hex);
                     }
                 }
+                _ => {}
             }
-            _ => {}
         }
     }
 
@@ -413,6 +400,8 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         }
     }
 
+    let mut table_border_styles = HashMap::new();
+
     for style_node in root.children() {
         if style_node.tag_name().name() != "style"
             || style_node.tag_name().namespace() != Some(WML_NS)
@@ -427,131 +416,195 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
             style_id_to_name.insert(id.to_string(), name.to_string());
         }
 
-        if style_node.attribute((WML_NS, "type")) != Some("paragraph") {
-            continue;
-        }
         let Some(style_id) = style_node.attribute((WML_NS, "styleId")) else {
             continue;
         };
 
-        if style_node.attribute((WML_NS, "default")) == Some("1") {
-            default_paragraph_style_id = style_id.to_string();
+        match style_node.attribute((WML_NS, "type")) {
+            Some("paragraph") => {
+                if style_node.attribute((WML_NS, "default")) == Some("1") {
+                    default_paragraph_style_id = style_id.to_string();
+                }
+
+                let ppr = wml(style_node, "pPr");
+                let spacing = ppr.and_then(|n| wml(n, "spacing"));
+                let space_before = spacing.and_then(|n| twips_attr(n, "before"));
+                let space_after = spacing.and_then(|n| twips_attr(n, "after"));
+                let borders = ppr.map(parse_paragraph_borders).unwrap_or_default();
+
+                let rpr = wml(style_node, "rPr");
+
+                let font_size = rpr
+                    .and_then(|n| wml_attr(n, "sz"))
+                    .and_then(|v| v.parse::<f32>().ok())
+                    .map(|hp| hp / 2.0);
+
+                let rfonts_node = rpr.and_then(|n| wml(n, "rFonts"));
+                let font_name = rfonts_node
+                    .map(|rfonts| resolve_font_from_node(rfonts, theme, &defaults.font_name));
+                let east_asia_font =
+                    rfonts_node.and_then(|rfonts| resolve_east_asia_font_from_node(rfonts, theme));
+
+                let bold = rpr.and_then(|n| wml_bool(n, "b"));
+                let italic = rpr.and_then(|n| wml_bool(n, "i"));
+                let caps = rpr.and_then(|n| wml_bool(n, "caps"));
+                let small_caps = rpr.and_then(|n| wml_bool(n, "smallCaps"));
+                let vanish = rpr.and_then(|n| wml_bool(n, "vanish"));
+                let underline = rpr.and_then(|n| {
+                    wml(n, "u")
+                        .and_then(|u| u.attribute((WML_NS, "val")))
+                        .map(|v| v != "none")
+                });
+                let strikethrough = rpr.and_then(|n| wml_bool(n, "strike"));
+                let dstrike = rpr.and_then(|n| wml_bool(n, "dstrike"));
+                let char_spacing = rpr
+                    .and_then(|n| wml(n, "spacing"))
+                    .and_then(|n| n.attribute((WML_NS, "val")))
+                    .and_then(|v| v.parse::<f32>().ok())
+                    .map(twips_to_pts);
+                let kern_threshold = rpr
+                    .and_then(|n| wml_attr(n, "kern"))
+                    .and_then(|v| v.parse::<f32>().ok())
+                    .map(|hp| hp / 2.0);
+
+                let color = rpr
+                    .and_then(|n| wml_attr(n, "color"))
+                    .and_then(parse_text_color);
+
+                let alignment = ppr.and_then(|ppr| wml_attr(ppr, "jc")).map(parse_alignment);
+
+                let contextual_spacing = ppr
+                    .and_then(|ppr| wml_bool(ppr, "contextualSpacing"))
+                    .unwrap_or(false);
+
+                let keep_next = ppr
+                    .and_then(|ppr| wml_bool(ppr, "keepNext"))
+                    .unwrap_or(false);
+                let keep_lines = ppr
+                    .and_then(|ppr| wml_bool(ppr, "keepLines"))
+                    .unwrap_or(false);
+                let page_break_before = ppr
+                    .and_then(|ppr| wml_bool(ppr, "pageBreakBefore"))
+                    .unwrap_or(false);
+
+                let line_spacing = spacing.and_then(|n| {
+                    n.attribute((WML_NS, "line"))
+                        .and_then(|v| v.parse::<f32>().ok())
+                        .map(|line_val| parse_line_spacing(n, line_val))
+                });
+
+                let ind = ppr.and_then(|n| wml(n, "ind"));
+                let indent_left =
+                    ind.and_then(|n| twips_attr(n, "start").or_else(|| twips_attr(n, "left")));
+                let indent_right =
+                    ind.and_then(|n| twips_attr(n, "end").or_else(|| twips_attr(n, "right")));
+                let indent_hanging = ind.and_then(|n| twips_attr(n, "hanging"));
+                let indent_first_line = ind.and_then(|n| twips_attr(n, "firstLine"));
+
+                let tab_stops = ppr.map(parse_tab_stops).unwrap_or_default();
+
+                let based_on = wml(style_node, "basedOn")
+                    .and_then(|n| n.attribute((WML_NS, "val")))
+                    .map(|s| s.to_string());
+
+                paragraph_styles.insert(
+                    style_id.to_string(),
+                    ParagraphStyle {
+                        font_size,
+                        font_name,
+                        east_asia_font,
+                        bold,
+                        italic,
+                        caps,
+                        small_caps,
+                        vanish,
+                        underline,
+                        strikethrough,
+                        dstrike,
+                        color,
+                        char_spacing,
+                        space_before,
+                        space_after,
+                        alignment,
+                        contextual_spacing,
+                        keep_next,
+                        keep_lines,
+                        page_break_before,
+                        line_spacing,
+                        indent_left,
+                        indent_right,
+                        indent_hanging,
+                        indent_first_line,
+                        borders,
+                        based_on,
+                        kern_threshold,
+                        tab_stops,
+                    },
+                );
+            }
+            Some("character") => {
+                let Some(rpr) = wml(style_node, "rPr") else {
+                    continue;
+                };
+                let font_size = wml_attr(rpr, "sz")
+                    .and_then(|v| v.parse::<f32>().ok())
+                    .map(|hp| hp / 2.0);
+                let rfonts_node = wml(rpr, "rFonts");
+                let font_name = rfonts_node
+                    .map(|rfonts| resolve_font_from_node(rfonts, theme, &defaults.font_name));
+                let east_asia_font =
+                    rfonts_node.and_then(|rfonts| resolve_east_asia_font_from_node(rfonts, theme));
+                let bold = wml_bool(rpr, "b");
+                let italic = wml_bool(rpr, "i");
+                let underline = wml(rpr, "u")
+                    .and_then(|n| n.attribute((WML_NS, "val")))
+                    .map(|v| v != "none");
+                let strikethrough = wml_bool(rpr, "strike");
+                let caps = wml_bool(rpr, "caps");
+                let small_caps = wml_bool(rpr, "smallCaps");
+                let vanish = wml_bool(rpr, "vanish");
+                let color = wml_attr(rpr, "color").and_then(parse_text_color);
+                let kern_threshold = wml_attr(rpr, "kern")
+                    .and_then(|v| v.parse::<f32>().ok())
+                    .map(|hp| hp / 2.0);
+
+                character_styles.insert(
+                    style_id.to_string(),
+                    CharacterStyle {
+                        font_size,
+                        font_name,
+                        east_asia_font,
+                        bold,
+                        italic,
+                        underline,
+                        strikethrough,
+                        caps,
+                        small_caps,
+                        vanish,
+                        color,
+                        kern_threshold,
+                    },
+                );
+            }
+            Some("table") => {
+                if let Some(tbl_borders) =
+                    wml(style_node, "tblPr").and_then(|pr| wml(pr, "tblBorders"))
+                {
+                    table_border_styles.insert(
+                        style_id.to_string(),
+                        TableBordersDef {
+                            top: parse_cell_border(tbl_borders, "top"),
+                            bottom: parse_cell_border(tbl_borders, "bottom"),
+                            left: parse_cell_border_left(tbl_borders),
+                            right: parse_cell_border_right(tbl_borders),
+                            inside_h: parse_cell_border(tbl_borders, "insideH"),
+                            inside_v: parse_cell_border(tbl_borders, "insideV"),
+                        },
+                    );
+                }
+            }
+            _ => {}
         }
-
-        let ppr = wml(style_node, "pPr");
-        let spacing = ppr.and_then(|n| wml(n, "spacing"));
-        let space_before = spacing.and_then(|n| twips_attr(n, "before"));
-        let space_after = spacing.and_then(|n| twips_attr(n, "after"));
-        let borders = ppr.map(parse_paragraph_borders).unwrap_or_default();
-
-        let rpr = wml(style_node, "rPr");
-
-        let font_size = rpr
-            .and_then(|n| wml_attr(n, "sz"))
-            .and_then(|v| v.parse::<f32>().ok())
-            .map(|hp| hp / 2.0);
-
-        let rfonts_node = rpr.and_then(|n| wml(n, "rFonts"));
-        let font_name =
-            rfonts_node.map(|rfonts| resolve_font_from_node(rfonts, theme, &defaults.font_name));
-        let east_asia_font = rfonts_node.and_then(|rfonts| resolve_east_asia_font_from_node(rfonts, theme));
-
-        let bold = rpr.and_then(|n| wml_bool(n, "b"));
-        let italic = rpr.and_then(|n| wml_bool(n, "i"));
-        let caps = rpr.and_then(|n| wml_bool(n, "caps"));
-        let small_caps = rpr.and_then(|n| wml_bool(n, "smallCaps"));
-        let vanish = rpr.and_then(|n| wml_bool(n, "vanish"));
-        let underline = rpr.and_then(|n| {
-            wml(n, "u")
-                .and_then(|u| u.attribute((WML_NS, "val")))
-                .map(|v| v != "none")
-        });
-        let strikethrough = rpr.and_then(|n| wml_bool(n, "strike"));
-        let dstrike = rpr.and_then(|n| wml_bool(n, "dstrike"));
-        let char_spacing = rpr
-            .and_then(|n| wml(n, "spacing"))
-            .and_then(|n| n.attribute((WML_NS, "val")))
-            .and_then(|v| v.parse::<f32>().ok())
-            .map(twips_to_pts);
-        let kern_threshold = rpr
-            .and_then(|n| wml_attr(n, "kern"))
-            .and_then(|v| v.parse::<f32>().ok())
-            .map(|hp| hp / 2.0);
-
-        let color = rpr
-            .and_then(|n| wml_attr(n, "color"))
-            .and_then(parse_text_color);
-
-        let alignment = ppr.and_then(|ppr| wml_attr(ppr, "jc")).map(parse_alignment);
-
-        let contextual_spacing = ppr
-            .and_then(|ppr| wml_bool(ppr, "contextualSpacing"))
-            .unwrap_or(false);
-
-        let keep_next = ppr
-            .and_then(|ppr| wml_bool(ppr, "keepNext"))
-            .unwrap_or(false);
-        let keep_lines = ppr
-            .and_then(|ppr| wml_bool(ppr, "keepLines"))
-            .unwrap_or(false);
-        let page_break_before = ppr
-            .and_then(|ppr| wml_bool(ppr, "pageBreakBefore"))
-            .unwrap_or(false);
-
-        let line_spacing = spacing.and_then(|n| {
-            n.attribute((WML_NS, "line"))
-                .and_then(|v| v.parse::<f32>().ok())
-                .map(|line_val| parse_line_spacing(n, line_val))
-        });
-
-        let ind = ppr.and_then(|n| wml(n, "ind"));
-        let indent_left =
-            ind.and_then(|n| twips_attr(n, "start").or_else(|| twips_attr(n, "left")));
-        let indent_right =
-            ind.and_then(|n| twips_attr(n, "end").or_else(|| twips_attr(n, "right")));
-        let indent_hanging = ind.and_then(|n| twips_attr(n, "hanging"));
-        let indent_first_line = ind.and_then(|n| twips_attr(n, "firstLine"));
-
-        let tab_stops = ppr.map(parse_tab_stops).unwrap_or_default();
-
-        let based_on = wml(style_node, "basedOn")
-            .and_then(|n| n.attribute((WML_NS, "val")))
-            .map(|s| s.to_string());
-
-        paragraph_styles.insert(
-            style_id.to_string(),
-            ParagraphStyle {
-                font_size,
-                font_name,
-                east_asia_font,
-                bold,
-                italic,
-                caps,
-                small_caps,
-                vanish,
-                underline,
-                strikethrough,
-                dstrike,
-                color,
-                char_spacing,
-                space_before,
-                space_after,
-                alignment,
-                contextual_spacing,
-                keep_next,
-                keep_lines,
-                page_break_before,
-                line_spacing,
-                indent_left,
-                indent_right,
-                indent_hanging,
-                indent_first_line,
-                borders,
-                based_on,
-                kern_threshold,
-                tab_stops,
-            },
-        );
     }
 
     resolve_based_on(&mut paragraph_styles);
@@ -560,121 +613,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
     // that aren't in docDefaults. Merge kern_threshold into defaults if missing.
     if defaults.kern_threshold.is_none() {
         if let Some(default_para) = paragraph_styles.get(&default_paragraph_style_id) {
-            if default_para.kern_threshold.is_some() {
-                defaults.kern_threshold = default_para.kern_threshold;
-            }
-        }
-    }
-
-    // Parse character styles (e.g., "Hyperlink")
-    for style_node in root.children() {
-        if style_node.tag_name().name() != "style"
-            || style_node.tag_name().namespace() != Some(WML_NS)
-        {
-            continue;
-        }
-        if style_node.attribute((WML_NS, "type")) != Some("character") {
-            continue;
-        }
-        let Some(style_id) = style_node.attribute((WML_NS, "styleId")) else {
-            continue;
-        };
-        let Some(rpr) = wml(style_node, "rPr") else {
-            continue;
-        };
-        let font_size = wml_attr(rpr, "sz")
-            .and_then(|v| v.parse::<f32>().ok())
-            .map(|hp| hp / 2.0);
-        let char_rfonts_node = wml(rpr, "rFonts");
-        let font_name =
-            char_rfonts_node.map(|rfonts| resolve_font_from_node(rfonts, theme, &defaults.font_name));
-        let east_asia_font = char_rfonts_node.and_then(|rfonts| resolve_east_asia_font_from_node(rfonts, theme));
-        let bold = wml_bool(rpr, "b");
-        let italic = wml_bool(rpr, "i");
-        let underline = wml(rpr, "u")
-            .and_then(|n| n.attribute((WML_NS, "val")))
-            .map(|v| v != "none");
-        let strikethrough = wml_bool(rpr, "strike");
-        let caps = wml_bool(rpr, "caps");
-        let small_caps = wml_bool(rpr, "smallCaps");
-        let vanish = wml_bool(rpr, "vanish");
-        let color = wml_attr(rpr, "color").and_then(parse_text_color);
-        let kern_threshold = wml_attr(rpr, "kern")
-            .and_then(|v| v.parse::<f32>().ok())
-            .map(|hp| hp / 2.0);
-
-        character_styles.insert(
-            style_id.to_string(),
-            CharacterStyle {
-                font_size,
-                font_name,
-                east_asia_font,
-                bold,
-                italic,
-                underline,
-                strikethrough,
-                caps,
-                small_caps,
-                vanish,
-                color,
-                kern_threshold,
-            },
-        );
-    }
-
-    let mut table_border_styles = HashMap::new();
-    for style_node in root.children() {
-        if style_node.tag_name().name() != "style"
-            || style_node.tag_name().namespace() != Some(WML_NS)
-        {
-            continue;
-        }
-        if style_node.attribute((WML_NS, "type")) != Some("table") {
-            continue;
-        }
-        let Some(style_id) = style_node.attribute((WML_NS, "styleId")) else {
-            continue;
-        };
-        if let Some(tbl_borders) = wml(style_node, "tblPr").and_then(|pr| wml(pr, "tblBorders")) {
-            let parse_bdr = |name: &str| -> CellBorder {
-                let Some(n) = wml(tbl_borders, name) else {
-                    return CellBorder::default();
-                };
-                let val = n.attribute((WML_NS, "val")).unwrap_or("none");
-                if val == "nil" || val == "none" {
-                    return CellBorder::default();
-                }
-                let width = n
-                    .attribute((WML_NS, "sz"))
-                    .and_then(|v| v.parse::<f32>().ok())
-                    .map(|v| v / 8.0)
-                    .unwrap_or(0.5);
-                let color = n.attribute((WML_NS, "color")).and_then(parse_hex_color);
-                CellBorder::visible(color, width)
-            };
-            let left = parse_bdr("left");
-            let left = if left.present {
-                left
-            } else {
-                parse_bdr("start")
-            };
-            let right = parse_bdr("right");
-            let right = if right.present {
-                right
-            } else {
-                parse_bdr("end")
-            };
-            table_border_styles.insert(
-                style_id.to_string(),
-                TableBordersDef {
-                    top: parse_bdr("top"),
-                    bottom: parse_bdr("bottom"),
-                    left,
-                    right,
-                    inside_h: parse_bdr("insideH"),
-                    inside_v: parse_bdr("insideV"),
-                },
-            );
+            defaults.kern_threshold = default_para.kern_threshold;
         }
     }
 
@@ -714,37 +653,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             };
         }
 
-        let mut inh = ParagraphStyle {
-            font_size: None,
-            font_name: None,
-            east_asia_font: None,
-            bold: None,
-            italic: None,
-            caps: None,
-            small_caps: None,
-            vanish: None,
-            underline: None,
-            strikethrough: None,
-            dstrike: None,
-            color: None,
-            char_spacing: None,
-            space_before: None,
-            space_after: None,
-            alignment: None,
-            contextual_spacing: false,
-            keep_next: false,
-            keep_lines: false,
-            page_break_before: false,
-            line_spacing: None,
-            indent_left: None,
-            indent_right: None,
-            indent_hanging: None,
-            indent_first_line: None,
-            borders: crate::model::ParagraphBorders::default(),
-            based_on: None,
-            kern_threshold: None,
-            tab_stops: Vec::new(),
-        };
+        let mut inh = ParagraphStyle::default();
 
         for ancestor_id in chain.iter().rev() {
             if let Some(s) = styles.get(ancestor_id) {

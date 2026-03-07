@@ -6,7 +6,7 @@ use crate::model::{
     MarkerSymbol,
 };
 
-use super::{DML_NS, read_zip_text};
+use super::{DML_NS, parse_hex_color, read_zip_text};
 
 const CHART_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 
@@ -20,16 +20,6 @@ fn chart_attr<'a>(parent: roxmltree::Node<'a, 'a>, child: &str) -> Option<&'a st
     chart_child(parent, child).and_then(|n| n.attribute("val"))
 }
 
-fn parse_hex_color_dml(val: &str) -> Option<[u8; 3]> {
-    if val.len() != 6 {
-        return None;
-    }
-    let r = u8::from_str_radix(&val[0..2], 16).ok()?;
-    let g = u8::from_str_radix(&val[2..4], 16).ok()?;
-    let b = u8::from_str_radix(&val[4..6], 16).ok()?;
-    Some([r, g, b])
-}
-
 fn dml_child<'a>(parent: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
     parent
         .children()
@@ -38,7 +28,7 @@ fn dml_child<'a>(parent: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltre
 
 fn extract_srgb_fill(sp_pr: roxmltree::Node) -> Option<[u8; 3]> {
     let srgb = dml_child(dml_child(sp_pr, "solidFill")?, "srgbClr")?;
-    srgb.attribute("val").and_then(parse_hex_color_dml)
+    srgb.attribute("val").and_then(parse_hex_color)
 }
 
 fn extract_fill_alpha(sp_pr: roxmltree::Node) -> Option<f32> {

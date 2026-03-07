@@ -60,7 +60,11 @@ pub(super) fn compute_header_height(
                     .filter_map(|r| r.inline_image.as_ref())
                     .map(|img| img.display_height)
                     .fold(0.0f32, f32::max);
-                height += if max_img_h > line_h { max_img_h } else { line_h };
+                height += if max_img_h > line_h {
+                    max_img_h
+                } else {
+                    line_h
+                };
                 prev_space_after = para.space_after;
             }
             Block::Table(table) => {
@@ -249,7 +253,15 @@ pub(super) fn render_header_footer(
                         let tp_ls = tp.line_spacing.unwrap_or(doc_line_spacing);
                         let has_tabs = tp.runs.iter().any(|r| r.is_tab);
                         let tb_lines = if has_tabs {
-                            build_tabbed_line(&tp.runs, seen_fonts, &tp.tab_stops, 0.0, content_w, 0.0, &empty_inline_imgs)
+                            build_tabbed_line(
+                                &tp.runs,
+                                seen_fonts,
+                                &tp.tab_stops,
+                                0.0,
+                                content_w,
+                                0.0,
+                                &empty_inline_imgs,
+                            )
                         } else {
                             build_paragraph_lines(
                                 &tp.runs,
@@ -469,7 +481,11 @@ pub(super) fn render_header_footer(
                     .flat_map(|l| l.chunks.iter())
                     .map(|c| c.inline_image_height)
                     .fold(0.0f32, f32::max);
-                let effective_line_h = if max_img_h > line_h { max_img_h } else { line_h };
+                let effective_line_h = if max_img_h > line_h {
+                    max_img_h
+                } else {
+                    line_h
+                };
                 cursor_y -= lines.len().max(1) as f32 * effective_line_h;
                 prev_space_after = para.space_after;
                 pi += 1;

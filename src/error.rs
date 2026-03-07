@@ -25,18 +25,18 @@ impl std::error::Error for Error {}
 
 impl From<zip::result::ZipError> for Error {
     fn from(e: zip::result::ZipError) -> Self {
-        Error::Zip(e)
+        Self::Zip(e)
     }
 }
 
 impl From<roxmltree::Error> for Error {
     fn from(e: roxmltree::Error) -> Self {
-        Error::Xml(e)
+        Self::Xml(e)
     }
 }
 
 impl From<std::io::Error> for Error {
     fn from(e: std::io::Error) -> Self {
-        Error::Io(e)
+        Self::Io(e)
     }
 }

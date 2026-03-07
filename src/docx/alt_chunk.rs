@@ -373,54 +373,29 @@ fn resolve_css(node: roxmltree::Node, css: &HashMap<String, CssProperties>) -> C
 }
 
 fn merge_css(base: &mut CssProperties, over: &CssProperties) {
-    if over.font_size_pt.is_some() {
-        base.font_size_pt = over.font_size_pt;
+    macro_rules! override_if_set {
+        ($($field:ident),+ $(,)?) => {
+            $(if over.$field.is_some() { base.$field.clone_from(&over.$field); })+
+        };
     }
-    if over.font_family.is_some() {
-        base.font_family.clone_from(&over.font_family);
-    }
-    if over.bold.is_some() {
-        base.bold = over.bold;
-    }
-    if over.text_align.is_some() {
-        base.text_align.clone_from(&over.text_align);
-    }
-    if over.text_indent_pt.is_some() {
-        base.text_indent_pt = over.text_indent_pt;
-    }
-    if over.margin_top_pt.is_some() {
-        base.margin_top_pt = over.margin_top_pt;
-    }
-    if over.margin_bottom_pt.is_some() {
-        base.margin_bottom_pt = over.margin_bottom_pt;
-    }
-    if over.margin_left_pt.is_some() {
-        base.margin_left_pt = over.margin_left_pt;
-    }
-    if over.line_height_pct.is_some() {
-        base.line_height_pct = over.line_height_pct;
-    }
-    if over.color.is_some() {
-        base.color = over.color;
-    }
-    if over.width_px.is_some() {
-        base.width_px = over.width_px;
-    }
-    if over.vertical_align.is_some() {
-        base.vertical_align.clone_from(&over.vertical_align);
-    }
-    if over.border_top.is_some() {
-        base.border_top = over.border_top;
-    }
-    if over.border_right.is_some() {
-        base.border_right = over.border_right;
-    }
-    if over.border_bottom.is_some() {
-        base.border_bottom = over.border_bottom;
-    }
-    if over.border_left.is_some() {
-        base.border_left = over.border_left;
-    }
+    override_if_set!(
+        font_size_pt,
+        font_family,
+        bold,
+        text_align,
+        text_indent_pt,
+        margin_top_pt,
+        margin_bottom_pt,
+        margin_left_pt,
+        line_height_pct,
+        color,
+        width_px,
+        vertical_align,
+        border_top,
+        border_right,
+        border_bottom,
+        border_left,
+    );
 }
 
 struct RunContext<'a> {

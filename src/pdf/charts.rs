@@ -262,16 +262,7 @@ pub(super) fn render_chart(
 
     match c.chart_type {
         ChartType::Pie => {
-            charts_radial::render_pie(
-                chart,
-                content,
-                x,
-                y,
-                has_font,
-                label_font_key,
-                font_size,
-                label_font,
-            );
+            charts_radial::render_pie(chart, content, x, y, has_font, label_font_key, label_font);
             return;
         }
         ChartType::Doughnut { hole_size_pct } => {
@@ -282,23 +273,13 @@ pub(super) fn render_chart(
                 y,
                 has_font,
                 label_font_key,
-                font_size,
                 hole_size_pct,
                 label_font,
             );
             return;
         }
         ChartType::Radar => {
-            render_radar(
-                chart,
-                content,
-                x,
-                y,
-                has_font,
-                label_font_key,
-                font_size,
-                label_font,
-            );
+            render_radar(chart, content, x, y, has_font, label_font_key, label_font);
             return;
         }
         _ => {}
@@ -816,7 +797,6 @@ fn render_radar(
     y: f32,
     has_font: bool,
     label_font_key: &str,
-    _font_size: f32,
     label_font: Option<&FontEntry>,
 ) {
     let c = &chart.chart;

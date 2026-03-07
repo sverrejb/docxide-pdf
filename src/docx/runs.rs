@@ -4,9 +4,11 @@ use std::io::Read;
 use crate::model::{FieldCode, FloatingImage, InlineChart, Run, Textbox, VertAlign};
 
 use super::images::{RunDrawingResult, parse_run_drawing};
-use super::numbering::NumberingInfo;
 use super::is_east_asian_char;
-use super::styles::{StylesInfo, ThemeFonts, resolve_east_asia_font_from_node, resolve_font_from_node};
+use super::numbering::NumberingInfo;
+use super::styles::{
+    StylesInfo, ThemeFonts, resolve_east_asia_font_from_node, resolve_font_from_node,
+};
 use super::textbox::parse_textbox_from_vml;
 use super::{WML_NS, highlight_color, parse_text_color, twips_to_pts, wml, wml_attr, wml_bool};
 
@@ -189,16 +191,34 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
         .and_then(|s| s.font_name.as_deref())
         .unwrap_or(&styles.defaults.font_name)
         .to_string();
-    let style_bold = para_style.and_then(|s| s.bold).unwrap_or(styles.defaults.bold);
-    let style_italic = para_style.and_then(|s| s.italic).unwrap_or(styles.defaults.italic);
-    let style_caps = para_style.and_then(|s| s.caps).unwrap_or(styles.defaults.caps);
-    let style_small_caps = para_style.and_then(|s| s.small_caps).unwrap_or(styles.defaults.small_caps);
-    let style_vanish = para_style.and_then(|s| s.vanish).unwrap_or(styles.defaults.vanish);
-    let style_underline = para_style.and_then(|s| s.underline).unwrap_or(styles.defaults.underline);
-    let style_strikethrough = para_style.and_then(|s| s.strikethrough).unwrap_or(styles.defaults.strikethrough);
-    let style_dstrike = para_style.and_then(|s| s.dstrike).unwrap_or(styles.defaults.dstrike);
+    let style_bold = para_style
+        .and_then(|s| s.bold)
+        .unwrap_or(styles.defaults.bold);
+    let style_italic = para_style
+        .and_then(|s| s.italic)
+        .unwrap_or(styles.defaults.italic);
+    let style_caps = para_style
+        .and_then(|s| s.caps)
+        .unwrap_or(styles.defaults.caps);
+    let style_small_caps = para_style
+        .and_then(|s| s.small_caps)
+        .unwrap_or(styles.defaults.small_caps);
+    let style_vanish = para_style
+        .and_then(|s| s.vanish)
+        .unwrap_or(styles.defaults.vanish);
+    let style_underline = para_style
+        .and_then(|s| s.underline)
+        .unwrap_or(styles.defaults.underline);
+    let style_strikethrough = para_style
+        .and_then(|s| s.strikethrough)
+        .unwrap_or(styles.defaults.strikethrough);
+    let style_dstrike = para_style
+        .and_then(|s| s.dstrike)
+        .unwrap_or(styles.defaults.dstrike);
     let style_color: Option<[u8; 3]> = para_style.and_then(|s| s.color).or(styles.defaults.color);
-    let style_char_spacing = para_style.and_then(|s| s.char_spacing).unwrap_or(styles.defaults.char_spacing);
+    let style_char_spacing = para_style
+        .and_then(|s| s.char_spacing)
+        .unwrap_or(styles.defaults.char_spacing);
     let style_kern_threshold: Option<f32> = para_style
         .and_then(|s| s.kern_threshold)
         .or(styles.defaults.kern_threshold);
@@ -317,7 +337,9 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                 .and_then(|n| wml_bool(n, "strike"))
                 .or_else(|| char_style.and_then(|cs| cs.strikethrough))
                 .unwrap_or(style_strikethrough),
-            dstrike: rpr.and_then(|n| wml_bool(n, "dstrike")).unwrap_or(style_dstrike),
+            dstrike: rpr
+                .and_then(|n| wml_bool(n, "dstrike"))
+                .unwrap_or(style_dstrike),
             char_spacing: rpr
                 .and_then(|n| wml(n, "spacing"))
                 .and_then(|n| n.attribute((WML_NS, "val")))
@@ -574,12 +596,11 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
     // need a synthetic run so the renderer computes the correct line height.
     if runs.is_empty() && !has_page_break {
         let mark_rpr = ppr.and_then(|ppr| wml(ppr, "rPr"));
-        if mark_rpr.and_then(|n| wml_attr(n, "sz")).is_some() {
-            let mark_font_size = mark_rpr
-                .and_then(|n| wml_attr(n, "sz"))
-                .and_then(|v| v.parse::<f32>().ok())
-                .map(|hp| hp / 2.0)
-                .unwrap_or(style_font_size);
+        let mark_font_size = mark_rpr
+            .and_then(|n| wml_attr(n, "sz"))
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(|hp| hp / 2.0);
+        if let Some(mark_font_size) = mark_font_size {
             let mark_font_name = mark_rpr
                 .and_then(|n| wml(n, "rFonts"))
                 .map(|rfonts| resolve_font_from_node(rfonts, theme, &style_font_name))

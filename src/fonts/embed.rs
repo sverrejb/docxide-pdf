@@ -3,6 +3,7 @@ use std::collections::{HashMap, HashSet};
 use pdf_writer::{Name, Pdf, Rect, Ref};
 use ttf_parser::Face;
 
+use super::FontMetrics;
 use super::encoding::winansi_to_char;
 
 /// Embed a TrueType/OpenType font as a CIDFont (Type0 composite) with Identity-H encoding.
@@ -17,14 +18,7 @@ pub(super) fn embed_truetype(
     face_index: u32,
     used_chars: &HashSet<char>,
     alloc: &mut impl FnMut() -> Ref,
-) -> Option<(
-    Vec<f32>,
-    f32,
-    f32,
-    HashMap<char, u16>,
-    HashMap<char, f32>,
-    HashMap<(u16, u16), f32>,
-)> {
+) -> Option<FontMetrics> {
     let face = Face::parse(font_data, face_index).ok()?;
 
     let units = face.units_per_em() as f32;
@@ -271,12 +265,12 @@ pub(super) fn embed_truetype(
     let line_h_ratio = (face.ascender() as f32 - face.descender() as f32 + line_gap) / units;
     let ascender_ratio = face.ascender() as f32 / units;
 
-    Some((
+    Some(FontMetrics {
         widths_1000,
         line_h_ratio,
         ascender_ratio,
         char_to_gid,
         char_widths_1000,
         kern_pairs,
-    ))
+    })
 }

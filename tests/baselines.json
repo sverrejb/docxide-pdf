@@ -176,12 +176,12 @@
   "scraped/bush_fires_act_c..": {
     "jaccard": 0.3914,
     "ssim": 0.7713,
-    "text_boundary": 0.7801
+    "text_boundary": 0.8026
   },
   "scraped/centrifugal_wate..": {
     "jaccard": 0.7906,
     "ssim": 0.9312,
-    "text_boundary": 0.8568
+    "text_boundary": 0.9862
   },
   "scraped/classroom_weekly..": {
     "jaccard": 0.9437,
@@ -191,7 +191,7 @@
   "scraped/croatian_grant_g..": {
     "jaccard": 0.0726,
     "ssim": 0.187,
-    "text_boundary": 0.0026
+    "text_boundary": 0.0287
   },
   "scraped/croatian_regulat..": {
     "jaccard": 0.0812,
@@ -231,7 +231,7 @@
   "scraped/federal_procurem..": {
     "jaccard": 0.5388,
     "ssim": 0.7351,
-    "text_boundary": 0.7588
+    "text_boundary": 0.7647
   },
   "scraped/feminist_voice_d..": {
     "jaccard": 0.0769,
@@ -306,7 +306,7 @@
   "scraped/polish_tender_de..": {
     "jaccard": 0.3197,
     "ssim": 0.4165,
-    "text_boundary": 0.2
+    "text_boundary": 0.4366
   },
   "scraped/russian_sports_r..": {
     "jaccard": 0.1267,
@@ -336,7 +336,7 @@
   "scraped/transition_to_wo..": {
     "jaccard": 0.0676,
     "ssim": 0.1887,
-    "text_boundary": 0.0238
+    "text_boundary": 0.0285
   },
   "scraped/ukraine_humanita..": {
     "jaccard": 0.386,
