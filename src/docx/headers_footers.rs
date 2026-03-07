@@ -63,7 +63,7 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
                 let ppr = wml(node, "pPr");
                 let para_style_id = ppr
                     .and_then(|ppr| wml_attr(ppr, "pStyle"))
-                    .unwrap_or("Normal");
+                    .unwrap_or(&styles.default_paragraph_style_id);
                 let para_style = styles.paragraph_styles.get(para_style_id);
 
                 let alignment = ppr

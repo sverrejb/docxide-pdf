@@ -280,7 +280,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                 let ppr = wml(p, "pPr");
                 let para_style_id = ppr
                     .and_then(|ppr| wml_attr(ppr, "pStyle"))
-                    .unwrap_or("Normal");
+                    .unwrap_or(&styles.default_paragraph_style_id);
                 let para_style = styles.paragraph_styles.get(para_style_id);
                 let alignment = ppr
                     .and_then(|ppr| wml_attr(ppr, "jc"))

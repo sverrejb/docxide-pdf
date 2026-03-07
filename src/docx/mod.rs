@@ -334,7 +334,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
 
                 let para_style_id = ppr
                     .and_then(|ppr| wml_attr(ppr, "pStyle"))
-                    .unwrap_or("Normal");
+                    .unwrap_or(&styles.default_paragraph_style_id);
 
                 let para_style = styles.paragraph_styles.get(para_style_id);
 

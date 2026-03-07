@@ -110,7 +110,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
     let ppr = wml(para_node, "pPr");
     let para_style_id = ppr
         .and_then(|ppr| wml_attr(ppr, "pStyle"))
-        .unwrap_or("Normal");
+        .unwrap_or(&styles.default_paragraph_style_id);
     let para_style = styles.paragraph_styles.get(para_style_id);
 
     let style_font_size = para_style

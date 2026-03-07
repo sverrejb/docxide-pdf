@@ -89,6 +89,9 @@ pub(super) struct StylesInfo {
     pub(super) table_border_styles: HashMap<String, TableBordersDef>,
     /// Maps style ID → display name (for STYLEREF resolution)
     pub(super) style_id_to_name: HashMap<String, String>,
+    /// The styleId of the default paragraph style (w:default="1" w:type="paragraph").
+    /// Locale-dependent: "Normal" (English), "Normalny" (Polish), "Standard" (German/LibreOffice), etc.
+    pub(super) default_paragraph_style_id: String,
 }
 
 pub(super) fn parse_alignment(val: &str) -> Alignment {
@@ -219,7 +222,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
     theme: &ThemeFonts,
 ) -> StylesInfo {
     let mut defaults = StyleDefaults {
-        font_size: 12.0,
+        font_size: 10.0,
         font_name: theme.minor.clone(),
         space_after: 0.0,
         line_spacing: LineSpacing::Auto(1.0),
@@ -228,6 +231,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
     let mut paragraph_styles = HashMap::new();
     let mut character_styles = HashMap::new();
     let mut style_id_to_name: HashMap<String, String> = HashMap::new();
+    let mut default_paragraph_style_id = String::from("Normal");
 
     let Some(xml_content) = read_zip_text(zip, "word/styles.xml") else {
         return StylesInfo {
@@ -236,6 +240,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
             character_styles,
             table_border_styles: HashMap::new(),
             style_id_to_name,
+            default_paragraph_style_id,
         };
     };
     let Ok(xml) = roxmltree::Document::parse(&xml_content) else {
@@ -245,6 +250,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
             character_styles,
             table_border_styles: HashMap::new(),
             style_id_to_name,
+            default_paragraph_style_id,
         };
     };
 
@@ -298,6 +304,10 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         let Some(style_id) = style_node.attribute((WML_NS, "styleId")) else {
             continue;
         };
+
+        if style_node.attribute((WML_NS, "default")) == Some("1") {
+            default_paragraph_style_id = style_id.to_string();
+        }
 
         let ppr = wml(style_node, "pPr");
         let spacing = ppr.and_then(|n| wml(n, "spacing"));
@@ -525,6 +535,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         character_styles,
         table_border_styles,
         style_id_to_name,
+        default_paragraph_style_id,
     }
 }
 

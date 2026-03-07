@@ -160,13 +160,101 @@
     "text_boundary": 0.7816
   },
   "scraped/bush_fires_act_c..": {
-    "jaccard": 0.3715,
-    "ssim": 0.7284,
+    "jaccard": 0.3803,
+    "ssim": 0.7495,
     "text_boundary": 0.7801
+  },
+  "scraped/centrifugal_wate..": {
+    "jaccard": 0.7798,
+    "ssim": 0.9135
   },
   "scraped/classroom_weekly..": {
     "jaccard": 0.9437,
     "ssim": 0.963,
     "text_boundary": 0.2609
+  },
+  "scraped/croatian_grant_g..": {
+    "jaccard": 0.0683,
+    "ssim": 0.1775
+  },
+  "scraped/czech_cafeteria_..": {
+    "jaccard": 0.737,
+    "ssim": 0.873
+  },
+  "scraped/czech_expert_wit..": {
+    "jaccard": 0.6479,
+    "ssim": 0.8177
+  },
+  "scraped/czech_grant_appl..": {
+    "jaccard": 0.0938,
+    "ssim": 0.2908
+  },
+  "scraped/czech_tree_cutti..": {
+    "jaccard": 0.575,
+    "ssim": 0.778
+  },
+  "scraped/east_asia_confer..": {
+    "jaccard": 0.0419,
+    "ssim": 0.1302
+  },
+  "scraped/indonesian_bench..": {
+    "jaccard": 0.2319,
+    "ssim": 0.4518
+  },
+  "scraped/italian_evaluati..": {
+    "jaccard": 0.1073,
+    "ssim": 0.3136
+  },
+  "scraped/italian_project_..": {
+    "jaccard": 0.0722,
+    "ssim": 0.241
+  },
+  "scraped/japanese_interli..": {
+    "jaccard": 0.0317,
+    "ssim": 0.1847
+  },
+  "scraped/lithuanian_food_..": {
+    "jaccard": 0.3695,
+    "ssim": 0.5949
+  },
+  "scraped/mandated_reporte..": {
+    "jaccard": 0.168,
+    "ssim": 0.421
+  },
+  "scraped/polish_archery_r..": {
+    "jaccard": 0.1495,
+    "ssim": 0.483
+  },
+  "scraped/polish_council_r..": {
+    "jaccard": 0.3719,
+    "ssim": 0.6786
+  },
+  "scraped/polish_municipal..": {
+    "jaccard": 0.1134,
+    "ssim": 0.2703
+  },
+  "scraped/polish_tender_de..": {
+    "jaccard": 0.1684,
+    "ssim": 0.2373
+  },
+  "scraped/russian_sports_r..": {
+    "jaccard": 0.1267,
+    "ssim": 0.2329
+  },
+  "scraped/russian_universi..": {
+    "jaccard": 0.1976,
+    "ssim": 0.5101
+  },
+  "scraped/slovak_misdemean..": {
+    "jaccard": 0.1285,
+    "ssim": 0.2932
+  },
+  "scraped/stem_partnership..": {
+    "jaccard": 0.1207,
+    "ssim": 0.3056
+  },
+  "scraped/waste_management..": {
+    "jaccard": 0.6845,
+    "ssim": 0.9155
   }
 }
