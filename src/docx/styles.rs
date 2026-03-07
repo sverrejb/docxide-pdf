@@ -18,15 +18,53 @@ fn latin_typeface<'a>(node: roxmltree::Node<'a, 'a>) -> Option<&'a str> {
         .filter(|tf| !tf.is_empty())
 }
 
+fn ea_typeface<'a>(node: roxmltree::Node<'a, 'a>) -> Option<&'a str> {
+    dml(node, "ea")
+        .and_then(|n| n.attribute("typeface"))
+        .filter(|tf| !tf.is_empty())
+}
+
+fn script_font_typeface<'a>(
+    font_group: roxmltree::Node<'a, 'a>,
+    script: &str,
+) -> Option<&'a str> {
+    font_group
+        .children()
+        .find(|n| {
+            n.tag_name().name() == "font"
+                && n.tag_name().namespace() == Some(DML_NS)
+                && n.attribute("script") == Some(script)
+        })
+        .and_then(|n| n.attribute("typeface"))
+        .filter(|tf| !tf.is_empty())
+}
+
+fn lang_to_script(lang: &str) -> &'static str {
+    if lang.starts_with("ja") {
+        "Jpan"
+    } else if lang.starts_with("zh") && lang.contains("TW") {
+        "Hant"
+    } else if lang.starts_with("zh") {
+        "Hans"
+    } else if lang.starts_with("ko") {
+        "Hang"
+    } else {
+        "Jpan"
+    }
+}
+
 pub(super) struct ThemeFonts {
     pub(super) major: String,
     pub(super) minor: String,
+    pub(super) major_east_asia: String,
+    pub(super) minor_east_asia: String,
     pub(super) colors: HashMap<String, [u8; 3]>,
 }
 
 pub(super) struct StyleDefaults {
     pub(super) font_size: f32,
     pub(super) font_name: String,
+    pub(super) east_asia_font: Option<String>,
     pub(super) space_after: f32,
     pub(super) line_spacing: LineSpacing,
     pub(super) kern_threshold: Option<f32>,
@@ -45,6 +83,7 @@ pub(super) struct StyleDefaults {
 pub(super) struct ParagraphStyle {
     pub(super) font_size: Option<f32>,
     pub(super) font_name: Option<String>,
+    pub(super) east_asia_font: Option<String>,
     pub(super) bold: Option<bool>,
     pub(super) italic: Option<bool>,
     pub(super) caps: Option<bool>,
@@ -76,6 +115,7 @@ pub(super) struct ParagraphStyle {
 pub(super) struct CharacterStyle {
     pub(super) font_size: Option<f32>,
     pub(super) font_name: Option<String>,
+    pub(super) east_asia_font: Option<String>,
     pub(super) bold: Option<bool>,
     pub(super) italic: Option<bool>,
     pub(super) underline: Option<bool>,
@@ -119,10 +159,15 @@ pub(super) fn parse_alignment(val: &str) -> Alignment {
 
 pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(
     zip: &mut zip::ZipArchive<R>,
+    east_asia_lang: Option<&str>,
 ) -> ThemeFonts {
     let mut major = String::from("Aptos Display");
     let mut minor = String::from("Aptos");
+    let mut major_east_asia = String::new();
+    let mut minor_east_asia = String::new();
     let mut colors = HashMap::new();
+
+    let script = east_asia_lang.map(lang_to_script).unwrap_or("Jpan");
 
     let names: Vec<String> = zip.file_names().map(|s: &str| s.to_string()).collect();
     let theme_name = names
@@ -132,6 +177,8 @@ pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(
         return ThemeFonts {
             major,
             minor,
+            major_east_asia,
+            minor_east_asia,
             colors,
         };
     };
@@ -139,6 +186,8 @@ pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(
         return ThemeFonts {
             major,
             minor,
+            major_east_asia,
+            minor_east_asia,
             colors,
         };
     };
@@ -152,11 +201,19 @@ pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(
                 if let Some(tf) = latin_typeface(node) {
                     major = tf.to_string();
                 }
+                major_east_asia = ea_typeface(node)
+                    .or_else(|| script_font_typeface(node, script))
+                    .unwrap_or("")
+                    .to_string();
             }
             "minorFont" => {
                 if let Some(tf) = latin_typeface(node) {
                     minor = tf.to_string();
                 }
+                minor_east_asia = ea_typeface(node)
+                    .or_else(|| script_font_typeface(node, script))
+                    .unwrap_or("")
+                    .to_string();
             }
             "clrScheme" => {
                 for child in node.children() {
@@ -184,6 +241,8 @@ pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(
     ThemeFonts {
         major,
         minor,
+        major_east_asia,
+        minor_east_asia,
         colors,
     }
 }
@@ -223,6 +282,33 @@ pub(super) fn resolve_font_from_node(
     )
 }
 
+pub(super) fn resolve_east_asia_font(
+    east_asia: Option<&str>,
+    east_asia_theme: Option<&str>,
+    theme: &ThemeFonts,
+) -> Option<String> {
+    let from_theme = match east_asia_theme {
+        Some("majorEastAsia") if !theme.major_east_asia.is_empty() => {
+            Some(theme.major_east_asia.clone())
+        }
+        Some("minorEastAsia") if !theme.minor_east_asia.is_empty() => {
+            Some(theme.minor_east_asia.clone())
+        }
+        _ => None,
+    };
+    // eastAsiaTheme overrides eastAsia per spec
+    from_theme.or_else(|| east_asia.filter(|s| !s.is_empty()).map(|s| s.to_string()))
+}
+
+pub(super) fn resolve_east_asia_font_from_node(
+    rfonts: roxmltree::Node,
+    theme: &ThemeFonts,
+) -> Option<String> {
+    let east_asia = rfonts.attribute((WML_NS, "eastAsia"));
+    let east_asia_theme = rfonts.attribute((WML_NS, "eastAsiaTheme"));
+    resolve_east_asia_font(east_asia, east_asia_theme, theme)
+}
+
 pub(super) fn parse_line_spacing(spacing_node: roxmltree::Node, line_val: f32) -> LineSpacing {
     match spacing_node.attribute((WML_NS, "lineRule")) {
         Some("exact") => LineSpacing::Exact(line_val / 20.0),
@@ -238,6 +324,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
     let mut defaults = StyleDefaults {
         font_size: 10.0,
         font_name: theme.minor.clone(),
+        east_asia_font: None,
         space_after: 0.0,
         line_spacing: LineSpacing::Auto(1.0),
         kern_threshold: None,
@@ -287,6 +374,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
             }
             if let Some(rfonts) = wml(rpr, "rFonts") {
                 defaults.font_name = resolve_font_from_node(rfonts, theme, &theme.minor);
+                defaults.east_asia_font = resolve_east_asia_font_from_node(rfonts, theme);
             }
             defaults.kern_threshold = wml_attr(rpr, "kern")
                 .and_then(|v| v.parse::<f32>().ok())
@@ -363,9 +451,10 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
             .and_then(|v| v.parse::<f32>().ok())
             .map(|hp| hp / 2.0);
 
-        let font_name = rpr
-            .and_then(|n| wml(n, "rFonts"))
-            .map(|rfonts| resolve_font_from_node(rfonts, theme, &defaults.font_name));
+        let rfonts_node = rpr.and_then(|n| wml(n, "rFonts"));
+        let font_name =
+            rfonts_node.map(|rfonts| resolve_font_from_node(rfonts, theme, &defaults.font_name));
+        let east_asia_font = rfonts_node.and_then(|rfonts| resolve_east_asia_font_from_node(rfonts, theme));
 
         let bold = rpr.and_then(|n| wml_bool(n, "b"));
         let italic = rpr.and_then(|n| wml_bool(n, "i"));
@@ -434,6 +523,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
             ParagraphStyle {
                 font_size,
                 font_name,
+                east_asia_font,
                 bold,
                 italic,
                 caps,
@@ -495,8 +585,10 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         let font_size = wml_attr(rpr, "sz")
             .and_then(|v| v.parse::<f32>().ok())
             .map(|hp| hp / 2.0);
-        let font_name = wml(rpr, "rFonts")
-            .map(|rfonts| resolve_font_from_node(rfonts, theme, &defaults.font_name));
+        let char_rfonts_node = wml(rpr, "rFonts");
+        let font_name =
+            char_rfonts_node.map(|rfonts| resolve_font_from_node(rfonts, theme, &defaults.font_name));
+        let east_asia_font = char_rfonts_node.and_then(|rfonts| resolve_east_asia_font_from_node(rfonts, theme));
         let bold = wml_bool(rpr, "b");
         let italic = wml_bool(rpr, "i");
         let underline = wml(rpr, "u")
@@ -516,6 +608,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
             CharacterStyle {
                 font_size,
                 font_name,
+                east_asia_font,
                 bold,
                 italic,
                 underline,
@@ -624,6 +717,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
         let mut inh = ParagraphStyle {
             font_size: None,
             font_name: None,
+            east_asia_font: None,
             bold: None,
             italic: None,
             caps: None,
@@ -655,6 +749,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
         for ancestor_id in chain.iter().rev() {
             if let Some(s) = styles.get(ancestor_id) {
                 inherit!(font_name, inh.font_name, s);
+                inherit!(east_asia_font, inh.east_asia_font, s);
                 inherit!(font_size, inh.font_size, s);
                 inherit!(bold, inh.bold, s);
                 inherit!(italic, inh.italic, s);
@@ -694,6 +789,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
 
         if let Some(s) = styles.get_mut(&id) {
             s.font_name = s.font_name.take().or(inh.font_name);
+            s.east_asia_font = s.east_asia_font.take().or(inh.east_asia_font);
             s.font_size = s.font_size.or(inh.font_size);
             s.bold = s.bold.or(inh.bold);
             s.italic = s.italic.or(inh.italic);
