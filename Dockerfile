@@ -1,13 +1,11 @@
-FROM rust:1-bookworm
+FROM docker/sandbox-templates:claude-code
 
-# System dependencies: mutool (mupdf-tools), Node.js, fonts, and build essentials
+USER root
+
+# System dependencies: mutool and fonts
 RUN apt-get update && apt-get install -y --no-install-recommends \
     mupdf-tools \
-    curl \
-    ca-certificates \
-    gnupg \
     pkg-config \
-    # Fonts that substitute for common Windows/Office fonts
     fonts-liberation \
     fonts-dejavu \
     fonts-noto-core \
@@ -15,17 +13,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fontconfig \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js 22 for Claude Code
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
-    && rm -rf /var/lib/apt/lists/*
+USER agent
 
-# Install Claude Code
-RUN npm install -g @anthropic-ai/claude-code
-
-# Create non-root user
-RUN useradd -m -s /bin/bash claude
-USER claude
-WORKDIR /home/claude/workspace
-
-ENTRYPOINT ["claude"]
+# Rust toolchain (installed as agent so ~/.cargo is accessible)
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+    sh -s -- -y --default-toolchain stable
+ENV PATH="/home/agent/.cargo/bin:${PATH}"

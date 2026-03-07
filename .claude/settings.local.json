@@ -173,7 +173,8 @@
       "Bash(cut:*)",
       "Bash(/tmp/plagiarism_analysis.txt:*)",
       "Bash(echo:*)",
-      "Bash(DOCXIDE_CASE=case33 cargo test:*)"
+      "Bash(DOCXIDE_CASE=case33 cargo test:*)",
+      "WebFetch(domain:docs.docker.com)"
     ]
   }
 }
