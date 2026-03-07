@@ -9,3 +9,5 @@ tests/output/
 tests/fixtures/scraped/
 .claude/projects
 .claude/worktrees
+/competitor/
+tools/three_way_compare.py

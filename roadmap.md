@@ -29,8 +29,27 @@ Also added `w:hAnsi`/`w:hAnsiTheme` fallback in `resolve_font_from_node()` for d
 
 Remaining:
 - **Panose matching** — fontTable.xml also contains panose classification bytes; could use these for more precise substitution
-- **Bundle fallback fonts** (Liberation, Noto) for consistent output without system fonts
-- **CJK fallback** — CJK characters render as blanks; need fallback to system CJK fonts (Hiragino on macOS, Noto CJK on Linux)
+- **Bundle fallback fonts** — see "Bundled Fallback Fonts" section below
+- **CJK fallback** — see "CJK Font Support" section below
+
+## Text Shaping with rustybuzz (TODO — HIGH IMPACT)
+
+We do manual char→glyph mapping with no OpenType shaping. This means ligatures (fi, fl), contextual alternates, and complex scripts (Arabic, Indic) all render incorrectly. Integrating `rustybuzz` (pure-Rust HarfBuzz port) would:
+1. **Fix ligatures** — OpenType GSUB table support for all Latin ligatures
+2. **Fix complex scripts** — Arabic reordering/joining, Indic conjuncts, Thai marks
+3. **Improve kerning** — GPOS kerning from shaping output replaces our manual kern table + GPOS extraction
+4. **Fix CJK contextual forms** — proper glyph selection for CJK fonts
+
+This is the single highest-impact improvement for international document fidelity. Would also simplify the font pipeline — shaping returns glyph IDs and advances directly, eliminating manual width computation.
+
+## Unicode Line Breaking (TODO — HIGH IMPACT)
+
+We split text on whitespace only via `split_preserving_spaces()`. This fails for CJK (no spaces between words), Thai, and other scripts where break opportunities are Unicode-defined. Integrating `unicode-linebreak` crate would:
+1. **Fix CJK line breaking** — break at correct positions without spaces
+2. **Fix other scripts** — Thai, Khmer, Lao, Myanmar word boundaries
+3. **Improve Latin handling** — proper break opportunities around hyphens, punctuation
+
+Small integration effort, high impact for non-Latin documents.
 
 ## CJK Font Support (TODO — HIGH IMPACT)
 
@@ -40,6 +59,15 @@ Japanese/Chinese/Korean text renders with completely wrong metrics or as blanks.
 3. **CJK encoding in PDF** — CJK fonts require CIDFont/ToUnicode mapping, not WinAnsiEncoding
 
 Would unblock all CJK-language documents (Japanese, Chinese, Korean).
+
+## Bundled Fallback Fonts (TODO — MEDIUM IMPACT)
+
+We rely entirely on system fonts and fall back to Helvetica Type1 as a last resort. This produces inconsistent output across environments (servers, Docker, CI). Should bundle metric-compatible open fonts behind a feature flag:
+- **Carlito** — metric-compatible with Calibri (the most common Word font)
+- **Caladea** — metric-compatible with Cambria
+- **Liberation Sans/Serif/Mono** — metric-compatible with Arial/Times New Roman/Courier New
+
+Metric compatibility means identical advance widths, so layout stays correct even with substitution. Ensures consistent output without requiring specific system fonts.
 
 ## docDefaults Run Properties (DONE)
 
@@ -132,6 +160,33 @@ New module `src/docx/settings.rs` parses `word/settings.xml` into `DocumentSetti
 
 `SectionBreakType::OddPage`/`EvenPage` now insert blank pages when the next physical page has wrong parity. Also handles implicit odd-page alignment when `evenAndOddHeaders` is enabled and the section has an explicit `pgNumType w:start`.
 
+## Paginator Extraction (TODO — MEDIUM IMPACT, HIGH ARCHITECTURAL VALUE)
+
+The `render()` function in `pdf/mod.rs` mixes pagination with rendering. Extracting a dedicated pagination pass would:
+1. **Enable widow/orphan control** — `w:widowControl` (default on) requires knowing whether ≥2 lines fit before committing a paragraph to the page. Currently we can't split paragraphs across pages line-by-line.
+2. **Enable table header row repeat** — `w:tblHeader` marks rows that should repeat when a table breaks across pages. Requires pagination to know where the break falls.
+3. **Enable keep-with-next / keep-lines** — `w:keepNext` and `w:keepLines` paragraph properties need look-ahead during pagination.
+4. **Enable post-pagination field resolution** — PAGE/NUMPAGES fields could be resolved after layout instead of during rendering, which is cleaner and more correct.
+
+Architecture: a `Paginator` takes the document model and produces `Vec<Page>` where each `Page` contains positioned elements. The PDF renderer then simply draws them. This is a significant refactor but unlocks multiple features that are impossible without it.
+
+## PDF Bookmarks (TODO — SMALL EFFORT, MEDIUM IMPACT)
+
+We don't generate PDF outline/bookmarks from heading styles. This is a commonly expected feature — most PDF viewers show a sidebar navigation panel from the outline. Implementation:
+1. During render, track heading paragraphs (style with `w:outlineLvl` or Heading1-9 style names) with their page index and y-position
+2. Build a hierarchical outline tree from heading levels
+3. Write PDF Outline objects with `pdf-writer`'s outline API
+
+Small effort, high perceived quality improvement.
+
+## PDF Metadata (TODO — TRIVIAL EFFORT, MEDIUM IMPACT)
+
+We don't write document metadata (title, author, subject, keywords) to the PDF. DOCX stores this in `docProps/core.xml` (Dublin Core). Implementation:
+1. Parse `docProps/core.xml` during DOCX loading — extract `dc:title`, `dc:creator`, `dc:subject`, `cp:keywords`
+2. Write PDF document info dictionary via `pdf-writer`
+
+Trivial effort, improves PDF viewer display (title in tab/title bar instead of filename).
+
 ## Unimplemented Spec Features
 
 - **`w:tblLook` / `w:tblStylePr`** — table conditional formatting (firstRow, lastRow, firstCol, bands, etc.)
@@ -154,16 +209,14 @@ Word computes line height using OS/2 `usWinAscent + usWinDescent` when the font'
 
 ## Code Structure
 
-### Refactor `pdf/mod.rs` `render()` (LOW)
+### Refactor `pdf/mod.rs` `render()` (LOW → see "Paginator Extraction")
 
-The `render()` function in `pdf/mod.rs` is ~1450 lines with many closures and shared mutable state (`y`, `current_page`, `effective_margin_bottom`, etc.). It could benefit from extraction into submodules:
+The `render()` function in `pdf/mod.rs` is ~1450 lines with many closures and shared mutable state (`y`, `current_page`, `effective_margin_bottom`, etc.). The right fix is the paginator extraction described above — separating pagination from rendering. In the meantime, smaller extractions are possible:
 
 - `pdf/headers_footers.rs` — `render_header_footer` (~220 lines, already a free fn)
 - `pdf/footnotes.rs` — footnote height computation + rendering (~120 lines)
 - `pdf/images.rs` — `embed_image` closure → free fn (~140 lines)
 - `pdf/list_labels.rs` — `label_for_run`, `label_for_paragraph` (~30 lines)
-
-The core page loop is tightly coupled through shared state, so breaking it into phases would require introducing a render context struct — a bigger undertaking that should be done incrementally.
 
 ## Performance
 
