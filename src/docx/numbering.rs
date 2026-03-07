@@ -156,20 +156,12 @@ fn format_number(value: u32, num_fmt: &str) -> String {
     }
 }
 
-fn normalize_bullet_text(text: &str, bullet_font: Option<&str>) -> String {
-    let is_symbol_font = bullet_font.is_some_and(|f| {
-        let lower = f.to_lowercase();
-        lower.contains("wingdings") || lower.contains("symbol") || lower.contains("webdings")
-    });
+fn normalize_bullet_text(text: &str, _bullet_font: Option<&str>) -> String {
     text.chars()
         .map(|c| {
             let cp = c as u32;
             if (0xF000..=0xF0FF).contains(&cp) {
-                if is_symbol_font {
-                    c
-                } else {
-                    symbol_pua_to_unicode(cp).unwrap_or(c)
-                }
+                symbol_pua_to_unicode(cp).unwrap_or(c)
             } else {
                 c
             }
@@ -192,23 +184,29 @@ fn symbol_pua_to_unicode(cp: u32) -> Option<char> {
 
 pub(super) fn parse_list_info(
     num_pr: Option<roxmltree::Node>,
+    style_num_id: Option<&str>,
+    style_num_ilvl: Option<u8>,
     numbering: &NumberingInfo,
     counters: &mut HashMap<(String, u8), u32>,
     last_seen_level: &mut HashMap<String, u8>,
 ) -> (f32, f32, String, Option<String>) {
-    let Some(num_pr) = num_pr else {
+    let (num_id, ilvl) = if let Some(np) = num_pr {
+        let nid = wml_attr(np, "numId");
+        let il = wml_attr(np, "ilvl")
+            .and_then(|v| v.parse::<u8>().ok())
+            .unwrap_or(0);
+        (nid, il)
+    } else if let Some(sn) = style_num_id {
+        (Some(sn), style_num_ilvl.unwrap_or(0))
+    } else {
         return (0.0, 0.0, String::new(), None);
     };
-    let Some(num_id) = wml_attr(num_pr, "numId") else {
+    let Some(num_id) = num_id else {
         return (0.0, 0.0, String::new(), None);
     };
     if num_id == "0" {
         return (0.0, 0.0, String::new(), None);
     }
-    let ilvl = wml_attr(num_pr, "ilvl")
-        .and_then(|v| v.parse::<u8>().ok())
-        .unwrap_or(0);
-
     let Some(abs_id) = numbering.num_to_abstract.get(num_id) else {
         return (0.0, 0.0, String::new(), None);
     };
@@ -266,7 +264,9 @@ pub(super) fn parse_list_info(
         }
         label
     };
-    let bullet_font = if def.num_fmt == "bullet" {
+    let bullet_font = if def.num_fmt == "bullet"
+        && label.chars().any(|c| (0xF000..=0xF0FF).contains(&(c as u32)))
+    {
         def.bullet_font.clone()
     } else {
         None

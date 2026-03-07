@@ -59,6 +59,8 @@ pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
         let (mut indent_left, mut indent_hanging, list_label, list_label_font) =
             super::numbering::parse_list_info(
                 num_pr,
+                None,
+                None,
                 numbering,
                 &mut counters,
                 &mut last_seen_level,

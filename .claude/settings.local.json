@@ -171,7 +171,9 @@
       "Bash(DOCXIDE_IMAGES=1 DOCXIDE_CASE=mongolian_human_rights_law cargo test:*)",
       "Bash(DOCXIDE_IMAGES=1 DOCXIDE_CASE=croatian_grant_guidelines cargo test:*)",
       "Bash(cut:*)",
-      "Bash(/tmp/plagiarism_analysis.txt:*)"
+      "Bash(/tmp/plagiarism_analysis.txt:*)",
+      "Bash(echo:*)",
+      "Bash(DOCXIDE_CASE=case33 cargo test:*)"
     ]
   }
 }

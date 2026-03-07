@@ -109,6 +109,8 @@ pub(super) struct ParagraphStyle {
     pub(super) based_on: Option<String>,
     pub(super) kern_threshold: Option<f32>,
     pub(super) tab_stops: Vec<TabStop>,
+    pub(super) num_id: Option<String>,
+    pub(super) num_ilvl: Option<u8>,
 }
 
 pub(super) struct CharacterStyle {
@@ -503,6 +505,14 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
 
                 let tab_stops = ppr.map(parse_tab_stops).unwrap_or_default();
 
+                let style_num_pr = ppr.and_then(|p| wml(p, "numPr"));
+                let num_id = style_num_pr
+                    .and_then(|np| wml_attr(np, "numId"))
+                    .map(|s| s.to_string());
+                let num_ilvl = style_num_pr
+                    .and_then(|np| wml_attr(np, "ilvl"))
+                    .and_then(|v| v.parse::<u8>().ok());
+
                 let based_on = wml(style_node, "basedOn")
                     .and_then(|n| n.attribute((WML_NS, "val")))
                     .map(|s| s.to_string());
@@ -539,6 +549,8 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                         based_on,
                         kern_threshold,
                         tab_stops,
+                        num_id,
+                        num_ilvl,
                     },
                 );
             }
@@ -679,6 +691,8 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                 inherit!(indent_hanging, inh.indent_hanging, s);
                 inherit!(indent_first_line, inh.indent_first_line, s);
                 inherit!(kern_threshold, inh.kern_threshold, s);
+                inherit!(num_id, inh.num_id, s);
+                inherit!(num_ilvl, inh.num_ilvl, s);
                 // Tab stops are additive: accumulate from ancestors, child overrides at same pos
                 for ts in &s.tab_stops {
                     if let Some(existing) = inh
@@ -715,6 +729,8 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             s.indent_hanging = s.indent_hanging.or(inh.indent_hanging);
             s.indent_first_line = s.indent_first_line.or(inh.indent_first_line);
             s.kern_threshold = s.kern_threshold.or(inh.kern_threshold);
+            s.num_id = s.num_id.take().or(inh.num_id);
+            s.num_ilvl = s.num_ilvl.or(inh.num_ilvl);
             if s.tab_stops.is_empty() {
                 s.tab_stops = inh.tab_stops;
             }

@@ -128,6 +128,11 @@
     "ssim": 0.9225,
     "text_boundary": 1.0
   },
+  "cases/case33": {
+    "jaccard": 0.5599,
+    "ssim": 0.9554,
+    "text_boundary": 0.7273
+  },
   "cases/case4": {
     "jaccard": 0.7293,
     "ssim": 0.9025,
@@ -179,8 +184,8 @@
     "text_boundary": 0.8026
   },
   "scraped/centrifugal_wate..": {
-    "jaccard": 0.7906,
-    "ssim": 0.9312,
+    "jaccard": 0.7923,
+    "ssim": 0.9325,
     "text_boundary": 0.9862
   },
   "scraped/classroom_weekly..": {
@@ -190,7 +195,7 @@
   },
   "scraped/croatian_grant_g..": {
     "jaccard": 0.0726,
-    "ssim": 0.187,
+    "ssim": 0.1871,
     "text_boundary": 0.0287
   },
   "scraped/croatian_regulat..": {
@@ -329,8 +334,8 @@
     "text_boundary": 0.4063
   },
   "scraped/stem_partnership..": {
-    "jaccard": 0.1207,
-    "ssim": 0.3056,
+    "jaccard": 0.1229,
+    "ssim": 0.3293,
     "text_boundary": 0.1941
   },
   "scraped/transition_to_wo..": {

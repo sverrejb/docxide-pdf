@@ -20,30 +20,36 @@ While the idea, architecture, testing strategy and validation of output are all 
 
 ## Supported features
 
-- **Text**: font embedding (TTF/OTF/TTC), bold, italic, underline, strikethrough, double strikethrough, font size, text color, superscript/subscript, small caps, all caps, character spacing, text expansion/compression (`w:w`), hidden text (`w:vanish`)
+- **Text**: font embedding (TTF/OTF/TTC), bold, italic, underline, strikethrough, double strikethrough, font size, text color, superscript/subscript, small caps, all caps, character spacing, text expansion/compression (`w:w`), hidden text (`w:vanish`), kerning (legacy kern table + GPOS PairAdjustment)
 - **Paragraphs**: left/center/right/justify alignment, space before/after, line spacing (auto, exact, at-least), first-line and hanging indentation, left/right indentation, contextual spacing, keep-next, keep-lines, paragraph borders (top/bottom/left/right/between) with color, paragraph shading, run highlighting
 - **Styles**: paragraph and run style inheritance (`basedOn` chains), document defaults from `docDefaults`, theme fonts and colors
 - **Lists**: bullet and numbered lists with multi-level nesting, custom number formats, list style inheritance
-- **Tables**: column widths with auto-fit, merged cells (horizontal `gridSpan` and vertical `vMerge`), row heights (exact and minimum), per-cell borders with color/width, cell shading, vertical alignment, cell margins
+- **Tables**: column widths with auto-fit, merged cells (horizontal `gridSpan` and vertical `vMerge`), row heights (exact and minimum), per-cell borders with color/width, cell shading, vertical alignment, cell margins, floating/positioned tables (`tblpPr`)
 - **Images**: inline JPEG/PNG embedding with sizing and alpha transparency, anchored/floating images (all wrap modes), floating image positioning relative to page/margin/column
 - **Text boxes**: DrawingML textboxes (`wps:txbx`) and VML fallback (`v:textbox`), shape fills (solid color with theme color support including lumMod/lumOff), textbox body margins
+- **Charts**: bar (clustered/stacked, vertical/horizontal), line, pie, area, doughnut, radar, scatter, bubble — with axis labels, gridlines, legends
 - **Page layout**: page size, margins, document grid (`linePitch`), explicit page breaks, `pageBreakBefore`, automatic page breaking with widow/orphan control
 - **Sections**: multiple sections with `nextPage`/`continuous`/`oddPage`/`evenPage` breaks, per-section page size and margins
 - **Multi-column layout**: 2+ columns with custom widths and spacing, column breaks, column separators
-- **Headers/footers**: default and first-page variants, per-section headers/footers, page number and page count fields, images in headers/footers
+- **Headers/footers**: default, first-page, and even/odd variants, per-section headers/footers, STYLEREF field resolution, page number and page count fields, images in headers/footers
 - **Footnotes**: footnote references, footnote rendering at page bottom with separator line
+- **Fields**: PAGE, NUMPAGES, STYLEREF (with spec-compliant search order), field code cached results for non-dynamic fields
+- **Hyperlinks**: clickable links in PDF output (URI link annotations)
 - **Tab stops**: left, center, right, decimal with leader dots
-- **Fonts**: cross-platform font search (macOS/Linux/Windows), embedded DOCX font extraction and deobfuscation, font subsetting (CIDFont/Type0), disk-cached font index
+- **Track changes**: final mode (insertions included, deletions removed — matches Word's PDF export)
+- **Compatibility**: `mc:AlternateContent` fallback, structured document tag (`w:sdt`) content extraction, `altChunk` HTML content parsing
+- **Fonts**: cross-platform font search (macOS/Linux/Windows), embedded DOCX font extraction and deobfuscation, font subsetting (CIDFont/Type0), disk-cached font index, font substitution via `fontTable.xml` altName and family-class fallback
 - **Output optimization**: font subsetting, content stream compression
 
 ### Not yet supported
 
-- **Text**: kerning (GPOS), ligatures, complex script shaping (Arabic, Devanagari, etc.), CJK fallback fonts
-- **Tables**: conditional formatting (`tblLook`/`tblStylePr` — banded rows, first/last column styles), nested tables, floating/positioned tables (`tblpPr`), text direction in cells (`textDirection`)
+- **Text**: ligatures, complex script shaping (Arabic, Devanagari, etc.), CJK fallback fonts
+- **Tables**: conditional formatting (`tblLook`/`tblStylePr` — banded rows, first/last column styles), nested tables, text direction in cells (`textDirection`)
 - **Images**: text wrapping around floating images/textboxes, EMF/WMF vector images
 - **Layout**: distribute alignment (`w:jc val="distribute"`), vertical page alignment (`w:vAlign` on section), right-to-left (bidi) text
-- **Features**: clickable hyperlinks (parsed but not linked in PDF), bookmarks, table of contents (field codes), endnotes, charts, SmartArt, OLE objects, structured document tags (`w:sdt`), `mc:AlternateContent` fallback
-- **Fonts**: intelligent font substitution (currently falls back to Helvetica when a font is missing)
+- **PDF features**: bookmarks/outline, document metadata (title, author)
+- **Features**: table of contents generation, endnotes, SmartArt, OLE objects
+- **Fonts**: bundled fallback fonts, text shaping (ligatures, complex scripts)
 
 ## Examples
 
@@ -130,21 +136,35 @@ src/
   main.rs             — CLI binary (behind `cli` feature)
   error.rs            — Error enum
   model.rs            — Document/Section/Paragraph/Run intermediate representation
-  fonts.rs            — font discovery, metrics, subsetting
+  fonts/
+    mod.rs            — font registration, metrics, fallback
+    discovery.rs      — cross-platform font search, disk cache
+    embed.rs          — font embedding, kern/GPOS extraction, subsetting
+    encoding.rs       — WinAnsi encoding, glyph mapping
+    cache.rs          — font index disk cache (TSV)
   docx/
     mod.rs            — DOCX ZIP + XML → Document parser, shared utilities
     styles.rs         — theme, style parsing, style inheritance
     runs.rs           — run-level XML → Vec<Run>
     numbering.rs      — list/numbering parsing, counter management
-    images.rs         — image extraction (inline + floating)
+    images.rs         — image extraction (inline + floating), chart detection
+    charts.rs         — chart XML parsing (8 chart types)
     textbox.rs        — textbox parsing (DrawingML + VML)
+    tables.rs         — table + cell parsing
     embedded_fonts.rs — DOCX font extraction and deobfuscation
     sections.rs       — section properties, columns, headers/footers refs
     headers_footers.rs— header/footer/footnote XML parsing
+    settings.rs       — document settings (tab stops, mirror margins)
+    alt_chunk.rs      — altChunk HTML content parsing
   pdf/
     mod.rs            — main render loop, header/footer rendering
     layout.rs         — text layout, line building, paragraph rendering
     table.rs          — table layout, auto-fit, table rendering
+    charts.rs         — cartesian chart rendering (bar/line/area/scatter/bubble/radar)
+    charts_radial.rs  — pie/doughnut chart rendering
+    chart_legend.rs   — shared legend rendering
+    header_footer.rs  — header/footer rendering
+    footnotes.rs      — footnote rendering
 tests/
   visual_comparison.rs  — Jaccard + SSIM comparison against Word reference PDFs
   text_boundary.rs      — page/line-level text boundary tests
