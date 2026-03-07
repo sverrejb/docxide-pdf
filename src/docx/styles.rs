@@ -4,7 +4,7 @@ use crate::model::{Alignment, CellBorder, LineSpacing, TabStop};
 
 use super::{
     DML_NS, WML_NS, parse_hex_color, parse_paragraph_borders, parse_tab_stops, parse_text_color,
-    read_zip_text, twips_attr, wml, wml_attr, wml_bool,
+    read_zip_text, twips_attr, twips_to_pts, wml, wml_attr, wml_bool,
 };
 
 fn dml<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
@@ -30,6 +30,16 @@ pub(super) struct StyleDefaults {
     pub(super) space_after: f32,
     pub(super) line_spacing: LineSpacing,
     pub(super) kern_threshold: Option<f32>,
+    pub(super) bold: bool,
+    pub(super) italic: bool,
+    pub(super) caps: bool,
+    pub(super) small_caps: bool,
+    pub(super) vanish: bool,
+    pub(super) strikethrough: bool,
+    pub(super) dstrike: bool,
+    pub(super) underline: bool,
+    pub(super) color: Option<[u8; 3]>,
+    pub(super) char_spacing: f32,
 }
 
 pub(super) struct ParagraphStyle {
@@ -40,7 +50,11 @@ pub(super) struct ParagraphStyle {
     pub(super) caps: Option<bool>,
     pub(super) small_caps: Option<bool>,
     pub(super) vanish: Option<bool>,
+    pub(super) underline: Option<bool>,
+    pub(super) strikethrough: Option<bool>,
+    pub(super) dstrike: Option<bool>,
     pub(super) color: Option<[u8; 3]>,
+    pub(super) char_spacing: Option<f32>,
     pub(super) space_before: Option<f32>,
     pub(super) space_after: Option<f32>,
     pub(super) alignment: Option<Alignment>,
@@ -227,6 +241,16 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         space_after: 0.0,
         line_spacing: LineSpacing::Auto(1.0),
         kern_threshold: None,
+        bold: false,
+        italic: false,
+        caps: false,
+        small_caps: false,
+        vanish: false,
+        strikethrough: false,
+        dstrike: false,
+        underline: false,
+        color: None,
+        char_spacing: 0.0,
     };
     let mut paragraph_styles = HashMap::new();
     let mut character_styles = HashMap::new();
@@ -267,6 +291,23 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
             defaults.kern_threshold = wml_attr(rpr, "kern")
                 .and_then(|v| v.parse::<f32>().ok())
                 .map(|hp| hp / 2.0);
+            defaults.bold = wml_bool(rpr, "b").unwrap_or(false);
+            defaults.italic = wml_bool(rpr, "i").unwrap_or(false);
+            defaults.caps = wml_bool(rpr, "caps").unwrap_or(false);
+            defaults.small_caps = wml_bool(rpr, "smallCaps").unwrap_or(false);
+            defaults.vanish = wml_bool(rpr, "vanish").unwrap_or(false);
+            defaults.strikethrough = wml_bool(rpr, "strike").unwrap_or(false);
+            defaults.dstrike = wml_bool(rpr, "dstrike").unwrap_or(false);
+            defaults.underline = wml(rpr, "u")
+                .and_then(|u| u.attribute((WML_NS, "val")))
+                .map(|v| v != "none")
+                .unwrap_or(false);
+            defaults.color = wml_attr(rpr, "color").and_then(parse_text_color);
+            defaults.char_spacing = wml(rpr, "spacing")
+                .and_then(|n| n.attribute((WML_NS, "val")))
+                .and_then(|v| v.parse::<f32>().ok())
+                .map(twips_to_pts)
+                .unwrap_or(0.0);
         }
         let default_spacing = wml(doc_defaults, "pPrDefault")
             .and_then(|n| wml(n, "pPr"))
@@ -331,6 +372,18 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         let caps = rpr.and_then(|n| wml_bool(n, "caps"));
         let small_caps = rpr.and_then(|n| wml_bool(n, "smallCaps"));
         let vanish = rpr.and_then(|n| wml_bool(n, "vanish"));
+        let underline = rpr.and_then(|n| {
+            wml(n, "u")
+                .and_then(|u| u.attribute((WML_NS, "val")))
+                .map(|v| v != "none")
+        });
+        let strikethrough = rpr.and_then(|n| wml_bool(n, "strike"));
+        let dstrike = rpr.and_then(|n| wml_bool(n, "dstrike"));
+        let char_spacing = rpr
+            .and_then(|n| wml(n, "spacing"))
+            .and_then(|n| n.attribute((WML_NS, "val")))
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(twips_to_pts);
         let kern_threshold = rpr
             .and_then(|n| wml_attr(n, "kern"))
             .and_then(|v| v.parse::<f32>().ok())
@@ -386,7 +439,11 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                 caps,
                 small_caps,
                 vanish,
+                underline,
+                strikethrough,
+                dstrike,
                 color,
+                char_spacing,
                 space_before,
                 space_after,
                 alignment,
@@ -409,13 +466,12 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
 
     resolve_based_on(&mut paragraph_styles);
 
-    // LibreOffice exports its default paragraph style as a custom style named "Standard".
-    // Properties like w:kern can end up orphaned there when the actual w:default="1" style
-    // doesn't carry them. Merge kern_threshold into defaults if missing.
+    // The default paragraph style (w:default="1") may carry properties like w:kern
+    // that aren't in docDefaults. Merge kern_threshold into defaults if missing.
     if defaults.kern_threshold.is_none() {
-        if let Some(standard) = paragraph_styles.get("Standard") {
-            if standard.kern_threshold.is_some() {
-                defaults.kern_threshold = standard.kern_threshold;
+        if let Some(default_para) = paragraph_styles.get(&default_paragraph_style_id) {
+            if default_para.kern_threshold.is_some() {
+                defaults.kern_threshold = default_para.kern_threshold;
             }
         }
     }
@@ -573,7 +629,11 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             caps: None,
             small_caps: None,
             vanish: None,
+            underline: None,
+            strikethrough: None,
+            dstrike: None,
             color: None,
+            char_spacing: None,
             space_before: None,
             space_after: None,
             alignment: None,
@@ -601,7 +661,11 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                 inherit!(caps, inh.caps, s);
                 inherit!(small_caps, inh.small_caps, s);
                 inherit!(vanish, inh.vanish, s);
+                inherit!(underline, inh.underline, s);
+                inherit!(strikethrough, inh.strikethrough, s);
+                inherit!(dstrike, inh.dstrike, s);
                 inherit!(color, inh.color, s);
+                inherit!(char_spacing, inh.char_spacing, s);
                 inherit!(alignment, inh.alignment, s);
                 inherit!(space_before, inh.space_before, s);
                 inherit!(space_after, inh.space_after, s);

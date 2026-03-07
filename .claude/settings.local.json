@@ -155,7 +155,10 @@
       "Bash(cargo doc:*)",
       "Bash(cargo package:*)",
       "Bash(git diff:*)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(DOCXIDE_CASE=russian_university_proceedings cargo test:*)",
+      "Bash(DOCXIDE_CASE=italian_project_proposal DOCXIDE_IMAGES=1 cargo test:*)",
+      "Bash(DOCXIDE_CASE=mongolian_human_rights_law DOCXIDE_IMAGES=1 cargo test:*)"
     ]
   }
 }

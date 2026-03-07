@@ -12,7 +12,7 @@ Remaining:
 
 ## The Mongolian Case
 
-The `mongolian_human_rights_law` scraped fixture scores 17.9% Jaccard (needs 20%). Improved from 13.6% via:
+The `mongolian_human_rights_law` scraped fixture scores 13.5% Jaccard (needs 20%). The `w:dstrike` in rPrDefault is now correctly inherited and overridden by Normal style's `w:dstrike val="0"` via the full style chain. Previously improved from 13.6% via:
 1. **"Standard" style recognition** (DONE) — LibreOffice exports its default paragraph style as a custom `w:customStyle="1"` style named "Standard". When the document's `docDefaults` lacks `w:kern`, we now merge `kern_threshold` from "Standard" if present. Found in 4/39 scraped fixtures; 2 of those carry `w:kern val="3"`.
 2. **Multi-space preservation** (DONE) — `build_paragraph_lines` previously used `split_whitespace()` which collapsed consecutive spaces to single gaps. Now uses `split_preserving_spaces()` which counts actual space characters between words and accumulates space width across runs. Fixed the date line (66 consecutive spaces used for positioning) wrapping correctly.
 
@@ -32,9 +32,24 @@ Remaining:
 - **Bundle fallback fonts** (Liberation, Noto) for consistent output without system fonts
 - **CJK fallback** — CJK characters render as blanks; need fallback to system CJK fonts (Hiragino on macOS, Noto CJK on Linux)
 
+## CJK Font Support (TODO — HIGH IMPACT)
+
+Japanese/Chinese/Korean text renders with completely wrong metrics or as blanks. The `japanese_interlibrary_loan` scraped fixture (1-page form) scores only 3.2% Jaccard because CJK glyphs fall back to Latin fonts with wrong character widths, causing massive text displacement in tables. Needs:
+1. **CJK font fallback chain** — detect CJK codepoints, fall back to system CJK fonts (Hiragino Sans on macOS, Noto Sans CJK on Linux)
+2. **CJK-aware text measurement** — full-width characters need correct advance widths
+3. **CJK encoding in PDF** — CJK fonts require CIDFont/ToUnicode mapping, not WinAnsiEncoding
+
+Would unblock all CJK-language documents (Japanese, Chinese, Korean).
+
+## docDefaults Run Properties (DONE)
+
+`StyleDefaults` now carries all run-level properties from `rPrDefault/rPr` (bold, italic, caps, smallCaps, vanish, strikethrough, dstrike, underline, color, char_spacing). Previously only font_size, font_name, and kern_threshold were parsed — all other properties silently defaulted to false/none. `parse_runs()` now falls back to these defaults instead of hardcoded `false`/`0.0`. `ParagraphStyle` also carries `underline`, `strikethrough`, `dstrike`, and `char_spacing` with full `basedOn` inheritance, completing the style chain: direct rPr → character style → paragraph style → docDefaults.
+
+Impact: `italian_project_proposal` improved from 7.2% → 10.9% Jaccard (entire document defaults to smallCaps). `mongolian_human_rights_law` correctly inherits dstrike from docDefaults and overrides it via Normal style's `w:dstrike val="0"`.
+
 ## Scraped Fixture Improvements
 
-8 passing, ~22 failing out of ~30 non-skipped scraped fixtures.
+14 passing, ~16 failing out of ~30 non-skipped scraped fixtures.
 Run `./tools/target/debug/analyze-fixtures --failing --fonts` for current breakdown.
 
 ### Floating Tables (DONE — positioning; inline `w:tblBorders` DONE)
