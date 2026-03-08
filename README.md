@@ -14,7 +14,7 @@ A Rust library and CLI tool for converting DOCX files to PDF, with the goal of m
 
 **Small files:** Output PDFs should be the same size or smaller than Word's export.
 
-## AI useage disclaimer 🤖
+## AI usage disclaimer 🤖
 
 While the idea, architecture, testing strategy and validation of output are all human, the vast majority of the code as of now is written by Claude Opus 4.6 with access to the PDF specification (ISO-32000) and the Office Open XML File Formats specification (ECMA-376).
 
