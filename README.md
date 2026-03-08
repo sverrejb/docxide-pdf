@@ -226,16 +226,16 @@ Then run from the project root:
 
 ```bash
 # Inspect XML inside a DOCX
-cargo run --manifest-path tools/Cargo.toml --bin docx-inspect -- input.docx
+./tools/target/debug/docx-inspect input.docx
 
 # Print font information
-cargo run --manifest-path tools/Cargo.toml --bin docx-fonts -- input.docx
+./tools/target/debug/docx-fonts input.docx
 
 # Compare two rendered pages
-cargo run --manifest-path tools/Cargo.toml --bin jaccard -- a.png b.png
+./tools/target/debug/jaccard a.png b.png
 
 # Full fixture diff
-cargo run --manifest-path tools/Cargo.toml --bin case-diff -- case1
+./tools/target/debug/case-diff case1
 ```
 
 ## Contributing
