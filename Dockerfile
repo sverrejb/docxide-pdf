@@ -119,9 +119,7 @@ ENV CARGO_TARGET_DIR=/home/${USERNAME}/.cargo-target
 
 RUN mkdir -p /home/${USERNAME}/.claude /home/${USERNAME}/.cache/sccache /home/${USERNAME}/.cargo/registry /home/${USERNAME}/.cargo-target
 
-WORKDIR /workspace
+# Store all Claude Code state in ~/.claude so a single volume persists everything
+ENV CLAUDE_CONFIG_DIR=/home/${USERNAME}/.claude
 
-# Entrypoint that persists ~/.claude.json into the ~/.claude volume
-COPY --chown=${USER_UID}:${USER_GID} entrypoint.sh /home/${USERNAME}/entrypoint.sh
-RUN chmod +x /home/${USERNAME}/entrypoint.sh
-ENTRYPOINT ["/home/dev/entrypoint.sh"]
+WORKDIR /workspace
