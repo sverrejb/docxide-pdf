@@ -574,17 +574,16 @@ fn font_families_match_docx() {
         .max()
         .unwrap_or(7)
         .max(7);
-    let diff_w = rows.iter().map(|r| r.diff.len()).max().unwrap_or(4).max(4);
 
     println!(
-        "\n  {:<name_w$}  Pass  {:<match_w$}  {:<diff_w$}",
-        "Case", "Matched", "Diff"
+        "\n  {:<name_w$}  Pass  {:<match_w$}  Diff",
+        "Case", "Matched"
     );
 
     for (r, row) in results.iter().zip(&rows) {
         let status = if r.pass { "Y" } else { "N" };
         println!(
-            "  {:<name_w$}  {:<4}  {:<match_w$}  {:<diff_w$}",
+            "  {:<name_w$}  {:<4}  {:<match_w$}  {}",
             r.name, status, row.matched, row.diff
         );
 
