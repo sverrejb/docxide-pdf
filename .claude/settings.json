@@ -4,7 +4,7 @@
     "filesystem": {
       "allowWrite": ["./", "//tmp"],
       "denyWrite": ["~/", "//"],
-      "denyRead": ["~/.ssh", "~/.aws", "~/.gnupg", "//etc"]
+      "denyRead": ["~/.ssh", "~/.aws", "~/.gnupg"]
     }
   }
 }

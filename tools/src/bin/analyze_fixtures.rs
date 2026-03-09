@@ -83,21 +83,35 @@ fn ref_page_count(fixture_path: &Path) -> Option<usize> {
     None
 }
 
-fn load_scores(csv_name: &str, score_col: usize) -> HashMap<String, f64> {
-    let csv_path = PathBuf::from("tests/output").join(csv_name);
-    let mut scores = HashMap::new();
-    let Ok(content) = fs::read_to_string(&csv_path) else {
-        return scores;
+/// Baselines key format: "scraped/<name truncated to 16 chars>.." or "cases/<name truncated to 16 chars>.."
+fn baselines_key(group: &str, name: &str) -> String {
+    let short = if name.len() > 16 {
+        format!("{}..", &name[..16])
+    } else {
+        name.to_string()
     };
-    for line in content.lines().skip(1) {
-        let parts: Vec<&str> = line.split(',').collect();
-        if parts.len() > score_col {
-            if let (Some(name), Ok(val)) = (parts.get(1), parts[score_col].parse::<f64>()) {
-                scores.insert(name.to_string(), val);
-            }
+    format!("{}/{}", group, short)
+}
+
+fn load_baselines() -> (HashMap<String, f64>, HashMap<String, f64>) {
+    let path = PathBuf::from("tests/baselines.json");
+    let Ok(content) = fs::read_to_string(&path) else {
+        return (HashMap::new(), HashMap::new());
+    };
+    let Ok(map) = serde_json::from_str::<HashMap<String, serde_json::Value>>(&content) else {
+        return (HashMap::new(), HashMap::new());
+    };
+    let mut jaccard = HashMap::new();
+    let mut ssim = HashMap::new();
+    for (key, val) in &map {
+        if let Some(j) = val.get("jaccard").and_then(|v| v.as_f64()) {
+            jaccard.insert(key.clone(), j);
+        }
+        if let Some(s) = val.get("ssim").and_then(|v| v.as_f64()) {
+            ssim.insert(key.clone(), s);
         }
     }
-    scores
+    (jaccard, ssim)
 }
 
 fn analyze_docx(path: &Path) -> Option<FixtureAnalysis> {
@@ -248,8 +262,12 @@ fn audit_fixtures(fixtures_dir: &Path) {
         .collect();
     entries.sort_by_key(|e| e.file_name());
 
-    let jaccard_scores = load_scores("results.csv", 3);
+    let (jaccard_scores, _) = load_baselines();
     let skip_fixtures = load_skip_list();
+    let group = fixtures_dir
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy();
 
     // Collect per-feature counts: feature_name -> (failing_fixtures, passing_fixtures, total_count)
     let mut feature_stats: Vec<(&str, usize, usize, usize, usize)> = Vec::new();
@@ -273,7 +291,8 @@ fn audit_fixtures(fixtures_dir: &Path) {
             let hits: usize = patterns.iter().map(|p| count_pattern(&all_xml, p)).sum();
             if hits > 0 {
                 total_hits += hits;
-                let jaccard = jaccard_scores.get(&fixture_name).copied().unwrap_or(0.0);
+                let key = baselines_key(&group, &fixture_name);
+                let jaccard = jaccard_scores.get(&key).copied().unwrap_or(0.0);
                 let is_skipped = skip_fixtures.contains(&fixture_name);
                 if is_skipped {
                     skipped_count += 1;
@@ -311,7 +330,11 @@ fn grep_fixtures(fixtures_dir: &Path, pattern: &str) {
         .collect();
     entries.sort_by_key(|e| e.file_name());
 
-    let jaccard_scores = load_scores("results.csv", 3);
+    let (jaccard_scores, _) = load_baselines();
+    let group = fixtures_dir
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy();
 
     println!("{:<66} {:>6} {:>6} {:>6}  {}", "Fixture", "Jaccd", "doc", "style", "Total");
     println!("{}", "─".repeat(100));
@@ -331,7 +354,8 @@ fn grep_fixtures(fixtures_dir: &Path, pattern: &str) {
         let total = doc_count + style_count;
 
         if total > 0 {
-            let jaccard = jaccard_scores.get(&name).copied().unwrap_or(0.0);
+            let key = baselines_key(&group, &name);
+            let jaccard = jaccard_scores.get(&key).copied().unwrap_or(0.0);
             let short_name = if name.len() > 64 {
                 format!("{}…", &name[..63])
             } else {
@@ -382,10 +406,11 @@ fn main() {
     // Load skip list
     let skip_fixtures = load_skip_list();
 
-    // Load test scores: results.csv = timestamp,case,pages,avg_jaccard,pass
-    //                    ssim_results.csv = timestamp,case,pages,avg_ssim
-    let jaccard_scores = load_scores("results.csv", 3);
-    let ssim_scores = load_scores("ssim_results.csv", 3);
+    let (jaccard_scores, ssim_scores) = load_baselines();
+    let group = fixtures_dir
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy();
 
     let mut entries: Vec<_> = fs::read_dir(&fixtures_dir)
         .unwrap()
@@ -399,8 +424,9 @@ fn main() {
         let Some(mut a) = analyze_docx(&entry.path()) else {
             continue;
         };
-        a.jaccard = jaccard_scores.get(&a.name).copied();
-        a.ssim = ssim_scores.get(&a.name).copied();
+        let key = baselines_key(&group, &a.name);
+        a.jaccard = jaccard_scores.get(&key).copied();
+        a.ssim = ssim_scores.get(&key).copied();
         a.skipped = skip_fixtures.contains(&a.name);
         analyses.push(a);
     }

@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::io::Read;
 
-use crate::model::{Alignment, HorizontalPosition, LineSpacing, Paragraph, Textbox};
+use crate::model::{
+    Alignment, HorizontalPosition, LineSpacing, Paragraph, ShapeFill, ShapeType, Textbox,
+};
 
 use super::images::{extent_dimensions, parse_anchor_position};
 use super::numbering::NumberingInfo;
@@ -188,6 +190,117 @@ fn parse_solid_fill(sp_pr: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3
     None
 }
 
+fn resolve_stop_color(stop: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]> {
+    if let Some(srgb) = stop
+        .children()
+        .find(|n| n.tag_name().name() == "srgbClr" && n.tag_name().namespace() == Some(DML_NS))
+    {
+        return srgb.attribute("val").and_then(super::parse_hex_color);
+    }
+    if let Some(scheme) = stop
+        .children()
+        .find(|n| n.tag_name().name() == "schemeClr" && n.tag_name().namespace() == Some(DML_NS))
+    {
+        let val = scheme.attribute("val")?;
+        let theme_key = match val {
+            "dk1" => "dk1",
+            "lt1" => "lt1",
+            "dk2" => "dk2",
+            "lt2" => "lt2",
+            "tx1" => "dk1",
+            "tx2" => "dk2",
+            "bg1" => "lt1",
+            "bg2" => "lt2",
+            other => other,
+        };
+        let base = *theme.colors.get(theme_key)?;
+        return Some(resolve_scheme_color(base, scheme));
+    }
+    None
+}
+
+fn parse_gradient_fill(sp_pr: roxmltree::Node, theme: &ThemeFonts) -> Option<ShapeFill> {
+    let grad_fill = sp_pr
+        .children()
+        .find(|n| n.tag_name().name() == "gradFill" && n.tag_name().namespace() == Some(DML_NS))?;
+    let gs_lst = grad_fill
+        .children()
+        .find(|n| n.tag_name().name() == "gsLst" && n.tag_name().namespace() == Some(DML_NS))?;
+
+    let mut stops: Vec<([u8; 3], f32)> = Vec::new();
+    for gs in gs_lst
+        .children()
+        .filter(|n| n.tag_name().name() == "gs" && n.tag_name().namespace() == Some(DML_NS))
+    {
+        let pos = gs
+            .attribute("pos")
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(|v| v / 100_000.0)
+            .unwrap_or(0.0);
+        if let Some(color) = resolve_stop_color(gs, theme) {
+            stops.push((color, pos));
+        }
+    }
+    if stops.is_empty() {
+        return None;
+    }
+
+    // OOXML a:lin @ang is in 60,000ths of a degree
+    let angle_deg = grad_fill
+        .children()
+        .find(|n| n.tag_name().name() == "lin" && n.tag_name().namespace() == Some(DML_NS))
+        .and_then(|lin| lin.attribute("ang"))
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(|v| v / 60_000.0)
+        .unwrap_or(0.0);
+
+    Some(ShapeFill::LinearGradient { stops, angle_deg })
+}
+
+fn parse_style_fill(wsp: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]> {
+    let style = wsp.children().find(|n| {
+        n.tag_name().name() == "style" && n.tag_name().namespace() == Some(WPS_NS)
+    })?;
+    let fill_ref = style.children().find(|n| {
+        n.tag_name().name() == "fillRef" && n.tag_name().namespace() == Some(DML_NS)
+    })?;
+
+    let idx = fill_ref
+        .attribute("idx")
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(0);
+    if idx == 0 {
+        return None;
+    }
+
+    if let Some(srgb) = fill_ref
+        .children()
+        .find(|n| n.tag_name().name() == "srgbClr" && n.tag_name().namespace() == Some(DML_NS))
+    {
+        return srgb.attribute("val").and_then(super::parse_hex_color);
+    }
+    if let Some(scheme) = fill_ref
+        .children()
+        .find(|n| n.tag_name().name() == "schemeClr" && n.tag_name().namespace() == Some(DML_NS))
+    {
+        let val = scheme.attribute("val")?;
+        let theme_key = match val {
+            "dk1" => "dk1",
+            "lt1" => "lt1",
+            "dk2" => "dk2",
+            "lt2" => "lt2",
+            "tx1" => "dk1",
+            "tx2" => "dk2",
+            "bg1" => "lt1",
+            "bg2" => "lt2",
+            other => other,
+        };
+        let base = *theme.colors.get(theme_key)?;
+        return Some(resolve_scheme_color(base, scheme));
+    }
+    None
+}
+
 fn parse_body_margins(wsp: roxmltree::Node) -> (f32, f32, f32, f32) {
     let body_pr = wsp
         .children()
@@ -211,7 +324,8 @@ fn parse_body_margins(wsp: roxmltree::Node) -> (f32, f32, f32, f32) {
 
 pub(super) struct WspResult {
     pub(super) paragraphs: Vec<Paragraph>,
-    pub(super) fill_color: Option<[u8; 3]>,
+    pub(super) fill: Option<ShapeFill>,
+    pub(super) shape_type: ShapeType,
     pub(super) margin_top: f32,
     pub(super) margin_left: f32,
     pub(super) margin_bottom: f32,
@@ -235,11 +349,32 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
         n.tag_name().name() == "spPr" && n.tag_name().namespace() == Some(WPS_NS)
             || n.tag_name().name() == "spPr" && n.tag_name().namespace() == Some(DML_NS)
     });
-    let fill_color = sp_pr.and_then(|sp| parse_solid_fill(sp, theme));
+    let fill: Option<ShapeFill> = sp_pr
+        .and_then(|sp| {
+            parse_solid_fill(sp, theme)
+                .map(ShapeFill::Solid)
+                .or_else(|| parse_gradient_fill(sp, theme))
+        })
+        .or_else(|| parse_style_fill(wsp, theme).map(ShapeFill::Solid));
     let has_no_fill = sp_pr.is_some_and(|sp| {
         sp.children()
             .any(|n| n.tag_name().name() == "noFill" && n.tag_name().namespace() == Some(DML_NS))
     });
+
+    let shape_type = sp_pr
+        .and_then(|sp| {
+            sp.children()
+                .find(|n| {
+                    n.tag_name().name() == "prstGeom"
+                        && n.tag_name().namespace() == Some(DML_NS)
+                })
+                .and_then(|g| g.attribute("prst"))
+        })
+        .map(|prst| match prst {
+            "ellipse" => ShapeType::Ellipse,
+            _ => ShapeType::Rect,
+        })
+        .unwrap_or(ShapeType::Rect);
 
     let (margin_top, margin_left, margin_bottom, margin_right) = parse_body_margins(wsp);
 
@@ -256,13 +391,14 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
         .unwrap_or_default();
 
     // Return if there's text content OR a visible fill
-    if paragraphs.is_empty() && (has_no_fill || fill_color.is_none()) {
+    if paragraphs.is_empty() && (has_no_fill || fill.is_none()) {
         return None;
     }
 
     Some(WspResult {
         paragraphs,
-        fill_color,
+        fill,
+        shape_type,
         margin_top,
         margin_left,
         margin_bottom,
@@ -343,7 +479,8 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         h_relative_from: h_relative,
         v_offset_pt: margin_top,
         v_relative_from: v_relative,
-        fill_color: None,
+        fill: None,
+        shape_type: ShapeType::Rect,
         margin_left: 7.2,
         margin_right: 7.2,
         margin_top: 3.6,
@@ -395,7 +532,8 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                                 h_relative_from: h_relative,
                                 v_offset_pt: v_offset,
                                 v_relative_from: v_relative,
-                                fill_color: wsp.fill_color,
+                                fill: wsp.fill,
+                                shape_type: wsp.shape_type,
                                 margin_left: wsp.margin_left,
                                 margin_right: wsp.margin_right,
                                 margin_top: wsp.margin_top,

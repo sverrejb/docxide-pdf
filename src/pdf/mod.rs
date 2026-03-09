@@ -16,7 +16,8 @@ use crate::fonts::{
 };
 use crate::model::{
     Alignment, Block, Document, EmbeddedImage, FieldCode, HeaderFooter, HorizontalPosition,
-    ImageFormat, LineSpacing, Paragraph, Run, SectionBreakType, SectionProperties,
+    ImageFormat, LineSpacing, Paragraph, Run, SectionBreakType, SectionProperties, ShapeFill,
+    ShapeType,
 };
 
 use footnotes::{compute_footnote_height, render_page_footnotes};
@@ -29,6 +30,79 @@ use layout::{
     render_paragraph_lines, tallest_run_metrics,
 };
 use table::render_table;
+
+pub(super) struct GradientSpec {
+    pattern_name: String,
+    stops: Vec<([u8; 3], f32)>,
+    angle_deg: f32,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+}
+
+fn draw_shape_path(content: &mut Content, x: f32, y: f32, w: f32, h: f32, shape: ShapeType) {
+    match shape {
+        ShapeType::Rect => {
+            content.rect(x, y, w, h);
+        }
+        ShapeType::Ellipse => {
+            const K: f32 = 0.5522847498;
+            let cx = x + w / 2.0;
+            let cy = y + h / 2.0;
+            let rx = w / 2.0;
+            let ry = h / 2.0;
+            content.move_to(cx + rx, cy);
+            content.cubic_to(cx + rx, cy + K * ry, cx + K * rx, cy + ry, cx, cy + ry);
+            content.cubic_to(cx - K * rx, cy + ry, cx - rx, cy + K * ry, cx - rx, cy);
+            content.cubic_to(cx - rx, cy - K * ry, cx - K * rx, cy - ry, cx, cy - ry);
+            content.cubic_to(cx + K * rx, cy - ry, cx + rx, cy - K * ry, cx + rx, cy);
+            content.close_path();
+        }
+    }
+}
+
+pub(super) fn render_shape_fill(
+    content: &mut Content,
+    fill: &ShapeFill,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    shape: ShapeType,
+    gradient_specs: &mut Vec<GradientSpec>,
+) {
+    match fill {
+        ShapeFill::Solid([r, g, b]) => {
+            content.save_state();
+            content.set_fill_rgb(*r as f32 / 255.0, *g as f32 / 255.0, *b as f32 / 255.0);
+            draw_shape_path(content, x, y, w, h, shape);
+            content.fill_nonzero();
+            content.restore_state();
+        }
+        ShapeFill::LinearGradient { stops, angle_deg } => {
+            let pat_name = format!("Grd{}", gradient_specs.len());
+            content.save_state();
+            draw_shape_path(content, x, y, w, h, shape);
+            content.clip_nonzero();
+            content.end_path();
+            content.set_fill_color_space(pdf_writer::types::ColorSpaceOperand::Pattern);
+            content.set_fill_pattern([], Name(pat_name.as_bytes()));
+            draw_shape_path(content, x, y, w, h, shape);
+            content.fill_nonzero();
+            content.restore_state();
+            gradient_specs.push(GradientSpec {
+                pattern_name: pat_name,
+                stops: stops.clone(),
+                angle_deg: *angle_deg,
+                x,
+                y,
+                w,
+                h,
+            });
+        }
+    }
+}
 
 fn styleref_insert(
     map: &mut HashMap<String, String>,
@@ -581,6 +655,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     let mut all_page_alpha_states: Vec<std::collections::HashSet<u8>> = Vec::new();
     let mut current_alpha_states: std::collections::HashSet<u8> = std::collections::HashSet::new();
 
+    // Per-page gradient pattern specs: (pattern_name, stops, angle_deg, rect)
+    let mut all_page_gradient_specs: Vec<Vec<GradientSpec>> = Vec::new();
+    let mut page_gradient_specs: Vec<GradientSpec> = Vec::new();
+
     // Track which section each page belongs to, and whether it's the first page of that section
     let mut page_section_indices: Vec<(usize, bool)> = Vec::new();
 
@@ -614,6 +692,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     all_page_links.push(std::mem::take(&mut current_page_links));
                     all_page_footnote_ids.push(std::mem::take(&mut current_page_footnote_ids));
                     all_page_alpha_states.push(std::mem::take(&mut current_alpha_states));
+                    all_page_gradient_specs.push(std::mem::take(&mut page_gradient_specs));
                     page_section_indices.push((sect_idx - 1, is_first_page_of_section));
                     all_page_styleref.push(styleref_running.clone());
                     all_page_first_styleref.push(std::mem::take(&mut styleref_page_first));
@@ -643,6 +722,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             all_page_links.push(Vec::new());
                             all_page_footnote_ids.push(Vec::new());
                             all_page_alpha_states.push(std::collections::HashSet::new());
+                            all_page_gradient_specs.push(Vec::new());
                             page_section_indices.push((sect_idx - 1, false));
                             all_page_styleref.push(styleref_running.clone());
                             all_page_first_styleref.push(std::mem::take(&mut styleref_page_first));
@@ -702,6 +782,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             all_page_footnote_ids
                                 .push(std::mem::take(&mut current_page_footnote_ids));
                             all_page_alpha_states.push(std::mem::take(&mut current_alpha_states));
+                            all_page_gradient_specs.push(std::mem::take(&mut page_gradient_specs));
                             page_section_indices.push((sect_idx, is_first_page_of_section));
                             all_page_styleref.push(styleref_running.clone());
                             all_page_first_styleref.push(std::mem::take(&mut styleref_page_first));
@@ -738,6 +819,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             all_page_footnote_ids
                                 .push(std::mem::take(&mut current_page_footnote_ids));
                             all_page_alpha_states.push(std::mem::take(&mut current_alpha_states));
+                            all_page_gradient_specs.push(std::mem::take(&mut page_gradient_specs));
                             page_section_indices.push((sect_idx, is_first_page_of_section));
                             all_page_styleref.push(styleref_running.clone());
                             all_page_first_styleref.push(std::mem::take(&mut styleref_page_first));
@@ -1012,6 +1094,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     .push(std::mem::take(&mut current_page_footnote_ids));
                                 all_page_alpha_states
                                     .push(std::mem::take(&mut current_alpha_states));
+                                all_page_gradient_specs
+                                    .push(std::mem::take(&mut page_gradient_specs));
                                 page_section_indices.push((sect_idx, is_first_page_of_section));
                                 all_page_styleref.push(styleref_running.clone());
                                 all_page_first_styleref
@@ -1073,6 +1157,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             all_page_footnote_ids
                                 .push(std::mem::take(&mut current_page_footnote_ids));
                             all_page_alpha_states.push(std::mem::take(&mut current_alpha_states));
+                            all_page_gradient_specs.push(std::mem::take(&mut page_gradient_specs));
                             page_section_indices.push((sect_idx, is_first_page_of_section));
                             all_page_styleref.push(styleref_running.clone());
                             all_page_first_styleref.push(std::mem::take(&mut styleref_page_first));
@@ -1241,17 +1326,17 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         };
 
                         // Draw fill background
-                        if let Some([r, g, b]) = tb.fill_color {
-                            current_content.save_state();
-                            current_content.set_fill_rgb(
-                                r as f32 / 255.0,
-                                g as f32 / 255.0,
-                                b as f32 / 255.0,
+                        if let Some(ref fill) = tb.fill {
+                            render_shape_fill(
+                                &mut current_content,
+                                fill,
+                                tb_x,
+                                tb_y_top - tb.height_pt,
+                                tb.width_pt,
+                                tb.height_pt,
+                                tb.shape_type,
+                                &mut page_gradient_specs,
                             );
-                            let rect_y = tb_y_top - tb.height_pt;
-                            current_content.rect(tb_x, rect_y, tb.width_pt, tb.height_pt);
-                            current_content.fill_nonzero();
-                            current_content.restore_state();
                         }
 
                         let content_x = tb_x + tb.margin_left;
@@ -1628,6 +1713,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     all_page_links.push(current_page_links);
     all_page_footnote_ids.push(current_page_footnote_ids);
     all_page_alpha_states.push(current_alpha_states);
+    all_page_gradient_specs.push(page_gradient_specs);
     page_section_indices.push((doc.sections.len() - 1, is_first_page_of_section));
     all_page_styleref.push(styleref_running.clone());
     all_page_first_styleref.push(std::mem::take(&mut styleref_page_first));
@@ -1640,6 +1726,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         page_section_indices.push((last, false));
         all_page_styleref.push(styleref_running.clone());
         all_page_first_styleref.push(std::mem::take(&mut styleref_page_first));
+    }
+    while all_page_gradient_specs.len() < all_contents.len() {
+        all_page_gradient_specs.push(Vec::new());
     }
 
     // Phase 2b: column separator lines
@@ -1779,6 +1868,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 &ii_map,
                 &fi_map,
                 page_styleref,
+                &mut all_page_gradient_specs[page_idx],
             );
             has_hf = true;
         }
@@ -1805,6 +1895,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 &ii_map,
                 &fi_map,
                 page_styleref,
+                &mut all_page_gradient_specs[page_idx],
             );
             has_hf = true;
         }
@@ -1854,6 +1945,68 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             pdf.ext_graphics(gs_ref)
                 .non_stroking_alpha(pct as f32 / 100.0);
             (pct, gs_ref)
+        })
+        .collect();
+
+    // Write gradient pattern objects (function + shading pattern per gradient)
+    let all_page_pattern_refs: Vec<Vec<(String, Ref)>> = all_page_gradient_specs
+        .iter()
+        .map(|specs| {
+            specs
+                .iter()
+                .map(|spec| {
+                    let (c0, c1) = if spec.stops.len() >= 2 {
+                        (spec.stops[0].0, spec.stops[spec.stops.len() - 1].0)
+                    } else {
+                        (spec.stops[0].0, spec.stops[0].0)
+                    };
+
+                    let func_ref = alloc();
+                    pdf.exponential_function(func_ref)
+                        .domain([0.0, 1.0])
+                        .c0([
+                            c0[0] as f32 / 255.0,
+                            c0[1] as f32 / 255.0,
+                            c0[2] as f32 / 255.0,
+                        ])
+                        .c1([
+                            c1[0] as f32 / 255.0,
+                            c1[1] as f32 / 255.0,
+                            c1[2] as f32 / 255.0,
+                        ])
+                        .n(1.0);
+
+                    // OOXML angle: 0° = left-to-right, 90° = top-to-bottom
+                    // PDF coords: origin at bottom-left, y increases upward
+                    let ang_rad = spec.angle_deg.to_radians();
+                    let (sin_a, cos_a) = ang_rad.sin_cos();
+                    let cx = spec.x + spec.w / 2.0;
+                    let cy = spec.y + spec.h / 2.0;
+                    let half_w = spec.w / 2.0;
+                    let half_h = spec.h / 2.0;
+                    // Start and end points along the gradient axis
+                    // In OOXML, 0° means gradient goes left→right, 90° means top→bottom
+                    // In PDF coords (y up), top→bottom means y decreasing
+                    let x0 = cx - half_w * cos_a;
+                    let y0 = cy + half_h * sin_a; // flip sin for PDF y-up
+                    let x1 = cx + half_w * cos_a;
+                    let y1 = cy - half_h * sin_a;
+
+                    let pat_ref = alloc();
+                    let mut pattern = pdf.shading_pattern(pat_ref);
+                    let mut shading = pattern.function_shading();
+                    shading
+                        .shading_type(pdf_writer::types::FunctionShadingType::Axial)
+                        .color_space()
+                        .device_rgb();
+                    shading
+                        .function(func_ref)
+                        .coords([x0, y0, x1, y1])
+                        .extend([true, true]);
+
+                    (spec.pattern_name.clone(), pat_ref)
+                })
+                .collect()
         })
         .collect();
 
@@ -1918,6 +2071,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     let gs_name = format!("GSa{pct}");
                     let gs_ref = *alpha_gs_refs.get(&pct).unwrap();
                     gs_dict.pair(Name(gs_name.as_bytes()), gs_ref);
+                }
+            }
+            if let Some(pat_refs) = all_page_pattern_refs.get(i) {
+                if !pat_refs.is_empty() {
+                    let mut patterns = resources.patterns();
+                    for (name, pat_ref) in pat_refs {
+                        patterns.pair(Name(name.as_bytes()), *pat_ref);
+                    }
                 }
             }
         }

@@ -154,6 +154,7 @@ pub(super) fn render_header_footer(
     inline_image_names: &HashMap<(usize, usize), String>,
     floating_image_names: &HashMap<(usize, usize), String>,
     styleref_values: &HashMap<String, String>,
+    gradient_specs: &mut Vec<super::GradientSpec>,
 ) {
     let text_width = sp.page_width - sp.margin_left - sp.margin_right;
     let mut cursor_y = if is_header {
@@ -236,13 +237,17 @@ pub(super) fn render_header_footer(
                         _ => slot_top - tb.v_offset_pt,
                     };
 
-                    if let Some([r, g, b]) = tb.fill_color {
-                        content.save_state();
-                        content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-                        let rect_y = tb_y_top - tb.height_pt;
-                        content.rect(tb_x, rect_y, tb.width_pt, tb.height_pt);
-                        content.fill_nonzero();
-                        content.restore_state();
+                    if let Some(ref fill) = tb.fill {
+                        super::render_shape_fill(
+                            content,
+                            fill,
+                            tb_x,
+                            tb_y_top - tb.height_pt,
+                            tb.width_pt,
+                            tb.height_pt,
+                            tb.shape_type,
+                            gradient_specs,
+                        );
                     }
 
                     let content_x = tb_x + tb.margin_left;

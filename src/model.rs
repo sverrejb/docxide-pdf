@@ -163,6 +163,21 @@ pub struct FloatingImage {
     pub wrap_type: WrapType,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum ShapeType {
+    #[default]
+    Rect,
+    Ellipse,
+}
+
+pub enum ShapeFill {
+    Solid([u8; 3]),
+    LinearGradient {
+        stops: Vec<([u8; 3], f32)>,
+        angle_deg: f32,
+    },
+}
+
 pub struct Textbox {
     pub paragraphs: Vec<Paragraph>,
     pub width_pt: f32,
@@ -171,7 +186,8 @@ pub struct Textbox {
     pub h_relative_from: &'static str,
     pub v_offset_pt: f32,
     pub v_relative_from: &'static str,
-    pub fill_color: Option<[u8; 3]>,
+    pub fill: Option<ShapeFill>,
+    pub shape_type: ShapeType,
     pub margin_left: f32,
     pub margin_right: f32,
     pub margin_top: f32,

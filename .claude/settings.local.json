@@ -174,7 +174,12 @@
       "Bash(/tmp/plagiarism_analysis.txt:*)",
       "Bash(echo:*)",
       "Bash(DOCXIDE_CASE=case33 cargo test:*)",
-      "WebFetch(domain:docs.docker.com)"
+      "WebFetch(domain:docs.docker.com)",
+      "Bash(DOCXIDE_CASE=vaccines_history_chapter cargo test -- --nocapture 2>&1 | tail -50)",
+      "Bash(DOCXIDE_CASE=vaccines_history_chapter DOCXIDE_IMAGES=1 cargo test visual_comparison -- --nocapture 2>&1 | tail -15)",
+      "Bash(DOCXIDE_IMAGES=1 DOCXIDE_CASE=vaccines_history_chapter cargo test -- --nocapture 2>&1 | tail -20)",
+      "Bash(DOCXIDE_CASE=vaccines_history_chapter cargo test -- --nocapture 2>&1 | tail -30)",
+      "Bash(DOCXIDE_CASE=vaccines_history_chapter DOCXIDE_IMAGES=1 cargo test -- --nocapture 2>&1 | grep -E \"Jaccard|SSIM|REGRESSION\")"
     ]
   }
 }

@@ -4,6 +4,11 @@
 
 The `vaccines_history_chapter` scraped fixture scores **0.0% Jaccard, 0.0% SSIM** (5 ref pages, 4 generated). Page 1 of the reference has a decorative header: a blue-to-orange gradient banner with white "Chapter 1" text, a red subtitle, 3 filled blue circles, connecting lines/arcs, and a SmartArt vaccine timeline. The generated output shows none of this — just plain body text.
 
+### Important
+
+Remember to consult the specs via local-rag MCP server.
+
+
 ### Root causes (confirmed via code + XML analysis)
 
 1. **Gradient fill not parsed → white text invisible (CRITICAL)**: The main textbox ("Chapter 1" + subtitle) is inside a rect with `a:gradFill` (accent1 blue → accent2 orange). `parse_solid_fill()` only handles `a:solidFill`, so `fill_color = None`. The textbox IS returned (has text paragraphs), but Title style sets `w:color FFFFFF` (white). White text on white page = invisible.
@@ -18,7 +23,7 @@ The `vaccines_history_chapter` scraped fixture scores **0.0% Jaccard, 0.0% SSIM*
 
 ---
 
-## Step 1: Parse gradient fills as solid-fill approximation
+## Step 1: Parse gradient fills as solid-fill approximation ✅ COMPLETED
 
 **Goal**: Make the "Chapter 1" textbox background visible so white text becomes readable.
 
@@ -46,7 +51,7 @@ The gradient in this document:
 
 ---
 
-## Step 2: Parse `a:fillRef` style-based fills
+## Step 2: Parse `a:fillRef` style-based fills ✅ COMPLETED
 
 **Goal**: Shapes using theme style fills (3 blue circles, filled rects) become visible as colored rectangles.
 
@@ -75,7 +80,7 @@ This makes the line 259 check (`paragraphs.is_empty() && (has_no_fill || fill_co
 
 ---
 
-## Step 3: True PDF gradient fills
+## Step 3: True PDF gradient fills ✅ COMPLETED
 
 **Goal**: Replace solid-fill approximation with actual linear gradient rendering for visual fidelity.
 
@@ -121,7 +126,7 @@ OOXML angle conversion: `ang=5400000` = 90° = top-to-bottom. In PDF coords (ori
 
 ---
 
-## Step 4: Basic ellipse geometry rendering
+## Step 4: Basic ellipse geometry rendering ✅ COMPLETED
 
 **Goal**: Render circles as actual circles instead of rectangles.
 

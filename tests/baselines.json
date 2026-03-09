@@ -354,8 +354,8 @@
     "text_boundary": 0.0
   },
   "scraped/vaccines_history..": {
-    "jaccard": 0.0616,
-    "ssim": 0.2549,
+    "jaccard": 0.2254,
+    "ssim": 0.2909,
     "text_boundary": 0.0
   },
   "scraped/waste_management..": {
