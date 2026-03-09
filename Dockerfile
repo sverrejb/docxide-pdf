@@ -38,6 +38,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-nanum \
     fonts-lato \
     fonts-stix \
+    bubblewrap \
+    socat \
     && rm -rf /var/lib/apt/lists/*
 
 # Microsoft core fonts: Arial, Verdana, Times New Roman, Courier New, Georgia,
@@ -96,10 +98,9 @@ EOF
 
 RUN fc-cache -fv
 
-# Install Claude Code (via npm)
+# Install Node.js (system-wide, no claude-code here)
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
-    && npm install -g @anthropic-ai/claude-code \
     && rm -rf /var/lib/apt/lists/*
 
 USER ${USERNAME}
@@ -117,7 +118,12 @@ ENV RUSTC_WRAPPER=sccache
 # Keep build artifacts on the container's ext4 filesystem, not the mounted volume
 ENV CARGO_TARGET_DIR=/home/${USERNAME}/.cargo-target
 
-RUN mkdir -p /home/${USERNAME}/.claude /home/${USERNAME}/.cache/sccache /home/${USERNAME}/.cargo/registry /home/${USERNAME}/.cargo-target
+RUN mkdir -p /home/${USERNAME}/.claude /home/${USERNAME}/.cache/sccache /home/${USERNAME}/.cargo/registry /home/${USERNAME}/.cargo-target /home/${USERNAME}/.npm-global
+
+# Install Claude Code to user-owned prefix so auto-updates work without sudo
+RUN npm config set prefix /home/${USERNAME}/.npm-global \
+    && npm install -g @anthropic-ai/claude-code
+ENV PATH="/home/${USERNAME}/.npm-global/bin:${PATH}"
 
 # Store all Claude Code state in ~/.claude so a single volume persists everything
 ENV CLAUDE_CONFIG_DIR=/home/${USERNAME}/.claude
