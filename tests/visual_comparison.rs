@@ -220,7 +220,6 @@ fn ref_screenshots_fresh(reference_pdf: &Path, screenshot_dir: &Path) -> bool {
 
 fn prepare_fixture(fixture_dir: &Path) -> Option<FixturePages> {
     let name = common::display_name(fixture_dir);
-    let input_docx = fixture_dir.join("input.docx");
     let reference_pdf = fixture_dir.join("reference.pdf");
     let output_base = common::output_dir(fixture_dir);
     let reference_screenshots = output_base.join("reference");
@@ -239,12 +238,14 @@ fn prepare_fixture(fixture_dir: &Path) -> Option<FixturePages> {
             return None;
         }
     }
-    let generated_pdf = output_base.join("generated.pdf");
     let t0 = Instant::now();
-    if let Err(e) = docxide_pdf::convert_docx_to_pdf(&input_docx, &generated_pdf) {
-        println!("  [SKIP] {name}: {e}");
-        return None;
-    }
+    let generated_pdf = match common::ensure_generated_pdf(fixture_dir) {
+        Ok(p) => p,
+        Err(e) => {
+            println!("  [SKIP] {name}: {e}");
+            return None;
+        }
+    };
     let convert_ms = t0.elapsed().as_millis() as u64;
     let t1 = Instant::now();
     if let Err(e) = screenshot_pdf(&generated_pdf, &generated_screenshots) {

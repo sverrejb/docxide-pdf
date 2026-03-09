@@ -461,26 +461,13 @@ fn analyze_fixture(fixture_dir: &Path) -> Option<FixtureResult> {
         return None;
     }
 
-    let output_dir = common::output_dir(fixture_dir);
-    fs::create_dir_all(&output_dir).ok();
-    let generated_pdf = output_dir.join("generated.pdf");
-
-    // Reuse existing generated.pdf if newer than input.docx
-    let needs_convert = !generated_pdf.exists() || {
-        let docx_mtime = fs::metadata(&input_docx)
-            .and_then(|m| m.modified())
-            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
-        let pdf_mtime = fs::metadata(&generated_pdf)
-            .and_then(|m| m.modified())
-            .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
-        pdf_mtime < docx_mtime
-    };
-    if needs_convert {
-        if let Err(e) = docxide_pdf::convert_docx_to_pdf(&input_docx, &generated_pdf) {
+    let generated_pdf = match common::ensure_generated_pdf(fixture_dir) {
+        Ok(p) => p,
+        Err(e) => {
             println!("  [SKIP] {name}: {e}");
             return None;
         }
-    }
+    };
 
     let docx_fonts = match extract_docx_fonts(&input_docx) {
         Ok(f) => f,

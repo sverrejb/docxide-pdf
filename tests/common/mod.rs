@@ -163,7 +163,35 @@ pub fn update_baselines(updates: &HashMap<String, Baselines>) {
     fs::write("tests/baselines.json", json + "\n").expect("Failed to write baselines.json");
 }
 
-/// Convert DOCX→PDF only if the generated PDF is missing or older than input.docx.
+/// Returns the newest mtime of any file found by recursively walking `dir`.
+fn dir_newest_mtime(dir: &Path) -> std::time::SystemTime {
+    let mut newest = std::time::SystemTime::UNIX_EPOCH;
+    let Ok(entries) = fs::read_dir(dir) else {
+        return newest;
+    };
+    for entry in entries.filter_map(|e| e.ok()) {
+        let path = entry.path();
+        if path.is_dir() {
+            let sub = dir_newest_mtime(&path);
+            if sub > newest {
+                newest = sub;
+            }
+        } else if let Ok(mtime) = fs::metadata(&path).and_then(|m| m.modified()) {
+            if mtime > newest {
+                newest = mtime;
+            }
+        }
+    }
+    newest
+}
+
+/// The newest mtime of any file under `src/`, cached for the process lifetime.
+fn src_newest_mtime() -> std::time::SystemTime {
+    static SRC_MTIME: std::sync::OnceLock<std::time::SystemTime> = std::sync::OnceLock::new();
+    *SRC_MTIME.get_or_init(|| dir_newest_mtime(Path::new("src")))
+}
+
+/// Convert DOCX→PDF only if the generated PDF is missing or older than input.docx or src/.
 pub fn ensure_generated_pdf(fixture_dir: &Path) -> Result<PathBuf, String> {
     let input_docx = fixture_dir.join("input.docx");
     let out = output_dir(fixture_dir);
@@ -174,10 +202,12 @@ pub fn ensure_generated_pdf(fixture_dir: &Path) -> Result<PathBuf, String> {
         let docx_mtime = fs::metadata(&input_docx)
             .and_then(|m| m.modified())
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+        let src_mtime = src_newest_mtime();
+        let newest_input = docx_mtime.max(src_mtime);
         let pdf_mtime = fs::metadata(&generated_pdf)
             .and_then(|m| m.modified())
             .unwrap_or(std::time::SystemTime::UNIX_EPOCH);
-        pdf_mtime < docx_mtime
+        pdf_mtime < newest_input
     };
 
     if needs_convert {
