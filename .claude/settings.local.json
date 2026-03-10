@@ -192,7 +192,9 @@
       "Bash(rm -rf tests/output/scraped/vaccines_history_chapter/comparison tests/output/scraped/vaccines_history_chapter/generated tests/output/scraped/vaccines_history_chapter/diff && DOCXIDE_CASE=vaccines_history_chapter DOCXIDE_IMAGES=1 cargo test visual_comparison -- --nocapture 2>&1)",
       "Bash(rm -rf tests/output/scraped/vaccines_history_chapter/comparison tests/output/scraped/vaccines_history_chapter/generated && DOCXIDE_CASE=vaccines_history_chapter DOCXIDE_IMAGES=1 cargo test visual_comparison -- --nocapture 2>&1 | grep -E \"SPACE|content_height|SMART\")",
       "Bash(rm -rf tests/output/scraped/vaccines_history_chapter/comparison tests/output/scraped/vaccines_history_chapter/generated && DOCXIDE_CASE=vaccines_history_chapter DOCXIDE_IMAGES=1 cargo test text_boundary -- --nocapture 2>&1 | head -40)",
-      "Bash(DOCXIDE_CASE=vaccines_history_chapter cargo test text_boundary -- --nocapture 2>&1 | grep -E \"SPACE|PAGE|SMART\")"
+      "Bash(DOCXIDE_CASE=vaccines_history_chapter cargo test text_boundary -- --nocapture 2>&1 | grep -E \"SPACE|PAGE|SMART\")",
+      "WebFetch(domain:wiki.openoffice.org)",
+      "WebFetch(domain:support.microsoft.com)"
     ]
   }
 }

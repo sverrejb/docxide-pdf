@@ -64,16 +64,16 @@ fn draw_shape_path(content: &mut Content, x: f32, y: f32, w: f32, h: f32, shape:
             let arrow_dx = ss * 0.5;
             let arrow_start = w - arrow_dx;
             let shaft_inset = h * 0.25;
-            let notch_depth = ss * 0.25;
+            let notch_depth = arrow_dx * shaft_inset / (h / 2.0);
 
-            content.move_to(x + notch_depth, y + h - shaft_inset);
+            content.move_to(x, y + h - shaft_inset);
             content.line_to(x + arrow_start, y + h - shaft_inset);
             content.line_to(x + arrow_start, y + h);
             content.line_to(x + w, y + h / 2.0);
             content.line_to(x + arrow_start, y);
             content.line_to(x + arrow_start, y + shaft_inset);
-            content.line_to(x + notch_depth, y + shaft_inset);
-            content.line_to(x, y + h / 2.0);
+            content.line_to(x, y + shaft_inset);
+            content.line_to(x + notch_depth, y + h / 2.0);
             content.close_path();
         }
     }
