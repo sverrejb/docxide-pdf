@@ -2,8 +2,9 @@ use std::collections::HashMap;
 use std::io::Read;
 
 use crate::model::{
-    Alignment, ConnectorShape, ConnectorType, HorizontalPosition, LineSpacing, Paragraph,
-    ShapeFill, ShapeType, Textbox, WrapType,
+    Alignment, ConnectorShape, ConnectorType, CustomGeometry, CustomGuideDef, CustomPathCommand,
+    CustomPathDef, HorizontalPosition, LineSpacing, Paragraph, ShapeFill, ShapeGeometry, Textbox,
+    WrapType,
 };
 
 use super::images::{extent_dimensions, parse_anchor_position};
@@ -317,6 +318,217 @@ fn parse_style_fill(wsp: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]>
     None
 }
 
+/// Parse `a:prstGeom` or `a:custGeom` from an spPr node into `ShapeGeometry`.
+pub(super) fn parse_shape_geometry(sp_pr: roxmltree::Node) -> ShapeGeometry {
+    // Try preset geometry first
+    if let Some(prst_geom) = sp_pr.children().find(|n| {
+        n.tag_name().name() == "prstGeom" && n.tag_name().namespace() == Some(DML_NS)
+    }) {
+        let preset = prst_geom.attribute("prst").unwrap_or("rect").to_string();
+        let adjustments = parse_avlst(prst_geom);
+        return ShapeGeometry {
+            preset: Some(preset),
+            adjustments,
+            custom: None,
+        };
+    }
+
+    // Try custom geometry
+    if let Some(cust_geom) = sp_pr.children().find(|n| {
+        n.tag_name().name() == "custGeom" && n.tag_name().namespace() == Some(DML_NS)
+    }) {
+        if let Some(custom) = parse_custom_geometry(cust_geom) {
+            return ShapeGeometry {
+                preset: None,
+                adjustments: Vec::new(),
+                custom: Some(custom),
+            };
+        }
+    }
+
+    ShapeGeometry::default()
+}
+
+fn parse_avlst(parent: roxmltree::Node) -> Vec<(String, i64)> {
+    let Some(avlst) = parent.children().find(|n| {
+        n.tag_name().name() == "avLst" && n.tag_name().namespace() == Some(DML_NS)
+    }) else {
+        return Vec::new();
+    };
+    avlst
+        .children()
+        .filter(|n| n.tag_name().name() == "gd" && n.tag_name().namespace() == Some(DML_NS))
+        .filter_map(|gd| {
+            let name = gd.attribute("name")?.to_string();
+            let fmla = gd.attribute("fmla")?;
+            let val = fmla.strip_prefix("val ")?.trim().parse::<i64>().ok()?;
+            Some((name, val))
+        })
+        .collect()
+}
+
+fn parse_custom_geometry(cust_geom: roxmltree::Node) -> Option<CustomGeometry> {
+    use crate::geometry::FormulaOp;
+    use crate::geometry::PathFill;
+
+    let adjust_defaults = parse_avlst(cust_geom);
+
+    let guides = cust_geom
+        .children()
+        .find(|n| n.tag_name().name() == "gdLst" && n.tag_name().namespace() == Some(DML_NS))
+        .map(|gdlst| {
+            gdlst
+                .children()
+                .filter(|n| {
+                    n.tag_name().name() == "gd" && n.tag_name().namespace() == Some(DML_NS)
+                })
+                .filter_map(|gd| {
+                    let name = gd.attribute("name")?.to_string();
+                    let fmla = gd.attribute("fmla")?;
+                    let parts: Vec<&str> = fmla.split_whitespace().collect();
+                    let op = FormulaOp::from_str(parts.first()?)?;
+                    let x = parts.get(1).unwrap_or(&"").to_string();
+                    let y = parts.get(2).unwrap_or(&"").to_string();
+                    let z = parts.get(3).unwrap_or(&"").to_string();
+                    Some(CustomGuideDef { name, op, x, y, z })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let paths = cust_geom
+        .children()
+        .find(|n| n.tag_name().name() == "pathLst" && n.tag_name().namespace() == Some(DML_NS))
+        .map(|path_lst| {
+            path_lst
+                .children()
+                .filter(|n| {
+                    n.tag_name().name() == "path" && n.tag_name().namespace() == Some(DML_NS)
+                })
+                .map(|path| {
+                    let w = path.attribute("w").and_then(|v| v.parse::<i64>().ok());
+                    let h = path.attribute("h").and_then(|v| v.parse::<i64>().ok());
+                    let fill = match path.attribute("fill") {
+                        Some("none") => PathFill::None,
+                        _ => PathFill::Norm,
+                    };
+                    let stroke = path.attribute("stroke") != Some("0");
+                    let commands = parse_path_commands(path);
+                    CustomPathDef {
+                        commands,
+                        w,
+                        h,
+                        fill,
+                        stroke,
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    Some(CustomGeometry {
+        adjust_defaults,
+        guides,
+        paths,
+    })
+}
+
+fn parse_path_commands(path: roxmltree::Node) -> Vec<CustomPathCommand> {
+    let mut commands = Vec::new();
+    for child in path
+        .children()
+        .filter(|n| n.tag_name().namespace() == Some(DML_NS))
+    {
+        match child.tag_name().name() {
+            "moveTo" => {
+                if let Some(pt) = dml_pt(child) {
+                    commands.push(CustomPathCommand::MoveTo {
+                        x: pt.0,
+                        y: pt.1,
+                    });
+                }
+            }
+            "lnTo" => {
+                if let Some(pt) = dml_pt(child) {
+                    commands.push(CustomPathCommand::LineTo {
+                        x: pt.0,
+                        y: pt.1,
+                    });
+                }
+            }
+            "arcTo" => {
+                commands.push(CustomPathCommand::ArcTo {
+                    wr: child.attribute("wR").unwrap_or("0").to_string(),
+                    hr: child.attribute("hR").unwrap_or("0").to_string(),
+                    st_ang: child.attribute("stAng").unwrap_or("0").to_string(),
+                    sw_ang: child.attribute("swAng").unwrap_or("0").to_string(),
+                });
+            }
+            "cubicBezTo" => {
+                let pts: Vec<(String, String)> = child
+                    .children()
+                    .filter(|n| {
+                        n.tag_name().name() == "pt" && n.tag_name().namespace() == Some(DML_NS)
+                    })
+                    .map(|pt| {
+                        (
+                            pt.attribute("x").unwrap_or("0").to_string(),
+                            pt.attribute("y").unwrap_or("0").to_string(),
+                        )
+                    })
+                    .collect();
+                if pts.len() == 3 {
+                    commands.push(CustomPathCommand::CubicBezTo {
+                        x1: pts[0].0.clone(),
+                        y1: pts[0].1.clone(),
+                        x2: pts[1].0.clone(),
+                        y2: pts[1].1.clone(),
+                        x3: pts[2].0.clone(),
+                        y3: pts[2].1.clone(),
+                    });
+                }
+            }
+            "quadBezTo" => {
+                let pts: Vec<(String, String)> = child
+                    .children()
+                    .filter(|n| {
+                        n.tag_name().name() == "pt" && n.tag_name().namespace() == Some(DML_NS)
+                    })
+                    .map(|pt| {
+                        (
+                            pt.attribute("x").unwrap_or("0").to_string(),
+                            pt.attribute("y").unwrap_or("0").to_string(),
+                        )
+                    })
+                    .collect();
+                if pts.len() == 2 {
+                    commands.push(CustomPathCommand::QuadBezTo {
+                        x1: pts[0].0.clone(),
+                        y1: pts[0].1.clone(),
+                        x2: pts[1].0.clone(),
+                        y2: pts[1].1.clone(),
+                    });
+                }
+            }
+            "close" => {
+                commands.push(CustomPathCommand::Close);
+            }
+            _ => {}
+        }
+    }
+    commands
+}
+
+fn dml_pt(parent: roxmltree::Node) -> Option<(String, String)> {
+    let pt = parent.children().find(|n| {
+        n.tag_name().name() == "pt" && n.tag_name().namespace() == Some(DML_NS)
+    })?;
+    Some((
+        pt.attribute("x").unwrap_or("0").to_string(),
+        pt.attribute("y").unwrap_or("0").to_string(),
+    ))
+}
+
 fn parse_body_margins(wsp: roxmltree::Node) -> (f32, f32, f32, f32) {
     let body_pr = wsp
         .children()
@@ -341,7 +553,7 @@ fn parse_body_margins(wsp: roxmltree::Node) -> (f32, f32, f32, f32) {
 pub(super) struct WspResult {
     pub(super) paragraphs: Vec<Paragraph>,
     pub(super) fill: Option<ShapeFill>,
-    pub(super) shape_type: ShapeType,
+    pub(super) shape_type: ShapeGeometry,
     pub(super) margin_top: f32,
     pub(super) margin_left: f32,
     pub(super) margin_bottom: f32,
@@ -379,19 +591,8 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
     });
 
     let shape_type = sp_pr
-        .and_then(|sp| {
-            sp.children()
-                .find(|n| {
-                    n.tag_name().name() == "prstGeom"
-                        && n.tag_name().namespace() == Some(DML_NS)
-                })
-                .and_then(|g| g.attribute("prst"))
-        })
-        .map(|prst| match prst {
-            "ellipse" => ShapeType::Ellipse,
-            _ => ShapeType::Rect,
-        })
-        .unwrap_or(ShapeType::Rect);
+        .map(parse_shape_geometry)
+        .unwrap_or_default();
 
     let (margin_top, margin_left, margin_bottom, margin_right) = parse_body_margins(wsp);
 
@@ -662,7 +863,7 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         v_offset_pt: margin_top,
         v_relative_from: v_relative,
         fill: None,
-        shape_type: ShapeType::Rect,
+        shape_type: ShapeGeometry::default(),
         margin_left: 7.2,
         margin_right: 7.2,
         margin_top: 3.6,

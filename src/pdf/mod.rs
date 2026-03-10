@@ -18,7 +18,7 @@ use crate::fonts::{
 use crate::model::{
     Alignment, Block, Document, EmbeddedImage, FieldCode, FloatingImage, HeaderFooter,
     HorizontalPosition, ImageFormat, LineSpacing, Paragraph, Run, SectionBreakType,
-    SectionProperties, ShapeFill, ShapeType, Textbox, VerticalPosition,
+    SectionProperties, ShapeFill, ShapeGeometry, Textbox, VerticalPosition,
 };
 
 use footnotes::{compute_footnote_height, render_page_footnotes};
@@ -51,7 +51,7 @@ pub(super) fn render_shape_fill(
     y: f32,
     w: f32,
     h: f32,
-    shape: ShapeType,
+    shape: &ShapeGeometry,
     gradient_specs: &mut Vec<GradientSpec>,
 ) {
     match fill {
@@ -193,7 +193,7 @@ fn render_single_textbox(
             tb_y_top - tb.height_pt,
             tb.width_pt,
             tb.height_pt,
-            tb.shape_type,
+            &tb.shape_type,
             gradient_specs,
         );
     }

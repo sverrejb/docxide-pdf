@@ -245,7 +245,7 @@ pub(super) fn render_header_footer(
                             tb_y_top - tb.height_pt,
                             tb.width_pt,
                             tb.height_pt,
-                            tb.shape_type,
+                            &tb.shape_type,
                             gradient_specs,
                         );
                     }

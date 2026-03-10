@@ -313,7 +313,7 @@ LibreOffice spent years implementing SmartArt import and describes their support
 ### Incremental path
 
 1. **Current: `dsp:drawing` fallback** (DONE) — renders pre-flattened shapes when present. Covers many real-world files since Word typically includes this part.
-2. **More shape types** (LOW EFFORT) — add roundRect, diamond, chevron, pentagon, hexagon, trapezoid, etc. to `ShapeType` enum and `draw_shape_path`.
+2. **More shape types** (DONE) — geometry engine supports all 187 OOXML preset shapes via formula interpreter.
 3. **Gradient fills** (LOW EFFORT) — SmartArt shapes frequently use linear gradients; extend fill parsing.
 4. **Group shapes** (MEDIUM EFFORT) — `dsp:grpSp` groups with nested transforms. Need recursive parsing.
 5. **Connector shapes** (MEDIUM EFFORT) — `dsp:cxnSp` connectors between shapes (arrows, lines).

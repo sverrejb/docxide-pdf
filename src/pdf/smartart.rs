@@ -3,44 +3,50 @@ use std::collections::HashMap;
 use pdf_writer::Content;
 
 use crate::fonts::FontEntry;
-use crate::model::{ShapeType, SmartArtDiagram};
+use crate::geometry::{self, ResolvedCommand};
+use crate::model::{ShapeGeometry, SmartArtDiagram};
 
 use super::charts;
 
-pub(super) fn draw_shape_path(content: &mut Content, x: f32, y: f32, w: f32, h: f32, shape: ShapeType) {
-    match shape {
-        ShapeType::Rect => {
-            content.rect(x, y, w, h);
-        }
-        ShapeType::Ellipse => {
-            const K: f32 = 0.5522847498;
-            let cx = x + w / 2.0;
-            let cy = y + h / 2.0;
-            let rx = w / 2.0;
-            let ry = h / 2.0;
-            content.move_to(cx + rx, cy);
-            content.cubic_to(cx + rx, cy + K * ry, cx + K * rx, cy + ry, cx, cy + ry);
-            content.cubic_to(cx - K * rx, cy + ry, cx - rx, cy + K * ry, cx - rx, cy);
-            content.cubic_to(cx - rx, cy - K * ry, cx - K * rx, cy - ry, cx, cy - ry);
-            content.cubic_to(cx + K * rx, cy - ry, cx + rx, cy - K * ry, cx + rx, cy);
-            content.close_path();
-        }
-        ShapeType::NotchedRightArrow => {
-            let ss = w.min(h);
-            let arrow_dx = ss * 0.5;
-            let arrow_start = w - arrow_dx;
-            let shaft_inset = h * 0.25;
-            let notch_depth = arrow_dx * shaft_inset / (h / 2.0);
+pub(super) fn draw_shape_path(content: &mut Content, x: f32, y: f32, w: f32, h: f32, shape: &ShapeGeometry) {
+    let evaluated = evaluate_shape_geometry(shape, w as f64, h as f64);
+    match evaluated {
+        Some(eval) => emit_evaluated_paths(content, x, y, &eval),
+        None => { content.rect(x, y, w, h); }
+    }
+}
 
-            content.move_to(x, y + h - shaft_inset);
-            content.line_to(x + arrow_start, y + h - shaft_inset);
-            content.line_to(x + arrow_start, y + h);
-            content.line_to(x + w, y + h / 2.0);
-            content.line_to(x + arrow_start, y);
-            content.line_to(x + arrow_start, y + shaft_inset);
-            content.line_to(x, y + shaft_inset);
-            content.line_to(x + notch_depth, y + h / 2.0);
-            content.close_path();
+fn evaluate_shape_geometry(shape: &ShapeGeometry, w: f64, h: f64) -> Option<geometry::EvaluatedShape> {
+    if let Some(ref custom) = shape.custom {
+        Some(geometry::evaluate_custom(custom, w, h, &shape.adjustments))
+    } else if let Some(ref preset) = shape.preset {
+        geometry::evaluate_preset(preset, w, h, &shape.adjustments)
+    } else {
+        None
+    }
+}
+
+fn emit_evaluated_paths(content: &mut Content, x: f32, y: f32, shape: &geometry::EvaluatedShape) {
+    for path in &shape.paths {
+        for cmd in &path.commands {
+            match cmd {
+                ResolvedCommand::MoveTo(px, py) => {
+                    content.move_to(x + *px as f32, y + *py as f32);
+                }
+                ResolvedCommand::LineTo(px, py) => {
+                    content.line_to(x + *px as f32, y + *py as f32);
+                }
+                ResolvedCommand::CubicTo { x1, y1, x2, y2, x: px, y: py } => {
+                    content.cubic_to(
+                        x + *x1 as f32, y + *y1 as f32,
+                        x + *x2 as f32, y + *y2 as f32,
+                        x + *px as f32, y + *py as f32,
+                    );
+                }
+                ResolvedCommand::Close => {
+                    content.close_path();
+                }
+            }
         }
     }
 }
@@ -86,7 +92,7 @@ pub(super) fn render_smartart(
                     b as f32 / 255.0,
                 );
             }
-            draw_shape_path(content, sx, sy, shape.width, shape.height, shape.shape_type);
+            draw_shape_path(content, sx, sy, shape.width, shape.height, &shape.shape_type);
             if has_fill && has_stroke {
                 content.fill_nonzero_and_stroke();
             } else if has_fill {

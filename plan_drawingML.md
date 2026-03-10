@@ -120,29 +120,29 @@ Signature changes from `shape: ShapeType` to `geometry: &ShapeGeometry`. All cal
 ## Implementation phases
 
 ### Phase 1: Geometry engine core
-1. Create `src/geometry/` with types, formula evaluator, path commands
-2. Unit test all 17 operators + built-in variables
-3. Extract arc→cubic from `pdf/mod.rs:267-320`, add quadBez→cubic
-4. Hand-code definitions for the 11 shapes in fixtures: rect, ellipse, roundRect, corner, triangle, notchedRightArrow, leftCircularArrow, circularArrow, line, arc, straightConnector1
-5. Unit tests comparing evaluated rect/ellipse/notchedRightArrow against current hand-coded paths
+1. ~~Create `src/geometry/` with types, formula evaluator, path commands~~ DONE
+2. ~~Unit test all 17 operators + built-in variables~~ DONE
+3. ~~Extract arc→cubic from `pdf/mod.rs:267-320`, add quadBez→cubic~~ DONE (completed in Step 1)
+4. ~~Hand-code definitions for the 11 shapes in fixtures: rect, ellipse, roundRect, corner, triangle, notchedRightArrow, leftCircularArrow, circularArrow, line, arc, straightConnector1~~ DONE
+5. ~~Unit tests comparing evaluated rect/ellipse/notchedRightArrow against current hand-coded paths~~ DONE
 
 ### Phase 2: Model migration + rendering integration
-1. Add `ShapeGeometry` to model.rs
-2. Update SmartArt + textbox parsing to produce `ShapeGeometry`
-3. Update `draw_shape_path` and `render_shape_fill` to use geometry engine
-4. Run full test suite — verify zero regressions (`cargo test -- --nocapture`, check for "REGRESSION" lines)
+1. ~~Add `ShapeGeometry` to model.rs~~ DONE
+2. ~~Update SmartArt + textbox parsing to produce `ShapeGeometry`~~ DONE
+3. ~~Update `draw_shape_path` and `render_shape_fill` to use geometry engine~~ DONE
+4. ~~Run full test suite — verify zero regressions (`cargo test -- --nocapture`, check for "REGRESSION" lines)~~ DONE
 
 ### Phase 3: Code generator + all 187 shapes
-1. Write `tools/generate-shapes/` that parses `presetShapeDefinitions.xml` → `definitions.rs`
-2. Generate all 187 definitions, replace hand-coded Phase 1 definitions
-3. Remove old `ShapeType` enum entirely
+1. ~~Write `tools/generate-shapes/` that parses `presetShapeDefinitions.xml` → `definitions.rs`~~ DONE
+2. ~~Generate all 187 definitions, replace hand-coded Phase 1 definitions~~ DONE
+3. ~~Remove old `ShapeType` enum entirely~~ DONE
 
 ### Phase 4: Test fixtures
-1. **case34 — Preset shape gallery**: Grid of ~20 common preset shapes with solid fills and strokes. Shapes: roundRect, diamond, chevron, pentagon, hexagon, triangle, rightArrow, heart, star5, cloud, donut, flowChartProcess, flowChartDecision, flowChartTerminator, plus, trapezoid, parallelogram, frame, leftArrow, upDownArrow. Generated with python-docx + ZIP post-processing to inject `a:prstGeom` elements.
-2. **case35 — Adjusted shapes**: Same shapes but with non-default adjustment values (e.g. roundRect with larger corner radius, star5 with different point depth). Tests that the formula evaluator handles overrides.
-3. **case36 — Custom geometry**: Shapes defined with `a:custGeom` paths (moveTo/lnTo/cubicBezTo/close). Tests the custom geometry path.
-4. **case37 — SmartArt with diverse shapes**: A SmartArt diagram that exercises multiple preset types (builds on existing SmartArt parsing). Could use a Process or Hierarchy layout that produces roundRects, arrows, connectors.
-5. Generate reference PDFs via Word for each, run visual comparison.
+1. ~~**case34 — Preset shape gallery**: Grid of ~20 common preset shapes with solid fills and strokes. Shapes: roundRect, diamond, chevron, pentagon, hexagon, triangle, rightArrow, heart, star5, cloud, donut, flowChartProcess, flowChartDecision, flowChartTerminator, plus, trapezoid, parallelogram, frame, leftArrow, upDownArrow. Generated with python-docx + ZIP post-processing to inject `a:prstGeom` elements.~~ DONE
+2. ~~**case35 — Adjusted shapes**: Same shapes but with non-default adjustment values (e.g. roundRect with larger corner radius, star5 with different point depth). Tests that the formula evaluator handles overrides.~~ DONE
+3. ~~**case36 — Custom geometry**: Shapes defined with `a:custGeom` paths (moveTo/lnTo/cubicBezTo/arcTo/close), with guide formulas (gdLst) and adjustment defaults (avLst). 6 shapes: star (lnTo), heart (cubicBezTo), arrow (guides), wave (mixed), cross (guides), rounded rect (arcTo).~~ DONE
+4. ~~**case37 — SmartArt with diverse shapes**: A SmartArt diagram that exercises multiple preset types (builds on existing SmartArt parsing). Could use a Process or Hierarchy layout that produces roundRects, arrows, connectors.~~ DONE
+5. Generate reference PDFs via Word for each, run visual comparison. **PARTIAL** — case34 (94.7% Jaccard, 80.4% SSIM) and case36 (96.7% Jaccard, 91.4% SSIM) done. **BLOCKED**: case35 and case37 need reference.pdf from MS Word.
 
 ### Phase 5: Cleanup
 1. Unify connector arc rendering to use geometry engine's arc conversion

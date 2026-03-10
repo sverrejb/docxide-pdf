@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::io::Read;
 
-use crate::model::{ShapeType, SmartArtDiagram, SmartArtShape};
+use crate::model::{SmartArtDiagram, SmartArtShape};
 
 use super::styles::ThemeFonts;
-use super::textbox::parse_solid_fill;
+use super::textbox::{parse_shape_geometry, parse_solid_fill};
 use super::{DML_NS, read_zip_text};
 
 const DSP_NS: &str = "http://schemas.microsoft.com/office/drawing/2008/diagram";
@@ -127,19 +127,7 @@ fn parse_dsp_shape(sp: roxmltree::Node, theme: &ThemeFonts) -> Option<SmartArtSh
         return None;
     }
 
-    let prst = sp_pr
-        .children()
-        .find(|n| {
-            n.tag_name().name() == "prstGeom" && n.tag_name().namespace() == Some(DML_NS)
-        })
-        .and_then(|n| n.attribute("prst"))
-        .unwrap_or("rect");
-
-    let shape_type = match prst {
-        "ellipse" => ShapeType::Ellipse,
-        "notchedRightArrow" => ShapeType::NotchedRightArrow,
-        _ => ShapeType::Rect,
-    };
+    let shape_type = parse_shape_geometry(sp_pr);
 
     Some(SmartArtShape {
         x: x as f32,

@@ -30,6 +30,10 @@ path = "src/bin/analyze_fixtures.rs"
 name = "case-browser"
 path = "src/bin/case_browser.rs"
 
+[[bin]]
+name = "generate-shapes"
+path = "src/bin/generate_shapes.rs"
+
 [dependencies]
 zip = "2"
 roxmltree = "0.21"

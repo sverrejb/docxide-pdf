@@ -172,12 +172,58 @@ pub struct FloatingImage {
     pub behind_doc: bool,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
-pub enum ShapeType {
-    #[default]
-    Rect,
-    Ellipse,
-    NotchedRightArrow,
+/// Geometry definition for a shape — either a preset name or custom paths.
+/// Supports all 187 OOXML preset shapes and arbitrary custom geometry (a:custGeom).
+#[derive(Clone, Debug)]
+pub struct ShapeGeometry {
+    pub preset: Option<String>,
+    pub adjustments: Vec<(String, i64)>,
+    pub custom: Option<CustomGeometry>,
+}
+
+impl Default for ShapeGeometry {
+    fn default() -> Self {
+        Self {
+            preset: Some("rect".to_string()),
+            adjustments: Vec::new(),
+            custom: None,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CustomGeometry {
+    pub adjust_defaults: Vec<(String, i64)>,
+    pub guides: Vec<CustomGuideDef>,
+    pub paths: Vec<CustomPathDef>,
+}
+
+#[derive(Clone, Debug)]
+pub struct CustomGuideDef {
+    pub name: String,
+    pub op: crate::geometry::FormulaOp,
+    pub x: String,
+    pub y: String,
+    pub z: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct CustomPathDef {
+    pub commands: Vec<CustomPathCommand>,
+    pub w: Option<i64>,
+    pub h: Option<i64>,
+    pub fill: crate::geometry::PathFill,
+    pub stroke: bool,
+}
+
+#[derive(Clone, Debug)]
+pub enum CustomPathCommand {
+    MoveTo { x: String, y: String },
+    LineTo { x: String, y: String },
+    ArcTo { wr: String, hr: String, st_ang: String, sw_ang: String },
+    CubicBezTo { x1: String, y1: String, x2: String, y2: String, x3: String, y3: String },
+    QuadBezTo { x1: String, y1: String, x2: String, y2: String },
+    Close,
 }
 
 pub struct SmartArtShape {
@@ -185,7 +231,7 @@ pub struct SmartArtShape {
     pub y: f32,
     pub width: f32,
     pub height: f32,
-    pub shape_type: ShapeType,
+    pub shape_type: ShapeGeometry,
     pub fill: Option<[u8; 3]>,
     pub stroke_color: Option<[u8; 3]>,
     pub stroke_width: f32,
@@ -232,7 +278,7 @@ pub struct Textbox {
     pub v_offset_pt: f32,
     pub v_relative_from: &'static str,
     pub fill: Option<ShapeFill>,
-    pub shape_type: ShapeType,
+    pub shape_type: ShapeGeometry,
     pub margin_left: f32,
     pub margin_right: f32,
     pub margin_top: f32,
