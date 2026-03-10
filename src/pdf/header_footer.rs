@@ -350,13 +350,7 @@ pub(super) fn render_header_footer(
                                 HorizontalPosition::Offset(o) => sp.margin_left + o,
                             },
                         };
-                        let fi_y_top = match fi.v_relative_from {
-                            "page" => sp.page_height - fi.v_offset_pt,
-                            "margin" | "topMargin" => {
-                                sp.page_height - sp.margin_top - fi.v_offset_pt
-                            }
-                            _ => slot_top - fi.v_offset_pt,
-                        };
+                        let fi_y_top = super::resolve_fi_y_top(fi, sp, slot_top);
                         let fi_y_bottom = fi_y_top - img.display_height;
                         content.save_state();
                         content.transform([

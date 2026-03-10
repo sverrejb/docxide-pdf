@@ -272,5 +272,6 @@ pub(super) fn embed_truetype(
         char_to_gid,
         char_widths_1000,
         kern_pairs,
+        synthetic_bold: false,
     })
 }

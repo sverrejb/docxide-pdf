@@ -145,6 +145,14 @@ pub enum HorizontalPosition {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub enum VerticalPosition {
+    Offset(f32),
+    AlignTop,
+    AlignCenter,
+    AlignBottom,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum WrapType {
     None,
     Square,
@@ -158,9 +166,10 @@ pub struct FloatingImage {
     pub image: EmbeddedImage,
     pub h_position: HorizontalPosition,
     pub h_relative_from: &'static str,
-    pub v_offset_pt: f32,
+    pub v_position: VerticalPosition,
     pub v_relative_from: &'static str,
     pub wrap_type: WrapType,
+    pub behind_doc: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -191,6 +200,21 @@ pub struct SmartArtDiagram {
     pub shapes: Vec<SmartArtShape>,
 }
 
+pub enum ConnectorType {
+    Line { flip_h: bool, flip_v: bool },
+    Arc { start_angle: f32, end_angle: f32, rotation: f32 },
+}
+
+pub struct ConnectorShape {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+    pub stroke_color: [u8; 3],
+    pub stroke_width: f32,
+    pub connector_type: ConnectorType,
+}
+
 pub enum ShapeFill {
     Solid([u8; 3]),
     LinearGradient {
@@ -217,6 +241,8 @@ pub struct Textbox {
     pub wrap_type: WrapType,
     pub dist_top: f32,
     pub dist_bottom: f32,
+    pub behind_doc: bool,
+    pub no_text_wrap: bool,
 }
 
 #[derive(Clone)]
@@ -261,6 +287,7 @@ pub struct Paragraph {
     pub extra_line_breaks: u32,
     pub floating_images: Vec<FloatingImage>,
     pub textboxes: Vec<Textbox>,
+    pub connectors: Vec<ConnectorShape>,
     pub inline_chart: Option<InlineChart>,
     pub smartart: Option<SmartArtDiagram>,
 }
@@ -293,6 +320,7 @@ impl Default for Paragraph {
             extra_line_breaks: 0,
             floating_images: Vec::new(),
             textboxes: Vec::new(),
+            connectors: Vec::new(),
             inline_chart: None,
             smartart: None,
         }

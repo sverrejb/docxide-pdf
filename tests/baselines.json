@@ -334,8 +334,8 @@
     "text_boundary": 0.4063
   },
   "scraped/stem_partnership..": {
-    "jaccard": 0.1229,
-    "ssim": 0.3293,
+    "jaccard": 0.2584,
+    "ssim": 0.4115,
     "text_boundary": 0.2706
   },
   "scraped/transition_to_wo..": {
@@ -349,13 +349,13 @@
     "text_boundary": 0.2407
   },
   "scraped/usep_handbook": {
-    "jaccard": 0.3977,
-    "ssim": 0.473,
-    "text_boundary": 0.0
+    "jaccard": 0.5403,
+    "ssim": 0.7307,
+    "text_boundary": 0.8304
   },
   "scraped/vaccines_history..": {
     "jaccard": 0.4118,
-    "ssim": 0.4822,
+    "ssim": 0.4852,
     "text_boundary": 0.1466
   },
   "scraped/waste_management..": {

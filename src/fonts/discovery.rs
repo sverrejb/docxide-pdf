@@ -248,17 +248,22 @@ fn get_font_index() -> &'static FontLookup {
 
 /// Look up a font file by family name and style using the OS/2 table metadata index.
 /// Falls back to the regular variant if the requested bold/italic is not available.
-pub(super) fn find_font_file(font_name: &str, bold: bool, italic: bool) -> Option<(PathBuf, u32)> {
+/// Returns `(path, face_index, exact_style_match)`.
+pub(super) fn find_font_file(
+    font_name: &str,
+    bold: bool,
+    italic: bool,
+) -> Option<(PathBuf, u32, bool)> {
     let index = get_font_index();
     let key = font_name.to_lowercase();
-    index
-        .get(&(key.clone(), bold, italic))
-        .or_else(|| {
-            if bold || italic {
-                index.get(&(key, false, false))
-            } else {
-                None
-            }
-        })
-        .cloned()
+    if let Some((path, face_index)) = index.get(&(key.clone(), bold, italic)) {
+        return Some((path.clone(), *face_index, true));
+    }
+    if bold || italic {
+        index
+            .get(&(key, false, false))
+            .map(|(path, face_index)| (path.clone(), *face_index, false))
+    } else {
+        None
+    }
 }

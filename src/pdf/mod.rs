@@ -16,9 +16,9 @@ use crate::fonts::{
     FontEntry, encode_as_gids, font_key, font_key_buf, register_font, to_winansi_bytes,
 };
 use crate::model::{
-    Alignment, Block, Document, EmbeddedImage, FieldCode, HeaderFooter, HorizontalPosition,
-    ImageFormat, LineSpacing, Paragraph, Run, SectionBreakType, SectionProperties, ShapeFill,
-    ShapeType,
+    Alignment, Block, Document, EmbeddedImage, FieldCode, FloatingImage, HeaderFooter,
+    HorizontalPosition, ImageFormat, LineSpacing, Paragraph, Run, SectionBreakType,
+    SectionProperties, ShapeFill, ShapeType, Textbox, VerticalPosition,
 };
 
 use footnotes::{compute_footnote_height, render_page_footnotes};
@@ -84,6 +84,297 @@ pub(super) fn render_shape_fill(
             });
         }
     }
+}
+
+fn resolve_fi_x(
+    fi: &FloatingImage,
+    sp: &SectionProperties,
+    col_x: f32,
+    col_w: f32,
+    text_width: f32,
+) -> f32 {
+    let img = &fi.image;
+    match fi.h_relative_from {
+        "page" => match fi.h_position {
+            HorizontalPosition::AlignCenter => (sp.page_width - img.display_width) / 2.0,
+            HorizontalPosition::AlignRight => sp.page_width - img.display_width,
+            HorizontalPosition::AlignLeft => 0.0,
+            HorizontalPosition::Offset(o) => o,
+        },
+        "column" => match fi.h_position {
+            HorizontalPosition::AlignCenter => col_x + (col_w - img.display_width) / 2.0,
+            HorizontalPosition::AlignRight => col_x + col_w - img.display_width,
+            HorizontalPosition::AlignLeft => col_x,
+            HorizontalPosition::Offset(o) => col_x + o,
+        },
+        "margin" | _ => match fi.h_position {
+            HorizontalPosition::AlignCenter => {
+                sp.margin_left + (text_width - img.display_width) / 2.0
+            }
+            HorizontalPosition::AlignRight => sp.margin_left + text_width - img.display_width,
+            HorizontalPosition::AlignLeft => sp.margin_left,
+            HorizontalPosition::Offset(o) => sp.margin_left + o,
+        },
+    }
+}
+
+fn resolve_fi_y_top(fi: &FloatingImage, sp: &SectionProperties, slot_top: f32) -> f32 {
+    let img = &fi.image;
+    match fi.v_position {
+        VerticalPosition::Offset(v_offset) => match fi.v_relative_from {
+            "page" => sp.page_height - v_offset,
+            "margin" | "topMargin" => sp.page_height - sp.margin_top - v_offset,
+            _ => slot_top - v_offset,
+        },
+        VerticalPosition::AlignTop => match fi.v_relative_from {
+            "page" => sp.page_height,
+            _ => sp.page_height - sp.margin_top,
+        },
+        VerticalPosition::AlignCenter => match fi.v_relative_from {
+            "page" => (sp.page_height + img.display_height) / 2.0,
+            _ => {
+                let area = sp.page_height - sp.margin_top - sp.margin_bottom;
+                sp.page_height - sp.margin_top - (area - img.display_height) / 2.0
+            }
+        },
+        VerticalPosition::AlignBottom => match fi.v_relative_from {
+            "page" => img.display_height,
+            _ => sp.margin_bottom + img.display_height,
+        },
+    }
+}
+
+fn render_single_textbox(
+    tb: &Textbox,
+    sp: &SectionProperties,
+    col_x: f32,
+    col_w: f32,
+    text_width: f32,
+    slot_top: f32,
+    content: &mut Content,
+    gradient_specs: &mut Vec<GradientSpec>,
+    seen_fonts: &HashMap<String, FontEntry>,
+    default_line_spacing: LineSpacing,
+    page_links: &mut Vec<LinkAnnotation>,
+) {
+    let tb_x = match tb.h_relative_from {
+        "page" => match tb.h_position {
+            HorizontalPosition::AlignCenter => (sp.page_width - tb.width_pt) / 2.0,
+            HorizontalPosition::AlignRight => sp.page_width - tb.width_pt,
+            HorizontalPosition::AlignLeft => 0.0,
+            HorizontalPosition::Offset(o) => o,
+        },
+        "column" => match tb.h_position {
+            HorizontalPosition::AlignCenter => col_x + (col_w - tb.width_pt) / 2.0,
+            HorizontalPosition::AlignRight => col_x + col_w - tb.width_pt,
+            HorizontalPosition::AlignLeft => col_x,
+            HorizontalPosition::Offset(o) => col_x + o,
+        },
+        "margin" | _ => match tb.h_position {
+            HorizontalPosition::AlignCenter => {
+                sp.margin_left + (text_width - tb.width_pt) / 2.0
+            }
+            HorizontalPosition::AlignRight => sp.margin_left + text_width - tb.width_pt,
+            HorizontalPosition::AlignLeft => sp.margin_left,
+            HorizontalPosition::Offset(o) => sp.margin_left + o,
+        },
+    };
+    let tb_y_top = match tb.v_relative_from {
+        "page" => sp.page_height - tb.v_offset_pt,
+        "margin" | "topMargin" => sp.page_height - sp.margin_top - tb.v_offset_pt,
+        _ => slot_top - tb.v_offset_pt,
+    };
+
+    if let Some(ref fill) = tb.fill {
+        render_shape_fill(
+            content,
+            fill,
+            tb_x,
+            tb_y_top - tb.height_pt,
+            tb.width_pt,
+            tb.height_pt,
+            tb.shape_type,
+            gradient_specs,
+        );
+    }
+
+    let content_x = tb_x + tb.margin_left;
+    let content_w = if tb.no_text_wrap {
+        10000.0
+    } else {
+        (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0)
+    };
+    let mut cursor_y = tb_y_top - tb.margin_top;
+    let empty_inline_imgs: HashMap<usize, String> = HashMap::new();
+    for tp in &tb.paragraphs {
+        let tp_ls = tp.line_spacing.unwrap_or(default_line_spacing);
+        let tp_text_x = content_x + tp.indent_left;
+        let tp_text_w = (content_w - tp.indent_left - tp.indent_right).max(1.0);
+        let text_hanging = if !tp.list_label.is_empty() {
+            0.0
+        } else if tp.indent_hanging > 0.0 {
+            tp.indent_hanging
+        } else {
+            -tp.indent_first_line
+        };
+        let has_tabs = tp.runs.iter().any(|r| r.is_tab);
+        let tb_lines = if has_tabs {
+            build_tabbed_line(
+                &tp.runs,
+                seen_fonts,
+                &tp.tab_stops,
+                tp.indent_left,
+                tp_text_w,
+                text_hanging,
+                &empty_inline_imgs,
+            )
+        } else {
+            build_paragraph_lines(
+                &tp.runs,
+                seen_fonts,
+                tp_text_w,
+                text_hanging,
+                &empty_inline_imgs,
+            )
+        };
+        if tb_lines.is_empty() {
+            let (fs, lhr, _) = tallest_run_metrics(&tp.runs, seen_fonts);
+            let lh = resolve_line_h(tp_ls, fs, lhr);
+            cursor_y -= tp.space_before + lh + tp.space_after;
+            continue;
+        }
+        let (tb_fs, tb_lhr, tb_ar) = tallest_run_metrics(&tp.runs, seen_fonts);
+        let tb_ascender = tb_ar.unwrap_or(0.75);
+        let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_lhr);
+        let tb_baseline = cursor_y - tp.space_before - tb_fs * tb_ascender;
+        if !tp.list_label.is_empty() {
+            let label_x = content_x + tp.indent_left - tp.indent_hanging;
+            let (label_font_name, label_bytes) = label_for_paragraph(tp, seen_fonts);
+            if let Some([r, g, b]) = tp.runs.first().and_then(|r| r.color) {
+                content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+            }
+            content
+                .begin_text()
+                .set_font(Name(label_font_name.as_bytes()), tb_fs)
+                .next_line(label_x, tb_baseline)
+                .show(Str(&label_bytes))
+                .end_text();
+            if tp.runs.first().and_then(|r| r.color).is_some() {
+                content.set_fill_gray(0.0);
+            }
+        }
+        render_paragraph_lines(
+            content,
+            &tb_lines,
+            &tp.alignment,
+            tp_text_x,
+            tp_text_w,
+            tb_baseline,
+            tb_line_h,
+            tb_lines.len(),
+            0,
+            page_links,
+            0.0,
+            seen_fonts,
+        );
+        cursor_y -= tp.space_before + (tb_lines.len() as f32) * tb_line_h + tp.space_after;
+    }
+}
+
+fn render_connector(
+    conn: &crate::model::ConnectorShape,
+    content: &mut Content,
+    col_x: f32,
+    slot_top: f32,
+) {
+    let cx = col_x + conn.x;
+    let cy = slot_top - conn.y;
+
+    content.save_state();
+    content.set_stroke_rgb(
+        conn.stroke_color[0] as f32 / 255.0,
+        conn.stroke_color[1] as f32 / 255.0,
+        conn.stroke_color[2] as f32 / 255.0,
+    );
+    content.set_line_width(conn.stroke_width);
+
+    match &conn.connector_type {
+        crate::model::ConnectorType::Line { flip_h, flip_v } => {
+            let (x0, y0, x1, y1) = match (*flip_h, *flip_v) {
+                (false, false) => (cx, cy, cx + conn.width, cy - conn.height),
+                (true, false) => (cx + conn.width, cy, cx, cy - conn.height),
+                (false, true) => (cx, cy - conn.height, cx + conn.width, cy),
+                (true, true) => (cx + conn.width, cy - conn.height, cx, cy),
+            };
+            content.move_to(x0, y0);
+            content.line_to(x1, y1);
+            content.stroke();
+        }
+        crate::model::ConnectorType::Arc {
+            start_angle,
+            end_angle,
+            rotation,
+        } => {
+            render_arc(content, cx, cy, conn.width, conn.height, *start_angle, *end_angle, *rotation);
+        }
+    }
+
+    content.restore_state();
+}
+
+fn render_arc(
+    content: &mut Content,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    start_deg: f32,
+    end_deg: f32,
+    rotation_deg: f32,
+) {
+    let rx = w / 2.0;
+    let ry = h / 2.0;
+    let cx = x + rx;
+    let cy = y - ry;
+
+    // OOXML arc: adj1=start, adj2=end; clockwise in y-down coords
+    // PDF: counterclockwise in y-up coords; arc from adj2→adj1 maps
+    // to PDF by adding 180° (y-flip reversal)
+    let math_start = (180.0 + end_deg + rotation_deg).to_radians();
+    let math_end = (180.0 + start_deg + rotation_deg).to_radians();
+
+    let mut angle = math_start;
+    let total = math_end - math_start;
+    if total.abs() < 0.001 {
+        return;
+    }
+
+    // Approximate arc with cubic bezier segments (max 90° each)
+    let n_segs = ((total.abs() / std::f32::consts::FRAC_PI_2).ceil() as usize).max(1);
+    let step = total / n_segs as f32;
+
+    let pt = |a: f32| -> (f32, f32) {
+        (cx + rx * a.cos(), cy + ry * a.sin())
+    };
+
+    let (sx, sy) = pt(angle);
+    content.move_to(sx, sy);
+
+    for _ in 0..n_segs {
+        let a0 = angle;
+        let a1 = angle + step;
+        let alpha = 4.0 * (1.0 - (step / 4.0).cos()) / (step / 4.0).sin() / 3.0;
+        // Unscaled unit circle tangent control points, then scale by radii
+        let (x0, y0) = pt(a0);
+        let (x3, y3) = pt(a1);
+        let cp1x = x0 - alpha * rx * a0.sin();
+        let cp1y = y0 + alpha * ry * a0.cos();
+        let cp2x = x3 + alpha * rx * a1.sin();
+        let cp2y = y3 - alpha * ry * a1.cos();
+        content.cubic_to(cp1x, cp1y, cp2x, cp2y, x3, y3);
+        angle = a1;
+    }
+    content.stroke();
 }
 
 fn styleref_insert(
@@ -953,7 +1244,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             WrapType::None => false,
                         };
                         if reserve {
-                            let fi_h = fi.v_offset_pt + fi.image.display_height;
+                            let fi_h = match fi.v_position {
+                                VerticalPosition::Offset(o) => o + fi.image.display_height,
+                                _ => fi.image.display_height,
+                            };
                             content_h = content_h.max(fi_h);
                         }
                     }
@@ -987,6 +1281,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         let mut prev_sa = effective_space_after;
                         let mut i = block_idx + 1;
                         while let Some(next) = adjacent_para(i) {
+                            if next.page_break_before {
+                                extra = f32::MAX;
+                                break;
+                            }
                             let (nfs, nlhr, _) = tallest_run_metrics(&next.runs, &seen_fonts);
                             let next_inter = f32::max(prev_sa, next.space_before);
                             let next_first_line_h =
@@ -1187,6 +1485,46 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     let para_text_width = (col_w - para.indent_left - para.indent_right).max(1.0);
                     let label_x = col_x + para.indent_left - para.indent_hanging;
 
+                    // Behind-doc floating images (rendered first, behind everything)
+                    for (fi_idx, fi) in para.floating_images.iter().enumerate().filter(|(_, f)| f.behind_doc) {
+                        if let Some(pdf_name) =
+                            floating_image_pdf_names.get(&(global_block_idx, fi_idx))
+                        {
+                            let img = &fi.image;
+                            let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
+                            let fi_y_top = resolve_fi_y_top(fi, sp, slot_top);
+                            let fi_y_bottom = fi_y_top - img.display_height;
+                            current_content.save_state();
+                            current_content.transform([
+                                img.display_width,
+                                0.0,
+                                0.0,
+                                img.display_height,
+                                fi_x,
+                                fi_y_bottom,
+                            ]);
+                            current_content.x_object(Name(pdf_name.as_bytes()));
+                            current_content.restore_state();
+                        }
+                    }
+
+                    // Render behind-doc textboxes before paragraph content
+                    for tb in para.textboxes.iter().filter(|t| t.behind_doc) {
+                        render_single_textbox(
+                            tb,
+                            sp,
+                            col_x,
+                            col_w,
+                            text_width,
+                            slot_top,
+                            &mut current_content,
+                            &mut page_gradient_specs,
+                            &seen_fonts,
+                            doc.line_spacing,
+                            &mut current_page_links,
+                        );
+                    }
+
                     // Draw paragraph shading (background), extending outward to match borders
                     if let Some([r, g, b]) = para.shading {
                         let shd_left_outset = para
@@ -1221,51 +1559,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         current_content.restore_state();
                     }
 
-                    for (fi_idx, fi) in para.floating_images.iter().enumerate() {
+                    // Normal floating images (not behind doc)
+                    for (fi_idx, fi) in para.floating_images.iter().enumerate().filter(|(_, f)| !f.behind_doc) {
                         if let Some(pdf_name) =
                             floating_image_pdf_names.get(&(global_block_idx, fi_idx))
                         {
                             let img = &fi.image;
-                            let fi_x = match fi.h_relative_from {
-                                "page" => match fi.h_position {
-                                    HorizontalPosition::AlignCenter => {
-                                        (sp.page_width - img.display_width) / 2.0
-                                    }
-                                    HorizontalPosition::AlignRight => {
-                                        sp.page_width - img.display_width
-                                    }
-                                    HorizontalPosition::AlignLeft => 0.0,
-                                    HorizontalPosition::Offset(o) => o,
-                                },
-                                "column" => match fi.h_position {
-                                    HorizontalPosition::AlignCenter => {
-                                        col_x + (col_w - img.display_width) / 2.0
-                                    }
-                                    HorizontalPosition::AlignRight => {
-                                        col_x + col_w - img.display_width
-                                    }
-                                    HorizontalPosition::AlignLeft => col_x,
-                                    HorizontalPosition::Offset(o) => col_x + o,
-                                },
-                                "margin" | _ => match fi.h_position {
-                                    HorizontalPosition::AlignCenter => {
-                                        sp.margin_left + (text_width - img.display_width) / 2.0
-                                    }
-                                    HorizontalPosition::AlignRight => {
-                                        sp.margin_left + text_width - img.display_width
-                                    }
-                                    HorizontalPosition::AlignLeft => sp.margin_left,
-                                    HorizontalPosition::Offset(o) => sp.margin_left + o,
-                                },
-                            };
-                            // OOXML: positive offset = downward; PDF: Y increases upward
-                            let fi_y_top = match fi.v_relative_from {
-                                "page" => sp.page_height - fi.v_offset_pt,
-                                "margin" | "topMargin" => {
-                                    sp.page_height - sp.margin_top - fi.v_offset_pt
-                                }
-                                _ => slot_top - fi.v_offset_pt,
-                            };
+                            let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
+                            let fi_y_top = resolve_fi_y_top(fi, sp, slot_top);
                             let fi_y_bottom = fi_y_top - img.display_height;
                             current_content.save_state();
                             current_content.transform([
@@ -1281,141 +1582,29 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         }
                     }
 
-                    for tb in &para.textboxes {
-                        let tb_x = match tb.h_relative_from {
-                            "page" => match tb.h_position {
-                                HorizontalPosition::AlignCenter => {
-                                    (sp.page_width - tb.width_pt) / 2.0
-                                }
-                                HorizontalPosition::AlignRight => sp.page_width - tb.width_pt,
-                                HorizontalPosition::AlignLeft => 0.0,
-                                HorizontalPosition::Offset(o) => o,
-                            },
-                            "column" => match tb.h_position {
-                                HorizontalPosition::AlignCenter => {
-                                    col_x + (col_w - tb.width_pt) / 2.0
-                                }
-                                HorizontalPosition::AlignRight => col_x + col_w - tb.width_pt,
-                                HorizontalPosition::AlignLeft => col_x,
-                                HorizontalPosition::Offset(o) => col_x + o,
-                            },
-                            "margin" | _ => match tb.h_position {
-                                HorizontalPosition::AlignCenter => {
-                                    sp.margin_left + (text_width - tb.width_pt) / 2.0
-                                }
-                                HorizontalPosition::AlignRight => {
-                                    sp.margin_left + text_width - tb.width_pt
-                                }
-                                HorizontalPosition::AlignLeft => sp.margin_left,
-                                HorizontalPosition::Offset(o) => sp.margin_left + o,
-                            },
-                        };
-                        let tb_y_top = match tb.v_relative_from {
-                            "page" => sp.page_height - tb.v_offset_pt,
-                            "margin" | "topMargin" => {
-                                sp.page_height - sp.margin_top - tb.v_offset_pt
-                            }
-                            _ => slot_top - tb.v_offset_pt,
-                        };
+                    for tb in para.textboxes.iter().filter(|t| !t.behind_doc) {
+                        render_single_textbox(
+                            tb,
+                            sp,
+                            col_x,
+                            col_w,
+                            text_width,
+                            slot_top,
+                            &mut current_content,
+                            &mut page_gradient_specs,
+                            &seen_fonts,
+                            doc.line_spacing,
+                            &mut current_page_links,
+                        );
+                    }
 
-                        // Draw fill background
-                        if let Some(ref fill) = tb.fill {
-                            render_shape_fill(
-                                &mut current_content,
-                                fill,
-                                tb_x,
-                                tb_y_top - tb.height_pt,
-                                tb.width_pt,
-                                tb.height_pt,
-                                tb.shape_type,
-                                &mut page_gradient_specs,
-                            );
-                        }
-
-                        let content_x = tb_x + tb.margin_left;
-                        let content_w = (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0);
-                        let mut cursor_y = tb_y_top - tb.margin_top;
-                        let empty_inline_imgs: HashMap<usize, String> = HashMap::new();
-                        for tp in &tb.paragraphs {
-                            let tp_ls = tp.line_spacing.unwrap_or(doc.line_spacing);
-                            let tp_text_x = content_x + tp.indent_left;
-                            let tp_text_w = (content_w - tp.indent_left - tp.indent_right).max(1.0);
-                            let text_hanging = if !tp.list_label.is_empty() {
-                                0.0
-                            } else if tp.indent_hanging > 0.0 {
-                                tp.indent_hanging
-                            } else {
-                                -tp.indent_first_line
-                            };
-                            let has_tabs = tp.runs.iter().any(|r| r.is_tab);
-                            let tb_lines = if has_tabs {
-                                build_tabbed_line(
-                                    &tp.runs,
-                                    &seen_fonts,
-                                    &tp.tab_stops,
-                                    tp.indent_left,
-                                    tp_text_w,
-                                    text_hanging,
-                                    &empty_inline_imgs,
-                                )
-                            } else {
-                                build_paragraph_lines(
-                                    &tp.runs,
-                                    &seen_fonts,
-                                    tp_text_w,
-                                    text_hanging,
-                                    &empty_inline_imgs,
-                                )
-                            };
-                            if tb_lines.is_empty() {
-                                let (fs, lhr, _) = tallest_run_metrics(&tp.runs, &seen_fonts);
-                                let lh = resolve_line_h(tp_ls, fs, lhr);
-                                cursor_y -= tp.space_before + lh + tp.space_after;
-                                continue;
-                            }
-                            let (tb_fs, tb_lhr, tb_ar) = tallest_run_metrics(&tp.runs, &seen_fonts);
-                            let tb_ascender = tb_ar.unwrap_or(0.75);
-                            let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_lhr);
-                            let tb_baseline = cursor_y - tp.space_before - tb_fs * tb_ascender;
-                            if !tp.list_label.is_empty() {
-                                let label_x = content_x + tp.indent_left - tp.indent_hanging;
-                                let (label_font_name, label_bytes) =
-                                    label_for_paragraph(tp, &seen_fonts);
-                                if let Some([r, g, b]) = tp.runs.first().and_then(|r| r.color) {
-                                    current_content.set_fill_rgb(
-                                        r as f32 / 255.0,
-                                        g as f32 / 255.0,
-                                        b as f32 / 255.0,
-                                    );
-                                }
-                                current_content
-                                    .begin_text()
-                                    .set_font(Name(label_font_name.as_bytes()), tb_fs)
-                                    .next_line(label_x, tb_baseline)
-                                    .show(Str(&label_bytes))
-                                    .end_text();
-                                if tp.runs.first().and_then(|r| r.color).is_some() {
-                                    current_content.set_fill_gray(0.0);
-                                }
-                            }
-                            render_paragraph_lines(
-                                &mut current_content,
-                                &tb_lines,
-                                &tp.alignment,
-                                tp_text_x,
-                                tp_text_w,
-                                tb_baseline,
-                                tb_line_h,
-                                tb_lines.len(),
-                                0,
-                                &mut current_page_links,
-                                0.0,
-                                &seen_fonts,
-                            );
-                            cursor_y -= tp.space_before
-                                + (tb_lines.len() as f32) * tb_line_h
-                                + tp.space_after;
-                        }
+                    for conn in &para.connectors {
+                        render_connector(
+                            conn,
+                            &mut current_content,
+                            col_x,
+                            slot_top,
+                        );
                     }
 
                     if let Some(ref ic) = para.inline_chart {
@@ -1956,26 +2145,68 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             specs
                 .iter()
                 .map(|spec| {
-                    let (c0, c1) = if spec.stops.len() >= 2 {
-                        (spec.stops[0].0, spec.stops[spec.stops.len() - 1].0)
+                    let func_ref = if spec.stops.len() <= 2 {
+                        let (c0, c1) = if spec.stops.len() >= 2 {
+                            (spec.stops[0].0, spec.stops[spec.stops.len() - 1].0)
+                        } else {
+                            (spec.stops[0].0, spec.stops[0].0)
+                        };
+                        let fref = alloc();
+                        pdf.exponential_function(fref)
+                            .domain([0.0, 1.0])
+                            .c0([
+                                c0[0] as f32 / 255.0,
+                                c0[1] as f32 / 255.0,
+                                c0[2] as f32 / 255.0,
+                            ])
+                            .c1([
+                                c1[0] as f32 / 255.0,
+                                c1[1] as f32 / 255.0,
+                                c1[2] as f32 / 255.0,
+                            ])
+                            .n(1.0);
+                        fref
                     } else {
-                        (spec.stops[0].0, spec.stops[0].0)
-                    };
+                        // Multi-stop: N-1 exponential functions stitched together
+                        let sub_refs: Vec<Ref> = spec
+                            .stops
+                            .windows(2)
+                            .map(|pair| {
+                                let fref = alloc();
+                                let c0 = pair[0].0;
+                                let c1 = pair[1].0;
+                                pdf.exponential_function(fref)
+                                    .domain([0.0, 1.0])
+                                    .c0([
+                                        c0[0] as f32 / 255.0,
+                                        c0[1] as f32 / 255.0,
+                                        c0[2] as f32 / 255.0,
+                                    ])
+                                    .c1([
+                                        c1[0] as f32 / 255.0,
+                                        c1[1] as f32 / 255.0,
+                                        c1[2] as f32 / 255.0,
+                                    ])
+                                    .n(1.0);
+                                fref
+                            })
+                            .collect();
 
-                    let func_ref = alloc();
-                    pdf.exponential_function(func_ref)
-                        .domain([0.0, 1.0])
-                        .c0([
-                            c0[0] as f32 / 255.0,
-                            c0[1] as f32 / 255.0,
-                            c0[2] as f32 / 255.0,
-                        ])
-                        .c1([
-                            c1[0] as f32 / 255.0,
-                            c1[1] as f32 / 255.0,
-                            c1[2] as f32 / 255.0,
-                        ])
-                        .n(1.0);
+                        let bounds: Vec<f32> = spec.stops[1..spec.stops.len() - 1]
+                            .iter()
+                            .map(|s| s.1)
+                            .collect();
+                        let encode: Vec<f32> =
+                            sub_refs.iter().flat_map(|_| [0.0, 1.0]).collect();
+
+                        let stitch_ref = alloc();
+                        pdf.stitching_function(stitch_ref)
+                            .domain([0.0, 1.0])
+                            .functions(sub_refs)
+                            .bounds(bounds)
+                            .encode(encode);
+                        stitch_ref
+                    };
 
                     // OOXML angle: 0° = left-to-right, 90° = top-to-bottom
                     // PDF coords: origin at bottom-left, y increases upward

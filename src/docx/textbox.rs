@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::io::Read;
 
 use crate::model::{
-    Alignment, HorizontalPosition, LineSpacing, Paragraph, ShapeFill, ShapeType, Textbox, WrapType,
+    Alignment, ConnectorShape, ConnectorType, HorizontalPosition, LineSpacing, Paragraph,
+    ShapeFill, ShapeType, Textbox, WrapType,
 };
 
 use super::images::{extent_dimensions, parse_anchor_position};
@@ -345,6 +346,7 @@ pub(super) struct WspResult {
     pub(super) margin_left: f32,
     pub(super) margin_bottom: f32,
     pub(super) margin_right: f32,
+    pub(super) no_text_wrap: bool,
 }
 
 pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
@@ -393,6 +395,12 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
 
     let (margin_top, margin_left, margin_bottom, margin_right) = parse_body_margins(wsp);
 
+    let no_text_wrap = wsp
+        .children()
+        .find(|n| n.tag_name().name() == "bodyPr" && n.tag_name().namespace() == Some(WPS_NS))
+        .and_then(|bp| bp.attribute("wrap"))
+        .is_some_and(|w| w == "none");
+
     // Try to get textbox content
     let paragraphs = wsp
         .children()
@@ -418,7 +426,166 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
         margin_left,
         margin_bottom,
         margin_right,
+        no_text_wrap,
     })
+}
+
+pub(super) fn parse_connector_from_wsp(
+    anchor: roxmltree::Node,
+    theme: &ThemeFonts,
+) -> Option<ConnectorShape> {
+    let wsp = anchor
+        .descendants()
+        .find(|n| n.tag_name().name() == "wsp" && n.tag_name().namespace() == Some(WPS_NS))?;
+
+    let sp_pr = wsp.children().find(|n| {
+        (n.tag_name().name() == "spPr" && n.tag_name().namespace() == Some(WPS_NS))
+            || (n.tag_name().name() == "spPr" && n.tag_name().namespace() == Some(DML_NS))
+    })?;
+
+    let prst_geom = sp_pr.children().find(|n| {
+        n.tag_name().name() == "prstGeom" && n.tag_name().namespace() == Some(DML_NS)
+    })?;
+    let prst = prst_geom.attribute("prst")?;
+
+    let connector_type = match prst {
+        "line" => {
+            let xfrm = sp_pr.children().find(|n| {
+                n.tag_name().name() == "xfrm" && n.tag_name().namespace() == Some(DML_NS)
+            });
+            let flip_h = xfrm.and_then(|x| x.attribute("flipH")).is_some_and(|v| v == "1");
+            let flip_v = xfrm.and_then(|x| x.attribute("flipV")).is_some_and(|v| v == "1");
+            ConnectorType::Line { flip_h, flip_v }
+        }
+        "arc" => {
+            let xfrm = sp_pr.children().find(|n| {
+                n.tag_name().name() == "xfrm" && n.tag_name().namespace() == Some(DML_NS)
+            });
+            let rotation = xfrm
+                .and_then(|x| x.attribute("rot"))
+                .and_then(|v| v.parse::<f32>().ok())
+                .unwrap_or(0.0)
+                / 60000.0;
+
+            let mut adj1 = 0.0_f32;
+            let mut adj2 = 0.0_f32;
+            for gd in prst_geom.descendants().filter(|n| {
+                n.tag_name().name() == "gd" && n.tag_name().namespace() == Some(DML_NS)
+            }) {
+                let name = gd.attribute("name").unwrap_or("");
+                let val = gd
+                    .attribute("fmla")
+                    .and_then(|f| f.strip_prefix("val "))
+                    .and_then(|v| v.parse::<f32>().ok())
+                    .unwrap_or(0.0)
+                    / 60000.0;
+                match name {
+                    "adj1" => adj1 = val,
+                    "adj2" => adj2 = val,
+                    _ => {}
+                }
+            }
+            ConnectorType::Arc {
+                start_angle: adj1,
+                end_angle: adj2,
+                rotation,
+            }
+        }
+        _ => return None,
+    };
+
+    let stroke_color = parse_style_stroke(wsp, theme).unwrap_or([0, 0, 0]);
+    let stroke_width = parse_style_stroke_width(wsp);
+
+    let (h_position, _, v_pos, _) = super::images::parse_anchor_position(anchor);
+    let (display_w, display_h) = super::images::extent_dimensions(anchor);
+    let v_offset = match v_pos {
+        crate::model::VerticalPosition::Offset(o) => o,
+        _ => 0.0,
+    };
+
+    let x = match h_position {
+        HorizontalPosition::Offset(v) => v,
+        _ => 0.0,
+    };
+
+    Some(ConnectorShape {
+        x,
+        y: v_offset,
+        width: display_w,
+        height: display_h,
+        stroke_color,
+        stroke_width,
+        connector_type,
+    })
+}
+
+fn parse_style_stroke(wsp: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]> {
+    let style = wsp.children().find(|n| {
+        n.tag_name().name() == "style" && n.tag_name().namespace() == Some(WPS_NS)
+    })?;
+    let ln_ref = style.children().find(|n| {
+        n.tag_name().name() == "lnRef" && n.tag_name().namespace() == Some(DML_NS)
+    })?;
+    let idx = ln_ref
+        .attribute("idx")
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(0);
+    if idx == 0 {
+        return None;
+    }
+    resolve_scheme_clr_child(ln_ref, theme)
+}
+
+fn parse_style_stroke_width(wsp: roxmltree::Node) -> f32 {
+    let style = wsp.children().find(|n| {
+        n.tag_name().name() == "style" && n.tag_name().namespace() == Some(WPS_NS)
+    });
+    let idx = style
+        .and_then(|s| {
+            s.children().find(|n| {
+                n.tag_name().name() == "lnRef" && n.tag_name().namespace() == Some(DML_NS)
+            })
+        })
+        .and_then(|lr| lr.attribute("idx"))
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(0);
+    match idx {
+        0 => 0.0,
+        1 => 0.75,
+        2 => 1.5,
+        3 => 2.25,
+        _ => 1.0,
+    }
+}
+
+fn resolve_scheme_clr_child(parent: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]> {
+    if let Some(srgb) = parent
+        .children()
+        .find(|n| n.tag_name().name() == "srgbClr" && n.tag_name().namespace() == Some(DML_NS))
+    {
+        return srgb.attribute("val").and_then(super::parse_hex_color);
+    }
+    if let Some(scheme) = parent
+        .children()
+        .find(|n| n.tag_name().name() == "schemeClr" && n.tag_name().namespace() == Some(DML_NS))
+    {
+        let val = scheme.attribute("val")?;
+        let theme_key = match val {
+            "dk1" => "dk1",
+            "lt1" => "lt1",
+            "dk2" => "dk2",
+            "lt2" => "lt2",
+            "tx1" => "dk1",
+            "tx2" => "dk2",
+            "bg1" => "lt1",
+            "bg2" => "lt2",
+            other => other,
+        };
+        let base = *theme.colors.get(theme_key)?;
+        return Some(resolve_scheme_color(base, scheme));
+    }
+    None
 }
 
 const VML_NS: &str = "urn:schemas-microsoft-com:vml";
@@ -503,6 +670,8 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         wrap_type: WrapType::None,
         dist_top: 0.0,
         dist_bottom: 0.0,
+        behind_doc: false,
+        no_text_wrap: false,
     })
 }
 
@@ -540,9 +709,14 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                         if let Some(wsp) =
                             parse_textbox_from_wsp(container, rels, zip, styles, theme, numbering)
                         {
-                            let (h_position, h_relative, v_offset, v_relative) =
+                            let (h_position, h_relative, v_pos, v_relative) =
                                 parse_anchor_position(container);
+                            let v_offset = match v_pos {
+                                crate::model::VerticalPosition::Offset(o) => o,
+                                _ => 0.0,
+                            };
                             let wrap_type = super::images::parse_wrap_type(container);
+                            let behind_doc = container.attribute("behindDoc") == Some("1");
                             let dist_top = container
                                 .attribute("distT")
                                 .and_then(|v| v.parse::<f32>().ok())
@@ -570,6 +744,8 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                                 wrap_type,
                                 dist_top,
                                 dist_bottom,
+                                behind_doc,
+                                no_text_wrap: wsp.no_text_wrap,
                             });
                         }
                     }

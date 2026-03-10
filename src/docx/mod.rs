@@ -594,6 +594,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                         ));
                         tbs
                     },
+                    connectors: parsed.connectors,
                     inline_chart: parsed.inline_chart,
                     smartart: parsed.smartart,
                 }));

@@ -3,14 +3,14 @@ use std::io::Read;
 
 use crate::model::{
     EmbeddedImage, FloatingImage, HorizontalPosition, ImageFormat, InlineChart, SmartArtDiagram,
-    WrapType,
+    VerticalPosition, WrapType,
 };
 
 use super::charts::parse_chart_from_zip;
 use super::numbering::NumberingInfo;
 use super::styles::{StylesInfo, ThemeFonts};
 use super::smartart::{has_diagram_ref, parse_smartart_drawing};
-use super::textbox::parse_textbox_from_wsp;
+use super::textbox::{parse_connector_from_wsp, parse_textbox_from_wsp};
 use super::{DML_NS, REL_NS, WML_NS, WPD_NS, wml};
 
 const CHART_URI: &str = "http://schemas.openxmlformats.org/drawingml/2006/chart";
@@ -106,7 +106,7 @@ pub(super) struct DrawingInfo {
 
 pub(super) fn parse_anchor_position(
     container: roxmltree::Node,
-) -> (HorizontalPosition, &'static str, f32, &'static str) {
+) -> (HorizontalPosition, &'static str, VerticalPosition, &'static str) {
     let pos_h = container
         .children()
         .find(|n| n.tag_name().name() == "positionH" && n.tag_name().namespace() == Some(WPD_NS));
@@ -145,20 +145,30 @@ pub(super) fn parse_anchor_position(
         Some("topMargin") => "topMargin",
         _ => "paragraph",
     };
-    let v_offset = if let Some(offset_node) =
+    let v_position = if let Some(align_node) =
+        pos_v.and_then(|n| n.children().find(|c| c.tag_name().name() == "align"))
+    {
+        match align_node.text().unwrap_or("") {
+            "bottom" => VerticalPosition::AlignBottom,
+            "center" => VerticalPosition::AlignCenter,
+            _ => VerticalPosition::AlignTop,
+        }
+    } else if let Some(offset_node) =
         pos_v.and_then(|n| n.children().find(|c| c.tag_name().name() == "posOffset"))
     {
-        offset_node
-            .text()
-            .unwrap_or("0")
-            .parse::<f32>()
-            .unwrap_or(0.0)
-            / 12700.0
+        VerticalPosition::Offset(
+            offset_node
+                .text()
+                .unwrap_or("0")
+                .parse::<f32>()
+                .unwrap_or(0.0)
+                / 12700.0,
+        )
     } else {
-        0.0
+        VerticalPosition::Offset(0.0)
     };
 
-    (h_position, h_relative, v_offset, v_relative)
+    (h_position, h_relative, v_position, v_relative)
 }
 
 pub(super) fn parse_wrap_type(container: roxmltree::Node) -> WrapType {
@@ -183,6 +193,7 @@ pub(super) enum RunDrawingResult {
     Inline(EmbeddedImage),
     Floating(FloatingImage),
     TextBox(crate::model::Textbox),
+    Connector(crate::model::ConnectorShape),
     Chart(InlineChart),
     SmartArt(SmartArtDiagram),
 }
@@ -210,9 +221,14 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
             if let Some(wsp) =
                 parse_textbox_from_wsp(container, rels, zip, styles, theme, numbering)
             {
-                let (h_position, h_relative, v_offset, v_relative) =
+                let (h_position, h_relative, v_pos, v_relative) =
                     parse_anchor_position(container);
+                let v_offset = match v_pos {
+                    VerticalPosition::Offset(o) => o,
+                    _ => 0.0,
+                };
                 let wrap_type = parse_wrap_type(container);
+                let behind_doc = container.attribute("behindDoc") == Some("1");
                 let dist_top = container
                     .attribute("distT")
                     .and_then(|v| v.parse::<f32>().ok())
@@ -240,20 +256,27 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
                     wrap_type,
                     dist_top,
                     dist_bottom,
+                    behind_doc,
+                    no_text_wrap: wsp.no_text_wrap,
                 }));
+            }
+            if let Some(conn) = parse_connector_from_wsp(container, theme) {
+                return Some(RunDrawingResult::Connector(conn));
             }
             if let Some(embed_id) = find_blip_embed(container) {
                 if let Some(img) = read_image_from_zip(embed_id, rels, zip, display_w, display_h) {
-                    let (h_position, h_relative, v_offset, v_relative) =
+                    let (h_position, h_relative, v_position, v_relative) =
                         parse_anchor_position(container);
                     let wrap_type = parse_wrap_type(container);
+                    let behind_doc = container.attribute("behindDoc") == Some("1");
                     return Some(RunDrawingResult::Floating(FloatingImage {
                         image: img,
                         h_position,
                         h_relative_from: h_relative,
-                        v_offset_pt: v_offset,
+                        v_position,
                         v_relative_from: v_relative,
                         wrap_type,
+                        behind_doc,
                     }));
                 }
             }

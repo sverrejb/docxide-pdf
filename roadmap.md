@@ -187,6 +187,28 @@ We don't write document metadata (title, author, subject, keywords) to the PDF. 
 
 Trivial effort, improves PDF viewer display (title in tab/title bar instead of filename).
 
+## DrawingML Preset Geometry (TODO — MEDIUM EFFORT, MEDIUM IMPACT)
+
+We currently handle only a handful of preset shapes (`ellipse`, `rect`, `notchedRightArrow`, `line`, `arc`). OOXML defines **187 preset shapes** (`ST_ShapeType`), each with guide formulas that compute the actual path from adjustment values. Any shape we don't recognize falls back to a rectangle.
+
+### Current state
+
+Basic connector/arc rendering added for the vaccine fixture (lines and arcs forming letters on circles). Arc angle conversion from OOXML to PDF coordinates works but doesn't handle ellipse rotation transforms properly (only angle-shifting, not true rotation).
+
+### No existing Rust crate helps with the hard part
+
+- **[msoffice_shared](https://docs.rs/msoffice_shared/0.1.1/msoffice_shared/drawingml/index.html)** — Has DrawingML type definitions (enums, structs) but doesn't compute actual paths. Parsing only, v0.1.1 (2020).
+- **[ooxmlsdk](https://github.com/KaiserY/ooxmlsdk)** — .NET Open XML SDK port. Document read/write, not rendering.
+- **[ooxml](https://lib.rs/crates/ooxml)** — xlsx only.
+
+None provide a function that takes `prst` name + adjustment values → path commands. The geometry formulas are defined in the OOXML spec Part 4 and would need to be implemented from scratch or ported from LibreOffice's C++ implementation.
+
+### Incremental path
+
+1. **Add common shapes** (LOW EFFORT) — roundRect, diamond, chevron, pentagon, hexagon, triangle, etc. Hand-code the most frequent ~20 shapes.
+2. **Implement guide formula interpreter** (MEDIUM EFFORT) — parse the `a:gd` formula language (`val`, `*/`, `+-`, `sin`, `cos`, `at2`, etc.) to compute paths from adjustment values. This unlocks all 187 shapes at once.
+3. **Custom geometry** (`a:custGeom`) (MEDIUM EFFORT) — shapes defined with explicit path commands rather than presets. Already appears in some documents.
+
 ## Unimplemented Spec Features
 
 - **`w:tblLook` / `w:tblStylePr`** — table conditional formatting (firstRow, lastRow, firstCol, bands, etc.)

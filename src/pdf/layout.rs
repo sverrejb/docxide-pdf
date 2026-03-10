@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use pdf_writer::types::TextRenderingMode;
 use pdf_writer::{Content, Name, Rect, Str};
 
 use crate::fonts::{FontEntry, encode_as_gids, font_key, font_key_buf, to_winansi_bytes};
@@ -51,6 +52,7 @@ pub(super) struct WordChunk {
     pub(super) hyperlink_url: Option<String>,
     pub(super) inline_image_name: Option<String>,
     pub(super) inline_image_height: f32,
+    pub(super) synthetic_bold: bool,
 }
 
 pub(super) struct LinkAnnotation {
@@ -171,6 +173,7 @@ pub(super) fn build_paragraph_lines(
                     hyperlink_url: None,
                     inline_image_name: Some(pdf_name.clone()),
                     inline_image_height: img.display_height,
+                    synthetic_bold: false,
                 });
                 current_x += img_w;
             }
@@ -233,6 +236,7 @@ pub(super) fn build_paragraph_lines(
                 hyperlink_url: run.hyperlink_url.clone(),
                 inline_image_name: None,
                 inline_image_height: 0.0,
+                synthetic_bold: entry.synthetic_bold,
             });
             current_x += ww;
         }
@@ -486,6 +490,7 @@ pub(super) fn build_tabbed_line(
                                         hyperlink_url: None,
                                         inline_image_name: None,
                                         inline_image_height: 0.0,
+                                        synthetic_bold: false,
                                     });
                                 }
                             }
@@ -520,6 +525,7 @@ pub(super) fn build_tabbed_line(
                         hyperlink_url: None,
                         inline_image_name: Some(pdf_name.clone()),
                         inline_image_height: img.display_height,
+                        synthetic_bold: false,
                     });
                     current_x += img.display_width;
                 }
@@ -579,6 +585,7 @@ pub(super) fn build_tabbed_line(
                     hyperlink_url: run.hyperlink_url.clone(),
                     inline_image_name: None,
                     inline_image_height: 0.0,
+                    synthetic_bold: entry.synthetic_bold,
                 });
                 current_x += ww;
             }
@@ -641,6 +648,7 @@ pub(super) fn render_paragraph_lines(
     let mut cur_font_size: f32 = -1.0;
     let mut cur_char_spacing: f32 = 0.0;
     let mut cur_text_scale: f32 = 100.0;
+    let mut cur_synthetic_bold = false;
 
     let pdf_name_to_entry: HashMap<&str, &FontEntry> = seen_fonts
         .values()
@@ -775,6 +783,25 @@ pub(super) fn render_paragraph_lines(
                     current_color = chunk.color;
                 }
 
+                if chunk.synthetic_bold != cur_synthetic_bold {
+                    if chunk.synthetic_bold {
+                        content.set_line_width(chunk.font_size * 0.02);
+                        if let Some([r, g, b]) = chunk.color {
+                            content.set_stroke_rgb(
+                                r as f32 / 255.0,
+                                g as f32 / 255.0,
+                                b as f32 / 255.0,
+                            );
+                        } else {
+                            content.set_stroke_gray(0.0);
+                        }
+                        content.set_text_rendering_mode(TextRenderingMode::FillStroke);
+                    } else {
+                        content.set_text_rendering_mode(TextRenderingMode::Fill);
+                    }
+                    cur_synthetic_bold = chunk.synthetic_bold;
+                }
+
                 if chunk.char_spacing != cur_char_spacing {
                     content.set_char_spacing(chunk.char_spacing);
                     cur_char_spacing = chunk.char_spacing;
@@ -836,6 +863,10 @@ pub(super) fn render_paragraph_lines(
                         });
                     }
                 }
+            }
+            if cur_synthetic_bold {
+                content.set_text_rendering_mode(TextRenderingMode::Fill);
+                cur_synthetic_bold = false;
             }
             if cur_char_spacing != 0.0 {
                 content.set_char_spacing(0.0);

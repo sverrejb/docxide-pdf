@@ -20,6 +20,7 @@ pub(crate) struct FontMetrics {
     pub(crate) char_to_gid: HashMap<char, u16>,
     pub(crate) char_widths_1000: HashMap<char, f32>,
     pub(crate) kern_pairs: HashMap<(u16, u16), f32>,
+    pub(crate) synthetic_bold: bool,
 }
 
 pub(crate) struct FontEntry {
@@ -31,6 +32,7 @@ pub(crate) struct FontEntry {
     pub(crate) char_to_gid: Option<HashMap<char, u16>>,
     pub(crate) char_widths_1000: Option<HashMap<char, f32>>,
     pub(crate) kern_pairs: Option<HashMap<(u16, u16), f32>>,
+    pub(crate) synthetic_bold: bool,
 }
 
 impl FontEntry {
@@ -126,38 +128,43 @@ fn try_font(
     used_chars: &HashSet<char>,
 ) -> Option<FontMetrics> {
     let embedded_key = (candidate.to_lowercase(), bold, italic);
-    let embedded_data = embedded_fonts.get(&embedded_key);
+    if let Some(data) = embedded_fonts.get(&embedded_key) {
+        if let Some(mut metrics) = embed::embed_truetype(
+            pdf,
+            font_ref,
+            descriptor_ref,
+            data_ref,
+            candidate,
+            data,
+            0,
+            used_chars,
+            alloc,
+        ) {
+            metrics.synthetic_bold = false;
+            return Some(metrics);
+        }
+    }
 
-    embedded_data
-        .and_then(|data| {
-            embed::embed_truetype(
-                pdf,
-                font_ref,
-                descriptor_ref,
-                data_ref,
-                candidate,
-                data,
-                0,
-                used_chars,
-                alloc,
-            )
-        })
-        .or_else(|| {
-            discovery::find_font_file(candidate, bold, italic).and_then(|(path, face_index)| {
-                let data = std::fs::read(&path).ok()?;
-                embed::embed_truetype(
-                    pdf,
-                    font_ref,
-                    descriptor_ref,
-                    data_ref,
-                    candidate,
-                    &data,
-                    face_index,
-                    used_chars,
-                    alloc,
-                )
-            })
-        })
+    if let Some((path, face_index, exact_match)) =
+        discovery::find_font_file(candidate, bold, italic)
+    {
+        let data = std::fs::read(&path).ok()?;
+        let mut metrics = embed::embed_truetype(
+            pdf,
+            font_ref,
+            descriptor_ref,
+            data_ref,
+            candidate,
+            &data,
+            face_index,
+            used_chars,
+            alloc,
+        )?;
+        metrics.synthetic_bold = bold && !exact_match;
+        return Some(metrics);
+    }
+
+    None
 }
 
 fn lookup_font_table<'a>(
@@ -275,6 +282,7 @@ pub(crate) fn register_font(
             } else {
                 Some(m.kern_pairs)
             };
+            let synthetic_bold = m.synthetic_bold;
             FontEntry {
                 pdf_name,
                 font_ref,
@@ -284,6 +292,7 @@ pub(crate) fn register_font(
                 char_to_gid: Some(m.char_to_gid),
                 char_widths_1000: Some(m.char_widths_1000),
                 kern_pairs,
+                synthetic_bold,
             }
         }
         None => {
@@ -300,6 +309,7 @@ pub(crate) fn register_font(
                 char_to_gid: None,
                 char_widths_1000: None,
                 kern_pairs: None,
+                synthetic_bold: false,
             }
         }
     };
