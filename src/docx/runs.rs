@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io::Read;
 
-use crate::model::{FieldCode, FloatingImage, InlineChart, Run, Textbox, VertAlign};
+use crate::model::{FieldCode, FloatingImage, InlineChart, Run, SmartArtDiagram, Textbox, VertAlign};
 
 use super::images::{RunDrawingResult, parse_run_drawing};
 use super::is_east_asian_char;
@@ -42,6 +42,7 @@ pub(super) struct ParsedRuns {
     pub(super) floating_images: Vec<FloatingImage>,
     pub(super) textboxes: Vec<Textbox>,
     pub(super) inline_chart: Option<InlineChart>,
+    pub(super) smartart: Option<SmartArtDiagram>,
 }
 
 /// Resolved formatting for the current run, used to build Run structs concisely.
@@ -282,6 +283,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
     let mut floating_images: Vec<FloatingImage> = Vec::new();
     let mut textboxes: Vec<Textbox> = Vec::new();
     let mut inline_chart: Option<InlineChart> = None;
+    let mut smartart: Option<SmartArtDiagram> = None;
     let mut has_page_break = false;
     let mut has_column_break = false;
     let mut line_break_count: u32 = 0;
@@ -424,6 +426,9 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                             Some(RunDrawingResult::Chart(ic)) => {
                                 inline_chart = Some(ic);
                             }
+                            Some(RunDrawingResult::SmartArt(diagram)) => {
+                                smartart = Some(diagram);
+                            }
                             None => {}
                         }
                     }
@@ -535,6 +540,9 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                         Some(RunDrawingResult::Chart(ic)) => {
                             inline_chart = Some(ic);
                         }
+                        Some(RunDrawingResult::SmartArt(diagram)) => {
+                            smartart = Some(diagram);
+                        }
                         None => {}
                     }
                 }
@@ -635,5 +643,6 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
         floating_images,
         textboxes,
         inline_chart,
+        smartart,
     }
 }

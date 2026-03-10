@@ -1,44 +1,8 @@
-Step 1: Parse gradient fills as solid-fill approximation — COMPLETED
-- Added parse_gradient_fill_as_solid() in src/docx/textbox.rs
-- Extracts first gradient stop color (schemeClr or srgbClr) as solid approximation
-- Chained after parse_solid_fill() in fill resolution
-- Result: vaccines_history_chapter Jaccard 6.2% → 20.1% (+13.9pp), SSIM +2.5pp
-- No regressions across full test suite
-
-Step 2: Parse a:fillRef style-based fills — COMPLETED
-- Added parse_style_fill(wsp, theme) in src/docx/textbox.rs
-- Resolves wps:style → a:fillRef → schemeClr/srgbClr to RGB color
-- Skips idx=0 (no fill); applies lumMod/lumOff transforms via resolve_scheme_color
-- Chained after gradient fill in parse_textbox_from_wsp: .or_else(|| parse_style_fill(wsp, theme))
-- Result: vaccines_history_chapter Jaccard 20.1% → 22.2% (+2.1pp), SSIM 28.0% → 28.6% (+0.6pp)
-- No regressions across full test suite
-
-Step 3: True PDF gradient fills — COMPLETED
-- 3a: Added ShapeFill enum (Solid/LinearGradient) in src/model.rs
-  - Changed Textbox.fill_color: Option<[u8;3]> → Textbox.fill: Option<ShapeFill>
-  - Updated all touch points: textbox.rs (WspResult, parsing, VML), images.rs, pdf/mod.rs, header_footer.rs
-- 3b: Replaced parse_gradient_fill_as_solid() with parse_gradient_fill() returning ShapeFill::LinearGradient
-  - Extracts all gradient stops with positions (a:gs @pos / 100000)
-  - Extracts angle from a:lin @ang (60000ths of degree → degrees)
-  - Factored out resolve_stop_color() helper for reuse across stops
-- 3c: PDF gradient rendering via Type 2 axial shading patterns
-  - render_shape_fill() dispatches Solid (rect fill) vs LinearGradient (pattern fill)
-  - Writes Type 2 exponential function (C0/C1 color interpolation, N=1 linear)
-  - Writes Type 2 shading pattern with axial coords computed from OOXML angle
-  - Clips to shape rect, fills with pattern color space
-  - Per-page gradient spec tracking (GradientSpec) following alpha_gs_refs pattern
-  - Pattern refs registered in page resources
-- OOXML→PDF angle mapping: 0°=left→right, 90°=top→bottom; PDF y-axis is inverted
-- Result: vaccines_history_chapter Jaccard 22.2% (unchanged — gradient vs solid same ink coverage), SSIM 28.6% → 28.9% (+0.3pp)
-- No regressions across full test suite
-
-Step 4: Basic ellipse geometry rendering — COMPLETED
-- 4a: Added ShapeType enum (Rect/Ellipse) in src/model.rs, added shape_type field to Textbox
-- 4b: Parses a:prstGeom @prst from wps:spPr in textbox.rs; "ellipse" → Ellipse, all others → Rect
-  - Added shape_type to WspResult, propagated through textbox.rs (DrawingML + VML) and images.rs
-- 4c: Added draw_shape_path() helper in pdf/mod.rs that draws rect or 4-cubic-Bezier ellipse
-  - Uses kappa constant (0.5522847498) for circle approximation
-  - render_shape_fill() now accepts ShapeType, uses ellipse path for both solid fills and gradient clips
-  - Updated both call sites: pdf/mod.rs and pdf/header_footer.rs
-- Result: vaccines_history_chapter Jaccard 22.2% → 22.5% (+0.3pp), SSIM 28.9% → 29.1% (+0.2pp)
-- No regressions across full test suite
+Completed Step 2 (all sub-tasks 2a-2d):
+- Added wrap_type, dist_top, dist_bottom fields to Textbox struct (model.rs)
+- Made parse_wrap_type pub(super) in images.rs
+- Parse wrap type + distT/distB from wp:anchor in both textbox.rs (DrawingML path) and images.rs (run drawing path)
+- Set WrapType::None defaults for VML fallback textboxes
+- Added textbox height reservation loop in pdf/mod.rs content_h calculation
+- vaccines_history_chapter improved: Jaccard +17.8pp (40.3%), SSIM +18.9pp (48.2%)
+- No regressions in full test suite

@@ -170,6 +170,23 @@ pub enum ShapeType {
     Ellipse,
 }
 
+pub struct SmartArtShape {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
+    pub shape_type: ShapeType,
+    pub fill: Option<[u8; 3]>,
+    pub text: String,
+    pub font_size: f32,
+}
+
+pub struct SmartArtDiagram {
+    pub display_width: f32,
+    pub display_height: f32,
+    pub shapes: Vec<SmartArtShape>,
+}
+
 pub enum ShapeFill {
     Solid([u8; 3]),
     LinearGradient {
@@ -193,6 +210,9 @@ pub struct Textbox {
     pub margin_top: f32,
     #[allow(dead_code)]
     pub margin_bottom: f32,
+    pub wrap_type: WrapType,
+    pub dist_top: f32,
+    pub dist_bottom: f32,
 }
 
 #[derive(Clone)]
@@ -238,6 +258,7 @@ pub struct Paragraph {
     pub floating_images: Vec<FloatingImage>,
     pub textboxes: Vec<Textbox>,
     pub inline_chart: Option<InlineChart>,
+    pub smartart: Option<SmartArtDiagram>,
 }
 
 impl Default for Paragraph {
@@ -269,6 +290,7 @@ impl Default for Paragraph {
             floating_images: Vec::new(),
             textboxes: Vec::new(),
             inline_chart: None,
+            smartart: None,
         }
     }
 }

@@ -1,6 +1,8 @@
 {
   "permissions": {
     "allow": [
+      "Bash",
+      "Read",
       "Bash(lsof:*)",
       "mcp__local-rag__query_documents",
       "mcp__local-rag__ingest_file",
@@ -179,7 +181,18 @@
       "Bash(DOCXIDE_CASE=vaccines_history_chapter DOCXIDE_IMAGES=1 cargo test visual_comparison -- --nocapture 2>&1 | tail -15)",
       "Bash(DOCXIDE_IMAGES=1 DOCXIDE_CASE=vaccines_history_chapter cargo test -- --nocapture 2>&1 | tail -20)",
       "Bash(DOCXIDE_CASE=vaccines_history_chapter cargo test -- --nocapture 2>&1 | tail -30)",
-      "Bash(DOCXIDE_CASE=vaccines_history_chapter DOCXIDE_IMAGES=1 cargo test -- --nocapture 2>&1 | grep -E \"Jaccard|SSIM|REGRESSION\")"
+      "Bash(DOCXIDE_CASE=vaccines_history_chapter DOCXIDE_IMAGES=1 cargo test -- --nocapture 2>&1 | grep -E \"Jaccard|SSIM|REGRESSION\")",
+      "Bash(DOCXIDE_CASE=vaccines_history_chapter cargo test -- --nocapture 2>&1 | tail -40)",
+      "Bash(DOCXIDE_CASE=vaccines_history_chapter cargo test -- --nocapture 2>&1 | grep -i \"SMARTART\\\\|pages\\\\|PAGE COUNT\\\\|content_height\")",
+      "Bash(DOCXIDE_CASE=vaccines_history_chapter DOCXIDE_IMAGES=1 cargo test -- --nocapture 2>&1 | tail -30)",
+      "Bash(DOCXIDE_CASE=vaccines_history_chapter cargo test -- --nocapture 2>&1 | grep \"SPACE_RESERVE\\\\|PAGE COUNT\\\\|Pages\")",
+      "Bash(DOCXIDE_CASE=vaccines_history_chapter DOCXIDE_IMAGES=1 cargo test -- --nocapture 2>&1 | grep \"SPACE_RESERVE\\\\|PAGE COUNT\\\\|Jaccard\\\\|Pages\\\\|gen=\")",
+      "Bash(DOCXIDE_CASE=vaccines_history_chapter cargo test visual_comparison -- --nocapture 2>&1 | grep \"SPACE\" | head -5)",
+      "Bash(DOCXIDE_CASE=vaccines_history_chapter cargo test visual_comparison -- --nocapture 2>&1)",
+      "Bash(rm -rf tests/output/scraped/vaccines_history_chapter/comparison tests/output/scraped/vaccines_history_chapter/generated tests/output/scraped/vaccines_history_chapter/diff && DOCXIDE_CASE=vaccines_history_chapter DOCXIDE_IMAGES=1 cargo test visual_comparison -- --nocapture 2>&1)",
+      "Bash(rm -rf tests/output/scraped/vaccines_history_chapter/comparison tests/output/scraped/vaccines_history_chapter/generated && DOCXIDE_CASE=vaccines_history_chapter DOCXIDE_IMAGES=1 cargo test visual_comparison -- --nocapture 2>&1 | grep -E \"SPACE|content_height|SMART\")",
+      "Bash(rm -rf tests/output/scraped/vaccines_history_chapter/comparison tests/output/scraped/vaccines_history_chapter/generated && DOCXIDE_CASE=vaccines_history_chapter DOCXIDE_IMAGES=1 cargo test text_boundary -- --nocapture 2>&1 | head -40)",
+      "Bash(DOCXIDE_CASE=vaccines_history_chapter cargo test text_boundary -- --nocapture 2>&1 | grep -E \"SPACE|PAGE|SMART\")"
     ]
   }
 }

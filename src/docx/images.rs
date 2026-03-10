@@ -2,16 +2,18 @@ use std::collections::HashMap;
 use std::io::Read;
 
 use crate::model::{
-    EmbeddedImage, FloatingImage, HorizontalPosition, ImageFormat, InlineChart, WrapType,
+    EmbeddedImage, FloatingImage, HorizontalPosition, ImageFormat, InlineChart, ShapeType,
+    SmartArtDiagram, SmartArtShape, WrapType,
 };
 
 use super::charts::parse_chart_from_zip;
 use super::numbering::NumberingInfo;
 use super::styles::{StylesInfo, ThemeFonts};
-use super::textbox::parse_textbox_from_wsp;
-use super::{DML_NS, REL_NS, WML_NS, WPD_NS, wml};
+use super::textbox::{parse_solid_fill, parse_textbox_from_wsp};
+use super::{DML_NS, REL_NS, WML_NS, WPD_NS, read_zip_text, wml};
 
 const CHART_URI: &str = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+const DIAGRAM_URI: &str = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
 
 /// Extract display dimensions (in points) from a wp:inline or wp:anchor element.
 pub(super) fn extent_dimensions(container: roxmltree::Node) -> (f32, f32) {
@@ -159,7 +161,7 @@ pub(super) fn parse_anchor_position(
     (h_position, h_relative, v_offset, v_relative)
 }
 
-fn parse_wrap_type(container: roxmltree::Node) -> WrapType {
+pub(super) fn parse_wrap_type(container: roxmltree::Node) -> WrapType {
     for child in container.children() {
         if child.tag_name().namespace() != Some(WPD_NS) {
             continue;
@@ -176,11 +178,13 @@ fn parse_wrap_type(container: roxmltree::Node) -> WrapType {
     WrapType::None
 }
 
+#[allow(dead_code)]
 pub(super) enum RunDrawingResult {
     Inline(EmbeddedImage),
     Floating(FloatingImage),
     TextBox(crate::model::Textbox),
     Chart(InlineChart),
+    SmartArt(SmartArtDiagram),
 }
 
 pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
@@ -208,6 +212,17 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
             {
                 let (h_position, h_relative, v_offset, v_relative) =
                     parse_anchor_position(container);
+                let wrap_type = parse_wrap_type(container);
+                let dist_top = container
+                    .attribute("distT")
+                    .and_then(|v| v.parse::<f32>().ok())
+                    .unwrap_or(0.0)
+                    / 12700.0;
+                let dist_bottom = container
+                    .attribute("distB")
+                    .and_then(|v| v.parse::<f32>().ok())
+                    .unwrap_or(0.0)
+                    / 12700.0;
                 return Some(RunDrawingResult::TextBox(crate::model::Textbox {
                     paragraphs: wsp.paragraphs,
                     width_pt: display_w,
@@ -222,6 +237,9 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
                     margin_right: wsp.margin_right,
                     margin_top: wsp.margin_top,
                     margin_bottom: wsp.margin_bottom,
+                    wrap_type,
+                    dist_top,
+                    dist_bottom,
                 }));
             }
             if let Some(embed_id) = find_blip_embed(container) {
@@ -258,8 +276,22 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
                 return Some(RunDrawingResult::Chart(ic));
             }
         }
+
+        if display_h > 0.0 && has_diagram_ref(container) {
+            let diagram =
+                parse_smartart_drawing(rels, zip, theme, display_w, display_h);
+            return Some(RunDrawingResult::SmartArt(diagram));
+        }
     }
     None
+}
+
+fn has_diagram_ref(container: roxmltree::Node) -> bool {
+    container.descendants().any(|n| {
+        n.tag_name().name() == "graphicData"
+            && n.tag_name().namespace() == Some(DML_NS)
+            && n.attribute("uri") == Some(DIAGRAM_URI)
+    })
 }
 
 fn find_chart_ref<'a>(container: roxmltree::Node<'a, 'a>) -> Option<&'a str> {
@@ -327,4 +359,165 @@ pub(super) fn compute_drawing_info<R: Read + std::io::Seek>(
         image,
         floating_images: Vec::new(),
     }
+}
+
+const DSP_NS: &str = "http://schemas.microsoft.com/office/drawing/2008/diagram";
+
+fn parse_smartart_drawing<R: Read + std::io::Seek>(
+    rels: &HashMap<String, String>,
+    zip: &mut zip::ZipArchive<R>,
+    theme: &ThemeFonts,
+    display_w: f32,
+    display_h: f32,
+) -> SmartArtDiagram {
+    let mut shapes = Vec::new();
+
+    let drawing_target = rels
+        .values()
+        .find(|t| t.contains("diagrams/drawing"));
+
+    if let Some(target) = drawing_target {
+        let zip_path = target
+            .strip_prefix('/')
+            .map(String::from)
+            .unwrap_or_else(|| format!("word/{}", target));
+
+        if let Some(xml) = read_zip_text(zip, &zip_path) {
+            if let Ok(doc) = roxmltree::Document::parse(&xml) {
+                let sp_tree = doc
+                    .root()
+                    .children()
+                    .find(|n| n.tag_name().name() == "drawing" && n.tag_name().namespace() == Some(DSP_NS))
+                    .and_then(|d| {
+                        d.children().find(|n| {
+                            n.tag_name().name() == "spTree"
+                                && n.tag_name().namespace() == Some(DSP_NS)
+                        })
+                    });
+
+                if let Some(tree) = sp_tree {
+                    for sp in tree.children().filter(|n| {
+                        n.tag_name().name() == "sp"
+                            && n.tag_name().namespace() == Some(DSP_NS)
+                    }) {
+                        if let Some(shape) = parse_dsp_shape(sp, theme) {
+                            shapes.push(shape);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    SmartArtDiagram {
+        display_width: display_w,
+        display_height: display_h,
+        shapes,
+    }
+}
+
+fn parse_dsp_shape(sp: roxmltree::Node, theme: &ThemeFonts) -> Option<SmartArtShape> {
+    let sp_pr = sp.children().find(|n| {
+        n.tag_name().name() == "spPr" && n.tag_name().namespace() == Some(DSP_NS)
+    })?;
+
+    let xfrm = sp_pr.children().find(|n| {
+        n.tag_name().name() == "xfrm" && n.tag_name().namespace() == Some(DML_NS)
+    })?;
+
+    let off = xfrm.children().find(|n| {
+        n.tag_name().name() == "off" && n.tag_name().namespace() == Some(DML_NS)
+    })?;
+    let ext = xfrm.children().find(|n| {
+        n.tag_name().name() == "ext" && n.tag_name().namespace() == Some(DML_NS)
+    })?;
+
+    let x = off.attribute("x").and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0) / 12700.0;
+    let y = off.attribute("y").and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0) / 12700.0;
+    let w = ext.attribute("cx").and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0) / 12700.0;
+    let h = ext.attribute("cy").and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0) / 12700.0;
+
+    let has_no_fill = sp_pr.children().any(|n| {
+        n.tag_name().name() == "noFill" && n.tag_name().namespace() == Some(DML_NS)
+    });
+
+    let fill = if has_no_fill {
+        None
+    } else {
+        parse_solid_fill(sp_pr, theme)
+    };
+
+    let (text, font_size) = parse_dsp_text(sp);
+
+    if fill.is_none() && text.is_empty() {
+        return None;
+    }
+
+    let prst = sp_pr
+        .children()
+        .find(|n| {
+            n.tag_name().name() == "prstGeom" && n.tag_name().namespace() == Some(DML_NS)
+        })
+        .and_then(|n| n.attribute("prst"))
+        .unwrap_or("rect");
+
+    let shape_type = match prst {
+        "ellipse" => ShapeType::Ellipse,
+        _ => ShapeType::Rect,
+    };
+
+    Some(SmartArtShape {
+        x: x as f32,
+        y: y as f32,
+        width: w as f32,
+        height: h as f32,
+        shape_type,
+        fill,
+        text,
+        font_size,
+    })
+}
+
+fn parse_dsp_text(sp: roxmltree::Node) -> (String, f32) {
+    let tx_body = sp.children().find(|n| {
+        n.tag_name().name() == "txBody" && n.tag_name().namespace() == Some(DSP_NS)
+    });
+
+    let Some(body) = tx_body else {
+        return (String::new(), 0.0);
+    };
+
+    let mut lines = Vec::new();
+    let mut font_size = 0.0_f32;
+
+    for p in body.children().filter(|n| {
+        n.tag_name().name() == "p" && n.tag_name().namespace() == Some(DML_NS)
+    }) {
+        let mut line_text = String::new();
+        for r in p.children().filter(|n| {
+            n.tag_name().name() == "r" && n.tag_name().namespace() == Some(DML_NS)
+        }) {
+            if let Some(rpr) = r.children().find(|n| {
+                n.tag_name().name() == "rPr" && n.tag_name().namespace() == Some(DML_NS)
+            }) {
+                if let Some(sz) = rpr.attribute("sz").and_then(|v| v.parse::<f32>().ok()) {
+                    if font_size == 0.0 {
+                        font_size = sz / 100.0;
+                    }
+                }
+            }
+            if let Some(t) = r.children().find(|n| {
+                n.tag_name().name() == "t" && n.tag_name().namespace() == Some(DML_NS)
+            }) {
+                if let Some(text) = t.text() {
+                    line_text.push_str(text);
+                }
+            }
+        }
+        if !line_text.is_empty() {
+            lines.push(line_text);
+        }
+    }
+
+    (lines.join("\n"), font_size)
 }

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io::Read;
 
 use crate::model::{
-    Alignment, HorizontalPosition, LineSpacing, Paragraph, ShapeFill, ShapeType, Textbox,
+    Alignment, HorizontalPosition, LineSpacing, Paragraph, ShapeFill, ShapeType, Textbox, WrapType,
 };
 
 use super::images::{extent_dimensions, parse_anchor_position};
@@ -120,9 +120,10 @@ pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
     paragraphs
 }
 
-fn resolve_scheme_color(base: [u8; 3], fill_node: roxmltree::Node) -> [u8; 3] {
+pub(super) fn resolve_scheme_color(base: [u8; 3], fill_node: roxmltree::Node) -> [u8; 3] {
     let mut lum_mod: Option<f32> = None;
     let mut lum_off: Option<f32> = None;
+    let mut tint: Option<f32> = None;
     for child in fill_node.children() {
         if child.tag_name().namespace() != Some(DML_NS) {
             continue;
@@ -140,22 +141,36 @@ fn resolve_scheme_color(base: [u8; 3], fill_node: roxmltree::Node) -> [u8; 3] {
                     .and_then(|v| v.parse::<f32>().ok())
                     .map(|v| v / 100_000.0);
             }
+            "tint" => {
+                tint = child
+                    .attribute("val")
+                    .and_then(|v| v.parse::<f32>().ok())
+                    .map(|v| v / 100_000.0);
+            }
             _ => {}
         }
     }
-    if lum_mod.is_none() && lum_off.is_none() {
-        return base;
+    let mut color = base;
+    if let Some(t) = tint {
+        color = [
+            (255.0 - t * (255.0 - color[0] as f32)).clamp(0.0, 255.0) as u8,
+            (255.0 - t * (255.0 - color[1] as f32)).clamp(0.0, 255.0) as u8,
+            (255.0 - t * (255.0 - color[2] as f32)).clamp(0.0, 255.0) as u8,
+        ];
     }
-    let m = lum_mod.unwrap_or(1.0);
-    let o = lum_off.unwrap_or(0.0);
-    [
-        ((base[0] as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8,
-        ((base[1] as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8,
-        ((base[2] as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8,
-    ]
+    if lum_mod.is_some() || lum_off.is_some() {
+        let m = lum_mod.unwrap_or(1.0);
+        let o = lum_off.unwrap_or(0.0);
+        color = [
+            ((color[0] as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8,
+            ((color[1] as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8,
+            ((color[2] as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8,
+        ];
+    }
+    color
 }
 
-fn parse_solid_fill(sp_pr: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]> {
+pub(super) fn parse_solid_fill(sp_pr: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]> {
     let fill = sp_pr
         .children()
         .find(|n| n.tag_name().name() == "solidFill" && n.tag_name().namespace() == Some(DML_NS))?;
@@ -485,6 +500,9 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         margin_right: 7.2,
         margin_top: 3.6,
         margin_bottom: 3.6,
+        wrap_type: WrapType::None,
+        dist_top: 0.0,
+        dist_bottom: 0.0,
     })
 }
 
@@ -524,6 +542,17 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                         {
                             let (h_position, h_relative, v_offset, v_relative) =
                                 parse_anchor_position(container);
+                            let wrap_type = super::images::parse_wrap_type(container);
+                            let dist_top = container
+                                .attribute("distT")
+                                .and_then(|v| v.parse::<f32>().ok())
+                                .unwrap_or(0.0)
+                                / 12700.0;
+                            let dist_bottom = container
+                                .attribute("distB")
+                                .and_then(|v| v.parse::<f32>().ok())
+                                .unwrap_or(0.0)
+                                / 12700.0;
                             textboxes.push(Textbox {
                                 paragraphs: wsp.paragraphs,
                                 width_pt: display_w,
@@ -538,6 +567,9 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                                 margin_right: wsp.margin_right,
                                 margin_top: wsp.margin_top,
                                 margin_bottom: wsp.margin_bottom,
+                                wrap_type,
+                                dist_top,
+                                dist_bottom,
                             });
                         }
                     }

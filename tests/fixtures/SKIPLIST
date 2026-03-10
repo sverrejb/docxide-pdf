@@ -5,42 +5,35 @@
 # Too slow (many pages, dominates test runtime)
 case13
 
-# All scraped fixtures enabled.
-#stem_partnerships_guide
-# centrifugal_water_chillers  — passes both thresholds
-#japanese_interlibrary_loan
-# croatian_grant_guidelines  — floating table, enabled for analysis
-# east_asia_conference_form  — floating table, enabled for analysis
-# russian_university_proceedings  — floating table, enabled for analysis
-# seminary_hill_board_meeting  — passes both thresholds
-#feminist_voice_dissertation
-#mongolian_human_rights_law
-# italian_project_proposal  — floating table, enabled for analysis
-#mandated_reporter_child_abuse
-# polish_municipal_letter  — floating table, enabled for analysis
-#vaccines_history_chapter
-#croatian_regulations_altchunk
-#czech_grant_application
-#go_math_grade4_guide
-#ukraine_humanitarian_aid
-#brazilian_logistics_study
-# waste_management_request  — passes both thresholds
-# czech_cafeteria_notice  — passes both thresholds
-#lithuanian_food_quality_order
-#usep_handbook
-# bush_fires_act_comparison
-#polish_tender_declaration
-#lithuanian_ethics_law
-#italian_evaluation_minutes
-#education_consultant_posting
-#indonesian_benchmarking_guide
-#transition_to_work_deed
-#polish_council_resolution
-# czech_tree_cutting_permit  — passes both thresholds
-# czech_expert_witness_law  — passes both thresholds
-#learning_cultures_dissertation
-#federal_procurement_terms
-#russian_sports_ranking_decree
-#polish_archery_range_plan
-#air_pollution_permit_form
-#slovak_misdemeanor_amendment
+# Scraped fixtures below Jaccard 20% or SSIM 75% thresholds
+air_pollution_permit_form
+brazilian_logistics_study
+croatian_grant_guidelines
+croatian_regulations_altchunk
+czech_grant_application
+east_asia_conference_form
+education_consultant_posting
+federal_procurement_terms
+feminist_voice_dissertation
+go_math_grade4_guide
+indonesian_benchmarking_guide
+italian_evaluation_minutes
+italian_project_proposal
+japanese_interlibrary_loan
+learning_cultures_dissertation
+lithuanian_ethics_law
+lithuanian_food_quality_order
+mandated_reporter_child_abuse
+mongolian_human_rights_law
+polish_archery_range_plan
+polish_council_resolution
+polish_municipal_letter
+polish_tender_declaration
+russian_sports_ranking_decree
+russian_university_proceedings
+slovak_misdemeanor_amendment
+stem_partnerships_guide
+transition_to_work_deed
+ukraine_humanitarian_aid
+usep_handbook
+vaccines_history_chapter

@@ -255,7 +255,7 @@
   },
   "scraped/italian_evaluati..": {
     "jaccard": 0.1074,
-    "ssim": 0.3142,
+    "ssim": 0.3143,
     "text_boundary": 0.2648
   },
   "scraped/italian_project_..": {
@@ -269,9 +269,9 @@
     "text_boundary": 1.0
   },
   "scraped/learning_culture..": {
-    "jaccard": 0.4434,
+    "jaccard": 0.332,
     "ssim": 0.587,
-    "text_boundary": 0.5411
+    "text_boundary": 0.3841
   },
   "scraped/lithuanian_ethic..": {
     "jaccard": 0.3267,
@@ -354,9 +354,9 @@
     "text_boundary": 0.0
   },
   "scraped/vaccines_history..": {
-    "jaccard": 0.2254,
-    "ssim": 0.2909,
-    "text_boundary": 0.0
+    "jaccard": 0.403,
+    "ssim": 0.4821,
+    "text_boundary": 0.1466
   },
   "scraped/waste_management..": {
     "jaccard": 0.6845,

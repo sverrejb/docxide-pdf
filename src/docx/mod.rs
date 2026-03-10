@@ -556,6 +556,9 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                 if let Some(ref ic) = parsed.inline_chart {
                     content_height = content_height.max(ic.display_height);
                 }
+                if let Some(ref sa) = parsed.smartart {
+                    content_height = content_height.max(sa.display_height);
+                }
 
                 blocks.push(Block::Paragraph(Paragraph {
                     runs,
@@ -591,6 +594,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                         tbs
                     },
                     inline_chart: parsed.inline_chart,
+                    smartart: parsed.smartart,
                 }));
 
                 // Mid-document section break: sectPr inside pPr ends the current section

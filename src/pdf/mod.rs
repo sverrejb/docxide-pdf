@@ -940,7 +940,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     } else if para.image.is_some() {
                         para.content_height.max(sp.line_pitch)
                     } else if text_empty {
-                        line_h
+                        if para.content_height > 0.0 {
+                            para.content_height
+                        } else {
+                            line_h
+                        }
                     } else if max_inline_img_h > 0.0 {
                         let mut h = 0.0f32;
                         for line in &lines {
@@ -969,6 +973,13 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         if reserve {
                             let fi_h = fi.v_offset_pt + fi.image.display_height;
                             content_h = content_h.max(fi_h);
+                        }
+                    }
+
+                    for tb in &para.textboxes {
+                        if tb.wrap_type == crate::model::WrapType::TopAndBottom {
+                            let tb_bottom = tb.v_offset_pt + tb.height_pt + tb.dist_bottom;
+                            content_h = content_h.max(tb_bottom);
                         }
                     }
 
@@ -1446,6 +1457,68 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             default_font,
                             &mut current_alpha_states,
                         );
+                    } else if let Some(ref diagram) = para.smartart {
+                        let diag_x = col_x;
+                        let diag_y = slot_top;
+                        let sa_font_entry = seen_fonts
+                            .values()
+                            .find(|e| {
+                                let lower = e.pdf_name.to_lowercase();
+                                !lower.contains("symbol")
+                            })
+                            .or_else(|| seen_fonts.values().next());
+                        let sa_font_pdf_name = sa_font_entry
+                            .map(|e| e.pdf_name.as_str())
+                            .unwrap_or("F1");
+                        for shape in &diagram.shapes {
+                            if let Some([r, g, b]) = shape.fill {
+                                let sx = diag_x + shape.x;
+                                let sy = diag_y - shape.y - shape.height;
+                                current_content.save_state();
+                                current_content.set_fill_rgb(
+                                    r as f32 / 255.0,
+                                    g as f32 / 255.0,
+                                    b as f32 / 255.0,
+                                );
+                                draw_shape_path(
+                                    &mut current_content,
+                                    sx,
+                                    sy,
+                                    shape.width,
+                                    shape.height,
+                                    shape.shape_type,
+                                );
+                                current_content.fill_nonzero();
+                                current_content.restore_state();
+                            }
+                            if shape.fill.is_none()
+                                && !shape.text.is_empty()
+                                && shape.font_size > 0.0
+                            {
+                                let fs = shape.font_size;
+                                let lines: Vec<&str> = shape.text.split('\n').collect();
+                                let line_h = fs * 1.2;
+                                let total_text_h = lines.len() as f32 * line_h;
+                                let text_top_y =
+                                    diag_y - shape.y - (shape.height - total_text_h) / 2.0;
+                                current_content.save_state();
+                                current_content.set_fill_gray(0.0);
+                                for (i, line) in lines.iter().enumerate() {
+                                    let tw = charts::text_width(line, fs, sa_font_entry);
+                                    let tx = diag_x + shape.x + (shape.width - tw) / 2.0;
+                                    let ty = text_top_y - fs - (i as f32) * line_h;
+                                    charts::show_text(
+                                        &mut current_content,
+                                        sa_font_pdf_name,
+                                        fs,
+                                        tx,
+                                        ty,
+                                        line,
+                                    );
+                                }
+                                current_content.restore_state();
+                            }
+                        }
                     } else if (para.image.is_some() || text_empty) && para.content_height > 0.0 {
                         if let Some(pdf_name) = image_pdf_names.get(&global_block_idx) {
                             let img = para.image.as_ref().unwrap();
@@ -1467,7 +1540,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             ]);
                             current_content.x_object(Name(pdf_name.as_bytes()));
                             current_content.restore_state();
-                        } else {
+                        } else if para.image.is_some() {
                             current_content
                                 .set_fill_gray(0.5)
                                 .rect(col_x, slot_top - content_h, col_w, content_h)
