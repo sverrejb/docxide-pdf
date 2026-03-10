@@ -447,7 +447,26 @@ fn parse_dsp_shape(sp: roxmltree::Node, theme: &ThemeFonts) -> Option<SmartArtSh
         parse_solid_fill(sp_pr, theme)
     };
 
-    let (text, font_size) = parse_dsp_text(sp);
+    let (stroke_color, stroke_width) = sp_pr
+        .children()
+        .find(|n| n.tag_name().name() == "ln" && n.tag_name().namespace() == Some(DML_NS))
+        .and_then(|ln| {
+            let has_no_fill =
+                ln.children().any(|n| n.tag_name().name() == "noFill" && n.tag_name().namespace() == Some(DML_NS));
+            if has_no_fill {
+                return None;
+            }
+            let color = parse_solid_fill(ln, theme)?;
+            let width = ln
+                .attribute("w")
+                .and_then(|v| v.parse::<f32>().ok())
+                .map(|emu| emu / 12700.0)
+                .unwrap_or(0.75);
+            Some((color, width))
+        })
+        .map_or((None, 0.0), |(c, w)| (Some(c), w));
+
+    let (text, font_size, text_color) = parse_dsp_text(sp, theme);
 
     if fill.is_none() && text.is_empty() {
         return None;
@@ -463,6 +482,7 @@ fn parse_dsp_shape(sp: roxmltree::Node, theme: &ThemeFonts) -> Option<SmartArtSh
 
     let shape_type = match prst {
         "ellipse" => ShapeType::Ellipse,
+        "notchedRightArrow" => ShapeType::NotchedRightArrow,
         _ => ShapeType::Rect,
     };
 
@@ -473,22 +493,26 @@ fn parse_dsp_shape(sp: roxmltree::Node, theme: &ThemeFonts) -> Option<SmartArtSh
         height: h as f32,
         shape_type,
         fill,
+        stroke_color,
+        stroke_width,
         text,
         font_size,
+        text_color,
     })
 }
 
-fn parse_dsp_text(sp: roxmltree::Node) -> (String, f32) {
+fn parse_dsp_text(sp: roxmltree::Node, theme: &ThemeFonts) -> (String, f32, Option<[u8; 3]>) {
     let tx_body = sp.children().find(|n| {
         n.tag_name().name() == "txBody" && n.tag_name().namespace() == Some(DSP_NS)
     });
 
     let Some(body) = tx_body else {
-        return (String::new(), 0.0);
+        return (String::new(), 0.0, None);
     };
 
     let mut lines = Vec::new();
     let mut font_size = 0.0_f32;
+    let mut text_color: Option<[u8; 3]> = None;
 
     for p in body.children().filter(|n| {
         n.tag_name().name() == "p" && n.tag_name().namespace() == Some(DML_NS)
@@ -505,6 +529,9 @@ fn parse_dsp_text(sp: roxmltree::Node) -> (String, f32) {
                         font_size = sz / 100.0;
                     }
                 }
+                if text_color.is_none() {
+                    text_color = parse_solid_fill(rpr, theme);
+                }
             }
             if let Some(t) = r.children().find(|n| {
                 n.tag_name().name() == "t" && n.tag_name().namespace() == Some(DML_NS)
@@ -519,5 +546,5 @@ fn parse_dsp_text(sp: roxmltree::Node) -> (String, f32) {
         }
     }
 
-    (lines.join("\n"), font_size)
+    (lines.join("\n"), font_size, text_color)
 }

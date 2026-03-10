@@ -168,6 +168,7 @@ pub enum ShapeType {
     #[default]
     Rect,
     Ellipse,
+    NotchedRightArrow,
 }
 
 pub struct SmartArtShape {
@@ -177,8 +178,11 @@ pub struct SmartArtShape {
     pub height: f32,
     pub shape_type: ShapeType,
     pub fill: Option<[u8; 3]>,
+    pub stroke_color: Option<[u8; 3]>,
+    pub stroke_width: f32,
     pub text: String,
     pub font_size: f32,
+    pub text_color: Option<[u8; 3]>,
 }
 
 pub struct SmartArtDiagram {

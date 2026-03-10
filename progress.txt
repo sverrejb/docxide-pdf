@@ -1,8 +1,8 @@
-Completed Step 2 (all sub-tasks 2a-2d):
-- Added wrap_type, dist_top, dist_bottom fields to Textbox struct (model.rs)
-- Made parse_wrap_type pub(super) in images.rs
-- Parse wrap type + distT/distB from wp:anchor in both textbox.rs (DrawingML path) and images.rs (run drawing path)
-- Set WrapType::None defaults for VML fallback textboxes
-- Added textbox height reservation loop in pdf/mod.rs content_h calculation
-- vaccines_history_chapter improved: Jaccard +17.8pp (40.3%), SSIM +18.9pp (48.2%)
-- No regressions in full test suite
+Step 1a: Added `NotchedRightArrow` variant to `ShapeType` enum in src/model.rs (line 171). Added temporary Rect fallback in draw_shape_path() in src/pdf/mod.rs to keep compilation working. Real arrow geometry will be implemented in Step 3a.
+Step 1b: Added `stroke_color: Option<[u8; 3]>`, `stroke_width: f32`, and `text_color: Option<[u8; 3]>` fields to `SmartArtShape` in src/model.rs. Updated the construction site in src/docx/images.rs (parse_dsp_shape) with default values (None/0.0). Actual parsing will be implemented in Step 2b/2c.
+Step 2a: Added `"notchedRightArrow" => ShapeType::NotchedRightArrow` match arm in `parse_dsp_shape()` in src/docx/images.rs (line 467). The preset geometry string from `a:prstGeom/@prst` is now correctly mapped to the NotchedRightArrow variant instead of falling through to the Rect default.
+Step 2b: Implemented stroke parsing from `a:ln` in `parse_dsp_shape()`. Finds the `a:ln` child of `sp_pr`, checks for `a:noFill` (no stroke), otherwise calls `parse_solid_fill(ln, theme)` to get stroke color. Parses width from `a:ln/@w` attribute (EMU / 12700 → points, default 0.75pt). Updated SmartArtShape construction to use parsed `stroke_color` and `stroke_width` instead of hardcoded defaults.
+Step 2c: Added text color parsing in `parse_dsp_text()`. Changed signature to accept `theme: &ThemeFonts` and return `(String, f32, Option<[u8; 3]>)`. In the `rPr` handling block, calls `parse_solid_fill(rpr, theme)` to extract text color from `a:solidFill` inside run properties. Updated call site in `parse_dsp_shape()` to pass `theme` and use the returned `text_color` in SmartArtShape construction (replacing hardcoded `None`).
+Step 2d: Already completed as part of steps 2b and 2c — SmartArtShape construction uses all new fields.
+Step 3a: Replaced temporary Rect fallback with real NotchedRightArrow geometry in draw_shape_path() (src/pdf/mod.rs lines 62-75). 8-point polygon: shaft with 25% vertical insets, arrowhead taking ss*0.5 width on the right, V-notch on the left. vaccines_history_chapter Jaccard improved to 41.1% (+0.8pp). No regressions in full suite.
+Step 3b: Rewrote SmartArt rendering loop in src/pdf/mod.rs. Three changes: (1) Fill+stroke: shapes with both fill and stroke use fill_nonzero_and_stroke(), stroke-only uses stroke() with set_stroke_rgb/set_line_width — circles now get white borders. (2) Text on any shape: removed the shape.fill.is_none() guard so text renders regardless of fill. (3) Text color: uses shape.text_color when present, falls back to black. Jaccard 41.2% (stable). No regressions in full suite.

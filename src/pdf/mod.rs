@@ -59,6 +59,23 @@ fn draw_shape_path(content: &mut Content, x: f32, y: f32, w: f32, h: f32, shape:
             content.cubic_to(cx + K * rx, cy - ry, cx + rx, cy - K * ry, cx + rx, cy);
             content.close_path();
         }
+        ShapeType::NotchedRightArrow => {
+            let ss = w.min(h);
+            let arrow_dx = ss * 0.5;
+            let arrow_start = w - arrow_dx;
+            let shaft_inset = h * 0.25;
+            let notch_depth = ss * 0.25;
+
+            content.move_to(x + notch_depth, y + h - shaft_inset);
+            content.line_to(x + arrow_start, y + h - shaft_inset);
+            content.line_to(x + arrow_start, y + h);
+            content.line_to(x + w, y + h / 2.0);
+            content.line_to(x + arrow_start, y);
+            content.line_to(x + arrow_start, y + shaft_inset);
+            content.line_to(x + notch_depth, y + shaft_inset);
+            content.line_to(x, y + h / 2.0);
+            content.close_path();
+        }
     }
 }
 
@@ -1471,15 +1488,29 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             .map(|e| e.pdf_name.as_str())
                             .unwrap_or("F1");
                         for shape in &diagram.shapes {
-                            if let Some([r, g, b]) = shape.fill {
-                                let sx = diag_x + shape.x;
-                                let sy = diag_y - shape.y - shape.height;
+                            let sx = diag_x + shape.x;
+                            let sy = diag_y - shape.y - shape.height;
+                            let has_fill = shape.fill.is_some();
+                            let has_stroke =
+                                shape.stroke_color.is_some() && shape.stroke_width > 0.0;
+
+                            if has_fill || has_stroke {
                                 current_content.save_state();
-                                current_content.set_fill_rgb(
-                                    r as f32 / 255.0,
-                                    g as f32 / 255.0,
-                                    b as f32 / 255.0,
-                                );
+                                if let Some([r, g, b]) = shape.fill {
+                                    current_content.set_fill_rgb(
+                                        r as f32 / 255.0,
+                                        g as f32 / 255.0,
+                                        b as f32 / 255.0,
+                                    );
+                                }
+                                if let Some([r, g, b]) = shape.stroke_color {
+                                    current_content.set_line_width(shape.stroke_width);
+                                    current_content.set_stroke_rgb(
+                                        r as f32 / 255.0,
+                                        g as f32 / 255.0,
+                                        b as f32 / 255.0,
+                                    );
+                                }
                                 draw_shape_path(
                                     &mut current_content,
                                     sx,
@@ -1488,13 +1519,17 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     shape.height,
                                     shape.shape_type,
                                 );
-                                current_content.fill_nonzero();
+                                if has_fill && has_stroke {
+                                    current_content.fill_nonzero_and_stroke();
+                                } else if has_fill {
+                                    current_content.fill_nonzero();
+                                } else {
+                                    current_content.stroke();
+                                }
                                 current_content.restore_state();
                             }
-                            if shape.fill.is_none()
-                                && !shape.text.is_empty()
-                                && shape.font_size > 0.0
-                            {
+
+                            if !shape.text.is_empty() && shape.font_size > 0.0 {
                                 let fs = shape.font_size;
                                 let lines: Vec<&str> = shape.text.split('\n').collect();
                                 let line_h = fs * 1.2;
@@ -1502,7 +1537,15 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 let text_top_y =
                                     diag_y - shape.y - (shape.height - total_text_h) / 2.0;
                                 current_content.save_state();
-                                current_content.set_fill_gray(0.0);
+                                if let Some([r, g, b]) = shape.text_color {
+                                    current_content.set_fill_rgb(
+                                        r as f32 / 255.0,
+                                        g as f32 / 255.0,
+                                        b as f32 / 255.0,
+                                    );
+                                } else {
+                                    current_content.set_fill_gray(0.0);
+                                }
                                 for (i, line) in lines.iter().enumerate() {
                                     let tw = charts::text_width(line, fs, sa_font_entry);
                                     let tx = diag_x + shape.x + (shape.width - tw) / 2.0;

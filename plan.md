@@ -1,79 +1,114 @@
-# Fix: Textboxes with wrapTopAndBottom don't push down content
+# Fix SmartArt Timeline Rendering
 
 ## Context
 
-In the `vaccines_history_chapter` fixture, the first paragraph contains a large gradient rectangle (a `wps:wsp` textbox inside `wp:anchor`) with `wp:wrapTopAndBottom` wrapping. This rectangle contains "Chapter 1" and subtitle text. Three circles with letters (T, Y, B) float over it with `wrapNone`.
+The `vaccines_history_chapter` fixture contains a SmartArt horizontal timeline (arrow with date circles and text labels). The current output is visually wrong compared to the Word reference:
 
-The blue underlined heading "The History of the Vaccine" is in a **subsequent paragraph** and should render **below** the gradient rect + circles. Instead, it renders at the top overlapping the gradient because the textbox doesn't reserve any vertical space.
+- **Reference**: Light blue notched right arrow, blue circles with white borders on the arrow, small text labels above/below
+- **Generated**: Flat light blue rectangle (instead of arrow), circles with no borders, tiny text barely visible
 
-**Root cause**: The `Textbox` struct has no `wrap_type` field. When textboxes are collected from `wp:anchor` elements, the wrap type is discarded. The content height calculation in the renderer only checks `FloatingImage` elements for `TopAndBottom` wrapping — textboxes are completely ignored.
+The SmartArt parsing already extracts shapes from `word/diagrams/drawing1.xml` via `parse_smartart_drawing()` in `images.rs`. The issues are in shape type recognition and rendering.
 
-The `parse_wrap_type()` function already exists in `images.rs` and works correctly — it's just never called for textboxes.
+The diagram's internal EMU coordinates match the display extent (`wp:extent cx=6146800 cy=1496060`), so no scaling is needed.
 
-## Step 1: Analyze (read-only)
+## Issues (ordered by visual impact)
 
-Already completed. Key findings:
+1. **`notchedRightArrow` rendered as rectangle** — `ShapeType` enum only has `Rect`/`Ellipse`; all other presets fall back to `Rect`
+2. **No stroke rendering** — circles should have 1pt white borders (`a:ln w="12700"` with `schemeClr lt1`), but `SmartArtShape` has no stroke fields
+3. **Text blocked on filled shapes** — rendering condition `shape.fill.is_none()` prevents text over fills (doesn't affect this fixture since text shapes use `noFill`, but is a general bug)
+4. **Text color hardcoded black** — should use parsed color from XML
 
-- **DOCX structure**: The gradient rect is `wp:anchor` → `wps:wsp` with `wp:wrapTopAndBottom`, `distT="457200" distB="457200"` (36pt each), `positionV relativeFrom="margin"` offset 0, extent 540×180pt
-- **Missing field**: `Textbox` struct (`model.rs:198`) has no `wrap_type` or distance fields
-- **Missing parse**: `collect_textboxes_from_paragraph` (`textbox.rs:542-556`) doesn't call `parse_wrap_type()`
-- **Missing height reservation**: `content_h` calculation (`pdf/mod.rs:964-977`) only loops over `para.floating_images`
-- **Existing utility**: `parse_wrap_type()` at `images.rs:164` already parses all 5 wrap types from `wp:anchor`
+## Implementation
 
-## Step 2: Implement the fix ✅ COMPLETED
+### Step 1: Model changes (`src/model.rs`)
 
-### 2a. Add fields to `Textbox` struct (`src/model.rs:198-213`)
-
-Add three fields:
+**1a.** ~~COMPLETED~~ Add `NotchedRightArrow` variant to `ShapeType` enum (line 167-171):
 ```rust
-pub wrap_type: WrapType,
-pub dist_top: f32,    // spacing above shape (points)
-pub dist_bottom: f32, // spacing below shape (points)
-```
-
-### 2b. Parse wrap type and distances in `collect_textboxes_from_paragraph` (`src/docx/textbox.rs:534-556`)
-
-After `parse_anchor_position(container)`, also call:
-- `parse_wrap_type(container)` (import from `images.rs`, already `pub(super)`)
-- Parse `distT` / `distB` attributes from the `wp:anchor` element (EMU → points: divide by 12700)
-
-Pass these values into the `Textbox` construction at line 542.
-
-### 2c. Update VML textbox creation (`src/docx/textbox.rs:489`)
-
-Set `wrap_type: WrapType::None, dist_top: 0.0, dist_bottom: 0.0` for VML fallback textboxes (they don't have anchor wrapping info).
-
-### 2d. Reserve height for TopAndBottom textboxes in renderer (`src/pdf/mod.rs`, after line 977)
-
-Add a loop after the existing floating_images loop:
-```rust
-for tb in &para.textboxes {
-    if tb.wrap_type == WrapType::TopAndBottom {
-        let tb_y_top = match tb.v_relative_from {
-            "page" => sp.page_height - tb.v_offset_pt,
-            "margin" | "topMargin" => sp.page_height - sp.margin_top - tb.v_offset_pt,
-            _ => slot_top - tb.v_offset_pt,
-        };
-        let needed = slot_top - (tb_y_top - tb.height_pt - tb.dist_bottom);
-        if needed > content_h {
-            content_h = needed;
-        }
-    }
+pub enum ShapeType {
+    #[default]
+    Rect,
+    Ellipse,
+    NotchedRightArrow,
 }
 ```
 
-This computes the exact space from current `slot_top` to the bottom of the textbox + its bottom distance, handling all position modes (page/margin/paragraph-relative).
+**1b.** ~~COMPLETED~~ Add fields to `SmartArtShape` (line 173-182):
+```rust
+pub stroke_color: Option<[u8; 3]>,
+pub stroke_width: f32,
+pub text_color: Option<[u8; 3]>,
+```
 
-### Files to modify
+### Step 2: Parsing changes (`src/docx/images.rs`)
 
-1. `src/model.rs` — add `wrap_type`, `dist_top`, `dist_bottom` to `Textbox`
-2. `src/docx/textbox.rs` — parse wrap type + distances from anchor, set defaults for VML path
-3. `src/pdf/mod.rs` — add textbox height reservation in content_h calculation
+**2a.** ~~COMPLETED~~ Recognize `notchedRightArrow` in `parse_dsp_shape()` (line 464):
+```rust
+"notchedRightArrow" => ShapeType::NotchedRightArrow,
+```
 
-### Verification
+**2b.** ~~COMPLETED~~ Parse stroke from `a:ln` in `parse_dsp_shape()` (after line 448, before text):
+- Find `a:ln` child of `sp_pr`
+- Check for `a:noFill` child (means no stroke)
+- Otherwise call `parse_solid_fill(ln_node, theme)` — reuses existing function since `a:ln > a:solidFill` has the same structure
+- Parse width from `a:ln/@w` attribute (EMU / 12700 → points, default 0.75pt)
 
-1. `cargo build` — confirm compilation
-2. `DOCXIDE_CASE=vaccines_history_chapter cargo test -- --nocapture` — check that the heading now appears below the gradient rect
-3. View generated page 1 image: `tests/output/scraped/vaccines_history_chapter/generated/page_001.png`
-4. Compare with reference: `tests/output/scraped/vaccines_history_chapter/reference/page_001.png`
-5. `cargo test -- --nocapture` — full test suite, check for "REGRESSION in:" lines to ensure no regressions
+**2c.** ~~COMPLETED~~ Parse text color in `parse_dsp_text()`:
+- Change signature to accept `theme: &ThemeFonts` and return `(String, f32, Option<[u8; 3]>)`
+- In the `rPr` handling block, call `parse_solid_fill(rpr, theme)` for text color
+- Update call site at line 450
+
+**2d.** ~~COMPLETED~~ Update `SmartArtShape` construction (line 469) with new fields.
+
+### Step 3: Rendering changes (`src/pdf/mod.rs`)
+
+**3a.** ~~COMPLETED~~ Add `NotchedRightArrow` arm to `draw_shape_path()` (line 44-63):
+
+Geometry for default adjust values (adj1=50000, adj2=50000):
+- `ss = min(w, h)` (shape scale unit)
+- `arrow_dx = ss * 0.5` (arrowhead width)
+- `arrow_start = w - arrow_dx`
+- `shaft_inset = h * 0.25` (25% from top/bottom)
+- `notch_depth = ss * 0.25` (notch V-depth)
+
+8-point polygon clockwise from top-left:
+1. `(notch_depth, y + h - shaft_inset)` — top-left of shaft
+2. `(arrow_start, y + h - shaft_inset)` — top-right of shaft
+3. `(arrow_start, y + h)` — top of arrowhead
+4. `(w, y + h/2)` — arrow tip
+5. `(arrow_start, y)` — bottom of arrowhead
+6. `(arrow_start, y + shaft_inset)` — bottom-right of shaft
+7. `(notch_depth, y + shaft_inset)` — bottom-left of shaft
+8. `(0, y + h/2)` — notch vertex
+Close path.
+
+**3b.** ~~COMPLETED~~ Rewrite SmartArt rendering loop (lines 1473-1521):
+
+Replace the current fill-only + text-without-fill logic with:
+- **Fill + stroke combined**: For shapes with both fill and stroke, use `fill_nonzero_and_stroke()` (already used in `charts.rs:634`)
+- **Fill only**: Use existing `fill_nonzero()`
+- **Stroke only**: Use `stroke()` with `set_stroke_rgb` and `set_line_width` (patterns from `table.rs`, `charts.rs`)
+- **Text on any shape**: Remove the `shape.fill.is_none()` guard — render text regardless of fill
+- **Text color**: Use `shape.text_color` if present, else black
+
+## Files to modify
+
+| File | Changes |
+|------|---------|
+| `src/model.rs` | Add `NotchedRightArrow` to `ShapeType`; add `stroke_color`, `stroke_width`, `text_color` to `SmartArtShape` |
+| `src/docx/images.rs` | Recognize `notchedRightArrow` preset; parse `a:ln` stroke; parse text color in `parse_dsp_text` |
+| `src/pdf/mod.rs` | Add arrow path to `draw_shape_path()`; rewrite SmartArt render loop for fill+stroke+text |
+
+## Existing code to reuse
+
+- `parse_solid_fill()` (`src/docx/textbox.rs:173`) — already imported in `images.rs:12`, works for stroke colors
+- `fill_nonzero_and_stroke()` — already used in `src/pdf/charts.rs:634`
+- `set_stroke_rgb()`, `set_line_width()`, `stroke()` — used throughout `src/pdf/table.rs`, `charts.rs`
+- `draw_shape_path()` — existing shape dispatch, just needs new arm
+
+## Verification
+
+1. `cargo build` — compilation check
+2. `DOCXIDE_CASE=vaccines_history_chapter cargo test -- --nocapture` — check improved scores
+3. View `tests/output/scraped/vaccines_history_chapter/generated/page_001.png` — arrow shape, circle borders, text visible
+4. Compare with `tests/output/scraped/vaccines_history_chapter/reference/page_001.png`
+5. `cargo test -- --nocapture` — full suite, check for "REGRESSION in:" lines
