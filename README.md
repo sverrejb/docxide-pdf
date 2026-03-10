@@ -37,6 +37,7 @@ While the idea, architecture, testing strategy and validation of output are all 
 - **Hyperlinks**: clickable links in PDF output (URI link annotations)
 - **Tab stops**: left, center, right, decimal with leader dots
 - **Track changes**: final mode (insertions included, deletions removed — matches Word's PDF export)
+- **SmartArt**: basic rendering via pre-flattened drawing shapes (`dsp:drawing`) — rectangles, ellipses, arrows with fills, strokes, and centered text
 - **Compatibility**: `mc:AlternateContent` fallback, structured document tag (`w:sdt`) content extraction, `altChunk` HTML content parsing
 - **Fonts**: cross-platform font search (macOS/Linux/Windows), embedded DOCX font extraction and deobfuscation, font subsetting (CIDFont/Type0), disk-cached font index, font substitution via `fontTable.xml` altName and family-class fallback
 - **Output optimization**: font subsetting, content stream compression
@@ -48,7 +49,8 @@ While the idea, architecture, testing strategy and validation of output are all 
 - **Images**: text wrapping around floating images/textboxes, EMF/WMF vector images
 - **Layout**: distribute alignment (`w:jc val="distribute"`), vertical page alignment (`w:vAlign` on section), right-to-left (bidi) text
 - **PDF features**: bookmarks/outline, document metadata (title, author)
-- **Features**: table of contents generation, endnotes, SmartArt, OLE objects
+- **SmartArt**: only basic rendering via pre-flattened drawing fallback (`dsp:drawing`); no layout engine (see roadmap)
+- **Features**: table of contents generation, endnotes, OLE objects
 - **Fonts**: bundled fallback fonts, text shaping (ligatures, complex scripts)
 
 ## Examples

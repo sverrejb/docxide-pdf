@@ -244,6 +244,65 @@ The `render()` function in `pdf/mod.rs` is ~1450 lines with many closures and sh
 - Compress font file streams with FlateDecode (currently uncompressed)
 - Memory usage for large DOCX files with many images
 
+## SmartArt (IN PROGRESS — basic fallback rendering; full support is VERY HIGH EFFORT)
+
+### Current state
+
+Basic rendering works by reading the pre-flattened `dsp:drawing` shape tree from `word/diagrams/drawingN.xml`. This contains positioned shapes (rect, ellipse, notchedRightArrow) with fills, strokes, and text — essentially a snapshot that Word pre-computes from the layout engine. Parsing in `src/docx/smartart.rs`, rendering in `src/pdf/smartart.rs`.
+
+### Scale of the full feature
+
+SmartArt is one of the largest features in OOXML. Microsoft ships **~190 built-in layouts** across 9 categories:
+
+| Category | Layouts |
+|---|---|
+| Process | 42 |
+| Relationship | 35 |
+| Picture | 34 |
+| List | 31 |
+| Cycle | 16 |
+| Hierarchy | 15 |
+| Office.com | 9 |
+| Matrix | 4 |
+| Pyramid | 4 |
+
+Each SmartArt diagram in a DOCX consists of **4 XML parts**: data model (`dgm:dataModel`), layout definition (`dgm:layoutDef`), colors (`dgm:colorsDef`), and style (`dgm:styleDef`).
+
+### Why it's hard
+
+The layout definitions are a **mini programming language**. Each layout is a tree of `layoutNode` elements with an algorithm type that controls positioning:
+
+- `composite` — absolute positioning of children
+- `lin` — linear flow
+- `snake` — wrapping linear flow (multi-row/column)
+- `cycle` — circular arrangement
+- `hierRoot` / `hierChild` — org chart trees
+- `pyra` — pyramid/trapezoid stacking
+- `conn` — connector routing
+- `sp` — spacing
+- `tx` — text fitting
+
+Each algorithm has dozens of parameters. The OOXML spec calls layout "the single largest aspect of DrawingML."
+
+**No fallback is guaranteed** — Word does NOT always include pre-rendered shapes in the DOCX. The `dsp:drawing` part exists in many files but is not mandatory. Files without it require a full layout engine to display anything.
+
+LibreOffice spent years implementing SmartArt import and describes their support as working "nearly perfectly" for ~200 layouts, with editing still "experimental only."
+
+### Incremental path
+
+1. **Current: `dsp:drawing` fallback** (DONE) — renders pre-flattened shapes when present. Covers many real-world files since Word typically includes this part.
+2. **More shape types** (LOW EFFORT) — add roundRect, diamond, chevron, pentagon, hexagon, trapezoid, etc. to `ShapeType` enum and `draw_shape_path`.
+3. **Gradient fills** (LOW EFFORT) — SmartArt shapes frequently use linear gradients; extend fill parsing.
+4. **Group shapes** (MEDIUM EFFORT) — `dsp:grpSp` groups with nested transforms. Need recursive parsing.
+5. **Connector shapes** (MEDIUM EFFORT) — `dsp:cxnSp` connectors between shapes (arrows, lines).
+6. **Image shapes** (MEDIUM EFFORT) — shapes that contain embedded images (`a:blipFill`).
+7. **Full layout engine** (VERY HIGH EFFORT) — implement the constraint-based layout algorithm that interprets ~200 XML layout recipes. This is essentially building a small layout engine from scratch. Only needed for files that lack the `dsp:drawing` fallback.
+
+### Not planned
+
+- **SmartArt editing/creation** — out of scope for a PDF converter
+- **Office.com layout download** — dynamic layouts fetched from Microsoft's servers
+
 ## Test Corpus Expansion
 
 Additional fixture ideas not yet covered:

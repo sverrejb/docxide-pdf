@@ -7,6 +7,7 @@ mod numbering;
 mod runs;
 mod sections;
 mod settings;
+pub(crate) mod smartart;
 mod styles;
 mod tables;
 mod textbox;
