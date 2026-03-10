@@ -1,6 +1,13 @@
 # docxide-pdf
 
+Library and CLI for converting DOCX files to PDF, matching Microsoft Word's output as closely as possible.
+
 ## ⚠️ Work in progress. This is in no way ready for use in production. The API, output quality, and supported features are all actively changing.
+
+### Got a weird DOCX?
+
+If you have a `.docx` file that produces ugly, broken, or just plain wrong output, send it to me! Real-world documents with surprising formatting are the best way to improve the converter. Open an issue or PR with the file included and I will try to make it work.
+
 
 A Rust library and CLI tool for converting DOCX files to PDF, with the goal of matching Microsoft Word's PDF export as closely as possible.<sup>*</sup>
 
@@ -243,10 +250,6 @@ Then run from the project root:
 ## Contributing
 
 Pull requests are welcome!
-
-### Got a weird DOCX?
-
-If you have a `.docx` file that produces ugly, broken, or just plain wrong output, send it to me! Real-world documents with surprising formatting are the best way to improve the converter. Open an issue or PR with the file included and I will try to make it work.
 
 ## License
 
