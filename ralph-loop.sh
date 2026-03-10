@@ -6,17 +6,19 @@ if [ -z "$1" ]; then
   exit 1
 fi
 
-//TODO: Take plan file as input param, 
-// Create ralph-folder with plans and logs
-// Create progress file programatically
+plan="plan_cleanup.md"
+
+# TODO: Take plan file as input param,
+# Create ralph-folder with plans and logs
+# Create progress file programmatically
 
 for ((i=1; i<=$1; i++)); do
     echo "====================="
     echo "Iteration $i starting"
     echo "====================="
 
-    result=$(claude --permission-mode acceptEdits -p "@plan_drawingML.md @progress.txt \
-1. Read the plan_drawingML.md and progress file. \
+    result=$(claude --permission-mode acceptEdits -p "@${plan} @progress.txt \
+1. Read the ${plan} and progress file. \
 2. Find the next incomplete task and implement it. \
 3. Update progress.txt with what you did. \
 4. Mark task in plan.md with completed when done.
