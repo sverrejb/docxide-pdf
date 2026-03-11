@@ -606,8 +606,9 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     image: para_image,
                     borders,
                     shading: para_shading,
-                    page_break_before: parsed.has_page_break
+                    page_break_before: parsed.has_page_break_before
                         || para_style.is_some_and(|s| s.page_break_before),
+                    page_break_after: parsed.has_page_break_after,
                     column_break_before: parsed.has_column_break,
                     tab_stops,
                     extra_line_breaks: parsed.line_break_count,

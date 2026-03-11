@@ -31,7 +31,7 @@ pub(super) fn extent_dimensions(container: roxmltree::Node) -> (f32, f32) {
     (cx / 12700.0, cy / 12700.0)
 }
 
-pub(super) fn image_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat)> {
+pub(super) fn image_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat, u8)> {
     // JPEG: starts with FF D8
     if data.len() >= 2 && data[0] == 0xFF && data[1] == 0xD8 {
         let mut i = 2;
@@ -47,7 +47,8 @@ pub(super) fn image_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat)> {
             if (marker == 0xC0 || marker == 0xC1 || marker == 0xC2) && i + 9 < data.len() {
                 let height = u16::from_be_bytes([data[i + 5], data[i + 6]]) as u32;
                 let width = u16::from_be_bytes([data[i + 7], data[i + 8]]) as u32;
-                return Some((width, height, ImageFormat::Jpeg));
+                let components = data[i + 9];
+                return Some((width, height, ImageFormat::Jpeg, components));
             }
             i += 2 + len;
         }
@@ -59,7 +60,7 @@ pub(super) fn image_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat)> {
     {
         let width = u32::from_be_bytes([data[16], data[17], data[18], data[19]]);
         let height = u32::from_be_bytes([data[20], data[21], data[22], data[23]]);
-        return Some((width, height, ImageFormat::Png));
+        return Some((width, height, ImageFormat::Png, 3));
     }
 
     None
@@ -80,7 +81,7 @@ pub(super) fn read_image_from_zip<R: Read + std::io::Seek>(
     let mut entry = zip.by_name(&zip_path).ok()?;
     let mut data = Vec::new();
     entry.read_to_end(&mut data).ok()?;
-    let (pw, ph, fmt) = image_dimensions(&data)?;
+    let (pw, ph, fmt, components) = image_dimensions(&data)?;
     Some(EmbeddedImage {
         data: std::sync::Arc::new(data),
         format: fmt,
@@ -88,6 +89,7 @@ pub(super) fn read_image_from_zip<R: Read + std::io::Seek>(
         pixel_height: ph,
         display_width: display_w,
         display_height: display_h,
+        jpeg_components: components,
     })
 }
 

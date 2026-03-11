@@ -598,7 +598,11 @@ fn embed_single_image(
             xobj.filter(Filter::DctDecode);
             xobj.width(img.pixel_width as i32);
             xobj.height(img.pixel_height as i32);
-            xobj.color_space().device_rgb();
+            match img.jpeg_components {
+                1 => xobj.color_space().device_gray(),
+                4 => xobj.color_space().device_cmyk(),
+                _ => xobj.color_space().device_rgb(),
+            };
             xobj.bits_per_component(8);
             xobj.interpolate(true);
         }
@@ -2077,6 +2081,20 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         para,
                         &doc.style_id_to_name,
                     );
+
+                    if para.page_break_after {
+                        pb.flush_page(sect_idx);
+                        pb.slot_top =
+                            effective_slot_top(cur_sp, false, &ctx);
+                        effective_margin_bottom = compute_effective_margin_bottom(
+                            cur_sp,
+                            false,
+                            &ctx,
+                        );
+                        pb.is_first_page_of_section = false;
+                        prev_space_after = 0.0;
+                        current_col = 0;
+                    }
                 }
 
                 Block::Table(table) => {

@@ -137,6 +137,9 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                 (val, exact)
             })
             .unwrap_or((None, false));
+        let is_header = tr_pr
+            .and_then(|pr| wml(pr, "tblHeader"))
+            .is_some();
 
         let mut cells = Vec::new();
         let mut grid_col = 0usize;
@@ -295,6 +298,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
             cells,
             height: row_height,
             height_exact,
+            is_header,
         });
     }
     Table {

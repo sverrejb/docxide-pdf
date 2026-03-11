@@ -11,7 +11,7 @@ Current scores: Jaccard 25.84%, SSIM 41.15%. Fixing these should significantly i
 
 ---
 
-## Fix 1: Grayscale JPEG Color Space (highest impact)
+## Fix 1: Grayscale JPEG Color Space (highest impact) — COMPLETED
 
 **Root cause**: `image1.jpeg` is a **grayscale JPEG** (1 component, 542x135px). The embed_image closure in `src/pdf/mod.rs:739` hardcodes `device_rgb()` for all JPEGs. The PDF viewer misinterprets 1-byte-per-pixel grayscale data as 3-byte RGB, causing the image to appear as 3 squished copies + a black rectangle.
 
@@ -36,7 +36,7 @@ Current scores: Jaccard 25.84%, SSIM 41.15%. Fixing these should significantly i
 
 ---
 
-## Fix 2: Mid-paragraph page break renders text on wrong page
+## Fix 2: Mid-paragraph page break renders text on wrong page — COMPLETED
 
 **Root cause**: The "Opportunity through learning" paragraph contains both text runs AND a `w:br type="page"` in the same paragraph. Currently, both `w:pageBreakBefore` (paragraph property) and `w:br type="page"` (run-level element) set the same `has_page_break` flag, which becomes `page_break_before: true`. This causes the renderer to break to a new page BEFORE rendering the text, so the white text ends up invisible on page 2 (white on white).
 
@@ -70,11 +70,15 @@ The color parsing itself is correct: `w:color w:val="FFFFFF"` → `[255, 255, 25
 
 ---
 
-## Fix 3: Text drift on page 2 (investigate after fixes 1 & 2)
+## Fix 3: Text drift on page 2 (investigate after fixes 1 & 2) — INVESTIGATED / NO CODE CHANGE
 
-**Likely cause**: The paragraph containing the floating anchor image has `w:pPr/w:rPr/w:sz val="460"` (230pt paragraph mark). Since its only run produces a floating image (not a text run), the `runs` vector is empty and the synthetic run code (`runs.rs:613-632`) creates a 230pt placeholder. This makes the paragraph ~230pt tall, which may differ from Word's handling.
+**Original hypothesis**: The 230pt paragraph mark (`w:pPr/w:rPr/w:sz val="460"`) on the floating-image paragraph creates a synthetic run that may be too tall.
 
-**Plan**: Re-evaluate after fixes 1 and 2 are applied, as the page break fix changes content placement. If drift persists, investigate whether the synthetic run should be suppressed or sized differently when the paragraph only contains floating images.
+**Investigation findings**:
+1. The 230pt synthetic run is **correct**. The author intentionally set the paragraph mark to 230pt to push "Opportunity through learning" text down page 1 to align with the cover image shape. Suppressing or reducing it would break the page 1 layout.
+2. Page 1 renders correctly in both reference and generated output — the 230pt paragraph is handled properly.
+3. The page 2+ text drift is **not caused by the 230pt paragraph** (which is in section 1, before the section break). The drift accumulates gradually across many body-text paragraphs in sections 2–3, indicating general font metrics/line spacing differences rather than a specific structural issue.
+4. No actionable code change identified for this fixture-specific plan. The remaining drift is a general layout accuracy issue that would be addressed by improving font metrics, line spacing precision, or paragraph spacing across all fixtures.
 
 ---
 

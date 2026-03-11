@@ -73,31 +73,48 @@ The repository includes:
 src/
   lib.rs              — public API: convert_docx_to_pdf(input: &Path, output: &Path)
   error.rs            — Error enum (Zip, Xml, Pdf, Io variants)
-  model.rs            — Document, Paragraph, Run, Chart intermediate representation
-  fonts.rs            — font discovery, metrics, subsetting
+  model.rs            — Document, Section, Paragraph, Run, Chart IR + shape/geometry types
   main.rs             — CLI binary (behind `cli` feature)
+  fonts/
+    mod.rs            — font registration, metrics, fallback
+    discovery.rs      — cross-platform font search, disk cache
+    embed.rs          — font embedding, kern/GPOS extraction, subsetting
+    encoding.rs       — WinAnsi encoding, glyph mapping
+    cache.rs          — font index disk cache (TSV)
+  geometry/
+    mod.rs            — preset shape evaluation entry point
+    definitions.rs    — all 187 OOXML preset shape definitions
+    formulas.rs       — guide formula interpreter (adjustment values, trig, arithmetic)
+    path.rs           — path command evaluation → PDF content stream
   docx/
     mod.rs            — XML utils, relationships, parse orchestrator, table+paragraph parsing
     styles.rs         — theme parsing, style structs, style inheritance
     runs.rs           — run-level XML → Vec<Run>
     numbering.rs      — list/numbering parsing, counter management
     images.rs         — image/chart drawing detection, floating/inline extraction
-    charts.rs         — parse c:chartSpace XML → Chart model (bar/line/pie/area/doughnut/radar/scatter/bubble)
-    textbox.rs        — DrawingML + VML textbox parsing
+    charts.rs         — parse c:chartSpace XML → Chart model (8 chart types)
+    textbox.rs        — DrawingML + VML textbox parsing, shape fills (solid + gradient)
+    tables.rs         — table + cell parsing
+    smartart.rs       — SmartArt diagram parsing (dsp:drawing shape trees)
     embedded_fonts.rs — embedded font extraction and deobfuscation
     sections.rs       — section properties (page size, margins, columns)
     headers_footers.rs — header/footer/footnote XML parsing
+    settings.rs       — document settings (tab stops, mirror margins, even/odd headers)
     alt_chunk.rs      — altChunk HTML content parsing
   pdf/
-    mod.rs            — main render loop, header/footer rendering
+    mod.rs            — main render loop, behind-doc/body/foreground z-ordering
     layout.rs         — text layout, line building, paragraph rendering
     table.rs          — table layout, auto-fit columns, table rendering
-    charts.rs         — Chart → PDF content stream (cartesian: bar/line/area/scatter/bubble + radar)
-    charts_radial.rs  — Radial chart rendering (pie/doughnut)
+    smartart.rs       — SmartArt shape rendering via geometry engine
+    charts.rs         — cartesian chart rendering (bar/line/area/scatter/bubble/radar)
+    charts_radial.rs  — pie/doughnut chart rendering
+    chart_legend.rs   — shared legend rendering
+    header_footer.rs  — header/footer rendering
+    footnotes.rs      — footnote rendering
 tests/
   visual_comparison.rs — Jaccard/SSIM similarity test against Word-generated reference PDFs
   text_boundary.rs     — text boundary test (page/line level)
-  fixtures/caseN/      — handcrafted test cases (30 cases)
+  fixtures/caseN/      — handcrafted test cases (37 cases)
   fixtures/samples/    — scraped real-world DOCX files
   output/<case>/       — generated.pdf, reference/, generated/, diff/ screenshots
 ```
@@ -119,7 +136,7 @@ tests/
 - Rust edition: 2024
 - Test output is compared using **Jaccard similarity on ink pixels** (luma < 200 = ink) and **SSIM** with spatial tolerance (±8px). Run tests with `cargo test -- --nocapture` to see scores.
 - Jaccard threshold: **20%**, SSIM threshold: **75%** (defined in `tests/visual_comparison.rs`)
-- 30 handcrafted test cases covering text, tables, images, charts, and more
+- 37 handcrafted test cases covering text, tables, images, charts, shapes, SmartArt, and more
 
 ## Word Layout Learnings
 

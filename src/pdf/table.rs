@@ -206,6 +206,158 @@ fn compute_row_layouts(
         .collect()
 }
 
+fn render_table_row(
+    row: &crate::model::TableRow,
+    layout: &RowLayout,
+    col_widths: &[f32],
+    cm: &crate::model::CellMargins,
+    table_left: f32,
+    pb: &mut super::PageBuilder,
+    ctx: &RenderContext,
+) {
+    let row_h = layout.height;
+    let row_top = pb.slot_top;
+    let row_bottom = row_top - row_h;
+
+    let mut grid_col = 0usize;
+    for (cell, (lines, line_h, font_size)) in row.cells.iter().zip(layout.cell_lines.iter()) {
+        let span = cell.grid_span.max(1) as usize;
+        let col_w: f32 = col_widths[grid_col..col_widths.len().min(grid_col + span)]
+            .iter()
+            .sum();
+        let cell_x = table_left
+            + col_widths[..grid_col.min(col_widths.len())]
+                .iter()
+                .sum::<f32>();
+        grid_col += span;
+
+        if cell.v_merge == VMerge::Continue {
+            continue;
+        }
+
+        if let Some([r, g, b]) = cell.shading {
+            let b_borders = &cell.borders;
+            let inset = (b_borders.top.width
+                + b_borders.bottom.width
+                + b_borders.left.width
+                + b_borders.right.width)
+                / 8.0;
+            pb.content.save_state();
+            pb.content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+            pb.content.rect(
+                cell_x + inset,
+                row_bottom + inset,
+                col_w - 2.0 * inset,
+                row_h - 2.0 * inset,
+            );
+            pb.content.fill_nonzero();
+            pb.content.restore_state();
+        }
+
+        if !lines.is_empty() && !lines.iter().all(|l| l.chunks.is_empty()) {
+            let text_x = cell_x + cm.left;
+            let text_w = (col_w - cm.left - cm.right).max(0.0);
+            let first_run = cell.paragraphs.first().and_then(|p| p.runs.first());
+            let mut kb = String::new();
+            let ascender_ratio = first_run
+                .map(|r| font_key_buf(r, &mut kb))
+                .and_then(|k| ctx.fonts.get(k))
+                .and_then(|e| e.ascender_ratio)
+                .unwrap_or(0.75);
+
+            let content_h = lines.len() as f32 * line_h;
+            let baseline_y = match cell.v_align {
+                CellVAlign::Top => row_top - cm.top - font_size * ascender_ratio,
+                CellVAlign::Center => {
+                    let avail = row_h - cm.top - cm.bottom;
+                    let offset = (avail - content_h) / 2.0;
+                    row_top - cm.top - offset.max(0.0) - font_size * ascender_ratio
+                }
+                CellVAlign::Bottom => {
+                    let avail = row_h - cm.top - cm.bottom;
+                    let offset = avail - content_h;
+                    row_top - cm.top - offset.max(0.0) - font_size * ascender_ratio
+                }
+            };
+
+            let alignment = cell
+                .paragraphs
+                .first()
+                .map(|p| p.alignment)
+                .unwrap_or(Alignment::Left);
+
+            render_paragraph_lines(
+                &mut pb.content,
+                lines,
+                &alignment,
+                text_x,
+                text_w,
+                baseline_y,
+                *line_h,
+                lines.len(),
+                0,
+                &mut Vec::new(),
+                0.0,
+                ctx.fonts,
+            );
+        }
+    }
+
+    // Draw per-cell borders
+    let mut grid_col = 0usize;
+    for cell in &row.cells {
+        let span = cell.grid_span.max(1) as usize;
+        let col_w: f32 = col_widths[grid_col..col_widths.len().min(grid_col + span)]
+            .iter()
+            .sum();
+        let bx = table_left
+            + col_widths[..grid_col.min(col_widths.len())]
+                .iter()
+                .sum::<f32>();
+        grid_col += span;
+
+        let b = &cell.borders;
+        let draw_border =
+            |c: &mut Content, border: &crate::model::CellBorder, x1, y1, x2, y2| {
+                if !border.present {
+                    return;
+                }
+                c.save_state();
+                c.set_line_width(border.width);
+                if let Some([r, g, b]) = border.color {
+                    c.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+                }
+                c.move_to(x1, y1);
+                c.line_to(x2, y2);
+                c.stroke();
+                c.restore_state();
+            };
+
+        if cell.v_merge != VMerge::Continue {
+            draw_border(&mut pb.content, &b.top, bx, row_top, bx + col_w, row_top);
+        }
+        draw_border(
+            &mut pb.content,
+            &b.bottom,
+            bx,
+            row_bottom,
+            bx + col_w,
+            row_bottom,
+        );
+        draw_border(&mut pb.content, &b.left, bx, row_top, bx, row_bottom);
+        draw_border(
+            &mut pb.content,
+            &b.right,
+            bx + col_w,
+            row_top,
+            bx + col_w,
+            row_bottom,
+        );
+    }
+
+    pb.slot_top = row_bottom;
+}
+
 pub(super) fn render_table(
     table: &Table,
     sp: &SectionProperties,
@@ -232,6 +384,14 @@ pub(super) fn render_table(
         pb.slot_top -= prev_space_after;
     }
 
+    // Count contiguous header rows from the start of the table (per OOXML spec,
+    // only contiguous header rows starting from row 0 are repeated).
+    let header_count = table
+        .rows
+        .iter()
+        .take_while(|r| r.is_header)
+        .count();
+
     for (ri, (row, layout)) in table.rows.iter().zip(row_layouts.iter()).enumerate() {
         let row_h = layout.height;
         log::debug!(
@@ -247,145 +407,24 @@ pub(super) fn render_table(
             pb.flush_page(sect_idx);
             pb.is_first_page_of_section = false;
             pb.slot_top = sp.page_height - sp.margin_top;
-        }
 
-        let row_top = pb.slot_top;
-        let row_bottom = row_top - row_h;
-
-        let mut grid_col = 0usize;
-        for (cell, (lines, line_h, font_size)) in row.cells.iter().zip(layout.cell_lines.iter()) {
-            let span = cell.grid_span.max(1) as usize;
-            let col_w: f32 = col_widths[grid_col..col_widths.len().min(grid_col + span)]
-                .iter()
-                .sum();
-            let cell_x = table_left
-                + col_widths[..grid_col.min(col_widths.len())]
-                    .iter()
-                    .sum::<f32>();
-            grid_col += span;
-
-            if cell.v_merge == VMerge::Continue {
-                continue;
-            }
-
-            if let Some([r, g, b]) = cell.shading {
-                let b_borders = &cell.borders;
-                let inset = (b_borders.top.width
-                    + b_borders.bottom.width
-                    + b_borders.left.width
-                    + b_borders.right.width)
-                    / 8.0;
-                pb.content.save_state();
-                pb.content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-                pb.content.rect(
-                    cell_x + inset,
-                    row_bottom + inset,
-                    col_w - 2.0 * inset,
-                    row_h - 2.0 * inset,
-                );
-                pb.content.fill_nonzero();
-                pb.content.restore_state();
-            }
-
-            if !lines.is_empty() && !lines.iter().all(|l| l.chunks.is_empty()) {
-                let text_x = cell_x + cm.left;
-                let text_w = (col_w - cm.left - cm.right).max(0.0);
-                let first_run = cell.paragraphs.first().and_then(|p| p.runs.first());
-                let mut kb = String::new();
-                let ascender_ratio = first_run
-                    .map(|r| font_key_buf(r, &mut kb))
-                    .and_then(|k| ctx.fonts.get(k))
-                    .and_then(|e| e.ascender_ratio)
-                    .unwrap_or(0.75);
-
-                let content_h = lines.len() as f32 * line_h;
-                let baseline_y = match cell.v_align {
-                    CellVAlign::Top => row_top - cm.top - font_size * ascender_ratio,
-                    CellVAlign::Center => {
-                        let avail = row_h - cm.top - cm.bottom;
-                        let offset = (avail - content_h) / 2.0;
-                        row_top - cm.top - offset.max(0.0) - font_size * ascender_ratio
-                    }
-                    CellVAlign::Bottom => {
-                        let avail = row_h - cm.top - cm.bottom;
-                        let offset = avail - content_h;
-                        row_top - cm.top - offset.max(0.0) - font_size * ascender_ratio
-                    }
-                };
-
-                let alignment = cell
-                    .paragraphs
-                    .first()
-                    .map(|p| p.alignment)
-                    .unwrap_or(Alignment::Left);
-
-                render_paragraph_lines(
-                    &mut pb.content,
-                    lines,
-                    &alignment,
-                    text_x,
-                    text_w,
-                    baseline_y,
-                    *line_h,
-                    lines.len(),
-                    0,
-                    &mut Vec::new(),
-                    0.0,
-                    ctx.fonts,
-                );
-            }
-        }
-
-        // Draw per-cell borders with color/width
-        let mut grid_col = 0usize;
-        for cell in &row.cells {
-            let span = cell.grid_span.max(1) as usize;
-            let col_w: f32 = col_widths[grid_col..col_widths.len().min(grid_col + span)]
-                .iter()
-                .sum();
-            let bx = table_left
-                + col_widths[..grid_col.min(col_widths.len())]
-                    .iter()
-                    .sum::<f32>();
-            grid_col += span;
-
-            let b = &cell.borders;
-            let draw_border = |c: &mut Content,
-                               border: &crate::model::CellBorder,
-                               x1,
-                               y1,
-                               x2,
-                               y2| {
-                if !border.present {
-                    return;
+            // Repeat header rows on the new page
+            if header_count > 0 && ri >= header_count {
+                for hi in 0..header_count {
+                    render_table_row(
+                        &table.rows[hi],
+                        &row_layouts[hi],
+                        &col_widths,
+                        cm,
+                        table_left,
+                        pb,
+                        ctx,
+                    );
                 }
-                c.save_state();
-                c.set_line_width(border.width);
-                if let Some([r, g, b]) = border.color {
-                    c.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-                }
-                c.move_to(x1, y1);
-                c.line_to(x2, y2);
-                c.stroke();
-                c.restore_state();
-            };
-
-            if cell.v_merge != VMerge::Continue {
-                draw_border(&mut pb.content, &b.top, bx, row_top, bx + col_w, row_top);
             }
-            draw_border(&mut pb.content, &b.bottom, bx, row_bottom, bx + col_w, row_bottom);
-            draw_border(&mut pb.content, &b.left, bx, row_top, bx, row_bottom);
-            draw_border(
-                &mut pb.content,
-                &b.right,
-                bx + col_w,
-                row_top,
-                bx + col_w,
-                row_bottom,
-            );
         }
 
-        pb.slot_top = row_bottom;
+        render_table_row(row, layout, &col_widths, cm, table_left, pb, ctx);
     }
 
     if let Some(saved) = saved_slot_top {

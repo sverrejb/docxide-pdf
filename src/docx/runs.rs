@@ -36,7 +36,8 @@ fn parse_styleref_arg(instr: &str) -> Option<String> {
 
 pub(super) struct ParsedRuns {
     pub(super) runs: Vec<Run>,
-    pub(super) has_page_break: bool,
+    pub(super) has_page_break_before: bool,
+    pub(super) has_page_break_after: bool,
     pub(super) has_column_break: bool,
     pub(super) line_break_count: u32,
     pub(super) floating_images: Vec<FloatingImage>,
@@ -286,7 +287,8 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
     let mut connectors: Vec<ConnectorShape> = Vec::new();
     let mut inline_chart: Option<InlineChart> = None;
     let mut smartart: Option<SmartArtDiagram> = None;
-    let mut has_page_break = false;
+    let mut has_page_break_before = false;
+    let mut has_page_break_after = false;
     let mut has_column_break = false;
     let mut line_break_count: u32 = 0;
     let mut in_field = false;
@@ -522,7 +524,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                     });
                 }
                 "br" if !in_field => match child.attribute((WML_NS, "type")) {
-                    Some("page") => has_page_break = true,
+                    Some("page") => has_page_break_after = true,
                     Some("column") => has_column_break = true,
                     _ => line_break_count += 1,
                 },
@@ -605,12 +607,12 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
         .and_then(|ppr| wml_bool(ppr, "pageBreakBefore"))
         .unwrap_or(false)
     {
-        has_page_break = true;
+        has_page_break_before = true;
     }
 
     // Empty paragraphs with explicit font sizing in their paragraph mark (pPr/rPr)
     // need a synthetic run so the renderer computes the correct line height.
-    if runs.is_empty() && !has_page_break {
+    if runs.is_empty() && !has_page_break_before {
         let mark_rpr = ppr.and_then(|ppr| wml(ppr, "rPr"));
         let mark_font_size = mark_rpr
             .and_then(|n| wml_attr(n, "sz"))
@@ -645,7 +647,8 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
 
     ParsedRuns {
         runs,
-        has_page_break,
+        has_page_break_before,
+        has_page_break_after,
         has_column_break,
         line_break_count,
         floating_images,

@@ -706,6 +706,7 @@ fn convert_table(
             cells,
             height: None,
             height_exact: false,
+            is_header: false,
         });
     }
 

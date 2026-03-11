@@ -134,6 +134,7 @@ pub struct EmbeddedImage {
     pub pixel_height: u32,
     pub display_width: f32,  // points
     pub display_height: f32, // points
+    pub jpeg_components: u8,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -346,6 +347,7 @@ pub struct Paragraph {
     pub borders: ParagraphBorders,
     pub shading: Option<[u8; 3]>,
     pub page_break_before: bool,
+    pub page_break_after: bool,
     pub column_break_before: bool,
     pub tab_stops: Vec<TabStop>,
     pub extra_line_breaks: u32,
@@ -379,6 +381,7 @@ impl Default for Paragraph {
             borders: ParagraphBorders::default(),
             shading: None,
             page_break_before: false,
+            page_break_after: false,
             column_break_before: false,
             tab_stops: Vec::new(),
             extra_line_breaks: 0,
@@ -546,6 +549,7 @@ pub struct TableRow {
     pub cells: Vec<TableCell>,
     pub height: Option<f32>,
     pub height_exact: bool,
+    pub is_header: bool,
 }
 
 pub struct TableCell {

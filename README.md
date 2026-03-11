@@ -29,36 +29,39 @@ While the idea, architecture, testing strategy and validation of output are all 
 
 - **Text**: font embedding (TTF/OTF/TTC), bold, italic, underline, strikethrough, double strikethrough, font size, text color, superscript/subscript, small caps, all caps, character spacing, text expansion/compression (`w:w`), hidden text (`w:vanish`), kerning (legacy kern table + GPOS PairAdjustment)
 - **Paragraphs**: left/center/right/justify alignment, space before/after, line spacing (auto, exact, at-least), first-line and hanging indentation, left/right indentation, contextual spacing, keep-next, keep-lines, paragraph borders (top/bottom/left/right/between) with color, paragraph shading, run highlighting
-- **Styles**: paragraph and run style inheritance (`basedOn` chains), document defaults from `docDefaults`, theme fonts and colors
+- **Styles**: paragraph and run style inheritance (`basedOn` chains), document defaults from `docDefaults` (all run properties: bold, italic, caps, smallCaps, vanish, strikethrough, dstrike, underline, color, char_spacing), theme fonts and colors
 - **Lists**: bullet and numbered lists with multi-level nesting, custom number formats, list style inheritance
-- **Tables**: column widths with auto-fit, merged cells (horizontal `gridSpan` and vertical `vMerge`), row heights (exact and minimum), per-cell borders with color/width, cell shading, vertical alignment, cell margins, floating/positioned tables (`tblpPr`)
-- **Images**: inline JPEG/PNG embedding with sizing and alpha transparency, anchored/floating images (all wrap modes), floating image positioning relative to page/margin/column
-- **Text boxes**: DrawingML textboxes (`wps:txbx`) and VML fallback (`v:textbox`), shape fills (solid color with theme color support including lumMod/lumOff), textbox body margins
-- **Charts**: bar (clustered/stacked, vertical/horizontal), line, pie, area, doughnut, radar, scatter, bubble — with axis labels, gridlines, legends
+- **Tables**: column widths with auto-fit, merged cells (horizontal `gridSpan` and vertical `vMerge`), row heights (exact and minimum), per-cell borders with color/width, inline `w:tblBorders`, cell shading, vertical alignment, cell margins, floating/positioned tables (`tblpPr`)
+- **Images**: inline JPEG/PNG embedding with sizing and alpha transparency, grayscale and CMYK JPEG support, anchored/floating images (all wrap modes), floating image positioning relative to page/margin/column, behind-document z-ordering
+- **Text boxes**: DrawingML textboxes (`wps:txbx`) and VML fallback (`v:textbox`), shape fills (solid color with theme color support including lumMod/lumOff, linear gradients with multiple color stops), textbox body margins
+- **Shapes & geometry**: all 187 OOXML preset shapes via formula-based geometry engine (guide formulas, adjustment values), custom geometry paths (`a:custGeom` with moveTo, lineTo, cubicBezTo, arcTo), shape fills and strokes
+- **Charts**: bar (clustered/stacked, vertical/horizontal), line, pie, area, doughnut, radar, scatter, bubble — with axis labels, tick marks, gridlines, legends, bubble fill opacity
 - **Page layout**: page size, margins, document grid (`linePitch`), explicit page breaks, `pageBreakBefore`, automatic page breaking with widow/orphan control
-- **Sections**: multiple sections with `nextPage`/`continuous`/`oddPage`/`evenPage` breaks, per-section page size and margins
+- **Sections**: multiple sections with `nextPage`/`continuous`/`oddPage`/`evenPage` breaks, per-section page size and margins, blank page insertion for odd/even page alignment
 - **Multi-column layout**: 2+ columns with custom widths and spacing, column breaks, column separators
-- **Headers/footers**: default, first-page, and even/odd variants, per-section headers/footers, STYLEREF field resolution, page number and page count fields, images in headers/footers
+- **Headers/footers**: default, first-page, and even/odd variants, per-section headers/footers, STYLEREF field resolution (spec-compliant backward search), page number and page count fields, images in headers/footers, correct z-ordering (behind body content)
 - **Footnotes**: footnote references, footnote rendering at page bottom with separator line
 - **Fields**: PAGE, NUMPAGES, STYLEREF (with spec-compliant search order), field code cached results for non-dynamic fields
 - **Hyperlinks**: clickable links in PDF output (URI link annotations)
 - **Tab stops**: left, center, right, decimal with leader dots
 - **Track changes**: final mode (insertions included, deletions removed — matches Word's PDF export)
-- **SmartArt**: basic rendering via pre-flattened drawing shapes (`dsp:drawing`) — rectangles, ellipses, arrows with fills, strokes, and centered text
-- **Compatibility**: `mc:AlternateContent` fallback, structured document tag (`w:sdt`) content extraction, `altChunk` HTML content parsing
+- **SmartArt**: rendering via pre-flattened drawing shapes (`dsp:drawing`) with full geometry engine support — all 187 preset shapes, custom geometry, fills (solid, gradient), strokes, and text
+- **Document settings**: `word/settings.xml` parsing — even/odd headers, default tab stop interval, mirror margins
+- **Compatibility**: `mc:AlternateContent` fallback, structured document tag (`w:sdt`) content extraction, `altChunk` HTML content parsing, smart tag handling
 - **Fonts**: cross-platform font search (macOS/Linux/Windows), embedded DOCX font extraction and deobfuscation, font subsetting (CIDFont/Type0), disk-cached font index, font substitution via `fontTable.xml` altName and family-class fallback
 - **Output optimization**: font subsetting, content stream compression
 
 ### Not yet supported
 
-- **Text**: ligatures, complex script shaping (Arabic, Devanagari, etc.), CJK fallback fonts
+- **Text**: text shaping/ligatures (fi, fl), complex script shaping (Arabic, Devanagari, etc.), Unicode line breaking for CJK/Thai
 - **Tables**: conditional formatting (`tblLook`/`tblStylePr` — banded rows, first/last column styles), nested tables, text direction in cells (`textDirection`)
-- **Images**: text wrapping around floating images/textboxes, EMF/WMF vector images
+- **Images**: text wrapping around floating images/textboxes/shapes, EMF/WMF vector images, shape clipping to bounding box
 - **Layout**: distribute alignment (`w:jc val="distribute"`), vertical page alignment (`w:vAlign` on section), right-to-left (bidi) text
+- **Charts**: 3D charts, stock charts, combo charts, stacked bar rendering, data labels, chart titles, secondary axes
+- **SmartArt**: only pre-flattened `dsp:drawing` fallback; no layout engine for documents missing the fallback (see roadmap)
 - **PDF features**: bookmarks/outline, document metadata (title, author)
-- **SmartArt**: only basic rendering via pre-flattened drawing fallback (`dsp:drawing`); no layout engine (see roadmap)
-- **Features**: table of contents generation, endnotes, OLE objects
-- **Fonts**: bundled fallback fonts, text shaping (ligatures, complex scripts)
+- **Features**: table of contents generation, endnotes, OLE objects, radial/pattern gradient fills
+- **Fonts**: bundled fallback fonts, CJK fallback font chain, text shaping via rustybuzz (ligatures, complex scripts)
 
 ## Examples
 
@@ -136,57 +139,6 @@ Font scanning results are cached to disk (per-directory, invalidated by mtime). 
 - **macOS**: `~/Library/Caches/docxide-pdf/font-index.tsv`
 - **Linux**: `$XDG_CACHE_HOME/docxide-pdf/font-index.tsv` (default `~/.cache/`)
 - **Windows**: `%LOCALAPPDATA%\docxide-pdf\cache\font-index.tsv`
-
-## Architecture
-
-```
-src/
-  lib.rs              — public API
-  main.rs             — CLI binary (behind `cli` feature)
-  error.rs            — Error enum
-  model.rs            — Document/Section/Paragraph/Run intermediate representation
-  fonts/
-    mod.rs            — font registration, metrics, fallback
-    discovery.rs      — cross-platform font search, disk cache
-    embed.rs          — font embedding, kern/GPOS extraction, subsetting
-    encoding.rs       — WinAnsi encoding, glyph mapping
-    cache.rs          — font index disk cache (TSV)
-  docx/
-    mod.rs            — DOCX ZIP + XML → Document parser, shared utilities
-    styles.rs         — theme, style parsing, style inheritance
-    runs.rs           — run-level XML → Vec<Run>
-    numbering.rs      — list/numbering parsing, counter management
-    images.rs         — image extraction (inline + floating), chart detection
-    charts.rs         — chart XML parsing (8 chart types)
-    textbox.rs        — textbox parsing (DrawingML + VML)
-    tables.rs         — table + cell parsing
-    embedded_fonts.rs — DOCX font extraction and deobfuscation
-    sections.rs       — section properties, columns, headers/footers refs
-    headers_footers.rs— header/footer/footnote XML parsing
-    settings.rs       — document settings (tab stops, mirror margins)
-    alt_chunk.rs      — altChunk HTML content parsing
-  pdf/
-    mod.rs            — main render loop, header/footer rendering
-    layout.rs         — text layout, line building, paragraph rendering
-    table.rs          — table layout, auto-fit, table rendering
-    charts.rs         — cartesian chart rendering (bar/line/area/scatter/bubble/radar)
-    charts_radial.rs  — pie/doughnut chart rendering
-    chart_legend.rs   — shared legend rendering
-    header_footer.rs  — header/footer rendering
-    footnotes.rs      — footnote rendering
-tests/
-  visual_comparison.rs  — Jaccard + SSIM comparison against Word reference PDFs
-  text_boundary.rs      — page/line-level text boundary tests
-  fixtures/<case>/      — input.docx + reference.pdf pairs
-  output/<case>/        — generated.pdf, screenshots, diff images
-tools/
-  analyze-fixtures      — fixture score table, feature audit, XML grep
-  docx-inspect          — inspect ZIP entries and XML inside a DOCX
-  docx-fonts            — print font/style info from a DOCX
-  jaccard               — compute Jaccard similarity between two PNGs or directories
-  case-diff             — render and compare a fixture, print per-page scores
-  graph.py              — live-updating similarity score graph over time
-```
 
 ## Testing
 

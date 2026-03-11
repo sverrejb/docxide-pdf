@@ -1,28 +1,30 @@
 #!/bin/bash
 set -e
 
-if [ -z "$1" ]; then
-  echo "Usage: $0 <iterations>"
+if [ -z "$1" ] || [ -z "$2" ]; then
+  echo "Usage: $0 <plan_file> <iterations>"
   exit 1
 fi
 
-plan="plan_cleanup.md"
+plan="$1"
+iterations="$2"
+progress="${plan%.md}_progress.md"
 
-# TODO: Take plan file as input param,
-# Create ralph-folder with plans and logs
-# Create progress file programmatically
+if [ ! -f "$progress" ]; then
+  echo "# Progress for ${plan}" > "$progress"
+fi
 
-for ((i=1; i<=$1; i++)); do
+for ((i=1; i<=iterations; i++)); do
     echo "====================="
     echo "Iteration $i starting"
     echo "====================="
 
-    result=$(claude --permission-mode acceptEdits -p "@${plan} @progress.txt \
-    The plan_cleanup file has the report detailing codebase improvements that can be done. You are to follow the plan by doing these steps:
+    result=$(claude --permission-mode acceptEdits -p "@${plan} @${progress} \
+    The plan file has instructions for a feature to be implemented. You are to follow the plan by doing these steps:
 1. Read the ${plan} and progress file. \
 2. Find the next incomplete task and implement it. \
-3. Update progress.txt with what you did. \
-4. Mark task in plan.md with completed when done.
+3. Update ${progress} with what you did. \
+4. Mark task in ${plan} with completed when done.
 ONLY DO ONE TASK AT A TIME. You are not to do more than the topmost uncompleted task. \
 If the plan item list is complete, output <promise>COMPLETE</promise>.")
 
