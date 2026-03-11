@@ -239,9 +239,9 @@
     "text_boundary": 0.0
   },
   "scraped/education_consul..": {
-    "jaccard": 0.0668,
-    "ssim": 0.1747,
-    "text_boundary": 0.0256
+    "jaccard": 0.0862,
+    "ssim": 0.2249,
+    "text_boundary": 0.2125
   },
   "scraped/federal_procurem..": {
     "jaccard": 0.5388,

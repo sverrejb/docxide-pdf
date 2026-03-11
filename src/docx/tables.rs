@@ -223,8 +223,8 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                 .and_then(parse_hex_color);
 
             let mut cell_paras = Vec::new();
-            for p in tc
-                .children()
+            for p in collect_block_nodes(tc)
+                .into_iter()
                 .filter(|n| n.tag_name().name() == "p" && n.tag_name().namespace() == Some(WML_NS))
             {
                 let parsed = parse_runs(p, styles, theme, rels, zip, numbering);
