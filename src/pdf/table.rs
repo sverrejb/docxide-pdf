@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use pdf_writer::Content;
+use pdf_writer::{Content, Name, Str};
 
-use crate::fonts::{FontEntry, font_key_buf};
+use crate::fonts::{FontEntry, encode_as_gids, font_key_buf, to_winansi_bytes};
 use crate::model::{Alignment, CellVAlign, SectionProperties, Table, VMerge};
 
 use super::header_footer::substitute_hf_runs;
@@ -103,6 +103,13 @@ struct CellParagraphLayout {
     ascender_ratio: f32,
     alignment: Alignment,
     space_before: f32,
+    indent_left: f32,
+    indent_right: f32,
+    indent_hanging: f32,
+    list_label: String,
+    list_label_font: Option<String>,
+    label_color: Option<[u8; 3]>,
+    first_run_font_key: String,
 }
 
 struct CellLayout {
@@ -113,6 +120,47 @@ struct CellLayout {
 struct RowLayout {
     height: f32,
     cells: Vec<CellLayout>,
+}
+
+fn draw_cell_label(
+    content: &mut Content,
+    para: &CellParagraphLayout,
+    label_x: f32,
+    baseline_y: f32,
+    fonts: &HashMap<String, FontEntry>,
+) {
+    let (pdf_name, bytes) = if let Some(ref lf) = para.list_label_font {
+        if let Some(entry) = fonts.get(lf.as_str()) {
+            let b = match &entry.char_to_gid {
+                Some(map) => encode_as_gids(&para.list_label, map),
+                None => to_winansi_bytes(&para.list_label),
+            };
+            (entry.pdf_name.as_str(), b)
+        } else {
+            return;
+        }
+    } else if let Some(entry) = fonts.get(para.first_run_font_key.as_str()) {
+        let b = match &entry.char_to_gid {
+            Some(map) => encode_as_gids(&para.list_label, map),
+            None => to_winansi_bytes(&para.list_label),
+        };
+        (entry.pdf_name.as_str(), b)
+    } else {
+        return;
+    };
+
+    if let Some([r, g, b]) = para.label_color {
+        content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+    }
+    content
+        .begin_text()
+        .set_font(Name(pdf_name.as_bytes()), para.font_size)
+        .next_line(label_x, baseline_y)
+        .show(Str(&bytes))
+        .end_text();
+    if para.label_color.is_some() {
+        content.set_fill_gray(0.0);
+    }
 }
 
 /// When provided, field codes in header/footer table runs are substituted with
@@ -180,7 +228,7 @@ fn compute_row_layouts(
                         let space_before = if pi > 0 {
                             f32::max(prev_space_after, para.space_before)
                         } else {
-                            0.0
+                            para.space_before
                         };
                         total_h += space_before;
 
@@ -193,11 +241,12 @@ fn compute_row_layouts(
                             .unwrap_or(0.75);
 
                         let lines = if !is_text_empty(runs) {
+                            let para_text_w = (cell_text_w - para.indent_left - para.indent_right).max(0.0);
                             let lines = build_paragraph_lines(
                                 runs,
                                 ctx.fonts,
-                                cell_text_w,
-                                0.0,
+                                para_text_w,
+                                para.indent_hanging,
                                 &std::collections::HashMap::new(),
                             );
                             total_h += lines.len() as f32 * line_h;
@@ -206,6 +255,14 @@ fn compute_row_layouts(
                             vec![]
                         };
 
+                        let first_run_font_key = runs
+                            .first()
+                            .map(|r| {
+                                let mut kb2 = String::new();
+                                font_key_buf(r, &mut kb2).to_owned()
+                            })
+                            .unwrap_or_default();
+
                         paragraphs.push(CellParagraphLayout {
                             lines,
                             line_h,
@@ -213,6 +270,13 @@ fn compute_row_layouts(
                             ascender_ratio,
                             alignment: para.alignment,
                             space_before,
+                            indent_left: para.indent_left,
+                            indent_right: para.indent_right,
+                            indent_hanging: para.indent_hanging,
+                            list_label: para.list_label.clone(),
+                            list_label_font: para.list_label_font.clone(),
+                            label_color: para.runs.first().and_then(|r| r.color),
+                            first_run_font_key,
                         });
 
                         prev_space_after = para.space_after;
@@ -295,17 +359,12 @@ fn render_table_row(
             .any(|p| !p.lines.is_empty() && !p.lines.iter().all(|l| l.chunks.is_empty()));
 
         if has_content {
-            let text_x = cell_x + cm.left;
-            let text_w = (col_w - cm.left - cm.right).max(0.0);
-
-            // Compute total content height across all paragraphs
             let content_h: f32 = cell_layout
                 .paragraphs
                 .iter()
                 .map(|p| p.space_before + p.lines.len() as f32 * p.line_h)
                 .sum();
 
-            // Vertical alignment offset
             let v_offset = match cell.v_align {
                 CellVAlign::Top => 0.0,
                 CellVAlign::Center => {
@@ -327,7 +386,14 @@ fn render_table_row(
                 }
 
                 cursor_y -= para.space_before;
+                let text_x = cell_x + cm.left + para.indent_left;
+                let text_w = (col_w - cm.left - cm.right - para.indent_left).max(0.0);
                 let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
+
+                if !para.list_label.is_empty() {
+                    let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging;
+                    draw_cell_label(&mut pb.content, para, label_x, baseline_y, ctx.fonts);
+                }
 
                 render_paragraph_lines(
                     &mut pb.content,
@@ -506,8 +572,6 @@ fn render_partial_row(
         });
 
         if has_content {
-            let text_x = cell_x + cm.left;
-            let text_w = (col_w - cm.left - cm.right).max(0.0);
             let mut cursor_y = row_top - cm.top;
 
             for pi in start..end {
@@ -520,7 +584,14 @@ fn render_partial_row(
                 }
 
                 cursor_y -= sb;
+                let text_x = cell_x + cm.left + para.indent_left;
+                let text_w = (col_w - cm.left - cm.right - para.indent_left).max(0.0);
                 let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
+
+                if !para.list_label.is_empty() {
+                    let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging;
+                    draw_cell_label(&mut pb.content, para, label_x, baseline_y, ctx.fonts);
+                }
 
                 render_paragraph_lines(
                     &mut pb.content,
@@ -794,9 +865,6 @@ pub(super) fn render_header_footer_table(
                 .any(|p| !p.lines.is_empty() && !p.lines.iter().all(|l| l.chunks.is_empty()));
 
             if has_content {
-                let text_x = cell_x + cm.left;
-                let text_w = (col_w - cm.left - cm.right).max(0.0);
-
                 let content_h: f32 = cell_layout
                     .paragraphs
                     .iter()
@@ -824,7 +892,14 @@ pub(super) fn render_header_footer_table(
                     }
 
                     cursor_y -= para.space_before;
+                    let text_x = cell_x + cm.left + para.indent_left;
+                    let text_w = (col_w - cm.left - cm.right - para.indent_left).max(0.0);
                     let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
+
+                    if !para.list_label.is_empty() {
+                        let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging;
+                        draw_cell_label(content, para, label_x, baseline_y, ctx.fonts);
+                    }
 
                     render_paragraph_lines(
                         content,

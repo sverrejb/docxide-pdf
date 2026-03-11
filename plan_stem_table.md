@@ -14,7 +14,7 @@ The grey header rows in the second table (numId=28, decimal "1.", "2.", etc.) ha
 
 ## Implementation
 
-### Step 1: Fix style-based numbering in table cell parsing
+### Step 1: Fix style-based numbering in table cell parsing ✅ COMPLETED
 **File**: `src/docx/tables.rs:250-252`
 
 Change:
@@ -35,7 +35,7 @@ let (mut indent_left, mut indent_hanging, list_label, list_label_font) =
 
 This enables `ListBullet` style paragraphs in table cells to resolve their bullet from the style's `numId=16`.
 
-### Step 2: Per-paragraph data structures in table layout
+### Step 2: Per-paragraph data structures in table layout ✅ COMPLETED
 **File**: `src/pdf/table.rs`
 
 Add new structs (before `compute_row_layouts`):
@@ -61,7 +61,7 @@ struct CellLayout {
 
 Replace `RowLayout.cell_lines: Vec<(Vec<TextLine>, f32, f32)>` with `cells: Vec<CellLayout>`.
 
-### Step 3: Refactor `compute_row_layouts` for per-paragraph layout
+### Step 3: Refactor `compute_row_layouts` for per-paragraph layout ✅ COMPLETED
 **File**: `src/pdf/table.rs:112-207`
 
 The existing loop already iterates paragraphs and computes per-paragraph `line_h`, `font_size`, spacing. Instead of flattening into `all_lines`, collect into `Vec<CellParagraphLayout>`.
@@ -76,7 +76,7 @@ For each paragraph, store:
 
 Height calculation: `cm.top + cm.bottom + sum(para.space_gap + para.lines.len() * para.line_h) + final_space_after`
 
-### Step 4: Refactor `render_table_row` for per-paragraph rendering
+### Step 4: Refactor `render_table_row` for per-paragraph rendering ✅ COMPLETED
 **File**: `src/pdf/table.rs:209-359`
 
 Replace the single `render_paragraph_lines` call (lines 289-302) with a per-paragraph loop:
@@ -128,12 +128,12 @@ for para_layout in &cell_layout.paragraphs {
 }
 ```
 
-### Step 5: Make `label_for_paragraph` accessible from table.rs
+### Step 5: Make `label_for_paragraph` accessible from table.rs ✅ COMPLETED
 **File**: `src/pdf/mod.rs`
 
 Change `fn label_for_paragraph` and `fn label_for_run` from private to `pub(super)` so `table.rs` can call them.
 
-### Step 6: Update header/footer table rendering
+### Step 6: Update header/footer table rendering ✅ COMPLETED
 **File**: `src/pdf/table.rs` (the `render_header_footer_table` function)
 
 Must also adapt to the new `CellLayout` struct (same changes as Step 4 but simpler since h/f tables are typically single-paragraph cells).

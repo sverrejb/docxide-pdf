@@ -189,9 +189,9 @@
     "text_boundary": 0.1632
   },
   "scraped/bush_fires_act_c..": {
-    "jaccard": 0.3915,
-    "ssim": 0.7732,
-    "text_boundary": 0.804
+    "jaccard": 0.4102,
+    "ssim": 0.7958,
+    "text_boundary": 0.8043
   },
   "scraped/centrifugal_wate..": {
     "jaccard": 0.7923,
@@ -344,9 +344,9 @@
     "text_boundary": 0.4063
   },
   "scraped/stem_partnership..": {
-    "jaccard": 0.2802,
-    "ssim": 0.4191,
-    "text_boundary": 0.2914
+    "jaccard": 0.2875,
+    "ssim": 0.385,
+    "text_boundary": 0.2143
   },
   "scraped/transition_to_wo..": {
     "jaccard": 0.0676,
