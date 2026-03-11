@@ -123,7 +123,7 @@ pub(super) fn render_smartart(
                 let tw = charts::text_width(line, fs, sa_font_entry);
                 let tx = diag_x + shape.x + (shape.width - tw) / 2.0;
                 let ty = text_top_y - fs - (i as f32) * line_h;
-                charts::show_text(content, sa_font_pdf_name, fs, tx, ty, line);
+                charts::show_text_encoded(content, sa_font_pdf_name, fs, tx, ty, line, sa_font_entry);
             }
             content.restore_state();
         }

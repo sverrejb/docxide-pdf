@@ -345,14 +345,17 @@ fn render_arc(
     let cx = x + rx;
     let cy = y - ry;
 
-    // OOXML arc: adj1=start, adj2=end; clockwise in y-down coords
-    // PDF: counterclockwise in y-up coords; arc from adj2→adj1 maps
-    // to PDF by adding 180° (y-flip reversal)
-    let math_start = (180.0 + end_deg + rotation_deg).to_radians();
-    let math_end = (180.0 + start_deg + rotation_deg).to_radians();
+    // OOXML sweep: from start_deg (adj1) to end_deg (adj2), always positive
+    let mut sweep_deg = end_deg - start_deg;
+    if sweep_deg <= 0.0 {
+        sweep_deg += 360.0;
+    }
 
-    let mut angle = math_start;
-    let total = math_end - math_start;
+    // OOXML uses standard trig angles (0°=right, CCW positive) displayed
+    // in y-down coords (so visually clockwise). For PDF y-up, negate angles.
+    let math_start = (-(start_deg + rotation_deg)).to_radians();
+    let total = -(sweep_deg).to_radians();
+
     if total.abs() < 0.001 {
         return;
     }
@@ -365,14 +368,14 @@ fn render_arc(
         (cx + rx * a.cos(), cy + ry * a.sin())
     };
 
+    let mut angle = math_start;
     let (sx, sy) = pt(angle);
     content.move_to(sx, sy);
 
     for _ in 0..n_segs {
         let a0 = angle;
         let a1 = angle + step;
-        let alpha = 4.0 * (1.0 - (step / 4.0).cos()) / (step / 4.0).sin() / 3.0;
-        // Unscaled unit circle tangent control points, then scale by radii
+        let alpha = 4.0 * (1.0 - (step / 2.0).cos()) / (step / 2.0).sin() / 3.0;
         let (x0, y0) = pt(a0);
         let (x3, y3) = pt(a1);
         let cp1x = x0 - alpha * rx * a0.sin();
@@ -781,6 +784,18 @@ fn collect_and_register_fonts(
                     .entry(key)
                     .or_default()
                     .insert(leader_char);
+            }
+        }
+    }
+    // Include SmartArt text characters in the first body font's subset
+    if let Some(first_run) = all_runs.first() {
+        let sa_key = font_key_buf(first_run, &mut key_buf).to_string();
+        let chars = used_chars_per_font.entry(sa_key).or_default();
+        for para in &all_paras {
+            if let Some(ref diagram) = para.smartart {
+                for shape in &diagram.shapes {
+                    chars.extend(shape.text.chars());
+                }
             }
         }
     }
@@ -1547,7 +1562,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     }
 
                     for tb in &para.textboxes {
-                        if tb.wrap_type == crate::model::WrapType::TopAndBottom {
+                        let reserve = match tb.wrap_type {
+                            crate::model::WrapType::TopAndBottom => true,
+                            crate::model::WrapType::Square => {
+                                tb.width_pt >= text_width * 0.9
+                            }
+                            _ => false,
+                        };
+                        if reserve {
                             let tb_bottom = tb.v_offset_pt + tb.height_pt + tb.dist_bottom;
                             content_h = content_h.max(tb_bottom);
                         }

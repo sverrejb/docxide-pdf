@@ -261,9 +261,28 @@ pub(super) fn embed_truetype(
         .descendant_font(cid_font_ref)
         .to_unicode(tounicode_ref);
 
-    let line_gap = face.line_gap() as f32;
-    let line_h_ratio = (face.ascender() as f32 - face.descender() as f32 + line_gap) / units;
-    let ascender_ratio = face.ascender() as f32 / units;
+    // Use OS/2 table metrics (what Word uses) instead of hhea metrics
+    let (line_h_ratio, ascender_ratio) = if let Some(os2) = face.tables().os2 {
+        if os2.use_typographic_metrics() {
+            let asc = os2.typographic_ascender() as f32;
+            let desc = os2.typographic_descender() as f32;
+            let gap = os2.typographic_line_gap() as f32;
+            ((asc - desc + gap) / units, asc / units)
+        } else {
+            let win_asc = os2.windows_ascender() as f32;
+            let win_desc = os2.windows_descender() as f32;
+            // usWinAscent/Descent define glyph clipping bounds; hhea lineGap
+            // provides external leading that Word includes in line spacing
+            let gap = face.line_gap() as f32;
+            ((win_asc - win_desc + gap) / units, win_asc / units)
+        }
+    } else {
+        let line_gap = face.line_gap() as f32;
+        (
+            (face.ascender() as f32 - face.descender() as f32 + line_gap) / units,
+            face.ascender() as f32 / units,
+        )
+    };
 
     Some(FontMetrics {
         widths_1000,

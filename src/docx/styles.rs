@@ -51,12 +51,35 @@ fn lang_to_script(lang: &str) -> &'static str {
     }
 }
 
+#[derive(Clone, Default)]
+pub(super) struct ColorTransforms {
+    pub(super) lum_mod: Option<f32>,
+    pub(super) lum_off: Option<f32>,
+    pub(super) sat_mod: Option<f32>,
+    pub(super) tint: Option<f32>,
+    pub(super) shade: Option<f32>,
+}
+
+pub(super) struct ThemeGradientStop {
+    pub(super) position: f32,
+    pub(super) transforms: ColorTransforms,
+}
+
+pub(super) enum ThemeFillStyle {
+    Solid,
+    Gradient {
+        stops: Vec<ThemeGradientStop>,
+        angle_deg: f32,
+    },
+}
+
 pub(super) struct ThemeFonts {
     pub(super) major: String,
     pub(super) minor: String,
     pub(super) major_east_asia: String,
     pub(super) minor_east_asia: String,
     pub(super) colors: HashMap<String, [u8; 3]>,
+    pub(super) fill_styles: Vec<ThemeFillStyle>,
 }
 
 pub(super) struct StyleDefaults {
@@ -167,6 +190,7 @@ pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(
     let mut major_east_asia = String::new();
     let mut minor_east_asia = String::new();
     let mut colors = HashMap::new();
+    let mut fill_styles = Vec::new();
 
     let script = east_asia_lang.map(lang_to_script).unwrap_or("Jpan");
 
@@ -222,6 +246,29 @@ pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(
                         }
                     }
                 }
+                "fillStyleLst" => {
+                    for child in node
+                        .children()
+                        .filter(|n| n.tag_name().namespace() == Some(DML_NS))
+                    {
+                        match child.tag_name().name() {
+                            "solidFill" => fill_styles.push(ThemeFillStyle::Solid),
+                            "gradFill" => {
+                                if let Some(gs_lst) = dml(child, "gsLst") {
+                                    let stops = parse_theme_gradient_stops(gs_lst);
+                                    let angle_deg = dml(child, "lin")
+                                        .and_then(|lin| lin.attribute("ang"))
+                                        .and_then(|v| v.parse::<f32>().ok())
+                                        .map(|v| v / 60_000.0)
+                                        .unwrap_or(0.0);
+                                    fill_styles
+                                        .push(ThemeFillStyle::Gradient { stops, angle_deg });
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -233,7 +280,56 @@ pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(
         major_east_asia,
         minor_east_asia,
         colors,
+        fill_styles,
     }
+}
+
+fn parse_theme_gradient_stops(gs_lst: roxmltree::Node) -> Vec<ThemeGradientStop> {
+    gs_lst
+        .children()
+        .filter(|n| n.tag_name().name() == "gs" && n.tag_name().namespace() == Some(DML_NS))
+        .map(|gs| {
+            let position = gs
+                .attribute("pos")
+                .and_then(|v| v.parse::<f32>().ok())
+                .map(|v| v / 100_000.0)
+                .unwrap_or(0.0);
+            let transforms = gs
+                .descendants()
+                .find(|n| {
+                    n.tag_name().name() == "schemeClr"
+                        && n.tag_name().namespace() == Some(DML_NS)
+                })
+                .map(|scheme_clr| parse_color_transforms(scheme_clr))
+                .unwrap_or_default();
+            ThemeGradientStop {
+                position,
+                transforms,
+            }
+        })
+        .collect()
+}
+
+fn parse_color_transforms(scheme_clr: roxmltree::Node) -> ColorTransforms {
+    let mut t = ColorTransforms::default();
+    for child in scheme_clr
+        .children()
+        .filter(|n| n.tag_name().namespace() == Some(DML_NS))
+    {
+        let val = child
+            .attribute("val")
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(|v| v / 100_000.0);
+        match child.tag_name().name() {
+            "lumMod" => t.lum_mod = val,
+            "lumOff" => t.lum_off = val,
+            "satMod" => t.sat_mod = val,
+            "tint" => t.tint = val,
+            "shade" => t.shade = val,
+            _ => {}
+        }
+    }
+    t
 }
 
 pub(super) fn resolve_font(

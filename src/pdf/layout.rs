@@ -801,7 +801,16 @@ pub(super) fn render_paragraph_lines(
                     } else {
                         y - chunk.font_size * 0.12
                     };
-                    decorations.push((x, ul_y - thick, chunk.width, thick, chunk.color));
+                    let ul_top = ul_y - thick;
+                    // Merge with previous underline decoration if same y and color
+                    let merged = decorations.last_mut().filter(|(_, dy, _, dh, dc)| {
+                        (*dy - ul_top).abs() < 0.01 && (*dh - thick).abs() < 0.01 && *dc == chunk.color
+                    });
+                    if let Some(prev) = merged {
+                        prev.2 = (x + chunk.width) - prev.0;
+                    } else {
+                        decorations.push((x, ul_top, chunk.width, thick, chunk.color));
+                    }
                 }
                 if chunk.strikethrough {
                     let thick = (chunk.font_size * 0.05).max(0.5);

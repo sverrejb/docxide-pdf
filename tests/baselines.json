@@ -159,8 +159,8 @@
     "text_boundary": 0.9909
   },
   "cases/case7": {
-    "jaccard": 0.693,
-    "ssim": 0.9171,
+    "jaccard": 0.6931,
+    "ssim": 0.9172,
     "text_boundary": 1.0
   },
   "cases/case8": {
@@ -169,8 +169,8 @@
     "text_boundary": 1.0
   },
   "cases/case9": {
-    "jaccard": 0.7053,
-    "ssim": 0.9007,
+    "jaccard": 0.7057,
+    "ssim": 0.9013,
     "text_boundary": 1.0
   },
   "samples/sample500kB": {
@@ -214,13 +214,13 @@
     "text_boundary": 0.4819
   },
   "scraped/czech_cafeteria_..": {
-    "jaccard": 0.737,
-    "ssim": 0.873,
+    "jaccard": 0.7373,
+    "ssim": 0.8732,
     "text_boundary": 1.0
   },
   "scraped/czech_expert_wit..": {
-    "jaccard": 0.6479,
-    "ssim": 0.8177,
+    "jaccard": 0.6516,
+    "ssim": 0.8247,
     "text_boundary": 0.9375
   },
   "scraped/czech_grant_appl..": {
@@ -229,8 +229,8 @@
     "text_boundary": 1.0
   },
   "scraped/czech_tree_cutti..": {
-    "jaccard": 0.575,
-    "ssim": 0.778,
+    "jaccard": 0.5767,
+    "ssim": 0.78,
     "text_boundary": 1.0
   },
   "scraped/east_asia_confer..": {
@@ -364,9 +364,9 @@
     "text_boundary": 0.8304
   },
   "scraped/vaccines_history..": {
-    "jaccard": 0.4118,
-    "ssim": 0.4852,
-    "text_boundary": 0.1466
+    "jaccard": 0.4116,
+    "ssim": 0.4874,
+    "text_boundary": 0.1522
   },
   "scraped/waste_management..": {
     "jaccard": 0.6845,
