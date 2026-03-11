@@ -999,6 +999,15 @@ fn embed_all_images(
     }
 }
 
+fn srgb_to_linear(c: u8) -> f32 {
+    let s = c as f32 / 255.0;
+    if s <= 0.04045 {
+        s / 12.92
+    } else {
+        ((s + 0.055) / 1.055).powf(2.4)
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn assemble_pdf_pages(
     pdf: &mut Pdf,
@@ -1072,14 +1081,14 @@ fn assemble_pdf_pages(
                         pdf.exponential_function(fref)
                             .domain([0.0, 1.0])
                             .c0([
-                                c0[0] as f32 / 255.0,
-                                c0[1] as f32 / 255.0,
-                                c0[2] as f32 / 255.0,
+                                srgb_to_linear(c0[0]),
+                                srgb_to_linear(c0[1]),
+                                srgb_to_linear(c0[2]),
                             ])
                             .c1([
-                                c1[0] as f32 / 255.0,
-                                c1[1] as f32 / 255.0,
-                                c1[2] as f32 / 255.0,
+                                srgb_to_linear(c1[0]),
+                                srgb_to_linear(c1[1]),
+                                srgb_to_linear(c1[2]),
                             ])
                             .n(1.0);
                         fref
@@ -1094,14 +1103,14 @@ fn assemble_pdf_pages(
                                 pdf.exponential_function(fref)
                                     .domain([0.0, 1.0])
                                     .c0([
-                                        c0[0] as f32 / 255.0,
-                                        c0[1] as f32 / 255.0,
-                                        c0[2] as f32 / 255.0,
+                                        srgb_to_linear(c0[0]),
+                                        srgb_to_linear(c0[1]),
+                                        srgb_to_linear(c0[2]),
                                     ])
                                     .c1([
-                                        c1[0] as f32 / 255.0,
-                                        c1[1] as f32 / 255.0,
-                                        c1[2] as f32 / 255.0,
+                                        srgb_to_linear(c1[0]),
+                                        srgb_to_linear(c1[1]),
+                                        srgb_to_linear(c1[2]),
                                     ])
                                     .n(1.0);
                                 fref
@@ -1141,7 +1150,15 @@ fn assemble_pdf_pages(
                     shading
                         .shading_type(pdf_writer::types::FunctionShadingType::Axial)
                         .color_space()
-                        .device_rgb();
+                        .cal_rgb(
+                            [0.9505, 1.0, 1.0890],
+                            None,
+                            None,
+                            Some([
+                                0.4124, 0.2126, 0.0193, 0.3576, 0.7152, 0.1192,
+                                0.1805, 0.0722, 0.9505,
+                            ]),
+                        );
                     shading
                         .function(func_ref)
                         .coords([x0, y0, x1, y1])

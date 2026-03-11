@@ -3,6 +3,7 @@
     "allow": [
       "Bash",
       "Read",
+      "Search",
       "Bash(lsof:*)",
       "mcp__local-rag__query_documents",
       "mcp__local-rag__ingest_file",
