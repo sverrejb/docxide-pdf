@@ -143,6 +143,11 @@
     "ssim": 0.9138,
     "text_boundary": 1.0
   },
+  "cases/case38": {
+    "jaccard": 0.9672,
+    "ssim": 0.8337,
+    "text_boundary": 1.0
+  },
   "cases/case4": {
     "jaccard": 0.7293,
     "ssim": 0.9025,
@@ -364,9 +369,9 @@
     "text_boundary": 0.8304
   },
   "scraped/vaccines_history..": {
-    "jaccard": 0.4116,
-    "ssim": 0.4875,
-    "text_boundary": 0.1522
+    "jaccard": 0.4155,
+    "ssim": 0.4907,
+    "text_boundary": 0.13
   },
   "scraped/waste_management..": {
     "jaccard": 0.6845,

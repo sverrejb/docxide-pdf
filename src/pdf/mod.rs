@@ -1258,6 +1258,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     let pages_id = alloc();
 
     let (seen_fonts, font_order) = collect_and_register_fonts(doc, &mut pdf, &mut alloc);
+    let smartart_font_key = font_order.first().map(|s| s.as_str()).unwrap_or("");
     let ctx = RenderContext {
         fonts: &seen_fonts,
         doc_line_spacing: doc.line_spacing,
@@ -1588,7 +1589,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         };
                         if reserve {
                             let tb_bottom = tb.v_offset_pt + tb.height_pt + tb.dist_bottom;
-                            content_h = content_h.max(tb_bottom);
+                            match tb.v_relative_from {
+                                VRelativeFrom::Paragraph => {
+                                    content_h = content_h.max(tb_bottom);
+                                }
+                                _ => {
+                                    content_h += tb_bottom;
+                                }
+                            }
                         }
                     }
 
@@ -1941,6 +1949,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             col_x,
                             pb.slot_top,
                             ctx.fonts,
+                            smartart_font_key,
                         );
                     } else if (para.image.is_some() || text_empty) && para.content_height > 0.0 {
                         if let Some(pdf_name) = image_pdf_names.get(&global_block_idx) {

@@ -26,7 +26,7 @@ The `max()` **swallows the paragraph's own line height**. When a `wrapTopAndBott
 
 ## Plan
 
-### Step 1: Fix textbox content_h reservation to be additive for margin/page-relative textboxes
+### Step 1: Fix textbox content_h reservation to be additive for margin/page-relative textboxes [COMPLETED]
 
 **File**: `src/pdf/mod.rs` ~line 1580-1592
 
@@ -61,13 +61,13 @@ for tb in &para.textboxes {
 
 Need to add `use crate::model::VRelativeFrom;` if not already imported at the usage site.
 
-### Step 2: Verify and run tests
+### Step 2: Verify and run tests [COMPLETED]
 
 1. `DOCXIDE_CASE=vaccines_history_chapter cargo test -- --nocapture` — verify heading moves closer to reference
 2. `cargo test -- --nocapture` — check for regressions (look for "REGRESSION in:" lines)
 3. `./tools/target/debug/analyze-fixtures` — full score overview
 
-### Step 3: Update baselines
+### Step 3: Update baselines [COMPLETED]
 
 Update `tests/baselines.json` with new scores for `vaccines_history_chapter`.
 

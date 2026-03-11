@@ -57,13 +57,9 @@ pub(super) fn render_smartart(
     diag_x: f32,
     diag_y: f32,
     seen_fonts: &HashMap<String, FontEntry>,
+    smartart_font_key: &str,
 ) {
-    let sa_font_entry = seen_fonts
-        .values()
-        .find(|e| {
-            let lower = e.pdf_name.to_lowercase();
-            !lower.contains("symbol")
-        })
+    let sa_font_entry = seen_fonts.get(smartart_font_key)
         .or_else(|| seen_fonts.values().next());
     let sa_font_pdf_name = sa_font_entry
         .map(|e| e.pdf_name.as_str())
