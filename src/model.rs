@@ -153,6 +153,21 @@ pub enum VerticalPosition {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+pub enum HRelativeFrom {
+    Page,
+    Margin,
+    Column,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum VRelativeFrom {
+    Page,
+    Margin,
+    TopMargin,
+    Paragraph,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum WrapType {
     None,
     Square,
@@ -165,9 +180,9 @@ pub enum WrapType {
 pub struct FloatingImage {
     pub image: EmbeddedImage,
     pub h_position: HorizontalPosition,
-    pub h_relative_from: &'static str,
+    pub h_relative_from: HRelativeFrom,
     pub v_position: VerticalPosition,
-    pub v_relative_from: &'static str,
+    pub v_relative_from: VRelativeFrom,
     pub wrap_type: WrapType,
     pub behind_doc: bool,
 }
@@ -241,7 +256,9 @@ pub struct SmartArtShape {
 }
 
 pub struct SmartArtDiagram {
+    #[allow(dead_code)]
     pub display_width: f32,
+    #[allow(dead_code)]
     pub display_height: f32,
     pub shapes: Vec<SmartArtShape>,
 }
@@ -274,9 +291,9 @@ pub struct Textbox {
     pub width_pt: f32,
     pub height_pt: f32,
     pub h_position: HorizontalPosition,
-    pub h_relative_from: &'static str,
+    pub h_relative_from: HRelativeFrom,
     pub v_offset_pt: f32,
-    pub v_relative_from: &'static str,
+    pub v_relative_from: VRelativeFrom,
     pub fill: Option<ShapeFill>,
     pub shape_type: ShapeGeometry,
     pub margin_left: f32,
@@ -285,6 +302,7 @@ pub struct Textbox {
     #[allow(dead_code)]
     pub margin_bottom: f32,
     pub wrap_type: WrapType,
+    #[allow(dead_code)]
     pub dist_top: f32,
     pub dist_bottom: f32,
     pub behind_doc: bool,
@@ -569,9 +587,8 @@ pub struct ChartSeries {
     pub marker: Option<MarkerSymbol>,
 }
 
-#[allow(dead_code)]
 pub enum ChartType {
-    Bar { horizontal: bool, stacked: bool },
+    Bar { horizontal: bool, #[allow(dead_code)] stacked: bool },
     Line,
     Pie,
     Area,
@@ -582,9 +599,9 @@ pub enum ChartType {
 }
 
 #[derive(Clone)]
-#[allow(dead_code)]
 pub struct ChartAxis {
     pub labels: Vec<String>,
+    #[allow(dead_code)]
     pub delete: bool,
     pub gridline_color: Option<[u8; 3]>,
     pub line_color: Option<[u8; 3]>,

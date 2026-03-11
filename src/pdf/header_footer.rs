@@ -2,10 +2,9 @@ use std::collections::HashMap;
 
 use pdf_writer::{Content, Name, Str};
 
-use crate::fonts::FontEntry;
 use crate::model::{
-    Alignment, Block, FieldCode, HeaderFooter, HorizontalPosition, LineSpacing, Paragraph, Run,
-    SectionProperties,
+    Alignment, Block, FieldCode, HRelativeFrom, HeaderFooter, HorizontalPosition, Paragraph, Run,
+    SectionProperties, VRelativeFrom,
 };
 
 use super::layout::{
@@ -13,7 +12,7 @@ use super::layout::{
     tallest_run_metrics,
 };
 use super::table;
-use super::{label_for_paragraph, resolve_line_h};
+use super::{RenderContext, label_for_paragraph, resolve_line_h};
 
 pub(super) fn substitute_hf_runs(
     runs: &[Run],
@@ -41,8 +40,7 @@ pub(super) fn substitute_hf_runs(
 
 pub(super) fn compute_header_height(
     hf: &HeaderFooter,
-    seen_fonts: &HashMap<String, FontEntry>,
-    doc_line_spacing: LineSpacing,
+    ctx: &RenderContext,
 ) -> f32 {
     let mut height = 0.0f32;
     let mut prev_space_after = 0.0f32;
@@ -51,8 +49,8 @@ pub(super) fn compute_header_height(
             Block::Paragraph(para) => {
                 let inter_gap = f32::max(prev_space_after, para.space_before);
                 height += inter_gap;
-                let (font_size, tallest_lhr, _) = tallest_run_metrics(&para.runs, seen_fonts);
-                let effective_ls = para.line_spacing.unwrap_or(doc_line_spacing);
+                let (font_size, tallest_lhr, _) = tallest_run_metrics(&para.runs, ctx.fonts);
+                let effective_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
                 let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
                 let max_img_h = para
                     .runs
@@ -69,7 +67,7 @@ pub(super) fn compute_header_height(
             }
             Block::Table(table) => {
                 let row_layouts =
-                    table::compute_hf_table_height(table, doc_line_spacing, seen_fonts);
+                    table::compute_hf_table_height(table, ctx);
                 height += row_layouts;
                 prev_space_after = 0.0;
             }
@@ -83,8 +81,7 @@ pub(super) fn compute_header_height(
 pub(super) fn effective_slot_top(
     sp: &SectionProperties,
     is_first: bool,
-    seen_fonts: &HashMap<String, FontEntry>,
-    doc_line_spacing: LineSpacing,
+    ctx: &RenderContext,
 ) -> f32 {
     let header = if is_first && sp.different_first_page {
         sp.header_first.as_ref()
@@ -93,7 +90,7 @@ pub(super) fn effective_slot_top(
     };
     let base = sp.page_height - sp.margin_top;
     if let Some(hf) = header {
-        let hdr_h = compute_header_height(hf, seen_fonts, doc_line_spacing);
+        let hdr_h = compute_header_height(hf, ctx);
         let hdr_bottom = sp.page_height - sp.header_margin - hdr_h;
         base.min(hdr_bottom)
     } else {
@@ -104,8 +101,7 @@ pub(super) fn effective_slot_top(
 pub(super) fn compute_effective_margin_bottom(
     sp: &SectionProperties,
     is_first: bool,
-    seen_fonts: &HashMap<String, FontEntry>,
-    doc_line_spacing: LineSpacing,
+    ctx: &RenderContext,
 ) -> f32 {
     let footer = if is_first && sp.different_first_page {
         sp.footer_first.as_ref()
@@ -114,7 +110,7 @@ pub(super) fn compute_effective_margin_bottom(
     };
     let base = sp.margin_bottom;
     if let Some(hf) = footer {
-        let ftr_h = compute_header_height(hf, seen_fonts, doc_line_spacing);
+        let ftr_h = compute_header_height(hf, ctx);
         let ftr_top = sp.footer_margin + ftr_h;
         base.max(ftr_top)
     } else {
@@ -144,9 +140,8 @@ pub(super) fn hf_paragraphs(hf: &HeaderFooter) -> Vec<&Paragraph> {
 pub(super) fn render_header_footer(
     content: &mut Content,
     hf: &HeaderFooter,
-    seen_fonts: &HashMap<String, FontEntry>,
+    ctx: &RenderContext,
     sp: &SectionProperties,
-    doc_line_spacing: LineSpacing,
     is_header: bool,
     page_num: usize,
     total_pages: usize,
@@ -160,7 +155,7 @@ pub(super) fn render_header_footer(
     let mut cursor_y = if is_header {
         sp.page_height - sp.header_margin
     } else {
-        sp.footer_margin + compute_header_height(hf, seen_fonts, doc_line_spacing)
+        sp.footer_margin + compute_header_height(hf, ctx)
     };
 
     let mut pi = 0usize;
@@ -171,8 +166,7 @@ pub(super) fn render_header_footer(
                 table::render_header_footer_table(
                     table,
                     sp,
-                    doc_line_spacing,
-                    seen_fonts,
+                    ctx,
                     content,
                     &mut cursor_y,
                     page_num,
@@ -193,9 +187,9 @@ pub(super) fn render_header_footer(
                     substitute_hf_runs(&para.runs, page_num, total_pages, styleref_values);
 
                 let (font_size, tallest_lhr, tallest_ar) =
-                    tallest_run_metrics(&substituted_runs, seen_fonts);
+                    tallest_run_metrics(&substituted_runs, ctx.fonts);
                 let ascender_ratio = tallest_ar.unwrap_or(0.75);
-                let effective_ls = para.line_spacing.unwrap_or(doc_line_spacing);
+                let effective_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
                 let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
 
                 let baseline_y = cursor_y - font_size * ascender_ratio;
@@ -204,13 +198,13 @@ pub(super) fn render_header_footer(
                 // Render textboxes
                 for tb in &para.textboxes {
                     let tb_x = match tb.h_relative_from {
-                        "page" => match tb.h_position {
+                        HRelativeFrom::Page => match tb.h_position {
                             HorizontalPosition::AlignCenter => (sp.page_width - tb.width_pt) / 2.0,
                             HorizontalPosition::AlignRight => sp.page_width - tb.width_pt,
                             HorizontalPosition::AlignLeft => 0.0,
                             HorizontalPosition::Offset(o) => o,
                         },
-                        "column" => match tb.h_position {
+                        HRelativeFrom::Column => match tb.h_position {
                             HorizontalPosition::AlignCenter => {
                                 sp.margin_left + (text_width - tb.width_pt) / 2.0
                             }
@@ -220,7 +214,7 @@ pub(super) fn render_header_footer(
                             HorizontalPosition::AlignLeft => sp.margin_left,
                             HorizontalPosition::Offset(o) => sp.margin_left + o,
                         },
-                        "margin" | _ => match tb.h_position {
+                        HRelativeFrom::Margin => match tb.h_position {
                             HorizontalPosition::AlignCenter => {
                                 sp.margin_left + (text_width - tb.width_pt) / 2.0
                             }
@@ -232,9 +226,11 @@ pub(super) fn render_header_footer(
                         },
                     };
                     let tb_y_top = match tb.v_relative_from {
-                        "page" => sp.page_height - tb.v_offset_pt,
-                        "margin" | "topMargin" => sp.page_height - sp.margin_top - tb.v_offset_pt,
-                        _ => slot_top - tb.v_offset_pt,
+                        VRelativeFrom::Page => sp.page_height - tb.v_offset_pt,
+                        VRelativeFrom::Margin | VRelativeFrom::TopMargin => {
+                            sp.page_height - sp.margin_top - tb.v_offset_pt
+                        }
+                        VRelativeFrom::Paragraph => slot_top - tb.v_offset_pt,
                     };
 
                     if let Some(ref fill) = tb.fill {
@@ -255,12 +251,12 @@ pub(super) fn render_header_footer(
                     let mut tb_cursor = tb_y_top - tb.margin_top;
                     let empty_inline_imgs: HashMap<usize, String> = HashMap::new();
                     for tp in &tb.paragraphs {
-                        let tp_ls = tp.line_spacing.unwrap_or(doc_line_spacing);
+                        let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
                         let has_tabs = tp.runs.iter().any(|r| r.is_tab);
                         let tb_lines = if has_tabs {
                             build_tabbed_line(
                                 &tp.runs,
-                                seen_fonts,
+                                ctx.fonts,
                                 &tp.tab_stops,
                                 0.0,
                                 content_w,
@@ -270,26 +266,26 @@ pub(super) fn render_header_footer(
                         } else {
                             build_paragraph_lines(
                                 &tp.runs,
-                                seen_fonts,
+                                ctx.fonts,
                                 content_w,
                                 0.0,
                                 &empty_inline_imgs,
                             )
                         };
                         if tb_lines.is_empty() {
-                            let (fs, _, _) = tallest_run_metrics(&tp.runs, seen_fonts);
+                            let (fs, _, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
                             let lh = resolve_line_h(tp_ls, fs, None);
                             tb_cursor -= tp.space_before + lh + tp.space_after;
                             continue;
                         }
-                        let (tb_fs, _, tb_ar) = tallest_run_metrics(&tp.runs, seen_fonts);
+                        let (tb_fs, _, tb_ar) = tallest_run_metrics(&tp.runs, ctx.fonts);
                         let tb_ascender = tb_ar.unwrap_or(0.75);
                         let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_ar);
                         let tb_baseline = tb_cursor - tp.space_before - tb_fs * tb_ascender;
                         if !tp.list_label.is_empty() {
                             let label_x = content_x + tp.indent_left - tp.indent_hanging;
                             let (label_font_name, label_bytes) =
-                                label_for_paragraph(tp, seen_fonts);
+                                label_for_paragraph(tp, ctx.fonts);
                             if let Some([r, g, b]) = tp.runs.first().and_then(|r| r.color) {
                                 content.set_fill_rgb(
                                     r as f32 / 255.0,
@@ -319,7 +315,7 @@ pub(super) fn render_header_footer(
                             0,
                             &mut Vec::new(),
                             0.0,
-                            seen_fonts,
+                            ctx.fonts,
                         );
                         tb_cursor -=
                             tp.space_before + (tb_lines.len() as f32) * tb_line_h + tp.space_after;
@@ -331,7 +327,7 @@ pub(super) fn render_header_footer(
                     if let Some(pdf_name) = floating_image_names.get(&(pi, fi_idx)) {
                         let img = &fi.image;
                         let fi_x = match fi.h_relative_from {
-                            "page" => match fi.h_position {
+                            HRelativeFrom::Page => match fi.h_position {
                                 HorizontalPosition::AlignCenter => {
                                     (sp.page_width - img.display_width) / 2.0
                                 }
@@ -339,7 +335,7 @@ pub(super) fn render_header_footer(
                                 HorizontalPosition::AlignLeft => 0.0,
                                 HorizontalPosition::Offset(o) => o,
                             },
-                            "margin" | _ => match fi.h_position {
+                            HRelativeFrom::Column | HRelativeFrom::Margin => match fi.h_position {
                                 HorizontalPosition::AlignCenter => {
                                     sp.margin_left + (text_width - img.display_width) / 2.0
                                 }
@@ -443,7 +439,7 @@ pub(super) fn render_header_footer(
                 let lines = if has_tabs {
                     build_tabbed_line(
                         &substituted_runs,
-                        seen_fonts,
+                        ctx.fonts,
                         &para.tab_stops,
                         0.0,
                         text_width,
@@ -453,7 +449,7 @@ pub(super) fn render_header_footer(
                 } else {
                     build_paragraph_lines(
                         &substituted_runs,
-                        seen_fonts,
+                        ctx.fonts,
                         text_width,
                         0.0,
                         &block_inline_images,
@@ -472,7 +468,7 @@ pub(super) fn render_header_footer(
                     0,
                     &mut Vec::new(),
                     0.0,
-                    seen_fonts,
+                    ctx.fonts,
                 );
 
                 let max_img_h = lines

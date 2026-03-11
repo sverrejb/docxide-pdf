@@ -495,13 +495,11 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                         .map(|line_val| parse_line_spacing(n, line_val))
                 });
 
-                let ind = ppr.and_then(|n| wml(n, "ind"));
-                let indent_left =
-                    ind.and_then(|n| twips_attr(n, "start").or_else(|| twips_attr(n, "left")));
-                let indent_right =
-                    ind.and_then(|n| twips_attr(n, "end").or_else(|| twips_attr(n, "right")));
-                let indent_hanging = ind.and_then(|n| twips_attr(n, "hanging"));
-                let indent_first_line = ind.and_then(|n| twips_attr(n, "firstLine"));
+                let (indent_left, indent_right, indent_hanging, indent_first_line) =
+                    match ppr.and_then(|n| wml(n, "ind")) {
+                        Some(ind) => super::extract_indents(ind),
+                        None => (None, None, None, None),
+                    };
 
                 let tab_stops = ppr.map(parse_tab_stops).unwrap_or_default();
 

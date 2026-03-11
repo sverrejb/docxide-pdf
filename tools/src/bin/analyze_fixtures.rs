@@ -561,26 +561,13 @@ fn main() {
 }
 
 fn load_skip_list() -> Vec<String> {
-    // Parse SKIP_FIXTURES from tests/common/mod.rs
-    let Ok(content) = fs::read_to_string("tests/common/mod.rs") else {
+    let Ok(content) = fs::read_to_string("tests/fixtures/SKIPLIST") else {
         return vec![];
     };
-    let mut skips = Vec::new();
-    let mut in_skip = false;
-    for line in content.lines() {
-        if line.contains("SKIP_FIXTURES") && line.contains("&[") {
-            in_skip = true;
-        }
-        if in_skip {
-            if let Some(start) = line.find('"') {
-                if let Some(end) = line[start + 1..].find('"') {
-                    skips.push(line[start + 1..start + 1 + end].to_string());
-                }
-            }
-            if line.contains("];") {
-                break;
-            }
-        }
-    }
-    skips
+    content
+        .lines()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .map(|l| l.to_string())
+        .collect()
 }

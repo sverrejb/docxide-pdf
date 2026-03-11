@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::io::Read;
 
 use crate::model::{
-    EmbeddedImage, FloatingImage, HorizontalPosition, ImageFormat, InlineChart, SmartArtDiagram,
-    VerticalPosition, WrapType,
+    EmbeddedImage, FloatingImage, HRelativeFrom, HorizontalPosition, ImageFormat, InlineChart,
+    SmartArtDiagram, VRelativeFrom, VerticalPosition, WrapType,
 };
 
 use super::charts::parse_chart_from_zip;
@@ -106,14 +106,14 @@ pub(super) struct DrawingInfo {
 
 pub(super) fn parse_anchor_position(
     container: roxmltree::Node,
-) -> (HorizontalPosition, &'static str, VerticalPosition, &'static str) {
+) -> (HorizontalPosition, HRelativeFrom, VerticalPosition, VRelativeFrom) {
     let pos_h = container
         .children()
         .find(|n| n.tag_name().name() == "positionH" && n.tag_name().namespace() == Some(WPD_NS));
     let h_relative = match pos_h.and_then(|n| n.attribute("relativeFrom")) {
-        Some("page") => "page",
-        Some("margin") => "margin",
-        _ => "column",
+        Some("page") => HRelativeFrom::Page,
+        Some("margin") => HRelativeFrom::Margin,
+        _ => HRelativeFrom::Column,
     };
     let h_position = if let Some(align_node) =
         pos_h.and_then(|n| n.children().find(|c| c.tag_name().name() == "align"))
@@ -140,10 +140,10 @@ pub(super) fn parse_anchor_position(
         .children()
         .find(|n| n.tag_name().name() == "positionV" && n.tag_name().namespace() == Some(WPD_NS));
     let v_relative = match pos_v.and_then(|n| n.attribute("relativeFrom")) {
-        Some("page") => "page",
-        Some("margin") => "margin",
-        Some("topMargin") => "topMargin",
-        _ => "paragraph",
+        Some("page") => VRelativeFrom::Page,
+        Some("margin") => VRelativeFrom::Margin,
+        Some("topMargin") => VRelativeFrom::TopMargin,
+        _ => VRelativeFrom::Paragraph,
     };
     let v_position = if let Some(align_node) =
         pos_v.and_then(|n| n.children().find(|c| c.tag_name().name() == "align"))

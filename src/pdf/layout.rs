@@ -55,7 +55,68 @@ pub(super) struct WordChunk {
     pub(super) synthetic_bold: bool,
 }
 
-pub(super) struct LinkAnnotation {
+impl WordChunk {
+    fn text(
+        entry: &FontEntry,
+        run: &Run,
+        word: &str,
+        eff_fs: f32,
+        char_spacing: f32,
+        y_offset: f32,
+        x_offset: f32,
+        width: f32,
+    ) -> Self {
+        Self {
+            pdf_font: entry.pdf_name.clone(),
+            text: word.to_string(),
+            font_size: eff_fs,
+            color: run.color,
+            highlight: run.highlight,
+            x_offset,
+            width,
+            underline: run.underline,
+            strikethrough: run.strikethrough,
+            dstrike: run.dstrike,
+            char_spacing,
+            text_scale: run.text_scale,
+            y_offset,
+            hyperlink_url: run.hyperlink_url.clone(),
+            inline_image_name: None,
+            inline_image_height: 0.0,
+            synthetic_bold: entry.synthetic_bold,
+        }
+    }
+
+    fn image(
+        pdf_name: &str,
+        font_size: f32,
+        x_offset: f32,
+        display_width: f32,
+        display_height: f32,
+    ) -> Self {
+        Self {
+            pdf_font: String::new(),
+            text: String::new(),
+            font_size,
+            color: None,
+            highlight: None,
+            x_offset,
+            width: display_width,
+            underline: false,
+            strikethrough: false,
+            dstrike: false,
+            char_spacing: 0.0,
+            text_scale: 100.0,
+            y_offset: 0.0,
+            hyperlink_url: None,
+            inline_image_name: Some(pdf_name.to_string()),
+            inline_image_height: display_height,
+            synthetic_bold: false,
+        }
+    }
+}
+
+pub(crate) struct LinkAnnotation {
     pub(super) rect: Rect,
     pub(super) url: String,
 }
@@ -156,25 +217,7 @@ pub(super) fn build_paragraph_lines(
                 }
                 pending_space_w = 0.0;
 
-                current_chunks.push(WordChunk {
-                    pdf_font: String::new(),
-                    text: String::new(),
-                    font_size: run.font_size,
-                    color: None,
-                    highlight: None,
-                    x_offset: current_x,
-                    width: img_w,
-                    underline: false,
-                    strikethrough: false,
-                    dstrike: false,
-                    char_spacing: 0.0,
-                    text_scale: 100.0,
-                    y_offset: 0.0,
-                    hyperlink_url: None,
-                    inline_image_name: Some(pdf_name.clone()),
-                    inline_image_height: img.display_height,
-                    synthetic_bold: false,
-                });
+                current_chunks.push(WordChunk::image(pdf_name, run.font_size, current_x, img_w, img.display_height));
                 current_x += img_w;
             }
             continue;
@@ -219,25 +262,7 @@ pub(super) fn build_paragraph_lines(
             }
             pending_space_w = 0.0;
 
-            current_chunks.push(WordChunk {
-                pdf_font: entry.pdf_name.clone(),
-                text: word.to_string(),
-                font_size: eff_fs,
-                color: run.color,
-                highlight: run.highlight,
-                x_offset: current_x,
-                width: ww,
-                underline: run.underline,
-                strikethrough: run.strikethrough,
-                dstrike: run.dstrike,
-                char_spacing: cs,
-                text_scale: run.text_scale,
-                y_offset: y_off,
-                hyperlink_url: run.hyperlink_url.clone(),
-                inline_image_name: None,
-                inline_image_height: 0.0,
-                synthetic_bold: entry.synthetic_bold,
-            });
+            current_chunks.push(WordChunk::text(entry, run, word, eff_fs, cs, y_off, current_x, ww));
             current_x += ww;
         }
 
@@ -413,14 +438,7 @@ pub(super) fn build_tabbed_line(
 
             // Wrap to new line if tab pushes past line_max
             if seg_start > line_max && !all_chunks.is_empty() {
-                let total_width = all_chunks
-                    .last()
-                    .map(|c| c.x_offset + c.width)
-                    .unwrap_or(0.0);
-                result_lines.push(TextLine {
-                    chunks: std::mem::take(&mut all_chunks),
-                    total_width,
-                });
+                result_lines.push(finish_line(&mut all_chunks));
                 current_x = 0.0;
                 is_first_line = false;
                 // Re-resolve the tab stop from position 0 on the new line
@@ -508,25 +526,7 @@ pub(super) fn build_tabbed_line(
             // Handle inline images (same pattern as build_paragraph_lines)
             if let Some(img) = &run.inline_image {
                 if let Some(pdf_name) = inline_image_names.get(&seg_indices[local_idx]) {
-                    all_chunks.push(WordChunk {
-                        pdf_font: String::new(),
-                        text: String::new(),
-                        font_size: run.font_size,
-                        color: None,
-                        highlight: None,
-                        x_offset: current_x,
-                        width: img.display_width,
-                        underline: false,
-                        strikethrough: false,
-                        dstrike: false,
-                        char_spacing: 0.0,
-                        text_scale: 100.0,
-                        y_offset: 0.0,
-                        hyperlink_url: None,
-                        inline_image_name: Some(pdf_name.clone()),
-                        inline_image_height: img.display_height,
-                        synthetic_bold: false,
-                    });
+                    all_chunks.push(WordChunk::image(pdf_name, run.font_size, current_x, img.display_width, img.display_height));
                     current_x += img.display_width;
                 }
                 continue;
@@ -557,36 +557,11 @@ pub(super) fn build_tabbed_line(
                 };
                 // Wrap word to new line if it exceeds max_width
                 if current_x + ww > cur_line_max && !all_chunks.is_empty() {
-                    let total_width = all_chunks
-                        .last()
-                        .map(|c| c.x_offset + c.width)
-                        .unwrap_or(0.0);
-                    result_lines.push(TextLine {
-                        chunks: std::mem::take(&mut all_chunks),
-                        total_width,
-                    });
+                    result_lines.push(finish_line(&mut all_chunks));
                     current_x = 0.0;
                     is_first_line = false;
                 }
-                all_chunks.push(WordChunk {
-                    pdf_font: entry.pdf_name.clone(),
-                    text: word.to_string(),
-                    font_size: eff_fs,
-                    color: run.color,
-                    highlight: run.highlight,
-                    x_offset: current_x,
-                    width: ww,
-                    underline: run.underline,
-                    strikethrough: run.strikethrough,
-                    dstrike: run.dstrike,
-                    char_spacing: cs,
-                    text_scale: run.text_scale,
-                    y_offset: y_off,
-                    hyperlink_url: run.hyperlink_url.clone(),
-                    inline_image_name: None,
-                    inline_image_height: 0.0,
-                    synthetic_bold: entry.synthetic_bold,
-                });
+                all_chunks.push(WordChunk::text(entry, run, word, eff_fs, cs, y_off, current_x, ww));
                 current_x += ww;
             }
             prev_ws = text.ends_with(char::is_whitespace);
@@ -595,14 +570,7 @@ pub(super) fn build_tabbed_line(
 
     // Finalize remaining chunks into the last line
     if !all_chunks.is_empty() {
-        let total_width = all_chunks
-            .last()
-            .map(|c| c.x_offset + c.width)
-            .unwrap_or(0.0);
-        result_lines.push(TextLine {
-            chunks: all_chunks,
-            total_width,
-        });
+        result_lines.push(finish_line(&mut all_chunks));
     } else if result_lines.is_empty() {
         result_lines.push(TextLine {
             chunks: vec![],

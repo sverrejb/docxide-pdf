@@ -18,6 +18,7 @@ for ((i=1; i<=$1; i++)); do
     echo "====================="
 
     result=$(claude --permission-mode acceptEdits -p "@${plan} @progress.txt \
+    The plan_cleanup file has the report detailing codebase improvements that can be done. You are to follow the plan by doing these steps:
 1. Read the ${plan} and progress file. \
 2. Find the next incomplete task and implement it. \
 3. Update progress.txt with what you did. \

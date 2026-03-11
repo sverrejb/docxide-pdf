@@ -17,9 +17,11 @@ use std::io::Read;
 
 use crate::error::Error;
 use crate::model::{
-    Alignment, Block, Document, Paragraph, ParagraphBorders, Section, SectionBreakType,
-    SectionProperties, TabAlignment, TabStop,
+    Alignment, Block, Document, LineSpacing, Paragraph, ParagraphBorders, Section,
+    SectionBreakType, SectionProperties, TabAlignment, TabStop,
 };
+
+use styles::ParagraphStyle;
 
 use styles::{parse_alignment, parse_line_spacing, parse_styles, parse_theme};
 
@@ -246,6 +248,49 @@ pub(super) fn parse_tab_stops(ppr: roxmltree::Node) -> Vec<TabStop> {
     stops
 }
 
+pub(super) fn resolve_theme_color_key(scheme_name: &str) -> &str {
+    match scheme_name {
+        "dk1" | "lt1" | "dk2" | "lt2" => scheme_name,
+        "tx1" => "dk1",
+        "tx2" => "dk2",
+        "bg1" => "lt1",
+        "bg2" => "lt2",
+        other => other,
+    }
+}
+
+pub(in crate::docx) fn parse_paragraph_spacing(
+    ppr: Option<roxmltree::Node>,
+    para_style: Option<&ParagraphStyle>,
+) -> (Option<f32>, Option<f32>, Option<LineSpacing>) {
+    let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
+    let space_before = inline_spacing
+        .and_then(|n| twips_attr(n, "before"))
+        .or_else(|| para_style.and_then(|s| s.space_before));
+    let space_after = inline_spacing
+        .and_then(|n| twips_attr(n, "after"))
+        .or_else(|| para_style.and_then(|s| s.space_after));
+    let line_spacing = inline_spacing
+        .and_then(|n| {
+            n.attribute((WML_NS, "line"))
+                .and_then(|v| v.parse::<f32>().ok())
+                .map(|line_val| parse_line_spacing(n, line_val))
+        })
+        .or_else(|| para_style.and_then(|s| s.line_spacing));
+    (space_before, space_after, line_spacing)
+}
+
+pub(super) fn extract_indents(
+    ind: roxmltree::Node,
+) -> (Option<f32>, Option<f32>, Option<f32>, Option<f32>) {
+    (
+        twips_attr(ind, "start").or_else(|| twips_attr(ind, "left")),
+        twips_attr(ind, "end").or_else(|| twips_attr(ind, "right")),
+        twips_attr(ind, "hanging"),
+        twips_attr(ind, "firstLine"),
+    )
+}
+
 pub(super) fn collect_block_nodes<'a>(
     parent: roxmltree::Node<'a, 'a>,
 ) -> Vec<roxmltree::Node<'a, 'a>> {
@@ -364,7 +409,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
     let xml = roxmltree::Document::parse(&xml_content)?;
     let root = xml.root_element();
 
-    let body = wml(root, "body").ok_or_else(|| Error::Pdf("Missing w:body".into()))?;
+    let body = wml(root, "body").ok_or_else(|| Error::InvalidDocx("Missing w:body".into()))?;
 
     let default_line_pitch = styles.defaults.font_size * 1.2;
 
@@ -400,8 +445,6 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
 
                 let para_style = styles.paragraph_styles.get(para_style_id);
 
-                let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
-
                 let inline_borders = ppr.map(parse_paragraph_borders).unwrap_or_default();
                 let has_inline_borders = inline_borders.top.is_some()
                     || inline_borders.bottom.is_some()
@@ -417,20 +460,17 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     .as_ref()
                     .map(|b| b.space_pt + b.width_pt)
                     .unwrap_or(0.0);
-                let space_before = inline_spacing
-                    .and_then(|n| twips_attr(n, "before"))
-                    .or_else(|| para_style.and_then(|s| s.space_before))
-                    .unwrap_or(0.0);
+
+                let (sp_before, sp_after, line_spacing) =
+                    parse_paragraph_spacing(ppr, para_style);
+                let space_before = sp_before.unwrap_or(0.0);
+                let space_after =
+                    sp_after.unwrap_or(styles.defaults.space_after) + bdr_bottom_extra;
 
                 let para_shading = ppr
                     .and_then(|ppr| wml(ppr, "shd"))
                     .and_then(|shd| shd.attribute((WML_NS, "fill")))
                     .and_then(parse_hex_color);
-                let space_after = inline_spacing
-                    .and_then(|n| twips_attr(n, "after"))
-                    .or_else(|| para_style.and_then(|s| s.space_after))
-                    .unwrap_or(styles.defaults.space_after)
-                    + bdr_bottom_extra;
 
                 let style_color: Option<[u8; 3]> = para_style.and_then(|s| s.color);
 
@@ -452,14 +492,6 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     .and_then(|ppr| wml_bool(ppr, "keepLines"))
                     .unwrap_or_else(|| para_style.is_some_and(|s| s.keep_lines));
 
-                let line_spacing = inline_spacing
-                    .and_then(|n| {
-                        n.attribute((WML_NS, "line"))
-                            .and_then(|v| v.parse::<f32>().ok())
-                            .map(|line_val| parse_line_spacing(n, line_val))
-                    })
-                    .or_else(|| para_style.and_then(|s| s.line_spacing));
-
                 let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
                 let style_num = para_style.and_then(|s| s.num_id.as_deref());
                 let style_ilvl = para_style.and_then(|s| s.num_ilvl);
@@ -476,18 +508,11 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                 let mut indent_first_line = 0.0f32;
                 let mut indent_right = 0.0f32;
                 if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
-                    if let Some(v) = twips_attr(ind, "start").or_else(|| twips_attr(ind, "left")) {
-                        indent_left = v;
-                    }
-                    if let Some(v) = twips_attr(ind, "end").or_else(|| twips_attr(ind, "right")) {
-                        indent_right = v;
-                    }
-                    if let Some(v) = twips_attr(ind, "hanging") {
-                        indent_hanging = v;
-                    }
-                    if let Some(v) = twips_attr(ind, "firstLine") {
-                        indent_first_line = v;
-                    }
+                    let (left, right, hanging, first) = extract_indents(ind);
+                    if let Some(v) = left { indent_left = v; }
+                    if let Some(v) = right { indent_right = v; }
+                    if let Some(v) = hanging { indent_hanging = v; }
+                    if let Some(v) = first { indent_first_line = v; }
                 } else if list_label.is_empty()
                     && let Some(s) = para_style
                 {

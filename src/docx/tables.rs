@@ -8,10 +8,11 @@ use crate::model::{
 
 use super::numbering::{self, parse_list_info};
 use super::runs::parse_runs;
-use super::styles::{self, TableBordersDef, parse_alignment, parse_line_spacing};
+use super::styles::{self, TableBordersDef, parse_alignment};
 use super::{
-    WML_NS, collect_block_nodes, parse_cell_border, parse_cell_border_left,
-    parse_cell_border_right, parse_hex_color, twips_attr, twips_to_pts, wml, wml_attr,
+    WML_NS, collect_block_nodes, extract_indents, parse_cell_border, parse_cell_border_left,
+    parse_cell_border_right, parse_hex_color, parse_paragraph_spacing, twips_attr, twips_to_pts,
+    wml, wml_attr,
 };
 
 pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
@@ -234,54 +235,35 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                     .map(parse_alignment)
                     .or_else(|| para_style.and_then(|s| s.alignment))
                     .unwrap_or(Alignment::Left);
-                let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
-                let line_spacing = inline_spacing
-                    .and_then(|n| {
-                        n.attribute((WML_NS, "line"))
-                            .and_then(|v| v.parse::<f32>().ok())
-                            .map(|line_val| parse_line_spacing(n, line_val))
-                    })
-                    .or_else(|| para_style.and_then(|s| s.line_spacing))
-                    .or_else(|| {
-                        if has_tbl_style {
-                            Some(LineSpacing::Auto(1.0))
-                        } else {
-                            None
-                        }
-                    });
+                let (sp_before, sp_after, ls) =
+                    parse_paragraph_spacing(ppr, para_style);
+                let line_spacing = ls.or_else(|| {
+                    if has_tbl_style {
+                        Some(LineSpacing::Auto(1.0))
+                    } else {
+                        None
+                    }
+                });
                 let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
                 let (mut indent_left, mut indent_hanging, list_label, list_label_font) =
                     parse_list_info(num_pr, None, None, numbering, counters, last_seen_level);
                 let mut indent_first_line = 0.0f32;
                 let mut indent_right = 0.0f32;
                 if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
-                    if let Some(v) = twips_attr(ind, "start").or_else(|| twips_attr(ind, "left")) {
-                        indent_left = v;
-                    }
-                    if let Some(v) = twips_attr(ind, "end").or_else(|| twips_attr(ind, "right")) {
-                        indent_right = v;
-                    }
-                    if let Some(v) = twips_attr(ind, "hanging") {
-                        indent_hanging = v;
-                    }
-                    if let Some(v) = twips_attr(ind, "firstLine") {
-                        indent_first_line = v;
-                    }
+                    let (left, right, hanging, first) = extract_indents(ind);
+                    if let Some(v) = left { indent_left = v; }
+                    if let Some(v) = right { indent_right = v; }
+                    if let Some(v) = hanging { indent_hanging = v; }
+                    if let Some(v) = first { indent_first_line = v; }
                 }
-                let space_before = inline_spacing
-                    .and_then(|n| twips_attr(n, "before"))
-                    .or_else(|| para_style.and_then(|s| s.space_before))
-                    .unwrap_or(0.0);
-                let space_after = inline_spacing
-                    .and_then(|n| twips_attr(n, "after"))
-                    .or_else(|| para_style.and_then(|s| s.space_after))
-                    .unwrap_or_else(|| {
-                        if has_tbl_style {
-                            0.0
-                        } else {
-                            styles.defaults.space_after
-                        }
-                    });
+                let space_before = sp_before.unwrap_or(0.0);
+                let space_after = sp_after.unwrap_or_else(|| {
+                    if has_tbl_style {
+                        0.0
+                    } else {
+                        styles.defaults.space_after
+                    }
+                });
                 cell_paras.push(Paragraph {
                     runs: parsed.runs,
                     alignment,

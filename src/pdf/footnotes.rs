@@ -2,29 +2,28 @@ use std::collections::HashMap;
 
 use pdf_writer::Content;
 
-use crate::fonts::FontEntry;
 use crate::model::{Footnote, LineSpacing, Run};
 
 use super::layout::{
     build_paragraph_lines, is_text_empty, render_paragraph_lines, tallest_run_metrics,
 };
 use super::resolve_line_h;
+use super::RenderContext;
 
 pub(super) fn compute_footnote_height(
     footnote: &Footnote,
-    seen_fonts: &HashMap<String, FontEntry>,
+    ctx: &RenderContext,
     text_width: f32,
-    doc_line_spacing: LineSpacing,
 ) -> f32 {
     let mut height = 0.0f32;
     for para in &footnote.paragraphs {
         if is_text_empty(&para.runs) {
             continue;
         }
-        let (fs, tallest_lhr, _) = tallest_run_metrics(&para.runs, seen_fonts);
-        let effective_ls = para.line_spacing.unwrap_or(doc_line_spacing);
+        let (fs, tallest_lhr, _) = tallest_run_metrics(&para.runs, ctx.fonts);
+        let effective_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
         let lh = resolve_line_h(effective_ls, fs, tallest_lhr);
-        let lines = build_paragraph_lines(&para.runs, seen_fonts, text_width, 0.0, &HashMap::new());
+        let lines = build_paragraph_lines(&para.runs, ctx.fonts, text_width, 0.0, &HashMap::new());
         height += lines.len().max(1) as f32 * lh;
     }
     height
@@ -35,11 +34,10 @@ pub(super) fn render_page_footnotes(
     fn_ids: &[u32],
     footnotes: &HashMap<u32, Footnote>,
     footnote_display_order: &HashMap<u32, u32>,
-    seen_fonts: &HashMap<String, FontEntry>,
+    ctx: &RenderContext,
     margin_left: f32,
     margin_bottom: f32,
     text_width: f32,
-    doc_line_spacing: LineSpacing,
 ) {
     if fn_ids.is_empty() {
         return;
@@ -50,7 +48,7 @@ pub(super) fn render_page_footnotes(
     for fn_id in fn_ids {
         if let Some(footnote) = footnotes.get(fn_id) {
             total_fn_height +=
-                compute_footnote_height(footnote, seen_fonts, text_width, doc_line_spacing);
+                compute_footnote_height(footnote, ctx, text_width);
         }
     }
     let separator_gap = 12.0f32;
@@ -93,13 +91,13 @@ pub(super) fn render_page_footnotes(
                 continue;
             }
 
-            let (fs, tallest_lhr, tallest_ar) = tallest_run_metrics(&substituted_runs, seen_fonts);
+            let (fs, tallest_lhr, tallest_ar) = tallest_run_metrics(&substituted_runs, ctx.fonts);
             let effective_ls = para.line_spacing.unwrap_or(LineSpacing::Auto(1.0));
             let lh = resolve_line_h(effective_ls, fs, tallest_lhr);
 
             let lines = build_paragraph_lines(
                 &substituted_runs,
-                seen_fonts,
+                ctx.fonts,
                 text_width,
                 0.0,
                 &HashMap::new(),
@@ -124,7 +122,7 @@ pub(super) fn render_page_footnotes(
                 0,
                 &mut Vec::new(),
                 0.0,
-                seen_fonts,
+                ctx.fonts,
             );
 
             fn_y -= lines.len() as f32 * lh;

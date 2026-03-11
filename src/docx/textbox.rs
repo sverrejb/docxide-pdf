@@ -3,15 +3,18 @@ use std::io::Read;
 
 use crate::model::{
     Alignment, ConnectorShape, ConnectorType, CustomGeometry, CustomGuideDef, CustomPathCommand,
-    CustomPathDef, HorizontalPosition, LineSpacing, Paragraph, ShapeFill, ShapeGeometry, Textbox,
-    WrapType,
+    CustomPathDef, HRelativeFrom, HorizontalPosition, LineSpacing, Paragraph, ShapeFill,
+    ShapeGeometry, Textbox, VRelativeFrom, WrapType,
 };
 
 use super::images::{extent_dimensions, parse_anchor_position};
 use super::numbering::NumberingInfo;
 use super::runs::parse_runs;
-use super::styles::{StylesInfo, ThemeFonts, parse_alignment, parse_line_spacing};
-use super::{DML_NS, MC_NS_TOP, WML_NS, WPD_NS, WPS_NS, twips_attr, wml, wml_attr};
+use super::styles::{StylesInfo, ThemeFonts, parse_alignment};
+use super::{
+    DML_NS, MC_NS_TOP, WML_NS, WPD_NS, WPS_NS, extract_indents, parse_paragraph_spacing,
+    resolve_theme_color_key, wml, wml_attr,
+};
 
 pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
     txbx_content: roxmltree::Node,
@@ -39,25 +42,10 @@ pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
             .map(parse_alignment)
             .or_else(|| para_style.and_then(|s| s.alignment))
             .unwrap_or(Alignment::Left);
-        let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
-        let space_before = inline_spacing
-            .and_then(|n| twips_attr(n, "before"))
-            .or_else(|| para_style.and_then(|s| s.space_before))
-            .unwrap_or(0.0);
-        let space_after = inline_spacing
-            .and_then(|n| twips_attr(n, "after"))
-            .or_else(|| para_style.and_then(|s| s.space_after))
-            .unwrap_or(0.0);
-        let line_spacing = Some(
-            inline_spacing
-                .and_then(|n| {
-                    n.attribute((WML_NS, "line"))
-                        .and_then(|v| v.parse::<f32>().ok())
-                        .map(|line_val| parse_line_spacing(n, line_val))
-                })
-                .or_else(|| para_style.and_then(|s| s.line_spacing))
-                .unwrap_or(LineSpacing::Auto(1.0)),
-        );
+        let (sp_before, sp_after, ls) = parse_paragraph_spacing(ppr, para_style);
+        let space_before = sp_before.unwrap_or(0.0);
+        let space_after = sp_after.unwrap_or(0.0);
+        let line_spacing = Some(ls.unwrap_or(LineSpacing::Auto(1.0)));
         let tab_stops = ppr.map(super::parse_tab_stops).unwrap_or_default();
         let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
         let (mut indent_left, mut indent_hanging, list_label, list_label_font) =
@@ -72,18 +60,11 @@ pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
         let mut indent_first_line = 0.0f32;
         let mut indent_right = 0.0f32;
         if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
-            if let Some(v) = twips_attr(ind, "left") {
-                indent_left = v;
-            }
-            if let Some(v) = twips_attr(ind, "right") {
-                indent_right = v;
-            }
-            if let Some(v) = twips_attr(ind, "hanging") {
-                indent_hanging = v;
-            }
-            if let Some(v) = twips_attr(ind, "firstLine") {
-                indent_first_line = v;
-            }
+            let (left, right, hanging, first) = extract_indents(ind);
+            if let Some(v) = left { indent_left = v; }
+            if let Some(v) = right { indent_right = v; }
+            if let Some(v) = hanging { indent_hanging = v; }
+            if let Some(v) = first { indent_first_line = v; }
         } else if list_label.is_empty() {
             if let Some(s) = para_style {
                 if let Some(v) = s.indent_left {
@@ -189,18 +170,7 @@ pub(super) fn parse_solid_fill(sp_pr: roxmltree::Node, theme: &ThemeFonts) -> Op
         .find(|n| n.tag_name().name() == "schemeClr" && n.tag_name().namespace() == Some(DML_NS))
     {
         let val = scheme.attribute("val")?;
-        // Map OOXML scheme names to theme element names
-        let theme_key = match val {
-            "dk1" => "dk1",
-            "lt1" => "lt1",
-            "dk2" => "dk2",
-            "lt2" => "lt2",
-            "tx1" => "dk1",
-            "tx2" => "dk2",
-            "bg1" => "lt1",
-            "bg2" => "lt2",
-            other => other,
-        };
+        let theme_key = resolve_theme_color_key(val);
         let base = *theme.colors.get(theme_key)?;
         return Some(resolve_scheme_color(base, scheme));
     }
@@ -219,17 +189,7 @@ fn resolve_stop_color(stop: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 
         .find(|n| n.tag_name().name() == "schemeClr" && n.tag_name().namespace() == Some(DML_NS))
     {
         let val = scheme.attribute("val")?;
-        let theme_key = match val {
-            "dk1" => "dk1",
-            "lt1" => "lt1",
-            "dk2" => "dk2",
-            "lt2" => "lt2",
-            "tx1" => "dk1",
-            "tx2" => "dk2",
-            "bg1" => "lt1",
-            "bg2" => "lt2",
-            other => other,
-        };
+        let theme_key = resolve_theme_color_key(val);
         let base = *theme.colors.get(theme_key)?;
         return Some(resolve_scheme_color(base, scheme));
     }
@@ -301,17 +261,7 @@ fn parse_style_fill(wsp: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]>
         .find(|n| n.tag_name().name() == "schemeClr" && n.tag_name().namespace() == Some(DML_NS))
     {
         let val = scheme.attribute("val")?;
-        let theme_key = match val {
-            "dk1" => "dk1",
-            "lt1" => "lt1",
-            "dk2" => "dk2",
-            "lt2" => "lt2",
-            "tx1" => "dk1",
-            "tx2" => "dk2",
-            "bg1" => "lt1",
-            "bg2" => "lt2",
-            other => other,
-        };
+        let theme_key = resolve_theme_color_key(val);
         let base = *theme.colors.get(theme_key)?;
         return Some(resolve_scheme_color(base, scheme));
     }
@@ -772,17 +722,7 @@ fn resolve_scheme_clr_child(parent: roxmltree::Node, theme: &ThemeFonts) -> Opti
         .find(|n| n.tag_name().name() == "schemeClr" && n.tag_name().namespace() == Some(DML_NS))
     {
         let val = scheme.attribute("val")?;
-        let theme_key = match val {
-            "dk1" => "dk1",
-            "lt1" => "lt1",
-            "dk2" => "dk2",
-            "lt2" => "lt2",
-            "tx1" => "dk1",
-            "tx2" => "dk2",
-            "bg1" => "lt1",
-            "bg2" => "lt2",
-            other => other,
-        };
+        let theme_key = resolve_theme_color_key(val);
         let base = *theme.colors.get(theme_key)?;
         return Some(resolve_scheme_color(base, scheme));
     }
@@ -815,8 +755,8 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
     let mut height = 0.0_f32;
     let mut margin_left = 0.0_f32;
     let mut margin_top = 0.0_f32;
-    let mut h_relative = "column";
-    let mut v_relative = "paragraph";
+    let mut h_relative = HRelativeFrom::Column;
+    let mut v_relative = VRelativeFrom::Paragraph;
 
     for part in style_str.split(';') {
         let part = part.trim();
@@ -832,16 +772,16 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
                 "margin-top" => margin_top = parse_pt(val),
                 "mso-position-horizontal-relative" => {
                     h_relative = match val {
-                        "page" => "page",
-                        "margin" => "margin",
-                        _ => "column",
+                        "page" => HRelativeFrom::Page,
+                        "margin" => HRelativeFrom::Margin,
+                        _ => HRelativeFrom::Column,
                     };
                 }
                 "mso-position-vertical-relative" => {
                     v_relative = match val {
-                        "page" => "page",
-                        "margin" => "margin",
-                        _ => "paragraph",
+                        "page" => VRelativeFrom::Page,
+                        "margin" => VRelativeFrom::Margin,
+                        _ => VRelativeFrom::Paragraph,
                     };
                 }
                 _ => {}

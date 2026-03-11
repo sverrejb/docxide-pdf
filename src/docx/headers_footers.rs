@@ -6,8 +6,10 @@ use crate::model::{Alignment, Block, Footnote, HeaderFooter, LineSpacing, Paragr
 use super::numbering::NumberingInfo;
 use super::parse_table_node;
 use super::runs::parse_runs;
-use super::styles::{StylesInfo, ThemeFonts, parse_alignment, parse_line_spacing};
-use super::{WML_NS, parse_paragraph_borders, parse_tab_stops, twips_attr, wml, wml_attr};
+use super::styles::{StylesInfo, ThemeFonts, parse_alignment};
+use super::{
+    WML_NS, parse_paragraph_borders, parse_paragraph_spacing, parse_tab_stops, wml, wml_attr,
+};
 
 pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
     xml_content: &str,
@@ -72,23 +74,10 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
                     .or_else(|| para_style.and_then(|s| s.alignment))
                     .unwrap_or(Alignment::Left);
 
-                let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
-                let line_spacing = inline_spacing
-                    .and_then(|n| {
-                        n.attribute((WML_NS, "line"))
-                            .and_then(|v| v.parse::<f32>().ok())
-                            .map(|line_val| parse_line_spacing(n, line_val))
-                    })
-                    .or_else(|| para_style.and_then(|s| s.line_spacing));
-
-                let space_before = inline_spacing
-                    .and_then(|n| twips_attr(n, "before"))
-                    .or_else(|| para_style.and_then(|s| s.space_before))
-                    .unwrap_or(0.0);
-                let space_after = inline_spacing
-                    .and_then(|n| twips_attr(n, "after"))
-                    .or_else(|| para_style.and_then(|s| s.space_after))
-                    .unwrap_or(0.0);
+                let (sp_before, sp_after, line_spacing) =
+                    parse_paragraph_spacing(ppr, para_style);
+                let space_before = sp_before.unwrap_or(0.0);
+                let space_after = sp_after.unwrap_or(0.0);
 
                 let parsed = parse_runs(node, styles, theme, rels, zip, &NumberingInfo::default());
 
@@ -176,23 +165,10 @@ pub(super) fn parse_footnotes<R: Read + std::io::Seek>(
                 &NumberingInfo::default(),
             );
 
-            let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
-            let space_before = inline_spacing
-                .and_then(|n| twips_attr(n, "before"))
-                .or_else(|| para_style.and_then(|s| s.space_before))
-                .unwrap_or(0.0);
-            let space_after = inline_spacing
-                .and_then(|n| twips_attr(n, "after"))
-                .or_else(|| para_style.and_then(|s| s.space_after))
-                .unwrap_or(0.0);
-            let line_spacing = inline_spacing
-                .and_then(|n| {
-                    n.attribute((WML_NS, "line"))
-                        .and_then(|v| v.parse::<f32>().ok())
-                        .map(|line_val| parse_line_spacing(n, line_val))
-                })
-                .or_else(|| para_style.and_then(|s| s.line_spacing))
-                .or(Some(LineSpacing::Auto(1.0)));
+            let (sp_before, sp_after, ls) = parse_paragraph_spacing(ppr, para_style);
+            let space_before = sp_before.unwrap_or(0.0);
+            let space_after = sp_after.unwrap_or(0.0);
+            let line_spacing = ls.or(Some(LineSpacing::Auto(1.0)));
 
             paragraphs.push(Paragraph {
                 runs: parsed.runs,
