@@ -356,6 +356,7 @@ pub struct Paragraph {
     pub connectors: Vec<ConnectorShape>,
     pub inline_chart: Option<InlineChart>,
     pub smartart: Option<SmartArtDiagram>,
+    pub is_section_break: bool,
 }
 
 impl Default for Paragraph {
@@ -390,6 +391,7 @@ impl Default for Paragraph {
             connectors: Vec::new(),
             inline_chart: None,
             smartart: None,
+            is_section_break: false,
         }
     }
 }

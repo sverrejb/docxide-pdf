@@ -1391,6 +1391,19 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         for (block_idx, block) in section.blocks.iter().enumerate() {
             match block {
                 Block::Paragraph(para) => {
+                    // Skip empty section-break paragraphs — Word gives these zero height
+                    if para.is_section_break
+                        && is_text_empty(&para.runs)
+                        && para.image.is_none()
+                        && para.inline_chart.is_none()
+                        && para.smartart.is_none()
+                        && para.floating_images.is_empty()
+                        && para.textboxes.is_empty()
+                    {
+                        global_block_idx += 1;
+                        continue;
+                    }
+
                     // Handle explicit page breaks
                     if para.page_break_before {
                         let at_top =

@@ -623,10 +623,14 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     connectors: parsed.connectors,
                     inline_chart: parsed.inline_chart,
                     smartart: parsed.smartart,
+                    is_section_break: false,
                 }));
 
                 // Mid-document section break: sectPr inside pPr ends the current section
                 if let Some(sect_node) = ppr.and_then(|ppr| wml(ppr, "sectPr")) {
+                    if let Some(Block::Paragraph(last_para)) = blocks.last_mut() {
+                        last_para.is_section_break = true;
+                    }
                     let props = parse_section_properties(
                         sect_node,
                         &rels,
