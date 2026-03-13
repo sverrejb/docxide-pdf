@@ -28,7 +28,7 @@ use styles::{parse_alignment, parse_line_spacing, parse_styles, parse_theme};
 use embedded_fonts::parse_font_table;
 use headers_footers::parse_footnotes;
 use images::compute_drawing_info;
-use numbering::{parse_list_info, parse_numbering};
+use numbering::{parse_list_info, parse_numbering, ListLabelInfo};
 use runs::parse_runs;
 use sections::parse_section_properties;
 use settings::parse_settings;
@@ -495,15 +495,22 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                 let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
                 let style_num = para_style.and_then(|s| s.num_id.as_deref());
                 let style_ilvl = para_style.and_then(|s| s.num_ilvl);
-                let (mut indent_left, mut indent_hanging, list_label, list_label_font) =
-                    parse_list_info(
-                        num_pr,
-                        style_num,
-                        style_ilvl,
-                        &numbering,
-                        &mut counters,
-                        &mut last_seen_level,
-                    );
+                let ListLabelInfo {
+                    mut indent_left,
+                    mut indent_hanging,
+                    label: list_label,
+                    font: list_label_font,
+                    font_size: list_label_font_size,
+                    bold: list_label_bold,
+                    color: list_label_color,
+                } = parse_list_info(
+                    num_pr,
+                    style_num,
+                    style_ilvl,
+                    &numbering,
+                    &mut counters,
+                    &mut last_seen_level,
+                );
 
                 let mut indent_first_line = 0.0f32;
                 let mut indent_right = 0.0f32;
@@ -599,6 +606,9 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     indent_first_line,
                     list_label,
                     list_label_font,
+                    list_label_font_size,
+                    list_label_bold,
+                    list_label_color,
                     contextual_spacing,
                     keep_next,
                     keep_lines,

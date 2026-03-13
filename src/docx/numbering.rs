@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use super::{WML_NS, twips_attr, wml, wml_attr};
+use super::{WML_NS, parse_hex_color, twips_attr, wml, wml_attr, wml_bool};
 
 #[derive(Clone)]
 pub(super) struct LevelDef {
@@ -10,6 +10,20 @@ pub(super) struct LevelDef {
     pub(super) indent_hanging: f32,
     pub(super) start: u32,
     pub(super) bullet_font: Option<String>,
+    pub(super) label_font_size: Option<f32>,
+    pub(super) label_bold: bool,
+    pub(super) label_color: Option<[u8; 3]>,
+}
+
+#[derive(Default)]
+pub(super) struct ListLabelInfo {
+    pub(super) indent_left: f32,
+    pub(super) indent_hanging: f32,
+    pub(super) label: String,
+    pub(super) font: Option<String>,
+    pub(super) font_size: Option<f32>,
+    pub(super) bold: bool,
+    pub(super) color: Option<[u8; 3]>,
 }
 
 #[derive(Default)]
@@ -66,13 +80,24 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
                     let ind = wml(lvl, "pPr").and_then(|ppr| wml(ppr, "ind"));
                     let indent_left = ind.and_then(|n| twips_attr(n, "left")).unwrap_or(0.0);
                     let indent_hanging = ind.and_then(|n| twips_attr(n, "hanging")).unwrap_or(0.0);
-                    let bullet_font = wml(lvl, "rPr")
-                        .and_then(|rpr| wml(rpr, "rFonts"))
+                    let rpr = wml(lvl, "rPr");
+                    let bullet_font = rpr
+                        .and_then(|r| wml(r, "rFonts"))
                         .and_then(|rf| {
                             rf.attribute((WML_NS, "ascii"))
                                 .or_else(|| rf.attribute((WML_NS, "hAnsi")))
                         })
                         .map(|s| s.to_string());
+                    let label_font_size = rpr
+                        .and_then(|r| wml(r, "sz"))
+                        .and_then(|n| n.attribute((WML_NS, "val")))
+                        .and_then(|v| v.parse::<f32>().ok())
+                        .map(|hp| hp / 2.0);
+                    let label_bold = rpr.and_then(|r| wml_bool(r, "b")).unwrap_or(false);
+                    let label_color = rpr
+                        .and_then(|r| wml(r, "color"))
+                        .and_then(|n| n.attribute((WML_NS, "val")))
+                        .and_then(parse_hex_color);
                     levels.insert(
                         ilvl,
                         LevelDef {
@@ -82,6 +107,9 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
                             indent_hanging,
                             start,
                             bullet_font,
+                            label_font_size,
+                            label_bold,
+                            label_color,
                         },
                     );
                 }
@@ -237,7 +265,7 @@ pub(super) fn parse_list_info(
     numbering: &NumberingInfo,
     counters: &mut HashMap<(String, u8), u32>,
     last_seen_level: &mut HashMap<String, u8>,
-) -> (f32, f32, String, Option<String>) {
+) -> ListLabelInfo {
     let (num_id, ilvl) = if let Some(np) = num_pr {
         let nid = wml_attr(np, "numId");
         let il = wml_attr(np, "ilvl")
@@ -247,22 +275,22 @@ pub(super) fn parse_list_info(
     } else if let Some(sn) = style_num_id {
         (Some(sn), style_num_ilvl.unwrap_or(0))
     } else {
-        return (0.0, 0.0, String::new(), None);
+        return ListLabelInfo::default();
     };
     let Some(num_id) = num_id else {
-        return (0.0, 0.0, String::new(), None);
+        return ListLabelInfo::default();
     };
     if num_id == "0" {
-        return (0.0, 0.0, String::new(), None);
+        return ListLabelInfo::default();
     }
     let Some(abs_id) = numbering.num_to_abstract.get(num_id) else {
-        return (0.0, 0.0, String::new(), None);
+        return ListLabelInfo::default();
     };
     let Some(levels) = numbering.abstract_nums.get(abs_id.as_str()) else {
-        return (0.0, 0.0, String::new(), None);
+        return ListLabelInfo::default();
     };
     let Some(def) = levels.get(&ilvl) else {
-        return (0.0, 0.0, String::new(), None);
+        return ListLabelInfo::default();
     };
 
     // Reset deeper-level counters when returning to a higher level
@@ -323,5 +351,13 @@ pub(super) fn parse_list_info(
     } else {
         None
     };
-    (def.indent_left, def.indent_hanging, label, bullet_font)
+    ListLabelInfo {
+        indent_left: def.indent_left,
+        indent_hanging: def.indent_hanging,
+        label,
+        font: bullet_font,
+        font_size: def.label_font_size,
+        bold: def.label_bold,
+        color: def.label_color,
+    }
 }

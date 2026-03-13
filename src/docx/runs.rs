@@ -601,6 +601,28 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                         ..Run::default()
                     });
                 }
+                "sym" if !in_field => {
+                    flush_pending(&mut pending_text, &mut runs);
+                    let sym_font = child.attribute((WML_NS, "font")).unwrap_or(&fmt.font_name);
+                    if let Some(ch) = child
+                        .attribute((WML_NS, "char"))
+                        .and_then(|hex| u32::from_str_radix(hex, 16).ok())
+                        .and_then(char::from_u32)
+                    {
+                        runs.push(Run {
+                            text: ch.to_string(),
+                            font_name: sym_font.to_string(),
+                            font_size: fmt.font_size,
+                            bold: fmt.bold,
+                            italic: fmt.italic,
+                            color: fmt.color,
+                            underline: fmt.underline,
+                            strikethrough: fmt.strikethrough,
+                            char_spacing: fmt.char_spacing,
+                            ..Run::default()
+                        });
+                    }
+                }
                 _ => {}
             }
         }

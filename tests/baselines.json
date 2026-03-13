@@ -180,8 +180,8 @@
     "text_boundary": 0.8506
   },
   "samples/samtale": {
-    "jaccard": 0.0916,
-    "ssim": 0.4358,
+    "jaccard": 0.1297,
+    "ssim": 0.5678,
     "text_boundary": 0.2381
   },
   "scraped/air_pollution_pe..": {
@@ -355,8 +355,8 @@
     "text_boundary": 0.0786
   },
   "scraped/transition_to_wo..": {
-    "jaccard": 0.256,
-    "ssim": 0.3766,
+    "jaccard": 0.2567,
+    "ssim": 0.3772,
     "text_boundary": 0.2003
   },
   "scraped/ukraine_humanita..": {

@@ -6,7 +6,7 @@ use crate::model::{
     Table, TableCell, TablePosition, TableRow, VMerge,
 };
 
-use super::numbering::{self, parse_list_info};
+use super::numbering::{self, parse_list_info, ListLabelInfo};
 use super::runs::parse_runs;
 use super::styles::{self, TableBordersDef, parse_alignment};
 use super::{
@@ -250,8 +250,15 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                 let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
                 let style_num = para_style.and_then(|s| s.num_id.as_deref());
                 let style_ilvl = para_style.and_then(|s| s.num_ilvl);
-                let (mut indent_left, mut indent_hanging, list_label, list_label_font) =
-                    parse_list_info(num_pr, style_num, style_ilvl, numbering, counters, last_seen_level);
+                let ListLabelInfo {
+                    mut indent_left,
+                    mut indent_hanging,
+                    label: list_label,
+                    font: list_label_font,
+                    font_size: list_label_font_size,
+                    bold: list_label_bold,
+                    color: list_label_color,
+                } = parse_list_info(num_pr, style_num, style_ilvl, numbering, counters, last_seen_level);
                 let mut indent_first_line = 0.0f32;
                 let mut indent_right = 0.0f32;
                 if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
@@ -278,6 +285,9 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                     indent_first_line,
                     list_label,
                     list_label_font,
+                    list_label_font_size,
+                    list_label_bold,
+                    list_label_color,
                     line_spacing,
                     space_before,
                     space_after,

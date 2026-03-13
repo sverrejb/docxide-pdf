@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use pdf_writer::{Content, Name, Str};
+use pdf_writer::{Content, Name};
 
 use crate::model::{
     Alignment, Block, FieldCode, HRelativeFrom, HeaderFooter, HorizontalPosition, Paragraph, Run,
@@ -12,7 +12,7 @@ use super::layout::{
     tallest_run_metrics,
 };
 use super::table;
-use super::{RenderContext, label_for_paragraph, resolve_line_h};
+use super::{RenderContext, resolve_line_h};
 
 pub(super) fn substitute_hf_runs(
     runs: &[Run],
@@ -282,27 +282,14 @@ pub(super) fn render_header_footer(
                         let tb_ascender = tb_ar.unwrap_or(0.75);
                         let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_ar);
                         let tb_baseline = tb_cursor - tp.space_before - tb_fs * tb_ascender;
-                        if !tp.list_label.is_empty() {
-                            let label_x = content_x + tp.indent_left - tp.indent_hanging;
-                            let (label_font_name, label_bytes) =
-                                label_for_paragraph(tp, ctx.fonts);
-                            if let Some([r, g, b]) = tp.runs.first().and_then(|r| r.color) {
-                                content.set_fill_rgb(
-                                    r as f32 / 255.0,
-                                    g as f32 / 255.0,
-                                    b as f32 / 255.0,
-                                );
-                            }
-                            content
-                                .begin_text()
-                                .set_font(Name(label_font_name.as_bytes()), tb_fs)
-                                .next_line(label_x, tb_baseline)
-                                .show(Str(&label_bytes))
-                                .end_text();
-                            if tp.runs.first().and_then(|r| r.color).is_some() {
-                                content.set_fill_gray(0.0);
-                            }
-                        }
+                        super::render_list_label(
+                            content,
+                            tp,
+                            ctx.fonts,
+                            content_x + tp.indent_left - tp.indent_hanging,
+                            tb_baseline,
+                            tb_fs,
+                        );
                         render_paragraph_lines(
                             content,
                             &tb_lines,

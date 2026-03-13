@@ -8,7 +8,7 @@ use crate::model::{
 };
 
 use super::images::{extent_dimensions, parse_anchor_position};
-use super::numbering::NumberingInfo;
+use super::numbering::{ListLabelInfo, NumberingInfo};
 use super::runs::parse_runs;
 use super::styles::{ColorTransforms, StylesInfo, ThemeFillStyle, ThemeFonts, parse_alignment};
 use super::{
@@ -48,8 +48,15 @@ pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
         let line_spacing = Some(ls.unwrap_or(LineSpacing::Auto(1.0)));
         let tab_stops = ppr.map(super::parse_tab_stops).unwrap_or_default();
         let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
-        let (mut indent_left, mut indent_hanging, list_label, list_label_font) =
-            super::numbering::parse_list_info(
+        let ListLabelInfo {
+            mut indent_left,
+            mut indent_hanging,
+            label: list_label,
+            font: list_label_font,
+            font_size: list_label_font_size,
+            bold: list_label_bold,
+            color: list_label_color,
+        } = super::numbering::parse_list_info(
                 num_pr,
                 None,
                 None,
@@ -92,6 +99,9 @@ pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
             indent_first_line,
             list_label,
             list_label_font,
+            list_label_font_size,
+            list_label_bold,
+            list_label_color,
             line_spacing,
             tab_stops,
             extra_line_breaks: parsed.line_break_count,
