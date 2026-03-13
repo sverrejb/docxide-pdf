@@ -581,7 +581,7 @@ pub(super) fn build_tabbed_line(
     result_lines
 }
 
-fn encode_text_for_pdf(
+pub(super) fn encode_text_for_pdf(
     text: &str,
     pdf_font: &str,
     pdf_name_to_entry: &HashMap<&str, &FontEntry>,

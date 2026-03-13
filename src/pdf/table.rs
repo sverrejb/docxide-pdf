@@ -10,7 +10,8 @@ use super::resolve_line_h;
 use super::RenderContext;
 
 use super::layout::{
-    TextLine, build_paragraph_lines, font_metric, is_text_empty, render_paragraph_lines,
+    TextLine, build_paragraph_lines, encode_text_for_pdf, font_metric, is_text_empty,
+    render_paragraph_lines,
 };
 
 /// Auto-fit column widths so that the longest non-breakable word in each column
@@ -422,72 +423,93 @@ fn render_table_row(
             .any(|p| !p.lines.is_empty() && !p.lines.iter().all(|l| l.chunks.is_empty()));
 
         if has_content && cell_layout.text_direction == TextDirection::TbRl {
-            // Rotated 90° CW: text flows top-to-bottom, lines stack right-to-left
-            let content_h: f32 = cell_layout
-                .paragraphs
-                .iter()
-                .flat_map(|p| p.lines.iter())
-                .map(|l| l.total_width)
-                .fold(0.0f32, f32::max);
+            // Vertical CJK text: characters upright, stacked top-to-bottom
+            let pdf_name_to_entry: HashMap<&str, &FontEntry> = ctx
+                .fonts
+                .values()
+                .map(|e| (e.pdf_name.as_str(), e))
+                .collect();
+
+            // Compute total content height (characters × font_size)
+            let mut total_char_h = 0.0f32;
+            for para in &cell_layout.paragraphs {
+                for line in &para.lines {
+                    for chunk in &line.chunks {
+                        if !chunk.text.is_empty() {
+                            total_char_h += chunk.text.chars().count() as f32 * chunk.font_size;
+                        }
+                    }
+                }
+            }
 
             let avail_h = row_h - cm.top - cm.bottom;
             let v_offset = match cell.v_align {
                 CellVAlign::Top => 0.0,
-                CellVAlign::Center => ((avail_h - content_h) / 2.0).max(0.0),
-                CellVAlign::Bottom => (avail_h - content_h).max(0.0),
+                CellVAlign::Center => ((avail_h - total_char_h) / 2.0).max(0.0),
+                CellVAlign::Bottom => (avail_h - total_char_h).max(0.0),
             };
 
-            // Center text block horizontally within the column
-            let content_w: f32 = cell_layout
-                .paragraphs
-                .iter()
-                .map(|p| p.space_before + p.lines.len() as f32 * p.line_h)
-                .sum();
             let avail_w = col_w - cm.left - cm.right;
-            let h_offset = ((avail_w - content_w) / 2.0).max(0.0);
+            let mut char_y = row_top - cm.top - v_offset;
 
-            pb.content.save_state();
-            // cm(0, -1, 1, 0, e, f): maps pre-transform (px, py) to
-            //   screen_x = py + e,  screen_y = -px + f
-            let e = cell_x + col_w - cm.right - h_offset;
-            let f = row_top - cm.top;
-            pb.content.transform([0.0, -1.0, 1.0, 0.0, e, f]);
-
-            let mut cursor_y = 0.0f32;
             for para in &cell_layout.paragraphs {
-                if para.lines.is_empty() || para.lines.iter().all(|l| l.chunks.is_empty()) {
-                    cursor_y -= para.space_before + para.lines.len() as f32 * para.line_h;
-                    continue;
+                for line in &para.lines {
+                    for chunk in &line.chunks {
+                        if chunk.text.is_empty() {
+                            continue;
+                        }
+                        let fs = chunk.font_size;
+                        let ascender_ratio = pdf_name_to_entry
+                            .get(chunk.pdf_font.as_str())
+                            .and_then(|e| e.ascender_ratio)
+                            .unwrap_or(0.75);
+
+                        if let Some([r, g, b]) = chunk.color {
+                            pb.content.set_fill_rgb(
+                                r as f32 / 255.0,
+                                g as f32 / 255.0,
+                                b as f32 / 255.0,
+                            );
+                        }
+
+                        pb.content.begin_text();
+                        pb.content
+                            .set_font(Name(chunk.pdf_font.as_bytes()), fs);
+
+                        let mut td_x = 0.0f32;
+                        let mut td_y = 0.0f32;
+                        for ch in chunk.text.chars() {
+                            let baseline_y = char_y - fs * ascender_ratio;
+                            // Center each character horizontally using its actual width
+                            let char_w = pdf_name_to_entry
+                                .get(chunk.pdf_font.as_str())
+                                .and_then(|e| e.char_widths_1000.as_ref())
+                                .and_then(|m| m.get(&ch))
+                                .map(|w| w * fs / 1000.0)
+                                .unwrap_or(fs);
+                            let cx = cell_x + cm.left + (avail_w - char_w) / 2.0;
+
+                            let ch_str = ch.to_string();
+                            let bytes = encode_text_for_pdf(
+                                &ch_str,
+                                &chunk.pdf_font,
+                                &pdf_name_to_entry,
+                            );
+                            pb.content.next_line(cx - td_x, baseline_y - td_y);
+                            td_x = cx;
+                            td_y = baseline_y;
+                            pb.content.show(Str(&bytes));
+
+                            char_y -= fs;
+                        }
+                        pb.content.end_text();
+
+                        if chunk.color.is_some() {
+                            pb.content.set_fill_gray(0.0);
+                        }
+                    }
                 }
-
-                cursor_y -= para.space_before;
-                let text_x = v_offset + para.indent_left;
-                let text_w = (avail_h - v_offset - para.indent_left - para.indent_right).max(0.0);
-                let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
-
-                if !para.list_label.is_empty() {
-                    let label_x = v_offset + para.indent_left - para.indent_hanging;
-                    draw_cell_label(&mut pb.content, para, label_x, baseline_y, ctx.fonts);
-                }
-
-                render_paragraph_lines(
-                    &mut pb.content,
-                    &para.lines,
-                    &para.alignment,
-                    text_x,
-                    text_w,
-                    baseline_y,
-                    para.line_h,
-                    para.lines.len(),
-                    0,
-                    &mut Vec::new(),
-                    0.0,
-                    ctx.fonts,
-                );
-
-                cursor_y -= para.lines.len() as f32 * para.line_h;
             }
-            pb.content.restore_state();
         } else if has_content {
             let content_h: f32 = cell_layout
                 .paragraphs
