@@ -1649,6 +1649,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 extra += next_inter + next_first_line_h + next_line_h;
                                 break;
                             }
+                            if next.page_break_after {
+                                extra = f32::MAX;
+                                break;
+                            }
                             extra += next_inter + next_first_line_h;
                             prev_sa = next.space_after;
                             i += 1;
