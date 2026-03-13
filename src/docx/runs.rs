@@ -234,7 +234,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
     fn collect_run_nodes<'a>(
         parent: roxmltree::Node<'a, 'a>,
         rels: &HashMap<String, String>,
-        out: &mut Vec<(roxmltree::Node<'a, 'a>, Option<String>)>,
+        out: &mut Vec<(roxmltree::Node<'a, 'a>, Option<String>, bool)>,
     ) {
         const MC_NS: &str = "http://schemas.openxmlformats.org/markup-compatibility/2006";
         const REL_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -244,8 +244,11 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
             let ns = child.tag_name().namespace();
             let is_wml = ns == Some(WML_NS);
             if is_wml && name == "r" {
-                out.push((child, None));
+                out.push((child, None, false));
             } else if is_wml && name == "hyperlink" {
+                let has_rid = child.attribute((REL_NS, "id")).is_some();
+                let has_anchor = child.attribute((WML_NS, "anchor")).is_some();
+                let is_anchor_only = has_anchor && !has_rid;
                 let url = child
                     .attribute((REL_NS, "id"))
                     .and_then(|rid| rels.get(rid))
@@ -253,7 +256,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                 for n in child.children().filter(|n| {
                     n.tag_name().name() == "r" && n.tag_name().namespace() == Some(WML_NS)
                 }) {
-                    out.push((n, url.clone()));
+                    out.push((n, url.clone(), is_anchor_only));
                 }
             } else if is_wml && name == "ins" {
                 collect_run_nodes(child, rels, out);
@@ -278,7 +281,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
             }
         }
     }
-    let mut run_nodes: Vec<(roxmltree::Node, Option<String>)> = Vec::new();
+    let mut run_nodes: Vec<(roxmltree::Node, Option<String>, bool)> = Vec::new();
     collect_run_nodes(para_node, rels, &mut run_nodes);
 
     let mut runs = Vec::new();
@@ -296,11 +299,15 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
     let mut field_instr = String::new();
     let mut field_result_text = String::new();
 
-    for (run_node, hyperlink_url) in run_nodes {
+    for (run_node, hyperlink_url, is_anchor_hyperlink) in run_nodes {
         let rpr = wml(run_node, "rPr");
 
         let char_style_id_str = rpr.and_then(|n| wml_attr(n, "rStyle"));
-        let char_style = char_style_id_str.and_then(|id| styles.character_styles.get(id));
+        let char_style = if is_anchor_hyperlink {
+            None
+        } else {
+            char_style_id_str.and_then(|id| styles.character_styles.get(id))
+        };
 
         let fmt = RunFormat {
             font_size: rpr

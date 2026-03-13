@@ -211,7 +211,7 @@
   },
   "scraped/croatian_grant_g..": {
     "jaccard": 0.0665,
-    "ssim": 0.1781,
+    "ssim": 0.1782,
     "text_boundary": 0.032
   },
   "scraped/croatian_regulat..": {
@@ -355,9 +355,9 @@
     "text_boundary": 0.0786
   },
   "scraped/transition_to_wo..": {
-    "jaccard": 0.0627,
-    "ssim": 0.1818,
-    "text_boundary": 0.0247
+    "jaccard": 0.256,
+    "ssim": 0.3766,
+    "text_boundary": 0.2003
   },
   "scraped/ukraine_humanita..": {
     "jaccard": 0.386,

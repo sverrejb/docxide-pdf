@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use super::{WML_NS, twips_attr, wml, wml_attr};
 
+#[derive(Clone)]
 pub(super) struct LevelDef {
     pub(super) num_fmt: String,
     pub(super) lvl_text: String,
@@ -29,6 +30,8 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
 
     let mut abstract_nums: HashMap<String, HashMap<u8, LevelDef>> = HashMap::new();
     let mut num_to_abstract: HashMap<String, String> = HashMap::new();
+    let mut num_style_link: HashMap<String, String> = HashMap::new();
+    let mut style_link_target: HashMap<String, String> = HashMap::new();
 
     let root = xml.root_element();
 
@@ -81,6 +84,12 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
                     );
                 }
                 abstract_nums.insert(abs_id.to_string(), levels);
+                if let Some(link) = wml_attr(node, "numStyleLink") {
+                    num_style_link.insert(abs_id.to_string(), link.to_string());
+                }
+                if let Some(link) = wml_attr(node, "styleLink") {
+                    style_link_target.insert(link.to_string(), abs_id.to_string());
+                }
             }
             "num" => {
                 let Some(num_id) = node.attribute((WML_NS, "numId")) else {
@@ -92,6 +101,20 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
                 num_to_abstract.insert(num_id.to_string(), abs_id.to_string());
             }
             _ => {}
+        }
+    }
+
+    // Resolve numStyleLink → styleLink chains
+    for (abs_id, style_name) in &num_style_link {
+        if let Some(target_abs_id) = style_link_target.get(style_name) {
+            if let Some(source_levels) = abstract_nums.get(target_abs_id).cloned() {
+                if !source_levels.is_empty() {
+                    let entry = abstract_nums.entry(abs_id.clone()).or_default();
+                    if entry.is_empty() {
+                        *entry = source_levels;
+                    }
+                }
+            }
         }
     }
 

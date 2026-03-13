@@ -12,7 +12,7 @@ The numbering issue alone affects ~1700 paragraphs and is the dominant cause of 
 
 ---
 
-## Fix 1: numStyleLink/styleLink resolution (CRITICAL)
+## Fix 1: numStyleLink/styleLink resolution (CRITICAL) ✅ COMPLETED
 
 **Files**: `src/docx/numbering.rs`
 
@@ -58,7 +58,7 @@ The numbering issue alone affects ~1700 paragraphs and is the dominant cause of 
 
 ---
 
-## Fix 2: Suppress Hyperlink char style for anchor-only hyperlinks (TOC color)
+## Fix 2: Suppress Hyperlink char style for anchor-only hyperlinks (TOC color) ✅ COMPLETED
 
 **Files**: `src/docx/runs.rs`
 
