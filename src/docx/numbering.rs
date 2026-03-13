@@ -16,6 +16,7 @@ pub(super) struct LevelDef {
 pub(super) struct NumberingInfo {
     pub(super) abstract_nums: HashMap<String, HashMap<u8, LevelDef>>,
     pub(super) num_to_abstract: HashMap<String, String>,
+    pub(super) start_overrides: HashMap<String, HashMap<u8, u32>>,
 }
 
 pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
@@ -32,6 +33,7 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
     let mut num_to_abstract: HashMap<String, String> = HashMap::new();
     let mut num_style_link: HashMap<String, String> = HashMap::new();
     let mut style_link_target: HashMap<String, String> = HashMap::new();
+    let mut start_overrides: HashMap<String, HashMap<u8, u32>> = HashMap::new();
 
     let root = xml.root_element();
 
@@ -99,6 +101,28 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
                     continue;
                 };
                 num_to_abstract.insert(num_id.to_string(), abs_id.to_string());
+                let mut overrides: HashMap<u8, u32> = HashMap::new();
+                for ovr in node.children() {
+                    if ovr.tag_name().name() == "lvlOverride"
+                        && ovr.tag_name().namespace() == Some(WML_NS)
+                    {
+                        if let Some(ilvl) =
+                            ovr.attribute((WML_NS, "ilvl")).and_then(|v| v.parse::<u8>().ok())
+                        {
+                            if let Some(start_ovr) = wml(ovr, "startOverride") {
+                                if let Some(val) = start_ovr
+                                    .attribute((WML_NS, "val"))
+                                    .and_then(|v| v.parse::<u32>().ok())
+                                {
+                                    overrides.insert(ilvl, val);
+                                }
+                            }
+                        }
+                    }
+                }
+                if !overrides.is_empty() {
+                    start_overrides.insert(num_id.to_string(), overrides);
+                }
             }
             _ => {}
         }
@@ -121,6 +145,7 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
     NumberingInfo {
         abstract_nums,
         num_to_abstract,
+        start_overrides,
     }
 }
 
@@ -252,7 +277,11 @@ pub(super) fn parse_list_info(
     last_seen_level.insert(num_id.to_string(), ilvl);
 
     // Increment or initialize counter using the level's start value
-    let start = def.start;
+    let start = numbering.start_overrides
+        .get(num_id)
+        .and_then(|m| m.get(&ilvl))
+        .copied()
+        .unwrap_or(def.start);
     let current_counter = *counters
         .entry((num_id.to_string(), ilvl))
         .and_modify(|c| *c += 1)
