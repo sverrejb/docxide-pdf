@@ -3,7 +3,7 @@ use std::io::Read;
 
 use crate::model::{
     Alignment, CellBorders, CellMargins, CellVAlign, HorizontalPosition, LineSpacing, Paragraph,
-    Table, TableCell, TablePosition, TableRow, VMerge,
+    Table, TableCell, TablePosition, TableRow, TextDirection, VMerge,
 };
 
 use super::numbering::{self, parse_list_info, ListLabelInfo};
@@ -178,6 +178,16 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                 })
                 .unwrap_or(CellVAlign::Top);
 
+            let text_direction = tc_pr
+                .and_then(|pr| wml(pr, "textDirection"))
+                .and_then(|n| n.attribute((WML_NS, "val")))
+                .map(|v| match v {
+                    "tbRlV" | "tbRl" | "rlV" | "rl" | "tbV" | "tb" => TextDirection::TbRl,
+                    "btLr" | "lr" | "lrV" | "lrTbV" => TextDirection::BtLr,
+                    _ => TextDirection::LrTb,
+                })
+                .unwrap_or(TextDirection::LrTb);
+
             let span_end = ci + grid_span as usize;
 
             let style_borders = effective_tbl_borders.map(|tb| CellBorders {
@@ -303,6 +313,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                 grid_span,
                 v_merge,
                 v_align,
+                text_direction,
             });
             grid_col += grid_span as usize;
         }

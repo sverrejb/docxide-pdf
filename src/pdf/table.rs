@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use pdf_writer::{Content, Name, Str};
 
 use crate::fonts::{FontEntry, encode_as_gids, font_key_buf, to_winansi_bytes};
-use crate::model::{Alignment, CellVAlign, SectionProperties, Table, VMerge};
+use crate::model::{Alignment, CellVAlign, SectionProperties, Table, TextDirection, VMerge};
 
 use super::header_footer::substitute_hf_runs;
 use super::resolve_line_h;
@@ -115,6 +115,7 @@ struct CellParagraphLayout {
 struct CellLayout {
     paragraphs: Vec<CellParagraphLayout>,
     total_height: f32,
+    text_direction: TextDirection,
 }
 
 struct RowLayout {
@@ -199,11 +200,18 @@ fn compute_row_layouts(
                         return CellLayout {
                             paragraphs: vec![],
                             total_height: 14.4,
+                            text_direction: TextDirection::LrTb,
                         };
                     }
 
-                    let cell_text_w = (col_w - cm.left - cm.right).max(0.0);
+                    let is_rotated = cell.text_direction != TextDirection::LrTb;
+                    let cell_text_w = if is_rotated {
+                        10000.0
+                    } else {
+                        (col_w - cm.left - cm.right).max(0.0)
+                    };
                     let mut total_h: f32 = cm.top + cm.bottom;
+                    let mut max_rotated_line_w: f32 = 0.0;
                     let mut paragraphs = Vec::new();
                     let mut prev_space_after = 0.0f32;
 
@@ -249,6 +257,11 @@ fn compute_row_layouts(
                                 para.indent_hanging,
                                 &std::collections::HashMap::new(),
                             );
+                            if is_rotated {
+                                for line in &lines {
+                                    max_rotated_line_w = max_rotated_line_w.max(line.total_width);
+                                }
+                            }
                             total_h += lines.len() as f32 * line_h;
                             lines
                         } else {
@@ -283,10 +296,14 @@ fn compute_row_layouts(
                     }
 
                     total_h += prev_space_after;
+                    if is_rotated {
+                        total_h = cm.top + cm.bottom + max_rotated_line_w;
+                    }
                     max_h = max_h.max(total_h);
                     CellLayout {
                         paragraphs,
                         total_height: total_h,
+                        text_direction: cell.text_direction,
                     }
                 })
                 .collect();
@@ -305,6 +322,50 @@ fn compute_row_layouts(
         .collect()
 }
 
+/// Look up the vMerge value for the cell at `target_col` in `row`.
+fn vmerge_at_col(row: &crate::model::TableRow, target_col: usize) -> VMerge {
+    let mut col = 0usize;
+    for cell in &row.cells {
+        if col == target_col {
+            return cell.v_merge;
+        }
+        col += cell.grid_span.max(1) as usize;
+        if col > target_col {
+            break;
+        }
+    }
+    VMerge::None
+}
+
+/// Pre-compute how much extra height each vMerge Restart cell spans beyond its own row.
+/// Returns a map from (row_idx, grid_col) to the sum of Continue row heights below.
+fn compute_merge_spans(
+    table: &Table,
+    row_layouts: &[RowLayout],
+) -> HashMap<(usize, usize), f32> {
+    let mut spans = HashMap::new();
+    for (ri, row) in table.rows.iter().enumerate() {
+        let mut grid_col = 0usize;
+        for cell in &row.cells {
+            let span = cell.grid_span.max(1) as usize;
+            if cell.v_merge == VMerge::Restart {
+                let mut extra = 0.0f32;
+                for next_ri in (ri + 1)..table.rows.len() {
+                    if vmerge_at_col(&table.rows[next_ri], grid_col) != VMerge::Continue {
+                        break;
+                    }
+                    extra += row_layouts[next_ri].height;
+                }
+                if extra > 0.0 {
+                    spans.insert((ri, grid_col), extra);
+                }
+            }
+            grid_col += span;
+        }
+    }
+    spans
+}
+
 fn render_table_row(
     row: &crate::model::TableRow,
     layout: &RowLayout,
@@ -313,6 +374,8 @@ fn render_table_row(
     table_left: f32,
     pb: &mut super::PageBuilder,
     ctx: &RenderContext,
+    row_idx: usize,
+    merge_spans: &HashMap<(usize, usize), f32>,
 ) {
     let row_h = layout.height;
     let row_top = pb.slot_top;
@@ -358,7 +421,74 @@ fn render_table_row(
             .iter()
             .any(|p| !p.lines.is_empty() && !p.lines.iter().all(|l| l.chunks.is_empty()));
 
-        if has_content {
+        if has_content && cell_layout.text_direction == TextDirection::TbRl {
+            // Rotated 90° CW: text flows top-to-bottom, lines stack right-to-left
+            let content_h: f32 = cell_layout
+                .paragraphs
+                .iter()
+                .flat_map(|p| p.lines.iter())
+                .map(|l| l.total_width)
+                .fold(0.0f32, f32::max);
+
+            let avail_h = row_h - cm.top - cm.bottom;
+            let v_offset = match cell.v_align {
+                CellVAlign::Top => 0.0,
+                CellVAlign::Center => ((avail_h - content_h) / 2.0).max(0.0),
+                CellVAlign::Bottom => (avail_h - content_h).max(0.0),
+            };
+
+            // Center text block horizontally within the column
+            let content_w: f32 = cell_layout
+                .paragraphs
+                .iter()
+                .map(|p| p.space_before + p.lines.len() as f32 * p.line_h)
+                .sum();
+            let avail_w = col_w - cm.left - cm.right;
+            let h_offset = ((avail_w - content_w) / 2.0).max(0.0);
+
+            pb.content.save_state();
+            // cm(0, -1, 1, 0, e, f): maps pre-transform (px, py) to
+            //   screen_x = py + e,  screen_y = -px + f
+            let e = cell_x + col_w - cm.right - h_offset;
+            let f = row_top - cm.top;
+            pb.content.transform([0.0, -1.0, 1.0, 0.0, e, f]);
+
+            let mut cursor_y = 0.0f32;
+            for para in &cell_layout.paragraphs {
+                if para.lines.is_empty() || para.lines.iter().all(|l| l.chunks.is_empty()) {
+                    cursor_y -= para.space_before + para.lines.len() as f32 * para.line_h;
+                    continue;
+                }
+
+                cursor_y -= para.space_before;
+                let text_x = v_offset + para.indent_left;
+                let text_w = (avail_h - v_offset - para.indent_left - para.indent_right).max(0.0);
+                let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
+
+                if !para.list_label.is_empty() {
+                    let label_x = v_offset + para.indent_left - para.indent_hanging;
+                    draw_cell_label(&mut pb.content, para, label_x, baseline_y, ctx.fonts);
+                }
+
+                render_paragraph_lines(
+                    &mut pb.content,
+                    &para.lines,
+                    &para.alignment,
+                    text_x,
+                    text_w,
+                    baseline_y,
+                    para.line_h,
+                    para.lines.len(),
+                    0,
+                    &mut Vec::new(),
+                    0.0,
+                    ctx.fonts,
+                );
+
+                cursor_y -= para.lines.len() as f32 * para.line_h;
+            }
+            pb.content.restore_state();
+        } else if has_content {
             let content_h: f32 = cell_layout
                 .paragraphs
                 .iter()
@@ -426,7 +556,17 @@ fn render_table_row(
             + col_widths[..grid_col.min(col_widths.len())]
                 .iter()
                 .sum::<f32>();
-        grid_col += span;
+
+        if cell.v_merge == VMerge::Continue {
+            grid_col += span;
+            continue;
+        }
+
+        let merge_extra = merge_spans
+            .get(&(row_idx, grid_col))
+            .copied()
+            .unwrap_or(0.0);
+        let effective_bottom = row_bottom - merge_extra;
 
         let b = &cell.borders;
         let draw_border =
@@ -445,26 +585,26 @@ fn render_table_row(
                 c.restore_state();
             };
 
-        if cell.v_merge != VMerge::Continue {
-            draw_border(&mut pb.content, &b.top, bx, row_top, bx + col_w, row_top);
-        }
+        draw_border(&mut pb.content, &b.top, bx, row_top, bx + col_w, row_top);
         draw_border(
             &mut pb.content,
             &b.bottom,
             bx,
-            row_bottom,
+            effective_bottom,
             bx + col_w,
-            row_bottom,
+            effective_bottom,
         );
-        draw_border(&mut pb.content, &b.left, bx, row_top, bx, row_bottom);
+        draw_border(&mut pb.content, &b.left, bx, row_top, bx, effective_bottom);
         draw_border(
             &mut pb.content,
             &b.right,
             bx + col_w,
             row_top,
             bx + col_w,
-            row_bottom,
+            effective_bottom,
         );
+
+        grid_col += span;
     }
 
     pb.slot_top = row_bottom;
@@ -681,6 +821,7 @@ pub(super) fn render_table(
 ) {
     let col_widths = auto_fit_columns(table, ctx.fonts);
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
+    let merge_spans = compute_merge_spans(table, &row_layouts);
     let cm = &table.cell_margins;
 
     let is_truly_floating = override_pos.is_some_and(|(.., restore)| restore);
@@ -762,6 +903,8 @@ pub(super) fn render_table(
                             table_left,
                             pb,
                             ctx,
+                            hi,
+                            &merge_spans,
                         );
                     }
                 }
@@ -782,12 +925,14 @@ pub(super) fn render_table(
                         table_left,
                         pb,
                         ctx,
+                        hi,
+                        &merge_spans,
                     );
                 }
             }
-            render_table_row(row, layout, &col_widths, cm, table_left, pb, ctx);
+            render_table_row(row, layout, &col_widths, cm, table_left, pb, ctx, ri, &merge_spans);
         } else {
-            render_table_row(row, layout, &col_widths, cm, table_left, pb, ctx);
+            render_table_row(row, layout, &col_widths, cm, table_left, pb, ctx, ri, &merge_spans);
         }
     }
 

@@ -484,6 +484,14 @@ pub enum CellVAlign {
     Bottom,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum TextDirection {
+    #[default]
+    LrTb,
+    TbRl,
+    BtLr,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct CellBorder {
     pub present: bool,
@@ -568,6 +576,7 @@ pub struct TableCell {
     pub grid_span: u16,
     pub v_merge: VMerge,
     pub v_align: CellVAlign,
+    pub text_direction: TextDirection,
 }
 
 pub enum Block {
