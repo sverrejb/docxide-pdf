@@ -1,4 +1,4 @@
-# Fixtures to skip during testing.
+q# Fixtures to skip during testing.
 # Each line is either a case name or a group name (skips all fixtures in that group).
 # Blank lines and lines starting with # are ignored.
 
@@ -6,34 +6,34 @@
 case13
 
 # Scraped fixtures below Jaccard 20% or SSIM 75% thresholds
-air_pollution_permit_form
-brazilian_logistics_study
-croatian_grant_guidelines
-croatian_regulations_altchunk
-czech_grant_application
-east_asia_conference_form
-education_consultant_posting
-federal_procurement_terms
-feminist_voice_dissertation
-go_math_grade4_guide
-indonesian_benchmarking_guide
-italian_evaluation_minutes
-italian_project_proposal
-japanese_interlibrary_loan
-learning_cultures_dissertation
-lithuanian_ethics_law
-lithuanian_food_quality_order
-mandated_reporter_child_abuse
-mongolian_human_rights_law
-polish_archery_range_plan
-polish_council_resolution
-polish_municipal_letter
-polish_tender_declaration
-russian_sports_ranking_decree
-russian_university_proceedings
-slovak_misdemeanor_amendment
+#air_pollution_permit_form
+#brazilian_logistics_study
+#croatian_grant_guidelines
+#croatian_regulations_altchunk
+#czech_grant_application
+#east_asia_conference_form
+#education_consultant_posting
+#federal_procurement_terms
+#feminist_voice_dissertation
+#go_math_grade4_guide
+#indonesian_benchmarking_guide
+#italian_evaluation_minutes
+#italian_project_proposal
+#japanese_interlibrary_loan
+#learning_cultures_dissertation
+#lithuanian_ethics_law
+#lithuanian_food_quality_order
+#mandated_reporter_child_abuse
+#mongolian_human_rights_law
+#polish_archery_range_plan
+#polish_council_resolution
+#polish_municipal_letter
+#polish_tender_declaration
+#russian_sports_ranking_decree
+#russian_university_proceedings
+#slovak_misdemeanor_amendment
 # stem_partnerships_guide
-transition_to_work_deed
-ukraine_humanitarian_aid
-usep_handbook
+#transition_to_work_deed
+#ukraine_humanitarian_aid
+#usep_handbook
 # vaccines_history_chapter

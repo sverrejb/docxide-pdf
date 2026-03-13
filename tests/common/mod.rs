@@ -211,7 +211,16 @@ pub fn ensure_generated_pdf(fixture_dir: &Path) -> Result<PathBuf, String> {
     };
 
     if needs_convert {
-        docxide_pdf::convert_docx_to_pdf(&input_docx, &generated_pdf).map_err(|e| e.to_string())?;
+        let input = input_docx.clone();
+        let output = generated_pdf.clone();
+        let result = std::panic::catch_unwind(move || {
+            docxide_pdf::convert_docx_to_pdf(&input, &output)
+        });
+        match result {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => return Err(e.to_string()),
+            Err(_) => return Err("conversion panicked".to_string()),
+        }
     }
 
     Ok(generated_pdf)
