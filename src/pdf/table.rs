@@ -430,17 +430,14 @@ fn render_table_row(
                 .map(|e| (e.pdf_name.as_str(), e))
                 .collect();
 
-            // Compute total content height (characters × font_size)
-            let mut total_char_h = 0.0f32;
-            for para in &cell_layout.paragraphs {
-                for line in &para.lines {
-                    for chunk in &line.chunks {
-                        if !chunk.text.is_empty() {
-                            total_char_h += chunk.text.chars().count() as f32 * chunk.font_size;
-                        }
-                    }
-                }
-            }
+            let total_char_h: f32 = cell_layout
+                .paragraphs
+                .iter()
+                .flat_map(|p| &p.lines)
+                .flat_map(|l| &l.chunks)
+                .filter(|c| !c.text.is_empty())
+                .map(|c| c.text.chars().count() as f32 * c.font_size)
+                .sum();
 
             let avail_h = row_h - cm.top - cm.bottom;
             let v_offset = match cell.v_align {
@@ -451,6 +448,7 @@ fn render_table_row(
 
             let avail_w = col_w - cm.left - cm.right;
             let mut char_y = row_top - cm.top - v_offset;
+            let mut char_buf = [0u8; 4];
 
             for para in &cell_layout.paragraphs {
                 for line in &para.lines {
@@ -459,10 +457,12 @@ fn render_table_row(
                             continue;
                         }
                         let fs = chunk.font_size;
-                        let ascender_ratio = pdf_name_to_entry
-                            .get(chunk.pdf_font.as_str())
+                        let entry = pdf_name_to_entry.get(chunk.pdf_font.as_str());
+                        let ascender_ratio = entry
                             .and_then(|e| e.ascender_ratio)
                             .unwrap_or(0.75);
+                        let widths = entry
+                            .and_then(|e| e.char_widths_1000.as_ref());
 
                         if let Some([r, g, b]) = chunk.color {
                             pb.content.set_fill_rgb(
@@ -473,25 +473,21 @@ fn render_table_row(
                         }
 
                         pb.content.begin_text();
-                        pb.content
-                            .set_font(Name(chunk.pdf_font.as_bytes()), fs);
+                        pb.content.set_font(Name(chunk.pdf_font.as_bytes()), fs);
 
                         let mut td_x = 0.0f32;
                         let mut td_y = 0.0f32;
                         for ch in chunk.text.chars() {
                             let baseline_y = char_y - fs * ascender_ratio;
-                            // Center each character horizontally using its actual width
-                            let char_w = pdf_name_to_entry
-                                .get(chunk.pdf_font.as_str())
-                                .and_then(|e| e.char_widths_1000.as_ref())
+                            let char_w = widths
                                 .and_then(|m| m.get(&ch))
                                 .map(|w| w * fs / 1000.0)
                                 .unwrap_or(fs);
                             let cx = cell_x + cm.left + (avail_w - char_w) / 2.0;
 
-                            let ch_str = ch.to_string();
+                            let ch_str = ch.encode_utf8(&mut char_buf);
                             let bytes = encode_text_for_pdf(
-                                &ch_str,
+                                ch_str,
                                 &chunk.pdf_font,
                                 &pdf_name_to_entry,
                             );

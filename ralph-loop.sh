@@ -26,7 +26,9 @@ for ((i=1; i<=iterations; i++)); do
 3. Update ${progress} with what you did. \
 4. Mark task in ${plan} with completed when done.
 ONLY DO ONE TASK AT A TIME. You are not to do more than the topmost uncompleted task. \
-If the plan item list is complete: 
+If the plan item list is complete: \
+Review all uncommitted code and simplify. Use the sub-agent code-simplifier:code-simplifier. \
+Report any score improvements or regressions. \
 Make a commit. As me, not as Claude, the message should have a 1-2 sentence summary and refer the relevant case. Then output <promise>COMPLETE</promise>.")
 
   echo "$result"
