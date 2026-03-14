@@ -715,14 +715,7 @@ fn embed_single_image(
     pdf_name
 }
 
-fn collect_and_register_fonts(
-    doc: &Document,
-    pdf: &mut Pdf,
-    alloc: &mut impl FnMut() -> Ref,
-) -> (HashMap<String, FontEntry>, Vec<String>) {
-    let mut seen_fonts: HashMap<String, FontEntry> = HashMap::new();
-    let mut font_order: Vec<String> = Vec::new();
-
+fn collect_all_runs(doc: &Document) -> Vec<&Run> {
     let hf_runs = doc.sections.iter().flat_map(|s| {
         [
             &s.properties.header_default,
@@ -744,8 +737,7 @@ fn collect_and_register_fonts(
         .flat_map(|fn_| fn_.paragraphs.iter())
         .flat_map(|p| p.runs.iter());
 
-    let all_runs: Vec<&Run> = doc
-        .sections
+    doc.sections
         .iter()
         .flat_map(|s| s.blocks.iter())
         .flat_map(|block| -> Vec<&Run> {
@@ -762,13 +754,16 @@ fn collect_and_register_fonts(
         })
         .chain(hf_runs)
         .chain(footnote_runs)
-        .collect();
+        .collect()
+}
 
-    let mut used_chars_per_font: HashMap<String, HashSet<char>> = HashMap::new();
+fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, HashSet<char>> {
+    let mut used: HashMap<String, HashSet<char>> = HashMap::new();
     let mut key_buf = String::new();
-    for run in &all_runs {
+
+    for run in all_runs {
         let key = font_key_buf(run, &mut key_buf);
-        let chars = used_chars_per_font.entry(key.to_string()).or_default();
+        let chars = used.entry(key.to_string()).or_default();
         if run.caps || run.small_caps {
             chars.extend(run.text.to_uppercase().chars());
         } else {
@@ -779,15 +774,14 @@ fn collect_and_register_fonts(
                 FieldCode::Page | FieldCode::NumPages => {
                     chars.extend('0'..='9');
                 }
-                FieldCode::StyleRef(_) => {
-                    // Characters will be included from the body text runs
-                }
+                FieldCode::StyleRef(_) => {}
             }
         }
         if run.footnote_id.is_some() || run.is_footnote_ref_mark {
             chars.extend('0'..='9');
         }
     }
+
     let all_paras: Vec<&Paragraph> = doc
         .sections
         .iter()
@@ -805,11 +799,11 @@ fn collect_and_register_fonts(
             }
         })
         .collect();
+
     for para in &all_paras {
         if !para.list_label.is_empty() {
             if let Some(key) = label_font_key(para) {
-                used_chars_per_font
-                    .entry(key)
+                used.entry(key)
                     .or_default()
                     .extend(para.list_label.chars());
             }
@@ -819,17 +813,14 @@ fn collect_and_register_fonts(
                 && let Some(run) = para.runs.first()
             {
                 let key = font_key_buf(run, &mut key_buf).to_string();
-                used_chars_per_font
-                    .entry(key)
-                    .or_default()
-                    .insert(leader_char);
+                used.entry(key).or_default().insert(leader_char);
             }
         }
     }
-    // Include SmartArt text characters in the first body font's subset
+
     if let Some(first_run) = all_runs.first() {
         let sa_key = font_key_buf(first_run, &mut key_buf).to_string();
-        let chars = used_chars_per_font.entry(sa_key).or_default();
+        let chars = used.entry(sa_key).or_default();
         for para in &all_paras {
             if let Some(ref diagram) = para.smartart {
                 for shape in &diagram.shapes {
@@ -838,6 +829,7 @@ fn collect_and_register_fonts(
             }
         }
     }
+
     for section in &doc.sections {
         for hf in [
             &section.properties.header_default,
@@ -853,7 +845,7 @@ fn collect_and_register_fonts(
             for para in hf_paragraphs(hf) {
                 for run in &para.runs {
                     let key = font_key_buf(run, &mut key_buf);
-                    let chars = used_chars_per_font.entry(key.to_string()).or_default();
+                    let chars = used.entry(key.to_string()).or_default();
                     if run.caps || run.small_caps {
                         chars.extend(run.text.to_uppercase().chars());
                     } else {
@@ -876,9 +868,24 @@ fn collect_and_register_fonts(
             }
         }
     }
-    for chars in used_chars_per_font.values_mut() {
+
+    for chars in used.values_mut() {
         chars.insert(' ');
     }
+
+    used
+}
+
+fn collect_and_register_fonts(
+    doc: &Document,
+    pdf: &mut Pdf,
+    alloc: &mut impl FnMut() -> Ref,
+) -> (HashMap<String, FontEntry>, Vec<String>) {
+    let mut seen_fonts: HashMap<String, FontEntry> = HashMap::new();
+    let mut font_order: Vec<String> = Vec::new();
+    let all_runs = collect_all_runs(doc);
+    let used_chars_per_font = collect_used_chars(doc, &all_runs);
+    let mut key_buf = String::new();
 
     for run in &all_runs {
         let key = font_key_buf(run, &mut key_buf);
