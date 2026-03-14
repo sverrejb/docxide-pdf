@@ -116,8 +116,8 @@ pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
             .unwrap_or(Alignment::Left);
         let (sp_before, sp_after, ls) = parse_paragraph_spacing(ppr, para_style);
         let space_before = sp_before.unwrap_or(0.0);
-        let space_after = sp_after.unwrap_or(0.0);
-        let line_spacing = Some(ls.unwrap_or(LineSpacing::Auto(1.0)));
+        let space_after = sp_after.unwrap_or(styles.defaults.space_after);
+        let line_spacing = Some(ls.unwrap_or(styles.defaults.line_spacing));
         let tab_stops = ppr.map(super::parse_tab_stops).unwrap_or_default();
         let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
         let ListLabelInfo {
