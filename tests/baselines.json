@@ -15,7 +15,7 @@
     "jaccard": 0.7273,
     "ssim": 0.9196,
     "text_boundary": 1.0,
-    "convert_ms": 11.6
+    "convert_ms": 11.5
   },
   "cases/case12": {
     "jaccard": 0.9826,
@@ -381,7 +381,7 @@
     "jaccard": 0.1347,
     "ssim": 0.2141,
     "text_boundary": 0.1838,
-    "convert_ms": 27.4
+    "convert_ms": 27.3
   },
   "scraped/polish_archery_r..": {
     "jaccard": 0.1498,
@@ -429,7 +429,7 @@
     "jaccard": 0.1288,
     "ssim": 0.2975,
     "text_boundary": 0.4688,
-    "convert_ms": 11.6
+    "convert_ms": 11.5
   },
   "scraped/stem_partnership..": {
     "jaccard": 0.2429,
