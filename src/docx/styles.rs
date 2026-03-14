@@ -13,14 +13,8 @@ fn dml<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<
         .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(DML_NS))
 }
 
-fn latin_typeface<'a>(node: roxmltree::Node<'a, 'a>) -> Option<&'a str> {
-    dml(node, "latin")
-        .and_then(|n| n.attribute("typeface"))
-        .filter(|tf| !tf.is_empty())
-}
-
-fn ea_typeface<'a>(node: roxmltree::Node<'a, 'a>) -> Option<&'a str> {
-    dml(node, "ea")
+fn dml_typeface<'a>(node: roxmltree::Node<'a, 'a>, element: &str) -> Option<&'a str> {
+    dml(node, element)
         .and_then(|n| n.attribute("typeface"))
         .filter(|tf| !tf.is_empty())
 }
@@ -181,6 +175,31 @@ pub(super) fn parse_alignment(val: &str) -> Alignment {
     }
 }
 
+fn parse_font_size(rpr: roxmltree::Node) -> Option<f32> {
+    wml_attr(rpr, "sz")
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(|hp| hp / 2.0)
+}
+
+fn parse_kern(rpr: roxmltree::Node) -> Option<f32> {
+    wml_attr(rpr, "kern")
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(|hp| hp / 2.0)
+}
+
+fn parse_underline(rpr: roxmltree::Node) -> Option<bool> {
+    wml(rpr, "u")
+        .and_then(|u| u.attribute((WML_NS, "val")))
+        .map(|v| v != "none")
+}
+
+fn parse_char_spacing(rpr: roxmltree::Node) -> Option<f32> {
+    wml(rpr, "spacing")
+        .and_then(|n| n.attribute((WML_NS, "val")))
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(twips_to_pts)
+}
+
 pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(
     zip: &mut zip::ZipArchive<R>,
     east_asia_lang: Option<&str>,
@@ -209,19 +228,19 @@ pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(
             }
             match node.tag_name().name() {
                 "majorFont" => {
-                    if let Some(tf) = latin_typeface(node) {
+                    if let Some(tf) = dml_typeface(node, "latin") {
                         major = tf.to_string();
                     }
-                    major_east_asia = ea_typeface(node)
+                    major_east_asia = dml_typeface(node, "ea")
                         .or_else(|| script_font_typeface(node, script))
                         .unwrap_or("")
                         .to_string();
                 }
                 "minorFont" => {
-                    if let Some(tf) = latin_typeface(node) {
+                    if let Some(tf) = dml_typeface(node, "latin") {
                         minor = tf.to_string();
                     }
-                    minor_east_asia = ea_typeface(node)
+                    minor_east_asia = dml_typeface(node, "ea")
                         .or_else(|| script_font_typeface(node, script))
                         .unwrap_or("")
                         .to_string();
@@ -261,8 +280,7 @@ pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(
                                         .and_then(|v| v.parse::<f32>().ok())
                                         .map(|v| v / 60_000.0)
                                         .unwrap_or(0.0);
-                                    fill_styles
-                                        .push(ThemeFillStyle::Gradient { stops, angle_deg });
+                                    fill_styles.push(ThemeFillStyle::Gradient { stops, angle_deg });
                                 }
                             }
                             _ => {}
@@ -297,10 +315,9 @@ fn parse_theme_gradient_stops(gs_lst: roxmltree::Node) -> Vec<ThemeGradientStop>
             let transforms = gs
                 .descendants()
                 .find(|n| {
-                    n.tag_name().name() == "schemeClr"
-                        && n.tag_name().namespace() == Some(DML_NS)
+                    n.tag_name().name() == "schemeClr" && n.tag_name().namespace() == Some(DML_NS)
                 })
-                .map(|scheme_clr| parse_color_transforms(scheme_clr))
+                .map(parse_color_transforms)
                 .unwrap_or_default();
             ThemeGradientStop {
                 position,
@@ -310,7 +327,7 @@ fn parse_theme_gradient_stops(gs_lst: roxmltree::Node) -> Vec<ThemeGradientStop>
         .collect()
 }
 
-fn parse_color_transforms(scheme_clr: roxmltree::Node) -> ColorTransforms {
+pub(super) fn parse_color_transforms(scheme_clr: roxmltree::Node) -> ColorTransforms {
     let mut t = ColorTransforms::default();
     for child in scheme_clr
         .children()
@@ -454,16 +471,14 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
 
     if let Some(doc_defaults) = wml(root, "docDefaults") {
         if let Some(rpr) = wml(doc_defaults, "rPrDefault").and_then(|n| wml(n, "rPr")) {
-            if let Some(sz_val) = wml_attr(rpr, "sz").and_then(|v| v.parse::<f32>().ok()) {
-                defaults.font_size = sz_val / 2.0;
+            if let Some(fs) = parse_font_size(rpr) {
+                defaults.font_size = fs;
             }
             if let Some(rfonts) = wml(rpr, "rFonts") {
                 defaults.font_name = resolve_font_from_node(rfonts, theme, &theme.minor);
                 defaults.east_asia_font = resolve_east_asia_font_from_node(rfonts, theme);
             }
-            defaults.kern_threshold = wml_attr(rpr, "kern")
-                .and_then(|v| v.parse::<f32>().ok())
-                .map(|hp| hp / 2.0);
+            defaults.kern_threshold = parse_kern(rpr);
             defaults.bold = wml_bool(rpr, "b").unwrap_or(false);
             defaults.italic = wml_bool(rpr, "i").unwrap_or(false);
             defaults.caps = wml_bool(rpr, "caps").unwrap_or(false);
@@ -471,16 +486,9 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
             defaults.vanish = wml_bool(rpr, "vanish").unwrap_or(false);
             defaults.strikethrough = wml_bool(rpr, "strike").unwrap_or(false);
             defaults.dstrike = wml_bool(rpr, "dstrike").unwrap_or(false);
-            defaults.underline = wml(rpr, "u")
-                .and_then(|u| u.attribute((WML_NS, "val")))
-                .map(|v| v != "none")
-                .unwrap_or(false);
+            defaults.underline = parse_underline(rpr).unwrap_or(false);
             defaults.color = wml_attr(rpr, "color").and_then(parse_text_color);
-            defaults.char_spacing = wml(rpr, "spacing")
-                .and_then(|n| n.attribute((WML_NS, "val")))
-                .and_then(|v| v.parse::<f32>().ok())
-                .map(twips_to_pts)
-                .unwrap_or(0.0);
+            defaults.char_spacing = parse_char_spacing(rpr).unwrap_or(0.0);
         }
         let default_spacing = wml(doc_defaults, "pPrDefault")
             .and_then(|n| wml(n, "pPr"))
@@ -532,11 +540,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
 
                 let rpr = wml(style_node, "rPr");
 
-                let font_size = rpr
-                    .and_then(|n| wml_attr(n, "sz"))
-                    .and_then(|v| v.parse::<f32>().ok())
-                    .map(|hp| hp / 2.0);
-
+                let font_size = rpr.and_then(parse_font_size);
                 let rfonts_node = rpr.and_then(|n| wml(n, "rFonts"));
                 let font_name = rfonts_node
                     .map(|rfonts| resolve_font_from_node(rfonts, theme, &defaults.font_name));
@@ -548,23 +552,11 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                 let caps = rpr.and_then(|n| wml_bool(n, "caps"));
                 let small_caps = rpr.and_then(|n| wml_bool(n, "smallCaps"));
                 let vanish = rpr.and_then(|n| wml_bool(n, "vanish"));
-                let underline = rpr.and_then(|n| {
-                    wml(n, "u")
-                        .and_then(|u| u.attribute((WML_NS, "val")))
-                        .map(|v| v != "none")
-                });
+                let underline = rpr.and_then(parse_underline);
                 let strikethrough = rpr.and_then(|n| wml_bool(n, "strike"));
                 let dstrike = rpr.and_then(|n| wml_bool(n, "dstrike"));
-                let char_spacing = rpr
-                    .and_then(|n| wml(n, "spacing"))
-                    .and_then(|n| n.attribute((WML_NS, "val")))
-                    .and_then(|v| v.parse::<f32>().ok())
-                    .map(twips_to_pts);
-                let kern_threshold = rpr
-                    .and_then(|n| wml_attr(n, "kern"))
-                    .and_then(|v| v.parse::<f32>().ok())
-                    .map(|hp| hp / 2.0);
-
+                let char_spacing = rpr.and_then(parse_char_spacing);
+                let kern_threshold = rpr.and_then(parse_kern);
                 let color = rpr
                     .and_then(|n| wml_attr(n, "color"))
                     .and_then(parse_text_color);
@@ -591,11 +583,10 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                         .map(|line_val| parse_line_spacing(n, line_val))
                 });
 
-                let (indent_left, indent_right, indent_hanging, indent_first_line) =
-                    match ppr.and_then(|n| wml(n, "ind")) {
-                        Some(ind) => super::extract_indents(ind),
-                        None => (None, None, None, None),
-                    };
+                let (indent_left, indent_right, indent_hanging, indent_first_line) = ppr
+                    .and_then(|n| wml(n, "ind"))
+                    .map(super::extract_indents)
+                    .unwrap_or_default();
 
                 let tab_stops = ppr.map(parse_tab_stops).unwrap_or_default();
 
@@ -652,9 +643,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                 let Some(rpr) = wml(style_node, "rPr") else {
                     continue;
                 };
-                let font_size = wml_attr(rpr, "sz")
-                    .and_then(|v| v.parse::<f32>().ok())
-                    .map(|hp| hp / 2.0);
+                let font_size = parse_font_size(rpr);
                 let rfonts_node = wml(rpr, "rFonts");
                 let font_name = rfonts_node
                     .map(|rfonts| resolve_font_from_node(rfonts, theme, &defaults.font_name));
@@ -662,17 +651,13 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                     rfonts_node.and_then(|rfonts| resolve_east_asia_font_from_node(rfonts, theme));
                 let bold = wml_bool(rpr, "b");
                 let italic = wml_bool(rpr, "i");
-                let underline = wml(rpr, "u")
-                    .and_then(|n| n.attribute((WML_NS, "val")))
-                    .map(|v| v != "none");
+                let underline = parse_underline(rpr);
                 let strikethrough = wml_bool(rpr, "strike");
                 let caps = wml_bool(rpr, "caps");
                 let small_caps = wml_bool(rpr, "smallCaps");
                 let vanish = wml_bool(rpr, "vanish");
                 let color = wml_attr(rpr, "color").and_then(parse_text_color);
-                let kern_threshold = wml_attr(rpr, "kern")
-                    .and_then(|v| v.parse::<f32>().ok())
-                    .map(|hp| hp / 2.0);
+                let kern_threshold = parse_kern(rpr);
 
                 character_styles.insert(
                     style_id.to_string(),
@@ -752,10 +737,8 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
         // Walk ancestors from furthest to closest, accumulating inherited values.
         // Each closer ancestor overrides the further one.
         macro_rules! inherit {
-            ($field:ident, $inherited:expr, $s:expr) => {
-                if $s.$field.is_some() {
-                    $inherited = $s.$field.clone();
-                }
+            ($dst:expr, $src:expr, $($field:ident),+ $(,)?) => {
+                $(if $src.$field.is_some() { $dst.$field = $src.$field.clone(); })+
             };
         }
 
@@ -763,30 +746,34 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
 
         for ancestor_id in chain.iter().rev() {
             if let Some(s) = styles.get(ancestor_id) {
-                inherit!(font_name, inh.font_name, s);
-                inherit!(east_asia_font, inh.east_asia_font, s);
-                inherit!(font_size, inh.font_size, s);
-                inherit!(bold, inh.bold, s);
-                inherit!(italic, inh.italic, s);
-                inherit!(caps, inh.caps, s);
-                inherit!(small_caps, inh.small_caps, s);
-                inherit!(vanish, inh.vanish, s);
-                inherit!(underline, inh.underline, s);
-                inherit!(strikethrough, inh.strikethrough, s);
-                inherit!(dstrike, inh.dstrike, s);
-                inherit!(color, inh.color, s);
-                inherit!(char_spacing, inh.char_spacing, s);
-                inherit!(alignment, inh.alignment, s);
-                inherit!(space_before, inh.space_before, s);
-                inherit!(space_after, inh.space_after, s);
-                inherit!(line_spacing, inh.line_spacing, s);
-                inherit!(indent_left, inh.indent_left, s);
-                inherit!(indent_right, inh.indent_right, s);
-                inherit!(indent_hanging, inh.indent_hanging, s);
-                inherit!(indent_first_line, inh.indent_first_line, s);
-                inherit!(kern_threshold, inh.kern_threshold, s);
-                inherit!(num_id, inh.num_id, s);
-                inherit!(num_ilvl, inh.num_ilvl, s);
+                inherit!(
+                    inh,
+                    s,
+                    font_name,
+                    east_asia_font,
+                    font_size,
+                    bold,
+                    italic,
+                    caps,
+                    small_caps,
+                    vanish,
+                    underline,
+                    strikethrough,
+                    dstrike,
+                    color,
+                    char_spacing,
+                    alignment,
+                    space_before,
+                    space_after,
+                    line_spacing,
+                    indent_left,
+                    indent_right,
+                    indent_hanging,
+                    indent_first_line,
+                    kern_threshold,
+                    num_id,
+                    num_ilvl,
+                );
                 // Tab stops are additive: accumulate from ancestors, child overrides at same pos
                 for ts in &s.tab_stops {
                     if let Some(existing) = inh

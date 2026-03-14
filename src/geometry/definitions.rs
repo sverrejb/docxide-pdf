@@ -21,7 +21,13 @@ pub struct PresetDef {
 
 macro_rules! gd {
     ($name:expr, $op:ident, $x:expr, $y:expr, $z:expr) => {
-        GuideDef { name: $name, op: FormulaOp::$op, x: $x, y: $y, z: $z }
+        GuideDef {
+            name: $name,
+            op: FormulaOp::$op,
+            x: $x,
+            y: $y,
+            z: $z,
+        }
     };
 }
 
@@ -235,9 +241,27 @@ static ACCENT_BORDER_CALLOUT1_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x2", y: "y2" },
 ];
 static ACCENT_BORDER_CALLOUT1_PATHS: &[PathDef] = &[
-    PathDef { commands: ACCENT_BORDER_CALLOUT1_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-    PathDef { commands: ACCENT_BORDER_CALLOUT1_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-    PathDef { commands: ACCENT_BORDER_CALLOUT1_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: ACCENT_BORDER_CALLOUT1_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: ACCENT_BORDER_CALLOUT1_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: ACCENT_BORDER_CALLOUT1_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static ACCENT_BORDER_CALLOUT1_GUIDES: &[GuideDef] = &[
     gd!("y1", MulDiv, "h", "adj1", "100000"),
@@ -246,10 +270,20 @@ static ACCENT_BORDER_CALLOUT1_GUIDES: &[GuideDef] = &[
     gd!("x2", MulDiv, "w", "adj4", "100000"),
 ];
 static ACCENT_BORDER_CALLOUT1: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 18750), ("adj2", -8333), ("adj3", 112500), ("adj4", -38333)],
+    adjust_defaults: &[
+        ("adj1", 18750),
+        ("adj2", -8333),
+        ("adj3", 112500),
+        ("adj4", -38333),
+    ],
     guides: ACCENT_BORDER_CALLOUT1_GUIDES,
     paths: ACCENT_BORDER_CALLOUT1_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static ACCENT_BORDER_CALLOUT2_P0_CMDS: &[PathCommandDef] = &[
@@ -270,9 +304,27 @@ static ACCENT_BORDER_CALLOUT2_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x3", y: "y3" },
 ];
 static ACCENT_BORDER_CALLOUT2_PATHS: &[PathDef] = &[
-    PathDef { commands: ACCENT_BORDER_CALLOUT2_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-    PathDef { commands: ACCENT_BORDER_CALLOUT2_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-    PathDef { commands: ACCENT_BORDER_CALLOUT2_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: ACCENT_BORDER_CALLOUT2_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: ACCENT_BORDER_CALLOUT2_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: ACCENT_BORDER_CALLOUT2_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static ACCENT_BORDER_CALLOUT2_GUIDES: &[GuideDef] = &[
     gd!("y1", MulDiv, "h", "adj1", "100000"),
@@ -283,10 +335,22 @@ static ACCENT_BORDER_CALLOUT2_GUIDES: &[GuideDef] = &[
     gd!("x3", MulDiv, "w", "adj6", "100000"),
 ];
 static ACCENT_BORDER_CALLOUT2: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 18750), ("adj2", -8333), ("adj3", 18750), ("adj4", -16667), ("adj5", 112500), ("adj6", -46667)],
+    adjust_defaults: &[
+        ("adj1", 18750),
+        ("adj2", -8333),
+        ("adj3", 18750),
+        ("adj4", -16667),
+        ("adj5", 112500),
+        ("adj6", -46667),
+    ],
     guides: ACCENT_BORDER_CALLOUT2_GUIDES,
     paths: ACCENT_BORDER_CALLOUT2_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static ACCENT_BORDER_CALLOUT3_P0_CMDS: &[PathCommandDef] = &[
@@ -308,9 +372,27 @@ static ACCENT_BORDER_CALLOUT3_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x4", y: "y4" },
 ];
 static ACCENT_BORDER_CALLOUT3_PATHS: &[PathDef] = &[
-    PathDef { commands: ACCENT_BORDER_CALLOUT3_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-    PathDef { commands: ACCENT_BORDER_CALLOUT3_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-    PathDef { commands: ACCENT_BORDER_CALLOUT3_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: ACCENT_BORDER_CALLOUT3_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: ACCENT_BORDER_CALLOUT3_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: ACCENT_BORDER_CALLOUT3_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static ACCENT_BORDER_CALLOUT3_GUIDES: &[GuideDef] = &[
     gd!("y1", MulDiv, "h", "adj1", "100000"),
@@ -323,10 +405,24 @@ static ACCENT_BORDER_CALLOUT3_GUIDES: &[GuideDef] = &[
     gd!("x4", MulDiv, "w", "adj8", "100000"),
 ];
 static ACCENT_BORDER_CALLOUT3: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 18750), ("adj2", -8333), ("adj3", 18750), ("adj4", -16667), ("adj5", 100000), ("adj6", -16667), ("adj7", 112963), ("adj8", -8333)],
+    adjust_defaults: &[
+        ("adj1", 18750),
+        ("adj2", -8333),
+        ("adj3", 18750),
+        ("adj4", -16667),
+        ("adj5", 100000),
+        ("adj6", -16667),
+        ("adj7", 112963),
+        ("adj8", -8333),
+    ],
     guides: ACCENT_BORDER_CALLOUT3_GUIDES,
     paths: ACCENT_BORDER_CALLOUT3_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static ACCENT_CALLOUT1_P0_CMDS: &[PathCommandDef] = &[
@@ -346,9 +442,27 @@ static ACCENT_CALLOUT1_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x2", y: "y2" },
 ];
 static ACCENT_CALLOUT1_PATHS: &[PathDef] = &[
-    PathDef { commands: ACCENT_CALLOUT1_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACCENT_CALLOUT1_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-    PathDef { commands: ACCENT_CALLOUT1_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: ACCENT_CALLOUT1_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACCENT_CALLOUT1_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: ACCENT_CALLOUT1_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static ACCENT_CALLOUT1_GUIDES: &[GuideDef] = &[
     gd!("y1", MulDiv, "h", "adj1", "100000"),
@@ -357,10 +471,20 @@ static ACCENT_CALLOUT1_GUIDES: &[GuideDef] = &[
     gd!("x2", MulDiv, "w", "adj4", "100000"),
 ];
 static ACCENT_CALLOUT1: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 18750), ("adj2", -8333), ("adj3", 112500), ("adj4", -38333)],
+    adjust_defaults: &[
+        ("adj1", 18750),
+        ("adj2", -8333),
+        ("adj3", 112500),
+        ("adj4", -38333),
+    ],
     guides: ACCENT_CALLOUT1_GUIDES,
     paths: ACCENT_CALLOUT1_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static ACCENT_CALLOUT2_P0_CMDS: &[PathCommandDef] = &[
@@ -381,9 +505,27 @@ static ACCENT_CALLOUT2_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x3", y: "y3" },
 ];
 static ACCENT_CALLOUT2_PATHS: &[PathDef] = &[
-    PathDef { commands: ACCENT_CALLOUT2_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACCENT_CALLOUT2_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-    PathDef { commands: ACCENT_CALLOUT2_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: ACCENT_CALLOUT2_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACCENT_CALLOUT2_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: ACCENT_CALLOUT2_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static ACCENT_CALLOUT2_GUIDES: &[GuideDef] = &[
     gd!("y1", MulDiv, "h", "adj1", "100000"),
@@ -394,10 +536,22 @@ static ACCENT_CALLOUT2_GUIDES: &[GuideDef] = &[
     gd!("x3", MulDiv, "w", "adj6", "100000"),
 ];
 static ACCENT_CALLOUT2: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 18750), ("adj2", -8333), ("adj3", 18750), ("adj4", -16667), ("adj5", 112500), ("adj6", -46667)],
+    adjust_defaults: &[
+        ("adj1", 18750),
+        ("adj2", -8333),
+        ("adj3", 18750),
+        ("adj4", -16667),
+        ("adj5", 112500),
+        ("adj6", -46667),
+    ],
     guides: ACCENT_CALLOUT2_GUIDES,
     paths: ACCENT_CALLOUT2_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static ACCENT_CALLOUT3_P0_CMDS: &[PathCommandDef] = &[
@@ -419,9 +573,27 @@ static ACCENT_CALLOUT3_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x4", y: "y4" },
 ];
 static ACCENT_CALLOUT3_PATHS: &[PathDef] = &[
-    PathDef { commands: ACCENT_CALLOUT3_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACCENT_CALLOUT3_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-    PathDef { commands: ACCENT_CALLOUT3_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: ACCENT_CALLOUT3_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACCENT_CALLOUT3_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: ACCENT_CALLOUT3_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static ACCENT_CALLOUT3_GUIDES: &[GuideDef] = &[
     gd!("y1", MulDiv, "h", "adj1", "100000"),
@@ -434,10 +606,24 @@ static ACCENT_CALLOUT3_GUIDES: &[GuideDef] = &[
     gd!("x4", MulDiv, "w", "adj8", "100000"),
 ];
 static ACCENT_CALLOUT3: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 18750), ("adj2", -8333), ("adj3", 18750), ("adj4", -16667), ("adj5", 100000), ("adj6", -16667), ("adj7", 112963), ("adj8", -8333)],
+    adjust_defaults: &[
+        ("adj1", 18750),
+        ("adj2", -8333),
+        ("adj3", 18750),
+        ("adj4", -16667),
+        ("adj5", 100000),
+        ("adj6", -16667),
+        ("adj7", 112963),
+        ("adj8", -8333),
+    ],
     guides: ACCENT_CALLOUT3_GUIDES,
     paths: ACCENT_CALLOUT3_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static ACTION_BUTTON_BACK_PREVIOUS_P0_CMDS: &[PathCommandDef] = &[
@@ -471,10 +657,34 @@ static ACTION_BUTTON_BACK_PREVIOUS_P3_CMDS: &[PathCommandDef] = &[
     PathCommandDef::Close,
 ];
 static ACTION_BUTTON_BACK_PREVIOUS_PATHS: &[PathDef] = &[
-    PathDef { commands: ACTION_BUTTON_BACK_PREVIOUS_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_BACK_PREVIOUS_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_BACK_PREVIOUS_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-    PathDef { commands: ACTION_BUTTON_BACK_PREVIOUS_P3_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: ACTION_BUTTON_BACK_PREVIOUS_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_BACK_PREVIOUS_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_BACK_PREVIOUS_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_BACK_PREVIOUS_P3_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static ACTION_BUTTON_BACK_PREVIOUS_GUIDES: &[GuideDef] = &[
     gd!("dx2", MulDiv, "ss", "3", "8"),
@@ -487,7 +697,12 @@ static ACTION_BUTTON_BACK_PREVIOUS: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: ACTION_BUTTON_BACK_PREVIOUS_GUIDES,
     paths: ACTION_BUTTON_BACK_PREVIOUS_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static ACTION_BUTTON_BEGINNING_P0_CMDS: &[PathCommandDef] = &[
@@ -536,10 +751,34 @@ static ACTION_BUTTON_BEGINNING_P3_CMDS: &[PathCommandDef] = &[
     PathCommandDef::Close,
 ];
 static ACTION_BUTTON_BEGINNING_PATHS: &[PathDef] = &[
-    PathDef { commands: ACTION_BUTTON_BEGINNING_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_BEGINNING_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_BEGINNING_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-    PathDef { commands: ACTION_BUTTON_BEGINNING_P3_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: ACTION_BUTTON_BEGINNING_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_BEGINNING_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_BEGINNING_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_BEGINNING_P3_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static ACTION_BUTTON_BEGINNING_GUIDES: &[GuideDef] = &[
     gd!("dx2", MulDiv, "ss", "3", "8"),
@@ -557,7 +796,12 @@ static ACTION_BUTTON_BEGINNING: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: ACTION_BUTTON_BEGINNING_GUIDES,
     paths: ACTION_BUTTON_BEGINNING_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static ACTION_BUTTON_BLANK_CMDS: &[PathCommandDef] = &[
@@ -567,14 +811,23 @@ static ACTION_BUTTON_BLANK_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "b" },
     PathCommandDef::Close,
 ];
-static ACTION_BUTTON_BLANK_PATHS: &[PathDef] = &[
-    PathDef { commands: ACTION_BUTTON_BLANK_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static ACTION_BUTTON_BLANK_PATHS: &[PathDef] = &[PathDef {
+    commands: ACTION_BUTTON_BLANK_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static ACTION_BUTTON_BLANK: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: &[],
     paths: ACTION_BUTTON_BLANK_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static ACTION_BUTTON_DOCUMENT_P0_CMDS: &[PathCommandDef] = &[
@@ -624,11 +877,41 @@ static ACTION_BUTTON_DOCUMENT_P4_CMDS: &[PathCommandDef] = &[
     PathCommandDef::Close,
 ];
 static ACTION_BUTTON_DOCUMENT_PATHS: &[PathDef] = &[
-    PathDef { commands: ACTION_BUTTON_DOCUMENT_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_DOCUMENT_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_DOCUMENT_P2_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_DOCUMENT_P3_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-    PathDef { commands: ACTION_BUTTON_DOCUMENT_P4_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: ACTION_BUTTON_DOCUMENT_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_DOCUMENT_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_DOCUMENT_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_DOCUMENT_P3_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_DOCUMENT_P4_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static ACTION_BUTTON_DOCUMENT_GUIDES: &[GuideDef] = &[
     gd!("dx2", MulDiv, "ss", "3", "8"),
@@ -645,7 +928,12 @@ static ACTION_BUTTON_DOCUMENT: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: ACTION_BUTTON_DOCUMENT_GUIDES,
     paths: ACTION_BUTTON_DOCUMENT_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static ACTION_BUTTON_END_P0_CMDS: &[PathCommandDef] = &[
@@ -694,10 +982,34 @@ static ACTION_BUTTON_END_P3_CMDS: &[PathCommandDef] = &[
     PathCommandDef::Close,
 ];
 static ACTION_BUTTON_END_PATHS: &[PathDef] = &[
-    PathDef { commands: ACTION_BUTTON_END_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_END_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_END_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-    PathDef { commands: ACTION_BUTTON_END_P3_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: ACTION_BUTTON_END_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_END_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_END_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_END_P3_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static ACTION_BUTTON_END_GUIDES: &[GuideDef] = &[
     gd!("dx2", MulDiv, "ss", "3", "8"),
@@ -715,7 +1027,12 @@ static ACTION_BUTTON_END: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: ACTION_BUTTON_END_GUIDES,
     paths: ACTION_BUTTON_END_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static ACTION_BUTTON_FORWARD_NEXT_P0_CMDS: &[PathCommandDef] = &[
@@ -749,10 +1066,34 @@ static ACTION_BUTTON_FORWARD_NEXT_P3_CMDS: &[PathCommandDef] = &[
     PathCommandDef::Close,
 ];
 static ACTION_BUTTON_FORWARD_NEXT_PATHS: &[PathDef] = &[
-    PathDef { commands: ACTION_BUTTON_FORWARD_NEXT_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_FORWARD_NEXT_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_FORWARD_NEXT_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-    PathDef { commands: ACTION_BUTTON_FORWARD_NEXT_P3_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: ACTION_BUTTON_FORWARD_NEXT_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_FORWARD_NEXT_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_FORWARD_NEXT_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_FORWARD_NEXT_P3_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static ACTION_BUTTON_FORWARD_NEXT_GUIDES: &[GuideDef] = &[
     gd!("dx2", MulDiv, "ss", "3", "8"),
@@ -765,7 +1106,12 @@ static ACTION_BUTTON_FORWARD_NEXT: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: ACTION_BUTTON_FORWARD_NEXT_GUIDES,
     paths: ACTION_BUTTON_FORWARD_NEXT_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static ACTION_BUTTON_HELP_P0_CMDS: &[PathCommandDef] = &[
@@ -775,50 +1121,155 @@ static ACTION_BUTTON_HELP_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "b" },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "g33", y: "g27" },
-    PathCommandDef::ArcTo { wr: "g16", hr: "g16", st_ang: "cd2", sw_ang: "cd2" },
-    PathCommandDef::ArcTo { wr: "g14", hr: "g15", st_ang: "0", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "g41", hr: "g42", st_ang: "3cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "g16",
+        hr: "g16",
+        st_ang: "cd2",
+        sw_ang: "cd2",
+    },
+    PathCommandDef::ArcTo {
+        wr: "g14",
+        hr: "g15",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "g41",
+        hr: "g42",
+        st_ang: "3cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "g37", y: "g30" },
     PathCommandDef::LineTo { x: "g36", y: "g30" },
     PathCommandDef::LineTo { x: "g36", y: "g29" },
-    PathCommandDef::ArcTo { wr: "g14", hr: "g15", st_ang: "cd2", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "g41", hr: "g42", st_ang: "cd4", sw_ang: "-5400000" },
-    PathCommandDef::ArcTo { wr: "g14", hr: "g14", st_ang: "0", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "g14",
+        hr: "g15",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "g41",
+        hr: "g42",
+        st_ang: "cd4",
+        sw_ang: "-5400000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "g14",
+        hr: "g14",
+        st_ang: "0",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "hc", y: "g31" },
-    PathCommandDef::ArcTo { wr: "g42", hr: "g42", st_ang: "3cd4", sw_ang: "21600000" },
+    PathCommandDef::ArcTo {
+        wr: "g42",
+        hr: "g42",
+        st_ang: "3cd4",
+        sw_ang: "21600000",
+    },
     PathCommandDef::Close,
 ];
 static ACTION_BUTTON_HELP_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "g33", y: "g27" },
-    PathCommandDef::ArcTo { wr: "g16", hr: "g16", st_ang: "cd2", sw_ang: "cd2" },
-    PathCommandDef::ArcTo { wr: "g14", hr: "g15", st_ang: "0", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "g41", hr: "g42", st_ang: "3cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "g16",
+        hr: "g16",
+        st_ang: "cd2",
+        sw_ang: "cd2",
+    },
+    PathCommandDef::ArcTo {
+        wr: "g14",
+        hr: "g15",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "g41",
+        hr: "g42",
+        st_ang: "3cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "g37", y: "g30" },
     PathCommandDef::LineTo { x: "g36", y: "g30" },
     PathCommandDef::LineTo { x: "g36", y: "g29" },
-    PathCommandDef::ArcTo { wr: "g14", hr: "g15", st_ang: "cd2", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "g41", hr: "g42", st_ang: "cd4", sw_ang: "-5400000" },
-    PathCommandDef::ArcTo { wr: "g14", hr: "g14", st_ang: "0", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "g14",
+        hr: "g15",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "g41",
+        hr: "g42",
+        st_ang: "cd4",
+        sw_ang: "-5400000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "g14",
+        hr: "g14",
+        st_ang: "0",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "hc", y: "g31" },
-    PathCommandDef::ArcTo { wr: "g42", hr: "g42", st_ang: "3cd4", sw_ang: "21600000" },
+    PathCommandDef::ArcTo {
+        wr: "g42",
+        hr: "g42",
+        st_ang: "3cd4",
+        sw_ang: "21600000",
+    },
     PathCommandDef::Close,
 ];
 static ACTION_BUTTON_HELP_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "g33", y: "g27" },
-    PathCommandDef::ArcTo { wr: "g16", hr: "g16", st_ang: "cd2", sw_ang: "cd2" },
-    PathCommandDef::ArcTo { wr: "g14", hr: "g15", st_ang: "0", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "g41", hr: "g42", st_ang: "3cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "g16",
+        hr: "g16",
+        st_ang: "cd2",
+        sw_ang: "cd2",
+    },
+    PathCommandDef::ArcTo {
+        wr: "g14",
+        hr: "g15",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "g41",
+        hr: "g42",
+        st_ang: "3cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "g37", y: "g30" },
     PathCommandDef::LineTo { x: "g36", y: "g30" },
     PathCommandDef::LineTo { x: "g36", y: "g29" },
-    PathCommandDef::ArcTo { wr: "g14", hr: "g15", st_ang: "cd2", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "g41", hr: "g42", st_ang: "cd4", sw_ang: "-5400000" },
-    PathCommandDef::ArcTo { wr: "g14", hr: "g14", st_ang: "0", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "g14",
+        hr: "g15",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "g41",
+        hr: "g42",
+        st_ang: "cd4",
+        sw_ang: "-5400000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "g14",
+        hr: "g14",
+        st_ang: "0",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "hc", y: "g31" },
-    PathCommandDef::ArcTo { wr: "g42", hr: "g42", st_ang: "3cd4", sw_ang: "21600000" },
+    PathCommandDef::ArcTo {
+        wr: "g42",
+        hr: "g42",
+        st_ang: "3cd4",
+        sw_ang: "21600000",
+    },
     PathCommandDef::Close,
 ];
 static ACTION_BUTTON_HELP_P3_CMDS: &[PathCommandDef] = &[
@@ -829,10 +1280,34 @@ static ACTION_BUTTON_HELP_P3_CMDS: &[PathCommandDef] = &[
     PathCommandDef::Close,
 ];
 static ACTION_BUTTON_HELP_PATHS: &[PathDef] = &[
-    PathDef { commands: ACTION_BUTTON_HELP_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_HELP_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_HELP_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-    PathDef { commands: ACTION_BUTTON_HELP_P3_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: ACTION_BUTTON_HELP_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_HELP_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_HELP_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_HELP_P3_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static ACTION_BUTTON_HELP_GUIDES: &[GuideDef] = &[
     gd!("dx2", MulDiv, "ss", "3", "8"),
@@ -861,7 +1336,12 @@ static ACTION_BUTTON_HELP: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: ACTION_BUTTON_HELP_GUIDES,
     paths: ACTION_BUTTON_HELP_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static ACTION_BUTTON_HOME_P0_CMDS: &[PathCommandDef] = &[
@@ -940,11 +1420,41 @@ static ACTION_BUTTON_HOME_P4_CMDS: &[PathCommandDef] = &[
     PathCommandDef::Close,
 ];
 static ACTION_BUTTON_HOME_PATHS: &[PathDef] = &[
-    PathDef { commands: ACTION_BUTTON_HOME_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_HOME_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_HOME_P2_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_HOME_P3_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-    PathDef { commands: ACTION_BUTTON_HOME_P4_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: ACTION_BUTTON_HOME_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_HOME_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_HOME_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_HOME_P3_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_HOME_P4_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static ACTION_BUTTON_HOME_GUIDES: &[GuideDef] = &[
     gd!("dx2", MulDiv, "ss", "3", "8"),
@@ -978,7 +1488,12 @@ static ACTION_BUTTON_HOME: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: ACTION_BUTTON_HOME_GUIDES,
     paths: ACTION_BUTTON_HOME_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static ACTION_BUTTON_INFORMATION_P0_CMDS: &[PathCommandDef] = &[
@@ -988,15 +1503,30 @@ static ACTION_BUTTON_INFORMATION_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "b" },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "hc", y: "g9" },
-    PathCommandDef::ArcTo { wr: "dx2", hr: "dx2", st_ang: "3cd4", sw_ang: "21600000" },
+    PathCommandDef::ArcTo {
+        wr: "dx2",
+        hr: "dx2",
+        st_ang: "3cd4",
+        sw_ang: "21600000",
+    },
     PathCommandDef::Close,
 ];
 static ACTION_BUTTON_INFORMATION_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "hc", y: "g9" },
-    PathCommandDef::ArcTo { wr: "dx2", hr: "dx2", st_ang: "3cd4", sw_ang: "21600000" },
+    PathCommandDef::ArcTo {
+        wr: "dx2",
+        hr: "dx2",
+        st_ang: "3cd4",
+        sw_ang: "21600000",
+    },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "hc", y: "g25" },
-    PathCommandDef::ArcTo { wr: "g38", hr: "g38", st_ang: "3cd4", sw_ang: "21600000" },
+    PathCommandDef::ArcTo {
+        wr: "g38",
+        hr: "g38",
+        st_ang: "3cd4",
+        sw_ang: "21600000",
+    },
     PathCommandDef::MoveTo { x: "g32", y: "g28" },
     PathCommandDef::LineTo { x: "g32", y: "g29" },
     PathCommandDef::LineTo { x: "g34", y: "g29" },
@@ -1011,7 +1541,12 @@ static ACTION_BUTTON_INFORMATION_P1_CMDS: &[PathCommandDef] = &[
 ];
 static ACTION_BUTTON_INFORMATION_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "hc", y: "g25" },
-    PathCommandDef::ArcTo { wr: "g38", hr: "g38", st_ang: "3cd4", sw_ang: "21600000" },
+    PathCommandDef::ArcTo {
+        wr: "g38",
+        hr: "g38",
+        st_ang: "3cd4",
+        sw_ang: "21600000",
+    },
     PathCommandDef::MoveTo { x: "g32", y: "g28" },
     PathCommandDef::LineTo { x: "g35", y: "g28" },
     PathCommandDef::LineTo { x: "g35", y: "g30" },
@@ -1026,10 +1561,20 @@ static ACTION_BUTTON_INFORMATION_P2_CMDS: &[PathCommandDef] = &[
 ];
 static ACTION_BUTTON_INFORMATION_P3_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "hc", y: "g9" },
-    PathCommandDef::ArcTo { wr: "dx2", hr: "dx2", st_ang: "3cd4", sw_ang: "21600000" },
+    PathCommandDef::ArcTo {
+        wr: "dx2",
+        hr: "dx2",
+        st_ang: "3cd4",
+        sw_ang: "21600000",
+    },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "hc", y: "g25" },
-    PathCommandDef::ArcTo { wr: "g38", hr: "g38", st_ang: "3cd4", sw_ang: "21600000" },
+    PathCommandDef::ArcTo {
+        wr: "g38",
+        hr: "g38",
+        st_ang: "3cd4",
+        sw_ang: "21600000",
+    },
     PathCommandDef::MoveTo { x: "g32", y: "g28" },
     PathCommandDef::LineTo { x: "g35", y: "g28" },
     PathCommandDef::LineTo { x: "g35", y: "g30" },
@@ -1050,11 +1595,41 @@ static ACTION_BUTTON_INFORMATION_P4_CMDS: &[PathCommandDef] = &[
     PathCommandDef::Close,
 ];
 static ACTION_BUTTON_INFORMATION_PATHS: &[PathDef] = &[
-    PathDef { commands: ACTION_BUTTON_INFORMATION_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_INFORMATION_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_INFORMATION_P2_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_INFORMATION_P3_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-    PathDef { commands: ACTION_BUTTON_INFORMATION_P4_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: ACTION_BUTTON_INFORMATION_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_INFORMATION_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_INFORMATION_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_INFORMATION_P3_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_INFORMATION_P4_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static ACTION_BUTTON_INFORMATION_GUIDES: &[GuideDef] = &[
     gd!("dx2", MulDiv, "ss", "3", "8"),
@@ -1084,7 +1659,12 @@ static ACTION_BUTTON_INFORMATION: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: ACTION_BUTTON_INFORMATION_GUIDES,
     paths: ACTION_BUTTON_INFORMATION_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static ACTION_BUTTON_MOVIE_P0_CMDS: &[PathCommandDef] = &[
@@ -1166,10 +1746,34 @@ static ACTION_BUTTON_MOVIE_P3_CMDS: &[PathCommandDef] = &[
     PathCommandDef::Close,
 ];
 static ACTION_BUTTON_MOVIE_PATHS: &[PathDef] = &[
-    PathDef { commands: ACTION_BUTTON_MOVIE_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_MOVIE_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_MOVIE_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-    PathDef { commands: ACTION_BUTTON_MOVIE_P3_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: ACTION_BUTTON_MOVIE_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_MOVIE_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_MOVIE_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_MOVIE_P3_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static ACTION_BUTTON_MOVIE_GUIDES: &[GuideDef] = &[
     gd!("dx2", MulDiv, "ss", "3", "8"),
@@ -1218,7 +1822,12 @@ static ACTION_BUTTON_MOVIE: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: ACTION_BUTTON_MOVIE_GUIDES,
     paths: ACTION_BUTTON_MOVIE_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static ACTION_BUTTON_RETURN_P0_CMDS: &[PathCommandDef] = &[
@@ -1232,15 +1841,35 @@ static ACTION_BUTTON_RETURN_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "hc", y: "g21" },
     PathCommandDef::LineTo { x: "g24", y: "g21" },
     PathCommandDef::LineTo { x: "g24", y: "g20" },
-    PathCommandDef::ArcTo { wr: "g27", hr: "g27", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "g27",
+        hr: "g27",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "g25", y: "g19" },
-    PathCommandDef::ArcTo { wr: "g27", hr: "g27", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "g27",
+        hr: "g27",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "g26", y: "g21" },
     PathCommandDef::LineTo { x: "g11", y: "g21" },
     PathCommandDef::LineTo { x: "g11", y: "g20" },
-    PathCommandDef::ArcTo { wr: "g17", hr: "g17", st_ang: "cd2", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "g17",
+        hr: "g17",
+        st_ang: "cd2",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "hc", y: "g10" },
-    PathCommandDef::ArcTo { wr: "g17", hr: "g17", st_ang: "cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "g17",
+        hr: "g17",
+        st_ang: "cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "g22", y: "g21" },
     PathCommandDef::Close,
 ];
@@ -1250,15 +1879,35 @@ static ACTION_BUTTON_RETURN_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "hc", y: "g21" },
     PathCommandDef::LineTo { x: "g24", y: "g21" },
     PathCommandDef::LineTo { x: "g24", y: "g20" },
-    PathCommandDef::ArcTo { wr: "g27", hr: "g27", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "g27",
+        hr: "g27",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "g25", y: "g19" },
-    PathCommandDef::ArcTo { wr: "g27", hr: "g27", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "g27",
+        hr: "g27",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "g26", y: "g21" },
     PathCommandDef::LineTo { x: "g11", y: "g21" },
     PathCommandDef::LineTo { x: "g11", y: "g20" },
-    PathCommandDef::ArcTo { wr: "g17", hr: "g17", st_ang: "cd2", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "g17",
+        hr: "g17",
+        st_ang: "cd2",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "hc", y: "g10" },
-    PathCommandDef::ArcTo { wr: "g17", hr: "g17", st_ang: "cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "g17",
+        hr: "g17",
+        st_ang: "cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "g22", y: "g21" },
     PathCommandDef::Close,
 ];
@@ -1266,15 +1915,35 @@ static ACTION_BUTTON_RETURN_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "g12", y: "g21" },
     PathCommandDef::LineTo { x: "g22", y: "g21" },
     PathCommandDef::LineTo { x: "g22", y: "g20" },
-    PathCommandDef::ArcTo { wr: "g17", hr: "g17", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "g17",
+        hr: "g17",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "g25", y: "g10" },
-    PathCommandDef::ArcTo { wr: "g17", hr: "g17", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "g17",
+        hr: "g17",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "g11", y: "g21" },
     PathCommandDef::LineTo { x: "g26", y: "g21" },
     PathCommandDef::LineTo { x: "g26", y: "g20" },
-    PathCommandDef::ArcTo { wr: "g27", hr: "g27", st_ang: "cd2", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "g27",
+        hr: "g27",
+        st_ang: "cd2",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "hc", y: "g19" },
-    PathCommandDef::ArcTo { wr: "g27", hr: "g27", st_ang: "cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "g27",
+        hr: "g27",
+        st_ang: "cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "g24", y: "g21" },
     PathCommandDef::LineTo { x: "hc", y: "g21" },
     PathCommandDef::LineTo { x: "g23", y: "g9" },
@@ -1288,10 +1957,34 @@ static ACTION_BUTTON_RETURN_P3_CMDS: &[PathCommandDef] = &[
     PathCommandDef::Close,
 ];
 static ACTION_BUTTON_RETURN_PATHS: &[PathDef] = &[
-    PathDef { commands: ACTION_BUTTON_RETURN_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_RETURN_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_RETURN_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-    PathDef { commands: ACTION_BUTTON_RETURN_P3_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: ACTION_BUTTON_RETURN_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_RETURN_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_RETURN_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_RETURN_P3_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static ACTION_BUTTON_RETURN_GUIDES: &[GuideDef] = &[
     gd!("dx2", MulDiv, "ss", "3", "8"),
@@ -1319,7 +2012,12 @@ static ACTION_BUTTON_RETURN: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: ACTION_BUTTON_RETURN_GUIDES,
     paths: ACTION_BUTTON_RETURN_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static ACTION_BUTTON_SOUND_P0_CMDS: &[PathCommandDef] = &[
@@ -1368,10 +2066,34 @@ static ACTION_BUTTON_SOUND_P3_CMDS: &[PathCommandDef] = &[
     PathCommandDef::Close,
 ];
 static ACTION_BUTTON_SOUND_PATHS: &[PathDef] = &[
-    PathDef { commands: ACTION_BUTTON_SOUND_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_SOUND_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ACTION_BUTTON_SOUND_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-    PathDef { commands: ACTION_BUTTON_SOUND_P3_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: ACTION_BUTTON_SOUND_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_SOUND_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_SOUND_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: ACTION_BUTTON_SOUND_P3_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static ACTION_BUTTON_SOUND_GUIDES: &[GuideDef] = &[
     gd!("dx2", MulDiv, "ss", "3", "8"),
@@ -1398,22 +2120,49 @@ static ACTION_BUTTON_SOUND: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: ACTION_BUTTON_SOUND_GUIDES,
     paths: ACTION_BUTTON_SOUND_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static ARC_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x1", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "stAng", sw_ang: "swAng" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "stAng",
+        sw_ang: "swAng",
+    },
     PathCommandDef::LineTo { x: "hc", y: "vc" },
     PathCommandDef::Close,
 ];
 static ARC_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x1", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "stAng", sw_ang: "swAng" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "stAng",
+        sw_ang: "swAng",
+    },
 ];
 static ARC_PATHS: &[PathDef] = &[
-    PathDef { commands: ARC_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ARC_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: ARC_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ARC_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static ARC_GUIDES: &[GuideDef] = &[
     gd!("stAng", Pin, "0", "adj1", "21599999"),
@@ -1463,26 +2212,45 @@ static ARC: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 16200000), ("adj2", 0)],
     guides: ARC_GUIDES,
     paths: ARC_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static BENT_ARROW_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "b" },
     PathCommandDef::LineTo { x: "l", y: "y5" },
-    PathCommandDef::ArcTo { wr: "bd", hr: "bd", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "bd",
+        hr: "bd",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x4", y: "dh2" },
     PathCommandDef::LineTo { x: "x4", y: "t" },
     PathCommandDef::LineTo { x: "r", y: "aw2" },
     PathCommandDef::LineTo { x: "x4", y: "y4" },
     PathCommandDef::LineTo { x: "x4", y: "y3" },
     PathCommandDef::LineTo { x: "x3", y: "y3" },
-    PathCommandDef::ArcTo { wr: "bd2", hr: "bd2", st_ang: "3cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "bd2",
+        hr: "bd2",
+        st_ang: "3cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "th", y: "b" },
     PathCommandDef::Close,
 ];
-static BENT_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: BENT_ARROW_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static BENT_ARROW_PATHS: &[PathDef] = &[PathDef {
+    commands: BENT_ARROW_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static BENT_ARROW_GUIDES: &[GuideDef] = &[
     gd!("a2", Pin, "0", "adj2", "50000"),
     gd!("maxAdj1", MulDiv, "a2", "2", "1"),
@@ -1509,10 +2277,20 @@ static BENT_ARROW_GUIDES: &[GuideDef] = &[
     gd!("y6", AddSub, "y3", "bd2", "0"),
 ];
 static BENT_ARROW: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 25000), ("adj2", 25000), ("adj3", 25000), ("adj4", 43750)],
+    adjust_defaults: &[
+        ("adj1", 25000),
+        ("adj2", 25000),
+        ("adj3", 25000),
+        ("adj4", 43750),
+    ],
     guides: BENT_ARROW_GUIDES,
     paths: BENT_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static BENT_CONNECTOR2_CMDS: &[PathCommandDef] = &[
@@ -1520,14 +2298,23 @@ static BENT_CONNECTOR2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "r", y: "t" },
     PathCommandDef::LineTo { x: "r", y: "b" },
 ];
-static BENT_CONNECTOR2_PATHS: &[PathDef] = &[
-    PathDef { commands: BENT_CONNECTOR2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-];
+static BENT_CONNECTOR2_PATHS: &[PathDef] = &[PathDef {
+    commands: BENT_CONNECTOR2_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::None,
+    stroke: true,
+}];
 static BENT_CONNECTOR2: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: &[],
     paths: BENT_CONNECTOR2_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static BENT_CONNECTOR3_CMDS: &[PathCommandDef] = &[
@@ -1536,17 +2323,24 @@ static BENT_CONNECTOR3_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x1", y: "b" },
     PathCommandDef::LineTo { x: "r", y: "b" },
 ];
-static BENT_CONNECTOR3_PATHS: &[PathDef] = &[
-    PathDef { commands: BENT_CONNECTOR3_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-];
-static BENT_CONNECTOR3_GUIDES: &[GuideDef] = &[
-    gd!("x1", MulDiv, "w", "adj1", "100000"),
-];
+static BENT_CONNECTOR3_PATHS: &[PathDef] = &[PathDef {
+    commands: BENT_CONNECTOR3_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::None,
+    stroke: true,
+}];
+static BENT_CONNECTOR3_GUIDES: &[GuideDef] = &[gd!("x1", MulDiv, "w", "adj1", "100000")];
 static BENT_CONNECTOR3: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 50000)],
     guides: BENT_CONNECTOR3_GUIDES,
     paths: BENT_CONNECTOR3_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static BENT_CONNECTOR4_CMDS: &[PathCommandDef] = &[
@@ -1556,9 +2350,13 @@ static BENT_CONNECTOR4_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "r", y: "y2" },
     PathCommandDef::LineTo { x: "r", y: "b" },
 ];
-static BENT_CONNECTOR4_PATHS: &[PathDef] = &[
-    PathDef { commands: BENT_CONNECTOR4_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-];
+static BENT_CONNECTOR4_PATHS: &[PathDef] = &[PathDef {
+    commands: BENT_CONNECTOR4_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::None,
+    stroke: true,
+}];
 static BENT_CONNECTOR4_GUIDES: &[GuideDef] = &[
     gd!("x1", MulDiv, "w", "adj1", "100000"),
     gd!("x2", AddDiv, "x1", "r", "2"),
@@ -1569,7 +2367,12 @@ static BENT_CONNECTOR4: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 50000), ("adj2", 50000)],
     guides: BENT_CONNECTOR4_GUIDES,
     paths: BENT_CONNECTOR4_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static BENT_CONNECTOR5_CMDS: &[PathCommandDef] = &[
@@ -1580,9 +2383,13 @@ static BENT_CONNECTOR5_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x3", y: "b" },
     PathCommandDef::LineTo { x: "r", y: "b" },
 ];
-static BENT_CONNECTOR5_PATHS: &[PathDef] = &[
-    PathDef { commands: BENT_CONNECTOR5_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-];
+static BENT_CONNECTOR5_PATHS: &[PathDef] = &[PathDef {
+    commands: BENT_CONNECTOR5_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::None,
+    stroke: true,
+}];
 static BENT_CONNECTOR5_GUIDES: &[GuideDef] = &[
     gd!("x1", MulDiv, "w", "adj1", "100000"),
     gd!("x3", MulDiv, "w", "adj3", "100000"),
@@ -1595,7 +2402,12 @@ static BENT_CONNECTOR5: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 50000), ("adj2", 50000), ("adj3", 50000)],
     guides: BENT_CONNECTOR5_GUIDES,
     paths: BENT_CONNECTOR5_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static BENT_UP_ARROW_CMDS: &[PathCommandDef] = &[
@@ -1610,9 +2422,13 @@ static BENT_UP_ARROW_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "b" },
     PathCommandDef::Close,
 ];
-static BENT_UP_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: BENT_UP_ARROW_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static BENT_UP_ARROW_PATHS: &[PathDef] = &[PathDef {
+    commands: BENT_UP_ARROW_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static BENT_UP_ARROW_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "0", "adj1", "50000"),
     gd!("a2", Pin, "0", "adj2", "50000"),
@@ -1635,7 +2451,12 @@ static BENT_UP_ARROW: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 25000), ("adj2", 25000), ("adj3", 25000)],
     guides: BENT_UP_ARROW_GUIDES,
     paths: BENT_UP_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "y2", r: "x4", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "y2",
+        r: "x4",
+        b: "b",
+    }),
 };
 
 static BEVEL_P0_CMDS: &[PathCommandDef] = &[
@@ -1694,12 +2515,48 @@ static BEVEL_P5_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x2", y: "y2" },
 ];
 static BEVEL_PATHS: &[PathDef] = &[
-    PathDef { commands: BEVEL_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: BEVEL_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: BEVEL_P2_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: BEVEL_P3_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: BEVEL_P4_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: BEVEL_P5_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: BEVEL_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: BEVEL_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: BEVEL_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: BEVEL_P3_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: BEVEL_P4_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: BEVEL_P5_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static BEVEL_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
@@ -1711,19 +2568,38 @@ static BEVEL: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 12500)],
     guides: BEVEL_GUIDES,
     paths: BEVEL_PATHS,
-    text_rect: Some(TextRectDef { l: "x1", t: "x1", r: "x2", b: "y2" }),
+    text_rect: Some(TextRectDef {
+        l: "x1",
+        t: "x1",
+        r: "x2",
+        b: "y2",
+    }),
 };
 
 static BLOCK_ARC_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x1", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "stAng", sw_ang: "swAng" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "stAng",
+        sw_ang: "swAng",
+    },
     PathCommandDef::LineTo { x: "x2", y: "y2" },
-    PathCommandDef::ArcTo { wr: "iwd2", hr: "ihd2", st_ang: "istAng", sw_ang: "iswAng" },
+    PathCommandDef::ArcTo {
+        wr: "iwd2",
+        hr: "ihd2",
+        st_ang: "istAng",
+        sw_ang: "iswAng",
+    },
     PathCommandDef::Close,
 ];
-static BLOCK_ARC_PATHS: &[PathDef] = &[
-    PathDef { commands: BLOCK_ARC_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static BLOCK_ARC_PATHS: &[PathDef] = &[PathDef {
+    commands: BLOCK_ARC_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static BLOCK_ARC_GUIDES: &[GuideDef] = &[
     gd!("stAng", Pin, "0", "adj1", "21599999"),
     gd!("istAng", Pin, "0", "adj2", "21599999"),
@@ -1801,7 +2677,12 @@ static BLOCK_ARC: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 10800000), ("adj2", 0), ("adj3", 25000)],
     guides: BLOCK_ARC_GUIDES,
     paths: BLOCK_ARC_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static BORDER_CALLOUT1_P0_CMDS: &[PathCommandDef] = &[
@@ -1816,8 +2697,20 @@ static BORDER_CALLOUT1_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x2", y: "y2" },
 ];
 static BORDER_CALLOUT1_PATHS: &[PathDef] = &[
-    PathDef { commands: BORDER_CALLOUT1_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-    PathDef { commands: BORDER_CALLOUT1_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: BORDER_CALLOUT1_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: BORDER_CALLOUT1_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static BORDER_CALLOUT1_GUIDES: &[GuideDef] = &[
     gd!("y1", MulDiv, "h", "adj1", "100000"),
@@ -1826,10 +2719,20 @@ static BORDER_CALLOUT1_GUIDES: &[GuideDef] = &[
     gd!("x2", MulDiv, "w", "adj4", "100000"),
 ];
 static BORDER_CALLOUT1: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 18750), ("adj2", -8333), ("adj3", 112500), ("adj4", -38333)],
+    adjust_defaults: &[
+        ("adj1", 18750),
+        ("adj2", -8333),
+        ("adj3", 112500),
+        ("adj4", -38333),
+    ],
     guides: BORDER_CALLOUT1_GUIDES,
     paths: BORDER_CALLOUT1_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static BORDER_CALLOUT2_P0_CMDS: &[PathCommandDef] = &[
@@ -1845,8 +2748,20 @@ static BORDER_CALLOUT2_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x3", y: "y3" },
 ];
 static BORDER_CALLOUT2_PATHS: &[PathDef] = &[
-    PathDef { commands: BORDER_CALLOUT2_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-    PathDef { commands: BORDER_CALLOUT2_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: BORDER_CALLOUT2_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: BORDER_CALLOUT2_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static BORDER_CALLOUT2_GUIDES: &[GuideDef] = &[
     gd!("y1", MulDiv, "h", "adj1", "100000"),
@@ -1857,10 +2772,22 @@ static BORDER_CALLOUT2_GUIDES: &[GuideDef] = &[
     gd!("x3", MulDiv, "w", "adj6", "100000"),
 ];
 static BORDER_CALLOUT2: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 18750), ("adj2", -8333), ("adj3", 18750), ("adj4", -16667), ("adj5", 112500), ("adj6", -46667)],
+    adjust_defaults: &[
+        ("adj1", 18750),
+        ("adj2", -8333),
+        ("adj3", 18750),
+        ("adj4", -16667),
+        ("adj5", 112500),
+        ("adj6", -46667),
+    ],
     guides: BORDER_CALLOUT2_GUIDES,
     paths: BORDER_CALLOUT2_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static BORDER_CALLOUT3_P0_CMDS: &[PathCommandDef] = &[
@@ -1877,8 +2804,20 @@ static BORDER_CALLOUT3_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x4", y: "y4" },
 ];
 static BORDER_CALLOUT3_PATHS: &[PathDef] = &[
-    PathDef { commands: BORDER_CALLOUT3_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-    PathDef { commands: BORDER_CALLOUT3_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: BORDER_CALLOUT3_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: BORDER_CALLOUT3_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static BORDER_CALLOUT3_GUIDES: &[GuideDef] = &[
     gd!("y1", MulDiv, "h", "adj1", "100000"),
@@ -1891,48 +2830,154 @@ static BORDER_CALLOUT3_GUIDES: &[GuideDef] = &[
     gd!("x4", MulDiv, "w", "adj8", "100000"),
 ];
 static BORDER_CALLOUT3: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 18750), ("adj2", -8333), ("adj3", 18750), ("adj4", -16667), ("adj5", 100000), ("adj6", -16667), ("adj7", 112963), ("adj8", -8333)],
+    adjust_defaults: &[
+        ("adj1", 18750),
+        ("adj2", -8333),
+        ("adj3", 18750),
+        ("adj4", -16667),
+        ("adj5", 100000),
+        ("adj6", -16667),
+        ("adj7", 112963),
+        ("adj8", -8333),
+    ],
     guides: BORDER_CALLOUT3_GUIDES,
     paths: BORDER_CALLOUT3_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static BRACE_PAIR_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x2", y: "b" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x1", y: "y3" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "0", sw_ang: "-5400000" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "0",
+        sw_ang: "-5400000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "x1", y: "x1" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x3", y: "t" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "3cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x4", y: "y2" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "cd2", sw_ang: "-5400000" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "3cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "cd2",
+        sw_ang: "-5400000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "3cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "x4", y: "y4" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
 static BRACE_PAIR_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x2", y: "b" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x1", y: "y3" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "0", sw_ang: "-5400000" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "0",
+        sw_ang: "-5400000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "x1", y: "x1" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::MoveTo { x: "x3", y: "t" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "3cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x4", y: "y2" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "cd2", sw_ang: "-5400000" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "3cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "cd2",
+        sw_ang: "-5400000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "3cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "x4", y: "y4" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
 ];
 static BRACE_PAIR_PATHS: &[PathDef] = &[
-    PathDef { commands: BRACE_PAIR_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: BRACE_PAIR_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: BRACE_PAIR_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: BRACE_PAIR_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static BRACE_PAIR_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "25000"),
@@ -1952,33 +2997,90 @@ static BRACE_PAIR: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 8333)],
     guides: BRACE_PAIR_GUIDES,
     paths: BRACE_PAIR_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "il", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "il",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static BRACKET_PAIR_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "x1" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x2", y: "t" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "3cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "r", y: "y2" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x1", y: "b" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
 static BRACKET_PAIR_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x1", y: "b" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "l", y: "x1" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::MoveTo { x: "x2", y: "t" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "3cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "r", y: "y2" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
 ];
 static BRACKET_PAIR_PATHS: &[PathDef] = &[
-    PathDef { commands: BRACKET_PAIR_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: BRACKET_PAIR_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: BRACKET_PAIR_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: BRACKET_PAIR_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static BRACKET_PAIR_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
@@ -1993,7 +3095,12 @@ static BRACKET_PAIR: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 16667)],
     guides: BRACKET_PAIR_GUIDES,
     paths: BRACKET_PAIR_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "il", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "il",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static CALLOUT1_P0_CMDS: &[PathCommandDef] = &[
@@ -2008,8 +3115,20 @@ static CALLOUT1_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x2", y: "y2" },
 ];
 static CALLOUT1_PATHS: &[PathDef] = &[
-    PathDef { commands: CALLOUT1_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: CALLOUT1_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: CALLOUT1_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: CALLOUT1_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static CALLOUT1_GUIDES: &[GuideDef] = &[
     gd!("y1", MulDiv, "h", "adj1", "100000"),
@@ -2018,10 +3137,20 @@ static CALLOUT1_GUIDES: &[GuideDef] = &[
     gd!("x2", MulDiv, "w", "adj4", "100000"),
 ];
 static CALLOUT1: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 18750), ("adj2", -8333), ("adj3", 112500), ("adj4", -38333)],
+    adjust_defaults: &[
+        ("adj1", 18750),
+        ("adj2", -8333),
+        ("adj3", 112500),
+        ("adj4", -38333),
+    ],
     guides: CALLOUT1_GUIDES,
     paths: CALLOUT1_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static CALLOUT2_P0_CMDS: &[PathCommandDef] = &[
@@ -2037,8 +3166,20 @@ static CALLOUT2_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x3", y: "y3" },
 ];
 static CALLOUT2_PATHS: &[PathDef] = &[
-    PathDef { commands: CALLOUT2_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: CALLOUT2_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: CALLOUT2_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: CALLOUT2_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static CALLOUT2_GUIDES: &[GuideDef] = &[
     gd!("y1", MulDiv, "h", "adj1", "100000"),
@@ -2049,10 +3190,22 @@ static CALLOUT2_GUIDES: &[GuideDef] = &[
     gd!("x3", MulDiv, "w", "adj6", "100000"),
 ];
 static CALLOUT2: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 18750), ("adj2", -8333), ("adj3", 18750), ("adj4", -16667), ("adj5", 112500), ("adj6", -46667)],
+    adjust_defaults: &[
+        ("adj1", 18750),
+        ("adj2", -8333),
+        ("adj3", 18750),
+        ("adj4", -16667),
+        ("adj5", 112500),
+        ("adj6", -46667),
+    ],
     guides: CALLOUT2_GUIDES,
     paths: CALLOUT2_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static CALLOUT3_P0_CMDS: &[PathCommandDef] = &[
@@ -2069,8 +3222,20 @@ static CALLOUT3_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x4", y: "y4" },
 ];
 static CALLOUT3_PATHS: &[PathDef] = &[
-    PathDef { commands: CALLOUT3_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: CALLOUT3_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: CALLOUT3_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: CALLOUT3_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static CALLOUT3_GUIDES: &[GuideDef] = &[
     gd!("y1", MulDiv, "h", "adj1", "100000"),
@@ -2083,37 +3248,104 @@ static CALLOUT3_GUIDES: &[GuideDef] = &[
     gd!("x4", MulDiv, "w", "adj8", "100000"),
 ];
 static CALLOUT3: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 18750), ("adj2", -8333), ("adj3", 18750), ("adj4", -16667), ("adj5", 100000), ("adj6", -16667), ("adj7", 112963), ("adj8", -8333)],
+    adjust_defaults: &[
+        ("adj1", 18750),
+        ("adj2", -8333),
+        ("adj3", 18750),
+        ("adj4", -16667),
+        ("adj5", 100000),
+        ("adj6", -16667),
+        ("adj7", 112963),
+        ("adj8", -8333),
+    ],
     guides: CALLOUT3_GUIDES,
     paths: CALLOUT3_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static CAN_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "cd2", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "cd2",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::LineTo { x: "r", y: "y3" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "0", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "0",
+        sw_ang: "cd2",
+    },
     PathCommandDef::Close,
 ];
 static CAN_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "cd2", sw_ang: "cd2" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "0", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "cd2",
+        sw_ang: "cd2",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "0",
+        sw_ang: "cd2",
+    },
     PathCommandDef::Close,
 ];
 static CAN_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "r", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "0", sw_ang: "cd2" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "cd2", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "0",
+        sw_ang: "cd2",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "cd2",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "r", y: "y3" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "0", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "0",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "l", y: "y1" },
 ];
 static CAN_PATHS: &[PathDef] = &[
-    PathDef { commands: CAN_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: CAN_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: CAN_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: CAN_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: CAN_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: CAN_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static CAN_GUIDES: &[GuideDef] = &[
     gd!("maxAdj", MulDiv, "50000", "h", "ss"),
@@ -2126,7 +3358,12 @@ static CAN: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 25000)],
     guides: CAN_GUIDES,
     paths: CAN_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "y2", r: "r", b: "y3" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "y2",
+        r: "r",
+        b: "y3",
+    }),
 };
 
 static CHART_PLUS_P0_CMDS: &[PathCommandDef] = &[
@@ -2143,8 +3380,20 @@ static CHART_PLUS_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::Close,
 ];
 static CHART_PLUS_PATHS: &[PathDef] = &[
-    PathDef { commands: CHART_PLUS_P0_CMDS, w: Some(10), h: Some(10), fill: PathFill::None, stroke: true },
-    PathDef { commands: CHART_PLUS_P1_CMDS, w: Some(10), h: Some(10), fill: PathFill::Norm, stroke: false },
+    PathDef {
+        commands: CHART_PLUS_P0_CMDS,
+        w: Some(10),
+        h: Some(10),
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: CHART_PLUS_P1_CMDS,
+        w: Some(10),
+        h: Some(10),
+        fill: PathFill::Norm,
+        stroke: false,
+    },
 ];
 static CHART_PLUS: PresetDef = PresetDef {
     adjust_defaults: &[],
@@ -2169,8 +3418,20 @@ static CHART_STAR_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::Close,
 ];
 static CHART_STAR_PATHS: &[PathDef] = &[
-    PathDef { commands: CHART_STAR_P0_CMDS, w: Some(10), h: Some(10), fill: PathFill::None, stroke: true },
-    PathDef { commands: CHART_STAR_P1_CMDS, w: Some(10), h: Some(10), fill: PathFill::Norm, stroke: false },
+    PathDef {
+        commands: CHART_STAR_P0_CMDS,
+        w: Some(10),
+        h: Some(10),
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: CHART_STAR_P1_CMDS,
+        w: Some(10),
+        h: Some(10),
+        fill: PathFill::Norm,
+        stroke: false,
+    },
 ];
 static CHART_STAR: PresetDef = PresetDef {
     adjust_defaults: &[],
@@ -2193,8 +3454,20 @@ static CHART_X_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::Close,
 ];
 static CHART_X_PATHS: &[PathDef] = &[
-    PathDef { commands: CHART_X_P0_CMDS, w: Some(10), h: Some(10), fill: PathFill::None, stroke: true },
-    PathDef { commands: CHART_X_P1_CMDS, w: Some(10), h: Some(10), fill: PathFill::Norm, stroke: false },
+    PathDef {
+        commands: CHART_X_P0_CMDS,
+        w: Some(10),
+        h: Some(10),
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: CHART_X_P1_CMDS,
+        w: Some(10),
+        h: Some(10),
+        fill: PathFill::Norm,
+        stroke: false,
+    },
 ];
 static CHART_X: PresetDef = PresetDef {
     adjust_defaults: &[],
@@ -2212,9 +3485,13 @@ static CHEVRON_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x1", y: "vc" },
     PathCommandDef::Close,
 ];
-static CHEVRON_PATHS: &[PathDef] = &[
-    PathDef { commands: CHEVRON_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static CHEVRON_PATHS: &[PathDef] = &[PathDef {
+    commands: CHEVRON_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static CHEVRON_GUIDES: &[GuideDef] = &[
     gd!("maxAdj", MulDiv, "100000", "w", "ss"),
     gd!("a", Pin, "0", "adj", "maxAdj"),
@@ -2229,17 +3506,31 @@ static CHEVRON: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 50000)],
     guides: CHEVRON_GUIDES,
     paths: CHEVRON_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "t", r: "ir", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "t",
+        r: "ir",
+        b: "b",
+    }),
 };
 
 static CHORD_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x1", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "stAng", sw_ang: "swAng" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "stAng",
+        sw_ang: "swAng",
+    },
     PathCommandDef::Close,
 ];
-static CHORD_PATHS: &[PathDef] = &[
-    PathDef { commands: CHORD_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static CHORD_PATHS: &[PathDef] = &[PathDef {
+    commands: CHORD_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static CHORD_GUIDES: &[GuideDef] = &[
     gd!("stAng", Pin, "0", "adj1", "21599999"),
     gd!("enAng", Pin, "0", "adj2", "21599999"),
@@ -2273,22 +3564,41 @@ static CHORD: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 2700000), ("adj2", 16200000)],
     guides: CHORD_GUIDES,
     paths: CHORD_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static CIRCULAR_ARROW_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "xE", y: "yE" },
-    PathCommandDef::ArcTo { wr: "rw1", hr: "rh1", st_ang: "stAng", sw_ang: "swAng" },
+    PathCommandDef::ArcTo {
+        wr: "rw1",
+        hr: "rh1",
+        st_ang: "stAng",
+        sw_ang: "swAng",
+    },
     PathCommandDef::LineTo { x: "xGp", y: "yGp" },
     PathCommandDef::LineTo { x: "xA", y: "yA" },
     PathCommandDef::LineTo { x: "xBp", y: "yBp" },
     PathCommandDef::LineTo { x: "xC", y: "yC" },
-    PathCommandDef::ArcTo { wr: "rw2", hr: "rh2", st_ang: "istAng", sw_ang: "iswAng" },
+    PathCommandDef::ArcTo {
+        wr: "rw2",
+        hr: "rh2",
+        st_ang: "istAng",
+        sw_ang: "iswAng",
+    },
     PathCommandDef::Close,
 ];
-static CIRCULAR_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: CIRCULAR_ARROW_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static CIRCULAR_ARROW_PATHS: &[PathDef] = &[PathDef {
+    commands: CIRCULAR_ARROW_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static CIRCULAR_ARROW_GUIDES: &[GuideDef] = &[
     gd!("a5", Pin, "0", "adj5", "25000"),
     gd!("maxAdj1", MulDiv, "a5", "2", "1"),
@@ -2484,54 +3794,223 @@ static CIRCULAR_ARROW_GUIDES: &[GuideDef] = &[
     gd!("ib", AddSub, "vc", "idy", "0"),
 ];
 static CIRCULAR_ARROW: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 12500), ("adj2", 1142319), ("adj3", 20457681), ("adj4", 10800000), ("adj5", 12500)],
+    adjust_defaults: &[
+        ("adj1", 12500),
+        ("adj2", 1142319),
+        ("adj3", 20457681),
+        ("adj4", 10800000),
+        ("adj5", 12500),
+    ],
     guides: CIRCULAR_ARROW_GUIDES,
     paths: CIRCULAR_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static CLOUD_P0_CMDS: &[PathCommandDef] = &[
-    PathCommandDef::MoveTo { x: "3900", y: "14370" },
-    PathCommandDef::ArcTo { wr: "6753", hr: "9190", st_ang: "-11429249", sw_ang: "7426832" },
-    PathCommandDef::ArcTo { wr: "5333", hr: "7267", st_ang: "-8646143", sw_ang: "5396714" },
-    PathCommandDef::ArcTo { wr: "4365", hr: "5945", st_ang: "-8748475", sw_ang: "5983381" },
-    PathCommandDef::ArcTo { wr: "4857", hr: "6595", st_ang: "-7859164", sw_ang: "7034504" },
-    PathCommandDef::ArcTo { wr: "5333", hr: "7273", st_ang: "-4722533", sw_ang: "6541615" },
-    PathCommandDef::ArcTo { wr: "6775", hr: "9220", st_ang: "-2776035", sw_ang: "7816140" },
-    PathCommandDef::ArcTo { wr: "5785", hr: "7867", st_ang: "37501", sw_ang: "6842000" },
-    PathCommandDef::ArcTo { wr: "6752", hr: "9215", st_ang: "1347096", sw_ang: "6910353" },
-    PathCommandDef::ArcTo { wr: "7720", hr: "10543", st_ang: "3974558", sw_ang: "4542661" },
-    PathCommandDef::ArcTo { wr: "4360", hr: "5918", st_ang: "-16496525", sw_ang: "8804134" },
-    PathCommandDef::ArcTo { wr: "4345", hr: "5945", st_ang: "-14809710", sw_ang: "9151131" },
+    PathCommandDef::MoveTo {
+        x: "3900",
+        y: "14370",
+    },
+    PathCommandDef::ArcTo {
+        wr: "6753",
+        hr: "9190",
+        st_ang: "-11429249",
+        sw_ang: "7426832",
+    },
+    PathCommandDef::ArcTo {
+        wr: "5333",
+        hr: "7267",
+        st_ang: "-8646143",
+        sw_ang: "5396714",
+    },
+    PathCommandDef::ArcTo {
+        wr: "4365",
+        hr: "5945",
+        st_ang: "-8748475",
+        sw_ang: "5983381",
+    },
+    PathCommandDef::ArcTo {
+        wr: "4857",
+        hr: "6595",
+        st_ang: "-7859164",
+        sw_ang: "7034504",
+    },
+    PathCommandDef::ArcTo {
+        wr: "5333",
+        hr: "7273",
+        st_ang: "-4722533",
+        sw_ang: "6541615",
+    },
+    PathCommandDef::ArcTo {
+        wr: "6775",
+        hr: "9220",
+        st_ang: "-2776035",
+        sw_ang: "7816140",
+    },
+    PathCommandDef::ArcTo {
+        wr: "5785",
+        hr: "7867",
+        st_ang: "37501",
+        sw_ang: "6842000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "6752",
+        hr: "9215",
+        st_ang: "1347096",
+        sw_ang: "6910353",
+    },
+    PathCommandDef::ArcTo {
+        wr: "7720",
+        hr: "10543",
+        st_ang: "3974558",
+        sw_ang: "4542661",
+    },
+    PathCommandDef::ArcTo {
+        wr: "4360",
+        hr: "5918",
+        st_ang: "-16496525",
+        sw_ang: "8804134",
+    },
+    PathCommandDef::ArcTo {
+        wr: "4345",
+        hr: "5945",
+        st_ang: "-14809710",
+        sw_ang: "9151131",
+    },
     PathCommandDef::Close,
 ];
 static CLOUD_P1_CMDS: &[PathCommandDef] = &[
-    PathCommandDef::MoveTo { x: "4693", y: "26177" },
-    PathCommandDef::ArcTo { wr: "4345", hr: "5945", st_ang: "5204520", sw_ang: "1585770" },
-    PathCommandDef::MoveTo { x: "6928", y: "34899" },
-    PathCommandDef::ArcTo { wr: "4360", hr: "5918", st_ang: "4416628", sw_ang: "686848" },
-    PathCommandDef::MoveTo { x: "16478", y: "39090" },
-    PathCommandDef::ArcTo { wr: "6752", hr: "9215", st_ang: "8257449", sw_ang: "844866" },
-    PathCommandDef::MoveTo { x: "28827", y: "34751" },
-    PathCommandDef::ArcTo { wr: "6752", hr: "9215", st_ang: "387196", sw_ang: "959901" },
-    PathCommandDef::MoveTo { x: "34129", y: "22954" },
-    PathCommandDef::ArcTo { wr: "5785", hr: "7867", st_ang: "-4217541", sw_ang: "4255042" },
-    PathCommandDef::MoveTo { x: "41798", y: "15354" },
-    PathCommandDef::ArcTo { wr: "5333", hr: "7273", st_ang: "1819082", sw_ang: "1665090" },
-    PathCommandDef::MoveTo { x: "38324", y: "5426" },
-    PathCommandDef::ArcTo { wr: "4857", hr: "6595", st_ang: "-824660", sw_ang: "891534" },
-    PathCommandDef::MoveTo { x: "29078", y: "3952" },
-    PathCommandDef::ArcTo { wr: "4857", hr: "6595", st_ang: "-8950887", sw_ang: "1091722" },
-    PathCommandDef::MoveTo { x: "22141", y: "4720" },
-    PathCommandDef::ArcTo { wr: "4365", hr: "5945", st_ang: "-9809656", sw_ang: "1061181" },
-    PathCommandDef::MoveTo { x: "14000", y: "5192" },
-    PathCommandDef::ArcTo { wr: "6753", hr: "9190", st_ang: "-4002417", sw_ang: "739161" },
-    PathCommandDef::MoveTo { x: "4127", y: "15789" },
-    PathCommandDef::ArcTo { wr: "6753", hr: "9190", st_ang: "9459261", sw_ang: "711490" },
+    PathCommandDef::MoveTo {
+        x: "4693",
+        y: "26177",
+    },
+    PathCommandDef::ArcTo {
+        wr: "4345",
+        hr: "5945",
+        st_ang: "5204520",
+        sw_ang: "1585770",
+    },
+    PathCommandDef::MoveTo {
+        x: "6928",
+        y: "34899",
+    },
+    PathCommandDef::ArcTo {
+        wr: "4360",
+        hr: "5918",
+        st_ang: "4416628",
+        sw_ang: "686848",
+    },
+    PathCommandDef::MoveTo {
+        x: "16478",
+        y: "39090",
+    },
+    PathCommandDef::ArcTo {
+        wr: "6752",
+        hr: "9215",
+        st_ang: "8257449",
+        sw_ang: "844866",
+    },
+    PathCommandDef::MoveTo {
+        x: "28827",
+        y: "34751",
+    },
+    PathCommandDef::ArcTo {
+        wr: "6752",
+        hr: "9215",
+        st_ang: "387196",
+        sw_ang: "959901",
+    },
+    PathCommandDef::MoveTo {
+        x: "34129",
+        y: "22954",
+    },
+    PathCommandDef::ArcTo {
+        wr: "5785",
+        hr: "7867",
+        st_ang: "-4217541",
+        sw_ang: "4255042",
+    },
+    PathCommandDef::MoveTo {
+        x: "41798",
+        y: "15354",
+    },
+    PathCommandDef::ArcTo {
+        wr: "5333",
+        hr: "7273",
+        st_ang: "1819082",
+        sw_ang: "1665090",
+    },
+    PathCommandDef::MoveTo {
+        x: "38324",
+        y: "5426",
+    },
+    PathCommandDef::ArcTo {
+        wr: "4857",
+        hr: "6595",
+        st_ang: "-824660",
+        sw_ang: "891534",
+    },
+    PathCommandDef::MoveTo {
+        x: "29078",
+        y: "3952",
+    },
+    PathCommandDef::ArcTo {
+        wr: "4857",
+        hr: "6595",
+        st_ang: "-8950887",
+        sw_ang: "1091722",
+    },
+    PathCommandDef::MoveTo {
+        x: "22141",
+        y: "4720",
+    },
+    PathCommandDef::ArcTo {
+        wr: "4365",
+        hr: "5945",
+        st_ang: "-9809656",
+        sw_ang: "1061181",
+    },
+    PathCommandDef::MoveTo {
+        x: "14000",
+        y: "5192",
+    },
+    PathCommandDef::ArcTo {
+        wr: "6753",
+        hr: "9190",
+        st_ang: "-4002417",
+        sw_ang: "739161",
+    },
+    PathCommandDef::MoveTo {
+        x: "4127",
+        y: "15789",
+    },
+    PathCommandDef::ArcTo {
+        wr: "6753",
+        hr: "9190",
+        st_ang: "9459261",
+        sw_ang: "711490",
+    },
 ];
 static CLOUD_PATHS: &[PathDef] = &[
-    PathDef { commands: CLOUD_P0_CMDS, w: Some(43200), h: Some(43200), fill: PathFill::Norm, stroke: true },
-    PathDef { commands: CLOUD_P1_CMDS, w: Some(43200), h: Some(43200), fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: CLOUD_P0_CMDS,
+        w: Some(43200),
+        h: Some(43200),
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: CLOUD_P1_CMDS,
+        w: Some(43200),
+        h: Some(43200),
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static CLOUD_GUIDES: &[GuideDef] = &[
     gd!("il", MulDiv, "w", "2977", "21600"),
@@ -2547,69 +4026,268 @@ static CLOUD: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: CLOUD_GUIDES,
     paths: CLOUD_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static CLOUD_CALLOUT_P0_CMDS: &[PathCommandDef] = &[
-    PathCommandDef::MoveTo { x: "3900", y: "14370" },
-    PathCommandDef::ArcTo { wr: "6753", hr: "9190", st_ang: "-11429249", sw_ang: "7426832" },
-    PathCommandDef::ArcTo { wr: "5333", hr: "7267", st_ang: "-8646143", sw_ang: "5396714" },
-    PathCommandDef::ArcTo { wr: "4365", hr: "5945", st_ang: "-8748475", sw_ang: "5983381" },
-    PathCommandDef::ArcTo { wr: "4857", hr: "6595", st_ang: "-7859164", sw_ang: "7034504" },
-    PathCommandDef::ArcTo { wr: "5333", hr: "7273", st_ang: "-4722533", sw_ang: "6541615" },
-    PathCommandDef::ArcTo { wr: "6775", hr: "9220", st_ang: "-2776035", sw_ang: "7816140" },
-    PathCommandDef::ArcTo { wr: "5785", hr: "7867", st_ang: "37501", sw_ang: "6842000" },
-    PathCommandDef::ArcTo { wr: "6752", hr: "9215", st_ang: "1347096", sw_ang: "6910353" },
-    PathCommandDef::ArcTo { wr: "7720", hr: "10543", st_ang: "3974558", sw_ang: "4542661" },
-    PathCommandDef::ArcTo { wr: "4360", hr: "5918", st_ang: "-16496525", sw_ang: "8804134" },
-    PathCommandDef::ArcTo { wr: "4345", hr: "5945", st_ang: "-14809710", sw_ang: "9151131" },
+    PathCommandDef::MoveTo {
+        x: "3900",
+        y: "14370",
+    },
+    PathCommandDef::ArcTo {
+        wr: "6753",
+        hr: "9190",
+        st_ang: "-11429249",
+        sw_ang: "7426832",
+    },
+    PathCommandDef::ArcTo {
+        wr: "5333",
+        hr: "7267",
+        st_ang: "-8646143",
+        sw_ang: "5396714",
+    },
+    PathCommandDef::ArcTo {
+        wr: "4365",
+        hr: "5945",
+        st_ang: "-8748475",
+        sw_ang: "5983381",
+    },
+    PathCommandDef::ArcTo {
+        wr: "4857",
+        hr: "6595",
+        st_ang: "-7859164",
+        sw_ang: "7034504",
+    },
+    PathCommandDef::ArcTo {
+        wr: "5333",
+        hr: "7273",
+        st_ang: "-4722533",
+        sw_ang: "6541615",
+    },
+    PathCommandDef::ArcTo {
+        wr: "6775",
+        hr: "9220",
+        st_ang: "-2776035",
+        sw_ang: "7816140",
+    },
+    PathCommandDef::ArcTo {
+        wr: "5785",
+        hr: "7867",
+        st_ang: "37501",
+        sw_ang: "6842000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "6752",
+        hr: "9215",
+        st_ang: "1347096",
+        sw_ang: "6910353",
+    },
+    PathCommandDef::ArcTo {
+        wr: "7720",
+        hr: "10543",
+        st_ang: "3974558",
+        sw_ang: "4542661",
+    },
+    PathCommandDef::ArcTo {
+        wr: "4360",
+        hr: "5918",
+        st_ang: "-16496525",
+        sw_ang: "8804134",
+    },
+    PathCommandDef::ArcTo {
+        wr: "4345",
+        hr: "5945",
+        st_ang: "-14809710",
+        sw_ang: "9151131",
+    },
     PathCommandDef::Close,
 ];
 static CLOUD_CALLOUT_P1_CMDS: &[PathCommandDef] = &[
-    PathCommandDef::MoveTo { x: "x23", y: "yPos" },
-    PathCommandDef::ArcTo { wr: "g26", hr: "g26", st_ang: "0", sw_ang: "21600000" },
+    PathCommandDef::MoveTo {
+        x: "x23",
+        y: "yPos",
+    },
+    PathCommandDef::ArcTo {
+        wr: "g26",
+        hr: "g26",
+        st_ang: "0",
+        sw_ang: "21600000",
+    },
     PathCommandDef::Close,
 ];
 static CLOUD_CALLOUT_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x24", y: "g17" },
-    PathCommandDef::ArcTo { wr: "g25", hr: "g25", st_ang: "0", sw_ang: "21600000" },
+    PathCommandDef::ArcTo {
+        wr: "g25",
+        hr: "g25",
+        st_ang: "0",
+        sw_ang: "21600000",
+    },
     PathCommandDef::Close,
 ];
 static CLOUD_CALLOUT_P3_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x25", y: "g24" },
-    PathCommandDef::ArcTo { wr: "g12", hr: "g12", st_ang: "0", sw_ang: "21600000" },
+    PathCommandDef::ArcTo {
+        wr: "g12",
+        hr: "g12",
+        st_ang: "0",
+        sw_ang: "21600000",
+    },
     PathCommandDef::Close,
 ];
 static CLOUD_CALLOUT_P4_CMDS: &[PathCommandDef] = &[
-    PathCommandDef::MoveTo { x: "4693", y: "26177" },
-    PathCommandDef::ArcTo { wr: "4345", hr: "5945", st_ang: "5204520", sw_ang: "1585770" },
-    PathCommandDef::MoveTo { x: "6928", y: "34899" },
-    PathCommandDef::ArcTo { wr: "4360", hr: "5918", st_ang: "4416628", sw_ang: "686848" },
-    PathCommandDef::MoveTo { x: "16478", y: "39090" },
-    PathCommandDef::ArcTo { wr: "6752", hr: "9215", st_ang: "8257449", sw_ang: "844866" },
-    PathCommandDef::MoveTo { x: "28827", y: "34751" },
-    PathCommandDef::ArcTo { wr: "6752", hr: "9215", st_ang: "387196", sw_ang: "959901" },
-    PathCommandDef::MoveTo { x: "34129", y: "22954" },
-    PathCommandDef::ArcTo { wr: "5785", hr: "7867", st_ang: "-4217541", sw_ang: "4255042" },
-    PathCommandDef::MoveTo { x: "41798", y: "15354" },
-    PathCommandDef::ArcTo { wr: "5333", hr: "7273", st_ang: "1819082", sw_ang: "1665090" },
-    PathCommandDef::MoveTo { x: "38324", y: "5426" },
-    PathCommandDef::ArcTo { wr: "4857", hr: "6595", st_ang: "-824660", sw_ang: "891534" },
-    PathCommandDef::MoveTo { x: "29078", y: "3952" },
-    PathCommandDef::ArcTo { wr: "4857", hr: "6595", st_ang: "-8950887", sw_ang: "1091722" },
-    PathCommandDef::MoveTo { x: "22141", y: "4720" },
-    PathCommandDef::ArcTo { wr: "4365", hr: "5945", st_ang: "-9809656", sw_ang: "1061181" },
-    PathCommandDef::MoveTo { x: "14000", y: "5192" },
-    PathCommandDef::ArcTo { wr: "6753", hr: "9190", st_ang: "-4002417", sw_ang: "739161" },
-    PathCommandDef::MoveTo { x: "4127", y: "15789" },
-    PathCommandDef::ArcTo { wr: "6753", hr: "9190", st_ang: "9459261", sw_ang: "711490" },
+    PathCommandDef::MoveTo {
+        x: "4693",
+        y: "26177",
+    },
+    PathCommandDef::ArcTo {
+        wr: "4345",
+        hr: "5945",
+        st_ang: "5204520",
+        sw_ang: "1585770",
+    },
+    PathCommandDef::MoveTo {
+        x: "6928",
+        y: "34899",
+    },
+    PathCommandDef::ArcTo {
+        wr: "4360",
+        hr: "5918",
+        st_ang: "4416628",
+        sw_ang: "686848",
+    },
+    PathCommandDef::MoveTo {
+        x: "16478",
+        y: "39090",
+    },
+    PathCommandDef::ArcTo {
+        wr: "6752",
+        hr: "9215",
+        st_ang: "8257449",
+        sw_ang: "844866",
+    },
+    PathCommandDef::MoveTo {
+        x: "28827",
+        y: "34751",
+    },
+    PathCommandDef::ArcTo {
+        wr: "6752",
+        hr: "9215",
+        st_ang: "387196",
+        sw_ang: "959901",
+    },
+    PathCommandDef::MoveTo {
+        x: "34129",
+        y: "22954",
+    },
+    PathCommandDef::ArcTo {
+        wr: "5785",
+        hr: "7867",
+        st_ang: "-4217541",
+        sw_ang: "4255042",
+    },
+    PathCommandDef::MoveTo {
+        x: "41798",
+        y: "15354",
+    },
+    PathCommandDef::ArcTo {
+        wr: "5333",
+        hr: "7273",
+        st_ang: "1819082",
+        sw_ang: "1665090",
+    },
+    PathCommandDef::MoveTo {
+        x: "38324",
+        y: "5426",
+    },
+    PathCommandDef::ArcTo {
+        wr: "4857",
+        hr: "6595",
+        st_ang: "-824660",
+        sw_ang: "891534",
+    },
+    PathCommandDef::MoveTo {
+        x: "29078",
+        y: "3952",
+    },
+    PathCommandDef::ArcTo {
+        wr: "4857",
+        hr: "6595",
+        st_ang: "-8950887",
+        sw_ang: "1091722",
+    },
+    PathCommandDef::MoveTo {
+        x: "22141",
+        y: "4720",
+    },
+    PathCommandDef::ArcTo {
+        wr: "4365",
+        hr: "5945",
+        st_ang: "-9809656",
+        sw_ang: "1061181",
+    },
+    PathCommandDef::MoveTo {
+        x: "14000",
+        y: "5192",
+    },
+    PathCommandDef::ArcTo {
+        wr: "6753",
+        hr: "9190",
+        st_ang: "-4002417",
+        sw_ang: "739161",
+    },
+    PathCommandDef::MoveTo {
+        x: "4127",
+        y: "15789",
+    },
+    PathCommandDef::ArcTo {
+        wr: "6753",
+        hr: "9190",
+        st_ang: "9459261",
+        sw_ang: "711490",
+    },
 ];
 static CLOUD_CALLOUT_PATHS: &[PathDef] = &[
-    PathDef { commands: CLOUD_CALLOUT_P0_CMDS, w: Some(43200), h: Some(43200), fill: PathFill::Norm, stroke: true },
-    PathDef { commands: CLOUD_CALLOUT_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-    PathDef { commands: CLOUD_CALLOUT_P2_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-    PathDef { commands: CLOUD_CALLOUT_P3_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-    PathDef { commands: CLOUD_CALLOUT_P4_CMDS, w: Some(43200), h: Some(43200), fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: CLOUD_CALLOUT_P0_CMDS,
+        w: Some(43200),
+        h: Some(43200),
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: CLOUD_CALLOUT_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: CLOUD_CALLOUT_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: CLOUD_CALLOUT_P3_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: CLOUD_CALLOUT_P4_CMDS,
+        w: Some(43200),
+        h: Some(43200),
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static CLOUD_CALLOUT_GUIDES: &[GuideDef] = &[
     gd!("dxPos", MulDiv, "w", "adj1", "100000"),
@@ -2660,7 +4338,12 @@ static CLOUD_CALLOUT: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", -20833), ("adj2", 62500)],
     guides: CLOUD_CALLOUT_GUIDES,
     paths: CLOUD_CALLOUT_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static CORNER_CMDS: &[PathCommandDef] = &[
@@ -2672,9 +4355,13 @@ static CORNER_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "b" },
     PathCommandDef::Close,
 ];
-static CORNER_PATHS: &[PathDef] = &[
-    PathDef { commands: CORNER_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static CORNER_PATHS: &[PathDef] = &[PathDef {
+    commands: CORNER_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static CORNER_GUIDES: &[GuideDef] = &[
     gd!("maxAdj1", MulDiv, "100000", "h", "ss"),
     gd!("maxAdj2", MulDiv, "100000", "w", "ss"),
@@ -2693,7 +4380,12 @@ static CORNER: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 50000), ("adj2", 50000)],
     guides: CORNER_GUIDES,
     paths: CORNER_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "it", r: "ir", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "it",
+        r: "ir",
+        b: "b",
+    }),
 };
 
 static CORNER_TABS_P0_CMDS: &[PathCommandDef] = &[
@@ -2721,10 +4413,34 @@ static CORNER_TABS_P3_CMDS: &[PathCommandDef] = &[
     PathCommandDef::Close,
 ];
 static CORNER_TABS_PATHS: &[PathDef] = &[
-    PathDef { commands: CORNER_TABS_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-    PathDef { commands: CORNER_TABS_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-    PathDef { commands: CORNER_TABS_P2_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-    PathDef { commands: CORNER_TABS_P3_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
+    PathDef {
+        commands: CORNER_TABS_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: CORNER_TABS_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: CORNER_TABS_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: CORNER_TABS_P3_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
 ];
 static CORNER_TABS_GUIDES: &[GuideDef] = &[
     gd!("md", Mod, "w", "h", "0"),
@@ -2736,7 +4452,12 @@ static CORNER_TABS: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: CORNER_TABS_GUIDES,
     paths: CORNER_TABS_PATHS,
-    text_rect: Some(TextRectDef { l: "dx", t: "dx", r: "x1", b: "y1" }),
+    text_rect: Some(TextRectDef {
+        l: "dx",
+        t: "dx",
+        r: "x1",
+        b: "y1",
+    }),
 };
 
 static CUBE_P0_CMDS: &[PathCommandDef] = &[
@@ -2775,10 +4496,34 @@ static CUBE_P3_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x4", y: "b" },
 ];
 static CUBE_PATHS: &[PathDef] = &[
-    PathDef { commands: CUBE_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: CUBE_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: CUBE_P2_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: CUBE_P3_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: CUBE_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: CUBE_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: CUBE_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: CUBE_P3_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static CUBE_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "100000"),
@@ -2794,31 +4539,70 @@ static CUBE: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 25000)],
     guides: CUBE_GUIDES,
     paths: CUBE_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "y1", r: "x4", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "y1",
+        r: "x4",
+        b: "b",
+    }),
 };
 
 static CURVED_CONNECTOR2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "t" },
-    PathCommandDef::CubicBezTo { x1: "wd2", y1: "t", x2: "r", y2: "hd2", x3: "r", y3: "b" },
+    PathCommandDef::CubicBezTo {
+        x1: "wd2",
+        y1: "t",
+        x2: "r",
+        y2: "hd2",
+        x3: "r",
+        y3: "b",
+    },
 ];
-static CURVED_CONNECTOR2_PATHS: &[PathDef] = &[
-    PathDef { commands: CURVED_CONNECTOR2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-];
+static CURVED_CONNECTOR2_PATHS: &[PathDef] = &[PathDef {
+    commands: CURVED_CONNECTOR2_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::None,
+    stroke: true,
+}];
 static CURVED_CONNECTOR2: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: &[],
     paths: CURVED_CONNECTOR2_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static CURVED_CONNECTOR3_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "t" },
-    PathCommandDef::CubicBezTo { x1: "x1", y1: "t", x2: "x2", y2: "hd4", x3: "x2", y3: "vc" },
-    PathCommandDef::CubicBezTo { x1: "x2", y1: "y3", x2: "x3", y2: "b", x3: "r", y3: "b" },
+    PathCommandDef::CubicBezTo {
+        x1: "x1",
+        y1: "t",
+        x2: "x2",
+        y2: "hd4",
+        x3: "x2",
+        y3: "vc",
+    },
+    PathCommandDef::CubicBezTo {
+        x1: "x2",
+        y1: "y3",
+        x2: "x3",
+        y2: "b",
+        x3: "r",
+        y3: "b",
+    },
 ];
-static CURVED_CONNECTOR3_PATHS: &[PathDef] = &[
-    PathDef { commands: CURVED_CONNECTOR3_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-];
+static CURVED_CONNECTOR3_PATHS: &[PathDef] = &[PathDef {
+    commands: CURVED_CONNECTOR3_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::None,
+    stroke: true,
+}];
 static CURVED_CONNECTOR3_GUIDES: &[GuideDef] = &[
     gd!("x2", MulDiv, "w", "adj1", "100000"),
     gd!("x1", AddDiv, "l", "x2", "2"),
@@ -2829,18 +4613,48 @@ static CURVED_CONNECTOR3: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 50000)],
     guides: CURVED_CONNECTOR3_GUIDES,
     paths: CURVED_CONNECTOR3_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static CURVED_CONNECTOR4_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "t" },
-    PathCommandDef::CubicBezTo { x1: "x1", y1: "t", x2: "x2", y2: "y2", x3: "x2", y3: "y1" },
-    PathCommandDef::CubicBezTo { x1: "x2", y1: "y3", x2: "x4", y2: "y4", x3: "x3", y3: "y4" },
-    PathCommandDef::CubicBezTo { x1: "x5", y1: "y4", x2: "r", y2: "y5", x3: "r", y3: "b" },
+    PathCommandDef::CubicBezTo {
+        x1: "x1",
+        y1: "t",
+        x2: "x2",
+        y2: "y2",
+        x3: "x2",
+        y3: "y1",
+    },
+    PathCommandDef::CubicBezTo {
+        x1: "x2",
+        y1: "y3",
+        x2: "x4",
+        y2: "y4",
+        x3: "x3",
+        y3: "y4",
+    },
+    PathCommandDef::CubicBezTo {
+        x1: "x5",
+        y1: "y4",
+        x2: "r",
+        y2: "y5",
+        x3: "r",
+        y3: "b",
+    },
 ];
-static CURVED_CONNECTOR4_PATHS: &[PathDef] = &[
-    PathDef { commands: CURVED_CONNECTOR4_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-];
+static CURVED_CONNECTOR4_PATHS: &[PathDef] = &[PathDef {
+    commands: CURVED_CONNECTOR4_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::None,
+    stroke: true,
+}];
 static CURVED_CONNECTOR4_GUIDES: &[GuideDef] = &[
     gd!("x2", MulDiv, "w", "adj1", "100000"),
     gd!("x1", AddDiv, "l", "x2", "2"),
@@ -2857,19 +4671,56 @@ static CURVED_CONNECTOR4: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 50000), ("adj2", 50000)],
     guides: CURVED_CONNECTOR4_GUIDES,
     paths: CURVED_CONNECTOR4_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static CURVED_CONNECTOR5_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "t" },
-    PathCommandDef::CubicBezTo { x1: "x2", y1: "t", x2: "x3", y2: "y2", x3: "x3", y3: "y1" },
-    PathCommandDef::CubicBezTo { x1: "x3", y1: "y3", x2: "x4", y2: "y4", x3: "x1", y3: "y4" },
-    PathCommandDef::CubicBezTo { x1: "x5", y1: "y4", x2: "x6", y2: "y6", x3: "x6", y3: "y5" },
-    PathCommandDef::CubicBezTo { x1: "x6", y1: "y7", x2: "x7", y2: "b", x3: "r", y3: "b" },
+    PathCommandDef::CubicBezTo {
+        x1: "x2",
+        y1: "t",
+        x2: "x3",
+        y2: "y2",
+        x3: "x3",
+        y3: "y1",
+    },
+    PathCommandDef::CubicBezTo {
+        x1: "x3",
+        y1: "y3",
+        x2: "x4",
+        y2: "y4",
+        x3: "x1",
+        y3: "y4",
+    },
+    PathCommandDef::CubicBezTo {
+        x1: "x5",
+        y1: "y4",
+        x2: "x6",
+        y2: "y6",
+        x3: "x6",
+        y3: "y5",
+    },
+    PathCommandDef::CubicBezTo {
+        x1: "x6",
+        y1: "y7",
+        x2: "x7",
+        y2: "b",
+        x3: "r",
+        y3: "b",
+    },
 ];
-static CURVED_CONNECTOR5_PATHS: &[PathDef] = &[
-    PathDef { commands: CURVED_CONNECTOR5_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-];
+static CURVED_CONNECTOR5_PATHS: &[PathDef] = &[PathDef {
+    commands: CURVED_CONNECTOR5_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::None,
+    stroke: true,
+}];
 static CURVED_CONNECTOR5_GUIDES: &[GuideDef] = &[
     gd!("x3", MulDiv, "w", "adj1", "100000"),
     gd!("x6", MulDiv, "w", "adj3", "100000"),
@@ -2890,43 +4741,106 @@ static CURVED_CONNECTOR5: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 50000), ("adj2", 50000), ("adj3", 50000)],
     guides: CURVED_CONNECTOR5_GUIDES,
     paths: CURVED_CONNECTOR5_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static CURVED_DOWN_ARROW_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x6", y: "b" },
     PathCommandDef::LineTo { x: "x4", y: "y1" },
     PathCommandDef::LineTo { x: "x5", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wR", hr: "h", st_ang: "stAng", sw_ang: "mswAng" },
+    PathCommandDef::ArcTo {
+        wr: "wR",
+        hr: "h",
+        st_ang: "stAng",
+        sw_ang: "mswAng",
+    },
     PathCommandDef::LineTo { x: "x3", y: "t" },
-    PathCommandDef::ArcTo { wr: "wR", hr: "h", st_ang: "3cd4", sw_ang: "swAng" },
+    PathCommandDef::ArcTo {
+        wr: "wR",
+        hr: "h",
+        st_ang: "3cd4",
+        sw_ang: "swAng",
+    },
     PathCommandDef::LineTo { x: "x8", y: "y1" },
     PathCommandDef::Close,
 ];
 static CURVED_DOWN_ARROW_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "ix", y: "iy" },
-    PathCommandDef::ArcTo { wr: "wR", hr: "h", st_ang: "stAng2", sw_ang: "swAng2" },
+    PathCommandDef::ArcTo {
+        wr: "wR",
+        hr: "h",
+        st_ang: "stAng2",
+        sw_ang: "swAng2",
+    },
     PathCommandDef::LineTo { x: "l", y: "b" },
-    PathCommandDef::ArcTo { wr: "wR", hr: "h", st_ang: "cd2", sw_ang: "swAng3" },
+    PathCommandDef::ArcTo {
+        wr: "wR",
+        hr: "h",
+        st_ang: "cd2",
+        sw_ang: "swAng3",
+    },
     PathCommandDef::Close,
 ];
 static CURVED_DOWN_ARROW_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "ix", y: "iy" },
-    PathCommandDef::ArcTo { wr: "wR", hr: "h", st_ang: "stAng2", sw_ang: "swAng2" },
+    PathCommandDef::ArcTo {
+        wr: "wR",
+        hr: "h",
+        st_ang: "stAng2",
+        sw_ang: "swAng2",
+    },
     PathCommandDef::LineTo { x: "l", y: "b" },
-    PathCommandDef::ArcTo { wr: "wR", hr: "h", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wR",
+        hr: "h",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x3", y: "t" },
-    PathCommandDef::ArcTo { wr: "wR", hr: "h", st_ang: "3cd4", sw_ang: "swAng" },
+    PathCommandDef::ArcTo {
+        wr: "wR",
+        hr: "h",
+        st_ang: "3cd4",
+        sw_ang: "swAng",
+    },
     PathCommandDef::LineTo { x: "x8", y: "y1" },
     PathCommandDef::LineTo { x: "x6", y: "b" },
     PathCommandDef::LineTo { x: "x4", y: "y1" },
     PathCommandDef::LineTo { x: "x5", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wR", hr: "h", st_ang: "stAng", sw_ang: "mswAng" },
+    PathCommandDef::ArcTo {
+        wr: "wR",
+        hr: "h",
+        st_ang: "stAng",
+        sw_ang: "mswAng",
+    },
 ];
 static CURVED_DOWN_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: CURVED_DOWN_ARROW_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: CURVED_DOWN_ARROW_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: CURVED_DOWN_ARROW_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: CURVED_DOWN_ARROW_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: CURVED_DOWN_ARROW_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: CURVED_DOWN_ARROW_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static CURVED_DOWN_ARROW_GUIDES: &[GuideDef] = &[
     gd!("maxAdj2", MulDiv, "50000", "w", "ss"),
@@ -2975,42 +4889,105 @@ static CURVED_DOWN_ARROW: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 25000), ("adj2", 50000), ("adj3", 25000)],
     guides: CURVED_DOWN_ARROW_GUIDES,
     paths: CURVED_DOWN_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static CURVED_LEFT_ARROW_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "y6" },
     PathCommandDef::LineTo { x: "x1", y: "y4" },
     PathCommandDef::LineTo { x: "x1", y: "y5" },
-    PathCommandDef::ArcTo { wr: "w", hr: "hR", st_ang: "swAng", sw_ang: "swAng2" },
-    PathCommandDef::ArcTo { wr: "w", hr: "hR", st_ang: "stAng3", sw_ang: "swAng3" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "hR",
+        st_ang: "swAng",
+        sw_ang: "swAng2",
+    },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "hR",
+        st_ang: "stAng3",
+        sw_ang: "swAng3",
+    },
     PathCommandDef::LineTo { x: "x1", y: "y8" },
     PathCommandDef::Close,
 ];
 static CURVED_LEFT_ARROW_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "r", y: "y3" },
-    PathCommandDef::ArcTo { wr: "w", hr: "hR", st_ang: "0", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "hR",
+        st_ang: "0",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "l", y: "t" },
-    PathCommandDef::ArcTo { wr: "w", hr: "hR", st_ang: "3cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
 static CURVED_LEFT_ARROW_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "r", y: "y3" },
-    PathCommandDef::ArcTo { wr: "w", hr: "hR", st_ang: "0", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "hR",
+        st_ang: "0",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "l", y: "t" },
-    PathCommandDef::ArcTo { wr: "w", hr: "hR", st_ang: "3cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "r", y: "y3" },
-    PathCommandDef::ArcTo { wr: "w", hr: "hR", st_ang: "0", sw_ang: "swAng" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "hR",
+        st_ang: "0",
+        sw_ang: "swAng",
+    },
     PathCommandDef::LineTo { x: "x1", y: "y8" },
     PathCommandDef::LineTo { x: "l", y: "y6" },
     PathCommandDef::LineTo { x: "x1", y: "y4" },
     PathCommandDef::LineTo { x: "x1", y: "y5" },
-    PathCommandDef::ArcTo { wr: "w", hr: "hR", st_ang: "swAng", sw_ang: "swAng2" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "hR",
+        st_ang: "swAng",
+        sw_ang: "swAng2",
+    },
 ];
 static CURVED_LEFT_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: CURVED_LEFT_ARROW_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: CURVED_LEFT_ARROW_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: CURVED_LEFT_ARROW_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: CURVED_LEFT_ARROW_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: CURVED_LEFT_ARROW_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: CURVED_LEFT_ARROW_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static CURVED_LEFT_ARROW_GUIDES: &[GuideDef] = &[
     gd!("maxAdj2", MulDiv, "50000", "h", "ss"),
@@ -3058,42 +5035,105 @@ static CURVED_LEFT_ARROW: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 25000), ("adj2", 50000), ("adj3", 25000)],
     guides: CURVED_LEFT_ARROW_GUIDES,
     paths: CURVED_LEFT_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static CURVED_RIGHT_ARROW_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "hR" },
-    PathCommandDef::ArcTo { wr: "w", hr: "hR", st_ang: "cd2", sw_ang: "mswAng" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "hR",
+        st_ang: "cd2",
+        sw_ang: "mswAng",
+    },
     PathCommandDef::LineTo { x: "x1", y: "y4" },
     PathCommandDef::LineTo { x: "r", y: "y6" },
     PathCommandDef::LineTo { x: "x1", y: "y8" },
     PathCommandDef::LineTo { x: "x1", y: "y7" },
-    PathCommandDef::ArcTo { wr: "w", hr: "hR", st_ang: "stAng", sw_ang: "swAng" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "hR",
+        st_ang: "stAng",
+        sw_ang: "swAng",
+    },
     PathCommandDef::Close,
 ];
 static CURVED_RIGHT_ARROW_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "r", y: "th" },
-    PathCommandDef::ArcTo { wr: "w", hr: "hR", st_ang: "3cd4", sw_ang: "swAng2" },
-    PathCommandDef::ArcTo { wr: "w", hr: "hR", st_ang: "stAng3", sw_ang: "swAng3" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "swAng2",
+    },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "hR",
+        st_ang: "stAng3",
+        sw_ang: "swAng3",
+    },
     PathCommandDef::Close,
 ];
 static CURVED_RIGHT_ARROW_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "hR" },
-    PathCommandDef::ArcTo { wr: "w", hr: "hR", st_ang: "cd2", sw_ang: "mswAng" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "hR",
+        st_ang: "cd2",
+        sw_ang: "mswAng",
+    },
     PathCommandDef::LineTo { x: "x1", y: "y4" },
     PathCommandDef::LineTo { x: "r", y: "y6" },
     PathCommandDef::LineTo { x: "x1", y: "y8" },
     PathCommandDef::LineTo { x: "x1", y: "y7" },
-    PathCommandDef::ArcTo { wr: "w", hr: "hR", st_ang: "stAng", sw_ang: "swAng" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "hR",
+        st_ang: "stAng",
+        sw_ang: "swAng",
+    },
     PathCommandDef::LineTo { x: "l", y: "hR" },
-    PathCommandDef::ArcTo { wr: "w", hr: "hR", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "hR",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "r", y: "th" },
-    PathCommandDef::ArcTo { wr: "w", hr: "hR", st_ang: "3cd4", sw_ang: "swAng2" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "swAng2",
+    },
 ];
 static CURVED_RIGHT_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: CURVED_RIGHT_ARROW_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: CURVED_RIGHT_ARROW_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: CURVED_RIGHT_ARROW_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: CURVED_RIGHT_ARROW_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: CURVED_RIGHT_ARROW_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: CURVED_RIGHT_ARROW_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static CURVED_RIGHT_ARROW_GUIDES: &[GuideDef] = &[
     gd!("maxAdj2", MulDiv, "50000", "h", "ss"),
@@ -3142,42 +5182,105 @@ static CURVED_RIGHT_ARROW: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 25000), ("adj2", 50000), ("adj3", 25000)],
     guides: CURVED_RIGHT_ARROW_GUIDES,
     paths: CURVED_RIGHT_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static CURVED_UP_ARROW_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x6", y: "t" },
     PathCommandDef::LineTo { x: "x8", y: "y1" },
     PathCommandDef::LineTo { x: "x7", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wR", hr: "h", st_ang: "stAng3", sw_ang: "swAng3" },
-    PathCommandDef::ArcTo { wr: "wR", hr: "h", st_ang: "stAng2", sw_ang: "swAng2" },
+    PathCommandDef::ArcTo {
+        wr: "wR",
+        hr: "h",
+        st_ang: "stAng3",
+        sw_ang: "swAng3",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wR",
+        hr: "h",
+        st_ang: "stAng2",
+        sw_ang: "swAng2",
+    },
     PathCommandDef::LineTo { x: "x4", y: "y1" },
     PathCommandDef::Close,
 ];
 static CURVED_UP_ARROW_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "wR", y: "b" },
-    PathCommandDef::ArcTo { wr: "wR", hr: "h", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wR",
+        hr: "h",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "th", y: "t" },
-    PathCommandDef::ArcTo { wr: "wR", hr: "h", st_ang: "cd2", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "wR",
+        hr: "h",
+        st_ang: "cd2",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::Close,
 ];
 static CURVED_UP_ARROW_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "ix", y: "iy" },
-    PathCommandDef::ArcTo { wr: "wR", hr: "h", st_ang: "stAng2", sw_ang: "swAng2" },
+    PathCommandDef::ArcTo {
+        wr: "wR",
+        hr: "h",
+        st_ang: "stAng2",
+        sw_ang: "swAng2",
+    },
     PathCommandDef::LineTo { x: "x4", y: "y1" },
     PathCommandDef::LineTo { x: "x6", y: "t" },
     PathCommandDef::LineTo { x: "x8", y: "y1" },
     PathCommandDef::LineTo { x: "x7", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wR", hr: "h", st_ang: "stAng3", sw_ang: "swAng" },
+    PathCommandDef::ArcTo {
+        wr: "wR",
+        hr: "h",
+        st_ang: "stAng3",
+        sw_ang: "swAng",
+    },
     PathCommandDef::LineTo { x: "wR", y: "b" },
-    PathCommandDef::ArcTo { wr: "wR", hr: "h", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wR",
+        hr: "h",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "th", y: "t" },
-    PathCommandDef::ArcTo { wr: "wR", hr: "h", st_ang: "cd2", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "wR",
+        hr: "h",
+        st_ang: "cd2",
+        sw_ang: "-5400000",
+    },
 ];
 static CURVED_UP_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: CURVED_UP_ARROW_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: CURVED_UP_ARROW_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: CURVED_UP_ARROW_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: CURVED_UP_ARROW_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: CURVED_UP_ARROW_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: CURVED_UP_ARROW_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static CURVED_UP_ARROW_GUIDES: &[GuideDef] = &[
     gd!("maxAdj2", MulDiv, "50000", "w", "ss"),
@@ -3227,7 +5330,12 @@ static CURVED_UP_ARROW: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 25000), ("adj2", 50000), ("adj3", 25000)],
     guides: CURVED_UP_ARROW_GUIDES,
     paths: CURVED_UP_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static DECAGON_CMDS: &[PathCommandDef] = &[
@@ -3243,9 +5351,13 @@ static DECAGON_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x1", y: "y3" },
     PathCommandDef::Close,
 ];
-static DECAGON_PATHS: &[PathDef] = &[
-    PathDef { commands: DECAGON_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static DECAGON_PATHS: &[PathDef] = &[PathDef {
+    commands: DECAGON_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static DECAGON_GUIDES: &[GuideDef] = &[
     gd!("shd2", MulDiv, "hd2", "vf", "100000"),
     gd!("dx1", Cos, "wd2", "2160000", ""),
@@ -3265,7 +5377,12 @@ static DECAGON: PresetDef = PresetDef {
     adjust_defaults: &[("vf", 105146)],
     guides: DECAGON_GUIDES,
     paths: DECAGON_PATHS,
-    text_rect: Some(TextRectDef { l: "x1", t: "y2", r: "x4", b: "y3" }),
+    text_rect: Some(TextRectDef {
+        l: "x1",
+        t: "y2",
+        r: "x4",
+        b: "y3",
+    }),
 };
 
 static DIAG_STRIPE_CMDS: &[PathCommandDef] = &[
@@ -3275,9 +5392,13 @@ static DIAG_STRIPE_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "b" },
     PathCommandDef::Close,
 ];
-static DIAG_STRIPE_PATHS: &[PathDef] = &[
-    PathDef { commands: DIAG_STRIPE_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static DIAG_STRIPE_PATHS: &[PathDef] = &[PathDef {
+    commands: DIAG_STRIPE_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static DIAG_STRIPE_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "100000"),
     gd!("x2", MulDiv, "w", "a", "100000"),
@@ -3291,7 +5412,12 @@ static DIAG_STRIPE: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 50000)],
     guides: DIAG_STRIPE_GUIDES,
     paths: DIAG_STRIPE_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "x3", b: "y3" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "x3",
+        b: "y3",
+    }),
 };
 
 static DIAMOND_CMDS: &[PathCommandDef] = &[
@@ -3301,9 +5427,13 @@ static DIAMOND_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "hc", y: "b" },
     PathCommandDef::Close,
 ];
-static DIAMOND_PATHS: &[PathDef] = &[
-    PathDef { commands: DIAMOND_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static DIAMOND_PATHS: &[PathDef] = &[PathDef {
+    commands: DIAMOND_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static DIAMOND_GUIDES: &[GuideDef] = &[
     gd!("ir", MulDiv, "w", "3", "4"),
     gd!("ib", MulDiv, "h", "3", "4"),
@@ -3312,7 +5442,12 @@ static DIAMOND: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: DIAMOND_GUIDES,
     paths: DIAMOND_PATHS,
-    text_rect: Some(TextRectDef { l: "wd4", t: "hd4", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "wd4",
+        t: "hd4",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static DODECAGON_CMDS: &[PathCommandDef] = &[
@@ -3330,9 +5465,13 @@ static DODECAGON_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "y3" },
     PathCommandDef::Close,
 ];
-static DODECAGON_PATHS: &[PathDef] = &[
-    PathDef { commands: DODECAGON_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static DODECAGON_PATHS: &[PathDef] = &[PathDef {
+    commands: DODECAGON_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static DODECAGON_GUIDES: &[GuideDef] = &[
     gd!("x1", MulDiv, "w", "2894", "21600"),
     gd!("x2", MulDiv, "w", "7906", "21600"),
@@ -3347,26 +5486,75 @@ static DODECAGON: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: DODECAGON_GUIDES,
     paths: DODECAGON_PATHS,
-    text_rect: Some(TextRectDef { l: "x1", t: "y1", r: "x4", b: "y4" }),
+    text_rect: Some(TextRectDef {
+        l: "x1",
+        t: "y1",
+        r: "x4",
+        b: "y4",
+    }),
 };
 
 static DONUT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "vc" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd2", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "3cd4", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "0", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "dr", y: "vc" },
-    PathCommandDef::ArcTo { wr: "iwd2", hr: "ihd2", st_ang: "cd2", sw_ang: "-5400000" },
-    PathCommandDef::ArcTo { wr: "iwd2", hr: "ihd2", st_ang: "cd4", sw_ang: "-5400000" },
-    PathCommandDef::ArcTo { wr: "iwd2", hr: "ihd2", st_ang: "0", sw_ang: "-5400000" },
-    PathCommandDef::ArcTo { wr: "iwd2", hr: "ihd2", st_ang: "3cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "iwd2",
+        hr: "ihd2",
+        st_ang: "cd2",
+        sw_ang: "-5400000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "iwd2",
+        hr: "ihd2",
+        st_ang: "cd4",
+        sw_ang: "-5400000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "iwd2",
+        hr: "ihd2",
+        st_ang: "0",
+        sw_ang: "-5400000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "iwd2",
+        hr: "ihd2",
+        st_ang: "3cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::Close,
 ];
-static DONUT_PATHS: &[PathDef] = &[
-    PathDef { commands: DONUT_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static DONUT_PATHS: &[PathDef] = &[PathDef {
+    commands: DONUT_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static DONUT_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
     gd!("dr", MulDiv, "ss", "a", "100000"),
@@ -3383,21 +5571,58 @@ static DONUT: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 25000)],
     guides: DONUT_GUIDES,
     paths: DONUT_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static DOUBLE_WAVE_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x2", y: "y1" },
-    PathCommandDef::CubicBezTo { x1: "x3", y1: "y2", x2: "x4", y2: "y3", x3: "x5", y3: "y1" },
-    PathCommandDef::CubicBezTo { x1: "x6", y1: "y2", x2: "x7", y2: "y3", x3: "x8", y3: "y1" },
+    PathCommandDef::CubicBezTo {
+        x1: "x3",
+        y1: "y2",
+        x2: "x4",
+        y2: "y3",
+        x3: "x5",
+        y3: "y1",
+    },
+    PathCommandDef::CubicBezTo {
+        x1: "x6",
+        y1: "y2",
+        x2: "x7",
+        y2: "y3",
+        x3: "x8",
+        y3: "y1",
+    },
     PathCommandDef::LineTo { x: "x15", y: "y4" },
-    PathCommandDef::CubicBezTo { x1: "x14", y1: "y6", x2: "x13", y2: "y5", x3: "x12", y3: "y4" },
-    PathCommandDef::CubicBezTo { x1: "x11", y1: "y6", x2: "x10", y2: "y5", x3: "x9", y3: "y4" },
+    PathCommandDef::CubicBezTo {
+        x1: "x14",
+        y1: "y6",
+        x2: "x13",
+        y2: "y5",
+        x3: "x12",
+        y3: "y4",
+    },
+    PathCommandDef::CubicBezTo {
+        x1: "x11",
+        y1: "y6",
+        x2: "x10",
+        y2: "y5",
+        x3: "x9",
+        y3: "y4",
+    },
     PathCommandDef::Close,
 ];
-static DOUBLE_WAVE_PATHS: &[PathDef] = &[
-    PathDef { commands: DOUBLE_WAVE_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static DOUBLE_WAVE_PATHS: &[PathDef] = &[PathDef {
+    commands: DOUBLE_WAVE_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static DOUBLE_WAVE_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "0", "adj1", "12500"),
     gd!("a2", Pin, "-10000", "adj2", "10000"),
@@ -3440,7 +5665,12 @@ static DOUBLE_WAVE: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 6250), ("adj2", 0)],
     guides: DOUBLE_WAVE_GUIDES,
     paths: DOUBLE_WAVE_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static DOWN_ARROW_CMDS: &[PathCommandDef] = &[
@@ -3453,9 +5683,13 @@ static DOWN_ARROW_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "hc", y: "b" },
     PathCommandDef::Close,
 ];
-static DOWN_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: DOWN_ARROW_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static DOWN_ARROW_PATHS: &[PathDef] = &[PathDef {
+    commands: DOWN_ARROW_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static DOWN_ARROW_GUIDES: &[GuideDef] = &[
     gd!("maxAdj2", MulDiv, "100000", "h", "ss"),
     gd!("a1", Pin, "0", "adj1", "100000"),
@@ -3472,7 +5706,12 @@ static DOWN_ARROW: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 50000), ("adj2", 50000)],
     guides: DOWN_ARROW_GUIDES,
     paths: DOWN_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "x1", t: "t", r: "x2", b: "y2" }),
+    text_rect: Some(TextRectDef {
+        l: "x1",
+        t: "t",
+        r: "x2",
+        b: "y2",
+    }),
 };
 
 static DOWN_ARROW_CALLOUT_CMDS: &[PathCommandDef] = &[
@@ -3489,9 +5728,13 @@ static DOWN_ARROW_CALLOUT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "y2" },
     PathCommandDef::Close,
 ];
-static DOWN_ARROW_CALLOUT_PATHS: &[PathDef] = &[
-    PathDef { commands: DOWN_ARROW_CALLOUT_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static DOWN_ARROW_CALLOUT_PATHS: &[PathDef] = &[PathDef {
+    commands: DOWN_ARROW_CALLOUT_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static DOWN_ARROW_CALLOUT_GUIDES: &[GuideDef] = &[
     gd!("maxAdj2", MulDiv, "50000", "w", "ss"),
     gd!("a2", Pin, "0", "adj2", "maxAdj2"),
@@ -3514,23 +5757,57 @@ static DOWN_ARROW_CALLOUT_GUIDES: &[GuideDef] = &[
     gd!("y1", MulDiv, "y2", "1", "2"),
 ];
 static DOWN_ARROW_CALLOUT: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 25000), ("adj2", 25000), ("adj3", 25000), ("adj4", 64977)],
+    adjust_defaults: &[
+        ("adj1", 25000),
+        ("adj2", 25000),
+        ("adj3", 25000),
+        ("adj4", 64977),
+    ],
     guides: DOWN_ARROW_CALLOUT_GUIDES,
     paths: DOWN_ARROW_CALLOUT_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "y2" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "y2",
+    }),
 };
 
 static ELLIPSE_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "vc" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd2", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "3cd4", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "0", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
-static ELLIPSE_PATHS: &[PathDef] = &[
-    PathDef { commands: ELLIPSE_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static ELLIPSE_PATHS: &[PathDef] = &[PathDef {
+    commands: ELLIPSE_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static ELLIPSE_GUIDES: &[GuideDef] = &[
     gd!("idx", Cos, "wd2", "2700000", ""),
     gd!("idy", Sin, "hd2", "2700000", ""),
@@ -3543,23 +5820,58 @@ static ELLIPSE: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: ELLIPSE_GUIDES,
     paths: ELLIPSE_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static ELLIPSE_RIBBON_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "t" },
-    PathCommandDef::QuadBezTo { x1: "cx1", y1: "cy1", x2: "x3", y2: "y1" },
+    PathCommandDef::QuadBezTo {
+        x1: "cx1",
+        y1: "cy1",
+        x2: "x3",
+        y2: "y1",
+    },
     PathCommandDef::LineTo { x: "x2", y: "y3" },
-    PathCommandDef::QuadBezTo { x1: "hc", y1: "cy3", x2: "x5", y2: "y3" },
+    PathCommandDef::QuadBezTo {
+        x1: "hc",
+        y1: "cy3",
+        x2: "x5",
+        y2: "y3",
+    },
     PathCommandDef::LineTo { x: "x4", y: "y1" },
-    PathCommandDef::QuadBezTo { x1: "cx2", y1: "cy1", x2: "r", y2: "t" },
+    PathCommandDef::QuadBezTo {
+        x1: "cx2",
+        y1: "cy1",
+        x2: "r",
+        y2: "t",
+    },
     PathCommandDef::LineTo { x: "x6", y: "y2" },
     PathCommandDef::LineTo { x: "r", y: "rh" },
-    PathCommandDef::QuadBezTo { x1: "cx5", y1: "cy4", x2: "x5", y2: "y5" },
+    PathCommandDef::QuadBezTo {
+        x1: "cx5",
+        y1: "cy4",
+        x2: "x5",
+        y2: "y5",
+    },
     PathCommandDef::LineTo { x: "x5", y: "y6" },
-    PathCommandDef::QuadBezTo { x1: "hc", y1: "cy6", x2: "x2", y2: "y6" },
+    PathCommandDef::QuadBezTo {
+        x1: "hc",
+        y1: "cy6",
+        x2: "x2",
+        y2: "y6",
+    },
     PathCommandDef::LineTo { x: "x2", y: "y5" },
-    PathCommandDef::QuadBezTo { x1: "cx4", y1: "cy4", x2: "l", y2: "rh" },
+    PathCommandDef::QuadBezTo {
+        x1: "cx4",
+        y1: "cy4",
+        x2: "l",
+        y2: "rh",
+    },
     PathCommandDef::LineTo { x: "wd8", y: "y2" },
     PathCommandDef::Close,
 ];
@@ -3567,26 +5879,66 @@ static ELLIPSE_RIBBON_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x3", y: "y7" },
     PathCommandDef::LineTo { x: "x3", y: "y1" },
     PathCommandDef::LineTo { x: "x2", y: "y3" },
-    PathCommandDef::QuadBezTo { x1: "hc", y1: "cy3", x2: "x5", y2: "y3" },
+    PathCommandDef::QuadBezTo {
+        x1: "hc",
+        y1: "cy3",
+        x2: "x5",
+        y2: "y3",
+    },
     PathCommandDef::LineTo { x: "x4", y: "y1" },
     PathCommandDef::LineTo { x: "x4", y: "y7" },
-    PathCommandDef::QuadBezTo { x1: "hc", y1: "cy7", x2: "x3", y2: "y7" },
+    PathCommandDef::QuadBezTo {
+        x1: "hc",
+        y1: "cy7",
+        x2: "x3",
+        y2: "y7",
+    },
     PathCommandDef::Close,
 ];
 static ELLIPSE_RIBBON_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "t" },
-    PathCommandDef::QuadBezTo { x1: "cx1", y1: "cy1", x2: "x3", y2: "y1" },
+    PathCommandDef::QuadBezTo {
+        x1: "cx1",
+        y1: "cy1",
+        x2: "x3",
+        y2: "y1",
+    },
     PathCommandDef::LineTo { x: "x2", y: "y3" },
-    PathCommandDef::QuadBezTo { x1: "hc", y1: "cy3", x2: "x5", y2: "y3" },
+    PathCommandDef::QuadBezTo {
+        x1: "hc",
+        y1: "cy3",
+        x2: "x5",
+        y2: "y3",
+    },
     PathCommandDef::LineTo { x: "x4", y: "y1" },
-    PathCommandDef::QuadBezTo { x1: "cx2", y1: "cy1", x2: "r", y2: "t" },
+    PathCommandDef::QuadBezTo {
+        x1: "cx2",
+        y1: "cy1",
+        x2: "r",
+        y2: "t",
+    },
     PathCommandDef::LineTo { x: "x6", y: "y2" },
     PathCommandDef::LineTo { x: "r", y: "rh" },
-    PathCommandDef::QuadBezTo { x1: "cx5", y1: "cy4", x2: "x5", y2: "y5" },
+    PathCommandDef::QuadBezTo {
+        x1: "cx5",
+        y1: "cy4",
+        x2: "x5",
+        y2: "y5",
+    },
     PathCommandDef::LineTo { x: "x5", y: "y6" },
-    PathCommandDef::QuadBezTo { x1: "hc", y1: "cy6", x2: "x2", y2: "y6" },
+    PathCommandDef::QuadBezTo {
+        x1: "hc",
+        y1: "cy6",
+        x2: "x2",
+        y2: "y6",
+    },
     PathCommandDef::LineTo { x: "x2", y: "y5" },
-    PathCommandDef::QuadBezTo { x1: "cx4", y1: "cy4", x2: "l", y2: "rh" },
+    PathCommandDef::QuadBezTo {
+        x1: "cx4",
+        y1: "cy4",
+        x2: "l",
+        y2: "rh",
+    },
     PathCommandDef::LineTo { x: "wd8", y: "y2" },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "x2", y: "y5" },
@@ -3599,9 +5951,27 @@ static ELLIPSE_RIBBON_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x4", y: "y1" },
 ];
 static ELLIPSE_RIBBON_PATHS: &[PathDef] = &[
-    PathDef { commands: ELLIPSE_RIBBON_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ELLIPSE_RIBBON_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ELLIPSE_RIBBON_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: ELLIPSE_RIBBON_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ELLIPSE_RIBBON_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ELLIPSE_RIBBON_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static ELLIPSE_RIBBON_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "0", "adj1", "100000"),
@@ -3652,23 +6022,58 @@ static ELLIPSE_RIBBON: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 25000), ("adj2", 50000), ("adj3", 12500)],
     guides: ELLIPSE_RIBBON_GUIDES,
     paths: ELLIPSE_RIBBON_PATHS,
-    text_rect: Some(TextRectDef { l: "x2", t: "q1", r: "x5", b: "y6" }),
+    text_rect: Some(TextRectDef {
+        l: "x2",
+        t: "q1",
+        r: "x5",
+        b: "y6",
+    }),
 };
 
 static ELLIPSE_RIBBON2_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "b" },
-    PathCommandDef::QuadBezTo { x1: "cx1", y1: "cy1", x2: "x3", y2: "y1" },
+    PathCommandDef::QuadBezTo {
+        x1: "cx1",
+        y1: "cy1",
+        x2: "x3",
+        y2: "y1",
+    },
     PathCommandDef::LineTo { x: "x2", y: "y3" },
-    PathCommandDef::QuadBezTo { x1: "hc", y1: "cy3", x2: "x5", y2: "y3" },
+    PathCommandDef::QuadBezTo {
+        x1: "hc",
+        y1: "cy3",
+        x2: "x5",
+        y2: "y3",
+    },
     PathCommandDef::LineTo { x: "x4", y: "y1" },
-    PathCommandDef::QuadBezTo { x1: "cx2", y1: "cy1", x2: "r", y2: "b" },
+    PathCommandDef::QuadBezTo {
+        x1: "cx2",
+        y1: "cy1",
+        x2: "r",
+        y2: "b",
+    },
     PathCommandDef::LineTo { x: "x6", y: "y2" },
     PathCommandDef::LineTo { x: "r", y: "q1" },
-    PathCommandDef::QuadBezTo { x1: "cx5", y1: "cy4", x2: "x5", y2: "y5" },
+    PathCommandDef::QuadBezTo {
+        x1: "cx5",
+        y1: "cy4",
+        x2: "x5",
+        y2: "y5",
+    },
     PathCommandDef::LineTo { x: "x5", y: "y6" },
-    PathCommandDef::QuadBezTo { x1: "hc", y1: "cy6", x2: "x2", y2: "y6" },
+    PathCommandDef::QuadBezTo {
+        x1: "hc",
+        y1: "cy6",
+        x2: "x2",
+        y2: "y6",
+    },
     PathCommandDef::LineTo { x: "x2", y: "y5" },
-    PathCommandDef::QuadBezTo { x1: "cx4", y1: "cy4", x2: "l", y2: "q1" },
+    PathCommandDef::QuadBezTo {
+        x1: "cx4",
+        y1: "cy4",
+        x2: "l",
+        y2: "q1",
+    },
     PathCommandDef::LineTo { x: "wd8", y: "y2" },
     PathCommandDef::Close,
 ];
@@ -3676,28 +6081,68 @@ static ELLIPSE_RIBBON2_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x3", y: "y7" },
     PathCommandDef::LineTo { x: "x3", y: "y1" },
     PathCommandDef::LineTo { x: "x2", y: "y3" },
-    PathCommandDef::QuadBezTo { x1: "hc", y1: "cy3", x2: "x5", y2: "y3" },
+    PathCommandDef::QuadBezTo {
+        x1: "hc",
+        y1: "cy3",
+        x2: "x5",
+        y2: "y3",
+    },
     PathCommandDef::LineTo { x: "x4", y: "y1" },
     PathCommandDef::LineTo { x: "x4", y: "y7" },
-    PathCommandDef::QuadBezTo { x1: "hc", y1: "cy7", x2: "x3", y2: "y7" },
+    PathCommandDef::QuadBezTo {
+        x1: "hc",
+        y1: "cy7",
+        x2: "x3",
+        y2: "y7",
+    },
     PathCommandDef::Close,
 ];
 static ELLIPSE_RIBBON2_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "b" },
     PathCommandDef::LineTo { x: "wd8", y: "y2" },
     PathCommandDef::LineTo { x: "l", y: "q1" },
-    PathCommandDef::QuadBezTo { x1: "cx4", y1: "cy4", x2: "x2", y2: "y5" },
+    PathCommandDef::QuadBezTo {
+        x1: "cx4",
+        y1: "cy4",
+        x2: "x2",
+        y2: "y5",
+    },
     PathCommandDef::LineTo { x: "x2", y: "y6" },
-    PathCommandDef::QuadBezTo { x1: "hc", y1: "cy6", x2: "x5", y2: "y6" },
+    PathCommandDef::QuadBezTo {
+        x1: "hc",
+        y1: "cy6",
+        x2: "x5",
+        y2: "y6",
+    },
     PathCommandDef::LineTo { x: "x5", y: "y5" },
-    PathCommandDef::QuadBezTo { x1: "cx5", y1: "cy4", x2: "r", y2: "q1" },
+    PathCommandDef::QuadBezTo {
+        x1: "cx5",
+        y1: "cy4",
+        x2: "r",
+        y2: "q1",
+    },
     PathCommandDef::LineTo { x: "x6", y: "y2" },
     PathCommandDef::LineTo { x: "r", y: "b" },
-    PathCommandDef::QuadBezTo { x1: "cx2", y1: "cy1", x2: "x4", y2: "y1" },
+    PathCommandDef::QuadBezTo {
+        x1: "cx2",
+        y1: "cy1",
+        x2: "x4",
+        y2: "y1",
+    },
     PathCommandDef::LineTo { x: "x5", y: "y3" },
-    PathCommandDef::QuadBezTo { x1: "hc", y1: "cy3", x2: "x2", y2: "y3" },
+    PathCommandDef::QuadBezTo {
+        x1: "hc",
+        y1: "cy3",
+        x2: "x2",
+        y2: "y3",
+    },
     PathCommandDef::LineTo { x: "x3", y: "y1" },
-    PathCommandDef::QuadBezTo { x1: "cx1", y1: "cy1", x2: "l", y2: "b" },
+    PathCommandDef::QuadBezTo {
+        x1: "cx1",
+        y1: "cy1",
+        x2: "l",
+        y2: "b",
+    },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "x2", y: "y3" },
     PathCommandDef::LineTo { x: "x2", y: "y5" },
@@ -3709,9 +6154,27 @@ static ELLIPSE_RIBBON2_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x4", y: "y7" },
 ];
 static ELLIPSE_RIBBON2_PATHS: &[PathDef] = &[
-    PathDef { commands: ELLIPSE_RIBBON2_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ELLIPSE_RIBBON2_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: ELLIPSE_RIBBON2_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: ELLIPSE_RIBBON2_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ELLIPSE_RIBBON2_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: ELLIPSE_RIBBON2_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static ELLIPSE_RIBBON2_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "0", "adj1", "100000"),
@@ -3772,23 +6235,52 @@ static ELLIPSE_RIBBON2: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 25000), ("adj2", 50000), ("adj3", 12500)],
     guides: ELLIPSE_RIBBON2_GUIDES,
     paths: ELLIPSE_RIBBON2_PATHS,
-    text_rect: Some(TextRectDef { l: "x2", t: "y6", r: "x5", b: "rh" }),
+    text_rect: Some(TextRectDef {
+        l: "x2",
+        t: "y6",
+        r: "x5",
+        b: "rh",
+    }),
 };
 
 static FLOW_CHART_ALTERNATE_PROCESS_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "ssd6" },
-    PathCommandDef::ArcTo { wr: "ssd6", hr: "ssd6", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "ssd6",
+        hr: "ssd6",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x2", y: "t" },
-    PathCommandDef::ArcTo { wr: "ssd6", hr: "ssd6", st_ang: "3cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "ssd6",
+        hr: "ssd6",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "r", y: "y2" },
-    PathCommandDef::ArcTo { wr: "ssd6", hr: "ssd6", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "ssd6",
+        hr: "ssd6",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "ssd6", y: "b" },
-    PathCommandDef::ArcTo { wr: "ssd6", hr: "ssd6", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "ssd6",
+        hr: "ssd6",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
-static FLOW_CHART_ALTERNATE_PROCESS_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_ALTERNATE_PROCESS_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static FLOW_CHART_ALTERNATE_PROCESS_PATHS: &[PathDef] = &[PathDef {
+    commands: FLOW_CHART_ALTERNATE_PROCESS_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static FLOW_CHART_ALTERNATE_PROCESS_GUIDES: &[GuideDef] = &[
     gd!("x2", AddSub, "r", "0", "ssd6"),
     gd!("y2", AddSub, "b", "0", "ssd6"),
@@ -3800,7 +6292,12 @@ static FLOW_CHART_ALTERNATE_PROCESS: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_ALTERNATE_PROCESS_GUIDES,
     paths: FLOW_CHART_ALTERNATE_PROCESS_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "il", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "il",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static FLOW_CHART_COLLATE_CMDS: &[PathCommandDef] = &[
@@ -3812,9 +6309,13 @@ static FLOW_CHART_COLLATE_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "1", y: "1" },
     PathCommandDef::Close,
 ];
-static FLOW_CHART_COLLATE_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_COLLATE_CMDS, w: Some(2), h: Some(2), fill: PathFill::Norm, stroke: true },
-];
+static FLOW_CHART_COLLATE_PATHS: &[PathDef] = &[PathDef {
+    commands: FLOW_CHART_COLLATE_CMDS,
+    w: Some(2),
+    h: Some(2),
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static FLOW_CHART_COLLATE_GUIDES: &[GuideDef] = &[
     gd!("ir", MulDiv, "w", "3", "4"),
     gd!("ib", MulDiv, "h", "3", "4"),
@@ -3823,20 +6324,49 @@ static FLOW_CHART_COLLATE: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_COLLATE_GUIDES,
     paths: FLOW_CHART_COLLATE_PATHS,
-    text_rect: Some(TextRectDef { l: "wd4", t: "hd4", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "wd4",
+        t: "hd4",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static FLOW_CHART_CONNECTOR_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "vc" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd2", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "3cd4", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "0", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
-static FLOW_CHART_CONNECTOR_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_CONNECTOR_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static FLOW_CHART_CONNECTOR_PATHS: &[PathDef] = &[PathDef {
+    commands: FLOW_CHART_CONNECTOR_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static FLOW_CHART_CONNECTOR_GUIDES: &[GuideDef] = &[
     gd!("idx", Cos, "wd2", "2700000", ""),
     gd!("idy", Sin, "hd2", "2700000", ""),
@@ -3849,7 +6379,12 @@ static FLOW_CHART_CONNECTOR: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_CONNECTOR_GUIDES,
     paths: FLOW_CHART_CONNECTOR_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static FLOW_CHART_DECISION_CMDS: &[PathCommandDef] = &[
@@ -3859,9 +6394,13 @@ static FLOW_CHART_DECISION_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "1", y: "2" },
     PathCommandDef::Close,
 ];
-static FLOW_CHART_DECISION_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_DECISION_CMDS, w: Some(2), h: Some(2), fill: PathFill::Norm, stroke: true },
-];
+static FLOW_CHART_DECISION_PATHS: &[PathDef] = &[PathDef {
+    commands: FLOW_CHART_DECISION_CMDS,
+    w: Some(2),
+    h: Some(2),
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static FLOW_CHART_DECISION_GUIDES: &[GuideDef] = &[
     gd!("ir", MulDiv, "w", "3", "4"),
     gd!("ib", MulDiv, "h", "3", "4"),
@@ -3870,19 +6409,33 @@ static FLOW_CHART_DECISION: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_DECISION_GUIDES,
     paths: FLOW_CHART_DECISION_PATHS,
-    text_rect: Some(TextRectDef { l: "wd4", t: "hd4", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "wd4",
+        t: "hd4",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static FLOW_CHART_DELAY_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "t" },
     PathCommandDef::LineTo { x: "hc", y: "t" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "3cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "3cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "l", y: "b" },
     PathCommandDef::Close,
 ];
-static FLOW_CHART_DELAY_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_DELAY_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static FLOW_CHART_DELAY_PATHS: &[PathDef] = &[PathDef {
+    commands: FLOW_CHART_DELAY_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static FLOW_CHART_DELAY_GUIDES: &[GuideDef] = &[
     gd!("idx", Cos, "wd2", "2700000", ""),
     gd!("idy", Sin, "hd2", "2700000", ""),
@@ -3894,40 +6447,71 @@ static FLOW_CHART_DELAY: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_DELAY_GUIDES,
     paths: FLOW_CHART_DELAY_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static FLOW_CHART_DISPLAY_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "0", y: "3" },
     PathCommandDef::LineTo { x: "1", y: "0" },
     PathCommandDef::LineTo { x: "5", y: "0" },
-    PathCommandDef::ArcTo { wr: "1", hr: "3", st_ang: "3cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "1",
+        hr: "3",
+        st_ang: "3cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "1", y: "6" },
     PathCommandDef::Close,
 ];
-static FLOW_CHART_DISPLAY_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_DISPLAY_CMDS, w: Some(6), h: Some(6), fill: PathFill::Norm, stroke: true },
-];
-static FLOW_CHART_DISPLAY_GUIDES: &[GuideDef] = &[
-    gd!("x2", MulDiv, "w", "5", "6"),
-];
+static FLOW_CHART_DISPLAY_PATHS: &[PathDef] = &[PathDef {
+    commands: FLOW_CHART_DISPLAY_CMDS,
+    w: Some(6),
+    h: Some(6),
+    fill: PathFill::Norm,
+    stroke: true,
+}];
+static FLOW_CHART_DISPLAY_GUIDES: &[GuideDef] = &[gd!("x2", MulDiv, "w", "5", "6")];
 static FLOW_CHART_DISPLAY: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_DISPLAY_GUIDES,
     paths: FLOW_CHART_DISPLAY_PATHS,
-    text_rect: Some(TextRectDef { l: "wd6", t: "t", r: "x2", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "wd6",
+        t: "t",
+        r: "x2",
+        b: "b",
+    }),
 };
 
 static FLOW_CHART_DOCUMENT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "0", y: "0" },
     PathCommandDef::LineTo { x: "21600", y: "0" },
-    PathCommandDef::LineTo { x: "21600", y: "17322" },
-    PathCommandDef::CubicBezTo { x1: "10800", y1: "17322", x2: "10800", y2: "23922", x3: "0", y3: "20172" },
+    PathCommandDef::LineTo {
+        x: "21600",
+        y: "17322",
+    },
+    PathCommandDef::CubicBezTo {
+        x1: "10800",
+        y1: "17322",
+        x2: "10800",
+        y2: "23922",
+        x3: "0",
+        y3: "20172",
+    },
     PathCommandDef::Close,
 ];
-static FLOW_CHART_DOCUMENT_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_DOCUMENT_CMDS, w: Some(21600), h: Some(21600), fill: PathFill::Norm, stroke: true },
-];
+static FLOW_CHART_DOCUMENT_PATHS: &[PathDef] = &[PathDef {
+    commands: FLOW_CHART_DOCUMENT_CMDS,
+    w: Some(21600),
+    h: Some(21600),
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static FLOW_CHART_DOCUMENT_GUIDES: &[GuideDef] = &[
     gd!("y1", MulDiv, "h", "17322", "21600"),
     gd!("y2", MulDiv, "h", "20172", "21600"),
@@ -3936,7 +6520,12 @@ static FLOW_CHART_DOCUMENT: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_DOCUMENT_GUIDES,
     paths: FLOW_CHART_DOCUMENT_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "y1" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "y1",
+    }),
 };
 
 static FLOW_CHART_EXTRACT_CMDS: &[PathCommandDef] = &[
@@ -3945,17 +6534,24 @@ static FLOW_CHART_EXTRACT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "2", y: "2" },
     PathCommandDef::Close,
 ];
-static FLOW_CHART_EXTRACT_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_EXTRACT_CMDS, w: Some(2), h: Some(2), fill: PathFill::Norm, stroke: true },
-];
-static FLOW_CHART_EXTRACT_GUIDES: &[GuideDef] = &[
-    gd!("x2", MulDiv, "w", "3", "4"),
-];
+static FLOW_CHART_EXTRACT_PATHS: &[PathDef] = &[PathDef {
+    commands: FLOW_CHART_EXTRACT_CMDS,
+    w: Some(2),
+    h: Some(2),
+    fill: PathFill::Norm,
+    stroke: true,
+}];
+static FLOW_CHART_EXTRACT_GUIDES: &[GuideDef] = &[gd!("x2", MulDiv, "w", "3", "4")];
 static FLOW_CHART_EXTRACT: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_EXTRACT_GUIDES,
     paths: FLOW_CHART_EXTRACT_PATHS,
-    text_rect: Some(TextRectDef { l: "wd4", t: "vc", r: "x2", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "wd4",
+        t: "vc",
+        r: "x2",
+        b: "b",
+    }),
 };
 
 static FLOW_CHART_INPUT_OUTPUT_CMDS: &[PathCommandDef] = &[
@@ -3965,9 +6561,13 @@ static FLOW_CHART_INPUT_OUTPUT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "4", y: "5" },
     PathCommandDef::Close,
 ];
-static FLOW_CHART_INPUT_OUTPUT_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_INPUT_OUTPUT_CMDS, w: Some(5), h: Some(5), fill: PathFill::Norm, stroke: true },
-];
+static FLOW_CHART_INPUT_OUTPUT_PATHS: &[PathDef] = &[PathDef {
+    commands: FLOW_CHART_INPUT_OUTPUT_CMDS,
+    w: Some(5),
+    h: Some(5),
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static FLOW_CHART_INPUT_OUTPUT_GUIDES: &[GuideDef] = &[
     gd!("x3", MulDiv, "w", "2", "5"),
     gd!("x4", MulDiv, "w", "3", "5"),
@@ -3978,7 +6578,12 @@ static FLOW_CHART_INPUT_OUTPUT: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_INPUT_OUTPUT_GUIDES,
     paths: FLOW_CHART_INPUT_OUTPUT_PATHS,
-    text_rect: Some(TextRectDef { l: "wd5", t: "t", r: "x5", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "wd5",
+        t: "t",
+        r: "x5",
+        b: "b",
+    }),
 };
 
 static FLOW_CHART_INTERNAL_STORAGE_P0_CMDS: &[PathCommandDef] = &[
@@ -4002,98 +6607,237 @@ static FLOW_CHART_INTERNAL_STORAGE_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::Close,
 ];
 static FLOW_CHART_INTERNAL_STORAGE_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_INTERNAL_STORAGE_P0_CMDS, w: Some(1), h: Some(1), fill: PathFill::Norm, stroke: false },
-    PathDef { commands: FLOW_CHART_INTERNAL_STORAGE_P1_CMDS, w: Some(8), h: Some(8), fill: PathFill::None, stroke: true },
-    PathDef { commands: FLOW_CHART_INTERNAL_STORAGE_P2_CMDS, w: Some(1), h: Some(1), fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: FLOW_CHART_INTERNAL_STORAGE_P0_CMDS,
+        w: Some(1),
+        h: Some(1),
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: FLOW_CHART_INTERNAL_STORAGE_P1_CMDS,
+        w: Some(8),
+        h: Some(8),
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: FLOW_CHART_INTERNAL_STORAGE_P2_CMDS,
+        w: Some(1),
+        h: Some(1),
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static FLOW_CHART_INTERNAL_STORAGE: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: &[],
     paths: FLOW_CHART_INTERNAL_STORAGE_PATHS,
-    text_rect: Some(TextRectDef { l: "wd8", t: "hd8", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "wd8",
+        t: "hd8",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static FLOW_CHART_MAGNETIC_DISK_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "0", y: "1" },
-    PathCommandDef::ArcTo { wr: "3", hr: "1", st_ang: "cd2", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "3",
+        hr: "1",
+        st_ang: "cd2",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "6", y: "5" },
-    PathCommandDef::ArcTo { wr: "3", hr: "1", st_ang: "0", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "3",
+        hr: "1",
+        st_ang: "0",
+        sw_ang: "cd2",
+    },
     PathCommandDef::Close,
 ];
 static FLOW_CHART_MAGNETIC_DISK_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "6", y: "1" },
-    PathCommandDef::ArcTo { wr: "3", hr: "1", st_ang: "0", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "3",
+        hr: "1",
+        st_ang: "0",
+        sw_ang: "cd2",
+    },
 ];
 static FLOW_CHART_MAGNETIC_DISK_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "0", y: "1" },
-    PathCommandDef::ArcTo { wr: "3", hr: "1", st_ang: "cd2", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "3",
+        hr: "1",
+        st_ang: "cd2",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "6", y: "5" },
-    PathCommandDef::ArcTo { wr: "3", hr: "1", st_ang: "0", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "3",
+        hr: "1",
+        st_ang: "0",
+        sw_ang: "cd2",
+    },
     PathCommandDef::Close,
 ];
 static FLOW_CHART_MAGNETIC_DISK_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_MAGNETIC_DISK_P0_CMDS, w: Some(6), h: Some(6), fill: PathFill::Norm, stroke: false },
-    PathDef { commands: FLOW_CHART_MAGNETIC_DISK_P1_CMDS, w: Some(6), h: Some(6), fill: PathFill::None, stroke: true },
-    PathDef { commands: FLOW_CHART_MAGNETIC_DISK_P2_CMDS, w: Some(6), h: Some(6), fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: FLOW_CHART_MAGNETIC_DISK_P0_CMDS,
+        w: Some(6),
+        h: Some(6),
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: FLOW_CHART_MAGNETIC_DISK_P1_CMDS,
+        w: Some(6),
+        h: Some(6),
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: FLOW_CHART_MAGNETIC_DISK_P2_CMDS,
+        w: Some(6),
+        h: Some(6),
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
-static FLOW_CHART_MAGNETIC_DISK_GUIDES: &[GuideDef] = &[
-    gd!("y3", MulDiv, "h", "5", "6"),
-];
+static FLOW_CHART_MAGNETIC_DISK_GUIDES: &[GuideDef] = &[gd!("y3", MulDiv, "h", "5", "6")];
 static FLOW_CHART_MAGNETIC_DISK: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_MAGNETIC_DISK_GUIDES,
     paths: FLOW_CHART_MAGNETIC_DISK_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "hd3", r: "r", b: "y3" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "hd3",
+        r: "r",
+        b: "y3",
+    }),
 };
 
 static FLOW_CHART_MAGNETIC_DRUM_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "1", y: "0" },
     PathCommandDef::LineTo { x: "5", y: "0" },
-    PathCommandDef::ArcTo { wr: "1", hr: "3", st_ang: "3cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "1",
+        hr: "3",
+        st_ang: "3cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "1", y: "6" },
-    PathCommandDef::ArcTo { wr: "1", hr: "3", st_ang: "cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "1",
+        hr: "3",
+        st_ang: "cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::Close,
 ];
 static FLOW_CHART_MAGNETIC_DRUM_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "5", y: "6" },
-    PathCommandDef::ArcTo { wr: "1", hr: "3", st_ang: "cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "1",
+        hr: "3",
+        st_ang: "cd4",
+        sw_ang: "cd2",
+    },
 ];
 static FLOW_CHART_MAGNETIC_DRUM_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "1", y: "0" },
     PathCommandDef::LineTo { x: "5", y: "0" },
-    PathCommandDef::ArcTo { wr: "1", hr: "3", st_ang: "3cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "1",
+        hr: "3",
+        st_ang: "3cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "1", y: "6" },
-    PathCommandDef::ArcTo { wr: "1", hr: "3", st_ang: "cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "1",
+        hr: "3",
+        st_ang: "cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::Close,
 ];
 static FLOW_CHART_MAGNETIC_DRUM_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_MAGNETIC_DRUM_P0_CMDS, w: Some(6), h: Some(6), fill: PathFill::Norm, stroke: false },
-    PathDef { commands: FLOW_CHART_MAGNETIC_DRUM_P1_CMDS, w: Some(6), h: Some(6), fill: PathFill::None, stroke: true },
-    PathDef { commands: FLOW_CHART_MAGNETIC_DRUM_P2_CMDS, w: Some(6), h: Some(6), fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: FLOW_CHART_MAGNETIC_DRUM_P0_CMDS,
+        w: Some(6),
+        h: Some(6),
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: FLOW_CHART_MAGNETIC_DRUM_P1_CMDS,
+        w: Some(6),
+        h: Some(6),
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: FLOW_CHART_MAGNETIC_DRUM_P2_CMDS,
+        w: Some(6),
+        h: Some(6),
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
-static FLOW_CHART_MAGNETIC_DRUM_GUIDES: &[GuideDef] = &[
-    gd!("x2", MulDiv, "w", "2", "3"),
-];
+static FLOW_CHART_MAGNETIC_DRUM_GUIDES: &[GuideDef] = &[gd!("x2", MulDiv, "w", "2", "3")];
 static FLOW_CHART_MAGNETIC_DRUM: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_MAGNETIC_DRUM_GUIDES,
     paths: FLOW_CHART_MAGNETIC_DRUM_PATHS,
-    text_rect: Some(TextRectDef { l: "wd6", t: "t", r: "x2", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "wd6",
+        t: "t",
+        r: "x2",
+        b: "b",
+    }),
 };
 
 static FLOW_CHART_MAGNETIC_TAPE_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "hc", y: "b" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd4", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd2", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "3cd4", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "0", sw_ang: "ang1" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "0",
+        sw_ang: "ang1",
+    },
     PathCommandDef::LineTo { x: "r", y: "ib" },
     PathCommandDef::LineTo { x: "r", y: "b" },
     PathCommandDef::Close,
 ];
-static FLOW_CHART_MAGNETIC_TAPE_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_MAGNETIC_TAPE_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static FLOW_CHART_MAGNETIC_TAPE_PATHS: &[PathDef] = &[PathDef {
+    commands: FLOW_CHART_MAGNETIC_TAPE_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static FLOW_CHART_MAGNETIC_TAPE_GUIDES: &[GuideDef] = &[
     gd!("idx", Cos, "wd2", "2700000", ""),
     gd!("idy", Sin, "hd2", "2700000", ""),
@@ -4107,7 +6851,12 @@ static FLOW_CHART_MAGNETIC_TAPE: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_MAGNETIC_TAPE_GUIDES,
     paths: FLOW_CHART_MAGNETIC_TAPE_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static FLOW_CHART_MANUAL_INPUT_CMDS: &[PathCommandDef] = &[
@@ -4117,14 +6866,23 @@ static FLOW_CHART_MANUAL_INPUT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "0", y: "5" },
     PathCommandDef::Close,
 ];
-static FLOW_CHART_MANUAL_INPUT_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_MANUAL_INPUT_CMDS, w: Some(5), h: Some(5), fill: PathFill::Norm, stroke: true },
-];
+static FLOW_CHART_MANUAL_INPUT_PATHS: &[PathDef] = &[PathDef {
+    commands: FLOW_CHART_MANUAL_INPUT_CMDS,
+    w: Some(5),
+    h: Some(5),
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static FLOW_CHART_MANUAL_INPUT: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: &[],
     paths: FLOW_CHART_MANUAL_INPUT_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "hd5", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "hd5",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static FLOW_CHART_MANUAL_OPERATION_CMDS: &[PathCommandDef] = &[
@@ -4134,9 +6892,13 @@ static FLOW_CHART_MANUAL_OPERATION_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "1", y: "5" },
     PathCommandDef::Close,
 ];
-static FLOW_CHART_MANUAL_OPERATION_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_MANUAL_OPERATION_CMDS, w: Some(5), h: Some(5), fill: PathFill::Norm, stroke: true },
-];
+static FLOW_CHART_MANUAL_OPERATION_PATHS: &[PathDef] = &[PathDef {
+    commands: FLOW_CHART_MANUAL_OPERATION_CMDS,
+    w: Some(5),
+    h: Some(5),
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static FLOW_CHART_MANUAL_OPERATION_GUIDES: &[GuideDef] = &[
     gd!("x3", MulDiv, "w", "4", "5"),
     gd!("x4", MulDiv, "w", "9", "10"),
@@ -4145,7 +6907,12 @@ static FLOW_CHART_MANUAL_OPERATION: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_MANUAL_OPERATION_GUIDES,
     paths: FLOW_CHART_MANUAL_OPERATION_PATHS,
-    text_rect: Some(TextRectDef { l: "wd5", t: "t", r: "x3", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "wd5",
+        t: "t",
+        r: "x3",
+        b: "b",
+    }),
 };
 
 static FLOW_CHART_MERGE_CMDS: &[PathCommandDef] = &[
@@ -4154,76 +6921,230 @@ static FLOW_CHART_MERGE_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "1", y: "2" },
     PathCommandDef::Close,
 ];
-static FLOW_CHART_MERGE_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_MERGE_CMDS, w: Some(2), h: Some(2), fill: PathFill::Norm, stroke: true },
-];
-static FLOW_CHART_MERGE_GUIDES: &[GuideDef] = &[
-    gd!("x2", MulDiv, "w", "3", "4"),
-];
+static FLOW_CHART_MERGE_PATHS: &[PathDef] = &[PathDef {
+    commands: FLOW_CHART_MERGE_CMDS,
+    w: Some(2),
+    h: Some(2),
+    fill: PathFill::Norm,
+    stroke: true,
+}];
+static FLOW_CHART_MERGE_GUIDES: &[GuideDef] = &[gd!("x2", MulDiv, "w", "3", "4")];
 static FLOW_CHART_MERGE: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_MERGE_GUIDES,
     paths: FLOW_CHART_MERGE_PATHS,
-    text_rect: Some(TextRectDef { l: "wd4", t: "t", r: "x2", b: "vc" }),
+    text_rect: Some(TextRectDef {
+        l: "wd4",
+        t: "t",
+        r: "x2",
+        b: "vc",
+    }),
 };
 
 static FLOW_CHART_MULTIDOCUMENT_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "0", y: "20782" },
-    PathCommandDef::CubicBezTo { x1: "9298", y1: "23542", x2: "9298", y2: "18022", x3: "18595", y3: "18022" },
-    PathCommandDef::LineTo { x: "18595", y: "3675" },
+    PathCommandDef::CubicBezTo {
+        x1: "9298",
+        y1: "23542",
+        x2: "9298",
+        y2: "18022",
+        x3: "18595",
+        y3: "18022",
+    },
+    PathCommandDef::LineTo {
+        x: "18595",
+        y: "3675",
+    },
     PathCommandDef::LineTo { x: "0", y: "3675" },
     PathCommandDef::Close,
-    PathCommandDef::MoveTo { x: "1532", y: "3675" },
-    PathCommandDef::LineTo { x: "1532", y: "1815" },
-    PathCommandDef::LineTo { x: "20000", y: "1815" },
-    PathCommandDef::LineTo { x: "20000", y: "16252" },
-    PathCommandDef::CubicBezTo { x1: "19298", y1: "16252", x2: "18595", y2: "16352", x3: "18595", y3: "16352" },
-    PathCommandDef::LineTo { x: "18595", y: "3675" },
+    PathCommandDef::MoveTo {
+        x: "1532",
+        y: "3675",
+    },
+    PathCommandDef::LineTo {
+        x: "1532",
+        y: "1815",
+    },
+    PathCommandDef::LineTo {
+        x: "20000",
+        y: "1815",
+    },
+    PathCommandDef::LineTo {
+        x: "20000",
+        y: "16252",
+    },
+    PathCommandDef::CubicBezTo {
+        x1: "19298",
+        y1: "16252",
+        x2: "18595",
+        y2: "16352",
+        x3: "18595",
+        y3: "16352",
+    },
+    PathCommandDef::LineTo {
+        x: "18595",
+        y: "3675",
+    },
     PathCommandDef::Close,
-    PathCommandDef::MoveTo { x: "2972", y: "1815" },
+    PathCommandDef::MoveTo {
+        x: "2972",
+        y: "1815",
+    },
     PathCommandDef::LineTo { x: "2972", y: "0" },
     PathCommandDef::LineTo { x: "21600", y: "0" },
-    PathCommandDef::LineTo { x: "21600", y: "14392" },
-    PathCommandDef::CubicBezTo { x1: "20800", y1: "14392", x2: "20000", y2: "14467", x3: "20000", y3: "14467" },
-    PathCommandDef::LineTo { x: "20000", y: "1815" },
+    PathCommandDef::LineTo {
+        x: "21600",
+        y: "14392",
+    },
+    PathCommandDef::CubicBezTo {
+        x1: "20800",
+        y1: "14392",
+        x2: "20000",
+        y2: "14467",
+        x3: "20000",
+        y3: "14467",
+    },
+    PathCommandDef::LineTo {
+        x: "20000",
+        y: "1815",
+    },
     PathCommandDef::Close,
 ];
 static FLOW_CHART_MULTIDOCUMENT_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "0", y: "3675" },
-    PathCommandDef::LineTo { x: "18595", y: "3675" },
-    PathCommandDef::LineTo { x: "18595", y: "18022" },
-    PathCommandDef::CubicBezTo { x1: "9298", y1: "18022", x2: "9298", y2: "23542", x3: "0", y3: "20782" },
+    PathCommandDef::LineTo {
+        x: "18595",
+        y: "3675",
+    },
+    PathCommandDef::LineTo {
+        x: "18595",
+        y: "18022",
+    },
+    PathCommandDef::CubicBezTo {
+        x1: "9298",
+        y1: "18022",
+        x2: "9298",
+        y2: "23542",
+        x3: "0",
+        y3: "20782",
+    },
     PathCommandDef::Close,
-    PathCommandDef::MoveTo { x: "1532", y: "3675" },
-    PathCommandDef::LineTo { x: "1532", y: "1815" },
-    PathCommandDef::LineTo { x: "20000", y: "1815" },
-    PathCommandDef::LineTo { x: "20000", y: "16252" },
-    PathCommandDef::CubicBezTo { x1: "19298", y1: "16252", x2: "18595", y2: "16352", x3: "18595", y3: "16352" },
-    PathCommandDef::MoveTo { x: "2972", y: "1815" },
+    PathCommandDef::MoveTo {
+        x: "1532",
+        y: "3675",
+    },
+    PathCommandDef::LineTo {
+        x: "1532",
+        y: "1815",
+    },
+    PathCommandDef::LineTo {
+        x: "20000",
+        y: "1815",
+    },
+    PathCommandDef::LineTo {
+        x: "20000",
+        y: "16252",
+    },
+    PathCommandDef::CubicBezTo {
+        x1: "19298",
+        y1: "16252",
+        x2: "18595",
+        y2: "16352",
+        x3: "18595",
+        y3: "16352",
+    },
+    PathCommandDef::MoveTo {
+        x: "2972",
+        y: "1815",
+    },
     PathCommandDef::LineTo { x: "2972", y: "0" },
     PathCommandDef::LineTo { x: "21600", y: "0" },
-    PathCommandDef::LineTo { x: "21600", y: "14392" },
-    PathCommandDef::CubicBezTo { x1: "20800", y1: "14392", x2: "20000", y2: "14467", x3: "20000", y3: "14467" },
+    PathCommandDef::LineTo {
+        x: "21600",
+        y: "14392",
+    },
+    PathCommandDef::CubicBezTo {
+        x1: "20800",
+        y1: "14392",
+        x2: "20000",
+        y2: "14467",
+        x3: "20000",
+        y3: "14467",
+    },
 ];
 static FLOW_CHART_MULTIDOCUMENT_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "0", y: "20782" },
-    PathCommandDef::CubicBezTo { x1: "9298", y1: "23542", x2: "9298", y2: "18022", x3: "18595", y3: "18022" },
-    PathCommandDef::LineTo { x: "18595", y: "16352" },
-    PathCommandDef::CubicBezTo { x1: "18595", y1: "16352", x2: "19298", y2: "16252", x3: "20000", y3: "16252" },
-    PathCommandDef::LineTo { x: "20000", y: "14467" },
-    PathCommandDef::CubicBezTo { x1: "20000", y1: "14467", x2: "20800", y2: "14392", x3: "21600", y3: "14392" },
+    PathCommandDef::CubicBezTo {
+        x1: "9298",
+        y1: "23542",
+        x2: "9298",
+        y2: "18022",
+        x3: "18595",
+        y3: "18022",
+    },
+    PathCommandDef::LineTo {
+        x: "18595",
+        y: "16352",
+    },
+    PathCommandDef::CubicBezTo {
+        x1: "18595",
+        y1: "16352",
+        x2: "19298",
+        y2: "16252",
+        x3: "20000",
+        y3: "16252",
+    },
+    PathCommandDef::LineTo {
+        x: "20000",
+        y: "14467",
+    },
+    PathCommandDef::CubicBezTo {
+        x1: "20000",
+        y1: "14467",
+        x2: "20800",
+        y2: "14392",
+        x3: "21600",
+        y3: "14392",
+    },
     PathCommandDef::LineTo { x: "21600", y: "0" },
     PathCommandDef::LineTo { x: "2972", y: "0" },
-    PathCommandDef::LineTo { x: "2972", y: "1815" },
-    PathCommandDef::LineTo { x: "1532", y: "1815" },
-    PathCommandDef::LineTo { x: "1532", y: "3675" },
+    PathCommandDef::LineTo {
+        x: "2972",
+        y: "1815",
+    },
+    PathCommandDef::LineTo {
+        x: "1532",
+        y: "1815",
+    },
+    PathCommandDef::LineTo {
+        x: "1532",
+        y: "3675",
+    },
     PathCommandDef::LineTo { x: "0", y: "3675" },
     PathCommandDef::Close,
 ];
 static FLOW_CHART_MULTIDOCUMENT_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_MULTIDOCUMENT_P0_CMDS, w: Some(21600), h: Some(21600), fill: PathFill::Norm, stroke: false },
-    PathDef { commands: FLOW_CHART_MULTIDOCUMENT_P1_CMDS, w: Some(21600), h: Some(21600), fill: PathFill::None, stroke: true },
-    PathDef { commands: FLOW_CHART_MULTIDOCUMENT_P2_CMDS, w: Some(21600), h: Some(21600), fill: PathFill::None, stroke: false },
+    PathDef {
+        commands: FLOW_CHART_MULTIDOCUMENT_P0_CMDS,
+        w: Some(21600),
+        h: Some(21600),
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: FLOW_CHART_MULTIDOCUMENT_P1_CMDS,
+        w: Some(21600),
+        h: Some(21600),
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: FLOW_CHART_MULTIDOCUMENT_P2_CMDS,
+        w: Some(21600),
+        h: Some(21600),
+        fill: PathFill::None,
+        stroke: false,
+    },
 ];
 static FLOW_CHART_MULTIDOCUMENT_GUIDES: &[GuideDef] = &[
     gd!("y2", MulDiv, "h", "3675", "21600"),
@@ -4236,7 +7157,12 @@ static FLOW_CHART_MULTIDOCUMENT: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_MULTIDOCUMENT_GUIDES,
     paths: FLOW_CHART_MULTIDOCUMENT_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "y2", r: "x5", b: "y8" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "y2",
+        r: "x5",
+        b: "y8",
+    }),
 };
 
 static FLOW_CHART_OFFLINE_STORAGE_P0_CMDS: &[PathCommandDef] = &[
@@ -4256,18 +7182,39 @@ static FLOW_CHART_OFFLINE_STORAGE_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::Close,
 ];
 static FLOW_CHART_OFFLINE_STORAGE_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_OFFLINE_STORAGE_P0_CMDS, w: Some(2), h: Some(2), fill: PathFill::Norm, stroke: false },
-    PathDef { commands: FLOW_CHART_OFFLINE_STORAGE_P1_CMDS, w: Some(5), h: Some(5), fill: PathFill::None, stroke: true },
-    PathDef { commands: FLOW_CHART_OFFLINE_STORAGE_P2_CMDS, w: Some(2), h: Some(2), fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: FLOW_CHART_OFFLINE_STORAGE_P0_CMDS,
+        w: Some(2),
+        h: Some(2),
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: FLOW_CHART_OFFLINE_STORAGE_P1_CMDS,
+        w: Some(5),
+        h: Some(5),
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: FLOW_CHART_OFFLINE_STORAGE_P2_CMDS,
+        w: Some(2),
+        h: Some(2),
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
-static FLOW_CHART_OFFLINE_STORAGE_GUIDES: &[GuideDef] = &[
-    gd!("x4", MulDiv, "w", "3", "4"),
-];
+static FLOW_CHART_OFFLINE_STORAGE_GUIDES: &[GuideDef] = &[gd!("x4", MulDiv, "w", "3", "4")];
 static FLOW_CHART_OFFLINE_STORAGE: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_OFFLINE_STORAGE_GUIDES,
     paths: FLOW_CHART_OFFLINE_STORAGE_PATHS,
-    text_rect: Some(TextRectDef { l: "wd4", t: "t", r: "x4", b: "vc" }),
+    text_rect: Some(TextRectDef {
+        l: "wd4",
+        t: "t",
+        r: "x4",
+        b: "vc",
+    }),
 };
 
 static FLOW_CHART_OFFPAGE_CONNECTOR_CMDS: &[PathCommandDef] = &[
@@ -4278,46 +7225,90 @@ static FLOW_CHART_OFFPAGE_CONNECTOR_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "0", y: "8" },
     PathCommandDef::Close,
 ];
-static FLOW_CHART_OFFPAGE_CONNECTOR_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_OFFPAGE_CONNECTOR_CMDS, w: Some(10), h: Some(10), fill: PathFill::Norm, stroke: true },
-];
-static FLOW_CHART_OFFPAGE_CONNECTOR_GUIDES: &[GuideDef] = &[
-    gd!("y1", MulDiv, "h", "4", "5"),
-];
+static FLOW_CHART_OFFPAGE_CONNECTOR_PATHS: &[PathDef] = &[PathDef {
+    commands: FLOW_CHART_OFFPAGE_CONNECTOR_CMDS,
+    w: Some(10),
+    h: Some(10),
+    fill: PathFill::Norm,
+    stroke: true,
+}];
+static FLOW_CHART_OFFPAGE_CONNECTOR_GUIDES: &[GuideDef] = &[gd!("y1", MulDiv, "h", "4", "5")];
 static FLOW_CHART_OFFPAGE_CONNECTOR: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_OFFPAGE_CONNECTOR_GUIDES,
     paths: FLOW_CHART_OFFPAGE_CONNECTOR_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "y1" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "y1",
+    }),
 };
 
 static FLOW_CHART_ONLINE_STORAGE_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "1", y: "0" },
     PathCommandDef::LineTo { x: "6", y: "0" },
-    PathCommandDef::ArcTo { wr: "1", hr: "3", st_ang: "3cd4", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "1",
+        hr: "3",
+        st_ang: "3cd4",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::LineTo { x: "1", y: "6" },
-    PathCommandDef::ArcTo { wr: "1", hr: "3", st_ang: "cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "1",
+        hr: "3",
+        st_ang: "cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::Close,
 ];
-static FLOW_CHART_ONLINE_STORAGE_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_ONLINE_STORAGE_CMDS, w: Some(6), h: Some(6), fill: PathFill::Norm, stroke: true },
-];
-static FLOW_CHART_ONLINE_STORAGE_GUIDES: &[GuideDef] = &[
-    gd!("x2", MulDiv, "w", "5", "6"),
-];
+static FLOW_CHART_ONLINE_STORAGE_PATHS: &[PathDef] = &[PathDef {
+    commands: FLOW_CHART_ONLINE_STORAGE_CMDS,
+    w: Some(6),
+    h: Some(6),
+    fill: PathFill::Norm,
+    stroke: true,
+}];
+static FLOW_CHART_ONLINE_STORAGE_GUIDES: &[GuideDef] = &[gd!("x2", MulDiv, "w", "5", "6")];
 static FLOW_CHART_ONLINE_STORAGE: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_ONLINE_STORAGE_GUIDES,
     paths: FLOW_CHART_ONLINE_STORAGE_PATHS,
-    text_rect: Some(TextRectDef { l: "wd6", t: "t", r: "x2", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "wd6",
+        t: "t",
+        r: "x2",
+        b: "b",
+    }),
 };
 
 static FLOW_CHART_OR_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "vc" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd2", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "3cd4", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "0", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
 static FLOW_CHART_OR_P1_CMDS: &[PathCommandDef] = &[
@@ -4328,16 +7319,54 @@ static FLOW_CHART_OR_P1_CMDS: &[PathCommandDef] = &[
 ];
 static FLOW_CHART_OR_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "vc" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd2", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "3cd4", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "0", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
 static FLOW_CHART_OR_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_OR_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: FLOW_CHART_OR_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-    PathDef { commands: FLOW_CHART_OR_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: FLOW_CHART_OR_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: FLOW_CHART_OR_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: FLOW_CHART_OR_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static FLOW_CHART_OR_GUIDES: &[GuideDef] = &[
     gd!("idx", Cos, "wd2", "2700000", ""),
@@ -4351,7 +7380,12 @@ static FLOW_CHART_OR: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_OR_GUIDES,
     paths: FLOW_CHART_OR_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static FLOW_CHART_PREDEFINED_PROCESS_P0_CMDS: &[PathCommandDef] = &[
@@ -4375,18 +7409,39 @@ static FLOW_CHART_PREDEFINED_PROCESS_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::Close,
 ];
 static FLOW_CHART_PREDEFINED_PROCESS_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_PREDEFINED_PROCESS_P0_CMDS, w: Some(1), h: Some(1), fill: PathFill::Norm, stroke: false },
-    PathDef { commands: FLOW_CHART_PREDEFINED_PROCESS_P1_CMDS, w: Some(8), h: Some(8), fill: PathFill::None, stroke: true },
-    PathDef { commands: FLOW_CHART_PREDEFINED_PROCESS_P2_CMDS, w: Some(1), h: Some(1), fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: FLOW_CHART_PREDEFINED_PROCESS_P0_CMDS,
+        w: Some(1),
+        h: Some(1),
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: FLOW_CHART_PREDEFINED_PROCESS_P1_CMDS,
+        w: Some(8),
+        h: Some(8),
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: FLOW_CHART_PREDEFINED_PROCESS_P2_CMDS,
+        w: Some(1),
+        h: Some(1),
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
-static FLOW_CHART_PREDEFINED_PROCESS_GUIDES: &[GuideDef] = &[
-    gd!("x2", MulDiv, "w", "7", "8"),
-];
+static FLOW_CHART_PREDEFINED_PROCESS_GUIDES: &[GuideDef] = &[gd!("x2", MulDiv, "w", "7", "8")];
 static FLOW_CHART_PREDEFINED_PROCESS: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_PREDEFINED_PROCESS_GUIDES,
     paths: FLOW_CHART_PREDEFINED_PROCESS_PATHS,
-    text_rect: Some(TextRectDef { l: "wd8", t: "t", r: "x2", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "wd8",
+        t: "t",
+        r: "x2",
+        b: "b",
+    }),
 };
 
 static FLOW_CHART_PREPARATION_CMDS: &[PathCommandDef] = &[
@@ -4398,17 +7453,24 @@ static FLOW_CHART_PREPARATION_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "2", y: "10" },
     PathCommandDef::Close,
 ];
-static FLOW_CHART_PREPARATION_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_PREPARATION_CMDS, w: Some(10), h: Some(10), fill: PathFill::Norm, stroke: true },
-];
-static FLOW_CHART_PREPARATION_GUIDES: &[GuideDef] = &[
-    gd!("x2", MulDiv, "w", "4", "5"),
-];
+static FLOW_CHART_PREPARATION_PATHS: &[PathDef] = &[PathDef {
+    commands: FLOW_CHART_PREPARATION_CMDS,
+    w: Some(10),
+    h: Some(10),
+    fill: PathFill::Norm,
+    stroke: true,
+}];
+static FLOW_CHART_PREPARATION_GUIDES: &[GuideDef] = &[gd!("x2", MulDiv, "w", "4", "5")];
 static FLOW_CHART_PREPARATION: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_PREPARATION_GUIDES,
     paths: FLOW_CHART_PREPARATION_PATHS,
-    text_rect: Some(TextRectDef { l: "wd5", t: "t", r: "x2", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "wd5",
+        t: "t",
+        r: "x2",
+        b: "b",
+    }),
 };
 
 static FLOW_CHART_PROCESS_CMDS: &[PathCommandDef] = &[
@@ -4418,14 +7480,23 @@ static FLOW_CHART_PROCESS_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "0", y: "1" },
     PathCommandDef::Close,
 ];
-static FLOW_CHART_PROCESS_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_PROCESS_CMDS, w: Some(1), h: Some(1), fill: PathFill::Norm, stroke: true },
-];
+static FLOW_CHART_PROCESS_PATHS: &[PathDef] = &[PathDef {
+    commands: FLOW_CHART_PROCESS_CMDS,
+    w: Some(1),
+    h: Some(1),
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static FLOW_CHART_PROCESS: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: &[],
     paths: FLOW_CHART_PROCESS_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static FLOW_CHART_PUNCHED_CARD_CMDS: &[PathCommandDef] = &[
@@ -4436,28 +7507,61 @@ static FLOW_CHART_PUNCHED_CARD_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "0", y: "5" },
     PathCommandDef::Close,
 ];
-static FLOW_CHART_PUNCHED_CARD_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_PUNCHED_CARD_CMDS, w: Some(5), h: Some(5), fill: PathFill::Norm, stroke: true },
-];
+static FLOW_CHART_PUNCHED_CARD_PATHS: &[PathDef] = &[PathDef {
+    commands: FLOW_CHART_PUNCHED_CARD_CMDS,
+    w: Some(5),
+    h: Some(5),
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static FLOW_CHART_PUNCHED_CARD: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: &[],
     paths: FLOW_CHART_PUNCHED_CARD_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "hd5", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "hd5",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static FLOW_CHART_PUNCHED_TAPE_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "0", y: "2" },
-    PathCommandDef::ArcTo { wr: "5", hr: "2", st_ang: "cd2", sw_ang: "-10800000" },
-    PathCommandDef::ArcTo { wr: "5", hr: "2", st_ang: "cd2", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "5",
+        hr: "2",
+        st_ang: "cd2",
+        sw_ang: "-10800000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "5",
+        hr: "2",
+        st_ang: "cd2",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "20", y: "18" },
-    PathCommandDef::ArcTo { wr: "5", hr: "2", st_ang: "0", sw_ang: "-10800000" },
-    PathCommandDef::ArcTo { wr: "5", hr: "2", st_ang: "0", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "5",
+        hr: "2",
+        st_ang: "0",
+        sw_ang: "-10800000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "5",
+        hr: "2",
+        st_ang: "0",
+        sw_ang: "cd2",
+    },
     PathCommandDef::Close,
 ];
-static FLOW_CHART_PUNCHED_TAPE_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_PUNCHED_TAPE_CMDS, w: Some(20), h: Some(20), fill: PathFill::Norm, stroke: true },
-];
+static FLOW_CHART_PUNCHED_TAPE_PATHS: &[PathDef] = &[PathDef {
+    commands: FLOW_CHART_PUNCHED_TAPE_CMDS,
+    w: Some(20),
+    h: Some(20),
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static FLOW_CHART_PUNCHED_TAPE_GUIDES: &[GuideDef] = &[
     gd!("y2", MulDiv, "h", "9", "10"),
     gd!("ib", MulDiv, "h", "4", "5"),
@@ -4466,7 +7570,12 @@ static FLOW_CHART_PUNCHED_TAPE: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_PUNCHED_TAPE_GUIDES,
     paths: FLOW_CHART_PUNCHED_TAPE_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "hd5", r: "r", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "hd5",
+        r: "r",
+        b: "ib",
+    }),
 };
 
 static FLOW_CHART_SORT_P0_CMDS: &[PathCommandDef] = &[
@@ -4488,9 +7597,27 @@ static FLOW_CHART_SORT_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::Close,
 ];
 static FLOW_CHART_SORT_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_SORT_P0_CMDS, w: Some(2), h: Some(2), fill: PathFill::Norm, stroke: false },
-    PathDef { commands: FLOW_CHART_SORT_P1_CMDS, w: Some(2), h: Some(2), fill: PathFill::None, stroke: true },
-    PathDef { commands: FLOW_CHART_SORT_P2_CMDS, w: Some(2), h: Some(2), fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: FLOW_CHART_SORT_P0_CMDS,
+        w: Some(2),
+        h: Some(2),
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: FLOW_CHART_SORT_P1_CMDS,
+        w: Some(2),
+        h: Some(2),
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: FLOW_CHART_SORT_P2_CMDS,
+        w: Some(2),
+        h: Some(2),
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static FLOW_CHART_SORT_GUIDES: &[GuideDef] = &[
     gd!("ir", MulDiv, "w", "3", "4"),
@@ -4500,15 +7627,40 @@ static FLOW_CHART_SORT: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_SORT_GUIDES,
     paths: FLOW_CHART_SORT_PATHS,
-    text_rect: Some(TextRectDef { l: "wd4", t: "hd4", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "wd4",
+        t: "hd4",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static FLOW_CHART_SUMMING_JUNCTION_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "vc" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd2", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "3cd4", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "0", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
 static FLOW_CHART_SUMMING_JUNCTION_P1_CMDS: &[PathCommandDef] = &[
@@ -4519,16 +7671,54 @@ static FLOW_CHART_SUMMING_JUNCTION_P1_CMDS: &[PathCommandDef] = &[
 ];
 static FLOW_CHART_SUMMING_JUNCTION_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "vc" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd2", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "3cd4", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "0", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
 static FLOW_CHART_SUMMING_JUNCTION_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_SUMMING_JUNCTION_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: FLOW_CHART_SUMMING_JUNCTION_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-    PathDef { commands: FLOW_CHART_SUMMING_JUNCTION_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: FLOW_CHART_SUMMING_JUNCTION_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: FLOW_CHART_SUMMING_JUNCTION_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: FLOW_CHART_SUMMING_JUNCTION_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static FLOW_CHART_SUMMING_JUNCTION_GUIDES: &[GuideDef] = &[
     gd!("idx", Cos, "wd2", "2700000", ""),
@@ -4542,20 +7732,42 @@ static FLOW_CHART_SUMMING_JUNCTION: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_SUMMING_JUNCTION_GUIDES,
     paths: FLOW_CHART_SUMMING_JUNCTION_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static FLOW_CHART_TERMINATOR_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "3475", y: "0" },
     PathCommandDef::LineTo { x: "18125", y: "0" },
-    PathCommandDef::ArcTo { wr: "3475", hr: "10800", st_ang: "3cd4", sw_ang: "cd2" },
-    PathCommandDef::LineTo { x: "3475", y: "21600" },
-    PathCommandDef::ArcTo { wr: "3475", hr: "10800", st_ang: "cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "3475",
+        hr: "10800",
+        st_ang: "3cd4",
+        sw_ang: "cd2",
+    },
+    PathCommandDef::LineTo {
+        x: "3475",
+        y: "21600",
+    },
+    PathCommandDef::ArcTo {
+        wr: "3475",
+        hr: "10800",
+        st_ang: "cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::Close,
 ];
-static FLOW_CHART_TERMINATOR_PATHS: &[PathDef] = &[
-    PathDef { commands: FLOW_CHART_TERMINATOR_CMDS, w: Some(21600), h: Some(21600), fill: PathFill::Norm, stroke: true },
-];
+static FLOW_CHART_TERMINATOR_PATHS: &[PathDef] = &[PathDef {
+    commands: FLOW_CHART_TERMINATOR_CMDS,
+    w: Some(21600),
+    h: Some(21600),
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static FLOW_CHART_TERMINATOR_GUIDES: &[GuideDef] = &[
     gd!("il", MulDiv, "w", "1018", "21600"),
     gd!("ir", MulDiv, "w", "20582", "21600"),
@@ -4566,7 +7778,12 @@ static FLOW_CHART_TERMINATOR: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FLOW_CHART_TERMINATOR_GUIDES,
     paths: FLOW_CHART_TERMINATOR_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static FOLDED_CORNER_P0_CMDS: &[PathCommandDef] = &[
@@ -4594,9 +7811,27 @@ static FOLDED_CORNER_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "r", y: "y2" },
 ];
 static FOLDED_CORNER_PATHS: &[PathDef] = &[
-    PathDef { commands: FOLDED_CORNER_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: FOLDED_CORNER_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: FOLDED_CORNER_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: FOLDED_CORNER_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: FOLDED_CORNER_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: FOLDED_CORNER_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static FOLDED_CORNER_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
@@ -4611,7 +7846,12 @@ static FOLDED_CORNER: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 16667)],
     guides: FOLDED_CORNER_GUIDES,
     paths: FOLDED_CORNER_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "y2" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "y2",
+    }),
 };
 
 static FRAME_CMDS: &[PathCommandDef] = &[
@@ -4626,9 +7866,13 @@ static FRAME_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x4", y: "x1" },
     PathCommandDef::Close,
 ];
-static FRAME_PATHS: &[PathDef] = &[
-    PathDef { commands: FRAME_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static FRAME_PATHS: &[PathDef] = &[PathDef {
+    commands: FRAME_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static FRAME_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "0", "adj1", "50000"),
     gd!("x1", MulDiv, "ss", "a1", "100000"),
@@ -4639,22 +7883,46 @@ static FRAME: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 12500)],
     guides: FRAME_GUIDES,
     paths: FRAME_PATHS,
-    text_rect: Some(TextRectDef { l: "x1", t: "x1", r: "x4", b: "y4" }),
+    text_rect: Some(TextRectDef {
+        l: "x1",
+        t: "x1",
+        r: "x4",
+        b: "y4",
+    }),
 };
 
 static FUNNEL_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x1", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd4", st_ang: "stAng1", sw_ang: "swAng1" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd4",
+        st_ang: "stAng1",
+        sw_ang: "swAng1",
+    },
     PathCommandDef::LineTo { x: "x3", y: "y2" },
-    PathCommandDef::ArcTo { wr: "rw3", hr: "rh3", st_ang: "da", sw_ang: "swAng3" },
+    PathCommandDef::ArcTo {
+        wr: "rw3",
+        hr: "rh3",
+        st_ang: "da",
+        sw_ang: "swAng3",
+    },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "x2", y: "hd4" },
-    PathCommandDef::ArcTo { wr: "rw2", hr: "rh2", st_ang: "cd2", sw_ang: "-21600000" },
+    PathCommandDef::ArcTo {
+        wr: "rw2",
+        hr: "rh2",
+        st_ang: "cd2",
+        sw_ang: "-21600000",
+    },
     PathCommandDef::Close,
 ];
-static FUNNEL_PATHS: &[PathDef] = &[
-    PathDef { commands: FUNNEL_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static FUNNEL_PATHS: &[PathDef] = &[PathDef {
+    commands: FUNNEL_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static FUNNEL_GUIDES: &[GuideDef] = &[
     gd!("d", MulDiv, "ss", "1", "20"),
     gd!("rw2", AddSub, "wd2", "0", "d"),
@@ -4692,7 +7960,12 @@ static FUNNEL: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: FUNNEL_GUIDES,
     paths: FUNNEL_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static GEAR6_CMDS: &[PathCommandDef] = &[
@@ -4700,32 +7973,66 @@ static GEAR6_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "xB1", y: "yB1" },
     PathCommandDef::LineTo { x: "xC1", y: "yC1" },
     PathCommandDef::LineTo { x: "xD1", y: "yD1" },
-    PathCommandDef::ArcTo { wr: "rw", hr: "rh", st_ang: "bD1", sw_ang: "swAng2" },
+    PathCommandDef::ArcTo {
+        wr: "rw",
+        hr: "rh",
+        st_ang: "bD1",
+        sw_ang: "swAng2",
+    },
     PathCommandDef::LineTo { x: "xC1", y: "yB2" },
     PathCommandDef::LineTo { x: "xB1", y: "yC2" },
     PathCommandDef::LineTo { x: "xA1", y: "yD2" },
-    PathCommandDef::ArcTo { wr: "rw", hr: "rh", st_ang: "bD2", sw_ang: "swAng1" },
+    PathCommandDef::ArcTo {
+        wr: "rw",
+        hr: "rh",
+        st_ang: "bD2",
+        sw_ang: "swAng1",
+    },
     PathCommandDef::LineTo { x: "xF6", y: "yB3" },
     PathCommandDef::LineTo { x: "xE6", y: "yB3" },
     PathCommandDef::LineTo { x: "xA6", y: "yD3" },
-    PathCommandDef::ArcTo { wr: "rw", hr: "rh", st_ang: "bD3", sw_ang: "swAng1" },
+    PathCommandDef::ArcTo {
+        wr: "rw",
+        hr: "rh",
+        st_ang: "bD3",
+        sw_ang: "swAng1",
+    },
     PathCommandDef::LineTo { x: "xB4", y: "yC2" },
     PathCommandDef::LineTo { x: "xC4", y: "yB2" },
     PathCommandDef::LineTo { x: "xD4", y: "yA2" },
-    PathCommandDef::ArcTo { wr: "rw", hr: "rh", st_ang: "bD4", sw_ang: "swAng2" },
+    PathCommandDef::ArcTo {
+        wr: "rw",
+        hr: "rh",
+        st_ang: "bD4",
+        sw_ang: "swAng2",
+    },
     PathCommandDef::LineTo { x: "xB5", y: "yC1" },
     PathCommandDef::LineTo { x: "xC5", y: "yB1" },
     PathCommandDef::LineTo { x: "xD5", y: "yA1" },
-    PathCommandDef::ArcTo { wr: "rw", hr: "rh", st_ang: "bD5", sw_ang: "swAng1" },
+    PathCommandDef::ArcTo {
+        wr: "rw",
+        hr: "rh",
+        st_ang: "bD5",
+        sw_ang: "swAng1",
+    },
     PathCommandDef::LineTo { x: "xE6", y: "yC6" },
     PathCommandDef::LineTo { x: "xF6", y: "yC6" },
     PathCommandDef::LineTo { x: "xD6", y: "yD6" },
-    PathCommandDef::ArcTo { wr: "rw", hr: "rh", st_ang: "bD6", sw_ang: "swAng1" },
+    PathCommandDef::ArcTo {
+        wr: "rw",
+        hr: "rh",
+        st_ang: "bD6",
+        sw_ang: "swAng1",
+    },
     PathCommandDef::Close,
 ];
-static GEAR6_PATHS: &[PathDef] = &[
-    PathDef { commands: GEAR6_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static GEAR6_PATHS: &[PathDef] = &[PathDef {
+    commands: GEAR6_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static GEAR6_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "0", "adj1", "20000"),
     gd!("a2", Pin, "0", "adj2", "5358"),
@@ -4839,7 +8146,12 @@ static GEAR6: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 15000), ("adj2", 3526)],
     guides: GEAR6_GUIDES,
     paths: GEAR6_PATHS,
-    text_rect: Some(TextRectDef { l: "xD5", t: "yA1", r: "xA1", b: "yD2" }),
+    text_rect: Some(TextRectDef {
+        l: "xD5",
+        t: "yA1",
+        r: "xA1",
+        b: "yD2",
+    }),
 };
 
 static GEAR9_CMDS: &[PathCommandDef] = &[
@@ -4847,44 +8159,93 @@ static GEAR9_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "xB1", y: "yB1" },
     PathCommandDef::LineTo { x: "xC1", y: "yC1" },
     PathCommandDef::LineTo { x: "xD1", y: "yD1" },
-    PathCommandDef::ArcTo { wr: "rw", hr: "rh", st_ang: "bD1", sw_ang: "swAng1" },
+    PathCommandDef::ArcTo {
+        wr: "rw",
+        hr: "rh",
+        st_ang: "bD1",
+        sw_ang: "swAng1",
+    },
     PathCommandDef::LineTo { x: "xB2", y: "yB2" },
     PathCommandDef::LineTo { x: "xC2", y: "yC2" },
     PathCommandDef::LineTo { x: "xD2", y: "yD2" },
-    PathCommandDef::ArcTo { wr: "rw", hr: "rh", st_ang: "bD2", sw_ang: "swAng2" },
+    PathCommandDef::ArcTo {
+        wr: "rw",
+        hr: "rh",
+        st_ang: "bD2",
+        sw_ang: "swAng2",
+    },
     PathCommandDef::LineTo { x: "xB3", y: "yB3" },
     PathCommandDef::LineTo { x: "xC3", y: "yC3" },
     PathCommandDef::LineTo { x: "xD3", y: "yD3" },
-    PathCommandDef::ArcTo { wr: "rw", hr: "rh", st_ang: "bD3", sw_ang: "swAng3" },
+    PathCommandDef::ArcTo {
+        wr: "rw",
+        hr: "rh",
+        st_ang: "bD3",
+        sw_ang: "swAng3",
+    },
     PathCommandDef::LineTo { x: "xB4", y: "yB4" },
     PathCommandDef::LineTo { x: "xC4", y: "yC4" },
     PathCommandDef::LineTo { x: "xD4", y: "yD4" },
-    PathCommandDef::ArcTo { wr: "rw", hr: "rh", st_ang: "bD4", sw_ang: "swAng4" },
+    PathCommandDef::ArcTo {
+        wr: "rw",
+        hr: "rh",
+        st_ang: "bD4",
+        sw_ang: "swAng4",
+    },
     PathCommandDef::LineTo { x: "xB5", y: "yC4" },
     PathCommandDef::LineTo { x: "xC5", y: "yB4" },
     PathCommandDef::LineTo { x: "xD5", y: "yA4" },
-    PathCommandDef::ArcTo { wr: "rw", hr: "rh", st_ang: "bD5", sw_ang: "swAng3" },
+    PathCommandDef::ArcTo {
+        wr: "rw",
+        hr: "rh",
+        st_ang: "bD5",
+        sw_ang: "swAng3",
+    },
     PathCommandDef::LineTo { x: "xB6", y: "yC3" },
     PathCommandDef::LineTo { x: "xC6", y: "yB3" },
     PathCommandDef::LineTo { x: "xD6", y: "yA3" },
-    PathCommandDef::ArcTo { wr: "rw", hr: "rh", st_ang: "bD6", sw_ang: "swAng2" },
+    PathCommandDef::ArcTo {
+        wr: "rw",
+        hr: "rh",
+        st_ang: "bD6",
+        sw_ang: "swAng2",
+    },
     PathCommandDef::LineTo { x: "xB7", y: "yC2" },
     PathCommandDef::LineTo { x: "xC7", y: "yB2" },
     PathCommandDef::LineTo { x: "xD7", y: "yA2" },
-    PathCommandDef::ArcTo { wr: "rw", hr: "rh", st_ang: "bD7", sw_ang: "swAng1" },
+    PathCommandDef::ArcTo {
+        wr: "rw",
+        hr: "rh",
+        st_ang: "bD7",
+        sw_ang: "swAng1",
+    },
     PathCommandDef::LineTo { x: "xB8", y: "yC1" },
     PathCommandDef::LineTo { x: "xC8", y: "yB1" },
     PathCommandDef::LineTo { x: "xD8", y: "yA1" },
-    PathCommandDef::ArcTo { wr: "rw", hr: "rh", st_ang: "bD8", sw_ang: "swAng5" },
+    PathCommandDef::ArcTo {
+        wr: "rw",
+        hr: "rh",
+        st_ang: "bD8",
+        sw_ang: "swAng5",
+    },
     PathCommandDef::LineTo { x: "xE9", y: "yC9" },
     PathCommandDef::LineTo { x: "xF9", y: "yC9" },
     PathCommandDef::LineTo { x: "xD9", y: "yD9" },
-    PathCommandDef::ArcTo { wr: "rw", hr: "rh", st_ang: "bD9", sw_ang: "swAng5" },
+    PathCommandDef::ArcTo {
+        wr: "rw",
+        hr: "rh",
+        st_ang: "bD9",
+        sw_ang: "swAng5",
+    },
     PathCommandDef::Close,
 ];
-static GEAR9_PATHS: &[PathDef] = &[
-    PathDef { commands: GEAR9_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static GEAR9_PATHS: &[PathDef] = &[PathDef {
+    commands: GEAR9_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static GEAR9_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "0", "adj1", "20000"),
     gd!("a2", Pin, "0", "adj2", "2679"),
@@ -5133,7 +8494,12 @@ static GEAR9: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 10000), ("adj2", 1763)],
     guides: GEAR9_GUIDES,
     paths: GEAR9_PATHS,
-    text_rect: Some(TextRectDef { l: "xA8", t: "yD1", r: "xD1", b: "yD3" }),
+    text_rect: Some(TextRectDef {
+        l: "xA8",
+        t: "yD1",
+        r: "xD1",
+        b: "yD3",
+    }),
 };
 
 static HALF_FRAME_CMDS: &[PathCommandDef] = &[
@@ -5145,9 +8511,13 @@ static HALF_FRAME_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "b" },
     PathCommandDef::Close,
 ];
-static HALF_FRAME_PATHS: &[PathDef] = &[
-    PathDef { commands: HALF_FRAME_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static HALF_FRAME_PATHS: &[PathDef] = &[PathDef {
+    commands: HALF_FRAME_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static HALF_FRAME_GUIDES: &[GuideDef] = &[
     gd!("maxAdj2", MulDiv, "100000", "w", "ss"),
     gd!("a2", Pin, "0", "adj2", "maxAdj2"),
@@ -5170,18 +8540,41 @@ static HALF_FRAME: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 33333), ("adj2", 33333)],
     guides: HALF_FRAME_GUIDES,
     paths: HALF_FRAME_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static HEART_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "hc", y: "hd4" },
-    PathCommandDef::CubicBezTo { x1: "x3", y1: "y1", x2: "x4", y2: "hd4", x3: "hc", y3: "b" },
-    PathCommandDef::CubicBezTo { x1: "x1", y1: "hd4", x2: "x2", y2: "y1", x3: "hc", y3: "hd4" },
+    PathCommandDef::CubicBezTo {
+        x1: "x3",
+        y1: "y1",
+        x2: "x4",
+        y2: "hd4",
+        x3: "hc",
+        y3: "b",
+    },
+    PathCommandDef::CubicBezTo {
+        x1: "x1",
+        y1: "hd4",
+        x2: "x2",
+        y2: "y1",
+        x3: "hc",
+        y3: "hd4",
+    },
     PathCommandDef::Close,
 ];
-static HEART_PATHS: &[PathDef] = &[
-    PathDef { commands: HEART_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static HEART_PATHS: &[PathDef] = &[PathDef {
+    commands: HEART_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static HEART_GUIDES: &[GuideDef] = &[
     gd!("dx1", MulDiv, "w", "49", "48"),
     gd!("dx2", MulDiv, "w", "10", "48"),
@@ -5198,7 +8591,12 @@ static HEART: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: HEART_GUIDES,
     paths: HEART_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "hd4", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "hd4",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static HEPTAGON_CMDS: &[PathCommandDef] = &[
@@ -5211,9 +8609,13 @@ static HEPTAGON_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x3", y: "y3" },
     PathCommandDef::Close,
 ];
-static HEPTAGON_PATHS: &[PathDef] = &[
-    PathDef { commands: HEPTAGON_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static HEPTAGON_PATHS: &[PathDef] = &[PathDef {
+    commands: HEPTAGON_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static HEPTAGON_GUIDES: &[GuideDef] = &[
     gd!("swd2", MulDiv, "wd2", "hf", "100000"),
     gd!("shd2", MulDiv, "hd2", "vf", "100000"),
@@ -5239,7 +8641,12 @@ static HEPTAGON: PresetDef = PresetDef {
     adjust_defaults: &[("hf", 102572), ("vf", 105210)],
     guides: HEPTAGON_GUIDES,
     paths: HEPTAGON_PATHS,
-    text_rect: Some(TextRectDef { l: "x2", t: "y1", r: "x5", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "x2",
+        t: "y1",
+        r: "x5",
+        b: "ib",
+    }),
 };
 
 static HEXAGON_CMDS: &[PathCommandDef] = &[
@@ -5251,9 +8658,13 @@ static HEXAGON_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x1", y: "y2" },
     PathCommandDef::Close,
 ];
-static HEXAGON_PATHS: &[PathDef] = &[
-    PathDef { commands: HEXAGON_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static HEXAGON_PATHS: &[PathDef] = &[PathDef {
+    commands: HEXAGON_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static HEXAGON_GUIDES: &[GuideDef] = &[
     gd!("maxAdj", MulDiv, "50000", "w", "ss"),
     gd!("a", Pin, "0", "adj", "maxAdj"),
@@ -5280,7 +8691,12 @@ static HEXAGON: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 25000), ("vf", 115470)],
     guides: HEXAGON_GUIDES,
     paths: HEXAGON_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static HOME_PLATE_CMDS: &[PathCommandDef] = &[
@@ -5291,9 +8707,13 @@ static HOME_PLATE_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "b" },
     PathCommandDef::Close,
 ];
-static HOME_PLATE_PATHS: &[PathDef] = &[
-    PathDef { commands: HOME_PLATE_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static HOME_PLATE_PATHS: &[PathDef] = &[PathDef {
+    commands: HOME_PLATE_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static HOME_PLATE_GUIDES: &[GuideDef] = &[
     gd!("maxAdj", MulDiv, "100000", "w", "ss"),
     gd!("a", Pin, "0", "adj", "maxAdj"),
@@ -5306,67 +8726,185 @@ static HOME_PLATE: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 50000)],
     guides: HOME_PLATE_GUIDES,
     paths: HOME_PLATE_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "ir", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "ir",
+        b: "b",
+    }),
 };
 
 static HORIZONTAL_SCROLL_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "r", y: "ch2" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x4", y: "ch2" },
-    PathCommandDef::ArcTo { wr: "ch4", hr: "ch4", st_ang: "0", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "ch4",
+        hr: "ch4",
+        st_ang: "0",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "x3", y: "ch" },
     PathCommandDef::LineTo { x: "ch2", y: "ch" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "3cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "3cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "l", y: "y7" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "cd2", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "cd2",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::LineTo { x: "ch", y: "y6" },
     PathCommandDef::LineTo { x: "x4", y: "y6" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "ch2", y: "y4" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "cd4", sw_ang: "-5400000" },
-    PathCommandDef::ArcTo { wr: "ch4", hr: "ch4", st_ang: "0", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "cd4",
+        sw_ang: "-5400000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "ch4",
+        hr: "ch4",
+        st_ang: "0",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::Close,
 ];
 static HORIZONTAL_SCROLL_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "ch2", y: "y4" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "cd4", sw_ang: "-5400000" },
-    PathCommandDef::ArcTo { wr: "ch4", hr: "ch4", st_ang: "0", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "cd4",
+        sw_ang: "-5400000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "ch4",
+        hr: "ch4",
+        st_ang: "0",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "x4", y: "ch" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "cd4", sw_ang: "-16200000" },
-    PathCommandDef::ArcTo { wr: "ch4", hr: "ch4", st_ang: "cd2", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "cd4",
+        sw_ang: "-16200000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "ch4",
+        hr: "ch4",
+        st_ang: "cd2",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::Close,
 ];
 static HORIZONTAL_SCROLL_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "y3" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x3", y: "ch" },
     PathCommandDef::LineTo { x: "x3", y: "ch2" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "cd2", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "cd2",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "r", y: "y5" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "ch", y: "y6" },
     PathCommandDef::LineTo { x: "ch", y: "y7" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "0", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "0",
+        sw_ang: "cd2",
+    },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "x3", y: "ch" },
     PathCommandDef::LineTo { x: "x4", y: "ch" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::MoveTo { x: "x4", y: "ch" },
     PathCommandDef::LineTo { x: "x4", y: "ch2" },
-    PathCommandDef::ArcTo { wr: "ch4", hr: "ch4", st_ang: "0", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "ch4",
+        hr: "ch4",
+        st_ang: "0",
+        sw_ang: "cd2",
+    },
     PathCommandDef::MoveTo { x: "ch2", y: "y4" },
     PathCommandDef::LineTo { x: "ch2", y: "y3" },
-    PathCommandDef::ArcTo { wr: "ch4", hr: "ch4", st_ang: "cd2", sw_ang: "cd2" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "0", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "ch4",
+        hr: "ch4",
+        st_ang: "cd2",
+        sw_ang: "cd2",
+    },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "0",
+        sw_ang: "cd2",
+    },
     PathCommandDef::MoveTo { x: "ch", y: "y3" },
     PathCommandDef::LineTo { x: "ch", y: "y6" },
 ];
 static HORIZONTAL_SCROLL_PATHS: &[PathDef] = &[
-    PathDef { commands: HORIZONTAL_SCROLL_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: HORIZONTAL_SCROLL_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: HORIZONTAL_SCROLL_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: HORIZONTAL_SCROLL_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: HORIZONTAL_SCROLL_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: HORIZONTAL_SCROLL_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static HORIZONTAL_SCROLL_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "25000"),
@@ -5385,39 +8923,114 @@ static HORIZONTAL_SCROLL: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 12500)],
     guides: HORIZONTAL_SCROLL_GUIDES,
     paths: HORIZONTAL_SCROLL_PATHS,
-    text_rect: Some(TextRectDef { l: "ch", t: "ch", r: "x4", b: "y6" }),
+    text_rect: Some(TextRectDef {
+        l: "ch",
+        t: "ch",
+        r: "x4",
+        b: "y6",
+    }),
 };
 
 static IRREGULAR_SEAL1_CMDS: &[PathCommandDef] = &[
-    PathCommandDef::MoveTo { x: "10800", y: "5800" },
+    PathCommandDef::MoveTo {
+        x: "10800",
+        y: "5800",
+    },
     PathCommandDef::LineTo { x: "14522", y: "0" },
-    PathCommandDef::LineTo { x: "14155", y: "5325" },
-    PathCommandDef::LineTo { x: "18380", y: "4457" },
-    PathCommandDef::LineTo { x: "16702", y: "7315" },
-    PathCommandDef::LineTo { x: "21097", y: "8137" },
-    PathCommandDef::LineTo { x: "17607", y: "10475" },
-    PathCommandDef::LineTo { x: "21600", y: "13290" },
-    PathCommandDef::LineTo { x: "16837", y: "12942" },
-    PathCommandDef::LineTo { x: "18145", y: "18095" },
-    PathCommandDef::LineTo { x: "14020", y: "14457" },
-    PathCommandDef::LineTo { x: "13247", y: "19737" },
-    PathCommandDef::LineTo { x: "10532", y: "14935" },
-    PathCommandDef::LineTo { x: "8485", y: "21600" },
-    PathCommandDef::LineTo { x: "7715", y: "15627" },
-    PathCommandDef::LineTo { x: "4762", y: "17617" },
-    PathCommandDef::LineTo { x: "5667", y: "13937" },
-    PathCommandDef::LineTo { x: "135", y: "14587" },
-    PathCommandDef::LineTo { x: "3722", y: "11775" },
+    PathCommandDef::LineTo {
+        x: "14155",
+        y: "5325",
+    },
+    PathCommandDef::LineTo {
+        x: "18380",
+        y: "4457",
+    },
+    PathCommandDef::LineTo {
+        x: "16702",
+        y: "7315",
+    },
+    PathCommandDef::LineTo {
+        x: "21097",
+        y: "8137",
+    },
+    PathCommandDef::LineTo {
+        x: "17607",
+        y: "10475",
+    },
+    PathCommandDef::LineTo {
+        x: "21600",
+        y: "13290",
+    },
+    PathCommandDef::LineTo {
+        x: "16837",
+        y: "12942",
+    },
+    PathCommandDef::LineTo {
+        x: "18145",
+        y: "18095",
+    },
+    PathCommandDef::LineTo {
+        x: "14020",
+        y: "14457",
+    },
+    PathCommandDef::LineTo {
+        x: "13247",
+        y: "19737",
+    },
+    PathCommandDef::LineTo {
+        x: "10532",
+        y: "14935",
+    },
+    PathCommandDef::LineTo {
+        x: "8485",
+        y: "21600",
+    },
+    PathCommandDef::LineTo {
+        x: "7715",
+        y: "15627",
+    },
+    PathCommandDef::LineTo {
+        x: "4762",
+        y: "17617",
+    },
+    PathCommandDef::LineTo {
+        x: "5667",
+        y: "13937",
+    },
+    PathCommandDef::LineTo {
+        x: "135",
+        y: "14587",
+    },
+    PathCommandDef::LineTo {
+        x: "3722",
+        y: "11775",
+    },
     PathCommandDef::LineTo { x: "0", y: "8615" },
-    PathCommandDef::LineTo { x: "4627", y: "7617" },
-    PathCommandDef::LineTo { x: "370", y: "2295" },
-    PathCommandDef::LineTo { x: "7312", y: "6320" },
-    PathCommandDef::LineTo { x: "8352", y: "2295" },
+    PathCommandDef::LineTo {
+        x: "4627",
+        y: "7617",
+    },
+    PathCommandDef::LineTo {
+        x: "370",
+        y: "2295",
+    },
+    PathCommandDef::LineTo {
+        x: "7312",
+        y: "6320",
+    },
+    PathCommandDef::LineTo {
+        x: "8352",
+        y: "2295",
+    },
     PathCommandDef::Close,
 ];
-static IRREGULAR_SEAL1_PATHS: &[PathDef] = &[
-    PathDef { commands: IRREGULAR_SEAL1_CMDS, w: Some(21600), h: Some(21600), fill: PathFill::Norm, stroke: true },
-];
+static IRREGULAR_SEAL1_PATHS: &[PathDef] = &[PathDef {
+    commands: IRREGULAR_SEAL1_CMDS,
+    w: Some(21600),
+    h: Some(21600),
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static IRREGULAR_SEAL1_GUIDES: &[GuideDef] = &[
     gd!("x5", MulDiv, "w", "4627", "21600"),
     gd!("x12", MulDiv, "w", "8485", "21600"),
@@ -5432,43 +9045,130 @@ static IRREGULAR_SEAL1: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: IRREGULAR_SEAL1_GUIDES,
     paths: IRREGULAR_SEAL1_PATHS,
-    text_rect: Some(TextRectDef { l: "x5", t: "y3", r: "x21", b: "y9" }),
+    text_rect: Some(TextRectDef {
+        l: "x5",
+        t: "y3",
+        r: "x21",
+        b: "y9",
+    }),
 };
 
 static IRREGULAR_SEAL2_CMDS: &[PathCommandDef] = &[
-    PathCommandDef::MoveTo { x: "11462", y: "4342" },
+    PathCommandDef::MoveTo {
+        x: "11462",
+        y: "4342",
+    },
     PathCommandDef::LineTo { x: "14790", y: "0" },
-    PathCommandDef::LineTo { x: "14525", y: "5777" },
-    PathCommandDef::LineTo { x: "18007", y: "3172" },
-    PathCommandDef::LineTo { x: "16380", y: "6532" },
-    PathCommandDef::LineTo { x: "21600", y: "6645" },
-    PathCommandDef::LineTo { x: "16985", y: "9402" },
-    PathCommandDef::LineTo { x: "18270", y: "11290" },
-    PathCommandDef::LineTo { x: "16380", y: "12310" },
-    PathCommandDef::LineTo { x: "18877", y: "15632" },
-    PathCommandDef::LineTo { x: "14640", y: "14350" },
-    PathCommandDef::LineTo { x: "14942", y: "17370" },
-    PathCommandDef::LineTo { x: "12180", y: "15935" },
-    PathCommandDef::LineTo { x: "11612", y: "18842" },
-    PathCommandDef::LineTo { x: "9872", y: "17370" },
-    PathCommandDef::LineTo { x: "8700", y: "19712" },
-    PathCommandDef::LineTo { x: "7527", y: "18125" },
-    PathCommandDef::LineTo { x: "4917", y: "21600" },
-    PathCommandDef::LineTo { x: "4805", y: "18240" },
-    PathCommandDef::LineTo { x: "1285", y: "17825" },
-    PathCommandDef::LineTo { x: "3330", y: "15370" },
+    PathCommandDef::LineTo {
+        x: "14525",
+        y: "5777",
+    },
+    PathCommandDef::LineTo {
+        x: "18007",
+        y: "3172",
+    },
+    PathCommandDef::LineTo {
+        x: "16380",
+        y: "6532",
+    },
+    PathCommandDef::LineTo {
+        x: "21600",
+        y: "6645",
+    },
+    PathCommandDef::LineTo {
+        x: "16985",
+        y: "9402",
+    },
+    PathCommandDef::LineTo {
+        x: "18270",
+        y: "11290",
+    },
+    PathCommandDef::LineTo {
+        x: "16380",
+        y: "12310",
+    },
+    PathCommandDef::LineTo {
+        x: "18877",
+        y: "15632",
+    },
+    PathCommandDef::LineTo {
+        x: "14640",
+        y: "14350",
+    },
+    PathCommandDef::LineTo {
+        x: "14942",
+        y: "17370",
+    },
+    PathCommandDef::LineTo {
+        x: "12180",
+        y: "15935",
+    },
+    PathCommandDef::LineTo {
+        x: "11612",
+        y: "18842",
+    },
+    PathCommandDef::LineTo {
+        x: "9872",
+        y: "17370",
+    },
+    PathCommandDef::LineTo {
+        x: "8700",
+        y: "19712",
+    },
+    PathCommandDef::LineTo {
+        x: "7527",
+        y: "18125",
+    },
+    PathCommandDef::LineTo {
+        x: "4917",
+        y: "21600",
+    },
+    PathCommandDef::LineTo {
+        x: "4805",
+        y: "18240",
+    },
+    PathCommandDef::LineTo {
+        x: "1285",
+        y: "17825",
+    },
+    PathCommandDef::LineTo {
+        x: "3330",
+        y: "15370",
+    },
     PathCommandDef::LineTo { x: "0", y: "12877" },
-    PathCommandDef::LineTo { x: "3935", y: "11592" },
-    PathCommandDef::LineTo { x: "1172", y: "8270" },
-    PathCommandDef::LineTo { x: "5372", y: "7817" },
-    PathCommandDef::LineTo { x: "4502", y: "3625" },
-    PathCommandDef::LineTo { x: "8550", y: "6382" },
-    PathCommandDef::LineTo { x: "9722", y: "1887" },
+    PathCommandDef::LineTo {
+        x: "3935",
+        y: "11592",
+    },
+    PathCommandDef::LineTo {
+        x: "1172",
+        y: "8270",
+    },
+    PathCommandDef::LineTo {
+        x: "5372",
+        y: "7817",
+    },
+    PathCommandDef::LineTo {
+        x: "4502",
+        y: "3625",
+    },
+    PathCommandDef::LineTo {
+        x: "8550",
+        y: "6382",
+    },
+    PathCommandDef::LineTo {
+        x: "9722",
+        y: "1887",
+    },
     PathCommandDef::Close,
 ];
-static IRREGULAR_SEAL2_PATHS: &[PathDef] = &[
-    PathDef { commands: IRREGULAR_SEAL2_CMDS, w: Some(21600), h: Some(21600), fill: PathFill::Norm, stroke: true },
-];
+static IRREGULAR_SEAL2_PATHS: &[PathDef] = &[PathDef {
+    commands: IRREGULAR_SEAL2_CMDS,
+    w: Some(21600),
+    h: Some(21600),
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static IRREGULAR_SEAL2_GUIDES: &[GuideDef] = &[
     gd!("x2", MulDiv, "w", "9722", "21600"),
     gd!("x5", MulDiv, "w", "5372", "21600"),
@@ -5486,7 +9186,12 @@ static IRREGULAR_SEAL2: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: IRREGULAR_SEAL2_GUIDES,
     paths: IRREGULAR_SEAL2_PATHS,
-    text_rect: Some(TextRectDef { l: "x5", t: "y3", r: "x19", b: "y17" }),
+    text_rect: Some(TextRectDef {
+        l: "x5",
+        t: "y3",
+        r: "x19",
+        b: "y17",
+    }),
 };
 
 static LEFT_ARROW_CMDS: &[PathCommandDef] = &[
@@ -5499,9 +9204,13 @@ static LEFT_ARROW_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x2", y: "b" },
     PathCommandDef::Close,
 ];
-static LEFT_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: LEFT_ARROW_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static LEFT_ARROW_PATHS: &[PathDef] = &[PathDef {
+    commands: LEFT_ARROW_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static LEFT_ARROW_GUIDES: &[GuideDef] = &[
     gd!("maxAdj2", MulDiv, "100000", "w", "ss"),
     gd!("a1", Pin, "0", "adj1", "100000"),
@@ -5518,7 +9227,12 @@ static LEFT_ARROW: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 50000), ("adj2", 50000)],
     guides: LEFT_ARROW_GUIDES,
     paths: LEFT_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "x1", t: "y1", r: "r", b: "y2" }),
+    text_rect: Some(TextRectDef {
+        l: "x1",
+        t: "y1",
+        r: "r",
+        b: "y2",
+    }),
 };
 
 static LEFT_ARROW_CALLOUT_CMDS: &[PathCommandDef] = &[
@@ -5535,9 +9249,13 @@ static LEFT_ARROW_CALLOUT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x1", y: "y4" },
     PathCommandDef::Close,
 ];
-static LEFT_ARROW_CALLOUT_PATHS: &[PathDef] = &[
-    PathDef { commands: LEFT_ARROW_CALLOUT_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static LEFT_ARROW_CALLOUT_PATHS: &[PathDef] = &[PathDef {
+    commands: LEFT_ARROW_CALLOUT_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static LEFT_ARROW_CALLOUT_GUIDES: &[GuideDef] = &[
     gd!("maxAdj2", MulDiv, "50000", "h", "ss"),
     gd!("a2", Pin, "0", "adj2", "maxAdj2"),
@@ -5560,34 +9278,96 @@ static LEFT_ARROW_CALLOUT_GUIDES: &[GuideDef] = &[
     gd!("x3", AddDiv, "x2", "r", "2"),
 ];
 static LEFT_ARROW_CALLOUT: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 25000), ("adj2", 25000), ("adj3", 25000), ("adj4", 64977)],
+    adjust_defaults: &[
+        ("adj1", 25000),
+        ("adj2", 25000),
+        ("adj3", 25000),
+        ("adj4", 64977),
+    ],
     guides: LEFT_ARROW_CALLOUT_GUIDES,
     paths: LEFT_ARROW_CALLOUT_PATHS,
-    text_rect: Some(TextRectDef { l: "x2", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "x2",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static LEFT_BRACE_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "r", y: "b" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "hc", y: "y4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "0", sw_ang: "-5400000" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "0",
+        sw_ang: "-5400000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "hc", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
 static LEFT_BRACE_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "r", y: "b" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "hc", y: "y4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "0", sw_ang: "-5400000" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "0",
+        sw_ang: "-5400000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "hc", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
 ];
 static LEFT_BRACE_PATHS: &[PathDef] = &[
-    PathDef { commands: LEFT_BRACE_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: LEFT_BRACE_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: LEFT_BRACE_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: LEFT_BRACE_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static LEFT_BRACE_GUIDES: &[GuideDef] = &[
     gd!("a2", Pin, "0", "adj2", "100000"),
@@ -5609,25 +9389,62 @@ static LEFT_BRACE: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 8333), ("adj2", 50000)],
     guides: LEFT_BRACE_GUIDES,
     paths: LEFT_BRACE_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "r", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "r",
+        b: "ib",
+    }),
 };
 
 static LEFT_BRACKET_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "r", y: "b" },
-    PathCommandDef::ArcTo { wr: "w", hr: "y1", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "y1",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "l", y: "y1" },
-    PathCommandDef::ArcTo { wr: "w", hr: "y1", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "y1",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
 static LEFT_BRACKET_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "r", y: "b" },
-    PathCommandDef::ArcTo { wr: "w", hr: "y1", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "y1",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "l", y: "y1" },
-    PathCommandDef::ArcTo { wr: "w", hr: "y1", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "y1",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
 ];
 static LEFT_BRACKET_PATHS: &[PathDef] = &[
-    PathDef { commands: LEFT_BRACKET_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: LEFT_BRACKET_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: LEFT_BRACKET_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: LEFT_BRACKET_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static LEFT_BRACKET_GUIDES: &[GuideDef] = &[
     gd!("maxAdj", MulDiv, "50000", "h", "ss"),
@@ -5644,23 +9461,42 @@ static LEFT_BRACKET: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 8333)],
     guides: LEFT_BRACKET_GUIDES,
     paths: LEFT_BRACKET_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "r", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "r",
+        b: "ib",
+    }),
 };
 
 static LEFT_CIRCULAR_ARROW_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "xE", y: "yE" },
     PathCommandDef::LineTo { x: "xD", y: "yD" },
-    PathCommandDef::ArcTo { wr: "rw2", hr: "rh2", st_ang: "istAng", sw_ang: "iswAng" },
+    PathCommandDef::ArcTo {
+        wr: "rw2",
+        hr: "rh2",
+        st_ang: "istAng",
+        sw_ang: "iswAng",
+    },
     PathCommandDef::LineTo { x: "xBp", y: "yBp" },
     PathCommandDef::LineTo { x: "xA", y: "yA" },
     PathCommandDef::LineTo { x: "xGp", y: "yGp" },
     PathCommandDef::LineTo { x: "xF", y: "yF" },
-    PathCommandDef::ArcTo { wr: "rw1", hr: "rh1", st_ang: "stAng0", sw_ang: "swAng0" },
+    PathCommandDef::ArcTo {
+        wr: "rw1",
+        hr: "rh1",
+        st_ang: "stAng0",
+        sw_ang: "swAng0",
+    },
     PathCommandDef::Close,
 ];
-static LEFT_CIRCULAR_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: LEFT_CIRCULAR_ARROW_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static LEFT_CIRCULAR_ARROW_PATHS: &[PathDef] = &[PathDef {
+    commands: LEFT_CIRCULAR_ARROW_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static LEFT_CIRCULAR_ARROW_GUIDES: &[GuideDef] = &[
     gd!("a5", Pin, "0", "adj5", "25000"),
     gd!("maxAdj1", MulDiv, "a5", "2", "1"),
@@ -5869,10 +9705,21 @@ static LEFT_CIRCULAR_ARROW_GUIDES: &[GuideDef] = &[
     gd!("ib", AddSub, "vc", "idy", "0"),
 ];
 static LEFT_CIRCULAR_ARROW: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 12500), ("adj2", -1142319), ("adj3", 1142319), ("adj4", 10800000), ("adj5", 12500)],
+    adjust_defaults: &[
+        ("adj1", 12500),
+        ("adj2", -1142319),
+        ("adj3", 1142319),
+        ("adj4", 10800000),
+        ("adj5", 12500),
+    ],
     guides: LEFT_CIRCULAR_ARROW_GUIDES,
     paths: LEFT_CIRCULAR_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static LEFT_RIGHT_ARROW_CMDS: &[PathCommandDef] = &[
@@ -5888,9 +9735,13 @@ static LEFT_RIGHT_ARROW_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x2", y: "b" },
     PathCommandDef::Close,
 ];
-static LEFT_RIGHT_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: LEFT_RIGHT_ARROW_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static LEFT_RIGHT_ARROW_PATHS: &[PathDef] = &[PathDef {
+    commands: LEFT_RIGHT_ARROW_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static LEFT_RIGHT_ARROW_GUIDES: &[GuideDef] = &[
     gd!("maxAdj2", MulDiv, "50000", "w", "ss"),
     gd!("a1", Pin, "0", "adj1", "100000"),
@@ -5908,7 +9759,12 @@ static LEFT_RIGHT_ARROW: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 50000), ("adj2", 50000)],
     guides: LEFT_RIGHT_ARROW_GUIDES,
     paths: LEFT_RIGHT_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "x1", t: "y1", r: "x4", b: "y2" }),
+    text_rect: Some(TextRectDef {
+        l: "x1",
+        t: "y1",
+        r: "x4",
+        b: "y2",
+    }),
 };
 
 static LEFT_RIGHT_ARROW_CALLOUT_CMDS: &[PathCommandDef] = &[
@@ -5932,9 +9788,13 @@ static LEFT_RIGHT_ARROW_CALLOUT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x1", y: "y4" },
     PathCommandDef::Close,
 ];
-static LEFT_RIGHT_ARROW_CALLOUT_PATHS: &[PathDef] = &[
-    PathDef { commands: LEFT_RIGHT_ARROW_CALLOUT_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static LEFT_RIGHT_ARROW_CALLOUT_PATHS: &[PathDef] = &[PathDef {
+    commands: LEFT_RIGHT_ARROW_CALLOUT_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static LEFT_RIGHT_ARROW_CALLOUT_GUIDES: &[GuideDef] = &[
     gd!("maxAdj2", MulDiv, "50000", "h", "ss"),
     gd!("a2", Pin, "0", "adj2", "maxAdj2"),
@@ -5958,28 +9818,52 @@ static LEFT_RIGHT_ARROW_CALLOUT_GUIDES: &[GuideDef] = &[
     gd!("x3", AddSub, "hc", "dx2", "0"),
 ];
 static LEFT_RIGHT_ARROW_CALLOUT: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 25000), ("adj2", 25000), ("adj3", 25000), ("adj4", 48123)],
+    adjust_defaults: &[
+        ("adj1", 25000),
+        ("adj2", 25000),
+        ("adj3", 25000),
+        ("adj4", 48123),
+    ],
     guides: LEFT_RIGHT_ARROW_CALLOUT_GUIDES,
     paths: LEFT_RIGHT_ARROW_CALLOUT_PATHS,
-    text_rect: Some(TextRectDef { l: "x2", t: "t", r: "x3", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "x2",
+        t: "t",
+        r: "x3",
+        b: "b",
+    }),
 };
 
 static LEFT_RIGHT_CIRCULAR_ARROW_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "xL", y: "yL" },
     PathCommandDef::LineTo { x: "xKp", y: "yKp" },
     PathCommandDef::LineTo { x: "xE", y: "yE" },
-    PathCommandDef::ArcTo { wr: "rw1", hr: "rh1", st_ang: "st2", sw_ang: "swAng" },
+    PathCommandDef::ArcTo {
+        wr: "rw1",
+        hr: "rh1",
+        st_ang: "st2",
+        sw_ang: "swAng",
+    },
     PathCommandDef::LineTo { x: "xGp", y: "yGp" },
     PathCommandDef::LineTo { x: "xA", y: "yA" },
     PathCommandDef::LineTo { x: "xBp", y: "yBp" },
     PathCommandDef::LineTo { x: "xC", y: "yC" },
-    PathCommandDef::ArcTo { wr: "rw2", hr: "rh2", st_ang: "istAng", sw_ang: "iswAng" },
+    PathCommandDef::ArcTo {
+        wr: "rw2",
+        hr: "rh2",
+        st_ang: "istAng",
+        sw_ang: "iswAng",
+    },
     PathCommandDef::LineTo { x: "xJp", y: "yJp" },
     PathCommandDef::Close,
 ];
-static LEFT_RIGHT_CIRCULAR_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: LEFT_RIGHT_CIRCULAR_ARROW_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static LEFT_RIGHT_CIRCULAR_ARROW_PATHS: &[PathDef] = &[PathDef {
+    commands: LEFT_RIGHT_CIRCULAR_ARROW_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static LEFT_RIGHT_CIRCULAR_ARROW_GUIDES: &[GuideDef] = &[
     gd!("a5", Pin, "0", "adj5", "25000"),
     gd!("maxAdj1", MulDiv, "a5", "2", "1"),
@@ -6213,10 +10097,21 @@ static LEFT_RIGHT_CIRCULAR_ARROW_GUIDES: &[GuideDef] = &[
     gd!("ib", AddSub, "vc", "idy", "0"),
 ];
 static LEFT_RIGHT_CIRCULAR_ARROW: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 12500), ("adj2", 1142319), ("adj3", 20457681), ("adj4", 11942319), ("adj5", 12500)],
+    adjust_defaults: &[
+        ("adj1", 12500),
+        ("adj2", 1142319),
+        ("adj3", 20457681),
+        ("adj4", 11942319),
+        ("adj5", 12500),
+    ],
     guides: LEFT_RIGHT_CIRCULAR_ARROW_GUIDES,
     paths: LEFT_RIGHT_CIRCULAR_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static LEFT_RIGHT_RIBBON_P0_CMDS: &[PathCommandDef] = &[
@@ -6224,15 +10119,30 @@ static LEFT_RIGHT_RIBBON_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x1", y: "t" },
     PathCommandDef::LineTo { x: "x1", y: "ly1" },
     PathCommandDef::LineTo { x: "hc", y: "ly1" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "3cd4", sw_ang: "cd2" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "3cd4", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "cd2",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::LineTo { x: "x4", y: "ry2" },
     PathCommandDef::LineTo { x: "x4", y: "ry1" },
     PathCommandDef::LineTo { x: "r", y: "ry3" },
     PathCommandDef::LineTo { x: "x4", y: "b" },
     PathCommandDef::LineTo { x: "x4", y: "ry4" },
     PathCommandDef::LineTo { x: "hc", y: "ry4" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x2", y: "ly3" },
     PathCommandDef::LineTo { x: "x1", y: "ly3" },
     PathCommandDef::LineTo { x: "x1", y: "ly4" },
@@ -6240,8 +10150,18 @@ static LEFT_RIGHT_RIBBON_P0_CMDS: &[PathCommandDef] = &[
 ];
 static LEFT_RIGHT_RIBBON_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x3", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "0", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "3cd4", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::LineTo { x: "x3", y: "ry2" },
     PathCommandDef::Close,
 ];
@@ -6250,15 +10170,30 @@ static LEFT_RIGHT_RIBBON_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x1", y: "t" },
     PathCommandDef::LineTo { x: "x1", y: "ly1" },
     PathCommandDef::LineTo { x: "hc", y: "ly1" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "3cd4", sw_ang: "cd2" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "3cd4", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "cd2",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::LineTo { x: "x4", y: "ry2" },
     PathCommandDef::LineTo { x: "x4", y: "ry1" },
     PathCommandDef::LineTo { x: "r", y: "ry3" },
     PathCommandDef::LineTo { x: "x4", y: "b" },
     PathCommandDef::LineTo { x: "x4", y: "ry4" },
     PathCommandDef::LineTo { x: "hc", y: "ry4" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x2", y: "ly3" },
     PathCommandDef::LineTo { x: "x1", y: "ly3" },
     PathCommandDef::LineTo { x: "x1", y: "ly4" },
@@ -6269,9 +10204,27 @@ static LEFT_RIGHT_RIBBON_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x2", y: "ly3" },
 ];
 static LEFT_RIGHT_RIBBON_PATHS: &[PathDef] = &[
-    PathDef { commands: LEFT_RIGHT_RIBBON_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: LEFT_RIGHT_RIBBON_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: LEFT_RIGHT_RIBBON_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: LEFT_RIGHT_RIBBON_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: LEFT_RIGHT_RIBBON_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: LEFT_RIGHT_RIBBON_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static LEFT_RIGHT_RIBBON_GUIDES: &[GuideDef] = &[
     gd!("a3", Pin, "0", "adj3", "33333"),
@@ -6302,7 +10255,12 @@ static LEFT_RIGHT_RIBBON: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 50000), ("adj2", 50000), ("adj3", 16667)],
     guides: LEFT_RIGHT_RIBBON_GUIDES,
     paths: LEFT_RIGHT_RIBBON_PATHS,
-    text_rect: Some(TextRectDef { l: "x1", t: "ly1", r: "x4", b: "ry4" }),
+    text_rect: Some(TextRectDef {
+        l: "x1",
+        t: "ly1",
+        r: "x4",
+        b: "ry4",
+    }),
 };
 
 static LEFT_RIGHT_UP_ARROW_CMDS: &[PathCommandDef] = &[
@@ -6325,9 +10283,13 @@ static LEFT_RIGHT_UP_ARROW_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x1", y: "b" },
     PathCommandDef::Close,
 ];
-static LEFT_RIGHT_UP_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: LEFT_RIGHT_UP_ARROW_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static LEFT_RIGHT_UP_ARROW_PATHS: &[PathDef] = &[PathDef {
+    commands: LEFT_RIGHT_UP_ARROW_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static LEFT_RIGHT_UP_ARROW_GUIDES: &[GuideDef] = &[
     gd!("a2", Pin, "0", "adj2", "50000"),
     gd!("maxAdj1", MulDiv, "a2", "2", "1"),
@@ -6355,7 +10317,12 @@ static LEFT_RIGHT_UP_ARROW: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 25000), ("adj2", 25000), ("adj3", 25000)],
     guides: LEFT_RIGHT_UP_ARROW_GUIDES,
     paths: LEFT_RIGHT_UP_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "y3", r: "ir", b: "y5" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "y3",
+        r: "ir",
+        b: "y5",
+    }),
 };
 
 static LEFT_UP_ARROW_CMDS: &[PathCommandDef] = &[
@@ -6373,9 +10340,13 @@ static LEFT_UP_ARROW_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x1", y: "b" },
     PathCommandDef::Close,
 ];
-static LEFT_UP_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: LEFT_UP_ARROW_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static LEFT_UP_ARROW_PATHS: &[PathDef] = &[PathDef {
+    commands: LEFT_UP_ARROW_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static LEFT_UP_ARROW_GUIDES: &[GuideDef] = &[
     gd!("a2", Pin, "0", "adj2", "50000"),
     gd!("maxAdj1", MulDiv, "a2", "2", "1"),
@@ -6402,26 +10373,62 @@ static LEFT_UP_ARROW: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 25000), ("adj2", 25000), ("adj3", 25000)],
     guides: LEFT_UP_ARROW_GUIDES,
     paths: LEFT_UP_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "y3", r: "x4", b: "y5" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "y3",
+        r: "x4",
+        b: "y5",
+    }),
 };
 
 static LIGHTNING_BOLT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "8472", y: "0" },
-    PathCommandDef::LineTo { x: "12860", y: "6080" },
-    PathCommandDef::LineTo { x: "11050", y: "6797" },
-    PathCommandDef::LineTo { x: "16577", y: "12007" },
-    PathCommandDef::LineTo { x: "14767", y: "12877" },
-    PathCommandDef::LineTo { x: "21600", y: "21600" },
-    PathCommandDef::LineTo { x: "10012", y: "14915" },
-    PathCommandDef::LineTo { x: "12222", y: "13987" },
-    PathCommandDef::LineTo { x: "5022", y: "9705" },
-    PathCommandDef::LineTo { x: "7602", y: "8382" },
+    PathCommandDef::LineTo {
+        x: "12860",
+        y: "6080",
+    },
+    PathCommandDef::LineTo {
+        x: "11050",
+        y: "6797",
+    },
+    PathCommandDef::LineTo {
+        x: "16577",
+        y: "12007",
+    },
+    PathCommandDef::LineTo {
+        x: "14767",
+        y: "12877",
+    },
+    PathCommandDef::LineTo {
+        x: "21600",
+        y: "21600",
+    },
+    PathCommandDef::LineTo {
+        x: "10012",
+        y: "14915",
+    },
+    PathCommandDef::LineTo {
+        x: "12222",
+        y: "13987",
+    },
+    PathCommandDef::LineTo {
+        x: "5022",
+        y: "9705",
+    },
+    PathCommandDef::LineTo {
+        x: "7602",
+        y: "8382",
+    },
     PathCommandDef::LineTo { x: "0", y: "3890" },
     PathCommandDef::Close,
 ];
-static LIGHTNING_BOLT_PATHS: &[PathDef] = &[
-    PathDef { commands: LIGHTNING_BOLT_CMDS, w: Some(21600), h: Some(21600), fill: PathFill::Norm, stroke: true },
-];
+static LIGHTNING_BOLT_PATHS: &[PathDef] = &[PathDef {
+    commands: LIGHTNING_BOLT_CMDS,
+    w: Some(21600),
+    h: Some(21600),
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static LIGHTNING_BOLT_GUIDES: &[GuideDef] = &[
     gd!("x1", MulDiv, "w", "5022", "21600"),
     gd!("x3", MulDiv, "w", "8472", "21600"),
@@ -6442,16 +10449,25 @@ static LIGHTNING_BOLT: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: LIGHTNING_BOLT_GUIDES,
     paths: LIGHTNING_BOLT_PATHS,
-    text_rect: Some(TextRectDef { l: "x4", t: "y4", r: "x9", b: "y10" }),
+    text_rect: Some(TextRectDef {
+        l: "x4",
+        t: "y4",
+        r: "x9",
+        b: "y10",
+    }),
 };
 
 static LINE_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "t" },
     PathCommandDef::LineTo { x: "r", y: "b" },
 ];
-static LINE_PATHS: &[PathDef] = &[
-    PathDef { commands: LINE_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static LINE_PATHS: &[PathDef] = &[PathDef {
+    commands: LINE_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static LINE: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: &[],
@@ -6463,9 +10479,13 @@ static LINE_INV_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "b" },
     PathCommandDef::LineTo { x: "r", y: "t" },
 ];
-static LINE_INV_PATHS: &[PathDef] = &[
-    PathDef { commands: LINE_INV_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static LINE_INV_PATHS: &[PathDef] = &[PathDef {
+    commands: LINE_INV_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static LINE_INV: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: &[],
@@ -6475,10 +10495,20 @@ static LINE_INV: PresetDef = PresetDef {
 
 static MATH_DIVIDE_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "hc", y: "y1" },
-    PathCommandDef::ArcTo { wr: "rad", hr: "rad", st_ang: "3cd4", sw_ang: "21600000" },
+    PathCommandDef::ArcTo {
+        wr: "rad",
+        hr: "rad",
+        st_ang: "3cd4",
+        sw_ang: "21600000",
+    },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "hc", y: "y5" },
-    PathCommandDef::ArcTo { wr: "rad", hr: "rad", st_ang: "cd4", sw_ang: "21600000" },
+    PathCommandDef::ArcTo {
+        wr: "rad",
+        hr: "rad",
+        st_ang: "cd4",
+        sw_ang: "21600000",
+    },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "x1", y: "y3" },
     PathCommandDef::LineTo { x: "x3", y: "y3" },
@@ -6486,9 +10516,13 @@ static MATH_DIVIDE_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x1", y: "y4" },
     PathCommandDef::Close,
 ];
-static MATH_DIVIDE_PATHS: &[PathDef] = &[
-    PathDef { commands: MATH_DIVIDE_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static MATH_DIVIDE_PATHS: &[PathDef] = &[PathDef {
+    commands: MATH_DIVIDE_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static MATH_DIVIDE_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "1000", "adj1", "36745"),
     gd!("ma1", AddSub, "0", "0", "a1"),
@@ -6517,7 +10551,12 @@ static MATH_DIVIDE: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 23520), ("adj2", 5880), ("adj3", 11760)],
     guides: MATH_DIVIDE_GUIDES,
     paths: MATH_DIVIDE_PATHS,
-    text_rect: Some(TextRectDef { l: "x1", t: "y3", r: "x3", b: "y4" }),
+    text_rect: Some(TextRectDef {
+        l: "x1",
+        t: "y3",
+        r: "x3",
+        b: "y4",
+    }),
 };
 
 static MATH_EQUAL_CMDS: &[PathCommandDef] = &[
@@ -6532,9 +10571,13 @@ static MATH_EQUAL_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x1", y: "y4" },
     PathCommandDef::Close,
 ];
-static MATH_EQUAL_PATHS: &[PathDef] = &[
-    PathDef { commands: MATH_EQUAL_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static MATH_EQUAL_PATHS: &[PathDef] = &[PathDef {
+    commands: MATH_EQUAL_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static MATH_EQUAL_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "0", "adj1", "36745"),
     gd!("2a1", MulDiv, "a1", "2", "1"),
@@ -6556,7 +10599,12 @@ static MATH_EQUAL: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 23520), ("adj2", 11760)],
     guides: MATH_EQUAL_GUIDES,
     paths: MATH_EQUAL_PATHS,
-    text_rect: Some(TextRectDef { l: "x1", t: "y1", r: "x2", b: "y4" }),
+    text_rect: Some(TextRectDef {
+        l: "x1",
+        t: "y1",
+        r: "x2",
+        b: "y4",
+    }),
 };
 
 static MATH_MINUS_CMDS: &[PathCommandDef] = &[
@@ -6566,9 +10614,13 @@ static MATH_MINUS_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x1", y: "y2" },
     PathCommandDef::Close,
 ];
-static MATH_MINUS_PATHS: &[PathDef] = &[
-    PathDef { commands: MATH_MINUS_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static MATH_MINUS_PATHS: &[PathDef] = &[PathDef {
+    commands: MATH_MINUS_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static MATH_MINUS_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "0", "adj1", "100000"),
     gd!("dy1", MulDiv, "h", "a1", "200000"),
@@ -6582,7 +10634,12 @@ static MATH_MINUS: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 23520)],
     guides: MATH_MINUS_GUIDES,
     paths: MATH_MINUS_PATHS,
-    text_rect: Some(TextRectDef { l: "x1", t: "y1", r: "x2", b: "y2" }),
+    text_rect: Some(TextRectDef {
+        l: "x1",
+        t: "y1",
+        r: "x2",
+        b: "y2",
+    }),
 };
 
 static MATH_MULTIPLY_CMDS: &[PathCommandDef] = &[
@@ -6600,9 +10657,13 @@ static MATH_MULTIPLY_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "xL", y: "vc" },
     PathCommandDef::Close,
 ];
-static MATH_MULTIPLY_PATHS: &[PathDef] = &[
-    PathDef { commands: MATH_MULTIPLY_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static MATH_MULTIPLY_PATHS: &[PathDef] = &[PathDef {
+    commands: MATH_MULTIPLY_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static MATH_MULTIPLY_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "0", "adj1", "51965"),
     gd!("th", MulDiv, "ss", "a1", "100000"),
@@ -6640,7 +10701,12 @@ static MATH_MULTIPLY: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 23520)],
     guides: MATH_MULTIPLY_GUIDES,
     paths: MATH_MULTIPLY_PATHS,
-    text_rect: Some(TextRectDef { l: "xA", t: "yB", r: "xE", b: "yH" }),
+    text_rect: Some(TextRectDef {
+        l: "xA",
+        t: "yB",
+        r: "xE",
+        b: "yH",
+    }),
 };
 
 static MATH_NOT_EQUAL_CMDS: &[PathCommandDef] = &[
@@ -6666,9 +10732,13 @@ static MATH_NOT_EQUAL_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x1", y: "y2" },
     PathCommandDef::Close,
 ];
-static MATH_NOT_EQUAL_PATHS: &[PathDef] = &[
-    PathDef { commands: MATH_NOT_EQUAL_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static MATH_NOT_EQUAL_PATHS: &[PathDef] = &[PathDef {
+    commands: MATH_NOT_EQUAL_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static MATH_NOT_EQUAL_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "0", "adj1", "50000"),
     gd!("crAng", Pin, "4200000", "adj2", "6600000"),
@@ -6730,7 +10800,12 @@ static MATH_NOT_EQUAL: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 23520), ("adj2", 6600000), ("adj3", 11760)],
     guides: MATH_NOT_EQUAL_GUIDES,
     paths: MATH_NOT_EQUAL_PATHS,
-    text_rect: Some(TextRectDef { l: "x1", t: "y1", r: "x8", b: "y4" }),
+    text_rect: Some(TextRectDef {
+        l: "x1",
+        t: "y1",
+        r: "x8",
+        b: "y4",
+    }),
 };
 
 static MATH_PLUS_CMDS: &[PathCommandDef] = &[
@@ -6748,9 +10823,13 @@ static MATH_PLUS_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x1", y: "y3" },
     PathCommandDef::Close,
 ];
-static MATH_PLUS_PATHS: &[PathDef] = &[
-    PathDef { commands: MATH_PLUS_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static MATH_PLUS_PATHS: &[PathDef] = &[PathDef {
+    commands: MATH_PLUS_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static MATH_PLUS_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "0", "adj1", "73490"),
     gd!("dx1", MulDiv, "w", "73490", "200000"),
@@ -6769,18 +10848,37 @@ static MATH_PLUS: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 23520)],
     guides: MATH_PLUS_GUIDES,
     paths: MATH_PLUS_PATHS,
-    text_rect: Some(TextRectDef { l: "x1", t: "y2", r: "x4", b: "y3" }),
+    text_rect: Some(TextRectDef {
+        l: "x1",
+        t: "y2",
+        r: "x4",
+        b: "y3",
+    }),
 };
 
 static MOON_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "r", y: "b" },
-    PathCommandDef::ArcTo { wr: "w", hr: "hd2", st_ang: "cd4", sw_ang: "cd2" },
-    PathCommandDef::ArcTo { wr: "g18w", hr: "dy1", st_ang: "stAng1", sw_ang: "swAng1" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "hd2",
+        st_ang: "cd4",
+        sw_ang: "cd2",
+    },
+    PathCommandDef::ArcTo {
+        wr: "g18w",
+        hr: "dy1",
+        st_ang: "stAng1",
+        sw_ang: "swAng1",
+    },
     PathCommandDef::Close,
 ];
-static MOON_PATHS: &[PathDef] = &[
-    PathDef { commands: MOON_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static MOON_PATHS: &[PathDef] = &[PathDef {
+    commands: MOON_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static MOON_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "87500"),
     gd!("g0", MulDiv, "ss", "a", "100000"),
@@ -6821,7 +10919,12 @@ static MOON: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 50000)],
     guides: MOON_GUIDES,
     paths: MOON_PATHS,
-    text_rect: Some(TextRectDef { l: "g12w", t: "g15h", r: "g0w", b: "g16h" }),
+    text_rect: Some(TextRectDef {
+        l: "g12w",
+        t: "g15h",
+        r: "g0w",
+        b: "g16h",
+    }),
 };
 
 static NON_ISOSCELES_TRAPEZOID_CMDS: &[PathCommandDef] = &[
@@ -6831,9 +10934,13 @@ static NON_ISOSCELES_TRAPEZOID_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "r", y: "b" },
     PathCommandDef::Close,
 ];
-static NON_ISOSCELES_TRAPEZOID_PATHS: &[PathDef] = &[
-    PathDef { commands: NON_ISOSCELES_TRAPEZOID_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static NON_ISOSCELES_TRAPEZOID_PATHS: &[PathDef] = &[PathDef {
+    commands: NON_ISOSCELES_TRAPEZOID_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static NON_ISOSCELES_TRAPEZOID_GUIDES: &[GuideDef] = &[
     gd!("maxAdj", MulDiv, "50000", "w", "ss"),
     gd!("a1", Pin, "0", "adj1", "maxAdj"),
@@ -6853,26 +10960,65 @@ static NON_ISOSCELES_TRAPEZOID: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 25000), ("adj2", 25000)],
     guides: NON_ISOSCELES_TRAPEZOID_GUIDES,
     paths: NON_ISOSCELES_TRAPEZOID_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "b",
+    }),
 };
 
 static NO_SMOKING_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "vc" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd2", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "3cd4", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "0", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "x1", y: "y1" },
-    PathCommandDef::ArcTo { wr: "iwd2", hr: "ihd2", st_ang: "stAng1", sw_ang: "swAng" },
+    PathCommandDef::ArcTo {
+        wr: "iwd2",
+        hr: "ihd2",
+        st_ang: "stAng1",
+        sw_ang: "swAng",
+    },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "x2", y: "y2" },
-    PathCommandDef::ArcTo { wr: "iwd2", hr: "ihd2", st_ang: "stAng2", sw_ang: "swAng" },
+    PathCommandDef::ArcTo {
+        wr: "iwd2",
+        hr: "ihd2",
+        st_ang: "stAng2",
+        sw_ang: "swAng",
+    },
     PathCommandDef::Close,
 ];
-static NO_SMOKING_PATHS: &[PathDef] = &[
-    PathDef { commands: NO_SMOKING_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static NO_SMOKING_PATHS: &[PathDef] = &[PathDef {
+    commands: NO_SMOKING_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static NO_SMOKING_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
     gd!("dr", MulDiv, "ss", "a", "100000"),
@@ -6911,7 +11057,12 @@ static NO_SMOKING: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 18750)],
     guides: NO_SMOKING_GUIDES,
     paths: NO_SMOKING_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static NOTCHED_RIGHT_ARROW_CMDS: &[PathCommandDef] = &[
@@ -6925,9 +11076,13 @@ static NOTCHED_RIGHT_ARROW_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x1", y: "vc" },
     PathCommandDef::Close,
 ];
-static NOTCHED_RIGHT_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: NOTCHED_RIGHT_ARROW_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static NOTCHED_RIGHT_ARROW_PATHS: &[PathDef] = &[PathDef {
+    commands: NOTCHED_RIGHT_ARROW_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static NOTCHED_RIGHT_ARROW_GUIDES: &[GuideDef] = &[
     gd!("maxAdj2", MulDiv, "100000", "w", "ss"),
     gd!("a1", Pin, "0", "adj1", "100000"),
@@ -6944,7 +11099,12 @@ static NOTCHED_RIGHT_ARROW: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 50000), ("adj2", 50000)],
     guides: NOTCHED_RIGHT_ARROW_GUIDES,
     paths: NOTCHED_RIGHT_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "x1", t: "y1", r: "x3", b: "y2" }),
+    text_rect: Some(TextRectDef {
+        l: "x1",
+        t: "y1",
+        r: "x3",
+        b: "y2",
+    }),
 };
 
 static OCTAGON_CMDS: &[PathCommandDef] = &[
@@ -6958,9 +11118,13 @@ static OCTAGON_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "y2" },
     PathCommandDef::Close,
 ];
-static OCTAGON_PATHS: &[PathDef] = &[
-    PathDef { commands: OCTAGON_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static OCTAGON_PATHS: &[PathDef] = &[PathDef {
+    commands: OCTAGON_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static OCTAGON_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
     gd!("x1", MulDiv, "ss", "a", "100000"),
@@ -6974,7 +11138,12 @@ static OCTAGON: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 29289)],
     guides: OCTAGON_GUIDES,
     paths: OCTAGON_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "il", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "il",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static PARALLELOGRAM_CMDS: &[PathCommandDef] = &[
@@ -6984,9 +11153,13 @@ static PARALLELOGRAM_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x5", y: "b" },
     PathCommandDef::Close,
 ];
-static PARALLELOGRAM_PATHS: &[PathDef] = &[
-    PathDef { commands: PARALLELOGRAM_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static PARALLELOGRAM_PATHS: &[PathDef] = &[PathDef {
+    commands: PARALLELOGRAM_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static PARALLELOGRAM_GUIDES: &[GuideDef] = &[
     gd!("maxAdj", MulDiv, "100000", "w", "ss"),
     gd!("a", Pin, "0", "adj", "maxAdj"),
@@ -7011,7 +11184,12 @@ static PARALLELOGRAM: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 25000)],
     guides: PARALLELOGRAM_GUIDES,
     paths: PARALLELOGRAM_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static PENTAGON_CMDS: &[PathCommandDef] = &[
@@ -7022,9 +11200,13 @@ static PENTAGON_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x2", y: "y2" },
     PathCommandDef::Close,
 ];
-static PENTAGON_PATHS: &[PathDef] = &[
-    PathDef { commands: PENTAGON_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static PENTAGON_PATHS: &[PathDef] = &[PathDef {
+    commands: PENTAGON_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static PENTAGON_GUIDES: &[GuideDef] = &[
     gd!("swd2", MulDiv, "wd2", "hf", "100000"),
     gd!("shd2", MulDiv, "hd2", "vf", "100000"),
@@ -7045,18 +11227,32 @@ static PENTAGON: PresetDef = PresetDef {
     adjust_defaults: &[("hf", 105146), ("vf", 110557)],
     guides: PENTAGON_GUIDES,
     paths: PENTAGON_PATHS,
-    text_rect: Some(TextRectDef { l: "x2", t: "it", r: "x3", b: "y2" }),
+    text_rect: Some(TextRectDef {
+        l: "x2",
+        t: "it",
+        r: "x3",
+        b: "y2",
+    }),
 };
 
 static PIE_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x1", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "stAng", sw_ang: "swAng" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "stAng",
+        sw_ang: "swAng",
+    },
     PathCommandDef::LineTo { x: "hc", y: "vc" },
     PathCommandDef::Close,
 ];
-static PIE_PATHS: &[PathDef] = &[
-    PathDef { commands: PIE_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static PIE_PATHS: &[PathDef] = &[PathDef {
+    commands: PIE_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static PIE_GUIDES: &[GuideDef] = &[
     gd!("stAng", Pin, "0", "adj1", "21599999"),
     gd!("enAng", Pin, "0", "adj2", "21599999"),
@@ -7086,18 +11282,32 @@ static PIE: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 0), ("adj2", 16200000)],
     guides: PIE_GUIDES,
     paths: PIE_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "ir", r: "it", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "ir",
+        r: "it",
+        b: "ib",
+    }),
 };
 
 static PIE_WEDGE_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "b" },
-    PathCommandDef::ArcTo { wr: "w", hr: "h", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "h",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "r", y: "b" },
     PathCommandDef::Close,
 ];
-static PIE_WEDGE_PATHS: &[PathDef] = &[
-    PathDef { commands: PIE_WEDGE_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static PIE_WEDGE_PATHS: &[PathDef] = &[PathDef {
+    commands: PIE_WEDGE_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static PIE_WEDGE_GUIDES: &[GuideDef] = &[
     gd!("g1", Cos, "w", "13500000", ""),
     gd!("g2", Sin, "h", "13500000", ""),
@@ -7108,23 +11318,52 @@ static PIE_WEDGE: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: PIE_WEDGE_GUIDES,
     paths: PIE_WEDGE_PATHS,
-    text_rect: Some(TextRectDef { l: "x1", t: "y1", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "x1",
+        t: "y1",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static PLAQUE_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "x1" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "x2", y: "t" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "cd2", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "cd2",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "r", y: "y2" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "3cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "3cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "x1", y: "b" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "0", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "0",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::Close,
 ];
-static PLAQUE_PATHS: &[PathDef] = &[
-    PathDef { commands: PLAQUE_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static PLAQUE_PATHS: &[PathDef] = &[PathDef {
+    commands: PLAQUE_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static PLAQUE_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
     gd!("x1", MulDiv, "ss", "a", "100000"),
@@ -7138,38 +11377,87 @@ static PLAQUE: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 16667)],
     guides: PLAQUE_GUIDES,
     paths: PLAQUE_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "il", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "il",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static PLAQUE_TABS_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "t" },
     PathCommandDef::LineTo { x: "dx", y: "t" },
-    PathCommandDef::ArcTo { wr: "dx", hr: "dx", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "dx",
+        hr: "dx",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
 static PLAQUE_TABS_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "y1" },
-    PathCommandDef::ArcTo { wr: "dx", hr: "dx", st_ang: "3cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "dx",
+        hr: "dx",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "l", y: "b" },
     PathCommandDef::Close,
 ];
 static PLAQUE_TABS_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "r", y: "t" },
     PathCommandDef::LineTo { x: "r", y: "dx" },
-    PathCommandDef::ArcTo { wr: "dx", hr: "dx", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "dx",
+        hr: "dx",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
 static PLAQUE_TABS_P3_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x1", y: "b" },
-    PathCommandDef::ArcTo { wr: "dx", hr: "dx", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "dx",
+        hr: "dx",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "r", y: "b" },
     PathCommandDef::Close,
 ];
 static PLAQUE_TABS_PATHS: &[PathDef] = &[
-    PathDef { commands: PLAQUE_TABS_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-    PathDef { commands: PLAQUE_TABS_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-    PathDef { commands: PLAQUE_TABS_P2_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-    PathDef { commands: PLAQUE_TABS_P3_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
+    PathDef {
+        commands: PLAQUE_TABS_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: PLAQUE_TABS_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: PLAQUE_TABS_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: PLAQUE_TABS_P3_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
 ];
 static PLAQUE_TABS_GUIDES: &[GuideDef] = &[
     gd!("md", Mod, "w", "h", "0"),
@@ -7181,7 +11469,12 @@ static PLAQUE_TABS: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: PLAQUE_TABS_GUIDES,
     paths: PLAQUE_TABS_PATHS,
-    text_rect: Some(TextRectDef { l: "dx", t: "dx", r: "x1", b: "y1" }),
+    text_rect: Some(TextRectDef {
+        l: "dx",
+        t: "dx",
+        r: "x1",
+        b: "y1",
+    }),
 };
 
 static PLUS_CMDS: &[PathCommandDef] = &[
@@ -7199,9 +11492,13 @@ static PLUS_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "y2" },
     PathCommandDef::Close,
 ];
-static PLUS_PATHS: &[PathDef] = &[
-    PathDef { commands: PLUS_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static PLUS_PATHS: &[PathDef] = &[PathDef {
+    commands: PLUS_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static PLUS_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
     gd!("x1", MulDiv, "ss", "a", "100000"),
@@ -7217,7 +11514,12 @@ static PLUS: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 25000)],
     guides: PLUS_GUIDES,
     paths: PLUS_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static QUAD_ARROW_CMDS: &[PathCommandDef] = &[
@@ -7247,9 +11549,13 @@ static QUAD_ARROW_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x1", y: "y5" },
     PathCommandDef::Close,
 ];
-static QUAD_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: QUAD_ARROW_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static QUAD_ARROW_PATHS: &[PathDef] = &[PathDef {
+    commands: QUAD_ARROW_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static QUAD_ARROW_GUIDES: &[GuideDef] = &[
     gd!("a2", Pin, "0", "adj2", "50000"),
     gd!("maxAdj1", MulDiv, "a2", "2", "1"),
@@ -7277,7 +11583,12 @@ static QUAD_ARROW: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 22500), ("adj2", 22500), ("adj3", 22500)],
     guides: QUAD_ARROW_GUIDES,
     paths: QUAD_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "y3", r: "ir", b: "y4" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "y3",
+        r: "ir",
+        b: "y4",
+    }),
 };
 
 static QUAD_ARROW_CALLOUT_CMDS: &[PathCommandDef] = &[
@@ -7315,9 +11626,13 @@ static QUAD_ARROW_CALLOUT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "ah", y: "y6" },
     PathCommandDef::Close,
 ];
-static QUAD_ARROW_CALLOUT_PATHS: &[PathDef] = &[
-    PathDef { commands: QUAD_ARROW_CALLOUT_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static QUAD_ARROW_CALLOUT_PATHS: &[PathDef] = &[PathDef {
+    commands: QUAD_ARROW_CALLOUT_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static QUAD_ARROW_CALLOUT_GUIDES: &[GuideDef] = &[
     gd!("a2", Pin, "0", "adj2", "50000"),
     gd!("maxAdj1", MulDiv, "a2", "2", "1"),
@@ -7348,10 +11663,20 @@ static QUAD_ARROW_CALLOUT_GUIDES: &[GuideDef] = &[
     gd!("y5", AddSub, "vc", "dx3", "0"),
 ];
 static QUAD_ARROW_CALLOUT: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 18515), ("adj2", 18515), ("adj3", 18515), ("adj4", 48123)],
+    adjust_defaults: &[
+        ("adj1", 18515),
+        ("adj2", 18515),
+        ("adj3", 18515),
+        ("adj4", 48123),
+    ],
     guides: QUAD_ARROW_CALLOUT_GUIDES,
     paths: QUAD_ARROW_CALLOUT_PATHS,
-    text_rect: Some(TextRectDef { l: "x2", t: "y2", r: "x7", b: "y7" }),
+    text_rect: Some(TextRectDef {
+        l: "x2",
+        t: "y2",
+        r: "x7",
+        b: "y7",
+    }),
 };
 
 static RECT_CMDS: &[PathCommandDef] = &[
@@ -7361,34 +11686,73 @@ static RECT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "b" },
     PathCommandDef::Close,
 ];
-static RECT_PATHS: &[PathDef] = &[
-    PathDef { commands: RECT_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static RECT_PATHS: &[PathDef] = &[PathDef {
+    commands: RECT_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static RECT: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: &[],
     paths: RECT_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static RIBBON_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "t" },
     PathCommandDef::LineTo { x: "x4", y: "t" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "3cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "x3", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "3cd4", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::LineTo { x: "x8", y: "y2" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "cd4", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "cd4",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::LineTo { x: "x7", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "r", y: "t" },
     PathCommandDef::LineTo { x: "x10", y: "y3" },
     PathCommandDef::LineTo { x: "r", y: "y4" },
     PathCommandDef::LineTo { x: "x9", y: "y4" },
     PathCommandDef::LineTo { x: "x9", y: "y5" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x3", y: "b" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x2", y: "y4" },
     PathCommandDef::LineTo { x: "l", y: "y4" },
     PathCommandDef::LineTo { x: "wd8", y: "y3" },
@@ -7396,36 +11760,86 @@ static RIBBON_P0_CMDS: &[PathCommandDef] = &[
 ];
 static RIBBON_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x5", y: "hR" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x3", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "3cd4", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::LineTo { x: "x5", y: "y2" },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "x6", y: "hR" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "cd2", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "cd2",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "x8", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "3cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "x6", y: "y2" },
     PathCommandDef::Close,
 ];
 static RIBBON_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "t" },
     PathCommandDef::LineTo { x: "x4", y: "t" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "3cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "x3", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "3cd4", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::LineTo { x: "x8", y: "y2" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "cd4", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "cd4",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::LineTo { x: "x7", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "r", y: "t" },
     PathCommandDef::LineTo { x: "x10", y: "y3" },
     PathCommandDef::LineTo { x: "r", y: "y4" },
     PathCommandDef::LineTo { x: "x9", y: "y4" },
     PathCommandDef::LineTo { x: "x9", y: "y5" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x3", y: "b" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x2", y: "y4" },
     PathCommandDef::LineTo { x: "l", y: "y4" },
     PathCommandDef::LineTo { x: "wd8", y: "y3" },
@@ -7440,9 +11854,27 @@ static RIBBON_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x9", y: "y4" },
 ];
 static RIBBON_PATHS: &[PathDef] = &[
-    PathDef { commands: RIBBON_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: RIBBON_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: RIBBON_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: RIBBON_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: RIBBON_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: RIBBON_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static RIBBON_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "0", "adj1", "33333"),
@@ -7469,27 +11901,62 @@ static RIBBON: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 16667), ("adj2", 50000)],
     guides: RIBBON_GUIDES,
     paths: RIBBON_PATHS,
-    text_rect: Some(TextRectDef { l: "x2", t: "y2", r: "x9", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "x2",
+        t: "y2",
+        r: "x9",
+        b: "b",
+    }),
 };
 
 static RIBBON2_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "b" },
     PathCommandDef::LineTo { x: "x4", y: "b" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "cd4", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "cd4",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::LineTo { x: "x3", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "x8", y: "y2" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "3cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "x7", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "3cd4", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::LineTo { x: "r", y: "b" },
     PathCommandDef::LineTo { x: "x10", y: "y3" },
     PathCommandDef::LineTo { x: "r", y: "y4" },
     PathCommandDef::LineTo { x: "x9", y: "y4" },
     PathCommandDef::LineTo { x: "x9", y: "hR" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "0", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "0",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "x3", y: "t" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "3cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "x2", y: "y4" },
     PathCommandDef::LineTo { x: "l", y: "y4" },
     PathCommandDef::LineTo { x: "wd8", y: "y3" },
@@ -7497,15 +11964,35 @@ static RIBBON2_P0_CMDS: &[PathCommandDef] = &[
 ];
 static RIBBON2_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x5", y: "y6" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "0", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "0",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "x3", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "x5", y: "y2" },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "x6", y: "y6" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x8", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "cd4", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "cd4",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::LineTo { x: "x6", y: "y2" },
     PathCommandDef::Close,
 ];
@@ -7515,22 +12002,52 @@ static RIBBON2_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "y4" },
     PathCommandDef::LineTo { x: "x2", y: "y4" },
     PathCommandDef::LineTo { x: "x2", y: "hR" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x8", y: "t" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "3cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x9", y: "y4" },
     PathCommandDef::LineTo { x: "x9", y: "y4" },
     PathCommandDef::LineTo { x: "r", y: "y4" },
     PathCommandDef::LineTo { x: "x10", y: "y3" },
     PathCommandDef::LineTo { x: "r", y: "b" },
     PathCommandDef::LineTo { x: "x7", y: "b" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "x8", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "cd4", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "cd4",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::LineTo { x: "x3", y: "y2" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "3cd4", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::LineTo { x: "x4", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd32", hr: "hR", st_ang: "3cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "wd32",
+        hr: "hR",
+        st_ang: "3cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "x5", y: "y2" },
     PathCommandDef::LineTo { x: "x5", y: "y6" },
@@ -7542,9 +12059,27 @@ static RIBBON2_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x9", y: "y7" },
 ];
 static RIBBON2_PATHS: &[PathDef] = &[
-    PathDef { commands: RIBBON2_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: RIBBON2_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: RIBBON2_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: RIBBON2_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: RIBBON2_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: RIBBON2_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static RIBBON2_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "0", "adj1", "33333"),
@@ -7573,7 +12108,12 @@ static RIBBON2: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 16667), ("adj2", 50000)],
     guides: RIBBON2_GUIDES,
     paths: RIBBON2_PATHS,
-    text_rect: Some(TextRectDef { l: "x2", t: "t", r: "x9", b: "y2" }),
+    text_rect: Some(TextRectDef {
+        l: "x2",
+        t: "t",
+        r: "x9",
+        b: "y2",
+    }),
 };
 
 static RIGHT_ARROW_CMDS: &[PathCommandDef] = &[
@@ -7586,9 +12126,13 @@ static RIGHT_ARROW_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "y2" },
     PathCommandDef::Close,
 ];
-static RIGHT_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: RIGHT_ARROW_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static RIGHT_ARROW_PATHS: &[PathDef] = &[PathDef {
+    commands: RIGHT_ARROW_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static RIGHT_ARROW_GUIDES: &[GuideDef] = &[
     gd!("maxAdj2", MulDiv, "100000", "w", "ss"),
     gd!("a1", Pin, "0", "adj1", "100000"),
@@ -7605,7 +12149,12 @@ static RIGHT_ARROW: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 50000), ("adj2", 50000)],
     guides: RIGHT_ARROW_GUIDES,
     paths: RIGHT_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "y1", r: "x2", b: "y2" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "y1",
+        r: "x2",
+        b: "y2",
+    }),
 };
 
 static RIGHT_ARROW_CALLOUT_CMDS: &[PathCommandDef] = &[
@@ -7622,9 +12171,13 @@ static RIGHT_ARROW_CALLOUT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "b" },
     PathCommandDef::Close,
 ];
-static RIGHT_ARROW_CALLOUT_PATHS: &[PathDef] = &[
-    PathDef { commands: RIGHT_ARROW_CALLOUT_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static RIGHT_ARROW_CALLOUT_PATHS: &[PathDef] = &[PathDef {
+    commands: RIGHT_ARROW_CALLOUT_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static RIGHT_ARROW_CALLOUT_GUIDES: &[GuideDef] = &[
     gd!("maxAdj2", MulDiv, "50000", "h", "ss"),
     gd!("a2", Pin, "0", "adj2", "maxAdj2"),
@@ -7647,34 +12200,96 @@ static RIGHT_ARROW_CALLOUT_GUIDES: &[GuideDef] = &[
     gd!("x1", MulDiv, "x2", "1", "2"),
 ];
 static RIGHT_ARROW_CALLOUT: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 25000), ("adj2", 25000), ("adj3", 25000), ("adj4", 64977)],
+    adjust_defaults: &[
+        ("adj1", 25000),
+        ("adj2", 25000),
+        ("adj3", 25000),
+        ("adj4", 64977),
+    ],
     guides: RIGHT_ARROW_CALLOUT_GUIDES,
     paths: RIGHT_ARROW_CALLOUT_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "x2", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "x2",
+        b: "b",
+    }),
 };
 
 static RIGHT_BRACE_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "t" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "3cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "hc", y: "y2" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "cd2", sw_ang: "-5400000" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "3cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "cd2",
+        sw_ang: "-5400000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "3cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "hc", y: "y4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
 static RIGHT_BRACE_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "t" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "3cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "hc", y: "y2" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "cd2", sw_ang: "-5400000" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "3cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "cd2",
+        sw_ang: "-5400000",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "3cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "hc", y: "y4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "y1", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "y1",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
 ];
 static RIGHT_BRACE_PATHS: &[PathDef] = &[
-    PathDef { commands: RIGHT_BRACE_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: RIGHT_BRACE_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: RIGHT_BRACE_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: RIGHT_BRACE_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static RIGHT_BRACE_GUIDES: &[GuideDef] = &[
     gd!("a2", Pin, "0", "adj2", "100000"),
@@ -7697,25 +12312,62 @@ static RIGHT_BRACE: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 8333), ("adj2", 50000)],
     guides: RIGHT_BRACE_GUIDES,
     paths: RIGHT_BRACE_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static RIGHT_BRACKET_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "t" },
-    PathCommandDef::ArcTo { wr: "w", hr: "y1", st_ang: "3cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "y1",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "r", y: "y2" },
-    PathCommandDef::ArcTo { wr: "w", hr: "y1", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "y1",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
 static RIGHT_BRACKET_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "t" },
-    PathCommandDef::ArcTo { wr: "w", hr: "y1", st_ang: "3cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "y1",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "r", y: "y2" },
-    PathCommandDef::ArcTo { wr: "w", hr: "y1", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "w",
+        hr: "y1",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
 ];
 static RIGHT_BRACKET_PATHS: &[PathDef] = &[
-    PathDef { commands: RIGHT_BRACKET_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: RIGHT_BRACKET_P1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: RIGHT_BRACKET_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: RIGHT_BRACKET_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static RIGHT_BRACKET_GUIDES: &[GuideDef] = &[
     gd!("maxAdj", MulDiv, "50000", "h", "ss"),
@@ -7732,20 +12384,34 @@ static RIGHT_BRACKET: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 8333)],
     guides: RIGHT_BRACKET_GUIDES,
     paths: RIGHT_BRACKET_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static ROUND1_RECT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "t" },
     PathCommandDef::LineTo { x: "x1", y: "t" },
-    PathCommandDef::ArcTo { wr: "dx1", hr: "dx1", st_ang: "3cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "dx1",
+        hr: "dx1",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "r", y: "b" },
     PathCommandDef::LineTo { x: "l", y: "b" },
     PathCommandDef::Close,
 ];
-static ROUND1_RECT_PATHS: &[PathDef] = &[
-    PathDef { commands: ROUND1_RECT_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static ROUND1_RECT_PATHS: &[PathDef] = &[PathDef {
+    commands: ROUND1_RECT_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static ROUND1_RECT_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
     gd!("dx1", MulDiv, "ss", "a", "100000"),
@@ -7757,24 +12423,53 @@ static ROUND1_RECT: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 16667)],
     guides: ROUND1_RECT_GUIDES,
     paths: ROUND1_RECT_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "ir", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "ir",
+        b: "b",
+    }),
 };
 
 static ROUND2_DIAG_RECT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x1", y: "t" },
     PathCommandDef::LineTo { x: "x2", y: "t" },
-    PathCommandDef::ArcTo { wr: "a", hr: "a", st_ang: "3cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "a",
+        hr: "a",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "r", y: "y1" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "a", y: "b" },
-    PathCommandDef::ArcTo { wr: "a", hr: "a", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "a",
+        hr: "a",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "l", y: "x1" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
-static ROUND2_DIAG_RECT_PATHS: &[PathDef] = &[
-    PathDef { commands: ROUND2_DIAG_RECT_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static ROUND2_DIAG_RECT_PATHS: &[PathDef] = &[PathDef {
+    commands: ROUND2_DIAG_RECT_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static ROUND2_DIAG_RECT_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "0", "adj1", "50000"),
     gd!("a2", Pin, "0", "adj2", "50000"),
@@ -7794,24 +12489,53 @@ static ROUND2_DIAG_RECT: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 16667), ("adj2", 0)],
     guides: ROUND2_DIAG_RECT_GUIDES,
     paths: ROUND2_DIAG_RECT_PATHS,
-    text_rect: Some(TextRectDef { l: "dx", t: "dx", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "dx",
+        t: "dx",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static ROUND2_SAME_RECT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "tx1", y: "t" },
     PathCommandDef::LineTo { x: "tx2", y: "t" },
-    PathCommandDef::ArcTo { wr: "tx1", hr: "tx1", st_ang: "3cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "tx1",
+        hr: "tx1",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "r", y: "by1" },
-    PathCommandDef::ArcTo { wr: "bx1", hr: "bx1", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "bx1",
+        hr: "bx1",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "bx1", y: "b" },
-    PathCommandDef::ArcTo { wr: "bx1", hr: "bx1", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "bx1",
+        hr: "bx1",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "l", y: "tx1" },
-    PathCommandDef::ArcTo { wr: "tx1", hr: "tx1", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "tx1",
+        hr: "tx1",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
-static ROUND2_SAME_RECT_PATHS: &[PathDef] = &[
-    PathDef { commands: ROUND2_SAME_RECT_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static ROUND2_SAME_RECT_PATHS: &[PathDef] = &[PathDef {
+    commands: ROUND2_SAME_RECT_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static ROUND2_SAME_RECT_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "0", "adj1", "50000"),
     gd!("a2", Pin, "0", "adj2", "50000"),
@@ -7831,23 +12555,52 @@ static ROUND2_SAME_RECT: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 16667), ("adj2", 0)],
     guides: ROUND2_SAME_RECT_GUIDES,
     paths: ROUND2_SAME_RECT_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "tdx", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "tdx",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static ROUND_RECT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "x1" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x2", y: "t" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "3cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "r", y: "y2" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x1", y: "b" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
-static ROUND_RECT_PATHS: &[PathDef] = &[
-    PathDef { commands: ROUND_RECT_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static ROUND_RECT_PATHS: &[PathDef] = &[PathDef {
+    commands: ROUND_RECT_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static ROUND_RECT_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
     gd!("x1", MulDiv, "ss", "a", "100000"),
@@ -7861,7 +12614,12 @@ static ROUND_RECT: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 16667)],
     guides: ROUND_RECT_GUIDES,
     paths: ROUND_RECT_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "il", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "il",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static RT_TRIANGLE_CMDS: &[PathCommandDef] = &[
@@ -7870,9 +12628,13 @@ static RT_TRIANGLE_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "r", y: "b" },
     PathCommandDef::Close,
 ];
-static RT_TRIANGLE_PATHS: &[PathDef] = &[
-    PathDef { commands: RT_TRIANGLE_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static RT_TRIANGLE_PATHS: &[PathDef] = &[PathDef {
+    commands: RT_TRIANGLE_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static RT_TRIANGLE_GUIDES: &[GuideDef] = &[
     gd!("it", MulDiv, "h", "7", "12"),
     gd!("ir", MulDiv, "w", "7", "12"),
@@ -7882,34 +12644,88 @@ static RT_TRIANGLE: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: RT_TRIANGLE_GUIDES,
     paths: RT_TRIANGLE_PATHS,
-    text_rect: Some(TextRectDef { l: "wd12", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "wd12",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static SMILEY_FACE_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "vc" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd2", sw_ang: "21600000" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd2",
+        sw_ang: "21600000",
+    },
     PathCommandDef::Close,
 ];
 static SMILEY_FACE_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x2", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wR", hr: "hR", st_ang: "cd2", sw_ang: "21600000" },
+    PathCommandDef::ArcTo {
+        wr: "wR",
+        hr: "hR",
+        st_ang: "cd2",
+        sw_ang: "21600000",
+    },
     PathCommandDef::MoveTo { x: "x3", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wR", hr: "hR", st_ang: "cd2", sw_ang: "21600000" },
+    PathCommandDef::ArcTo {
+        wr: "wR",
+        hr: "hR",
+        st_ang: "cd2",
+        sw_ang: "21600000",
+    },
 ];
 static SMILEY_FACE_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x1", y: "y2" },
-    PathCommandDef::QuadBezTo { x1: "hc", y1: "y5", x2: "x4", y2: "y2" },
+    PathCommandDef::QuadBezTo {
+        x1: "hc",
+        y1: "y5",
+        x2: "x4",
+        y2: "y2",
+    },
 ];
 static SMILEY_FACE_P3_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "vc" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd2", sw_ang: "21600000" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd2",
+        sw_ang: "21600000",
+    },
     PathCommandDef::Close,
 ];
 static SMILEY_FACE_PATHS: &[PathDef] = &[
-    PathDef { commands: SMILEY_FACE_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: SMILEY_FACE_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-    PathDef { commands: SMILEY_FACE_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-    PathDef { commands: SMILEY_FACE_P3_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: SMILEY_FACE_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: SMILEY_FACE_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: SMILEY_FACE_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
+    PathDef {
+        commands: SMILEY_FACE_P3_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static SMILEY_FACE_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "-4653", "adj", "4653"),
@@ -7937,7 +12753,12 @@ static SMILEY_FACE: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 4653)],
     guides: SMILEY_FACE_GUIDES,
     paths: SMILEY_FACE_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static SNIP1_RECT_CMDS: &[PathCommandDef] = &[
@@ -7948,9 +12769,13 @@ static SNIP1_RECT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "b" },
     PathCommandDef::Close,
 ];
-static SNIP1_RECT_PATHS: &[PathDef] = &[
-    PathDef { commands: SNIP1_RECT_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static SNIP1_RECT_PATHS: &[PathDef] = &[PathDef {
+    commands: SNIP1_RECT_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static SNIP1_RECT_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
     gd!("dx1", MulDiv, "ss", "a", "100000"),
@@ -7962,7 +12787,12 @@ static SNIP1_RECT: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 16667)],
     guides: SNIP1_RECT_GUIDES,
     paths: SNIP1_RECT_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "it", r: "ir", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "it",
+        r: "ir",
+        b: "b",
+    }),
 };
 
 static SNIP2_DIAG_RECT_CMDS: &[PathCommandDef] = &[
@@ -7976,9 +12806,13 @@ static SNIP2_DIAG_RECT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "lx1" },
     PathCommandDef::Close,
 ];
-static SNIP2_DIAG_RECT_PATHS: &[PathDef] = &[
-    PathDef { commands: SNIP2_DIAG_RECT_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static SNIP2_DIAG_RECT_PATHS: &[PathDef] = &[PathDef {
+    commands: SNIP2_DIAG_RECT_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static SNIP2_DIAG_RECT_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "0", "adj1", "50000"),
     gd!("a2", Pin, "0", "adj2", "50000"),
@@ -7998,7 +12832,12 @@ static SNIP2_DIAG_RECT: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 0), ("adj2", 16667)],
     guides: SNIP2_DIAG_RECT_GUIDES,
     paths: SNIP2_DIAG_RECT_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "il", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "il",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static SNIP2_SAME_RECT_CMDS: &[PathCommandDef] = &[
@@ -8012,9 +12851,13 @@ static SNIP2_SAME_RECT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "tx1" },
     PathCommandDef::Close,
 ];
-static SNIP2_SAME_RECT_PATHS: &[PathDef] = &[
-    PathDef { commands: SNIP2_SAME_RECT_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static SNIP2_SAME_RECT_PATHS: &[PathDef] = &[PathDef {
+    commands: SNIP2_SAME_RECT_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static SNIP2_SAME_RECT_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "0", "adj1", "50000"),
     gd!("a2", Pin, "0", "adj2", "50000"),
@@ -8034,7 +12877,12 @@ static SNIP2_SAME_RECT: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 16667), ("adj2", 0)],
     guides: SNIP2_SAME_RECT_GUIDES,
     paths: SNIP2_SAME_RECT_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static SNIP_ROUND_RECT_CMDS: &[PathCommandDef] = &[
@@ -8044,12 +12892,21 @@ static SNIP_ROUND_RECT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "r", y: "b" },
     PathCommandDef::LineTo { x: "l", y: "b" },
     PathCommandDef::LineTo { x: "l", y: "x1" },
-    PathCommandDef::ArcTo { wr: "x1", hr: "x1", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "x1",
+        hr: "x1",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
-static SNIP_ROUND_RECT_PATHS: &[PathDef] = &[
-    PathDef { commands: SNIP_ROUND_RECT_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static SNIP_ROUND_RECT_PATHS: &[PathDef] = &[PathDef {
+    commands: SNIP_ROUND_RECT_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static SNIP_ROUND_RECT_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "0", "adj1", "50000"),
     gd!("a2", Pin, "0", "adj2", "50000"),
@@ -8063,7 +12920,12 @@ static SNIP_ROUND_RECT: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 16667), ("adj2", 16667)],
     guides: SNIP_ROUND_RECT_GUIDES,
     paths: SNIP_ROUND_RECT_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "il", r: "ir", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "il",
+        r: "ir",
+        b: "b",
+    }),
 };
 
 static SQUARE_TABS_P0_CMDS: &[PathCommandDef] = &[
@@ -8095,10 +12957,34 @@ static SQUARE_TABS_P3_CMDS: &[PathCommandDef] = &[
     PathCommandDef::Close,
 ];
 static SQUARE_TABS_PATHS: &[PathDef] = &[
-    PathDef { commands: SQUARE_TABS_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-    PathDef { commands: SQUARE_TABS_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-    PathDef { commands: SQUARE_TABS_P2_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-    PathDef { commands: SQUARE_TABS_P3_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
+    PathDef {
+        commands: SQUARE_TABS_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: SQUARE_TABS_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: SQUARE_TABS_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
+    PathDef {
+        commands: SQUARE_TABS_P3_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: true,
+    },
 ];
 static SQUARE_TABS_GUIDES: &[GuideDef] = &[
     gd!("md", Mod, "w", "h", "0"),
@@ -8110,7 +12996,12 @@ static SQUARE_TABS: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: SQUARE_TABS_GUIDES,
     paths: SQUARE_TABS_PATHS,
-    text_rect: Some(TextRectDef { l: "dx", t: "dx", r: "x1", b: "y1" }),
+    text_rect: Some(TextRectDef {
+        l: "dx",
+        t: "dx",
+        r: "x1",
+        b: "y1",
+    }),
 };
 
 static STAR10_CMDS: &[PathCommandDef] = &[
@@ -8136,9 +13027,13 @@ static STAR10_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "sx1", y: "vc" },
     PathCommandDef::Close,
 ];
-static STAR10_PATHS: &[PathDef] = &[
-    PathDef { commands: STAR10_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static STAR10_PATHS: &[PathDef] = &[PathDef {
+    commands: STAR10_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static STAR10_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
     gd!("swd2", MulDiv, "wd2", "hf", "100000"),
@@ -8176,7 +13071,12 @@ static STAR10: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 42533), ("hf", 105146)],
     guides: STAR10_GUIDES,
     paths: STAR10_PATHS,
-    text_rect: Some(TextRectDef { l: "sx2", t: "sy2", r: "sx5", b: "sy3" }),
+    text_rect: Some(TextRectDef {
+        l: "sx2",
+        t: "sy2",
+        r: "sx5",
+        b: "sy3",
+    }),
 };
 
 static STAR12_CMDS: &[PathCommandDef] = &[
@@ -8206,9 +13106,13 @@ static STAR12_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "sx1", y: "sy4" },
     PathCommandDef::Close,
 ];
-static STAR12_PATHS: &[PathDef] = &[
-    PathDef { commands: STAR12_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static STAR12_PATHS: &[PathDef] = &[PathDef {
+    commands: STAR12_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static STAR12_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
     gd!("dx1", Cos, "wd2", "1800000", ""),
@@ -8245,7 +13149,12 @@ static STAR12: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 37500)],
     guides: STAR12_GUIDES,
     paths: STAR12_PATHS,
-    text_rect: Some(TextRectDef { l: "sx2", t: "sy2", r: "sx5", b: "sy5" }),
+    text_rect: Some(TextRectDef {
+        l: "sx2",
+        t: "sy2",
+        r: "sx5",
+        b: "sy5",
+    }),
 };
 
 static STAR16_CMDS: &[PathCommandDef] = &[
@@ -8283,9 +13192,13 @@ static STAR16_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "sx1", y: "sy5" },
     PathCommandDef::Close,
 ];
-static STAR16_PATHS: &[PathDef] = &[
-    PathDef { commands: STAR16_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static STAR16_PATHS: &[PathDef] = &[PathDef {
+    commands: STAR16_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static STAR16_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
     gd!("dx1", MulDiv, "wd2", "92388", "100000"),
@@ -8344,7 +13257,12 @@ static STAR16: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 37500)],
     guides: STAR16_GUIDES,
     paths: STAR16_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static STAR24_CMDS: &[PathCommandDef] = &[
@@ -8367,29 +13285,65 @@ static STAR24_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x7", y: "y2" },
     PathCommandDef::LineTo { x: "sx9", y: "sy3" },
     PathCommandDef::LineTo { x: "x8", y: "y3" },
-    PathCommandDef::LineTo { x: "sx10", y: "sy4" },
+    PathCommandDef::LineTo {
+        x: "sx10",
+        y: "sy4",
+    },
     PathCommandDef::LineTo { x: "x9", y: "y4" },
-    PathCommandDef::LineTo { x: "sx11", y: "sy5" },
+    PathCommandDef::LineTo {
+        x: "sx11",
+        y: "sy5",
+    },
     PathCommandDef::LineTo { x: "x10", y: "y5" },
-    PathCommandDef::LineTo { x: "sx12", y: "sy6" },
+    PathCommandDef::LineTo {
+        x: "sx12",
+        y: "sy6",
+    },
     PathCommandDef::LineTo { x: "r", y: "vc" },
-    PathCommandDef::LineTo { x: "sx12", y: "sy7" },
+    PathCommandDef::LineTo {
+        x: "sx12",
+        y: "sy7",
+    },
     PathCommandDef::LineTo { x: "x10", y: "y6" },
-    PathCommandDef::LineTo { x: "sx11", y: "sy8" },
+    PathCommandDef::LineTo {
+        x: "sx11",
+        y: "sy8",
+    },
     PathCommandDef::LineTo { x: "x9", y: "y7" },
-    PathCommandDef::LineTo { x: "sx10", y: "sy9" },
+    PathCommandDef::LineTo {
+        x: "sx10",
+        y: "sy9",
+    },
     PathCommandDef::LineTo { x: "x8", y: "y8" },
-    PathCommandDef::LineTo { x: "sx9", y: "sy10" },
+    PathCommandDef::LineTo {
+        x: "sx9",
+        y: "sy10",
+    },
     PathCommandDef::LineTo { x: "x7", y: "y9" },
-    PathCommandDef::LineTo { x: "sx8", y: "sy11" },
+    PathCommandDef::LineTo {
+        x: "sx8",
+        y: "sy11",
+    },
     PathCommandDef::LineTo { x: "x6", y: "y10" },
-    PathCommandDef::LineTo { x: "sx7", y: "sy12" },
+    PathCommandDef::LineTo {
+        x: "sx7",
+        y: "sy12",
+    },
     PathCommandDef::LineTo { x: "hc", y: "b" },
-    PathCommandDef::LineTo { x: "sx6", y: "sy12" },
+    PathCommandDef::LineTo {
+        x: "sx6",
+        y: "sy12",
+    },
     PathCommandDef::LineTo { x: "x5", y: "y10" },
-    PathCommandDef::LineTo { x: "sx5", y: "sy11" },
+    PathCommandDef::LineTo {
+        x: "sx5",
+        y: "sy11",
+    },
     PathCommandDef::LineTo { x: "x4", y: "y9" },
-    PathCommandDef::LineTo { x: "sx4", y: "sy10" },
+    PathCommandDef::LineTo {
+        x: "sx4",
+        y: "sy10",
+    },
     PathCommandDef::LineTo { x: "x3", y: "y8" },
     PathCommandDef::LineTo { x: "sx3", y: "sy9" },
     PathCommandDef::LineTo { x: "x2", y: "y7" },
@@ -8398,9 +13352,13 @@ static STAR24_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "sx1", y: "sy7" },
     PathCommandDef::Close,
 ];
-static STAR24_PATHS: &[PathDef] = &[
-    PathDef { commands: STAR24_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static STAR24_PATHS: &[PathDef] = &[PathDef {
+    commands: STAR24_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static STAR24_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
     gd!("dx1", Cos, "wd2", "900000", ""),
@@ -8483,7 +13441,12 @@ static STAR24: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 37500)],
     guides: STAR24_GUIDES,
     paths: STAR24_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static STAR32_CMDS: &[PathCommandDef] = &[
@@ -8506,56 +13469,126 @@ static STAR32_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "hc", y: "t" },
     PathCommandDef::LineTo { x: "sx9", y: "sy1" },
     PathCommandDef::LineTo { x: "x8", y: "y1" },
-    PathCommandDef::LineTo { x: "sx10", y: "sy2" },
+    PathCommandDef::LineTo {
+        x: "sx10",
+        y: "sy2",
+    },
     PathCommandDef::LineTo { x: "x9", y: "y2" },
-    PathCommandDef::LineTo { x: "sx11", y: "sy3" },
+    PathCommandDef::LineTo {
+        x: "sx11",
+        y: "sy3",
+    },
     PathCommandDef::LineTo { x: "x10", y: "y3" },
-    PathCommandDef::LineTo { x: "sx12", y: "sy4" },
+    PathCommandDef::LineTo {
+        x: "sx12",
+        y: "sy4",
+    },
     PathCommandDef::LineTo { x: "x11", y: "y4" },
-    PathCommandDef::LineTo { x: "sx13", y: "sy5" },
+    PathCommandDef::LineTo {
+        x: "sx13",
+        y: "sy5",
+    },
     PathCommandDef::LineTo { x: "x12", y: "y5" },
-    PathCommandDef::LineTo { x: "sx14", y: "sy6" },
+    PathCommandDef::LineTo {
+        x: "sx14",
+        y: "sy6",
+    },
     PathCommandDef::LineTo { x: "x13", y: "y6" },
-    PathCommandDef::LineTo { x: "sx15", y: "sy7" },
+    PathCommandDef::LineTo {
+        x: "sx15",
+        y: "sy7",
+    },
     PathCommandDef::LineTo { x: "x14", y: "y7" },
-    PathCommandDef::LineTo { x: "sx16", y: "sy8" },
+    PathCommandDef::LineTo {
+        x: "sx16",
+        y: "sy8",
+    },
     PathCommandDef::LineTo { x: "r", y: "vc" },
-    PathCommandDef::LineTo { x: "sx16", y: "sy9" },
+    PathCommandDef::LineTo {
+        x: "sx16",
+        y: "sy9",
+    },
     PathCommandDef::LineTo { x: "x14", y: "y8" },
-    PathCommandDef::LineTo { x: "sx15", y: "sy10" },
+    PathCommandDef::LineTo {
+        x: "sx15",
+        y: "sy10",
+    },
     PathCommandDef::LineTo { x: "x13", y: "y9" },
-    PathCommandDef::LineTo { x: "sx14", y: "sy11" },
+    PathCommandDef::LineTo {
+        x: "sx14",
+        y: "sy11",
+    },
     PathCommandDef::LineTo { x: "x12", y: "y10" },
-    PathCommandDef::LineTo { x: "sx13", y: "sy12" },
+    PathCommandDef::LineTo {
+        x: "sx13",
+        y: "sy12",
+    },
     PathCommandDef::LineTo { x: "x11", y: "y11" },
-    PathCommandDef::LineTo { x: "sx12", y: "sy13" },
+    PathCommandDef::LineTo {
+        x: "sx12",
+        y: "sy13",
+    },
     PathCommandDef::LineTo { x: "x10", y: "y12" },
-    PathCommandDef::LineTo { x: "sx11", y: "sy14" },
+    PathCommandDef::LineTo {
+        x: "sx11",
+        y: "sy14",
+    },
     PathCommandDef::LineTo { x: "x9", y: "y13" },
-    PathCommandDef::LineTo { x: "sx10", y: "sy15" },
+    PathCommandDef::LineTo {
+        x: "sx10",
+        y: "sy15",
+    },
     PathCommandDef::LineTo { x: "x8", y: "y14" },
-    PathCommandDef::LineTo { x: "sx9", y: "sy16" },
+    PathCommandDef::LineTo {
+        x: "sx9",
+        y: "sy16",
+    },
     PathCommandDef::LineTo { x: "hc", y: "b" },
-    PathCommandDef::LineTo { x: "sx8", y: "sy16" },
+    PathCommandDef::LineTo {
+        x: "sx8",
+        y: "sy16",
+    },
     PathCommandDef::LineTo { x: "x7", y: "y14" },
-    PathCommandDef::LineTo { x: "sx7", y: "sy15" },
+    PathCommandDef::LineTo {
+        x: "sx7",
+        y: "sy15",
+    },
     PathCommandDef::LineTo { x: "x6", y: "y13" },
-    PathCommandDef::LineTo { x: "sx6", y: "sy14" },
+    PathCommandDef::LineTo {
+        x: "sx6",
+        y: "sy14",
+    },
     PathCommandDef::LineTo { x: "x5", y: "y12" },
-    PathCommandDef::LineTo { x: "sx5", y: "sy13" },
+    PathCommandDef::LineTo {
+        x: "sx5",
+        y: "sy13",
+    },
     PathCommandDef::LineTo { x: "x4", y: "y11" },
-    PathCommandDef::LineTo { x: "sx4", y: "sy12" },
+    PathCommandDef::LineTo {
+        x: "sx4",
+        y: "sy12",
+    },
     PathCommandDef::LineTo { x: "x3", y: "y10" },
-    PathCommandDef::LineTo { x: "sx3", y: "sy11" },
+    PathCommandDef::LineTo {
+        x: "sx3",
+        y: "sy11",
+    },
     PathCommandDef::LineTo { x: "x2", y: "y9" },
-    PathCommandDef::LineTo { x: "sx2", y: "sy10" },
+    PathCommandDef::LineTo {
+        x: "sx2",
+        y: "sy10",
+    },
     PathCommandDef::LineTo { x: "x1", y: "y8" },
     PathCommandDef::LineTo { x: "sx1", y: "sy9" },
     PathCommandDef::Close,
 ];
-static STAR32_PATHS: &[PathDef] = &[
-    PathDef { commands: STAR32_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static STAR32_PATHS: &[PathDef] = &[PathDef {
+    commands: STAR32_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static STAR32_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
     gd!("dx1", MulDiv, "wd2", "98079", "100000"),
@@ -8662,7 +13695,12 @@ static STAR32: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 37500)],
     guides: STAR32_GUIDES,
     paths: STAR32_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static STAR4_CMDS: &[PathCommandDef] = &[
@@ -8676,9 +13714,13 @@ static STAR4_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "sx1", y: "sy2" },
     PathCommandDef::Close,
 ];
-static STAR4_PATHS: &[PathDef] = &[
-    PathDef { commands: STAR4_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static STAR4_PATHS: &[PathDef] = &[PathDef {
+    commands: STAR4_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static STAR4_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
     gd!("iwd2", MulDiv, "wd2", "a", "50000"),
@@ -8695,7 +13737,12 @@ static STAR4: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 12500)],
     guides: STAR4_GUIDES,
     paths: STAR4_PATHS,
-    text_rect: Some(TextRectDef { l: "sx1", t: "sy1", r: "sx2", b: "sy2" }),
+    text_rect: Some(TextRectDef {
+        l: "sx1",
+        t: "sy1",
+        r: "sx2",
+        b: "sy2",
+    }),
 };
 
 static STAR5_CMDS: &[PathCommandDef] = &[
@@ -8711,9 +13758,13 @@ static STAR5_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "sx1", y: "sy2" },
     PathCommandDef::Close,
 ];
-static STAR5_PATHS: &[PathDef] = &[
-    PathDef { commands: STAR5_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static STAR5_PATHS: &[PathDef] = &[PathDef {
+    commands: STAR5_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static STAR5_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
     gd!("swd2", MulDiv, "wd2", "hf", "100000"),
@@ -8748,7 +13799,12 @@ static STAR5: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 19098), ("hf", 105146), ("vf", 110557)],
     guides: STAR5_GUIDES,
     paths: STAR5_PATHS,
-    text_rect: Some(TextRectDef { l: "sx1", t: "sy1", r: "sx4", b: "sy3" }),
+    text_rect: Some(TextRectDef {
+        l: "sx1",
+        t: "sy1",
+        r: "sx4",
+        b: "sy3",
+    }),
 };
 
 static STAR6_CMDS: &[PathCommandDef] = &[
@@ -8766,9 +13822,13 @@ static STAR6_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "sx1", y: "vc" },
     PathCommandDef::Close,
 ];
-static STAR6_PATHS: &[PathDef] = &[
-    PathDef { commands: STAR6_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static STAR6_PATHS: &[PathDef] = &[PathDef {
+    commands: STAR6_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static STAR6_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
     gd!("swd2", MulDiv, "wd2", "hf", "100000"),
@@ -8792,7 +13852,12 @@ static STAR6: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 28868), ("hf", 115470)],
     guides: STAR6_GUIDES,
     paths: STAR6_PATHS,
-    text_rect: Some(TextRectDef { l: "sx1", t: "sy1", r: "sx4", b: "sy2" }),
+    text_rect: Some(TextRectDef {
+        l: "sx1",
+        t: "sy1",
+        r: "sx4",
+        b: "sy2",
+    }),
 };
 
 static STAR7_CMDS: &[PathCommandDef] = &[
@@ -8812,9 +13877,13 @@ static STAR7_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "sx2", y: "sy3" },
     PathCommandDef::Close,
 ];
-static STAR7_PATHS: &[PathDef] = &[
-    PathDef { commands: STAR7_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static STAR7_PATHS: &[PathDef] = &[PathDef {
+    commands: STAR7_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static STAR7_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
     gd!("swd2", MulDiv, "wd2", "hf", "100000"),
@@ -8859,7 +13928,12 @@ static STAR7: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 34601), ("hf", 102572), ("vf", 105210)],
     guides: STAR7_GUIDES,
     paths: STAR7_PATHS,
-    text_rect: Some(TextRectDef { l: "sx2", t: "sy1", r: "sx5", b: "sy3" }),
+    text_rect: Some(TextRectDef {
+        l: "sx2",
+        t: "sy1",
+        r: "sx5",
+        b: "sy3",
+    }),
 };
 
 static STAR8_CMDS: &[PathCommandDef] = &[
@@ -8881,9 +13955,13 @@ static STAR8_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "sx1", y: "sy3" },
     PathCommandDef::Close,
 ];
-static STAR8_PATHS: &[PathDef] = &[
-    PathDef { commands: STAR8_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static STAR8_PATHS: &[PathDef] = &[PathDef {
+    commands: STAR8_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static STAR8_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "50000"),
     gd!("dx1", Cos, "wd2", "2700000", ""),
@@ -8912,33 +13990,59 @@ static STAR8: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 37500)],
     guides: STAR8_GUIDES,
     paths: STAR8_PATHS,
-    text_rect: Some(TextRectDef { l: "sx1", t: "sy1", r: "sx4", b: "sy4" }),
+    text_rect: Some(TextRectDef {
+        l: "sx1",
+        t: "sy1",
+        r: "sx4",
+        b: "sy4",
+    }),
 };
 
 static STRAIGHT_CONNECTOR1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "t" },
     PathCommandDef::LineTo { x: "r", y: "b" },
 ];
-static STRAIGHT_CONNECTOR1_PATHS: &[PathDef] = &[
-    PathDef { commands: STRAIGHT_CONNECTOR1_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
-];
+static STRAIGHT_CONNECTOR1_PATHS: &[PathDef] = &[PathDef {
+    commands: STRAIGHT_CONNECTOR1_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::None,
+    stroke: true,
+}];
 static STRAIGHT_CONNECTOR1: PresetDef = PresetDef {
     adjust_defaults: &[],
     guides: &[],
     paths: STRAIGHT_CONNECTOR1_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static STRIPED_RIGHT_ARROW_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "y1" },
-    PathCommandDef::LineTo { x: "ssd32", y: "y1" },
-    PathCommandDef::LineTo { x: "ssd32", y: "y2" },
+    PathCommandDef::LineTo {
+        x: "ssd32",
+        y: "y1",
+    },
+    PathCommandDef::LineTo {
+        x: "ssd32",
+        y: "y2",
+    },
     PathCommandDef::LineTo { x: "l", y: "y2" },
     PathCommandDef::Close,
-    PathCommandDef::MoveTo { x: "ssd16", y: "y1" },
+    PathCommandDef::MoveTo {
+        x: "ssd16",
+        y: "y1",
+    },
     PathCommandDef::LineTo { x: "ssd8", y: "y1" },
     PathCommandDef::LineTo { x: "ssd8", y: "y2" },
-    PathCommandDef::LineTo { x: "ssd16", y: "y2" },
+    PathCommandDef::LineTo {
+        x: "ssd16",
+        y: "y2",
+    },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "x4", y: "y1" },
     PathCommandDef::LineTo { x: "x5", y: "y1" },
@@ -8949,9 +14053,13 @@ static STRIPED_RIGHT_ARROW_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x4", y: "y2" },
     PathCommandDef::Close,
 ];
-static STRIPED_RIGHT_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: STRIPED_RIGHT_ARROW_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static STRIPED_RIGHT_ARROW_PATHS: &[PathDef] = &[PathDef {
+    commands: STRIPED_RIGHT_ARROW_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static STRIPED_RIGHT_ARROW_GUIDES: &[GuideDef] = &[
     gd!("maxAdj2", MulDiv, "84375", "w", "ss"),
     gd!("a1", Pin, "0", "adj1", "100000"),
@@ -8969,7 +14077,12 @@ static STRIPED_RIGHT_ARROW: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 50000), ("adj2", 50000)],
     guides: STRIPED_RIGHT_ARROW_GUIDES,
     paths: STRIPED_RIGHT_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "x4", t: "y1", r: "x6", b: "y2" }),
+    text_rect: Some(TextRectDef {
+        l: "x4",
+        t: "y1",
+        r: "x6",
+        b: "y2",
+    }),
 };
 
 static SUN_CMDS: &[PathCommandDef] = &[
@@ -9006,12 +14119,21 @@ static SUN_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x16", y: "y17" },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "x19", y: "vc" },
-    PathCommandDef::ArcTo { wr: "wR", hr: "hR", st_ang: "cd2", sw_ang: "21600000" },
+    PathCommandDef::ArcTo {
+        wr: "wR",
+        hr: "hR",
+        st_ang: "cd2",
+        sw_ang: "21600000",
+    },
     PathCommandDef::Close,
 ];
-static SUN_PATHS: &[PathDef] = &[
-    PathDef { commands: SUN_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static SUN_PATHS: &[PathDef] = &[PathDef {
+    commands: SUN_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static SUN_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "12500", "adj", "46875"),
     gd!("g0", AddSub, "50000", "0", "a"),
@@ -9065,22 +14187,41 @@ static SUN: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 25000)],
     guides: SUN_GUIDES,
     paths: SUN_PATHS,
-    text_rect: Some(TextRectDef { l: "x9", t: "y9", r: "x8", b: "y8" }),
+    text_rect: Some(TextRectDef {
+        l: "x9",
+        t: "y9",
+        r: "x8",
+        b: "y8",
+    }),
 };
 
 static SWOOSH_ARROW_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "b" },
-    PathCommandDef::QuadBezTo { x1: "xP1", y1: "yP1", x2: "xB", y2: "yB" },
+    PathCommandDef::QuadBezTo {
+        x1: "xP1",
+        y1: "yP1",
+        x2: "xB",
+        y2: "yB",
+    },
     PathCommandDef::LineTo { x: "xC", y: "t" },
     PathCommandDef::LineTo { x: "r", y: "yD" },
     PathCommandDef::LineTo { x: "xE", y: "yE" },
     PathCommandDef::LineTo { x: "xF", y: "yF" },
-    PathCommandDef::QuadBezTo { x1: "xP2", y1: "yP2", x2: "l", y2: "b" },
+    PathCommandDef::QuadBezTo {
+        x1: "xP2",
+        y1: "yP2",
+        x2: "l",
+        y2: "b",
+    },
     PathCommandDef::Close,
 ];
-static SWOOSH_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: SWOOSH_ARROW_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static SWOOSH_ARROW_PATHS: &[PathDef] = &[PathDef {
+    commands: SWOOSH_ARROW_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static SWOOSH_ARROW_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "1", "adj1", "75000"),
     gd!("maxAdj2", MulDiv, "70000", "w", "ss"),
@@ -9112,21 +14253,55 @@ static SWOOSH_ARROW: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 25000), ("adj2", 16667)],
     guides: SWOOSH_ARROW_GUIDES,
     paths: SWOOSH_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static TEARDROP_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "vc" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd2", sw_ang: "cd4" },
-    PathCommandDef::QuadBezTo { x1: "x2", y1: "t", x2: "x1", y2: "y1" },
-    PathCommandDef::QuadBezTo { x1: "r", y1: "y2", x2: "r", y2: "vc" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "0", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::QuadBezTo {
+        x1: "x2",
+        y1: "t",
+        x2: "x1",
+        y2: "y1",
+    },
+    PathCommandDef::QuadBezTo {
+        x1: "r",
+        y1: "y2",
+        x2: "r",
+        y2: "vc",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
 ];
-static TEARDROP_PATHS: &[PathDef] = &[
-    PathDef { commands: TEARDROP_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static TEARDROP_PATHS: &[PathDef] = &[PathDef {
+    commands: TEARDROP_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static TEARDROP_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "200000"),
     gd!("r2", Sqrt, "2", "", ""),
@@ -9151,7 +14326,12 @@ static TEARDROP: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 100000)],
     guides: TEARDROP_GUIDES,
     paths: TEARDROP_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static TRAPEZOID_CMDS: &[PathCommandDef] = &[
@@ -9161,9 +14341,13 @@ static TRAPEZOID_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "r", y: "b" },
     PathCommandDef::Close,
 ];
-static TRAPEZOID_PATHS: &[PathDef] = &[
-    PathDef { commands: TRAPEZOID_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static TRAPEZOID_PATHS: &[PathDef] = &[PathDef {
+    commands: TRAPEZOID_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static TRAPEZOID_GUIDES: &[GuideDef] = &[
     gd!("maxAdj", MulDiv, "50000", "w", "ss"),
     gd!("a", Pin, "0", "adj", "maxAdj"),
@@ -9179,7 +14363,12 @@ static TRAPEZOID: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 25000)],
     guides: TRAPEZOID_GUIDES,
     paths: TRAPEZOID_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "b",
+    }),
 };
 
 static TRIANGLE_CMDS: &[PathCommandDef] = &[
@@ -9188,9 +14377,13 @@ static TRIANGLE_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "r", y: "b" },
     PathCommandDef::Close,
 ];
-static TRIANGLE_PATHS: &[PathDef] = &[
-    PathDef { commands: TRIANGLE_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static TRIANGLE_PATHS: &[PathDef] = &[PathDef {
+    commands: TRIANGLE_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static TRIANGLE_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "100000"),
     gd!("x1", MulDiv, "w", "a", "200000"),
@@ -9201,7 +14394,12 @@ static TRIANGLE: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 50000)],
     guides: TRIANGLE_GUIDES,
     paths: TRIANGLE_PATHS,
-    text_rect: Some(TextRectDef { l: "x1", t: "vc", r: "x3", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "x1",
+        t: "vc",
+        r: "x3",
+        b: "b",
+    }),
 };
 
 static UP_ARROW_CALLOUT_CMDS: &[PathCommandDef] = &[
@@ -9218,9 +14416,13 @@ static UP_ARROW_CALLOUT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "b" },
     PathCommandDef::Close,
 ];
-static UP_ARROW_CALLOUT_PATHS: &[PathDef] = &[
-    PathDef { commands: UP_ARROW_CALLOUT_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static UP_ARROW_CALLOUT_PATHS: &[PathDef] = &[PathDef {
+    commands: UP_ARROW_CALLOUT_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static UP_ARROW_CALLOUT_GUIDES: &[GuideDef] = &[
     gd!("maxAdj2", MulDiv, "50000", "w", "ss"),
     gd!("a2", Pin, "0", "adj2", "maxAdj2"),
@@ -9243,10 +14445,20 @@ static UP_ARROW_CALLOUT_GUIDES: &[GuideDef] = &[
     gd!("y3", AddDiv, "y2", "b", "2"),
 ];
 static UP_ARROW_CALLOUT: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 25000), ("adj2", 25000), ("adj3", 25000), ("adj4", 64977)],
+    adjust_defaults: &[
+        ("adj1", 25000),
+        ("adj2", 25000),
+        ("adj3", 25000),
+        ("adj4", 64977),
+    ],
     guides: UP_ARROW_CALLOUT_GUIDES,
     paths: UP_ARROW_CALLOUT_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "y2", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "y2",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static UP_DOWN_ARROW_CMDS: &[PathCommandDef] = &[
@@ -9262,9 +14474,13 @@ static UP_DOWN_ARROW_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x1", y: "y2" },
     PathCommandDef::Close,
 ];
-static UP_DOWN_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: UP_DOWN_ARROW_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static UP_DOWN_ARROW_PATHS: &[PathDef] = &[PathDef {
+    commands: UP_DOWN_ARROW_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static UP_DOWN_ARROW_GUIDES: &[GuideDef] = &[
     gd!("maxAdj2", MulDiv, "50000", "h", "ss"),
     gd!("a1", Pin, "0", "adj1", "100000"),
@@ -9282,7 +14498,12 @@ static UP_DOWN_ARROW: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 50000), ("adj2", 50000)],
     guides: UP_DOWN_ARROW_GUIDES,
     paths: UP_DOWN_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "x1", t: "y1", r: "x2", b: "y4" }),
+    text_rect: Some(TextRectDef {
+        l: "x1",
+        t: "y1",
+        r: "x2",
+        b: "y4",
+    }),
 };
 
 static UP_ARROW_CMDS: &[PathCommandDef] = &[
@@ -9295,9 +14516,13 @@ static UP_ARROW_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "x1", y: "y2" },
     PathCommandDef::Close,
 ];
-static UP_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: UP_ARROW_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static UP_ARROW_PATHS: &[PathDef] = &[PathDef {
+    commands: UP_ARROW_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static UP_ARROW_GUIDES: &[GuideDef] = &[
     gd!("maxAdj2", MulDiv, "100000", "h", "ss"),
     gd!("a1", Pin, "0", "adj1", "100000"),
@@ -9314,7 +14539,12 @@ static UP_ARROW: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 50000), ("adj2", 50000)],
     guides: UP_ARROW_GUIDES,
     paths: UP_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "x1", t: "y1", r: "x2", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "x1",
+        t: "y1",
+        r: "x2",
+        b: "b",
+    }),
 };
 
 static UP_DOWN_ARROW_CALLOUT_CMDS: &[PathCommandDef] = &[
@@ -9338,9 +14568,13 @@ static UP_DOWN_ARROW_CALLOUT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "y3" },
     PathCommandDef::Close,
 ];
-static UP_DOWN_ARROW_CALLOUT_PATHS: &[PathDef] = &[
-    PathDef { commands: UP_DOWN_ARROW_CALLOUT_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static UP_DOWN_ARROW_CALLOUT_PATHS: &[PathDef] = &[PathDef {
+    commands: UP_DOWN_ARROW_CALLOUT_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static UP_DOWN_ARROW_CALLOUT_GUIDES: &[GuideDef] = &[
     gd!("maxAdj2", MulDiv, "50000", "w", "ss"),
     gd!("a2", Pin, "0", "adj2", "maxAdj2"),
@@ -9364,33 +14598,67 @@ static UP_DOWN_ARROW_CALLOUT_GUIDES: &[GuideDef] = &[
     gd!("y3", AddSub, "vc", "dy2", "0"),
 ];
 static UP_DOWN_ARROW_CALLOUT: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 25000), ("adj2", 25000), ("adj3", 25000), ("adj4", 48123)],
+    adjust_defaults: &[
+        ("adj1", 25000),
+        ("adj2", 25000),
+        ("adj3", 25000),
+        ("adj4", 48123),
+    ],
     guides: UP_DOWN_ARROW_CALLOUT_GUIDES,
     paths: UP_DOWN_ARROW_CALLOUT_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "y2", r: "r", b: "y3" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "y2",
+        r: "r",
+        b: "y3",
+    }),
 };
 
 static UTURN_ARROW_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "b" },
     PathCommandDef::LineTo { x: "l", y: "bd" },
-    PathCommandDef::ArcTo { wr: "bd", hr: "bd", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "bd",
+        hr: "bd",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x4", y: "t" },
-    PathCommandDef::ArcTo { wr: "bd", hr: "bd", st_ang: "3cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "bd",
+        hr: "bd",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x9", y: "y4" },
     PathCommandDef::LineTo { x: "r", y: "y4" },
     PathCommandDef::LineTo { x: "x8", y: "y5" },
     PathCommandDef::LineTo { x: "x6", y: "y4" },
     PathCommandDef::LineTo { x: "x7", y: "y4" },
     PathCommandDef::LineTo { x: "x7", y: "x3" },
-    PathCommandDef::ArcTo { wr: "bd2", hr: "bd2", st_ang: "0", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "bd2",
+        hr: "bd2",
+        st_ang: "0",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "x3", y: "th" },
-    PathCommandDef::ArcTo { wr: "bd2", hr: "bd2", st_ang: "3cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "bd2",
+        hr: "bd2",
+        st_ang: "3cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "th", y: "b" },
     PathCommandDef::Close,
 ];
-static UTURN_ARROW_PATHS: &[PathDef] = &[
-    PathDef { commands: UTURN_ARROW_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static UTURN_ARROW_PATHS: &[PathDef] = &[PathDef {
+    commands: UTURN_ARROW_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static UTURN_ARROW_GUIDES: &[GuideDef] = &[
     gd!("a2", Pin, "0", "adj2", "25000"),
     gd!("maxAdj1", MulDiv, "a2", "2", "1"),
@@ -9426,70 +14694,194 @@ static UTURN_ARROW_GUIDES: &[GuideDef] = &[
     gd!("cx", AddDiv, "th", "x7", "2"),
 ];
 static UTURN_ARROW: PresetDef = PresetDef {
-    adjust_defaults: &[("adj1", 25000), ("adj2", 25000), ("adj3", 25000), ("adj4", 43750), ("adj5", 75000)],
+    adjust_defaults: &[
+        ("adj1", 25000),
+        ("adj2", 25000),
+        ("adj3", 25000),
+        ("adj4", 43750),
+        ("adj5", 75000),
+    ],
     guides: UTURN_ARROW_GUIDES,
     paths: UTURN_ARROW_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static VERTICAL_SCROLL_P0_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "ch2", y: "b" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "ch2", y: "y4" },
-    PathCommandDef::ArcTo { wr: "ch4", hr: "ch4", st_ang: "cd4", sw_ang: "-10800000" },
+    PathCommandDef::ArcTo {
+        wr: "ch4",
+        hr: "ch4",
+        st_ang: "cd4",
+        sw_ang: "-10800000",
+    },
     PathCommandDef::LineTo { x: "ch", y: "y3" },
     PathCommandDef::LineTo { x: "ch", y: "ch2" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x7", y: "t" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "3cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "3cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "x6", y: "ch" },
     PathCommandDef::LineTo { x: "x6", y: "y4" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "x4", y: "ch2" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "0", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "ch4", hr: "ch4", st_ang: "cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "ch4",
+        hr: "ch4",
+        st_ang: "cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::Close,
 ];
 static VERTICAL_SCROLL_P1_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x4", y: "ch2" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "0", sw_ang: "cd4" },
-    PathCommandDef::ArcTo { wr: "ch4", hr: "ch4", st_ang: "cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "ch4",
+        hr: "ch4",
+        st_ang: "cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "ch", y: "y4" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "0", sw_ang: "3cd4" },
-    PathCommandDef::ArcTo { wr: "ch4", hr: "ch4", st_ang: "3cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "0",
+        sw_ang: "3cd4",
+    },
+    PathCommandDef::ArcTo {
+        wr: "ch4",
+        hr: "ch4",
+        st_ang: "3cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::Close,
 ];
 static VERTICAL_SCROLL_P2_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "ch", y: "y3" },
     PathCommandDef::LineTo { x: "ch", y: "ch2" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x7", y: "t" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "3cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "3cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "x6", y: "ch" },
     PathCommandDef::LineTo { x: "x6", y: "y4" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "ch2", y: "b" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::Close,
     PathCommandDef::MoveTo { x: "x3", y: "t" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "3cd4", sw_ang: "cd2" },
-    PathCommandDef::ArcTo { wr: "ch4", hr: "ch4", st_ang: "cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "3cd4",
+        sw_ang: "cd2",
+    },
+    PathCommandDef::ArcTo {
+        wr: "ch4",
+        hr: "ch4",
+        st_ang: "cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "x4", y: "ch2" },
     PathCommandDef::MoveTo { x: "x6", y: "ch" },
     PathCommandDef::LineTo { x: "x3", y: "ch" },
     PathCommandDef::MoveTo { x: "ch2", y: "y3" },
-    PathCommandDef::ArcTo { wr: "ch4", hr: "ch4", st_ang: "3cd4", sw_ang: "cd2" },
+    PathCommandDef::ArcTo {
+        wr: "ch4",
+        hr: "ch4",
+        st_ang: "3cd4",
+        sw_ang: "cd2",
+    },
     PathCommandDef::LineTo { x: "ch", y: "y4" },
     PathCommandDef::MoveTo { x: "ch2", y: "b" },
-    PathCommandDef::ArcTo { wr: "ch2", hr: "ch2", st_ang: "cd4", sw_ang: "-5400000" },
+    PathCommandDef::ArcTo {
+        wr: "ch2",
+        hr: "ch2",
+        st_ang: "cd4",
+        sw_ang: "-5400000",
+    },
     PathCommandDef::LineTo { x: "ch", y: "y3" },
 ];
 static VERTICAL_SCROLL_PATHS: &[PathDef] = &[
-    PathDef { commands: VERTICAL_SCROLL_P0_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: VERTICAL_SCROLL_P1_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: false },
-    PathDef { commands: VERTICAL_SCROLL_P2_CMDS, w: None, h: None, fill: PathFill::None, stroke: true },
+    PathDef {
+        commands: VERTICAL_SCROLL_P0_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: VERTICAL_SCROLL_P1_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::Norm,
+        stroke: false,
+    },
+    PathDef {
+        commands: VERTICAL_SCROLL_P2_CMDS,
+        w: None,
+        h: None,
+        fill: PathFill::None,
+        stroke: true,
+    },
 ];
 static VERTICAL_SCROLL_GUIDES: &[GuideDef] = &[
     gd!("a", Pin, "0", "adj", "25000"),
@@ -9508,19 +14900,42 @@ static VERTICAL_SCROLL: PresetDef = PresetDef {
     adjust_defaults: &[("adj", 12500)],
     guides: VERTICAL_SCROLL_GUIDES,
     paths: VERTICAL_SCROLL_PATHS,
-    text_rect: Some(TextRectDef { l: "ch", t: "ch", r: "x6", b: "y4" }),
+    text_rect: Some(TextRectDef {
+        l: "ch",
+        t: "ch",
+        r: "x6",
+        b: "y4",
+    }),
 };
 
 static WAVE_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "x2", y: "y1" },
-    PathCommandDef::CubicBezTo { x1: "x3", y1: "y2", x2: "x4", y2: "y3", x3: "x5", y3: "y1" },
+    PathCommandDef::CubicBezTo {
+        x1: "x3",
+        y1: "y2",
+        x2: "x4",
+        y2: "y3",
+        x3: "x5",
+        y3: "y1",
+    },
     PathCommandDef::LineTo { x: "x10", y: "y4" },
-    PathCommandDef::CubicBezTo { x1: "x8", y1: "y6", x2: "x7", y2: "y5", x3: "x6", y3: "y4" },
+    PathCommandDef::CubicBezTo {
+        x1: "x8",
+        y1: "y6",
+        x2: "x7",
+        y2: "y5",
+        x3: "x6",
+        y3: "y4",
+    },
     PathCommandDef::Close,
 ];
-static WAVE_PATHS: &[PathDef] = &[
-    PathDef { commands: WAVE_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static WAVE_PATHS: &[PathDef] = &[PathDef {
+    commands: WAVE_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static WAVE_GUIDES: &[GuideDef] = &[
     gd!("a1", Pin, "0", "adj1", "20000"),
     gd!("a2", Pin, "-10000", "adj2", "10000"),
@@ -9557,18 +14972,35 @@ static WAVE: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", 12500), ("adj2", 0)],
     guides: WAVE_GUIDES,
     paths: WAVE_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static WEDGE_ELLIPSE_CALLOUT_CMDS: &[PathCommandDef] = &[
-    PathCommandDef::MoveTo { x: "xPos", y: "yPos" },
+    PathCommandDef::MoveTo {
+        x: "xPos",
+        y: "yPos",
+    },
     PathCommandDef::LineTo { x: "x1", y: "y1" },
-    PathCommandDef::ArcTo { wr: "wd2", hr: "hd2", st_ang: "stAng1", sw_ang: "swAng" },
+    PathCommandDef::ArcTo {
+        wr: "wd2",
+        hr: "hd2",
+        st_ang: "stAng1",
+        sw_ang: "swAng",
+    },
     PathCommandDef::Close,
 ];
-static WEDGE_ELLIPSE_CALLOUT_PATHS: &[PathDef] = &[
-    PathDef { commands: WEDGE_ELLIPSE_CALLOUT_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static WEDGE_ELLIPSE_CALLOUT_PATHS: &[PathDef] = &[PathDef {
+    commands: WEDGE_ELLIPSE_CALLOUT_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static WEDGE_ELLIPSE_CALLOUT_GUIDES: &[GuideDef] = &[
     gd!("dxPos", MulDiv, "w", "adj1", "100000"),
     gd!("dyPos", MulDiv, "h", "adj2", "100000"),
@@ -9603,7 +15035,12 @@ static WEDGE_ELLIPSE_CALLOUT: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", -20833), ("adj2", 62500)],
     guides: WEDGE_ELLIPSE_CALLOUT_GUIDES,
     paths: WEDGE_ELLIPSE_CALLOUT_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "it", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "it",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 static WEDGE_RECT_CALLOUT_CMDS: &[PathCommandDef] = &[
@@ -9625,9 +15062,13 @@ static WEDGE_RECT_CALLOUT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::LineTo { x: "l", y: "y1" },
     PathCommandDef::Close,
 ];
-static WEDGE_RECT_CALLOUT_PATHS: &[PathDef] = &[
-    PathDef { commands: WEDGE_RECT_CALLOUT_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static WEDGE_RECT_CALLOUT_PATHS: &[PathDef] = &[PathDef {
+    commands: WEDGE_RECT_CALLOUT_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static WEDGE_RECT_CALLOUT_GUIDES: &[GuideDef] = &[
     gd!("dxPos", MulDiv, "w", "adj1", "100000"),
     gd!("dyPos", MulDiv, "h", "adj2", "100000"),
@@ -9668,35 +15109,64 @@ static WEDGE_RECT_CALLOUT: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", -20833), ("adj2", 62500)],
     guides: WEDGE_RECT_CALLOUT_GUIDES,
     paths: WEDGE_RECT_CALLOUT_PATHS,
-    text_rect: Some(TextRectDef { l: "l", t: "t", r: "r", b: "b" }),
+    text_rect: Some(TextRectDef {
+        l: "l",
+        t: "t",
+        r: "r",
+        b: "b",
+    }),
 };
 
 static WEDGE_ROUND_RECT_CALLOUT_CMDS: &[PathCommandDef] = &[
     PathCommandDef::MoveTo { x: "l", y: "u1" },
-    PathCommandDef::ArcTo { wr: "u1", hr: "u1", st_ang: "cd2", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "u1",
+        hr: "u1",
+        st_ang: "cd2",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x1", y: "t" },
     PathCommandDef::LineTo { x: "xt", y: "yt" },
     PathCommandDef::LineTo { x: "x2", y: "t" },
     PathCommandDef::LineTo { x: "u2", y: "t" },
-    PathCommandDef::ArcTo { wr: "u1", hr: "u1", st_ang: "3cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "u1",
+        hr: "u1",
+        st_ang: "3cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "r", y: "y1" },
     PathCommandDef::LineTo { x: "xr", y: "yr" },
     PathCommandDef::LineTo { x: "r", y: "y2" },
     PathCommandDef::LineTo { x: "r", y: "v2" },
-    PathCommandDef::ArcTo { wr: "u1", hr: "u1", st_ang: "0", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "u1",
+        hr: "u1",
+        st_ang: "0",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "x2", y: "b" },
     PathCommandDef::LineTo { x: "xb", y: "yb" },
     PathCommandDef::LineTo { x: "x1", y: "b" },
     PathCommandDef::LineTo { x: "u1", y: "b" },
-    PathCommandDef::ArcTo { wr: "u1", hr: "u1", st_ang: "cd4", sw_ang: "cd4" },
+    PathCommandDef::ArcTo {
+        wr: "u1",
+        hr: "u1",
+        st_ang: "cd4",
+        sw_ang: "cd4",
+    },
     PathCommandDef::LineTo { x: "l", y: "y2" },
     PathCommandDef::LineTo { x: "xl", y: "yl" },
     PathCommandDef::LineTo { x: "l", y: "y1" },
     PathCommandDef::Close,
 ];
-static WEDGE_ROUND_RECT_CALLOUT_PATHS: &[PathDef] = &[
-    PathDef { commands: WEDGE_ROUND_RECT_CALLOUT_CMDS, w: None, h: None, fill: PathFill::Norm, stroke: true },
-];
+static WEDGE_ROUND_RECT_CALLOUT_PATHS: &[PathDef] = &[PathDef {
+    commands: WEDGE_ROUND_RECT_CALLOUT_CMDS,
+    w: None,
+    h: None,
+    fill: PathFill::Norm,
+    stroke: true,
+}];
 static WEDGE_ROUND_RECT_CALLOUT_GUIDES: &[GuideDef] = &[
     gd!("dxPos", MulDiv, "w", "adj1", "100000"),
     gd!("dyPos", MulDiv, "h", "adj2", "100000"),
@@ -9741,7 +15211,12 @@ static WEDGE_ROUND_RECT_CALLOUT: PresetDef = PresetDef {
     adjust_defaults: &[("adj1", -20833), ("adj2", 62500), ("adj3", 16667)],
     guides: WEDGE_ROUND_RECT_CALLOUT_GUIDES,
     paths: WEDGE_ROUND_RECT_CALLOUT_PATHS,
-    text_rect: Some(TextRectDef { l: "il", t: "il", r: "ir", b: "ib" }),
+    text_rect: Some(TextRectDef {
+        l: "il",
+        t: "il",
+        r: "ir",
+        b: "ib",
+    }),
 };
 
 #[cfg(test)]
@@ -9752,9 +15227,17 @@ mod tests {
     #[test]
     fn test_all_original_11_shapes_are_registered() {
         let names = [
-            "rect", "ellipse", "roundRect", "corner", "triangle",
-            "notchedRightArrow", "leftCircularArrow", "circularArrow",
-            "line", "arc", "straightConnector1",
+            "rect",
+            "ellipse",
+            "roundRect",
+            "corner",
+            "triangle",
+            "notchedRightArrow",
+            "leftCircularArrow",
+            "circularArrow",
+            "line",
+            "arc",
+            "straightConnector1",
         ];
         for name in names {
             assert!(lookup(name).is_some(), "Shape '{name}' not found in lookup");
@@ -9764,10 +15247,26 @@ mod tests {
     #[test]
     fn test_187_shapes_registered() {
         let names = [
-            "accentBorderCallout1", "bentArrow", "chevron", "diamond", "ellipse",
-            "flowChartProcess", "gear6", "heart", "irregularSeal1", "leftArrow",
-            "mathPlus", "noSmoking", "octagon", "parallelogram", "rect",
-            "roundRect", "star5", "trapezoid", "uturnArrow", "wave",
+            "accentBorderCallout1",
+            "bentArrow",
+            "chevron",
+            "diamond",
+            "ellipse",
+            "flowChartProcess",
+            "gear6",
+            "heart",
+            "irregularSeal1",
+            "leftArrow",
+            "mathPlus",
+            "noSmoking",
+            "octagon",
+            "parallelogram",
+            "rect",
+            "roundRect",
+            "star5",
+            "trapezoid",
+            "uturnArrow",
+            "wave",
         ];
         for name in names {
             assert!(lookup(name).is_some(), "Shape '{name}' not found in lookup");
@@ -9865,12 +15364,21 @@ mod tests {
 
     #[test]
     fn test_text_rect_present() {
-        for name in ["rect", "ellipse", "roundRect", "triangle", "corner", "notchedRightArrow"] {
+        for name in [
+            "rect",
+            "ellipse",
+            "roundRect",
+            "triangle",
+            "corner",
+            "notchedRightArrow",
+        ] {
             let shape = evaluate_preset(name, 100.0, 80.0, &[]).unwrap();
-            assert!(shape.text_rect.is_some(), "Shape '{name}' should have a text rect");
+            assert!(
+                shape.text_rect.is_some(),
+                "Shape '{name}' should have a text rect"
+            );
         }
         let line = evaluate_preset("line", 100.0, 50.0, &[]).unwrap();
         assert!(line.text_rect.is_none());
     }
 }
-

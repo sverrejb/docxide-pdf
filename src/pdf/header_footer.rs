@@ -38,10 +38,7 @@ pub(super) fn substitute_hf_runs(
         .collect()
 }
 
-pub(super) fn compute_header_height(
-    hf: &HeaderFooter,
-    ctx: &RenderContext,
-) -> f32 {
+pub(super) fn compute_header_height(hf: &HeaderFooter, ctx: &RenderContext) -> f32 {
     let mut height = 0.0f32;
     let mut prev_space_after = 0.0f32;
     for block in &hf.blocks {
@@ -66,8 +63,7 @@ pub(super) fn compute_header_height(
                 prev_space_after = para.space_after;
             }
             Block::Table(table) => {
-                let row_layouts =
-                    table::compute_hf_table_height(table, ctx);
+                let row_layouts = table::compute_hf_table_height(table, ctx);
                 height += row_layouts;
                 prev_space_after = 0.0;
             }

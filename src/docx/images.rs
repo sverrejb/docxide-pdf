@@ -8,18 +8,38 @@ use crate::model::{
 
 use super::charts::parse_chart_from_zip;
 use super::numbering::NumberingInfo;
-use super::styles::{StylesInfo, ThemeFonts};
 use super::smartart::{has_diagram_ref, parse_smartart_drawing};
+use super::styles::{StylesInfo, ThemeFonts};
 use super::textbox::{parse_connector_from_wsp, parse_textbox_from_wsp};
 use super::{DML_NS, REL_NS, WML_NS, WPD_NS, wml};
 
 const CHART_URI: &str = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 
-/// Extract display dimensions (in points) from a wp:inline or wp:anchor element.
+fn emu_to_pts(emu: f32) -> f32 {
+    emu / 12700.0
+}
+
+fn parse_emu_text(text: Option<&str>) -> f32 {
+    emu_to_pts(text.unwrap_or("0").parse::<f32>().unwrap_or(0.0))
+}
+
+fn wpd<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
+    node.children()
+        .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(WPD_NS))
+}
+
+fn wpd_child_text<'a>(parent: Option<roxmltree::Node<'a, 'a>>, name: &str) -> Option<&'a str> {
+    parent
+        .and_then(|n| n.children().find(|c| c.tag_name().name() == name))
+        .and_then(|n| n.text())
+}
+
+fn emu_attr(node: roxmltree::Node, attr: &str) -> f32 {
+    parse_emu_text(node.attribute(attr))
+}
+
 pub(super) fn extent_dimensions(container: roxmltree::Node) -> (f32, f32) {
-    let extent = container
-        .children()
-        .find(|n| n.tag_name().name() == "extent" && n.tag_name().namespace() == Some(WPD_NS));
+    let extent = wpd(container, "extent");
     let cx = extent
         .and_then(|n| n.attribute("cx"))
         .and_then(|v| v.parse::<f32>().ok())
@@ -28,41 +48,42 @@ pub(super) fn extent_dimensions(container: roxmltree::Node) -> (f32, f32) {
         .and_then(|n| n.attribute("cy"))
         .and_then(|v| v.parse::<f32>().ok())
         .unwrap_or(0.0);
-    (cx / 12700.0, cy / 12700.0)
+    (emu_to_pts(cx), emu_to_pts(cy))
 }
 
 pub(super) fn image_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat, u8)> {
-    // JPEG: starts with FF D8
     if data.len() >= 2 && data[0] == 0xFF && data[1] == 0xD8 {
-        let mut i = 2;
-        while i + 4 < data.len() {
-            if data[i] != 0xFF {
-                return None;
-            }
-            let marker = data[i + 1];
-            if marker == 0xD9 {
-                break;
-            }
-            let len = u16::from_be_bytes([data[i + 2], data[i + 3]]) as usize;
-            if (marker == 0xC0 || marker == 0xC1 || marker == 0xC2) && i + 9 < data.len() {
-                let height = u16::from_be_bytes([data[i + 5], data[i + 6]]) as u32;
-                let width = u16::from_be_bytes([data[i + 7], data[i + 8]]) as u32;
-                let components = data[i + 9];
-                return Some((width, height, ImageFormat::Jpeg, components));
-            }
-            i += 2 + len;
-        }
-        return None;
+        return parse_jpeg_dimensions(data);
     }
 
-    // PNG: starts with 89 50 4E 47, dimensions in IHDR chunk at bytes 16-23
-    if data.len() >= 24 && data[0] == 0x89 && data[1] == 0x50 && data[2] == 0x4E && data[3] == 0x47
-    {
+    if data.len() >= 24 && data[0..4] == [0x89, 0x50, 0x4E, 0x47] {
         let width = u32::from_be_bytes([data[16], data[17], data[18], data[19]]);
         let height = u32::from_be_bytes([data[20], data[21], data[22], data[23]]);
         return Some((width, height, ImageFormat::Png, 3));
     }
 
+    None
+}
+
+fn parse_jpeg_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat, u8)> {
+    let mut i = 2;
+    while i + 4 < data.len() {
+        if data[i] != 0xFF {
+            return None;
+        }
+        let marker = data[i + 1];
+        if marker == 0xD9 {
+            break;
+        }
+        let len = u16::from_be_bytes([data[i + 2], data[i + 3]]) as usize;
+        if matches!(marker, 0xC0 | 0xC1 | 0xC2) && i + 9 < data.len() {
+            let height = u16::from_be_bytes([data[i + 5], data[i + 6]]) as u32;
+            let width = u16::from_be_bytes([data[i + 7], data[i + 8]]) as u32;
+            let components = data[i + 9];
+            return Some((width, height, ImageFormat::Jpeg, components));
+        }
+        i += 2 + len;
+    }
     None
 }
 
@@ -108,64 +129,45 @@ pub(super) struct DrawingInfo {
 
 pub(super) fn parse_anchor_position(
     container: roxmltree::Node,
-) -> (HorizontalPosition, HRelativeFrom, VerticalPosition, VRelativeFrom) {
-    let pos_h = container
-        .children()
-        .find(|n| n.tag_name().name() == "positionH" && n.tag_name().namespace() == Some(WPD_NS));
+) -> (
+    HorizontalPosition,
+    HRelativeFrom,
+    VerticalPosition,
+    VRelativeFrom,
+) {
+    let pos_h = wpd(container, "positionH");
     let h_relative = match pos_h.and_then(|n| n.attribute("relativeFrom")) {
         Some("page") => HRelativeFrom::Page,
         Some("margin") => HRelativeFrom::Margin,
         _ => HRelativeFrom::Column,
     };
-    let h_position = if let Some(align_node) =
-        pos_h.and_then(|n| n.children().find(|c| c.tag_name().name() == "align"))
-    {
-        match align_node.text().unwrap_or("") {
+    let h_position = if let Some(text) = wpd_child_text(pos_h, "align") {
+        match text {
             "center" => HorizontalPosition::AlignCenter,
             "right" => HorizontalPosition::AlignRight,
             _ => HorizontalPosition::AlignLeft,
         }
-    } else if let Some(offset_node) =
-        pos_h.and_then(|n| n.children().find(|c| c.tag_name().name() == "posOffset"))
-    {
-        let emu = offset_node
-            .text()
-            .unwrap_or("0")
-            .parse::<f32>()
-            .unwrap_or(0.0);
-        HorizontalPosition::Offset(emu / 12700.0)
+    } else if let Some(text) = wpd_child_text(pos_h, "posOffset") {
+        HorizontalPosition::Offset(parse_emu_text(Some(text)))
     } else {
         HorizontalPosition::AlignLeft
     };
 
-    let pos_v = container
-        .children()
-        .find(|n| n.tag_name().name() == "positionV" && n.tag_name().namespace() == Some(WPD_NS));
+    let pos_v = wpd(container, "positionV");
     let v_relative = match pos_v.and_then(|n| n.attribute("relativeFrom")) {
         Some("page") => VRelativeFrom::Page,
         Some("margin") => VRelativeFrom::Margin,
         Some("topMargin") => VRelativeFrom::TopMargin,
         _ => VRelativeFrom::Paragraph,
     };
-    let v_position = if let Some(align_node) =
-        pos_v.and_then(|n| n.children().find(|c| c.tag_name().name() == "align"))
-    {
-        match align_node.text().unwrap_or("") {
+    let v_position = if let Some(text) = wpd_child_text(pos_v, "align") {
+        match text {
             "bottom" => VerticalPosition::AlignBottom,
             "center" => VerticalPosition::AlignCenter,
             _ => VerticalPosition::AlignTop,
         }
-    } else if let Some(offset_node) =
-        pos_v.and_then(|n| n.children().find(|c| c.tag_name().name() == "posOffset"))
-    {
-        VerticalPosition::Offset(
-            offset_node
-                .text()
-                .unwrap_or("0")
-                .parse::<f32>()
-                .unwrap_or(0.0)
-                / 12700.0,
-        )
+    } else if let Some(text) = wpd_child_text(pos_v, "posOffset") {
+        VerticalPosition::Offset(parse_emu_text(Some(text)))
     } else {
         VerticalPosition::Offset(0.0)
     };
@@ -190,7 +192,6 @@ pub(super) fn parse_wrap_type(container: roxmltree::Node) -> WrapType {
     WrapType::None
 }
 
-#[allow(dead_code)]
 pub(super) enum RunDrawingResult {
     Inline(EmbeddedImage),
     Floating(FloatingImage),
@@ -198,6 +199,10 @@ pub(super) enum RunDrawingResult {
     Connector(crate::model::ConnectorShape),
     Chart(InlineChart),
     SmartArt(SmartArtDiagram),
+}
+
+fn is_wpd_drawing(node: roxmltree::Node, expected: &str) -> bool {
+    node.tag_name().name() == expected && node.tag_name().namespace() == Some(WPD_NS)
 }
 
 pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
@@ -209,38 +214,25 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
     numbering: &NumberingInfo,
 ) -> Option<RunDrawingResult> {
     for container in drawing_node.children() {
-        let name = container.tag_name().name();
-        if name != "inline" && name != "anchor" {
-            continue;
-        }
-        if container.tag_name().namespace() != Some(WPD_NS) {
+        let is_inline = is_wpd_drawing(container, "inline");
+        let is_anchor = is_wpd_drawing(container, "anchor");
+        if !is_inline && !is_anchor {
             continue;
         }
 
         let (display_w, display_h) = extent_dimensions(container);
 
-        if name == "anchor" {
+        if is_anchor {
             if let Some(wsp) =
                 parse_textbox_from_wsp(container, rels, zip, styles, theme, numbering)
             {
-                let (h_position, h_relative, v_pos, v_relative) =
-                    parse_anchor_position(container);
+                let (h_position, h_relative, v_pos, v_relative) = parse_anchor_position(container);
                 let v_offset = match v_pos {
                     VerticalPosition::Offset(o) => o,
                     _ => 0.0,
                 };
                 let wrap_type = parse_wrap_type(container);
                 let behind_doc = container.attribute("behindDoc") == Some("1");
-                let dist_top = container
-                    .attribute("distT")
-                    .and_then(|v| v.parse::<f32>().ok())
-                    .unwrap_or(0.0)
-                    / 12700.0;
-                let dist_bottom = container
-                    .attribute("distB")
-                    .and_then(|v| v.parse::<f32>().ok())
-                    .unwrap_or(0.0)
-                    / 12700.0;
                 return Some(RunDrawingResult::TextBox(crate::model::Textbox {
                     paragraphs: wsp.paragraphs,
                     width_pt: display_w,
@@ -256,8 +248,8 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
                     margin_top: wsp.margin_top,
                     margin_bottom: wsp.margin_bottom,
                     wrap_type,
-                    dist_top,
-                    dist_bottom,
+                    dist_top: emu_attr(container, "distT"),
+                    dist_bottom: emu_attr(container, "distB"),
                     behind_doc,
                     no_text_wrap: wsp.no_text_wrap,
                 }));
@@ -303,8 +295,7 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
         }
 
         if display_h > 0.0 && has_diagram_ref(container) {
-            let diagram =
-                parse_smartart_drawing(rels, zip, theme, display_w, display_h);
+            let diagram = parse_smartart_drawing(rels, zip, theme, display_w, display_h);
             return Some(RunDrawingResult::SmartArt(diagram));
         }
     }
@@ -346,22 +337,11 @@ pub(super) fn compute_drawing_info<R: Read + std::io::Seek>(
             continue;
         };
         for container in drawing.children() {
-            let name = container.tag_name().name();
-            if name != "inline" && name != "anchor" {
-                continue;
-            }
-            if container.tag_name().namespace() != Some(WPD_NS) {
+            if !is_wpd_drawing(container, "inline") {
                 continue;
             }
 
             let (display_w, display_h) = extent_dimensions(container);
-
-            // Anchored images are handled by parse_runs() — skip them here
-            // to avoid duplication. Only process inline drawings.
-            if name == "anchor" {
-                continue;
-            }
-
             max_height = max_height.max(display_h);
 
             if image.is_none() {
@@ -377,4 +357,3 @@ pub(super) fn compute_drawing_info<R: Read + std::io::Seek>(
         floating_images: Vec::new(),
     }
 }
-

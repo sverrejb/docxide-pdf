@@ -1,5 +1,11 @@
-#[derive(Clone, Copy, Debug, PartialEq)]
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use crate::geometry::{FormulaOp, PathFill};
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum Alignment {
+    #[default]
     Left,
     Center,
     Right,
@@ -105,19 +111,19 @@ pub struct FontTableEntry {
     pub family: FontFamily,
 }
 
-pub type FontTable = std::collections::HashMap<String, FontTableEntry>;
+pub type FontTable = HashMap<String, FontTableEntry>;
 
 pub struct Document {
     pub sections: Vec<Section>,
     pub line_spacing: LineSpacing,
     /// Fonts embedded in the DOCX (deobfuscated TTF/OTF bytes).
     /// Key: (lowercase_font_name, bold, italic)
-    pub embedded_fonts: std::collections::HashMap<(String, bool, bool), Vec<u8>>,
-    pub footnotes: std::collections::HashMap<u32, Footnote>,
+    pub embedded_fonts: HashMap<(String, bool, bool), Vec<u8>>,
+    pub footnotes: HashMap<u32, Footnote>,
     pub font_table: FontTable,
     pub even_and_odd_headers: bool,
     /// Maps style IDs to display names (for STYLEREF resolution)
-    pub style_id_to_name: std::collections::HashMap<String, String>,
+    pub style_id_to_name: HashMap<String, String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -128,7 +134,7 @@ pub enum ImageFormat {
 
 #[derive(Clone)]
 pub struct EmbeddedImage {
-    pub data: std::sync::Arc<Vec<u8>>,
+    pub data: Arc<Vec<u8>>,
     pub format: ImageFormat,
     pub pixel_width: u32,
     pub pixel_height: u32,
@@ -217,7 +223,7 @@ pub struct CustomGeometry {
 #[derive(Clone, Debug)]
 pub struct CustomGuideDef {
     pub name: String,
-    pub op: crate::geometry::FormulaOp,
+    pub op: FormulaOp,
     pub x: String,
     pub y: String,
     pub z: String,
@@ -228,17 +234,40 @@ pub struct CustomPathDef {
     pub commands: Vec<CustomPathCommand>,
     pub w: Option<i64>,
     pub h: Option<i64>,
-    pub fill: crate::geometry::PathFill,
+    pub fill: PathFill,
     pub stroke: bool,
 }
 
 #[derive(Clone, Debug)]
 pub enum CustomPathCommand {
-    MoveTo { x: String, y: String },
-    LineTo { x: String, y: String },
-    ArcTo { wr: String, hr: String, st_ang: String, sw_ang: String },
-    CubicBezTo { x1: String, y1: String, x2: String, y2: String, x3: String, y3: String },
-    QuadBezTo { x1: String, y1: String, x2: String, y2: String },
+    MoveTo {
+        x: String,
+        y: String,
+    },
+    LineTo {
+        x: String,
+        y: String,
+    },
+    ArcTo {
+        wr: String,
+        hr: String,
+        st_ang: String,
+        sw_ang: String,
+    },
+    CubicBezTo {
+        x1: String,
+        y1: String,
+        x2: String,
+        y2: String,
+        x3: String,
+        y3: String,
+    },
+    QuadBezTo {
+        x1: String,
+        y1: String,
+        x2: String,
+        y2: String,
+    },
     Close,
 }
 
@@ -265,8 +294,15 @@ pub struct SmartArtDiagram {
 }
 
 pub enum ConnectorType {
-    Line { flip_h: bool, flip_v: bool },
-    Arc { start_angle: f32, end_angle: f32, rotation: f32 },
+    Line {
+        flip_h: bool,
+        flip_v: bool,
+    },
+    Arc {
+        start_angle: f32,
+        end_angle: f32,
+        rotation: f32,
+    },
 }
 
 pub struct ConnectorShape {
@@ -326,6 +362,7 @@ pub struct ParagraphBorders {
     pub between: Option<ParagraphBorder>,
 }
 
+#[derive(Default)]
 pub struct Paragraph {
     pub runs: Vec<Run>,
     pub style_id: Option<String>,
@@ -360,46 +397,6 @@ pub struct Paragraph {
     pub inline_chart: Option<InlineChart>,
     pub smartart: Option<SmartArtDiagram>,
     pub is_section_break: bool,
-}
-
-impl Default for Paragraph {
-    fn default() -> Self {
-        Self {
-            runs: Vec::new(),
-            style_id: None,
-            space_before: 0.0,
-            space_after: 0.0,
-            content_height: 0.0,
-            alignment: Alignment::Left,
-            indent_left: 0.0,
-            indent_right: 0.0,
-            indent_hanging: 0.0,
-            indent_first_line: 0.0,
-            list_label: String::new(),
-            list_label_font: None,
-            list_label_font_size: None,
-            list_label_bold: false,
-            list_label_color: None,
-            contextual_spacing: false,
-            keep_next: false,
-            keep_lines: false,
-            line_spacing: None,
-            image: None,
-            borders: ParagraphBorders::default(),
-            shading: None,
-            page_break_before: false,
-            page_break_after: false,
-            column_break_before: false,
-            tab_stops: Vec::new(),
-            extra_line_breaks: 0,
-            floating_images: Vec::new(),
-            textboxes: Vec::new(),
-            connectors: Vec::new(),
-            inline_chart: None,
-            smartart: None,
-            is_section_break: false,
-        }
-    }
 }
 
 #[derive(Clone)]
@@ -608,14 +605,21 @@ pub struct ChartSeries {
     pub marker: Option<MarkerSymbol>,
 }
 
+#[derive(Clone)]
 pub enum ChartType {
-    Bar { horizontal: bool, #[allow(dead_code)] stacked: bool },
+    Bar {
+        horizontal: bool,
+        #[allow(dead_code)]
+        stacked: bool,
+    },
     Line,
     Pie,
     Area,
     Scatter,
     Bubble,
-    Doughnut { hole_size_pct: f32 },
+    Doughnut {
+        hole_size_pct: f32,
+    },
     Radar,
 }
 

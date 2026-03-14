@@ -71,13 +71,9 @@ pub(super) fn parse_section_properties<R: Read + std::io::Seek>(
         let col_defs: Vec<ColumnDef> = if !equal_width && !child_cols.is_empty() {
             child_cols
                 .iter()
-                .map(|c| {
-                    let w = twips_attr(*c, "w").unwrap_or(0.0);
-                    let sp = twips_attr(*c, "space").unwrap_or(0.0);
-                    ColumnDef {
-                        width: w,
-                        space: sp,
-                    }
+                .map(|c| ColumnDef {
+                    width: twips_attr(*c, "w").unwrap_or(0.0),
+                    space: twips_attr(*c, "space").unwrap_or(0.0),
                 })
                 .collect()
         } else if num > 1 {
@@ -103,52 +99,39 @@ pub(super) fn parse_section_properties<R: Read + std::io::Seek>(
         })
     });
 
-    let mut header_default_rid = None;
-    let mut header_first_rid = None;
-    let mut header_even_rid = None;
-    let mut footer_default_rid = None;
-    let mut footer_first_rid = None;
-    let mut footer_even_rid = None;
-    for child in sect_node.children() {
-        if child.tag_name().namespace() != Some(WML_NS) {
-            continue;
-        }
-        let hf_type = child.attribute((WML_NS, "type")).unwrap_or("");
-        let rid = child.attribute((REL_NS, "id"));
-        match child.tag_name().name() {
-            "headerReference" => match hf_type {
-                "default" => header_default_rid = rid,
-                "first" => header_first_rid = rid,
-                "even" => header_even_rid = rid,
-                _ => {}
-            },
-            "footerReference" => match hf_type {
-                "default" => footer_default_rid = rid,
-                "first" => footer_first_rid = rid,
-                "even" => footer_even_rid = rid,
-                _ => {}
-            },
-            _ => {}
-        }
-    }
-
-    let resolve_hf = |rid: Option<&str>, zip: &mut zip::ZipArchive<R>| -> Option<HeaderFooter> {
-        let target = rels.get(rid?)?;
-        let zip_path = target
-            .strip_prefix('/')
-            .map(String::from)
-            .unwrap_or_else(|| format!("word/{}", target));
-        let part_rels = parse_part_relationships(zip, &zip_path);
-        let xml_text = read_zip_text(zip, &zip_path)?;
-        parse_header_footer_xml(&xml_text, styles, theme, &part_rels, zip)
+    let find_ref_rid = |tag: &str, hf_type: &str| -> Option<&str> {
+        sect_node.children().find_map(|child| {
+            if child.tag_name().namespace() == Some(WML_NS)
+                && child.tag_name().name() == tag
+                && child.attribute((WML_NS, "type")) == Some(hf_type)
+            {
+                child.attribute((REL_NS, "id"))
+            } else {
+                None
+            }
+        })
     };
 
-    let header_default = resolve_hf(header_default_rid, zip);
-    let header_first = resolve_hf(header_first_rid, zip);
-    let header_even = resolve_hf(header_even_rid, zip);
-    let footer_default = resolve_hf(footer_default_rid, zip);
-    let footer_first = resolve_hf(footer_first_rid, zip);
-    let footer_even = resolve_hf(footer_even_rid, zip);
+    let resolve_hf =
+        |tag: &str, hf_type: &str, zip: &mut zip::ZipArchive<R>| -> Option<HeaderFooter> {
+            let rid = find_ref_rid(tag, hf_type)?;
+            let target = rels.get(rid)?;
+            let zip_path = if let Some(stripped) = target.strip_prefix('/') {
+                stripped.to_string()
+            } else {
+                format!("word/{}", target)
+            };
+            let part_rels = parse_part_relationships(zip, &zip_path);
+            let xml_text = read_zip_text(zip, &zip_path)?;
+            parse_header_footer_xml(&xml_text, styles, theme, &part_rels, zip)
+        };
+
+    let header_default = resolve_hf("headerReference", "default", zip);
+    let header_first = resolve_hf("headerReference", "first", zip);
+    let header_even = resolve_hf("headerReference", "even", zip);
+    let footer_default = resolve_hf("footerReference", "default", zip);
+    let footer_first = resolve_hf("footerReference", "first", zip);
+    let footer_even = resolve_hf("footerReference", "even", zip);
 
     SectionProperties {
         page_width,

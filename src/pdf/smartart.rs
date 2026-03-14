@@ -8,15 +8,28 @@ use crate::model::{ShapeGeometry, SmartArtDiagram};
 
 use super::charts;
 
-pub(super) fn draw_shape_path(content: &mut Content, x: f32, y: f32, w: f32, h: f32, shape: &ShapeGeometry) {
+pub(super) fn draw_shape_path(
+    content: &mut Content,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    shape: &ShapeGeometry,
+) {
     let evaluated = evaluate_shape_geometry(shape, w as f64, h as f64);
     match evaluated {
         Some(eval) => emit_evaluated_paths(content, x, y, &eval),
-        None => { content.rect(x, y, w, h); }
+        None => {
+            content.rect(x, y, w, h);
+        }
     }
 }
 
-fn evaluate_shape_geometry(shape: &ShapeGeometry, w: f64, h: f64) -> Option<geometry::EvaluatedShape> {
+fn evaluate_shape_geometry(
+    shape: &ShapeGeometry,
+    w: f64,
+    h: f64,
+) -> Option<geometry::EvaluatedShape> {
     if let Some(ref custom) = shape.custom {
         Some(geometry::evaluate_custom(custom, w, h, &shape.adjustments))
     } else if let Some(ref preset) = shape.preset {
@@ -36,11 +49,21 @@ fn emit_evaluated_paths(content: &mut Content, x: f32, y: f32, shape: &geometry:
                 ResolvedCommand::LineTo(px, py) => {
                     content.line_to(x + *px as f32, y + *py as f32);
                 }
-                ResolvedCommand::CubicTo { x1, y1, x2, y2, x: px, y: py } => {
+                ResolvedCommand::CubicTo {
+                    x1,
+                    y1,
+                    x2,
+                    y2,
+                    x: px,
+                    y: py,
+                } => {
                     content.cubic_to(
-                        x + *x1 as f32, y + *y1 as f32,
-                        x + *x2 as f32, y + *y2 as f32,
-                        x + *px as f32, y + *py as f32,
+                        x + *x1 as f32,
+                        y + *y1 as f32,
+                        x + *x2 as f32,
+                        y + *y2 as f32,
+                        x + *px as f32,
+                        y + *py as f32,
                     );
                 }
                 ResolvedCommand::Close => {
@@ -59,11 +82,10 @@ pub(super) fn render_smartart(
     seen_fonts: &HashMap<String, FontEntry>,
     smartart_font_key: &str,
 ) {
-    let sa_font_entry = seen_fonts.get(smartart_font_key)
+    let sa_font_entry = seen_fonts
+        .get(smartart_font_key)
         .or_else(|| seen_fonts.values().next());
-    let sa_font_pdf_name = sa_font_entry
-        .map(|e| e.pdf_name.as_str())
-        .unwrap_or("F1");
+    let sa_font_pdf_name = sa_font_entry.map(|e| e.pdf_name.as_str()).unwrap_or("F1");
 
     for shape in &diagram.shapes {
         let sx = diag_x + shape.x;
@@ -74,21 +96,20 @@ pub(super) fn render_smartart(
         if has_fill || has_stroke {
             content.save_state();
             if let Some([r, g, b]) = shape.fill {
-                content.set_fill_rgb(
-                    r as f32 / 255.0,
-                    g as f32 / 255.0,
-                    b as f32 / 255.0,
-                );
+                content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
             }
             if let Some([r, g, b]) = shape.stroke_color {
                 content.set_line_width(shape.stroke_width);
-                content.set_stroke_rgb(
-                    r as f32 / 255.0,
-                    g as f32 / 255.0,
-                    b as f32 / 255.0,
-                );
+                content.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
             }
-            draw_shape_path(content, sx, sy, shape.width, shape.height, &shape.shape_type);
+            draw_shape_path(
+                content,
+                sx,
+                sy,
+                shape.width,
+                shape.height,
+                &shape.shape_type,
+            );
             if has_fill && has_stroke {
                 content.fill_nonzero_and_stroke();
             } else if has_fill {
@@ -107,11 +128,7 @@ pub(super) fn render_smartart(
             let text_top_y = diag_y - shape.y - (shape.height - total_text_h) / 2.0;
             content.save_state();
             if let Some([r, g, b]) = shape.text_color {
-                content.set_fill_rgb(
-                    r as f32 / 255.0,
-                    g as f32 / 255.0,
-                    b as f32 / 255.0,
-                );
+                content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
             } else {
                 content.set_fill_gray(0.0);
             }
@@ -119,7 +136,15 @@ pub(super) fn render_smartart(
                 let tw = charts::text_width(line, fs, sa_font_entry);
                 let tx = diag_x + shape.x + (shape.width - tw) / 2.0;
                 let ty = text_top_y - fs - (i as f32) * line_h;
-                charts::show_text_encoded(content, sa_font_pdf_name, fs, tx, ty, line, sa_font_entry);
+                charts::show_text_encoded(
+                    content,
+                    sa_font_pdf_name,
+                    fs,
+                    tx,
+                    ty,
+                    line,
+                    sa_font_entry,
+                );
             }
             content.restore_state();
         }

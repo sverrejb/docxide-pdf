@@ -2,11 +2,11 @@ use std::collections::HashMap;
 use std::io::Read;
 
 use crate::model::{
-    Alignment, CellBorders, CellMargins, CellVAlign, HorizontalPosition, LineSpacing, Paragraph,
-    Table, TableCell, TablePosition, TableRow, TextDirection, VMerge,
+    Alignment, CellBorder, CellBorders, CellMargins, CellVAlign, HorizontalPosition, LineSpacing,
+    Paragraph, Table, TableCell, TablePosition, TableRow, TextDirection, VMerge,
 };
 
-use super::numbering::{self, parse_list_info, ListLabelInfo};
+use super::numbering::{self, ListLabelInfo, parse_list_info};
 use super::runs::parse_runs;
 use super::styles::{self, TableBordersDef, parse_alignment};
 use super::{
@@ -14,6 +14,20 @@ use super::{
     parse_cell_border_right, parse_hex_color, parse_paragraph_spacing, twips_attr, twips_to_pts,
     wml, wml_attr,
 };
+
+fn is_wml(node: &roxmltree::Node, name: &str) -> bool {
+    node.tag_name().name() == name && node.tag_name().namespace() == Some(WML_NS)
+}
+
+fn margin_twips(mar: roxmltree::Node, primary: &str, fallback: &str) -> Option<f32> {
+    wml(mar, primary)
+        .or_else(|| wml(mar, fallback))
+        .and_then(|n| twips_attr(n, "w"))
+}
+
+fn border_or_fallback(inline: CellBorder, fallback: CellBorder) -> CellBorder {
+    if inline.present { inline } else { fallback }
+}
 
 pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
     node: roxmltree::Node,
@@ -28,7 +42,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
     let col_widths: Vec<f32> = wml(node, "tblGrid")
         .into_iter()
         .flat_map(|grid| grid.children())
-        .filter(|n| n.tag_name().name() == "gridCol" && n.tag_name().namespace() == Some(WML_NS))
+        .filter(|n| is_wml(n, "gridCol"))
         .filter_map(|n| twips_attr(n, "w"))
         .collect();
 
@@ -44,17 +58,11 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
             top: wml(mar, "top")
                 .and_then(|n| twips_attr(n, "w"))
                 .unwrap_or(0.0),
-            left: wml(mar, "left")
-                .or_else(|| wml(mar, "start"))
-                .and_then(|n| twips_attr(n, "w"))
-                .unwrap_or(5.4),
+            left: margin_twips(mar, "left", "start").unwrap_or(5.4),
             bottom: wml(mar, "bottom")
                 .and_then(|n| twips_attr(n, "w"))
                 .unwrap_or(0.0),
-            right: wml(mar, "right")
-                .or_else(|| wml(mar, "end"))
-                .and_then(|n| twips_attr(n, "w"))
-                .unwrap_or(5.4),
+            right: margin_twips(mar, "right", "end").unwrap_or(5.4),
         })
         .unwrap_or_default();
 
@@ -74,19 +82,18 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
             .and_then(|v| v.parse::<f32>().ok())
             .map(twips_to_pts)
             .unwrap_or(0.0);
-        let h_position = if let Some(spec) = tblp.attribute((WML_NS, "tblpXSpec")) {
-            match spec {
-                "center" => HorizontalPosition::AlignCenter,
-                "right" => HorizontalPosition::AlignRight,
-                _ => HorizontalPosition::AlignLeft,
+        let h_position = match tblp.attribute((WML_NS, "tblpXSpec")) {
+            Some("center") => HorizontalPosition::AlignCenter,
+            Some("right") => HorizontalPosition::AlignRight,
+            Some(_) => HorizontalPosition::AlignLeft,
+            None => {
+                let offset = tblp
+                    .attribute((WML_NS, "tblpX"))
+                    .and_then(|v| v.parse::<f32>().ok())
+                    .map(twips_to_pts)
+                    .unwrap_or(0.0);
+                HorizontalPosition::Offset(offset)
             }
-        } else {
-            let offset = tblp
-                .attribute((WML_NS, "tblpX"))
-                .and_then(|v| v.parse::<f32>().ok())
-                .map(twips_to_pts)
-                .unwrap_or(0.0);
-            HorizontalPosition::Offset(offset)
         };
         TablePosition {
             h_position,
@@ -96,10 +103,10 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
         }
     });
 
-    let has_tbl_style = tbl_pr.and_then(|pr| wml_attr(pr, "tblStyle")).is_some();
     let tbl_style_borders = tbl_pr
         .and_then(|pr| wml_attr(pr, "tblStyle"))
         .and_then(|id| styles.table_border_styles.get(id));
+    let has_tbl_style = tbl_style_borders.is_some();
 
     let inline_tbl_borders =
         tbl_pr
@@ -118,7 +125,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
 
     let tbl_rows: Vec<_> = collect_block_nodes(node)
         .into_iter()
-        .filter(|n| n.tag_name().name() == "tr" && n.tag_name().namespace() == Some(WML_NS))
+        .filter(|n| is_wml(n, "tr"))
         .collect();
     let num_rows = tbl_rows.len();
     let num_cols = col_widths.len();
@@ -129,23 +136,18 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
         let (row_height, height_exact) = tr_pr
             .and_then(|pr| wml(pr, "trHeight"))
             .map(|h| {
-                let val = h
-                    .attribute((WML_NS, "val"))
-                    .and_then(|v| v.parse::<f32>().ok())
-                    .map(twips_to_pts);
+                let val = twips_attr(h, "val");
                 let exact = h.attribute((WML_NS, "hRule")) == Some("exact");
                 (val, exact)
             })
             .unwrap_or((None, false));
-        let is_header = tr_pr
-            .and_then(|pr| wml(pr, "tblHeader"))
-            .is_some();
+        let is_header = tr_pr.and_then(|pr| wml(pr, "tblHeader")).is_some();
 
         let mut cells = Vec::new();
         let mut grid_col = 0usize;
         for tc in collect_block_nodes(*tr)
             .into_iter()
-            .filter(|n| n.tag_name().name() == "tc" && n.tag_name().namespace() == Some(WML_NS))
+            .filter(|n| is_wml(n, "tc"))
         {
             let ci = grid_col;
             let tc_pr = wml(tc, "tcPr");
@@ -155,8 +157,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                 .unwrap_or_else(|| col_widths.get(ci).copied().unwrap_or(72.0));
 
             let grid_span = tc_pr
-                .and_then(|pr| wml(pr, "gridSpan"))
-                .and_then(|n| n.attribute((WML_NS, "val")))
+                .and_then(|pr| wml_attr(pr, "gridSpan"))
                 .and_then(|v| v.parse::<u16>().ok())
                 .unwrap_or(1);
 
@@ -168,25 +169,17 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                 })
                 .unwrap_or(VMerge::None);
 
-            let v_align = tc_pr
-                .and_then(|pr| wml(pr, "vAlign"))
-                .and_then(|n| n.attribute((WML_NS, "val")))
-                .map(|v| match v {
-                    "center" => CellVAlign::Center,
-                    "bottom" => CellVAlign::Bottom,
-                    _ => CellVAlign::Top,
-                })
-                .unwrap_or(CellVAlign::Top);
+            let v_align = match tc_pr.and_then(|pr| wml_attr(pr, "vAlign")) {
+                Some("center") => CellVAlign::Center,
+                Some("bottom") => CellVAlign::Bottom,
+                _ => CellVAlign::Top,
+            };
 
-            let text_direction = tc_pr
-                .and_then(|pr| wml(pr, "textDirection"))
-                .and_then(|n| n.attribute((WML_NS, "val")))
-                .map(|v| match v {
-                    "tbRlV" | "tbRl" | "rlV" | "rl" | "tbV" | "tb" => TextDirection::TbRl,
-                    "btLr" | "lr" | "lrV" | "lrTbV" => TextDirection::BtLr,
-                    _ => TextDirection::LrTb,
-                })
-                .unwrap_or(TextDirection::LrTb);
+            let text_direction = match tc_pr.and_then(|pr| wml_attr(pr, "textDirection")) {
+                Some("tbRlV" | "tbRl" | "rlV" | "rl" | "tbV" | "tb") => TextDirection::TbRl,
+                Some("btLr" | "lr" | "lrV" | "lrTbV") => TextDirection::BtLr,
+                _ => TextDirection::LrTb,
+            };
 
             let span_end = ci + grid_span as usize;
 
@@ -209,19 +202,14 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                 .and_then(|pr| wml(pr, "tcBorders"))
                 .map(|bdr| {
                     let fallback = style_borders.unwrap_or_default();
-                    let top = parse_cell_border(bdr, "top");
-                    let bottom = parse_cell_border(bdr, "bottom");
-                    let left = parse_cell_border_left(bdr);
-                    let right = parse_cell_border_right(bdr);
                     CellBorders {
-                        top: if top.present { top } else { fallback.top },
-                        bottom: if bottom.present {
-                            bottom
-                        } else {
-                            fallback.bottom
-                        },
-                        left: if left.present { left } else { fallback.left },
-                        right: if right.present { right } else { fallback.right },
+                        top: border_or_fallback(parse_cell_border(bdr, "top"), fallback.top),
+                        bottom: border_or_fallback(
+                            parse_cell_border(bdr, "bottom"),
+                            fallback.bottom,
+                        ),
+                        left: border_or_fallback(parse_cell_border_left(bdr), fallback.left),
+                        right: border_or_fallback(parse_cell_border_right(bdr), fallback.right),
                     }
                 })
                 .unwrap_or_else(|| style_borders.unwrap_or_default());
@@ -235,7 +223,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
             let mut cell_paras = Vec::new();
             for p in collect_block_nodes(tc)
                 .into_iter()
-                .filter(|n| n.tag_name().name() == "p" && n.tag_name().namespace() == Some(WML_NS))
+                .filter(|n| is_wml(n, "p"))
             {
                 let parsed = parse_runs(p, styles, theme, rels, zip, numbering);
                 let ppr = wml(p, "pPr");
@@ -248,15 +236,8 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                     .map(parse_alignment)
                     .or_else(|| para_style.and_then(|s| s.alignment))
                     .unwrap_or(Alignment::Left);
-                let (sp_before, sp_after, ls) =
-                    parse_paragraph_spacing(ppr, para_style);
-                let line_spacing = ls.or_else(|| {
-                    if has_tbl_style {
-                        Some(LineSpacing::Auto(1.0))
-                    } else {
-                        None
-                    }
-                });
+                let (sp_before, sp_after, ls) = parse_paragraph_spacing(ppr, para_style);
+                let line_spacing = ls.or_else(|| has_tbl_style.then_some(LineSpacing::Auto(1.0)));
                 let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
                 let style_num = para_style.and_then(|s| s.num_id.as_deref());
                 let style_ilvl = para_style.and_then(|s| s.num_ilvl);
@@ -268,23 +249,36 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                     font_size: list_label_font_size,
                     bold: list_label_bold,
                     color: list_label_color,
-                } = parse_list_info(num_pr, style_num, style_ilvl, numbering, counters, last_seen_level);
+                } = parse_list_info(
+                    num_pr,
+                    style_num,
+                    style_ilvl,
+                    numbering,
+                    counters,
+                    last_seen_level,
+                );
                 let mut indent_first_line = 0.0f32;
                 let mut indent_right = 0.0f32;
                 if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
                     let (left, right, hanging, first) = extract_indents(ind);
-                    if let Some(v) = left { indent_left = v; }
-                    if let Some(v) = right { indent_right = v; }
-                    if let Some(v) = hanging { indent_hanging = v; }
-                    if let Some(v) = first { indent_first_line = v; }
+                    if let Some(v) = left {
+                        indent_left = v;
+                    }
+                    if let Some(v) = right {
+                        indent_right = v;
+                    }
+                    if let Some(v) = hanging {
+                        indent_hanging = v;
+                    }
+                    if let Some(v) = first {
+                        indent_first_line = v;
+                    }
                 }
                 let space_before = sp_before.unwrap_or(0.0);
-                let space_after = sp_after.unwrap_or_else(|| {
-                    if has_tbl_style {
-                        0.0
-                    } else {
-                        styles.defaults.space_after
-                    }
+                let space_after = sp_after.unwrap_or(if has_tbl_style {
+                    0.0
+                } else {
+                    styles.defaults.space_after
                 });
                 cell_paras.push(Paragraph {
                     runs: parsed.runs,

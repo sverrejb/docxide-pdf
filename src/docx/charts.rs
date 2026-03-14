@@ -26,14 +26,18 @@ fn dml_child<'a>(parent: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltre
         .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(DML_NS))
 }
 
+fn find_srgb_clr<'a>(sp_pr: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
+    dml_child(dml_child(sp_pr, "solidFill")?, "srgbClr")
+}
+
 fn extract_srgb_fill(sp_pr: roxmltree::Node) -> Option<[u8; 3]> {
-    let srgb = dml_child(dml_child(sp_pr, "solidFill")?, "srgbClr")?;
-    srgb.attribute("val").and_then(parse_hex_color)
+    find_srgb_clr(sp_pr)?
+        .attribute("val")
+        .and_then(parse_hex_color)
 }
 
 fn extract_fill_alpha(sp_pr: roxmltree::Node) -> Option<f32> {
-    let srgb = dml_child(dml_child(sp_pr, "solidFill")?, "srgbClr")?;
-    let alpha_node = dml_child(srgb, "alpha")?;
+    let alpha_node = dml_child(find_srgb_clr(sp_pr)?, "alpha")?;
     let val: f32 = alpha_node.attribute("val")?.parse().ok()?;
     Some(val / 100_000.0)
 }
@@ -47,6 +51,29 @@ fn extract_line_color(sp_pr: roxmltree::Node) -> Option<[u8; 3]> {
     extract_srgb_fill(ln)
 }
 
+fn collect_indexed_pts<T: Clone>(
+    cache_node: roxmltree::Node,
+    default: T,
+    extract: impl Fn(roxmltree::Node) -> Option<T>,
+) -> Vec<T> {
+    let mut pts: Vec<(usize, T)> = cache_node
+        .children()
+        .filter(|n| n.tag_name().name() == "pt" && n.tag_name().namespace() == Some(CHART_NS))
+        .filter_map(|pt| {
+            let idx = pt.attribute("idx")?.parse::<usize>().ok()?;
+            let v = extract(pt)?;
+            Some((idx, v))
+        })
+        .collect();
+    pts.sort_by_key(|(idx, _)| *idx);
+    let count = pts.last().map(|(idx, _)| idx + 1).unwrap_or(0);
+    let mut values = vec![default; count];
+    for (idx, v) in pts {
+        values[idx] = v;
+    }
+    values
+}
+
 fn parse_num_cache(parent: roxmltree::Node, child_name: &str) -> Vec<f32> {
     let num_cache = chart_child(parent, child_name)
         .and_then(|c| chart_child(c, "numRef"))
@@ -54,34 +81,46 @@ fn parse_num_cache(parent: roxmltree::Node, child_name: &str) -> Vec<f32> {
     let Some(num_cache) = num_cache else {
         return Vec::new();
     };
-    let mut pts: Vec<(usize, f32)> = num_cache
-        .children()
-        .filter(|n| n.tag_name().name() == "pt" && n.tag_name().namespace() == Some(CHART_NS))
-        .filter_map(|pt| {
-            let idx = pt.attribute("idx")?.parse::<usize>().ok()?;
-            let v = chart_child(pt, "v")?.text()?.parse::<f32>().ok()?;
-            Some((idx, v))
-        })
-        .collect();
-    pts.sort_by_key(|(idx, _)| *idx);
-    let count = pts.last().map(|(idx, _)| idx + 1).unwrap_or(0);
-    let mut values = vec![0.0; count];
-    for (idx, v) in pts {
-        values[idx] = v;
+    collect_indexed_pts(num_cache, 0.0, |pt| {
+        chart_child(pt, "v")?.text()?.parse::<f32>().ok()
+    })
+}
+
+fn parse_str_cache(container: Option<roxmltree::Node>) -> Vec<String> {
+    let str_cache = container
+        .and_then(|c| chart_child(c, "strRef"))
+        .and_then(|sr| chart_child(sr, "strCache"));
+    let Some(str_cache) = str_cache else {
+        return Vec::new();
+    };
+    collect_indexed_pts(str_cache, String::new(), |pt| {
+        chart_child(pt, "v")?.text().map(str::to_string)
+    })
+}
+
+fn parse_marker_symbol(val: &str) -> Option<MarkerSymbol> {
+    match val {
+        "circle" => Some(MarkerSymbol::Circle),
+        "square" => Some(MarkerSymbol::Square),
+        "diamond" => Some(MarkerSymbol::Diamond),
+        "triangle" => Some(MarkerSymbol::Triangle),
+        "plus" => Some(MarkerSymbol::Plus),
+        "star" => Some(MarkerSymbol::Star),
+        "x" => Some(MarkerSymbol::X),
+        "dash" => Some(MarkerSymbol::Dash),
+        "dot" => Some(MarkerSymbol::Dot),
+        "none" => Some(MarkerSymbol::None),
+        _ => None,
     }
-    values
 }
 
 fn parse_series(ser_node: roxmltree::Node) -> (ChartSeries, Vec<String>) {
     let label = chart_child(ser_node, "tx")
         .and_then(|tx| chart_child(tx, "strRef"))
         .and_then(|sr| chart_child(sr, "strCache"))
-        .and_then(|cache| {
-            cache
-                .descendants()
-                .find(|n| n.tag_name().name() == "v" && n.tag_name().namespace() == Some(CHART_NS))
-                .and_then(|v| v.text())
-        })
+        .and_then(|cache| chart_child(cache, "pt"))
+        .and_then(|pt| chart_child(pt, "v"))
+        .and_then(|v| v.text())
         .unwrap_or("")
         .to_string();
 
@@ -100,19 +139,7 @@ fn parse_series(ser_node: roxmltree::Node) -> (ChartSeries, Vec<String>) {
 
     let marker = marker_node
         .and_then(|m| chart_attr(m, "symbol"))
-        .and_then(|val| match val {
-            "circle" => Some(MarkerSymbol::Circle),
-            "square" => Some(MarkerSymbol::Square),
-            "diamond" => Some(MarkerSymbol::Diamond),
-            "triangle" => Some(MarkerSymbol::Triangle),
-            "plus" => Some(MarkerSymbol::Plus),
-            "star" => Some(MarkerSymbol::Star),
-            "x" => Some(MarkerSymbol::X),
-            "dash" => Some(MarkerSymbol::Dash),
-            "dot" => Some(MarkerSymbol::Dot),
-            "none" => Some(MarkerSymbol::None),
-            _ => Option::None,
-        });
+        .and_then(parse_marker_symbol);
 
     // Scatter/bubble use yVal instead of val
     let y_vals = parse_num_cache(ser_node, "yVal");
@@ -143,31 +170,6 @@ fn parse_series(ser_node: roxmltree::Node) -> (ChartSeries, Vec<String>) {
 
 fn non_empty_vec(v: Vec<f32>) -> Option<Vec<f32>> {
     if v.is_empty() { None } else { Some(v) }
-}
-
-fn parse_str_cache(container: Option<roxmltree::Node>) -> Vec<String> {
-    let str_cache = container
-        .and_then(|c| chart_child(c, "strRef"))
-        .and_then(|sr| chart_child(sr, "strCache"));
-    let Some(str_cache) = str_cache else {
-        return Vec::new();
-    };
-    let mut pts: Vec<(usize, String)> = str_cache
-        .children()
-        .filter(|n| n.tag_name().name() == "pt" && n.tag_name().namespace() == Some(CHART_NS))
-        .filter_map(|pt| {
-            let idx = pt.attribute("idx")?.parse::<usize>().ok()?;
-            let v = chart_child(pt, "v")?.text()?.to_string();
-            Some((idx, v))
-        })
-        .collect();
-    pts.sort_by_key(|(idx, _)| *idx);
-    let count = pts.last().map(|(idx, _)| idx + 1).unwrap_or(0);
-    let mut labels = vec![String::new(); count];
-    for (idx, v) in pts {
-        labels[idx] = v;
-    }
-    labels
 }
 
 fn parse_axis(ax_node: roxmltree::Node) -> ChartAxis {
@@ -244,10 +246,9 @@ fn parse_chart_space(xml_content: &str, accent_colors: Vec<[u8; 3]>) -> Option<C
     let (type_node, chart_type, gap_width_pct) = detect_chart_type(plot_area)?;
 
     let (series_list, cat_labels) = collect_series(type_node);
-    let is_scatter_like = matches!(chart_type, ChartType::Scatter | ChartType::Bubble);
 
     // Scatter/bubble have two valAx; use first as cat_axis, second as val_axis
-    let (mut cat_axis, val_axis) = if is_scatter_like {
+    let (mut cat_axis, val_axis) = if matches!(chart_type, ChartType::Scatter | ChartType::Bubble) {
         let val_axes: Vec<_> = plot_area
             .children()
             .filter(|n| {
@@ -300,32 +301,29 @@ fn detect_chart_type<'a>(
     }
 
     let default_gap = 150.0;
-    if let Some(n) = chart_child(plot_area, "lineChart") {
-        return Some((n, ChartType::Line, default_gap));
-    }
-    if let Some(n) =
-        chart_child(plot_area, "pieChart").or_else(|| chart_child(plot_area, "pie3DChart"))
-    {
-        return Some((n, ChartType::Pie, default_gap));
-    }
-    if let Some(n) = chart_child(plot_area, "areaChart") {
-        return Some((n, ChartType::Area, default_gap));
-    }
+
     if let Some(n) = chart_child(plot_area, "doughnutChart") {
         let hole_size_pct = chart_attr(n, "holeSize")
             .and_then(|v| v.parse::<f32>().ok())
             .unwrap_or(50.0);
         return Some((n, ChartType::Doughnut { hole_size_pct }, default_gap));
     }
-    if let Some(n) = chart_child(plot_area, "radarChart") {
-        return Some((n, ChartType::Radar, default_gap));
+
+    let simple_types: &[(&str, ChartType)] = &[
+        ("lineChart", ChartType::Line),
+        ("pieChart", ChartType::Pie),
+        ("pie3DChart", ChartType::Pie),
+        ("areaChart", ChartType::Area),
+        ("radarChart", ChartType::Radar),
+        ("scatterChart", ChartType::Scatter),
+        ("bubbleChart", ChartType::Bubble),
+    ];
+    for &(element, ref chart_type) in simple_types {
+        if let Some(n) = chart_child(plot_area, element) {
+            return Some((n, chart_type.clone(), default_gap));
+        }
     }
-    if let Some(n) = chart_child(plot_area, "scatterChart") {
-        return Some((n, ChartType::Scatter, default_gap));
-    }
-    if let Some(n) = chart_child(plot_area, "bubbleChart") {
-        return Some((n, ChartType::Bubble, default_gap));
-    }
+
     None
 }
 

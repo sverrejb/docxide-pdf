@@ -11,7 +11,7 @@ iterations="$1"
 progress="./ralph/willie_progress.md"
 
 if [ ! -f "$progress" ]; then
-  echo "# Progress for Willie}" > "$progress"
+  echo "# Progress for Willie" > "$progress"
 fi
 
 for ((i=1; i<=iterations; i++)); do

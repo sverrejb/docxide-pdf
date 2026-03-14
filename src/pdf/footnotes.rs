@@ -4,11 +4,11 @@ use pdf_writer::Content;
 
 use crate::model::{Footnote, LineSpacing, Run};
 
+use super::RenderContext;
 use super::layout::{
     build_paragraph_lines, is_text_empty, render_paragraph_lines, tallest_run_metrics,
 };
 use super::resolve_line_h;
-use super::RenderContext;
 
 pub(super) fn compute_footnote_height(
     footnote: &Footnote,
@@ -47,8 +47,7 @@ pub(super) fn render_page_footnotes(
     let mut total_fn_height = 0.0f32;
     for fn_id in fn_ids {
         if let Some(footnote) = footnotes.get(fn_id) {
-            total_fn_height +=
-                compute_footnote_height(footnote, ctx, text_width);
+            total_fn_height += compute_footnote_height(footnote, ctx, text_width);
         }
     }
     let separator_gap = 12.0f32;

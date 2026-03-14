@@ -27,7 +27,7 @@ fn render_and_write(doc: &model::Document, path: impl AsRef<Path>) -> Result<(),
     let bytes = pdf::render(doc)?;
     let t_render = t0.elapsed();
 
-    std::fs::write(&path, &bytes).map_err(Error::Io)?;
+    std::fs::write(&path, &bytes)?;
     let t_total = t0.elapsed();
 
     log::info!(

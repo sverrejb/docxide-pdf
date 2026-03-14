@@ -38,8 +38,7 @@ pub(super) fn winansi_to_char(byte: u8) -> char {
 /// Map a single Unicode char to its WinAnsi byte, or 0 if unmappable.
 pub(super) fn char_to_winansi(c: char) -> u8 {
     match c as u32 {
-        0x0020..=0x007F => c as u8,
-        0x00A0..=0x00FF => c as u8,
+        0x0020..=0x007F | 0x00A0..=0x00FF => c as u8,
         0x20AC => 0x80,
         0x201A => 0x82,
         0x0192 => 0x83,
@@ -78,13 +77,9 @@ pub(crate) fn to_winansi_bytes(s: &str) -> Vec<u8> {
 
 /// Encode UTF-8 text as big-endian 2-byte glyph IDs for CIDFont content streams.
 pub(crate) fn encode_as_gids(text: &str, char_to_gid: &HashMap<char, u16>) -> Vec<u8> {
-    let mut out = Vec::with_capacity(text.len() * 2);
-    for ch in text.chars() {
-        let gid = char_to_gid.get(&ch).copied().unwrap_or(0);
-        out.push((gid >> 8) as u8);
-        out.push((gid & 0xFF) as u8);
-    }
-    out
+    text.chars()
+        .flat_map(|ch| char_to_gid.get(&ch).copied().unwrap_or(0).to_be_bytes())
+        .collect()
 }
 
 /// Approximate Helvetica widths at 1000 units/em for WinAnsi chars 32..=255.

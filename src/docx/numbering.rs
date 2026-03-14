@@ -61,11 +61,7 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
                     continue;
                 };
                 let mut levels: HashMap<u8, LevelDef> = HashMap::new();
-                for lvl in node.children() {
-                    if lvl.tag_name().name() != "lvl" || lvl.tag_name().namespace() != Some(WML_NS)
-                    {
-                        continue;
-                    }
+                for lvl in node.children().filter(|n| n.has_tag_name((WML_NS, "lvl"))) {
                     let Some(ilvl) = lvl
                         .attribute((WML_NS, "ilvl"))
                         .and_then(|v| v.parse::<u8>().ok())
@@ -89,14 +85,12 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
                         })
                         .map(|s| s.to_string());
                     let label_font_size = rpr
-                        .and_then(|r| wml(r, "sz"))
-                        .and_then(|n| n.attribute((WML_NS, "val")))
+                        .and_then(|r| wml_attr(r, "sz"))
                         .and_then(|v| v.parse::<f32>().ok())
                         .map(|hp| hp / 2.0);
                     let label_bold = rpr.and_then(|r| wml_bool(r, "b")).unwrap_or(false);
                     let label_color = rpr
-                        .and_then(|r| wml(r, "color"))
-                        .and_then(|n| n.attribute((WML_NS, "val")))
+                        .and_then(|r| wml_attr(r, "color"))
                         .and_then(parse_hex_color);
                     levels.insert(
                         ilvl,
@@ -129,25 +123,18 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
                     continue;
                 };
                 num_to_abstract.insert(num_id.to_string(), abs_id.to_string());
-                let mut overrides: HashMap<u8, u32> = HashMap::new();
-                for ovr in node.children() {
-                    if ovr.tag_name().name() == "lvlOverride"
-                        && ovr.tag_name().namespace() == Some(WML_NS)
-                    {
-                        if let Some(ilvl) =
-                            ovr.attribute((WML_NS, "ilvl")).and_then(|v| v.parse::<u8>().ok())
-                        {
-                            if let Some(start_ovr) = wml(ovr, "startOverride") {
-                                if let Some(val) = start_ovr
-                                    .attribute((WML_NS, "val"))
-                                    .and_then(|v| v.parse::<u32>().ok())
-                                {
-                                    overrides.insert(ilvl, val);
-                                }
-                            }
-                        }
-                    }
-                }
+                let overrides: HashMap<u8, u32> = node
+                    .children()
+                    .filter(|n| n.has_tag_name((WML_NS, "lvlOverride")))
+                    .filter_map(|ovr| {
+                        let ilvl = ovr
+                            .attribute((WML_NS, "ilvl"))
+                            .and_then(|v| v.parse::<u8>().ok())?;
+                        let val =
+                            wml_attr(ovr, "startOverride").and_then(|v| v.parse::<u32>().ok())?;
+                        Some((ilvl, val))
+                    })
+                    .collect();
                 if !overrides.is_empty() {
                     start_overrides.insert(num_id.to_string(), overrides);
                 }
@@ -158,15 +145,18 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
 
     // Resolve numStyleLink → styleLink chains
     for (abs_id, style_name) in &num_style_link {
-        if let Some(target_abs_id) = style_link_target.get(style_name) {
-            if let Some(source_levels) = abstract_nums.get(target_abs_id).cloned() {
-                if !source_levels.is_empty() {
-                    let entry = abstract_nums.entry(abs_id.clone()).or_default();
-                    if entry.is_empty() {
-                        *entry = source_levels;
-                    }
-                }
-            }
+        let Some(target_abs_id) = style_link_target.get(style_name) else {
+            continue;
+        };
+        let Some(source_levels) = abstract_nums.get(target_abs_id).cloned() else {
+            continue;
+        };
+        if source_levels.is_empty() {
+            continue;
+        }
+        let entry = abstract_nums.entry(abs_id.clone()).or_default();
+        if entry.is_empty() {
+            *entry = source_levels;
         }
     }
 
@@ -232,7 +222,7 @@ fn format_number(value: u32, num_fmt: &str) -> String {
     }
 }
 
-fn normalize_bullet_text(text: &str, _bullet_font: Option<&str>) -> String {
+fn normalize_bullet_text(text: &str) -> String {
     text.chars()
         .map(|c| {
             let cp = c as u32;
@@ -294,18 +284,16 @@ pub(super) fn parse_list_info(
     };
 
     // Reset deeper-level counters when returning to a higher level
-    let prev_level = last_seen_level.get(num_id).copied();
-    if let Some(prev) = prev_level {
-        if ilvl <= prev {
-            for deeper in (ilvl + 1)..=prev {
-                counters.remove(&(num_id.to_string(), deeper));
-            }
+    if let Some(&prev) = last_seen_level.get(num_id) {
+        for deeper in (ilvl + 1)..=prev {
+            counters.remove(&(num_id.to_string(), deeper));
         }
     }
     last_seen_level.insert(num_id.to_string(), ilvl);
 
     // Increment or initialize counter using the level's start value
-    let start = numbering.start_overrides
+    let start = numbering
+        .start_overrides
         .get(num_id)
         .and_then(|m| m.get(&ilvl))
         .copied()
@@ -315,8 +303,9 @@ pub(super) fn parse_list_info(
         .and_modify(|c| *c += 1)
         .or_insert(start);
 
-    let label = if def.num_fmt == "bullet" {
-        let text = normalize_bullet_text(&def.lvl_text, def.bullet_font.as_deref());
+    let is_bullet = def.num_fmt == "bullet";
+    let label = if is_bullet {
+        let text = normalize_bullet_text(&def.lvl_text);
         if text.is_empty() {
             "\u{2022}".to_string()
         } else {
@@ -344,18 +333,18 @@ pub(super) fn parse_list_info(
         }
         label
     };
-    let bullet_font = if def.num_fmt == "bullet"
-        && label.chars().any(|c| (0xF000..=0xF0FF).contains(&(c as u32)))
-    {
-        def.bullet_font.clone()
-    } else {
-        None
-    };
+    let has_pua = label
+        .chars()
+        .any(|c| (0xF000..=0xF0FF).contains(&(c as u32)));
     ListLabelInfo {
         indent_left: def.indent_left,
         indent_hanging: def.indent_hanging,
         label,
-        font: bullet_font,
+        font: if is_bullet && has_pua {
+            def.bullet_font.clone()
+        } else {
+            None
+        },
         font_size: def.label_font_size,
         bold: def.label_bold,
         color: def.label_color,

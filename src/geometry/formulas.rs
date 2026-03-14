@@ -55,7 +55,15 @@ pub struct GuideDef {
     pub z: &'static str,
 }
 
-const ANG_UNIT: f64 = 60000.0; // 60000ths of a degree per degree
+const ANG_UNIT: f64 = 60000.0;
+
+fn ang_to_rad(ang: f64) -> f64 {
+    ang / (ANG_UNIT * 180.0) * std::f64::consts::PI
+}
+
+fn rad_to_ang(rad: f64) -> f64 {
+    rad / std::f64::consts::PI * 180.0 * ANG_UNIT
+}
 
 pub struct GuideEnv {
     values: HashMap<String, i64>,
@@ -78,36 +86,29 @@ impl GuideEnv {
         values.insert("hc".into(), w / 2);
         values.insert("vc".into(), h / 2);
 
-        // wd{n} = w / n
-        for d in [2, 3, 4, 5, 6, 8, 10, 12] {
-            values.insert(format!("wd{d}"), w / d);
-        }
-        // hd{n} = h / n
-        for d in [2, 3, 4, 5, 6, 8, 10] {
-            values.insert(format!("hd{d}"), h / d);
-        }
-        // ssd{n} = ss / n
-        for d in [2, 4, 6, 8, 16, 32] {
-            values.insert(format!("ssd{d}"), ss / d);
+        for (prefix, val, divisors) in [
+            ("wd", w, [2_i64, 3, 4, 5, 6, 8, 10, 12].as_slice()),
+            ("hd", h, &[2, 3, 4, 5, 6, 8, 10]),
+            ("ssd", ss, &[2, 4, 6, 8, 16, 32]),
+        ] {
+            for &d in divisors {
+                values.insert(format!("{prefix}{d}"), val / d);
+            }
         }
 
         // Angle constants (in 60000ths of a degree)
-        values.insert("cd2".into(), 10_800_000);  // 180 deg
-        values.insert("cd4".into(), 5_400_000);   // 90 deg
-        values.insert("cd8".into(), 2_700_000);   // 45 deg
+        values.insert("cd2".into(), 10_800_000); // 180 deg
+        values.insert("cd4".into(), 5_400_000); // 90 deg
+        values.insert("cd8".into(), 2_700_000); // 45 deg
         values.insert("3cd4".into(), 16_200_000); // 270 deg
-        values.insert("3cd8".into(), 8_100_000);  // 135 deg
+        values.insert("3cd8".into(), 8_100_000); // 135 deg
         values.insert("5cd8".into(), 13_500_000); // 225 deg
         values.insert("7cd8".into(), 18_900_000); // 315 deg
 
         Self { values }
     }
 
-    pub fn set_adjustments(
-        &mut self,
-        defaults: &[(&str, i64)],
-        overrides: &[(String, i64)],
-    ) {
+    pub fn set_adjustments(&mut self, defaults: &[(&str, i64)], overrides: &[(String, i64)]) {
         for &(name, val) in defaults {
             self.values.insert(name.to_string(), val);
         }
@@ -149,7 +150,11 @@ impl GuideEnv {
             FormulaOp::Val => x(),
             FormulaOp::MulDiv => {
                 let denom = z();
-                if denom == 0 { 0 } else { (x() as i128 * y() as i128 / denom as i128) as i64 }
+                if denom == 0 {
+                    0
+                } else {
+                    (x() as i128 * y() as i128 / denom as i128) as i64
+                }
             }
             FormulaOp::AddSub => x() + y() - z(),
             FormulaOp::AddDiv => {
@@ -157,7 +162,11 @@ impl GuideEnv {
                 if denom == 0 { 0 } else { (x() + y()) / denom }
             }
             FormulaOp::IfElse => {
-                if x() > 0 { y() } else { z() }
+                if x() > 0 {
+                    y()
+                } else {
+                    z()
+                }
             }
             FormulaOp::Abs => x().abs(),
             FormulaOp::Sqrt => {
@@ -172,45 +181,20 @@ impl GuideEnv {
                 let hi = z();
                 val.clamp(lo, hi)
             }
-            FormulaOp::Sin => {
-                let mag = x() as f64;
-                let ang = y() as f64 / (ANG_UNIT * 180.0) * std::f64::consts::PI;
-                (mag * ang.sin()) as i64
-            }
-            FormulaOp::Cos => {
-                let mag = x() as f64;
-                let ang = y() as f64 / (ANG_UNIT * 180.0) * std::f64::consts::PI;
-                (mag * ang.cos()) as i64
-            }
-            FormulaOp::Tan => {
-                let mag = x() as f64;
-                let ang = y() as f64 / (ANG_UNIT * 180.0) * std::f64::consts::PI;
-                (mag * ang.tan()) as i64
-            }
-            FormulaOp::Atan2 => {
-                let xv = x() as f64;
-                let yv = y() as f64;
-                let rad = yv.atan2(xv);
-                (rad / std::f64::consts::PI * 180.0 * ANG_UNIT) as i64
-            }
+            FormulaOp::Sin => (x() as f64 * ang_to_rad(y() as f64).sin()) as i64,
+            FormulaOp::Cos => (x() as f64 * ang_to_rad(y() as f64).cos()) as i64,
+            FormulaOp::Tan => (x() as f64 * ang_to_rad(y() as f64).tan()) as i64,
+            FormulaOp::Atan2 => rad_to_ang((y() as f64).atan2(x() as f64)) as i64,
             FormulaOp::CosAtan2 => {
-                let mag = x() as f64;
-                let yv = y() as f64;
-                let zv = z() as f64;
-                let ang = zv.atan2(yv);
-                (mag * ang.cos()) as i64
+                let ang = (z() as f64).atan2(y() as f64);
+                (x() as f64 * ang.cos()) as i64
             }
             FormulaOp::SinAtan2 => {
-                let mag = x() as f64;
-                let yv = y() as f64;
-                let zv = z() as f64;
-                let ang = zv.atan2(yv);
-                (mag * ang.sin()) as i64
+                let ang = (z() as f64).atan2(y() as f64);
+                (x() as f64 * ang.sin()) as i64
             }
             FormulaOp::Mod => {
-                let xv = x() as f64;
-                let yv = y() as f64;
-                let zv = z() as f64;
+                let (xv, yv, zv) = (x() as f64, y() as f64, z() as f64);
                 (xv * xv + yv * yv + zv * zv).sqrt() as i64
             }
         }
@@ -261,8 +245,11 @@ mod tests {
     fn test_mul_div() {
         let mut env = env_1m();
         env.evaluate_guides(&[GuideDef {
-            name: "g1", op: FormulaOp::MulDiv,
-            x: "w", y: "50000", z: "100000",
+            name: "g1",
+            op: FormulaOp::MulDiv,
+            x: "w",
+            y: "50000",
+            z: "100000",
         }]);
         assert_eq!(env.resolve("g1"), 500_000);
     }
@@ -271,8 +258,11 @@ mod tests {
     fn test_mul_div_zero_denom() {
         let mut env = env_1m();
         env.evaluate_guides(&[GuideDef {
-            name: "g1", op: FormulaOp::MulDiv,
-            x: "w", y: "50000", z: "0",
+            name: "g1",
+            op: FormulaOp::MulDiv,
+            x: "w",
+            y: "50000",
+            z: "0",
         }]);
         assert_eq!(env.resolve("g1"), 0);
     }
@@ -281,8 +271,11 @@ mod tests {
     fn test_add_sub() {
         let mut env = env_1m();
         env.evaluate_guides(&[GuideDef {
-            name: "g1", op: FormulaOp::AddSub,
-            x: "r", y: "0", z: "100000",
+            name: "g1",
+            op: FormulaOp::AddSub,
+            x: "r",
+            y: "0",
+            z: "100000",
         }]);
         assert_eq!(env.resolve("g1"), 900_000);
     }
@@ -291,8 +284,11 @@ mod tests {
     fn test_add_div() {
         let mut env = env_1m();
         env.evaluate_guides(&[GuideDef {
-            name: "g1", op: FormulaOp::AddDiv,
-            x: "w", y: "h", z: "2",
+            name: "g1",
+            op: FormulaOp::AddDiv,
+            x: "w",
+            y: "h",
+            z: "2",
         }]);
         assert_eq!(env.resolve("g1"), 1_000_000);
     }
@@ -301,8 +297,20 @@ mod tests {
     fn test_if_else() {
         let mut env = env_1m();
         env.evaluate_guides(&[
-            GuideDef { name: "pos", op: FormulaOp::IfElse, x: "w", y: "100", z: "200" },
-            GuideDef { name: "neg", op: FormulaOp::IfElse, x: "l", y: "100", z: "200" },
+            GuideDef {
+                name: "pos",
+                op: FormulaOp::IfElse,
+                x: "w",
+                y: "100",
+                z: "200",
+            },
+            GuideDef {
+                name: "neg",
+                op: FormulaOp::IfElse,
+                x: "l",
+                y: "100",
+                z: "200",
+            },
         ]);
         assert_eq!(env.resolve("pos"), 100);
         assert_eq!(env.resolve("neg"), 200);
@@ -313,7 +321,11 @@ mod tests {
         let mut env = env_1m();
         env.values.insert("neg".into(), -500);
         env.evaluate_guides(&[GuideDef {
-            name: "g1", op: FormulaOp::Abs, x: "neg", y: "", z: "",
+            name: "g1",
+            op: FormulaOp::Abs,
+            x: "neg",
+            y: "",
+            z: "",
         }]);
         assert_eq!(env.resolve("g1"), 500);
     }
@@ -323,7 +335,11 @@ mod tests {
         let mut env = env_1m();
         env.values.insert("v".into(), 1_000_000);
         env.evaluate_guides(&[GuideDef {
-            name: "g1", op: FormulaOp::Sqrt, x: "v", y: "", z: "",
+            name: "g1",
+            op: FormulaOp::Sqrt,
+            x: "v",
+            y: "",
+            z: "",
         }]);
         assert_eq!(env.resolve("g1"), 1000);
     }
@@ -332,8 +348,20 @@ mod tests {
     fn test_min_max() {
         let mut env = env_1m();
         env.evaluate_guides(&[
-            GuideDef { name: "lo", op: FormulaOp::Min, x: "300", y: "500", z: "" },
-            GuideDef { name: "hi", op: FormulaOp::Max, x: "300", y: "500", z: "" },
+            GuideDef {
+                name: "lo",
+                op: FormulaOp::Min,
+                x: "300",
+                y: "500",
+                z: "",
+            },
+            GuideDef {
+                name: "hi",
+                op: FormulaOp::Max,
+                x: "300",
+                y: "500",
+                z: "",
+            },
         ]);
         assert_eq!(env.resolve("lo"), 300);
         assert_eq!(env.resolve("hi"), 500);
@@ -343,11 +371,23 @@ mod tests {
     fn test_pin() {
         let mut env = env_1m();
         env.evaluate_guides(&[
-            GuideDef { name: "clamped", op: FormulaOp::Pin, x: "100", y: "50", z: "200" },
-            GuideDef { name: "above", op: FormulaOp::Pin, x: "100", y: "300", z: "200" },
+            GuideDef {
+                name: "clamped",
+                op: FormulaOp::Pin,
+                x: "100",
+                y: "50",
+                z: "200",
+            },
+            GuideDef {
+                name: "above",
+                op: FormulaOp::Pin,
+                x: "100",
+                y: "300",
+                z: "200",
+            },
         ]);
         assert_eq!(env.resolve("clamped"), 100); // 50 clamped to [100,200]
-        assert_eq!(env.resolve("above"), 200);   // 300 clamped to [100,200]
+        assert_eq!(env.resolve("above"), 200); // 300 clamped to [100,200]
     }
 
     #[test]
@@ -355,8 +395,20 @@ mod tests {
         let mut env = env_1m();
         // sin(1000000, 5400000) = 1000000 * sin(90 deg) = 1000000
         env.evaluate_guides(&[
-            GuideDef { name: "s", op: FormulaOp::Sin, x: "1000000", y: "cd4", z: "" },
-            GuideDef { name: "c", op: FormulaOp::Cos, x: "1000000", y: "cd4", z: "" },
+            GuideDef {
+                name: "s",
+                op: FormulaOp::Sin,
+                x: "1000000",
+                y: "cd4",
+                z: "",
+            },
+            GuideDef {
+                name: "c",
+                op: FormulaOp::Cos,
+                x: "1000000",
+                y: "cd4",
+                z: "",
+            },
         ]);
         assert_eq!(env.resolve("s"), 1_000_000);
         assert!(env.resolve("c").abs() < 100); // cos(90) ~ 0
@@ -367,7 +419,11 @@ mod tests {
         let mut env = env_1m();
         // at2(1000000, 1000000) = atan2(1000000, 1000000) = 45 deg = 2700000
         env.evaluate_guides(&[GuideDef {
-            name: "a", op: FormulaOp::Atan2, x: "1000000", y: "1000000", z: "",
+            name: "a",
+            op: FormulaOp::Atan2,
+            x: "1000000",
+            y: "1000000",
+            z: "",
         }]);
         assert!((env.resolve("a") - 2_700_000).abs() < 100);
     }
@@ -377,7 +433,11 @@ mod tests {
         let mut env = env_1m();
         // mod(3, 4, 0) = sqrt(9+16+0) = 5
         env.evaluate_guides(&[GuideDef {
-            name: "m", op: FormulaOp::Mod, x: "3", y: "4", z: "0",
+            name: "m",
+            op: FormulaOp::Mod,
+            x: "3",
+            y: "4",
+            z: "0",
         }]);
         assert_eq!(env.resolve("m"), 5);
     }
@@ -388,8 +448,20 @@ mod tests {
         // cat2(1000, 1000000, 0) = 1000 * cos(atan2(0, 1000000)) = 1000 * cos(0) = 1000
         // sat2(1000, 1000000, 0) = 1000 * sin(atan2(0, 1000000)) = 1000 * sin(0) = 0
         env.evaluate_guides(&[
-            GuideDef { name: "ct", op: FormulaOp::CosAtan2, x: "1000", y: "1000000", z: "0" },
-            GuideDef { name: "st", op: FormulaOp::SinAtan2, x: "1000", y: "1000000", z: "0" },
+            GuideDef {
+                name: "ct",
+                op: FormulaOp::CosAtan2,
+                x: "1000",
+                y: "1000000",
+                z: "0",
+            },
+            GuideDef {
+                name: "st",
+                op: FormulaOp::SinAtan2,
+                x: "1000",
+                y: "1000000",
+                z: "0",
+            },
         ]);
         assert_eq!(env.resolve("ct"), 1000);
         assert!(env.resolve("st").abs() < 2);
@@ -400,9 +472,27 @@ mod tests {
         let mut env = GuideEnv::new(1_000_000, 500_000);
         env.set_adjustments(&[("adj", 25000)], &[]);
         env.evaluate_guides(&[
-            GuideDef { name: "a", op: FormulaOp::Pin, x: "0", y: "adj", z: "50000" },
-            GuideDef { name: "x1", op: FormulaOp::MulDiv, x: "ss", y: "a", z: "100000" },
-            GuideDef { name: "x2", op: FormulaOp::AddSub, x: "r", y: "0", z: "x1" },
+            GuideDef {
+                name: "a",
+                op: FormulaOp::Pin,
+                x: "0",
+                y: "adj",
+                z: "50000",
+            },
+            GuideDef {
+                name: "x1",
+                op: FormulaOp::MulDiv,
+                x: "ss",
+                y: "a",
+                z: "100000",
+            },
+            GuideDef {
+                name: "x2",
+                op: FormulaOp::AddSub,
+                x: "r",
+                y: "0",
+                z: "x1",
+            },
         ]);
         // ss = min(1M, 500K) = 500000
         // a = pin(0, 25000, 50000) = 25000
@@ -425,7 +515,11 @@ mod tests {
         let mut env = env_1m();
         // tan(1000, cd8) = 1000 * tan(45 deg) = 1000
         env.evaluate_guides(&[GuideDef {
-            name: "t", op: FormulaOp::Tan, x: "1000", y: "cd8", z: "",
+            name: "t",
+            op: FormulaOp::Tan,
+            x: "1000",
+            y: "cd8",
+            z: "",
         }]);
         assert!((env.resolve("t") - 1000).abs() < 2);
     }
@@ -435,7 +529,11 @@ mod tests {
         let mut env = env_1m();
         env.values.insert("neg".into(), -100);
         env.evaluate_guides(&[GuideDef {
-            name: "g1", op: FormulaOp::Sqrt, x: "neg", y: "", z: "",
+            name: "g1",
+            op: FormulaOp::Sqrt,
+            x: "neg",
+            y: "",
+            z: "",
         }]);
         assert_eq!(env.resolve("g1"), 0);
     }
@@ -444,7 +542,11 @@ mod tests {
     fn test_add_div_zero_denom() {
         let mut env = env_1m();
         env.evaluate_guides(&[GuideDef {
-            name: "g1", op: FormulaOp::AddDiv, x: "w", y: "h", z: "0",
+            name: "g1",
+            op: FormulaOp::AddDiv,
+            x: "w",
+            y: "h",
+            z: "0",
         }]);
         assert_eq!(env.resolve("g1"), 0);
     }
@@ -454,7 +556,11 @@ mod tests {
         let mut env = env_1m();
         // x == 0 should go to else branch
         env.evaluate_guides(&[GuideDef {
-            name: "g1", op: FormulaOp::IfElse, x: "0", y: "100", z: "200",
+            name: "g1",
+            op: FormulaOp::IfElse,
+            x: "0",
+            y: "100",
+            z: "200",
         }]);
         assert_eq!(env.resolve("g1"), 200);
     }
@@ -499,13 +605,13 @@ mod tests {
     #[test]
     fn test_builtin_all_angle_constants() {
         let env = env_1m();
-        assert_eq!(env.resolve("cd2"), 10_800_000);   // 180 deg
-        assert_eq!(env.resolve("cd4"), 5_400_000);     // 90 deg
-        assert_eq!(env.resolve("cd8"), 2_700_000);     // 45 deg
-        assert_eq!(env.resolve("3cd4"), 16_200_000);   // 270 deg
-        assert_eq!(env.resolve("3cd8"), 8_100_000);    // 135 deg
-        assert_eq!(env.resolve("5cd8"), 13_500_000);   // 225 deg
-        assert_eq!(env.resolve("7cd8"), 18_900_000);   // 315 deg
+        assert_eq!(env.resolve("cd2"), 10_800_000); // 180 deg
+        assert_eq!(env.resolve("cd4"), 5_400_000); // 90 deg
+        assert_eq!(env.resolve("cd8"), 2_700_000); // 45 deg
+        assert_eq!(env.resolve("3cd4"), 16_200_000); // 270 deg
+        assert_eq!(env.resolve("3cd8"), 8_100_000); // 135 deg
+        assert_eq!(env.resolve("5cd8"), 13_500_000); // 225 deg
+        assert_eq!(env.resolve("7cd8"), 18_900_000); // 315 deg
     }
 
     #[test]

@@ -14,14 +14,18 @@ pub struct EvaluatedPath {
 
 pub struct EvaluatedShape {
     pub paths: Vec<EvaluatedPath>,
-    /// Text rectangle in PDF coordinates (x, y_bottom, width, height).
     pub text_rect: Option<(f64, f64, f64, f64)>,
 }
 
-/// Evaluate a preset shape geometry, returning resolved paths in PDF coordinate space.
-///
-/// `w` and `h` are the shape dimensions in points.
-/// Coordinates are y-flipped (OOXML y-down -> PDF y-up).
+// 1 point = 12700 EMU. Preserves precision for the integer formula evaluator.
+const EMU_SCALE: f64 = 12700.0;
+
+fn scaled_env(w: f64, h: f64) -> (GuideEnv, i64, i64) {
+    let wi = (w * EMU_SCALE) as i64;
+    let hi = (h * EMU_SCALE) as i64;
+    (GuideEnv::new(wi, hi), wi, hi)
+}
+
 pub fn evaluate_preset(
     name: &str,
     w: f64,
@@ -32,23 +36,13 @@ pub fn evaluate_preset(
     Some(evaluate_def(def, w, h, adj_overrides))
 }
 
-/// Evaluate a preset definition with given dimensions and adjustment overrides.
 pub fn evaluate_def(
     def: &PresetDef,
     w: f64,
     h: f64,
     adj_overrides: &[(String, i64)],
 ) -> EvaluatedShape {
-    // OOXML coordinates are integers; scale points to a large integer space
-    // for guide computation, then scale back to f64 points for the resolved paths.
-    //
-    // We use EMU-like units: 1 point = 12700 EMU. This preserves precision
-    // for the integer formula evaluator while keeping values within i64 range.
-    let scale = 12700.0;
-    let wi = (w * scale) as i64;
-    let hi = (h * scale) as i64;
-
-    let mut env = GuideEnv::new(wi, hi);
+    let (mut env, wi, hi) = scaled_env(w, h);
     env.set_adjustments(def.adjust_defaults, adj_overrides);
     env.evaluate_guides(def.guides);
 
@@ -63,36 +57,25 @@ pub fn evaluate_def(
         .collect();
 
     let text_rect = def.text_rect.as_ref().map(|tr| {
-        let l = env.resolve(tr.l) as f64 / scale;
-        let t = env.resolve(tr.t) as f64 / scale;
-        let r = env.resolve(tr.r) as f64 / scale;
-        let b = env.resolve(tr.b) as f64 / scale;
-        // Convert to PDF coords: (x, y_bottom, width, height)
+        let l = env.resolve(tr.l) as f64 / EMU_SCALE;
+        let t = env.resolve(tr.t) as f64 / EMU_SCALE;
+        let r = env.resolve(tr.r) as f64 / EMU_SCALE;
+        let b = env.resolve(tr.b) as f64 / EMU_SCALE;
         (l, h - b, r - l, b - t)
     });
 
     EvaluatedShape { paths, text_rect }
 }
 
-/// Evaluate a custom geometry (a:custGeom), returning resolved paths in PDF coordinate space.
 pub fn evaluate_custom(
     custom: &crate::model::CustomGeometry,
     w: f64,
     h: f64,
     adj_overrides: &[(String, i64)],
 ) -> EvaluatedShape {
-    let scale = 12700.0;
-    let wi = (w * scale) as i64;
-    let hi = (h * scale) as i64;
-
-    let mut env = GuideEnv::new(wi, hi);
-    // Set custom adjustment defaults, then apply overrides
-    for (name, val) in &custom.adjust_defaults {
-        env.set_adjustments(&[], &[(name.clone(), *val)]);
-    }
-    if !adj_overrides.is_empty() {
-        env.set_adjustments(&[], adj_overrides);
-    }
+    let (mut env, wi, hi) = scaled_env(w, h);
+    env.set_adjustments(&[], &custom.adjust_defaults);
+    env.set_adjustments(&[], adj_overrides);
     env.evaluate_custom_guides(&custom.guides);
 
     let paths = custom
@@ -105,7 +88,10 @@ pub fn evaluate_custom(
         })
         .collect();
 
-    EvaluatedShape { paths, text_rect: None }
+    EvaluatedShape {
+        paths,
+        text_rect: None,
+    }
 }
 
 #[cfg(test)]
@@ -135,13 +121,21 @@ mod tests {
 
         assert_eq!(cmds.len(), 5);
         // Top-left in PDF coords (OOXML origin 0,0 -> PDF 0,h)
-        assert!(matches!(&cmds[0], ResolvedCommand::MoveTo(x, y) if approx_eq(*x, 0.0, 0.01) && approx_eq(*y, h, 0.01)));
+        assert!(
+            matches!(&cmds[0], ResolvedCommand::MoveTo(x, y) if approx_eq(*x, 0.0, 0.01) && approx_eq(*y, h, 0.01))
+        );
         // Top-right
-        assert!(matches!(&cmds[1], ResolvedCommand::LineTo(x, y) if approx_eq(*x, w, 0.01) && approx_eq(*y, h, 0.01)));
+        assert!(
+            matches!(&cmds[1], ResolvedCommand::LineTo(x, y) if approx_eq(*x, w, 0.01) && approx_eq(*y, h, 0.01))
+        );
         // Bottom-right
-        assert!(matches!(&cmds[2], ResolvedCommand::LineTo(x, y) if approx_eq(*x, w, 0.01) && approx_eq(*y, 0.0, 0.01)));
+        assert!(
+            matches!(&cmds[2], ResolvedCommand::LineTo(x, y) if approx_eq(*x, w, 0.01) && approx_eq(*y, 0.0, 0.01))
+        );
         // Bottom-left
-        assert!(matches!(&cmds[3], ResolvedCommand::LineTo(x, y) if approx_eq(*x, 0.0, 0.01) && approx_eq(*y, 0.0, 0.01)));
+        assert!(
+            matches!(&cmds[3], ResolvedCommand::LineTo(x, y) if approx_eq(*x, 0.0, 0.01) && approx_eq(*y, 0.0, 0.01))
+        );
         assert!(matches!(&cmds[4], ResolvedCommand::Close));
     }
 
@@ -161,23 +155,32 @@ mod tests {
         let cmds = &shape.paths[0].commands;
 
         // Starts at left center: (0, h/2) in PDF coords
-        assert!(matches!(&cmds[0], ResolvedCommand::MoveTo(x, y) if approx_eq(*x, 0.0, 0.1) && approx_eq(*y, h / 2.0, 0.1)));
+        assert!(
+            matches!(&cmds[0], ResolvedCommand::MoveTo(x, y) if approx_eq(*x, 0.0, 0.1) && approx_eq(*y, h / 2.0, 0.1))
+        );
 
         // Collect all endpoints from the cubic segments
-        let endpoints: Vec<(f64, f64)> = cmds.iter().filter_map(|c| match c {
-            ResolvedCommand::CubicTo { x, y, .. } => Some((*x, *y)),
-            _ => None,
-        }).collect();
+        let endpoints: Vec<(f64, f64)> = cmds
+            .iter()
+            .filter_map(|c| match c {
+                ResolvedCommand::CubicTo { x, y, .. } => Some((*x, *y)),
+                _ => None,
+            })
+            .collect();
 
         // 4 arcs of 90 degrees each produce 4 cubic segments
-        assert_eq!(endpoints.len(), 4, "Expected 4 cubic bezier segments for 4 quarter-arcs");
+        assert_eq!(
+            endpoints.len(),
+            4,
+            "Expected 4 cubic bezier segments for 4 quarter-arcs"
+        );
 
         // After each 90° arc, should hit: top center, right center, bottom center, left center
         let cardinal_points = [
-            (w / 2.0, h),       // top center
-            (w, h / 2.0),       // right center
-            (w / 2.0, 0.0),     // bottom center
-            (0.0, h / 2.0),     // left center (back to start)
+            (w / 2.0, h),   // top center
+            (w, h / 2.0),   // right center
+            (w / 2.0, 0.0), // bottom center
+            (0.0, h / 2.0), // left center (back to start)
         ];
 
         for (i, (ex, ey)) in cardinal_points.iter().enumerate() {
@@ -239,12 +242,24 @@ mod tests {
             (25.0, 50.0),   // (x1, vc): notch point
         ];
 
-        assert_eq!(cmds.len(), 9, "Expected 9 commands: MoveTo + 7 LineTo + Close");
-        assert!(matches!(&cmds[0], ResolvedCommand::MoveTo(x, y) if approx_eq(*x, expected[0].0, 0.01) && approx_eq(*y, expected[0].1, 0.01)),
-            "MoveTo mismatch: got {:?}, expected {:?}", cmds[0], expected[0]);
+        assert_eq!(
+            cmds.len(),
+            9,
+            "Expected 9 commands: MoveTo + 7 LineTo + Close"
+        );
+        assert!(
+            matches!(&cmds[0], ResolvedCommand::MoveTo(x, y) if approx_eq(*x, expected[0].0, 0.01) && approx_eq(*y, expected[0].1, 0.01)),
+            "MoveTo mismatch: got {:?}, expected {:?}",
+            cmds[0],
+            expected[0]
+        );
         for i in 1..8 {
-            assert!(matches!(&cmds[i], ResolvedCommand::LineTo(x, y) if approx_eq(*x, expected[i].0, 0.01) && approx_eq(*y, expected[i].1, 0.01)),
-                "LineTo {i} mismatch: got {:?}, expected {:?}", cmds[i], expected[i]);
+            assert!(
+                matches!(&cmds[i], ResolvedCommand::LineTo(x, y) if approx_eq(*x, expected[i].0, 0.01) && approx_eq(*y, expected[i].1, 0.01)),
+                "LineTo {i} mismatch: got {:?}, expected {:?}",
+                cmds[i],
+                expected[i]
+            );
         }
         assert!(matches!(&cmds[8], ResolvedCommand::Close));
     }

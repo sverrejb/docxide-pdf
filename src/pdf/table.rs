@@ -5,9 +5,9 @@ use pdf_writer::{Content, Name, Str};
 use crate::fonts::{FontEntry, encode_as_gids, font_key_buf, to_winansi_bytes};
 use crate::model::{Alignment, CellVAlign, SectionProperties, Table, TextDirection, VMerge};
 
+use super::RenderContext;
 use super::header_footer::substitute_hf_runs;
 use super::resolve_line_h;
-use super::RenderContext;
 
 use super::layout::{
     TextLine, build_paragraph_lines, encode_text_for_pdf, font_metric, is_text_empty,
@@ -250,7 +250,8 @@ fn compute_row_layouts(
                             .unwrap_or(0.75);
 
                         let lines = if !is_text_empty(runs) {
-                            let para_text_w = (cell_text_w - para.indent_left - para.indent_right).max(0.0);
+                            let para_text_w =
+                                (cell_text_w - para.indent_left - para.indent_right).max(0.0);
                             let lines = build_paragraph_lines(
                                 runs,
                                 ctx.fonts,
@@ -340,10 +341,7 @@ fn vmerge_at_col(row: &crate::model::TableRow, target_col: usize) -> VMerge {
 
 /// Pre-compute how much extra height each vMerge Restart cell spans beyond its own row.
 /// Returns a map from (row_idx, grid_col) to the sum of Continue row heights below.
-fn compute_merge_spans(
-    table: &Table,
-    row_layouts: &[RowLayout],
-) -> HashMap<(usize, usize), f32> {
+fn compute_merge_spans(table: &Table, row_layouts: &[RowLayout]) -> HashMap<(usize, usize), f32> {
     let mut spans = HashMap::new();
     for (ri, row) in table.rows.iter().enumerate() {
         let mut grid_col = 0usize;
@@ -406,7 +404,8 @@ fn render_table_row(
                 + b_borders.right.width)
                 / 8.0;
             pb.content.save_state();
-            pb.content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+            pb.content
+                .set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
             pb.content.rect(
                 cell_x + inset,
                 row_bottom + inset,
@@ -458,11 +457,8 @@ fn render_table_row(
                         }
                         let fs = chunk.font_size;
                         let entry = pdf_name_to_entry.get(chunk.pdf_font.as_str());
-                        let ascender_ratio = entry
-                            .and_then(|e| e.ascender_ratio)
-                            .unwrap_or(0.75);
-                        let widths = entry
-                            .and_then(|e| e.char_widths_1000.as_ref());
+                        let ascender_ratio = entry.and_then(|e| e.ascender_ratio).unwrap_or(0.75);
+                        let widths = entry.and_then(|e| e.char_widths_1000.as_ref());
 
                         if let Some([r, g, b]) = chunk.color {
                             pb.content.set_fill_rgb(
@@ -486,11 +482,8 @@ fn render_table_row(
                             let cx = cell_x + cm.left + (avail_w - char_w) / 2.0;
 
                             let ch_str = ch.encode_utf8(&mut char_buf);
-                            let bytes = encode_text_for_pdf(
-                                ch_str,
-                                &chunk.pdf_font,
-                                &pdf_name_to_entry,
-                            );
+                            let bytes =
+                                encode_text_for_pdf(ch_str, &chunk.pdf_font, &pdf_name_to_entry);
                             pb.content.next_line(cx - td_x, baseline_y - td_y);
                             td_x = cx;
                             td_y = baseline_y;
@@ -587,21 +580,20 @@ fn render_table_row(
         let effective_bottom = row_bottom - merge_extra;
 
         let b = &cell.borders;
-        let draw_border =
-            |c: &mut Content, border: &crate::model::CellBorder, x1, y1, x2, y2| {
-                if !border.present {
-                    return;
-                }
-                c.save_state();
-                c.set_line_width(border.width);
-                if let Some([r, g, b]) = border.color {
-                    c.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-                }
-                c.move_to(x1, y1);
-                c.line_to(x2, y2);
-                c.stroke();
-                c.restore_state();
-            };
+        let draw_border = |c: &mut Content, border: &crate::model::CellBorder, x1, y1, x2, y2| {
+            if !border.present {
+                return;
+            }
+            c.save_state();
+            c.set_line_width(border.width);
+            if let Some([r, g, b]) = border.color {
+                c.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+            }
+            c.move_to(x1, y1);
+            c.line_to(x2, y2);
+            c.stroke();
+            c.restore_state();
+        };
 
         draw_border(&mut pb.content, &b.top, bx, row_top, bx + col_w, row_top);
         draw_border(
@@ -785,21 +777,20 @@ fn render_partial_row(
         grid_col += span;
 
         let b = &cell.borders;
-        let draw_border =
-            |c: &mut Content, border: &crate::model::CellBorder, x1, y1, x2, y2| {
-                if !border.present {
-                    return;
-                }
-                c.save_state();
-                c.set_line_width(border.width);
-                if let Some([r, g, b]) = border.color {
-                    c.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-                }
-                c.move_to(x1, y1);
-                c.line_to(x2, y2);
-                c.stroke();
-                c.restore_state();
-            };
+        let draw_border = |c: &mut Content, border: &crate::model::CellBorder, x1, y1, x2, y2| {
+            if !border.present {
+                return;
+            }
+            c.save_state();
+            c.set_line_width(border.width);
+            if let Some([r, g, b]) = border.color {
+                c.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+            }
+            c.move_to(x1, y1);
+            c.line_to(x2, y2);
+            c.stroke();
+            c.restore_state();
+        };
 
         if is_first && cell.v_merge != VMerge::Continue {
             draw_border(&mut pb.content, &b.top, bx, row_top, bx + col_w, row_top);
@@ -857,11 +848,7 @@ pub(super) fn render_table(
 
     // Count contiguous header rows from the start of the table (per OOXML spec,
     // only contiguous header rows starting from row 0 are repeated).
-    let header_count = table
-        .rows
-        .iter()
-        .take_while(|r| r.is_header)
-        .count();
+    let header_count = table.rows.iter().take_while(|r| r.is_header).count();
 
     for (ri, (row, layout)) in table.rows.iter().zip(row_layouts.iter()).enumerate() {
         let row_h = layout.height;
@@ -897,8 +884,17 @@ pub(super) fn render_table(
                 }
 
                 render_partial_row(
-                    row, layout, &col_widths, cm, table_left, pb, ctx,
-                    &starts, &ends, is_first_chunk, all_done,
+                    row,
+                    layout,
+                    &col_widths,
+                    cm,
+                    table_left,
+                    pb,
+                    ctx,
+                    &starts,
+                    &ends,
+                    is_first_chunk,
+                    all_done,
                 );
 
                 if all_done {
@@ -948,9 +944,29 @@ pub(super) fn render_table(
                     );
                 }
             }
-            render_table_row(row, layout, &col_widths, cm, table_left, pb, ctx, ri, &merge_spans);
+            render_table_row(
+                row,
+                layout,
+                &col_widths,
+                cm,
+                table_left,
+                pb,
+                ctx,
+                ri,
+                &merge_spans,
+            );
         } else {
-            render_table_row(row, layout, &col_widths, cm, table_left, pb, ctx, ri, &merge_spans);
+            render_table_row(
+                row,
+                layout,
+                &col_widths,
+                cm,
+                table_left,
+                pb,
+                ctx,
+                ri,
+                &merge_spans,
+            );
         }
     }
 
@@ -959,10 +975,7 @@ pub(super) fn render_table(
     }
 }
 
-pub(super) fn compute_hf_table_height(
-    table: &Table,
-    ctx: &RenderContext,
-) -> f32 {
+pub(super) fn compute_hf_table_height(table: &Table, ctx: &RenderContext) -> f32 {
     let col_widths = auto_fit_columns(table, ctx.fonts);
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     row_layouts.iter().map(|r| r.height).sum()
@@ -984,12 +997,7 @@ pub(super) fn render_header_footer_table(
         total_pages,
         styleref_values,
     };
-    let row_layouts = compute_row_layouts(
-        table,
-        &col_widths,
-        ctx,
-        Some(&hf_sub),
-    );
+    let row_layouts = compute_row_layouts(table, &col_widths, ctx, Some(&hf_sub));
     let cm = &table.cell_margins;
     let table_left = sp.margin_left + table.table_indent - cm.left;
 

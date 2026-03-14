@@ -21,14 +21,13 @@ use crate::model::{
     SectionBreakType, SectionProperties, TabAlignment, TabStop,
 };
 
-use styles::ParagraphStyle;
-
-use styles::{parse_alignment, parse_line_spacing, parse_styles, parse_theme};
+use styles::{ParagraphStyle, parse_alignment, parse_line_spacing, parse_styles, parse_theme};
 
 use embedded_fonts::parse_font_table;
 use headers_footers::parse_footnotes;
 use images::compute_drawing_info;
-use numbering::{parse_list_info, parse_numbering, ListLabelInfo};
+use numbering::{ListLabelInfo, parse_list_info, parse_numbering};
+use relationships::parse_relationships;
 use runs::parse_runs;
 use sections::parse_section_properties;
 use settings::parse_settings;
@@ -192,24 +191,27 @@ pub(super) fn parse_cell_border(parent: roxmltree::Node, name: &str) -> crate::m
     crate::model::CellBorder::visible(color, width)
 }
 
+fn parse_cell_border_with_fallback(
+    parent: roxmltree::Node,
+    primary: &str,
+    fallback: &str,
+) -> crate::model::CellBorder {
+    let border = parse_cell_border(parent, primary);
+    if border.present {
+        border
+    } else {
+        parse_cell_border(parent, fallback)
+    }
+}
+
 /// Parse left border with "start" fallback per OOXML bidi naming.
 pub(super) fn parse_cell_border_left(parent: roxmltree::Node) -> crate::model::CellBorder {
-    let left = parse_cell_border(parent, "left");
-    if left.present {
-        left
-    } else {
-        parse_cell_border(parent, "start")
-    }
+    parse_cell_border_with_fallback(parent, "left", "start")
 }
 
 /// Parse right border with "end" fallback per OOXML bidi naming.
 pub(super) fn parse_cell_border_right(parent: roxmltree::Node) -> crate::model::CellBorder {
-    let right = parse_cell_border(parent, "right");
-    if right.present {
-        right
-    } else {
-        parse_cell_border(parent, "end")
-    }
+    parse_cell_border_with_fallback(parent, "right", "end")
 }
 
 pub(super) fn parse_tab_stops(ppr: roxmltree::Node) -> Vec<TabStop> {
@@ -323,18 +325,19 @@ mod relationships {
     use super::read_zip_text;
 
     fn parse_rels_xml(xml_content: &str) -> HashMap<String, String> {
-        let mut rels = HashMap::new();
         let Ok(xml) = roxmltree::Document::parse(xml_content) else {
-            return rels;
+            return HashMap::new();
         };
-        for node in xml.root_element().children() {
-            if node.tag_name().name() == "Relationship"
-                && let (Some(id), Some(target)) = (node.attribute("Id"), node.attribute("Target"))
-            {
-                rels.insert(id.to_string(), target.to_string());
-            }
-        }
-        rels
+        xml.root_element()
+            .children()
+            .filter(|n| n.tag_name().name() == "Relationship")
+            .filter_map(|n| {
+                Some((
+                    n.attribute("Id")?.to_string(),
+                    n.attribute("Target")?.to_string(),
+                ))
+            })
+            .collect()
     }
 
     pub(in crate::docx) fn parse_relationships<R: Read + std::io::Seek>(
@@ -366,8 +369,6 @@ mod relationships {
     }
 }
 
-use relationships::parse_relationships;
-
 pub fn parse(path: &std::path::Path) -> Result<Document, Error> {
     let file = std::fs::File::open(path).map_err(|e| match e.kind() {
         std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied => Error::Io(
@@ -396,9 +397,8 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
     let styles = parse_styles(zip, &theme);
     let numbering = parse_numbering(zip);
     let rels = parse_relationships(zip);
-    let font_table_result = parse_font_table(zip);
-    let embedded_fonts = font_table_result.embedded_fonts;
-    let font_table = font_table_result.font_table;
+    let ft = parse_font_table(zip);
+    let (embedded_fonts, font_table) = (ft.embedded_fonts, ft.font_table);
     let footnotes = parse_footnotes(zip, &styles, &theme);
 
     let mut xml_content = String::new();
@@ -461,8 +461,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     .map(|b| b.space_pt + b.width_pt)
                     .unwrap_or(0.0);
 
-                let (sp_before, sp_after, line_spacing) =
-                    parse_paragraph_spacing(ppr, para_style);
+                let (sp_before, sp_after, line_spacing) = parse_paragraph_spacing(ppr, para_style);
                 let space_before = sp_before.unwrap_or(0.0);
                 let space_after =
                     sp_after.unwrap_or(styles.defaults.space_after) + bdr_bottom_extra;
@@ -472,7 +471,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     .and_then(|shd| shd.attribute((WML_NS, "fill")))
                     .and_then(parse_hex_color);
 
-                let style_color: Option<[u8; 3]> = para_style.and_then(|s| s.color);
+                let style_color = para_style.and_then(|s| s.color);
 
                 let alignment = ppr
                     .and_then(|ppr| wml_attr(ppr, "jc"))
@@ -514,43 +513,48 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
 
                 let mut indent_first_line = 0.0f32;
                 let mut indent_right = 0.0f32;
-                if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
-                    let (left, right, hanging, first) = extract_indents(ind);
-                    if let Some(v) = left { indent_left = v; }
-                    if let Some(v) = right { indent_right = v; }
-                    if let Some(v) = hanging { indent_hanging = v; }
-                    if let Some(v) = first { indent_first_line = v; }
-                } else if list_label.is_empty()
-                    && let Some(s) = para_style
-                {
-                    if let Some(v) = s.indent_left {
-                        indent_left = v;
-                    }
-                    if let Some(v) = s.indent_right {
-                        indent_right = v;
-                    }
-                    if let Some(v) = s.indent_hanging {
-                        indent_hanging = v;
-                    }
-                    if let Some(v) = s.indent_first_line {
-                        indent_first_line = v;
-                    }
+                let (left, right, hanging, first) =
+                    if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
+                        extract_indents(ind)
+                    } else if list_label.is_empty()
+                        && let Some(s) = para_style
+                    {
+                        (
+                            s.indent_left,
+                            s.indent_right,
+                            s.indent_hanging,
+                            s.indent_first_line,
+                        )
+                    } else {
+                        (None, None, None, None)
+                    };
+                if let Some(v) = left {
+                    indent_left = v;
+                }
+                if let Some(v) = right {
+                    indent_right = v;
+                }
+                if let Some(v) = hanging {
+                    indent_hanging = v;
+                }
+                if let Some(v) = first {
+                    indent_first_line = v;
                 }
 
                 let parsed = parse_runs(node, &styles, &theme, &rels, zip, &numbering);
                 let mut runs = parsed.runs;
 
-                for run in &mut runs {
-                    if run.color.is_none() && style_color.is_some() {
-                        run.color = style_color;
+                if let Some(color) = style_color {
+                    for run in &mut runs {
+                        run.color.get_or_insert(color);
                     }
                 }
 
                 let mut tab_stops = ppr.map(parse_tab_stops).unwrap_or_default();
-                if tab_stops.is_empty() {
-                    if let Some(s) = para_style {
-                        tab_stops = s.tab_stops.clone();
-                    }
+                if tab_stops.is_empty()
+                    && let Some(s) = para_style
+                {
+                    tab_stops = s.tab_stops.clone();
                 }
                 // OOXML §17.3.1.38: hanging indent implicitly creates a tab stop
                 if indent_hanging > 0.0 {

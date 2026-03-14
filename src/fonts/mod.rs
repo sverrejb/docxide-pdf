@@ -57,31 +57,28 @@ impl FontEntry {
                 .map(|ch| self.char_width_1000(ch) * font_size / 1000.0)
                 .sum();
         }
-        let chars: Vec<char> = word.chars().collect();
+        let scale = font_size / 1000.0;
+        let mut prev: Option<char> = None;
         let mut w: f32 = 0.0;
-        for (i, &ch) in chars.iter().enumerate() {
-            w += self.char_width_1000(ch) * font_size / 1000.0;
-            if i + 1 < chars.len() {
-                w += self.kern_1000(ch, chars[i + 1]) * font_size / 1000.0;
+        for ch in word.chars() {
+            if let Some(p) = prev {
+                w += self.kern_1000(p, ch) * scale;
             }
+            w += self.char_width_1000(ch) * scale;
+            prev = Some(ch);
         }
         w
     }
 
     fn kern_1000(&self, left: char, right: char) -> f32 {
-        let Some(ref pairs) = self.kern_pairs else {
+        let (Some(pairs), Some(c2g)) = (&self.kern_pairs, &self.char_to_gid) else {
             return 0.0;
         };
-        let Some(ref c2g) = self.char_to_gid else {
-            return 0.0;
-        };
-        let Some(&l) = c2g.get(&left) else {
-            return 0.0;
-        };
-        let Some(&r) = c2g.get(&right) else {
-            return 0.0;
-        };
-        pairs.get(&(l, r)).copied().unwrap_or(0.0)
+        c2g.get(&left)
+            .zip(c2g.get(&right))
+            .and_then(|(&l, &r)| pairs.get(&(l, r)))
+            .copied()
+            .unwrap_or(0.0)
     }
 
     pub(crate) fn space_width(&self, font_size: f32) -> f32 {
@@ -127,44 +124,31 @@ fn try_font(
     embedded_fonts: &EmbeddedFonts,
     used_chars: &HashSet<char>,
 ) -> Option<FontMetrics> {
-    let embedded_key = (candidate.to_lowercase(), bold, italic);
-    if let Some(data) = embedded_fonts.get(&embedded_key) {
-        if let Some(mut metrics) = embed::embed_truetype(
+    let mut embed = |data: &[u8], face_index: u32| {
+        embed::embed_truetype(
             pdf,
             font_ref,
             descriptor_ref,
             data_ref,
             candidate,
             data,
-            0,
-            used_chars,
-            alloc,
-        ) {
-            metrics.synthetic_bold = false;
-            return Some(metrics);
-        }
-    }
-
-    if let Some((path, face_index, exact_match)) =
-        discovery::find_font_file(candidate, bold, italic)
-    {
-        let data = std::fs::read(&path).ok()?;
-        let mut metrics = embed::embed_truetype(
-            pdf,
-            font_ref,
-            descriptor_ref,
-            data_ref,
-            candidate,
-            &data,
             face_index,
             used_chars,
             alloc,
-        )?;
-        metrics.synthetic_bold = bold && !exact_match;
+        )
+    };
+
+    let embedded_key = (candidate.to_lowercase(), bold, italic);
+    if let Some(mut metrics) = embedded_fonts.get(&embedded_key).and_then(|d| embed(d, 0)) {
+        metrics.synthetic_bold = false;
         return Some(metrics);
     }
 
-    None
+    let (path, face_index, exact_match) = discovery::find_font_file(candidate, bold, italic)?;
+    let data = std::fs::read(&path).ok()?;
+    let mut metrics = embed(&data, face_index)?;
+    metrics.synthetic_bold = bold && !exact_match;
+    Some(metrics)
 }
 
 fn lookup_font_table<'a>(
@@ -205,13 +189,12 @@ pub(crate) fn register_font(
     let descriptor_ref = alloc();
     let data_ref = alloc();
 
-    let font_candidates: Vec<&str> = font_name.split(';').map(|s| s.trim()).collect();
+    let primary = primary_font_name(font_name);
 
-    let mut result = None;
-    for candidate in &font_candidates {
-        let found = try_font(
+    let mut try_candidate = |name: &str| {
+        try_font(
             pdf,
-            candidate,
+            name,
             bold,
             italic,
             font_ref,
@@ -220,81 +203,46 @@ pub(crate) fn register_font(
             alloc,
             embedded_fonts,
             used_chars,
-        );
-        if let Some(metrics) = found {
-            result = Some(metrics);
-            break;
-        }
-    }
+        )
+    };
 
-    // Consult fontTable.xml for substitution hints
-    if result.is_none() {
-        let primary = primary_font_name(font_name);
-        if let Some(entry) = lookup_font_table(font_table, primary) {
-            // Try altName first
+    let result = font_name
+        .split(';')
+        .map(|s| s.trim())
+        .find_map(|c| try_candidate(c))
+        .or_else(|| {
+            let entry = lookup_font_table(font_table, primary)?;
             if let Some(ref alt) = entry.alt_name {
-                if let Some(metrics) = try_font(
-                    pdf,
-                    alt,
-                    bold,
-                    italic,
-                    font_ref,
-                    descriptor_ref,
-                    data_ref,
-                    alloc,
-                    embedded_fonts,
-                    used_chars,
-                ) {
+                if let Some(m) = try_candidate(alt) {
                     log::info!("Font substitution: {primary} → altName \"{alt}\"");
-                    result = Some(metrics);
+                    return Some(m);
                 }
             }
-            // Try family-class fallback
-            if result.is_none() {
-                if let Some(fallback) = family_fallback(entry.family) {
-                    if let Some(metrics) = try_font(
-                        pdf,
-                        fallback,
-                        bold,
-                        italic,
-                        font_ref,
-                        descriptor_ref,
-                        data_ref,
-                        alloc,
-                        embedded_fonts,
-                        used_chars,
-                    ) {
-                        log::info!(
-                            "Font substitution: {primary} → family {:?} fallback \"{fallback}\"",
-                            entry.family
-                        );
-                        result = Some(metrics);
-                    }
-                }
-            }
-        }
-    }
+            let fallback = family_fallback(entry.family)?;
+            let m = try_candidate(fallback)?;
+            log::info!(
+                "Font substitution: {primary} → family {:?} fallback \"{fallback}\"",
+                entry.family
+            );
+            Some(m)
+        });
 
     let entry = match result {
-        Some(m) => {
-            let kern_pairs = if m.kern_pairs.is_empty() {
+        Some(m) => FontEntry {
+            pdf_name,
+            font_ref,
+            widths_1000: m.widths_1000,
+            line_h_ratio: Some(m.line_h_ratio),
+            ascender_ratio: Some(m.ascender_ratio),
+            char_to_gid: Some(m.char_to_gid),
+            char_widths_1000: Some(m.char_widths_1000),
+            kern_pairs: if m.kern_pairs.is_empty() {
                 None
             } else {
                 Some(m.kern_pairs)
-            };
-            let synthetic_bold = m.synthetic_bold;
-            FontEntry {
-                pdf_name,
-                font_ref,
-                widths_1000: m.widths_1000,
-                line_h_ratio: Some(m.line_h_ratio),
-                ascender_ratio: Some(m.ascender_ratio),
-                char_to_gid: Some(m.char_to_gid),
-                char_widths_1000: Some(m.char_widths_1000),
-                kern_pairs,
-                synthetic_bold,
-            }
-        }
+            },
+            synthetic_bold: m.synthetic_bold,
+        },
         None => {
             log::warn!("Font not found: {font_name} bold={bold} italic={italic} — using Helvetica");
             pdf.type1_font(font_ref)

@@ -1,6 +1,6 @@
 use std::io::Read;
 
-use super::{WML_NS, read_zip_text, twips_to_pts};
+use super::{WML_NS, read_zip_text, twips_to_pts, wml, wml_attr, wml_bool};
 
 pub(super) struct DocumentSettings {
     pub even_and_odd_headers: bool,
@@ -31,40 +31,19 @@ pub(super) fn parse_settings<R: Read + std::io::Seek>(
     };
     let root = doc.root_element();
 
-    let wml_bool_el = |name: &str| -> bool {
-        root.children().any(|n| {
-            n.tag_name().namespace() == Some(WML_NS)
-                && n.tag_name().name() == name
-                && n.attribute((WML_NS, "val"))
-                    .is_none_or(|v| v != "0" && v != "false")
-        })
-    };
-
-    let even_and_odd_headers = wml_bool_el("evenAndOddHeaders");
-    let mirror_margins = wml_bool_el("mirrorMargins");
-
-    let default_tab_stop = root
-        .children()
-        .find(|n| {
-            n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "defaultTabStop"
-        })
-        .and_then(|n| n.attribute((WML_NS, "val")))
+    let default_tab_stop = wml_attr(root, "defaultTabStop")
         .and_then(|v| v.parse::<f32>().ok())
         .map(twips_to_pts)
         .unwrap_or(36.0);
 
-    let east_asia_lang = root
-        .children()
-        .find(|n| {
-            n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "themeFontLang"
-        })
+    let east_asia_lang = wml(root, "themeFontLang")
         .and_then(|n| n.attribute((WML_NS, "eastAsia")))
         .map(|s| s.to_string());
 
     DocumentSettings {
-        even_and_odd_headers,
+        even_and_odd_headers: wml_bool(root, "evenAndOddHeaders").unwrap_or(false),
         default_tab_stop,
-        mirror_margins,
+        mirror_margins: wml_bool(root, "mirrorMargins").unwrap_or(false),
         east_asia_lang,
     }
 }

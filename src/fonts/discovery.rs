@@ -1,5 +1,5 @@
-use std::collections::HashMap;
-use std::path::PathBuf;
+use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use memmap2::Mmap;
@@ -91,20 +91,14 @@ fn font_directories() -> Vec<PathBuf> {
     dirs
 }
 
-fn is_font_file(path: &std::path::Path) -> bool {
-    matches!(
-        path.extension()
-            .and_then(|e| e.to_str())
-            .map(|e| e.to_ascii_lowercase())
-            .as_deref(),
-        Some("ttf" | "otf" | "ttc")
-    )
-}
-
-fn is_font_collection(path: &std::path::Path) -> bool {
+fn font_ext(path: &Path) -> Option<String> {
     path.extension()
         .and_then(|e| e.to_str())
-        .is_some_and(|e| e.eq_ignore_ascii_case("ttc"))
+        .map(|e| e.to_ascii_lowercase())
+}
+
+fn is_font_file(path: &Path) -> bool {
+    matches!(font_ext(path).as_deref(), Some("ttf" | "otf" | "ttc"))
 }
 
 fn scan_font_dirs() -> FontLookup {
@@ -115,21 +109,15 @@ fn scan_font_dirs() -> FontLookup {
     let no_cache = std::env::var("DOCXSIDE_NO_FONT_CACHE").is_ok();
 
     let cache = if no_cache {
-        FontCache {
-            dir_mtimes: HashMap::new(),
-            files: HashMap::new(),
-        }
+        FontCache::default()
     } else {
         load_cache()
     };
-    let mut new_cache = FontCache {
-        dir_mtimes: HashMap::new(),
-        files: HashMap::new(),
-    };
+    let mut new_cache = FontCache::default();
     let mut files_scanned = 0u32;
     let mut dirs_cached = 0u32;
     let mut dirs_scanned = 0u32;
-    let mut visited_dirs: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+    let mut visited_dirs: HashSet<PathBuf> = HashSet::new();
 
     let mut stack: Vec<PathBuf> = dirs;
     while let Some(dir) = stack.pop() {
@@ -172,21 +160,9 @@ fn scan_font_dirs() -> FontLookup {
                             .entry((face.family.to_lowercase(), face.bold, face.italic))
                             .or_insert((file_path.clone(), face.face_index));
                     }
-                    new_cache.files.insert(
-                        file_path.clone(),
-                        CachedFile {
-                            faces: cached_file
-                                .faces
-                                .iter()
-                                .map(|f| CachedFace {
-                                    family: f.family.clone(),
-                                    bold: f.bold,
-                                    italic: f.italic,
-                                    face_index: f.face_index,
-                                })
-                                .collect(),
-                        },
-                    );
+                    new_cache
+                        .files
+                        .insert(file_path.clone(), cached_file.clone());
                 }
             }
             continue;
@@ -203,11 +179,7 @@ fn scan_font_dirs() -> FontLookup {
             let Ok(data) = (unsafe { Mmap::map(&file) }) else {
                 continue;
             };
-            let face_count = if is_font_collection(&file_path) {
-                ttf_parser::fonts_in_collection(&data).unwrap_or(1)
-            } else {
-                1
-            };
+            let face_count = ttf_parser::fonts_in_collection(&data).unwrap_or(1);
             let mut faces = Vec::new();
             for face_idx in 0..face_count {
                 if let Some((family, bold, italic)) = read_font_style(&data, face_idx) {

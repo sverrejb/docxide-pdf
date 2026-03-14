@@ -6,10 +6,28 @@ use crate::model::{Alignment, Block, Footnote, HeaderFooter, LineSpacing, Paragr
 use super::numbering::NumberingInfo;
 use super::parse_table_node;
 use super::runs::parse_runs;
-use super::styles::{StylesInfo, ThemeFonts, parse_alignment};
+use super::styles::{ParagraphStyle, StylesInfo, ThemeFonts, parse_alignment};
 use super::{
     WML_NS, parse_paragraph_borders, parse_paragraph_spacing, parse_tab_stops, wml, wml_attr,
 };
+
+fn is_wml_element(node: roxmltree::Node, name: &str) -> bool {
+    node.tag_name().namespace() == Some(WML_NS) && node.tag_name().name() == name
+}
+
+fn is_block_element(node: roxmltree::Node) -> bool {
+    node.tag_name().namespace() == Some(WML_NS) && matches!(node.tag_name().name(), "p" | "tbl")
+}
+
+fn resolve_alignment(
+    ppr: Option<roxmltree::Node>,
+    para_style: Option<&ParagraphStyle>,
+) -> Alignment {
+    ppr.and_then(|ppr| wml_attr(ppr, "jc"))
+        .map(parse_alignment)
+        .or_else(|| para_style.and_then(|s| s.alignment))
+        .unwrap_or(Alignment::Left)
+}
 
 pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
     xml_content: &str,
@@ -27,17 +45,11 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
         if child.tag_name().namespace() != Some(WML_NS) {
             continue;
         }
-        if child.tag_name().name() == "sdt" {
+        if is_wml_element(child, "sdt") {
             if let Some(content) = wml(child, "sdtContent") {
-                for inner in content.children() {
-                    if inner.tag_name().namespace() == Some(WML_NS)
-                        && (inner.tag_name().name() == "p" || inner.tag_name().name() == "tbl")
-                    {
-                        top_nodes.push(inner);
-                    }
-                }
+                top_nodes.extend(content.children().filter(|n| is_block_element(*n)));
             }
-        } else if child.tag_name().name() == "p" || child.tag_name().name() == "tbl" {
+        } else if is_block_element(child) {
             top_nodes.push(child);
         }
     }
@@ -68,30 +80,18 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
                     .unwrap_or(&styles.default_paragraph_style_id);
                 let para_style = styles.paragraph_styles.get(para_style_id);
 
-                let alignment = ppr
-                    .and_then(|ppr| wml_attr(ppr, "jc"))
-                    .map(parse_alignment)
-                    .or_else(|| para_style.and_then(|s| s.alignment))
-                    .unwrap_or(Alignment::Left);
-
-                let (sp_before, sp_after, line_spacing) =
-                    parse_paragraph_spacing(ppr, para_style);
-                let space_before = sp_before.unwrap_or(0.0);
-                let space_after = sp_after.unwrap_or(0.0);
-
-                let parsed = parse_runs(node, styles, theme, rels, zip, &NumberingInfo::default());
-
-                let borders = ppr.map(parse_paragraph_borders).unwrap_or_default();
-                let tab_stops = ppr.map(parse_tab_stops).unwrap_or_default();
+                let alignment = resolve_alignment(ppr, para_style);
+                let (sp_before, sp_after, line_spacing) = parse_paragraph_spacing(ppr, para_style);
+                let parsed = parse_runs(node, styles, theme, rels, zip, &numbering);
 
                 blocks.push(Block::Paragraph(Paragraph {
                     runs: parsed.runs,
                     alignment,
                     line_spacing,
-                    space_before,
-                    space_after,
-                    borders,
-                    tab_stops,
+                    space_before: sp_before.unwrap_or(0.0),
+                    space_after: sp_after.unwrap_or(0.0),
+                    borders: ppr.map(parse_paragraph_borders).unwrap_or_default(),
+                    tab_stops: ppr.map(parse_tab_stops).unwrap_or_default(),
                     extra_line_breaks: parsed.line_break_count,
                     floating_images: parsed.floating_images,
                     textboxes: parsed.textboxes,
@@ -102,11 +102,7 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
         }
     }
 
-    if blocks.is_empty() {
-        None
-    } else {
-        Some(HeaderFooter { blocks })
-    }
+    (!blocks.is_empty()).then(|| HeaderFooter { blocks })
 }
 
 pub(super) fn parse_footnotes<R: Read + std::io::Seek>(
@@ -122,9 +118,11 @@ pub(super) fn parse_footnotes<R: Read + std::io::Seek>(
         return footnotes;
     };
     let root = xml.root_element();
+    let empty_rels = HashMap::new();
+    let numbering = NumberingInfo::default();
 
     for node in root.children() {
-        if node.tag_name().namespace() != Some(WML_NS) || node.tag_name().name() != "footnote" {
+        if !is_wml_element(node, "footnote") {
             continue;
         }
         // Skip separator/continuationSeparator footnotes (type attribute, IDs 0 and 1)
@@ -139,43 +137,23 @@ pub(super) fn parse_footnotes<R: Read + std::io::Seek>(
         };
 
         let mut paragraphs = Vec::new();
-        let empty_rels = HashMap::new();
-        for p in node.children() {
-            if p.tag_name().namespace() != Some(WML_NS) || p.tag_name().name() != "p" {
-                continue;
-            }
+        for p in node.children().filter(|n| is_wml_element(*n, "p")) {
             let ppr = wml(p, "pPr");
             let para_style_id = ppr
                 .and_then(|ppr| wml_attr(ppr, "pStyle"))
                 .unwrap_or("FootnoteText");
             let para_style = styles.paragraph_styles.get(para_style_id);
 
-            let alignment = ppr
-                .and_then(|ppr| wml_attr(ppr, "jc"))
-                .map(parse_alignment)
-                .or_else(|| para_style.and_then(|s| s.alignment))
-                .unwrap_or(Alignment::Left);
-
-            let parsed = parse_runs(
-                p,
-                styles,
-                theme,
-                &empty_rels,
-                zip,
-                &NumberingInfo::default(),
-            );
-
+            let alignment = resolve_alignment(ppr, para_style);
+            let parsed = parse_runs(p, styles, theme, &empty_rels, zip, &numbering);
             let (sp_before, sp_after, ls) = parse_paragraph_spacing(ppr, para_style);
-            let space_before = sp_before.unwrap_or(0.0);
-            let space_after = sp_after.unwrap_or(0.0);
-            let line_spacing = ls.or(Some(LineSpacing::Auto(1.0)));
 
             paragraphs.push(Paragraph {
                 runs: parsed.runs,
-                space_before,
-                space_after,
+                space_before: sp_before.unwrap_or(0.0),
+                space_after: sp_after.unwrap_or(0.0),
                 alignment,
-                line_spacing,
+                line_spacing: ls.or(Some(LineSpacing::Auto(1.0))),
                 extra_line_breaks: parsed.line_break_count,
                 ..Paragraph::default()
             });

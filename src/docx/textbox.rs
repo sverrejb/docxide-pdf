@@ -10,11 +10,83 @@ use crate::model::{
 use super::images::{extent_dimensions, parse_anchor_position};
 use super::numbering::{ListLabelInfo, NumberingInfo};
 use super::runs::parse_runs;
-use super::styles::{ColorTransforms, StylesInfo, ThemeFillStyle, ThemeFonts, parse_alignment};
+use super::styles::{
+    ColorTransforms, StylesInfo, ThemeFillStyle, ThemeFonts, parse_alignment,
+    parse_color_transforms,
+};
 use super::{
     DML_NS, MC_NS_TOP, WML_NS, WPD_NS, WPS_NS, extract_indents, parse_paragraph_spacing,
     resolve_theme_color_key, wml, wml_attr,
 };
+
+fn find_dml<'a>(parent: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
+    parent
+        .children()
+        .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(DML_NS))
+}
+
+fn find_dml_all<'a>(
+    parent: roxmltree::Node<'a, 'a>,
+    name: &str,
+) -> impl Iterator<Item = roxmltree::Node<'a, 'a>> {
+    parent
+        .children()
+        .filter(move |n| n.tag_name().name() == name && n.tag_name().namespace() == Some(DML_NS))
+}
+
+fn collect_dml_points(parent: roxmltree::Node) -> Vec<(String, String)> {
+    find_dml_all(parent, "pt")
+        .map(|pt| {
+            (
+                pt.attribute("x").unwrap_or("0").to_string(),
+                pt.attribute("y").unwrap_or("0").to_string(),
+            )
+        })
+        .collect()
+}
+
+fn find_wps<'a>(parent: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
+    parent
+        .children()
+        .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(WPS_NS))
+}
+
+fn find_sp_pr<'a>(wsp: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
+    wsp.children().find(|n| {
+        n.tag_name().name() == "spPr"
+            && (n.tag_name().namespace() == Some(WPS_NS)
+                || n.tag_name().namespace() == Some(DML_NS))
+    })
+}
+
+fn resolve_color_child(parent: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]> {
+    if let Some(srgb) = find_dml(parent, "srgbClr") {
+        return srgb.attribute("val").and_then(super::parse_hex_color);
+    }
+    if let Some(scheme) = find_dml(parent, "schemeClr") {
+        let val = scheme.attribute("val")?;
+        let theme_key = resolve_theme_color_key(val);
+        let base = *theme.colors.get(theme_key)?;
+        let transforms = parse_color_transforms(scheme);
+        return Some(apply_color_transforms(base, &transforms));
+    }
+    None
+}
+
+fn find_wps_style_ref<'a>(
+    wsp: roxmltree::Node<'a, 'a>,
+    ref_name: &str,
+) -> Option<roxmltree::Node<'a, 'a>> {
+    let style = find_wps(wsp, "style")?;
+    find_dml(style, ref_name)
+}
+
+fn emu_attr(node: roxmltree::Node, attr: &str) -> f32 {
+    node.attribute(attr)
+        .and_then(|v| v.parse::<f32>().ok())
+        .unwrap_or(0.0)
+        / 12700.0
+}
 
 pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
     txbx_content: roxmltree::Node,
@@ -57,21 +129,29 @@ pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
             bold: list_label_bold,
             color: list_label_color,
         } = super::numbering::parse_list_info(
-                num_pr,
-                None,
-                None,
-                numbering,
-                &mut counters,
-                &mut last_seen_level,
-            );
+            num_pr,
+            None,
+            None,
+            numbering,
+            &mut counters,
+            &mut last_seen_level,
+        );
         let mut indent_first_line = 0.0f32;
         let mut indent_right = 0.0f32;
         if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
             let (left, right, hanging, first) = extract_indents(ind);
-            if let Some(v) = left { indent_left = v; }
-            if let Some(v) = right { indent_right = v; }
-            if let Some(v) = hanging { indent_hanging = v; }
-            if let Some(v) = first { indent_first_line = v; }
+            if let Some(v) = left {
+                indent_left = v;
+            }
+            if let Some(v) = right {
+                indent_right = v;
+            }
+            if let Some(v) = hanging {
+                indent_hanging = v;
+            }
+            if let Some(v) = first {
+                indent_first_line = v;
+            }
         } else if list_label.is_empty() {
             if let Some(s) = para_style {
                 if let Some(v) = s.indent_left {
@@ -113,56 +193,6 @@ pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
     paragraphs
 }
 
-pub(super) fn resolve_scheme_color(base: [u8; 3], fill_node: roxmltree::Node) -> [u8; 3] {
-    let mut lum_mod: Option<f32> = None;
-    let mut lum_off: Option<f32> = None;
-    let mut tint: Option<f32> = None;
-    for child in fill_node.children() {
-        if child.tag_name().namespace() != Some(DML_NS) {
-            continue;
-        }
-        match child.tag_name().name() {
-            "lumMod" => {
-                lum_mod = child
-                    .attribute("val")
-                    .and_then(|v| v.parse::<f32>().ok())
-                    .map(|v| v / 100_000.0);
-            }
-            "lumOff" => {
-                lum_off = child
-                    .attribute("val")
-                    .and_then(|v| v.parse::<f32>().ok())
-                    .map(|v| v / 100_000.0);
-            }
-            "tint" => {
-                tint = child
-                    .attribute("val")
-                    .and_then(|v| v.parse::<f32>().ok())
-                    .map(|v| v / 100_000.0);
-            }
-            _ => {}
-        }
-    }
-    let mut color = base;
-    if let Some(t) = tint {
-        color = [
-            (255.0 - t * (255.0 - color[0] as f32)).clamp(0.0, 255.0) as u8,
-            (255.0 - t * (255.0 - color[1] as f32)).clamp(0.0, 255.0) as u8,
-            (255.0 - t * (255.0 - color[2] as f32)).clamp(0.0, 255.0) as u8,
-        ];
-    }
-    if lum_mod.is_some() || lum_off.is_some() {
-        let m = lum_mod.unwrap_or(1.0);
-        let o = lum_off.unwrap_or(0.0);
-        color = [
-            ((color[0] as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8,
-            ((color[1] as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8,
-            ((color[2] as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8,
-        ];
-    }
-    color
-}
-
 fn rgb_to_hsl(c: [u8; 3]) -> (f32, f32, f32) {
     let r = c[0] as f32 / 255.0;
     let g = c[1] as f32 / 255.0;
@@ -194,7 +224,11 @@ fn hsl_to_rgb(h: f32, s: f32, l: f32) -> [u8; 3] {
         let v = (l * 255.0).clamp(0.0, 255.0) as u8;
         return [v, v, v];
     }
-    let q = if l < 0.5 { l * (1.0 + s) } else { l + s - l * s };
+    let q = if l < 0.5 {
+        l * (1.0 + s)
+    } else {
+        l + s - l * s
+    };
     let p = 2.0 * l - q;
     let hue_to_rgb = |t: f32| -> f32 {
         let t = ((t % 1.0) + 1.0) % 1.0;
@@ -250,78 +284,30 @@ fn apply_color_transforms(base: [u8; 3], t: &ColorTransforms) -> [u8; 3] {
 }
 
 pub(super) fn parse_solid_fill(sp_pr: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]> {
-    let fill = sp_pr
-        .children()
-        .find(|n| n.tag_name().name() == "solidFill" && n.tag_name().namespace() == Some(DML_NS))?;
-    // Direct sRGB color
-    if let Some(srgb) = fill
-        .children()
-        .find(|n| n.tag_name().name() == "srgbClr" && n.tag_name().namespace() == Some(DML_NS))
-    {
-        return srgb.attribute("val").and_then(super::parse_hex_color);
-    }
-    // Theme color reference
-    if let Some(scheme) = fill
-        .children()
-        .find(|n| n.tag_name().name() == "schemeClr" && n.tag_name().namespace() == Some(DML_NS))
-    {
-        let val = scheme.attribute("val")?;
-        let theme_key = resolve_theme_color_key(val);
-        let base = *theme.colors.get(theme_key)?;
-        return Some(resolve_scheme_color(base, scheme));
-    }
-    None
-}
-
-fn resolve_stop_color(stop: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]> {
-    if let Some(srgb) = stop
-        .children()
-        .find(|n| n.tag_name().name() == "srgbClr" && n.tag_name().namespace() == Some(DML_NS))
-    {
-        return srgb.attribute("val").and_then(super::parse_hex_color);
-    }
-    if let Some(scheme) = stop
-        .children()
-        .find(|n| n.tag_name().name() == "schemeClr" && n.tag_name().namespace() == Some(DML_NS))
-    {
-        let val = scheme.attribute("val")?;
-        let theme_key = resolve_theme_color_key(val);
-        let base = *theme.colors.get(theme_key)?;
-        return Some(resolve_scheme_color(base, scheme));
-    }
-    None
+    let fill = find_dml(sp_pr, "solidFill")?;
+    resolve_color_child(fill, theme)
 }
 
 fn parse_gradient_fill(sp_pr: roxmltree::Node, theme: &ThemeFonts) -> Option<ShapeFill> {
-    let grad_fill = sp_pr
-        .children()
-        .find(|n| n.tag_name().name() == "gradFill" && n.tag_name().namespace() == Some(DML_NS))?;
-    let gs_lst = grad_fill
-        .children()
-        .find(|n| n.tag_name().name() == "gsLst" && n.tag_name().namespace() == Some(DML_NS))?;
+    let grad_fill = find_dml(sp_pr, "gradFill")?;
+    let gs_lst = find_dml(grad_fill, "gsLst")?;
 
-    let mut stops: Vec<([u8; 3], f32)> = Vec::new();
-    for gs in gs_lst
-        .children()
-        .filter(|n| n.tag_name().name() == "gs" && n.tag_name().namespace() == Some(DML_NS))
-    {
-        let pos = gs
-            .attribute("pos")
-            .and_then(|v| v.parse::<f32>().ok())
-            .map(|v| v / 100_000.0)
-            .unwrap_or(0.0);
-        if let Some(color) = resolve_stop_color(gs, theme) {
-            stops.push((color, pos));
-        }
-    }
+    let stops: Vec<([u8; 3], f32)> = find_dml_all(gs_lst, "gs")
+        .filter_map(|gs| {
+            let pos = gs
+                .attribute("pos")
+                .and_then(|v| v.parse::<f32>().ok())
+                .map(|v| v / 100_000.0)
+                .unwrap_or(0.0);
+            resolve_color_child(gs, theme).map(|color| (color, pos))
+        })
+        .collect();
     if stops.is_empty() {
         return None;
     }
 
     // OOXML a:lin @ang is in 60,000ths of a degree
-    let angle_deg = grad_fill
-        .children()
-        .find(|n| n.tag_name().name() == "lin" && n.tag_name().namespace() == Some(DML_NS))
+    let angle_deg = find_dml(grad_fill, "lin")
         .and_then(|lin| lin.attribute("ang"))
         .and_then(|v| v.parse::<f32>().ok())
         .map(|v| v / 60_000.0)
@@ -331,12 +317,7 @@ fn parse_gradient_fill(sp_pr: roxmltree::Node, theme: &ThemeFonts) -> Option<Sha
 }
 
 fn parse_style_fill(wsp: roxmltree::Node, theme: &ThemeFonts) -> Option<ShapeFill> {
-    let style = wsp.children().find(|n| {
-        n.tag_name().name() == "style" && n.tag_name().namespace() == Some(WPS_NS)
-    })?;
-    let fill_ref = style.children().find(|n| {
-        n.tag_name().name() == "fillRef" && n.tag_name().namespace() == Some(DML_NS)
-    })?;
+    let fill_ref = find_wps_style_ref(wsp, "fillRef")?;
 
     let idx = fill_ref
         .attribute("idx")
@@ -346,7 +327,7 @@ fn parse_style_fill(wsp: roxmltree::Node, theme: &ThemeFonts) -> Option<ShapeFil
         return None;
     }
 
-    let base_color = resolve_scheme_clr_child(fill_ref, theme)?;
+    let base_color = resolve_color_child(fill_ref, theme)?;
 
     let fill_style_idx = (idx as usize).saturating_sub(1);
     match theme.fill_styles.get(fill_style_idx) {
@@ -369,10 +350,7 @@ fn parse_style_fill(wsp: roxmltree::Node, theme: &ThemeFonts) -> Option<ShapeFil
 
 /// Parse `a:prstGeom` or `a:custGeom` from an spPr node into `ShapeGeometry`.
 pub(super) fn parse_shape_geometry(sp_pr: roxmltree::Node) -> ShapeGeometry {
-    // Try preset geometry first
-    if let Some(prst_geom) = sp_pr.children().find(|n| {
-        n.tag_name().name() == "prstGeom" && n.tag_name().namespace() == Some(DML_NS)
-    }) {
+    if let Some(prst_geom) = find_dml(sp_pr, "prstGeom") {
         let preset = prst_geom.attribute("prst").unwrap_or("rect").to_string();
         let adjustments = parse_avlst(prst_geom);
         return ShapeGeometry {
@@ -382,10 +360,7 @@ pub(super) fn parse_shape_geometry(sp_pr: roxmltree::Node) -> ShapeGeometry {
         };
     }
 
-    // Try custom geometry
-    if let Some(cust_geom) = sp_pr.children().find(|n| {
-        n.tag_name().name() == "custGeom" && n.tag_name().namespace() == Some(DML_NS)
-    }) {
+    if let Some(cust_geom) = find_dml(sp_pr, "custGeom") {
         if let Some(custom) = parse_custom_geometry(cust_geom) {
             return ShapeGeometry {
                 preset: None,
@@ -399,14 +374,10 @@ pub(super) fn parse_shape_geometry(sp_pr: roxmltree::Node) -> ShapeGeometry {
 }
 
 fn parse_avlst(parent: roxmltree::Node) -> Vec<(String, i64)> {
-    let Some(avlst) = parent.children().find(|n| {
-        n.tag_name().name() == "avLst" && n.tag_name().namespace() == Some(DML_NS)
-    }) else {
+    let Some(avlst) = find_dml(parent, "avLst") else {
         return Vec::new();
     };
-    avlst
-        .children()
-        .filter(|n| n.tag_name().name() == "gd" && n.tag_name().namespace() == Some(DML_NS))
+    find_dml_all(avlst, "gd")
         .filter_map(|gd| {
             let name = gd.attribute("name")?.to_string();
             let fmla = gd.attribute("fmla")?;
@@ -422,15 +393,9 @@ fn parse_custom_geometry(cust_geom: roxmltree::Node) -> Option<CustomGeometry> {
 
     let adjust_defaults = parse_avlst(cust_geom);
 
-    let guides = cust_geom
-        .children()
-        .find(|n| n.tag_name().name() == "gdLst" && n.tag_name().namespace() == Some(DML_NS))
+    let guides = find_dml(cust_geom, "gdLst")
         .map(|gdlst| {
-            gdlst
-                .children()
-                .filter(|n| {
-                    n.tag_name().name() == "gd" && n.tag_name().namespace() == Some(DML_NS)
-                })
+            find_dml_all(gdlst, "gd")
                 .filter_map(|gd| {
                     let name = gd.attribute("name")?.to_string();
                     let fmla = gd.attribute("fmla")?;
@@ -445,15 +410,9 @@ fn parse_custom_geometry(cust_geom: roxmltree::Node) -> Option<CustomGeometry> {
         })
         .unwrap_or_default();
 
-    let paths = cust_geom
-        .children()
-        .find(|n| n.tag_name().name() == "pathLst" && n.tag_name().namespace() == Some(DML_NS))
+    let paths = find_dml(cust_geom, "pathLst")
         .map(|path_lst| {
-            path_lst
-                .children()
-                .filter(|n| {
-                    n.tag_name().name() == "path" && n.tag_name().namespace() == Some(DML_NS)
-                })
+            find_dml_all(path_lst, "path")
                 .map(|path| {
                     let w = path.attribute("w").and_then(|v| v.parse::<i64>().ok());
                     let h = path.attribute("h").and_then(|v| v.parse::<i64>().ok());
@@ -490,19 +449,13 @@ fn parse_path_commands(path: roxmltree::Node) -> Vec<CustomPathCommand> {
     {
         match child.tag_name().name() {
             "moveTo" => {
-                if let Some(pt) = dml_pt(child) {
-                    commands.push(CustomPathCommand::MoveTo {
-                        x: pt.0,
-                        y: pt.1,
-                    });
+                if let Some((x, y)) = dml_pt(child) {
+                    commands.push(CustomPathCommand::MoveTo { x, y });
                 }
             }
             "lnTo" => {
-                if let Some(pt) = dml_pt(child) {
-                    commands.push(CustomPathCommand::LineTo {
-                        x: pt.0,
-                        y: pt.1,
-                    });
+                if let Some((x, y)) = dml_pt(child) {
+                    commands.push(CustomPathCommand::LineTo { x, y });
                 }
             }
             "arcTo" => {
@@ -514,18 +467,7 @@ fn parse_path_commands(path: roxmltree::Node) -> Vec<CustomPathCommand> {
                 });
             }
             "cubicBezTo" => {
-                let pts: Vec<(String, String)> = child
-                    .children()
-                    .filter(|n| {
-                        n.tag_name().name() == "pt" && n.tag_name().namespace() == Some(DML_NS)
-                    })
-                    .map(|pt| {
-                        (
-                            pt.attribute("x").unwrap_or("0").to_string(),
-                            pt.attribute("y").unwrap_or("0").to_string(),
-                        )
-                    })
-                    .collect();
+                let pts = collect_dml_points(child);
                 if pts.len() == 3 {
                     commands.push(CustomPathCommand::CubicBezTo {
                         x1: pts[0].0.clone(),
@@ -538,18 +480,7 @@ fn parse_path_commands(path: roxmltree::Node) -> Vec<CustomPathCommand> {
                 }
             }
             "quadBezTo" => {
-                let pts: Vec<(String, String)> = child
-                    .children()
-                    .filter(|n| {
-                        n.tag_name().name() == "pt" && n.tag_name().namespace() == Some(DML_NS)
-                    })
-                    .map(|pt| {
-                        (
-                            pt.attribute("x").unwrap_or("0").to_string(),
-                            pt.attribute("y").unwrap_or("0").to_string(),
-                        )
-                    })
-                    .collect();
+                let pts = collect_dml_points(child);
                 if pts.len() == 2 {
                     commands.push(CustomPathCommand::QuadBezTo {
                         x1: pts[0].0.clone(),
@@ -569,9 +500,7 @@ fn parse_path_commands(path: roxmltree::Node) -> Vec<CustomPathCommand> {
 }
 
 fn dml_pt(parent: roxmltree::Node) -> Option<(String, String)> {
-    let pt = parent.children().find(|n| {
-        n.tag_name().name() == "pt" && n.tag_name().namespace() == Some(DML_NS)
-    })?;
+    let pt = find_dml(parent, "pt")?;
     Some((
         pt.attribute("x").unwrap_or("0").to_string(),
         pt.attribute("y").unwrap_or("0").to_string(),
@@ -579,10 +508,7 @@ fn dml_pt(parent: roxmltree::Node) -> Option<(String, String)> {
 }
 
 fn parse_body_margins(wsp: roxmltree::Node) -> (f32, f32, f32, f32) {
-    let body_pr = wsp
-        .children()
-        .find(|n| n.tag_name().name() == "bodyPr" && n.tag_name().namespace() == Some(WPS_NS));
-    let Some(bp) = body_pr else {
+    let Some(bp) = find_wps(wsp, "bodyPr") else {
         return (3.6, 7.2, 3.6, 7.2); // Word defaults: 0.05" top/bottom, 0.1" left/right
     };
     let emu_to_pt = |attr: &str, default: f32| -> f32 {
@@ -622,11 +548,7 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
         .descendants()
         .find(|n| n.tag_name().name() == "wsp" && n.tag_name().namespace() == Some(WPS_NS))?;
 
-    // Extract fill color from spPr
-    let sp_pr = wsp.children().find(|n| {
-        n.tag_name().name() == "spPr" && n.tag_name().namespace() == Some(WPS_NS)
-            || n.tag_name().name() == "spPr" && n.tag_name().namespace() == Some(DML_NS)
-    });
+    let sp_pr = find_sp_pr(wsp);
     let fill: Option<ShapeFill> = sp_pr
         .and_then(|sp| {
             parse_solid_fill(sp, theme)
@@ -634,27 +556,17 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
                 .or_else(|| parse_gradient_fill(sp, theme))
         })
         .or_else(|| parse_style_fill(wsp, theme));
-    let has_no_fill = sp_pr.is_some_and(|sp| {
-        sp.children()
-            .any(|n| n.tag_name().name() == "noFill" && n.tag_name().namespace() == Some(DML_NS))
-    });
+    let has_no_fill = sp_pr.is_some_and(|sp| find_dml(sp, "noFill").is_some());
 
-    let shape_type = sp_pr
-        .map(parse_shape_geometry)
-        .unwrap_or_default();
+    let shape_type = sp_pr.map(parse_shape_geometry).unwrap_or_default();
 
     let (margin_top, margin_left, margin_bottom, margin_right) = parse_body_margins(wsp);
 
-    let no_text_wrap = wsp
-        .children()
-        .find(|n| n.tag_name().name() == "bodyPr" && n.tag_name().namespace() == Some(WPS_NS))
+    let no_text_wrap = find_wps(wsp, "bodyPr")
         .and_then(|bp| bp.attribute("wrap"))
         .is_some_and(|w| w == "none");
 
-    // Try to get textbox content
-    let paragraphs = wsp
-        .children()
-        .find(|n| n.tag_name().name() == "txbx" && n.tag_name().namespace() == Some(WPS_NS))
+    let paragraphs = find_wps(wsp, "txbx")
         .and_then(|txbx| {
             txbx.children().find(|n| {
                 n.tag_name().name() == "txbxContent" && n.tag_name().namespace() == Some(WML_NS)
@@ -663,7 +575,6 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
         .map(|tc| parse_txbx_content_paragraphs(tc, styles, theme, rels, zip, numbering))
         .unwrap_or_default();
 
-    // Return if there's text content OR a visible fill
     if paragraphs.is_empty() && (has_no_fill || fill.is_none()) {
         return None;
     }
@@ -688,29 +599,23 @@ pub(super) fn parse_connector_from_wsp(
         .descendants()
         .find(|n| n.tag_name().name() == "wsp" && n.tag_name().namespace() == Some(WPS_NS))?;
 
-    let sp_pr = wsp.children().find(|n| {
-        (n.tag_name().name() == "spPr" && n.tag_name().namespace() == Some(WPS_NS))
-            || (n.tag_name().name() == "spPr" && n.tag_name().namespace() == Some(DML_NS))
-    })?;
-
-    let prst_geom = sp_pr.children().find(|n| {
-        n.tag_name().name() == "prstGeom" && n.tag_name().namespace() == Some(DML_NS)
-    })?;
+    let sp_pr = find_sp_pr(wsp)?;
+    let prst_geom = find_dml(sp_pr, "prstGeom")?;
     let prst = prst_geom.attribute("prst")?;
+
+    let xfrm = find_dml(sp_pr, "xfrm");
 
     let connector_type = match prst {
         "line" => {
-            let xfrm = sp_pr.children().find(|n| {
-                n.tag_name().name() == "xfrm" && n.tag_name().namespace() == Some(DML_NS)
-            });
-            let flip_h = xfrm.and_then(|x| x.attribute("flipH")).is_some_and(|v| v == "1");
-            let flip_v = xfrm.and_then(|x| x.attribute("flipV")).is_some_and(|v| v == "1");
+            let flip_h = xfrm
+                .and_then(|x| x.attribute("flipH"))
+                .is_some_and(|v| v == "1");
+            let flip_v = xfrm
+                .and_then(|x| x.attribute("flipV"))
+                .is_some_and(|v| v == "1");
             ConnectorType::Line { flip_h, flip_v }
         }
         "arc" => {
-            let xfrm = sp_pr.children().find(|n| {
-                n.tag_name().name() == "xfrm" && n.tag_name().namespace() == Some(DML_NS)
-            });
             let rotation = xfrm
                 .and_then(|x| x.attribute("rot"))
                 .and_then(|v| v.parse::<f32>().ok())
@@ -719,9 +624,10 @@ pub(super) fn parse_connector_from_wsp(
 
             let mut adj1 = 0.0_f32;
             let mut adj2 = 0.0_f32;
-            for gd in prst_geom.descendants().filter(|n| {
-                n.tag_name().name() == "gd" && n.tag_name().namespace() == Some(DML_NS)
-            }) {
+            for gd in prst_geom
+                .descendants()
+                .filter(|n| n.tag_name().name() == "gd" && n.tag_name().namespace() == Some(DML_NS))
+            {
                 let name = gd.attribute("name").unwrap_or("");
                 let val = gd
                     .attribute("fmla")
@@ -747,8 +653,8 @@ pub(super) fn parse_connector_from_wsp(
     let stroke_color = parse_style_stroke(wsp, theme).unwrap_or([0, 0, 0]);
     let stroke_width = parse_style_stroke_width(wsp);
 
-    let (h_position, _, v_pos, _) = super::images::parse_anchor_position(anchor);
-    let (display_w, display_h) = super::images::extent_dimensions(anchor);
+    let (h_position, _, v_pos, _) = parse_anchor_position(anchor);
+    let (display_w, display_h) = extent_dimensions(anchor);
     let v_offset = match v_pos {
         crate::model::VerticalPosition::Offset(o) => o,
         _ => 0.0,
@@ -771,12 +677,7 @@ pub(super) fn parse_connector_from_wsp(
 }
 
 fn parse_style_stroke(wsp: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]> {
-    let style = wsp.children().find(|n| {
-        n.tag_name().name() == "style" && n.tag_name().namespace() == Some(WPS_NS)
-    })?;
-    let ln_ref = style.children().find(|n| {
-        n.tag_name().name() == "lnRef" && n.tag_name().namespace() == Some(DML_NS)
-    })?;
+    let ln_ref = find_wps_style_ref(wsp, "lnRef")?;
     let idx = ln_ref
         .attribute("idx")
         .and_then(|v| v.parse::<u32>().ok())
@@ -784,19 +685,11 @@ fn parse_style_stroke(wsp: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3
     if idx == 0 {
         return None;
     }
-    resolve_scheme_clr_child(ln_ref, theme)
+    resolve_color_child(ln_ref, theme)
 }
 
 fn parse_style_stroke_width(wsp: roxmltree::Node) -> f32 {
-    let style = wsp.children().find(|n| {
-        n.tag_name().name() == "style" && n.tag_name().namespace() == Some(WPS_NS)
-    });
-    let idx = style
-        .and_then(|s| {
-            s.children().find(|n| {
-                n.tag_name().name() == "lnRef" && n.tag_name().namespace() == Some(DML_NS)
-            })
-        })
+    let idx = find_wps_style_ref(wsp, "lnRef")
         .and_then(|lr| lr.attribute("idx"))
         .and_then(|v| v.parse::<u32>().ok())
         .unwrap_or(0);
@@ -807,25 +700,6 @@ fn parse_style_stroke_width(wsp: roxmltree::Node) -> f32 {
         3 => 2.25,
         _ => 1.0,
     }
-}
-
-fn resolve_scheme_clr_child(parent: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]> {
-    if let Some(srgb) = parent
-        .children()
-        .find(|n| n.tag_name().name() == "srgbClr" && n.tag_name().namespace() == Some(DML_NS))
-    {
-        return srgb.attribute("val").and_then(super::parse_hex_color);
-    }
-    if let Some(scheme) = parent
-        .children()
-        .find(|n| n.tag_name().name() == "schemeClr" && n.tag_name().namespace() == Some(DML_NS))
-    {
-        let val = scheme.attribute("val")?;
-        let theme_key = resolve_theme_color_key(val);
-        let base = *theme.colors.get(theme_key)?;
-        return Some(resolve_scheme_color(base, scheme));
-    }
-    None
 }
 
 const VML_NS: &str = "urn:schemas-microsoft-com:vml";
@@ -839,8 +713,7 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
     numbering: &NumberingInfo,
 ) -> Option<Textbox> {
     let shape = pict_node.children().find(|n| {
-        n.tag_name().namespace() == Some(VML_NS)
-            && (n.tag_name().name() == "shape" || n.tag_name().name() == "rect")
+        n.tag_name().namespace() == Some(VML_NS) && matches!(n.tag_name().name(), "shape" | "rect")
     })?;
     let textbox = shape
         .children()
@@ -857,14 +730,11 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
     let mut h_relative = HRelativeFrom::Column;
     let mut v_relative = VRelativeFrom::Paragraph;
 
+    let parse_pt = |s: &str| -> f32 { s.trim_end_matches("pt").parse::<f32>().unwrap_or(0.0) };
     for part in style_str.split(';') {
-        let part = part.trim();
-        if let Some((key, val)) = part.split_once(':') {
-            let key = key.trim();
+        if let Some((key, val)) = part.trim().split_once(':') {
             let val = val.trim();
-            let parse_pt =
-                |s: &str| -> f32 { s.trim_end_matches("pt").parse::<f32>().unwrap_or(0.0) };
-            match key {
+            match key.trim() {
                 "width" => width = parse_pt(val),
                 "height" => height = parse_pt(val),
                 "margin-left" => margin_left = parse_pt(val),
@@ -937,7 +807,7 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
             });
 
             if let Some(branch) = choice {
-                // DrawingML path: mc:Choice → w:drawing → wp:anchor → wps:wsp → wps:txbx
+                // DrawingML path: mc:Choice -> w:drawing -> wp:anchor -> wps:wsp -> wps:txbx
                 for drawing in branch.children().filter(|n| {
                     n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "drawing"
                 }) {
@@ -957,16 +827,8 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                             };
                             let wrap_type = super::images::parse_wrap_type(container);
                             let behind_doc = container.attribute("behindDoc") == Some("1");
-                            let dist_top = container
-                                .attribute("distT")
-                                .and_then(|v| v.parse::<f32>().ok())
-                                .unwrap_or(0.0)
-                                / 12700.0;
-                            let dist_bottom = container
-                                .attribute("distB")
-                                .and_then(|v| v.parse::<f32>().ok())
-                                .unwrap_or(0.0)
-                                / 12700.0;
+                            let dist_top = emu_attr(container, "distT");
+                            let dist_bottom = emu_attr(container, "distB");
                             textboxes.push(Textbox {
                                 paragraphs: wsp.paragraphs,
                                 width_pt: display_w,
@@ -991,7 +853,7 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                     }
                 }
             } else if let Some(branch) = fallback {
-                // VML fallback: mc:Fallback → w:pict → v:shape → v:textbox
+                // VML fallback: mc:Fallback -> w:pict -> v:shape -> v:textbox
                 for pict in branch.children().filter(|n| {
                     n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "pict"
                 }) {
@@ -1001,7 +863,6 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                         textboxes.push(tb);
                     }
                 }
-                // Also check for w:r/w:pict inside fallback
                 for r in branch.children().filter(|n| {
                     n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "r"
                 }) {

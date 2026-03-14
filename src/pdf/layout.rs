@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use pdf_writer::types::TextRenderingMode;
@@ -5,6 +6,47 @@ use pdf_writer::{Content, Name, Rect, Str};
 
 use crate::fonts::{FontEntry, encode_as_gids, font_key, font_key_buf, to_winansi_bytes};
 use crate::model::{Alignment, Run, TabAlignment, TabStop, VertAlign};
+
+fn set_fill_color(content: &mut Content, color: Option<[u8; 3]>) {
+    if let Some([r, g, b]) = color {
+        content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+    } else {
+        content.set_fill_gray(0.0);
+    }
+}
+
+fn set_stroke_color(content: &mut Content, color: Option<[u8; 3]>) {
+    if let Some([r, g, b]) = color {
+        content.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+    } else {
+        content.set_stroke_gray(0.0);
+    }
+}
+
+/// Resolve aligned segment start position given a tab stop, segment runs, and minimum x.
+fn resolve_tab_aligned_start(
+    stop: &TabStop,
+    tab_target: f32,
+    seg_runs: &[&Run],
+    seen_fonts: &HashMap<String, FontEntry>,
+    min_x: f32,
+) -> f32 {
+    match stop.alignment {
+        TabAlignment::Left => tab_target.max(min_x),
+        TabAlignment::Center => {
+            let sw = segment_width(seg_runs, seen_fonts);
+            (tab_target - sw / 2.0).max(min_x)
+        }
+        TabAlignment::Right => {
+            let sw = segment_width(seg_runs, seen_fonts);
+            (tab_target - sw).max(min_x)
+        }
+        TabAlignment::Decimal => {
+            let bw = decimal_before_width(seg_runs, seen_fonts);
+            (tab_target - bw).max(min_x)
+        }
+    }
+}
 
 /// Split text into (preceding_space_count, word) pairs.
 /// Leading and inter-word spaces are counted. Trailing spaces (after the last word)
@@ -114,6 +156,35 @@ impl WordChunk {
             synthetic_bold: false,
         }
     }
+
+    fn leader(
+        entry: &FontEntry,
+        text: String,
+        font_size: f32,
+        color: Option<[u8; 3]>,
+        x_offset: f32,
+        width: f32,
+    ) -> Self {
+        Self {
+            pdf_font: entry.pdf_name.clone(),
+            text,
+            font_size,
+            color,
+            highlight: None,
+            x_offset,
+            width,
+            underline: false,
+            strikethrough: false,
+            dstrike: false,
+            char_spacing: 0.0,
+            text_scale: 100.0,
+            y_offset: 0.0,
+            hyperlink_url: None,
+            inline_image_name: None,
+            inline_image_height: 0.0,
+            synthetic_bold: false,
+        }
+    }
 }
 
 pub(crate) struct LinkAnnotation {
@@ -145,11 +216,11 @@ fn effective_font_size(run: &Run) -> f32 {
 }
 
 /// Returns the text to use for layout/rendering, applying caps/smallCaps transforms.
-fn effective_text(run: &Run) -> std::borrow::Cow<'_, str> {
+fn effective_text(run: &Run) -> Cow<'_, str> {
     if run.caps || run.small_caps {
-        std::borrow::Cow::Owned(run.text.to_uppercase())
+        Cow::Owned(run.text.to_uppercase())
     } else {
-        std::borrow::Cow::Borrowed(&run.text)
+        Cow::Borrowed(&run.text)
     }
 }
 
@@ -217,7 +288,13 @@ pub(super) fn build_paragraph_lines(
                 }
                 pending_space_w = 0.0;
 
-                current_chunks.push(WordChunk::image(pdf_name, run.font_size, current_x, img_w, img.display_height));
+                current_chunks.push(WordChunk::image(
+                    pdf_name,
+                    run.font_size,
+                    current_x,
+                    img_w,
+                    img.display_height,
+                ));
                 current_x += img_w;
             }
             continue;
@@ -262,7 +339,9 @@ pub(super) fn build_paragraph_lines(
             }
             pending_space_w = 0.0;
 
-            current_chunks.push(WordChunk::text(entry, run, word, eff_fs, cs, y_off, current_x, ww));
+            current_chunks.push(WordChunk::text(
+                entry, run, word, eff_fs, cs, y_off, current_x, ww,
+            ));
             current_x += ww;
         }
 
@@ -286,17 +365,18 @@ pub(super) fn build_paragraph_lines(
 
 fn find_next_tab_stop(current_x: f32, tab_stops: &[TabStop], indent_left: f32) -> TabStop {
     let abs_x = current_x + indent_left;
-    for stop in tab_stops {
-        if stop.position > abs_x + 0.5 {
-            return stop.clone();
-        }
-    }
-    let next_default = ((abs_x / DEFAULT_TAB_INTERVAL).floor() + 1.0) * DEFAULT_TAB_INTERVAL;
-    TabStop {
-        position: next_default,
-        alignment: TabAlignment::Left,
-        leader: None,
-    }
+    tab_stops
+        .iter()
+        .find(|s| s.position > abs_x + 0.5)
+        .cloned()
+        .unwrap_or_else(|| {
+            let next = ((abs_x / DEFAULT_TAB_INTERVAL).floor() + 1.0) * DEFAULT_TAB_INTERVAL;
+            TabStop {
+                position: next,
+                alignment: TabAlignment::Left,
+                leader: None,
+            }
+        })
 }
 
 fn segment_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 {
@@ -323,7 +403,7 @@ fn segment_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 
 }
 
 fn decimal_before_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 {
-    let texts: Vec<std::borrow::Cow<'_, str>> = runs.iter().map(|r| effective_text(r)).collect();
+    let texts: Vec<Cow<'_, str>> = runs.iter().map(|r| effective_text(r)).collect();
     let full_text: String = texts.iter().map(|t| t.as_ref()).collect();
     let before = if let Some(dot_pos) = full_text.find('.') {
         &full_text[..dot_pos]
@@ -418,47 +498,18 @@ pub(super) fn build_tabbed_line(
         if seg_idx > 0 {
             let stop = find_next_tab_stop(current_x, tab_stops, line_indent);
             let tab_target = stop.position - line_indent;
+            let mut seg_start =
+                resolve_tab_aligned_start(&stop, tab_target, seg_runs, seen_fonts, current_x);
 
-            // Calculate where segment text will start based on alignment
-            let mut seg_start = match stop.alignment {
-                TabAlignment::Left => tab_target.max(current_x),
-                TabAlignment::Center => {
-                    let sw = segment_width(seg_runs, seen_fonts);
-                    (tab_target - sw / 2.0).max(current_x)
-                }
-                TabAlignment::Right => {
-                    let sw = segment_width(seg_runs, seen_fonts);
-                    (tab_target - sw).max(current_x)
-                }
-                TabAlignment::Decimal => {
-                    let bw = decimal_before_width(seg_runs, seen_fonts);
-                    (tab_target - bw).max(current_x)
-                }
-            };
-
-            // Wrap to new line if tab pushes past line_max
             if seg_start > line_max && !all_chunks.is_empty() {
                 result_lines.push(finish_line(&mut all_chunks));
                 current_x = 0.0;
                 is_first_line = false;
-                // Re-resolve the tab stop from position 0 on the new line
                 let new_stop = find_next_tab_stop(0.0, tab_stops, indent_left);
                 let new_target = new_stop.position - indent_left;
-                seg_start = match new_stop.alignment {
-                    TabAlignment::Left => new_target.max(0.0),
-                    TabAlignment::Center => {
-                        let sw = segment_width(seg_runs, seen_fonts);
-                        (new_target - sw / 2.0).max(0.0)
-                    }
-                    TabAlignment::Right => {
-                        let sw = segment_width(seg_runs, seen_fonts);
-                        (new_target - sw).max(0.0)
-                    }
-                    TabAlignment::Decimal => {
-                        let bw = decimal_before_width(seg_runs, seen_fonts);
-                        (new_target - bw).max(0.0)
-                    }
-                };
+                seg_start = resolve_tab_aligned_start(
+                    &new_stop, new_target, seg_runs, seen_fonts, 0.0,
+                );
             }
 
             // Draw leader fill between end of previous text and start of aligned text
@@ -481,36 +532,19 @@ pub(super) fn build_tabbed_line(
                         let key = font_key_buf(run, &mut key_buf);
                         let entry = seen_fonts.get(key).expect("font registered");
                         let eff_fs = effective_font_size(run);
-                        {
-                            let char_w = entry.char_width_1000(leader_char) * eff_fs / 1000.0;
-                            let leader_gap = seg_start - current_x;
-                            if char_w > 0.0 && leader_gap > char_w * 2.0 {
-                                let count = ((leader_gap - char_w) / char_w).floor() as usize;
-                                if count > 0 {
-                                    let leader_text: String =
-                                        std::iter::repeat_n(leader_char, count).collect();
-                                    let leader_w = count as f32 * char_w;
-                                    let leader_start = seg_start - leader_w;
-                                    all_chunks.push(WordChunk {
-                                        pdf_font: entry.pdf_name.clone(),
-                                        text: leader_text,
-                                        font_size: eff_fs,
-                                        color: run.color,
-                                        highlight: None,
-                                        x_offset: leader_start,
-                                        width: leader_w,
-                                        underline: false,
-                                        strikethrough: false,
-                                        dstrike: false,
-                                        char_spacing: 0.0,
-                                        text_scale: 100.0,
-                                        y_offset: 0.0,
-                                        hyperlink_url: None,
-                                        inline_image_name: None,
-                                        inline_image_height: 0.0,
-                                        synthetic_bold: false,
-                                    });
-                                }
+                        let char_w = entry.char_width_1000(leader_char) * eff_fs / 1000.0;
+                        let leader_gap = seg_start - current_x;
+                        if char_w > 0.0 && leader_gap > char_w * 2.0 {
+                            let count = ((leader_gap - char_w) / char_w).floor() as usize;
+                            if count > 0 {
+                                let leader_text: String =
+                                    std::iter::repeat_n(leader_char, count).collect();
+                                let leader_w = count as f32 * char_w;
+                                let leader_start = seg_start - leader_w;
+                                all_chunks.push(WordChunk::leader(
+                                    entry, leader_text, eff_fs, run.color,
+                                    leader_start, leader_w,
+                                ));
                             }
                         }
                     }
@@ -526,7 +560,13 @@ pub(super) fn build_tabbed_line(
             // Handle inline images (same pattern as build_paragraph_lines)
             if let Some(img) = &run.inline_image {
                 if let Some(pdf_name) = inline_image_names.get(&seg_indices[local_idx]) {
-                    all_chunks.push(WordChunk::image(pdf_name, run.font_size, current_x, img.display_width, img.display_height));
+                    all_chunks.push(WordChunk::image(
+                        pdf_name,
+                        run.font_size,
+                        current_x,
+                        img.display_width,
+                        img.display_height,
+                    ));
                     current_x += img.display_width;
                 }
                 continue;
@@ -561,7 +601,9 @@ pub(super) fn build_tabbed_line(
                     current_x = 0.0;
                     is_first_line = false;
                 }
-                all_chunks.push(WordChunk::text(entry, run, word, eff_fs, cs, y_off, current_x, ww));
+                all_chunks.push(WordChunk::text(
+                    entry, run, word, eff_fs, cs, y_off, current_x, ww,
+                ));
                 current_x += ww;
             }
             prev_ws = text.ends_with(char::is_whitespace);
@@ -676,7 +718,6 @@ pub(super) fn render_paragraph_lines(
         };
 
         let mut decorations: Vec<(f32, f32, f32, f32, Option<[u8; 3]>)> = Vec::new();
-        let mut image_draws: Vec<(f32, f32, f32, f32, &str)> = Vec::new();
 
         // Draw run highlights as merged spans (contiguous same-color highlights)
         {
@@ -690,11 +731,7 @@ pub(super) fn render_paragraph_lines(
                     let hl_bottom = y - fs * 0.2;
                     let hl_height = fs * 1.15;
                     content.save_state();
-                    content.set_fill_rgb(
-                        color[0] as f32 / 255.0,
-                        color[1] as f32 / 255.0,
-                        color[2] as f32 / 255.0,
-                    );
+                    set_fill_color(content, Some(color));
                     content.rect(sx, hl_bottom, ex - sx, hl_height);
                     content.fill_nonzero();
                     content.restore_state();
@@ -743,26 +780,14 @@ pub(super) fn render_paragraph_lines(
                 let cy = y + chunk.y_offset;
 
                 if chunk.color != current_color {
-                    if let Some([r, g, b]) = chunk.color {
-                        content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-                    } else {
-                        content.set_fill_gray(0.0);
-                    }
+                    set_fill_color(content, chunk.color);
                     current_color = chunk.color;
                 }
 
                 if chunk.synthetic_bold != cur_synthetic_bold {
                     if chunk.synthetic_bold {
                         content.set_line_width(chunk.font_size * 0.02);
-                        if let Some([r, g, b]) = chunk.color {
-                            content.set_stroke_rgb(
-                                r as f32 / 255.0,
-                                g as f32 / 255.0,
-                                b as f32 / 255.0,
-                            );
-                        } else {
-                            content.set_stroke_gray(0.0);
-                        }
+                        set_stroke_color(content, chunk.color);
                         content.set_text_rendering_mode(TextRenderingMode::FillStroke);
                     } else {
                         content.set_text_rendering_mode(TextRenderingMode::Fill);
@@ -781,8 +806,7 @@ pub(super) fn render_paragraph_lines(
 
                 if cur_font_name != chunk.pdf_font || cur_font_size != chunk.font_size {
                     content.set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size);
-                    cur_font_name.clear();
-                    cur_font_name.push_str(&chunk.pdf_font);
+                    cur_font_name.clone_from(&chunk.pdf_font);
                     cur_font_size = chunk.font_size;
                 }
 
@@ -804,7 +828,9 @@ pub(super) fn render_paragraph_lines(
                     let ul_top = ul_y - thick;
                     // Merge with previous underline decoration if same y and color
                     let merged = decorations.last_mut().filter(|(_, dy, _, dh, dc)| {
-                        (*dy - ul_top).abs() < 0.01 && (*dh - thick).abs() < 0.01 && *dc == chunk.color
+                        (*dy - ul_top).abs() < 0.01
+                            && (*dh - thick).abs() < 0.01
+                            && *dc == chunk.color
                     });
                     if let Some(prev) = merged {
                         prev.2 = (x + chunk.width) - prev.0;
@@ -856,36 +882,21 @@ pub(super) fn render_paragraph_lines(
             content.end_text();
         }
 
-        // Collect inline image draws
+        // Draw inline images outside text block
         for (chunk_idx, chunk) in line.chunks.iter().enumerate() {
             if let Some(ref img_name) = chunk.inline_image_name {
                 let x = line_start_x + chunk.x_offset + chunk_idx as f32 * extra_per_gap;
                 let img_bottom = y - (chunk.inline_image_height - chunk.font_size);
-                image_draws.push((
-                    x,
-                    img_bottom,
-                    chunk.width,
-                    chunk.inline_image_height,
-                    img_name,
-                ));
+                content.save_state();
+                content.transform([chunk.width, 0.0, 0.0, chunk.inline_image_height, x, img_bottom]);
+                content.x_object(Name(img_name.as_bytes()));
+                content.restore_state();
             }
-        }
-
-        // Draw inline images outside text block
-        for &(ix, iy, iw, ih, ref img_name) in &image_draws {
-            content.save_state();
-            content.transform([iw, 0.0, 0.0, ih, ix, iy]);
-            content.x_object(Name(img_name.as_bytes()));
-            content.restore_state();
         }
 
         for &(dx, dy, dw, dh, dcolor) in &decorations {
             if dcolor != current_color {
-                if let Some([r, g, b]) = dcolor {
-                    content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-                } else {
-                    content.set_fill_gray(0.0);
-                }
+                set_fill_color(content, dcolor);
                 current_color = dcolor;
             }
             content.rect(dx, dy, dw, dh).fill_nonzero();

@@ -16,20 +16,21 @@ use crate::fonts::{
     FontEntry, encode_as_gids, font_key, font_key_buf, register_font, to_winansi_bytes,
 };
 use crate::model::{
-    Alignment, Block, Document, EmbeddedImage, FieldCode, FloatingImage, HRelativeFrom,
-    HeaderFooter, HorizontalPosition, ImageFormat, LineSpacing, Paragraph, Run, SectionBreakType,
-    SectionProperties, ShapeFill, ShapeGeometry, Textbox, VRelativeFrom, VerticalPosition,
+    Alignment, Block, ConnectorShape, ConnectorType, Document, EmbeddedImage, FieldCode,
+    FloatingImage, HRelativeFrom, HeaderFooter, HorizontalPosition, ImageFormat, LineSpacing,
+    Paragraph, ParagraphBorder, ParagraphBorders, Run, SectionBreakType, SectionProperties,
+    ShapeFill, ShapeGeometry, Textbox, VRelativeFrom, VerticalPosition, WrapType,
 };
 
 use footnotes::{compute_footnote_height, render_page_footnotes};
 use header_footer::{
     compute_effective_margin_bottom, effective_slot_top, hf_paragraphs, render_header_footer,
 };
-
 use layout::{
     LinkAnnotation, build_paragraph_lines, build_tabbed_line, is_text_empty,
     render_paragraph_lines, tallest_run_metrics,
 };
+use smartart::draw_shape_path;
 use table::render_table;
 
 pub(super) struct RenderContext<'a> {
@@ -46,8 +47,6 @@ pub(super) struct GradientSpec {
     w: f32,
     h: f32,
 }
-
-use smartart::draw_shape_path;
 
 pub(super) fn render_shape_fill(
     content: &mut Content,
@@ -91,6 +90,28 @@ pub(super) fn render_shape_fill(
     }
 }
 
+fn resolve_h_position(
+    h_relative_from: HRelativeFrom,
+    h_position: &HorizontalPosition,
+    obj_width: f32,
+    sp: &SectionProperties,
+    col_x: f32,
+    col_w: f32,
+    text_width: f32,
+) -> f32 {
+    let (origin, area_width) = match h_relative_from {
+        HRelativeFrom::Page => (0.0, sp.page_width),
+        HRelativeFrom::Column => (col_x, col_w),
+        HRelativeFrom::Margin => (sp.margin_left, text_width),
+    };
+    match h_position {
+        HorizontalPosition::AlignCenter => origin + (area_width - obj_width) / 2.0,
+        HorizontalPosition::AlignRight => origin + area_width - obj_width,
+        HorizontalPosition::AlignLeft => origin,
+        HorizontalPosition::Offset(o) => origin + o,
+    }
+}
+
 fn resolve_fi_x(
     fi: &FloatingImage,
     sp: &SectionProperties,
@@ -98,29 +119,15 @@ fn resolve_fi_x(
     col_w: f32,
     text_width: f32,
 ) -> f32 {
-    let img = &fi.image;
-    match fi.h_relative_from {
-        HRelativeFrom::Page => match fi.h_position {
-            HorizontalPosition::AlignCenter => (sp.page_width - img.display_width) / 2.0,
-            HorizontalPosition::AlignRight => sp.page_width - img.display_width,
-            HorizontalPosition::AlignLeft => 0.0,
-            HorizontalPosition::Offset(o) => o,
-        },
-        HRelativeFrom::Column => match fi.h_position {
-            HorizontalPosition::AlignCenter => col_x + (col_w - img.display_width) / 2.0,
-            HorizontalPosition::AlignRight => col_x + col_w - img.display_width,
-            HorizontalPosition::AlignLeft => col_x,
-            HorizontalPosition::Offset(o) => col_x + o,
-        },
-        HRelativeFrom::Margin => match fi.h_position {
-            HorizontalPosition::AlignCenter => {
-                sp.margin_left + (text_width - img.display_width) / 2.0
-            }
-            HorizontalPosition::AlignRight => sp.margin_left + text_width - img.display_width,
-            HorizontalPosition::AlignLeft => sp.margin_left,
-            HorizontalPosition::Offset(o) => sp.margin_left + o,
-        },
-    }
+    resolve_h_position(
+        fi.h_relative_from,
+        &fi.h_position,
+        fi.image.display_width,
+        sp,
+        col_x,
+        col_w,
+        text_width,
+    )
 }
 
 fn resolve_fi_y_top(fi: &FloatingImage, sp: &SectionProperties, slot_top: f32) -> f32 {
@@ -163,28 +170,15 @@ fn render_single_textbox(
     ctx: &RenderContext,
     page_links: &mut Vec<LinkAnnotation>,
 ) {
-    let tb_x = match tb.h_relative_from {
-        HRelativeFrom::Page => match tb.h_position {
-            HorizontalPosition::AlignCenter => (sp.page_width - tb.width_pt) / 2.0,
-            HorizontalPosition::AlignRight => sp.page_width - tb.width_pt,
-            HorizontalPosition::AlignLeft => 0.0,
-            HorizontalPosition::Offset(o) => o,
-        },
-        HRelativeFrom::Column => match tb.h_position {
-            HorizontalPosition::AlignCenter => col_x + (col_w - tb.width_pt) / 2.0,
-            HorizontalPosition::AlignRight => col_x + col_w - tb.width_pt,
-            HorizontalPosition::AlignLeft => col_x,
-            HorizontalPosition::Offset(o) => col_x + o,
-        },
-        HRelativeFrom::Margin => match tb.h_position {
-            HorizontalPosition::AlignCenter => {
-                sp.margin_left + (text_width - tb.width_pt) / 2.0
-            }
-            HorizontalPosition::AlignRight => sp.margin_left + text_width - tb.width_pt,
-            HorizontalPosition::AlignLeft => sp.margin_left,
-            HorizontalPosition::Offset(o) => sp.margin_left + o,
-        },
-    };
+    let tb_x = resolve_h_position(
+        tb.h_relative_from,
+        &tb.h_position,
+        tb.width_pt,
+        sp,
+        col_x,
+        col_w,
+        text_width,
+    );
     let tb_y_top = match tb.v_relative_from {
         VRelativeFrom::Page => sp.page_height - tb.v_offset_pt,
         VRelativeFrom::Margin | VRelativeFrom::TopMargin => {
@@ -281,12 +275,43 @@ fn render_single_textbox(
     }
 }
 
-fn render_connector(
-    conn: &crate::model::ConnectorShape,
-    content: &mut Content,
+fn render_floating_images(
+    floating_images: &[FloatingImage],
+    behind_doc: bool,
+    global_block_idx: usize,
+    pdf_names: &HashMap<(usize, usize), String>,
+    sp: &SectionProperties,
     col_x: f32,
+    col_w: f32,
+    text_width: f32,
     slot_top: f32,
+    content: &mut Content,
 ) {
+    for (fi_idx, fi) in floating_images.iter().enumerate() {
+        if fi.behind_doc != behind_doc {
+            continue;
+        }
+        if let Some(pdf_name) = pdf_names.get(&(global_block_idx, fi_idx)) {
+            let img = &fi.image;
+            let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
+            let fi_y_top = resolve_fi_y_top(fi, sp, slot_top);
+            let fi_y_bottom = fi_y_top - img.display_height;
+            content.save_state();
+            content.transform([
+                img.display_width,
+                0.0,
+                0.0,
+                img.display_height,
+                fi_x,
+                fi_y_bottom,
+            ]);
+            content.x_object(Name(pdf_name.as_bytes()));
+            content.restore_state();
+        }
+    }
+}
+
+fn render_connector(conn: &ConnectorShape, content: &mut Content, col_x: f32, slot_top: f32) {
     let cx = col_x + conn.x;
     let cy = slot_top - conn.y;
 
@@ -299,7 +324,7 @@ fn render_connector(
     content.set_line_width(conn.stroke_width);
 
     match &conn.connector_type {
-        crate::model::ConnectorType::Line { flip_h, flip_v } => {
+        ConnectorType::Line { flip_h, flip_v } => {
             let (x0, y0, x1, y1) = match (*flip_h, *flip_v) {
                 (false, false) => (cx, cy, cx + conn.width, cy - conn.height),
                 (true, false) => (cx + conn.width, cy, cx, cy - conn.height),
@@ -310,12 +335,21 @@ fn render_connector(
             content.line_to(x1, y1);
             content.stroke();
         }
-        crate::model::ConnectorType::Arc {
+        ConnectorType::Arc {
             start_angle,
             end_angle,
             rotation,
         } => {
-            render_arc(content, cx, cy, conn.width, conn.height, *start_angle, *end_angle, *rotation);
+            render_arc(
+                content,
+                cx,
+                cy,
+                conn.width,
+                conn.height,
+                *start_angle,
+                *end_angle,
+                *rotation,
+            );
         }
     }
 
@@ -356,9 +390,7 @@ fn render_arc(
     let n_segs = ((total.abs() / std::f32::consts::FRAC_PI_2).ceil() as usize).max(1);
     let step = total / n_segs as f32;
 
-    let pt = |a: f32| -> (f32, f32) {
-        (cx + rx * a.cos(), cy + ry * a.sin())
-    };
+    let pt = |a: f32| -> (f32, f32) { (cx + rx * a.cos(), cy + ry * a.sin()) };
 
     let mut angle = math_start;
     let (sx, sy) = pt(angle);
@@ -392,6 +424,19 @@ fn styleref_insert(
     }
 }
 
+fn styleref_insert_first(
+    map: &mut HashMap<String, String>,
+    id: &str,
+    text: &str,
+    style_id_to_name: &HashMap<String, String>,
+) {
+    map.entry(id.to_string())
+        .or_insert_with(|| text.to_string());
+    if let Some(name) = style_id_to_name.get(id) {
+        map.entry(name.clone()).or_insert_with(|| text.to_string());
+    }
+}
+
 fn update_styleref_from_para(
     running: &mut HashMap<String, String>,
     page_first: &mut HashMap<String, String>,
@@ -402,37 +447,20 @@ fn update_styleref_from_para(
         let text: String = para.runs.iter().map(|r| r.text.as_str()).collect();
         if !text.is_empty() {
             styleref_insert(running, sid, &text, style_id_to_name);
-            page_first
-                .entry(sid.to_string())
-                .or_insert_with(|| text.clone());
-            if let Some(name) = style_id_to_name.get(sid.as_str()) {
-                page_first
-                    .entry(name.clone())
-                    .or_insert_with(|| text.clone());
-            }
+            styleref_insert_first(page_first, sid, &text, style_id_to_name);
         }
     }
     for run in &para.runs {
         if let Some(ref csid) = run.char_style_id {
             if !run.text.is_empty() {
                 styleref_insert(running, csid, &run.text, style_id_to_name);
-                page_first
-                    .entry(csid.to_string())
-                    .or_insert_with(|| run.text.clone());
-                if let Some(name) = style_id_to_name.get(csid.as_str()) {
-                    page_first
-                        .entry(name.clone())
-                        .or_insert_with(|| run.text.clone());
-                }
+                styleref_insert_first(page_first, csid, &run.text, style_id_to_name);
             }
         }
     }
 }
 
-fn border_eq(
-    a: &Option<crate::model::ParagraphBorder>,
-    b: &Option<crate::model::ParagraphBorder>,
-) -> bool {
+fn border_eq(a: &Option<ParagraphBorder>, b: &Option<ParagraphBorder>) -> bool {
     match (a, b) {
         (None, None) => true,
         (Some(a), Some(b)) => a.width_pt == b.width_pt && a.color == b.color,
@@ -440,7 +468,7 @@ fn border_eq(
     }
 }
 
-fn borders_match(a: &crate::model::ParagraphBorders, b: &crate::model::ParagraphBorders) -> bool {
+fn borders_match(a: &ParagraphBorders, b: &ParagraphBorders) -> bool {
     border_eq(&a.top, &b.top)
         && border_eq(&a.bottom, &b.bottom)
         && border_eq(&a.left, &b.left)
@@ -463,7 +491,7 @@ fn resolve_line_h(ls: LineSpacing, font_size: f32, tallest_lhr: Option<f32>) -> 
     }
 }
 
-fn para_runs_with_textboxes(para: &crate::model::Paragraph) -> Vec<&Run> {
+fn para_runs_with_textboxes(para: &Paragraph) -> Vec<&Run> {
     let mut out: Vec<&Run> = para.runs.iter().collect();
     for tb in &para.textboxes {
         for tp in &tb.paragraphs {
@@ -498,7 +526,7 @@ pub(super) struct PageBuilder {
     pub(super) content: Content,
     pub(super) links: Vec<LinkAnnotation>,
     pub(super) footnote_ids: Vec<u32>,
-    pub(super) alpha_states: std::collections::HashSet<u8>,
+    pub(super) alpha_states: HashSet<u8>,
     pub(super) gradient_specs: Vec<GradientSpec>,
 
     // Cross-page running state
@@ -513,7 +541,7 @@ pub(super) struct PageBuilder {
     all_contents: Vec<Content>,
     all_links: Vec<Vec<LinkAnnotation>>,
     all_footnote_ids: Vec<Vec<u32>>,
-    all_alpha_states: Vec<std::collections::HashSet<u8>>,
+    all_alpha_states: Vec<HashSet<u8>>,
     all_gradient_specs: Vec<Vec<GradientSpec>>,
     page_section_indices: Vec<(usize, bool)>,
     all_styleref: Vec<HashMap<String, String>>,
@@ -526,7 +554,7 @@ impl PageBuilder {
             content: Content::new(),
             links: Vec::new(),
             footnote_ids: Vec::new(),
-            alpha_states: std::collections::HashSet::new(),
+            alpha_states: HashSet::new(),
             gradient_specs: Vec::new(),
             styleref_running: HashMap::new(),
             styleref_page_first: HashMap::new(),
@@ -564,8 +592,7 @@ impl PageBuilder {
         self.all_contents.push(Content::new());
         self.all_links.push(Vec::new());
         self.all_footnote_ids.push(Vec::new());
-        self.all_alpha_states
-            .push(std::collections::HashSet::new());
+        self.all_alpha_states.push(HashSet::new());
         self.all_gradient_specs.push(Vec::new());
         self.page_section_indices.push((sect_idx, false));
         self.all_styleref.push(self.styleref_running.clone());
@@ -575,6 +602,32 @@ impl PageBuilder {
 
     fn page_count(&self) -> usize {
         self.all_contents.len()
+    }
+
+    fn is_at_page_top(&self, sp: &SectionProperties) -> bool {
+        (self.slot_top - (sp.page_height - sp.margin_top)).abs() < 1.0
+    }
+
+    /// Advance to the next column if available, otherwise flush the current page.
+    fn advance_column_or_page(
+        &mut self,
+        current_col: &mut usize,
+        col_count: usize,
+        sect_idx: usize,
+        sp: &SectionProperties,
+        effective_margin_bottom: &mut f32,
+        ctx: &RenderContext,
+    ) {
+        if *current_col + 1 < col_count {
+            *current_col += 1;
+            self.slot_top = effective_slot_top(sp, false, ctx);
+        } else {
+            *current_col = 0;
+            self.flush_page(sect_idx);
+            self.slot_top = effective_slot_top(sp, false, ctx);
+            *effective_margin_bottom = compute_effective_margin_bottom(sp, false, ctx);
+            self.is_first_page_of_section = false;
+        }
     }
 }
 
@@ -632,8 +685,7 @@ fn embed_single_image(
 
             let smask_ref = if has_alpha {
                 let alpha_data: Vec<u8> = rgba.pixels().map(|p| p.0[3]).collect();
-                let compressed_alpha =
-                    miniz_oxide::deflate::compress_to_vec_zlib(&alpha_data, 6);
+                let compressed_alpha = miniz_oxide::deflate::compress_to_vec_zlib(&alpha_data, 6);
                 let mask_ref = alloc();
                 let mut mask = pdf.image_xobject(mask_ref, &compressed_alpha);
                 mask.filter(Filter::FlateDecode);
@@ -918,8 +970,7 @@ fn embed_all_images(
                         }
                     }
                     for (fi_idx, fi) in para.floating_images.iter().enumerate() {
-                        let name =
-                            embed_single_image(&fi.image, &mut image_xobjects, pdf, alloc);
+                        let name = embed_single_image(&fi.image, &mut image_xobjects, pdf, alloc);
                         floating_image_pdf_names.insert((global_block_idx, fi_idx), name);
                     }
                 }
@@ -947,8 +998,7 @@ fn embed_all_images(
                     for block in &hf.blocks {
                         if let Block::Paragraph(para) = block {
                             if let Some(img) = &para.image {
-                                let name =
-                                    embed_single_image(img, &mut image_xobjects, pdf, alloc);
+                                let name = embed_single_image(img, &mut image_xobjects, pdf, alloc);
                                 hf_image_names.insert((si, hf_type, pi), name);
                             }
                             for (ri, run) in para.runs.iter().enumerate() {
@@ -995,6 +1045,14 @@ fn srgb_to_linear(c: u8) -> f32 {
     }
 }
 
+fn srgb_to_linear_rgb(c: [u8; 3]) -> [f32; 3] {
+    [
+        srgb_to_linear(c[0]),
+        srgb_to_linear(c[1]),
+        srgb_to_linear(c[2]),
+    ]
+}
+
 #[allow(clippy::too_many_arguments)]
 fn assemble_pdf_pages(
     pdf: &mut Pdf,
@@ -1004,7 +1062,7 @@ fn assemble_pdf_pages(
     all_contents: Vec<Content>,
     all_hf_contents: &mut Vec<Option<Content>>,
     all_page_links: &[Vec<LinkAnnotation>],
-    all_page_alpha_states: &[std::collections::HashSet<u8>],
+    all_page_alpha_states: &[HashSet<u8>],
     all_page_gradient_specs: &[Vec<GradientSpec>],
     page_section_indices: &[(usize, bool)],
     seen_fonts: &HashMap<String, FontEntry>,
@@ -1038,7 +1096,7 @@ fn assemble_pdf_pages(
         })
         .collect();
 
-    let all_alpha_values: std::collections::HashSet<u8> = all_page_alpha_states
+    let all_alpha_values: HashSet<u8> = all_page_alpha_states
         .iter()
         .flat_map(|s| s.iter().copied())
         .collect();
@@ -1067,16 +1125,8 @@ fn assemble_pdf_pages(
                         let fref = alloc();
                         pdf.exponential_function(fref)
                             .domain([0.0, 1.0])
-                            .c0([
-                                srgb_to_linear(c0[0]),
-                                srgb_to_linear(c0[1]),
-                                srgb_to_linear(c0[2]),
-                            ])
-                            .c1([
-                                srgb_to_linear(c1[0]),
-                                srgb_to_linear(c1[1]),
-                                srgb_to_linear(c1[2]),
-                            ])
+                            .c0(srgb_to_linear_rgb(c0))
+                            .c1(srgb_to_linear_rgb(c1))
                             .n(1.0);
                         fref
                     } else {
@@ -1085,20 +1135,10 @@ fn assemble_pdf_pages(
                             .windows(2)
                             .map(|pair| {
                                 let fref = alloc();
-                                let c0 = pair[0].0;
-                                let c1 = pair[1].0;
                                 pdf.exponential_function(fref)
                                     .domain([0.0, 1.0])
-                                    .c0([
-                                        srgb_to_linear(c0[0]),
-                                        srgb_to_linear(c0[1]),
-                                        srgb_to_linear(c0[2]),
-                                    ])
-                                    .c1([
-                                        srgb_to_linear(c1[0]),
-                                        srgb_to_linear(c1[1]),
-                                        srgb_to_linear(c1[2]),
-                                    ])
+                                    .c0(srgb_to_linear_rgb(pair[0].0))
+                                    .c1(srgb_to_linear_rgb(pair[1].0))
                                     .n(1.0);
                                 fref
                             })
@@ -1108,8 +1148,7 @@ fn assemble_pdf_pages(
                             .iter()
                             .map(|s| s.1)
                             .collect();
-                        let encode: Vec<f32> =
-                            sub_refs.iter().flat_map(|_| [0.0, 1.0]).collect();
+                        let encode: Vec<f32> = sub_refs.iter().flat_map(|_| [0.0, 1.0]).collect();
 
                         let stitch_ref = alloc();
                         pdf.stitching_function(stitch_ref)
@@ -1142,8 +1181,8 @@ fn assemble_pdf_pages(
                             None,
                             None,
                             Some([
-                                0.4124, 0.2126, 0.0193, 0.3576, 0.7152, 0.1192,
-                                0.1805, 0.0722, 0.9505,
+                                0.4124, 0.2126, 0.0193, 0.3576, 0.7152, 0.1192, 0.1805, 0.0722,
+                                0.9505,
                             ]),
                         );
                     shading
@@ -1209,22 +1248,18 @@ fn assemble_pdf_pages(
                     xobjects.pair(Name(name.as_bytes()), *xobj_ref);
                 }
             }
-            let alpha_set = all_page_alpha_states.get(i);
-            if alpha_set.is_some_and(|s| !s.is_empty()) {
-                let alpha_set = alpha_set.unwrap();
+            if let Some(alpha_set) = all_page_alpha_states.get(i).filter(|s| !s.is_empty()) {
                 let mut gs_dict = resources.ext_g_states();
                 for &pct in alpha_set {
                     let gs_name = format!("GSa{pct}");
-                    let gs_ref = *alpha_gs_refs.get(&pct).unwrap();
+                    let gs_ref = alpha_gs_refs[&pct];
                     gs_dict.pair(Name(gs_name.as_bytes()), gs_ref);
                 }
             }
-            if let Some(pat_refs) = all_page_pattern_refs.get(i) {
-                if !pat_refs.is_empty() {
-                    let mut patterns = resources.patterns();
-                    for (name, pat_ref) in pat_refs {
-                        patterns.pair(Name(name.as_bytes()), *pat_ref);
-                    }
+            if let Some(pat_refs) = all_page_pattern_refs.get(i).filter(|p| !p.is_empty()) {
+                let mut patterns = resources.patterns();
+                for (name, pat_ref) in pat_refs {
+                    patterns.pair(Name(name.as_bytes()), *pat_ref);
                 }
             }
         }
@@ -1253,14 +1288,15 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
     let t_fonts = t0.elapsed();
 
-    let embedded = embed_all_images(doc, &mut pdf, &mut alloc);
-    let image_pdf_names = embedded.image_pdf_names;
-    let inline_image_pdf_names = embedded.inline_image_pdf_names;
-    let floating_image_pdf_names = embedded.floating_image_pdf_names;
-    let image_xobjects = embedded.image_xobjects;
-    let hf_image_names = embedded.hf_image_names;
-    let hf_inline_image_names = embedded.hf_inline_image_names;
-    let hf_floating_image_names = embedded.hf_floating_image_names;
+    let EmbeddedImages {
+        image_pdf_names,
+        inline_image_pdf_names,
+        floating_image_pdf_names,
+        image_xobjects,
+        hf_image_names,
+        hf_inline_image_names,
+        hf_floating_image_names,
+    } = embed_all_images(doc, &mut pdf, &mut alloc);
 
     let t_images = t0.elapsed();
 
@@ -1298,8 +1334,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     let initial_slot_top = effective_slot_top(cur_sp, true, &ctx);
     let mut pb = PageBuilder::new(initial_slot_top);
     let mut prev_space_after: f32 = 0.0;
-    let mut effective_margin_bottom: f32 =
-        compute_effective_margin_bottom(cur_sp, true, &ctx);
+    let mut effective_margin_bottom: f32 = compute_effective_margin_bottom(cur_sp, true, &ctx);
     let mut global_block_idx: usize = 0;
 
     for (sect_idx, section) in doc.sections.iter().enumerate() {
@@ -1337,8 +1372,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     }
 
                     pb.slot_top = effective_slot_top(sp, true, &ctx);
-                    effective_margin_bottom =
-                        compute_effective_margin_bottom(sp, true, &ctx);
+                    effective_margin_bottom = compute_effective_margin_bottom(sp, true, &ctx);
                 }
                 SectionBreakType::Continuous => {
                     // No forced break; geometry updates on next page
@@ -1368,7 +1402,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         };
         let mut current_col: usize = 0;
 
-        let adjacent_para = |idx: usize| -> Option<&crate::model::Paragraph> {
+        let adjacent_para = |idx: usize| -> Option<&Paragraph> {
             match section.blocks.get(idx)? {
                 Block::Paragraph(p) => Some(p),
                 Block::Table(_) => None,
@@ -1393,17 +1427,12 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                     // Handle explicit page breaks
                     if para.page_break_before {
-                        let at_top =
-                            (pb.slot_top - (cur_sp.page_height - cur_sp.margin_top)).abs() < 1.0;
+                        let at_top = pb.is_at_page_top(cur_sp);
                         if !at_top {
                             pb.flush_page(sect_idx);
-                            pb.slot_top =
-                                effective_slot_top(cur_sp, false, &ctx);
-                            effective_margin_bottom = compute_effective_margin_bottom(
-                                cur_sp,
-                                false,
-                                &ctx,
-                            );
+                            pb.slot_top = effective_slot_top(cur_sp, false, &ctx);
+                            effective_margin_bottom =
+                                compute_effective_margin_bottom(cur_sp, false, &ctx);
                             pb.is_first_page_of_section = false;
                             current_col = 0;
                         }
@@ -1416,24 +1445,15 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                     // Handle explicit column breaks
                     if para.column_break_before && col_count > 1 {
-                        if current_col + 1 < col_count {
-                            current_col += 1;
-                            pb.slot_top =
-                                effective_slot_top(cur_sp, false, &ctx);
-                            prev_space_after = 0.0;
-                        } else {
-                            current_col = 0;
-                            pb.flush_page(sect_idx);
-                            pb.slot_top =
-                                effective_slot_top(cur_sp, false, &ctx);
-                            effective_margin_bottom = compute_effective_margin_bottom(
-                                cur_sp,
-                                false,
-                                &ctx,
-                            );
-                            pb.is_first_page_of_section = false;
-                            prev_space_after = 0.0;
-                        }
+                        pb.advance_column_or_page(
+                            &mut current_col,
+                            col_count,
+                            sect_idx,
+                            cur_sp,
+                            &mut effective_margin_bottom,
+                            &ctx,
+                        );
+                        prev_space_after = 0.0;
                     }
 
                     let next_para = adjacent_para(block_idx + 1);
@@ -1562,8 +1582,12 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         let first_line_h = if let Some(label_fs) = para.list_label_font_size {
                             if label_fs > font_size {
                                 resolve_line_h(effective_ls, label_fs, tallest_lhr)
-                            } else { line_h }
-                        } else { line_h };
+                            } else {
+                                line_h
+                            }
+                        } else {
+                            line_h
+                        };
                         if num_lines <= 1 {
                             first_line_h
                         } else {
@@ -1572,7 +1596,6 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     };
 
                     for fi in &para.floating_images {
-                        use crate::model::WrapType;
                         let reserve = match fi.wrap_type {
                             WrapType::TopAndBottom => true,
                             WrapType::Square | WrapType::Tight | WrapType::Through => {
@@ -1591,10 +1614,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                     for tb in &para.textboxes {
                         let reserve = match tb.wrap_type {
-                            crate::model::WrapType::TopAndBottom => true,
-                            crate::model::WrapType::Square => {
-                                tb.width_pt >= text_width * 0.9
-                            }
+                            WrapType::TopAndBottom => true,
+                            WrapType::Square => tb.width_pt >= text_width * 0.9,
                             _ => false,
                         };
                         if reserve {
@@ -1624,8 +1645,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         .unwrap_or(0.0);
 
                     let needed = inter_gap + bdr_top_pad + content_h;
-                    let at_page_top =
-                        (pb.slot_top - (cur_sp.page_height - cur_sp.margin_top)).abs() < 1.0;
+                    let at_page_top = pb.is_at_page_top(cur_sp);
 
                     let keep_next_extra = if para.keep_next {
                         let mut extra = 0.0;
@@ -1659,7 +1679,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         0.0
                     };
 
-                    if !at_page_top && pb.slot_top - needed - keep_next_extra < effective_margin_bottom
+                    if !at_page_top
+                        && pb.slot_top - needed - keep_next_extra < effective_margin_bottom
                     {
                         let available = pb.slot_top - inter_gap - effective_margin_bottom;
                         let first_line_h = tallest_lhr
@@ -1711,28 +1732,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 ctx.fonts,
                             );
 
-                            if current_col + 1 < col_count {
-                                current_col += 1;
-                                pb.slot_top = effective_slot_top(
-                                    cur_sp,
-                                    false,
-                                    &ctx,
-                                );
-                            } else {
-                                current_col = 0;
-                                pb.flush_page(sect_idx);
-                                pb.slot_top = effective_slot_top(
-                                    cur_sp,
-                                    false,
-                                    &ctx,
-                                );
-                                effective_margin_bottom = compute_effective_margin_bottom(
-                                    cur_sp,
-                                    false,
-                                    &ctx,
-                                );
-                                pb.is_first_page_of_section = false;
-                            }
+                            pb.advance_column_or_page(
+                                &mut current_col,
+                                col_count,
+                                sect_idx,
+                                cur_sp,
+                                &mut effective_margin_bottom,
+                                &ctx,
+                            );
 
                             let rest = &lines[lines_that_fit..];
                             let rest_content_h = rest.len() as f32 * line_h;
@@ -1764,28 +1771,19 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             continue;
                         }
 
-                        if current_col + 1 < col_count {
-                            current_col += 1;
-                            pb.slot_top =
-                                effective_slot_top(cur_sp, false, &ctx);
-                        } else {
-                            current_col = 0;
-                            pb.flush_page(sect_idx);
-                            pb.slot_top =
-                                effective_slot_top(cur_sp, false, &ctx);
-                            effective_margin_bottom = compute_effective_margin_bottom(
-                                cur_sp,
-                                false,
-                                &ctx,
-                            );
-                            pb.is_first_page_of_section = false;
-                        }
+                        pb.advance_column_or_page(
+                            &mut current_col,
+                            col_count,
+                            sect_idx,
+                            cur_sp,
+                            &mut effective_margin_bottom,
+                            &ctx,
+                        );
                         inter_gap = 0.0;
                     }
 
                     // Suppress space_before at the top of a page
-                    let at_new_page_top = !pb.all_contents.is_empty()
-                        && (pb.slot_top - (cur_sp.page_height - cur_sp.margin_top)).abs() < 1.0;
+                    let at_new_page_top = !pb.all_contents.is_empty() && pb.is_at_page_top(cur_sp);
                     if at_new_page_top {
                         if pb.is_first_page_of_section {
                             // Section break: collapse with the previous section's trailing space_after
@@ -1803,30 +1801,19 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     let para_text_width = (col_w - para.indent_left - para.indent_right).max(1.0);
                     let label_x = col_x + para.indent_left - para.indent_hanging;
 
-                    // Behind-doc floating images (rendered first, behind everything)
-                    for (fi_idx, fi) in para.floating_images.iter().enumerate().filter(|(_, f)| f.behind_doc) {
-                        if let Some(pdf_name) =
-                            floating_image_pdf_names.get(&(global_block_idx, fi_idx))
-                        {
-                            let img = &fi.image;
-                            let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
-                            let fi_y_top = resolve_fi_y_top(fi, sp, pb.slot_top);
-                            let fi_y_bottom = fi_y_top - img.display_height;
-                            pb.content.save_state();
-                            pb.content.transform([
-                                img.display_width,
-                                0.0,
-                                0.0,
-                                img.display_height,
-                                fi_x,
-                                fi_y_bottom,
-                            ]);
-                            pb.content.x_object(Name(pdf_name.as_bytes()));
-                            pb.content.restore_state();
-                        }
-                    }
-
-                    // Render behind-doc textboxes before paragraph content
+                    // Render behind-doc layer: floating images + textboxes
+                    render_floating_images(
+                        &para.floating_images,
+                        true,
+                        global_block_idx,
+                        &floating_image_pdf_names,
+                        sp,
+                        col_x,
+                        col_w,
+                        text_width,
+                        pb.slot_top,
+                        &mut pb.content,
+                    );
                     for tb in para.textboxes.iter().filter(|t| t.behind_doc) {
                         render_single_textbox(
                             tb,
@@ -1876,29 +1863,19 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         pb.content.restore_state();
                     }
 
-                    // Normal floating images (not behind doc)
-                    for (fi_idx, fi) in para.floating_images.iter().enumerate().filter(|(_, f)| !f.behind_doc) {
-                        if let Some(pdf_name) =
-                            floating_image_pdf_names.get(&(global_block_idx, fi_idx))
-                        {
-                            let img = &fi.image;
-                            let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
-                            let fi_y_top = resolve_fi_y_top(fi, sp, pb.slot_top);
-                            let fi_y_bottom = fi_y_top - img.display_height;
-                            pb.content.save_state();
-                            pb.content.transform([
-                                img.display_width,
-                                0.0,
-                                0.0,
-                                img.display_height,
-                                fi_x,
-                                fi_y_bottom,
-                            ]);
-                            pb.content.x_object(Name(pdf_name.as_bytes()));
-                            pb.content.restore_state();
-                        }
-                    }
-
+                    // Render foreground layer: floating images + textboxes
+                    render_floating_images(
+                        &para.floating_images,
+                        false,
+                        global_block_idx,
+                        &floating_image_pdf_names,
+                        sp,
+                        col_x,
+                        col_w,
+                        text_width,
+                        pb.slot_top,
+                        &mut pb.content,
+                    );
                     for tb in para.textboxes.iter().filter(|t| !t.behind_doc) {
                         render_single_textbox(
                             tb,
@@ -1915,12 +1892,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     }
 
                     for conn in &para.connectors {
-                        render_connector(
-                            conn,
-                            &mut pb.content,
-                            col_x,
-                            pb.slot_top,
-                        );
+                        render_connector(conn, &mut pb.content, col_x, pb.slot_top);
                     }
 
                     if let Some(ref ic) = para.inline_chart {
@@ -1930,7 +1902,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 Alignment::Right => (col_w - ic.display_width).max(0.0),
                                 _ => 0.0,
                             };
-                        let default_font = ctx.fonts
+                        let default_font = ctx
+                            .fonts
                             .keys()
                             .next()
                             .map(|s| s.as_str())
@@ -2029,36 +2002,34 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         let box_left = col_x - bdr_left_outset;
                         let box_right = col_x + col_w + bdr_right_outset;
 
-                        let draw_h_border =
-                            |content: &mut Content, b: &crate::model::ParagraphBorder, y: f32| {
-                                let [r, g, b_c] = b.color;
-                                content.save_state();
-                                content.set_line_width(b.width_pt);
-                                content.set_stroke_rgb(
-                                    r as f32 / 255.0,
-                                    g as f32 / 255.0,
-                                    b_c as f32 / 255.0,
-                                );
-                                content.move_to(box_left, y);
-                                content.line_to(box_right, y);
-                                content.stroke();
-                                content.restore_state();
-                            };
-                        let draw_v_border =
-                            |content: &mut Content, b: &crate::model::ParagraphBorder, x: f32| {
-                                let [r, g, b_c] = b.color;
-                                content.save_state();
-                                content.set_line_width(b.width_pt);
-                                content.set_stroke_rgb(
-                                    r as f32 / 255.0,
-                                    g as f32 / 255.0,
-                                    b_c as f32 / 255.0,
-                                );
-                                content.move_to(x, box_top);
-                                content.line_to(x, box_bottom);
-                                content.stroke();
-                                content.restore_state();
-                            };
+                        let draw_h_border = |content: &mut Content, b: &ParagraphBorder, y: f32| {
+                            let [r, g, b_c] = b.color;
+                            content.save_state();
+                            content.set_line_width(b.width_pt);
+                            content.set_stroke_rgb(
+                                r as f32 / 255.0,
+                                g as f32 / 255.0,
+                                b_c as f32 / 255.0,
+                            );
+                            content.move_to(box_left, y);
+                            content.line_to(box_right, y);
+                            content.stroke();
+                            content.restore_state();
+                        };
+                        let draw_v_border = |content: &mut Content, b: &ParagraphBorder, x: f32| {
+                            let [r, g, b_c] = b.color;
+                            content.save_state();
+                            content.set_line_width(b.width_pt);
+                            content.set_stroke_rgb(
+                                r as f32 / 255.0,
+                                g as f32 / 255.0,
+                                b_c as f32 / 255.0,
+                            );
+                            content.move_to(x, box_top);
+                            content.line_to(x, box_bottom);
+                            content.stroke();
+                            content.restore_state();
+                        };
 
                         let prev_has_between = prev_para.is_some_and(|pp| {
                             pp.borders.between.is_some()
@@ -2097,11 +2068,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             if !pb.footnote_ids.contains(&id) {
                                 pb.footnote_ids.push(id);
                                 if let Some(footnote) = doc.footnotes.get(&id) {
-                                    let fn_height = compute_footnote_height(
-                                        footnote,
-                                        &ctx,
-                                        text_width,
-                                    );
+                                    let fn_height =
+                                        compute_footnote_height(footnote, &ctx, text_width);
                                     let separator_h = if pb.footnote_ids.len() == 1 {
                                         12.0
                                     } else {
@@ -2122,13 +2090,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                     if para.page_break_after {
                         pb.flush_page(sect_idx);
-                        pb.slot_top =
-                            effective_slot_top(cur_sp, false, &ctx);
-                        effective_margin_bottom = compute_effective_margin_bottom(
-                            cur_sp,
-                            false,
-                            &ctx,
-                        );
+                        pb.slot_top = effective_slot_top(cur_sp, false, &ctx);
+                        effective_margin_bottom =
+                            compute_effective_margin_bottom(cur_sp, false, &ctx);
                         pb.is_first_page_of_section = false;
                         prev_space_after = 0.0;
                         current_col = 0;
@@ -2208,7 +2172,6 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     pb.flush_page(doc.sections.len() - 1);
 
     let t_layout = t0.elapsed();
-
 
     // Phase 2b: column separator lines
     for (page_idx, content) in pb.all_contents.iter_mut().enumerate() {
@@ -2301,13 +2264,12 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
         // Per spec §17.16.5.59: in headers/footers of a printed document, STYLEREF
         // searches the current page top-to-bottom first, then backward to doc start.
-        let page_first = pb.all_first_styleref
+        let page_first = pb
+            .all_first_styleref
             .get(page_idx)
             .unwrap_or(&empty_styleref);
         let prev_running = if page_idx > 0 {
-            pb.all_styleref
-                .get(page_idx - 1)
-                .unwrap_or(&empty_styleref)
+            pb.all_styleref.get(page_idx - 1).unwrap_or(&empty_styleref)
         } else {
             &empty_styleref
         };
@@ -2455,7 +2417,9 @@ fn render_list_label(
         return;
     }
     let (label_font_name, label_bytes) = label_for_paragraph(para, fonts);
-    let label_color = para.list_label_color.or_else(|| para.runs.first().and_then(|r| r.color));
+    let label_color = para
+        .list_label_color
+        .or_else(|| para.runs.first().and_then(|r| r.color));
     if let Some([r, g, b]) = label_color {
         content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
     }

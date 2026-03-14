@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 use std::io::Read;
 
-use crate::model::{ConnectorShape, FieldCode, FloatingImage, InlineChart, Run, SmartArtDiagram, Textbox, VertAlign};
+use crate::model::{
+    ConnectorShape, FieldCode, FloatingImage, InlineChart, Run, SmartArtDiagram, Textbox, VertAlign,
+};
 
 use super::images::{RunDrawingResult, parse_run_drawing};
 use super::is_east_asian_char;
@@ -11,6 +13,9 @@ use super::styles::{
 };
 use super::textbox::parse_textbox_from_vml;
 use super::{WML_NS, highlight_color, parse_text_color, twips_to_pts, wml, wml_attr, wml_bool};
+
+const MC_NS: &str = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+const REL_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
 fn is_dynamic_field(instr: &str) -> bool {
     let keyword = instr.split_whitespace().next().unwrap_or("");
@@ -32,6 +37,16 @@ fn parse_styleref_arg(instr: &str) -> Option<String> {
     } else {
         Some(rest.split_whitespace().next()?.to_string())
     }
+}
+
+fn mc_choice_or_fallback<'a>(node: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
+    let choice = node
+        .children()
+        .find(|n| n.tag_name().namespace() == Some(MC_NS) && n.tag_name().name() == "Choice");
+    let fallback = node
+        .children()
+        .find(|n| n.tag_name().namespace() == Some(MC_NS) && n.tag_name().name() == "Fallback");
+    choice.or(fallback)
 }
 
 pub(super) struct ParsedRuns {
@@ -105,6 +120,24 @@ impl RunFormat {
             ..Run::default()
         }
     }
+
+    fn styled_run(&self) -> Run {
+        Run {
+            font_size: self.font_size,
+            font_name: self.font_name.clone(),
+            bold: self.bold,
+            italic: self.italic,
+            color: self.color,
+            ..Run::default()
+        }
+    }
+
+    fn superscript_run(&self) -> Run {
+        Run {
+            vertical_align: VertAlign::Superscript,
+            ..self.styled_run()
+        }
+    }
 }
 
 fn split_run_by_script(run: Run) -> Vec<Run> {
@@ -173,6 +206,67 @@ fn split_run_by_script(run: Run) -> Vec<Run> {
     }
 }
 
+fn collect_run_nodes<'a>(
+    parent: roxmltree::Node<'a, 'a>,
+    rels: &HashMap<String, String>,
+    out: &mut Vec<(roxmltree::Node<'a, 'a>, Option<String>, bool)>,
+) {
+    for child in parent.children() {
+        let name = child.tag_name().name();
+        let ns = child.tag_name().namespace();
+        let is_wml = ns == Some(WML_NS);
+        if is_wml && name == "r" {
+            out.push((child, None, false));
+        } else if is_wml && name == "hyperlink" {
+            let has_rid = child.attribute((REL_NS, "id")).is_some();
+            let has_anchor = child.attribute((WML_NS, "anchor")).is_some();
+            let is_anchor_only = has_anchor && !has_rid;
+            let url = child
+                .attribute((REL_NS, "id"))
+                .and_then(|rid| rels.get(rid))
+                .cloned();
+            for n in child
+                .children()
+                .filter(|n| n.tag_name().name() == "r" && n.tag_name().namespace() == Some(WML_NS))
+            {
+                out.push((n, url.clone(), is_anchor_only));
+            }
+        } else if is_wml && matches!(name, "ins" | "smartTag") {
+            collect_run_nodes(child, rels, out);
+        } else if is_wml && name == "del" {
+            // Final mode: skip deleted content entirely
+        } else if is_wml && name == "sdt" {
+            if let Some(content) = wml(child, "sdtContent") {
+                collect_run_nodes(content, rels, out);
+            }
+        } else if ns == Some(MC_NS) && name == "AlternateContent" {
+            if let Some(branch) = mc_choice_or_fallback(child) {
+                collect_run_nodes(branch, rels, out);
+            }
+        }
+    }
+}
+
+macro_rules! handle_drawing_result {
+    ($result:expr, $fmt:expr, $runs:expr, $floating_images:expr, $textboxes:expr,
+     $inline_chart:expr, $smartart:expr, $connectors:expr) => {
+        match $result {
+            Some(RunDrawingResult::Inline(img)) => {
+                $runs.push(Run {
+                    inline_image: Some(img),
+                    ..$fmt.minimal_run()
+                });
+            }
+            Some(RunDrawingResult::Floating(fi)) => $floating_images.push(fi),
+            Some(RunDrawingResult::TextBox(tb)) => $textboxes.push(tb),
+            Some(RunDrawingResult::Chart(ic)) => $inline_chart = Some(ic),
+            Some(RunDrawingResult::SmartArt(diagram)) => $smartart = Some(diagram),
+            Some(RunDrawingResult::Connector(c)) => $connectors.push(c),
+            None => {}
+        }
+    };
+}
+
 pub(super) fn parse_runs<R: Read + std::io::Seek>(
     para_node: roxmltree::Node,
     styles: &StylesInfo,
@@ -229,58 +323,6 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
         .and_then(|s| s.east_asia_font.as_deref())
         .or(styles.defaults.east_asia_font.as_deref());
 
-    const MC_NS: &str = "http://schemas.openxmlformats.org/markup-compatibility/2006";
-
-    fn collect_run_nodes<'a>(
-        parent: roxmltree::Node<'a, 'a>,
-        rels: &HashMap<String, String>,
-        out: &mut Vec<(roxmltree::Node<'a, 'a>, Option<String>, bool)>,
-    ) {
-        const MC_NS: &str = "http://schemas.openxmlformats.org/markup-compatibility/2006";
-        const REL_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-
-        for child in parent.children() {
-            let name = child.tag_name().name();
-            let ns = child.tag_name().namespace();
-            let is_wml = ns == Some(WML_NS);
-            if is_wml && name == "r" {
-                out.push((child, None, false));
-            } else if is_wml && name == "hyperlink" {
-                let has_rid = child.attribute((REL_NS, "id")).is_some();
-                let has_anchor = child.attribute((WML_NS, "anchor")).is_some();
-                let is_anchor_only = has_anchor && !has_rid;
-                let url = child
-                    .attribute((REL_NS, "id"))
-                    .and_then(|rid| rels.get(rid))
-                    .cloned();
-                for n in child.children().filter(|n| {
-                    n.tag_name().name() == "r" && n.tag_name().namespace() == Some(WML_NS)
-                }) {
-                    out.push((n, url.clone(), is_anchor_only));
-                }
-            } else if is_wml && name == "ins" {
-                collect_run_nodes(child, rels, out);
-            } else if is_wml && name == "del" {
-                // Final mode: skip deleted content entirely
-            } else if is_wml && name == "smartTag" {
-                collect_run_nodes(child, rels, out);
-            } else if is_wml && name == "sdt" {
-                if let Some(content) = wml(child, "sdtContent") {
-                    collect_run_nodes(content, rels, out);
-                }
-            } else if ns == Some(MC_NS) && name == "AlternateContent" {
-                let choice = child.children().find(|n| {
-                    n.tag_name().namespace() == Some(MC_NS) && n.tag_name().name() == "Choice"
-                });
-                let fallback = child.children().find(|n| {
-                    n.tag_name().namespace() == Some(MC_NS) && n.tag_name().name() == "Fallback"
-                });
-                if let Some(branch) = choice.or(fallback) {
-                    collect_run_nodes(branch, rels, out);
-                }
-            }
-        }
-    }
     let mut run_nodes: Vec<(roxmltree::Node, Option<String>, bool)> = Vec::new();
     collect_run_nodes(para_node, rels, &mut run_nodes);
 
@@ -290,7 +332,6 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
     let mut connectors: Vec<ConnectorShape> = Vec::new();
     let mut inline_chart: Option<InlineChart> = None;
     let mut smartart: Option<SmartArtDiagram> = None;
-    let mut has_page_break_before = false;
     let mut has_page_break_after = false;
     let mut has_column_break = false;
     let mut line_break_count: u32 = 0;
@@ -309,6 +350,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
             char_style_id_str.and_then(|id| styles.character_styles.get(id))
         };
 
+        let rfonts_node = rpr.and_then(|n| wml(n, "rFonts"));
         let fmt = RunFormat {
             font_size: rpr
                 .and_then(|n| wml_attr(n, "sz"))
@@ -316,20 +358,14 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                 .map(|hp| hp / 2.0)
                 .or_else(|| char_style.and_then(|cs| cs.font_size))
                 .unwrap_or(style_font_size),
-            font_name: {
-                let rfonts_node = rpr.and_then(|n| wml(n, "rFonts"));
-                rfonts_node
-                    .map(|rfonts| resolve_font_from_node(rfonts, theme, &style_font_name))
-                    .or_else(|| char_style.and_then(|cs| cs.font_name.clone()))
-                    .unwrap_or_else(|| style_font_name.clone())
-            },
-            east_asia_font_name: {
-                let rfonts_node = rpr.and_then(|n| wml(n, "rFonts"));
-                rfonts_node
-                    .and_then(|rfonts| resolve_east_asia_font_from_node(rfonts, theme))
-                    .or_else(|| char_style.and_then(|cs| cs.east_asia_font.clone()))
-                    .or_else(|| style_east_asia_font.map(|s| s.to_string()))
-            },
+            font_name: rfonts_node
+                .map(|rfonts| resolve_font_from_node(rfonts, theme, &style_font_name))
+                .or_else(|| char_style.and_then(|cs| cs.font_name.clone()))
+                .unwrap_or_else(|| style_font_name.clone()),
+            east_asia_font_name: rfonts_node
+                .and_then(|rfonts| resolve_east_asia_font_from_node(rfonts, theme))
+                .or_else(|| char_style.and_then(|cs| cs.east_asia_font.clone()))
+                .or_else(|| style_east_asia_font.map(|s| s.to_string())),
             bold: rpr
                 .and_then(|n| wml_bool(n, "b"))
                 .or_else(|| char_style.and_then(|cs| cs.bold))
@@ -414,39 +450,26 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                 let choice = child.children().find(|n| {
                     n.tag_name().namespace() == Some(MC_NS) && n.tag_name().name() == "Choice"
                 });
-                let fallback = child.children().find(|n| {
-                    n.tag_name().namespace() == Some(MC_NS) && n.tag_name().name() == "Fallback"
-                });
                 if let Some(branch) = choice {
                     for drawing in branch.children().filter(|n| {
                         n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "drawing"
                     }) {
-                        match parse_run_drawing(drawing, rels, zip, styles, theme, numbering) {
-                            Some(RunDrawingResult::Inline(img)) => {
-                                runs.push(Run {
-                                    inline_image: Some(img),
-                                    ..fmt.minimal_run()
-                                });
-                            }
-                            Some(RunDrawingResult::Floating(fi)) => {
-                                floating_images.push(fi);
-                            }
-                            Some(RunDrawingResult::TextBox(tb)) => {
-                                textboxes.push(tb);
-                            }
-                            Some(RunDrawingResult::Chart(ic)) => {
-                                inline_chart = Some(ic);
-                            }
-                            Some(RunDrawingResult::SmartArt(diagram)) => {
-                                smartart = Some(diagram);
-                            }
-                            Some(RunDrawingResult::Connector(c)) => {
-                                connectors.push(c);
-                            }
-                            None => {}
-                        }
+                        let result =
+                            parse_run_drawing(drawing, rels, zip, styles, theme, numbering);
+                        handle_drawing_result!(
+                            result,
+                            fmt,
+                            runs,
+                            floating_images,
+                            textboxes,
+                            inline_chart,
+                            smartart,
+                            connectors
+                        );
                     }
-                } else if let Some(branch) = fallback {
+                } else if let Some(branch) = child.children().find(|n| {
+                    n.tag_name().namespace() == Some(MC_NS) && n.tag_name().name() == "Fallback"
+                }) {
                     for pict in branch.descendants().filter(|n| {
                         n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "pict"
                     }) {
@@ -490,14 +513,9 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                                 let text = std::mem::take(&mut field_result_text);
                                 runs.push(Run {
                                     text,
-                                    font_size: fmt.font_size,
-                                    font_name: fmt.font_name.clone(),
-                                    bold: fmt.bold,
-                                    italic: fmt.italic,
-                                    color: fmt.color,
                                     field_code: Some(code),
                                     hyperlink_url: hyperlink_url.clone(),
-                                    ..Run::default()
+                                    ..fmt.styled_run()
                                 });
                             }
                             in_field = false;
@@ -514,8 +532,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                 }
                 "t" if !in_field || (in_field_result && !is_dynamic_field(&field_instr)) => {
                     if let Some(t) = child.text() {
-                        let normalized = t.replace('\n', " ");
-                        pending_text.push_str(&normalized);
+                        pending_text.push_str(&t.replace('\n', " "));
                     }
                 }
                 "t" if in_field_result && is_dynamic_field(&field_instr) => {
@@ -538,30 +555,17 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                 "drawing" if in_field => {}
                 "drawing" => {
                     flush_pending(&mut pending_text, &mut runs);
-                    match parse_run_drawing(child, rels, zip, styles, theme, numbering) {
-                        Some(RunDrawingResult::Inline(img)) => {
-                            runs.push(Run {
-                                inline_image: Some(img),
-                                ..fmt.minimal_run()
-                            });
-                        }
-                        Some(RunDrawingResult::Floating(fi)) => {
-                            floating_images.push(fi);
-                        }
-                        Some(RunDrawingResult::TextBox(tb)) => {
-                            textboxes.push(tb);
-                        }
-                        Some(RunDrawingResult::Chart(ic)) => {
-                            inline_chart = Some(ic);
-                        }
-                        Some(RunDrawingResult::SmartArt(diagram)) => {
-                            smartart = Some(diagram);
-                        }
-                        Some(RunDrawingResult::Connector(c)) => {
-                            connectors.push(c);
-                        }
-                        None => {}
-                    }
+                    let result = parse_run_drawing(child, rels, zip, styles, theme, numbering);
+                    handle_drawing_result!(
+                        result,
+                        fmt,
+                        runs,
+                        floating_images,
+                        textboxes,
+                        inline_chart,
+                        smartart,
+                        connectors
+                    );
                 }
                 "pict" if !in_field => {
                     if let Some(tb) =
@@ -577,28 +581,16 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                         .and_then(|v| v.parse::<u32>().ok())
                     {
                         runs.push(Run {
-                            font_size: fmt.font_size,
-                            font_name: fmt.font_name.clone(),
-                            bold: fmt.bold,
-                            italic: fmt.italic,
-                            color: fmt.color,
-                            vertical_align: VertAlign::Superscript,
                             footnote_id: Some(id),
-                            ..Run::default()
+                            ..fmt.superscript_run()
                         });
                     }
                 }
                 "footnoteRef" if !in_field => {
                     flush_pending(&mut pending_text, &mut runs);
                     runs.push(Run {
-                        font_size: fmt.font_size,
-                        font_name: fmt.font_name.clone(),
-                        bold: fmt.bold,
-                        italic: fmt.italic,
-                        color: fmt.color,
-                        vertical_align: VertAlign::Superscript,
                         is_footnote_ref_mark: true,
-                        ..Run::default()
+                        ..fmt.superscript_run()
                     });
                 }
                 "sym" if !in_field => {
@@ -632,12 +624,9 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
         }
     }
 
-    if ppr
+    let has_page_break_before = ppr
         .and_then(|ppr| wml_bool(ppr, "pageBreakBefore"))
-        .unwrap_or(false)
-    {
-        has_page_break_before = true;
-    }
+        .unwrap_or(false);
 
     // Empty paragraphs with explicit font sizing in their paragraph mark (pPr/rPr)
     // need a synthetic run so the renderer computes the correct line height.

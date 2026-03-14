@@ -9,6 +9,30 @@ use super::{DML_NS, read_zip_text};
 
 const DSP_NS: &str = "http://schemas.microsoft.com/office/drawing/2008/diagram";
 const DIAGRAM_URI: &str = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
+const EMU_PER_PT: f64 = 12700.0;
+
+fn dsp<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
+    node.children()
+        .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(DSP_NS))
+}
+
+fn dml<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
+    node.children()
+        .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(DML_NS))
+}
+
+fn has_dml(node: roxmltree::Node, name: &str) -> bool {
+    node.children()
+        .any(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(DML_NS))
+}
+
+fn emu_attr(node: roxmltree::Node, attr: &str) -> f32 {
+    (node
+        .attribute(attr)
+        .and_then(|v| v.parse::<f64>().ok())
+        .unwrap_or(0.0)
+        / EMU_PER_PT) as f32
+}
 
 pub(super) fn has_diagram_ref(container: roxmltree::Node) -> bool {
     container.descendants().any(|n| {
@@ -27,11 +51,7 @@ pub(super) fn parse_smartart_drawing<R: Read + std::io::Seek>(
 ) -> SmartArtDiagram {
     let mut shapes = Vec::new();
 
-    let drawing_target = rels
-        .values()
-        .find(|t| t.contains("diagrams/drawing"));
-
-    if let Some(target) = drawing_target {
+    if let Some(target) = rels.values().find(|t| t.contains("diagrams/drawing")) {
         let zip_path = target
             .strip_prefix('/')
             .map(String::from)
@@ -39,26 +59,16 @@ pub(super) fn parse_smartart_drawing<R: Read + std::io::Seek>(
 
         if let Some(xml) = read_zip_text(zip, &zip_path) {
             if let Ok(doc) = roxmltree::Document::parse(&xml) {
-                let sp_tree = doc
-                    .root()
-                    .children()
-                    .find(|n| n.tag_name().name() == "drawing" && n.tag_name().namespace() == Some(DSP_NS))
-                    .and_then(|d| {
-                        d.children().find(|n| {
-                            n.tag_name().name() == "spTree"
-                                && n.tag_name().namespace() == Some(DSP_NS)
-                        })
-                    });
+                let sp_tree = dsp(doc.root(), "drawing").and_then(|d| dsp(d, "spTree"));
 
                 if let Some(tree) = sp_tree {
-                    for sp in tree.children().filter(|n| {
-                        n.tag_name().name() == "sp"
-                            && n.tag_name().namespace() == Some(DSP_NS)
-                    }) {
-                        if let Some(shape) = parse_dsp_shape(sp, theme) {
-                            shapes.push(shape);
-                        }
-                    }
+                    shapes = tree
+                        .children()
+                        .filter(|n| {
+                            n.tag_name().name() == "sp" && n.tag_name().namespace() == Some(DSP_NS)
+                        })
+                        .filter_map(|sp| parse_dsp_shape(sp, theme))
+                        .collect();
                 }
             }
         }
@@ -72,50 +82,32 @@ pub(super) fn parse_smartart_drawing<R: Read + std::io::Seek>(
 }
 
 fn parse_dsp_shape(sp: roxmltree::Node, theme: &ThemeFonts) -> Option<SmartArtShape> {
-    let sp_pr = sp.children().find(|n| {
-        n.tag_name().name() == "spPr" && n.tag_name().namespace() == Some(DSP_NS)
-    })?;
+    let sp_pr = dsp(sp, "spPr")?;
+    let xfrm = dml(sp_pr, "xfrm")?;
+    let off = dml(xfrm, "off")?;
+    let ext = dml(xfrm, "ext")?;
 
-    let xfrm = sp_pr.children().find(|n| {
-        n.tag_name().name() == "xfrm" && n.tag_name().namespace() == Some(DML_NS)
-    })?;
+    let x = emu_attr(off, "x");
+    let y = emu_attr(off, "y");
+    let w = emu_attr(ext, "cx");
+    let h = emu_attr(ext, "cy");
 
-    let off = xfrm.children().find(|n| {
-        n.tag_name().name() == "off" && n.tag_name().namespace() == Some(DML_NS)
-    })?;
-    let ext = xfrm.children().find(|n| {
-        n.tag_name().name() == "ext" && n.tag_name().namespace() == Some(DML_NS)
-    })?;
-
-    let x = off.attribute("x").and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0) / 12700.0;
-    let y = off.attribute("y").and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0) / 12700.0;
-    let w = ext.attribute("cx").and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0) / 12700.0;
-    let h = ext.attribute("cy").and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0) / 12700.0;
-
-    let has_no_fill = sp_pr.children().any(|n| {
-        n.tag_name().name() == "noFill" && n.tag_name().namespace() == Some(DML_NS)
-    });
-
-    let fill = if has_no_fill {
+    let fill = if has_dml(sp_pr, "noFill") {
         None
     } else {
         parse_solid_fill(sp_pr, theme)
     };
 
-    let (stroke_color, stroke_width) = sp_pr
-        .children()
-        .find(|n| n.tag_name().name() == "ln" && n.tag_name().namespace() == Some(DML_NS))
+    let (stroke_color, stroke_width) = dml(sp_pr, "ln")
         .and_then(|ln| {
-            let has_no_fill =
-                ln.children().any(|n| n.tag_name().name() == "noFill" && n.tag_name().namespace() == Some(DML_NS));
-            if has_no_fill {
+            if has_dml(ln, "noFill") {
                 return None;
             }
             let color = parse_solid_fill(ln, theme)?;
             let width = ln
                 .attribute("w")
                 .and_then(|v| v.parse::<f32>().ok())
-                .map(|emu| emu / 12700.0)
+                .map(|emu| emu / EMU_PER_PT as f32)
                 .unwrap_or(0.75);
             Some((color, width))
         })
@@ -127,14 +119,12 @@ fn parse_dsp_shape(sp: roxmltree::Node, theme: &ThemeFonts) -> Option<SmartArtSh
         return None;
     }
 
-    let shape_type = parse_shape_geometry(sp_pr);
-
     Some(SmartArtShape {
-        x: x as f32,
-        y: y as f32,
-        width: w as f32,
-        height: h as f32,
-        shape_type,
+        x,
+        y,
+        width: w,
+        height: h,
+        shape_type: parse_shape_geometry(sp_pr),
         fill,
         stroke_color,
         stroke_width,
@@ -145,11 +135,7 @@ fn parse_dsp_shape(sp: roxmltree::Node, theme: &ThemeFonts) -> Option<SmartArtSh
 }
 
 fn parse_dsp_text(sp: roxmltree::Node, theme: &ThemeFonts) -> (String, f32, Option<[u8; 3]>) {
-    let tx_body = sp.children().find(|n| {
-        n.tag_name().name() == "txBody" && n.tag_name().namespace() == Some(DSP_NS)
-    });
-
-    let Some(body) = tx_body else {
+    let Some(body) = dsp(sp, "txBody") else {
         return (String::new(), 0.0, None);
     };
 
@@ -157,18 +143,18 @@ fn parse_dsp_text(sp: roxmltree::Node, theme: &ThemeFonts) -> (String, f32, Opti
     let mut font_size = 0.0_f32;
     let mut text_color: Option<[u8; 3]> = None;
 
-    for p in body.children().filter(|n| {
-        n.tag_name().name() == "p" && n.tag_name().namespace() == Some(DML_NS)
-    }) {
+    for p in body
+        .children()
+        .filter(|n| n.tag_name().name() == "p" && n.tag_name().namespace() == Some(DML_NS))
+    {
         let mut line_text = String::new();
-        for r in p.children().filter(|n| {
-            n.tag_name().name() == "r" && n.tag_name().namespace() == Some(DML_NS)
-        }) {
-            if let Some(rpr) = r.children().find(|n| {
-                n.tag_name().name() == "rPr" && n.tag_name().namespace() == Some(DML_NS)
-            }) {
-                if let Some(sz) = rpr.attribute("sz").and_then(|v| v.parse::<f32>().ok()) {
-                    if font_size == 0.0 {
+        for r in p
+            .children()
+            .filter(|n| n.tag_name().name() == "r" && n.tag_name().namespace() == Some(DML_NS))
+        {
+            if let Some(rpr) = dml(r, "rPr") {
+                if font_size == 0.0 {
+                    if let Some(sz) = rpr.attribute("sz").and_then(|v| v.parse::<f32>().ok()) {
                         font_size = sz / 100.0;
                     }
                 }
@@ -176,9 +162,7 @@ fn parse_dsp_text(sp: roxmltree::Node, theme: &ThemeFonts) -> (String, f32, Opti
                     text_color = parse_solid_fill(rpr, theme);
                 }
             }
-            if let Some(t) = r.children().find(|n| {
-                n.tag_name().name() == "t" && n.tag_name().namespace() == Some(DML_NS)
-            }) {
+            if let Some(t) = dml(r, "t") {
                 if let Some(text) = t.text() {
                     line_text.push_str(text);
                 }

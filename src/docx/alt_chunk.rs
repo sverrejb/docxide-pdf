@@ -140,10 +140,10 @@ fn fix_xhtml_void_tags(html: &str) -> String {
         };
 
         let tag_content = &rest[1..end];
+        let tc = tag_content.trim_start();
         let is_void = ["meta", "br", "hr", "img", "link", "input"]
             .iter()
             .any(|t| {
-                let tc = tag_content.trim_start();
                 tc.starts_with(t)
                     && tc.as_bytes()[t.len()..]
                         .first()
@@ -315,10 +315,7 @@ fn convert_html_to_blocks(
     doc: &roxmltree::Document,
     css: &HashMap<String, CssProperties>,
 ) -> Vec<Block> {
-    let body = match find_element(doc.root(), "body") {
-        Some(b) => b,
-        None => doc.root_element(),
-    };
+    let body = find_element(doc.root(), "body").unwrap_or_else(|| doc.root_element());
 
     let mut blocks = Vec::new();
     convert_children_to_blocks(body, css, &mut blocks);
@@ -570,7 +567,7 @@ fn find_element<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltr
 // --- Table conversion ---
 
 fn is_table_cell(n: &roxmltree::Node) -> bool {
-    n.is_element() && (n.tag_name().name() == "td" || n.tag_name().name() == "th")
+    n.is_element() && matches!(n.tag_name().name(), "td" | "th")
 }
 
 fn cell_colspan(td: &roxmltree::Node) -> usize {
@@ -608,9 +605,7 @@ fn convert_table(
 
     for tds in &rows_tds {
         let total_cols: usize = tds.iter().map(|td| cell_colspan(td)).sum();
-        if total_cols > max_cols {
-            max_cols = total_cols;
-        }
+        max_cols = max_cols.max(total_cols);
 
         let individual = tds.iter().filter(|td| cell_colspan(td) == 1).count();
         if individual > best_individual_cells {

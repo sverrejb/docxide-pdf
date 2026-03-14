@@ -1,6 +1,8 @@
 use std::collections::HashMap;
+use std::fmt::Write;
 use std::path::PathBuf;
 
+#[derive(Clone)]
 pub(super) struct CachedFace {
     pub(super) family: String,
     pub(super) bold: bool,
@@ -8,11 +10,12 @@ pub(super) struct CachedFace {
     pub(super) face_index: u32,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(super) struct CachedFile {
     pub(super) faces: Vec<CachedFace>,
 }
 
+#[derive(Default)]
 pub(super) struct FontCache {
     pub(super) dir_mtimes: HashMap<PathBuf, i64>,
     pub(super) files: HashMap<PathBuf, CachedFile>,
@@ -44,10 +47,7 @@ pub(super) fn cache_path() -> Option<PathBuf> {
 }
 
 pub(super) fn load_cache() -> FontCache {
-    let mut fc = FontCache {
-        dir_mtimes: HashMap::new(),
-        files: HashMap::new(),
-    };
+    let mut fc = FontCache::default();
     let Some(path) = cache_path() else {
         return fc;
     };
@@ -68,20 +68,19 @@ pub(super) fn load_cache() -> FontCache {
                 fc.dir_mtimes.insert(PathBuf::from(parts[1]), mtime);
             }
             Some("F") if parts.len() == 6 => {
-                let file_path = PathBuf::from(parts[1]);
-                let family = parts[2].to_string();
-                let bold = parts[3] == "1";
-                let italic = parts[4] == "1";
                 let Ok(face_index) = parts[5].parse::<u32>() else {
                     continue;
                 };
-                let entry = fc.files.entry(file_path).or_default();
-                entry.faces.push(CachedFace {
-                    family,
-                    bold,
-                    italic,
-                    face_index,
-                });
+                fc.files
+                    .entry(PathBuf::from(parts[1]))
+                    .or_default()
+                    .faces
+                    .push(CachedFace {
+                        family: parts[2].to_string(),
+                        bold: parts[3] == "1",
+                        italic: parts[4] == "1",
+                        face_index,
+                    });
             }
             Some("F") if parts.len() == 3 && parts[2] == "-" => {
                 fc.files.entry(PathBuf::from(parts[1])).or_default();
@@ -102,22 +101,22 @@ pub(super) fn save_cache(cache: &FontCache) {
     let mut out = String::from(CACHE_VERSION);
     out.push('\n');
     for (dir_path, mtime) in &cache.dir_mtimes {
-        out.push_str(&format!("D\t{}\t{}\n", dir_path.to_string_lossy(), mtime));
+        let _ = writeln!(out, "D\t{}\t{mtime}", dir_path.to_string_lossy());
     }
     for (file_path, cached) in &cache.files {
         let path_str = file_path.to_string_lossy();
         if cached.faces.is_empty() {
-            out.push_str(&format!("F\t{}\t-\n", path_str));
+            let _ = writeln!(out, "F\t{path_str}\t-");
         } else {
             for face in &cached.faces {
-                out.push_str(&format!(
-                    "F\t{}\t{}\t{}\t{}\t{}\n",
-                    path_str,
+                let _ = writeln!(
+                    out,
+                    "F\t{path_str}\t{}\t{}\t{}\t{}",
                     face.family,
-                    if face.bold { "1" } else { "0" },
-                    if face.italic { "1" } else { "0" },
+                    u8::from(face.bold),
+                    u8::from(face.italic),
                     face.face_index,
-                ));
+                );
             }
         }
     }
