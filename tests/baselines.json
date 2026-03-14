@@ -15,7 +15,7 @@
     "jaccard": 0.7273,
     "ssim": 0.9196,
     "text_boundary": 1.0,
-    "convert_ms": 11.5
+    "convert_ms": 11.2
   },
   "cases/case12": {
     "jaccard": 0.9826,
@@ -33,7 +33,7 @@
     "jaccard": 0.2089,
     "ssim": 0.8751,
     "text_boundary": 1.0,
-    "convert_ms": 7.0
+    "convert_ms": 6.8
   },
   "cases/case16": {
     "jaccard": 0.9088,
@@ -213,7 +213,7 @@
     "jaccard": 0.4707,
     "ssim": 0.9406,
     "text_boundary": 1.0,
-    "convert_ms": 36.2
+    "convert_ms": 35.3
   },
   "cases/case9": {
     "jaccard": 0.7057,
@@ -243,7 +243,7 @@
     "jaccard": 0.1691,
     "ssim": 0.3094,
     "text_boundary": 0.1632,
-    "convert_ms": 685.4
+    "convert_ms": 672.6
   },
   "scraped/bush_fires_act_c..": {
     "jaccard": 0.4102,
@@ -255,19 +255,19 @@
     "jaccard": 0.7923,
     "ssim": 0.9325,
     "text_boundary": 0.9885,
-    "convert_ms": 33.6
+    "convert_ms": 33.2
   },
   "scraped/classroom_weekly..": {
     "jaccard": 0.9413,
     "ssim": 0.9611,
     "text_boundary": 0.3043,
-    "convert_ms": 56.3
+    "convert_ms": 55.1
   },
   "scraped/croatian_grant_g..": {
     "jaccard": 0.0698,
     "ssim": 0.1813,
     "text_boundary": 0.032,
-    "convert_ms": 229.3
+    "convert_ms": 229.0
   },
   "scraped/croatian_regulat..": {
     "jaccard": 0.075,
@@ -285,13 +285,13 @@
     "jaccard": 0.6516,
     "ssim": 0.8247,
     "text_boundary": 0.9375,
-    "convert_ms": 35.8
+    "convert_ms": 35.2
   },
   "scraped/czech_grant_appl..": {
     "jaccard": 0.107,
     "ssim": 0.3082,
     "text_boundary": 0.5962,
-    "convert_ms": 32.2
+    "convert_ms": 30.6
   },
   "scraped/czech_tree_cutti..": {
     "jaccard": 0.7247,
@@ -309,37 +309,37 @@
     "jaccard": 0.0977,
     "ssim": 0.2269,
     "text_boundary": 0.2451,
-    "convert_ms": 43.0
+    "convert_ms": 42.0
   },
   "scraped/federal_procurem..": {
     "jaccard": 0.518,
     "ssim": 0.6689,
     "text_boundary": 0.6746,
-    "convert_ms": 47.5
+    "convert_ms": 46.5
   },
   "scraped/feminist_voice_d..": {
     "jaccard": 0.3356,
     "ssim": 0.6939,
     "text_boundary": 0.6936,
-    "convert_ms": 245.9
+    "convert_ms": 241.9
   },
   "scraped/go_math_grade4_g..": {
     "jaccard": 0.169,
     "ssim": 0.419,
     "text_boundary": 0.3469,
-    "convert_ms": 65.1
+    "convert_ms": 63.5
   },
   "scraped/indonesian_bench..": {
     "jaccard": 0.224,
     "ssim": 0.4299,
     "text_boundary": 0.3961,
-    "convert_ms": 154.6
+    "convert_ms": 152.2
   },
   "scraped/italian_evaluati..": {
     "jaccard": 0.3415,
     "ssim": 0.441,
     "text_boundary": 0.5797,
-    "convert_ms": 102.3
+    "convert_ms": 102.2
   },
   "scraped/italian_project_..": {
     "jaccard": 0.2827,
@@ -381,7 +381,7 @@
     "jaccard": 0.1347,
     "ssim": 0.2141,
     "text_boundary": 0.1838,
-    "convert_ms": 27.3
+    "convert_ms": 27.0
   },
   "scraped/polish_archery_r..": {
     "jaccard": 0.1498,
@@ -417,7 +417,7 @@
     "jaccard": 0.2021,
     "ssim": 0.5164,
     "text_boundary": 0.6264,
-    "convert_ms": 20.8
+    "convert_ms": 20.7
   },
   "scraped/seminary_hill_bo..": {
     "jaccard": 0.4906,
