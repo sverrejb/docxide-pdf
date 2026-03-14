@@ -1238,6 +1238,9 @@ fn assemble_pdf_pages(
             specs
                 .iter()
                 .map(|spec| {
+                    let srgb = |c: [u8; 3]| -> [f32; 3] {
+                        [c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0]
+                    };
                     let func_ref = if spec.stops.len() <= 2 {
                         let (c0, c1) = if spec.stops.len() >= 2 {
                             (spec.stops[0].0, spec.stops[spec.stops.len() - 1].0)
@@ -1247,8 +1250,8 @@ fn assemble_pdf_pages(
                         let fref = alloc();
                         pdf.exponential_function(fref)
                             .domain([0.0, 1.0])
-                            .c0(srgb_to_linear_rgb(c0))
-                            .c1(srgb_to_linear_rgb(c1))
+                            .c0(srgb(c0))
+                            .c1(srgb(c1))
                             .n(1.0);
                         fref
                     } else {
@@ -1259,8 +1262,8 @@ fn assemble_pdf_pages(
                                 let fref = alloc();
                                 pdf.exponential_function(fref)
                                     .domain([0.0, 1.0])
-                                    .c0(srgb_to_linear_rgb(pair[0].0))
-                                    .c1(srgb_to_linear_rgb(pair[1].0))
+                                    .c0(srgb(pair[0].0))
+                                    .c1(srgb(pair[1].0))
                                     .n(1.0);
                                 fref
                             })
@@ -1299,15 +1302,7 @@ fn assemble_pdf_pages(
                     shading
                         .shading_type(pdf_writer::types::FunctionShadingType::Axial)
                         .color_space()
-                        .cal_rgb(
-                            [0.9505, 1.0, 1.0890],
-                            None,
-                            None,
-                            Some([
-                                0.4124, 0.2126, 0.0193, 0.3576, 0.7152, 0.1192, 0.1805, 0.0722,
-                                0.9505,
-                            ]),
-                        );
+                        .device_rgb();
                     shading
                         .function(func_ref)
                         .coords([x0, y0, x1, y1])

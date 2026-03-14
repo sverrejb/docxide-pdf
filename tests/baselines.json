@@ -175,7 +175,7 @@
   },
   "cases/case38": {
     "jaccard": 0.9929,
-    "ssim": 0.9297,
+    "ssim": 0.9302,
     "text_boundary": 1.0,
     "convert_ms": 4.4
   },
@@ -450,7 +450,7 @@
     "convert_ms": 32.8
   },
   "scraped/vaccines_history..": {
-    "jaccard": 0.4155,
+    "jaccard": 0.4156,
     "ssim": 0.5181,
     "text_boundary": 0.1316,
     "convert_ms": 19.2
