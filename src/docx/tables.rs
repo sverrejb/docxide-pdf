@@ -29,6 +29,38 @@ fn border_or_fallback(inline: CellBorder, fallback: CellBorder) -> CellBorder {
     if inline.present { inline } else { fallback }
 }
 
+/// Flatten nested table content: extract all w:p nodes from a w:tbl's cells,
+/// skipping vMerge=continue cells to avoid duplicating merged content.
+fn collect_nested_table_paragraphs<'a>(
+    tbl: roxmltree::Node<'a, 'a>,
+    out: &mut Vec<roxmltree::Node<'a, 'a>>,
+) {
+    for tr in collect_block_nodes(tbl)
+        .into_iter()
+        .filter(|n| is_wml(n, "tr"))
+    {
+        for tc in collect_block_nodes(tr)
+            .into_iter()
+            .filter(|n| is_wml(n, "tc"))
+        {
+            let tc_pr = wml(tc, "tcPr");
+            let is_continue = tc_pr
+                .and_then(|pr| wml(pr, "vMerge"))
+                .is_some_and(|n| n.attribute((WML_NS, "val")) != Some("restart"));
+            if is_continue {
+                continue;
+            }
+            for n in collect_block_nodes(tc) {
+                if is_wml(&n, "p") {
+                    out.push(n);
+                } else if is_wml(&n, "tbl") {
+                    collect_nested_table_paragraphs(n, out);
+                }
+            }
+        }
+    }
+}
+
 pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
     node: roxmltree::Node,
     styles: &styles::StylesInfo,
@@ -221,11 +253,28 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                 .and_then(parse_hex_color);
 
             let mut cell_paras = Vec::new();
-            for p in collect_block_nodes(tc)
-                .into_iter()
-                .filter(|n| is_wml(n, "p"))
-            {
+            let block_nodes = collect_block_nodes(tc);
+            let mut p_nodes: Vec<roxmltree::Node> = Vec::new();
+            for n in &block_nodes {
+                if is_wml(n, "p") {
+                    p_nodes.push(*n);
+                } else if is_wml(n, "tbl") {
+                    collect_nested_table_paragraphs(*n, &mut p_nodes);
+                }
+            }
+            for p in p_nodes {
                 let parsed = parse_runs(p, styles, theme, rels, zip, numbering);
+                let mut runs = parsed.runs;
+                let has_text = runs.iter().any(|r| !r.text.is_empty() || r.is_tab);
+                let has_inline_images = runs.iter().any(|r| r.inline_image.is_some());
+                let (para_image, content_height) = if has_inline_images && !has_text {
+                    let idx = runs.iter().position(|r| r.inline_image.is_some());
+                    let img = idx.and_then(|i| runs[i].inline_image.take());
+                    let h = img.as_ref().map(|i| i.display_height).unwrap_or(0.0);
+                    (img, h)
+                } else {
+                    (None, 0.0)
+                };
                 let ppr = wml(p, "pPr");
                 let para_style_id = ppr
                     .and_then(|ppr| wml_attr(ppr, "pStyle"))
@@ -281,7 +330,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                     styles.defaults.space_after
                 });
                 cell_paras.push(Paragraph {
-                    runs: parsed.runs,
+                    runs,
                     alignment,
                     indent_left,
                     indent_right,
@@ -295,6 +344,8 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                     line_spacing,
                     space_before,
                     space_after,
+                    image: para_image,
+                    content_height,
                     ..Paragraph::default()
                 });
             }

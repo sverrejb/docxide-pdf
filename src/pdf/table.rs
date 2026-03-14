@@ -443,6 +443,9 @@ fn compute_row_layouts(
                             total_h += lines.len() as f32 * line_h;
                             lines
                         } else {
+                            if para.content_height > 0.0 {
+                                total_h += para.content_height;
+                            }
                             vec![]
                         };
 

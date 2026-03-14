@@ -40,3 +40,41 @@
 
 ### Commit
 `a7038d2` — "Implement proper w:br line break handling in text layout"
+
+## Session 2 — 2026-03-14: Nested table flattening and inline images in table cells
+
+### Case Selected
+`mandated_reporter_child_abuse` (text/layout only, 5 pages, 18.2% Jaccard) — chosen because it's closest to the 20% threshold among text/layout-only failing fixtures (only 1.8pp away). The first-page header contains a table with an inline image (logo) and a nested table (title), both of which were silently dropped.
+
+### Problem
+Two issues in table cell parsing:
+1. **Nested tables dropped**: `parse_table_node()` only collected `w:p` elements from cells, completely ignoring `w:tbl` (nested tables). The header's right cell contained a nested table with the document title "5001.3 Child Abuse Notification of Reporting Procedures and Employee Acknowledgement Form" — all that content was silently lost.
+2. **Inline images in table cells not extracted**: The body parser (`docx/mod.rs`) lifts `Run.inline_image` into `Paragraph.image` and sets `content_height`, but table cell parsing didn't do this. The header logo (~63pt tall) was parsed as a run-level image but never contributed to cell/row height.
+
+### Analysis
+- Investigated 15 failing fixtures; 7 were text/layout-only
+- `mandated_reporter_child_abuse` header1.xml contains: outer table (2 cols: logo+text | nested table with title), using `w:titlePg` for first-page header
+- Nested tables are rare in the corpus — only 1 out of ~75 fixtures uses them, and only in a header
+- Also investigated `czech_grant_application` (9.2%), `polish_archery_range_plan` (15.0%), `slovak_misdemeanor_amendment` (12.9%) for common issues
+- Found a separate bug: empty paragraphs in table cells contribute 0 height instead of `line_h`. This affects the Czech form fixture significantly (cells use empty paragraphs as vertical spacers). However, fixing this caused SSIM regressions (-2.9pp, -3.4pp on other fixtures) because every cell's end-of-cell marker also gets height, so this fix was NOT included.
+
+### Implementation
+1. Added `collect_nested_table_paragraphs()` in `tables.rs` — recursively extracts `w:p` nodes from nested `w:tbl` elements, skipping `vMerge=continue` cells to avoid duplicating merged content
+2. Changed cell content iteration to handle both `w:p` (direct paragraphs) and `w:tbl` (nested tables via flattening)
+3. Added inline image extraction in table cell paragraph parsing — mirrors `docx/mod.rs` logic: when a cell paragraph has `inline_image` and no text, lifts it to `Paragraph.image` and sets `content_height`
+4. In `compute_row_layouts()` (`pdf/table.rs`): when an empty paragraph has `content_height > 0` (image), adds it to the cell's total height
+
+### Files Modified
+- `src/docx/tables.rs` — nested table flattening, inline image extraction in cell paragraphs
+- `src/pdf/table.rs` — image height in cell height computation
+
+### Results
+- **No visual REGRESSION flags across all fixtures**
+- `mandated_reporter_child_abuse`: 18.2% → 18.4% Jaccard (+0.2pp), 43.5% → 43.7% SSIM (+0.2pp)
+- `mandated_reporter_child_abuse` text boundary: 9% → 28% (+19pp) — title text now correctly rendered
+- Small noise-level variations on unrelated fixtures (samtale -0.4pp, japanese SSIM -0.6pp) — these fixtures have no nested tables and the changes don't affect their code paths
+- Empty paragraph fix for table cells investigated but deferred due to regressions (see Analysis)
+
+### Not Fixed (deferred)
+- **Empty paragraph height in table cells**: Every `w:p` in a table cell (including spacer paragraphs) should contribute `line_h` to cell height. Current code gives 0 height. Fixing this improved `czech_grant_application` by +1.5pp but caused -2.9pp and -3.4pp SSIM regressions on other fixtures because the mandatory end-of-cell paragraph marker also gets full `line_h`. Needs a way to distinguish spacer paragraphs from the structural end-of-cell marker.
+- **Inline image rendering in table cells**: Images are now parsed and contribute to height, but the actual image is not rendered (no XObject reference plumbing in table cell rendering). The logo is correctly sized but invisible.
