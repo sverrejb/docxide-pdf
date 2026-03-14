@@ -132,12 +132,12 @@
   "cases/case34": {
     "jaccard": 0.9475,
     "ssim": 0.8035,
-    "text_boundary": 1.0
+    "text_boundary": 0.0
   },
   "cases/case36": {
     "jaccard": 0.9671,
     "ssim": 0.9138,
-    "text_boundary": 1.0
+    "text_boundary": 0.0
   },
   "cases/case38": {
     "jaccard": 0.9672,
@@ -187,7 +187,7 @@
   "scraped/air_pollution_pe..": {
     "jaccard": 0.1262,
     "ssim": 0.2982,
-    "text_boundary": 1.0
+    "text_boundary": 0.0
   },
   "scraped/brazilian_logist..": {
     "jaccard": 0.1691,
@@ -232,7 +232,7 @@
   "scraped/czech_grant_appl..": {
     "jaccard": 0.0919,
     "ssim": 0.3082,
-    "text_boundary": 1.0
+    "text_boundary": 0.0
   },
   "scraped/czech_tree_cutti..": {
     "jaccard": 0.5767,
@@ -275,14 +275,14 @@
     "text_boundary": 0.5797
   },
   "scraped/italian_project_..": {
-    "jaccard": 0.1124,
-    "ssim": 0.332,
+    "jaccard": 0.2827,
+    "ssim": 0.5702,
     "text_boundary": 0.1786
   },
   "scraped/japanese_interli..": {
-    "jaccard": 0.0592,
-    "ssim": 0.1934,
-    "text_boundary": 1.0
+    "jaccard": 0.0354,
+    "ssim": 0.1904,
+    "text_boundary": 0.1053
   },
   "scraped/learning_culture..": {
     "jaccard": 0.3311,

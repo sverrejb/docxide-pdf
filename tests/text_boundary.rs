@@ -167,7 +167,7 @@ impl CaseResult {
         if self.total_lines > 0 {
             self.matching_lines as f64 / self.total_lines as f64
         } else {
-            1.0
+            0.0
         }
     }
 }

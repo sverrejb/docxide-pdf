@@ -527,8 +527,9 @@ fn collect_text(node: roxmltree::Node) -> String {
 /// Strip leading/trailing whitespace-only runs from a block element's run list.
 /// Matches HTML rendering: whitespace at the start/end of block elements is ignored.
 fn trim_block_whitespace(runs: &mut Vec<Run>) {
-    while runs.first().is_some_and(|r| r.text.trim().is_empty()) {
-        runs.remove(0);
+    let start = runs.iter().position(|r| !r.text.trim().is_empty()).unwrap_or(runs.len());
+    if start > 0 {
+        runs.drain(..start);
     }
     while runs.last().is_some_and(|r| r.text.trim().is_empty()) {
         runs.pop();

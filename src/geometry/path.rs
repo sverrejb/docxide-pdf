@@ -371,7 +371,12 @@ fn arc_to_cubics(
         let a1 = angle + step;
 
         let half = step / 2.0;
-        let alpha = (4.0 / 3.0) * (1.0 - half.cos()) / half.sin();
+        let sin_half = half.sin();
+        let alpha = if sin_half.abs() < 1e-10 {
+            0.0
+        } else {
+            (4.0 / 3.0) * (1.0 - half.cos()) / sin_half
+        };
 
         let x0 = cx + wr * a0.cos();
         let y0 = cy + hr * a0.sin();

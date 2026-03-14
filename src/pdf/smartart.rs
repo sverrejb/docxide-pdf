@@ -110,10 +110,11 @@ pub(super) fn render_smartart(
                 &shape.shape_type,
             );
             match (has_fill, has_stroke) {
-                (true, true) => content.fill_nonzero_and_stroke(),
-                (true, false) => content.fill_nonzero(),
-                _ => content.stroke(),
-            };
+                (true, true) => { content.fill_nonzero_and_stroke(); }
+                (true, false) => { content.fill_nonzero(); }
+                (false, true) => { content.stroke(); }
+                (false, false) => {}
+            }
             content.restore_state();
         }
 

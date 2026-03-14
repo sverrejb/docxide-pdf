@@ -124,7 +124,10 @@ impl GuideEnv {
         if let Some(&val) = self.values.get(arg) {
             return val;
         }
-        arg.parse::<i64>().unwrap_or(0)
+        arg.parse::<i64>().unwrap_or_else(|_| {
+            log::debug!("Unknown shape guide variable: {arg:?}");
+            0
+        })
     }
 
     pub fn evaluate_guides(&mut self, guides: &[GuideDef]) {

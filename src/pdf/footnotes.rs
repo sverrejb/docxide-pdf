@@ -109,7 +109,7 @@ pub(super) fn render_page_footnotes(
         let Some(footnote) = footnotes.get(fn_id) else {
             continue;
         };
-        let display_num = footnote_display_order.get(fn_id).copied().unwrap_or(0);
+        let display_num = footnote_display_order.get(fn_id).copied().unwrap_or(1);
 
         for para in &footnote.paragraphs {
             let runs = substitute_ref_marks(&para.runs, display_num);

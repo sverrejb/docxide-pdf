@@ -477,7 +477,9 @@ fn compute_row_layouts(
                     if is_rotated {
                         total_h = cm.top + cm.bottom + max_rotated_line_w;
                     }
-                    max_h = max_h.max(total_h);
+                    if cell.v_merge != VMerge::Restart {
+                        max_h = max_h.max(total_h);
+                    }
                     CellLayout {
                         paragraphs,
                         total_height: total_h,
