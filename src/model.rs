@@ -317,6 +317,14 @@ pub struct ConnectorShape {
     pub connector_type: ConnectorType,
 }
 
+#[derive(Clone, Copy, Default)]
+pub enum TextAnchor {
+    #[default]
+    Top,
+    Middle,
+    Bottom,
+}
+
 pub enum ShapeFill {
     Solid([u8; 3]),
     LinearGradient {
@@ -335,10 +343,12 @@ pub struct Textbox {
     pub v_relative_from: VRelativeFrom,
     pub fill: Option<ShapeFill>,
     pub shape_type: ShapeGeometry,
+    pub stroke_color: Option<[u8; 3]>,
+    pub stroke_width: f32,
+    pub text_anchor: TextAnchor,
     pub margin_left: f32,
     pub margin_right: f32,
     pub margin_top: f32,
-    #[allow(dead_code)]
     pub margin_bottom: f32,
     pub wrap_type: WrapType,
     #[allow(dead_code)]

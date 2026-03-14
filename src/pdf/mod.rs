@@ -19,7 +19,8 @@ use crate::model::{
     Alignment, Block, ConnectorShape, ConnectorType, Document, EmbeddedImage, FieldCode,
     FloatingImage, HRelativeFrom, HeaderFooter, HorizontalPosition, ImageFormat, LineSpacing,
     Paragraph, ParagraphBorder, ParagraphBorders, Run, SectionBreakType, SectionProperties,
-    ShapeFill, ShapeGeometry, Table, Textbox, VRelativeFrom, VerticalPosition, WrapType,
+    ShapeFill, ShapeGeometry, Table, TextAnchor, Textbox, VRelativeFrom, VerticalPosition,
+    WrapType,
 };
 
 use footnotes::{compute_footnote_height, render_page_footnotes};
@@ -202,13 +203,77 @@ fn render_single_textbox(
         );
     }
 
+    if let Some(stroke) = tb.stroke_color {
+        if tb.stroke_width > 0.0 {
+            content.save_state();
+            content.set_line_width(tb.stroke_width);
+            content.set_stroke_rgb(
+                stroke[0] as f32 / 255.0,
+                stroke[1] as f32 / 255.0,
+                stroke[2] as f32 / 255.0,
+            );
+            draw_shape_path(
+                content,
+                tb_x,
+                tb_y_top - tb.height_pt,
+                tb.width_pt,
+                tb.height_pt,
+                &tb.shape_type,
+            );
+            content.stroke();
+            content.restore_state();
+        }
+    }
+
     let content_x = tb_x + tb.margin_left;
     let content_w = if tb.no_text_wrap {
         10000.0
     } else {
         (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0)
     };
-    let mut cursor_y = tb_y_top - tb.margin_top;
+
+    let anchor_offset = match tb.text_anchor {
+        TextAnchor::Top => 0.0,
+        TextAnchor::Middle | TextAnchor::Bottom => {
+            let empty_inline_imgs_pre: HashMap<usize, String> = HashMap::new();
+            let mut total_h = 0.0f32;
+            for tp in &tb.paragraphs {
+                let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
+                let tp_text_w = (content_w - tp.indent_left - tp.indent_right).max(1.0);
+                let text_hanging = if !tp.list_label.is_empty() {
+                    0.0
+                } else if tp.indent_hanging > 0.0 {
+                    tp.indent_hanging
+                } else {
+                    -tp.indent_first_line
+                };
+                let has_tabs = tp.runs.iter().any(|r| r.is_tab);
+                let lines = if has_tabs {
+                    build_tabbed_line(
+                        &tp.runs, ctx.fonts, &tp.tab_stops, tp.indent_left,
+                        tp_text_w, text_hanging, &empty_inline_imgs_pre,
+                    )
+                } else {
+                    build_paragraph_lines(
+                        &tp.runs, ctx.fonts, tp_text_w, text_hanging, &empty_inline_imgs_pre,
+                    )
+                };
+                let (fs, lhr, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
+                let lh = resolve_line_h(tp_ls, fs, lhr);
+                let n = lines.len().max(1) as f32;
+                total_h += tp.space_before + n * lh + tp.space_after;
+            }
+            let available = tb.height_pt - tb.margin_top - tb.margin_bottom;
+            let gap = (available - total_h).max(0.0);
+            match tb.text_anchor {
+                TextAnchor::Middle => gap / 2.0,
+                TextAnchor::Bottom => gap,
+                TextAnchor::Top => 0.0,
+            }
+        }
+    };
+
+    let mut cursor_y = tb_y_top - tb.margin_top - anchor_offset;
     let empty_inline_imgs: HashMap<usize, String> = HashMap::new();
     for tp in &tb.paragraphs {
         let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);

@@ -4,7 +4,7 @@ use std::io::Read;
 use crate::model::{
     Alignment, ConnectorShape, ConnectorType, CustomGeometry, CustomGuideDef, CustomPathCommand,
     CustomPathDef, HRelativeFrom, HorizontalPosition, LineSpacing, Paragraph, ShapeFill,
-    ShapeGeometry, Textbox, VRelativeFrom, WrapType,
+    ShapeGeometry, TextAnchor, Textbox, VRelativeFrom, WrapType,
 };
 
 use super::images::{extent_dimensions, parse_anchor_position};
@@ -528,6 +528,9 @@ pub(super) struct WspResult {
     pub(super) paragraphs: Vec<Paragraph>,
     pub(super) fill: Option<ShapeFill>,
     pub(super) shape_type: ShapeGeometry,
+    pub(super) stroke_color: Option<[u8; 3]>,
+    pub(super) stroke_width: f32,
+    pub(super) text_anchor: TextAnchor,
     pub(super) margin_top: f32,
     pub(super) margin_left: f32,
     pub(super) margin_bottom: f32,
@@ -557,13 +560,36 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
         .or_else(|| parse_style_fill(wsp, theme));
     let has_no_fill = sp_pr.is_some_and(|sp| find_dml(sp, "noFill").is_some());
 
+    let (stroke_color, stroke_width) = sp_pr
+        .and_then(|sp| find_dml(sp, "ln"))
+        .and_then(|ln| {
+            if find_dml(ln, "noFill").is_some() {
+                return None;
+            }
+            let color = parse_solid_fill(ln, theme)?;
+            let width = ln
+                .attribute("w")
+                .and_then(|v| v.parse::<f32>().ok())
+                .map(|emu| emu / 12700.0)
+                .unwrap_or(0.75);
+            Some((color, width))
+        })
+        .map_or((None, 0.0), |(c, w)| (Some(c), w));
+
     let shape_type = sp_pr.map(parse_shape_geometry).unwrap_or_default();
 
     let (margin_top, margin_left, margin_bottom, margin_right) = parse_body_margins(wsp);
 
-    let no_text_wrap = find_wps(wsp, "bodyPr")
+    let body_pr = find_wps(wsp, "bodyPr");
+    let no_text_wrap = body_pr
         .and_then(|bp| bp.attribute("wrap"))
         .is_some_and(|w| w == "none");
+
+    let text_anchor = match body_pr.and_then(|bp| bp.attribute("anchor")) {
+        Some("ctr") => TextAnchor::Middle,
+        Some("b") => TextAnchor::Bottom,
+        _ => TextAnchor::Top,
+    };
 
     let paragraphs = find_wps(wsp, "txbx")
         .and_then(|txbx| {
@@ -582,6 +608,9 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
         paragraphs,
         fill,
         shape_type,
+        stroke_color,
+        stroke_width,
+        text_anchor,
         margin_top,
         margin_left,
         margin_bottom,
@@ -772,6 +801,9 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         v_relative_from: v_relative,
         fill: None,
         shape_type: ShapeGeometry::default(),
+        stroke_color: None,
+        stroke_width: 0.0,
+        text_anchor: TextAnchor::Top,
         margin_left: 7.2,
         margin_right: 7.2,
         margin_top: 3.6,
@@ -838,6 +870,9 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                                 v_relative_from: v_relative,
                                 fill: wsp.fill,
                                 shape_type: wsp.shape_type,
+                                stroke_color: wsp.stroke_color,
+                                stroke_width: wsp.stroke_width,
+                                text_anchor: wsp.text_anchor,
                                 margin_left: wsp.margin_left,
                                 margin_right: wsp.margin_right,
                                 margin_top: wsp.margin_top,
