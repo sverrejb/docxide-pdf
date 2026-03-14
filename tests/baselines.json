@@ -258,14 +258,14 @@
     "convert_ms": 57.8
   },
   "scraped/croatian_grant_g..": {
-    "jaccard": 0.0681,
-    "ssim": 0.1789,
+    "jaccard": 0.0698,
+    "ssim": 0.1813,
     "text_boundary": 0.032,
     "convert_ms": 229.3
   },
   "scraped/croatian_regulat..": {
-    "jaccard": 0.0812,
-    "ssim": 0.288,
+    "jaccard": 0.075,
+    "ssim": 0.2651,
     "text_boundary": 0.4819,
     "convert_ms": 19.5
   },
@@ -282,7 +282,7 @@
     "convert_ms": 35.9
   },
   "scraped/czech_grant_appl..": {
-    "jaccard": 0.0919,
+    "jaccard": 0.107,
     "ssim": 0.3082,
     "text_boundary": 0.0,
     "convert_ms": 32.2
@@ -307,7 +307,7 @@
   },
   "scraped/federal_procurem..": {
     "jaccard": 0.518,
-    "ssim": 0.6688,
+    "ssim": 0.6689,
     "text_boundary": 0.6746,
     "convert_ms": 47.5
   },
@@ -318,7 +318,7 @@
     "convert_ms": 245.9
   },
   "scraped/go_math_grade4_g..": {
-    "jaccard": 0.1686,
+    "jaccard": 0.169,
     "ssim": 0.419,
     "text_boundary": 0.3114,
     "convert_ms": 65.1

@@ -418,6 +418,8 @@ fn compute_row_layouts(
                     let mut max_rotated_line_w: f32 = 0.0;
                     let mut paragraphs = Vec::new();
                     let mut prev_space_after = 0.0f32;
+                    let cell_has_content =
+                        cell.paragraphs.iter().any(|p| !is_text_empty(&p.runs));
 
                     for (pi, para) in cell.paragraphs.iter().enumerate() {
                         let substituted;
@@ -472,6 +474,8 @@ fn compute_row_layouts(
                         } else {
                             if para.content_height > 0.0 {
                                 total_h += para.content_height;
+                            } else if !cell_has_content {
+                                total_h += line_h;
                             }
                             vec![]
                         };
