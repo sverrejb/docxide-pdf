@@ -126,5 +126,51 @@ Two issues:
 - No REGRESSION flags on visual comparison
 
 ### Not Fixed (deferred)
-- **mandated_reporter still 0.4pp below 20% threshold**: The page break on page 1 still falls at a slightly different point than Word. ~10pt of additional header height is needed (from nested table row heights lost during flattening). Fixing nested table height preservation in the flattening code would likely push this fixture over the threshold.
+- **mandated_reporter still 0.4pp below 20% threshold**: The page break on page 1 still falls at a slightly different point than Word. ~10pt of additional header height is needed (from nested table row heights lost during flattening). Fixing nested table height preservation in the flattening code would likely push this fixture over the threshold. **→ Fixed in session 4.**
 - **Empty paragraph height in table cells**: Still deferred (see session 2 notes).
+
+## Session 4 — 2026-03-14: Cell-level tcMar + nested table margin preservation
+
+### Case Selected
+`mandated_reporter_child_abuse` (text/layout only, 5 pages, 19.6% Jaccard) — continued from session 3 as it was 0.4pp below the 20% threshold. The header table row height was too small because cell-level margins (`w:tcMar`) were not parsed, and nested table cell margins were lost during flattening.
+
+### Problem
+Two issues in table cell margin handling:
+1. **Cell-level `w:tcMar` not parsed**: The code only read table-level `w:tblCellMar` defaults. Individual cells can override margins via `w:tcMar` in `w:tcPr`. In the mandated_reporter header table, each cell has `tcMar` with 1.8pt (36 twips) all around, but we were using the table-level defaults (0pt top/bottom). This made cell content heights 3.6pt shorter than they should be.
+2. **Nested table cell margins lost during flattening**: `collect_nested_table_paragraphs()` extracted paragraph XML nodes from nested tables but discarded the nested table's cell margins (`tcMar`). In the header, the nested table's cells had 5pt (100 twips) margins on each side — 10pt of vertical spacing completely lost.
+
+### Analysis
+- Header table height was 99.3pt (computed by `compute_hf_table_height`); should be ~102.9pt
+- Outer row trHeight=1965 twips (98.25pt) with hRule=atLeast — content was barely above the minimum
+- Cell 1 (logo): image paragraph (85.4pt content_height) + text paragraph (~13.3pt) + 0pt cell margins = ~98.7pt content
+- With cell-level tcMar (+3.6pt): cell 1 = ~102.3pt → row height = ~102.9pt
+- This 3.6pt increase in header table height shifted body text down, improving vertical alignment across all 5 pages
+- Nested table margin fix adds 10pt to cell 2, but cell 1 is taller so it doesn't affect the row height in this case. However, the fix is correct for other documents with nested tables where cell 2 might be the tallest cell.
+
+### Implementation
+1. Added `cell_margins: Option<CellMargins>` to `TableCell` struct in `model.rs`
+2. Parse `w:tcMar` for each cell in `parse_table_node()` in `tables.rs` — falls back to table-level `tblCellMar`
+3. In `compute_row_layouts()` (`pdf/table.rs`): use per-cell margins (`ecm`) for cell text width, initial total height, and rotated cell width
+4. In `render_table_row()` and `render_header_footer_table()` (`pdf/table.rs`): use per-cell margins for vAlign offset and cursor_y computation, pass to `render_cell_paragraphs()`
+5. Changed `collect_nested_table_paragraphs()` to use `AnnotatedNode` struct carrying `extra_space_before`/`extra_space_after` from nested table cell margins
+6. Nested table cell margins read from both `tblCellMar` (table-level fallback) and `tcMar` (cell-level override)
+7. Extra spacing applied to first/last paragraphs from each nested cell during outer cell paragraph parsing
+
+### Files Modified
+- `src/model.rs` — added `cell_margins: Option<CellMargins>` to `TableCell`
+- `src/docx/tables.rs` — `AnnotatedNode` struct, nested table margin preservation in `collect_nested_table_paragraphs()`, `tcMar` parsing per cell
+- `src/docx/alt_chunk.rs` — added `cell_margins: None` to HTML table cell construction
+- `src/pdf/table.rs` — per-cell margins in `compute_row_layouts()`, `render_table_row()`, `render_header_footer_table()`
+- `src/pdf/header_footer.rs` — removed debug output (cleanup)
+
+### Results
+- **mandated_reporter_child_abuse**: 19.6% → 26.4% Jaccard (+6.8pp), 49.5% → 49.9% SSIM (+0.4pp) — **NOW PASSING** (25 passing fixtures)
+- No REGRESSION flags across all fixtures
+- Small noise-level variations: sample500kB -0.3pp, samtale -0.4pp, japanese_interlibrary -0.6pp (all within noise range, no pass/fail status changes)
+
+### Commit
+`29d96fc` — "Support cell-level tcMar and preserve nested table cell margins during flattening"
+
+### Not Fixed (deferred)
+- **Empty paragraph height in table cells**: Still deferred (see session 2 notes).
+- **mandated_reporter SSIM still below 75% (49.9%)**: Horizontal text positioning differences remain. The SSIM metric has zero horizontal tolerance (see memory notes), so even small horizontal shifts severely impact SSIM scores.
