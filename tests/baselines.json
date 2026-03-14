@@ -39,7 +39,7 @@
     "jaccard": 0.9088,
     "ssim": 0.7575,
     "text_boundary": 1.0,
-    "convert_ms": 46.7
+    "convert_ms": 46.6
   },
   "cases/case17": {
     "jaccard": 0.473,
@@ -231,7 +231,7 @@
     "jaccard": 0.1297,
     "ssim": 0.5678,
     "text_boundary": 0.24,
-    "convert_ms": 9.7
+    "convert_ms": 9.5
   },
   "scraped/air_pollution_pe..": {
     "jaccard": 0.1263,

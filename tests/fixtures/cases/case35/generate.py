@@ -34,14 +34,16 @@ SHAPES = [
     ("roundRect", "4472C4", "roundRect\ndefault", None),
     ("roundRect", "2F5597", "roundRect\nadj=40000", {"adj": 40000}),
     # Row 2: star5 — default inner radius vs shallow star
+    # star5 has 3 adjustments (adj, hf, vf) — must provide all when overriding
     ("star5", "BF8F00", "star5\ndefault", None),
-    ("star5", "806000", "star5\nadj=35000", {"adj": 35000}),
+    ("star5", "806000", "star5\nadj=35000", {"adj": 35000, "hf": 105146, "vf": 110557}),
     # Row 3: rightArrow — default vs narrow head + thin shaft
     ("rightArrow", "264478", "rightArrow\ndefault", None),
     ("rightArrow", "1B3050", "rightArrow\nadj1=25000\nadj2=75000", {"adj1": 25000, "adj2": 75000}),
     # Row 4: hexagon — default vs very tapered
+    # hexagon has 2 adjustments (adj, vf) — must provide all when overriding
     ("hexagon", "5B9BD5", "hexagon\ndefault", None),
-    ("hexagon", "2E75B6", "hexagon\nadj=10000", {"adj": 10000}),
+    ("hexagon", "2E75B6", "hexagon\nadj=10000", {"adj": 10000, "vf": 115470}),
     # Row 5: trapezoid — default vs nearly rectangular
     ("trapezoid", "FF6699", "trapezoid\ndefault", None),
     ("trapezoid", "CC3366", "trapezoid\nadj=10000", {"adj": 10000}),
@@ -97,18 +99,8 @@ def shape_anchor_xml(idx, preset, color, label, adjustments):
     luma = 0.299 * r + 0.587 * g + 0.114 * b
     text_color = "FFFFFF" if luma < 140 else "000000"
 
-    # Multi-line labels: split on \n into separate <w:p> elements
-    lines = label.split("\n")
-    label_paras = ""
-    for line in lines:
-        label_paras += (
-            f'<w:p>'
-            f'<w:pPr><w:jc w:val="center"/><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr>'
-            f'<w:r><w:rPr><w:sz w:val="14"/>'
-            f'<w:color w:val="{text_color}"/></w:rPr>'
-            f'<w:t>{line}</w:t></w:r>'
-            f'</w:p>'
-        )
+    # Use single-line label (replace newlines with spaces) — matches case34 pattern
+    flat_label = label.replace("\n", " ")
 
     return (
         f'<w:r>'
@@ -151,7 +143,16 @@ def shape_anchor_xml(idx, preset, color, label, adjustments):
         f'</wps:spPr>'
         f'<wps:txbx>'
         f'<w:txbxContent xmlns:w="{W_NS}">'
-        f'{label_paras}'
+        f'<w:p>'
+        f'<w:pPr><w:jc w:val="center"/></w:pPr>'
+        f'<w:r>'
+        f'<w:rPr>'
+        f'<w:sz w:val="16"/>'
+        f'<w:color w:val="{text_color}"/>'
+        f'</w:rPr>'
+        f'<w:t>{flat_label}</w:t>'
+        f'</w:r>'
+        f'</w:p>'
         f'</w:txbxContent>'
         f'</wps:txbx>'
         f'<wps:bodyPr anchor="ctr" anchorCtr="0" lIns="0" tIns="0" rIns="0" bIns="0"/>'

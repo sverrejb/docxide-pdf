@@ -343,7 +343,7 @@ with zipfile.ZipFile(tmp, "r") as zin:
             '<Override PartName="/word/diagrams/data1.xml"'
             ' ContentType="application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml"/>'
             '<Override PartName="/word/diagrams/layout1.xml"'
-            ' ContentType="application/vnd.openxmlformats-officedocument.drawingml.diagramLayoutDefinition+xml"/>'
+            ' ContentType="application/vnd.openxmlformats-officedocument.drawingml.diagramLayout+xml"/>'
             '<Override PartName="/word/diagrams/style1.xml"'
             ' ContentType="application/vnd.openxmlformats-officedocument.drawingml.diagramStyle+xml"/>'
             '<Override PartName="/word/diagrams/colors1.xml"'
