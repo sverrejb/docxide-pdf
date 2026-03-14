@@ -252,7 +252,7 @@
   "scraped/federal_procurem..": {
     "jaccard": 0.518,
     "ssim": 0.6688,
-    "text_boundary": 0.6726
+    "text_boundary": 0.6746
   },
   "scraped/feminist_voice_d..": {
     "jaccard": 0.3356,
@@ -261,7 +261,7 @@
   },
   "scraped/go_math_grade4_g..": {
     "jaccard": 0.1422,
-    "ssim": 0.3948,
+    "ssim": 0.3959,
     "text_boundary": 0.3114
   },
   "scraped/indonesian_bench..": {
@@ -276,7 +276,7 @@
   },
   "scraped/italian_project_..": {
     "jaccard": 0.1124,
-    "ssim": 0.3315,
+    "ssim": 0.332,
     "text_boundary": 0.1786
   },
   "scraped/japanese_interli..": {
@@ -357,7 +357,7 @@
   "scraped/transition_to_wo..": {
     "jaccard": 0.2567,
     "ssim": 0.3772,
-    "text_boundary": 0.2003
+    "text_boundary": 0.2004
   },
   "scraped/ukraine_humanita..": {
     "jaccard": 0.386,

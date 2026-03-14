@@ -3,16 +3,201 @@ use std::collections::HashMap;
 use pdf_writer::{Content, Name, Str};
 
 use crate::fonts::{FontEntry, encode_as_gids, font_key_buf, to_winansi_bytes};
-use crate::model::{Alignment, CellVAlign, SectionProperties, Table, TextDirection, VMerge};
+use crate::model::{
+    Alignment, CellBorder, CellMargins, CellVAlign, SectionProperties, Table, TableRow,
+    TextDirection, VMerge,
+};
 
 use super::RenderContext;
 use super::header_footer::substitute_hf_runs;
-use super::resolve_line_h;
-
 use super::layout::{
     TextLine, build_paragraph_lines, encode_text_for_pdf, font_metric, is_text_empty,
     render_paragraph_lines,
 };
+use super::resolve_line_h;
+
+fn cell_span_width(col_widths: &[f32], grid_col: usize, span: usize) -> f32 {
+    col_widths[grid_col..col_widths.len().min(grid_col + span)]
+        .iter()
+        .sum()
+}
+
+fn cell_x_offset(col_widths: &[f32], table_left: f32, grid_col: usize) -> f32 {
+    table_left
+        + col_widths[..grid_col.min(col_widths.len())]
+            .iter()
+            .sum::<f32>()
+}
+
+fn draw_border(content: &mut Content, border: &CellBorder, x1: f32, y1: f32, x2: f32, y2: f32) {
+    if !border.present {
+        return;
+    }
+    content.save_state();
+    content.set_line_width(border.width);
+    if let Some([r, g, b]) = border.color {
+        content.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+    }
+    content.move_to(x1, y1);
+    content.line_to(x2, y2);
+    content.stroke();
+    content.restore_state();
+}
+
+fn draw_cell_borders(
+    content: &mut Content,
+    borders: &crate::model::CellBorders,
+    bx: f32,
+    top: f32,
+    bottom: f32,
+    col_w: f32,
+    draw_top: bool,
+    draw_bottom: bool,
+) {
+    if draw_top {
+        draw_border(content, &borders.top, bx, top, bx + col_w, top);
+    }
+    if draw_bottom {
+        draw_border(content, &borders.bottom, bx, bottom, bx + col_w, bottom);
+    }
+    draw_border(content, &borders.left, bx, top, bx, bottom);
+    draw_border(content, &borders.right, bx + col_w, top, bx + col_w, bottom);
+}
+
+fn draw_cell_shading(
+    content: &mut Content,
+    shading: [u8; 3],
+    borders: &crate::model::CellBorders,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+) {
+    let inset =
+        (borders.top.width + borders.bottom.width + borders.left.width + borders.right.width) / 8.0;
+    content.save_state();
+    content.set_fill_rgb(
+        shading[0] as f32 / 255.0,
+        shading[1] as f32 / 255.0,
+        shading[2] as f32 / 255.0,
+    );
+    content.rect(x + inset, y + inset, w - 2.0 * inset, h - 2.0 * inset);
+    content.fill_nonzero();
+    content.restore_state();
+}
+
+fn valign_offset(v_align: CellVAlign, available: f32, content_h: f32) -> f32 {
+    match v_align {
+        CellVAlign::Top => 0.0,
+        CellVAlign::Center => ((available - content_h) / 2.0).max(0.0),
+        CellVAlign::Bottom => (available - content_h).max(0.0),
+    }
+}
+
+fn para_has_visible_content(para: &CellParagraphLayout) -> bool {
+    !para.lines.is_empty() && para.lines.iter().any(|l| !l.chunks.is_empty())
+}
+
+fn cell_has_visible_content(paragraphs: &[CellParagraphLayout]) -> bool {
+    paragraphs.iter().any(|p| para_has_visible_content(p))
+}
+
+fn render_cell_paragraphs(
+    content: &mut Content,
+    paragraphs: &[CellParagraphLayout],
+    cell_x: f32,
+    col_w: f32,
+    cursor_y_start: f32,
+    cm: &CellMargins,
+    fonts: &HashMap<String, FontEntry>,
+) {
+    let mut cursor_y = cursor_y_start;
+
+    for para in paragraphs {
+        if !para_has_visible_content(para) {
+            cursor_y -= para.space_before + para.lines.len() as f32 * para.line_h;
+            continue;
+        }
+
+        cursor_y -= para.space_before;
+        let text_x = cell_x + cm.left + para.indent_left;
+        let text_w = (col_w - cm.left - cm.right - para.indent_left).max(0.0);
+        let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
+
+        if !para.list_label.is_empty() {
+            let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging;
+            draw_cell_label(content, para, label_x, baseline_y, fonts);
+        }
+
+        render_paragraph_lines(
+            content,
+            &para.lines,
+            &para.alignment,
+            text_x,
+            text_w,
+            baseline_y,
+            para.line_h,
+            para.lines.len(),
+            0,
+            &mut Vec::new(),
+            0.0,
+            fonts,
+        );
+
+        cursor_y -= para.lines.len() as f32 * para.line_h;
+    }
+}
+
+fn render_partial_cell_paragraphs(
+    content: &mut Content,
+    paragraphs: &[CellParagraphLayout],
+    start: usize,
+    end: usize,
+    cell_x: f32,
+    col_w: f32,
+    cursor_y_start: f32,
+    cm: &CellMargins,
+    fonts: &HashMap<String, FontEntry>,
+) {
+    let mut cursor_y = cursor_y_start;
+
+    for pi in start..end {
+        let para = &paragraphs[pi];
+        let sb = if pi == start { 0.0 } else { para.space_before };
+
+        if !para_has_visible_content(para) {
+            cursor_y -= sb + para.lines.len() as f32 * para.line_h;
+            continue;
+        }
+
+        cursor_y -= sb;
+        let text_x = cell_x + cm.left + para.indent_left;
+        let text_w = (col_w - cm.left - cm.right - para.indent_left).max(0.0);
+        let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
+
+        if !para.list_label.is_empty() {
+            let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging;
+            draw_cell_label(content, para, label_x, baseline_y, fonts);
+        }
+
+        render_paragraph_lines(
+            content,
+            &para.lines,
+            &para.alignment,
+            text_x,
+            text_w,
+            baseline_y,
+            para.line_h,
+            para.lines.len(),
+            0,
+            &mut Vec::new(),
+            0.0,
+            fonts,
+        );
+
+        cursor_y -= para.lines.len() as f32 * para.line_h;
+    }
+}
 
 /// Auto-fit column widths so that the longest non-breakable word in each column
 /// fits within the cell (including padding). Columns that need more space grow;
@@ -64,7 +249,6 @@ fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>) -> Vec<f3
     let total: f32 = table.col_widths.iter().sum();
     let mut widths = table.col_widths.clone();
 
-    // Expand columns that need it, track how much extra space is needed
     let mut extra_needed: f32 = 0.0;
     let mut shrinkable: f32 = 0.0;
     for i in 0..ncols {
@@ -84,7 +268,6 @@ fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>) -> Vec<f3
                 widths[i] -= available * factor;
             }
         }
-        // Normalize to preserve total
         let new_total: f32 = widths.iter().sum();
         if (new_total - total).abs() > 0.01 {
             let scale = total / new_total;
@@ -124,6 +307,13 @@ struct RowLayout {
     cells: Vec<CellLayout>,
 }
 
+fn encode_label(label: &str, entry: &FontEntry) -> Vec<u8> {
+    match &entry.char_to_gid {
+        Some(map) => encode_as_gids(label, map),
+        None => to_winansi_bytes(label),
+    }
+}
+
 fn draw_cell_label(
     content: &mut Content,
     para: &CellParagraphLayout,
@@ -131,32 +321,21 @@ fn draw_cell_label(
     baseline_y: f32,
     fonts: &HashMap<String, FontEntry>,
 ) {
-    let (pdf_name, bytes) = if let Some(ref lf) = para.list_label_font {
-        if let Some(entry) = fonts.get(lf.as_str()) {
-            let b = match &entry.char_to_gid {
-                Some(map) => encode_as_gids(&para.list_label, map),
-                None => to_winansi_bytes(&para.list_label),
-            };
-            (entry.pdf_name.as_str(), b)
-        } else {
-            return;
-        }
-    } else if let Some(entry) = fonts.get(para.first_run_font_key.as_str()) {
-        let b = match &entry.char_to_gid {
-            Some(map) => encode_as_gids(&para.list_label, map),
-            None => to_winansi_bytes(&para.list_label),
-        };
-        (entry.pdf_name.as_str(), b)
-    } else {
+    let font_key = para
+        .list_label_font
+        .as_deref()
+        .unwrap_or(para.first_run_font_key.as_str());
+    let Some(entry) = fonts.get(font_key) else {
         return;
     };
+    let bytes = encode_label(&para.list_label, entry);
 
     if let Some([r, g, b]) = para.label_color {
         content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
     }
     content
         .begin_text()
-        .set_font(Name(pdf_name.as_bytes()), para.font_size)
+        .set_font(Name(entry.pdf_name.as_bytes()), para.font_size)
         .next_line(label_x, baseline_y)
         .show(Str(&bytes))
         .end_text();
@@ -191,10 +370,7 @@ fn compute_row_layouts(
                 .iter()
                 .map(|cell| {
                     let span = cell.grid_span.max(1) as usize;
-                    let col_w: f32 = col_widths[grid_col..col_widths.len().min(grid_col + span)]
-                        .iter()
-                        .sum::<f32>()
-                        .max(cell.width);
+                    let col_w = cell_span_width(col_widths, grid_col, span).max(cell.width);
                     grid_col += span;
 
                     if cell.v_merge == VMerge::Continue {
@@ -325,7 +501,7 @@ fn compute_row_layouts(
 }
 
 /// Look up the vMerge value for the cell at `target_col` in `row`.
-fn vmerge_at_col(row: &crate::model::TableRow, target_col: usize) -> VMerge {
+fn vmerge_at_col(row: &TableRow, target_col: usize) -> VMerge {
     let mut col = 0usize;
     for cell in &row.cells {
         if col == target_col {
@@ -366,10 +542,10 @@ fn compute_merge_spans(table: &Table, row_layouts: &[RowLayout]) -> HashMap<(usi
 }
 
 fn render_table_row(
-    row: &crate::model::TableRow,
+    row: &TableRow,
     layout: &RowLayout,
     col_widths: &[f32],
-    cm: &crate::model::CellMargins,
+    cm: &CellMargins,
     table_left: f32,
     pb: &mut super::PageBuilder,
     ctx: &RenderContext,
@@ -383,122 +559,40 @@ fn render_table_row(
     let mut grid_col = 0usize;
     for (cell, cell_layout) in row.cells.iter().zip(layout.cells.iter()) {
         let span = cell.grid_span.max(1) as usize;
-        let col_w: f32 = col_widths[grid_col..col_widths.len().min(grid_col + span)]
-            .iter()
-            .sum();
-        let cell_x = table_left
-            + col_widths[..grid_col.min(col_widths.len())]
-                .iter()
-                .sum::<f32>();
+        let col_w = cell_span_width(col_widths, grid_col, span);
+        let cell_x = cell_x_offset(col_widths, table_left, grid_col);
         grid_col += span;
 
         if cell.v_merge == VMerge::Continue {
             continue;
         }
 
-        if let Some([r, g, b]) = cell.shading {
-            let b_borders = &cell.borders;
-            let inset = (b_borders.top.width
-                + b_borders.bottom.width
-                + b_borders.left.width
-                + b_borders.right.width)
-                / 8.0;
-            pb.content.save_state();
-            pb.content
-                .set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-            pb.content.rect(
-                cell_x + inset,
-                row_bottom + inset,
-                col_w - 2.0 * inset,
-                row_h - 2.0 * inset,
+        if let Some(shading) = cell.shading {
+            draw_cell_shading(
+                &mut pb.content,
+                shading,
+                &cell.borders,
+                cell_x,
+                row_bottom,
+                col_w,
+                row_h,
             );
-            pb.content.fill_nonzero();
-            pb.content.restore_state();
         }
 
-        let has_content = cell_layout
-            .paragraphs
-            .iter()
-            .any(|p| !p.lines.is_empty() && !p.lines.iter().all(|l| l.chunks.is_empty()));
+        let has_content = cell_has_visible_content(&cell_layout.paragraphs);
 
         if has_content && cell_layout.text_direction == TextDirection::TbRl {
-            // Vertical CJK text: characters upright, stacked top-to-bottom
-            let pdf_name_to_entry: HashMap<&str, &FontEntry> = ctx
-                .fonts
-                .values()
-                .map(|e| (e.pdf_name.as_str(), e))
-                .collect();
-
-            let total_char_h: f32 = cell_layout
-                .paragraphs
-                .iter()
-                .flat_map(|p| &p.lines)
-                .flat_map(|l| &l.chunks)
-                .filter(|c| !c.text.is_empty())
-                .map(|c| c.text.chars().count() as f32 * c.font_size)
-                .sum();
-
-            let avail_h = row_h - cm.top - cm.bottom;
-            let v_offset = match cell.v_align {
-                CellVAlign::Top => 0.0,
-                CellVAlign::Center => ((avail_h - total_char_h) / 2.0).max(0.0),
-                CellVAlign::Bottom => (avail_h - total_char_h).max(0.0),
-            };
-
-            let avail_w = col_w - cm.left - cm.right;
-            let mut char_y = row_top - cm.top - v_offset;
-            let mut char_buf = [0u8; 4];
-
-            for para in &cell_layout.paragraphs {
-                for line in &para.lines {
-                    for chunk in &line.chunks {
-                        if chunk.text.is_empty() {
-                            continue;
-                        }
-                        let fs = chunk.font_size;
-                        let entry = pdf_name_to_entry.get(chunk.pdf_font.as_str());
-                        let ascender_ratio = entry.and_then(|e| e.ascender_ratio).unwrap_or(0.75);
-                        let widths = entry.and_then(|e| e.char_widths_1000.as_ref());
-
-                        if let Some([r, g, b]) = chunk.color {
-                            pb.content.set_fill_rgb(
-                                r as f32 / 255.0,
-                                g as f32 / 255.0,
-                                b as f32 / 255.0,
-                            );
-                        }
-
-                        pb.content.begin_text();
-                        pb.content.set_font(Name(chunk.pdf_font.as_bytes()), fs);
-
-                        let mut td_x = 0.0f32;
-                        let mut td_y = 0.0f32;
-                        for ch in chunk.text.chars() {
-                            let baseline_y = char_y - fs * ascender_ratio;
-                            let char_w = widths
-                                .and_then(|m| m.get(&ch))
-                                .map(|w| w * fs / 1000.0)
-                                .unwrap_or(fs);
-                            let cx = cell_x + cm.left + (avail_w - char_w) / 2.0;
-
-                            let ch_str = ch.encode_utf8(&mut char_buf);
-                            let bytes =
-                                encode_text_for_pdf(ch_str, &chunk.pdf_font, &pdf_name_to_entry);
-                            pb.content.next_line(cx - td_x, baseline_y - td_y);
-                            td_x = cx;
-                            td_y = baseline_y;
-                            pb.content.show(Str(&bytes));
-
-                            char_y -= fs;
-                        }
-                        pb.content.end_text();
-
-                        if chunk.color.is_some() {
-                            pb.content.set_fill_gray(0.0);
-                        }
-                    }
-                }
-            }
+            render_vertical_cjk_cell(
+                &mut pb.content,
+                cell_layout,
+                cell,
+                cell_x,
+                row_top,
+                row_h,
+                col_w,
+                cm,
+                ctx,
+            );
         } else if has_content {
             let content_h: f32 = cell_layout
                 .paragraphs
@@ -506,67 +600,27 @@ fn render_table_row(
                 .map(|p| p.space_before + p.lines.len() as f32 * p.line_h)
                 .sum();
 
-            let v_offset = match cell.v_align {
-                CellVAlign::Top => 0.0,
-                CellVAlign::Center => {
-                    let avail = row_h - cm.top - cm.bottom;
-                    ((avail - content_h) / 2.0).max(0.0)
-                }
-                CellVAlign::Bottom => {
-                    let avail = row_h - cm.top - cm.bottom;
-                    (avail - content_h).max(0.0)
-                }
-            };
+            let avail = row_h - cm.top - cm.bottom;
+            let v_offset = valign_offset(cell.v_align, avail, content_h);
+            let cursor_y = row_top - cm.top - v_offset;
 
-            let mut cursor_y = row_top - cm.top - v_offset;
-
-            for para in &cell_layout.paragraphs {
-                if para.lines.is_empty() || para.lines.iter().all(|l| l.chunks.is_empty()) {
-                    cursor_y -= para.space_before + para.lines.len() as f32 * para.line_h;
-                    continue;
-                }
-
-                cursor_y -= para.space_before;
-                let text_x = cell_x + cm.left + para.indent_left;
-                let text_w = (col_w - cm.left - cm.right - para.indent_left).max(0.0);
-                let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
-
-                if !para.list_label.is_empty() {
-                    let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging;
-                    draw_cell_label(&mut pb.content, para, label_x, baseline_y, ctx.fonts);
-                }
-
-                render_paragraph_lines(
-                    &mut pb.content,
-                    &para.lines,
-                    &para.alignment,
-                    text_x,
-                    text_w,
-                    baseline_y,
-                    para.line_h,
-                    para.lines.len(),
-                    0,
-                    &mut Vec::new(),
-                    0.0,
-                    ctx.fonts,
-                );
-
-                cursor_y -= para.lines.len() as f32 * para.line_h;
-            }
+            render_cell_paragraphs(
+                &mut pb.content,
+                &cell_layout.paragraphs,
+                cell_x,
+                col_w,
+                cursor_y,
+                cm,
+                ctx.fonts,
+            );
         }
     }
 
-    // Draw per-cell borders
     let mut grid_col = 0usize;
     for cell in &row.cells {
         let span = cell.grid_span.max(1) as usize;
-        let col_w: f32 = col_widths[grid_col..col_widths.len().min(grid_col + span)]
-            .iter()
-            .sum();
-        let bx = table_left
-            + col_widths[..grid_col.min(col_widths.len())]
-                .iter()
-                .sum::<f32>();
+        let col_w = cell_span_width(col_widths, grid_col, span);
+        let bx = cell_x_offset(col_widths, table_left, grid_col);
 
         if cell.v_merge == VMerge::Continue {
             grid_col += span;
@@ -579,39 +633,15 @@ fn render_table_row(
             .unwrap_or(0.0);
         let effective_bottom = row_bottom - merge_extra;
 
-        let b = &cell.borders;
-        let draw_border = |c: &mut Content, border: &crate::model::CellBorder, x1, y1, x2, y2| {
-            if !border.present {
-                return;
-            }
-            c.save_state();
-            c.set_line_width(border.width);
-            if let Some([r, g, b]) = border.color {
-                c.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-            }
-            c.move_to(x1, y1);
-            c.line_to(x2, y2);
-            c.stroke();
-            c.restore_state();
-        };
-
-        draw_border(&mut pb.content, &b.top, bx, row_top, bx + col_w, row_top);
-        draw_border(
+        draw_cell_borders(
             &mut pb.content,
-            &b.bottom,
+            &cell.borders,
             bx,
-            effective_bottom,
-            bx + col_w,
-            effective_bottom,
-        );
-        draw_border(&mut pb.content, &b.left, bx, row_top, bx, effective_bottom);
-        draw_border(
-            &mut pb.content,
-            &b.right,
-            bx + col_w,
             row_top,
-            bx + col_w,
             effective_bottom,
+            col_w,
+            true,
+            true,
         );
 
         grid_col += span;
@@ -620,14 +650,89 @@ fn render_table_row(
     pb.slot_top = row_bottom;
 }
 
+fn render_vertical_cjk_cell(
+    content: &mut Content,
+    cell_layout: &CellLayout,
+    cell: &crate::model::TableCell,
+    cell_x: f32,
+    row_top: f32,
+    row_h: f32,
+    col_w: f32,
+    cm: &CellMargins,
+    ctx: &RenderContext,
+) {
+    let pdf_name_to_entry: HashMap<&str, &FontEntry> = ctx
+        .fonts
+        .values()
+        .map(|e| (e.pdf_name.as_str(), e))
+        .collect();
+
+    let total_char_h: f32 = cell_layout
+        .paragraphs
+        .iter()
+        .flat_map(|p| &p.lines)
+        .flat_map(|l| &l.chunks)
+        .filter(|c| !c.text.is_empty())
+        .map(|c| c.text.chars().count() as f32 * c.font_size)
+        .sum();
+
+    let avail_h = row_h - cm.top - cm.bottom;
+    let v_offset = valign_offset(cell.v_align, avail_h, total_char_h);
+
+    let avail_w = col_w - cm.left - cm.right;
+    let mut char_y = row_top - cm.top - v_offset;
+    let mut char_buf = [0u8; 4];
+
+    for para in &cell_layout.paragraphs {
+        for line in &para.lines {
+            for chunk in &line.chunks {
+                if chunk.text.is_empty() {
+                    continue;
+                }
+                let fs = chunk.font_size;
+                let entry = pdf_name_to_entry.get(chunk.pdf_font.as_str());
+                let ascender_ratio = entry.and_then(|e| e.ascender_ratio).unwrap_or(0.75);
+                let widths = entry.and_then(|e| e.char_widths_1000.as_ref());
+
+                if let Some([r, g, b]) = chunk.color {
+                    content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+                }
+
+                content.begin_text();
+                content.set_font(Name(chunk.pdf_font.as_bytes()), fs);
+
+                let mut td_x = 0.0f32;
+                let mut td_y = 0.0f32;
+                for ch in chunk.text.chars() {
+                    let baseline_y = char_y - fs * ascender_ratio;
+                    let char_w = widths
+                        .and_then(|m| m.get(&ch))
+                        .map(|w| w * fs / 1000.0)
+                        .unwrap_or(fs);
+                    let cx = cell_x + cm.left + (avail_w - char_w) / 2.0;
+
+                    let ch_str = ch.encode_utf8(&mut char_buf);
+                    let bytes = encode_text_for_pdf(ch_str, &chunk.pdf_font, &pdf_name_to_entry);
+                    content.next_line(cx - td_x, baseline_y - td_y);
+                    td_x = cx;
+                    td_y = baseline_y;
+                    content.show(Str(&bytes));
+
+                    char_y -= fs;
+                }
+                content.end_text();
+
+                if chunk.color.is_some() {
+                    content.set_fill_gray(0.0);
+                }
+            }
+        }
+    }
+}
+
 /// Find how many paragraphs (from `start`) fit within `available_h`.
 /// Always includes at least one paragraph to guarantee progress.
-fn find_cell_split(
-    cell: &CellLayout,
-    start: usize,
-    available_h: f32,
-    cm: &crate::model::CellMargins,
-) -> usize {
+fn find_cell_split(cell: &CellLayout, start: usize, available_h: f32, cm: &CellMargins) -> usize {
     if start >= cell.paragraphs.len() {
         return cell.paragraphs.len();
     }
@@ -648,10 +753,10 @@ fn find_cell_split(
 /// `starts[ci]..ends[ci]` gives the paragraph range for cell `ci`.
 /// `is_first`/`is_last` control top/bottom border drawing.
 fn render_partial_row(
-    row: &crate::model::TableRow,
+    row: &TableRow,
     layout: &RowLayout,
     col_widths: &[f32],
-    cm: &crate::model::CellMargins,
+    cm: &CellMargins,
     table_left: f32,
     pb: &mut super::PageBuilder,
     ctx: &RenderContext,
@@ -680,13 +785,8 @@ fn render_partial_row(
     let mut grid_col = 0usize;
     for (ci, (cell, cell_layout)) in row.cells.iter().zip(layout.cells.iter()).enumerate() {
         let span = cell.grid_span.max(1) as usize;
-        let col_w: f32 = col_widths[grid_col..col_widths.len().min(grid_col + span)]
-            .iter()
-            .sum();
-        let cell_x = table_left
-            + col_widths[..grid_col.min(col_widths.len())]
-                .iter()
-                .sum::<f32>();
+        let col_w = cell_span_width(col_widths, grid_col, span);
+        let cell_x = cell_x_offset(col_widths, table_left, grid_col);
         grid_col += span;
 
         if cell.v_merge == VMerge::Continue {
@@ -696,127 +796,83 @@ fn render_partial_row(
         let start = starts[ci];
         let end = ends[ci];
 
-        if let Some([r, g, b]) = cell.shading {
-            let b_borders = &cell.borders;
-            let inset = (b_borders.top.width
-                + b_borders.bottom.width
-                + b_borders.left.width
-                + b_borders.right.width)
-                / 8.0;
-            pb.content.save_state();
-            pb.content
-                .set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-            pb.content.rect(
-                cell_x + inset,
-                row_bottom + inset,
-                col_w - 2.0 * inset,
-                row_h - 2.0 * inset,
+        if let Some(shading) = cell.shading {
+            draw_cell_shading(
+                &mut pb.content,
+                shading,
+                &cell.borders,
+                cell_x,
+                row_bottom,
+                col_w,
+                row_h,
             );
-            pb.content.fill_nonzero();
-            pb.content.restore_state();
         }
 
-        let has_content = (start..end).any(|pi| {
-            let p = &cell_layout.paragraphs[pi];
-            !p.lines.is_empty() && !p.lines.iter().all(|l| l.chunks.is_empty())
-        });
+        let has_content =
+            (start..end).any(|pi| para_has_visible_content(&cell_layout.paragraphs[pi]));
 
         if has_content {
-            let mut cursor_y = row_top - cm.top;
-
-            for pi in start..end {
-                let para = &cell_layout.paragraphs[pi];
-                let sb = if pi == start { 0.0 } else { para.space_before };
-
-                if para.lines.is_empty() || para.lines.iter().all(|l| l.chunks.is_empty()) {
-                    cursor_y -= sb + para.lines.len() as f32 * para.line_h;
-                    continue;
-                }
-
-                cursor_y -= sb;
-                let text_x = cell_x + cm.left + para.indent_left;
-                let text_w = (col_w - cm.left - cm.right - para.indent_left).max(0.0);
-                let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
-
-                if !para.list_label.is_empty() {
-                    let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging;
-                    draw_cell_label(&mut pb.content, para, label_x, baseline_y, ctx.fonts);
-                }
-
-                render_paragraph_lines(
-                    &mut pb.content,
-                    &para.lines,
-                    &para.alignment,
-                    text_x,
-                    text_w,
-                    baseline_y,
-                    para.line_h,
-                    para.lines.len(),
-                    0,
-                    &mut Vec::new(),
-                    0.0,
-                    ctx.fonts,
-                );
-
-                cursor_y -= para.lines.len() as f32 * para.line_h;
-            }
+            render_partial_cell_paragraphs(
+                &mut pb.content,
+                &cell_layout.paragraphs,
+                start,
+                end,
+                cell_x,
+                col_w,
+                row_top - cm.top,
+                cm,
+                ctx.fonts,
+            );
         }
     }
 
-    // Draw borders
     let mut grid_col = 0usize;
     for cell in &row.cells {
         let span = cell.grid_span.max(1) as usize;
-        let col_w: f32 = col_widths[grid_col..col_widths.len().min(grid_col + span)]
-            .iter()
-            .sum();
-        let bx = table_left
-            + col_widths[..grid_col.min(col_widths.len())]
-                .iter()
-                .sum::<f32>();
+        let col_w = cell_span_width(col_widths, grid_col, span);
+        let bx = cell_x_offset(col_widths, table_left, grid_col);
         grid_col += span;
 
-        let b = &cell.borders;
-        let draw_border = |c: &mut Content, border: &crate::model::CellBorder, x1, y1, x2, y2| {
-            if !border.present {
-                return;
-            }
-            c.save_state();
-            c.set_line_width(border.width);
-            if let Some([r, g, b]) = border.color {
-                c.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-            }
-            c.move_to(x1, y1);
-            c.line_to(x2, y2);
-            c.stroke();
-            c.restore_state();
-        };
-
-        if is_first && cell.v_merge != VMerge::Continue {
-            draw_border(&mut pb.content, &b.top, bx, row_top, bx + col_w, row_top);
-        }
-        if is_last {
-            draw_border(
-                &mut pb.content,
-                &b.bottom,
-                bx,
-                row_bottom,
-                bx + col_w,
-                row_bottom,
-            );
-        }
-        draw_border(&mut pb.content, &b.left, bx, row_top, bx, row_bottom);
-        draw_border(
+        let draw_top = is_first && cell.v_merge != VMerge::Continue;
+        draw_cell_borders(
             &mut pb.content,
-            &b.right,
-            bx + col_w,
+            &cell.borders,
+            bx,
             row_top,
-            bx + col_w,
             row_bottom,
+            col_w,
+            draw_top,
+            is_last,
         );
     }
 
     pb.slot_top = row_bottom;
+}
+
+fn render_header_rows(
+    table: &Table,
+    row_layouts: &[RowLayout],
+    col_widths: &[f32],
+    cm: &CellMargins,
+    table_left: f32,
+    pb: &mut super::PageBuilder,
+    ctx: &RenderContext,
+    merge_spans: &HashMap<(usize, usize), f32>,
+    header_count: usize,
+) {
+    for hi in 0..header_count {
+        render_table_row(
+            &table.rows[hi],
+            &row_layouts[hi],
+            col_widths,
+            cm,
+            table_left,
+            pb,
+            ctx,
+            hi,
+            merge_spans,
+        );
+    }
 }
 
 pub(super) fn render_table(
@@ -850,6 +906,25 @@ pub(super) fn render_table(
     // only contiguous header rows starting from row 0 are repeated).
     let header_count = table.rows.iter().take_while(|r| r.is_header).count();
 
+    let flush_and_render_headers = |pb: &mut super::PageBuilder, ri: usize| {
+        pb.flush_page(sect_idx);
+        pb.is_first_page_of_section = false;
+        pb.slot_top = sp.page_height - sp.margin_top;
+        if header_count > 0 && ri >= header_count {
+            render_header_rows(
+                table,
+                &row_layouts,
+                &col_widths,
+                cm,
+                table_left,
+                pb,
+                ctx,
+                &merge_spans,
+                header_count,
+            );
+        }
+    };
+
     for (ri, (row, layout)) in table.rows.iter().zip(row_layouts.iter()).enumerate() {
         let row_h = layout.height;
         log::debug!(
@@ -864,8 +939,7 @@ pub(super) fn render_table(
         let page_content_h = sp.page_height - sp.margin_top - sp.margin_bottom;
 
         if !is_truly_floating && row_h > available_h && row_h > page_content_h {
-            // Row is too tall for any single page — split across pages,
-            // starting on the current page to avoid wasting space
+            // Row is too tall for any single page -- split across pages
             let ncells = layout.cells.len();
             let mut starts = vec![0usize; ncells];
             let mut is_first_chunk = true;
@@ -903,47 +977,10 @@ pub(super) fn render_table(
 
                 starts = ends;
                 is_first_chunk = false;
-                pb.flush_page(sect_idx);
-                pb.is_first_page_of_section = false;
-                pb.slot_top = sp.page_height - sp.margin_top;
-
-                if header_count > 0 && ri >= header_count {
-                    for hi in 0..header_count {
-                        render_table_row(
-                            &table.rows[hi],
-                            &row_layouts[hi],
-                            &col_widths,
-                            cm,
-                            table_left,
-                            pb,
-                            ctx,
-                            hi,
-                            &merge_spans,
-                        );
-                    }
-                }
+                flush_and_render_headers(pb, ri);
             }
         } else if !is_truly_floating && !at_page_top && row_h > available_h {
-            // Row fits on a fresh page but not here — flush first
-            pb.flush_page(sect_idx);
-            pb.is_first_page_of_section = false;
-            pb.slot_top = sp.page_height - sp.margin_top;
-
-            if header_count > 0 && ri >= header_count {
-                for hi in 0..header_count {
-                    render_table_row(
-                        &table.rows[hi],
-                        &row_layouts[hi],
-                        &col_widths,
-                        cm,
-                        table_left,
-                        pb,
-                        ctx,
-                        hi,
-                        &merge_spans,
-                    );
-                }
-            }
+            flush_and_render_headers(pb, ri);
             render_table_row(
                 row,
                 layout,
@@ -1009,135 +1046,66 @@ pub(super) fn render_header_footer_table(
         let mut grid_col = 0usize;
         for (cell, cell_layout) in row.cells.iter().zip(layout.cells.iter()) {
             let span = cell.grid_span.max(1) as usize;
-            let col_w: f32 = col_widths[grid_col..col_widths.len().min(grid_col + span)]
-                .iter()
-                .sum();
-            let cell_x = table_left
-                + col_widths[..grid_col.min(col_widths.len())]
-                    .iter()
-                    .sum::<f32>();
+            let col_w = cell_span_width(&col_widths, grid_col, span);
+            let cell_x = cell_x_offset(&col_widths, table_left, grid_col);
             grid_col += span;
 
             if cell.v_merge == VMerge::Continue {
                 continue;
             }
 
-            if let Some([r, g, b]) = cell.shading {
+            if let Some(shading) = cell.shading {
                 content.save_state();
-                content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+                content.set_fill_rgb(
+                    shading[0] as f32 / 255.0,
+                    shading[1] as f32 / 255.0,
+                    shading[2] as f32 / 255.0,
+                );
                 content.rect(cell_x, row_bottom, col_w, row_h);
                 content.fill_nonzero();
                 content.restore_state();
             }
 
-            let has_content = cell_layout
-                .paragraphs
-                .iter()
-                .any(|p| !p.lines.is_empty() && !p.lines.iter().all(|l| l.chunks.is_empty()));
-
-            if has_content {
+            if cell_has_visible_content(&cell_layout.paragraphs) {
                 let content_h: f32 = cell_layout
                     .paragraphs
                     .iter()
                     .map(|p| p.space_before + p.lines.len() as f32 * p.line_h)
                     .sum();
 
-                let v_offset = match cell.v_align {
-                    CellVAlign::Top => 0.0,
-                    CellVAlign::Center => {
-                        let avail = row_h - cm.top - cm.bottom;
-                        ((avail - content_h) / 2.0).max(0.0)
-                    }
-                    CellVAlign::Bottom => {
-                        let avail = row_h - cm.top - cm.bottom;
-                        (avail - content_h).max(0.0)
-                    }
-                };
+                let avail = row_h - cm.top - cm.bottom;
+                let v_offset = valign_offset(cell.v_align, avail, content_h);
+                let cell_cursor_y = row_top - cm.top - v_offset;
 
-                let mut cursor_y = row_top - cm.top - v_offset;
-
-                for para in &cell_layout.paragraphs {
-                    if para.lines.is_empty() || para.lines.iter().all(|l| l.chunks.is_empty()) {
-                        cursor_y -= para.space_before + para.lines.len() as f32 * para.line_h;
-                        continue;
-                    }
-
-                    cursor_y -= para.space_before;
-                    let text_x = cell_x + cm.left + para.indent_left;
-                    let text_w = (col_w - cm.left - cm.right - para.indent_left).max(0.0);
-                    let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
-
-                    if !para.list_label.is_empty() {
-                        let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging;
-                        draw_cell_label(content, para, label_x, baseline_y, ctx.fonts);
-                    }
-
-                    render_paragraph_lines(
-                        content,
-                        &para.lines,
-                        &para.alignment,
-                        text_x,
-                        text_w,
-                        baseline_y,
-                        para.line_h,
-                        para.lines.len(),
-                        0,
-                        &mut Vec::new(),
-                        0.0,
-                        ctx.fonts,
-                    );
-
-                    cursor_y -= para.lines.len() as f32 * para.line_h;
-                }
+                render_cell_paragraphs(
+                    content,
+                    &cell_layout.paragraphs,
+                    cell_x,
+                    col_w,
+                    cell_cursor_y,
+                    cm,
+                    ctx.fonts,
+                );
             }
         }
 
-        // Draw borders
         let mut grid_col = 0usize;
         for cell in &row.cells {
             let span = cell.grid_span.max(1) as usize;
-            let col_w: f32 = col_widths[grid_col..col_widths.len().min(grid_col + span)]
-                .iter()
-                .sum();
-            let bx = table_left
-                + col_widths[..grid_col.min(col_widths.len())]
-                    .iter()
-                    .sum::<f32>();
+            let col_w = cell_span_width(&col_widths, grid_col, span);
+            let bx = cell_x_offset(&col_widths, table_left, grid_col);
             grid_col += span;
 
-            let b = &cell.borders;
-            let draw_border = |content: &mut Content,
-                               border: &crate::model::CellBorder,
-                               x1,
-                               y1,
-                               x2,
-                               y2| {
-                if !border.present {
-                    return;
-                }
-                content.save_state();
-                content.set_line_width(border.width);
-                if let Some([r, g, b]) = border.color {
-                    content.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-                }
-                content.move_to(x1, y1);
-                content.line_to(x2, y2);
-                content.stroke();
-                content.restore_state();
-            };
-
-            if cell.v_merge != VMerge::Continue && ri == 0 {
-                draw_border(content, &b.top, bx, row_top, bx + col_w, row_top);
-            }
-            draw_border(content, &b.bottom, bx, row_bottom, bx + col_w, row_bottom);
-            draw_border(content, &b.left, bx, row_top, bx, row_bottom);
-            draw_border(
+            let draw_top = cell.v_merge != VMerge::Continue && ri == 0;
+            draw_cell_borders(
                 content,
-                &b.right,
-                bx + col_w,
+                &cell.borders,
+                bx,
                 row_top,
-                bx + col_w,
                 row_bottom,
+                col_w,
+                draw_top,
+                true,
             );
         }
 

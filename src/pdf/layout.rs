@@ -507,9 +507,8 @@ pub(super) fn build_tabbed_line(
                 is_first_line = false;
                 let new_stop = find_next_tab_stop(0.0, tab_stops, indent_left);
                 let new_target = new_stop.position - indent_left;
-                seg_start = resolve_tab_aligned_start(
-                    &new_stop, new_target, seg_runs, seen_fonts, 0.0,
-                );
+                seg_start =
+                    resolve_tab_aligned_start(&new_stop, new_target, seg_runs, seen_fonts, 0.0);
             }
 
             // Draw leader fill between end of previous text and start of aligned text
@@ -542,8 +541,12 @@ pub(super) fn build_tabbed_line(
                                 let leader_w = count as f32 * char_w;
                                 let leader_start = seg_start - leader_w;
                                 all_chunks.push(WordChunk::leader(
-                                    entry, leader_text, eff_fs, run.color,
-                                    leader_start, leader_w,
+                                    entry,
+                                    leader_text,
+                                    eff_fs,
+                                    run.color,
+                                    leader_start,
+                                    leader_w,
                                 ));
                             }
                         }
@@ -888,7 +891,14 @@ pub(super) fn render_paragraph_lines(
                 let x = line_start_x + chunk.x_offset + chunk_idx as f32 * extra_per_gap;
                 let img_bottom = y - (chunk.inline_image_height - chunk.font_size);
                 content.save_state();
-                content.transform([chunk.width, 0.0, 0.0, chunk.inline_image_height, x, img_bottom]);
+                content.transform([
+                    chunk.width,
+                    0.0,
+                    0.0,
+                    chunk.inline_image_height,
+                    x,
+                    img_bottom,
+                ]);
                 content.x_object(Name(img_name.as_bytes()));
                 content.restore_state();
             }

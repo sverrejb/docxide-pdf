@@ -1,3 +1,5 @@
+use std::f32::consts::{FRAC_PI_2, TAU};
+
 use pdf_writer::Content;
 
 use crate::fonts::FontEntry;
@@ -14,6 +16,28 @@ struct RadialLayout {
     has_legend: bool,
     legend_on_right: bool,
     labels: Vec<String>,
+}
+
+const ARC_SEGMENTS: usize = 64;
+
+fn arc_segment_count(sweep: f32) -> usize {
+    ((ARC_SEGMENTS as f32 * sweep / TAU).ceil() as usize).max(2)
+}
+
+fn emit_arc(content: &mut Content, cx: f32, cy: f32, radius: f32, start: f32, sweep: f32) {
+    let n = arc_segment_count(sweep);
+    for s in 0..=n {
+        let a = start - (s as f32 / n as f32) * sweep;
+        content.line_to(cx + radius * a.cos(), cy + radius * a.sin());
+    }
+}
+
+fn emit_arc_reverse(content: &mut Content, cx: f32, cy: f32, radius: f32, end: f32, sweep: f32) {
+    let n = arc_segment_count(sweep);
+    for s in 0..=n {
+        let a = end + (s as f32 / n as f32) * sweep;
+        content.line_to(cx + radius * a.cos(), cy + radius * a.sin());
+    }
 }
 
 fn setup_radial_chart(
@@ -135,22 +159,16 @@ pub(super) fn render_pie(
 
     content.save_state();
 
-    let mut angle = std::f32::consts::FRAC_PI_2;
-    let segments = 64;
+    let mut angle = FRAC_PI_2;
     let values = &c.series[0].values;
     let total: f32 = values.iter().sum();
 
     for (i, &val) in values.iter().enumerate() {
-        let sweep = (val / total) * 2.0 * std::f32::consts::PI;
+        let sweep = (val / total) * TAU;
         fill_rgb(content, layout.colors[i % layout.colors.len()]);
 
         content.move_to(layout.cx, layout.cy);
-        let n_seg =
-            ((segments as f32 * sweep / (2.0 * std::f32::consts::PI)).ceil() as usize).max(2);
-        for s in 0..=n_seg {
-            let a = angle - (s as f32 / n_seg as f32) * sweep;
-            content.line_to(layout.cx + radius * a.cos(), layout.cy + radius * a.sin());
-        }
+        emit_arc(content, layout.cx, layout.cy, radius, angle, sweep);
         content.close_path();
         content.fill_nonzero();
 
@@ -186,38 +204,22 @@ pub(super) fn render_doughnut(
 
     content.save_state();
 
-    let mut angle = std::f32::consts::FRAC_PI_2;
-    let segments = 64;
+    let mut angle = FRAC_PI_2;
     let values = &c.series[0].values;
     let total: f32 = values.iter().sum();
 
     for (i, &val) in values.iter().enumerate() {
-        let sweep = (val / total) * 2.0 * std::f32::consts::PI;
+        let sweep = (val / total) * TAU;
         fill_rgb(content, layout.colors[i % layout.colors.len()]);
 
-        let n_seg =
-            ((segments as f32 * sweep / (2.0 * std::f32::consts::PI)).ceil() as usize).max(2);
-
         // Outer arc (clockwise = decreasing angle)
-        let a_start = angle;
-        let a_end = angle - sweep;
         content.move_to(
-            layout.cx + outer_r * a_start.cos(),
-            layout.cy + outer_r * a_start.sin(),
+            layout.cx + outer_r * angle.cos(),
+            layout.cy + outer_r * angle.sin(),
         );
-        for s in 1..=n_seg {
-            let a = a_start - (s as f32 / n_seg as f32) * sweep;
-            content.line_to(layout.cx + outer_r * a.cos(), layout.cy + outer_r * a.sin());
-        }
+        emit_arc(content, layout.cx, layout.cy, outer_r, angle, sweep);
         // Inner arc backwards (increasing angle)
-        content.line_to(
-            layout.cx + inner_r * a_end.cos(),
-            layout.cy + inner_r * a_end.sin(),
-        );
-        for s in 1..=n_seg {
-            let a = a_end + (s as f32 / n_seg as f32) * sweep;
-            content.line_to(layout.cx + inner_r * a.cos(), layout.cy + inner_r * a.sin());
-        }
+        emit_arc_reverse(content, layout.cx, layout.cy, inner_r, angle - sweep, sweep);
         content.close_path();
         content.fill_nonzero();
 

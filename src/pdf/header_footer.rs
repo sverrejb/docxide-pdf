@@ -3,12 +3,11 @@ use std::collections::HashMap;
 use pdf_writer::{Content, Name};
 
 use crate::model::{
-    Alignment, Block, FieldCode, HRelativeFrom, HeaderFooter, HorizontalPosition, Paragraph, Run,
-    SectionProperties, VRelativeFrom,
+    Alignment, Block, FieldCode, HeaderFooter, Paragraph, Run, SectionProperties, VRelativeFrom,
 };
 
 use super::layout::{
-    build_paragraph_lines, build_tabbed_line, is_text_empty, render_paragraph_lines,
+    TextLine, build_paragraph_lines, build_tabbed_line, is_text_empty, render_paragraph_lines,
     tallest_run_metrics,
 };
 use super::table;
@@ -44,8 +43,7 @@ pub(super) fn compute_header_height(hf: &HeaderFooter, ctx: &RenderContext) -> f
     for block in &hf.blocks {
         match block {
             Block::Paragraph(para) => {
-                let inter_gap = f32::max(prev_space_after, para.space_before);
-                height += inter_gap;
+                height += prev_space_after.max(para.space_before);
                 let (font_size, tallest_lhr, _) = tallest_run_metrics(&para.runs, ctx.fonts);
                 let effective_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
                 let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
@@ -55,16 +53,11 @@ pub(super) fn compute_header_height(hf: &HeaderFooter, ctx: &RenderContext) -> f
                     .filter_map(|r| r.inline_image.as_ref())
                     .map(|img| img.display_height)
                     .fold(0.0f32, f32::max);
-                height += if max_img_h > line_h {
-                    max_img_h
-                } else {
-                    line_h
-                };
+                height += max_img_h.max(line_h);
                 prev_space_after = para.space_after;
             }
             Block::Table(table) => {
-                let row_layouts = table::compute_hf_table_height(table, ctx);
-                height += row_layouts;
+                height += table::compute_hf_table_height(table, ctx);
                 prev_space_after = 0.0;
             }
         }
@@ -79,18 +72,16 @@ pub(super) fn effective_slot_top(
     is_first: bool,
     ctx: &RenderContext,
 ) -> f32 {
-    let header = if is_first && sp.different_first_page {
-        sp.header_first.as_ref()
-    } else {
-        sp.header_default.as_ref()
-    };
+    let header = select_hf(
+        is_first,
+        sp.different_first_page,
+        &sp.header_first,
+        &sp.header_default,
+    );
     let base = sp.page_height - sp.margin_top;
-    if let Some(hf) = header {
-        let hdr_h = compute_header_height(hf, ctx);
-        let hdr_bottom = sp.page_height - sp.header_margin - hdr_h;
-        base.min(hdr_bottom)
-    } else {
-        base
+    match header {
+        Some(hf) => base.min(sp.page_height - sp.header_margin - compute_header_height(hf, ctx)),
+        None => base,
     }
 }
 
@@ -99,38 +90,89 @@ pub(super) fn compute_effective_margin_bottom(
     is_first: bool,
     ctx: &RenderContext,
 ) -> f32 {
-    let footer = if is_first && sp.different_first_page {
-        sp.footer_first.as_ref()
-    } else {
-        sp.footer_default.as_ref()
-    };
+    let footer = select_hf(
+        is_first,
+        sp.different_first_page,
+        &sp.footer_first,
+        &sp.footer_default,
+    );
     let base = sp.margin_bottom;
-    if let Some(hf) = footer {
-        let ftr_h = compute_header_height(hf, ctx);
-        let ftr_top = sp.footer_margin + ftr_h;
-        base.max(ftr_top)
+    match footer {
+        Some(hf) => base.max(sp.footer_margin + compute_header_height(hf, ctx)),
+        None => base,
+    }
+}
+
+fn select_hf<'a>(
+    is_first: bool,
+    different_first_page: bool,
+    first: &'a Option<HeaderFooter>,
+    default: &'a Option<HeaderFooter>,
+) -> Option<&'a HeaderFooter> {
+    if is_first && different_first_page {
+        first.as_ref()
     } else {
-        base
+        default.as_ref()
     }
 }
 
 pub(super) fn hf_paragraphs(hf: &HeaderFooter) -> Vec<&Paragraph> {
-    let mut out = Vec::new();
-    for block in &hf.blocks {
-        match block {
-            Block::Paragraph(p) => out.push(p),
-            Block::Table(t) => {
-                for row in &t.rows {
-                    for cell in &row.cells {
-                        for p in &cell.paragraphs {
-                            out.push(p);
-                        }
-                    }
-                }
-            }
+    hf.blocks
+        .iter()
+        .flat_map(|block| match block {
+            Block::Paragraph(p) => vec![p],
+            Block::Table(t) => t
+                .rows
+                .iter()
+                .flat_map(|row| row.cells.iter())
+                .flat_map(|cell| cell.paragraphs.iter())
+                .collect(),
+        })
+        .collect()
+}
+
+fn resolve_tb_y_top(
+    v_relative_from: VRelativeFrom,
+    v_offset_pt: f32,
+    sp: &SectionProperties,
+    slot_top: f32,
+) -> f32 {
+    match v_relative_from {
+        VRelativeFrom::Page => sp.page_height - v_offset_pt,
+        VRelativeFrom::Margin | VRelativeFrom::TopMargin => {
+            sp.page_height - sp.margin_top - v_offset_pt
         }
+        VRelativeFrom::Paragraph => slot_top - v_offset_pt,
     }
-    out
+}
+
+fn emit_image_xobject(
+    content: &mut Content,
+    pdf_name: &str,
+    x: f32,
+    y_bottom: f32,
+    w: f32,
+    h: f32,
+) {
+    content.save_state();
+    content.transform([w, 0.0, 0.0, h, x, y_bottom]);
+    content.x_object(Name(pdf_name.as_bytes()));
+    content.restore_state();
+}
+
+fn build_lines(
+    runs: &[Run],
+    fonts: &HashMap<String, crate::fonts::FontEntry>,
+    tab_stops: &[crate::model::TabStop],
+    text_width: f32,
+    inline_images: &HashMap<usize, String>,
+) -> Vec<TextLine> {
+    let has_tabs = runs.iter().any(|r| r.is_tab);
+    if has_tabs {
+        build_tabbed_line(runs, fonts, tab_stops, 0.0, text_width, 0.0, inline_images)
+    } else {
+        build_paragraph_lines(runs, fonts, text_width, 0.0, inline_images)
+    }
 }
 
 pub(super) fn render_header_footer(
@@ -176,8 +218,7 @@ pub(super) fn render_header_footer(
                 let has_field_code = para.runs.iter().any(|r| r.field_code.is_some());
                 let text_empty = !has_field_code && is_text_empty(&para.runs);
 
-                let inter_gap = f32::max(prev_space_after, para.space_before);
-                cursor_y -= inter_gap;
+                cursor_y -= prev_space_after.max(para.space_before);
 
                 let substituted_runs =
                     substitute_hf_runs(&para.runs, page_num, total_pages, styleref_values);
@@ -193,41 +234,17 @@ pub(super) fn render_header_footer(
 
                 // Render textboxes
                 for tb in &para.textboxes {
-                    let tb_x = match tb.h_relative_from {
-                        HRelativeFrom::Page => match tb.h_position {
-                            HorizontalPosition::AlignCenter => (sp.page_width - tb.width_pt) / 2.0,
-                            HorizontalPosition::AlignRight => sp.page_width - tb.width_pt,
-                            HorizontalPosition::AlignLeft => 0.0,
-                            HorizontalPosition::Offset(o) => o,
-                        },
-                        HRelativeFrom::Column => match tb.h_position {
-                            HorizontalPosition::AlignCenter => {
-                                sp.margin_left + (text_width - tb.width_pt) / 2.0
-                            }
-                            HorizontalPosition::AlignRight => {
-                                sp.margin_left + text_width - tb.width_pt
-                            }
-                            HorizontalPosition::AlignLeft => sp.margin_left,
-                            HorizontalPosition::Offset(o) => sp.margin_left + o,
-                        },
-                        HRelativeFrom::Margin => match tb.h_position {
-                            HorizontalPosition::AlignCenter => {
-                                sp.margin_left + (text_width - tb.width_pt) / 2.0
-                            }
-                            HorizontalPosition::AlignRight => {
-                                sp.margin_left + text_width - tb.width_pt
-                            }
-                            HorizontalPosition::AlignLeft => sp.margin_left,
-                            HorizontalPosition::Offset(o) => sp.margin_left + o,
-                        },
-                    };
-                    let tb_y_top = match tb.v_relative_from {
-                        VRelativeFrom::Page => sp.page_height - tb.v_offset_pt,
-                        VRelativeFrom::Margin | VRelativeFrom::TopMargin => {
-                            sp.page_height - sp.margin_top - tb.v_offset_pt
-                        }
-                        VRelativeFrom::Paragraph => slot_top - tb.v_offset_pt,
-                    };
+                    let tb_x = super::resolve_h_position(
+                        tb.h_relative_from,
+                        &tb.h_position,
+                        tb.width_pt,
+                        sp,
+                        sp.margin_left,
+                        text_width,
+                        text_width,
+                    );
+                    let tb_y_top =
+                        resolve_tb_y_top(tb.v_relative_from, tb.v_offset_pt, sp, slot_top);
 
                     if let Some(ref fill) = tb.fill {
                         super::render_shape_fill(
@@ -248,26 +265,13 @@ pub(super) fn render_header_footer(
                     let empty_inline_imgs: HashMap<usize, String> = HashMap::new();
                     for tp in &tb.paragraphs {
                         let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                        let has_tabs = tp.runs.iter().any(|r| r.is_tab);
-                        let tb_lines = if has_tabs {
-                            build_tabbed_line(
-                                &tp.runs,
-                                ctx.fonts,
-                                &tp.tab_stops,
-                                0.0,
-                                content_w,
-                                0.0,
-                                &empty_inline_imgs,
-                            )
-                        } else {
-                            build_paragraph_lines(
-                                &tp.runs,
-                                ctx.fonts,
-                                content_w,
-                                0.0,
-                                &empty_inline_imgs,
-                            )
-                        };
+                        let tb_lines = build_lines(
+                            &tp.runs,
+                            ctx.fonts,
+                            &tp.tab_stops,
+                            content_w,
+                            &empty_inline_imgs,
+                        );
                         if tb_lines.is_empty() {
                             let (fs, _, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
                             let lh = resolve_line_h(tp_ls, fs, None);
@@ -309,39 +313,24 @@ pub(super) fn render_header_footer(
                 for (fi_idx, fi) in para.floating_images.iter().enumerate() {
                     if let Some(pdf_name) = floating_image_names.get(&(pi, fi_idx)) {
                         let img = &fi.image;
-                        let fi_x = match fi.h_relative_from {
-                            HRelativeFrom::Page => match fi.h_position {
-                                HorizontalPosition::AlignCenter => {
-                                    (sp.page_width - img.display_width) / 2.0
-                                }
-                                HorizontalPosition::AlignRight => sp.page_width - img.display_width,
-                                HorizontalPosition::AlignLeft => 0.0,
-                                HorizontalPosition::Offset(o) => o,
-                            },
-                            HRelativeFrom::Column | HRelativeFrom::Margin => match fi.h_position {
-                                HorizontalPosition::AlignCenter => {
-                                    sp.margin_left + (text_width - img.display_width) / 2.0
-                                }
-                                HorizontalPosition::AlignRight => {
-                                    sp.margin_left + text_width - img.display_width
-                                }
-                                HorizontalPosition::AlignLeft => sp.margin_left,
-                                HorizontalPosition::Offset(o) => sp.margin_left + o,
-                            },
-                        };
-                        let fi_y_top = super::resolve_fi_y_top(fi, sp, slot_top);
-                        let fi_y_bottom = fi_y_top - img.display_height;
-                        content.save_state();
-                        content.transform([
+                        let fi_x = super::resolve_h_position(
+                            fi.h_relative_from,
+                            &fi.h_position,
                             img.display_width,
-                            0.0,
-                            0.0,
-                            img.display_height,
+                            sp,
+                            sp.margin_left,
+                            text_width,
+                            text_width,
+                        );
+                        let fi_y_top = super::resolve_fi_y_top(fi, sp, slot_top);
+                        emit_image_xobject(
+                            content,
+                            pdf_name,
                             fi_x,
-                            fi_y_bottom,
-                        ]);
-                        content.x_object(Name(pdf_name.as_bytes()));
-                        content.restore_state();
+                            fi_y_top - img.display_height,
+                            img.display_width,
+                            img.display_height,
+                        );
                     }
                 }
 
@@ -357,17 +346,14 @@ pub(super) fn render_header_footer(
                                 Alignment::Right => (text_width - img.display_width).max(0.0),
                                 _ => 0.0,
                             };
-                        content.save_state();
-                        content.transform([
-                            img.display_width,
-                            0.0,
-                            0.0,
-                            img.display_height,
+                        emit_image_xobject(
+                            content,
+                            pdf_name,
                             x,
                             y_bottom,
-                        ]);
-                        content.x_object(Name(pdf_name.as_bytes()));
-                        content.restore_state();
+                            img.display_width,
+                            img.display_height,
+                        );
                     }
                     cursor_y -= line_h;
                     prev_space_after = para.space_after;
@@ -418,26 +404,13 @@ pub(super) fn render_header_footer(
                     .map(|((_, ri), name)| (*ri, name.clone()))
                     .collect();
 
-                let has_tabs = substituted_runs.iter().any(|r| r.is_tab);
-                let lines = if has_tabs {
-                    build_tabbed_line(
-                        &substituted_runs,
-                        ctx.fonts,
-                        &para.tab_stops,
-                        0.0,
-                        text_width,
-                        0.0,
-                        &block_inline_images,
-                    )
-                } else {
-                    build_paragraph_lines(
-                        &substituted_runs,
-                        ctx.fonts,
-                        text_width,
-                        0.0,
-                        &block_inline_images,
-                    )
-                };
+                let lines = build_lines(
+                    &substituted_runs,
+                    ctx.fonts,
+                    &para.tab_stops,
+                    text_width,
+                    &block_inline_images,
+                );
 
                 render_paragraph_lines(
                     content,
@@ -459,12 +432,7 @@ pub(super) fn render_header_footer(
                     .flat_map(|l| l.chunks.iter())
                     .map(|c| c.inline_image_height)
                     .fold(0.0f32, f32::max);
-                let effective_line_h = if max_img_h > line_h {
-                    max_img_h
-                } else {
-                    line_h
-                };
-                cursor_y -= lines.len().max(1) as f32 * effective_line_h;
+                cursor_y -= lines.len().max(1) as f32 * max_img_h.max(line_h);
                 prev_space_after = para.space_after;
                 pi += 1;
             }

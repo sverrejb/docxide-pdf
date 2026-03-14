@@ -78,6 +78,8 @@ fn set_stroke_color(content: &mut Content, color: Option<[u8; 3]>) {
     }
 }
 
+static DEFAULT_AXIS_COLOR: [u8; 3] = [179, 179, 179];
+
 const DEFAULT_MARKER_CYCLE: [MarkerSymbol; 3] = [
     MarkerSymbol::Diamond,
     MarkerSymbol::Square,
@@ -308,15 +310,10 @@ pub(super) fn render_chart(
         }
     );
 
-    let has_legend = c.legend.is_some();
-    let legend_on_right = c
-        .legend
-        .as_ref()
-        .is_some_and(|l| l.position == LegendPosition::Right);
-    let legend_on_bottom = c
-        .legend
-        .as_ref()
-        .is_some_and(|l| l.position == LegendPosition::Bottom);
+    let legend_pos = c.legend.as_ref().map(|l| l.position);
+    let has_legend = legend_pos.is_some();
+    let legend_on_right = legend_pos == Some(LegendPosition::Right);
+    let legend_on_bottom = legend_pos == Some(LegendPosition::Bottom);
 
     let max_val = c
         .series
@@ -390,12 +387,16 @@ pub(super) fn render_chart(
 
     content.save_state();
 
-    // Gridlines
+    // Gridlines and value-axis tick marks
     if let Some(ref val_axis) = c.val_axis {
-        let color = val_axis.gridline_color.unwrap_or([179, 179, 179]);
         content.set_line_width(0.5);
-        stroke_rgb(content, color);
         let num_ticks = (axis_max / tick_step).round() as usize;
+        let tick_len = 4.0;
+
+        stroke_rgb(
+            content,
+            val_axis.gridline_color.unwrap_or(DEFAULT_AXIS_COLOR),
+        );
         for i in 0..=num_ticks {
             let frac = (i as f32 * tick_step) / axis_max;
             if !horizontal {
@@ -409,15 +410,8 @@ pub(super) fn render_chart(
             }
             content.stroke();
         }
-    }
 
-    // Y-axis tick marks
-    if let Some(ref val_axis) = c.val_axis {
-        let color = val_axis.line_color.unwrap_or([179, 179, 179]);
-        stroke_rgb(content, color);
-        content.set_line_width(0.5);
-        let num_ticks = (axis_max / tick_step).round() as usize;
-        let tick_len = 4.0;
+        stroke_rgb(content, val_axis.line_color.unwrap_or(DEFAULT_AXIS_COLOR));
         for i in 0..=num_ticks {
             let frac = (i as f32 * tick_step) / axis_max;
             if !horizontal {
@@ -439,7 +433,7 @@ pub(super) fn render_chart(
             .cat_axis
             .as_ref()
             .and_then(|a| a.line_color)
-            .unwrap_or([179, 179, 179]);
+            .unwrap_or(DEFAULT_AXIS_COLOR);
         stroke_rgb(content, axis_color);
         content.set_line_width(0.5);
         let tick_len = 4.0;
@@ -572,24 +566,33 @@ pub(super) fn render_chart(
         ChartType::Area => {
             let cat_w = plot_w / (num_categories - 1).max(1) as f32;
             for series in &c.series {
+                let pts: Vec<(f32, f32)> = series
+                    .values
+                    .iter()
+                    .enumerate()
+                    .map(|(ci, &val)| {
+                        (
+                            plot_x + ci as f32 * cat_w,
+                            plot_y + (val / axis_max) * plot_h,
+                        )
+                    })
+                    .collect();
+
                 set_color(content, series.color);
                 content.move_to(plot_x, plot_y);
-                for (ci, &val) in series.values.iter().enumerate() {
-                    let lx = plot_x + ci as f32 * cat_w;
-                    let ly = plot_y + (val / axis_max) * plot_h;
+                for &(lx, ly) in &pts {
                     content.line_to(lx, ly);
                 }
-                let last_x = plot_x + (num_categories - 1) as f32 * cat_w;
-                content.line_to(last_x, plot_y);
+                if let Some(&(last_x, _)) = pts.last() {
+                    content.line_to(last_x, plot_y);
+                }
                 content.close_path();
                 content.fill_nonzero();
 
                 set_stroke_color(content, series.color);
                 content.set_line_width(1.5);
-                for (ci, &val) in series.values.iter().enumerate() {
-                    let lx = plot_x + ci as f32 * cat_w;
-                    let ly = plot_y + (val / axis_max) * plot_h;
-                    if ci == 0 {
+                for (i, &(lx, ly)) in pts.iter().enumerate() {
+                    if i == 0 {
                         content.move_to(lx, ly);
                     } else {
                         content.line_to(lx, ly);
@@ -659,8 +662,8 @@ pub(super) fn render_chart(
     }
 
     // Plot area border
+    content.set_line_width(0.75);
     if let Some(border) = c.plot_border_color {
-        content.set_line_width(0.75);
         stroke_rgb(content, border);
         content.rect(plot_x, plot_y, plot_w, plot_h);
         content.stroke();
@@ -669,8 +672,7 @@ pub(super) fn render_chart(
             .val_axis
             .as_ref()
             .and_then(|a| a.line_color)
-            .unwrap_or([179, 179, 179]);
-        content.set_line_width(0.75);
+            .unwrap_or(DEFAULT_AXIS_COLOR);
         stroke_rgb(content, axis_color);
         content.move_to(plot_x, plot_y);
         content.line_to(plot_x, plot_y + plot_h);
@@ -828,15 +830,10 @@ fn render_radar(
         return;
     }
 
-    let has_legend = c.legend.is_some();
-    let legend_on_right = c
-        .legend
-        .as_ref()
-        .is_some_and(|l| l.position == LegendPosition::Right);
-    let legend_on_bottom = c
-        .legend
-        .as_ref()
-        .is_some_and(|l| l.position == LegendPosition::Bottom);
+    let legend_pos = c.legend.as_ref().map(|l| l.position);
+    let has_legend = legend_pos.is_some();
+    let legend_on_right = legend_pos == Some(LegendPosition::Right);
+    let legend_on_bottom = legend_pos == Some(LegendPosition::Bottom);
 
     let max_val = c
         .series
@@ -881,7 +878,7 @@ fn render_radar(
         .val_axis
         .as_ref()
         .and_then(|a| a.gridline_color)
-        .unwrap_or([179, 179, 179]);
+        .unwrap_or(DEFAULT_AXIS_COLOR);
     content.set_line_width(0.5);
     stroke_rgb(content, grid_color);
 
@@ -974,15 +971,14 @@ fn render_radar(
         // Value labels along the 12 o'clock spoke (including "0" at center)
         let val_gap = 12.0;
         {
-            let label = "0".to_string();
-            let tw = text_width(&label, font_size, label_font);
+            let tw = text_width("0", font_size, label_font);
             show_text(
                 content,
                 label_font_key,
                 font_size,
                 cx - tw - val_gap,
                 cy - font_size * 0.3,
-                &label,
+                "0",
             );
         }
         for ti in 1..=num_ticks {

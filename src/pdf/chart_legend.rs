@@ -38,10 +38,14 @@ pub(super) fn render_chart_legend(
     let legend_fs = 10.0;
     let spacing = 2.5;
 
+    let item_width = |item: &LegendItem| -> f32 {
+        let ext = line_extension(&item.swatch);
+        swatch_size + ext * 2.0 + spacing + text_width(item.label, legend_fs, label_font) + 12.0
+    };
+
     match placement {
         LegendPlacement::Right { x: lx, center_y } => {
-            let num_items = items.len();
-            let block_h = swatch_size + (num_items as f32 - 1.0) * line_h;
+            let block_h = swatch_size + (items.len() as f32 - 1.0) * line_h;
             let ly_start = center_y + block_h / 2.0 - swatch_size + 5.0;
             for (i, item) in items.iter().enumerate() {
                 let ly = ly_start - i as f32 * line_h;
@@ -59,16 +63,7 @@ pub(super) fn render_chart_legend(
             }
         }
         LegendPlacement::Bottom { center_x, y: ly } => {
-            let total_w: f32 = items
-                .iter()
-                .map(|item| {
-                    swatch_size
-                        + line_extension(&item.swatch) * 2.0
-                        + spacing
-                        + text_width(item.label, legend_fs, label_font)
-                        + 12.0
-                })
-                .sum();
+            let total_w: f32 = items.iter().map(|item| item_width(item)).sum();
             let mut lx = center_x - total_w / 2.0;
             for item in items {
                 render_swatch(content, &item.swatch, item.color, lx, ly, swatch_size);
@@ -83,11 +78,7 @@ pub(super) fn render_chart_legend(
                     ly + 1.0,
                     item.label,
                 );
-                lx += swatch_size
-                    + ext * 2.0
-                    + spacing
-                    + text_width(item.label, legend_fs, label_font)
-                    + 12.0;
+                lx += item_width(item);
             }
         }
     }
@@ -108,6 +99,10 @@ fn render_swatch(
     y: f32,
     size: f32,
 ) {
+    let center_x = x + size / 2.0;
+    let center_y = y + size / 2.0;
+    let radius = size / 2.0;
+
     match swatch {
         SwatchStyle::Rect => {
             fill_rgb(content, color);
@@ -116,19 +111,17 @@ fn render_swatch(
         }
         SwatchStyle::Marker(sym) => {
             fill_rgb(content, color);
-            draw_marker(content, *sym, x + size / 2.0, y + size / 2.0, size / 2.0);
+            draw_marker(content, *sym, center_x, center_y, radius);
         }
         SwatchStyle::LineMarker(sym) => {
-            let mcx = x + size / 2.0;
-            let mcy = y + size / 2.0;
-            let ext = 12.0;
+            let ext = line_extension(swatch);
             stroke_rgb(content, color);
             content.set_line_width(1.5);
-            content.move_to(mcx - ext, mcy);
-            content.line_to(mcx + ext, mcy);
+            content.move_to(center_x - ext, center_y);
+            content.line_to(center_x + ext, center_y);
             content.stroke();
             fill_rgb(content, color);
-            draw_marker(content, *sym, mcx, mcy, size / 2.0);
+            draw_marker(content, *sym, center_x, center_y, radius);
         }
     }
 }
