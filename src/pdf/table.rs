@@ -114,12 +114,34 @@ fn render_cell_paragraphs(
     let mut cursor_y = cursor_y_start;
 
     for para in paragraphs {
-        if !para_has_visible_content(para) {
+        if !para_has_visible_content(para) && para.image_name.is_none() {
             cursor_y -= para.space_before + para.lines.len() as f32 * para.line_h;
+            if para.content_height > 0.0 {
+                cursor_y -= para.content_height;
+            }
             continue;
         }
 
         cursor_y -= para.space_before;
+
+        if let Some(ref img_name) = para.image_name {
+            let img_x = cell_x + cm.left;
+            let img_y = cursor_y - para.image_height;
+            content.save_state();
+            content.transform([
+                para.image_width,
+                0.0,
+                0.0,
+                para.image_height,
+                img_x,
+                img_y,
+            ]);
+            content.x_object(Name(img_name.as_bytes()));
+            content.restore_state();
+            cursor_y -= para.content_height;
+            continue;
+        }
+
         let text_x = cell_x + cm.left + para.indent_left;
         let text_w = (col_w - cm.left - cm.right - para.indent_left).max(0.0);
         let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
@@ -294,6 +316,10 @@ struct CellParagraphLayout {
     list_label_font: Option<String>,
     label_color: Option<[u8; 3]>,
     first_run_font_key: String,
+    image_name: Option<String>,
+    image_width: f32,
+    image_height: f32,
+    content_height: f32,
 }
 
 struct CellLayout {
@@ -457,6 +483,16 @@ fn compute_row_layouts(
                             })
                             .unwrap_or_default();
 
+                        let image_name = para.image.as_ref().and_then(|img| {
+                            let key = std::sync::Arc::as_ptr(&img.data) as usize;
+                            ctx.table_cell_image_names.get(&key).cloned()
+                        });
+                        let (image_width, image_height) = para
+                            .image
+                            .as_ref()
+                            .map(|img| (img.display_width, img.display_height))
+                            .unwrap_or((0.0, 0.0));
+
                         paragraphs.push(CellParagraphLayout {
                             lines,
                             line_h,
@@ -471,6 +507,10 @@ fn compute_row_layouts(
                             list_label_font: para.list_label_font.clone(),
                             label_color: para.runs.first().and_then(|r| r.color),
                             first_run_font_key,
+                            image_name,
+                            image_width,
+                            image_height,
+                            content_height: para.content_height,
                         });
 
                         prev_space_after = para.space_after;
@@ -602,7 +642,14 @@ fn render_table_row(
             let content_h: f32 = cell_layout
                 .paragraphs
                 .iter()
-                .map(|p| p.space_before + p.lines.len() as f32 * p.line_h)
+                .map(|p| {
+                    let para_h = if p.lines.is_empty() && p.content_height > 0.0 {
+                        p.content_height
+                    } else {
+                        p.lines.len() as f32 * p.line_h
+                    };
+                    p.space_before + para_h
+                })
                 .sum();
 
             let avail = row_h - cm.top - cm.bottom;

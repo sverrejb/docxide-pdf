@@ -51,7 +51,7 @@ pub(super) fn compute_header_height(hf: &HeaderFooter, ctx: &RenderContext) -> f
                     .runs
                     .iter()
                     .filter_map(|r| r.inline_image.as_ref())
-                    .map(|img| img.display_height)
+                    .map(|img| img.display_height + img.layout_extra_height)
                     .fold(0.0f32, f32::max);
                 height += max_img_h.max(line_h);
                 prev_space_after = para.space_after;

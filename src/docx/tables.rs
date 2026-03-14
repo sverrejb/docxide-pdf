@@ -270,7 +270,10 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                 let (para_image, content_height) = if has_inline_images && !has_text {
                     let idx = runs.iter().position(|r| r.inline_image.is_some());
                     let img = idx.and_then(|i| runs[i].inline_image.take());
-                    let h = img.as_ref().map(|i| i.display_height).unwrap_or(0.0);
+                    let h = img
+                        .as_ref()
+                        .map(|i| i.display_height + i.layout_extra_height)
+                        .unwrap_or(0.0);
                     (img, h)
                 } else {
                     (None, 0.0)

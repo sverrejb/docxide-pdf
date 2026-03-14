@@ -141,6 +141,8 @@ pub struct EmbeddedImage {
     pub display_width: f32,  // points
     pub display_height: f32, // points
     pub jpeg_components: u8,
+    /// Extra vertical space from wp:effectExtent + wp:inline distT/distB (points)
+    pub layout_extra_height: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

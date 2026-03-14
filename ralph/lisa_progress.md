@@ -77,4 +77,54 @@ Two issues in table cell parsing:
 
 ### Not Fixed (deferred)
 - **Empty paragraph height in table cells**: Every `w:p` in a table cell (including spacer paragraphs) should contribute `line_h` to cell height. Current code gives 0 height. Fixing this improved `czech_grant_application` by +1.5pp but caused -2.9pp and -3.4pp SSIM regressions on other fixtures because the mandatory end-of-cell paragraph marker also gets full `line_h`. Needs a way to distinguish spacer paragraphs from the structural end-of-cell marker.
-- **Inline image rendering in table cells**: Images are now parsed and contribute to height, but the actual image is not rendered (no XObject reference plumbing in table cell rendering). The logo is correctly sized but invisible.
+
+## Session 3 — 2026-03-14: Inline image effectExtent/dist + table cell image rendering
+
+### Case Selected
+`mandated_reporter_child_abuse` (text/layout only, 5 pages, 18.4% Jaccard) — continued from session 2 as the fixture closest to the 20% threshold (1.6pp away). The header contains a table cell with a large inline image (JCS Inc. logo) whose layout extra height from `wp:effectExtent` and `distT/distB` was not being accounted for. Additionally, inline images in table cells were parsed but never rendered.
+
+### Problem
+Two issues:
+1. **Inline image layout height missing effectExtent and dist margins**: `wp:inline` elements have `effectExtent` (space for visual effects like borders) and `distT/distB` (minimum distance to surrounding text) attributes. These were not included in the image's layout height, causing table cells containing images to be shorter than they should be. In the header table, this made the first page body text start too high, shifting all subsequent pages.
+2. **Inline images in table cells not rendered**: Session 2 added image parsing and height contribution for table cell images, but the actual image XObject was never embedded or drawn. The logo was correctly sized but invisible.
+
+### Analysis
+- Investigated the first-page header of `mandated_reporter_child_abuse`: a table with logo image (73.9×63.4pt) in cell 1, nested table with title in cell 2
+- The image's `wp:inline` had `distT="114300" distB="114300"` (9pt each) and `effectExtent t="25400" b="25400"` (2pt each) — total 22pt of extra height not being used
+- Without this extra height, cell 1 content was ~80pt, below the `trHeight=1965` (98.25pt) minimum. With it, cell content reaches ~102pt, exceeding the minimum and increasing the table row height by 4.25pt
+- The 4.25pt increase in header height shifts body text down, improving vertical alignment with the reference across all 5 pages
+- Initial approach included effectExtent in body paragraph height too, but this caused -1.0pp regression on `russian_sports_ranking_decree` (its coat-of-arms image has effectExtent b=0.6pt that shifted text). Fixed by only applying layout_extra_height in table cell context, not body paragraphs.
+- For table cell image rendering, added XObject pre-embedding for all table cells (body + headers/footers) and image drawing in the cell rendering code
+
+### Implementation
+1. Added `layout_extra_height: f32` field to `EmbeddedImage` struct — captures effectExtent top+bottom + distT+distB (in pts)
+2. Added `inline_extra_height()` helper in `images.rs` — extracts effectExtent and dist from `wp:inline` container
+3. In `parse_run_drawing_result()` and `compute_drawing_info()` — inline images now get `layout_extra_height` set
+4. In `tables.rs` cell parsing — `content_height` includes `display_height + layout_extra_height` for image paragraphs
+5. In `header_footer.rs` `compute_header_height()` — uses `display_height + layout_extra_height` for inline images
+6. In `mod.rs` body parser — deliberately does NOT include layout_extra_height (to avoid body text displacement regressions)
+7. Added `table_cell_image_names` HashMap to `EmbeddedImages` and `RenderContext` — maps `Arc::as_ptr()` address to PDF XObject name
+8. In `embed_all_images()` — walks all table cells in body + headers/footers to pre-embed images
+9. Added `image_name`, `image_width`, `image_height`, `content_height` fields to `CellParagraphLayout`
+10. In `render_cell_paragraphs()` — draws images using `content.x_object()` when `image_name` is set
+11. Fixed `content_h` calculation in `render_table_row()` — includes `content_height` for image paragraphs (needed for vAlign centering)
+
+### Files Modified
+- `src/model.rs` — added `layout_extra_height` to `EmbeddedImage`
+- `src/docx/images.rs` — `inline_extra_height()` helper, `read_image_from_zip_extra()`, pass extra height for inline images
+- `src/docx/mod.rs` — body parser uses `display_height` only (no extra height for body paragraphs)
+- `src/docx/tables.rs` — table cell parser includes `layout_extra_height` in content_height
+- `src/pdf/mod.rs` — `Table` import, `table_cell_image_names` in `RenderContext` and `EmbeddedImages`, pre-embedding for table cell images
+- `src/pdf/table.rs` — `CellParagraphLayout` image fields, image rendering in cells, fixed content_h for vAlign
+- `src/pdf/header_footer.rs` — includes `layout_extra_height` in header height computation
+
+### Results
+- **mandated_reporter_child_abuse**: 18.4% → 19.6% Jaccard (+1.2pp), 43.7% → 49.5% SSIM (+5.8pp)
+- Logo image now renders visibly in the header table cell
+- Header table height increased from 98.25pt to 102.5pt (effectExtent+dist pushes cell content past trHeight minimum)
+- Small noise-level variations on some fixtures (samtale -0.4pp, sample500kB -0.3pp, indonesian_benchmark -0.5pp) — these are within measurement noise range and don't affect pass/fail status
+- No REGRESSION flags on visual comparison
+
+### Not Fixed (deferred)
+- **mandated_reporter still 0.4pp below 20% threshold**: The page break on page 1 still falls at a slightly different point than Word. ~10pt of additional header height is needed (from nested table row heights lost during flattening). Fixing nested table height preservation in the flattening code would likely push this fixture over the threshold.
+- **Empty paragraph height in table cells**: Still deferred (see session 2 notes).

@@ -19,7 +19,7 @@ use crate::model::{
     Alignment, Block, ConnectorShape, ConnectorType, Document, EmbeddedImage, FieldCode,
     FloatingImage, HRelativeFrom, HeaderFooter, HorizontalPosition, ImageFormat, LineSpacing,
     Paragraph, ParagraphBorder, ParagraphBorders, Run, SectionBreakType, SectionProperties,
-    ShapeFill, ShapeGeometry, Textbox, VRelativeFrom, VerticalPosition, WrapType,
+    ShapeFill, ShapeGeometry, Table, Textbox, VRelativeFrom, VerticalPosition, WrapType,
 };
 
 use footnotes::{compute_footnote_height, render_page_footnotes};
@@ -36,6 +36,8 @@ use table::render_table;
 pub(super) struct RenderContext<'a> {
     pub(super) fonts: &'a HashMap<String, FontEntry>,
     pub(super) doc_line_spacing: LineSpacing,
+    /// Image names for inline images in table cells, keyed by Arc data pointer address.
+    pub(super) table_cell_image_names: &'a HashMap<usize, String>,
 }
 
 pub(super) struct GradientSpec {
@@ -519,6 +521,8 @@ struct EmbeddedImages {
     hf_image_names: HashMap<(usize, u8, usize), String>,
     hf_inline_image_names: HashMap<(usize, u8, usize, usize), String>,
     hf_floating_image_names: HashMap<(usize, u8, usize, usize), String>,
+    /// Images in table cell paragraphs, keyed by Arc data pointer address.
+    table_cell_image_names: HashMap<usize, String>,
 }
 
 pub(super) struct PageBuilder {
@@ -1032,6 +1036,51 @@ fn embed_all_images(
         }
     }
 
+    let mut table_cell_image_names: HashMap<usize, String> = HashMap::new();
+    {
+        let mut tables: Vec<&Table> = Vec::new();
+        for section in &doc.sections {
+            for block in &section.blocks {
+                if let Block::Table(table) = block {
+                    tables.push(table);
+                }
+            }
+            let hf_list: [Option<&HeaderFooter>; 6] = [
+                section.properties.header_default.as_ref(),
+                section.properties.header_first.as_ref(),
+                section.properties.footer_default.as_ref(),
+                section.properties.footer_first.as_ref(),
+                section.properties.header_even.as_ref(),
+                section.properties.footer_even.as_ref(),
+            ];
+            for hf_opt in hf_list {
+                if let Some(hf) = hf_opt {
+                    for block in &hf.blocks {
+                        if let Block::Table(table) = block {
+                            tables.push(table);
+                        }
+                    }
+                }
+            }
+        }
+        for table in tables {
+            for row in &table.rows {
+                for cell in &row.cells {
+                    for para in &cell.paragraphs {
+                        if let Some(img) = &para.image {
+                            let key = std::sync::Arc::as_ptr(&img.data) as usize;
+                            if !table_cell_image_names.contains_key(&key) {
+                                let name =
+                                    embed_single_image(img, &mut image_xobjects, pdf, alloc);
+                                table_cell_image_names.insert(key, name);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     EmbeddedImages {
         image_pdf_names,
         inline_image_pdf_names,
@@ -1040,6 +1089,7 @@ fn embed_all_images(
         hf_image_names,
         hf_inline_image_names,
         hf_floating_image_names,
+        table_cell_image_names,
     }
 }
 
@@ -1288,11 +1338,6 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
     let (seen_fonts, font_order) = collect_and_register_fonts(doc, &mut pdf, &mut alloc);
     let smartart_font_key = font_order.first().map(|s| s.as_str()).unwrap_or("");
-    let ctx = RenderContext {
-        fonts: &seen_fonts,
-        doc_line_spacing: doc.line_spacing,
-    };
-
     let t_fonts = t0.elapsed();
 
     let EmbeddedImages {
@@ -1303,7 +1348,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         hf_image_names,
         hf_inline_image_names,
         hf_floating_image_names,
+        table_cell_image_names,
     } = embed_all_images(doc, &mut pdf, &mut alloc);
+
+    let ctx = RenderContext {
+        fonts: &seen_fonts,
+        doc_line_spacing: doc.line_spacing,
+        table_cell_image_names: &table_cell_image_names,
+    };
 
     let t_images = t0.elapsed();
 
