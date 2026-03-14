@@ -949,7 +949,7 @@ pub(super) fn render_table(
 
     let is_truly_floating = override_pos.is_some_and(|(.., restore)| restore);
     let (table_left, saved_slot_top) = if let Some((x, y, restore)) = override_pos {
-        let saved = if restore { Some(pb.slot_top) } else { None };
+        let saved = if restore { Some((pb.slot_top, y)) } else { None };
         pb.slot_top = y;
         (x, saved)
     } else {
@@ -1065,8 +1065,16 @@ pub(super) fn render_table(
         }
     }
 
-    if let Some(saved) = saved_slot_top {
-        pb.slot_top = saved;
+    if let Some((saved, table_top_y)) = saved_slot_top {
+        let table_bottom = pb.slot_top;
+        // When the floating table starts at/above the margin (table_top_y >= saved),
+        // body text can't flow above it — push text below the table.
+        // When the table starts below the margin, body text fills the gap above it.
+        if table_top_y >= saved && table_bottom < saved {
+            pb.slot_top = table_bottom;
+        } else {
+            pb.slot_top = saved;
+        }
     }
 }
 
