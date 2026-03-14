@@ -580,6 +580,7 @@ fn visual_comparison() {
                 jaccard: Some(r.jaccard),
                 ssim: Some(r.ssim),
                 text_boundary: None,
+                convert_ms: None,
             },
         );
     }

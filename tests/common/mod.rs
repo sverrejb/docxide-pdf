@@ -16,6 +16,8 @@ pub struct Baselines {
     pub ssim: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub text_boundary: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub convert_ms: Option<f64>,
 }
 
 fn load_skiplist() -> HashSet<String> {
@@ -150,6 +152,12 @@ fn merge_max(existing: &mut Option<f64>, new_val: Option<f64>) {
     }
 }
 
+fn merge_min(existing: &mut Option<f64>, new_val: Option<f64>) {
+    if let Some(v) = new_val {
+        *existing = Some(round4(existing.map_or(v, |b| b.min(v))));
+    }
+}
+
 pub fn update_baselines(updates: &HashMap<String, Baselines>) {
     let mut baselines = read_baselines();
     for (name, new) in updates {
@@ -157,6 +165,7 @@ pub fn update_baselines(updates: &HashMap<String, Baselines>) {
         merge_max(&mut entry.jaccard, new.jaccard);
         merge_max(&mut entry.ssim, new.ssim);
         merge_max(&mut entry.text_boundary, new.text_boundary);
+        merge_min(&mut entry.convert_ms, new.convert_ms);
     }
     let sorted: BTreeMap<_, _> = baselines.into_iter().collect();
     let json = serde_json::to_string_pretty(&sorted).expect("Failed to serialize baselines");

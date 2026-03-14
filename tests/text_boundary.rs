@@ -326,6 +326,7 @@ fn text_boundaries_match() {
                 jaccard: None,
                 ssim: None,
                 text_boundary: Some(r.line_match_pct()),
+                convert_ms: None,
             },
         );
     }
