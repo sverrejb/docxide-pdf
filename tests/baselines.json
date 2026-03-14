@@ -258,8 +258,8 @@
     "convert_ms": 57.8
   },
   "scraped/croatian_grant_g..": {
-    "jaccard": 0.0665,
-    "ssim": 0.1782,
+    "jaccard": 0.0681,
+    "ssim": 0.1789,
     "text_boundary": 0.032,
     "convert_ms": 229.3
   },
@@ -318,8 +318,8 @@
     "convert_ms": 245.9
   },
   "scraped/go_math_grade4_g..": {
-    "jaccard": 0.1422,
-    "ssim": 0.3959,
+    "jaccard": 0.1686,
+    "ssim": 0.419,
     "text_boundary": 0.3114,
     "convert_ms": 65.1
   },
@@ -366,8 +366,8 @@
     "convert_ms": 5.0
   },
   "scraped/mandated_reporte..": {
-    "jaccard": 0.1821,
-    "ssim": 0.4346,
+    "jaccard": 0.2636,
+    "ssim": 0.4991,
     "text_boundary": 0.0904,
     "convert_ms": 20.0
   },

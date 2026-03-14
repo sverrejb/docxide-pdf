@@ -29,12 +29,33 @@ fn border_or_fallback(inline: CellBorder, fallback: CellBorder) -> CellBorder {
     if inline.present { inline } else { fallback }
 }
 
+struct AnnotatedNode<'a> {
+    node: roxmltree::Node<'a, 'a>,
+    extra_space_before: f32,
+    extra_space_after: f32,
+}
+
 /// Flatten nested table content: extract all w:p nodes from a w:tbl's cells,
 /// skipping vMerge=continue cells to avoid duplicating merged content.
+/// Preserves nested table cell margins as extra spacing on first/last paragraphs.
 fn collect_nested_table_paragraphs<'a>(
     tbl: roxmltree::Node<'a, 'a>,
-    out: &mut Vec<roxmltree::Node<'a, 'a>>,
+    out: &mut Vec<AnnotatedNode<'a>>,
 ) {
+    let tbl_pr = wml(tbl, "tblPr");
+    let (margin_top, margin_bottom) = tbl_pr
+        .and_then(|pr| wml(pr, "tblCellMar"))
+        .map(|mar| {
+            let top = wml(mar, "top")
+                .and_then(|n| twips_attr(n, "w"))
+                .unwrap_or(0.0);
+            let bottom = wml(mar, "bottom")
+                .and_then(|n| twips_attr(n, "w"))
+                .unwrap_or(0.0);
+            (top, bottom)
+        })
+        .unwrap_or((0.0, 0.0));
+
     for tr in collect_block_nodes(tbl)
         .into_iter()
         .filter(|n| is_wml(n, "tr"))
@@ -50,12 +71,35 @@ fn collect_nested_table_paragraphs<'a>(
             if is_continue {
                 continue;
             }
+            let (cell_margin_top, cell_margin_bottom) = tc_pr
+                .and_then(|pr| wml(pr, "tcMar"))
+                .map(|mar| {
+                    let top = wml(mar, "top")
+                        .and_then(|n| twips_attr(n, "w"))
+                        .unwrap_or(margin_top);
+                    let bottom = wml(mar, "bottom")
+                        .and_then(|n| twips_attr(n, "w"))
+                        .unwrap_or(margin_bottom);
+                    (top, bottom)
+                })
+                .unwrap_or((margin_top, margin_bottom));
+
+            let start_idx = out.len();
             for n in collect_block_nodes(tc) {
                 if is_wml(&n, "p") {
-                    out.push(n);
+                    out.push(AnnotatedNode {
+                        node: n,
+                        extra_space_before: 0.0,
+                        extra_space_after: 0.0,
+                    });
                 } else if is_wml(&n, "tbl") {
                     collect_nested_table_paragraphs(n, out);
                 }
+            }
+            let end_idx = out.len();
+            if start_idx < end_idx {
+                out[start_idx].extra_space_before += cell_margin_top;
+                out[end_idx - 1].extra_space_after += cell_margin_bottom;
             }
         }
     }
@@ -252,17 +296,37 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                 .filter(|f| *f != "none")
                 .and_then(parse_hex_color);
 
+            let per_cell_margins = tc_pr
+                .and_then(|pr| wml(pr, "tcMar"))
+                .map(|mar| CellMargins {
+                    top: wml(mar, "top")
+                        .and_then(|n| twips_attr(n, "w"))
+                        .unwrap_or(cell_margins.top),
+                    left: margin_twips(mar, "left", "start")
+                        .unwrap_or(cell_margins.left),
+                    bottom: wml(mar, "bottom")
+                        .and_then(|n| twips_attr(n, "w"))
+                        .unwrap_or(cell_margins.bottom),
+                    right: margin_twips(mar, "right", "end")
+                        .unwrap_or(cell_margins.right),
+                });
+
             let mut cell_paras = Vec::new();
             let block_nodes = collect_block_nodes(tc);
-            let mut p_nodes: Vec<roxmltree::Node> = Vec::new();
+            let mut p_nodes: Vec<AnnotatedNode> = Vec::new();
             for n in &block_nodes {
                 if is_wml(n, "p") {
-                    p_nodes.push(*n);
+                    p_nodes.push(AnnotatedNode {
+                        node: *n,
+                        extra_space_before: 0.0,
+                        extra_space_after: 0.0,
+                    });
                 } else if is_wml(n, "tbl") {
                     collect_nested_table_paragraphs(*n, &mut p_nodes);
                 }
             }
-            for p in p_nodes {
+            for ap in p_nodes {
+                let p = ap.node;
                 let parsed = parse_runs(p, styles, theme, rels, zip, numbering);
                 let mut runs = parsed.runs;
                 let has_text = runs.iter().any(|r| !r.text.is_empty() || r.is_tab);
@@ -326,12 +390,12 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                         indent_first_line = v;
                     }
                 }
-                let space_before = sp_before.unwrap_or(0.0);
+                let space_before = sp_before.unwrap_or(0.0) + ap.extra_space_before;
                 let space_after = sp_after.unwrap_or(if has_tbl_style {
                     0.0
                 } else {
                     styles.defaults.space_after
-                });
+                }) + ap.extra_space_after;
                 cell_paras.push(Paragraph {
                     runs,
                     alignment,
@@ -360,6 +424,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                 grid_span,
                 v_merge,
                 v_align,
+                cell_margins: per_cell_margins,
                 text_direction,
             });
             grid_col += grid_span as usize;

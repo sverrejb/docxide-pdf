@@ -407,13 +407,14 @@ fn compute_row_layouts(
                         };
                     }
 
+                    let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
                     let is_rotated = cell.text_direction != TextDirection::LrTb;
                     let cell_text_w = if is_rotated {
                         10000.0
                     } else {
-                        (col_w - cm.left - cm.right).max(0.0)
+                        (col_w - ecm.left - ecm.right).max(0.0)
                     };
-                    let mut total_h: f32 = cm.top + cm.bottom;
+                    let mut total_h: f32 = ecm.top + ecm.bottom;
                     let mut max_rotated_line_w: f32 = 0.0;
                     let mut paragraphs = Vec::new();
                     let mut prev_space_after = 0.0f32;
@@ -518,7 +519,7 @@ fn compute_row_layouts(
 
                     total_h += prev_space_after;
                     if is_rotated {
-                        total_h = cm.top + cm.bottom + max_rotated_line_w;
+                        total_h = ecm.top + ecm.bottom + max_rotated_line_w;
                     }
                     if cell.v_merge != VMerge::Restart {
                         max_h = max_h.max(total_h);
@@ -625,6 +626,7 @@ fn render_table_row(
         }
 
         let has_content = cell_has_visible_content(&cell_layout.paragraphs);
+        let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
 
         if has_content && cell_layout.text_direction == TextDirection::TbRl {
             render_vertical_cjk_cell(
@@ -635,7 +637,7 @@ fn render_table_row(
                 row_top,
                 row_h,
                 col_w,
-                cm,
+                ecm,
                 ctx,
             );
         } else if has_content {
@@ -652,9 +654,9 @@ fn render_table_row(
                 })
                 .sum();
 
-            let avail = row_h - cm.top - cm.bottom;
+            let avail = row_h - ecm.top - ecm.bottom;
             let v_offset = valign_offset(cell.v_align, avail, content_h);
-            let cursor_y = row_top - cm.top - v_offset;
+            let cursor_y = row_top - ecm.top - v_offset;
 
             render_cell_paragraphs(
                 &mut pb.content,
@@ -662,7 +664,7 @@ fn render_table_row(
                 cell_x,
                 col_w,
                 cursor_y,
-                cm,
+                ecm,
                 ctx.fonts,
             );
         }
@@ -1119,15 +1121,16 @@ pub(super) fn render_header_footer_table(
             }
 
             if cell_has_visible_content(&cell_layout.paragraphs) {
+                let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
                 let content_h: f32 = cell_layout
                     .paragraphs
                     .iter()
                     .map(|p| p.space_before + p.lines.len() as f32 * p.line_h)
                     .sum();
 
-                let avail = row_h - cm.top - cm.bottom;
+                let avail = row_h - ecm.top - ecm.bottom;
                 let v_offset = valign_offset(cell.v_align, avail, content_h);
-                let cell_cursor_y = row_top - cm.top - v_offset;
+                let cell_cursor_y = row_top - ecm.top - v_offset;
 
                 render_cell_paragraphs(
                     content,
@@ -1135,7 +1138,7 @@ pub(super) fn render_header_footer_table(
                     cell_x,
                     col_w,
                     cell_cursor_y,
-                    cm,
+                    ecm,
                     ctx.fonts,
                 );
             }

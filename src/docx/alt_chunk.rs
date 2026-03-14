@@ -696,6 +696,7 @@ fn convert_table(
                 v_merge: crate::model::VMerge::None,
                 v_align,
                 text_direction: crate::model::TextDirection::default(),
+                cell_margins: None,
             });
         }
 

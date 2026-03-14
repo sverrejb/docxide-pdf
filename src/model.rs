@@ -577,6 +577,7 @@ pub struct TableCell {
     pub v_merge: VMerge,
     pub v_align: CellVAlign,
     pub text_direction: TextDirection,
+    pub cell_margins: Option<CellMargins>,
 }
 
 pub enum Block {
