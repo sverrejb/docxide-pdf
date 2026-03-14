@@ -93,7 +93,7 @@
     "jaccard": 0.7401,
     "ssim": 0.9306,
     "text_boundary": 1.0,
-    "convert_ms": 10.0
+    "convert_ms": 9.9
   },
   "cases/case25": {
     "jaccard": 0.7309,
@@ -105,7 +105,7 @@
     "jaccard": 0.7866,
     "ssim": 0.9138,
     "text_boundary": 1.0,
-    "convert_ms": 7.7
+    "convert_ms": 7.5
   },
   "cases/case27": {
     "jaccard": 0.9634,
@@ -162,6 +162,9 @@
     "convert_ms": 5.0
   },
   "cases/case35": {
+    "jaccard": 0.9931,
+    "ssim": 0.9762,
+    "text_boundary": 1.0,
     "convert_ms": 5.1
   },
   "cases/case36": {
@@ -171,11 +174,14 @@
     "convert_ms": 3.9
   },
   "cases/case37": {
+    "jaccard": 0.2325,
+    "ssim": 0.003,
+    "text_boundary": 0.0,
     "convert_ms": 3.7
   },
   "cases/case38": {
     "jaccard": 0.9929,
-    "ssim": 0.9548,
+    "ssim": 0.9556,
     "text_boundary": 1.0,
     "convert_ms": 4.4
   },
@@ -195,7 +201,7 @@
     "jaccard": 0.3951,
     "ssim": 0.8526,
     "text_boundary": 0.9909,
-    "convert_ms": 14.2
+    "convert_ms": 13.7
   },
   "cases/case7": {
     "jaccard": 0.6931,
@@ -237,7 +243,7 @@
     "jaccard": 0.1691,
     "ssim": 0.3094,
     "text_boundary": 0.1632,
-    "convert_ms": 695.2
+    "convert_ms": 685.4
   },
   "scraped/bush_fires_act_c..": {
     "jaccard": 0.4102,
@@ -333,7 +339,7 @@
     "jaccard": 0.3415,
     "ssim": 0.441,
     "text_boundary": 0.5797,
-    "convert_ms": 103.0
+    "convert_ms": 102.3
   },
   "scraped/italian_project_..": {
     "jaccard": 0.2827,
@@ -351,7 +357,7 @@
     "jaccard": 0.3311,
     "ssim": 0.4566,
     "text_boundary": 0.3841,
-    "convert_ms": 899.5
+    "convert_ms": 884.6
   },
   "scraped/lithuanian_ethic..": {
     "jaccard": 0.3267,
