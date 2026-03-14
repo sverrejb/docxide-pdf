@@ -625,7 +625,6 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     page_break_after: parsed.has_page_break_after,
                     column_break_before: parsed.has_column_break,
                     tab_stops,
-                    extra_line_breaks: parsed.line_break_count,
                     floating_images,
                     textboxes: {
                         let mut tbs = parsed.textboxes;

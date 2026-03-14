@@ -295,7 +295,6 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                     line_spacing,
                     space_before,
                     space_after,
-                    extra_line_breaks: parsed.line_break_count,
                     ..Paragraph::default()
                 });
             }

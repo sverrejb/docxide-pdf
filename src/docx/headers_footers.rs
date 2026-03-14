@@ -92,7 +92,6 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
                     space_after: sp_after.unwrap_or(0.0),
                     borders: ppr.map(parse_paragraph_borders).unwrap_or_default(),
                     tab_stops: ppr.map(parse_tab_stops).unwrap_or_default(),
-                    extra_line_breaks: parsed.line_break_count,
                     floating_images: parsed.floating_images,
                     textboxes: parsed.textboxes,
                     ..Paragraph::default()
@@ -154,7 +153,6 @@ pub(super) fn parse_footnotes<R: Read + std::io::Seek>(
                 space_after: sp_after.unwrap_or(0.0),
                 alignment,
                 line_spacing: ls.or(Some(LineSpacing::Auto(1.0))),
-                extra_line_breaks: parsed.line_break_count,
                 ..Paragraph::default()
             });
         }

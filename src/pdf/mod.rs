@@ -1584,8 +1584,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         }
                         h
                     } else {
-                        let min_lines = 1 + para.extra_line_breaks as usize;
-                        let num_lines = lines.len().max(min_lines);
+                        let num_lines = lines.len();
                         let first_line_h = if let Some(label_fs) = para.list_label_font_size {
                             if label_fs > font_size {
                                 resolve_line_h(effective_ls, label_fs, tallest_lhr)

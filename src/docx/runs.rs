@@ -54,7 +54,6 @@ pub(super) struct ParsedRuns {
     pub(super) has_page_break_before: bool,
     pub(super) has_page_break_after: bool,
     pub(super) has_column_break: bool,
-    pub(super) line_break_count: u32,
     pub(super) floating_images: Vec<FloatingImage>,
     pub(super) textboxes: Vec<Textbox>,
     pub(super) connectors: Vec<ConnectorShape>,
@@ -334,7 +333,6 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
     let mut smartart: Option<SmartArtDiagram> = None;
     let mut has_page_break_after = false;
     let mut has_column_break = false;
-    let mut line_break_count: u32 = 0;
     let mut in_field = false;
     let mut in_field_result = false;
     let mut field_instr = String::new();
@@ -550,7 +548,13 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                 "br" if !in_field => match child.attribute((WML_NS, "type")) {
                     Some("page") => has_page_break_after = true,
                     Some("column") => has_column_break = true,
-                    _ => line_break_count += 1,
+                    _ => {
+                        flush_pending(&mut pending_text, &mut runs);
+                        runs.push(Run {
+                            is_line_break: true,
+                            ..fmt.minimal_run()
+                        });
+                    }
                 },
                 "drawing" if in_field => {}
                 "drawing" => {
@@ -668,7 +672,6 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
         has_page_break_before,
         has_page_break_after,
         has_column_break,
-        line_break_count,
         floating_images,
         textboxes,
         connectors,

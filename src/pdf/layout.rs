@@ -195,12 +195,13 @@ pub(crate) struct LinkAnnotation {
 pub(super) struct TextLine {
     pub(super) chunks: Vec<WordChunk>,
     pub(super) total_width: f32,
+    pub(super) ends_with_break: bool,
 }
 
 /// True when a paragraph has no visible text (may still have phantom font-info runs).
 pub(super) fn is_text_empty(runs: &[Run]) -> bool {
     runs.iter()
-        .all(|r| r.vanish || (r.text.is_empty() && !r.is_tab && r.inline_image.is_none()))
+        .all(|r| r.vanish || (r.text.is_empty() && !r.is_tab && !r.is_line_break && r.inline_image.is_none()))
 }
 
 fn effective_font_size(run: &Run) -> f32 {
@@ -239,7 +240,14 @@ fn finish_line(chunks: &mut Vec<WordChunk>) -> TextLine {
     TextLine {
         chunks: std::mem::take(chunks),
         total_width,
+        ends_with_break: false,
     }
+}
+
+fn finish_line_with_break(chunks: &mut Vec<WordChunk>) -> TextLine {
+    let mut line = finish_line(chunks);
+    line.ends_with_break = true;
+    line
 }
 
 /// Layout runs into wrapped lines.
@@ -262,6 +270,13 @@ pub(super) fn build_paragraph_lines(
     for (run_idx, run) in runs.iter().enumerate() {
         if run.vanish || run.is_tab {
             continue; // vanished runs hidden; tabs handled in build_tabbed_line
+        }
+
+        if run.is_line_break {
+            lines.push(finish_line_with_break(&mut current_chunks));
+            current_x = 0.0;
+            pending_space_w = 0.0;
+            continue;
         }
 
         // Handle inline images as single block elements in the line
@@ -358,6 +373,7 @@ pub(super) fn build_paragraph_lines(
         lines.push(TextLine {
             chunks: vec![],
             total_width: 0.0,
+            ends_with_break: false,
         });
     }
     lines
@@ -560,6 +576,14 @@ pub(super) fn build_tabbed_line(
         // Layout text in this segment from current_x
         let mut prev_ws = false;
         for (local_idx, run) in seg_runs.iter().enumerate() {
+            if run.is_line_break {
+                result_lines.push(finish_line_with_break(&mut all_chunks));
+                current_x = 0.0;
+                is_first_line = false;
+                prev_ws = false;
+                continue;
+            }
+
             // Handle inline images (same pattern as build_paragraph_lines)
             if let Some(img) = &run.inline_image {
                 if let Some(pdf_name) = inline_image_names.get(&seg_indices[local_idx]) {
@@ -620,6 +644,7 @@ pub(super) fn build_tabbed_line(
         result_lines.push(TextLine {
             chunks: vec![],
             total_width: 0.0,
+            ends_with_break: false,
         });
     }
 
@@ -697,6 +722,7 @@ pub(super) fn render_paragraph_lines(
 
         let is_justified = *alignment == Alignment::Justify
             && global_line_idx != last_line_idx
+            && !line.ends_with_break
             && line.chunks.len() > 1;
 
         let (eff_margin, eff_width) = if global_line_idx == 0 && first_line_hanging.abs() > 0.001 {

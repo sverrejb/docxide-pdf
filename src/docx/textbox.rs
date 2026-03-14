@@ -184,7 +184,6 @@ pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
             list_label_color,
             line_spacing,
             tab_stops,
-            extra_line_breaks: parsed.line_break_count,
             floating_images: parsed.floating_images,
             textboxes: parsed.textboxes,
             ..Paragraph::default()
