@@ -30,8 +30,4 @@ for ((i=1; i<=iterations; i++)); do
 
   echo "$result"
 
-  if [[ "$result" == *"<promise>COMPLETE</promise>"* ]]; then
-    echo "Plan complete after $i iterations."
-    exit 0
-  fi
 done

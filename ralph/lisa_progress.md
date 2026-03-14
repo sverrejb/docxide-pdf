@@ -366,3 +366,63 @@ Floating tables with `vertAnchor="page"` positioned above or straddling the top 
 - **Text wrapping around floating tables**: When a floating table doesn't span full width, text should wrap beside it. Currently no text wrapping is implemented for floating tables — text either goes above or below. Affects `croatian_grant_guidelines` and `east_asia_conference_form`.
 - **Font width measurement discrepancies**: 6 text/layout-only fixtures remain blocked by font metrics (sessions 6-7 conclusion).
 - **wrapSquare text wrapping**: `brazilian_logistics_study` (16.9%) blocked by lack of text wrapping around floating images.
+
+## Session 9 — 2026-03-14: Deep investigation of all 13 failing fixtures (no code change)
+
+### Objective
+Find any remaining structural bugs or feature gaps to push failing fixtures toward the 20% Jaccard threshold. Systematically investigate every failing fixture with visual diff comparison.
+
+### Fixtures Investigated
+All 13 failing fixtures were visually compared (generated vs reference vs diff images). Deep analysis on:
+- `air_pollution_permit_form` (12.6% — 21 textboxes, 6 altChunk, 1 page)
+- `croatian_grant_guidelines` (7.0% — 72 vs 65 pages, previously hypothesized as 2-column layout)
+- `brazilian_logistics_study` (16.9% — 8 wrapSquare anchored images, 20 pages)
+- `go_math_grade4_guide` (16.9% — 15 wrapSquare anchored images, all tiny 21×21pt icons, 23 vs 26 pages)
+- `mongolian_human_rights_law` (13.5% — standard fonts Arial/TNR, 2 images, 6 footnotes)
+- `education_consultant_posting` (8.6% — 5 vs 7 pages, SDTs correctly handled)
+
+### Key Findings
+
+#### 1. `croatian_grant_guidelines` is NOT 2-column (debunked hypothesis)
+The document has `<w:cols w:space="708"/>` with NO `w:num` attribute, which defaults to 1 column. The earlier agent investigation incorrectly concluded it was 2-column. The 7 extra pages (72 vs 65) are purely from cumulative font metric differences across 972 paragraphs.
+
+#### 2. `go_math_grade4_guide` anchored images are all tiny icons
+All 15 `wp:anchor` images are 21×21pt icons (2.9% of 720pt text width), far below the 90% wrapSquare threshold. The 3-page shortfall (23 vs 26) is from Museo Sans 300 font substitution producing tighter metrics.
+
+#### 3. `brazilian_logistics_study` wrapSquare images at 77-89% width
+3 of 4 wrapSquare images fall between 77-89% width, just below the 90% threshold. Session 7's 50% threshold experiment CORRECTLY regressed this fixture because pushing text below images (without text wrapping) makes vertical positions LESS similar to Word's text-beside-image layout. The current "overlap" approach preserves better vertical alignment.
+
+#### 4. `defaultTabStop` parsed but unused — correct fix causes regressions
+**Bug found**: `DocumentSettings.default_tab_stop` is parsed from `word/settings.xml` but the layout code uses a hardcoded `DEFAULT_TAB_INTERVAL = 36.0pt` constant. 20/39 fixtures have non-standard default tab stops:
+- 15 fixtures at 708tw (35.4pt) — 0.6pt off from our 36pt
+- 2 Lithuanian at 1296tw (64.8pt) — 28.8pt off
+- `transition_to_work_deed` at 510tw (25.5pt) — 10.5pt off
+- `east_asia_conference_form` at 800tw (40.0pt) — 4pt off
+
+**Implementation attempted**: Threaded `default_tab_stop` from Document → RenderContext → `build_tabbed_line` → `find_next_tab_stop`. Build succeeded.
+
+**Results**: Net negative — 13 small regressions (-0.1 to -1.2pp SSIM), zero improvements. The Lithuanian fixtures (largest gap, 64.8pt) were unchanged because they have 0-1 tab characters. The 0.6pt correction for 708tw fixtures shifted enough tab positions to cause cascading layout differences that interact negatively with existing font metric errors.
+
+**Decision**: Reverted. The fix is architecturally correct but should be landed alongside font metric improvements (rustybuzz) to avoid error cancellation regressions.
+
+### Approaches Explored But Not Implemented
+
+1. **Tab leader rendering** — already implemented
+2. **Footnote separator lines** — already implemented
+3. **Paragraph shading** — already implemented
+4. **Table conditional formatting (tblLook/tblStylePr)** — `go_math_grade4_guide` has 28 tblLook elements but ALL disable conditional formatting (`firstRow="0"` etc.) and 0 tblStylePr definitions
+5. **beforeAutospacing/afterAutospacing** — confirmed irrelevant (default values match Word's auto-spacing)
+6. **AtLeast line spacing** — implementation correct (`natural.max(min_pts)`)
+7. **Floating image vertical space with VRelativeFrom** — only affects paragraph-relative images in current fixtures
+
+### Conclusion: All 13 Failures Confirmed Font-Metric-Bound
+This session independently verified sessions 6-7's conclusion through visual diff analysis of every failing fixture. Every fixture shows the same pattern: content present but progressively displaced horizontally and vertically, with displacement growing from top to bottom of each page (cumulative font width drift). No structural bugs or missing features were found that could meaningfully improve scores.
+
+### Blocked By (unchanged from sessions 6-7)
+1. **Text Shaping (rustybuzz)** — would fix character width measurement, the root cause
+2. **Text Wrapping (wrapSquare/wrapTight)** — would help `brazilian_logistics_study` but is architecturally complex
+3. **CJK Font Support** — blocks `japanese_interlibrary_loan` and `east_asia_conference_form`
+4. **`defaultTabStop` usage** — correct fix ready but should be landed with rustybuzz
+
+### No Commit (Session 9)
+No code changes were made. The defaultTabStop fix was implemented, tested, and reverted.

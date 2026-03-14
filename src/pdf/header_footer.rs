@@ -4,6 +4,7 @@ use pdf_writer::{Content, Name};
 
 use crate::model::{
     Alignment, Block, FieldCode, HeaderFooter, Paragraph, Run, SectionProperties, VRelativeFrom,
+    VerticalPosition, WrapType,
 };
 
 use super::layout::{
@@ -53,7 +54,33 @@ pub(super) fn compute_header_height(hf: &HeaderFooter, ctx: &RenderContext) -> f
                     .filter_map(|r| r.inline_image.as_ref())
                     .map(|img| img.display_height + img.layout_extra_height)
                     .fold(0.0f32, f32::max);
-                height += max_img_h.max(line_h);
+                let mut content_h = max_img_h.max(line_h);
+
+                for fi in &para.floating_images {
+                    if matches!(fi.wrap_type, WrapType::TopAndBottom) {
+                        let fi_h = match fi.v_position {
+                            VerticalPosition::Offset(o) => o + fi.image.display_height,
+                            _ => fi.image.display_height,
+                        };
+                        content_h = content_h.max(fi_h);
+                    }
+                }
+
+                for tb in &para.textboxes {
+                    if matches!(tb.wrap_type, WrapType::TopAndBottom) {
+                        let tb_bottom = tb.v_offset_pt + tb.height_pt + tb.dist_bottom;
+                        match tb.v_relative_from {
+                            VRelativeFrom::Paragraph => {
+                                content_h = content_h.max(tb_bottom);
+                            }
+                            _ => {
+                                content_h += tb_bottom;
+                            }
+                        }
+                    }
+                }
+
+                height += content_h;
                 prev_space_after = para.space_after;
             }
             Block::Table(table) => {
@@ -78,7 +105,9 @@ pub(super) fn effective_slot_top(
     );
     let base = sp.page_height - sp.margin_top;
     match header {
-        Some(hf) => base.min(sp.page_height - sp.header_margin - compute_header_height(hf, ctx)),
+        Some(hf) => {
+            base.min(sp.page_height - sp.header_margin - compute_header_height(hf, ctx))
+        }
         None => base,
     }
 }
@@ -96,7 +125,9 @@ pub(super) fn compute_effective_margin_bottom(
     );
     let base = sp.margin_bottom;
     match footer {
-        Some(hf) => base.max(sp.footer_margin + compute_header_height(hf, ctx)),
+        Some(hf) => {
+            base.max(sp.footer_margin + compute_header_height(hf, ctx))
+        }
         None => base,
     }
 }

@@ -189,7 +189,7 @@
     "jaccard": 0.7607,
     "ssim": 0.9027,
     "text_boundary": 1.0,
-    "convert_ms": 8.7
+    "convert_ms": 8.6
   },
   "cases/case6": {
     "jaccard": 0.3951,
@@ -284,12 +284,12 @@
   "scraped/czech_grant_appl..": {
     "jaccard": 0.107,
     "ssim": 0.3082,
-    "text_boundary": 0.0,
+    "text_boundary": 0.5962,
     "convert_ms": 32.2
   },
   "scraped/czech_tree_cutti..": {
-    "jaccard": 0.5767,
-    "ssim": 0.78,
+    "jaccard": 0.7247,
+    "ssim": 0.9659,
     "text_boundary": 1.0,
     "convert_ms": 4.1
   },
@@ -300,9 +300,9 @@
     "convert_ms": 9.2
   },
   "scraped/education_consul..": {
-    "jaccard": 0.0864,
+    "jaccard": 0.0977,
     "ssim": 0.2269,
-    "text_boundary": 0.0263,
+    "text_boundary": 0.2451,
     "convert_ms": 43.0
   },
   "scraped/federal_procurem..": {
@@ -320,7 +320,7 @@
   "scraped/go_math_grade4_g..": {
     "jaccard": 0.169,
     "ssim": 0.419,
-    "text_boundary": 0.3114,
+    "text_boundary": 0.3469,
     "convert_ms": 65.1
   },
   "scraped/indonesian_bench..": {
@@ -368,7 +368,7 @@
   "scraped/mandated_reporte..": {
     "jaccard": 0.2636,
     "ssim": 0.4991,
-    "text_boundary": 0.0904,
+    "text_boundary": 0.2963,
     "convert_ms": 20.0
   },
   "scraped/mongolian_human_..": {
@@ -390,9 +390,9 @@
     "convert_ms": 8.5
   },
   "scraped/polish_municipal..": {
-    "jaccard": 0.132,
-    "ssim": 0.2837,
-    "text_boundary": 0.25,
+    "jaccard": 0.2654,
+    "ssim": 0.6826,
+    "text_boundary": 0.9259,
     "convert_ms": 10.2
   },
   "scraped/polish_tender_de..": {
