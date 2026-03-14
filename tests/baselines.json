@@ -174,7 +174,7 @@
     "convert_ms": 3.7
   },
   "cases/case38": {
-    "jaccard": 0.9906,
+    "jaccard": 0.9929,
     "ssim": 0.9297,
     "text_boundary": 1.0,
     "convert_ms": 4.4
@@ -207,7 +207,7 @@
     "jaccard": 0.4707,
     "ssim": 0.9406,
     "text_boundary": 1.0,
-    "convert_ms": 36.6
+    "convert_ms": 36.2
   },
   "cases/case9": {
     "jaccard": 0.7057,
@@ -255,7 +255,7 @@
     "jaccard": 0.9413,
     "ssim": 0.9611,
     "text_boundary": 0.3043,
-    "convert_ms": 57.8
+    "convert_ms": 56.3
   },
   "scraped/croatian_grant_g..": {
     "jaccard": 0.0698,
@@ -279,7 +279,7 @@
     "jaccard": 0.6516,
     "ssim": 0.8247,
     "text_boundary": 0.9375,
-    "convert_ms": 35.9
+    "convert_ms": 35.8
   },
   "scraped/czech_grant_appl..": {
     "jaccard": 0.107,

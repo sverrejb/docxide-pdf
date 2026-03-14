@@ -1285,8 +1285,9 @@ fn assemble_pdf_pages(
                     let (sin_a, cos_a) = ang_rad.sin_cos();
                     let cx = spec.x + spec.w / 2.0;
                     let cy = spec.y + spec.h / 2.0;
-                    let half_len = (spec.w / 2.0 * cos_a).abs()
-                        + (spec.h / 2.0 * sin_a).abs();
+                    let half_len = ((spec.w / 2.0 * cos_a).powi(2)
+                        + (spec.h / 2.0 * sin_a).powi(2))
+                    .sqrt();
                     let x0 = cx - half_len * cos_a;
                     let y0 = cy + half_len * sin_a;
                     let x1 = cx + half_len * cos_a;
