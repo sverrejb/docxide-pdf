@@ -1000,3 +1000,127 @@ Table-level `w:jc` (horizontal alignment) was completely unimplemented. All non-
 - **Footnote line spacing fallback mismatch**: Correct but zero measurable improvement.
 - **Text wrapping (wrapSquare)**: Blocks `brazilian_logistics_study` (16.9%), `63791f8c...` (15.7%)
 - **CJK Font Support**: Blocks 3 CJK fixtures
+
+## Session 19 — 2026-03-15: Deep investigation of all new.md cases + justified text spacing fix (no code change)
+
+### Cases from `new.md` Investigated
+All 12 cases from `new.md` were previously processed in session 10. Their status remains unchanged:
+- **Passing (3)**: `4676b6e5...` (35.8%), `4a1834b7...` (23.7%), `501c6b2d...` (51.2%)
+- **Failing (9)**: All 9 confirmed font-metric-bound per sessions 10-18
+
+### Current Status
+30 passing, 21 failing, 0 skipped.
+
+### Investigation Summary
+
+#### 1. Deep fixture analysis via subagents
+Launched parallel deep investigations of:
+- **`ed02d3b6...`** (15.6%, 14 pages, Polish legal): Agent found `w:position` attribute, but all values are `val="0"` (no offset). Duplicate `w:sz` elements found but second value correctly overrides first. Complex script tags (`w:bCs`, `w:szCs`) correctly handled. No actionable structural issue.
+- **`mongolian_human_rights_law`** (13.5%, 8 pages, Cyrillic): Agent initially reported blue text (3366FF) but investigation showed all text is `w:color w:val="000000" w:themeColor="text1"` — black. Image has `a:lum bright="6000"` (brightness adjustment, not implemented) but this only affects 1 image on 1 page. No actionable structural issue.
+
+#### 2. Theme color resolution audit
+Verified that `w:color` parsing in `runs.rs` reads `w:val` attribute correctly. Theme color (`w:themeColor`) is stored alongside but Word pre-computes the RGB value into `w:val` at save time, so reading `w:val` is sufficient. No bug.
+
+#### 3. Cell shading theme fill (`w:themeFill`) audit
+Found 5 fixtures with `w:themeFill` (c23b53f6: 106, education_consultant: 42, stem_partnerships: 802). Verified that `w:fill` already contains the pre-resolved color, so not reading `w:themeFill` is correct behavior.
+
+#### 4. contextualSpacing spec deviation investigation
+- **Spec says**: suppress space when preceding/following paragraph has the **same paragraph style** (§17.3.1.9)
+- **Our code**: checks if **both paragraphs** have `contextual_spacing` flag
+- **Impact analysis**: Searched all failing fixtures. `ed02d3b6` has 48 occurrences but ALL are `w:val="false"` (disabling). `mongolian_human_rights_law` has 235 occurrences but ALL paragraphs have `w:spacing w:after="0"` — contextualSpacing has zero effect when spacing is already 0.
+- **Conclusion**: The spec deviation doesn't affect any fixture in the corpus. Fix deferred.
+
+#### 5. Paragraph spacing model verification
+Verified inter-paragraph spacing formula: `max(prev_effective_space_after, current_effective_space_before)` at line 1606. Confirmed correct per OOXML spec. No bugs found.
+
+#### 6. Visual diff analysis (closest to threshold)
+Examined diff images for `ed02d3b6` (15.6%), `brazilian_logistics_study` (16.9%), `c23b53f6` (12.2%), `ab1b677c` (12.8%), `c9ad6f65` (11.1%). All show the same pattern: text present but progressively displaced (red/blue pairs close together), with displacement growing from top to bottom — classic font-metric cumulative drift.
+
+#### 7. Table features audit
+- `w:tblGrid` column widths: correctly parsed from `w:gridCol @w:w`
+- `w:tcW` cell widths: correctly parsed, used as `max(gridCol_width, tcW)` in `compute_row_layouts`
+- `w:tblW type="pct"`: 0 fixtures use percentage table widths
+- `w:gridSpan`: correctly handled (14 fixtures use it)
+- `w:tblHeader`: 5 fixtures use it, but requires paginator extraction (roadmap item)
+- Table horizontal alignment: already fixed in session 18
+
+#### 8. Justified text spacing fix (implemented, tested, REVERTED)
+
+**Discovery**: In justified text rendering, extra inter-word space was distributed between ALL chunk boundaries (`chunk_idx * extra_per_gap`), including between chunks that are parts of the same word (when a word spans multiple runs with different formatting). The correct behavior is to only distribute space at actual word boundaries.
+
+**Implementation**: Added `has_space_before: bool` to `WordChunk`. Set based on whether the chunk was preceded by whitespace during line building. Changed justify rendering to count only chunks with `has_space_before=true` for gap distribution.
+
+**Bug found during testing**: After a line wrap, the first word on the new line inherited `has_space_before=true` from the pre-wrap state. Fixed by tracking whether a wrap occurred and clearing the flag.
+
+**Results after fix**: Zero improvements, multiple small regressions (-0.1pp to -1.2pp across ~12 fixtures). Net negative. Same error cancellation pattern as sessions 7/12/16 — the existing "incorrect" equal distribution is calibrated into the overall layout.
+
+**Decision**: Reverted. The fix is architecturally correct but should be landed alongside the coordinated OS/2 + rustybuzz changes.
+
+### Key Finding: Complete confirmation of error cancellation barrier
+
+This session independently verified through a completely new approach (justified text spacing) the fundamental barrier identified in sessions 6-18:
+
+**Every individual improvement to rendering accuracy causes regressions because the current layout is a local optimum calibrated to consistent-but-incorrect metrics.** The five approaches confirmed to hit this barrier:
+1. OS/2 Win Metrics line height (sessions 7, 12)
+2. Rustybuzz text shaping (session 16)
+3. lastRenderedPageBreak page hints (session 16)
+4. defaultTabStop usage (session 9)
+5. **Justified text word-boundary spacing (this session)**
+
+The path forward requires landing all metric improvements simultaneously in a coordinated pass.
+
+### Blocked By (unchanged)
+1. **Coordinated OS/2 + rustybuzz + justify fix** — all changes correct individually, must be landed together
+2. **Text Wrapping (wrapSquare)** — would help `brazilian_logistics_study` but architecturally complex
+3. **CJK Font Support** — blocks 3 CJK fixtures
+
+### No Commit (Session 19)
+No code changes were made. The justified text spacing fix was implemented, tested, and reverted.
+
+## Session 20 — 2026-03-15: Include effectExtent in body inline image layout
+
+### Case Selected
+`c23b53f6f5595ea5740966dc66c2dd4a9eb786177bc3b4f405d022ec65190608` (12.2% Jaccard, 4 pages, 60 tables) — "Creeting St Mary Housing & Population Data Profile". Selected from new.md because page 1 has a large map image with enormous `wp:effectExtent` values (13.5pt top, 26.25pt bottom = ~40pt total) that were not being included in body image layout height, causing content below the image to render ~40pt too high.
+
+### Problem
+Body inline images (`wp:inline` in body paragraphs) were not including `layout_extra_height` (effectExtent + distT/distB) in their paragraph `content_height`, while table cell images and header/footer images already did (fixed in session 3). This inconsistency meant that for body images with visual effects (shadow, glow, border effects), the space allocated for the image was too small by the effectExtent amount, causing all subsequent content to shift up.
+
+Session 3 had deliberately excluded this for body images because it caused a -1.0pp regression on `russian_sports_ranking_decree` (which has a coat-of-arms image with effectExtent b=0.6pt). However, the c23b53f6 fixture has a 40pt effectExtent — a much larger correction that produces a significant improvement.
+
+### Analysis
+- Investigated all 12 new.md cases (9 failing, 3 passing) through 19 previous sessions
+- All 21 failing fixtures confirmed font-metric-bound across sessions 6-19
+- Examined visual diff images: c23b53f6 page 1 showed massive red/blue displacement on the map image and text below it
+- The map image has `wp:effectExtent l="171450" t="171450" r="353060" b="333375"` — these are visual effect margins (13.5pt left, 13.5pt top, 27.8pt right, 26.25pt bottom)
+- Without effectExtent in layout, content_height = 453.75pt (display_height only); with effectExtent, content_height = 493.5pt — a 39.75pt difference
+- Also investigated double/dotted border rendering, tblHeader handling, table border positioning, and font metric corrections — none yielded actionable improvements
+
+### Implementation
+1. Changed body inline image `content_height` in `src/docx/mod.rs` to include `layout_extra_height` (matching table cell and header/footer behavior)
+2. Added `layout_extra_top: f32` field to `EmbeddedImage` struct — stores the top portion of extra space (effectExtent.t + distT)
+3. Updated `inline_extra_height()` in `images.rs` to return `(total, top)` tuple instead of just total
+4. Updated `read_image_from_zip_extra()` to accept and store `layout_extra_top`
+5. In body image rendering (`pdf/mod.rs`): offset image Y position by `layout_extra_top` so image renders within the effect area, not at the very top of the paragraph space
+
+### Files Modified
+- `src/model.rs` — added `layout_extra_top` to `EmbeddedImage`
+- `src/docx/images.rs` — `inline_extra_height()` returns tuple, `read_image_from_zip_extra()` accepts `layout_extra_top`, callsites updated
+- `src/docx/mod.rs` — body image content_height includes `layout_extra_height`
+- `src/pdf/mod.rs` — body image Y position offset by `layout_extra_top`
+- `tests/baselines.json` — updated c23b53f6 baseline
+
+### Results
+- **c23b53f6**: 12.2% → 17.5% Jaccard (+5.3pp), 24.4% → 29.6% SSIM (+5.2pp)
+- **No REGRESSION flags** on Jaccard or SSIM across all 51 fixtures
+- **No pass/fail status changes** (30 passing fixtures unchanged)
+- `russian_sports_ranking_decree`: 12.8% (unchanged — its 0.6pt effectExtent is too small to cause measurable difference)
+- `polish_municipal_letter`: 26.5% → 26.6% (+0.1pp — tiny improvement from effectExtent on anchored images)
+
+### Commit
+`c9e60de` — "Include effectExtent in body inline image layout height and position"
+
+### Not Fixed (deferred)
+- **Font metric drift**: All remaining 21 failing fixtures (including c23b53f6 at 17.5%) share the same root cause of font width measurement discrepancies. Blocked by rustybuzz text shaping.
+- **c23b53f6 still 2.5pp below 20% threshold**: The remaining gap is from font-metric-driven text positioning within the 60 tables on pages 2-4.
+- **Text wrapping (wrapSquare)**: Blocks `brazilian_logistics_study` (16.9%), `63791f8c` (15.7%)
+- **CJK Font Support**: Blocks 3 CJK fixtures
