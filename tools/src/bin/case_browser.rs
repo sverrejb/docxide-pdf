@@ -1,7 +1,11 @@
 use eframe::egui;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+
+const RENDER_DPI: f32 = 150.0;
+const PIXELS_PER_POINT: f32 = RENDER_DPI / 72.0;
 
 fn main() -> eframe::Result<()> {
     let output_dir = find_output_dir();
@@ -121,6 +125,80 @@ enum NatPart {
     Num(u64),
 }
 
+// --- Annotation types ---
+
+#[derive(Clone, Copy, PartialEq, Serialize, Deserialize)]
+enum ImageSource {
+    Reference,
+    Generated,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+struct Annotation {
+    id: u64,
+    page: usize,
+    source: ImageSource,
+    x_pt: f32,
+    y_pt: f32,
+    note: String,
+}
+
+#[derive(Default, Serialize, Deserialize)]
+struct AnnotationStore {
+    next_id: u64,
+    annotations: Vec<Annotation>,
+}
+
+fn load_annotations(case_dir: &Path) -> AnnotationStore {
+    let path = case_dir.join("annotations.json");
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn save_annotations(case_dir: &Path, store: &AnnotationStore) {
+    let path = case_dir.join("annotations.json");
+    if let Ok(json) = serde_json::to_string_pretty(store) {
+        let _ = std::fs::write(path, json);
+    }
+}
+
+struct PendingAnnotation {
+    page: usize,
+    source: ImageSource,
+    x_pt: f32,
+    y_pt: f32,
+    text_buf: String,
+}
+
+struct ImageClick {
+    screen_pos: egui::Pos2,
+    image_rect: egui::Rect,
+    tex_size: [usize; 2],
+}
+
+fn screen_to_pdf_pts(click: &ImageClick) -> (f32, f32) {
+    let rel_x = click.screen_pos.x - click.image_rect.left();
+    let rel_y = click.screen_pos.y - click.image_rect.top();
+    let scale = click.tex_size[0] as f32 / click.image_rect.width();
+    let x_pt = (rel_x * scale) / PIXELS_PER_POINT;
+    let y_pt = (rel_y * scale) / PIXELS_PER_POINT;
+    (x_pt, y_pt)
+}
+
+fn pdf_pts_to_screen(
+    x_pt: f32,
+    y_pt: f32,
+    image_rect: &egui::Rect,
+    tex_size: [usize; 2],
+) -> egui::Pos2 {
+    let scale = tex_size[0] as f32 / image_rect.width();
+    let sx = image_rect.left() + (x_pt * PIXELS_PER_POINT) / scale;
+    let sy = image_rect.top() + (y_pt * PIXELS_PER_POINT) / scale;
+    egui::pos2(sx, sy)
+}
+
 fn count_pages(case_dir: &Path) -> usize {
     // Count from whichever has more pages (reference or generated)
     let r = count_pngs(&case_dir.join("reference"));
@@ -160,10 +238,15 @@ struct App {
     show_grid: bool,
     grid_spacing: f32,
     refresh_flash: f32,
+    annotations: AnnotationStore,
+    pending_annotation: Option<PendingAnnotation>,
+    show_annotations: bool,
+    show_notes_panel: bool,
 }
 
 impl App {
     fn new(cases: Vec<CaseInfo>, _output_dir: PathBuf) -> Self {
+        let annotations = load_annotations(&cases[0].dir);
         Self {
             cases,
             current_case: 0,
@@ -175,6 +258,10 @@ impl App {
             show_grid: false,
             grid_spacing: 18.0,
             refresh_flash: 0.0,
+            annotations,
+            pending_annotation: None,
+            show_annotations: true,
+            show_notes_panel: true,
         }
     }
 
@@ -184,11 +271,14 @@ impl App {
 
     fn set_case(&mut self, idx: usize) {
         if idx != self.current_case {
+            save_annotations(&self.cases[self.current_case].dir, &self.annotations);
             self.current_case = idx;
             self.current_page = 0;
             self.scroll_to_current = true;
             self.texture_cache.clear();
             self.overlay_cache.clear();
+            self.annotations = load_annotations(&self.cases[idx].dir);
+            self.pending_annotation = None;
         }
     }
 
@@ -237,8 +327,16 @@ impl App {
 
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Handle keyboard input
+        // Handle keyboard input (skip when text input has focus)
+        let text_has_focus = self.pending_annotation.is_some()
+            && ctx.memory(|m| m.focused().is_some());
         ctx.input(|i| {
+            if i.key_pressed(egui::Key::Escape) {
+                self.pending_annotation = None;
+            }
+            if text_has_focus {
+                return;
+            }
             if i.key_pressed(egui::Key::ArrowRight) {
                 let next = (self.current_case + 1).min(self.cases.len() - 1);
                 self.set_case(next);
@@ -276,6 +374,12 @@ impl eframe::App for App {
             }
             if i.key_pressed(egui::Key::Minus) {
                 self.grid_spacing = (self.grid_spacing - 2.0).max(4.0);
+            }
+            if i.key_pressed(egui::Key::A) {
+                self.show_annotations = !self.show_annotations;
+            }
+            if i.key_pressed(egui::Key::N) {
+                self.show_notes_panel = !self.show_notes_panel;
             }
         });
 
@@ -337,7 +441,7 @@ impl eframe::App for App {
                     ui.label(format!("Grid: {:.0}px (+/-)", self.grid_spacing));
                 }
                 ui.separator();
-                ui.label("[L]ines overlay  [F]refresh");
+                ui.label("[L]ines  [F]refresh  [A]nnot  [N]otes");
                 if self.refresh_flash > 0.0 {
                     let alpha = (self.refresh_flash * 255.0) as u8;
                     ui.label(
@@ -368,6 +472,132 @@ impl eframe::App for App {
             });
         });
 
+        // Notes panel (left side)
+        if self.show_notes_panel {
+            let page = self.current_page;
+            let page_anns: Vec<(usize, &Annotation)> = self
+                .annotations
+                .annotations
+                .iter()
+                .enumerate()
+                .filter(|(_, a)| a.page == page)
+                .collect();
+            let mut delete_id = None;
+            egui::SidePanel::left("notes_panel")
+                .default_width(220.0)
+                .show(ctx, |ui| {
+                    ui.heading("Notes");
+                    ui.separator();
+                    if page_anns.is_empty() {
+                        ui.weak("Click an image to add a note");
+                    }
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        for (display_idx, (_, ann)) in page_anns.iter().enumerate() {
+                            let color = match ann.source {
+                                ImageSource::Reference => {
+                                    egui::Color32::from_rgb(255, 165, 0)
+                                }
+                                ImageSource::Generated => {
+                                    egui::Color32::from_rgb(0, 180, 80)
+                                }
+                            };
+                            let src = match ann.source {
+                                ImageSource::Reference => "Ref",
+                                ImageSource::Generated => "Gen",
+                            };
+                            ui.horizontal(|ui| {
+                                ui.colored_label(
+                                    color,
+                                    format!("#{}", display_idx + 1),
+                                );
+                                ui.label(format!(
+                                    "{} ({:.0}, {:.0})",
+                                    src, ann.x_pt, ann.y_pt
+                                ));
+                                if ui
+                                    .small_button("X")
+                                    .on_hover_text("Delete this note")
+                                    .clicked()
+                                {
+                                    delete_id = Some(ann.id);
+                                }
+                            });
+                            ui.label(&ann.note);
+                            ui.separator();
+                        }
+                    });
+                });
+            if let Some(id) = delete_id {
+                self.annotations.annotations.retain(|a| a.id != id);
+                save_annotations(&self.cases[self.current_case].dir, &self.annotations);
+            }
+        }
+
+        // Annotation input popup
+        let mut commit_annotation = false;
+        let mut cancel_annotation = false;
+        if self.pending_annotation.is_some() {
+            egui::Window::new("Add Note")
+                .collapsible(false)
+                .resizable(false)
+                .show(ctx, |ui| {
+                    let pending = self.pending_annotation.as_mut().unwrap();
+                    let src = match pending.source {
+                        ImageSource::Reference => "Reference",
+                        ImageSource::Generated => "Generated",
+                    };
+                    ui.label(format!(
+                        "{} page {} at ({:.0}, {:.0}) pt",
+                        src,
+                        pending.page + 1,
+                        pending.x_pt,
+                        pending.y_pt
+                    ));
+                    let resp = ui.text_edit_singleline(&mut pending.text_buf);
+                    resp.request_focus();
+                    let cmd_enter = ui.input(|i| {
+                        i.key_pressed(egui::Key::Enter) && i.modifiers.command
+                    });
+                    if cmd_enter
+                        || (resp.lost_focus()
+                            && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                    {
+                        commit_annotation = true;
+                    }
+                    ui.horizontal(|ui| {
+                        if ui.button("Save").clicked() {
+                            commit_annotation = true;
+                        }
+                        if ui.button("Cancel").clicked() {
+                            cancel_annotation = true;
+                        }
+                    });
+                });
+        }
+        if commit_annotation {
+            if let Some(pending) = self.pending_annotation.take() {
+                if !pending.text_buf.trim().is_empty() {
+                    let id = self.annotations.next_id;
+                    self.annotations.next_id += 1;
+                    self.annotations.annotations.push(Annotation {
+                        id,
+                        page: pending.page,
+                        source: pending.source,
+                        x_pt: pending.x_pt,
+                        y_pt: pending.y_pt,
+                        note: pending.text_buf.trim().to_string(),
+                    });
+                    save_annotations(
+                        &self.cases[self.current_case].dir,
+                        &self.annotations,
+                    );
+                }
+            }
+        }
+        if cancel_annotation {
+            self.pending_annotation = None;
+        }
+
         // Central panel: images
         egui::CentralPanel::default().show(ctx, |ui| {
             let page = self.current_page;
@@ -375,15 +605,15 @@ impl eframe::App for App {
                 ViewMode::SideBySide => {
                     let ref_path = self.page_path("reference", page);
                     let gen_path = self.page_path("generated", page);
-                    show_side_by_side(self, ctx, ui, &ref_path, &gen_path);
+                    show_side_by_side(self, ctx, ui, &ref_path, &gen_path, page);
                 }
                 ViewMode::Reference => {
                     let path = self.page_path("reference", page);
-                    show_single(self, ctx, ui, &path, "Reference");
+                    show_single(self, ctx, ui, &path, "Reference", ImageSource::Reference, page);
                 }
                 ViewMode::Generated => {
                     let path = self.page_path("generated", page);
-                    show_single(self, ctx, ui, &path, "Generated");
+                    show_single(self, ctx, ui, &path, "Generated", ImageSource::Generated, page);
                 }
                 ViewMode::Overlay => {
                     show_overlay(self, ctx, ui, page);
@@ -423,35 +653,113 @@ fn draw_grid_overlay(ctx: &egui::Context, rect: egui::Rect, spacing: f32) {
     }
 }
 
-fn show_image(
+fn show_image_clickable(
     app: &mut App,
     ctx: &egui::Context,
     ui: &mut egui::Ui,
     path: &PathBuf,
     max_w: f32,
     max_h: f32,
-) {
+    source: ImageSource,
+    page: usize,
+) -> Option<ImageClick> {
+    let mut click = None;
     if let Some(tex) = app.load_texture(ctx, path) {
         let size = fit_size(&tex, max_w, max_h);
-        let resp = ui.image(egui::load::SizedTexture::new(tex.id(), size));
+        let tex_size = [tex.size()[0], tex.size()[1]];
+        let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+        ui.painter()
+            .image(tex.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
         if app.show_grid {
-            draw_grid_overlay(ctx, resp.rect, app.grid_spacing);
+            draw_grid_overlay(ctx, rect, app.grid_spacing);
+        }
+        if app.show_annotations {
+            draw_annotation_markers(ui, rect, tex_size, &app.annotations.annotations, page, source);
+        }
+        if resp.clicked() {
+            if let Some(pos) = resp.interact_pointer_pos() {
+                click = Some(ImageClick {
+                    screen_pos: pos,
+                    image_rect: rect,
+                    tex_size,
+                });
+            }
         }
     } else {
         ui.label("(not found)");
     }
+    click
 }
 
-fn show_single(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, path: &PathBuf, label: &str) {
+fn draw_annotation_markers(
+    ui: &egui::Ui,
+    image_rect: egui::Rect,
+    tex_size: [usize; 2],
+    annotations: &[Annotation],
+    page: usize,
+    source: ImageSource,
+) {
+    let painter = ui.painter();
+    let filtered: Vec<&Annotation> = annotations
+        .iter()
+        .filter(|a| a.page == page && a.source == source)
+        .collect();
+    for (i, ann) in filtered.iter().enumerate() {
+        let center = pdf_pts_to_screen(ann.x_pt, ann.y_pt, &image_rect, tex_size);
+        if !image_rect.contains(center) {
+            continue;
+        }
+        let color = match ann.source {
+            ImageSource::Reference => egui::Color32::from_rgb(255, 165, 0),
+            ImageSource::Generated => egui::Color32::from_rgb(0, 180, 80),
+        };
+        painter.circle_filled(center, 10.0, color);
+        painter.text(
+            center,
+            egui::Align2::CENTER_CENTER,
+            format!("{}", i + 1),
+            egui::FontId::proportional(11.0),
+            egui::Color32::WHITE,
+        );
+        let hover_rect = egui::Rect::from_center_size(center, egui::vec2(20.0, 20.0));
+        if ui.rect_contains_pointer(hover_rect) {
+            egui::show_tooltip(ui.ctx(), ui.layer_id(), ui.id().with(ann.id), |ui| {
+                ui.label(&ann.note);
+            });
+        }
+    }
+}
+
+fn show_single(
+    app: &mut App,
+    ctx: &egui::Context,
+    ui: &mut egui::Ui,
+    path: &PathBuf,
+    label: &str,
+    source: ImageSource,
+    page: usize,
+) {
     let age = file_age(path).unwrap_or_default();
     ui.horizontal(|ui| {
         ui.label(label);
         ui.label(egui::RichText::new(age).weak());
     });
     let available = ui.available_size();
-    egui::ScrollArea::both().show(ui, |ui| {
-        show_image(app, ctx, ui, path, available.x, available.y - 20.0);
-    });
+    let click = egui::ScrollArea::both()
+        .show(ui, |ui| {
+            show_image_clickable(app, ctx, ui, path, available.x, available.y - 20.0, source, page)
+        })
+        .inner;
+    if let Some(click) = click {
+        let (x_pt, y_pt) = screen_to_pdf_pts(&click);
+        app.pending_annotation = Some(PendingAnnotation {
+            page,
+            source,
+            x_pt,
+            y_pt,
+            text_buf: String::new(),
+        });
+    }
 }
 
 fn show_side_by_side(
@@ -460,11 +768,8 @@ fn show_side_by_side(
     ui: &mut egui::Ui,
     ref_path: &PathBuf,
     gen_path: &PathBuf,
+    page: usize,
 ) {
-    let ref_tex = app.load_texture(ctx, ref_path);
-    let gen_tex = app.load_texture(ctx, gen_path);
-    let show_grid = app.show_grid;
-    let grid_spacing = app.grid_spacing;
     let ref_age = file_age(ref_path).unwrap_or_default();
     let gen_age = file_age(gen_path).unwrap_or_default();
 
@@ -472,21 +777,18 @@ fn show_side_by_side(
     let half_w = (available.x - 10.0) / 2.0;
     let max_h = available.y - 30.0;
 
+    let mut ref_click = None;
+    let mut gen_click = None;
+
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
             ui.horizontal(|ui| {
                 ui.label("Reference");
                 ui.label(egui::RichText::new(&ref_age).weak());
             });
-            if let Some(tex) = &ref_tex {
-                let size = fit_size(tex, half_w, max_h);
-                let resp = ui.image(egui::load::SizedTexture::new(tex.id(), size));
-                if show_grid {
-                    draw_grid_overlay(ui.ctx(), resp.rect, grid_spacing);
-                }
-            } else {
-                ui.label("(not found)");
-            }
+            ref_click = show_image_clickable(
+                app, ctx, ui, ref_path, half_w, max_h, ImageSource::Reference, page,
+            );
         });
 
         ui.separator();
@@ -496,17 +798,25 @@ fn show_side_by_side(
                 ui.label("Generated");
                 ui.label(egui::RichText::new(&gen_age).weak());
             });
-            if let Some(tex) = &gen_tex {
-                let size = fit_size(tex, half_w, max_h);
-                let resp = ui.image(egui::load::SizedTexture::new(tex.id(), size));
-                if show_grid {
-                    draw_grid_overlay(ui.ctx(), resp.rect, grid_spacing);
-                }
-            } else {
-                ui.label("(not found)");
-            }
+            gen_click = show_image_clickable(
+                app, ctx, ui, gen_path, half_w, max_h, ImageSource::Generated, page,
+            );
         });
     });
+
+    let click_info = ref_click
+        .map(|c| (c, ImageSource::Reference))
+        .or_else(|| gen_click.map(|c| (c, ImageSource::Generated)));
+    if let Some((click, source)) = click_info {
+        let (x_pt, y_pt) = screen_to_pdf_pts(&click);
+        app.pending_annotation = Some(PendingAnnotation {
+            page,
+            source,
+            x_pt,
+            y_pt,
+            text_buf: String::new(),
+        });
+    }
 }
 
 fn build_overlay_texture(
@@ -579,15 +889,54 @@ fn show_overlay(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: usi
     let available = ui.available_size();
     if let Some(Some(tex)) = app.overlay_cache.get(&key) {
         let tex = tex.clone();
+        let tex_size = [tex.size()[0], tex.size()[1]];
         let show_grid = app.show_grid;
         let grid_spacing = app.grid_spacing;
-        egui::ScrollArea::both().show(ui, |ui| {
-            let size = fit_size(&tex, available.x, available.y - 20.0);
-            let resp = ui.image(egui::load::SizedTexture::new(tex.id(), size));
-            if show_grid {
-                draw_grid_overlay(ui.ctx(), resp.rect, grid_spacing);
-            }
-        });
+        let show_annotations = app.show_annotations;
+        let annotations_snapshot: Vec<Annotation> = app.annotations.annotations.clone();
+        let click = egui::ScrollArea::both()
+            .show(ui, |ui| {
+                let size = fit_size(&tex, available.x, available.y - 20.0);
+                let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+                ui.painter().image(
+                    tex.id(),
+                    rect,
+                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                    egui::Color32::WHITE,
+                );
+                if show_grid {
+                    draw_grid_overlay(ui.ctx(), rect, grid_spacing);
+                }
+                if show_annotations {
+                    // In overlay mode, show both ref and gen markers
+                    draw_annotation_markers(
+                        ui, rect, tex_size, &annotations_snapshot, page, ImageSource::Reference,
+                    );
+                    draw_annotation_markers(
+                        ui, rect, tex_size, &annotations_snapshot, page, ImageSource::Generated,
+                    );
+                }
+                if resp.clicked() {
+                    resp.interact_pointer_pos().map(|pos| ImageClick {
+                        screen_pos: pos,
+                        image_rect: rect,
+                        tex_size,
+                    })
+                } else {
+                    None
+                }
+            })
+            .inner;
+        if let Some(click) = click {
+            let (x_pt, y_pt) = screen_to_pdf_pts(&click);
+            app.pending_annotation = Some(PendingAnnotation {
+                page,
+                source: ImageSource::Generated,
+                x_pt,
+                y_pt,
+                text_buf: String::new(),
+            });
+        }
     } else {
         ui.label("Could not load reference and/or generated images");
     }

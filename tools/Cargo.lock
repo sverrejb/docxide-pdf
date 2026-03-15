@@ -1054,6 +1054,7 @@ dependencies = [
  "egui_extras",
  "image",
  "roxmltree",
+ "serde",
  "serde_json",
  "zip",
 ]
