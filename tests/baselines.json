@@ -498,8 +498,8 @@
     "convert_ms": 10.8
   },
   "scraped/slovak_misdemean..": {
-    "jaccard": 0.1288,
-    "ssim": 0.2975,
+    "jaccard": 0.2655,
+    "ssim": 0.645,
     "text_boundary": 0.4688,
     "convert_ms": 11.5
   },

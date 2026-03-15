@@ -394,6 +394,7 @@ pub struct Paragraph {
     pub contextual_spacing: bool,
     pub keep_next: bool,
     pub keep_lines: bool,
+    pub widow_control: bool,
     pub line_spacing: Option<LineSpacing>,
     pub image: Option<EmbeddedImage>,
     pub borders: ParagraphBorders,

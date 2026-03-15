@@ -93,6 +93,7 @@ pub(super) struct StyleDefaults {
     pub(super) underline: bool,
     pub(super) color: Option<[u8; 3]>,
     pub(super) char_spacing: f32,
+    pub(super) widow_control: bool,
 }
 
 #[derive(Default)]
@@ -116,6 +117,7 @@ pub(super) struct ParagraphStyle {
     pub(super) contextual_spacing: bool,
     pub(super) keep_next: bool,
     pub(super) keep_lines: bool,
+    pub(super) widow_control: Option<bool>,
     pub(super) page_break_before: bool,
     pub(super) line_spacing: Option<LineSpacing>,
     pub(super) indent_left: Option<f32>,
@@ -440,6 +442,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         underline: false,
         color: None,
         char_spacing: 0.0,
+        widow_control: true,
     };
     let mut paragraph_styles = HashMap::new();
     let mut character_styles = HashMap::new();
@@ -490,9 +493,11 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
             defaults.color = wml_attr(rpr, "color").and_then(parse_text_color);
             defaults.char_spacing = parse_char_spacing(rpr).unwrap_or(0.0);
         }
-        let default_spacing = wml(doc_defaults, "pPrDefault")
-            .and_then(|n| wml(n, "pPr"))
-            .and_then(|n| wml(n, "spacing"));
+        let default_ppr = wml(doc_defaults, "pPrDefault").and_then(|n| wml(n, "pPr"));
+        if let Some(wc) = default_ppr.and_then(|ppr| wml_bool(ppr, "widowControl")) {
+            defaults.widow_control = wc;
+        }
+        let default_spacing = default_ppr.and_then(|n| wml(n, "spacing"));
         if let Some(spacing) = default_spacing {
             if let Some(after_val) = twips_attr(spacing, "after") {
                 defaults.space_after = after_val;
@@ -573,6 +578,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                 let keep_lines = ppr
                     .and_then(|ppr| wml_bool(ppr, "keepLines"))
                     .unwrap_or(false);
+                let widow_control = ppr.and_then(|ppr| wml_bool(ppr, "widowControl"));
                 let page_break_before = ppr
                     .and_then(|ppr| wml_bool(ppr, "pageBreakBefore"))
                     .unwrap_or(false);
@@ -624,6 +630,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                         contextual_spacing,
                         keep_next,
                         keep_lines,
+                        widow_control,
                         page_break_before,
                         line_spacing,
                         indent_left,
@@ -771,6 +778,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     indent_hanging,
                     indent_first_line,
                     kern_threshold,
+                    widow_control,
                     num_id,
                     num_ilvl,
                 );
@@ -810,6 +818,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             s.indent_hanging = s.indent_hanging.or(inh.indent_hanging);
             s.indent_first_line = s.indent_first_line.or(inh.indent_first_line);
             s.kern_threshold = s.kern_threshold.or(inh.kern_threshold);
+            s.widow_control = s.widow_control.or(inh.widow_control);
             s.num_id = s.num_id.take().or(inh.num_id);
             s.num_ilvl = s.num_ilvl.or(inh.num_ilvl);
             if s.tab_stops.is_empty() {

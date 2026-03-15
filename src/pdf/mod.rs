@@ -1816,9 +1816,13 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             0
                         };
 
-                        // Reduce to ensure at least 2 lines remain on next page (orphan control)
-                        if lines_that_fit > 0 && lines.len().saturating_sub(lines_that_fit) < 2 {
-                            lines_that_fit = lines.len().saturating_sub(2);
+                        if para.widow_control {
+                            // Ensure at least 2 lines remain on next page (orphan prevention)
+                            if lines_that_fit > 0
+                                && lines.len().saturating_sub(lines_that_fit) < 2
+                            {
+                                lines_that_fit = lines.len().saturating_sub(2);
+                            }
                         }
 
                         // keepLines: don't split — move entire paragraph to next column/page
@@ -1826,7 +1830,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             lines_that_fit = 0;
                         }
 
-                        if lines_that_fit >= 2 && lines_that_fit < lines.len() {
+                        let min_split_lines = if para.widow_control { 2 } else { 1 };
+                        if lines_that_fit >= min_split_lines && lines_that_fit < lines.len() {
                             let first_part = &lines[..lines_that_fit];
                             pb.slot_top -= inter_gap;
                             let ascender_ratio = tallest_ar.unwrap_or(0.75);

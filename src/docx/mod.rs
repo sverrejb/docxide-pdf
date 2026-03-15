@@ -491,6 +491,11 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     .and_then(|ppr| wml_bool(ppr, "keepLines"))
                     .unwrap_or_else(|| para_style.is_some_and(|s| s.keep_lines));
 
+                let widow_control = ppr
+                    .and_then(|ppr| wml_bool(ppr, "widowControl"))
+                    .or_else(|| para_style.and_then(|s| s.widow_control))
+                    .unwrap_or(styles.defaults.widow_control);
+
                 let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
                 let style_num = para_style.and_then(|s| s.num_id.as_deref());
                 let style_ilvl = para_style.and_then(|s| s.num_ilvl);
@@ -616,6 +621,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     contextual_spacing,
                     keep_next,
                     keep_lines,
+                    widow_control,
                     line_spacing,
                     image: para_image,
                     borders,
