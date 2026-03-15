@@ -48,22 +48,28 @@ fn resolve_tab_aligned_start(
     }
 }
 
+/// U+00A0 (non-breaking space) renders as a space but must not allow line breaks.
+fn is_break_space(c: char) -> bool {
+    c.is_whitespace() && c != '\u{00a0}'
+}
+
 /// Split text into (preceding_space_count, word) pairs.
 /// Leading and inter-word spaces are counted. Trailing spaces (after the last word)
 /// are handled separately by the caller.
+/// Non-breaking spaces (U+00A0) are kept within words — they don't create break points.
 fn split_preserving_spaces(text: &str) -> Vec<(usize, &str)> {
     let mut result = Vec::new();
     let mut chars = text.char_indices().peekable();
     let mut space_count: usize = 0;
 
     while let Some(&(i, c)) = chars.peek() {
-        if c.is_whitespace() {
+        if is_break_space(c) {
             space_count += 1;
             chars.next();
         } else {
             let start = i;
             while let Some(&(_, c)) = chars.peek() {
-                if c.is_whitespace() {
+                if is_break_space(c) {
                     break;
                 }
                 chars.next();
@@ -361,7 +367,7 @@ pub(super) fn build_paragraph_lines(
         }
 
         // Accumulate trailing whitespace for the next run
-        let trailing_spaces = text.chars().rev().take_while(|c| c.is_whitespace()).count();
+        let trailing_spaces = text.chars().rev().take_while(|c| is_break_space(*c)).count();
         pending_space_w += trailing_spaces as f32 * space_w_cs;
     }
 
@@ -608,12 +614,13 @@ pub(super) fn build_tabbed_line(
 
             let cs = run.char_spacing;
             let ts = run.text_scale / 100.0;
-            for (i, word) in text.split_whitespace().enumerate() {
+            let words: Vec<&str> = text.split(is_break_space).filter(|s| !s.is_empty()).collect();
+            for (i, word) in words.iter().enumerate() {
                 let char_count = word.chars().count();
                 let kern = run.kern_threshold.is_some_and(|t| eff_fs >= t);
                 let ww = entry.word_width(word, eff_fs, kern) * ts + cs * char_count as f32;
                 if !all_chunks.is_empty()
-                    && (i > 0 || prev_ws || text.starts_with(char::is_whitespace))
+                    && (i > 0 || prev_ws || text.starts_with(is_break_space))
                 {
                     current_x += space_w * ts + cs;
                 }
@@ -633,7 +640,7 @@ pub(super) fn build_tabbed_line(
                 ));
                 current_x += ww;
             }
-            prev_ws = text.ends_with(char::is_whitespace);
+            prev_ws = text.ends_with(is_break_space);
         }
     }
 

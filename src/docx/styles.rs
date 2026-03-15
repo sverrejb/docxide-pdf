@@ -831,7 +831,11 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             s.caps = s.caps.or(inh.caps);
             s.small_caps = s.small_caps.or(inh.small_caps);
             s.vanish = s.vanish.or(inh.vanish);
+            s.underline = s.underline.or(inh.underline);
+            s.strikethrough = s.strikethrough.or(inh.strikethrough);
+            s.dstrike = s.dstrike.or(inh.dstrike);
             s.color = s.color.or(inh.color);
+            s.char_spacing = s.char_spacing.or(inh.char_spacing);
             s.alignment = s.alignment.or(inh.alignment);
             s.space_before = s.space_before.or(inh.space_before);
             s.space_after = s.space_after.or(inh.space_after);
