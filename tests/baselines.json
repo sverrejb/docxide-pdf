@@ -222,7 +222,7 @@
     "convert_ms": 4.1
   },
   "samples/sample500kB": {
-    "jaccard": 0.32,
+    "jaccard": 0.3227,
     "ssim": 0.5151,
     "text_boundary": 0.8506,
     "convert_ms": 14.3
@@ -312,9 +312,9 @@
     "convert_ms": 4.1
   },
   "scraped/east_asia_confer..": {
-    "jaccard": 0.0375,
-    "ssim": 0.1234,
-    "text_boundary": 0.0,
+    "jaccard": 0.0842,
+    "ssim": 0.206,
+    "text_boundary": 0.0476,
     "convert_ms": 8.1
   },
   "scraped/education_consul..": {
@@ -390,9 +390,9 @@
     "convert_ms": 3.3
   },
   "scraped/korean_japanese_..": {
-    "jaccard": 0.0253,
-    "ssim": 0.0895,
-    "text_boundary": 0.0,
+    "jaccard": 0.0957,
+    "ssim": 0.1783,
+    "text_boundary": 0.0952,
     "convert_ms": 8.6
   },
   "scraped/korean_japanese_c..": {
@@ -453,7 +453,7 @@
     "jaccard": 0.1557,
     "ssim": 0.3337,
     "text_boundary": 0.2133,
-    "convert_ms": 48.7
+    "convert_ms": 48.4
   },
   "scraped/polish_building_p..": {
     "jaccard": 0.1557,
@@ -555,7 +555,7 @@
     "jaccard": 0.2144,
     "ssim": 0.514,
     "text_boundary": 0.3148,
-    "convert_ms": 4.1
+    "convert_ms": 4.0
   },
   "scraped/turkish_ancient_r..": {
     "jaccard": 0.214,

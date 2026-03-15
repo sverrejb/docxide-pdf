@@ -1936,3 +1936,55 @@ Nested tables (`w:tbl` inside `w:tc`) were flattened into a sequential list of p
 ### Current Status of new.md Cases
 - **Passing (6)**: `turkish_prostate_cancer_course` (35.8%), `german_mezzo_soprano_bio` (51.2%), `school_mandated_reporter_policy` (23.8%), `parish_housing_data_profile` (25.4%), `go_math_ccr_alignment` (25.0%), `turkish_ancient_religions_plan` (21.4%)
 - **Failing (6)**: `polish_building_procurement_spec` (15.6%), `uk_commercial_lease_template` (14.6%, was 5.5%), `rehab_centre_physio_posting` (11.4%), `traditional_skills_job_form` (11.0%), `czech_municipal_grant_form` (10.5%), `korean_japanese_conference_form` (2.5%)
+
+## Session 32 — 2026-03-15: Implement clear tab stop handling in style inheritance
+
+### Case Selected
+`uk_commercial_lease_template` (text/layout only, 79 pages, 14.6% Jaccard) — chosen from `new.md` because visual diff analysis of page 2 revealed the Table of Contents rendering was completely broken: page numbers appeared inline instead of right-aligned, and top-level entries had titles pushed to the far right of the page. Root cause was a spec violation in tab stop inheritance.
+
+### Problem
+Two bugs in tab stop handling:
+
+1. **Clear tab stops discarded during parsing**: `parse_tab_stops()` returned `None` for `w:val="clear"` entries (line 236-238 in `mod.rs`), completely discarding them. Per OOXML spec, clear tabs should REMOVE inherited tab stops at matching positions.
+
+2. **Tab inheritance was "all or nothing"**: `resolve_based_on()` at line 851 used `if s.tab_stops.is_empty() { s.tab_stops = inh.tab_stops; }` — if a style defined ANY tab stops, ALL inherited tabs were discarded. Per OOXML spec, tab stops should be additive: inherited tabs + child's explicit tabs - child's clear tabs.
+
+### Analysis
+- The `uk_commercial_lease_template` uses 89 TOC paragraphs with styles TOC1-TOC5
+- Normal style defines 6 left-aligned tab stops at 850, 1701, 2551, 3402, 4252, 5102 twips
+- TOC styles inherit from Normal and use `w:tab w:val="clear"` to remove 5 of the 6 inherited left tabs, then add a single `w:tab w:val="right" w:pos="9071"` for right-aligned page numbers
+- With the bug, TOC1 ended up with ONLY [9071R] (its own tab, inherited tabs discarded)
+- This caused the first tab in "2.\tINTERPRETATION\t11" to jump directly to the right-aligned tab at 453.55pt, pushing "INTERPRETATION" to the far right of the page, and the second tab had no remaining tab stops → page number "11" wrapped to a new line
+- 14 fixtures in the corpus have clear tab stops in styles (93 in uk_commercial alone)
+- 149 of 161 tab characters in uk_commercial are in TOC paragraphs; only 12 in body text (SHNormal)
+
+### Implementation
+1. Added `parse_tab_stops_with_clears()` function returning `(Vec<TabStop>, Vec<f32>)` — tab stops and clear positions
+2. Added `clear_tab_positions: Vec<f32>` to `ParagraphStyle` struct
+3. In `resolve_based_on()` tab inheritance: apply clear positions BEFORE merging child's explicit tabs into inherited tabs, removing inherited tabs at matching positions
+4. Changed tab assignment from conditional (`if s.tab_stops.is_empty()`) to unconditional (`s.tab_stops = inh.tab_stops`) — styles always get the fully resolved inherited+merged tabs
+5. In paragraph parsing (`mod.rs`): always start from style-level tab stops, then apply paragraph-level clears and explicit tabs additively (instead of the previous "use own or inherit all" pattern)
+
+### Files Modified
+- `src/docx/mod.rs` — `parse_tab_stops_with_clears()`, paragraph-level additive tab merging with clears
+- `src/docx/styles.rs` — `clear_tab_positions` field, proper additive inheritance with clears in `resolve_based_on()`
+- `tests/baselines.json` — updated baselines for uk_commercial_lease_template (+0.11pp Jaccard)
+
+### Results
+- **uk_commercial_lease_template**: 14.6% → 14.7% Jaccard (+0.1pp), 30.2% SSIM (unchanged)
+- **No Jaccard or SSIM regressions** across all 51 fixtures
+- **No pass/fail status changes** (34 passing fixtures unchanged)
+- TOC pages 2-4 now render correctly with right-aligned page numbers and proper tab stop layout
+- Entry 1 ("1.DEFINITIONS1") still renders incorrectly due to TOC field code begin/separate markers interfering with run processing (separate issue)
+
+### Commit
+`3e1dabe` — "Implement clear tab stop handling in style inheritance per OOXML spec"
+
+### Not Fixed (deferred)
+- **TOC field code interference**: The first TOC entry's field begin/separate markers cause runs to be concatenated without tab handling. Affects only 1 line per TOC.
+- **Font metric drift**: All remaining 17 failing fixtures share the same root cause of font width measurement discrepancies. Blocked by rustybuzz text shaping.
+- **CJK Font Support**: Blocks `korean_japanese_conference_form` (2.5%), `japanese_interlibrary_loan` (3.5%), `east_asia_conference_form` (3.8%)
+
+### Current Status of new.md Cases
+- **Passing (6)**: `turkish_prostate_cancer_course` (35.8%), `german_mezzo_soprano_bio` (51.2%), `school_mandated_reporter_policy` (23.8%), `parish_housing_data_profile` (25.4%), `go_math_ccr_alignment` (25.0%), `turkish_ancient_religions_plan` (21.4%)
+- **Failing (6)**: `polish_building_procurement_spec` (15.6%), `uk_commercial_lease_template` (14.7%, was 14.6%), `rehab_centre_physio_posting` (11.4%), `traditional_skills_job_form` (11.0%), `czech_municipal_grant_form` (10.5%), `korean_japanese_conference_form` (2.5%)

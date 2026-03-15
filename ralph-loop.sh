@@ -16,7 +16,7 @@ fi
 
 for ((i=1; i<=iterations; i++)); do
     echo "====================="
-    echo "Iteration $i starting"
+    echo "Iteration $i / $iterations — $(date '+%Y-%m-%d %H:%M:%S')"
     echo "====================="
 
     result=$(claude --permission-mode acceptEdits -p "@${plan} @${progress} \

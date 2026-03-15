@@ -21,7 +21,7 @@ pub(super) struct FontCache {
     pub(super) files: HashMap<PathBuf, CachedFile>,
 }
 
-pub(super) const CACHE_VERSION: &str = "v1";
+pub(super) const CACHE_VERSION: &str = "v2";
 
 pub(super) fn cache_path() -> Option<PathBuf> {
     let dir = if cfg!(target_os = "macos") {

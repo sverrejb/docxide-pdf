@@ -15,9 +15,9 @@ if [ ! -f "$progress" ]; then
 fi
 
 for ((i=1; i<=iterations; i++)); do
-    echo "====================="
-    echo "Iteration $i starting"
-    echo "====================="
+    echo "====================================="
+    echo "Iteration $i / $iterations — $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "====================================="
 
     result=$(claude --permission-mode acceptEdits -p "@${progress} \
   You are to do the following steps:

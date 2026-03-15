@@ -12,25 +12,31 @@ type FontLookup = HashMap<(String, bool, bool), (PathBuf, u32)>;
 
 static FONT_INDEX: OnceLock<FontLookup> = OnceLock::new();
 
-fn font_family_name(face: &Face) -> Option<String> {
-    // Use ID 1 (Family) — matches what DOCX references and distinguishes
-    // "Aptos Display" from "Aptos" from "Aptos Narrow".
-    // ID 16 (Typographic Family) groups all these under one name, causing collisions.
+/// Return all localized family names for a font face (deduplicated by lowercase).
+fn font_family_names(face: &Face) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut names = Vec::new();
     for name in face.names() {
         if name.name_id == ttf_parser::name_id::FAMILY
             && name.is_unicode()
             && let Some(s) = name.to_string()
         {
-            return Some(s);
+            if seen.insert(s.to_lowercase()) {
+                names.push(s);
+            }
         }
     }
-    None
+    names
 }
 
-fn read_font_style(data: &[u8], face_index: u32) -> Option<(String, bool, bool)> {
+/// Returns `(names, bold, italic)` — one entry with ALL localized family names.
+fn read_font_style(data: &[u8], face_index: u32) -> Option<(Vec<String>, bool, bool)> {
     let face = Face::parse(data, face_index).ok()?;
-    let family = font_family_name(&face)?;
-    Some((family, face.is_bold(), face.is_italic()))
+    let names = font_family_names(&face);
+    if names.is_empty() {
+        return None;
+    }
+    Some((names, face.is_bold(), face.is_italic()))
 }
 
 fn font_directories() -> Vec<PathBuf> {
@@ -182,16 +188,20 @@ fn scan_font_dirs() -> FontLookup {
             let face_count = ttf_parser::fonts_in_collection(&data).unwrap_or(1);
             let mut faces = Vec::new();
             for face_idx in 0..face_count {
-                if let Some((family, bold, italic)) = read_font_style(&data, face_idx) {
-                    index
-                        .entry((family.to_lowercase(), bold, italic))
-                        .or_insert((file_path.clone(), face_idx));
-                    faces.push(CachedFace {
-                        family,
-                        bold,
-                        italic,
-                        face_index: face_idx,
-                    });
+                if let Some((families, bold, italic)) = read_font_style(&data, face_idx) {
+                    for family in &families {
+                        index
+                            .entry((family.to_lowercase(), bold, italic))
+                            .or_insert((file_path.clone(), face_idx));
+                    }
+                    for family in families {
+                        faces.push(CachedFace {
+                            family,
+                            bold,
+                            italic,
+                            face_index: face_idx,
+                        });
+                    }
                 }
             }
             new_cache.files.insert(file_path, CachedFile { faces });

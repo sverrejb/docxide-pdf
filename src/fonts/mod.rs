@@ -173,6 +173,53 @@ fn family_fallback(family: FontFamily) -> Option<&'static str> {
     }
 }
 
+fn has_cjk_chars(chars: &HashSet<char>) -> bool {
+    chars.iter().any(|&c| {
+        let cp = c as u32;
+        // CJK Unified Ideographs + extensions, Hangul Syllables, Katakana, Hiragana
+        (0x4E00..=0x9FFF).contains(&cp)
+            || (0x3400..=0x4DBF).contains(&cp)
+            || (0xAC00..=0xD7AF).contains(&cp)
+            || (0x3040..=0x309F).contains(&cp)
+            || (0x30A0..=0x30FF).contains(&cp)
+            || (0xF900..=0xFAFF).contains(&cp)
+            || (0x20000..=0x2A6DF).contains(&cp)
+    })
+}
+
+fn cjk_fallback_fonts() -> &'static [&'static str] {
+    #[cfg(target_os = "macos")]
+    {
+        &[
+            "Malgun Gothic",
+            "AppleSD Gothic Neo",
+            "Apple SD Gothic Neo",
+            "Hiragino Sans",
+            "PingFang SC",
+        ]
+    }
+    #[cfg(target_os = "linux")]
+    {
+        &[
+            "Noto Sans CJK SC",
+            "Noto Sans CJK KR",
+            "Noto Sans CJK JP",
+        ]
+    }
+    #[cfg(target_os = "windows")]
+    {
+        &[
+            "Malgun Gothic",
+            "Yu Gothic",
+            "Microsoft YaHei",
+        ]
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
+    {
+        &[]
+    }
+}
+
 pub(crate) fn register_font(
     pdf: &mut Pdf,
     font_name: &str,
@@ -206,6 +253,8 @@ pub(crate) fn register_font(
         )
     };
 
+    let needs_cjk = has_cjk_chars(used_chars);
+
     let result = font_name
         .split(';')
         .map(|s| s.trim())
@@ -218,6 +267,18 @@ pub(crate) fn register_font(
                     return Some(m);
                 }
             }
+            // Try CJK fallback before family fallback — family fonts (TNR, Courier)
+            // lack CJK glyphs and would produce squares
+            if needs_cjk {
+                for cjk_font in cjk_fallback_fonts() {
+                    if let Some(m) = try_candidate(cjk_font) {
+                        log::info!(
+                            "Font substitution: {primary} → CJK fallback \"{cjk_font}\""
+                        );
+                        return Some(m);
+                    }
+                }
+            }
             let fallback = family_fallback(entry.family)?;
             let m = try_candidate(fallback)?;
             log::info!(
@@ -225,6 +286,19 @@ pub(crate) fn register_font(
                 entry.family
             );
             Some(m)
+        })
+        .or_else(|| {
+            if !needs_cjk {
+                return None;
+            }
+            // Font not in fontTable at all — try CJK fallback as last resort
+            for cjk_font in cjk_fallback_fonts() {
+                if let Some(m) = try_candidate(cjk_font) {
+                    log::info!("Font substitution: {primary} → CJK fallback \"{cjk_font}\"");
+                    return Some(m);
+                }
+            }
+            None
         });
 
     let entry = match result {
