@@ -610,7 +610,7 @@ pub struct TableRow {
 
 pub struct TableCell {
     pub width: f32, // points
-    pub paragraphs: Vec<Paragraph>,
+    pub content: Vec<Block>,
     pub borders: CellBorders,
     pub shading: Option<[u8; 3]>,
     pub grid_span: u16,
@@ -618,6 +618,30 @@ pub struct TableCell {
     pub v_align: CellVAlign,
     pub text_direction: TextDirection,
     pub cell_margins: Option<CellMargins>,
+}
+
+impl TableCell {
+    /// Recursively collect all paragraphs from this cell's content,
+    /// including paragraphs inside nested tables.
+    pub fn all_paragraphs(&self) -> Vec<&Paragraph> {
+        fn collect<'a>(blocks: &'a [Block], out: &mut Vec<&'a Paragraph>) {
+            for block in blocks {
+                match block {
+                    Block::Paragraph(p) => out.push(p),
+                    Block::Table(t) => {
+                        for row in &t.rows {
+                            for cell in &row.cells {
+                                collect(&cell.content, out);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        let mut result = Vec::new();
+        collect(&self.content, &mut result);
+        result
+    }
 }
 
 pub enum Block {

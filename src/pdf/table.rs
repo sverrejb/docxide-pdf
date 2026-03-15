@@ -4,8 +4,8 @@ use pdf_writer::{Content, Name, Str};
 
 use crate::fonts::{FontEntry, encode_as_gids, font_key_buf, to_winansi_bytes};
 use crate::model::{
-    Alignment, BorderStyle, CellBorder, CellMargins, CellVAlign, SectionProperties, Table,
-    TableRow, TextDirection, VMerge,
+    Alignment, Block, BorderStyle, CellBorder, CellMargins, CellVAlign, SectionProperties, Table,
+    TableAlignment, TableRow, TextDirection, VMerge,
 };
 
 use super::RenderContext;
@@ -139,126 +139,304 @@ fn para_has_visible_content(para: &CellParagraphLayout) -> bool {
         || (!para.lines.is_empty() && para.lines.iter().any(|l| !l.chunks.is_empty()))
 }
 
-fn cell_has_visible_content(paragraphs: &[CellParagraphLayout]) -> bool {
-    paragraphs.iter().any(|p| para_has_visible_content(p))
+fn cell_has_visible_content(items: &[CellContentItem]) -> bool {
+    items.iter().any(|item| match item {
+        CellContentItem::Paragraph(p) => para_has_visible_content(p),
+        CellContentItem::NestedTable { height } => *height > 0.0,
+    })
 }
 
-fn render_cell_paragraphs(
+fn render_cell_content(
     content: &mut Content,
-    paragraphs: &[CellParagraphLayout],
+    items: &[CellContentItem],
+    blocks: &[Block],
     cell_x: f32,
     col_w: f32,
     cursor_y_start: f32,
     cm: &CellMargins,
-    fonts: &HashMap<String, FontEntry>,
+    ctx: &RenderContext,
 ) {
     let mut cursor_y = cursor_y_start;
+    let mut block_idx = 0;
 
-    for para in paragraphs {
-        if !para_has_visible_content(para) && para.image_name.is_none() {
-            cursor_y -= para.space_before + para.lines.len() as f32 * para.line_h;
-            if para.content_height > 0.0 {
-                cursor_y -= para.content_height;
+    for item in items {
+        match item {
+            CellContentItem::Paragraph(para) => {
+                // Advance block_idx past the corresponding Block::Paragraph
+                while block_idx < blocks.len() {
+                    if matches!(&blocks[block_idx], Block::Paragraph(_)) {
+                        block_idx += 1;
+                        break;
+                    }
+                    block_idx += 1;
+                }
+
+                if !para_has_visible_content(para) && para.image_name.is_none() {
+                    cursor_y -= para.space_before + para.lines.len() as f32 * para.line_h;
+                    if para.content_height > 0.0 {
+                        cursor_y -= para.content_height;
+                    }
+                    continue;
+                }
+
+                cursor_y -= para.space_before;
+
+                if let Some(ref img_name) = para.image_name {
+                    let img_x = cell_x + cm.left;
+                    let img_y = cursor_y - para.image_height;
+                    content.save_state();
+                    content.transform([
+                        para.image_width,
+                        0.0,
+                        0.0,
+                        para.image_height,
+                        img_x,
+                        img_y,
+                    ]);
+                    content.x_object(Name(img_name.as_bytes()));
+                    content.restore_state();
+                    cursor_y -= para.content_height;
+                    continue;
+                }
+
+                let text_x = cell_x + cm.left + para.indent_left;
+                let text_w = (col_w - cm.left - cm.right - para.indent_left).max(0.0);
+                let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
+
+                if !para.list_label.is_empty() {
+                    let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging;
+                    draw_cell_label(content, para, label_x, baseline_y, ctx.fonts);
+                }
+
+                render_paragraph_lines(
+                    content,
+                    &para.lines,
+                    &para.alignment,
+                    text_x,
+                    text_w,
+                    baseline_y,
+                    para.line_h,
+                    para.lines.len(),
+                    0,
+                    &mut Vec::new(),
+                    0.0,
+                    ctx.fonts,
+                );
+
+                cursor_y -= para.lines.len() as f32 * para.line_h;
             }
-            continue;
+            CellContentItem::NestedTable { height } => {
+                // Find the corresponding Block::Table
+                let table = loop {
+                    if block_idx >= blocks.len() {
+                        break None;
+                    }
+                    if let Block::Table(t) = &blocks[block_idx] {
+                        block_idx += 1;
+                        break Some(t);
+                    }
+                    block_idx += 1;
+                };
+                if let Some(table) = table {
+                    render_nested_table(table, content, cell_x + cm.left, col_w - cm.left - cm.right, &mut cursor_y, ctx);
+                } else {
+                    cursor_y -= height;
+                }
+            }
         }
-
-        cursor_y -= para.space_before;
-
-        if let Some(ref img_name) = para.image_name {
-            let img_x = cell_x + cm.left;
-            let img_y = cursor_y - para.image_height;
-            content.save_state();
-            content.transform([
-                para.image_width,
-                0.0,
-                0.0,
-                para.image_height,
-                img_x,
-                img_y,
-            ]);
-            content.x_object(Name(img_name.as_bytes()));
-            content.restore_state();
-            cursor_y -= para.content_height;
-            continue;
-        }
-
-        let text_x = cell_x + cm.left + para.indent_left;
-        let text_w = (col_w - cm.left - cm.right - para.indent_left).max(0.0);
-        let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
-
-        if !para.list_label.is_empty() {
-            let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging;
-            draw_cell_label(content, para, label_x, baseline_y, fonts);
-        }
-
-        render_paragraph_lines(
-            content,
-            &para.lines,
-            &para.alignment,
-            text_x,
-            text_w,
-            baseline_y,
-            para.line_h,
-            para.lines.len(),
-            0,
-            &mut Vec::new(),
-            0.0,
-            fonts,
-        );
-
-        cursor_y -= para.lines.len() as f32 * para.line_h;
     }
 }
 
-fn render_partial_cell_paragraphs(
+/// Render a nested table inline within a parent cell at the given cursor position.
+fn render_nested_table(
+    table: &Table,
     content: &mut Content,
-    paragraphs: &[CellParagraphLayout],
+    available_x: f32,
+    available_w: f32,
+    cursor_y: &mut f32,
+    ctx: &RenderContext,
+) {
+    let col_widths = auto_fit_columns(table, ctx.fonts);
+    let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
+    let cm = &table.cell_margins;
+    let table_total_w: f32 = col_widths.iter().sum();
+    let table_left = match table.alignment {
+        TableAlignment::Center => available_x + (available_w - table_total_w) / 2.0,
+        TableAlignment::Right => available_x + available_w - table_total_w,
+        TableAlignment::Left => available_x + table.table_indent - cm.left,
+    };
+
+    for (ri, (row, layout)) in table.rows.iter().zip(row_layouts.iter()).enumerate() {
+        let row_h = layout.height;
+        let row_top = *cursor_y;
+        let row_bottom = row_top - row_h;
+
+        let mut grid_col = 0usize;
+        for (cell, cell_layout) in row.cells.iter().zip(layout.cells.iter()) {
+            let span = cell.grid_span.max(1) as usize;
+            let col_w = cell_span_width(&col_widths, grid_col, span);
+            let cx = cell_x_offset(&col_widths, table_left, grid_col);
+            grid_col += span;
+
+            if cell.v_merge == VMerge::Continue {
+                continue;
+            }
+
+            if let Some(shading) = cell.shading {
+                content.save_state();
+                content.set_fill_rgb(
+                    shading[0] as f32 / 255.0,
+                    shading[1] as f32 / 255.0,
+                    shading[2] as f32 / 255.0,
+                );
+                content.rect(cx, row_bottom, col_w, row_h);
+                content.fill_nonzero();
+                content.restore_state();
+            }
+
+            if cell_has_visible_content(&cell_layout.items) {
+                let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
+                let content_h: f32 = cell_layout
+                    .items
+                    .iter()
+                    .map(|item| match item {
+                        CellContentItem::Paragraph(p) => {
+                            p.space_before + p.lines.len() as f32 * p.line_h
+                        }
+                        CellContentItem::NestedTable { height } => *height,
+                    })
+                    .sum();
+
+                let avail = row_h - ecm.top - ecm.bottom;
+                let v_offset = valign_offset(cell.v_align, avail, content_h);
+                let cell_cursor_y = row_top - ecm.top - v_offset;
+
+                render_cell_content(
+                    content,
+                    &cell_layout.items,
+                    &cell.content,
+                    cx,
+                    col_w,
+                    cell_cursor_y,
+                    ecm,
+                    ctx,
+                );
+            }
+        }
+
+        let mut grid_col = 0usize;
+        for cell in &row.cells {
+            let span = cell.grid_span.max(1) as usize;
+            let col_w = cell_span_width(&col_widths, grid_col, span);
+            let bx = cell_x_offset(&col_widths, table_left, grid_col);
+            grid_col += span;
+
+            let draw_top = cell.v_merge != VMerge::Continue && ri == 0;
+            draw_cell_borders(
+                content,
+                &cell.borders,
+                bx,
+                row_top,
+                row_bottom,
+                col_w,
+                draw_top,
+                true,
+            );
+        }
+
+        *cursor_y = row_bottom;
+    }
+}
+
+fn render_partial_cell_content(
+    content: &mut Content,
+    items: &[CellContentItem],
+    blocks: &[Block],
     start: usize,
     end: usize,
     cell_x: f32,
     col_w: f32,
     cursor_y_start: f32,
     cm: &CellMargins,
-    fonts: &HashMap<String, FontEntry>,
+    ctx: &RenderContext,
 ) {
     let mut cursor_y = cursor_y_start;
+    // Build a mapping from item index to block index
+    let mut block_idx = 0usize;
+    let mut item_to_block: Vec<usize> = Vec::new();
+    for item in items {
+        item_to_block.push(block_idx);
+        match item {
+            CellContentItem::Paragraph(_) => {
+                while block_idx < blocks.len() {
+                    if matches!(&blocks[block_idx], Block::Paragraph(_)) {
+                        block_idx += 1;
+                        break;
+                    }
+                    block_idx += 1;
+                }
+            }
+            CellContentItem::NestedTable { .. } => {
+                while block_idx < blocks.len() {
+                    if matches!(&blocks[block_idx], Block::Table(_)) {
+                        block_idx += 1;
+                        break;
+                    }
+                    block_idx += 1;
+                }
+            }
+        }
+    }
 
     for pi in start..end {
-        let para = &paragraphs[pi];
-        let sb = if pi == start { 0.0 } else { para.space_before };
+        match &items[pi] {
+            CellContentItem::Paragraph(para) => {
+                let sb = if pi == start { 0.0 } else { para.space_before };
 
-        if !para_has_visible_content(para) {
-            cursor_y -= sb + para.lines.len() as f32 * para.line_h;
-            continue;
+                if !para_has_visible_content(para) {
+                    cursor_y -= sb + para.lines.len() as f32 * para.line_h;
+                    continue;
+                }
+
+                cursor_y -= sb;
+                let text_x = cell_x + cm.left + para.indent_left;
+                let text_w = (col_w - cm.left - cm.right - para.indent_left).max(0.0);
+                let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
+
+                if !para.list_label.is_empty() {
+                    let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging;
+                    draw_cell_label(content, para, label_x, baseline_y, ctx.fonts);
+                }
+
+                render_paragraph_lines(
+                    content,
+                    &para.lines,
+                    &para.alignment,
+                    text_x,
+                    text_w,
+                    baseline_y,
+                    para.line_h,
+                    para.lines.len(),
+                    0,
+                    &mut Vec::new(),
+                    0.0,
+                    ctx.fonts,
+                );
+
+                cursor_y -= para.lines.len() as f32 * para.line_h;
+            }
+            CellContentItem::NestedTable { height } => {
+                let bi = item_to_block.get(pi).copied().unwrap_or(0);
+                if let Some(Block::Table(table)) = blocks.get(bi) {
+                    render_nested_table(
+                        table, content, cell_x + cm.left, col_w - cm.left - cm.right,
+                        &mut cursor_y, ctx,
+                    );
+                } else {
+                    cursor_y -= height;
+                }
+            }
         }
-
-        cursor_y -= sb;
-        let text_x = cell_x + cm.left + para.indent_left;
-        let text_w = (col_w - cm.left - cm.right - para.indent_left).max(0.0);
-        let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
-
-        if !para.list_label.is_empty() {
-            let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging;
-            draw_cell_label(content, para, label_x, baseline_y, fonts);
-        }
-
-        render_paragraph_lines(
-            content,
-            &para.lines,
-            &para.alignment,
-            text_x,
-            text_w,
-            baseline_y,
-            para.line_h,
-            para.lines.len(),
-            0,
-            &mut Vec::new(),
-            0.0,
-            fonts,
-        );
-
-        cursor_y -= para.lines.len() as f32 * para.line_h;
     }
 }
 
@@ -282,7 +460,7 @@ fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>) -> Vec<f3
                 continue;
             }
             let mut key_buf = String::new();
-            for para in &cell.paragraphs {
+            for para in cell.all_paragraphs() {
                 for run in &para.runs {
                     let key = font_key_buf(run, &mut key_buf);
                     let Some(entry) = fonts.get(key) else {
@@ -363,8 +541,13 @@ struct CellParagraphLayout {
     content_height: f32,
 }
 
+enum CellContentItem {
+    Paragraph(CellParagraphLayout),
+    NestedTable { height: f32 },
+}
+
 struct CellLayout {
-    paragraphs: Vec<CellParagraphLayout>,
+    items: Vec<CellContentItem>,
     total_height: f32,
     text_direction: TextDirection,
 }
@@ -442,7 +625,7 @@ fn compute_row_layouts(
 
                     if cell.v_merge == VMerge::Continue {
                         return CellLayout {
-                            paragraphs: vec![],
+                            items: vec![],
                             total_height: 14.4,
                             text_direction: TextDirection::LrTb,
                         };
@@ -457,107 +640,130 @@ fn compute_row_layouts(
                     };
                     let mut total_h: f32 = ecm.top + ecm.bottom;
                     let mut max_rotated_line_w: f32 = 0.0;
-                    let mut paragraphs = Vec::new();
+                    let mut items: Vec<CellContentItem> = Vec::new();
                     let mut prev_space_after = 0.0f32;
+                    let mut para_idx = 0usize;
 
-                    for (pi, para) in cell.paragraphs.iter().enumerate() {
-                        let substituted;
-                        let runs = if let Some(sub) = hf_sub {
-                            substituted = substitute_hf_runs(
-                                &para.runs,
-                                sub.page_num,
-                                sub.total_pages,
-                                sub.styleref_values,
-                            );
-                            &substituted
-                        } else {
-                            &para.runs
-                        };
-                        let font_size = runs.first().map_or(12.0, |r| r.font_size);
-                        let effective_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                        let tallest_lhr = font_metric(runs, ctx.fonts, |e| e.line_h_ratio);
-                        let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
+                    for block in &cell.content {
+                        match block {
+                            Block::Paragraph(para) => {
+                                let substituted;
+                                let runs = if let Some(sub) = hf_sub {
+                                    substituted = substitute_hf_runs(
+                                        &para.runs,
+                                        sub.page_num,
+                                        sub.total_pages,
+                                        sub.styleref_values,
+                                    );
+                                    &substituted
+                                } else {
+                                    &para.runs
+                                };
+                                let font_size = runs.first().map_or(12.0, |r| r.font_size);
+                                let effective_ls =
+                                    para.line_spacing.unwrap_or(ctx.doc_line_spacing);
+                                let tallest_lhr =
+                                    font_metric(runs, ctx.fonts, |e| e.line_h_ratio);
+                                let line_h =
+                                    resolve_line_h(effective_ls, font_size, tallest_lhr);
 
-                        let space_before = if pi > 0 {
-                            f32::max(prev_space_after, para.space_before)
-                        } else {
-                            para.space_before
-                        };
-                        total_h += space_before;
+                                let space_before = if para_idx > 0 {
+                                    f32::max(prev_space_after, para.space_before)
+                                } else {
+                                    para.space_before
+                                };
+                                total_h += space_before;
 
-                        let mut kb = String::new();
-                        let ascender_ratio = runs
-                            .first()
-                            .map(|r| font_key_buf(r, &mut kb))
-                            .and_then(|k| ctx.fonts.get(k))
-                            .and_then(|e| e.ascender_ratio)
-                            .unwrap_or(0.75);
+                                let mut kb = String::new();
+                                let ascender_ratio = runs
+                                    .first()
+                                    .map(|r| font_key_buf(r, &mut kb))
+                                    .and_then(|k| ctx.fonts.get(k))
+                                    .and_then(|e| e.ascender_ratio)
+                                    .unwrap_or(0.75);
 
-                        let lines = if !is_text_empty(runs) {
-                            let para_text_w =
-                                (cell_text_w - para.indent_left - para.indent_right).max(0.0);
-                            let lines = build_paragraph_lines(
-                                runs,
-                                ctx.fonts,
-                                para_text_w,
-                                para.indent_hanging,
-                                &std::collections::HashMap::new(),
-                            );
-                            if is_rotated {
-                                for line in &lines {
-                                    max_rotated_line_w = max_rotated_line_w.max(line.total_width);
-                                }
+                                let lines = if !is_text_empty(runs) {
+                                    let para_text_w = (cell_text_w
+                                        - para.indent_left
+                                        - para.indent_right)
+                                        .max(0.0);
+                                    let lines = build_paragraph_lines(
+                                        runs,
+                                        ctx.fonts,
+                                        para_text_w,
+                                        para.indent_hanging,
+                                        &std::collections::HashMap::new(),
+                                    );
+                                    if is_rotated {
+                                        for line in &lines {
+                                            max_rotated_line_w =
+                                                max_rotated_line_w.max(line.total_width);
+                                        }
+                                    }
+                                    total_h += lines.len() as f32 * line_h;
+                                    lines
+                                } else {
+                                    if para.content_height > 0.0 {
+                                        total_h += para.content_height;
+                                    } else {
+                                        total_h += line_h;
+                                    }
+                                    vec![]
+                                };
+
+                                let first_run_font_key = runs
+                                    .first()
+                                    .map(|r| {
+                                        let mut kb2 = String::new();
+                                        font_key_buf(r, &mut kb2).to_owned()
+                                    })
+                                    .unwrap_or_default();
+
+                                let image_name = para.image.as_ref().and_then(|img| {
+                                    let key = std::sync::Arc::as_ptr(&img.data) as usize;
+                                    ctx.table_cell_image_names.get(&key).cloned()
+                                });
+                                let (image_width, image_height) = para
+                                    .image
+                                    .as_ref()
+                                    .map(|img| (img.display_width, img.display_height))
+                                    .unwrap_or((0.0, 0.0));
+
+                                items.push(CellContentItem::Paragraph(CellParagraphLayout {
+                                    lines,
+                                    line_h,
+                                    font_size,
+                                    ascender_ratio,
+                                    alignment: para.alignment,
+                                    space_before,
+                                    indent_left: para.indent_left,
+                                    indent_right: para.indent_right,
+                                    indent_hanging: para.indent_hanging,
+                                    list_label: para.list_label.clone(),
+                                    list_label_font: para.list_label_font.clone(),
+                                    label_color: para.runs.first().and_then(|r| r.color),
+                                    first_run_font_key,
+                                    image_name,
+                                    image_width,
+                                    image_height,
+                                    content_height: para.content_height,
+                                }));
+
+                                prev_space_after = para.space_after;
+                                para_idx += 1;
                             }
-                            total_h += lines.len() as f32 * line_h;
-                            lines
-                        } else {
-                            if para.content_height > 0.0 {
-                                total_h += para.content_height;
-                            } else {
-                                total_h += line_h;
+                            Block::Table(nested_table) => {
+                                let nested_cw = auto_fit_columns(nested_table, ctx.fonts);
+                                let nested_layouts =
+                                    compute_row_layouts(nested_table, &nested_cw, ctx, hf_sub);
+                                let nested_h: f32 =
+                                    nested_layouts.iter().map(|rl| rl.height).sum();
+                                total_h += nested_h;
+                                items.push(CellContentItem::NestedTable { height: nested_h });
+                                prev_space_after = 0.0;
+                                para_idx += 1;
                             }
-                            vec![]
-                        };
-
-                        let first_run_font_key = runs
-                            .first()
-                            .map(|r| {
-                                let mut kb2 = String::new();
-                                font_key_buf(r, &mut kb2).to_owned()
-                            })
-                            .unwrap_or_default();
-
-                        let image_name = para.image.as_ref().and_then(|img| {
-                            let key = std::sync::Arc::as_ptr(&img.data) as usize;
-                            ctx.table_cell_image_names.get(&key).cloned()
-                        });
-                        let (image_width, image_height) = para
-                            .image
-                            .as_ref()
-                            .map(|img| (img.display_width, img.display_height))
-                            .unwrap_or((0.0, 0.0));
-
-                        paragraphs.push(CellParagraphLayout {
-                            lines,
-                            line_h,
-                            font_size,
-                            ascender_ratio,
-                            alignment: para.alignment,
-                            space_before,
-                            indent_left: para.indent_left,
-                            indent_right: para.indent_right,
-                            indent_hanging: para.indent_hanging,
-                            list_label: para.list_label.clone(),
-                            list_label_font: para.list_label_font.clone(),
-                            label_color: para.runs.first().and_then(|r| r.color),
-                            first_run_font_key,
-                            image_name,
-                            image_width,
-                            image_height,
-                            content_height: para.content_height,
-                        });
-
-                        prev_space_after = para.space_after;
+                        }
                     }
 
                     total_h += prev_space_after;
@@ -568,7 +774,7 @@ fn compute_row_layouts(
                         max_h = max_h.max(total_h);
                     }
                     CellLayout {
-                        paragraphs,
+                        items,
                         total_height: total_h,
                         text_direction: cell.text_direction,
                     }
@@ -668,7 +874,7 @@ fn render_table_row(
             );
         }
 
-        let has_content = cell_has_visible_content(&cell_layout.paragraphs);
+        let has_content = cell_has_visible_content(&cell_layout.items);
         let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
 
         if has_content && cell_layout.text_direction == TextDirection::TbRl {
@@ -685,15 +891,18 @@ fn render_table_row(
             );
         } else if has_content {
             let content_h: f32 = cell_layout
-                .paragraphs
+                .items
                 .iter()
-                .map(|p| {
-                    let para_h = if p.lines.is_empty() && p.content_height > 0.0 {
-                        p.content_height
-                    } else {
-                        p.lines.len() as f32 * p.line_h
-                    };
-                    p.space_before + para_h
+                .map(|item| match item {
+                    CellContentItem::Paragraph(p) => {
+                        let para_h = if p.lines.is_empty() && p.content_height > 0.0 {
+                            p.content_height
+                        } else {
+                            p.lines.len() as f32 * p.line_h
+                        };
+                        p.space_before + para_h
+                    }
+                    CellContentItem::NestedTable { height } => *height,
                 })
                 .sum();
 
@@ -701,14 +910,15 @@ fn render_table_row(
             let v_offset = valign_offset(cell.v_align, avail, content_h);
             let cursor_y = row_top - ecm.top - v_offset;
 
-            render_cell_paragraphs(
+            render_cell_content(
                 &mut pb.content,
-                &cell_layout.paragraphs,
+                &cell_layout.items,
+                &cell.content,
                 cell_x,
                 col_w,
                 cursor_y,
                 ecm,
-                ctx.fonts,
+                ctx,
             );
         }
     }
@@ -764,8 +974,15 @@ fn render_vertical_cjk_cell(
         .map(|e| (e.pdf_name.as_str(), e))
         .collect();
 
-    let total_char_h: f32 = cell_layout
-        .paragraphs
+    let paras: Vec<&CellParagraphLayout> = cell_layout
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            CellContentItem::Paragraph(p) => Some(p),
+            _ => None,
+        })
+        .collect();
+    let total_char_h: f32 = paras
         .iter()
         .flat_map(|p| &p.lines)
         .flat_map(|l| &l.chunks)
@@ -780,7 +997,7 @@ fn render_vertical_cjk_cell(
     let mut char_y = row_top - cm.top - v_offset;
     let mut char_buf = [0u8; 4];
 
-    for para in &cell_layout.paragraphs {
+    for para in &paras {
         for line in &para.lines {
             for chunk in &line.chunks {
                 if chunk.text.is_empty() {
@@ -827,23 +1044,27 @@ fn render_vertical_cjk_cell(
     }
 }
 
-/// Find how many paragraphs (from `start`) fit within `available_h`.
-/// Always includes at least one paragraph to guarantee progress.
+/// Find how many items (from `start`) fit within `available_h`.
+/// Always includes at least one item to guarantee progress.
 fn find_cell_split(cell: &CellLayout, start: usize, available_h: f32, cm: &CellMargins) -> usize {
-    if start >= cell.paragraphs.len() {
-        return cell.paragraphs.len();
+    if start >= cell.items.len() {
+        return cell.items.len();
     }
     let mut h = cm.top + cm.bottom;
-    for pi in start..cell.paragraphs.len() {
-        let para = &cell.paragraphs[pi];
-        let sb = if pi == start { 0.0 } else { para.space_before };
-        let para_h = sb + para.lines.len() as f32 * para.line_h;
-        if h + para_h > available_h && pi > start {
+    for pi in start..cell.items.len() {
+        let item_h = match &cell.items[pi] {
+            CellContentItem::Paragraph(para) => {
+                let sb = if pi == start { 0.0 } else { para.space_before };
+                sb + para.lines.len() as f32 * para.line_h
+            }
+            CellContentItem::NestedTable { height } => *height,
+        };
+        if h + item_h > available_h && pi > start {
             return pi;
         }
-        h += para_h;
+        h += item_h;
     }
-    cell.paragraphs.len()
+    cell.items.len()
 }
 
 /// Render a subset of each cell's paragraphs for a split row.
@@ -868,9 +1089,14 @@ fn render_partial_row(
         let end = ends[ci];
         let mut h = cm.top + cm.bottom;
         for pi in start..end {
-            let para = &cell_layout.paragraphs[pi];
-            let sb = if pi == start { 0.0 } else { para.space_before };
-            h += sb + para.lines.len() as f32 * para.line_h;
+            let item_h = match &cell_layout.items[pi] {
+                CellContentItem::Paragraph(para) => {
+                    let sb = if pi == start { 0.0 } else { para.space_before };
+                    sb + para.lines.len() as f32 * para.line_h
+                }
+                CellContentItem::NestedTable { height } => *height,
+            };
+            h += item_h;
         }
         max_h = max_h.max(h);
     }
@@ -905,20 +1131,23 @@ fn render_partial_row(
             );
         }
 
-        let has_content =
-            (start..end).any(|pi| para_has_visible_content(&cell_layout.paragraphs[pi]));
+        let has_content = (start..end).any(|pi| match &cell_layout.items[pi] {
+            CellContentItem::Paragraph(p) => para_has_visible_content(p),
+            CellContentItem::NestedTable { height } => *height > 0.0,
+        });
 
         if has_content {
-            render_partial_cell_paragraphs(
+            render_partial_cell_content(
                 &mut pb.content,
-                &cell_layout.paragraphs,
+                &cell_layout.items,
+                &cell.content,
                 start,
                 end,
                 cell_x,
                 col_w,
                 row_top - cm.top,
                 cm,
-                ctx.fonts,
+                ctx,
             );
         }
     }
@@ -1056,7 +1285,7 @@ pub(super) fn render_table(
 
                 for ci in 0..ncells {
                     let end = find_cell_split(&layout.cells[ci], starts[ci], avail, cm);
-                    if end < layout.cells[ci].paragraphs.len() {
+                    if end < layout.cells[ci].items.len() {
                         all_done = false;
                     }
                     ends.push(end);
@@ -1188,26 +1417,32 @@ pub(super) fn render_header_footer_table(
                 content.restore_state();
             }
 
-            if cell_has_visible_content(&cell_layout.paragraphs) {
+            if cell_has_visible_content(&cell_layout.items) {
                 let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
                 let content_h: f32 = cell_layout
-                    .paragraphs
+                    .items
                     .iter()
-                    .map(|p| p.space_before + p.lines.len() as f32 * p.line_h)
+                    .map(|item| match item {
+                        CellContentItem::Paragraph(p) => {
+                            p.space_before + p.lines.len() as f32 * p.line_h
+                        }
+                        CellContentItem::NestedTable { height } => *height,
+                    })
                     .sum();
 
                 let avail = row_h - ecm.top - ecm.bottom;
                 let v_offset = valign_offset(cell.v_align, avail, content_h);
                 let cell_cursor_y = row_top - ecm.top - v_offset;
 
-                render_cell_paragraphs(
+                render_cell_content(
                     content,
-                    &cell_layout.paragraphs,
+                    &cell_layout.items,
+                    &cell.content,
                     cell_x,
                     col_w,
                     cell_cursor_y,
                     ecm,
-                    ctx.fonts,
+                    ctx,
                 );
             }
         }

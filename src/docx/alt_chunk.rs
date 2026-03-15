@@ -690,7 +690,7 @@ fn convert_table(
 
             cells.push(TableCell {
                 width: w_pt,
-                paragraphs: cell_paras,
+                content: cell_paras.into_iter().map(crate::model::Block::Paragraph).collect(),
                 borders,
                 shading: None,
                 grid_span: colspan as u16,

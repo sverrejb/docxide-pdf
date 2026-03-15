@@ -154,7 +154,7 @@ pub(super) fn hf_paragraphs(hf: &HeaderFooter) -> Vec<&Paragraph> {
                 .rows
                 .iter()
                 .flat_map(|row| row.cells.iter())
-                .flat_map(|cell| cell.paragraphs.iter())
+                .flat_map(|cell| cell.all_paragraphs())
                 .collect(),
         })
         .collect()

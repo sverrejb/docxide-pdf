@@ -816,7 +816,7 @@ fn collect_all_runs(doc: &Document) -> Vec<&Run> {
                     .rows
                     .iter()
                     .flat_map(|row| row.cells.iter())
-                    .flat_map(|cell| cell.paragraphs.iter())
+                    .flat_map(|cell| cell.all_paragraphs())
                     .flat_map(|para| para_runs_with_textboxes(para))
                     .collect(),
             }
@@ -862,7 +862,7 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
                     .rows
                     .iter()
                     .flat_map(|row| row.cells.iter())
-                    .flat_map(|cell| cell.paragraphs.iter())
+                    .flat_map(|cell| cell.all_paragraphs())
                     .flat_map(|p| collect_paras(p))
                     .collect(),
             }
@@ -1131,7 +1131,7 @@ fn embed_all_images(
         for table in tables {
             for row in &table.rows {
                 for cell in &row.cells {
-                    for para in &cell.paragraphs {
+                    for para in cell.all_paragraphs() {
                         if let Some(img) = &para.image {
                             let key = std::sync::Arc::as_ptr(&img.data) as usize;
                             if !table_cell_image_names.contains_key(&key) {
@@ -1437,7 +1437,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         t.rows
                             .iter()
                             .flat_map(|row| row.cells.iter())
-                            .flat_map(|cell| cell.paragraphs.iter())
+                            .flat_map(|cell| cell.all_paragraphs())
                             .flat_map(|p| p.runs.iter()),
                     ),
                 };
@@ -2283,7 +2283,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                     for row in &table.rows {
                         for cell in &row.cells {
-                            for p in &cell.paragraphs {
+                            for p in cell.all_paragraphs() {
                                 update_styleref_from_para(
                                     &mut pb.styleref_running,
                                     &mut pb.styleref_page_first,
