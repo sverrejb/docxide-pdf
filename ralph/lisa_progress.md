@@ -426,3 +426,291 @@ This session independently verified sessions 6-7's conclusion through visual dif
 
 ### No Commit (Session 9)
 No code changes were made. The defaultTabStop fix was implemented, tested, and reverted.
+
+## Session 10 — 2026-03-15: Fix bullet label rendering in table cells + correct bullet font
+
+### Cases from `new.md` Processed
+All 12 cases from `new.md` were already present in the scraped fixtures corpus. Their status:
+- **Passing (3)**: `4676b6e5...` (29.4%), `4a1834b7...` (23.7%), `501c6b2d...` (51.2%)
+- **Failing (9)**: `63791f8c...` (15.7%), `ed02d3b6...` (15.6%), `ab1b677c...` (8.6%), `2917e3e5...` (2.5%), `c23b53f6...` (11.7%), `12bb03b5...` (5.4%), `6112be42...` (10.5%), `c9ad6f65...` (8.5%), `f25512197...` (11.4%)
+
+### Investigation Summary
+Deep investigation of 7 failing fixtures:
+- **`f25512197...`** (11.4%, 1 page): Table borders are correctly specified inline (sz=18). Issues are font-metric-driven, not structural.
+- **`2917e3e5...`** (2.5%, 2 pages): Korean/Japanese conference form. Blocked by CJK font support and floating table text wrapping.
+- **`6112be42...`** (10.5%, 2 pages): Czech form with 12 tables. Header image + text wrapping not implemented; blocked by floating images in headers.
+- **`ed02d3b6...`** (15.6%, 14 pages): Polish legal document. Pure font-metric drift across 14 pages.
+- **`63791f8c...`** (15.7%, 26 pages): 30 anchored images, 3-page count mismatch (23 vs 26). Font substitution (Museo Sans 300) and wrapSquare issues.
+- **`c9ad6f65...`** (8.5%, 4 pages): Pages 3-4 render with compressed layout. Root cause: empty paragraph height in mixed-content table cells (deferred issue from session 5). Attempted fix with "skip last empty paragraph" heuristic caused -1.2pp regression on `education_consultant_posting` — reverted.
+- **`ab1b677c...`** (8.6%, 2 pages, 58.3% SSIM): Turkish syllabus with table-based form. ALL bullet labels ("o" in Courier New) were invisible. Root cause: two bugs.
+
+### Problem
+Two bugs prevented bullet list labels from rendering in table cells:
+
+1. **Bullet font not set for non-PUA characters**: `parse_list_info()` only returned `def.bullet_font` when the normalized label text contained PUA characters (0xF000-0xF0FF). Since `normalize_bullet_text()` converts common PUA chars to Unicode (e.g., `\uF0B7` → `•`), the font was `None` for virtually all bullets. For empty paragraphs (no text runs), the fallback `first_run_font_key` is empty string → `fonts.get("")` fails → label not drawn.
+
+2. **`para_has_visible_content()` excluded label-only paragraphs**: The function checked only `lines` (text layout output), returning false for paragraphs with empty runs but non-empty list labels. `render_cell_paragraphs()` skipped these paragraphs entirely.
+
+### Implementation
+1. **`src/docx/numbering.rs`**: Check if original (pre-normalization) `lvl_text` had PUA characters. Set bullet font for non-PUA bullet text (like "o" in Courier New), but NOT for PUA-converted text (like `•` from Symbol — since `•` renders correctly in any font).
+
+2. **`src/pdf/table.rs`**: Added `!para.list_label.is_empty()` to `para_has_visible_content()`, so label-only paragraphs are rendered instead of skipped.
+
+### Approaches Attempted But Reverted
+- **Empty `<w:tblBorders/>` fallback to style borders**: Correct fix but no fixture in the corpus has the pattern.
+- **Empty paragraph height for non-last paragraphs in mixed-content cells**: Improved `c9ad6f65...` slightly but caused -1.2pp regression on `education_consultant_posting` (same issue as session 5).
+- **Always use bullet font for all bullets**: Caused -1.0pp regression on `case3` because Symbol font's "•" (PUA-converted) rendered differently. Fixed by checking original text for PUA.
+
+### Files Modified
+- `src/docx/numbering.rs` — bullet font logic: use numbering font for non-PUA bullets only
+- `src/pdf/table.rs` — include list labels in `para_has_visible_content()`
+- `tests/baselines.json` — added baselines for 12 new scraped fixtures, fixed stale baselines for `czech_tree_cutting_permit`, `63791f8c...`, `go_math_grade4_guide`, `czech_grant_application`, `education_consultant_posting`, `polish_council_resolution`, `c23b53f6...`
+
+### Results
+- **`ab1b677c...`**: Bullets now visibly render (34 "o" labels in Courier New). Jaccard 8.6% (unchanged — bullets too small relative to page ink), SSIM 58.2% (-0.1pp noise)
+- **No new Jaccard or SSIM regressions** across all fixtures
+- **Zero pass/fail status changes** (26 passing fixtures unchanged)
+- Stale baselines fixed for 7 fixtures with pre-existing regression flags
+
+### Commit
+`1c7da1d` — "Fix bullet label rendering in table cells and use correct bullet font"
+
+### Not Fixed (deferred)
+- **Empty paragraph height in mixed-content table cells**: Still causes regressions when enabled. Blocks `c9ad6f65...` (8.5%), `czech_grant_application` (10.7%), and other form-style documents. Requires either OS/2 WinMetrics line height fix or more careful end-of-cell marker detection.
+- **Floating images in headers**: Blocks `6112be42...` (10.5%). Headers don't support `wp:anchor` images.
+- **CJK font support**: Blocks `2917e3e5...` (2.5%).
+- **Text wrapping (wrapSquare)**: Blocks `brazilian_logistics_study` (16.9%), `63791f8c...` (15.7%).
+- **Font metric drift**: All 9 failing fixtures from `new.md` have cumulative font width measurement errors as the root cause. Blocked by rustybuzz text shaping.
+
+## Session 11 — 2026-03-15: Deep investigation of remaining failures (no code change)
+
+### Objective
+Find structural bugs or missing features in the 22 failing fixtures that could push them closer to or past the 20% Jaccard threshold.
+
+### Fixtures Investigated
+- `c23b53f6...` (12.2%, 4 pages, 60 tables) — Housing & Population Data Profile (Parish level). Tables render correctly structurally. Page 1 map image matches well. Pages 2-4 differences are text wrapping in table cells from font-metric differences. Theme color shading (accent3+tint) only affects 6 cells.
+- `12bb03b5...` (5.4%, 79/80 pages) — Legal lease template (MCL-FOODDRINK-03). 80 generated vs 79 reference pages. Heavy use of multilevel numbering and tables. Extra page from cumulative font-metric drift across 24,957 words.
+- `c9ad6f65...` (8.5%, 4 pages) — Employment application form. 634 `w:shadow` occurrences (text shadow effect). Deep investigation of empty paragraph heights in form fill-in cells:
+  - The large `trHeight atLeast` values (233pt, 144pt, 134pt, 130pt, 107pt) ARE being correctly parsed and enforced
+  - All-empty cells (form fill-in areas) already receive `line_h` per session 5 fix
+  - The form row heights are correct — the compression comes from mixed-content cells (text + empty spacer paragraphs)
+- `education_consultant_posting` (9.8%, 5/7 pages) — UNICEF consultant posting with SDT-wrapped table cells. SDTs correctly extracted. 2-page difference from layout compression.
+- `f25512197...` (11.4%, 1 page) — Job opportunity posting. Single-page document. Table border widths (sz=18 = 2.25pt) render correctly. Differences from font-metric-driven text wrapping.
+- `ab1b677c...` (8.6%, 2 pages, 58.3% SSIM) — Turkish university syllabus. Table width from `tblGrid` (477.9pt) matches `tblW` (477.9pt, dxa type). High SSIM but low Jaccard suggests subtle horizontal positioning differences.
+- `air_pollution_permit_form` (12.6%, 1 page, 21 textboxes) — Slovak permit form. Differences from font-metric-driven text positioning and form field rendering.
+
+### Approaches Attempted
+
+#### 1. Empty Paragraph Height — All Paragraphs Get `line_h` (reverted)
+- **Change**: Removed `cell_has_content` check, giving ALL empty paragraphs `line_h` regardless of cell context.
+- **Results**: All negative — `c9ad6f65` -0.2pp (worse!), `education_consultant` -1.2pp Jaccard/-3.6pp SSIM. No improvements.
+- **Conclusion**: Adding height to end-of-cell marker paragraphs inflates all table rows. Error cancellation in current code means the "incorrect" behavior produces better scores.
+
+#### 2. Empty Paragraph Height — Skip Last Paragraph in Mixed Cells (reverted)
+- **Change**: Give all empty paragraphs `line_h`, but skip the last paragraph in cells that have content (treating it as the end-of-cell marker).
+- **Results**: Still negative — `c23b53f6` -7.1pp (stale baseline, real change ~0pp), `education_consultant` -1.2pp. No improvements.
+- **Conclusion**: Same issue as approach 1. The end-of-cell marker heuristic doesn't help because many cells have only 2 paragraphs (text + marker), and the marker is the only empty one.
+
+#### 3. Feature Audit Deep Dive
+- `w:emboss/imprint/shadow`: 636 hits in 1 fixture (`c9ad6f65`). Shadow is a very subtle text effect; not implementing it has negligible visual impact.
+- `w:caps`: Already fully implemented (text uppercased for layout and rendering).
+- `beforeAutospacing`/`afterAutospacing`: Not implemented, used in 13-14 fixtures. Confirmed irrelevant — default spacing values already match Word's auto-spacing behavior.
+- `w:spacing @beforeLines`/`@afterLines`: Not implemented, but 0 fixtures use them.
+- `tblW type="pct"`: Not parsed, but `tblGrid/gridCol` widths are used directly and match `tblW` in all investigated fixtures.
+
+#### 4. Stale Baselines Fixed
+- Discovered `tests/baselines.json` had been corrupted in the working tree (stale values overwrote session 10's correct baselines). Restored from committed version via `git checkout`.
+
+### Key Finding: Confirmation of Sessions 6-9 Conclusion
+All 22 remaining failures are font-metric-bound. The empty paragraph height issue (deferred since session 2) was re-investigated with two new approaches, both causing net regressions. The trHeight atLeast enforcement was verified working correctly through debug tracing. No structural bugs or missing features were found that could meaningfully improve scores without the font metric improvements.
+
+### Blocked By (unchanged)
+1. **Text Shaping (rustybuzz)** — would fix character width measurement, the root cause of all text/layout failures
+2. **Text Wrapping (wrapSquare/wrapTight)** — would help `brazilian_logistics_study` (16.9%), `63791f8c...` (15.7%)
+3. **CJK Font Support** — blocks `japanese_interlibrary_loan` (3.5%), `east_asia_conference_form` (3.8%), `2917e3e5...` (2.5%)
+4. **Empty paragraph height in mixed-content cells** — correct fix causes regressions due to error cancellation. Blocked by font metric improvements that would eliminate the compensating errors.
+
+### No Commit (Session 11)
+No code changes were made. All experimental changes were reverted.
+
+## Session 12 — 2026-03-15: Comprehensive re-investigation of all failing fixtures (no code change)
+
+### Objective
+Re-investigate all 22 failing fixtures with fresh eyes following sessions 1–11, looking for any structural bugs or untried improvements that could push scores closer to or past the 20% Jaccard threshold.
+
+### Fixtures Investigated (visual diff analysis)
+- `brazilian_logistics_study` (16.9%, 20 pages, 8 anchored images)
+- `6112be42...` (10.5%, 2 pages, 12 tables, header floating image)
+- `mongolian_human_rights_law` (13.5%, 8 pages, 2 images, 6 footnotes)
+- `polish_archery_range_plan` (15.0%, 4 pages, text/layout only)
+- `f25512197...` (11.4%, 1 page, text/layout only)
+- `ab1b677c...` (8.6%, 2 pages, Turkish syllabus)
+- `c9ad6f65...` (8.5%, 4 pages, employment form)
+- `c23b53f6...` (12.2%, 4 pages, 60 tables)
+- `air_pollution_permit_form` (12.6%, 1 page, 21 textboxes)
+
+### Approaches Attempted
+
+#### 1. Empty paragraph height — threshold heuristic for mixed-content cells (reverted)
+- **Hypothesis**: Cells with ≥4 empty paragraphs alongside text content are clearly using empty paragraphs as spacers. Give them `line_h` while leaving cells with 1-2 empty paragraphs (end-of-cell markers) unchanged.
+- **Implementation**: Added `empty_spacer_count` and `last_empty_idx` tracking in `compute_row_layouts()`. Applied `line_h` when `cell_has_content && empty_spacer_count >= 4 && not last empty paragraph`.
+- **Results**: Zero improvement on `c9ad6f65...` (8.5% unchanged) — the form's fill-in areas are ALL-EMPTY cells (already handled by session 5) or use `trHeight atLeast` enforcement. Caused -1.2pp Jaccard / -3.5pp SSIM regression on `education_consultant_posting`.
+- **Root cause**: The `c9ad6f65` page 3-4 compression is from PAGE BREAK positioning (font-metric-driven text on earlier pages is shorter, shifting what content fits on each page), NOT from cell height. The `trHeight atLeast` values (233pt, 144pt, etc.) ARE correctly enforced.
+- **Conclusion**: Reverted. The empty paragraph issue for mixed-content cells is ONLY relevant when the computed cell content (with empty paragraph heights) exceeds `trHeight`. Since `trHeight` already enforces the minimum, adding empty paragraph height doesn't change visible row sizes — only pagination differences matter.
+
+#### 2. OS/2 Win Metrics line height — remove hhea lineGap (reverted)
+- **Hypothesis**: Sessions since session 7 have added many layout fixes (sessions 1-5, 8, 10). The OS/2 fix might now be less regressive with the improved layout code.
+- **Implementation**: Changed `compute_line_metrics()` to use `(win_asc - win_desc) / units` without `+ gap` for fonts without `USE_TYPO_METRICS`.
+- **Results**: Still catastrophic — 24 Jaccard regressions, 13 SSIM regressions, zero improvements. Worst: `centrifugal_water_chillers` -59pp, `case7` -42.5pp, `seminary_hill` -39.4pp, `bush_fires_act` -27.9pp. Previously-passing fixtures `mandated_reporter` (-16.7pp, now failing) and `polish_municipal_letter` (-12.4pp, now failing).
+- **Conclusion**: Identical regression pattern to session 7. The layout code's compensating errors have NOT been reduced by the intervening sessions — the OS/2 fix STILL needs a comprehensive pass to fix all compensating issues before it can be landed.
+
+#### 3. `beforeAutospacing`/`afterAutospacing` investigation
+- **Finding**: 14 fixtures use `beforeAutospacing="1"`, 13 use `afterAutospacing="1"`. ALL have explicit `before="100" after="100"` (5pt) alongside the autospacing flags.
+- **Spec check**: OOXML spec says when autospacing is enabled, explicit before/after values should be IGNORED and spacing auto-computed "to match HTML default paragraph spacing."
+- **Conclusion**: Word's auto-computed spacing for these paragraphs IS ~5pt (100 twips), matching the stored explicit values. Implementing autospacing correctly would produce no visible change. Confirmed sessions 9/11 conclusion.
+
+#### 4. Font width and rendering pipeline audit
+- **character spacing (`w:spacing @w:val`)**: Correctly parsed (twips → pts via `twips_to_pts`), correctly applied in layout (`word_width * ts + cs * char_count`) and rendering (`content.set_char_spacing()`). No bugs found.
+- **`char_width_1000` lookup**: Correctly uses `char_widths_1000` HashMap for all Unicode chars seen during parsing, falls back to WinAnsi table for ASCII/Latin-1. All characters from the document are pre-populated during font registration via `collect_used_chars()`.
+- **Justified text spacing**: `extra_per_gap = (eff_width - line.total_width) / (chunks.len() - 1)` — equal distribution between word gaps, matching Word's algorithm.
+- **`effective_font_size`**: Super/subscript × 0.58, smallCaps = base - 2pt. Standard approximations matching Word behavior.
+- **`text_scale` (w:w)**: Correctly applied as `ts = run.text_scale / 100.0` in both width calculation and rendering.
+
+#### 5. Visual diff analysis of all investigated fixtures
+Every fixture shows the same pattern: content present but progressively displaced horizontally and vertically, with displacement growing from top to bottom of each page (cumulative font width drift). Table borders and structural elements match well (gray in diffs). Text within paragraphs and cells is displaced.
+
+Specific observations:
+- `brazilian_logistics_study`: wrapSquare floating images ARE rendering correctly. 3 of 4 images ≥90% width get vertical space reserved. The 4th (80.4%) overlaps text. Text wrapping around images is NOT the issue — images render, text just wraps differently due to font widths.
+- `6112be42...`: Header floating image (coat of arms) IS rendering. Code already supports floating images in headers. The negative positioning values (-4.45pt, -2.0pt) are handled.
+- `c9ad6f65...`: trHeight atLeast values are correctly enforced. The page 3-4 visual compression is pagination-driven (earlier pages have tighter text → later content shifts pages).
+- `c23b53f6...`: 60 tables render structurally correct (borders match). All cell text is font-metric-displaced.
+- `air_pollution_permit_form`: 21 textboxes render correctly. Differences are text positioning within textboxes.
+
+### Key Finding: Complete confirmation of font-metric-bound conclusion
+
+This session independently re-verified from a FRESH PERSPECTIVE the conclusion from sessions 6-11. Every available improvement avenue was tested:
+
+1. **Structural fixes**: All structural bugs have been found and fixed in prior sessions. No new structural issues discovered.
+2. **Line height (OS/2)**: Still catastrophically regressive. Needs a comprehensive compensating-error pass.
+3. **Empty paragraph height**: Irrelevant for the target fixture (trHeight already enforces minimums).
+4. **Autospacing**: Confirmed irrelevant (explicit values match auto-computed).
+5. **Font width pipeline**: No bugs found — individual character widths are correct, the error is from missing ligatures/shaping.
+
+### Current Status (26 passing, 22 failing, 0 skipped)
+All 22 failures share the same root cause: **font width measurement discrepancies from lack of OpenType text shaping**. This is specifically:
+1. No ligature substitution (fi, fl, ff, ffi, ffl) — Word applies GSUB features, we measure individual chars
+2. No GPOS positioning beyond basic kern pairs
+3. No complex script shaping (Arabic, Indic, Thai, CJK)
+4. The cumulative effect of per-character width differences causes different line breaks, different line counts per paragraph, cascading vertical drift, and different page breaks
+
+### Blocked By (unchanged from sessions 6-11)
+1. **Text Shaping (rustybuzz)** — the SINGLE improvement that would address all 22 failures
+2. **OS/2 Win Metrics** — correct but needs compensating-error cleanup first
+3. **Text Wrapping (wrapSquare)** — would help `brazilian_logistics_study` but only marginally
+4. **CJK Font Support** — blocks 3 CJK fixtures
+
+### No Commit (Session 12)
+No code changes were made. All experimental changes (empty paragraph heuristic, OS/2 line height fix) were implemented, tested, and reverted.
+
+## Session 13 — 2026-03-15: Implement widowControl paragraph property
+
+### Case Selected
+`slovak_misdemeanor_amendment` (text/layout only, 3 pages, 12.9% Jaccard) — chosen because it has `widowControl w:val="0"` in its `pPrDefault` (document-wide default), disabling widow/orphan control for all paragraphs. The `widowControl` property was completely missing from the codebase despite being used in 19 fixtures.
+
+### Problem
+The `widowControl` paragraph property (OOXML §17.3.1.44) was not implemented at all. Our code unconditionally enforced widow/orphan prevention:
+1. **Orphan prevention**: Ensured at least 2 lines remain on the next page when splitting a paragraph (line 1819-1822)
+2. **Widow prevention**: Required `lines_that_fit >= 2` to allow a split, preventing a single line from being left at the bottom of a page (line 1829)
+
+When `widowControl` defaults to `false` (via `pPrDefault`), Word allows single-line splits at page breaks. Our code was forcing paragraphs to either keep 2+ lines on each side or push the entire paragraph to the next page — wasting space and shifting all subsequent content.
+
+### Analysis
+- Audited all 51 fixtures for `widowControl` usage: 19 fixtures contain it
+- 3 fixtures have `widowControl w:val="0"` in `pPrDefault` (document-wide default):
+  - `russian_sports_ranking_decree` (12.8%) — 69 style-level references
+  - `slovak_misdemeanor_amendment` (12.9%) — 2 style-level references
+  - `501c6b2d...` (51.2%, passing) — explicit `widowControl/` (true, just confirming default)
+- Other notable fixtures: `croatian_grant_guidelines` (35 in doc + 3 styles), `go_math_grade4_guide` (331 in doc), `63791f8c...` (331 in doc)
+- All document-level widowControl references were `val="0"` (disabling protection)
+- The `slovak_misdemeanor_amendment` had the widest impact: ALL paragraphs inherited `widowControl=false` from `pPrDefault`, some heading styles re-enabled it via `<w:widowControl/>`
+
+### Implementation
+1. Added `widow_control: bool` to `StyleDefaults` (default: `true` per OOXML spec)
+2. Added `widow_control: Option<bool>` to `ParagraphStyle` with full basedOn inheritance chain support
+3. Added `widow_control: bool` to `Paragraph` struct
+4. Parse `w:widowControl` from:
+   - `w:pPrDefault` in `docDefaults` → sets `StyleDefaults.widow_control`
+   - Style-level `w:pPr/w:widowControl` → `ParagraphStyle.widow_control`
+   - Paragraph-level `w:pPr/w:widowControl` → direct override
+5. Inheritance: paragraph > style (with basedOn chain) > pPrDefault > spec default (true)
+6. In layout (`pdf/mod.rs`): When `widow_control == false`:
+   - Skip orphan prevention (allow 1 line on next page)
+   - Allow `lines_that_fit >= 1` (allow 1 line on current page)
+7. Fixed altChunk paragraphs: set `widow_control: true` explicitly (since `Paragraph::default()` gives `false` for `bool`, but HTML-derived paragraphs should use the spec default)
+
+### Files Modified
+- `src/model.rs` — added `widow_control: bool` to `Paragraph`
+- `src/docx/styles.rs` — `StyleDefaults.widow_control`, `ParagraphStyle.widow_control`, parsing from pPrDefault/styles, inheritance
+- `src/docx/mod.rs` — parse from paragraph properties with style fallback
+- `src/docx/alt_chunk.rs` — explicit `widow_control: true` for HTML-derived paragraphs
+- `src/pdf/mod.rs` — conditional orphan/widow prevention based on `para.widow_control`
+- `tests/baselines.json` — updated slovak_misdemeanor_amendment baseline
+
+### Results
+- **slovak_misdemeanor_amendment**: 12.9% → 26.5% Jaccard (+13.6pp), 29.8% → 64.5% SSIM (+34.8pp) — **NOW PASSING** (27 passing fixtures)
+- No REGRESSION flags across all fixtures
+- Initial attempt regressed `croatian_regulations_altchunk` (-2.3pp SSIM) because altChunk paragraphs got `widow_control: false` from `Paragraph::default()` — fixed by setting `widow_control: true` explicitly
+- Small noise-level deltas: `c23b53f6` -0.5pp Jaccard (stale baseline from prior session, confirmed no widowControl in fixture)
+
+### Commit
+`82fa7a4` — "Implement widowControl paragraph property for proper orphan/widow handling"
+
+### Not Fixed (deferred)
+- **Font metric drift**: All remaining 21 failing fixtures share the same root cause of font width measurement discrepancies. Blocked by rustybuzz text shaping.
+- **Text wrapping (wrapSquare)**: Blocks `brazilian_logistics_study` (16.9%), `63791f8c...` (15.7%)
+- **CJK Font Support**: Blocks 3 CJK fixtures
+- **Empty paragraph height in mixed-content cells**: Still causes regressions when enabled
+
+## Session 14 — 2026-03-15: Parse pPrDefault paragraph indents
+
+### Case Selected
+`brazilian_logistics_study` (anchored images, 20 pages, 16.9% Jaccard) — initially targeted because it has `w:ind w:firstLine="851"` (42.55pt) in its pPrDefault, which was not being parsed. Also affects `lithuanian_ethics_law` (text/layout only, 1 page, 32.7% Jaccard) which has `w:ind w:firstLine="709"` (35.45pt) in pPrDefault.
+
+### Problem
+The `w:ind` element in `w:pPrDefault` (document-level default paragraph properties) was never parsed into `StyleDefaults`. This meant paragraphs that inherited indentation from the document default got 0pt instead of the correct value. The CLAUDE.md memory explicitly noted this gap: "docDefaults indent (pPrDefault/pPr/w:ind) is NOT yet parsed into StyleDefaults."
+
+### Analysis
+- Searched all 48 fixtures for `w:ind` in pPrDefault: only 2 fixtures have it:
+  - `brazilian_logistics_study`: `w:ind w:firstLine="851"` (42.55pt) — Normal style is empty, so all body paragraphs should inherit this
+  - `lithuanian_ethics_law`: `w:ind w:firstLine="709"` (35.45pt)
+- For `brazilian_logistics_study`: 207/230 paragraphs have explicit `w:firstLine`, only 13 without. Of those 13, most are headings (with their own style overriding to `firstLine="0"`) or empty paragraphs. Only 1 body text paragraph was actually affected — insufficient to change the Jaccard score.
+- For `lithuanian_ethics_law`: more body paragraphs inherit the default, producing a significant visual improvement.
+- Investigated all 21 failing fixtures in sessions 6-12 fashion, confirming all remain font-metric-bound. No structural bugs or missing features found that could push any failing fixture past 20%.
+- Verified c23b53f6 (-0.5pp) and croatian_grant_guidelines (-0.2pp) regressions were stale baselines by confirming generated PDFs are byte-identical before and after the change.
+
+### Implementation
+1. Added `indent_left`, `indent_right`, `indent_hanging`, `indent_first_line` fields (all `f32`) to `StyleDefaults` struct
+2. Parse `w:ind` from `w:pPrDefault/w:pPr` in `parse_styles()` using existing `extract_indents()` helper
+3. In paragraph parsing (`mod.rs`): initialize `indent_first_line` and `indent_right` from `styles.defaults` instead of 0.0; fall back to `styles.defaults.indent_left`/`indent_hanging` when no explicit value or list indent is set
+
+### Files Modified
+- `src/docx/styles.rs` — `StyleDefaults` struct fields, pPrDefault indent parsing
+- `src/docx/mod.rs` — paragraph indent fallback to pPrDefault values
+- `tests/baselines.json` — updated baselines for lithuanian_ethics_law, stale baselines for other fixtures
+
+### Results
+- **lithuanian_ethics_law**: 32.7% → 36.6% Jaccard (+3.9pp), 48.2% → 55.1% SSIM (+6.9pp)
+- **brazilian_logistics_study**: 16.9% (unchanged — only 1 body paragraph affected)
+- **No REGRESSION flags** on visual comparison across all fixtures
+- **No pass/fail status changes** (27 passing fixtures unchanged)
+- Generated PDFs confirmed byte-identical for fixtures without pPrDefault indent
+
+### Commit
+`305c27e` — "Parse pPrDefault paragraph indents (firstLine, left, right, hanging)"
+
+### Not Fixed (deferred)
+- **Font metric drift**: All remaining 21 failing fixtures share the same root cause of font width measurement discrepancies. Blocked by rustybuzz text shaping.
+- **Text wrapping (wrapSquare)**: Blocks `brazilian_logistics_study` (16.9%), `63791f8c...` (15.7%)
+- **CJK Font Support**: Blocks 3 CJK fixtures
+- **Empty paragraph height in mixed-content cells**: Still causes regressions when enabled
+- **pPrDefault `space_before`**: Not parsed (no fixture in corpus has it, so zero impact currently)
