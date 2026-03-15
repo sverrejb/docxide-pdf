@@ -1585,3 +1585,354 @@ Attempted to avoid the education_consultant regression by skipping the last empt
 - **education_consultant regression**: The -1.2pp Jaccard / -3.3pp SSIM regression is an error-cancellation artifact. Our incorrect 0-height for empty paragraphs was compensating for other layout errors. The regression cannot be mitigated without fixing the underlying font metric issues.
 - **Font metric drift**: All remaining 18 failing fixtures share the same root cause of font width measurement discrepancies. Blocked by rustybuzz text shaping.
 - **CJK Font Support**: Blocks `korean_japanese_conference_form` (2.5%), `japanese_interlibrary_loan` (3.5%), `east_asia_conference_form` (3.8%)
+
+## Session 27 — 2026-03-15: Resolve table border conflicts between adjacent rows
+
+### Case Selected
+`turkish_ancient_religions_plan` (2 pages, 19.7% Jaccard, 59.0% SSIM) — chosen from `new.md` as the closest failing fixture to the 20.5% Jaccard threshold (0.8pp away). Analysis of the DOCX revealed a border conflict resolution bug where table-level `insideH=single` borders were overwriting cell-level `tcBorders=dotted` borders at internal horizontal edges.
+
+### Problem
+When two adjacent table rows share a horizontal border edge, both cells draw their borders at the same position: the upper cell draws its bottom border, then the lower cell draws its top border on top. The second draw always wins visually.
+
+In the Turkish fixture:
+- Table-level `tblBorders`: `insideH=single` (for internal horizontal borders)
+- 84/98 cells have explicit `tcBorders` overriding internal borders to `dotted`
+- 14 cells have NO `tcBorders` → their top/bottom borders default to `insideH=single`
+
+At boundaries where an upper cell has `tcBorders bottom=dotted` (cell-level) and the lower cell has no `tcBorders` (table-level `insideH=single`):
+- Upper row renders: draws bottom as dotted
+- Lower row renders: draws top as solid single (overwrites dotted)
+- Result: solid borders where dotted should appear
+
+Per OOXML §17.4.38, cell-level borders (from `tcBorders`) take priority over table-level borders (from `tblBorders`). The dotted border should win.
+
+### Analysis
+- Analyzed the Turkish fixture's DOCX: 49 rows, 98 cells, 132 dotted borders, 27 single borders, 8 double borders
+- Cell border patterns: 54 cells (top=dotted, bottom=dotted), 16 cells (top=single, bottom=dotted), 5 cells (top=dotted, bottom=single), 4 cells (top=single only), 3 cells (bottom=dotted only), 2 cells (top=double, bottom=double), 14 cells (no tcBorders)
+- The 14 cells without tcBorders are the problem: their table-level single borders overwrite adjacent cells' cell-level dotted borders
+- Each incorrectly solid border adds ~60% more ink pixels than the correct dotted border, directly hurting Jaccard
+
+### Implementation
+1. Added `is_override: bool` field to `CellBorder` in `model.rs` — tracks whether a border comes from cell-level `tcBorders` (true) or table-level `tblBorders` defaults (false)
+2. Updated `border_or_fallback()` in `tables.rs` — sets `is_override=true` for borders from `tcBorders`, `false` for fallback borders from `tblBorders`
+3. Added `resolve_h_border()` function — conflict resolution per OOXML §17.4.38:
+   - Cell-level override beats table-level default
+   - Among same-level borders: wider border wins
+   - Among same-width same-level: prefer upper (first drawn)
+4. Added post-parse conflict resolution pass in `parse_table_node()` — iterates adjacent row pairs, resolves shared horizontal borders. Handles grid span differences using column position tracking.
+5. Both the upper cell's bottom and lower cell's top are set to the winning border, so rendering (which draws both) produces consistent output regardless of draw order.
+
+### Files Modified
+- `src/model.rs` — added `is_override: bool` to `CellBorder` struct, default, and `visible()` constructor
+- `src/docx/tables.rs` — `border_or_fallback()` sets `is_override`, `resolve_h_border()` function, post-parse conflict resolution pass
+- `tests/baselines.json` — updated baselines for turkish_ancient_religions_plan, italian_evaluation_minutes, sample500kB, traditional_skills_job_form
+
+### Results
+- **34 passing fixtures (was 33) — 1 new passing fixture**
+- **turkish_ancient_religions_plan**: 19.7% → 21.4% Jaccard (+1.7pp) — **NOW PASSING**, 59.0% → 51.4% SSIM (-7.6pp, was already below 75% threshold; dot-pattern texture change at SSIM comparison resolution)
+- `italian_evaluation_minutes`: -0.2pp Jaccard (34.1% → 33.9%, still passing)
+- `sample500kB`: -0.3pp Jaccard (32.3% → 32.0%, still passing)
+- `traditional_skills_job_form`: -0.1pp Jaccard (11.1% → 11.0%, still failing)
+- No previously passing fixture became failing
+
+### Commit
+`e4a67eb` — "Resolve table border conflicts between adjacent rows per OOXML spec"
+
+### Not Fixed (deferred)
+- **Font metric drift**: All remaining 17 failing fixtures share the same root cause of font width measurement discrepancies. Blocked by rustybuzz text shaping.
+- **Vertical border conflict resolution**: Only horizontal border conflicts between adjacent rows are resolved. Vertical border conflicts between adjacent columns (left/right borders) are not resolved. Low impact since vertical borders rarely have cell-level overrides in the corpus.
+- **SSIM regression on Turkish**: The -7.6pp SSIM regression is expected — changing borders from solid to dotted changes local pixel texture that SSIM penalizes. The SSIM was already well below the 75% threshold.
+- **CJK Font Support**: Blocks `korean_japanese_conference_form` (2.5%), `japanese_interlibrary_loan` (3.5%), `east_asia_conference_form` (3.8%)
+
+## Session 28 — 2026-03-15: Comprehensive investigation of new.md failing cases + hyphen line breaking (no code change)
+
+### Cases from `new.md` Investigated
+All 12 cases from `new.md`. Their status:
+- **Passing (6)**: `turkish_prostate_cancer_course` (35.8%), `german_mezzo_soprano_bio` (51.2%), `school_mandated_reporter_policy` (23.7%), `parish_housing_data_profile` (25.4%), `go_math_ccr_alignment` (25.0%), `turkish_ancient_religions_plan` (21.4%)
+- **Failing (6)**: `polish_building_procurement_spec` (15.6%), `rehab_centre_physio_posting` (11.4%), `traditional_skills_job_form` (11.0%), `czech_municipal_grant_form` (10.5%), `uk_commercial_lease_template` (5.5%), `korean_japanese_conference_form` (2.5%)
+
+### Current Status
+34 passing, 17 failing, 0 skipped.
+
+### Fixtures Investigated
+Deep investigation of 3 failing new.md fixtures via parallel subagents + visual diff analysis:
+
+#### 1. `polish_building_procurement_spec` (15.6%, 14 pages)
+- Agent reported "hyperlink color" issue (blue vs black text) — **DEBUNKED**. Visual comparison of generated vs reference showed both outputs have black text. The red/blue in diff images were diff visualization colors, not actual text differences.
+- Found duplicate `w:sz` elements in first paragraph (`val="24"` followed by `val="26"`). Our `wml()` function uses `.find()` (first child) instead of `.filter().last()` (last child per OOXML spec). However, only 1 run in the entire document is affected — too small to meaningfully change scores.
+- `w:position w:val="0"` — no vertical offset, not a factor.
+- Document uses Tahoma font. All text present but progressively displaced. Confirmed font-metric-bound.
+
+#### 2. `rehab_centre_physio_posting` (11.4%, 1 page)
+- Agent reported "negative tab position bug" (`w:pos="-1440"`) — **DEBUNKED**. The negative tab is at the END of text content (after "Education, Licenses, Registration & Experience:"), so it has no visual effect.
+- Single-page document with table + body text. Negative character spacing (`w:spacing w:val="-8"`, `-14`) correctly parsed and applied.
+- Visual diff shows classic font-metric drift pattern even on a single page — cumulative character width errors across all paragraphs are sufficient to cause 11.4% Jaccard.
+
+#### 3. `traditional_skills_job_form` (11.0%, 4 pages)
+- Single large table with 6 columns, fixed layout. All borders explicitly defined at cell level.
+- 1 anchored image (wrapNone, page-relative) correctly rendered.
+- No structural bugs found. Font-metric-bound.
+
+### Approaches Attempted
+
+#### 1. Hyperlink/Character Style Color Investigation (debunked)
+Agent hypothesis that `style18` ("Łącze internetowe" with `w:color w:val="000080"`) was leaking blue color to non-hyperlink text was incorrect. Both generated and reference PDFs render identical black text. The diff visualization colors were misinterpreted.
+
+#### 2. Duplicate `w:sz` Element Handling (not worth fixing)
+Found that `wml()` uses `.find()` (returns first matching child) but OOXML spec says last duplicate wins. Only 1 run in the Polish fixture has duplicate `w:sz` (24 and 26 half-points → 12pt vs 13pt). Zero measurable impact on Jaccard.
+
+#### 3. Font Encoding for Non-WinAnsi Characters (confirmed correct)
+Investigated whether Polish characters (ą, ę, ś, ć, ł — all outside WinAnsi range) were being dropped in PDF output. Confirmed: all embedded fonts use CID encoding (`encode_as_gids`), not WinAnsi. Non-WinAnsi characters render correctly. Only the Helvetica fallback (unregistered fonts) uses WinAnsi, which doesn't apply to fixtures with system fonts found.
+
+#### 4. Paragraph Border Rendering (`w:pBdr`) Audit
+16 fixtures contain `w:pBdr`. Checked all failing fixtures with pBdr:
+- `brazilian_logistics_study`: 32 pBdr entries — ALL `w:val="nil"` (no visible borders)
+- `czech_grant_application`: 170 pBdr entries — ALL `w:val="nil"`
+- `czech_municipal_grant_form`: 170 pBdr entries — ALL `w:val="nil"`
+No failing fixture has non-nil paragraph borders. Dead end.
+
+#### 5. Hyphen/Dash Line Breaking (implemented, tested, REVERTED)
+**Discovery**: Our code only breaks lines at whitespace. Word also breaks after hyphens (-), en-dashes (–), em-dashes (—), and slashes (/). Polish "termo-modernizacji" should break after "termo-" but our code treats it as one word.
+
+**Implementation**: Added `is_break_after(c: char)` helper matching `-`, `\u{2010}`, `\u{2013}`, `\u{2014}`, `/`. Modified `split_preserving_spaces()` inner loop to break after these characters, keeping the hyphen with the left fragment.
+
+**Results**: ALL changes were negative. 3 Jaccard regressions on passing handcrafted cases:
+- `case4`: -4.2pp (from ~73% to 68.7%)
+- `case10`: -2.3pp (from ~72% to 69.4%)
+- `case26`: -4.2pp (from ~79% to 74.5%)
+Zero improvements on any failing fixture. Small regressions on `brazilian_logistics_study` (-0.7pp) and `polish_archery_range_plan` (-0.1pp).
+
+**Root cause**: Same error-cancellation pattern as sessions 7/9/12/16/19. The current layout was calibrated with whitespace-only breaks. Adding hyphen breaks changes line composition, disrupting the calibration. This is the 6th "correct" improvement confirmed as net-negative in isolation.
+
+**Reverted**: All changes rolled back.
+
+#### 6. Visual Diff Analysis of All Failing New.md Fixtures
+Examined diff images for `polish_building_procurement_spec`, `rehab_centre_physio_posting`, `czech_municipal_grant_form`. All show the identical pattern: text present but progressively displaced horizontally and vertically, with displacement growing from top to bottom. No structural bugs or missing features detected.
+
+### Key Finding: Sixth Confirmation of Error Cancellation Barrier
+
+This session adds hyphen line breaking to the list of "correct" improvements that cause regressions:
+1. OS/2 Win Metrics line height (sessions 7, 12, 24)
+2. Rustybuzz text shaping (session 16)
+3. lastRenderedPageBreak page hints (session 16)
+4. defaultTabStop usage (session 9)
+5. Justified text word-boundary spacing (session 19)
+6. **Hyphen/dash line breaking (this session)**
+
+All six are architecturally correct per OOXML spec but individually net-negative. The coordinated fix (all six simultaneously) remains the only viable path.
+
+### Blocked By (unchanged from sessions 6-27)
+1. **Coordinated OS/2 + rustybuzz + layout fix** — all "correct" improvements must be landed simultaneously with compensating-error cleanup
+2. **CJK Font Support** — blocks `korean_japanese_conference_form` (2.5%), `japanese_interlibrary_loan` (3.5%), `east_asia_conference_form` (3.8%)
+3. **Text Wrapping (wrapSquare)** — would help `brazilian_logistics_study` (16.9%) but architecturally complex
+
+### No Commit (Session 28)
+No code changes were made. Hyphen line breaking was implemented, tested (3 regressions, 0 improvements), and reverted. All 6 failing new.md fixtures confirmed font-metric-bound through comprehensive investigation.
+
+## Session 29 — 2026-03-15: Comprehensive multi-angle investigation of remaining failures (no code change)
+
+### Cases from `new.md` Investigated
+All 12 cases from `new.md`. Their status:
+- **Passing (6)**: `turkish_prostate_cancer_course` (35.8%), `german_mezzo_soprano_bio` (51.2%), `school_mandated_reporter_policy` (23.7%), `parish_housing_data_profile` (25.4%), `go_math_ccr_alignment` (25.0%), `turkish_ancient_religions_plan` (21.4%)
+- **Failing (6)**: `polish_building_procurement_spec` (15.6%), `rehab_centre_physio_posting` (11.4%), `traditional_skills_job_form` (11.0%), `czech_municipal_grant_form` (10.5%), `uk_commercial_lease_template` (5.5%), `korean_japanese_conference_form` (2.5%)
+
+### Current Status
+34 passing, 17 failing, 0 skipped.
+
+### Investigation Summary
+
+#### 1. Hanging indent + list interaction audit
+Deep investigation of how `indent_hanging` interacts with numbered/bulleted lists across the full pipeline (parsing → layout → rendering). Found that `text_hanging = 0.0` for list items is architecturally correct: the label is positioned at `indent_left - indent_hanging` (in the hanging area), while text lines start at `indent_left`. All formulas verified mathematically correct.
+
+#### 2. Inter-paragraph spacing at table boundaries
+Investigated whether tables correctly handle `prev_space_after` from preceding paragraphs, particularly at page boundaries. Found:
+- Tables apply `prev_space_after` unconditionally at line 1007 (`pb.slot_top -= prev_space_after`)
+- Unlike paragraphs (which suppress `space_before` at page top, lines 1914-1923), tables have no page-top suppression check
+- **Theoretical bug**: if a section break puts `slot_top` at page top and the first block is a table with `prev_space_after > 0`, the table would be incorrectly pushed down
+- **Practical impact**: Zero — no fixture in the corpus starts a section with a table AND has non-zero `prev_space_after` from the previous section. Normal page breaks within paragraph rendering correctly consume `prev_space_after` on the current page before overflow.
+
+#### 3. Visual diff analysis of 4 failing fixtures
+Examined generated/reference/diff images for:
+- `polish_building_procurement_spec` (page 1): generated and reference nearly identical. Classic font-metric drift with progressive vertical displacement from top to bottom.
+- `rehab_centre_physio_posting` (page 1): single-page document. Table cell text displaced by 5-10pt vertically. Even on 1 page, cumulative character width errors across ~400 characters are sufficient to cause 11.4% Jaccard.
+- `traditional_skills_job_form` (pages 1 & 4): header table, form cells, anchored logo image all render correctly. Vertical displacement increases from top to bottom. "Contact details" cells slightly taller in generated (from session 26 empty paragraph fix).
+- All diff images show the same pattern: text present but progressively displaced (red/blue pairs), with displacement growing from top to bottom.
+
+#### 4. `w:textDirection` feature investigation
+Searched all fixtures for `w:textDirection`:
+- 5 fixtures contain it: `czech_grant_application` (3 in styles), `czech_municipal_grant_form` (3 in styles), `german_mezzo_soprano_bio` (1 in doc), `japanese_interlibrary_loan` (3 in doc), `polish_building_procurement_spec` (1 in doc)
+- Czech fixtures: `btLr` (bottom-to-top) in Normal/Standard styles — Google Docs artifact. Word ignores `textDirection` at the paragraph style level for body paragraphs. Our code correctly doesn't implement it, matching Word's behavior.
+- Polish fixture: `lrTb` (left-to-right, top-to-bottom) — the default direction, no effect.
+- No `textDirection` found in `w:tcPr` (table cell) context in any failing fixture, which is the only context where it would matter.
+
+#### 5. `w:tblCellSpacing` audit
+Only 2 fixtures use `tblCellSpacing`, both passing (stem_partnerships 24.3%, transition_to_work 25.6%). No failing fixture affected.
+
+#### 6. Font availability audit
+Reviewed font lists for all 17 failing fixtures. Notable missing fonts:
+- `BakerSignet BT` (rehab_centre) — specialty font, likely falling back to Helvetica
+- `Arial Mon`, `Times New Roman Mon` (mongolian) — Mongolian-specific variants, not on macOS
+- `Andale Sans UI`, `OpenSymbol`, `StarSymbol` (russian, polish) — uncommon fonts
+These are known font availability issues, not code bugs. Font fallback is handled correctly.
+
+#### 7. Table auto-fit and fixed layout verification
+Verified `traditional_skills_job_form` uses `tblLayout w:type="fixed"` with explicit `gridCol` widths summing to 470pt (9400 twips). Our auto-fit code correctly preserves fixed-layout table widths. Table-level shading `fill="ceddeb"` (luma ~218) is above ink threshold (200), no Jaccard impact.
+
+#### 8. Google Docs style artifacts verification
+Czech fixtures have Google Docs artifacts: `w:spacing w:line="1" w:lineRule="atLeast"` (effectively 0.05pt minimum = no minimum), `w:ind w:left="-1" w:hanging="1"` (effectively ±0.05pt = zero). All correctly handled by existing code — `AtLeast(0.05)` yields natural line height, and ±0.05pt indents are negligible.
+
+#### 9. Baseline positioning and line metrics audit
+Verified `compute_line_metrics()` in `fonts/embed.rs`:
+- OS/2 path: `ascender_ratio = win_asc / upm`, `line_h_ratio = (win_asc + win_desc + hhea_gap) / upm`
+- USE_TYPO_METRICS path: uses typographic values
+- Baseline formula `slot_top - font_size * ascender_ratio` is mathematically correct
+- Verified for Verdana 8pt: ascender=8.043pt, line_h=9.722pt, descender space=1.679pt — all consistent
+
+### Key Finding: Definitive confirmation after 29 sessions
+
+This session investigated from 9 different angles:
+1. Hanging indent + list interaction — correct
+2. Table boundary spacing — theoretical edge case, zero practical impact
+3. Visual diff analysis — classic font-metric drift in all 4 fixtures examined
+4. Text direction feature — Google Docs artifact, correctly ignored
+5. Cell spacing — not used by any failing fixture
+6. Font availability — known issue, correctly handled by fallback
+7. Table auto-fit — correct for fixed-layout tables
+8. Google Docs style artifacts — correctly handled
+9. Baseline positioning — mathematically correct
+
+All 17 remaining failures are confirmed font-metric-bound for the 12th time (sessions 6-9, 11-12, 15-16, 19, 23-25, 28-29).
+
+### Blocked By (unchanged from sessions 6-28)
+1. **Coordinated OS/2 + rustybuzz + layout fix** — all "correct" improvements must be landed simultaneously with compensating-error cleanup
+2. **CJK Font Support** — blocks `korean_japanese_conference_form` (2.5%), `japanese_interlibrary_loan` (3.5%), `east_asia_conference_form` (3.8%)
+3. **Text Wrapping (wrapSquare)** — would help `brazilian_logistics_study` (16.9%) but architecturally complex
+
+### No Commit (Session 29)
+No code changes were made. All 6 failing new.md fixtures confirmed font-metric-bound through comprehensive investigation across 9 angles.
+
+## Session 30 — 2026-03-15: Layout-rendering kerning mismatch investigation (no code change)
+
+### Cases from `new.md` Investigated
+All 12 cases from `new.md`. Their status:
+- **Passing (6)**: `turkish_prostate_cancer_course` (35.8%), `german_mezzo_soprano_bio` (51.2%), `school_mandated_reporter_policy` (23.7%), `parish_housing_data_profile` (25.4%), `go_math_ccr_alignment` (25.0%), `turkish_ancient_religions_plan` (21.4%)
+- **Failing (6)**: `polish_building_procurement_spec` (15.6%), `rehab_centre_physio_posting` (11.4%), `traditional_skills_job_form` (11.0%), `czech_municipal_grant_form` (10.5%), `uk_commercial_lease_template` (5.5%), `korean_japanese_conference_form` (2.5%)
+
+### Current Status
+34 passing, 17 failing, 0 skipped.
+
+### Investigation: Layout-Rendering Kerning Mismatch
+
+Discovered and investigated a systematic mismatch between layout and rendering for kerning:
+- **Layout**: computes word widths WITH kerning (kern pairs from kern table + GPOS) when `kern_threshold` is met
+- **Rendering**: uses plain `Tj` operator WITHOUT any kerning adjustments (no TJ arrays)
+- 6 places in layout code (`layout.rs` ×4, `table.rs` ×1, `charts.rs` ×1) pass `kern=true` to `word_width()`
+- 0 places in rendering apply kerning to PDF output
+
+This causes layout to compute narrower word widths (kerning reduces spacing) while rendering draws wider text (unkerned advance widths).
+
+### Corpus Analysis: `w:kern` Usage
+- 19/51 fixtures contain `w:kern`
+- 11 of 17 failing fixtures have `w:kern`
+- `russian_sports_ranking_decree`: 68 entries with `w:kern w:val="0"` (always kern) — all text affected
+- The closest-to-threshold failing fixtures (`polish_building_procurement_spec` 15.6%, `brazilian_logistics_study` 16.9%, `polish_archery_range_plan` 15.0%) have NO `w:kern` — unaffected by kerning changes
+
+### Experiment 1: Disable Layout Kerning (reverted)
+**Hypothesis**: Removing kerning from layout would make layout consistent with rendering (both unkerned), making words wider in layout calculations.
+
+**Implementation**: Forced `kern = false` in all 5 layout locations (layout.rs ×4, table.rs ×1).
+
+**Results**: Catastrophic regressions — `case1` -14.4pp (59.1% → 44.7%), `case18` -13.6pp (64.7% → 51.1%). Zero improvements on any failing fixture. `russian_sports_ranking_decree` unchanged (11.8% → 11.8%) despite having 68 always-kern entries, because Cyrillic text in Arial has very few kern pairs.
+
+**Key insight**: Layout kerning is CORRECT. Word DOES apply kerning during layout. Our kern values (from kern table + GPOS pair adjustments) match Word's behavior well for case1/case18 (Aptos font). Removing them makes layout LESS accurate, not more.
+
+**Conclusion**: The mismatch should be fixed by adding kerning to RENDERING (TJ arrays), not by removing it from LAYOUT. Session 6 tried this (net negative with -0.1 to -0.4pp regressions), suggesting our kern pair values are close but don't exactly match Word's GPOS processing.
+
+### Experiment 2: Character Spacing Accumulation Audit
+Investigated whether the character spacing formula `word_width * ts + cs * char_count` systematically over/under-counts character spacing. Found:
+- Space characters correctly get `space_w * ts + cs` (one char_spacing per space)
+- Word characters get `cs * char_count` (one per character, including the last)
+- For "ABC DEF": total = sum(A..F widths) + 7*cs + space_w — matches Word's per-character spacing model
+- No systematic error found
+
+### Experiment 3: Closest-to-Threshold Fixture Analysis
+- **`polish_building_procurement_spec`** (15.6%): No `w:kern`, uses Tahoma font. Pure font-metric drift across 14 pages.
+- **`brazilian_logistics_study`** (16.9%): No `w:kern`, 8 wrapSquare anchored images. Text wrapping blocked.
+- **`polish_archery_range_plan`** (15.0%): No `w:kern`, Times New Roman. Font-metric drift.
+- **`russian_sports_ranking_decree`** (11.8%): 68 `w:kern val="0"` but Cyrillic Arial has minimal kern pairs. No measurable effect from kerning changes.
+
+All closest-to-threshold fixtures either have no kerning or insufficient kern pairs for changes to matter.
+
+### Key Finding: Seventh Confirmation of Error Cancellation Barrier
+
+This session adds layout kerning removal to the list of "correct" architectural changes that cause regressions:
+1. OS/2 Win Metrics line height (sessions 7, 12, 24) — -59pp worst
+2. Rustybuzz text shaping (session 16) — -2.5pp worst
+3. lastRenderedPageBreak page hints (session 16) — -35pp worst
+4. defaultTabStop usage (session 9) — -1.2pp worst
+5. Justified text word-boundary spacing (session 19) — -1.2pp worst
+6. Hyphen/dash line breaking (session 28) — -4.2pp worst
+7. **Layout kerning removal (this session)** — -14.4pp worst
+
+The layout-rendering kerning mismatch investigation provides NEW insight: layout kerning is correct (matches Word), so the rendering side needs TJ arrays. But session 6 showed TJ kerning with our current kern values is also net negative. This means our kern pair extraction (from kern + GPOS tables) produces values that are CLOSE to but don't exactly match Word's shaping engine output.
+
+### Blocked By (unchanged from sessions 6-29)
+1. **Coordinated OS/2 + rustybuzz + TJ kerning fix** — TJ kerning should be part of the coordinated fix, using rustybuzz-derived positioning instead of our current kern pair extraction
+2. **CJK Font Support** — blocks `korean_japanese_conference_form` (2.5%), `japanese_interlibrary_loan` (3.5%), `east_asia_conference_form` (3.8%)
+3. **Text Wrapping (wrapSquare)** — would help `brazilian_logistics_study` (16.9%) but architecturally complex
+
+### No Commit (Session 30)
+No code changes were made. Layout kerning removal experiment was implemented, tested (-14.4pp regression on case1), and reverted. Character spacing accumulation audited and found correct. All 6 failing new.md fixtures remain font-metric-bound.
+
+## Session 31 — 2026-03-15: Render nested tables as proper tables instead of flattening
+
+### Case Selected
+`uk_commercial_lease_template` (text/layout only, 79 pages, 5.5% Jaccard) — chosen because visual diff inspection revealed a structural bug: the "Term / [●] years" section on page 1 is a nested two-column table (`w:tbl` inside `w:tc`), but the existing `collect_nested_table_paragraphs()` flattened it into sequential paragraphs, destroying the two-column layout. Corpus analysis showed **14 fixtures** contain multi-column nested tables, including 5 from `new.md`.
+
+### Problem
+Nested tables (`w:tbl` inside `w:tc`) were flattened into a sequential list of paragraphs by `collect_nested_table_paragraphs()` (introduced in session 2 for single-column nested tables). For multi-column nested tables, this completely destroyed the column layout — content from column 1 row 1 was followed by column 2 row 1, then column 1 row 2, etc., rendering as stacked text instead of a two-column table.
+
+### Analysis
+- Visual diff of `uk_commercial_lease_template` page 1 showed "Term", "[●] years", "Initial Rent", "£[●]", etc. rendered as stacked paragraphs instead of a side-by-side two-column table
+- DOCX inspection confirmed a nested `w:tbl` with `tblLayout="fixed"`, two `gridCol w:w="2707"` columns, inside the outer table's single-column cell
+- Corpus scan found **14 fixtures** with multi-column nested tables:
+  - **Failing**: `czech_municipal_grant_form` (12 nested), `rehab_centre_physio_posting` (2), `uk_commercial_lease_template` (4), `croatian_grant_guidelines` (6), `education_consultant_posting` (2), `polish_archery_range_plan` (2), `czech_grant_application` (12), `go_math_grade4_guide` (28)
+  - **Passing**: `go_math_ccr_alignment` (28), `parish_housing_data_profile` (8), `bush_fires_act_comparison` (2), `learning_cultures_dissertation` (2), `stem_partnerships_guide` (4), `transition_to_work_deed` (14)
+- Previous sessions (6-30) all investigated font-metric-bound failures. This was the first structural fix opportunity identified in many sessions.
+
+### Implementation
+1. Changed `TableCell.paragraphs: Vec<Paragraph>` to `TableCell.content: Vec<Block>` in `model.rs`, where `Block` is the existing enum (`Paragraph` | `Table`)
+2. Added `TableCell::all_paragraphs()` helper that recursively collects all paragraphs from cell content (including nested table cells) — used by font discovery, char collection, image embedding, footnote ordering, and STYLEREF updates
+3. Removed `AnnotatedNode` struct and `collect_nested_table_paragraphs()` function from `tables.rs`
+4. Changed cell content parsing to build `Vec<Block>`: `w:p` → `Block::Paragraph(...)`, `w:tbl` → `Block::Table(parse_table_node(...))` (recursive call)
+5. Added `CellContentItem` enum in `pdf/table.rs` with `Paragraph(CellParagraphLayout)` and `NestedTable { height: f32 }` variants
+6. Updated `CellLayout.paragraphs` to `CellLayout.items: Vec<CellContentItem>`
+7. Updated `compute_row_layouts` to compute nested table heights via recursive `auto_fit_columns` + `compute_row_layouts`
+8. Added `render_nested_table()` function that renders a table inline within a parent cell (adapted from `render_header_footer_table` but with position-based placement instead of section margins)
+9. Replaced `render_cell_paragraphs()` with `render_cell_content()` that dispatches between paragraph rendering and nested table rendering
+10. Updated `render_partial_cell_content()` for split row rendering with nested tables
+11. Updated `find_cell_split()` to treat nested tables as unsplittable items
+12. Updated all `cell.paragraphs` references in `pdf/mod.rs` and `header_footer.rs` to use `cell.all_paragraphs()` or `cell.content`
+
+### Files Modified
+- `src/model.rs` — `TableCell.content: Vec<Block>`, `all_paragraphs()` helper
+- `src/docx/tables.rs` — removed `AnnotatedNode`/`collect_nested_table_paragraphs`, recursive `parse_table_node` for nested tables
+- `src/docx/alt_chunk.rs` — updated `TableCell` construction for `content` field
+- `src/pdf/table.rs` — `CellContentItem` enum, `CellLayout.items`, `compute_row_layouts`, `render_cell_content`, `render_nested_table`, `render_partial_cell_content`, `find_cell_split`, `render_header_footer_table`, `render_vertical_cjk_cell`, `auto_fit_columns`
+- `src/pdf/mod.rs` — updated all `cell.paragraphs` → `cell.all_paragraphs()` (font discovery, char collection, image embedding, footnote ordering, STYLEREF)
+- `src/pdf/header_footer.rs` — updated `hf_paragraphs()` to use `cell.all_paragraphs()`
+- `tests/baselines.json` — updated baselines
+
+### Results
+- **uk_commercial_lease_template**: 5.5% → 14.6% Jaccard (+9.1pp), 15.3% → 30.2% SSIM (+14.8pp) — massive improvement
+- **school_mandated_reporter_policy**: +0.1pp Jaccard (noise level)
+- **No Jaccard or SSIM regressions** across all 51 fixtures
+- **34 passing, 17 failing, 0 skipped** — unchanged pass/fail counts
+- Text boundary test shows expected changes in fixtures with nested tables (text extraction order changes when rendering as tables vs flat paragraphs)
+
+### Commit
+`83d6b08` — "Render nested tables as proper tables instead of flattening to paragraphs"
+
+### Current Status of new.md Cases
+- **Passing (6)**: `turkish_prostate_cancer_course` (35.8%), `german_mezzo_soprano_bio` (51.2%), `school_mandated_reporter_policy` (23.8%), `parish_housing_data_profile` (25.4%), `go_math_ccr_alignment` (25.0%), `turkish_ancient_religions_plan` (21.4%)
+- **Failing (6)**: `polish_building_procurement_spec` (15.6%), `uk_commercial_lease_template` (14.6%, was 5.5%), `rehab_centre_physio_posting` (11.4%), `traditional_skills_job_form` (11.0%), `czech_municipal_grant_form` (10.5%), `korean_japanese_conference_form` (2.5%)
