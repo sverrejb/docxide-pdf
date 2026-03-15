@@ -222,7 +222,7 @@
     "convert_ms": 4.1
   },
   "samples/sample500kB": {
-    "jaccard": 0.3227,
+    "jaccard": 0.32,
     "ssim": 0.5151,
     "text_boundary": 0.8506,
     "convert_ms": 14.3
@@ -317,7 +317,7 @@
   },
   "scraped/education_consul..": {
     "jaccard": 0.086,
-    "ssim": 0.1912,
+    "ssim": 0.1915,
     "text_boundary": 0.19,
     "convert_ms": 42.0
   },
@@ -366,8 +366,8 @@
     "convert_ms": 150.3
   },
   "scraped/italian_evaluati..": {
-    "jaccard": 0.3415,
-    "ssim": 0.441,
+    "jaccard": 0.3392,
+    "ssim": 0.443,
     "text_boundary": 0.5797,
     "convert_ms": 101.4
   },
@@ -518,7 +518,7 @@
     "convert_ms": 29.2
   },
   "scraped/traditional_skil..": {
-    "jaccard": 0.1114,
+    "jaccard": 0.1104,
     "ssim": 0.3758
   },
   "scraped/traditional_skill..": {
@@ -534,12 +534,12 @@
     "convert_ms": 395.9
   },
   "scraped/turkish_ancient_..": {
-    "jaccard": 0.1971,
-    "ssim": 0.5897
+    "jaccard": 0.2144,
+    "ssim": 0.514
   },
   "scraped/turkish_ancient_r..": {
-    "jaccard": 0.1971,
-    "ssim": 0.5897,
+    "jaccard": 0.214,
+    "ssim": 0.514,
     "text_boundary": 0.3148,
     "convert_ms": 3.7
   },

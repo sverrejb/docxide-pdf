@@ -26,7 +26,39 @@ fn margin_twips(mar: roxmltree::Node, primary: &str, fallback: &str) -> Option<f
 }
 
 fn border_or_fallback(inline: CellBorder, fallback: CellBorder) -> CellBorder {
-    if inline.present { inline } else { fallback }
+    if inline.present {
+        CellBorder {
+            is_override: true,
+            ..inline
+        }
+    } else {
+        fallback
+    }
+}
+
+fn resolve_h_border(upper_bottom: CellBorder, lower_top: CellBorder) -> CellBorder {
+    if !upper_bottom.present {
+        return lower_top;
+    }
+    if !lower_top.present {
+        return upper_bottom;
+    }
+    // Cell-level override beats table-level default
+    if upper_bottom.is_override && !lower_top.is_override {
+        return upper_bottom;
+    }
+    if lower_top.is_override && !upper_bottom.is_override {
+        return lower_top;
+    }
+    // Both same level: wider wins
+    if upper_bottom.width > lower_top.width + 0.01 {
+        return upper_bottom;
+    }
+    if lower_top.width > upper_bottom.width + 0.01 {
+        return lower_top;
+    }
+    // Same width, same level: prefer upper (first drawn)
+    upper_bottom
 }
 
 struct AnnotatedNode<'a> {
@@ -460,6 +492,40 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
             is_header,
         });
     }
+    // Resolve border conflicts between adjacent rows. When a cell-level override
+    // border (from tcBorders) meets a table-level default (from tblBorders) at the
+    // same horizontal edge, the cell-level border wins per OOXML §17.4.38.
+    for ri in 0..rows.len().saturating_sub(1) {
+        let (upper, lower) = rows.split_at_mut(ri + 1);
+        let upper_row = &mut upper[ri];
+        let lower_row = &mut lower[0];
+        let mut ug = 0usize;
+        let mut lg = 0usize;
+        let mut ui = 0usize;
+        let mut li = 0usize;
+        while ui < upper_row.cells.len() && li < lower_row.cells.len() {
+            let u_span = upper_row.cells[ui].grid_span.max(1) as usize;
+            let l_span = lower_row.cells[li].grid_span.max(1) as usize;
+            if ug == lg {
+                let ub = &upper_row.cells[ui].borders.bottom;
+                let lb = &lower_row.cells[li].borders.top;
+                let winner = resolve_h_border(*ub, *lb);
+                upper_row.cells[ui].borders.bottom = winner;
+                lower_row.cells[li].borders.top = winner;
+            }
+            let u_end = ug + u_span;
+            let l_end = lg + l_span;
+            if u_end <= l_end {
+                ug = u_end;
+                ui += 1;
+            }
+            if l_end <= u_end {
+                lg = l_end;
+                li += 1;
+            }
+        }
+    }
+
     Table {
         col_widths,
         rows,

@@ -523,6 +523,7 @@ pub struct CellBorder {
     pub color: Option<[u8; 3]>,
     pub width: f32,
     pub style: BorderStyle,
+    pub is_override: bool,
 }
 
 impl Default for CellBorder {
@@ -532,6 +533,7 @@ impl Default for CellBorder {
             color: None,
             width: 0.5,
             style: BorderStyle::Single,
+            is_override: false,
         }
     }
 }
@@ -543,6 +545,7 @@ impl CellBorder {
             color,
             width,
             style,
+            is_override: false,
         }
     }
 }
