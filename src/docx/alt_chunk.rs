@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io::{Read, Seek};
 
 use crate::model::{
-    Alignment, Block, CellBorder, CellBorders, CellMargins, Paragraph, Run, Table,
+    Alignment, Block, BorderStyle, CellBorder, CellBorders, CellMargins, Paragraph, Run, Table,
     TableAlignment, TableCell, TableRow,
 };
 
@@ -224,7 +224,7 @@ fn parse_css_border(val: &str) -> Option<CellBorder> {
             width = parse_css_length_pt(p);
         }
     }
-    Some(CellBorder::visible(Some([0, 0, 0]), width))
+    Some(CellBorder::visible(Some([0, 0, 0]), width, BorderStyle::Single))
 }
 
 fn parse_css_properties(decl_block: &str) -> CssProperties {

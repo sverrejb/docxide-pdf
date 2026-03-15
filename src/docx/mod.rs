@@ -188,7 +188,16 @@ pub(super) fn parse_cell_border(parent: roxmltree::Node, name: &str) -> crate::m
         .map(|v| v / 8.0)
         .unwrap_or(0.5);
     let color = n.attribute((WML_NS, "color")).and_then(parse_hex_color);
-    crate::model::CellBorder::visible(color, width)
+    let style = match val {
+        "dotted" => crate::model::BorderStyle::Dotted,
+        "dashed" => crate::model::BorderStyle::Dashed,
+        "dashSmallGap" => crate::model::BorderStyle::DashSmallGap,
+        "dashDotStroked" | "dashDot" => crate::model::BorderStyle::DashDot,
+        "dashDotDot" => crate::model::BorderStyle::DashDotDot,
+        "double" => crate::model::BorderStyle::Double,
+        _ => crate::model::BorderStyle::Single,
+    };
+    crate::model::CellBorder::visible(color, width, style)
 }
 
 fn parse_cell_border_with_fallback(

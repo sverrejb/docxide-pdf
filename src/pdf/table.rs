@@ -4,8 +4,8 @@ use pdf_writer::{Content, Name, Str};
 
 use crate::fonts::{FontEntry, encode_as_gids, font_key_buf, to_winansi_bytes};
 use crate::model::{
-    Alignment, CellBorder, CellMargins, CellVAlign, SectionProperties, Table, TableRow,
-    TextDirection, VMerge,
+    Alignment, BorderStyle, CellBorder, CellMargins, CellVAlign, SectionProperties, Table,
+    TableRow, TextDirection, VMerge,
 };
 
 use super::RenderContext;
@@ -33,10 +33,50 @@ fn draw_border(content: &mut Content, border: &CellBorder, x1: f32, y1: f32, x2:
     if !border.present {
         return;
     }
+    let w = border.width;
     content.save_state();
-    content.set_line_width(border.width);
+    content.set_line_width(w);
     if let Some([r, g, b]) = border.color {
         content.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+    }
+    match border.style {
+        BorderStyle::Dotted => {
+            content.set_line_cap(pdf_writer::types::LineCapStyle::RoundCap);
+            content.set_dash_pattern([0.0, w * 2.0], 0.0);
+        }
+        BorderStyle::Dashed | BorderStyle::DashSmallGap => {
+            let dash = if border.style == BorderStyle::DashSmallGap {
+                w * 3.0
+            } else {
+                w * 4.0
+            };
+            content.set_dash_pattern([dash, w * 2.0], 0.0);
+        }
+        BorderStyle::DashDot => {
+            content.set_dash_pattern([w * 4.0, w * 2.0, 0.0, w * 2.0], 0.0);
+        }
+        BorderStyle::DashDotDot => {
+            content.set_dash_pattern(
+                [w * 4.0, w * 2.0, 0.0, w * 2.0, 0.0, w * 2.0],
+                0.0,
+            );
+        }
+        BorderStyle::Double => {
+            let gap = w.max(0.75);
+            let thin = (w / 3.0).max(0.25);
+            content.set_line_width(thin);
+            content.move_to(x1, y1);
+            content.line_to(x2, y2);
+            content.stroke();
+            let dx = if (x1 - x2).abs() < 0.01 { gap } else { 0.0 };
+            let dy = if (y1 - y2).abs() < 0.01 { gap } else { 0.0 };
+            content.move_to(x1 - dx, y1 - dy);
+            content.line_to(x2 - dx, y2 - dy);
+            content.stroke();
+            content.restore_state();
+            return;
+        }
+        BorderStyle::Single => {}
     }
     content.move_to(x1, y1);
     content.line_to(x2, y2);

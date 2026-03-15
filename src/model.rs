@@ -505,11 +505,24 @@ pub enum TextDirection {
     BtLr,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum BorderStyle {
+    #[default]
+    Single,
+    Dotted,
+    Dashed,
+    DashSmallGap,
+    DashDot,
+    DashDotDot,
+    Double,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct CellBorder {
     pub present: bool,
     pub color: Option<[u8; 3]>,
     pub width: f32,
+    pub style: BorderStyle,
 }
 
 impl Default for CellBorder {
@@ -518,16 +531,18 @@ impl Default for CellBorder {
             present: false,
             color: None,
             width: 0.5,
+            style: BorderStyle::Single,
         }
     }
 }
 
 impl CellBorder {
-    pub fn visible(color: Option<[u8; 3]>, width: f32) -> Self {
+    pub fn visible(color: Option<[u8; 3]>, width: f32, style: BorderStyle) -> Self {
         Self {
             present: true,
             color,
             width,
+            style,
         }
     }
 }
