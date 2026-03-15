@@ -432,8 +432,8 @@
     "convert_ms": 26.1
   },
   "scraped/parish_housing_d..": {
-    "jaccard": 0.2542,
-    "ssim": 0.5572,
+    "jaccard": 0.2553,
+    "ssim": 0.5585,
     "text_boundary": 0.6265,
     "convert_ms": 93.3
   },
@@ -552,8 +552,8 @@
     "convert_ms": 395.9
   },
   "scraped/turkish_ancient_..": {
-    "jaccard": 0.2144,
-    "ssim": 0.514,
+    "jaccard": 0.2313,
+    "ssim": 0.5385,
     "text_boundary": 0.3148,
     "convert_ms": 4.0
   },

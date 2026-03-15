@@ -266,6 +266,8 @@ fn render_nested_table(
         TableAlignment::Left => available_x + table.table_indent - cm.left,
     };
 
+    let merge_spans = compute_merge_spans(table, &row_layouts);
+
     for (ri, (row, layout)) in table.rows.iter().zip(row_layouts.iter()).enumerate() {
         let row_h = layout.height;
         let row_top = *cursor_y;
@@ -276,11 +278,18 @@ fn render_nested_table(
             let span = cell.grid_span.max(1) as usize;
             let col_w = cell_span_width(&col_widths, grid_col, span);
             let cx = cell_x_offset(&col_widths, table_left, grid_col);
+            let cell_grid_col = grid_col;
             grid_col += span;
 
             if cell.v_merge == VMerge::Continue {
                 continue;
             }
+
+            let merge_extra = merge_spans
+                .get(&(ri, cell_grid_col))
+                .copied()
+                .unwrap_or(0.0);
+            let effective_h = row_h + merge_extra;
 
             if let Some(shading) = cell.shading {
                 content.save_state();
@@ -307,7 +316,7 @@ fn render_nested_table(
                     })
                     .sum();
 
-                let avail = row_h - ecm.top - ecm.bottom;
+                let avail = effective_h - ecm.top - ecm.bottom;
                 let v_offset = valign_offset(cell.v_align, avail, content_h);
                 let cell_cursor_y = row_top - ecm.top - v_offset;
 
@@ -856,11 +865,18 @@ fn render_table_row(
         let span = cell.grid_span.max(1) as usize;
         let col_w = cell_span_width(col_widths, grid_col, span);
         let cell_x = cell_x_offset(col_widths, table_left, grid_col);
+        let cell_grid_col = grid_col;
         grid_col += span;
 
         if cell.v_merge == VMerge::Continue {
             continue;
         }
+
+        let merge_extra = merge_spans
+            .get(&(row_idx, cell_grid_col))
+            .copied()
+            .unwrap_or(0.0);
+        let effective_h = row_h + merge_extra;
 
         if let Some(shading) = cell.shading {
             draw_cell_shading(
@@ -906,7 +922,7 @@ fn render_table_row(
                 })
                 .sum();
 
-            let avail = row_h - ecm.top - ecm.bottom;
+            let avail = effective_h - ecm.top - ecm.bottom;
             let v_offset = valign_offset(cell.v_align, avail, content_h);
             let cursor_y = row_top - ecm.top - v_offset;
 
@@ -1398,6 +1414,8 @@ pub(super) fn render_header_footer_table(
         }
     };
 
+    let merge_spans = compute_merge_spans(table, &row_layouts);
+
     for (ri, (row, layout)) in table.rows.iter().zip(row_layouts.iter()).enumerate() {
         let row_h = layout.height;
         let row_top = *cursor_y;
@@ -1408,11 +1426,18 @@ pub(super) fn render_header_footer_table(
             let span = cell.grid_span.max(1) as usize;
             let col_w = cell_span_width(&col_widths, grid_col, span);
             let cell_x = cell_x_offset(&col_widths, table_left, grid_col);
+            let cell_grid_col = grid_col;
             grid_col += span;
 
             if cell.v_merge == VMerge::Continue {
                 continue;
             }
+
+            let merge_extra = merge_spans
+                .get(&(ri, cell_grid_col))
+                .copied()
+                .unwrap_or(0.0);
+            let effective_h = row_h + merge_extra;
 
             if let Some(shading) = cell.shading {
                 content.save_state();
@@ -1439,7 +1464,7 @@ pub(super) fn render_header_footer_table(
                     })
                     .sum();
 
-                let avail = row_h - ecm.top - ecm.bottom;
+                let avail = effective_h - ecm.top - ecm.bottom;
                 let v_offset = valign_offset(cell.v_align, avail, content_h);
                 let cell_cursor_y = row_top - ecm.top - v_offset;
 
