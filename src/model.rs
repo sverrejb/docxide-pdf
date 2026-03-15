@@ -564,12 +564,21 @@ pub struct TablePosition {
     pub v_anchor: &'static str, // "page", "margin", or "text"
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+pub enum TableAlignment {
+    #[default]
+    Left,
+    Center,
+    Right,
+}
+
 pub struct Table {
     pub col_widths: Vec<f32>, // points
     pub rows: Vec<TableRow>,
     pub table_indent: f32,
     pub cell_margins: CellMargins,
     pub position: Option<TablePosition>,
+    pub alignment: TableAlignment,
 }
 
 pub struct TableRow {

@@ -954,7 +954,15 @@ pub(super) fn render_table(
         pb.slot_top = y;
         (x, saved)
     } else {
-        (sp.margin_left + table.table_indent - cm.left, None)
+        use crate::model::TableAlignment;
+        let text_width = sp.page_width - sp.margin_left - sp.margin_right;
+        let table_total_w: f32 = col_widths.iter().sum();
+        let left = match table.alignment {
+            TableAlignment::Center => sp.margin_left + (text_width - table_total_w) / 2.0,
+            TableAlignment::Right => sp.margin_left + text_width - table_total_w,
+            TableAlignment::Left => sp.margin_left + table.table_indent - cm.left,
+        };
+        (left, None)
     };
 
     if !is_truly_floating {
@@ -1103,7 +1111,16 @@ pub(super) fn render_header_footer_table(
     };
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, Some(&hf_sub));
     let cm = &table.cell_margins;
-    let table_left = sp.margin_left + table.table_indent - cm.left;
+    let table_left = {
+        use crate::model::TableAlignment;
+        let text_width = sp.page_width - sp.margin_left - sp.margin_right;
+        let table_total_w: f32 = col_widths.iter().sum();
+        match table.alignment {
+            TableAlignment::Center => sp.margin_left + (text_width - table_total_w) / 2.0,
+            TableAlignment::Right => sp.margin_left + text_width - table_total_w,
+            TableAlignment::Left => sp.margin_left + table.table_indent - cm.left,
+        }
+    };
 
     for (ri, (row, layout)) in table.rows.iter().zip(row_layouts.iter()).enumerate() {
         let row_h = layout.height;

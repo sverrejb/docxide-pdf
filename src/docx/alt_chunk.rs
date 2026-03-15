@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::io::{Read, Seek};
 
 use crate::model::{
-    Alignment, Block, CellBorder, CellBorders, CellMargins, Paragraph, Run, Table, TableCell,
-    TableRow,
+    Alignment, Block, CellBorder, CellBorders, CellMargins, Paragraph, Run, Table,
+    TableAlignment, TableCell, TableRow,
 };
 
 use super::parse_hex_color;
@@ -715,5 +715,6 @@ fn convert_table(
         table_indent: 0.0,
         cell_margins: CellMargins::default(),
         position: None,
+        alignment: TableAlignment::default(),
     })
 }

@@ -33,7 +33,7 @@
     "jaccard": 0.2089,
     "ssim": 0.8751,
     "text_boundary": 1.0,
-    "convert_ms": 6.8
+    "convert_ms": 6.7
   },
   "cases/case16": {
     "jaccard": 0.9088,
@@ -195,7 +195,7 @@
     "jaccard": 0.7607,
     "ssim": 0.9027,
     "text_boundary": 1.0,
-    "convert_ms": 8.6
+    "convert_ms": 8.5
   },
   "cases/case6": {
     "jaccard": 0.3951,
@@ -234,8 +234,8 @@
     "convert_ms": 9.5
   },
   "scraped/12bb03b517b1758d..": {
-    "jaccard": 0.0536,
-    "ssim": 0.1514,
+    "jaccard": 0.0547,
+    "ssim": 0.1533,
     "text_boundary": 0.006,
     "convert_ms": 269.2
   },
@@ -243,13 +243,13 @@
     "jaccard": 0.0253,
     "ssim": 0.0895,
     "text_boundary": 0.0,
-    "convert_ms": 9.5
+    "convert_ms": 9.4
   },
   "scraped/4676b6e55862a384..": {
-    "jaccard": 0.2945,
-    "ssim": 0.697,
+    "jaccard": 0.3583,
+    "ssim": 0.7537,
     "text_boundary": 1.0,
-    "convert_ms": 2.4
+    "convert_ms": 2.3
   },
   "scraped/4a1834b7409fab00..": {
     "jaccard": 0.2373,
@@ -276,8 +276,8 @@
     "convert_ms": 64.6
   },
   "scraped/ab1b677c40a85c04..": {
-    "jaccard": 0.0857,
-    "ssim": 0.5827,
+    "jaccard": 0.1279,
+    "ssim": 0.6602,
     "text_boundary": 0.3148,
     "convert_ms": 3.7
   },
@@ -301,13 +301,13 @@
   },
   "scraped/c23b53f6f5595ea5..": {
     "jaccard": 0.1223,
-    "ssim": 0.243,
+    "ssim": 0.2441,
     "text_boundary": 0.6265,
     "convert_ms": 89.9
   },
   "scraped/c9ad6f65ebbe0c3c..": {
-    "jaccard": 0.0846,
-    "ssim": 0.2835,
+    "jaccard": 0.1114,
+    "ssim": 0.3704,
     "text_boundary": 0.3882,
     "convert_ms": 19.1
   },
@@ -363,7 +363,7 @@
     "jaccard": 0.0375,
     "ssim": 0.1258,
     "text_boundary": 0.0,
-    "convert_ms": 8.2
+    "convert_ms": 8.1
   },
   "scraped/ed02d3b6f1beb350..": {
     "jaccard": 0.1557,

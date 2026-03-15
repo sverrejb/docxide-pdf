@@ -3,7 +3,7 @@ use std::io::Read;
 
 use crate::model::{
     Alignment, CellBorder, CellBorders, CellMargins, CellVAlign, HorizontalPosition, LineSpacing,
-    Paragraph, Table, TableCell, TablePosition, TableRow, TextDirection, VMerge,
+    Paragraph, Table, TableAlignment, TableCell, TablePosition, TableRow, TextDirection, VMerge,
 };
 
 use super::numbering::{self, ListLabelInfo, parse_list_info};
@@ -127,6 +127,16 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
         .and_then(|pr| wml(pr, "tblInd"))
         .and_then(|ind| twips_attr(ind, "w"))
         .unwrap_or(0.0);
+
+    let alignment = tbl_pr
+        .and_then(|pr| wml(pr, "jc"))
+        .and_then(|jc| jc.attribute((WML_NS, "val")))
+        .map(|val| match val {
+            "center" => TableAlignment::Center,
+            "right" | "end" => TableAlignment::Right,
+            _ => TableAlignment::Left,
+        })
+        .unwrap_or_default();
 
     let cell_margins = tbl_pr
         .and_then(|pr| wml(pr, "tblCellMar"))
@@ -442,5 +452,6 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
         table_indent,
         cell_margins,
         position: table_position,
+        alignment,
     }
 }
