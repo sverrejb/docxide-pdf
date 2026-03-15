@@ -136,7 +136,21 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
             "right" | "end" => TableAlignment::Right,
             _ => TableAlignment::Left,
         })
-        .unwrap_or_default();
+        .unwrap_or_else(|| {
+            // Fall back to first row's w:trPr/w:jc if table-level jc absent
+            collect_block_nodes(node)
+                .into_iter()
+                .find(|n| is_wml(n, "tr"))
+                .and_then(|tr| wml(tr, "trPr"))
+                .and_then(|pr| wml(pr, "jc"))
+                .and_then(|jc| jc.attribute((WML_NS, "val")))
+                .map(|val| match val {
+                    "center" => TableAlignment::Center,
+                    "right" | "end" => TableAlignment::Right,
+                    _ => TableAlignment::Left,
+                })
+                .unwrap_or_default()
+        });
 
     let cell_margins = tbl_pr
         .and_then(|pr| wml(pr, "tblCellMar"))

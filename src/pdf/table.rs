@@ -42,7 +42,7 @@ fn draw_border(content: &mut Content, border: &CellBorder, x1: f32, y1: f32, x2:
     match border.style {
         BorderStyle::Dotted => {
             content.set_line_cap(pdf_writer::types::LineCapStyle::RoundCap);
-            content.set_dash_pattern([0.0, w * 2.0], 0.0);
+            content.set_dash_pattern([0.0, w * 3.0], 0.0);
         }
         BorderStyle::Dashed | BorderStyle::DashSmallGap => {
             let dash = if border.style == BorderStyle::DashSmallGap {
