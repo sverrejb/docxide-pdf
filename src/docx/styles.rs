@@ -94,6 +94,10 @@ pub(super) struct StyleDefaults {
     pub(super) color: Option<[u8; 3]>,
     pub(super) char_spacing: f32,
     pub(super) widow_control: bool,
+    pub(super) indent_left: f32,
+    pub(super) indent_right: f32,
+    pub(super) indent_hanging: f32,
+    pub(super) indent_first_line: f32,
 }
 
 #[derive(Default)]
@@ -443,6 +447,10 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         color: None,
         char_spacing: 0.0,
         widow_control: true,
+        indent_left: 0.0,
+        indent_right: 0.0,
+        indent_hanging: 0.0,
+        indent_first_line: 0.0,
     };
     let mut paragraph_styles = HashMap::new();
     let mut character_styles = HashMap::new();
@@ -507,6 +515,21 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                 .and_then(|v| v.parse::<f32>().ok())
             {
                 defaults.line_spacing = parse_line_spacing(spacing, line_val);
+            }
+        }
+        if let Some(ind) = default_ppr.and_then(|n| wml(n, "ind")) {
+            let (left, right, hanging, first) = super::extract_indents(ind);
+            if let Some(v) = left {
+                defaults.indent_left = v;
+            }
+            if let Some(v) = right {
+                defaults.indent_right = v;
+            }
+            if let Some(v) = hanging {
+                defaults.indent_hanging = v;
+            }
+            if let Some(v) = first {
+                defaults.indent_first_line = v;
             }
         }
     }

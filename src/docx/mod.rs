@@ -516,8 +516,8 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     &mut last_seen_level,
                 );
 
-                let mut indent_first_line = 0.0f32;
-                let mut indent_right = 0.0f32;
+                let mut indent_first_line = styles.defaults.indent_first_line;
+                let mut indent_right = styles.defaults.indent_right;
                 let (left, right, hanging, first) =
                     if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
                         extract_indents(ind)
@@ -535,12 +535,16 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     };
                 if let Some(v) = left {
                     indent_left = v;
+                } else if indent_left == 0.0 {
+                    indent_left = styles.defaults.indent_left;
                 }
                 if let Some(v) = right {
                     indent_right = v;
                 }
                 if let Some(v) = hanging {
                     indent_hanging = v;
+                } else if indent_hanging == 0.0 {
+                    indent_hanging = styles.defaults.indent_hanging;
                 }
                 if let Some(v) = first {
                     indent_first_line = v;

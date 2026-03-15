@@ -243,13 +243,13 @@
     "jaccard": 0.0253,
     "ssim": 0.0895,
     "text_boundary": 0.0,
-    "convert_ms": 9.7
+    "convert_ms": 9.5
   },
   "scraped/4676b6e55862a384..": {
     "jaccard": 0.2945,
     "ssim": 0.697,
     "text_boundary": 1.0,
-    "convert_ms": 2.5
+    "convert_ms": 2.4
   },
   "scraped/4a1834b7409fab00..": {
     "jaccard": 0.2373,
@@ -267,7 +267,7 @@
     "jaccard": 0.1051,
     "ssim": 0.2785,
     "text_boundary": 0.42,
-    "convert_ms": 32.1
+    "convert_ms": 31.5
   },
   "scraped/63791f8c41162207..": {
     "jaccard": 0.157,
@@ -345,7 +345,7 @@
     "jaccard": 0.6516,
     "ssim": 0.8247,
     "text_boundary": 0.9375,
-    "convert_ms": 34.9
+    "convert_ms": 34.6
   },
   "scraped/czech_grant_appl..": {
     "jaccard": 0.107,
@@ -363,7 +363,7 @@
     "jaccard": 0.0375,
     "ssim": 0.1258,
     "text_boundary": 0.0,
-    "convert_ms": 8.5
+    "convert_ms": 8.2
   },
   "scraped/ed02d3b6f1beb350..": {
     "jaccard": 0.1557,
@@ -432,8 +432,8 @@
     "convert_ms": 884.6
   },
   "scraped/lithuanian_ethic..": {
-    "jaccard": 0.3267,
-    "ssim": 0.4822,
+    "jaccard": 0.366,
+    "ssim": 0.551,
     "text_boundary": 0.9,
     "convert_ms": 6.3
   },
@@ -471,7 +471,7 @@
     "jaccard": 0.2654,
     "ssim": 0.6826,
     "text_boundary": 0.9259,
-    "convert_ms": 10.2
+    "convert_ms": 10.1
   },
   "scraped/polish_tender_de..": {
     "jaccard": 0.3197,
@@ -500,7 +500,7 @@
   "scraped/slovak_misdemean..": {
     "jaccard": 0.2655,
     "ssim": 0.645,
-    "text_boundary": 0.4688,
+    "text_boundary": 0.6615,
     "convert_ms": 11.5
   },
   "scraped/stem_partnership..": {
