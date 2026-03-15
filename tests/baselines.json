@@ -246,8 +246,8 @@
     "convert_ms": 660.0
   },
   "scraped/bush_fires_act_c..": {
-    "jaccard": 0.4221,
-    "ssim": 0.8169,
+    "jaccard": 0.4222,
+    "ssim": 0.817,
     "text_boundary": 0.806,
     "convert_ms": 195.6
   },
@@ -297,7 +297,7 @@
     "jaccard": 0.1051,
     "ssim": 0.2785,
     "text_boundary": 0.42,
-    "convert_ms": 33.0
+    "convert_ms": 32.0
   },
   "scraped/czech_municipal_g..": {
     "jaccard": 0.1051,
@@ -453,7 +453,7 @@
     "jaccard": 0.1557,
     "ssim": 0.3337,
     "text_boundary": 0.2133,
-    "convert_ms": 49.5
+    "convert_ms": 48.7
   },
   "scraped/polish_building_p..": {
     "jaccard": 0.1557,
@@ -576,9 +576,9 @@
     "convert_ms": 2.3
   },
   "scraped/uk_commercial_le..": {
-    "jaccard": 0.146,
+    "jaccard": 0.1471,
     "ssim": 0.3018,
-    "text_boundary": 0.1261,
+    "text_boundary": 0.1392,
     "convert_ms": 269.2
   },
   "scraped/ukraine_humanita..": {

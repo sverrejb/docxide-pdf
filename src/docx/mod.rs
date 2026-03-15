@@ -224,39 +224,48 @@ pub(super) fn parse_cell_border_right(parent: roxmltree::Node) -> crate::model::
 }
 
 pub(super) fn parse_tab_stops(ppr: roxmltree::Node) -> Vec<TabStop> {
+    let (stops, _) = parse_tab_stops_with_clears(ppr);
+    stops
+}
+
+pub(super) fn parse_tab_stops_with_clears(ppr: roxmltree::Node) -> (Vec<TabStop>, Vec<f32>) {
     let Some(tabs) = wml(ppr, "tabs") else {
-        return vec![];
+        return (vec![], vec![]);
     };
-    let mut stops: Vec<TabStop> = tabs
+    let mut stops = Vec::new();
+    let mut clears = Vec::new();
+    for n in tabs
         .children()
         .filter(|n| n.tag_name().name() == "tab" && n.tag_name().namespace() == Some(WML_NS))
-        .filter_map(|n| {
-            let pos = twips_attr(n, "pos")?;
-            let val = n.attribute((WML_NS, "val")).unwrap_or("left");
-            if val == "clear" {
-                return None;
-            }
-            let alignment = match val {
-                "center" => TabAlignment::Center,
-                "right" => TabAlignment::Right,
-                "decimal" => TabAlignment::Decimal,
-                _ => TabAlignment::Left,
-            };
-            let leader = n.attribute((WML_NS, "leader")).and_then(|l| match l {
-                "dot" => Some('.'),
-                "hyphen" => Some('-'),
-                "underscore" => Some('_'),
-                _ => None,
-            });
-            Some(TabStop {
-                position: pos,
-                alignment,
-                leader,
-            })
-        })
-        .collect();
+    {
+        let Some(pos) = twips_attr(n, "pos") else {
+            continue;
+        };
+        let val = n.attribute((WML_NS, "val")).unwrap_or("left");
+        if val == "clear" {
+            clears.push(pos);
+            continue;
+        }
+        let alignment = match val {
+            "center" => TabAlignment::Center,
+            "right" => TabAlignment::Right,
+            "decimal" => TabAlignment::Decimal,
+            _ => TabAlignment::Left,
+        };
+        let leader = n.attribute((WML_NS, "leader")).and_then(|l| match l {
+            "dot" => Some('.'),
+            "hyphen" => Some('-'),
+            "underscore" => Some('_'),
+            _ => None,
+        });
+        stops.push(TabStop {
+            position: pos,
+            alignment,
+            leader,
+        });
+    }
     stops.sort_by(|a, b| a.position.total_cmp(&b.position));
-    stops
+    (stops, clears)
 }
 
 pub(super) fn resolve_theme_color_key(scheme_name: &str) -> &str {
@@ -568,11 +577,29 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     }
                 }
 
-                let mut tab_stops = ppr.map(parse_tab_stops).unwrap_or_default();
-                if tab_stops.is_empty()
-                    && let Some(s) = para_style
-                {
-                    tab_stops = s.tab_stops.clone();
+                let mut tab_stops = if let Some(s) = para_style {
+                    s.tab_stops.clone()
+                } else {
+                    vec![]
+                };
+                let (para_tabs, para_clears) = ppr
+                    .map(parse_tab_stops_with_clears)
+                    .unwrap_or_default();
+                if !para_tabs.is_empty() || !para_clears.is_empty() {
+                    for &clear_pos in &para_clears {
+                        tab_stops.retain(|t| (t.position - clear_pos).abs() >= 0.5);
+                    }
+                    for ts in para_tabs {
+                        if let Some(existing) = tab_stops
+                            .iter_mut()
+                            .find(|t| (t.position - ts.position).abs() < 0.5)
+                        {
+                            *existing = ts;
+                        } else {
+                            tab_stops.push(ts);
+                        }
+                    }
+                    tab_stops.sort_by(|a, b| a.position.total_cmp(&b.position));
                 }
                 // OOXML §17.3.1.38: hanging indent implicitly creates a tab stop
                 if indent_hanging > 0.0 {

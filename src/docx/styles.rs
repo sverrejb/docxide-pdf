@@ -4,7 +4,8 @@ use crate::model::{Alignment, CellBorder, LineSpacing, TabStop};
 
 use super::{
     DML_NS, WML_NS, parse_cell_border, parse_cell_border_left, parse_cell_border_right,
-    parse_paragraph_borders, parse_tab_stops, parse_text_color, read_zip_text, twips_attr,
+    parse_paragraph_borders, parse_tab_stops_with_clears, parse_text_color, read_zip_text,
+    twips_attr,
     twips_to_pts, wml, wml_attr, wml_bool,
 };
 
@@ -132,6 +133,7 @@ pub(super) struct ParagraphStyle {
     pub(super) based_on: Option<String>,
     pub(super) kern_threshold: Option<f32>,
     pub(super) tab_stops: Vec<TabStop>,
+    pub(super) clear_tab_positions: Vec<f32>,
     pub(super) num_id: Option<String>,
     pub(super) num_ilvl: Option<u8>,
 }
@@ -617,7 +619,9 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                     .map(super::extract_indents)
                     .unwrap_or_default();
 
-                let tab_stops = ppr.map(parse_tab_stops).unwrap_or_default();
+                let (tab_stops, clear_tab_positions) = ppr
+                    .map(parse_tab_stops_with_clears)
+                    .unwrap_or_default();
 
                 let style_num_pr = ppr.and_then(|p| wml(p, "numPr"));
                 let num_id = style_num_pr
@@ -664,6 +668,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                         based_on,
                         kern_threshold,
                         tab_stops,
+                        clear_tab_positions,
                         num_id,
                         num_ilvl,
                     },
@@ -806,6 +811,11 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     num_ilvl,
                 );
                 // Tab stops are additive: accumulate from ancestors, child overrides at same pos
+                // Clear tabs remove inherited tabs at matching positions
+                for &clear_pos in &s.clear_tab_positions {
+                    inh.tab_stops
+                        .retain(|t| (t.position - clear_pos).abs() >= 0.5);
+                }
                 for ts in &s.tab_stops {
                     if let Some(existing) = inh
                         .tab_stops
@@ -848,9 +858,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             s.widow_control = s.widow_control.or(inh.widow_control);
             s.num_id = s.num_id.take().or(inh.num_id);
             s.num_ilvl = s.num_ilvl.or(inh.num_ilvl);
-            if s.tab_stops.is_empty() {
-                s.tab_stops = inh.tab_stops;
-            }
+            s.tab_stops = inh.tab_stops;
         }
     }
 }
