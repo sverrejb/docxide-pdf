@@ -582,6 +582,8 @@ pub struct TablePosition {
     pub h_anchor: &'static str, // "page", "margin", or "column"
     pub v_offset_pt: f32,
     pub v_anchor: &'static str, // "page", "margin", or "text"
+    pub top_from_text: f32,     // min distance above table (pts)
+    pub bottom_from_text: f32,  // min distance below table (pts)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Default)]

@@ -1201,6 +1201,7 @@ fn render_header_rows(
     }
 }
 
+/// `override_pos`: `(x, y, top_from_text, bottom_from_text)` for floating tables.
 pub(super) fn render_table(
     table: &Table,
     sp: &SectionProperties,
@@ -1208,19 +1209,20 @@ pub(super) fn render_table(
     pb: &mut super::PageBuilder,
     sect_idx: usize,
     prev_space_after: f32,
-    override_pos: Option<(f32, f32, bool)>,
+    override_pos: Option<(f32, f32, f32, f32)>,
 ) {
     let col_widths = auto_fit_columns(table, ctx.fonts);
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     let merge_spans = compute_merge_spans(table, &row_layouts);
     let cm = &table.cell_margins;
 
-    let is_truly_floating = override_pos.is_some_and(|(.., restore)| restore);
-    let (table_left, saved_slot_top) = if let Some((x, y, restore)) = override_pos {
-        let saved = if restore { Some((pb.slot_top, y)) } else { None };
-        pb.slot_top = y;
-        (x, saved)
-    } else {
+    let is_floating = override_pos.is_some();
+    let (table_left, saved_slot_top, text_margins) =
+        if let Some((x, y, top_margin, bottom_margin)) = override_pos {
+            let saved = Some((pb.slot_top - prev_space_after, y));
+            pb.slot_top = y;
+            (x, saved, (top_margin, bottom_margin))
+        } else {
         use crate::model::TableAlignment;
         let text_width = sp.page_width - sp.margin_left - sp.margin_right;
         let table_total_w: f32 = col_widths.iter().sum();
@@ -1229,12 +1231,12 @@ pub(super) fn render_table(
             TableAlignment::Right => sp.margin_left + text_width - table_total_w,
             TableAlignment::Left => sp.margin_left + table.table_indent - cm.left,
         };
-        (left, None)
+        (left, None, (0.0, 0.0))
     };
 
-    if !is_truly_floating {
-        pb.slot_top -= prev_space_after;
-    }
+    // For non-floating tables, prev_space_after offsets the table start.
+    // For floating tables, it was already consumed into the saved cursor position.
+    pb.slot_top -= prev_space_after;
 
     // Count contiguous header rows from the start of the table (per OOXML spec,
     // only contiguous header rows starting from row 0 are repeated).
@@ -1272,7 +1274,7 @@ pub(super) fn render_table(
         let available_h = pb.slot_top - sp.margin_bottom;
         let page_content_h = sp.page_height - sp.margin_top - sp.margin_bottom;
 
-        if !is_truly_floating && row_h > available_h && row_h > page_content_h {
+        if !is_floating && row_h > available_h && row_h > page_content_h {
             // Row is too tall for any single page -- split across pages
             let ncells = layout.cells.len();
             let mut starts = vec![0usize; ncells];
@@ -1313,7 +1315,7 @@ pub(super) fn render_table(
                 is_first_chunk = false;
                 flush_and_render_headers(pb, ri);
             }
-        } else if !is_truly_floating && !at_page_top && row_h > available_h {
+        } else if !is_floating && !at_page_top && row_h > available_h {
             flush_and_render_headers(pb, ri);
             render_table_row(
                 row,
@@ -1342,14 +1344,21 @@ pub(super) fn render_table(
     }
 
     if let Some((saved, table_top_y)) = saved_slot_top {
+        let (top_margin, bottom_margin) = text_margins;
         let table_bottom = pb.slot_top;
         // When the floating table starts at/above the margin (table_top_y >= saved),
         // body text can't flow above it — push text below the table.
-        // When the table starts below the margin, body text fills the gap above it.
+        // When the table starts below the margin, body text fills the gap above it,
+        // and content that reaches the table area is pushed below via float_zone.
+        // The zone includes topFromText/bottomFromText spacing per the OOXML spec.
         if table_top_y >= saved && table_bottom < saved {
-            pb.slot_top = table_bottom;
+            pb.slot_top = table_bottom - bottom_margin;
         } else {
             pb.slot_top = saved;
+            if table_bottom < saved {
+                pb.float_zone =
+                    Some((table_top_y + top_margin, table_bottom - bottom_margin));
+            }
         }
     }
 }

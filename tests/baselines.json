@@ -264,9 +264,9 @@
     "convert_ms": 55.1
   },
   "scraped/croatian_grant_g..": {
-    "jaccard": 0.0706,
-    "ssim": 0.1818,
-    "text_boundary": 0.0343,
+    "jaccard": 0.0848,
+    "ssim": 0.2,
+    "text_boundary": 0.0811,
     "convert_ms": 229.0
   },
   "scraped/croatian_regulat..": {
@@ -313,8 +313,8 @@
   },
   "scraped/east_asia_confer..": {
     "jaccard": 0.0842,
-    "ssim": 0.206,
-    "text_boundary": 0.0476,
+    "ssim": 0.2077,
+    "text_boundary": 0.5714,
     "convert_ms": 8.1
   },
   "scraped/education_consul..": {
@@ -391,8 +391,8 @@
   },
   "scraped/korean_japanese_..": {
     "jaccard": 0.0957,
-    "ssim": 0.1783,
-    "text_boundary": 0.0952,
+    "ssim": 0.1789,
+    "text_boundary": 0.7619,
     "convert_ms": 8.6
   },
   "scraped/korean_japanese_c..": {
@@ -453,7 +453,7 @@
     "jaccard": 0.1557,
     "ssim": 0.3337,
     "text_boundary": 0.2133,
-    "convert_ms": 48.4
+    "convert_ms": 47.9
   },
   "scraped/polish_building_p..": {
     "jaccard": 0.1557,
@@ -522,8 +522,8 @@
     "convert_ms": 10.8
   },
   "scraped/slovak_misdemean..": {
-    "jaccard": 0.2877,
-    "ssim": 0.7091,
+    "jaccard": 0.4382,
+    "ssim": 0.7587,
     "text_boundary": 0.7231,
     "convert_ms": 11.5
   },
@@ -537,7 +537,7 @@
     "jaccard": 0.1104,
     "ssim": 0.3758,
     "text_boundary": 0.7273,
-    "convert_ms": 20.9
+    "convert_ms": 19.5
   },
   "scraped/traditional_skill..": {
     "jaccard": 0.11,

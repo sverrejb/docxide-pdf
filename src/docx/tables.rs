@@ -153,11 +153,23 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                 HorizontalPosition::Offset(offset)
             }
         };
+        let top_from_text = tblp
+            .attribute((WML_NS, "topFromText"))
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(twips_to_pts)
+            .unwrap_or(0.0);
+        let bottom_from_text = tblp
+            .attribute((WML_NS, "bottomFromText"))
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(twips_to_pts)
+            .unwrap_or(0.0);
         TablePosition {
             h_position,
             h_anchor,
             v_offset_pt,
             v_anchor,
+            top_from_text,
+            bottom_from_text,
         }
     });
 

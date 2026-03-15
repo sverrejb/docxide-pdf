@@ -850,9 +850,83 @@ pub(super) fn render_paragraph_lines(
                 td_x = x;
                 td_y = cy;
 
-                let text_bytes =
-                    encode_text_for_pdf(&chunk.text, &chunk.pdf_font, &pdf_name_to_entry);
-                content.show(Str(&text_bytes));
+                // Per-character font fallback: if some chars are missing
+                // from the primary font, split into segments and render
+                // missing chars with the CJK fallback font.
+                let primary_entry = pdf_name_to_entry.get(chunk.pdf_font.as_str());
+                let has_missing = primary_entry
+                    .is_some_and(|e| !e.missing_cjk_chars.is_empty());
+                let fallback_entry = has_missing
+                    .then(|| seen_fonts.get("__cjk_fallback"))
+                    .flatten();
+
+                if let (Some(primary), Some(fallback)) = (primary_entry, fallback_entry) {
+                    let primary_gids = primary.char_to_gid.as_ref();
+                    let fallback_gids = fallback.char_to_gid.as_ref();
+                    // Split text into runs of primary vs fallback chars
+                    let mut seg_start = 0;
+                    let mut in_fallback = false;
+                    let chars: Vec<char> = chunk.text.chars().collect();
+                    for (i, &ch) in chars.iter().enumerate() {
+                        let needs_fb = primary.missing_cjk_chars.contains(&ch);
+                        if i == 0 {
+                            in_fallback = needs_fb;
+                        } else if needs_fb != in_fallback {
+                            let seg: String = chars[seg_start..i].iter().collect();
+                            if in_fallback {
+                                if let Some(map) = fallback_gids {
+                                    let fb_name = &fallback.pdf_name;
+                                    content.set_font(
+                                        Name(fb_name.as_bytes()),
+                                        chunk.font_size,
+                                    );
+                                    content.show(Str(&encode_as_gids(&seg, map)));
+                                    content.set_font(
+                                        Name(chunk.pdf_font.as_bytes()),
+                                        chunk.font_size,
+                                    );
+                                }
+                            } else {
+                                let bytes = encode_text_for_pdf(
+                                    &seg,
+                                    &chunk.pdf_font,
+                                    &pdf_name_to_entry,
+                                );
+                                content.show(Str(&bytes));
+                            }
+                            seg_start = i;
+                            in_fallback = needs_fb;
+                        }
+                    }
+                    // Flush last segment
+                    let seg: String = chars[seg_start..].iter().collect();
+                    if in_fallback {
+                        if let Some(map) = fallback_gids {
+                            let fb_name = &fallback.pdf_name;
+                            content
+                                .set_font(Name(fb_name.as_bytes()), chunk.font_size);
+                            content.show(Str(&encode_as_gids(&seg, map)));
+                            content.set_font(
+                                Name(chunk.pdf_font.as_bytes()),
+                                chunk.font_size,
+                            );
+                        }
+                    } else {
+                        let bytes = encode_text_for_pdf(
+                            &seg,
+                            &chunk.pdf_font,
+                            &pdf_name_to_entry,
+                        );
+                        content.show(Str(&bytes));
+                    }
+                } else {
+                    let text_bytes = encode_text_for_pdf(
+                        &chunk.text,
+                        &chunk.pdf_font,
+                        &pdf_name_to_entry,
+                    );
+                    content.show(Str(&text_bytes));
+                };
 
                 if chunk.underline {
                     let thick = (chunk.font_size * 0.05).max(0.5);

@@ -33,6 +33,8 @@ pub(crate) struct FontEntry {
     pub(crate) char_widths_1000: Option<HashMap<char, f32>>,
     pub(crate) kern_pairs: Option<HashMap<(u16, u16), f32>>,
     pub(crate) synthetic_bold: bool,
+    /// CJK chars requested but not present in this font (need fallback rendering).
+    pub(crate) missing_cjk_chars: HashSet<char>,
 }
 
 impl FontEntry {
@@ -48,6 +50,22 @@ impl FontEntry {
         } else {
             0.0
         }
+    }
+
+    /// Width with CJK fallback: if this font is missing a CJK char, use the
+    /// fallback font's width instead.
+    pub(crate) fn char_width_1000_with_fallback(
+        &self,
+        ch: char,
+        fallback: Option<&FontEntry>,
+    ) -> f32 {
+        let w = self.char_width_1000(ch);
+        if w > 0.0 || !self.missing_cjk_chars.contains(&ch) {
+            return w;
+        }
+        fallback
+            .and_then(|fb| fb.char_widths_1000.as_ref()?.get(&ch).copied())
+            .unwrap_or(0.0)
     }
 
     pub(crate) fn word_width(&self, word: &str, font_size: f32, kern: bool) -> f32 {
@@ -173,28 +191,30 @@ fn family_fallback(family: FontFamily) -> Option<&'static str> {
     }
 }
 
-fn has_cjk_chars(chars: &HashSet<char>) -> bool {
-    chars.iter().any(|&c| {
-        let cp = c as u32;
-        // CJK Unified Ideographs + extensions, Hangul Syllables, Katakana, Hiragana
-        (0x4E00..=0x9FFF).contains(&cp)
-            || (0x3400..=0x4DBF).contains(&cp)
-            || (0xAC00..=0xD7AF).contains(&cp)
-            || (0x3040..=0x309F).contains(&cp)
-            || (0x30A0..=0x30FF).contains(&cp)
-            || (0xF900..=0xFAFF).contains(&cp)
-            || (0x20000..=0x2A6DF).contains(&cp)
-    })
+fn is_cjk_char(c: char) -> bool {
+    let cp = c as u32;
+    (0x4E00..=0x9FFF).contains(&cp)
+        || (0x3400..=0x4DBF).contains(&cp)
+        || (0xAC00..=0xD7AF).contains(&cp)
+        || (0x3040..=0x309F).contains(&cp)
+        || (0x30A0..=0x30FF).contains(&cp)
+        || (0xF900..=0xFAFF).contains(&cp)
+        || (0x20000..=0x2A6DF).contains(&cp)
 }
 
-fn cjk_fallback_fonts() -> &'static [&'static str] {
+fn has_cjk_chars(chars: &HashSet<char>) -> bool {
+    chars.iter().any(|&c| is_cjk_char(c))
+}
+
+pub(crate) fn cjk_fallback_fonts() -> &'static [&'static str] {
     #[cfg(target_os = "macos")]
     {
         &[
+            "Hiragino Sans",
+            "Arial Unicode MS",
             "Malgun Gothic",
             "AppleSD Gothic Neo",
             "Apple SD Gothic Neo",
-            "Hiragino Sans",
             "PingFang SC",
         ]
     }
@@ -255,18 +275,24 @@ pub(crate) fn register_font(
 
     let needs_cjk = has_cjk_chars(used_chars);
 
-    let result = font_name
-        .split(';')
-        .map(|s| s.trim())
-        .find_map(|c| try_candidate(c))
+    // If the fontTable provides an altName, try it first — it's the document's
+    // explicit mapping and more reliable than the system font index (which may
+    // resolve a localized name like "바탕" to a different font than "Batang").
+    let result = lookup_font_table(font_table, primary)
+        .and_then(|entry| {
+            let alt = entry.alt_name.as_ref()?;
+            let m = try_candidate(alt)?;
+            log::info!("Font substitution: {primary} → altName \"{alt}\"");
+            Some(m)
+        })
+        .or_else(|| {
+            font_name
+                .split(';')
+                .map(|s| s.trim())
+                .find_map(|c| try_candidate(c))
+        })
         .or_else(|| {
             let entry = lookup_font_table(font_table, primary)?;
-            if let Some(ref alt) = entry.alt_name {
-                if let Some(m) = try_candidate(alt) {
-                    log::info!("Font substitution: {primary} → altName \"{alt}\"");
-                    return Some(m);
-                }
-            }
             // Try CJK fallback before family fallback — family fonts (TNR, Courier)
             // lack CJK glyphs and would produce squares
             if needs_cjk {
@@ -301,6 +327,21 @@ pub(crate) fn register_font(
             None
         });
 
+    // Compute which CJK chars are missing from the resolved font
+    let missing_cjk = if needs_cjk {
+        let covered: HashSet<char> = result
+            .as_ref()
+            .map(|m| m.char_to_gid.keys().copied().collect())
+            .unwrap_or_default();
+        used_chars
+            .iter()
+            .copied()
+            .filter(|ch| !covered.contains(ch) && is_cjk_char(*ch))
+            .collect()
+    } else {
+        HashSet::new()
+    };
+
     let entry = match result {
         Some(m) => FontEntry {
             pdf_name,
@@ -316,6 +357,7 @@ pub(crate) fn register_font(
                 Some(m.kern_pairs)
             },
             synthetic_bold: m.synthetic_bold,
+            missing_cjk_chars: missing_cjk,
         },
         None => {
             log::warn!("Font not found: {font_name} bold={bold} italic={italic} — using Helvetica");
@@ -332,6 +374,7 @@ pub(crate) fn register_font(
                 char_widths_1000: None,
                 kern_pairs: None,
                 synthetic_bold: false,
+                missing_cjk_chars: missing_cjk,
             }
         }
     };

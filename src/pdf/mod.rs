@@ -605,6 +605,9 @@ pub(super) struct PageBuilder {
     // Layout position state
     pub(super) slot_top: f32,
     pub(super) is_first_page_of_section: bool,
+    /// (table_top_y, table_bottom_y) of a floating table on this page;
+    /// when cursor enters this zone, push it below the table.
+    pub(super) float_zone: Option<(f32, f32)>,
 
     // Accumulated pages
     all_contents: Vec<Content>,
@@ -629,6 +632,7 @@ impl PageBuilder {
             styleref_page_first: HashMap::new(),
             slot_top,
             is_first_page_of_section: true,
+            float_zone: None,
             all_contents: Vec::new(),
             all_links: Vec::new(),
             all_footnote_ids: Vec::new(),
@@ -655,6 +659,7 @@ impl PageBuilder {
         self.all_styleref.push(self.styleref_running.clone());
         self.all_first_styleref
             .push(std::mem::take(&mut self.styleref_page_first));
+        self.float_zone = None;
     }
 
     fn push_blank_page(&mut self, sect_idx: usize) {
@@ -997,6 +1002,53 @@ fn collect_and_register_fonts(
             );
             seen_fonts.insert(key.clone(), entry);
             font_order.push(key.clone());
+        }
+    }
+
+    // Collect all CJK chars missing from their primary fonts and register a
+    // shared CJK fallback font so the rendering code can substitute per-character.
+    let mut all_missing_cjk: HashSet<char> = HashSet::new();
+    for entry in seen_fonts.values() {
+        all_missing_cjk.extend(&entry.missing_cjk_chars);
+    }
+    if !all_missing_cjk.is_empty() {
+        let fallback_key = "__cjk_fallback".to_string();
+        let pdf_name = format!("F{}", font_order.len() + 1);
+        let mut fallback_font_name = "Malgun Gothic";
+        for name in crate::fonts::cjk_fallback_fonts() {
+            fallback_font_name = name;
+            break;
+        }
+        let entry = register_font(
+            pdf,
+            fallback_font_name,
+            false,
+            false,
+            pdf_name,
+            alloc,
+            &doc.embedded_fonts,
+            &all_missing_cjk,
+            &doc.font_table,
+        );
+        font_order.push(fallback_key.clone());
+        seen_fonts.insert(fallback_key, entry);
+
+        // Copy fallback char widths into each primary font so layout uses correct widths
+        if let Some(fb_widths) = seen_fonts
+            .get("__cjk_fallback")
+            .and_then(|e| e.char_widths_1000.clone())
+        {
+            for entry in seen_fonts.values_mut() {
+                if entry.missing_cjk_chars.is_empty() {
+                    continue;
+                }
+                let widths = entry.char_widths_1000.get_or_insert_with(HashMap::new);
+                for &ch in &entry.missing_cjk_chars {
+                    if let Some(&w) = fb_widths.get(&ch) {
+                        widths.insert(ch, w);
+                    }
+                }
+            }
         }
     }
 
@@ -1535,6 +1587,18 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         };
 
         for (block_idx, block) in section.blocks.iter().enumerate() {
+            // If a floating table set an exclusion zone, push content below
+            // when it would overlap the table. A paragraph needs at least one
+            // line of space (~14pt) to fit above the zone; if it wouldn't fit,
+            // push the entire block below the table.
+            if let Some((zone_top, zone_bottom)) = pb.float_zone {
+                const MIN_PARA_HEIGHT: f32 = 14.0;
+                if pb.slot_top - MIN_PARA_HEIGHT <= zone_top {
+                    pb.slot_top = zone_bottom;
+                    pb.float_zone = None;
+                }
+            }
+
             match block {
                 Block::Paragraph(para) => {
                     // Skip empty section-break paragraphs — Word gives these zero height
@@ -2262,13 +2326,12 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 }
                             }
                         };
-                        let restore = pos.v_anchor != "text";
                         let y = match pos.v_anchor {
                             "page" => sp.page_height - pos.v_offset_pt,
                             "margin" => sp.page_height - sp.margin_top - pos.v_offset_pt,
                             _ => pb.slot_top - pos.v_offset_pt,
                         };
-                        (x, y, restore)
+                        (x, y, pos.top_from_text, pos.bottom_from_text)
                     });
                     render_table(
                         table,
@@ -2295,6 +2358,15 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     }
                 }
             }
+            // Also check after rendering: if the block pushed the cursor
+            // into the floating table zone, jump below the table.
+            if let Some((zone_top, zone_bottom)) = pb.float_zone {
+                if pb.slot_top <= zone_top {
+                    pb.slot_top = zone_bottom;
+                    pb.float_zone = None;
+                }
+            }
+
             global_block_idx += 1;
         }
     }
