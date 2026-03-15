@@ -95,7 +95,8 @@ fn valign_offset(v_align: CellVAlign, available: f32, content_h: f32) -> f32 {
 }
 
 fn para_has_visible_content(para: &CellParagraphLayout) -> bool {
-    !para.lines.is_empty() && para.lines.iter().any(|l| !l.chunks.is_empty())
+    !para.list_label.is_empty()
+        || (!para.lines.is_empty() && para.lines.iter().any(|l| !l.chunks.is_empty()))
 }
 
 fn cell_has_visible_content(paragraphs: &[CellParagraphLayout]) -> bool {

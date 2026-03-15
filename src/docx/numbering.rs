@@ -304,6 +304,11 @@ pub(super) fn parse_list_info(
         .or_insert(start);
 
     let is_bullet = def.num_fmt == "bullet";
+    let original_had_pua = is_bullet
+        && def
+            .lvl_text
+            .chars()
+            .any(|c| (0xF000..=0xF0FF).contains(&(c as u32)));
     let label = if is_bullet {
         let text = normalize_bullet_text(&def.lvl_text);
         if text.is_empty() {
@@ -333,14 +338,11 @@ pub(super) fn parse_list_info(
         }
         label
     };
-    let has_pua = label
-        .chars()
-        .any(|c| (0xF000..=0xF0FF).contains(&(c as u32)));
     ListLabelInfo {
         indent_left: def.indent_left,
         indent_hanging: def.indent_hanging,
         label,
-        font: if is_bullet && has_pua {
+        font: if is_bullet && !original_had_pua {
             def.bullet_font.clone()
         } else {
             None
