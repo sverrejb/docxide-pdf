@@ -300,8 +300,8 @@
     "convert_ms": 197.9
   },
   "scraped/c23b53f6f5595ea5..": {
-    "jaccard": 0.1223,
-    "ssim": 0.2441,
+    "jaccard": 0.1751,
+    "ssim": 0.2956,
     "text_boundary": 0.6265,
     "convert_ms": 89.9
   },
@@ -402,8 +402,8 @@
     "convert_ms": 63.5
   },
   "scraped/indonesian_bench..": {
-    "jaccard": 0.224,
-    "ssim": 0.4299,
+    "jaccard": 0.2286,
+    "ssim": 0.4301,
     "text_boundary": 0.3961,
     "convert_ms": 152.2
   },
@@ -426,7 +426,7 @@
     "convert_ms": 3.3
   },
   "scraped/learning_culture..": {
-    "jaccard": 0.3311,
+    "jaccard": 0.3312,
     "ssim": 0.4566,
     "text_boundary": 0.3841,
     "convert_ms": 884.6

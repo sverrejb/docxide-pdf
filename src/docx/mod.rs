@@ -589,7 +589,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                 let (para_image, mut content_height) = if has_inline_images && !has_text {
                     let img_run_idx = runs.iter().position(|r| r.inline_image.is_some());
                     let img = img_run_idx.and_then(|i| runs[i].inline_image.take());
-                    let h = img.as_ref().map(|i| i.display_height).unwrap_or(0.0);
+                    let h = img.as_ref().map(|i| i.display_height + i.layout_extra_height).unwrap_or(0.0);
                     (img, h)
                 } else if has_inline_images {
                     (None, 0.0)

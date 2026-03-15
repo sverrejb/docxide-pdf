@@ -38,14 +38,16 @@ fn emu_attr(node: roxmltree::Node, attr: &str) -> f32 {
     parse_emu_text(node.attribute(attr))
 }
 
-/// Extra vertical space for an inline image: effectExtent top+bottom + distT+distB.
-fn inline_extra_height(container: roxmltree::Node) -> f32 {
+/// Extra vertical space for an inline image: (total, top_portion).
+/// Total = effectExtent top+bottom + distT+distB.
+/// Top = effectExtent.t + distT.
+fn inline_extra_height(container: roxmltree::Node) -> (f32, f32) {
     let ee = wpd(container, "effectExtent");
     let ee_t = ee.map(|n| emu_attr(n, "t")).unwrap_or(0.0);
     let ee_b = ee.map(|n| emu_attr(n, "b")).unwrap_or(0.0);
     let dist_t = emu_attr(container, "distT");
     let dist_b = emu_attr(container, "distB");
-    ee_t + ee_b + dist_t + dist_b
+    (ee_t + ee_b + dist_t + dist_b, ee_t + dist_t)
 }
 
 pub(super) fn extent_dimensions(container: roxmltree::Node) -> (f32, f32) {
@@ -104,7 +106,7 @@ pub(super) fn read_image_from_zip<R: Read + std::io::Seek>(
     display_w: f32,
     display_h: f32,
 ) -> Option<EmbeddedImage> {
-    read_image_from_zip_extra(embed_id, rels, zip, display_w, display_h, 0.0)
+    read_image_from_zip_extra(embed_id, rels, zip, display_w, display_h, 0.0, 0.0)
 }
 
 pub(super) fn read_image_from_zip_extra<R: Read + std::io::Seek>(
@@ -114,6 +116,7 @@ pub(super) fn read_image_from_zip_extra<R: Read + std::io::Seek>(
     display_w: f32,
     display_h: f32,
     layout_extra_height: f32,
+    layout_extra_top: f32,
 ) -> Option<EmbeddedImage> {
     let target = rels.get(embed_id)?;
     let zip_path = target
@@ -133,6 +136,7 @@ pub(super) fn read_image_from_zip_extra<R: Read + std::io::Seek>(
         display_height: display_h,
         jpeg_components: components,
         layout_extra_height,
+        layout_extra_top,
     })
 }
 
@@ -303,9 +307,9 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
         }
 
         if let Some(embed_id) = find_blip_embed(container) {
-            let extra_h = inline_extra_height(container);
+            let (extra_h, extra_top) = inline_extra_height(container);
             if let Some(img) =
-                read_image_from_zip_extra(embed_id, rels, zip, display_w, display_h, extra_h)
+                read_image_from_zip_extra(embed_id, rels, zip, display_w, display_h, extra_h, extra_top)
             {
                 return Some(RunDrawingResult::Inline(img));
             }
@@ -370,13 +374,13 @@ pub(super) fn compute_drawing_info<R: Read + std::io::Seek>(
             }
 
             let (display_w, display_h) = extent_dimensions(container);
-            let extra_h = inline_extra_height(container);
+            let (extra_h, extra_top) = inline_extra_height(container);
             max_height = max_height.max(display_h + extra_h);
 
             if image.is_none() {
                 if let Some(embed_id) = find_blip_embed(container) {
                     image =
-                        read_image_from_zip_extra(embed_id, rels, zip, display_w, display_h, extra_h);
+                        read_image_from_zip_extra(embed_id, rels, zip, display_w, display_h, extra_h, extra_top);
                 }
             }
         }

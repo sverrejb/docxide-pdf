@@ -2058,7 +2058,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     } else if (para.image.is_some() || text_empty) && para.content_height > 0.0 {
                         if let Some(pdf_name) = image_pdf_names.get(&global_block_idx) {
                             let img = para.image.as_ref().unwrap();
-                            let y_bottom = pb.slot_top - img.display_height;
+                            let y_bottom = pb.slot_top - img.layout_extra_top - img.display_height;
                             let x = col_x
                                 + match para.alignment {
                                     Alignment::Center => (col_w - img.display_width).max(0.0) / 2.0,
