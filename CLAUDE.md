@@ -161,6 +161,17 @@ Measured for case1: reference baseline at y=708.72pt from bottom (83.28pt from t
 ### Document Grid
 `w:sectPr/w:docGrid @w:linePitch` (in twips) defines the baseline-to-baseline distance for grid-snapped text. Divide by 20 to get points (360 twips = 18pt for case1).
 
+### Case Browser Annotations
+
+The case browser (`tools/src/bin/case_browser.rs`) supports click-to-annotate. Annotations are saved as `annotations.json` in each case's output directory (e.g., `tests/output/scraped/foo/annotations.json`). Coordinates use PDF-native coordinate space (x from left, y from bottom, in points). The annotations capture rendering issues spotted during visual inspection — use them as precise bug reports when fixing rendering problems.
+
+**Workflow for fixing issues from annotations:**
+1. Read the case's `annotations.json` to see what problems were noted
+2. The coordinates tell you exactly where on the page the issue is — cross-reference with the DOCX source using `docx-inspect` to find the relevant XML elements at that position
+3. Use the overlay view (key `O`) in the case browser to see exactly what differs between reference and generated output at the annotated location
+
+**Keyboard shortcuts:** `A` toggle markers, `N` toggle notes panel, click image to add note, `Cmd+Enter` to save, `Escape` to cancel.
+
 ### pdf-writer Patterns
 Object IDs must be written exactly once. Build the content stream first, then write the page object:
 

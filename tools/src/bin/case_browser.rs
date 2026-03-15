@@ -183,7 +183,9 @@ fn screen_to_pdf_pts(click: &ImageClick) -> (f32, f32) {
     let rel_y = click.screen_pos.y - click.image_rect.top();
     let scale = click.tex_size[0] as f32 / click.image_rect.width();
     let x_pt = (rel_x * scale) / PIXELS_PER_POINT;
-    let y_pt = (rel_y * scale) / PIXELS_PER_POINT;
+    let page_height_pt = click.tex_size[1] as f32 / PIXELS_PER_POINT;
+    let y_from_top = (rel_y * scale) / PIXELS_PER_POINT;
+    let y_pt = page_height_pt - y_from_top;
     (x_pt, y_pt)
 }
 
@@ -194,8 +196,10 @@ fn pdf_pts_to_screen(
     tex_size: [usize; 2],
 ) -> egui::Pos2 {
     let scale = tex_size[0] as f32 / image_rect.width();
+    let page_height_pt = tex_size[1] as f32 / PIXELS_PER_POINT;
+    let y_from_top = page_height_pt - y_pt;
     let sx = image_rect.left() + (x_pt * PIXELS_PER_POINT) / scale;
-    let sy = image_rect.top() + (y_pt * PIXELS_PER_POINT) / scale;
+    let sy = image_rect.top() + (y_from_top * PIXELS_PER_POINT) / scale;
     egui::pos2(sx, sy)
 }
 

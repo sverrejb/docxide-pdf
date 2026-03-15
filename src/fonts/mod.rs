@@ -191,30 +191,20 @@ fn family_fallback(family: FontFamily) -> Option<&'static str> {
     }
 }
 
-fn is_cjk_char(c: char) -> bool {
-    let cp = c as u32;
-    (0x4E00..=0x9FFF).contains(&cp)
-        || (0x3400..=0x4DBF).contains(&cp)
-        || (0xAC00..=0xD7AF).contains(&cp)
-        || (0x3040..=0x309F).contains(&cp)
-        || (0x30A0..=0x30FF).contains(&cp)
-        || (0xF900..=0xFAFF).contains(&cp)
-        || (0x20000..=0x2A6DF).contains(&cp)
-}
-
 fn has_cjk_chars(chars: &HashSet<char>) -> bool {
-    chars.iter().any(|&c| is_cjk_char(c))
+    chars.iter().any(|&c| crate::docx::is_east_asian_char(c))
 }
 
 pub(crate) fn cjk_fallback_fonts() -> &'static [&'static str] {
     #[cfg(target_os = "macos")]
     {
         &[
-            "Hiragino Sans",
-            "Arial Unicode MS",
             "Malgun Gothic",
             "AppleSD Gothic Neo",
             "Apple SD Gothic Neo",
+            "Hiragino Sans W3",
+            "Hiragino Kaku Gothic ProN W3",
+            "Arial Unicode MS",
             "PingFang SC",
         ]
     }
@@ -336,7 +326,7 @@ pub(crate) fn register_font(
         used_chars
             .iter()
             .copied()
-            .filter(|ch| !covered.contains(ch) && is_cjk_char(*ch))
+            .filter(|ch| !covered.contains(ch) && crate::docx::is_east_asian_char(*ch))
             .collect()
     } else {
         HashSet::new()

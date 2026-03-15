@@ -1,2 +1,2 @@
 [alias]
-compare = "run --manifest-path tools/Cargo.toml --bin case-browser --"
+compare = "run  --release --manifest-path tools/Cargo.toml --bin case-browser --"

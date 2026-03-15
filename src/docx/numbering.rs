@@ -310,11 +310,16 @@ pub(super) fn parse_list_info(
             .chars()
             .any(|c| (0xF000..=0xF0FF).contains(&(c as u32)));
     let label = if is_bullet {
-        let text = normalize_bullet_text(&def.lvl_text);
-        if text.is_empty() {
-            "\u{2022}".to_string()
+        if original_had_pua && def.bullet_font.is_some() {
+            // Keep PUA chars for symbol fonts — their cmaps expect PUA encoding
+            def.lvl_text.clone()
         } else {
-            text
+            let text = normalize_bullet_text(&def.lvl_text);
+            if text.is_empty() {
+                "\u{2022}".to_string()
+            } else {
+                text
+            }
         }
     } else {
         let mut label = def.lvl_text.clone();
@@ -342,7 +347,7 @@ pub(super) fn parse_list_info(
         indent_left: def.indent_left,
         indent_hanging: def.indent_hanging,
         label,
-        font: if is_bullet && !original_had_pua {
+        font: if is_bullet {
             def.bullet_font.clone()
         } else {
             None

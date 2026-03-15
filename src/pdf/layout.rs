@@ -50,7 +50,7 @@ fn resolve_tab_aligned_start(
 
 /// U+00A0 (non-breaking space) renders as a space but must not allow line breaks.
 fn is_break_space(c: char) -> bool {
-    c.is_whitespace() && c != '\u{00a0}'
+    c.is_whitespace() && c != '\u{00a0}' && c != '\u{3000}'
 }
 
 /// Split text into (preceding_space_count, word) pairs.
