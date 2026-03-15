@@ -373,7 +373,7 @@
   },
   "scraped/italian_evaluati..": {
     "jaccard": 0.3392,
-    "ssim": 0.443,
+    "ssim": 0.4431,
     "text_boundary": 0.5797,
     "convert_ms": 101.4
   },
@@ -567,7 +567,7 @@
     "jaccard": 0.3583,
     "ssim": 0.7537,
     "text_boundary": 1.0,
-    "convert_ms": 2.4
+    "convert_ms": 2.2
   },
   "scraped/turkish_prostate_..": {
     "jaccard": 0.3583,

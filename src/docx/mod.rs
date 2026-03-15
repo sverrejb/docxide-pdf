@@ -552,7 +552,13 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                         (None, None, None, None)
                     };
                 if let Some(v) = left {
-                    indent_left = v;
+                    if !list_label.is_empty() {
+                        let style_indent =
+                            para_style.and_then(|s| s.indent_left).unwrap_or(0.0);
+                        indent_left = v.max(style_indent);
+                    } else {
+                        indent_left = v;
+                    }
                 } else if indent_left == 0.0 {
                     indent_left = styles.defaults.indent_left;
                 }
@@ -561,6 +567,8 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                 }
                 if let Some(v) = hanging {
                     indent_hanging = v;
+                } else if first.is_some() {
+                    indent_hanging = 0.0;
                 } else if indent_hanging == 0.0 {
                     indent_hanging = styles.defaults.indent_hanging;
                 }
