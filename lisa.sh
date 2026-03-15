@@ -22,7 +22,7 @@ for ((i=1; i<=iterations; i++)); do
     result=$(claude --permission-mode acceptEdits -p "@${progress} \
   You are to do the following steps:
 0. Read ./ralph/lisa_progress.md \
-1. Select a case to improve, either a new one or continue on the last worked on. \
+1. Select a case from the list @new.md to improve, either a new one or continue on a previously worked on. \
 2. Analyze input, output. Compare results and reference. Consult specs via local-rag mcp. Plan how to improve the scores and implement the plan. \
 3. If any meaningful improvement is achieved, and no substansial test regressions occur, commit the fix and write to the ./ralph/lisa_progress.md file
 4. Update the progress file with processed files and details of what was done.
