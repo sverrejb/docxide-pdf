@@ -3,7 +3,7 @@ mod charts;
 mod embedded_fonts;
 mod headers_footers;
 mod images;
-mod numbering;
+pub(crate) mod numbering;
 mod runs;
 mod sections;
 mod settings;
@@ -745,6 +745,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
             break_type: SectionBreakType::NextPage,
             columns: None,
             page_num_start: None,
+            page_num_format: None,
         }
     };
     sections.push(Section {

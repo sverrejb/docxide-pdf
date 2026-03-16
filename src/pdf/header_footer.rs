@@ -19,6 +19,7 @@ pub(super) fn substitute_hf_runs(
     page_num: usize,
     total_pages: usize,
     styleref_values: &HashMap<String, String>,
+    page_num_format: Option<&str>,
 ) -> Vec<Run> {
     runs.iter()
         .map(|run| {
@@ -26,7 +27,13 @@ pub(super) fn substitute_hf_runs(
             if let Some(ref fc) = run.field_code {
                 r.field_code = None;
                 r.text = match fc {
-                    FieldCode::Page => page_num.to_string(),
+                    FieldCode::Page => {
+                        if let Some(fmt) = page_num_format {
+                            crate::docx::numbering::format_number(page_num as u32, fmt)
+                        } else {
+                            page_num.to_string()
+                        }
+                    }
                     FieldCode::NumPages => total_pages.to_string(),
                     FieldCode::StyleRef(name) => {
                         styleref_values.get(name).cloned().unwrap_or_default()
@@ -253,7 +260,7 @@ pub(super) fn render_header_footer(
                 cursor_y -= prev_space_after.max(para.space_before);
 
                 let substituted_runs =
-                    substitute_hf_runs(&para.runs, page_num, total_pages, styleref_values);
+                    substitute_hf_runs(&para.runs, page_num, total_pages, styleref_values, sp.page_num_format.as_deref());
 
                 let (font_size, tallest_lhr, tallest_ar) =
                     tallest_run_metrics(&substituted_runs, ctx.fonts);

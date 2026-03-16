@@ -621,6 +621,7 @@ struct HfSubstitution<'a> {
     page_num: usize,
     total_pages: usize,
     styleref_values: &'a HashMap<String, String>,
+    page_num_format: Option<&'a str>,
 }
 
 fn compute_row_layouts(
@@ -675,6 +676,7 @@ fn compute_row_layouts(
                                         sub.page_num,
                                         sub.total_pages,
                                         sub.styleref_values,
+                                        sub.page_num_format,
                                     );
                                     &substituted
                                 } else {
@@ -1407,6 +1409,7 @@ pub(super) fn render_header_footer_table(
         page_num,
         total_pages,
         styleref_values,
+        page_num_format: sp.page_num_format.as_deref(),
     };
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, Some(&hf_sub));
     let cm = &table.cell_margins;

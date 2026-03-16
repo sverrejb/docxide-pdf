@@ -88,6 +88,7 @@ pub struct SectionProperties {
     pub break_type: SectionBreakType,
     pub columns: Option<ColumnsConfig>,
     pub page_num_start: Option<u32>,
+    pub page_num_format: Option<String>,
 }
 
 pub struct Section {

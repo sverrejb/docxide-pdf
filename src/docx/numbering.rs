@@ -211,7 +211,7 @@ fn to_letter(value: u32, base: u8) -> String {
     result
 }
 
-fn format_number(value: u32, num_fmt: &str) -> String {
+pub(crate) fn format_number(value: u32, num_fmt: &str) -> String {
     match num_fmt {
         "decimal" => value.to_string(),
         "decimalZero" => format!("{value:02}"),

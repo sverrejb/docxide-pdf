@@ -34,9 +34,13 @@ pub(super) fn parse_section_properties<R: Read + std::io::Seek>(
 
     let different_first_page = wml(sect_node, "titlePg").is_some();
 
-    let page_num_start = wml(sect_node, "pgNumType")
+    let pg_num_type = wml(sect_node, "pgNumType");
+    let page_num_start = pg_num_type
         .and_then(|n| n.attribute((WML_NS, "start")))
         .and_then(|v| v.parse::<u32>().ok());
+    let page_num_format = pg_num_type
+        .and_then(|n| n.attribute((WML_NS, "fmt")))
+        .map(|v| v.to_string());
 
     let break_type = wml(sect_node, "type")
         .and_then(|n| n.attribute((WML_NS, "val")))
@@ -153,5 +157,6 @@ pub(super) fn parse_section_properties<R: Read + std::io::Seek>(
         break_type,
         columns,
         page_num_start,
+        page_num_format,
     }
 }

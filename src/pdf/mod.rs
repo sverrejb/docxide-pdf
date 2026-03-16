@@ -2509,15 +2509,33 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         let mut hf = Content::new();
         let mut has_hf = false;
 
-        let (header, hdr_type) = if is_first && sp.different_first_page {
-            (sp.header_first.as_ref(), 1u8)
-        } else if doc.even_and_odd_headers && page_num % 2 == 0 && sp.header_even.is_some() {
-            (sp.header_even.as_ref(), 4u8)
-        } else {
-            (sp.header_default.as_ref(), 0u8)
+        // Resolve header with inheritance: fall back to previous sections
+        let (header, hdr_type, hdr_si) = {
+            let mut resolved = (None, 0u8, si);
+            for idx in (0..=si).rev() {
+                let s = &doc.sections[idx].properties;
+                let (h, t) = if idx == si {
+                    // Current section: respect is_first and even/odd
+                    if is_first && s.different_first_page {
+                        (s.header_first.as_ref(), 1u8)
+                    } else if doc.even_and_odd_headers && page_num % 2 == 0 && s.header_even.is_some() {
+                        (s.header_even.as_ref(), 4u8)
+                    } else {
+                        (s.header_default.as_ref(), 0u8)
+                    }
+                } else {
+                    // Inherited section: always use default
+                    (s.header_default.as_ref(), 0u8)
+                };
+                if h.is_some() {
+                    resolved = (h, t, idx);
+                    break;
+                }
+            }
+            resolved
         };
         if let Some(header_data) = header {
-            let (pi_map, ii_map, fi_map) = build_hf_maps(si, hdr_type);
+            let (pi_map, ii_map, fi_map) = build_hf_maps(hdr_si, hdr_type);
             render_header_footer(
                 &mut hf,
                 header_data,
@@ -2535,15 +2553,33 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             has_hf = true;
         }
 
-        let (footer, ftr_type) = if is_first && sp.different_first_page {
-            (sp.footer_first.as_ref(), 3u8)
-        } else if doc.even_and_odd_headers && page_num % 2 == 0 && sp.footer_even.is_some() {
-            (sp.footer_even.as_ref(), 5u8)
-        } else {
-            (sp.footer_default.as_ref(), 2u8)
+        // Resolve footer with inheritance: fall back to previous sections
+        let (footer, ftr_type, ftr_si) = {
+            let mut resolved = (None, 0u8, si);
+            for idx in (0..=si).rev() {
+                let s = &doc.sections[idx].properties;
+                let (f, t) = if idx == si {
+                    // Current section: respect is_first and even/odd
+                    if is_first && s.different_first_page {
+                        (s.footer_first.as_ref(), 3u8)
+                    } else if doc.even_and_odd_headers && page_num % 2 == 0 && s.footer_even.is_some() {
+                        (s.footer_even.as_ref(), 5u8)
+                    } else {
+                        (s.footer_default.as_ref(), 2u8)
+                    }
+                } else {
+                    // Inherited section: always use default
+                    (s.footer_default.as_ref(), 2u8)
+                };
+                if f.is_some() {
+                    resolved = (f, t, idx);
+                    break;
+                }
+            }
+            resolved
         };
         if let Some(footer_data) = footer {
-            let (pi_map, ii_map, fi_map) = build_hf_maps(si, ftr_type);
+            let (pi_map, ii_map, fi_map) = build_hf_maps(ftr_si, ftr_type);
             render_header_footer(
                 &mut hf,
                 footer_data,
