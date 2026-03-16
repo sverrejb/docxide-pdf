@@ -126,3 +126,24 @@ When `w:br type="page"` is encountered and no text content has been emitted yet 
 - `federal_procurement_terms`: +2.1pp Jaccard (51.7→53.8%), +6.7pp SSIM (67.1→73.8%)
 - `go_math_grade4_guide`: +1.3pp Jaccard (26.4→27.7%), +3.2pp SSIM (46.1→49.3%)
 Fix applies to all 9 fixtures containing `w:br w:type="page"` inline breaks.
+
+## 2026-03-16: Fix empty paragraph height in table cell rendering
+
+**Case**: `italian_project_proposal` (28.3% → 28.5% Jaccard, 57.0% → 57.6% SSIM, passing)
+
+**Annotation**: "\"Progretto 1\" is too high up compared to reference. Also should not be broken into two lines." (page 1, left column of form table).
+
+**Problem**: In vertically merged table cells, empty paragraphs (paragraphs with no text runs) were not consuming their line height during rendering, even though the layout computation correctly accounted for it. The merged cell in this document has 7 empty paragraphs before the "progetto 1" text, which should push it down ~165pt. But during rendering in `render_cell_content`, the cursor advance for empty paragraphs was `para.space_before + para.lines.len() * para.line_h`. Since empty paragraphs have `lines = vec![]` (set during `compute_row_layouts`), `lines.len() = 0` and only `space_before` was subtracted — losing ~109pt of vertical space. This caused text to appear near the top of the merged cell instead of at the correct position 2/3 down.
+
+The layout computation in `compute_row_layouts` correctly handled this: for empty text with `content_height = 0`, it added `line_h` to `total_h`. But the rendering code did not match.
+
+**Fix** (`src/pdf/table.rs`):
+1. Added `para_block_height()` helper that returns the correct height for a paragraph's content block, matching the layout computation: `line_h` for empty paragraphs (no lines, no content_height), `content_height` when present, or `lines.len() * line_h` for non-empty.
+2. Applied consistently across 6 locations: `render_cell_content` (empty para branch), content_h recalculations for vAlign in `render_table_row` and `render_nested_table`, `find_cell_split`, and `render_partial_row`.
+
+**Result**: Zero REGRESSION flags across all fixtures. Multiple fixtures improved:
+- `italian_project_proposal`: +0.2pp Jaccard (28.3→28.5%), +0.6pp SSIM (57.0→57.6%)
+- `traditional_skills_job_form`: +9.2pp SSIM (37.6→46.8%)
+- `parish_housing_data_profile`: +5.9pp SSIM (55.8→61.7%)
+- `education_consultant_posting`: +0.9pp SSIM (19.2→20.1%)
+Fix affects all documents with empty paragraphs in table cells, which is extremely common in form-style documents. Small noise-level variations (≤0.4pp) on a few unrelated fixtures.

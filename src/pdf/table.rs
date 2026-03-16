@@ -139,6 +139,21 @@ fn para_has_visible_content(para: &CellParagraphLayout) -> bool {
         || (!para.lines.is_empty() && para.lines.iter().any(|l| !l.chunks.is_empty()))
 }
 
+/// Height of a paragraph's text content, matching the layout computation in
+/// `compute_row_layouts`. Empty paragraphs (no lines) still occupy one line
+/// height unless they carry an explicit `content_height` (e.g. from an image).
+fn para_block_height(p: &CellParagraphLayout) -> f32 {
+    if p.lines.is_empty() {
+        if p.content_height > 0.0 {
+            p.content_height
+        } else {
+            p.line_h
+        }
+    } else {
+        p.lines.len() as f32 * p.line_h
+    }
+}
+
 fn cell_has_visible_content(items: &[CellContentItem]) -> bool {
     items.iter().any(|item| match item {
         CellContentItem::Paragraph(p) => para_has_visible_content(p),
@@ -172,10 +187,7 @@ fn render_cell_content(
                 }
 
                 if !para_has_visible_content(para) && para.image_name.is_none() {
-                    cursor_y -= para.space_before + para.lines.len() as f32 * para.line_h;
-                    if para.content_height > 0.0 {
-                        cursor_y -= para.content_height;
-                    }
+                    cursor_y -= para.space_before + para_block_height(para);
                     continue;
                 }
 
@@ -310,7 +322,7 @@ fn render_nested_table(
                     .iter()
                     .map(|item| match item {
                         CellContentItem::Paragraph(p) => {
-                            p.space_before + p.lines.len() as f32 * p.line_h
+                            p.space_before + para_block_height(p)
                         }
                         CellContentItem::NestedTable { height } => *height,
                     })
@@ -403,7 +415,7 @@ fn render_partial_cell_content(
                 let sb = if pi == start { 0.0 } else { para.space_before };
 
                 if !para_has_visible_content(para) {
-                    cursor_y -= sb + para.lines.len() as f32 * para.line_h;
+                    cursor_y -= sb + para_block_height(para);
                     continue;
                 }
 
@@ -911,12 +923,7 @@ fn render_table_row(
                 .iter()
                 .map(|item| match item {
                     CellContentItem::Paragraph(p) => {
-                        let para_h = if p.lines.is_empty() && p.content_height > 0.0 {
-                            p.content_height
-                        } else {
-                            p.lines.len() as f32 * p.line_h
-                        };
-                        p.space_before + para_h
+                        p.space_before + para_block_height(p)
                     }
                     CellContentItem::NestedTable { height } => *height,
                 })
@@ -1071,7 +1078,7 @@ fn find_cell_split(cell: &CellLayout, start: usize, available_h: f32, cm: &CellM
         let item_h = match &cell.items[pi] {
             CellContentItem::Paragraph(para) => {
                 let sb = if pi == start { 0.0 } else { para.space_before };
-                sb + para.lines.len() as f32 * para.line_h
+                sb + para_block_height(para)
             }
             CellContentItem::NestedTable { height } => *height,
         };
@@ -1108,7 +1115,7 @@ fn render_partial_row(
             let item_h = match &cell_layout.items[pi] {
                 CellContentItem::Paragraph(para) => {
                     let sb = if pi == start { 0.0 } else { para.space_before };
-                    sb + para.lines.len() as f32 * para.line_h
+                    sb + para_block_height(para)
                 }
                 CellContentItem::NestedTable { height } => *height,
             };
@@ -1458,7 +1465,7 @@ pub(super) fn render_header_footer_table(
                     .iter()
                     .map(|item| match item {
                         CellContentItem::Paragraph(p) => {
-                            p.space_before + p.lines.len() as f32 * p.line_h
+                            p.space_before + para_block_height(p)
                         }
                         CellContentItem::NestedTable { height } => *height,
                     })
