@@ -136,11 +136,14 @@ enum ImageSource {
 #[derive(Clone, Serialize, Deserialize)]
 struct Annotation {
     id: u64,
+    case: String,
     page: usize,
     source: ImageSource,
     x_pt: f32,
     y_pt: f32,
     note: String,
+    #[serde(default)]
+    fixed: bool,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -149,16 +152,20 @@ struct AnnotationStore {
     annotations: Vec<Annotation>,
 }
 
-fn load_annotations(case_dir: &Path) -> AnnotationStore {
-    let path = case_dir.join("annotations.json");
+fn annotations_path(output_dir: &Path) -> PathBuf {
+    output_dir.join("annotations.json")
+}
+
+fn load_annotations(output_dir: &Path) -> AnnotationStore {
+    let path = annotations_path(output_dir);
     std::fs::read_to_string(&path)
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default()
 }
 
-fn save_annotations(case_dir: &Path, store: &AnnotationStore) {
-    let path = case_dir.join("annotations.json");
+fn save_annotations(output_dir: &Path, store: &AnnotationStore) {
+    let path = annotations_path(output_dir);
     if let Ok(json) = serde_json::to_string_pretty(store) {
         let _ = std::fs::write(path, json);
     }
@@ -233,6 +240,7 @@ enum ViewMode {
 
 struct App {
     cases: Vec<CaseInfo>,
+    output_dir: PathBuf,
     current_case: usize,
     current_page: usize,
     view_mode: ViewMode,
@@ -249,10 +257,11 @@ struct App {
 }
 
 impl App {
-    fn new(cases: Vec<CaseInfo>, _output_dir: PathBuf) -> Self {
-        let annotations = load_annotations(&cases[0].dir);
+    fn new(cases: Vec<CaseInfo>, output_dir: PathBuf) -> Self {
+        let annotations = load_annotations(&output_dir);
         Self {
             cases,
+            output_dir,
             current_case: 0,
             current_page: 0,
             view_mode: ViewMode::SideBySide,
@@ -275,15 +284,17 @@ impl App {
 
     fn set_case(&mut self, idx: usize) {
         if idx != self.current_case {
-            save_annotations(&self.cases[self.current_case].dir, &self.annotations);
             self.current_case = idx;
             self.current_page = 0;
             self.scroll_to_current = true;
             self.texture_cache.clear();
             self.overlay_cache.clear();
-            self.annotations = load_annotations(&self.cases[idx].dir);
             self.pending_annotation = None;
         }
+    }
+
+    fn save_annotations(&self) {
+        save_annotations(&self.output_dir, &self.annotations);
     }
 
     fn refresh(&mut self) {
@@ -479,30 +490,33 @@ impl eframe::App for App {
         // Notes panel (left side)
         if self.show_notes_panel {
             let page = self.current_page;
-            let page_anns: Vec<(usize, &Annotation)> = self
+            let case_name = self.cases[self.current_case].name.clone();
+            let page_ann_ids: Vec<u64> = self
                 .annotations
                 .annotations
                 .iter()
-                .enumerate()
-                .filter(|(_, a)| a.page == page)
+                .filter(|a| a.case == case_name && a.page == page)
+                .map(|a| a.id)
                 .collect();
             let mut delete_id = None;
+            let mut toggle_fixed_id = None;
             egui::SidePanel::left("notes_panel")
                 .default_width(220.0)
                 .show(ctx, |ui| {
                     ui.heading("Notes");
                     ui.separator();
-                    if page_anns.is_empty() {
+                    if page_ann_ids.is_empty() {
                         ui.weak("Click an image to add a note");
                     }
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        for (display_idx, (_, ann)) in page_anns.iter().enumerate() {
-                            let color = match ann.source {
-                                ImageSource::Reference => {
-                                    egui::Color32::from_rgb(255, 165, 0)
-                                }
-                                ImageSource::Generated => {
-                                    egui::Color32::from_rgb(0, 180, 80)
+                        for (display_idx, ann_id) in page_ann_ids.iter().enumerate() {
+                            let ann = self.annotations.annotations.iter().find(|a| a.id == *ann_id).unwrap();
+                            let color = if ann.fixed {
+                                egui::Color32::from_gray(140)
+                            } else {
+                                match ann.source {
+                                    ImageSource::Reference => egui::Color32::from_rgb(255, 165, 0),
+                                    ImageSource::Generated => egui::Color32::from_rgb(0, 180, 80),
                                 }
                             };
                             let src = match ann.source {
@@ -523,17 +537,31 @@ impl eframe::App for App {
                                     .on_hover_text("Delete this note")
                                     .clicked()
                                 {
-                                    delete_id = Some(ann.id);
+                                    delete_id = Some(*ann_id);
                                 }
                             });
-                            ui.label(&ann.note);
+                            if ann.fixed {
+                                ui.label(egui::RichText::new(&ann.note).strikethrough());
+                            } else {
+                                ui.label(&ann.note);
+                            }
+                            let mut fixed = ann.fixed;
+                            if ui.checkbox(&mut fixed, "Fixed").changed() {
+                                toggle_fixed_id = Some(*ann_id);
+                            }
                             ui.separator();
                         }
                     });
                 });
             if let Some(id) = delete_id {
                 self.annotations.annotations.retain(|a| a.id != id);
-                save_annotations(&self.cases[self.current_case].dir, &self.annotations);
+                self.save_annotations();
+            }
+            if let Some(id) = toggle_fixed_id {
+                if let Some(ann) = self.annotations.annotations.iter_mut().find(|a| a.id == id) {
+                    ann.fixed = !ann.fixed;
+                }
+                self.save_annotations();
             }
         }
 
@@ -585,16 +613,15 @@ impl eframe::App for App {
                     self.annotations.next_id += 1;
                     self.annotations.annotations.push(Annotation {
                         id,
+                        case: self.cases[self.current_case].name.clone(),
                         page: pending.page,
                         source: pending.source,
                         x_pt: pending.x_pt,
                         y_pt: pending.y_pt,
                         note: pending.text_buf.trim().to_string(),
+                        fixed: false,
                     });
-                    save_annotations(
-                        &self.cases[self.current_case].dir,
-                        &self.annotations,
-                    );
+                    self.save_annotations();
                 }
             }
         }
@@ -678,7 +705,8 @@ fn show_image_clickable(
             draw_grid_overlay(ctx, rect, app.grid_spacing);
         }
         if app.show_annotations {
-            draw_annotation_markers(ui, rect, tex_size, &app.annotations.annotations, page, source);
+            let case_name = &app.cases[app.current_case].name;
+            draw_annotation_markers(ui, rect, tex_size, &app.annotations.annotations, case_name, page, source);
         }
         if resp.clicked() {
             if let Some(pos) = resp.interact_pointer_pos() {
@@ -700,22 +728,27 @@ fn draw_annotation_markers(
     image_rect: egui::Rect,
     tex_size: [usize; 2],
     annotations: &[Annotation],
+    case_name: &str,
     page: usize,
     source: ImageSource,
 ) {
     let painter = ui.painter();
     let filtered: Vec<&Annotation> = annotations
         .iter()
-        .filter(|a| a.page == page && a.source == source)
+        .filter(|a| a.case == case_name && a.page == page && a.source == source)
         .collect();
     for (i, ann) in filtered.iter().enumerate() {
         let center = pdf_pts_to_screen(ann.x_pt, ann.y_pt, &image_rect, tex_size);
         if !image_rect.contains(center) {
             continue;
         }
-        let color = match ann.source {
-            ImageSource::Reference => egui::Color32::from_rgb(255, 165, 0),
-            ImageSource::Generated => egui::Color32::from_rgb(0, 180, 80),
+        let color = if ann.fixed {
+            egui::Color32::from_gray(160)
+        } else {
+            match ann.source {
+                ImageSource::Reference => egui::Color32::from_rgb(255, 165, 0),
+                ImageSource::Generated => egui::Color32::from_rgb(0, 180, 80),
+            }
         };
         painter.circle_filled(center, 10.0, color);
         painter.text(
@@ -898,6 +931,7 @@ fn show_overlay(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: usi
         let grid_spacing = app.grid_spacing;
         let show_annotations = app.show_annotations;
         let annotations_snapshot: Vec<Annotation> = app.annotations.annotations.clone();
+        let case_name = app.cases[app.current_case].name.clone();
         let click = egui::ScrollArea::both()
             .show(ui, |ui| {
                 let size = fit_size(&tex, available.x, available.y - 20.0);
@@ -912,12 +946,11 @@ fn show_overlay(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: usi
                     draw_grid_overlay(ui.ctx(), rect, grid_spacing);
                 }
                 if show_annotations {
-                    // In overlay mode, show both ref and gen markers
                     draw_annotation_markers(
-                        ui, rect, tex_size, &annotations_snapshot, page, ImageSource::Reference,
+                        ui, rect, tex_size, &annotations_snapshot, &case_name, page, ImageSource::Reference,
                     );
                     draw_annotation_markers(
-                        ui, rect, tex_size, &annotations_snapshot, page, ImageSource::Generated,
+                        ui, rect, tex_size, &annotations_snapshot, &case_name, page, ImageSource::Generated,
                     );
                 }
                 if resp.clicked() {

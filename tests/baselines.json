@@ -246,8 +246,8 @@
     "convert_ms": 660.0
   },
   "scraped/bush_fires_act_c..": {
-    "jaccard": 0.4266,
-    "ssim": 0.8246,
+    "jaccard": 0.428,
+    "ssim": 0.8273,
     "text_boundary": 0.888,
     "convert_ms": 195.6
   },
@@ -295,8 +295,8 @@
   },
   "scraped/czech_municipal_..": {
     "jaccard": 0.1051,
-    "ssim": 0.2785,
-    "text_boundary": 0.42,
+    "ssim": 0.2798,
+    "text_boundary": 0.5962,
     "convert_ms": 32.0
   },
   "scraped/czech_municipal_g..": {
@@ -330,9 +330,9 @@
     "convert_ms": 46.5
   },
   "scraped/feminist_voice_d..": {
-    "jaccard": 0.3356,
-    "ssim": 0.6932,
-    "text_boundary": 0.6936,
+    "jaccard": 0.3363,
+    "ssim": 0.6946,
+    "text_boundary": 0.7059,
     "convert_ms": 239.7
   },
   "scraped/german_mezzo_sop..": {
@@ -360,9 +360,9 @@
     "convert_ms": 64.6
   },
   "scraped/go_math_grade4_g..": {
-    "jaccard": 0.2769,
-    "ssim": 0.493,
-    "text_boundary": 0.5527,
+    "jaccard": 0.2771,
+    "ssim": 0.4939,
+    "text_boundary": 0.5595,
     "convert_ms": 62.1
   },
   "scraped/indonesian_bench..": {
@@ -403,7 +403,7 @@
   },
   "scraped/learning_culture..": {
     "jaccard": 0.3312,
-    "ssim": 0.4566,
+    "ssim": 0.4569,
     "text_boundary": 0.3841,
     "convert_ms": 884.6
   },
@@ -528,9 +528,9 @@
     "convert_ms": 11.5
   },
   "scraped/stem_partnership..": {
-    "jaccard": 0.2429,
+    "jaccard": 0.243,
     "ssim": 0.3108,
-    "text_boundary": 0.0786,
+    "text_boundary": 0.2214,
     "convert_ms": 29.2
   },
   "scraped/traditional_skil..": {
@@ -546,8 +546,8 @@
     "convert_ms": 19.1
   },
   "scraped/transition_to_wo..": {
-    "jaccard": 0.2621,
-    "ssim": 0.3796,
+    "jaccard": 0.2623,
+    "ssim": 0.3801,
     "text_boundary": 0.2058,
     "convert_ms": 395.9
   },
@@ -576,8 +576,8 @@
     "convert_ms": 2.3
   },
   "scraped/uk_commercial_le..": {
-    "jaccard": 0.1471,
-    "ssim": 0.3018,
+    "jaccard": 0.1569,
+    "ssim": 0.3291,
     "text_boundary": 0.1395,
     "convert_ms": 269.2
   },

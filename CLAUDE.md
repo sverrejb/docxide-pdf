@@ -163,12 +163,13 @@ Measured for case1: reference baseline at y=708.72pt from bottom (83.28pt from t
 
 ### Case Browser Annotations
 
-The case browser (`tools/src/bin/case_browser.rs`) supports click-to-annotate. Annotations are saved as `annotations.json` in each case's output directory (e.g., `tests/output/scraped/foo/annotations.json`). Coordinates use PDF-native coordinate space (x from left, y from bottom, in points). The annotations capture rendering issues spotted during visual inspection — use them as precise bug reports when fixing rendering problems.
+The case browser (`tools/src/bin/case_browser.rs`) supports click-to-annotate. All annotations are saved in a single file: `tests/output/annotations.json`. Each annotation includes the case name, page, source (Reference/Generated), PDF coordinates (x from left, y from bottom, in points), note text, and a `fixed` flag. The annotations capture rendering issues spotted during visual inspection — use them as precise bug reports when fixing rendering problems.
 
 **Workflow for fixing issues from annotations:**
-1. Read the case's `annotations.json` to see what problems were noted
+1. Read `tests/output/annotations.json` and filter for the case you're working on
 2. The coordinates tell you exactly where on the page the issue is — cross-reference with the DOCX source using `docx-inspect` to find the relevant XML elements at that position
 3. Use the overlay view (key `O`) in the case browser to see exactly what differs between reference and generated output at the annotated location
+4. Annotations with `"fixed": true` have been resolved — focus on unfixed ones
 
 **Keyboard shortcuts:** `A` toggle markers, `N` toggle notes panel, click image to add note, `Cmd+Enter` to save, `Escape` to cancel.
 

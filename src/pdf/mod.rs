@@ -608,6 +608,10 @@ pub(super) struct PageBuilder {
     // Layout position state
     pub(super) slot_top: f32,
     pub(super) is_first_page_of_section: bool,
+    /// Section that owns the current page for header/footer purposes.
+    /// For continuous section breaks, this stays as the section that started
+    /// the page, not the section that continues mid-page.
+    page_hf_section: usize,
     /// (table_top_y, table_bottom_y) of a floating table on this page;
     /// when cursor enters this zone, push it below the table.
     pub(super) float_zone: Option<(f32, f32)>,
@@ -635,6 +639,7 @@ impl PageBuilder {
             styleref_page_first: HashMap::new(),
             slot_top,
             is_first_page_of_section: true,
+            page_hf_section: 0,
             float_zone: None,
             all_contents: Vec::new(),
             all_links: Vec::new(),
@@ -658,11 +663,13 @@ impl PageBuilder {
         self.all_gradient_specs
             .push(std::mem::take(&mut self.gradient_specs));
         self.page_section_indices
-            .push((sect_idx, self.is_first_page_of_section));
+            .push((self.page_hf_section, self.is_first_page_of_section));
         self.all_styleref.push(self.styleref_running.clone());
         self.all_first_styleref
             .push(std::mem::take(&mut self.styleref_page_first));
         self.float_zone = None;
+        // After flush, the new page starts with the current section
+        self.page_hf_section = sect_idx;
     }
 
     fn push_blank_page(&mut self, sect_idx: usize) {
@@ -671,10 +678,11 @@ impl PageBuilder {
         self.all_footnote_ids.push(Vec::new());
         self.all_alpha_states.push(HashSet::new());
         self.all_gradient_specs.push(Vec::new());
-        self.page_section_indices.push((sect_idx, false));
+        self.page_section_indices.push((self.page_hf_section, false));
         self.all_styleref.push(self.styleref_running.clone());
         self.all_first_styleref
             .push(std::mem::take(&mut self.styleref_page_first));
+        self.page_hf_section = sect_idx;
     }
 
     fn page_count(&self) -> usize {
@@ -923,6 +931,14 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
         }
     }
 
+    // Collect all page number formats across sections so inherited footers get
+    // the right characters (e.g. footer in section 1 inherited by section 2 with lowerRoman).
+    let all_page_num_formats: Vec<&str> = doc
+        .sections
+        .iter()
+        .filter_map(|s| s.properties.page_num_format.as_deref())
+        .collect();
+
     for section in &doc.sections {
         for hf in [
             &section.properties.header_default,
@@ -948,6 +964,9 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
                         match fc {
                             FieldCode::Page | FieldCode::NumPages => {
                                 chars.extend('0'..='9');
+                                for fmt in &all_page_num_formats {
+                                    extend_chars_for_num_format(chars, fmt);
+                                }
                             }
                             FieldCode::StyleRef(_) => {
                                 chars.extend(styleref_chars.iter());
@@ -964,6 +983,16 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
     }
 
     used
+}
+
+fn extend_chars_for_num_format(chars: &mut HashSet<char>, fmt: &str) {
+    match fmt {
+        "lowerRoman" => chars.extend(['i', 'v', 'x', 'l', 'c', 'd', 'm']),
+        "upperRoman" => chars.extend(['I', 'V', 'X', 'L', 'C', 'D', 'M']),
+        "lowerLetter" => chars.extend('a'..='z'),
+        "upperLetter" => chars.extend('A'..='Z'),
+        _ => {}
+    }
 }
 
 fn collect_and_register_fonts(
@@ -1574,12 +1603,15 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                     pb.slot_top = effective_slot_top(sp, true, &ctx);
                     effective_margin_bottom = compute_effective_margin_bottom(sp, true, &ctx);
+                    pb.page_hf_section = sect_idx;
+                    pb.is_first_page_of_section = true;
                 }
                 SectionBreakType::Continuous => {
-                    // No forced break; geometry updates on next page
+                    // No forced break; geometry updates on next page.
+                    // Don't update page_hf_section — the current page keeps
+                    // the section that started it for header/footer purposes.
                 }
             }
-            pb.is_first_page_of_section = true;
         }
 
         cur_sp = sp;
