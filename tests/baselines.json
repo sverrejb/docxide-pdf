@@ -336,8 +336,8 @@
     "convert_ms": 239.7
   },
   "scraped/german_mezzo_sop..": {
-    "jaccard": 0.512,
-    "ssim": 0.529,
+    "jaccard": 0.5129,
+    "ssim": 0.5312,
     "text_boundary": 1.0,
     "convert_ms": 31.9
   },

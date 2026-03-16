@@ -74,7 +74,9 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
                         .and_then(|v| v.parse::<u32>().ok())
                         .unwrap_or(1);
                     let ind = wml(lvl, "pPr").and_then(|ppr| wml(ppr, "ind"));
-                    let indent_left = ind.and_then(|n| twips_attr(n, "left")).unwrap_or(0.0);
+                    let indent_left = ind
+                        .and_then(|n| twips_attr(n, "start").or_else(|| twips_attr(n, "left")))
+                        .unwrap_or(0.0);
                     let indent_hanging = ind.and_then(|n| twips_attr(n, "hanging")).unwrap_or(0.0);
                     let rpr = wml(lvl, "rPr");
                     let bullet_font = rpr
