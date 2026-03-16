@@ -2302,20 +2302,17 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             content.restore_state();
                         };
 
-                        let prev_has_between = prev_para.is_some_and(|pp| {
-                            pp.borders.between.is_some()
-                                && borders_match(&pp.borders, &para.borders)
-                        });
-                        let next_has_between = next_para.is_some_and(|np| {
-                            bdr.between.is_some() && borders_match(&para.borders, &np.borders)
-                        });
+                        let prev_borders_match = prev_para
+                            .is_some_and(|pp| borders_match(&pp.borders, &para.borders));
+                        let next_borders_match = next_para
+                            .is_some_and(|np| borders_match(&para.borders, &np.borders));
 
-                        if !prev_has_between {
+                        if !prev_borders_match {
                             if let Some(b) = &bdr.top {
                                 draw_h_border(&mut pb.content, b, box_top);
                             }
                         }
-                        if next_has_between {
+                        if next_borders_match {
                             if let Some(b) = &bdr.between {
                                 draw_h_border(&mut pb.content, b, box_bottom);
                             }

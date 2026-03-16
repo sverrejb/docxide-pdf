@@ -60,3 +60,26 @@ Two issues:
 - `src/pdf/header_footer.rs` — page number formatting in `substitute_hf_runs`
 - `src/pdf/mod.rs` — header/footer inheritance across sections
 - `src/pdf/table.rs` — pass `page_num_format` through `HfSubstitution`
+
+## 2026-03-16: Paragraph border collapsing for identical adjacent paragraphs (annotation 1)
+
+### Problem
+Annotation 1 reported a spurious grey horizontal line above "Medarbeiderens navn:" in the `samples/samtale` fixture. The reference PDF doesn't show this line.
+
+### Root Cause
+The document has two consecutive paragraphs with identical `w:pBdr` settings (bottom border: single, sz=18, color=A6A6A6): a break-only spacer paragraph and the "Medarbeiderens navn:" paragraph. Per the OOXML spec (§17.3.1.7), when adjacent paragraphs have identical border definitions for all border properties, they form a visual group — the `bottom` border is only drawn below the **last** paragraph in the group, and the `between` border (if defined) is used between them.
+
+Our code only applied this grouping logic when a `between` border element was explicitly defined (`bdr.between.is_some()`). When no `between` was defined, each paragraph drew its own `bottom` border independently, producing the spurious grey line on the spacer paragraph.
+
+### Implementation
+Changed the border rendering logic in `src/pdf/mod.rs` to check `borders_match()` independently of whether a `between` element is defined:
+- `prev_borders_match`: suppress top border when previous paragraph has matching borders
+- `next_borders_match`: draw `between` border if defined, otherwise draw nothing; only draw `bottom` border when next paragraph does NOT match
+
+### Results
+- `samples/samtale`: Grey line above "Medarbeiderens navn:" removed, matching reference behavior
+- Jaccard: 12.0% (-0.5pp), SSIM: 55.1% (-1.4pp) — small metric drops from content shift after border removal
+- No pass/fail status changes across any fixtures
+
+### Files Modified
+- `src/pdf/mod.rs` — paragraph border collapsing: check `borders_match` without requiring `between.is_some()`

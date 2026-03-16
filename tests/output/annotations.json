@@ -19,7 +19,7 @@
       "x_pt": 571.6547,
       "y_pt": 251.30847,
       "note": "This grey line above the \"Medarbeiderens\"-text should not be rendered.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 2,
