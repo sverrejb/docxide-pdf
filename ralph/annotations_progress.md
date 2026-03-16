@@ -103,3 +103,24 @@ Added a `trailing_lead` adjustment in `src/pdf/mod.rs` that subtracts the last l
 ### Files Modified
 - `src/pdf/mod.rs` — added `trailing_lead` adjustment for bottom-only border/shading box positioning
 - `tests/baselines.json` — updated samtale SSIM baseline
+
+## 2026-03-16: Fix tab leader rendering in tab-only paragraphs (annotation 3)
+
+### Problem
+Annotation 3 reported missing dotted lines in `scraped/air_pollution_permit_form` page 1. The reference PDF shows dotted form-fill lines (e.g., "Kelt: .......... 2020.") created by tab stops with `w:leader="dot"`, but the generated PDF rendered blank space.
+
+### Root Cause
+In `build_tabbed_line()`, when rendering tab leaders, the code searches for a font to use by looking at text runs in the current and previous segments. However, the affected paragraphs contain only tab runs and no text runs — all segments have empty run lists. The font search returns `None` and the leader is silently skipped.
+
+Tab runs DO carry font information (`font_name`, `font_size`) from the run format context, but they're separated out during segment splitting and never included in segment run lists.
+
+### Implementation
+Added a third fallback in the leader font search in `src/pdf/layout.rs`: when no text runs are found in any segment, search the original `runs` slice (which includes tab runs) for any run with a non-empty font name. This provides the font metrics needed to render the leader characters.
+
+### Results
+- `scraped/air_pollution_permit_form`: Dotted leader lines now render correctly in form fields
+- Jaccard: 15.5% (+2.8pp), SSIM: 36.5% (+6.7pp)
+- No regressions across all fixtures
+
+### Files Modified
+- `src/pdf/layout.rs` — added tab-run fallback in leader font search

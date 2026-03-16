@@ -551,12 +551,15 @@ pub(super) fn build_tabbed_line(
                 let leader = resolved_leader;
 
                 if let Some(leader_char) = leader {
-                    let font_run = seg_runs.first().or_else(|| {
+                    let font_run: Option<&Run> = seg_runs.first().copied().or_else(|| {
                         segments[..seg_idx]
                             .iter()
                             .rev()
-                            .flat_map(|(r, _, _)| r.last())
+                            .flat_map(|(r, _, _)| r.last().copied())
                             .next()
+                    }).or_else(|| {
+                        // Tab-only paragraphs: fall back to any run (including tab runs)
+                        runs.iter().find(|r| !r.font_name.is_empty())
                     });
                     if let Some(run) = font_run {
                         let key = font_key_buf(run, &mut key_buf);

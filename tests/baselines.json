@@ -234,8 +234,8 @@
     "convert_ms": 9.5
   },
   "scraped/air_pollution_pe..": {
-    "jaccard": 0.1263,
-    "ssim": 0.2982,
+    "jaccard": 0.1547,
+    "ssim": 0.3655,
     "text_boundary": 0.0,
     "convert_ms": 9.5
   },
