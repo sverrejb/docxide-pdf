@@ -539,6 +539,9 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                         field_result_text.push_str(t);
                     }
                 }
+                "noBreakHyphen" => {
+                    pending_text.push('-');
+                }
                 "tab" if !in_field
                     || (in_field_result && !is_dynamic_field(&field_instr)) =>
                 {

@@ -147,3 +147,17 @@ The layout computation in `compute_row_layouts` correctly handled this: for empt
 - `parish_housing_data_profile`: +5.9pp SSIM (55.8→61.7%)
 - `education_consultant_posting`: +0.9pp SSIM (19.2→20.1%)
 Fix affects all documents with empty paragraphs in table cells, which is extremely common in form-style documents. Small noise-level variations (≤0.4pp) on a few unrelated fixtures.
+
+## 2026-03-16: Handle w:noBreakHyphen run element
+
+**Case**: `bush_fires_act_comparison` (42.4% → 42.7% Jaccard, passing)
+
+**Problem**: The `<w:noBreakHyphen/>` run element was not handled in the run parser (`src/docx/runs.rs`). This element represents a non-breaking hyphen — visually a hyphen character that prevents line breaking at that position. Without handling it, the hyphen was silently dropped, causing missing characters in the rendered text. The `bush_fires_act_comparison` document (a legal comparison of Bush Fires Act amendments) contains 53 instances of `w:noBreakHyphen`, and `centrifugal_water_chillers` contains 9.
+
+**Fix** (`src/docx/runs.rs`):
+Added a `"noBreakHyphen"` match arm in the run element parser that appends a regular hyphen character (`'-'`) to the pending text. Used ASCII hyphen-minus (U+002D) rather than Unicode non-breaking hyphen (U+2011) since U+2011 is not in the WinAnsi encoding used for PDF text output, and our line breaker only splits on whitespace so the non-breaking property is already implicit.
+
+**Result**: Zero REGRESSION flags across all fixtures. Two fixtures improved:
+- `bush_fires_act_comparison`: +0.3pp Jaccard (42.4→42.7%), +0.6pp SSIM (81.9→82.5%)
+- `centrifugal_water_chillers`: +1.0pp Jaccard (79.2→80.2%), +0.8pp SSIM (93.2→94.0%)
+Small noise-level variations (≤0.4pp) on a few unrelated fixtures.
