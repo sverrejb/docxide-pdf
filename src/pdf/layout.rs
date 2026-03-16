@@ -522,6 +522,7 @@ pub(super) fn build_tabbed_line(
             let tab_target = stop.position - line_indent;
             let mut seg_start =
                 resolve_tab_aligned_start(&stop, tab_target, seg_runs, seen_fonts, current_x);
+            let mut resolved_leader = stop.leader;
 
             if seg_start > line_max && !all_chunks.is_empty() {
                 result_lines.push(finish_line(&mut all_chunks));
@@ -531,15 +532,12 @@ pub(super) fn build_tabbed_line(
                 let new_target = new_stop.position - indent_left;
                 seg_start =
                     resolve_tab_aligned_start(&new_stop, new_target, seg_runs, seen_fonts, 0.0);
+                resolved_leader = new_stop.leader;
             }
 
             // Draw leader fill between end of previous text and start of aligned text
             if tab_before.is_some() {
-                let abs_x = current_x + line_indent;
-                let leader = tab_stops
-                    .iter()
-                    .find(|s| s.position > abs_x + 0.5)
-                    .and_then(|s| s.leader);
+                let leader = resolved_leader;
 
                 if let Some(leader_char) = leader {
                     let font_run = seg_runs.first().or_else(|| {

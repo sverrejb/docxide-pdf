@@ -538,7 +538,9 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                         field_result_text.push_str(t);
                     }
                 }
-                "tab" if !in_field => {
+                "tab" if !in_field
+                    || (in_field_result && !is_dynamic_field(&field_instr)) =>
+                {
                     flush_pending(&mut pending_text, &mut runs);
                     runs.push(Run {
                         is_tab: true,
