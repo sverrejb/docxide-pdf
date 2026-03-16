@@ -196,12 +196,14 @@ fn build_lines(
     text_width: f32,
     inline_images: &HashMap<usize, String>,
     default_tab_stop: f32,
+    indent_left: f32,
+    text_hanging: f32,
 ) -> Vec<TextLine> {
     let has_tabs = runs.iter().any(|r| r.is_tab);
     if has_tabs {
-        build_tabbed_line(runs, fonts, tab_stops, 0.0, text_width, 0.0, inline_images, default_tab_stop)
+        build_tabbed_line(runs, fonts, tab_stops, indent_left, text_width, text_hanging, inline_images, default_tab_stop)
     } else {
-        build_paragraph_lines(runs, fonts, text_width, 0.0, inline_images)
+        build_paragraph_lines(runs, fonts, text_width, text_hanging, inline_images)
     }
 }
 
@@ -295,13 +297,23 @@ pub(super) fn render_header_footer(
                     let empty_inline_imgs: HashMap<usize, String> = HashMap::new();
                     for tp in &tb.paragraphs {
                         let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
+                        let tp_text_w = (content_w - tp.indent_left - tp.indent_right).max(1.0);
+                        let tp_hanging = if !tp.list_label.is_empty() {
+                            0.0
+                        } else if tp.indent_hanging > 0.0 {
+                            tp.indent_hanging
+                        } else {
+                            -tp.indent_first_line
+                        };
                         let tb_lines = build_lines(
                             &tp.runs,
                             ctx.fonts,
                             &tp.tab_stops,
-                            content_w,
+                            tp_text_w,
                             &empty_inline_imgs,
                             ctx.default_tab_stop,
+                            tp.indent_left,
+                            tp_hanging,
                         );
                         if tb_lines.is_empty() {
                             let (fs, _, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
@@ -325,8 +337,8 @@ pub(super) fn render_header_footer(
                             content,
                             &tb_lines,
                             &tp.alignment,
-                            content_x,
-                            content_w,
+                            content_x + tp.indent_left,
+                            tp_text_w,
                             tb_baseline,
                             tb_line_h,
                             tb_lines.len(),
@@ -435,27 +447,40 @@ pub(super) fn render_header_footer(
                     .map(|((_, ri), name)| (*ri, name.clone()))
                     .collect();
 
+                let para_text_x = sp.margin_left + para.indent_left;
+                let para_text_width =
+                    (text_width - para.indent_left - para.indent_right).max(1.0);
+                let text_hanging = if !para.list_label.is_empty() {
+                    0.0
+                } else if para.indent_hanging > 0.0 {
+                    para.indent_hanging
+                } else {
+                    -para.indent_first_line
+                };
+
                 let lines = build_lines(
                     &substituted_runs,
                     ctx.fonts,
                     &para.tab_stops,
-                    text_width,
+                    para_text_width,
                     &block_inline_images,
                     ctx.default_tab_stop,
+                    para.indent_left,
+                    text_hanging,
                 );
 
                 render_paragraph_lines(
                     content,
                     &lines,
                     &para.alignment,
-                    sp.margin_left,
-                    text_width,
+                    para_text_x,
+                    para_text_width,
                     baseline_y,
                     line_h,
                     lines.len(),
                     0,
                     &mut Vec::new(),
-                    0.0,
+                    text_hanging,
                     ctx.fonts,
                 );
 

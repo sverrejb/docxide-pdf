@@ -8,7 +8,8 @@ use super::parse_table_node;
 use super::runs::parse_runs;
 use super::styles::{ParagraphStyle, StylesInfo, ThemeFonts, parse_alignment};
 use super::{
-    WML_NS, parse_paragraph_borders, parse_paragraph_spacing, parse_tab_stops, wml, wml_attr,
+    WML_NS, extract_indents, parse_paragraph_borders, parse_paragraph_spacing, parse_tab_stops,
+    wml, wml_attr,
 };
 
 fn is_wml_element(node: roxmltree::Node, name: &str) -> bool {
@@ -84,6 +85,21 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
                 let (sp_before, sp_after, line_spacing) = parse_paragraph_spacing(ppr, para_style);
                 let parsed = parse_runs(node, styles, theme, rels, zip, &numbering);
 
+                let (mut indent_left, mut indent_right, mut indent_hanging, mut indent_first_line) =
+                    (0.0f32, 0.0f32, 0.0f32, 0.0f32);
+                if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
+                    let (left, right, hanging, first) = extract_indents(ind);
+                    indent_left = left.unwrap_or(0.0);
+                    indent_right = right.unwrap_or(0.0);
+                    indent_hanging = hanging.unwrap_or(0.0);
+                    indent_first_line = first.unwrap_or(0.0);
+                } else if let Some(s) = para_style {
+                    indent_left = s.indent_left.unwrap_or(0.0);
+                    indent_right = s.indent_right.unwrap_or(0.0);
+                    indent_hanging = s.indent_hanging.unwrap_or(0.0);
+                    indent_first_line = s.indent_first_line.unwrap_or(0.0);
+                }
+
                 blocks.push(Block::Paragraph(Paragraph {
                     runs: parsed.runs,
                     alignment,
@@ -94,6 +110,10 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
                     tab_stops: ppr.map(parse_tab_stops).unwrap_or_default(),
                     floating_images: parsed.floating_images,
                     textboxes: parsed.textboxes,
+                    indent_left,
+                    indent_right,
+                    indent_hanging,
+                    indent_first_line,
                     ..Paragraph::default()
                 }));
             }
