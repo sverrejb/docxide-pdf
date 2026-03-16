@@ -324,8 +324,8 @@
     "convert_ms": 42.0
   },
   "scraped/federal_procurem..": {
-    "jaccard": 0.5172,
-    "ssim": 0.671,
+    "jaccard": 0.5381,
+    "ssim": 0.7375,
     "text_boundary": 0.6903,
     "convert_ms": 46.5
   },
@@ -360,8 +360,8 @@
     "convert_ms": 64.6
   },
   "scraped/go_math_grade4_g..": {
-    "jaccard": 0.2637,
-    "ssim": 0.4613,
+    "jaccard": 0.2767,
+    "ssim": 0.4926,
     "text_boundary": 0.4773,
     "convert_ms": 62.1
   },
@@ -546,8 +546,8 @@
     "convert_ms": 19.1
   },
   "scraped/transition_to_wo..": {
-    "jaccard": 0.2562,
-    "ssim": 0.3742,
+    "jaccard": 0.2609,
+    "ssim": 0.3788,
     "text_boundary": 0.2004,
     "convert_ms": 395.9
   },

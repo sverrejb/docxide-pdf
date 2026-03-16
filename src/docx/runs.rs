@@ -332,6 +332,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
     let mut inline_chart: Option<InlineChart> = None;
     let mut smartart: Option<SmartArtDiagram> = None;
     let mut has_page_break_after = false;
+    let mut page_break_before_content = false;
     let mut has_column_break = false;
     let mut in_field = false;
     let mut in_field_result = false;
@@ -548,7 +549,13 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                     });
                 }
                 "br" if !in_field => match child.attribute((WML_NS, "type")) {
-                    Some("page") => has_page_break_after = true,
+                    Some("page") => {
+                        if runs.is_empty() && pending_text.is_empty() {
+                            page_break_before_content = true;
+                        } else {
+                            has_page_break_after = true;
+                        }
+                    }
                     Some("column") => has_column_break = true,
                     _ => {
                         flush_pending(&mut pending_text, &mut runs);
@@ -632,7 +639,8 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
 
     let has_page_break_before = ppr
         .and_then(|ppr| wml_bool(ppr, "pageBreakBefore"))
-        .unwrap_or(false);
+        .unwrap_or(false)
+        || page_break_before_content;
 
     // Empty paragraphs with explicit font sizing in their paragraph mark (pPr/rPr)
     // need a synthetic run so the renderer computes the correct line height.
