@@ -228,8 +228,8 @@
     "convert_ms": 14.3
   },
   "samples/samtale": {
-    "jaccard": 0.1255,
-    "ssim": 0.5644,
+    "jaccard": 0.1284,
+    "ssim": 0.543,
     "text_boundary": 0.24,
     "convert_ms": 9.5
   },

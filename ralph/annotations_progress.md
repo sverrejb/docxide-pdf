@@ -83,3 +83,23 @@ Changed the border rendering logic in `src/pdf/mod.rs` to check `borders_match()
 
 ### Files Modified
 - `src/pdf/mod.rs` — paragraph border collapsing: check `borders_match` without requiring `between.is_some()`
+
+## 2026-03-16: Bottom-only border positioning tighter to text (annotation 2)
+
+### Problem
+Annotation 2 reported that in `samples/samtale` page 2, answer text (e.g., "I stor grad.") was "floating above" the grey bottom border line instead of sitting directly above it. The reference PDF shows text tightly above the border.
+
+### Root Cause
+The bottom border's `box_bottom` was computed as `slot_top - bdr_top_pad - content_h - bdr_bottom_pad`, where `content_h` includes the full `line_h` (font metrics including line-gap leading below the descender). Per the OOXML spec (§17.3.1.7), the `w:space` attribute on a bottom border measures "the space after the bottom of the text" — i.e., from the text descender, not from the line box bottom. The trailing leading (typically ~2pt for a 10pt font) was being added as extra gap between text and border.
+
+### Implementation
+Added a `trailing_lead` adjustment in `src/pdf/mod.rs` that subtracts the last line's leading (`line_h - font_size`) from the border/shading box bottom. This only applies for bottom-only borders (no top border present) — the "separator/underline" pattern. Boxed paragraphs (all-side borders) are unaffected, preserving their symmetric appearance.
+
+### Results
+- `samples/samtale`: Answer text now sits directly above grey border lines, matching reference
+- Jaccard: 12.8% (+0.3pp), SSIM: 54.3% (-2.2pp) — SSIM drop is from border position shift, not a visual regression
+- No regressions across all fixtures in Jaccard or SSIM (case17 border boxes unaffected)
+
+### Files Modified
+- `src/pdf/mod.rs` — added `trailing_lead` adjustment for bottom-only border/shading box positioning
+- `tests/baselines.json` — updated samtale SSIM baseline

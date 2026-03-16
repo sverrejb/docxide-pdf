@@ -29,7 +29,7 @@
       "x_pt": 514.2692,
       "y_pt": 506.1648,
       "note": "Text should be directly above the grey line, not floating above it.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 3,
