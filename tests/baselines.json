@@ -246,8 +246,8 @@
     "convert_ms": 660.0
   },
   "scraped/bush_fires_act_c..": {
-    "jaccard": 0.4222,
-    "ssim": 0.817,
+    "jaccard": 0.4235,
+    "ssim": 0.8189,
     "text_boundary": 0.806,
     "convert_ms": 195.6
   },

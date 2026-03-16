@@ -904,6 +904,22 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
         }
     }
 
+    // Collect characters that may appear in STYLEREF values by scanning
+    // body paragraph text (paragraph styles) and run text (character styles).
+    let mut styleref_chars: HashSet<char> = HashSet::new();
+    for para in &all_paras {
+        if para.style_id.is_some() {
+            for run in &para.runs {
+                styleref_chars.extend(run.text.chars());
+            }
+        }
+        for run in &para.runs {
+            if run.char_style_id.is_some() {
+                styleref_chars.extend(run.text.chars());
+            }
+        }
+    }
+
     for section in &doc.sections {
         for hf in [
             &section.properties.header_default,
@@ -931,10 +947,7 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
                                 chars.extend('0'..='9');
                             }
                             FieldCode::StyleRef(_) => {
-                                chars.extend('0'..='9');
-                                chars.extend('A'..='Z');
-                                chars.extend('a'..='z');
-                                chars.extend([' ', '.', ',', '/', '-', '(', ')']);
+                                chars.extend(styleref_chars.iter());
                             }
                         }
                     }

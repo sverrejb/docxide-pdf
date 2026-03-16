@@ -52,3 +52,36 @@ let indent_left = ind
 This mirrors the existing pattern in `mod.rs:307` for paragraph indents.
 
 **Result**: Zero REGRESSION flags across all fixtures. German case improved +0.1pp Jaccard, +0.2pp SSIM. Fix affects all documents using `w:start` in numbering definitions (common in LibreOffice-generated DOCX files). Small noise-level variations (≤0.4pp) on a few unrelated fixtures.
+
+## 2026-03-16: Fix tabs inside field results (TOC first entry rendering)
+
+**Case**: `croatian_grant_guidelines` (8.5% Jaccard, failing — dominant issue is floating tables)
+
+**Annotation**: "This first line of the TOC is not rendered right. There is no space between the '1!', the Title and the page number, and the dotted line is missing as well (......)" (page 1).
+
+**Problem**: The first TOC entry rendered as "1Opće informacije4" with no tab spacing or dot leaders. The root cause was in `parse_runs` (`src/docx/runs.rs`): `<w:tab/>` elements inside field result sections were unconditionally skipped by the guard `!in_field`. The first TOC entry is special because it contains the TOC field code (`fldChar begin` + `instrText "TOC..."` + `fldChar separate`), so `in_field` is true for the entire paragraph. Subsequent TOC entries are separate `<w:p>` elements where `in_field` resets to false. Text in field results was already correctly handled (line 531: `in_field_result && !is_dynamic_field(...)`) but tabs used a stricter guard.
+
+Additionally, in `src/pdf/layout.rs`, the tab leader lookup in `build_tabbed_line` re-searched the tab stops array instead of using the already-resolved `stop` variable, which could find the wrong tab stop after line wrapping.
+
+**Fix**:
+1. `src/docx/runs.rs`: Changed tab guard from `!in_field` to `!in_field || (in_field_result && !is_dynamic_field(&field_instr))`, matching the text handling condition
+2. `src/pdf/layout.rs`: Use the resolved tab stop's leader directly instead of re-searching the tab stops array
+
+**Result**: Zero REGRESSION flags across all fixtures. The first TOC entry now renders with proper tab spacing and dot leaders. Overall Jaccard score unchanged (8.5%) because the dominant issue for this 65-page document is floating tables. Small noise-level variations (≤0.4pp) on a few unrelated fixtures. Fix applies to all documents with tab characters inside non-dynamic field results (common in TOC fields).
+
+## 2026-03-16: Fix missing glyphs in STYLEREF header values (non-breaking space)
+
+**Case**: `bush_fires_act_comparison` (42.2% → 42.4% Jaccard, passing)
+
+**Annotation**: "We are rendering some empty squares here that are not supposed to be here." (page 3, header area) and '"[Heading" should be aligned with the "[2" above.' (page 3, body text).
+
+**Problem**: STYLEREF fields in headers/footers resolve dynamically at render time using text from body paragraphs. The body text in this legal document contains non-breaking spaces (U+00A0) — e.g., "Bush Fires Act\u{a0}1954". The font character collection for STYLEREF fields used a hardcoded set of ASCII characters (`'0'..='9'`, `'A'..='Z'`, `'a'..='z'`, and a few punctuation marks), which did NOT include U+00A0 or other non-ASCII characters. When the STYLEREF resolved to text with non-breaking spaces, those characters were missing from the font subset, causing .notdef glyphs (empty squares) to render and the spacing between words to collapse.
+
+**Fix** (`src/pdf/mod.rs`):
+Replaced the hardcoded STYLEREF character set with dynamic collection from the document body. Before the header/footer character collection loop, scan all body paragraphs and collect characters from:
+1. All runs in paragraphs that have a `style_id` (paragraph-level STYLEREF targets)
+2. All runs that have a `char_style_id` (character-level STYLEREF targets)
+
+This ensures every character that could appear in a STYLEREF value is included in the font subset, regardless of encoding.
+
+**Result**: Zero REGRESSION flags across all fixtures. Bush fires case improved +0.2pp Jaccard, +0.2pp SSIM. Header now correctly renders "Bush Fires Act 1954" with proper non-breaking space instead of collapsed/missing glyph. Fix applies to all documents using STYLEREF fields with non-ASCII characters in the referenced text (common in legal documents with non-breaking spaces).
