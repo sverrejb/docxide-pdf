@@ -385,14 +385,24 @@ pub(super) fn build_paragraph_lines(
     lines
 }
 
-fn find_next_tab_stop(current_x: f32, tab_stops: &[TabStop], indent_left: f32) -> TabStop {
+fn find_next_tab_stop(
+    current_x: f32,
+    tab_stops: &[TabStop],
+    indent_left: f32,
+    default_tab_interval: f32,
+) -> TabStop {
     let abs_x = current_x + indent_left;
     tab_stops
         .iter()
         .find(|s| s.position > abs_x + 0.5)
         .cloned()
         .unwrap_or_else(|| {
-            let next = ((abs_x / DEFAULT_TAB_INTERVAL).floor() + 1.0) * DEFAULT_TAB_INTERVAL;
+            let interval = if default_tab_interval > 0.0 {
+                default_tab_interval
+            } else {
+                DEFAULT_TAB_INTERVAL
+            };
+            let next = ((abs_x / interval).floor() + 1.0) * interval;
             TabStop {
                 position: next,
                 alignment: TabAlignment::Left,
@@ -466,6 +476,7 @@ pub(super) fn build_tabbed_line(
     max_width: f32,
     first_line_hanging: f32,
     inline_image_names: &HashMap<usize, String>,
+    default_tab_stop: f32,
 ) -> Vec<TextLine> {
     // Split runs into segments at tab markers, tracking original run indices
     let mut segments: Vec<(Vec<&Run>, Vec<usize>, Option<TabStop>)> = Vec::new();
@@ -518,7 +529,7 @@ pub(super) fn build_tabbed_line(
         };
 
         if seg_idx > 0 {
-            let stop = find_next_tab_stop(current_x, tab_stops, line_indent);
+            let stop = find_next_tab_stop(current_x, tab_stops, line_indent, default_tab_stop);
             let tab_target = stop.position - line_indent;
             let mut seg_start =
                 resolve_tab_aligned_start(&stop, tab_target, seg_runs, seen_fonts, current_x);
@@ -528,7 +539,7 @@ pub(super) fn build_tabbed_line(
                 result_lines.push(finish_line(&mut all_chunks));
                 current_x = 0.0;
                 is_first_line = false;
-                let new_stop = find_next_tab_stop(0.0, tab_stops, indent_left);
+                let new_stop = find_next_tab_stop(0.0, tab_stops, indent_left, default_tab_stop);
                 let new_target = new_stop.position - indent_left;
                 seg_start =
                     resolve_tab_aligned_start(&new_stop, new_target, seg_runs, seen_fonts, 0.0);

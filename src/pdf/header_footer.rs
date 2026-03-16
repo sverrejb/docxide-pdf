@@ -195,10 +195,11 @@ fn build_lines(
     tab_stops: &[crate::model::TabStop],
     text_width: f32,
     inline_images: &HashMap<usize, String>,
+    default_tab_stop: f32,
 ) -> Vec<TextLine> {
     let has_tabs = runs.iter().any(|r| r.is_tab);
     if has_tabs {
-        build_tabbed_line(runs, fonts, tab_stops, 0.0, text_width, 0.0, inline_images)
+        build_tabbed_line(runs, fonts, tab_stops, 0.0, text_width, 0.0, inline_images, default_tab_stop)
     } else {
         build_paragraph_lines(runs, fonts, text_width, 0.0, inline_images)
     }
@@ -300,6 +301,7 @@ pub(super) fn render_header_footer(
                             &tp.tab_stops,
                             content_w,
                             &empty_inline_imgs,
+                            ctx.default_tab_stop,
                         );
                         if tb_lines.is_empty() {
                             let (fs, _, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
@@ -439,6 +441,7 @@ pub(super) fn render_header_footer(
                     &para.tab_stops,
                     text_width,
                     &block_inline_images,
+                    ctx.default_tab_stop,
                 );
 
                 render_paragraph_lines(

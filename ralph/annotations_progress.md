@@ -1,5 +1,22 @@
 # Progress for Lisa
 
+## 2026-03-16: Use document's defaultTabStop setting for tab interval
+
+**Case**: `czech_tree_cutting_permit` (57.7% → 72.5% Jaccard, passing)
+
+**Problem**: The layout code used a hardcoded `DEFAULT_TAB_INTERVAL = 36.0pt` (720 twips = 0.5 inches, the US default) for computing default tab stop positions when no explicit tab stops are defined. However, the document's `word/settings.xml` specifies `<w:defaultTabStop w:val="708"/>` (35.4pt = 1.25cm, the European/metric default). This 0.6pt-per-tab discrepancy accumulated across tab-heavy content, shifting text horizontally and causing significant pixel misalignment on the single-page form.
+
+The `defaultTabStop` value was already parsed from settings.xml in `settings.rs` and stored in `DocumentSettings`, but it was never passed through to the `Document` model or the renderer — it was effectively dead code.
+
+**Fix**:
+1. `src/model.rs`: Added `default_tab_stop: f32` field to the `Document` struct
+2. `src/docx/mod.rs`: Pass `settings.default_tab_stop` when constructing the Document
+3. `src/pdf/mod.rs`: Added `default_tab_stop` to `RenderContext`, threaded through all `build_tabbed_line` call sites
+4. `src/pdf/layout.rs`: Updated `find_next_tab_stop` and `build_tabbed_line` to accept and use the document's tab interval instead of the hardcoded constant
+5. `src/pdf/header_footer.rs`: Updated `build_lines` helper to pass tab stop through
+
+**Result**: Zero REGRESSION flags across all fixtures. Czech tree cutting permit improved +14.8pp Jaccard (57.7→72.5%), +18.6pp SSIM (78.0→96.6%). Fix affects all 48 scraped fixtures with `defaultTabStop` settings — 16 use 708 twips (35.4pt), 2 use 1296 twips (64.8pt), and others use various non-720 values. The 720-twips fixtures (US default) are unaffected since they match the previous hardcoded value.
+
 ## 2026-03-16: Fix numbered paragraph indentation (style indent as minimum)
 
 **Case**: `italian_evaluation_minutes` (33.9% Jaccard, passing)
@@ -85,3 +102,27 @@ Replaced the hardcoded STYLEREF character set with dynamic collection from the d
 This ensures every character that could appear in a STYLEREF value is included in the font subset, regardless of encoding.
 
 **Result**: Zero REGRESSION flags across all fixtures. Bush fires case improved +0.2pp Jaccard, +0.2pp SSIM. Header now correctly renders "Bush Fires Act 1954" with proper non-breaking space instead of collapsed/missing glyph. Fix applies to all documents using STYLEREF fields with non-ASCII characters in the referenced text (common in legal documents with non-breaking spaces).
+
+## 2026-03-16: Fix inline page break before text treated as page-break-after
+
+**Case**: `transition_to_work_deed` (25.6% → 26.1% Jaccard, passing)
+
+**Annotation**: "\"Reader's guide to this deed\" should come on page 2" (page 1).
+
+**Problem**: When `w:br w:type="page"` appears in a run before any text content in the same paragraph, the break should cause text after it to render on the next page. For example:
+```xml
+<w:p>
+  <w:r><w:br w:type="page"/></w:r>
+  <w:r><w:t>Reader's Guide to this Deed</w:t></w:r>
+</w:p>
+```
+Our code always set `has_page_break_after = true`, which rendered the entire paragraph (including "Reader's Guide") on the current page, then triggered a page break. The text appeared on page 1 instead of page 2.
+
+**Fix** (`src/docx/runs.rs`):
+When `w:br type="page"` is encountered and no text content has been emitted yet (`runs.is_empty() && pending_text.is_empty()`), set a `page_break_before_content` flag instead of `has_page_break_after`. This flag is then OR'd into `has_page_break_before`, causing the paragraph's text to render on the new page.
+
+**Result**: Zero REGRESSION flags across all fixtures. Three fixtures improved:
+- `transition_to_work_deed`: +0.5pp Jaccard (25.6→26.1%), +0.5pp SSIM (37.4→37.9%)
+- `federal_procurement_terms`: +2.1pp Jaccard (51.7→53.8%), +6.7pp SSIM (67.1→73.8%)
+- `go_math_grade4_guide`: +1.3pp Jaccard (26.4→27.7%), +3.2pp SSIM (46.1→49.3%)
+Fix applies to all 9 fixtures containing `w:br w:type="page"` inline breaks.

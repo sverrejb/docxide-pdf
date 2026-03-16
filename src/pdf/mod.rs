@@ -37,6 +37,7 @@ use table::render_table;
 pub(super) struct RenderContext<'a> {
     pub(super) fonts: &'a HashMap<String, FontEntry>,
     pub(super) doc_line_spacing: LineSpacing,
+    pub(super) default_tab_stop: f32,
     /// Image names for inline images in table cells, keyed by Arc data pointer address.
     pub(super) table_cell_image_names: &'a HashMap<usize, String>,
 }
@@ -252,6 +253,7 @@ fn render_single_textbox(
                     build_tabbed_line(
                         &tp.runs, ctx.fonts, &tp.tab_stops, tp.indent_left,
                         tp_text_w, text_hanging, &empty_inline_imgs_pre,
+                        ctx.default_tab_stop,
                     )
                 } else {
                     build_paragraph_lines(
@@ -296,6 +298,7 @@ fn render_single_textbox(
                 tp_text_w,
                 text_hanging,
                 &empty_inline_imgs,
+                ctx.default_tab_stop,
             )
         } else {
             build_paragraph_lines(
@@ -1492,6 +1495,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     let ctx = RenderContext {
         fonts: &seen_fonts,
         doc_line_spacing: doc.line_spacing,
+        default_tab_stop: doc.default_tab_stop,
         table_cell_image_names: &table_cell_image_names,
     };
 
@@ -1746,6 +1750,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             para_text_width,
                             text_hanging,
                             &block_inline_images,
+                            doc.default_tab_stop,
                         )
                     } else {
                         build_paragraph_lines(

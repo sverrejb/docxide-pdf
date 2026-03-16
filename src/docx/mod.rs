@@ -759,6 +759,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         footnotes,
         font_table,
         even_and_odd_headers: settings.even_and_odd_headers,
+        default_tab_stop: settings.default_tab_stop,
         style_id_to_name: styles.style_id_to_name,
     })
 }
