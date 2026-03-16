@@ -161,3 +161,17 @@ Added a `"noBreakHyphen"` match arm in the run element parser that appends a reg
 - `bush_fires_act_comparison`: +0.3pp Jaccard (42.4→42.7%), +0.6pp SSIM (81.9→82.5%)
 - `centrifugal_water_chillers`: +1.0pp Jaccard (79.2→80.2%), +0.8pp SSIM (93.2→94.0%)
 Small noise-level variations (≤0.4pp) on a few unrelated fixtures.
+
+## 2026-03-16: Apply paragraph indentation in header/footer rendering
+
+**Case**: `lithuanian_ethics_law` (36.6% → 40.2% Jaccard, passing)
+
+**Problem**: Header/footer paragraphs with `w:ind` attributes (left indent, right indent, firstLine, hanging) had their indentation completely ignored. The header/footer parser in `src/docx/headers_footers.rs` never extracted `w:ind` from paragraph properties — the `Paragraph` struct was always constructed with `..Paragraph::default()` which sets all indent fields to 0. Additionally, the header/footer renderer in `src/pdf/header_footer.rs` always passed 0 for indent parameters to `build_lines()` and `render_paragraph_lines()`.
+
+In the `lithuanian_ethics_law` document, the header contains two paragraphs ("Projekto Nr." and "lyginamasis variantas") with `w:ind w:firstLine="6237"` (311.85pt first-line indent), which should position them at the right side of the header area. Without indent support, they rendered at the left margin.
+
+**Fix**:
+1. `src/docx/headers_footers.rs`: Added indent parsing via `extract_indents()` for header/footer paragraphs, with style fallback when no direct `w:ind` is specified. Set `indent_left`, `indent_right`, `indent_hanging`, and `indent_first_line` on the Paragraph struct.
+2. `src/pdf/header_footer.rs`: Updated `build_lines()` to accept `indent_left` and `text_hanging` parameters. Compute `para_text_x`, `para_text_width`, and `text_hanging` from paragraph indent fields in the main paragraph rendering path. Pass `text_hanging` to `render_paragraph_lines()`. Also updated textbox paragraph rendering within headers/footers to use indent-adjusted widths.
+
+**Result**: Zero REGRESSION flags across all fixtures. Lithuanian ethics law improved +3.6pp Jaccard (36.6→40.2%), +3.6pp SSIM (55.1→58.7%). Fix affects all documents with indented paragraphs in headers/footers. Small noise-level variations (≤0.4pp) on a few unrelated fixtures.
