@@ -2,7 +2,8 @@ use std::collections::HashMap;
 use std::io::Read;
 
 use crate::model::{
-    ConnectorShape, FieldCode, FloatingImage, InlineChart, Run, SmartArtDiagram, Textbox, VertAlign,
+    ConnectorShape, FieldCode, FloatingImage, HorizontalRule, InlineChart, Run, SmartArtDiagram,
+    Textbox, VertAlign,
 };
 
 use super::images::{RunDrawingResult, parse_run_drawing};
@@ -12,7 +13,10 @@ use super::styles::{
     StylesInfo, ThemeFonts, resolve_east_asia_font_from_node, resolve_font_from_node,
 };
 use super::textbox::parse_textbox_from_vml;
-use super::{WML_NS, highlight_color, parse_text_color, twips_to_pts, wml, wml_attr, wml_bool};
+use super::{
+    WML_NS, highlight_color, parse_hex_color, parse_text_color, twips_to_pts, wml, wml_attr,
+    wml_bool,
+};
 
 const MC_NS: &str = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 const REL_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -59,6 +63,7 @@ pub(super) struct ParsedRuns {
     pub(super) connectors: Vec<ConnectorShape>,
     pub(super) inline_chart: Option<InlineChart>,
     pub(super) smartart: Option<SmartArtDiagram>,
+    pub(super) horizontal_rule: Option<HorizontalRule>,
 }
 
 /// Resolved formatting for the current run, used to build Run structs concisely.
@@ -331,6 +336,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
     let mut connectors: Vec<ConnectorShape> = Vec::new();
     let mut inline_chart: Option<InlineChart> = None;
     let mut smartart: Option<SmartArtDiagram> = None;
+    let mut horizontal_rule: Option<HorizontalRule> = None;
     let mut has_page_break_after = false;
     let mut page_break_before_content = false;
     let mut has_column_break = false;
@@ -584,7 +590,9 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                     );
                 }
                 "pict" if !in_field => {
-                    if let Some(tb) =
+                    if let Some(hr) = parse_vml_horizontal_rule(child) {
+                        horizontal_rule = Some(hr);
+                    } else if let Some(tb) =
                         parse_textbox_from_vml(child, rels, zip, styles, theme, numbering)
                     {
                         textboxes.push(tb);
@@ -690,5 +698,53 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
         connectors,
         inline_chart,
         smartart,
+        horizontal_rule,
     }
+}
+
+const OFFICE_NS: &str = "urn:schemas-microsoft-com:office:office";
+const VML_NS_RUNS: &str = "urn:schemas-microsoft-com:vml";
+
+fn parse_vml_horizontal_rule(pict_node: roxmltree::Node) -> Option<HorizontalRule> {
+    let shape = pict_node.children().find(|n| {
+        n.tag_name().namespace() == Some(VML_NS_RUNS)
+            && matches!(n.tag_name().name(), "rect" | "shape")
+    })?;
+
+    let is_hr = shape
+        .attribute((OFFICE_NS, "hr"))
+        .is_some_and(|v| v == "t" || v == "true");
+    if !is_hr {
+        return None;
+    }
+
+    let style_str = shape.attribute("style").unwrap_or("");
+    let mut height_pt = 1.5_f32;
+    for part in style_str.split(';') {
+        if let Some((key, val)) = part.trim().split_once(':') {
+            if key.trim() == "height" {
+                height_pt = val.trim().trim_end_matches("pt").parse().unwrap_or(1.5);
+            }
+        }
+    }
+
+    let fill_color = shape
+        .attribute("fillcolor")
+        .and_then(|c| {
+            let hex = c.strip_prefix('#').unwrap_or(c);
+            parse_hex_color(hex)
+        })
+        .unwrap_or([0xa0, 0xa0, 0xa0]);
+
+    let hrpct = shape
+        .attribute((OFFICE_NS, "hrpct"))
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(|v| v / 10.0);
+    let width_pct = hrpct.unwrap_or(100.0);
+
+    Some(HorizontalRule {
+        height_pt,
+        fill_color,
+        width_pct,
+    })
 }

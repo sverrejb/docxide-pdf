@@ -2214,6 +2214,27 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             ctx.fonts,
                             smartart_font_key,
                         );
+                    } else if let Some(ref hr) = para.horizontal_rule {
+                        let rule_w = col_w * hr.width_pct / 100.0;
+                        let rule_x = col_x
+                            + match para.alignment {
+                                Alignment::Center => (col_w - rule_w) / 2.0,
+                                Alignment::Right => col_w - rule_w,
+                                _ => 0.0,
+                            };
+                        let rule_y =
+                            pb.slot_top - (content_h - hr.height_pt) / 2.0 - hr.height_pt;
+                        let [r, g, b] = hr.fill_color;
+                        pb.content.save_state();
+                        pb.content.set_fill_rgb(
+                            r as f32 / 255.0,
+                            g as f32 / 255.0,
+                            b as f32 / 255.0,
+                        );
+                        pb.content
+                            .rect(rule_x, rule_y, rule_w, hr.height_pt);
+                        pb.content.fill_nonzero();
+                        pb.content.restore_state();
                     } else if (para.image.is_some() || text_empty) && para.content_height > 0.0 {
                         if let Some(pdf_name) = image_pdf_names.get(&global_block_idx) {
                             let img = para.image.as_ref().unwrap();

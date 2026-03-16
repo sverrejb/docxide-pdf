@@ -414,7 +414,14 @@ pub struct Paragraph {
     pub connectors: Vec<ConnectorShape>,
     pub inline_chart: Option<InlineChart>,
     pub smartart: Option<SmartArtDiagram>,
+    pub horizontal_rule: Option<HorizontalRule>,
     pub is_section_break: bool,
+}
+
+pub struct HorizontalRule {
+    pub height_pt: f32,
+    pub fill_color: [u8; 3],
+    pub width_pct: f32,
 }
 
 #[derive(Clone)]

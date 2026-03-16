@@ -124,3 +124,30 @@ Added a third fallback in the leader font search in `src/pdf/layout.rs`: when no
 
 ### Files Modified
 - `src/pdf/layout.rs` — added tab-run fallback in leader font search
+
+## 2026-03-16: Render VML horizontal rules (annotation 4)
+
+### Problem
+Annotation 4 reported a missing horizontal rule ("hr") in `scraped/croatian_grant_guidelines` page 1. The reference PDF shows a thin grey line between the bold quoted text and "(referentni broj: IP.4.1.06)", but the generated PDF rendered blank space.
+
+### Root Cause
+The document uses a VML horizontal rule: `<v:rect o:hr="t" style="height:1.5pt" fillcolor="#a0a0a0">` inside `<w:pict>`. When `parse_textbox_from_vml` encountered this `v:rect`, it found the shape node but no `v:textbox` child, so it returned `None`. The horizontal rule was silently dropped.
+
+### Implementation
+1. **`src/model.rs`**: Added `HorizontalRule { height_pt, fill_color, width_pct }` struct and `horizontal_rule: Option<HorizontalRule>` field to `Paragraph`.
+2. **`src/docx/runs.rs`**: Added `parse_vml_horizontal_rule()` function that detects `o:hr="t"` on VML shapes, extracts height from CSS style, fill color, and width percentage from `o:hrpct`. In the `"pict"` handler, HR detection runs before textbox parsing.
+3. **`src/docx/runs.rs`**: Added `horizontal_rule` field to `ParsedRuns` struct.
+4. **`src/docx/mod.rs`**: Wired `parsed.horizontal_rule` into the `Paragraph` construction.
+5. **`src/pdf/mod.rs`**: Added rendering branch for `para.horizontal_rule` — draws a filled rectangle centered vertically within the paragraph's line height, using the HR's fill color and width percentage.
+
+### Results
+- `scraped/croatian_grant_guidelines`: Grey horizontal rule now renders correctly between bold text and reference number, matching reference
+- Jaccard: 8.5% (no change), SSIM: 19.9% (-0.1pp noise)
+- No regressions across all fixtures (Jaccard and SSIM)
+- Also renders VML HRs in `scraped/mandated_reporter_child_abuse` and `scraped/school_mandated_reporter_policy` without layout disruption
+
+### Files Modified
+- `src/model.rs` — added `HorizontalRule` struct, `horizontal_rule` field on `Paragraph`
+- `src/docx/runs.rs` — VML HR parsing, `ParsedRuns` field
+- `src/docx/mod.rs` — wire HR through to Paragraph
+- `src/pdf/mod.rs` — render HR as filled rectangle

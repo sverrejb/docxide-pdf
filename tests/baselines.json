@@ -236,7 +236,7 @@
   "scraped/air_pollution_pe..": {
     "jaccard": 0.1547,
     "ssim": 0.3655,
-    "text_boundary": 0.0,
+    "text_boundary": 0.9429,
     "convert_ms": 9.5
   },
   "scraped/brazilian_logist..": {
@@ -421,7 +421,7 @@
   },
   "scraped/mandated_reporte..": {
     "jaccard": 0.2642,
-    "ssim": 0.4993,
+    "ssim": 0.5064,
     "text_boundary": 0.2963,
     "convert_ms": 20.0
   },
@@ -505,7 +505,7 @@
   },
   "scraped/school_mandated_..": {
     "jaccard": 0.2379,
-    "ssim": 0.4467,
+    "ssim": 0.4478,
     "text_boundary": 0.2963,
     "convert_ms": 39.3
   },

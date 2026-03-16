@@ -1,16 +1,6 @@
 {
-  "next_id": 24,
+  "next_id": 27,
   "annotations": [
-    {
-      "id": 0,
-      "case": "samples/sample500kB",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 350.07956,
-      "y_pt": 245.51135,
-      "note": "Labels are using a serif-font. Should be sans, see reference.",
-      "fixed": true
-    },
     {
       "id": 2,
       "case": "samples/samtale",
@@ -22,16 +12,6 @@
       "fixed": true
     },
     {
-      "id": 3,
-      "case": "scraped/air_pollution_permit_form",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 455.7,
-      "y_pt": 788.4305,
-      "note": "We are not rendering the dotted lines that the reference does. There should be four dotted lines here.",
-      "fixed": true
-    },
-    {
       "id": 4,
       "case": "scraped/croatian_grant_guidelines",
       "page": 0,
@@ -39,7 +19,7 @@
       "x_pt": 286.9996,
       "y_pt": 283.83087,
       "note": "Missing a \"hr\" about here compared to the reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 5,
@@ -229,6 +209,36 @@
       "x_pt": 555.4253,
       "y_pt": 467.83395,
       "note": "The space above the \"Medarbeiderens egenevaluering\" is too large.",
+      "fixed": false
+    },
+    {
+      "id": 24,
+      "case": "samples/sample500kB",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 343.72385,
+      "y_pt": 232.46417,
+      "note": "Labels show up in the .png files, but opening the generated PDF in MacOS preview does not show the labels.",
+      "fixed": false
+    },
+    {
+      "id": 25,
+      "case": "scraped/air_pollution_permit_form",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 107.463844,
+      "y_pt": 52.710266,
+      "note": "I don't see this line in the reference.",
+      "fixed": false
+    },
+    {
+      "id": 26,
+      "case": "scraped/air_pollution_permit_form",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 183.82957,
+      "y_pt": 140.08453,
+      "note": "We are missing dotted lines between \"a\" and 2020 here.",
       "fixed": false
     }
   ]
