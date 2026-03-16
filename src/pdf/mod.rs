@@ -40,6 +40,7 @@ pub(super) struct RenderContext<'a> {
     pub(super) default_tab_stop: f32,
     /// Image names for inline images in table cells, keyed by Arc data pointer address.
     pub(super) table_cell_image_names: &'a HashMap<usize, String>,
+    pub(super) chart_font_name: &'a str,
 }
 
 pub(super) struct GradientSpec {
@@ -978,6 +979,31 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
         }
     }
 
+    // Collect characters for chart labels under the theme minor font
+    {
+        let mut chart_label_chars: HashSet<char> = HashSet::new();
+        for para in &all_paras {
+            if let Some(ref ic) = para.inline_chart {
+                chart_label_chars.extend('0'..='9');
+                chart_label_chars.insert('.');
+                chart_label_chars.insert('-');
+                for series in &ic.chart.series {
+                    chart_label_chars.extend(series.label.chars());
+                }
+                if let Some(ref cat_axis) = ic.chart.cat_axis {
+                    for label in &cat_axis.labels {
+                        chart_label_chars.extend(label.chars());
+                    }
+                }
+            }
+        }
+        if !chart_label_chars.is_empty() {
+            used.entry(doc.chart_font_name.clone())
+                .or_default()
+                .extend(chart_label_chars);
+        }
+    }
+
     for chars in used.values_mut() {
         chars.insert(' ');
     }
@@ -1526,6 +1552,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         doc_line_spacing: doc.line_spacing,
         default_tab_stop: doc.default_tab_stop,
         table_cell_image_names: &table_cell_image_names,
+        chart_font_name: &doc.chart_font_name,
     };
 
     let t_images = t0.elapsed();
@@ -2152,19 +2179,13 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 Alignment::Right => (col_w - ic.display_width).max(0.0),
                                 _ => 0.0,
                             };
-                        let default_font = ctx
-                            .fonts
-                            .keys()
-                            .next()
-                            .map(|s| s.as_str())
-                            .unwrap_or("Helvetica");
                         charts::render_chart(
                             ic,
                             &mut pb.content,
                             chart_x,
                             pb.slot_top,
                             ctx.fonts,
-                            default_font,
+                            ctx.chart_font_name,
                             &mut pb.alpha_states,
                         );
                     } else if let Some(ref diagram) = para.smartart {

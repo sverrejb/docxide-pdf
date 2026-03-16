@@ -251,14 +251,7 @@ pub(super) fn render_chart(
     let h = chart.display_height;
 
     let font_size = 10.0;
-    let label_font_key = seen_fonts
-        .keys()
-        .find(|k| {
-            let lower = k.to_lowercase();
-            !lower.contains("symbol") && !lower.contains("serif") && !lower.contains("/")
-        })
-        .map(|s| s.as_str())
-        .unwrap_or(default_font_name);
+    let label_font_key = default_font_name;
     let has_font = seen_fonts.contains_key(label_font_key);
     let label_font = seen_fonts.get(label_font_key);
 

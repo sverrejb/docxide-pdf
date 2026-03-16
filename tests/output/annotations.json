@@ -1,0 +1,225 @@
+{
+  "next_id": 22,
+  "annotations": [
+    {
+      "id": 0,
+      "case": "samples/sample500kB",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 350.07956,
+      "y_pt": 245.51135,
+      "note": "Labels are using a serif-font. Should be sans, see reference.",
+      "fixed": true
+    },
+    {
+      "id": 1,
+      "case": "samples/samtale",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 571.6547,
+      "y_pt": 251.30847,
+      "note": "This grey line above the \"Medarbeiderens\"-text should not be rendered.",
+      "fixed": false
+    },
+    {
+      "id": 2,
+      "case": "samples/samtale",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 514.2692,
+      "y_pt": 506.1648,
+      "note": "Text should be directly above the grey line, not floating above it.",
+      "fixed": false
+    },
+    {
+      "id": 3,
+      "case": "scraped/air_pollution_permit_form",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 455.7,
+      "y_pt": 788.4305,
+      "note": "We are not rendering the dotted lines that the reference does. There should be four dotted lines here.",
+      "fixed": false
+    },
+    {
+      "id": 4,
+      "case": "scraped/croatian_grant_guidelines",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 286.9996,
+      "y_pt": 283.83087,
+      "note": "Missing a \"hr\" about here compared to the reference.",
+      "fixed": false
+    },
+    {
+      "id": 5,
+      "case": "scraped/croatian_grant_guidelines",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 156.05186,
+      "y_pt": 767.3191,
+      "note": "TOC starts a bit too high up on the page compared to reference.",
+      "fixed": false
+    },
+    {
+      "id": 6,
+      "case": "scraped/croatian_grant_guidelines",
+      "page": 3,
+      "source": "Generated",
+      "x_pt": 226.17776,
+      "y_pt": 451.33154,
+      "note": "Green box should be broken across two pages like the reference.",
+      "fixed": false
+    },
+    {
+      "id": 7,
+      "case": "scraped/czech_municipal_grant_form",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 111.64876,
+      "y_pt": 780.05676,
+      "note": "Heading is rendered above the logo.",
+      "fixed": false
+    },
+    {
+      "id": 8,
+      "case": "scraped/east_asia_conference_form",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 322.27734,
+      "y_pt": 164.30786,
+      "note": "This text should come on page 2.",
+      "fixed": false
+    },
+    {
+      "id": 9,
+      "case": "scraped/education_consultant_posting",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 295.79837,
+      "y_pt": 706.1211,
+      "note": "Too much space below \"Terms of Reference\", and too little above it.",
+      "fixed": false
+    },
+    {
+      "id": 10,
+      "case": "scraped/feminist_voice_dissertation",
+      "page": 7,
+      "source": "Generated",
+      "x_pt": 155.08342,
+      "y_pt": 712.2301,
+      "note": "Keywords should be on the page before compared to reference.",
+      "fixed": false
+    },
+    {
+      "id": 11,
+      "case": "scraped/feminist_voice_dissertation",
+      "page": 1,
+      "source": "Reference",
+      "x_pt": 305.85876,
+      "y_pt": 55.196655,
+      "note": "We are missing the roman numerals page numbers in the preamble.",
+      "fixed": true
+    },
+    {
+      "id": 12,
+      "case": "scraped/feminist_voice_dissertation",
+      "page": 9,
+      "source": "Generated",
+      "x_pt": 310.00793,
+      "y_pt": 59.561157,
+      "note": "We are also missing page numbers here.",
+      "fixed": true
+    },
+    {
+      "id": 13,
+      "case": "scraped/indonesian_benchmarking_guide",
+      "page": 5,
+      "source": "Generated",
+      "x_pt": 193.22345,
+      "y_pt": 700.9636,
+      "note": "This image is rendered on top of other content. Should come on the next page, compare to the reference.",
+      "fixed": false
+    },
+    {
+      "id": 14,
+      "case": "scraped/japanese_interlibrary_loan",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 36.972225,
+      "y_pt": 343.99335,
+      "note": "Vertical text in first column is not vertically centered. See reference.",
+      "fixed": false
+    },
+    {
+      "id": 15,
+      "case": "scraped/japanese_interlibrary_loan",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 41.093235,
+      "y_pt": 70.68347,
+      "note": "Text in bottom row has too little padding above. Reference has some gap above the text.",
+      "fixed": false
+    },
+    {
+      "id": 16,
+      "case": "scraped/japanese_interlibrary_loan",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 316.12506,
+      "y_pt": 308.1038,
+      "note": "Page 2 should not exist.",
+      "fixed": false
+    },
+    {
+      "id": 17,
+      "case": "scraped/polish_building_procurement_spec",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 81.622795,
+      "y_pt": 195.54712,
+      "note": "\"Nazawa\" should not be indented here",
+      "fixed": false
+    },
+    {
+      "id": 18,
+      "case": "scraped/polish_municipal_letter",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 66.15268,
+      "y_pt": 754.8083,
+      "note": "We are missing the \"logo\" / emblem / seal here.",
+      "fixed": false
+    },
+    {
+      "id": 19,
+      "case": "scraped/stem_partnerships_guide",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 271.31982,
+      "y_pt": 798.97766,
+      "note": "\"Best Practice Guide: .....\" should not be rendered on page 2, only 3, 4 and so on. See reference.",
+      "fixed": false
+    },
+    {
+      "id": 20,
+      "case": "scraped/uk_commercial_lease_template",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 299.56885,
+      "y_pt": 203.6264,
+      "note": "Text needs to be higher up.",
+      "fixed": false
+    },
+    {
+      "id": 21,
+      "case": "scraped/vaccines_history_chapter",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 459.57916,
+      "y_pt": 450.31363,
+      "note": "We are rendering the labels too wide. Compare to reference.",
+      "fixed": false
+    }
+  ]
+}

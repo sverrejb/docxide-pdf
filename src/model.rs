@@ -126,6 +126,8 @@ pub struct Document {
     pub default_tab_stop: f32,
     /// Maps style IDs to display names (for STYLEREF resolution)
     pub style_id_to_name: HashMap<String, String>,
+    /// Theme minor (body) font — used as the default chart label font
+    pub chart_font_name: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
