@@ -1,17 +1,5 @@
 # Roadmap
 
-## Text Shaping with rustybuzz (TODO — HIGH IMPACT)
-
-We do manual char→glyph mapping with no OpenType shaping. This means ligatures (fi, fl), contextual alternates, and complex scripts (Arabic, Indic) all render incorrectly. Integrating `rustybuzz` (pure-Rust HarfBuzz port) would:
-1. **Fix ligatures** — OpenType GSUB table support for all Latin ligatures
-2. **Fix complex scripts** — Arabic reordering/joining, Indic conjuncts, Thai marks
-3. **Improve kerning** — GPOS kerning from shaping output replaces our manual kern table + GPOS extraction
-4. **Fix CJK contextual forms** — proper glyph selection for CJK fonts
-
-This is the single highest-impact improvement for international document fidelity. Would also simplify the font pipeline — shaping returns glyph IDs and advances directly, eliminating manual width computation.
-
-Would also subsume the current "PDF rendering kerning" gap: we currently use `Tj` without kern adjustments in the PDF content stream. Shaping output would enable `TJ` arrays with per-glyph positioning for visually correct justified text.
-
 ## Unicode Line Breaking (TODO — HIGH IMPACT)
 
 We split text on whitespace only via `split_preserving_spaces()`. This fails for CJK (no spaces between words), Thai, and other scripts where break opportunities are Unicode-defined. Integrating `unicode-linebreak` crate would:

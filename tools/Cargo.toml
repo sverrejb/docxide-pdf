@@ -34,6 +34,10 @@ path = "src/bin/case_browser.rs"
 name = "generate-shapes"
 path = "src/bin/generate_shapes.rs"
 
+[[bin]]
+name = "shaping-compare"
+path = "src/bin/shaping_compare.rs"
+
 [dependencies]
 zip = "2"
 roxmltree = "0.21"
@@ -42,3 +46,7 @@ eframe = "0.31"
 egui_extras = { version = "0.31", features = ["image"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+lopdf = "0.34"
+rustybuzz = "0.20"
+ttf-parser = "0.25"
+memmap2 = "0.9"
