@@ -136,6 +136,7 @@ pub(super) struct ParagraphStyle {
     pub(super) clear_tab_positions: Vec<f32>,
     pub(super) num_id: Option<String>,
     pub(super) num_ilvl: Option<u8>,
+    pub(super) outline_level: Option<u8>,
 }
 
 pub(super) struct CharacterStyle {
@@ -631,6 +632,11 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                     .and_then(|np| wml_attr(np, "ilvl"))
                     .and_then(|v| v.parse::<u8>().ok());
 
+                let outline_level = ppr
+                    .and_then(|p| wml_attr(p, "outlineLvl"))
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .filter(|&lvl| lvl <= 8);
+
                 let based_on = wml(style_node, "basedOn")
                     .and_then(|n| n.attribute((WML_NS, "val")))
                     .map(|s| s.to_string());
@@ -671,6 +677,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                         clear_tab_positions,
                         num_id,
                         num_ilvl,
+                        outline_level,
                     },
                 );
             }
@@ -809,6 +816,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     widow_control,
                     num_id,
                     num_ilvl,
+                    outline_level,
                 );
                 // Tab stops are additive: accumulate from ancestors, child overrides at same pos
                 // Clear tabs remove inherited tabs at matching positions
@@ -858,6 +866,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             s.widow_control = s.widow_control.or(inh.widow_control);
             s.num_id = s.num_id.take().or(inh.num_id);
             s.num_ilvl = s.num_ilvl.or(inh.num_ilvl);
+            s.outline_level = s.outline_level.or(inh.outline_level);
             s.tab_stops = inh.tab_stops;
         }
     }

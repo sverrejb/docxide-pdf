@@ -650,6 +650,21 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     content_height = content_height.max(sa.display_height);
                 }
 
+                let outline_level = ppr
+                    .and_then(|ppr| wml_attr(ppr, "outlineLvl"))
+                    .and_then(|v| v.parse::<u8>().ok())
+                    .filter(|&lvl| lvl <= 8)
+                    .or_else(|| para_style.and_then(|s| s.outline_level));
+
+                let bookmarks: Vec<String> = node
+                    .children()
+                    .filter(|n| {
+                        n.tag_name().namespace() == Some(WML_NS)
+                            && n.tag_name().name() == "bookmarkStart"
+                    })
+                    .filter_map(|n| n.attribute((WML_NS, "name")).map(|s| s.to_string()))
+                    .collect();
+
                 blocks.push(Block::Paragraph(Paragraph {
                     runs,
                     style_id: Some(para_style_id.to_string()),
@@ -692,6 +707,8 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     smartart: parsed.smartart,
                     horizontal_rule: parsed.horizontal_rule,
                     is_section_break: false,
+                    bookmarks,
+                    outline_level,
                 }));
 
                 // Mid-document section break: sectPr inside pPr ends the current section

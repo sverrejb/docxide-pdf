@@ -37,14 +37,13 @@ The `render()` function in `pdf/mod.rs` mixes pagination with rendering. Extract
 
 Architecture: a `Paginator` takes the document model and produces `Vec<Page>` where each `Page` contains positioned elements. The PDF renderer then simply draws them. This is a significant refactor but unlocks multiple features that are impossible without it.
 
-## PDF Bookmarks (TODO — SMALL EFFORT, MEDIUM IMPACT)
+## TOC Internal Link Navigation (DONE)
 
-We don't generate PDF outline/bookmarks from heading styles. This is a commonly expected feature — most PDF viewers show a sidebar navigation panel from the outline. Implementation:
-1. During render, track heading paragraphs (style with `w:outlineLvl` or Heading1-9 style names) with their page index and y-position
-2. Build a hierarchical outline tree from heading levels
-3. Write PDF Outline objects with `pdf-writer`'s outline API
+`w:hyperlink w:anchor="name"` links in TOC entries now produce PDF GoTo annotations that jump to the target heading. `w:bookmarkStart w:name="..."` elements are collected during DOCX parsing and their page/y positions are tracked during rendering. The annotation writer emits `/S /GoTo` with `/XYZ` destinations for `#name` URLs and falls back to `/S /URI` for external links. Tested in case39.
 
-Small effort, high perceived quality improvement.
+## PDF Bookmarks (DONE)
+
+PDF outline/bookmarks (sidebar navigation panel) are now generated from heading styles. Implementation tracks heading paragraphs via `w:outlineLvl` attributes in styles or paragraphs, builds a hierarchical outline tree using parent-child relationships from heading levels, and writes PDF Outline objects. The catalog sets `PageMode::UseOutlines` so the outline sidebar opens automatically. Tested in case39 (Introduction and Methods headings with proper nesting).
 
 ## PDF Metadata (TODO — TRIVIAL EFFORT, MEDIUM IMPACT)
 

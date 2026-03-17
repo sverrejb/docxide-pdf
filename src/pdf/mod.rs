@@ -9,7 +9,7 @@ mod table;
 
 use std::collections::{HashMap, HashSet};
 
-use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str};
+use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str, TextStr};
 
 use crate::error::Error;
 use crate::fonts::{
@@ -51,6 +51,13 @@ pub(super) struct GradientSpec {
     y: f32,
     w: f32,
     h: f32,
+}
+
+struct HeadingEntry {
+    title: String,
+    level: u8,
+    page_idx: usize,
+    y_position: f32,
 }
 
 pub(super) fn render_shape_fill(
@@ -1320,6 +1327,8 @@ fn assemble_pdf_pages(
     font_order: &[String],
     image_xobjects: &[(String, Ref)],
     doc: &Document,
+    bookmark_positions: &HashMap<String, (usize, f32)>,
+    heading_entries: &[HeadingEntry],
 ) {
     let n = all_contents.len();
     let page_ids: Vec<Ref> = (0..n).map(|_| alloc()).collect();
@@ -1330,18 +1339,32 @@ fn assemble_pdf_pages(
         .map(|links| {
             links
                 .iter()
-                .map(|link| {
+                .filter_map(|link| {
                     let annot_ref = alloc();
                     let mut annot = pdf.annotation(annot_ref);
                     annot
                         .subtype(pdf_writer::types::AnnotationType::Link)
                         .rect(link.rect)
                         .border(0.0, 0.0, 0.0, None);
-                    annot
-                        .action()
-                        .action_type(pdf_writer::types::ActionType::Uri)
-                        .uri(Str(link.url.as_bytes()));
-                    annot_ref
+                    if let Some(anchor) = link.url.strip_prefix('#') {
+                        if let Some(&(dest_page_idx, dest_y)) = bookmark_positions.get(anchor) {
+                            annot
+                                .action()
+                                .action_type(pdf_writer::types::ActionType::GoTo)
+                                .destination()
+                                .page(page_ids[dest_page_idx])
+                                .xyz(0.0, dest_y, None);
+                            Some(annot_ref)
+                        } else {
+                            None
+                        }
+                    } else {
+                        annot
+                            .action()
+                            .action_type(pdf_writer::types::ActionType::Uri)
+                            .uri(Str(link.url.as_bytes()));
+                        Some(annot_ref)
+                    }
                 })
                 .collect()
         })
@@ -1467,7 +1490,100 @@ fn assemble_pdf_pages(
         }
     }
 
-    pdf.catalog(catalog_id).pages(pages_id);
+    // Build PDF outline (bookmarks panel) from heading entries
+    let outline_id = if !heading_entries.is_empty() {
+        let oid = alloc();
+        let item_refs: Vec<Ref> = heading_entries.iter().map(|_| alloc()).collect();
+
+        // Build parent/first-child/last-child/prev/next relationships using a stack.
+        // Each item's parent is the nearest preceding item with a smaller level, or the root.
+        // children_of[i] collects indices of direct children of item i.
+        // children_of_root collects top-level items.
+        let mut parent_idx: Vec<Option<usize>> = vec![None; heading_entries.len()];
+        let mut stack: Vec<usize> = Vec::new(); // indices of ancestors
+        for (i, entry) in heading_entries.iter().enumerate() {
+            while let Some(&top) = stack.last() {
+                if heading_entries[top].level < entry.level {
+                    break;
+                }
+                stack.pop();
+            }
+            parent_idx[i] = stack.last().copied();
+            stack.push(i);
+        }
+
+        // Group children by parent
+        let mut children_of: Vec<Vec<usize>> = vec![Vec::new(); heading_entries.len()];
+        let mut root_children: Vec<usize> = Vec::new();
+        for (i, parent) in parent_idx.iter().enumerate() {
+            match parent {
+                Some(p) => children_of[*p].push(i),
+                None => root_children.push(i),
+            }
+        }
+
+        // Count all visible descendants (open by default)
+        fn count_descendants(idx: usize, children_of: &[Vec<usize>]) -> i32 {
+            let mut total = children_of[idx].len() as i32;
+            for &child in &children_of[idx] {
+                total += count_descendants(child, children_of);
+            }
+            total
+        }
+
+        let total_visible: i32 = heading_entries.len() as i32;
+
+        // Write outline items
+        for (i, entry) in heading_entries.iter().enumerate() {
+            let parent_ref = match parent_idx[i] {
+                Some(p) => item_refs[p],
+                None => oid,
+            };
+            let siblings = match parent_idx[i] {
+                Some(p) => &children_of[p],
+                None => &root_children,
+            };
+            let pos_in_siblings = siblings.iter().position(|&s| s == i).unwrap();
+
+            let mut item = pdf.outline_item(item_refs[i]);
+            item.title(TextStr(&entry.title))
+                .parent(parent_ref);
+
+            if pos_in_siblings > 0 {
+                item.prev(item_refs[siblings[pos_in_siblings - 1]]);
+            }
+            if pos_in_siblings + 1 < siblings.len() {
+                item.next(item_refs[siblings[pos_in_siblings + 1]]);
+            }
+
+            if !children_of[i].is_empty() {
+                item.first(item_refs[*children_of[i].first().unwrap()])
+                    .last(item_refs[*children_of[i].last().unwrap()])
+                    .count(count_descendants(i, &children_of));
+            }
+
+            item.dest().page(page_ids[entry.page_idx]).xyz(0.0, entry.y_position, None);
+        }
+
+        // Write outline root
+        pdf.outline(oid)
+            .first(item_refs[root_children[0]])
+            .last(item_refs[*root_children.last().unwrap()])
+            .count(total_visible);
+
+        Some(oid)
+    } else {
+        None
+    };
+
+    {
+        let mut catalog = pdf.catalog(catalog_id);
+        catalog.pages(pages_id);
+        if let Some(oid) = outline_id {
+            catalog.outlines(oid)
+                .page_mode(pdf_writer::types::PageMode::UseOutlines);
+        }
+    }
     pdf.pages(pages_id)
         .kids(page_ids.iter().copied())
         .count(n as i32);
@@ -1590,6 +1706,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     let mut cur_sp = first_sp;
     let initial_slot_top = effective_slot_top(cur_sp, true, &ctx);
     let mut pb = PageBuilder::new(initial_slot_top);
+    let mut bookmark_positions: HashMap<String, (usize, f32)> = HashMap::new();
+    let mut heading_entries: Vec<HeadingEntry> = Vec::new();
     let mut prev_space_after: f32 = 0.0;
     let mut effective_margin_bottom: f32 = compute_effective_margin_bottom(cur_sp, true, &ctx);
     let mut global_block_idx: usize = 0;
@@ -2087,6 +2205,24 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     }
 
                     pb.slot_top -= inter_gap;
+
+                    for bookmark in &para.bookmarks {
+                        bookmark_positions
+                            .entry(bookmark.clone())
+                            .or_insert((pb.all_contents.len(), pb.slot_top));
+                    }
+
+                    if let Some(level) = para.outline_level {
+                        let title: String = para.runs.iter().map(|r| r.text.as_str()).collect();
+                        if !title.trim().is_empty() {
+                            heading_entries.push(HeadingEntry {
+                                title: title.trim().to_string(),
+                                level,
+                                page_idx: pb.all_contents.len(),
+                                y_position: pb.slot_top,
+                            });
+                        }
+                    }
 
                     // Re-fetch column geometry (may have changed after overflow)
                     let (col_x, col_w) = col_geometry[current_col];
@@ -2706,6 +2842,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         &font_order,
         &image_xobjects,
         doc,
+        &bookmark_positions,
+        &heading_entries,
     );
 
     let t_assembly = t0.elapsed();

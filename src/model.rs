@@ -416,6 +416,8 @@ pub struct Paragraph {
     pub smartart: Option<SmartArtDiagram>,
     pub horizontal_rule: Option<HorizontalRule>,
     pub is_section_break: bool,
+    pub bookmarks: Vec<String>,
+    pub outline_level: Option<u8>,
 }
 
 pub struct HorizontalRule {
