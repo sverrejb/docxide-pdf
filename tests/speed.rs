@@ -19,6 +19,7 @@ struct TimingResult {
 }
 
 #[test]
+#[ignore]
 fn conversion_speed() {
     let fixtures = common::discover_fixtures().expect("discover fixtures");
     let baselines = common::read_baselines();

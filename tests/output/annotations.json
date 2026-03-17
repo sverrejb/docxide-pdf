@@ -1,5 +1,5 @@
 {
-  "next_id": 27,
+  "next_id": 28,
   "annotations": [
     {
       "id": 2,
@@ -239,6 +239,16 @@
       "x_pt": 183.82957,
       "y_pt": 140.08453,
       "note": "We are missing dotted lines between \"a\" and 2020 here.",
+      "fixed": false
+    },
+    {
+      "id": 27,
+      "case": "scraped/brazilian_logistics_study",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 521.32245,
+      "y_pt": 124.66205,
+      "note": "Text should be justified here (not ragged right edge of text block) See reference",
       "fixed": false
     }
   ]

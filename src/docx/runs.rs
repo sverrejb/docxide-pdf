@@ -225,10 +225,14 @@ fn collect_run_nodes<'a>(
             let has_rid = child.attribute((REL_NS, "id")).is_some();
             let has_anchor = child.attribute((WML_NS, "anchor")).is_some();
             let is_anchor_only = has_anchor && !has_rid;
-            let url = child
-                .attribute((REL_NS, "id"))
-                .and_then(|rid| rels.get(rid))
-                .cloned();
+            let url = if is_anchor_only {
+                child.attribute((WML_NS, "anchor")).map(|a| format!("#{a}"))
+            } else {
+                child
+                    .attribute((REL_NS, "id"))
+                    .and_then(|rid| rels.get(rid))
+                    .cloned()
+            };
             for n in child
                 .children()
                 .filter(|n| n.tag_name().name() == "r" && n.tag_name().namespace() == Some(WML_NS))
