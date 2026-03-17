@@ -38,10 +38,6 @@ path = "src/bin/generate_shapes.rs"
 name = "shaping-compare"
 path = "src/bin/shaping_compare.rs"
 
-[[bin]]
-name = "hinting-compare"
-path = "src/bin/hinting_compare.rs"
-
 [dependencies]
 zip = "2"
 roxmltree = "0.21"
@@ -54,4 +50,3 @@ lopdf = "0.34"
 rustybuzz = "0.20"
 ttf-parser = "0.25"
 memmap2 = "0.9"
-fontdue = "0.9"
