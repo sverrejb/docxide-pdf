@@ -457,6 +457,7 @@ fn convert_paragraph(node: roxmltree::Node, css: &HashMap<String, CssProperties>
         indent_first_line: props.text_indent_pt.unwrap_or(0.0),
         line_spacing,
         widow_control: true,
+        snap_to_grid: true,
         ..Paragraph::default()
     }
 }
@@ -684,6 +685,7 @@ fn convert_table(
                             .unwrap_or_else(|| "Times New Roman".to_string()),
                         ..Run::default()
                     }],
+                    snap_to_grid: true,
                     ..Paragraph::default()
                 });
             }

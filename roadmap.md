@@ -9,14 +9,14 @@ We split text on whitespace only via `split_preserving_spaces()`. This fails for
 
 Small integration effort, high impact for non-Latin documents.
 
-## CJK Font Support (TODO — HIGH IMPACT)
+## CJK Rendering Polish (TODO — MEDIUM IMPACT)
 
-Japanese/Chinese/Korean text renders with completely wrong metrics or as blanks. The `japanese_interlibrary_loan` scraped fixture (1-page form) scores only 3.2% Jaccard because CJK glyphs fall back to Latin fonts with wrong character widths, causing massive text displacement in tables. Needs:
-1. **CJK font fallback chain** — detect CJK codepoints, fall back to system CJK fonts (Hiragino Sans on macOS, Noto Sans CJK on Linux)
-2. **CJK-aware text measurement** — full-width characters need correct advance widths
-3. **CJK encoding in PDF** — CJK fonts require CIDFont/ToUnicode mapping, not WinAnsiEncoding
+Core CJK support is implemented: CIDFont/Identity-H/ToUnicode encoding, platform-specific font fallback chains (Hiragino/Noto/Yu Gothic), per-character font fallback at render time, script-based run splitting via `w:rFonts @eastAsia`, and vertical text rendering (`w:textDirection="tbRlV"`). CJK fixtures render readable output but score low (4–9% Jaccard) due to spacing/positioning precision issues:
 
-Would unblock all CJK-language documents (Japanese, Chinese, Korean).
+1. **`w:snapToGrid`** (DONE) — implemented. Paragraphs with `snap_to_grid: true` (spec default) snap line heights to grid pitch multiples when the section's `docGrid @type` is "lines", "linesAndChars", or "snapToChars". Paragraphs with `snapToGrid="0"` skip grid snapping. `DocGridType` enum and `grid_type` field added to `SectionProperties`.
+2. **Vanished paragraph mark** (DONE) — `w:pPr/w:rPr/w:vanish` on the paragraph mark now produces zero height and zero spacing for empty paragraphs. Prevents phantom page breaks from trailing vanished paragraphs.
+3. **`w:firstLineChars`** (MEDIUM) — character-based indent (e.g. `firstLineChars="100"` = 1 character width). Not parsed; we only handle `w:firstLine` (twip-based). In practice, twip fallback is always present alongside firstLineChars.
+4. **Vertical text centering** — `render_vertical_cjk_cell` uses a simplistic height calculation (chars × font_size) that doesn't account for paragraph spacing, causing vertical misalignment in merged cells.
 
 ## Bundled Fallback Fonts (TODO — MEDIUM IMPACT)
 
@@ -45,13 +45,9 @@ Architecture: a `Paginator` takes the document model and produces `Vec<Page>` wh
 
 PDF outline/bookmarks (sidebar navigation panel) are now generated from heading styles. Implementation tracks heading paragraphs via `w:outlineLvl` attributes in styles or paragraphs, builds a hierarchical outline tree using parent-child relationships from heading levels, and writes PDF Outline objects. The catalog sets `PageMode::UseOutlines` so the outline sidebar opens automatically. Tested in case39 (Introduction and Methods headings with proper nesting).
 
-## PDF Metadata (TODO — TRIVIAL EFFORT, MEDIUM IMPACT)
+## PDF Metadata (DONE)
 
-We don't write document metadata (title, author, subject, keywords) to the PDF. DOCX stores this in `docProps/core.xml` (Dublin Core). Implementation:
-1. Parse `docProps/core.xml` during DOCX loading — extract `dc:title`, `dc:creator`, `dc:subject`, `cp:keywords`
-2. Write PDF document info dictionary via `pdf-writer`
-
-Trivial effort, improves PDF viewer display (title in tab/title bar instead of filename).
+Document metadata (title, author, subject, keywords) is now parsed from `docProps/core.xml` and written to the PDF info dictionary. Producer is set to "docxside-pdf".
 
 ## Line Height: OS/2 Win Metrics (TODO — MEDIUM, correct but causes regressions)
 

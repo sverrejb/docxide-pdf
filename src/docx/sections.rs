@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io::Read;
 
-use crate::model::{ColumnDef, ColumnsConfig, HeaderFooter, SectionBreakType, SectionProperties};
+use crate::model::{ColumnDef, ColumnsConfig, DocGridType, HeaderFooter, SectionBreakType, SectionProperties};
 
 use super::headers_footers::parse_header_footer_xml;
 use super::relationships::parse_part_relationships;
@@ -31,6 +31,16 @@ pub(super) fn parse_section_properties<R: Read + std::io::Seek>(
     let line_pitch = doc_grid
         .and_then(|n| twips_attr(n, "linePitch"))
         .unwrap_or(default_line_pitch);
+
+    let grid_type = doc_grid
+        .and_then(|n| n.attribute((WML_NS, "type")))
+        .map(|v| match v {
+            "lines" => DocGridType::Lines,
+            "linesAndChars" => DocGridType::LinesAndChars,
+            "snapToChars" => DocGridType::SnapToChars,
+            _ => DocGridType::Default,
+        })
+        .unwrap_or(DocGridType::Default);
 
     let different_first_page = wml(sect_node, "titlePg").is_some();
 
@@ -154,6 +164,7 @@ pub(super) fn parse_section_properties<R: Read + std::io::Seek>(
         footer_even,
         different_first_page,
         line_pitch,
+        grid_type,
         break_type,
         columns,
         page_num_start,

@@ -137,6 +137,7 @@ pub(super) struct ParagraphStyle {
     pub(super) num_id: Option<String>,
     pub(super) num_ilvl: Option<u8>,
     pub(super) outline_level: Option<u8>,
+    pub(super) snap_to_grid: Option<bool>,
 }
 
 pub(super) struct CharacterStyle {
@@ -637,6 +638,8 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                     .and_then(|v| v.parse::<u8>().ok())
                     .filter(|&lvl| lvl <= 8);
 
+                let snap_to_grid = ppr.and_then(|ppr| wml_bool(ppr, "snapToGrid"));
+
                 let based_on = wml(style_node, "basedOn")
                     .and_then(|n| n.attribute((WML_NS, "val")))
                     .map(|s| s.to_string());
@@ -678,6 +681,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                         num_id,
                         num_ilvl,
                         outline_level,
+                        snap_to_grid,
                     },
                 );
             }
@@ -817,6 +821,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     num_id,
                     num_ilvl,
                     outline_level,
+                    snap_to_grid,
                 );
                 // Tab stops are additive: accumulate from ancestors, child overrides at same pos
                 // Clear tabs remove inherited tabs at matching positions
@@ -867,6 +872,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             s.num_id = s.num_id.take().or(inh.num_id);
             s.num_ilvl = s.num_ilvl.or(inh.num_ilvl);
             s.outline_level = s.outline_level.or(inh.outline_level);
+            s.snap_to_grid = s.snap_to_grid.or(inh.snap_to_grid);
             s.tab_stops = inh.tab_stops;
         }
     }

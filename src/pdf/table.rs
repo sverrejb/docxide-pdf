@@ -144,7 +144,9 @@ fn para_has_visible_content(para: &CellParagraphLayout) -> bool {
 /// height unless they carry an explicit `content_height` (e.g. from an image).
 fn para_block_height(p: &CellParagraphLayout) -> f32 {
     if p.lines.is_empty() {
-        if p.content_height > 0.0 {
+        if p.paragraph_mark_vanish {
+            0.0
+        } else if p.content_height > 0.0 {
             p.content_height
         } else {
             p.line_h
@@ -560,6 +562,7 @@ struct CellParagraphLayout {
     image_width: f32,
     image_height: f32,
     content_height: f32,
+    paragraph_mark_vanish: bool,
 }
 
 enum CellContentItem {
@@ -726,7 +729,9 @@ fn compute_row_layouts(
                                     total_h += lines.len() as f32 * line_h;
                                     lines
                                 } else {
-                                    if para.content_height > 0.0 {
+                                    if para.paragraph_mark_vanish {
+                                        // vanished paragraph mark: zero height
+                                    } else if para.content_height > 0.0 {
                                         total_h += para.content_height;
                                     } else {
                                         total_h += line_h;
@@ -770,6 +775,7 @@ fn compute_row_layouts(
                                     image_width,
                                     image_height,
                                     content_height: para.content_height,
+                                    paragraph_mark_vanish: para.paragraph_mark_vanish,
                                 }));
 
                                 prev_space_after = para.space_after;

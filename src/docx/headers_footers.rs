@@ -114,6 +114,7 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
                     indent_right,
                     indent_hanging,
                     indent_first_line,
+                    snap_to_grid: true,
                     ..Paragraph::default()
                 }));
             }
@@ -173,6 +174,7 @@ pub(super) fn parse_footnotes<R: Read + std::io::Seek>(
                 space_after: sp_after.unwrap_or(0.0),
                 alignment,
                 line_spacing: ls.or(Some(LineSpacing::Auto(1.0))),
+                snap_to_grid: true,
                 ..Paragraph::default()
             });
         }

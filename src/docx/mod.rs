@@ -409,6 +409,46 @@ pub fn parse_bytes(bytes: &[u8]) -> Result<Document, Error> {
     parse_zip(&mut zip)
 }
 
+fn parse_core_props<R: Read + std::io::Seek>(
+    zip: &mut zip::ZipArchive<R>,
+) -> (Option<String>, Option<String>, Option<String>, Option<String>) {
+    let Some(xml_content) = read_zip_text(zip, "docProps/core.xml") else {
+        return (None, None, None, None);
+    };
+    let Ok(xml) = roxmltree::Document::parse(&xml_content) else {
+        return (None, None, None, None);
+    };
+
+    let root = xml.root_element();
+
+    let mut title = None;
+    let mut author = None;
+    let mut subject = None;
+    let mut keywords = None;
+
+    for child in root.children() {
+        if child.tag_name().name() == "title" && child.tag_name().namespace() == Some("http://purl.org/dc/elements/1.1/") {
+            if let Some(text) = child.text() {
+                title = Some(text.to_string());
+            }
+        } else if child.tag_name().name() == "creator" && child.tag_name().namespace() == Some("http://purl.org/dc/elements/1.1/") {
+            if let Some(text) = child.text() {
+                author = Some(text.to_string());
+            }
+        } else if child.tag_name().name() == "subject" && child.tag_name().namespace() == Some("http://purl.org/dc/elements/1.1/") {
+            if let Some(text) = child.text() {
+                subject = Some(text.to_string());
+            }
+        } else if child.tag_name().name() == "keywords" && child.tag_name().namespace() == Some("http://schemas.openxmlformats.org/package/2006/metadata/core-properties") {
+            if let Some(text) = child.text() {
+                keywords = Some(text.to_string());
+            }
+        }
+    }
+
+    (title, author, subject, keywords)
+}
+
 fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Document, Error> {
     let settings = parse_settings(zip);
     let theme = parse_theme(zip, settings.east_asia_lang.as_deref());
@@ -418,6 +458,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
     let ft = parse_font_table(zip);
     let (embedded_fonts, font_table) = (ft.embedded_fonts, ft.font_table);
     let footnotes = parse_footnotes(zip, &styles, &theme);
+    let (title, author, subject, keywords) = parse_core_props(zip);
 
     let mut xml_content = String::new();
     zip.by_name("word/document.xml")
@@ -456,6 +497,11 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
             }
             "p" => {
                 let ppr = wml(node, "pPr");
+
+                let paragraph_mark_vanish = ppr
+                    .and_then(|ppr| wml(ppr, "rPr"))
+                    .and_then(|rpr| wml_bool(rpr, "vanish"))
+                    .unwrap_or(false);
 
                 let para_style_id = ppr
                     .and_then(|ppr| wml_attr(ppr, "pStyle"))
@@ -513,6 +559,11 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     .and_then(|ppr| wml_bool(ppr, "widowControl"))
                     .or_else(|| para_style.and_then(|s| s.widow_control))
                     .unwrap_or(styles.defaults.widow_control);
+
+                let snap_to_grid = ppr
+                    .and_then(|ppr| wml_bool(ppr, "snapToGrid"))
+                    .or_else(|| para_style.and_then(|s| s.snap_to_grid))
+                    .unwrap_or(true);
 
                 let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
                 let style_num = para_style.and_then(|s| s.num_id.as_deref());
@@ -709,6 +760,8 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     is_section_break: false,
                     bookmarks,
                     outline_level,
+                    paragraph_mark_vanish,
+                    snap_to_grid,
                 }));
 
                 // Mid-document section break: sectPr inside pPr ends the current section
@@ -760,6 +813,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
             footer_even: None,
             different_first_page: false,
             line_pitch: default_line_pitch,
+            grid_type: crate::model::DocGridType::Default,
             break_type: SectionBreakType::NextPage,
             columns: None,
             page_num_start: None,
@@ -781,5 +835,9 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         default_tab_stop: settings.default_tab_stop,
         style_id_to_name: styles.style_id_to_name,
         chart_font_name: theme.minor.clone(),
+        title,
+        author,
+        subject,
+        keywords,
     })
 }

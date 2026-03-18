@@ -186,6 +186,7 @@ pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
             tab_stops,
             floating_images: parsed.floating_images,
             textboxes: parsed.textboxes,
+            snap_to_grid: true,
             ..Paragraph::default()
         });
     }

@@ -360,8 +360,8 @@
     "convert_ms": 2.4
   },
   "scraped/japanese_interli..": {
-    "jaccard": 0.0412,
-    "ssim": 0.1904,
+    "jaccard": 0.0413,
+    "ssim": 0.2668,
     "text_boundary": 0.0952,
     "convert_ms": 4.5
   },

@@ -1,32 +1,35 @@
+mod assembly;
 mod chart_legend;
 mod charts;
 mod charts_radial;
+mod fonts;
 mod footnotes;
 mod header_footer;
+mod images;
 mod layout;
 mod smartart;
 mod table;
 
 use std::collections::{HashMap, HashSet};
 
-use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str, TextStr};
+use pdf_writer::{Content, Name, Pdf, Ref, Str};
 
 use crate::error::Error;
-use crate::fonts::{
-    FontEntry, encode_as_gids, font_key, font_key_buf, register_font, to_winansi_bytes,
-};
+use crate::fonts::{FontEntry, encode_as_gids, font_key, to_winansi_bytes};
 use crate::model::{
-    Alignment, Block, ConnectorShape, ConnectorType, Document, EmbeddedImage, FieldCode,
-    FloatingImage, HRelativeFrom, HeaderFooter, HorizontalPosition, ImageFormat, LineSpacing,
-    Paragraph, ParagraphBorder, ParagraphBorders, Run, SectionBreakType, SectionProperties,
-    ShapeFill, ShapeGeometry, Table, TextAnchor, Textbox, VRelativeFrom, VerticalPosition,
-    WrapType,
+    Alignment, Block, ConnectorShape, ConnectorType, DocGridType, Document, FloatingImage,
+    HRelativeFrom, HorizontalPosition, LineSpacing, Paragraph, ParagraphBorder, ParagraphBorders,
+    Run, SectionBreakType, SectionProperties, ShapeFill, ShapeGeometry, TextAnchor, Textbox,
+    VRelativeFrom, VerticalPosition, WrapType,
 };
 
+use assembly::{HeadingEntry, assemble_pdf_pages};
+use fonts::collect_and_register_fonts;
 use footnotes::{compute_footnote_height, render_page_footnotes};
 use header_footer::{
-    compute_effective_margin_bottom, effective_slot_top, hf_paragraphs, render_header_footer,
+    compute_effective_margin_bottom, effective_slot_top, render_header_footer,
 };
+use images::{EmbeddedImages, embed_all_images};
 use layout::{
     LinkAnnotation, build_paragraph_lines, build_tabbed_line, is_text_empty,
     render_paragraph_lines, tallest_run_metrics,
@@ -51,13 +54,6 @@ pub(super) struct GradientSpec {
     y: f32,
     w: f32,
     h: f32,
-}
-
-struct HeadingEntry {
-    title: String,
-    level: u8,
-    page_idx: usize,
-    y_position: f32,
 }
 
 pub(super) fn render_shape_fill(
@@ -589,18 +585,6 @@ fn collect_paras(para: &Paragraph) -> Vec<&Paragraph> {
     out
 }
 
-struct EmbeddedImages {
-    image_pdf_names: HashMap<usize, String>,
-    inline_image_pdf_names: HashMap<(usize, usize), String>,
-    floating_image_pdf_names: HashMap<(usize, usize), String>,
-    image_xobjects: Vec<(String, Ref)>,
-    hf_image_names: HashMap<(usize, u8, usize), String>,
-    hf_inline_image_names: HashMap<(usize, u8, usize, usize), String>,
-    hf_floating_image_names: HashMap<(usize, u8, usize, usize), String>,
-    /// Images in table cell paragraphs, keyed by Arc data pointer address.
-    table_cell_image_names: HashMap<usize, String>,
-}
-
 pub(super) struct PageBuilder {
     // Current page state
     pub(super) content: Content,
@@ -724,916 +708,6 @@ impl PageBuilder {
     }
 }
 
-fn embed_single_image(
-    img: &EmbeddedImage,
-    image_xobjects: &mut Vec<(String, Ref)>,
-    pdf: &mut Pdf,
-    alloc: &mut impl FnMut() -> Ref,
-) -> String {
-    let xobj_ref = alloc();
-    let pdf_name = format!("Im{}", image_xobjects.len() + 1);
-
-    match img.format {
-        ImageFormat::Jpeg => {
-            let mut xobj = pdf.image_xobject(xobj_ref, &*img.data);
-            xobj.filter(Filter::DctDecode);
-            xobj.width(img.pixel_width as i32);
-            xobj.height(img.pixel_height as i32);
-            match img.jpeg_components {
-                1 => xobj.color_space().device_gray(),
-                4 => xobj.color_space().device_cmyk(),
-                _ => xobj.color_space().device_rgb(),
-            };
-            xobj.bits_per_component(8);
-            xobj.interpolate(true);
-        }
-        ImageFormat::Png => {
-            let cursor = std::io::Cursor::new(img.data.as_slice());
-            let reader = image::ImageReader::with_format(
-                std::io::BufReader::new(cursor),
-                image::ImageFormat::Png,
-            );
-            let decoded = match reader.decode() {
-                Ok(d) => d,
-                Err(e) => {
-                    log::warn!("PNG decode failed: {e} — writing 1x1 placeholder");
-                    let mut xobj = pdf.image_xobject(xobj_ref, &[255, 255, 255]);
-                    xobj.width(1);
-                    xobj.height(1);
-                    xobj.color_space().device_rgb();
-                    xobj.bits_per_component(8);
-                    image_xobjects.push((pdf_name.clone(), xobj_ref));
-                    return pdf_name;
-                }
-            };
-            let rgba: image::RgbaImage = decoded.to_rgba8();
-            let (w, h) = (rgba.width(), rgba.height());
-            let has_alpha = rgba.pixels().any(|p| p.0[3] < 255);
-
-            let rgb_data: Vec<u8> = rgba
-                .pixels()
-                .flat_map(|p| [p.0[0], p.0[1], p.0[2]])
-                .collect();
-            let compressed_rgb = miniz_oxide::deflate::compress_to_vec_zlib(&rgb_data, 6);
-
-            let smask_ref = if has_alpha {
-                let alpha_data: Vec<u8> = rgba.pixels().map(|p| p.0[3]).collect();
-                let compressed_alpha = miniz_oxide::deflate::compress_to_vec_zlib(&alpha_data, 6);
-                let mask_ref = alloc();
-                let mut mask = pdf.image_xobject(mask_ref, &compressed_alpha);
-                mask.filter(Filter::FlateDecode);
-                mask.width(w as i32);
-                mask.height(h as i32);
-                mask.color_space().device_gray();
-                mask.bits_per_component(8);
-                Some(mask_ref)
-            } else {
-                None
-            };
-
-            let mut xobj = pdf.image_xobject(xobj_ref, &compressed_rgb);
-            xobj.filter(Filter::FlateDecode);
-            xobj.width(w as i32);
-            xobj.height(h as i32);
-            xobj.color_space().device_rgb();
-            xobj.bits_per_component(8);
-            xobj.interpolate(true);
-            if let Some(mask_ref) = smask_ref {
-                xobj.s_mask(mask_ref);
-            }
-        }
-    }
-
-    image_xobjects.push((pdf_name.clone(), xobj_ref));
-    pdf_name
-}
-
-fn collect_all_runs(doc: &Document) -> Vec<&Run> {
-    let hf_runs = doc.sections.iter().flat_map(|s| {
-        [
-            &s.properties.header_default,
-            &s.properties.header_first,
-            &s.properties.header_even,
-            &s.properties.footer_default,
-            &s.properties.footer_first,
-            &s.properties.footer_even,
-        ]
-        .into_iter()
-        .filter_map(|hf| hf.as_ref())
-        .flat_map(|hf| hf_paragraphs(hf))
-        .flat_map(|p| p.runs.iter())
-    });
-
-    let footnote_runs = doc
-        .footnotes
-        .values()
-        .flat_map(|fn_| fn_.paragraphs.iter())
-        .flat_map(|p| p.runs.iter());
-
-    doc.sections
-        .iter()
-        .flat_map(|s| s.blocks.iter())
-        .flat_map(|block| -> Vec<&Run> {
-            match block {
-                Block::Paragraph(para) => para_runs_with_textboxes(para),
-                Block::Table(table) => table
-                    .rows
-                    .iter()
-                    .flat_map(|row| row.cells.iter())
-                    .flat_map(|cell| cell.all_paragraphs())
-                    .flat_map(|para| para_runs_with_textboxes(para))
-                    .collect(),
-            }
-        })
-        .chain(hf_runs)
-        .chain(footnote_runs)
-        .collect()
-}
-
-fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, HashSet<char>> {
-    let mut used: HashMap<String, HashSet<char>> = HashMap::new();
-    let mut key_buf = String::new();
-
-    for run in all_runs {
-        let key = font_key_buf(run, &mut key_buf);
-        let chars = used.entry(key.to_string()).or_default();
-        if run.caps || run.small_caps {
-            chars.extend(run.text.to_uppercase().chars());
-        } else {
-            chars.extend(run.text.chars());
-        }
-        if let Some(ref fc) = run.field_code {
-            match fc {
-                FieldCode::Page | FieldCode::NumPages => {
-                    chars.extend('0'..='9');
-                }
-                FieldCode::StyleRef(_) => {}
-            }
-        }
-        if run.footnote_id.is_some() || run.is_footnote_ref_mark {
-            chars.extend('0'..='9');
-        }
-    }
-
-    let all_paras: Vec<&Paragraph> = doc
-        .sections
-        .iter()
-        .flat_map(|s| s.blocks.iter())
-        .flat_map(|block| -> Vec<&Paragraph> {
-            match block {
-                Block::Paragraph(p) => collect_paras(p),
-                Block::Table(t) => t
-                    .rows
-                    .iter()
-                    .flat_map(|row| row.cells.iter())
-                    .flat_map(|cell| cell.all_paragraphs())
-                    .flat_map(|p| collect_paras(p))
-                    .collect(),
-            }
-        })
-        .collect();
-
-    for para in &all_paras {
-        if !para.list_label.is_empty() {
-            if let Some(key) = label_font_key(para) {
-                used.entry(key)
-                    .or_default()
-                    .extend(para.list_label.chars());
-            }
-        }
-        for stop in &para.tab_stops {
-            if let Some(leader_char) = stop.leader
-                && let Some(run) = para.runs.first()
-            {
-                let key = font_key_buf(run, &mut key_buf).to_string();
-                used.entry(key).or_default().insert(leader_char);
-            }
-        }
-    }
-
-    if let Some(first_run) = all_runs.first() {
-        let sa_key = font_key_buf(first_run, &mut key_buf).to_string();
-        let chars = used.entry(sa_key).or_default();
-        for para in &all_paras {
-            if let Some(ref diagram) = para.smartart {
-                for shape in &diagram.shapes {
-                    chars.extend(shape.text.chars());
-                }
-            }
-        }
-    }
-
-    // Collect characters that may appear in STYLEREF values by scanning
-    // body paragraph text (paragraph styles) and run text (character styles).
-    let mut styleref_chars: HashSet<char> = HashSet::new();
-    for para in &all_paras {
-        if para.style_id.is_some() {
-            for run in &para.runs {
-                styleref_chars.extend(run.text.chars());
-            }
-        }
-        for run in &para.runs {
-            if run.char_style_id.is_some() {
-                styleref_chars.extend(run.text.chars());
-            }
-        }
-    }
-
-    // Collect all page number formats across sections so inherited footers get
-    // the right characters (e.g. footer in section 1 inherited by section 2 with lowerRoman).
-    let all_page_num_formats: Vec<&str> = doc
-        .sections
-        .iter()
-        .filter_map(|s| s.properties.page_num_format.as_deref())
-        .collect();
-
-    for section in &doc.sections {
-        for hf in [
-            &section.properties.header_default,
-            &section.properties.header_first,
-            &section.properties.header_even,
-            &section.properties.footer_default,
-            &section.properties.footer_first,
-            &section.properties.footer_even,
-        ]
-        .into_iter()
-        .flatten()
-        {
-            for para in hf_paragraphs(hf) {
-                for run in &para.runs {
-                    let key = font_key_buf(run, &mut key_buf);
-                    let chars = used.entry(key.to_string()).or_default();
-                    if run.caps || run.small_caps {
-                        chars.extend(run.text.to_uppercase().chars());
-                    } else {
-                        chars.extend(run.text.chars());
-                    }
-                    if let Some(ref fc) = run.field_code {
-                        match fc {
-                            FieldCode::Page | FieldCode::NumPages => {
-                                chars.extend('0'..='9');
-                                for fmt in &all_page_num_formats {
-                                    extend_chars_for_num_format(chars, fmt);
-                                }
-                            }
-                            FieldCode::StyleRef(_) => {
-                                chars.extend(styleref_chars.iter());
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // Collect characters for chart labels under the theme minor font
-    {
-        let mut chart_label_chars: HashSet<char> = HashSet::new();
-        for para in &all_paras {
-            if let Some(ref ic) = para.inline_chart {
-                chart_label_chars.extend('0'..='9');
-                chart_label_chars.insert('.');
-                chart_label_chars.insert('-');
-                for series in &ic.chart.series {
-                    chart_label_chars.extend(series.label.chars());
-                }
-                if let Some(ref cat_axis) = ic.chart.cat_axis {
-                    for label in &cat_axis.labels {
-                        chart_label_chars.extend(label.chars());
-                    }
-                }
-            }
-        }
-        if !chart_label_chars.is_empty() {
-            used.entry(doc.chart_font_name.clone())
-                .or_default()
-                .extend(chart_label_chars);
-        }
-    }
-
-    for chars in used.values_mut() {
-        chars.insert(' ');
-    }
-
-    used
-}
-
-fn extend_chars_for_num_format(chars: &mut HashSet<char>, fmt: &str) {
-    match fmt {
-        "lowerRoman" => chars.extend(['i', 'v', 'x', 'l', 'c', 'd', 'm']),
-        "upperRoman" => chars.extend(['I', 'V', 'X', 'L', 'C', 'D', 'M']),
-        "lowerLetter" => chars.extend('a'..='z'),
-        "upperLetter" => chars.extend('A'..='Z'),
-        _ => {}
-    }
-}
-
-fn collect_and_register_fonts(
-    doc: &Document,
-    pdf: &mut Pdf,
-    alloc: &mut impl FnMut() -> Ref,
-) -> (HashMap<String, FontEntry>, Vec<String>) {
-    let mut seen_fonts: HashMap<String, FontEntry> = HashMap::new();
-    let mut font_order: Vec<String> = Vec::new();
-    let all_runs = collect_all_runs(doc);
-    let used_chars_per_font = collect_used_chars(doc, &all_runs);
-    let mut key_buf = String::new();
-
-    for run in &all_runs {
-        let key = font_key_buf(run, &mut key_buf);
-        if !seen_fonts.contains_key(key) {
-            let key_owned = key.to_string();
-            let pdf_name = format!("F{}", font_order.len() + 1);
-            let used = used_chars_per_font
-                .get(&key_owned)
-                .cloned()
-                .unwrap_or_default();
-            let entry = register_font(
-                pdf,
-                &run.font_name,
-                run.bold,
-                run.italic,
-                pdf_name,
-                alloc,
-                &doc.embedded_fonts,
-                &used,
-                &doc.font_table,
-            );
-            font_order.push(key_owned.clone());
-            seen_fonts.insert(key_owned, entry);
-        }
-    }
-
-    for (key, used) in &used_chars_per_font {
-        if !seen_fonts.contains_key(key) {
-            let pdf_name = format!("F{}", font_order.len() + 1);
-            let entry = register_font(
-                pdf,
-                key,
-                false,
-                false,
-                pdf_name,
-                alloc,
-                &doc.embedded_fonts,
-                used,
-                &doc.font_table,
-            );
-            seen_fonts.insert(key.clone(), entry);
-            font_order.push(key.clone());
-        }
-    }
-
-    // Collect all CJK chars missing from their primary fonts and register a
-    // shared CJK fallback font so the rendering code can substitute per-character.
-    let mut all_missing_cjk: HashSet<char> = HashSet::new();
-    for entry in seen_fonts.values() {
-        all_missing_cjk.extend(&entry.missing_cjk_chars);
-    }
-    if !all_missing_cjk.is_empty() {
-        let fallback_key = "__cjk_fallback".to_string();
-        let pdf_name = format!("F{}", font_order.len() + 1);
-        // Per-character fallback needs comprehensive CJK coverage (including
-        // Japanese Kanji that Korean fonts like Malgun Gothic may lack).
-        // Try comprehensive fonts first, then language-specific ones.
-        #[cfg(target_os = "macos")]
-        let fallback_font_name =
-            "Hiragino Sans W3;Hiragino Kaku Gothic ProN W3;Arial Unicode MS;Malgun Gothic";
-        #[cfg(target_os = "linux")]
-        let fallback_font_name = "Noto Sans CJK SC;Noto Sans CJK KR;Noto Sans CJK JP";
-        #[cfg(target_os = "windows")]
-        let fallback_font_name = "Yu Gothic;Microsoft YaHei;Malgun Gothic";
-        #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-        let fallback_font_name = "Arial Unicode MS";
-        let entry = register_font(
-            pdf,
-            &fallback_font_name,
-            false,
-            false,
-            pdf_name,
-            alloc,
-            &doc.embedded_fonts,
-            &all_missing_cjk,
-            &doc.font_table,
-        );
-        font_order.push(fallback_key.clone());
-        seen_fonts.insert(fallback_key, entry);
-
-        // Copy fallback char widths into each primary font so layout uses correct widths
-        if let Some(fb_widths) = seen_fonts
-            .get("__cjk_fallback")
-            .and_then(|e| e.char_widths_1000.clone())
-        {
-            for entry in seen_fonts.values_mut() {
-                if entry.missing_cjk_chars.is_empty() {
-                    continue;
-                }
-                let widths = entry.char_widths_1000.get_or_insert_with(HashMap::new);
-                for &ch in &entry.missing_cjk_chars {
-                    if let Some(&w) = fb_widths.get(&ch) {
-                        widths.insert(ch, w);
-                    }
-                }
-            }
-        }
-    }
-
-    if seen_fonts.is_empty() {
-        let pdf_name = "F1".to_string();
-        let entry = register_font(
-            pdf,
-            "Helvetica",
-            false,
-            false,
-            pdf_name,
-            alloc,
-            &doc.embedded_fonts,
-            &HashSet::new(),
-            &doc.font_table,
-        );
-        seen_fonts.insert("Helvetica".to_string(), entry);
-        font_order.push("Helvetica".to_string());
-    }
-
-    (seen_fonts, font_order)
-}
-
-fn embed_all_images(
-    doc: &Document,
-    pdf: &mut Pdf,
-    alloc: &mut impl FnMut() -> Ref,
-) -> EmbeddedImages {
-    let mut image_pdf_names: HashMap<usize, String> = HashMap::new();
-    let mut inline_image_pdf_names: HashMap<(usize, usize), String> = HashMap::new();
-    let mut image_xobjects: Vec<(String, Ref)> = Vec::new();
-    let mut floating_image_pdf_names: HashMap<(usize, usize), String> = HashMap::new();
-
-    {
-        let mut global_block_idx = 0usize;
-        for section in &doc.sections {
-            for block in &section.blocks {
-                if let Block::Paragraph(para) = block {
-                    if let Some(img) = &para.image {
-                        let name = embed_single_image(img, &mut image_xobjects, pdf, alloc);
-                        image_pdf_names.insert(global_block_idx, name);
-                    }
-                    for (run_idx, run) in para.runs.iter().enumerate() {
-                        if let Some(img) = &run.inline_image {
-                            let name = embed_single_image(img, &mut image_xobjects, pdf, alloc);
-                            inline_image_pdf_names.insert((global_block_idx, run_idx), name);
-                        }
-                    }
-                    for (fi_idx, fi) in para.floating_images.iter().enumerate() {
-                        let name = embed_single_image(&fi.image, &mut image_xobjects, pdf, alloc);
-                        floating_image_pdf_names.insert((global_block_idx, fi_idx), name);
-                    }
-                }
-                global_block_idx += 1;
-            }
-        }
-    }
-
-    let mut hf_image_names: HashMap<(usize, u8, usize), String> = HashMap::new();
-    let mut hf_inline_image_names: HashMap<(usize, u8, usize, usize), String> = HashMap::new();
-    let mut hf_floating_image_names: HashMap<(usize, u8, usize, usize), String> = HashMap::new();
-    {
-        let hf_variants: [(u8, fn(&SectionProperties) -> Option<&HeaderFooter>); 6] = [
-            (0, |sp| sp.header_default.as_ref()),
-            (1, |sp| sp.header_first.as_ref()),
-            (2, |sp| sp.footer_default.as_ref()),
-            (3, |sp| sp.footer_first.as_ref()),
-            (4, |sp| sp.header_even.as_ref()),
-            (5, |sp| sp.footer_even.as_ref()),
-        ];
-        for (si, section) in doc.sections.iter().enumerate() {
-            for &(hf_type, accessor) in &hf_variants {
-                if let Some(hf) = accessor(&section.properties) {
-                    let mut pi = 0usize;
-                    for block in &hf.blocks {
-                        if let Block::Paragraph(para) = block {
-                            if let Some(img) = &para.image {
-                                let name = embed_single_image(img, &mut image_xobjects, pdf, alloc);
-                                hf_image_names.insert((si, hf_type, pi), name);
-                            }
-                            for (ri, run) in para.runs.iter().enumerate() {
-                                if let Some(img) = &run.inline_image {
-                                    let name =
-                                        embed_single_image(img, &mut image_xobjects, pdf, alloc);
-                                    hf_inline_image_names.insert((si, hf_type, pi, ri), name);
-                                }
-                            }
-                            for (fi, floating) in para.floating_images.iter().enumerate() {
-                                let name = embed_single_image(
-                                    &floating.image,
-                                    &mut image_xobjects,
-                                    pdf,
-                                    alloc,
-                                );
-                                hf_floating_image_names.insert((si, hf_type, pi, fi), name);
-                            }
-                            pi += 1;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    let mut table_cell_image_names: HashMap<usize, String> = HashMap::new();
-    {
-        let mut tables: Vec<&Table> = Vec::new();
-        for section in &doc.sections {
-            for block in &section.blocks {
-                if let Block::Table(table) = block {
-                    tables.push(table);
-                }
-            }
-            let hf_list: [Option<&HeaderFooter>; 6] = [
-                section.properties.header_default.as_ref(),
-                section.properties.header_first.as_ref(),
-                section.properties.footer_default.as_ref(),
-                section.properties.footer_first.as_ref(),
-                section.properties.header_even.as_ref(),
-                section.properties.footer_even.as_ref(),
-            ];
-            for hf_opt in hf_list {
-                if let Some(hf) = hf_opt {
-                    for block in &hf.blocks {
-                        if let Block::Table(table) = block {
-                            tables.push(table);
-                        }
-                    }
-                }
-            }
-        }
-        for table in tables {
-            for row in &table.rows {
-                for cell in &row.cells {
-                    for para in cell.all_paragraphs() {
-                        if let Some(img) = &para.image {
-                            let key = std::sync::Arc::as_ptr(&img.data) as usize;
-                            if !table_cell_image_names.contains_key(&key) {
-                                let name =
-                                    embed_single_image(img, &mut image_xobjects, pdf, alloc);
-                                table_cell_image_names.insert(key, name);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    EmbeddedImages {
-        image_pdf_names,
-        inline_image_pdf_names,
-        floating_image_pdf_names,
-        image_xobjects,
-        hf_image_names,
-        hf_inline_image_names,
-        hf_floating_image_names,
-        table_cell_image_names,
-    }
-}
-
-fn srgb_to_linear(s: f32) -> f32 {
-    if s <= 0.04045 {
-        s / 12.92
-    } else {
-        ((s + 0.055) / 1.055).powf(2.4)
-    }
-}
-
-fn srgb_to_linear_rgb(c: [u8; 3]) -> [f32; 3] {
-    [
-        srgb_to_linear(c[0] as f32 / 255.0),
-        srgb_to_linear(c[1] as f32 / 255.0),
-        srgb_to_linear(c[2] as f32 / 255.0),
-    ]
-}
-
-#[allow(clippy::too_many_arguments)]
-fn assemble_pdf_pages(
-    pdf: &mut Pdf,
-    alloc: &mut impl FnMut() -> Ref,
-    catalog_id: Ref,
-    pages_id: Ref,
-    all_contents: Vec<Content>,
-    all_hf_contents: &mut Vec<Option<Content>>,
-    all_page_links: &[Vec<LinkAnnotation>],
-    all_page_alpha_states: &[HashSet<u8>],
-    all_page_gradient_specs: &[Vec<GradientSpec>],
-    page_section_indices: &[(usize, bool)],
-    seen_fonts: &HashMap<String, FontEntry>,
-    font_order: &[String],
-    image_xobjects: &[(String, Ref)],
-    doc: &Document,
-    bookmark_positions: &HashMap<String, (usize, f32)>,
-    heading_entries: &[HeadingEntry],
-) {
-    let n = all_contents.len();
-    let page_ids: Vec<Ref> = (0..n).map(|_| alloc()).collect();
-    let content_ids: Vec<Ref> = (0..n).map(|_| alloc()).collect();
-
-    let page_annot_refs: Vec<Vec<Ref>> = all_page_links
-        .iter()
-        .map(|links| {
-            links
-                .iter()
-                .filter_map(|link| {
-                    let annot_ref = alloc();
-                    let mut annot = pdf.annotation(annot_ref);
-                    annot
-                        .subtype(pdf_writer::types::AnnotationType::Link)
-                        .rect(link.rect)
-                        .border(0.0, 0.0, 0.0, None);
-                    if let Some(anchor) = link.url.strip_prefix('#') {
-                        if let Some(&(dest_page_idx, dest_y)) = bookmark_positions.get(anchor) {
-                            annot
-                                .action()
-                                .action_type(pdf_writer::types::ActionType::GoTo)
-                                .destination()
-                                .page(page_ids[dest_page_idx])
-                                .xyz(0.0, dest_y, None);
-                            Some(annot_ref)
-                        } else {
-                            None
-                        }
-                    } else {
-                        annot
-                            .action()
-                            .action_type(pdf_writer::types::ActionType::Uri)
-                            .uri(Str(link.url.as_bytes()));
-                        Some(annot_ref)
-                    }
-                })
-                .collect()
-        })
-        .collect();
-
-    let all_alpha_values: HashSet<u8> = all_page_alpha_states
-        .iter()
-        .flat_map(|s| s.iter().copied())
-        .collect();
-    let alpha_gs_refs: HashMap<u8, Ref> = all_alpha_values
-        .iter()
-        .map(|&pct| {
-            let gs_ref = alloc();
-            pdf.ext_graphics(gs_ref)
-                .non_stroking_alpha(pct as f32 / 100.0);
-            (pct, gs_ref)
-        })
-        .collect();
-
-    let all_page_pattern_refs: Vec<Vec<(String, Ref)>> = all_page_gradient_specs
-        .iter()
-        .map(|specs| {
-            specs
-                .iter()
-                .map(|spec| {
-                    let func_ref = if spec.stops.len() <= 2 {
-                        let (c0, c1) = if spec.stops.len() >= 2 {
-                            (spec.stops[0].0, spec.stops[spec.stops.len() - 1].0)
-                        } else {
-                            (spec.stops[0].0, spec.stops[0].0)
-                        };
-                        let fref = alloc();
-                        pdf.exponential_function(fref)
-                            .domain([0.0, 1.0])
-                            .c0(srgb_to_linear_rgb(c0))
-                            .c1(srgb_to_linear_rgb(c1))
-                            .n(1.0);
-                        fref
-                    } else {
-                        let sub_refs: Vec<Ref> = spec
-                            .stops
-                            .windows(2)
-                            .map(|pair| {
-                                let fref = alloc();
-                                pdf.exponential_function(fref)
-                                    .domain([0.0, 1.0])
-                                    .c0(srgb_to_linear_rgb(pair[0].0))
-                                    .c1(srgb_to_linear_rgb(pair[1].0))
-                                    .n(1.0);
-                                fref
-                            })
-                            .collect();
-
-                        let bounds: Vec<f32> = spec.stops[1..spec.stops.len() - 1]
-                            .iter()
-                            .map(|s| s.1)
-                            .collect();
-                        let encode: Vec<f32> =
-                            sub_refs.iter().flat_map(|_| [0.0, 1.0]).collect();
-
-                        let stitch_ref = alloc();
-                        pdf.stitching_function(stitch_ref)
-                            .domain([0.0, 1.0])
-                            .functions(sub_refs)
-                            .bounds(bounds)
-                            .encode(encode);
-                        stitch_ref
-                    };
-
-                    let ang_rad = spec.angle_deg.to_radians();
-                    let (sin_a, cos_a) = ang_rad.sin_cos();
-                    let cx = spec.x + spec.w / 2.0;
-                    let cy = spec.y + spec.h / 2.0;
-                    let half_len = ((spec.w / 2.0 * cos_a).powi(2)
-                        + (spec.h / 2.0 * sin_a).powi(2))
-                    .sqrt();
-                    let x0 = cx - half_len * cos_a;
-                    let y0 = cy + half_len * sin_a;
-                    let x1 = cx + half_len * cos_a;
-                    let y1 = cy - half_len * sin_a;
-
-                    let pat_ref = alloc();
-                    let mut pattern = pdf.shading_pattern(pat_ref);
-                    let mut shading = pattern.function_shading();
-                    shading
-                        .shading_type(pdf_writer::types::FunctionShadingType::Axial)
-                        .color_space()
-                        .cal_rgb(
-                            [0.9505, 1.0, 1.0890],
-                            None,
-                            None,
-                            Some([
-                                0.4124, 0.2126, 0.0193, 0.3576, 0.7152, 0.1192, 0.1805, 0.0722,
-                                0.9505,
-                            ]),
-                        );
-                    shading
-                        .function(func_ref)
-                        .coords([x0, y0, x1, y1])
-                        .extend([true, true]);
-
-                    (spec.pattern_name.clone(), pat_ref)
-                })
-                .collect()
-        })
-        .collect();
-
-    for (i, c) in all_contents.into_iter().enumerate() {
-        let body_raw = c.finish();
-        if let Some(hf) = all_hf_contents[i].take() {
-            let hf_raw = hf.finish();
-            let mut combined = Vec::with_capacity(hf_raw.len() + 1 + body_raw.len());
-            combined.extend_from_slice(hf_raw.as_slice());
-            combined.push(b'\n');
-            combined.extend_from_slice(body_raw.as_slice());
-            let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&combined, 6);
-            pdf.stream(content_ids[i], &compressed)
-                .filter(Filter::FlateDecode);
-        } else {
-            let compressed = miniz_oxide::deflate::compress_to_vec_zlib(body_raw.as_slice(), 6);
-            pdf.stream(content_ids[i], &compressed)
-                .filter(Filter::FlateDecode);
-        }
-    }
-
-    // Build PDF outline (bookmarks panel) from heading entries
-    let outline_id = if !heading_entries.is_empty() {
-        let oid = alloc();
-        let item_refs: Vec<Ref> = heading_entries.iter().map(|_| alloc()).collect();
-
-        // Build parent/first-child/last-child/prev/next relationships using a stack.
-        // Each item's parent is the nearest preceding item with a smaller level, or the root.
-        // children_of[i] collects indices of direct children of item i.
-        // children_of_root collects top-level items.
-        let mut parent_idx: Vec<Option<usize>> = vec![None; heading_entries.len()];
-        let mut stack: Vec<usize> = Vec::new(); // indices of ancestors
-        for (i, entry) in heading_entries.iter().enumerate() {
-            while let Some(&top) = stack.last() {
-                if heading_entries[top].level < entry.level {
-                    break;
-                }
-                stack.pop();
-            }
-            parent_idx[i] = stack.last().copied();
-            stack.push(i);
-        }
-
-        // Group children by parent
-        let mut children_of: Vec<Vec<usize>> = vec![Vec::new(); heading_entries.len()];
-        let mut root_children: Vec<usize> = Vec::new();
-        for (i, parent) in parent_idx.iter().enumerate() {
-            match parent {
-                Some(p) => children_of[*p].push(i),
-                None => root_children.push(i),
-            }
-        }
-
-        // Count all visible descendants (open by default)
-        fn count_descendants(idx: usize, children_of: &[Vec<usize>]) -> i32 {
-            let mut total = children_of[idx].len() as i32;
-            for &child in &children_of[idx] {
-                total += count_descendants(child, children_of);
-            }
-            total
-        }
-
-        let total_visible: i32 = heading_entries.len() as i32;
-
-        // Write outline items
-        for (i, entry) in heading_entries.iter().enumerate() {
-            let parent_ref = match parent_idx[i] {
-                Some(p) => item_refs[p],
-                None => oid,
-            };
-            let siblings = match parent_idx[i] {
-                Some(p) => &children_of[p],
-                None => &root_children,
-            };
-            let pos_in_siblings = siblings.iter().position(|&s| s == i).unwrap();
-
-            let mut item = pdf.outline_item(item_refs[i]);
-            item.title(TextStr(&entry.title))
-                .parent(parent_ref);
-
-            if pos_in_siblings > 0 {
-                item.prev(item_refs[siblings[pos_in_siblings - 1]]);
-            }
-            if pos_in_siblings + 1 < siblings.len() {
-                item.next(item_refs[siblings[pos_in_siblings + 1]]);
-            }
-
-            if !children_of[i].is_empty() {
-                item.first(item_refs[*children_of[i].first().unwrap()])
-                    .last(item_refs[*children_of[i].last().unwrap()])
-                    .count(count_descendants(i, &children_of));
-            }
-
-            item.dest().page(page_ids[entry.page_idx]).xyz(0.0, entry.y_position, None);
-        }
-
-        // Write outline root
-        pdf.outline(oid)
-            .first(item_refs[root_children[0]])
-            .last(item_refs[*root_children.last().unwrap()])
-            .count(total_visible);
-
-        Some(oid)
-    } else {
-        None
-    };
-
-    {
-        let mut catalog = pdf.catalog(catalog_id);
-        catalog.pages(pages_id);
-        if let Some(oid) = outline_id {
-            catalog.outlines(oid)
-                .page_mode(pdf_writer::types::PageMode::UseOutlines);
-        }
-    }
-    pdf.pages(pages_id)
-        .kids(page_ids.iter().copied())
-        .count(n as i32);
-
-    let font_pairs: Vec<(String, Ref)> = font_order
-        .iter()
-        .map(|name| (seen_fonts[name].pdf_name.clone(), seen_fonts[name].font_ref))
-        .collect();
-
-    for i in 0..n {
-        let (si, _) = page_section_indices[i];
-        let sp = &doc.sections[si].properties;
-        let mut page = pdf.page(page_ids[i]);
-        page.media_box(Rect::new(0.0, 0.0, sp.page_width, sp.page_height))
-            .parent(pages_id)
-            .contents(content_ids[i]);
-        if !page_annot_refs[i].is_empty() {
-            page.annotations(page_annot_refs[i].iter().copied());
-        }
-        {
-            let mut resources = page.resources();
-            {
-                let mut fonts = resources.fonts();
-                for (name, font_ref) in &font_pairs {
-                    fonts.pair(Name(name.as_bytes()), *font_ref);
-                }
-            }
-            if !image_xobjects.is_empty() {
-                let mut xobjects = resources.x_objects();
-                for (name, xobj_ref) in image_xobjects {
-                    xobjects.pair(Name(name.as_bytes()), *xobj_ref);
-                }
-            }
-            if let Some(alpha_set) = all_page_alpha_states.get(i).filter(|s| !s.is_empty()) {
-                let mut gs_dict = resources.ext_g_states();
-                for &pct in alpha_set {
-                    let gs_name = format!("GSa{pct}");
-                    let gs_ref = alpha_gs_refs[&pct];
-                    gs_dict.pair(Name(gs_name.as_bytes()), gs_ref);
-                }
-            }
-            if let Some(pat_refs) = all_page_pattern_refs.get(i).filter(|p| !p.is_empty()) {
-                let mut patterns = resources.patterns();
-                for (name, pat_ref) in pat_refs {
-                    patterns.pair(Name(name.as_bytes()), *pat_ref);
-                }
-            }
-        }
-    }
-}
 
 pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     let t0 = std::time::Instant::now();
@@ -1874,6 +948,20 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         tallest_run_metrics(&para.runs, ctx.fonts);
                     let effective_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
                     let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
+                    let line_h = if para.snap_to_grid
+                        && matches!(
+                            cur_sp.grid_type,
+                            DocGridType::Lines
+                                | DocGridType::LinesAndChars
+                                | DocGridType::SnapToChars
+                        )
+                        && !matches!(effective_ls, LineSpacing::Exact(_))
+                        && cur_sp.line_pitch > 0.0
+                    {
+                        (line_h / cur_sp.line_pitch).ceil() * cur_sp.line_pitch
+                    } else {
+                        line_h
+                    };
 
                     let (col_x, col_w) = col_geometry[current_col];
                     let para_text_x = col_x + para.indent_left;
@@ -1951,7 +1039,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     } else if para.image.is_some() {
                         para.content_height.max(sp.line_pitch)
                     } else if text_empty {
-                        if para.content_height > 0.0 {
+                        if para.paragraph_mark_vanish {
+                            0.0
+                        } else if para.content_height > 0.0 {
                             para.content_height
                         } else {
                             line_h
@@ -2019,6 +1109,12 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 }
                             }
                         }
+                    }
+
+                    // Vanished paragraph mark: zero out height and spacing
+                    if text_empty && para.paragraph_mark_vanish {
+                        content_h = 0.0;
+                        inter_gap = 0.0;
                     }
 
                     let bdr_top_pad = para
@@ -2503,7 +1599,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     }
 
                     pb.slot_top -= content_h + bdr_top_pad;
-                    prev_space_after = effective_space_after;
+                    if !(text_empty && para.paragraph_mark_vanish) {
+                        prev_space_after = effective_space_after;
+                    }
 
                     // Track footnotes referenced on this page
                     for run in para.runs.iter() {
