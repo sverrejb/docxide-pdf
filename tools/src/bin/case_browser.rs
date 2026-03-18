@@ -171,6 +171,47 @@ fn save_annotations(output_dir: &Path, store: &AnnotationStore) {
     }
 }
 
+// --- Baseline scores ---
+
+#[derive(Default, Deserialize)]
+struct BaselineScores {
+    jaccard: Option<f64>,
+    ssim: Option<f64>,
+}
+
+fn baseline_key(name: &str) -> String {
+    let (group, case_name) = if let Some(idx) = name.find('/') {
+        (&name[..idx], &name[idx + 1..])
+    } else {
+        ("cases", name)
+    };
+    let short = if case_name.len() > 16 {
+        format!("{}..", &case_name[..16])
+    } else {
+        case_name.to_string()
+    };
+    format!("{}/{}", group, short)
+}
+
+fn load_baselines(output_dir: &Path) -> HashMap<String, BaselineScores> {
+    let path = output_dir
+        .parent()
+        .unwrap_or(output_dir)
+        .join("baselines.json");
+    std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn score_color(value: f64, threshold: f64) -> egui::Color32 {
+    if value >= threshold {
+        egui::Color32::from_rgb(0, 180, 0)
+    } else {
+        egui::Color32::from_rgb(220, 40, 40)
+    }
+}
+
 struct PendingAnnotation {
     page: usize,
     source: ImageSource,
@@ -254,11 +295,13 @@ struct App {
     pending_annotation: Option<PendingAnnotation>,
     show_annotations: bool,
     show_notes_panel: bool,
+    baselines: HashMap<String, BaselineScores>,
 }
 
 impl App {
     fn new(cases: Vec<CaseInfo>, output_dir: PathBuf) -> Self {
         let annotations = load_annotations(&output_dir);
+        let baselines = load_baselines(&output_dir);
         Self {
             cases,
             output_dir,
@@ -275,6 +318,7 @@ impl App {
             pending_annotation: None,
             show_annotations: true,
             show_notes_panel: true,
+            baselines,
         }
     }
 
@@ -403,7 +447,17 @@ impl eframe::App for App {
             .cases
             .iter()
             .enumerate()
-            .map(|(i, c)| (format!("{} ({}p)", c.name, c.page_count), i))
+            .map(|(i, c)| {
+                let key = baseline_key(&c.name);
+                let label = if let Some(b) = self.baselines.get(&key) {
+                    let j = b.jaccard.map(|v| format!("{:.0}", v * 100.0)).unwrap_or_else(|| "-".into());
+                    let s = b.ssim.map(|v| format!("{:.0}", v * 100.0)).unwrap_or_else(|| "-".into());
+                    format!("{} ({}p) {}/{}", c.name, c.page_count, j, s)
+                } else {
+                    format!("{} ({}p)", c.name, c.page_count)
+                };
+                (label, i)
+            })
             .collect();
         let cur = self.current_case;
         let scroll = self.scroll_to_current;
@@ -412,7 +466,7 @@ impl eframe::App for App {
         let mut did_scroll = false;
 
         egui::SidePanel::right("case_list")
-            .default_width(200.0)
+            .default_width(260.0)
             .show(ctx, |ui| {
                 ui.heading("Cases");
                 ui.separator();
@@ -451,6 +505,22 @@ impl eframe::App for App {
                     ViewMode::Overlay => "[O]verlay",
                 };
                 ui.label(format!("View: {}", mode_label));
+                let key = baseline_key(&case.name);
+                if let Some(b) = self.baselines.get(&key) {
+                    ui.separator();
+                    if let Some(j) = b.jaccard {
+                        ui.colored_label(
+                            score_color(j, 0.20),
+                            format!("Jaccard: {:.1}%", j * 100.0),
+                        );
+                    }
+                    if let Some(s) = b.ssim {
+                        ui.colored_label(
+                            score_color(s, 0.75),
+                            format!("SSIM: {:.1}%", s * 100.0),
+                        );
+                    }
+                }
                 ui.separator();
                 if self.show_grid {
                     ui.label(format!("Grid: {:.0}px (+/-)", self.grid_spacing));
