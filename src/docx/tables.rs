@@ -163,6 +163,16 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
             .and_then(|v| v.parse::<f32>().ok())
             .map(twips_to_pts)
             .unwrap_or(0.0);
+        let left_from_text = tblp
+            .attribute((WML_NS, "leftFromText"))
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(twips_to_pts)
+            .unwrap_or(0.0);
+        let right_from_text = tblp
+            .attribute((WML_NS, "rightFromText"))
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(twips_to_pts)
+            .unwrap_or(0.0);
         TablePosition {
             h_position,
             h_anchor,
@@ -170,6 +180,8 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
             v_anchor,
             top_from_text,
             bottom_from_text,
+            left_from_text,
+            right_from_text,
         }
     });
 

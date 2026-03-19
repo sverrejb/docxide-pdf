@@ -330,7 +330,7 @@ fn text_boundaries_match() {
             },
         );
     }
-    common::update_baselines(&baseline_updates);
+    common::write_latest_scores(&baseline_updates);
 
     let regressions: Vec<&str> = results
         .iter()

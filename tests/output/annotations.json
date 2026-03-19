@@ -1,5 +1,5 @@
 {
-  "next_id": 28,
+  "next_id": 44,
   "annotations": [
     {
       "id": 2,
@@ -249,6 +249,156 @@
       "x_pt": 521.32245,
       "y_pt": 124.66205,
       "note": "Text should be justified here (not ragged right edge of text block) See reference",
+      "fixed": false
+    },
+    {
+      "id": 28,
+      "case": "scraped/mandated_reporter_child_abuse",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 65.31869,
+      "y_pt": 717.6384,
+      "note": "We are not rendering the blue outline on this logo",
+      "fixed": false
+    },
+    {
+      "id": 29,
+      "case": "scraped/mandated_reporter_child_abuse",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 68.444786,
+      "y_pt": 659.99646,
+      "note": "JCS-Inc. Form should be directly below the Logo/image. The spacing is too much now compared to the reference.",
+      "fixed": false
+    },
+    {
+      "id": 30,
+      "case": "scraped/mongolian_human_rights_law",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 192.72809,
+      "y_pt": 474.28906,
+      "note": "We render a space here after the 4.1.5\" that is not present in the reference pdf",
+      "fixed": false
+    },
+    {
+      "id": 31,
+      "case": "scraped/parish_housing_data_profile",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 319.59677,
+      "y_pt": 278.26538,
+      "note": "We are not rendering drop shadow for this image. Compare to reference.",
+      "fixed": false
+    },
+    {
+      "id": 32,
+      "case": "scraped/stem_partnerships_guide",
+      "page": 2,
+      "source": "Generated",
+      "x_pt": 519.4701,
+      "y_pt": 54.766785,
+      "note": "Reference says this is page 2, not page 1.",
+      "fixed": false
+    },
+    {
+      "id": 33,
+      "case": "scraped/turkish_ancient_religions_plan",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 177.98225,
+      "y_pt": 463.97626,
+      "note": "Some of the horizontal borders in the table should be bolder/darker.",
+      "fixed": false
+    },
+    {
+      "id": 34,
+      "case": "scraped/turkish_ancient_religions_plan",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 122.45199,
+      "y_pt": 630.3104,
+      "note": "\"ŞAMANİZM\" is indented here, it should not be. Compare to reference.",
+      "fixed": false
+    },
+    {
+      "id": 35,
+      "case": "case6",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 172.97893,
+      "y_pt": 157.12347,
+      "note": "\"refresh\" goes out of bounds here. The table cell should either be wider, or the text should be narrower.  Compare to reference.",
+      "fixed": false
+    },
+    {
+      "id": 37,
+      "case": "case30",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 114.08524,
+      "y_pt": 445.33157,
+      "note": "Labels should be between the little markers on the x-axis. See reference.",
+      "fixed": false
+    },
+    {
+      "id": 38,
+      "case": "case30",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 358.61722,
+      "y_pt": 513.2798,
+      "note": "We render this table too wide, compare to reference.",
+      "fixed": false
+    },
+    {
+      "id": 39,
+      "case": "case31",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 377.55087,
+      "y_pt": 620.78094,
+      "note": "This graph is also too wide.  The left edge is aligned, but our right is too far to the right.",
+      "fixed": false
+    },
+    {
+      "id": 40,
+      "case": "case33",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 92.75124,
+      "y_pt": 560.3922,
+      "note": "Looks like each bullet point causes a slightly larger vertical drift from the reference.",
+      "fixed": false
+    },
+    {
+      "id": 41,
+      "case": "scraped/education_consultant_posting",
+      "page": 6,
+      "source": "Generated",
+      "x_pt": 302.06705,
+      "y_pt": 730.32324,
+      "note": "This table part ovelaps the \"Header\" with \"United Nations Children's Fund\" and the \"TERMS OF REFERENCE\". It should come after that. See reference.",
+      "fixed": false
+    },
+    {
+      "id": 42,
+      "case": "scraped/croatian_grant_guidelines",
+      "page": 6,
+      "source": "Generated",
+      "x_pt": 543.74835,
+      "y_pt": 132.68329,
+      "note": "Links overflow the page width",
+      "fixed": false
+    },
+    {
+      "id": 43,
+      "case": "scraped/brazilian_logistics_study",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 499.98782,
+      "y_pt": 700.7213,
+      "note": "Text should be justified here as well.",
       "fixed": false
     }
   ]

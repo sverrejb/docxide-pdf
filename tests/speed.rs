@@ -144,7 +144,7 @@ fn conversion_speed() {
             },
         );
     }
-    common::update_baselines(&updates);
+    common::write_latest_scores(&updates);
 
     if !regressions.is_empty() {
         println!("\n  REGRESSION in: {}", regressions.join(", "));

@@ -101,6 +101,8 @@ pub struct TablePosition {
     pub v_anchor: &'static str, // "page", "margin", or "text"
     pub top_from_text: f32,     // min distance above table (pts)
     pub bottom_from_text: f32,  // min distance below table (pts)
+    pub left_from_text: f32,    // min distance left of table (pts)
+    pub right_from_text: f32,   // min distance right of table (pts)
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Default)]

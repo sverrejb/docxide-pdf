@@ -146,30 +146,34 @@ fn round4(v: f64) -> f64 {
     (v * 10000.0).round() / 10000.0
 }
 
-fn merge_max(existing: &mut Option<f64>, new_val: Option<f64>) {
-    if let Some(v) = new_val {
-        *existing = Some(round4(existing.map_or(v, |b| b.max(v))));
-    }
-}
-
-fn merge_min(existing: &mut Option<f64>, new_val: Option<f64>) {
-    if let Some(v) = new_val {
-        *existing = Some(round4(existing.map_or(v, |b| b.min(v))));
-    }
-}
-
-pub fn update_baselines(updates: &HashMap<String, Baselines>) {
-    let mut baselines = read_baselines();
+/// Write scores from the current test run to tests/output/latest_scores.json.
+/// Merges per-field so different tests (visual, text_boundary, speed) can each
+/// contribute their metrics without overwriting each other.
+/// This file is gitignored — use `accept-baselines` to promote into baselines.json.
+pub fn write_latest_scores(updates: &HashMap<String, Baselines>) {
+    fs::create_dir_all("tests/output").ok();
+    let path = Path::new("tests/output/latest_scores.json");
+    let mut scores: BTreeMap<String, Baselines> = fs::read_to_string(path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
     for (name, new) in updates {
-        let entry = baselines.entry(name.clone()).or_default();
-        merge_max(&mut entry.jaccard, new.jaccard);
-        merge_max(&mut entry.ssim, new.ssim);
-        merge_max(&mut entry.text_boundary, new.text_boundary);
-        merge_min(&mut entry.convert_ms, new.convert_ms);
+        let entry = scores.entry(name.clone()).or_default();
+        if let Some(v) = new.jaccard {
+            entry.jaccard = Some(round4(v));
+        }
+        if let Some(v) = new.ssim {
+            entry.ssim = Some(round4(v));
+        }
+        if let Some(v) = new.text_boundary {
+            entry.text_boundary = Some(round4(v));
+        }
+        if let Some(v) = new.convert_ms {
+            entry.convert_ms = Some(round4(v));
+        }
     }
-    let sorted: BTreeMap<_, _> = baselines.into_iter().collect();
-    let json = serde_json::to_string_pretty(&sorted).expect("Failed to serialize baselines");
-    fs::write("tests/baselines.json", json + "\n").expect("Failed to write baselines.json");
+    let json = serde_json::to_string_pretty(&scores).expect("Failed to serialize latest scores");
+    fs::write(path, json + "\n").expect("Failed to write latest_scores.json");
 }
 
 /// Returns the newest mtime of any file found by recursively walking `dir`.

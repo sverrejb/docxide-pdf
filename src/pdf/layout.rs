@@ -260,18 +260,29 @@ fn finish_line_with_break(chunks: &mut Vec<WordChunk>) -> TextLine {
 /// Handles cross-run contiguous text correctly: no space is inserted between
 /// runs unless the preceding text ended with whitespace or the new run starts
 /// with whitespace (e.g., "bold" + ", " → "bold," not "bold ,").
+/// `width_after_line`: after building this many lines, switch to a different
+/// max_width (used for text wrapping around floating tables where lines beside
+/// the table are narrow, then lines below it expand to full column width).
 pub(super) fn build_paragraph_lines(
     runs: &[Run],
     seen_fonts: &HashMap<String, FontEntry>,
     max_width: f32,
     first_line_hanging: f32,
     inline_image_names: &HashMap<usize, String>,
+    width_after_line: Option<(usize, f32)>,
 ) -> Vec<TextLine> {
     let mut lines: Vec<TextLine> = Vec::new();
     let mut current_chunks: Vec<WordChunk> = Vec::new();
     let mut current_x: f32 = 0.0;
     let mut pending_space_w: f32 = 0.0;
     let mut key_buf = String::new();
+
+    let effective_max = |line_count: usize| -> f32 {
+        match width_after_line {
+            Some((n, w)) if line_count >= n => w,
+            _ => max_width,
+        }
+    };
 
     for (run_idx, run) in runs.iter().enumerate() {
         if run.vanish || run.is_tab {
@@ -296,10 +307,11 @@ pub(super) fn build_paragraph_lines(
                     current_x
                 };
 
+                let eff_w = effective_max(lines.len());
                 let line_max = if lines.is_empty() {
-                    max_width + first_line_hanging
+                    eff_w + first_line_hanging
                 } else {
-                    max_width
+                    eff_w
                 };
                 if !current_chunks.is_empty() && proposed_x + img_w > line_max {
                     lines.push(finish_line(&mut current_chunks));
@@ -347,10 +359,11 @@ pub(super) fn build_paragraph_lines(
                 current_x
             };
 
+            let eff_w = effective_max(lines.len());
             let line_max = if lines.is_empty() {
-                max_width + first_line_hanging
+                eff_w + first_line_hanging
             } else {
-                max_width
+                eff_w
             };
             if !current_chunks.is_empty() && proposed_x + ww > line_max {
                 lines.push(finish_line(&mut current_chunks));

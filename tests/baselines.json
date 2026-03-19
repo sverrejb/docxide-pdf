@@ -197,6 +197,11 @@
     "text_boundary": 1.0,
     "convert_ms": 10.7
   },
+  "cases/case40": {
+    "jaccard": 0.3501,
+    "ssim": 0.516,
+    "text_boundary": 0.4667
+  },
   "cases/case5": {
     "jaccard": 0.7607,
     "ssim": 0.9027,
@@ -306,8 +311,8 @@
     "convert_ms": 4.8
   },
   "scraped/east_asia_confer..": {
-    "jaccard": 0.0808,
-    "ssim": 0.2103,
+    "jaccard": 0.081,
+    "ssim": 0.2102,
     "text_boundary": 0.5714,
     "convert_ms": 22.0
   },
@@ -367,13 +372,13 @@
   },
   "scraped/korean_japanese_..": {
     "jaccard": 0.0921,
-    "ssim": 0.1828,
+    "ssim": 0.1834,
     "text_boundary": 0.7619,
     "convert_ms": 18.4
   },
   "scraped/learning_culture..": {
-    "jaccard": 0.331,
-    "ssim": 0.4569,
+    "jaccard": 0.3311,
+    "ssim": 0.4571,
     "text_boundary": 0.3794,
     "convert_ms": 1027.5
   },
@@ -408,8 +413,8 @@
     "convert_ms": 97.8
   },
   "scraped/polish_archery_r..": {
-    "jaccard": 0.1487,
-    "ssim": 0.4844,
+    "jaccard": 0.1491,
+    "ssim": 0.4847,
     "text_boundary": 0.4718,
     "convert_ms": 16.3
   },
@@ -474,7 +479,7 @@
     "convert_ms": 13.2
   },
   "scraped/stem_partnership..": {
-    "jaccard": 0.243,
+    "jaccard": 0.2432,
     "ssim": 0.3107,
     "text_boundary": 0.2214,
     "convert_ms": 32.2

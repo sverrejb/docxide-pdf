@@ -210,7 +210,7 @@ fn build_lines(
     if has_tabs {
         build_tabbed_line(runs, fonts, tab_stops, indent_left, text_width, text_hanging, inline_images, default_tab_stop)
     } else {
-        build_paragraph_lines(runs, fonts, text_width, text_hanging, inline_images)
+        build_paragraph_lines(runs, fonts, text_width, text_hanging, inline_images, None)
     }
 }
 

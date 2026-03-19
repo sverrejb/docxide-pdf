@@ -49,9 +49,20 @@ PDF outline/bookmarks (sidebar navigation panel) are now generated from heading 
 
 Document metadata (title, author, subject, keywords) is now parsed from `docProps/core.xml` and written to the PDF info dictionary. Producer is set to "docxside-pdf".
 
-## Line Height: OS/2 Win Metrics (TODO — MEDIUM, correct but causes regressions)
+## Line Height: OS/2 Win Metrics (DONE)
 
-Word computes line height using OS/2 `usWinAscent + usWinDescent` when the font's `USE_TYPO_METRICS` flag is not set (most fonts). We currently use `hhea ascender - descender + line_gap`, which produces tighter line spacing. The fix is straightforward in `src/fonts/embed.rs` (`face.tables().os2` → `windows_ascender()`/`windows_descender()`; note `windows_descender()` returns a negated value so use `win_asc - win_desc`). However, changing this globally causes 23 regressions (some -50pp) because other layout code has been calibrated against the wrong `line_h_ratio`. Should be landed alongside a pass to fix compensating layout issues.
+OS/2 Win Metrics are already implemented in `compute_line_metrics()` in `src/fonts/embed.rs`. The function correctly uses `usWinAscent + usWinDescent` when `USE_TYPO_METRICS` is not set. The remaining vertical drift in failing text-only fixtures has other root causes — not line metrics.
+
+## Vertical Drift Investigation (TODO — HIGH IMPACT)
+
+The 8 failing text-only fixtures still show accumulated vertical shift. Investigation of three hypothesized root causes found:
+1. **Image paragraph height rounding** — fixed: removed unconditional `line_pitch` floor for image paragraphs, using exact `content_height` instead.
+2. **Table trailing spacing** — investigated and disproven: `render_table` already accounts for cell margins and borders, so `prev_space_after = 0.0` is approximately correct. Adding the last paragraph's `space_after` double-counts spacing.
+3. **List paragraph spacing** — investigated and disproven for `polish_archery_range_plan`: the fixture uses manual numbering in tables, not `w:numPr` list formatting, and no styles define inter-paragraph spacing.
+
+Remaining avenues to investigate:
+- **Text wrapping around floating tables** — Word wraps body text around `tblpPr` tables, pushing subsequent paragraphs below. We render them as overlapping, causing large visual diffs (case32).
+- **Per-font line height calibration** — different fonts may have subtle differences in how their Win Metrics translate to actual line spacing in Word.
 
 ## SmartArt Remaining Work
 
@@ -131,8 +142,13 @@ The `render()` function in `pdf/mod.rs` is ~2400 lines with many closures and sh
 
 ## Scraped Fixture Status
 
-19 passing, 0 failing, 30 skipped (font issues) out of 39 scraped fixtures.
-Run `./tools/target/debug/analyze-fixtures --failing --fonts` for current breakdown.
+33 passing, 16 failing, 0 skipped out of 49 scraped fixtures. Breakdown of 16 failures by dominant issue:
+- **text/layout only**: 8 fixtures (all show accumulated vertical shift from wrong line metrics)
+- **anchored images**: 4 fixtures
+- **floating tables**: 3 fixtures
+- **structured doc tags**: 1 fixture
+
+Run `./tools/target/debug/analyze-fixtures --failing` for current breakdown.
 
 ## Test Corpus Expansion
 

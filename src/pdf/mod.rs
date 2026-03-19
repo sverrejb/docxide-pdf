@@ -261,7 +261,7 @@ fn render_single_textbox(
                     )
                 } else {
                     build_paragraph_lines(
-                        &tp.runs, ctx.fonts, tp_text_w, text_hanging, &empty_inline_imgs_pre,
+                        &tp.runs, ctx.fonts, tp_text_w, text_hanging, &empty_inline_imgs_pre, None,
                     )
                 };
                 let (fs, lhr, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
@@ -311,6 +311,7 @@ fn render_single_textbox(
                 tp_text_w,
                 text_hanging,
                 &empty_inline_imgs,
+                None,
             )
         };
         if tb_lines.is_empty() {
@@ -585,6 +586,24 @@ fn collect_paras(para: &Paragraph) -> Vec<&Paragraph> {
     out
 }
 
+pub(super) struct FloatZone {
+    pub top_y: f32,
+    pub bottom_y: f32,
+    pub table_left: f32,
+    pub table_right: f32,
+    pub left_from_text: f32,
+    pub right_from_text: f32,
+}
+
+pub(super) struct FloatingTablePos {
+    pub x: f32,
+    pub y: f32,
+    pub top_from_text: f32,
+    pub bottom_from_text: f32,
+    pub left_from_text: f32,
+    pub right_from_text: f32,
+}
+
 pub(super) struct PageBuilder {
     // Current page state
     pub(super) content: Content,
@@ -604,9 +623,9 @@ pub(super) struct PageBuilder {
     /// For continuous section breaks, this stays as the section that started
     /// the page, not the section that continues mid-page.
     page_hf_section: usize,
-    /// (table_top_y, table_bottom_y) of a floating table on this page;
-    /// when cursor enters this zone, push it below the table.
-    pub(super) float_zone: Option<(f32, f32)>,
+    /// Floating table exclusion zone on this page; paragraph layout
+    /// uses horizontal bounds to decide wrap-beside vs push-below.
+    pub(super) float_zone: Option<FloatZone>,
 
     // Accumulated pages
     all_contents: Vec<Content>,
@@ -862,15 +881,25 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         };
 
         for (block_idx, block) in section.blocks.iter().enumerate() {
-            // If a floating table set an exclusion zone, push content below
-            // when it would overlap the table. A paragraph needs at least one
-            // line of space (~14pt) to fit above the zone; if it wouldn't fit,
-            // push the entire block below the table.
-            if let Some((zone_top, zone_bottom)) = pb.float_zone {
-                const MIN_PARA_HEIGHT: f32 = 14.0;
-                if pb.slot_top - MIN_PARA_HEIGHT <= zone_top {
-                    pb.slot_top = zone_bottom;
+            // If a floating table set an exclusion zone, decide whether to
+            // wrap text beside the table or push it below.
+            if let Some(ref fz) = pb.float_zone {
+                if pb.slot_top <= fz.bottom_y {
+                    // Already past the zone — clear it
                     pb.float_zone = None;
+                } else if pb.slot_top <= fz.top_y {
+                    // Cursor is within or entering the zone — check horizontal space
+                    let (col_x, col_w) = col_geometry[current_col];
+                    let space_right = (col_x + col_w) - (fz.table_right + fz.right_from_text);
+                    let space_left = (fz.table_left - fz.left_from_text) - col_x;
+                    let best_side = space_right.max(space_left);
+                    const MIN_WRAP_WIDTH: f32 = 72.0; // ~1 inch minimum
+                    if best_side < MIN_WRAP_WIDTH {
+                        // Not enough room — push below
+                        pb.slot_top = fz.bottom_y;
+                        pb.float_zone = None;
+                    }
+                    // Otherwise leave zone active — paragraph layout adjusts width
                 }
             }
 
@@ -964,9 +993,37 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     };
 
                     let (col_x, col_w) = col_geometry[current_col];
-                    let para_text_x = col_x + para.indent_left;
-                    let para_text_width = (col_w - para.indent_left - para.indent_right).max(1.0);
-                    let label_x = col_x + para.indent_left - para.indent_hanging;
+                    let mut para_text_x = col_x + para.indent_left;
+                    let mut para_text_width =
+                        (col_w - para.indent_left - para.indent_right).max(1.0);
+                    let mut label_x = col_x + para.indent_left - para.indent_hanging;
+
+                    // When inside a floating table zone, narrow the paragraph to
+                    // fit beside the table rather than overlapping it.
+                    if let Some(ref fz) = pb.float_zone {
+                        if pb.slot_top <= fz.top_y && pb.slot_top > fz.bottom_y {
+                            let col_right = col_x + col_w;
+                            let space_right =
+                                col_right - (fz.table_right + fz.right_from_text);
+                            let space_left = (fz.table_left - fz.left_from_text) - col_x;
+
+                            if space_right >= space_left && space_right >= 72.0 {
+                                let new_left = fz.table_right + fz.right_from_text;
+                                para_text_width =
+                                    (col_right - new_left - para.indent_right).max(1.0);
+                                para_text_x = new_left + para.indent_left;
+                                label_x =
+                                    new_left + para.indent_left - para.indent_hanging;
+                            } else if space_left >= 72.0 {
+                                let avail_right = fz.table_left - fz.left_from_text;
+                                para_text_width = (avail_right - col_x
+                                    - para.indent_left
+                                    - para.indent_right)
+                                    .max(1.0);
+                            }
+                        }
+                    }
+
                     let text_hanging = if !para.list_label.is_empty() {
                         0.0
                     } else if para.indent_hanging > 0.0 {
@@ -1004,6 +1061,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         .filter(|((bi, _), _)| *bi == global_block_idx)
                         .map(|((_, ri), name)| (*ri, name.clone()))
                         .collect();
+                    let mut float_width_change: Option<(usize, f32)> = None;
                     let lines = if para.image.is_some() || text_empty {
                         vec![]
                     } else if has_tabs {
@@ -1018,12 +1076,28 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             doc.default_tab_stop,
                         )
                     } else {
+                        // When wrapping beside a floating table, compute how many
+                        // lines fit at narrow width, then expand to full column width.
+                        let width_change: Option<(usize, f32)> = pb.float_zone.as_ref().and_then(|fz| {
+                            if pb.slot_top <= fz.top_y && pb.slot_top > fz.bottom_y
+                                && (para_text_width - (col_w - para.indent_left - para.indent_right)).abs() > 1.0
+                            {
+                                let effective_top = pb.slot_top - inter_gap;
+                                let lines_beside = ((effective_top - fz.bottom_y) / line_h).round() as usize;
+                                let full_width = (col_w - para.indent_left - para.indent_right).max(1.0);
+                                if lines_beside > 0 { Some((lines_beside, full_width)) } else { None }
+                            } else {
+                                None
+                            }
+                        });
+                        float_width_change = width_change;
                         build_paragraph_lines(
                             &effective_runs,
                             ctx.fonts,
                             para_text_width,
                             text_hanging,
                             &block_inline_images,
+                            width_change,
                         )
                     };
 
@@ -1037,7 +1111,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     let mut content_h = if para.inline_chart.is_some() {
                         para.content_height
                     } else if para.image.is_some() {
-                        para.content_height.max(sp.line_pitch)
+                        para.content_height
                     } else if text_empty {
                         if para.paragraph_mark_vanish {
                             0.0
@@ -1322,9 +1396,34 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                     // Re-fetch column geometry (may have changed after overflow)
                     let (col_x, col_w) = col_geometry[current_col];
-                    let para_text_x = col_x + para.indent_left;
-                    let para_text_width = (col_w - para.indent_left - para.indent_right).max(1.0);
-                    let label_x = col_x + para.indent_left - para.indent_hanging;
+                    para_text_x = col_x + para.indent_left;
+                    para_text_width = (col_w - para.indent_left - para.indent_right).max(1.0);
+                    label_x = col_x + para.indent_left - para.indent_hanging;
+
+                    // Re-apply float zone adjustment after potential column change
+                    if let Some(ref fz) = pb.float_zone {
+                        if pb.slot_top <= fz.top_y && pb.slot_top > fz.bottom_y {
+                            let col_right = col_x + col_w;
+                            let space_right =
+                                col_right - (fz.table_right + fz.right_from_text);
+                            let space_left = (fz.table_left - fz.left_from_text) - col_x;
+
+                            if space_right >= space_left && space_right >= 72.0 {
+                                let new_left = fz.table_right + fz.right_from_text;
+                                para_text_width =
+                                    (col_right - new_left - para.indent_right).max(1.0);
+                                para_text_x = new_left + para.indent_left;
+                                label_x =
+                                    new_left + para.indent_left - para.indent_hanging;
+                            } else if space_left >= 72.0 {
+                                let avail_right = fz.table_left - fz.left_from_text;
+                                para_text_width = (avail_right - col_x
+                                    - para.indent_left
+                                    - para.indent_right)
+                                    .max(1.0);
+                            }
+                        }
+                    }
 
                     // Render behind-doc layer: floating images + textboxes
                     render_floating_images(
@@ -1508,20 +1607,74 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             font_size,
                         );
 
-                        render_paragraph_lines(
-                            &mut pb.content,
-                            &lines,
-                            &para.alignment,
-                            para_text_x,
-                            para_text_width,
-                            baseline_y,
-                            line_h,
-                            lines.len(),
-                            0,
-                            &mut pb.links,
-                            text_hanging,
-                            ctx.fonts,
-                        );
+                        if let Some((split_at, _full_w)) = float_width_change {
+                            if split_at < lines.len() {
+                                // Render lines beside the table at narrow width + shifted position
+                                render_paragraph_lines(
+                                    &mut pb.content,
+                                    &lines[..split_at],
+                                    &para.alignment,
+                                    para_text_x,
+                                    para_text_width,
+                                    baseline_y,
+                                    line_h,
+                                    lines.len(),
+                                    0,
+                                    &mut pb.links,
+                                    text_hanging,
+                                    ctx.fonts,
+                                );
+                                // Render lines below the table at full width + normal position
+                                let full_text_x = col_x + para.indent_left;
+                                let full_text_w = (col_w - para.indent_left - para.indent_right).max(1.0);
+                                let below_baseline = baseline_y - split_at as f32 * line_h;
+                                render_paragraph_lines(
+                                    &mut pb.content,
+                                    &lines[split_at..],
+                                    &para.alignment,
+                                    full_text_x,
+                                    full_text_w,
+                                    below_baseline,
+                                    line_h,
+                                    lines.len(),
+                                    split_at,
+                                    &mut pb.links,
+                                    text_hanging,
+                                    ctx.fonts,
+                                );
+                            } else {
+                                // All lines fit beside the table
+                                render_paragraph_lines(
+                                    &mut pb.content,
+                                    &lines,
+                                    &para.alignment,
+                                    para_text_x,
+                                    para_text_width,
+                                    baseline_y,
+                                    line_h,
+                                    lines.len(),
+                                    0,
+                                    &mut pb.links,
+                                    text_hanging,
+                                    ctx.fonts,
+                                );
+                            }
+                        } else {
+                            render_paragraph_lines(
+                                &mut pb.content,
+                                &lines,
+                                &para.alignment,
+                                para_text_x,
+                                para_text_width,
+                                baseline_y,
+                                line_h,
+                                lines.len(),
+                                0,
+                                &mut pb.links,
+                                text_hanging,
+                                ctx.fonts,
+                            );
+                        }
                     }
 
                     // Draw paragraph borders — left/right borders extend outward
@@ -1679,7 +1832,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             "margin" => sp.page_height - sp.margin_top - pos.v_offset_pt,
                             _ => pb.slot_top - pos.v_offset_pt,
                         };
-                        (x, y, pos.top_from_text, pos.bottom_from_text)
+                        FloatingTablePos {
+                            x,
+                            y,
+                            top_from_text: pos.top_from_text,
+                            bottom_from_text: pos.bottom_from_text,
+                            left_from_text: pos.left_from_text,
+                            right_from_text: pos.right_from_text,
+                        }
                     });
                     render_table(
                         table,
@@ -1706,11 +1866,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     }
                 }
             }
-            // Also check after rendering: if the block pushed the cursor
-            // into the floating table zone, jump below the table.
-            if let Some((zone_top, zone_bottom)) = pb.float_zone {
-                if pb.slot_top <= zone_top {
-                    pb.slot_top = zone_bottom;
+            // Clear float zone once cursor passes below it
+            if let Some(ref fz) = pb.float_zone {
+                if pb.slot_top <= fz.bottom_y {
                     pb.float_zone = None;
                 }
             }

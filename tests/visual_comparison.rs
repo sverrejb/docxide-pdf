@@ -584,7 +584,7 @@ fn visual_comparison() {
             },
         );
     }
-    common::update_baselines(&baseline_updates);
+    common::write_latest_scores(&baseline_updates);
 
     let jaccard_rows: Vec<(String, f64, bool)> = results
         .iter()

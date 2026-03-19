@@ -719,6 +719,7 @@ fn compute_row_layouts(
                                         para_text_w,
                                         para.indent_hanging,
                                         &std::collections::HashMap::new(),
+                                        None,
                                     );
                                     if is_rotated {
                                         for line in &lines {
@@ -1232,7 +1233,7 @@ fn render_header_rows(
     }
 }
 
-/// `override_pos`: `(x, y, top_from_text, bottom_from_text)` for floating tables.
+/// `override_pos`: positioning info for floating tables.
 pub(super) fn render_table(
     table: &Table,
     sp: &SectionProperties,
@@ -1240,7 +1241,7 @@ pub(super) fn render_table(
     pb: &mut super::PageBuilder,
     sect_idx: usize,
     prev_space_after: f32,
-    override_pos: Option<(f32, f32, f32, f32)>,
+    override_pos: Option<super::FloatingTablePos>,
 ) {
     let col_widths = auto_fit_columns(table, ctx.fonts);
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
@@ -1249,10 +1250,10 @@ pub(super) fn render_table(
 
     let is_floating = override_pos.is_some();
     let (table_left, saved_slot_top, text_margins) =
-        if let Some((x, y, top_margin, bottom_margin)) = override_pos {
-            let saved = Some((pb.slot_top - prev_space_after, y));
-            pb.slot_top = y;
-            (x, saved, (top_margin, bottom_margin))
+        if let Some(ref fp) = override_pos {
+            let saved = Some((pb.slot_top - prev_space_after, fp.y));
+            pb.slot_top = fp.y;
+            (fp.x, saved, (fp.top_from_text, fp.bottom_from_text))
         } else {
         use crate::model::TableAlignment;
         let text_width = sp.page_width - sp.margin_left - sp.margin_right;
@@ -1375,21 +1376,24 @@ pub(super) fn render_table(
     }
 
     if let Some((saved, table_top_y)) = saved_slot_top {
+        let table_total_w: f32 = col_widths.iter().sum();
         let (top_margin, bottom_margin) = text_margins;
         let table_bottom = pb.slot_top;
-        // When the floating table starts at/above the margin (table_top_y >= saved),
-        // body text can't flow above it — push text below the table.
-        // When the table starts below the margin, body text fills the gap above it,
-        // and content that reaches the table area is pushed below via float_zone.
-        // The zone includes topFromText/bottomFromText spacing per the OOXML spec.
-        if table_top_y >= saved && table_bottom < saved {
-            pb.slot_top = table_bottom - bottom_margin;
-        } else {
-            pb.slot_top = saved;
-            if table_bottom < saved {
-                pb.float_zone =
-                    Some((table_top_y + top_margin, table_bottom - bottom_margin));
-            }
+
+        // Always restore cursor to body text position — the float zone lets
+        // paragraph layout decide whether to wrap beside or push below.
+        pb.slot_top = saved;
+
+        if table_bottom < saved {
+            let fp = override_pos.as_ref().unwrap();
+            pb.float_zone = Some(super::FloatZone {
+                top_y: table_top_y + top_margin,
+                bottom_y: table_bottom - bottom_margin,
+                table_left,
+                table_right: table_left + table_total_w,
+                left_from_text: fp.left_from_text,
+                right_from_text: fp.right_from_text,
+            });
         }
     }
 }

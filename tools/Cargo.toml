@@ -38,6 +38,10 @@ path = "src/bin/generate_shapes.rs"
 name = "shaping-compare"
 path = "src/bin/shaping_compare.rs"
 
+[[bin]]
+name = "accept-baselines"
+path = "src/bin/accept_baselines.rs"
+
 [dependencies]
 zip = "2"
 roxmltree = "0.21"
