@@ -99,7 +99,7 @@ fn extract_docx_fonts(docx_path: &Path) -> Result<BTreeSet<String>, String> {
         collect_fonts_from_xml(&doc, &theme_major, &theme_minor, &mut fonts);
         collect_used_styles(&doc, &mut used_styles);
         if !has_unstyled_runs {
-            has_unstyled_runs = has_runs_without_font(&doc);
+            has_unstyled_runs = has_runs_without_font(&doc, &style_fonts);
         }
     }
 
@@ -262,8 +262,12 @@ fn parse_theme_fonts(archive: &mut zip::ZipArchive<fs::File>) -> (Option<String>
     (major, minor)
 }
 
-/// Check if any w:r element lacks an explicit w:rFonts (relies on style/default font).
-fn has_runs_without_font(doc: &roxmltree::Document) -> bool {
+/// Check if any w:r element lacks an explicit w:rFonts AND its parent paragraph's
+/// style doesn't provide a font (i.e., the run truly relies on the document default font).
+fn has_runs_without_font(
+    doc: &roxmltree::Document,
+    style_fonts: &HashMap<String, String>,
+) -> bool {
     let w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     for node in doc.descendants() {
         if node.tag_name().name() == "r"
@@ -279,7 +283,31 @@ fn has_runs_without_font(doc: &roxmltree::Document) -> bool {
                 let has_text = node
                     .children()
                     .any(|c| c.tag_name().name() == "t" || c.tag_name().name() == "br");
-                if has_text {
+                if !has_text {
+                    continue;
+                }
+                // Check if the parent paragraph's pStyle provides a font
+                let para = node.parent().and_then(|p| {
+                    if p.tag_name().name() == "p" {
+                        Some(p)
+                    } else {
+                        None
+                    }
+                });
+                let style_has_font = para
+                    .and_then(|p| {
+                        p.descendants().find_map(|n| {
+                            if n.tag_name().name() == "pStyle" {
+                                n.attribute((w, "val"))
+                                    .or_else(|| n.attribute("val"))
+                                    .map(String::from)
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                    .is_some_and(|sid| style_fonts.contains_key(sid.as_str()));
+                if !style_has_font {
                     return true;
                 }
             }

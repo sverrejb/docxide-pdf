@@ -1,5 +1,5 @@
 {
-  "next_id": 44,
+  "next_id": 45,
   "annotations": [
     {
       "id": 2,
@@ -399,6 +399,16 @@
       "x_pt": 499.98782,
       "y_pt": 700.7213,
       "note": "Text should be justified here as well.",
+      "fixed": false
+    },
+    {
+      "id": 44,
+      "case": "case30",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 359.17673,
+      "y_pt": 608.8364,
+      "note": "Lines should not start or bein at the edge, but rather where the month-\"limits\" are set. See annotation 1.",
       "fixed": false
     }
   ]

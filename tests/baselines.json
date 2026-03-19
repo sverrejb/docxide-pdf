@@ -200,7 +200,17 @@
   "cases/case40": {
     "jaccard": 0.3501,
     "ssim": 0.516,
-    "text_boundary": 0.4667
+    "text_boundary": 0.5
+  },
+  "cases/case41": {
+    "jaccard": 0.8193,
+    "ssim": 0.8296,
+    "text_boundary": 0.8333
+  },
+  "cases/case42": {
+    "jaccard": 0.4731,
+    "ssim": 0.5064,
+    "text_boundary": 0.1667
   },
   "cases/case5": {
     "jaccard": 0.7607,
@@ -251,9 +261,9 @@
     "convert_ms": 12.0
   },
   "scraped/brazilian_logist..": {
-    "jaccard": 0.169,
-    "ssim": 0.3093,
-    "text_boundary": 0.1632,
+    "jaccard": 0.1287,
+    "ssim": 0.2441,
+    "text_boundary": 0.1433,
     "convert_ms": 744.0
   },
   "scraped/bush_fires_act_c..": {
@@ -275,9 +285,9 @@
     "convert_ms": 59.6
   },
   "scraped/croatian_grant_g..": {
-    "jaccard": 0.0846,
-    "ssim": 0.1993,
-    "text_boundary": 0.0745,
+    "jaccard": 0.0845,
+    "ssim": 0.1991,
+    "text_boundary": 0.0735,
     "convert_ms": 270.5
   },
   "scraped/croatian_regulat..": {
@@ -311,8 +321,8 @@
     "convert_ms": 4.8
   },
   "scraped/east_asia_confer..": {
-    "jaccard": 0.081,
-    "ssim": 0.2102,
+    "jaccard": 0.0808,
+    "ssim": 0.2103,
     "text_boundary": 0.5714,
     "convert_ms": 22.0
   },
@@ -347,9 +357,9 @@
     "convert_ms": 70.6
   },
   "scraped/indonesian_bench..": {
-    "jaccard": 0.2286,
-    "ssim": 0.4303,
-    "text_boundary": 0.3629,
+    "jaccard": 0.2202,
+    "ssim": 0.4129,
+    "text_boundary": 0.33,
     "convert_ms": 170.5
   },
   "scraped/italian_evaluati..": {
@@ -372,13 +382,13 @@
   },
   "scraped/korean_japanese_..": {
     "jaccard": 0.0921,
-    "ssim": 0.1834,
+    "ssim": 0.1828,
     "text_boundary": 0.7619,
     "convert_ms": 18.4
   },
   "scraped/learning_culture..": {
-    "jaccard": 0.3311,
-    "ssim": 0.4571,
+    "jaccard": 0.331,
+    "ssim": 0.4569,
     "text_boundary": 0.3794,
     "convert_ms": 1027.5
   },
@@ -413,8 +423,8 @@
     "convert_ms": 97.8
   },
   "scraped/polish_archery_r..": {
-    "jaccard": 0.1491,
-    "ssim": 0.4847,
+    "jaccard": 0.1487,
+    "ssim": 0.4844,
     "text_boundary": 0.4718,
     "convert_ms": 16.3
   },
@@ -479,7 +489,7 @@
     "convert_ms": 13.2
   },
   "scraped/stem_partnership..": {
-    "jaccard": 0.2432,
+    "jaccard": 0.243,
     "ssim": 0.3107,
     "text_boundary": 0.2214,
     "convert_ms": 32.2
