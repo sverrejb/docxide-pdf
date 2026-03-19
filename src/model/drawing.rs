@@ -8,6 +8,7 @@ use super::{HRelativeFrom, HorizontalPosition, Paragraph, VRelativeFrom, WrapTyp
 pub enum ImageFormat {
     Jpeg,
     Png,
+    Bmp,
 }
 
 #[derive(Clone)]
@@ -34,6 +35,10 @@ pub struct FloatingImage {
     pub v_relative_from: VRelativeFrom,
     pub wrap_type: WrapType,
     pub behind_doc: bool,
+    pub dist_top: f32,
+    pub dist_bottom: f32,
+    pub dist_left: f32,
+    pub dist_right: f32,
 }
 
 /// Geometry definition for a shape — either a preset name or custom paths.

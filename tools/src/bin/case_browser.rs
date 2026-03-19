@@ -342,9 +342,26 @@ impl App {
     }
 
     fn refresh(&mut self) {
+        let old_name = self.cases[self.current_case].name.clone();
+        self.cases = discover_cases(&self.output_dir);
+        self.baselines = load_baselines(&self.output_dir);
+        self.annotations = load_annotations(&self.output_dir);
+        // Try to stay on the same case after refresh
+        self.current_case = self
+            .cases
+            .iter()
+            .position(|c| c.name == old_name)
+            .unwrap_or(0);
+        // Clamp page in case page count changed
+        if !self.cases.is_empty() {
+            self.current_page = self
+                .current_page
+                .min(self.cases[self.current_case].page_count.saturating_sub(1));
+        }
         self.texture_cache.clear();
         self.overlay_cache.clear();
         self.refresh_flash = 1.0;
+        self.scroll_to_current = true;
     }
 
     fn page_path(&self, subdir: &str, page: usize) -> PathBuf {

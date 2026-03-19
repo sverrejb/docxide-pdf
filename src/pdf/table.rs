@@ -1389,8 +1389,8 @@ pub(super) fn render_table(
             pb.float_zone = Some(super::FloatZone {
                 top_y: table_top_y + top_margin,
                 bottom_y: table_bottom - bottom_margin,
-                table_left,
-                table_right: table_left + table_total_w,
+                obj_left: table_left,
+                obj_right: table_left + table_total_w,
                 left_from_text: fp.left_from_text,
                 right_from_text: fp.right_from_text,
             });

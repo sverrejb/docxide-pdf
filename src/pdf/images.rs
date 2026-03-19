@@ -41,11 +41,15 @@ fn embed_single_image(
             xobj.bits_per_component(8);
             xobj.interpolate(true);
         }
-        ImageFormat::Png => {
+        ImageFormat::Png | ImageFormat::Bmp => {
+            let img_fmt = match img.format {
+                ImageFormat::Bmp => image::ImageFormat::Bmp,
+                _ => image::ImageFormat::Png,
+            };
             let cursor = std::io::Cursor::new(img.data.as_slice());
             let reader = image::ImageReader::with_format(
                 std::io::BufReader::new(cursor),
-                image::ImageFormat::Png,
+                img_fmt,
             );
             let decoded = match reader.decode() {
                 Ok(d) => d,

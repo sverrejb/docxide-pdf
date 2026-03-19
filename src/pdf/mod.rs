@@ -589,8 +589,8 @@ fn collect_paras(para: &Paragraph) -> Vec<&Paragraph> {
 pub(super) struct FloatZone {
     pub top_y: f32,
     pub bottom_y: f32,
-    pub table_left: f32,
-    pub table_right: f32,
+    pub obj_left: f32,
+    pub obj_right: f32,
     pub left_from_text: f32,
     pub right_from_text: f32,
 }
@@ -881,8 +881,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         };
 
         for (block_idx, block) in section.blocks.iter().enumerate() {
-            // If a floating table set an exclusion zone, decide whether to
-            // wrap text beside the table or push it below.
+            // If a float zone is active, decide whether to wrap text beside
+            // the object or push it below.
             if let Some(ref fz) = pb.float_zone {
                 if pb.slot_top <= fz.bottom_y {
                     // Already past the zone — clear it
@@ -890,8 +890,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 } else if pb.slot_top <= fz.top_y {
                     // Cursor is within or entering the zone — check horizontal space
                     let (col_x, col_w) = col_geometry[current_col];
-                    let space_right = (col_x + col_w) - (fz.table_right + fz.right_from_text);
-                    let space_left = (fz.table_left - fz.left_from_text) - col_x;
+                    let space_right = (col_x + col_w) - (fz.obj_right + fz.right_from_text);
+                    let space_left = (fz.obj_left - fz.left_from_text) - col_x;
                     let best_side = space_right.max(space_left);
                     const MIN_WRAP_WIDTH: f32 = 72.0; // ~1 inch minimum
                     if best_side < MIN_WRAP_WIDTH {
@@ -1004,18 +1004,18 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         if pb.slot_top <= fz.top_y && pb.slot_top > fz.bottom_y {
                             let col_right = col_x + col_w;
                             let space_right =
-                                col_right - (fz.table_right + fz.right_from_text);
-                            let space_left = (fz.table_left - fz.left_from_text) - col_x;
+                                col_right - (fz.obj_right + fz.right_from_text);
+                            let space_left = (fz.obj_left - fz.left_from_text) - col_x;
 
                             if space_right >= space_left && space_right >= 72.0 {
-                                let new_left = fz.table_right + fz.right_from_text;
+                                let new_left = fz.obj_right + fz.right_from_text;
                                 para_text_width =
                                     (col_right - new_left - para.indent_right).max(1.0);
                                 para_text_x = new_left + para.indent_left;
                                 label_x =
                                     new_left + para.indent_left - para.indent_hanging;
                             } else if space_left >= 72.0 {
-                                let avail_right = fz.table_left - fz.left_from_text;
+                                let avail_right = fz.obj_left - fz.left_from_text;
                                 para_text_width = (avail_right - col_x
                                     - para.indent_left
                                     - para.indent_right)
@@ -1062,6 +1062,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         .map(|((_, ri), name)| (*ri, name.clone()))
                         .collect();
                     let mut float_width_change: Option<(usize, f32)> = None;
+                    // For look-ahead: (narrow_x, narrow_w) for lines after the split
+                    let mut lookahead_narrow: Option<(f32, f32)> = None;
                     let lines = if para.image.is_some() || text_empty {
                         vec![]
                     } else if has_tabs {
@@ -1076,29 +1078,100 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             doc.default_tab_stop,
                         )
                     } else {
-                        // When wrapping beside a floating table, compute how many
+                        // When wrapping beside a floating object, compute how many
                         // lines fit at narrow width, then expand to full column width.
                         let width_change: Option<(usize, f32)> = pb.float_zone.as_ref().and_then(|fz| {
+                            let full_width = (col_w - para.indent_left - para.indent_right).max(1.0);
                             if pb.slot_top <= fz.top_y && pb.slot_top > fz.bottom_y
-                                && (para_text_width - (col_w - para.indent_left - para.indent_right)).abs() > 1.0
+                                && (para_text_width - full_width).abs() > 1.0
                             {
                                 let effective_top = pb.slot_top - inter_gap;
                                 let lines_beside = ((effective_top - fz.bottom_y) / line_h).round() as usize;
-                                let full_width = (col_w - para.indent_left - para.indent_right).max(1.0);
                                 if lines_beside > 0 { Some((lines_beside, full_width)) } else { None }
                             } else {
                                 None
                             }
                         });
-                        float_width_change = width_change;
-                        build_paragraph_lines(
-                            &effective_runs,
-                            ctx.fonts,
-                            para_text_width,
-                            text_hanging,
-                            &block_inline_images,
-                            width_change,
-                        )
+
+                        // Look-ahead: if next block is an image-only paragraph
+                        // with wrapping, build lines at full width first, then
+                        // check if the bottom lines need narrowing.
+                        let lookahead_fi = if pb.float_zone.is_none() {
+                            section.blocks.get(block_idx + 1).and_then(|b| {
+                                if let Block::Paragraph(np) = b {
+                                    if !np.floating_images.is_empty()
+                                        && is_text_empty(&np.runs)
+                                        && np.image.is_none()
+                                        && np.inline_chart.is_none()
+                                    {
+                                        np.floating_images.iter().find(|fi| matches!(
+                                            fi.wrap_type,
+                                            WrapType::Square | WrapType::Tight | WrapType::Through
+                                        ))
+                                    } else { None }
+                                } else { None }
+                            })
+                        } else { None };
+
+                        let (lines, final_width_change) = if let Some(fi) = lookahead_fi {
+                            // Two-pass: build at full width, then narrow bottom lines
+                            let full_lines = build_paragraph_lines(
+                                &effective_runs, ctx.fonts, para_text_width,
+                                text_hanging, &block_inline_images, None,
+                            );
+                            let num_lines = full_lines.len();
+                            let content_h_est = num_lines as f32 * line_h;
+                            let fi_x = resolve_fi_x(fi, sp, col_x, col_w, col_w);
+                            let space_right = (col_x + col_w)
+                                - (fi_x + fi.image.display_width + fi.dist_right);
+                            let space_left = (fi_x - fi.dist_left) - col_x;
+                            let best = space_right.max(space_left);
+                            // Zone overlap: image starts at ~(slot_top - content_h - space_after)
+                            // zone extends dist_top above that into the current paragraph
+                            // Image-only paragraphs effectively have zero height
+                            // in Word, so the image anchors right at the preceding
+                            // paragraph's bottom. The zone extends dist_top above.
+                            let overlap = fi.dist_top;
+                            let lines_to_narrow = if best >= 72.0 && overlap > 0.0 {
+                                ((overlap / line_h).ceil() as usize).min(num_lines)
+                            } else { 0 };
+                            if lines_to_narrow > 0 {
+                                let lines_above = num_lines.saturating_sub(lines_to_narrow);
+                                let narrow_w = if space_right >= space_left {
+                                    ((col_x + col_w) - (fi_x + fi.image.display_width + fi.dist_right)
+                                        - para.indent_right).max(1.0)
+                                } else {
+                                    (fi_x - fi.dist_left - col_x
+                                        - para.indent_left - para.indent_right).max(1.0)
+                                };
+                                let narrow_x = if space_right >= space_left {
+                                    fi_x + fi.image.display_width + fi.dist_right
+                                        + para.indent_left
+                                } else {
+                                    col_x + para.indent_left
+                                };
+                                lookahead_narrow = Some((narrow_x, narrow_w));
+                                let rebuilt = build_paragraph_lines(
+                                    &effective_runs, ctx.fonts, para_text_width,
+                                    text_hanging, &block_inline_images,
+                                    Some((lines_above, narrow_w)),
+                                );
+                                (rebuilt, Some((lines_above, narrow_w)))
+                            } else {
+                                (full_lines, None)
+                            }
+                        } else {
+                            float_width_change = width_change;
+                            let built = build_paragraph_lines(
+                                &effective_runs, ctx.fonts, para_text_width,
+                                text_hanging, &block_inline_images, width_change,
+                            );
+                            (built, width_change)
+                        };
+                        if final_width_change.is_some() {
+                            float_width_change = final_width_change;
+                        }
+                        lines
                     };
 
                     // For lines containing inline images, use the tallest element as line height
@@ -1159,8 +1232,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         };
                         if reserve {
                             let fi_h = match fi.v_position {
-                                VerticalPosition::Offset(o) => o + fi.image.display_height,
-                                _ => fi.image.display_height,
+                                VerticalPosition::Offset(o) => {
+                                    o + fi.dist_top + fi.image.display_height + fi.dist_bottom
+                                }
+                                _ => fi.dist_top + fi.image.display_height + fi.dist_bottom,
                             };
                             content_h = content_h.max(fi_h);
                         }
@@ -1405,18 +1480,18 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         if pb.slot_top <= fz.top_y && pb.slot_top > fz.bottom_y {
                             let col_right = col_x + col_w;
                             let space_right =
-                                col_right - (fz.table_right + fz.right_from_text);
-                            let space_left = (fz.table_left - fz.left_from_text) - col_x;
+                                col_right - (fz.obj_right + fz.right_from_text);
+                            let space_left = (fz.obj_left - fz.left_from_text) - col_x;
 
                             if space_right >= space_left && space_right >= 72.0 {
-                                let new_left = fz.table_right + fz.right_from_text;
+                                let new_left = fz.obj_right + fz.right_from_text;
                                 para_text_width =
                                     (col_right - new_left - para.indent_right).max(1.0);
                                 para_text_x = new_left + para.indent_left;
                                 label_x =
                                     new_left + para.indent_left - para.indent_hanging;
                             } else if space_left >= 72.0 {
-                                let avail_right = fz.table_left - fz.left_from_text;
+                                let avail_right = fz.obj_left - fz.left_from_text;
                                 para_text_width = (avail_right - col_x
                                     - para.indent_left
                                     - para.indent_right)
@@ -1501,6 +1576,30 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         pb.slot_top,
                         &mut pb.content,
                     );
+
+                    // Set FloatZone for wrapping floating images
+                    for fi in &para.floating_images {
+                        match fi.wrap_type {
+                            WrapType::Square | WrapType::Tight | WrapType::Through => {
+                                let fi_x =
+                                    resolve_fi_x(fi, sp, col_x, col_w, text_width);
+                                let fi_y_top =
+                                    resolve_fi_y_top(fi, sp, pb.slot_top);
+                                let fi_y_bottom =
+                                    fi_y_top - fi.image.display_height;
+                                pb.float_zone = Some(FloatZone {
+                                    top_y: fi_y_top + fi.dist_top,
+                                    bottom_y: fi_y_bottom - fi.dist_bottom,
+                                    obj_left: fi_x,
+                                    obj_right: fi_x + fi.image.display_width,
+                                    left_from_text: fi.dist_left,
+                                    right_from_text: fi.dist_right,
+                                });
+                            }
+                            _ => {}
+                        }
+                    }
+
                     for tb in para.textboxes.iter().filter(|t| !t.behind_doc) {
                         render_single_textbox(
                             tb,
@@ -1607,9 +1706,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             font_size,
                         );
 
-                        if let Some((split_at, _full_w)) = float_width_change {
+                        if let Some((split_at, _after_w)) = float_width_change {
                             if split_at < lines.len() {
-                                // Render lines beside the table at narrow width + shifted position
+                                // Render first part
                                 render_paragraph_lines(
                                     &mut pb.content,
                                     &lines[..split_at],
@@ -1624,16 +1723,23 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     text_hanging,
                                     ctx.fonts,
                                 );
-                                // Render lines below the table at full width + normal position
-                                let full_text_x = col_x + para.indent_left;
-                                let full_text_w = (col_w - para.indent_left - para.indent_right).max(1.0);
+                                // Render second part at different width/position
+                                let (after_x, after_w) = if let Some((nx, nw)) = lookahead_narrow {
+                                    // Look-ahead: second part is narrow (beside image)
+                                    (nx, nw)
+                                } else {
+                                    // Normal: second part is full width (below object)
+                                    let full_text_x = col_x + para.indent_left;
+                                    let full_text_w = (col_w - para.indent_left - para.indent_right).max(1.0);
+                                    (full_text_x, full_text_w)
+                                };
                                 let below_baseline = baseline_y - split_at as f32 * line_h;
                                 render_paragraph_lines(
                                     &mut pb.content,
                                     &lines[split_at..],
                                     &para.alignment,
-                                    full_text_x,
-                                    full_text_w,
+                                    after_x,
+                                    after_w,
                                     below_baseline,
                                     line_h,
                                     lines.len(),

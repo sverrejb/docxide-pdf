@@ -74,6 +74,12 @@ pub(super) fn image_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat, u8
         return Some((width, height, ImageFormat::Png, 3));
     }
 
+    if data.len() >= 26 && data[0] == b'B' && data[1] == b'M' {
+        let width = u32::from_le_bytes([data[18], data[19], data[20], data[21]]);
+        let height = u32::from_le_bytes([data[22], data[23], data[24], data[25]]);
+        return Some((width, height, ImageFormat::Bmp, 3));
+    }
+
     None
 }
 
@@ -300,6 +306,10 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
                         v_relative_from: v_relative,
                         wrap_type,
                         behind_doc,
+                        dist_top: emu_attr(container, "distT"),
+                        dist_bottom: emu_attr(container, "distB"),
+                        dist_left: emu_attr(container, "distL"),
+                        dist_right: emu_attr(container, "distR"),
                     }));
                 }
             }
