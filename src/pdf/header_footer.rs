@@ -206,11 +206,25 @@ fn build_lines(
     indent_left: f32,
     text_hanging: f32,
 ) -> Vec<TextLine> {
+    build_lines_with_float(runs, fonts, tab_stops, text_width, inline_images, default_tab_stop, indent_left, text_hanging, None)
+}
+
+fn build_lines_with_float(
+    runs: &[Run],
+    fonts: &HashMap<String, crate::fonts::FontEntry>,
+    tab_stops: &[crate::model::TabStop],
+    text_width: f32,
+    inline_images: &HashMap<usize, String>,
+    default_tab_stop: f32,
+    indent_left: f32,
+    text_hanging: f32,
+    per_line_widths: Option<&[f32]>,
+) -> Vec<TextLine> {
     let has_tabs = runs.iter().any(|r| r.is_tab);
     if has_tabs {
         build_tabbed_line(runs, fonts, tab_stops, indent_left, text_width, text_hanging, inline_images, default_tab_stop)
     } else {
-        build_paragraph_lines(runs, fonts, text_width, text_hanging, inline_images, None, None)
+        build_paragraph_lines(runs, fonts, text_width, text_hanging, inline_images, None, per_line_widths)
     }
 }
 
@@ -237,6 +251,8 @@ pub(super) fn render_header_footer(
 
     let mut pi = 0usize;
     let mut prev_space_after = 0.0f32;
+    // Float zone: (fi_x, fi_y_top, fi_y_bottom, obj_right, dist_left, dist_right)
+    let mut hdr_fz: Option<(f32, f32, f32, f32, f32, f32)> = None;
     for block in &hf.blocks {
         match block {
             Block::Table(table) => {
@@ -360,7 +376,7 @@ pub(super) fn render_header_footer(
                     }
                 }
 
-                // Render floating images
+                // Render floating images and register float zones
                 for (fi_idx, fi) in para.floating_images.iter().enumerate() {
                     if let Some(pdf_name) = floating_image_names.get(&(pi, fi_idx)) {
                         let img = &fi.image;
@@ -382,6 +398,20 @@ pub(super) fn render_header_footer(
                             img.display_width,
                             img.display_height,
                         );
+                        // Register float zone for wrapping images
+                        if matches!(
+                            fi.wrap_type,
+                            WrapType::Square | WrapType::Tight | WrapType::Through
+                        ) {
+                            hdr_fz = Some((
+                                fi_x,
+                                fi_y_top,
+                                fi_y_top - img.display_height,
+                                fi_x + img.display_width,
+                                fi.dist_left,
+                                fi.dist_right,
+                            ));
+                        }
                     }
                 }
 
@@ -455,8 +485,8 @@ pub(super) fn render_header_footer(
                     .map(|((_, ri), name)| (*ri, name.clone()))
                     .collect();
 
-                let para_text_x = sp.margin_left + para.indent_left;
-                let para_text_width =
+                let mut para_text_x = sp.margin_left + para.indent_left;
+                let mut para_text_width =
                     (text_width - para.indent_left - para.indent_right).max(1.0);
                 let text_hanging = if !para.list_label.is_empty() {
                     0.0
@@ -466,7 +496,110 @@ pub(super) fn render_header_footer(
                     -para.indent_first_line
                 };
 
-                let lines = build_lines(
+                // Narrow text width when a wrapping floating image overlaps this paragraph
+                // Check both same-paragraph floats and cross-paragraph float zone
+                let mut hdr_line_geom: Option<Vec<(f32, f32)>> = None;
+                let fz_params: Option<(f32, f32, f32, f32, f32, f32)> =
+                    para.floating_images
+                        .iter()
+                        .find(|fi| {
+                            matches!(
+                                fi.wrap_type,
+                                WrapType::Square | WrapType::Tight | WrapType::Through
+                            )
+                        })
+                        .map(|fi| {
+                            let img = &fi.image;
+                            let fi_x = super::resolve_h_position(
+                                fi.h_relative_from,
+                                &fi.h_position,
+                                img.display_width,
+                                sp,
+                                sp.margin_left,
+                                text_width,
+                                text_width,
+                            );
+                            let fi_y_top = super::resolve_fi_y_top(fi, sp, slot_top);
+                            (
+                                fi_x,
+                                fi_y_top,
+                                fi_y_top - img.display_height,
+                                fi_x + img.display_width,
+                                fi.dist_left,
+                                fi.dist_right,
+                            )
+                        })
+                        .or(hdr_fz);
+
+                if let Some((fi_x, fi_y_top, fi_y_bottom, obj_right, dist_left, dist_right)) =
+                    fz_params
+                {
+                    let col_x = sp.margin_left;
+                    let col_right = sp.margin_left + text_width;
+
+                    // Check if paragraph overlaps the float vertically
+                    if slot_top > fi_y_bottom && baseline_y < fi_y_top {
+                        let space_right =
+                            col_right - (obj_right + dist_right);
+                        let space_left = (fi_x - dist_left) - col_x;
+
+                        if space_right >= space_left && space_right >= 36.0 {
+                            let new_left = obj_right + dist_right;
+                            para_text_width =
+                                (col_right - new_left - para.indent_right).max(1.0);
+                            para_text_x = new_left + para.indent_left;
+                        } else if space_left >= 36.0 {
+                            let avail_right = fi_x - dist_left;
+                            para_text_width = (avail_right - col_x
+                                - para.indent_left
+                                - para.indent_right)
+                                .max(1.0);
+                        }
+
+                        // Build per-line geometry for multi-line paragraphs that may
+                        // span above and through the float zone
+                        let ascender_ratio_e = tallest_ar.unwrap_or(0.75);
+                        let full_w =
+                            (text_width - para.indent_left - para.indent_right).max(1.0);
+                        let max_lines = ((slot_top - fi_y_bottom) / line_h)
+                            .ceil() as usize
+                            + 10;
+                        let max_lines = max_lines.max(20);
+                        let mut geom = Vec::with_capacity(max_lines);
+                        for i in 0..max_lines {
+                            let y = slot_top
+                                - font_size * ascender_ratio_e
+                                - i as f32 * line_h;
+                            if y <= fi_y_top && y > fi_y_bottom {
+                                let sr = col_right - (obj_right + dist_right);
+                                let sl = (fi_x - dist_left) - col_x;
+                                if sr >= sl && sr >= 36.0 {
+                                    let nl = obj_right + dist_right;
+                                    let w = (col_right - nl - para.indent_right)
+                                        .max(1.0);
+                                    geom.push((nl + para.indent_left, w));
+                                } else if sl >= 36.0 {
+                                    let ar = fi_x - dist_left;
+                                    let w = (ar - col_x
+                                        - para.indent_left
+                                        - para.indent_right)
+                                        .max(1.0);
+                                    geom.push((col_x + para.indent_left, w));
+                                } else {
+                                    geom.push((col_x + para.indent_left, full_w));
+                                }
+                            } else {
+                                geom.push((col_x + para.indent_left, full_w));
+                            }
+                        }
+                        hdr_line_geom = Some(geom);
+                    }
+                }
+
+                let per_line_widths: Option<Vec<f32>> =
+                    hdr_line_geom.as_ref().map(|g| g.iter().map(|&(_, w)| w).collect());
+
+                let lines = build_lines_with_float(
                     &substituted_runs,
                     ctx.fonts,
                     &para.tab_stops,
@@ -475,6 +608,7 @@ pub(super) fn render_header_footer(
                     ctx.default_tab_stop,
                     para.indent_left,
                     text_hanging,
+                    per_line_widths.as_deref(),
                 );
 
                 render_paragraph_lines(
@@ -490,7 +624,7 @@ pub(super) fn render_header_footer(
                     &mut Vec::new(),
                     text_hanging,
                     ctx.fonts,
-                    None,
+                    hdr_line_geom.as_deref(),
                 );
 
                 let max_img_h = lines

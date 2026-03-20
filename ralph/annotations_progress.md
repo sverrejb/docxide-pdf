@@ -47,3 +47,25 @@
 **Impact**:
 - `scraped/croatian_grant_guidelines`: Jaccard -1.4pp (8.5→7.0%), SSIM -1.7pp (19.9→18.2%) — small score drop because the split point differs from reference due to text width differences, but the structural behavior (table splitting across pages) now matches the reference
 - No regressions across all other 90 test cases (including 5 other fixtures with floating tables)
+
+---
+
+## 2026-03-20: Fixed text wrapping around floating images in headers (annotation #7)
+
+**Problem**: In `scraped/czech_municipal_grant_form`, the heading text "OBEC TUHAŇ" and address were rendered on top of/overlapping the coat of arms logo in the header, instead of wrapping to the right of it. The reference shows the text correctly positioned to the right of the floating image.
+
+**Root cause**: The header/footer rendering code (`src/pdf/header_footer.rs`) had no support for text wrapping around floating images. While the body text rendering had a sophisticated `FloatZone` system, the header code simply emitted floating images at their positions and laid out text at full page width, ignoring `wrapSquare` wrap mode entirely.
+
+Additionally, the floating image was in a separate paragraph (paragraph 0) from the text (paragraphs 1 and 2), so the float zone needed to persist across paragraph boundaries within the header.
+
+**Fix** (`src/pdf/header_footer.rs`):
+- Added a cross-paragraph `hdr_fz` variable that tracks the float zone (position, dimensions, distances) across header paragraphs
+- When rendering a floating image with `WrapType::Square | Tight | Through`, register the float zone in `hdr_fz`
+- For each subsequent text paragraph, check if it vertically overlaps the float zone
+- When overlapping, narrow `para_text_x` and `para_text_width` to avoid the image area
+- Build per-line geometry for multi-line paragraphs that span into/through the float zone
+- Pass per-line widths to `build_paragraph_lines` and `render_paragraph_lines` via a new `build_lines_with_float` helper
+
+**Impact**:
+- `scraped/czech_municipal_grant_form`: Jaccard +0.8pp (10.5→11.3%), SSIM +2.2pp (27.8→30.1%)
+- No regressions across all 91 test cases

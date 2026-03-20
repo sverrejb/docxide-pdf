@@ -309,8 +309,8 @@
     "convert_ms": 39.4
   },
   "scraped/czech_municipal_..": {
-    "jaccard": 0.105,
-    "ssim": 0.2784,
+    "jaccard": 0.113,
+    "ssim": 0.3007,
     "text_boundary": 0.42,
     "convert_ms": 34.9
   },

@@ -49,7 +49,7 @@
       "x_pt": 111.64876,
       "y_pt": 780.05676,
       "note": "Heading is rendered above the logo.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 8,
