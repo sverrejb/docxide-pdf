@@ -220,6 +220,30 @@ impl SampledBoundary {
         let t = (x - x0) / dx;
         y0 + t * (y1 - y0)
     }
+
+    /// Minimum y value across all sampled points.
+    fn min_y(&self) -> f64 {
+        self.points
+            .iter()
+            .map(|p| p.1)
+            .fold(f64::INFINITY, f64::min)
+    }
+
+    /// Maximum y value across all sampled points.
+    fn max_y(&self) -> f64 {
+        self.points
+            .iter()
+            .map(|p| p.1)
+            .fold(f64::NEG_INFINITY, f64::max)
+    }
+
+    /// X-extent of the boundary.
+    fn x_range(&self) -> f64 {
+        if self.points.len() < 2 {
+            return 0.0;
+        }
+        self.points.last().unwrap().0 - self.points.first().unwrap().0
+    }
 }
 
 /// Evaluate the warp preset and return sampled top and bottom boundaries.
@@ -244,40 +268,38 @@ pub(super) fn evaluate_warp_boundaries(
 
 /// Warp a single point through the envelope boundaries.
 /// `gx`, `gy` are in the flat text coordinate system (0..text_w, 0..text_h).
-/// Returns warped (x, y) in PDF coordinates.
+/// `boundary_w` is the x-extent of the boundary curves (typically content_w).
+/// Returns warped (x, y) in boundary coordinates.
 fn warp_point(
     gx: f64,
     gy: f64,
     text_w: f64,
     text_h: f64,
+    boundary_w: f64,
     top: &SampledBoundary,
     bottom: &SampledBoundary,
 ) -> (f64, f64) {
-    // u = horizontal position (0..text_w maps to boundary x range)
-    let u = if text_w > 0.0 { gx / text_w } else { 0.5 };
-
     // v = vertical position (0 = bottom, 1 = top of text)
     let v = if text_h > 0.0 { gy / text_h } else { 0.5 };
 
-    // Sample boundaries at this x position
-    let x_pos = gx; // boundaries are in the same coordinate space
-    let top_y = top.y_at(x_pos);
-    let bot_y = bottom.y_at(x_pos);
+    // Map glyph x to boundary x-coordinate space
+    let boundary_x = if text_w > 0.0 {
+        gx / text_w * boundary_w
+    } else {
+        boundary_w * 0.5
+    };
 
-    // Interpolate between bottom and top
-    let warped_x = gx; // x stays the same (boundaries define y distortion)
+    let top_y = top.y_at(boundary_x);
+    let bot_y = bottom.y_at(boundary_x);
+
+    // Interpolate between bottom and top boundary
     let warped_y = bot_y + v * (top_y - bot_y);
 
-    // For warps that also move x (like textWave), we need to interpolate x too.
-    // The boundary x-coordinates may not be uniformly distributed.
-    // For now, use a simple approach: x comes from the boundary at parameter u.
-    let _ = u; // future: use u for x-interpolation on circular warps
-
-    (warped_x, warped_y)
+    (boundary_x, warped_y)
 }
 
 /// Render a warped textbox: extract glyph outlines, warp them through the envelope,
-/// and emit as filled PDF paths.
+/// and emit as filled PDF paths. Returns true if rendering succeeded, false to fall back to flat.
 pub(super) fn render_warped_textbox(
     tb: &Textbox,
     content: &mut Content,
@@ -285,17 +307,19 @@ pub(super) fn render_warped_textbox(
     tb_x: f32,
     tb_y_top: f32,
     content_w: f32,
-) {
+) -> bool {
     let warp = match &tb.text_warp {
         Some(w) => w,
-        None => return,
+        None => return false,
     };
 
-    // Collect all text and compute total width
+    // Collect all text and first run's formatting
     let mut total_text = String::new();
     let mut font_name = String::new();
     let mut font_size = 12.0_f32;
     let mut text_color: Option<[u8; 3]> = None;
+    let mut first_outline: Option<TextOutline> = None;
+    let mut first_fill: Option<TextFill> = None;
     for para in &tb.paragraphs {
         for run in &para.runs {
             if !run.text.is_empty() {
@@ -304,25 +328,32 @@ pub(super) fn render_warped_textbox(
                     font_name = run.font_name.clone();
                     font_size = run.font_size;
                     text_color = run.color;
+                    first_outline = run.text_outline.clone();
+                    first_fill = run.text_fill.clone();
                 }
             }
         }
     }
 
     if total_text.is_empty() || font_name.is_empty() {
-        return;
+        return false;
     }
 
     // Load font for glyph outlines
     let Some((font_data, face_index)) = load_font_data(&font_name, seen_fonts) else {
-        return;
+        return false;
     };
     let Some(face) = ttf_parser::Face::parse(&font_data, face_index).ok() else {
-        return;
+        return false;
     };
 
     let units_per_em = face.units_per_em() as f64;
     let scale = font_size as f64 / units_per_em;
+
+    // Font metrics for coordinate transform (Fix 1)
+    let descender = face.descender() as f64 / units_per_em * font_size as f64; // negative
+    let ascender = face.ascender() as f64 / units_per_em * font_size as f64;
+    let glyph_extent = ascender - descender; // total glyph height in points
 
     // Compute character advances to get total text width
     let mut char_advances: Vec<(char, f64)> = Vec::new();
@@ -338,104 +369,105 @@ pub(super) fn render_warped_textbox(
     }
 
     let text_w = total_advance.max(1.0);
-    let text_h = font_size as f64;
+    let text_h = glyph_extent; // glyph vertical extent for v normalization
 
-    // Evaluate warp boundaries
+    // Evaluate warp boundaries using textbox dimensions (not glyph extent)
+    // WordArt stretches text to fill the textbox envelope
+    let boundary_w = content_w as f64;
+    let boundary_h = tb.height_pt as f64;
     let Some((top_boundary, bottom_boundary)) =
-        evaluate_warp_boundaries(&warp.preset, &warp.adjustments, content_w as f64, text_h)
+        evaluate_warp_boundaries(&warp.preset, &warp.adjustments, boundary_w, boundary_h)
     else {
-        return;
+        return false;
+    };
+
+    // Determine fill color from text_fill, falling back to run color
+    let fill_color = match &first_fill {
+        Some(TextFill::Solid([r, g, b])) => Some((*r, *g, *b)),
+        Some(TextFill::NoFill) => None,
+        _ => text_color.map(|[r, g, b]| (r, g, b)),
     };
 
     // Set up rendering
     content.save_state();
-    if let Some([r, g, b]) = text_color {
+    if let Some((r, g, b)) = fill_color {
         content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
     } else {
         content.set_fill_gray(0.0);
     }
 
-    // Horizontal centering offset
-    let x_offset = (content_w as f64 - text_w) / 2.0;
+    // Geometry engine already converts boundaries to PDF y-up coords (shape_h - scaled),
+    // so boundary y=0 is bottom of envelope, y=boundary_h is top.
+    // Anchor envelope top to textbox top.
+    let envelope_top = top_boundary.max_y();
+
+    // Helper closure: transform a glyph point to PDF page coordinates
+    let transform = |gx_font: f64, gy_font: f64, cursor_x: f64| -> (f32, f32) {
+        // gx in text advance space
+        let gx = cursor_x + gx_font * scale;
+        // gy: shift from font-space (baseline=0, up=positive) to flat text space (0..text_h)
+        let gy = gy_font * scale - descender;
+
+        let (wx, wy) = warp_point(gx, gy, text_w, text_h, boundary_w, &top_boundary, &bottom_boundary);
+
+        // wx is in boundary x-space [0, boundary_w]
+        // wy is in PDF y-up space (already converted by geometry engine)
+        let pdf_x = (tb_x as f64 + wx) as f32;
+        let pdf_y = (tb_y_top as f64 - envelope_top + wy) as f32;
+        (pdf_x, pdf_y)
+    };
 
     // For each character, extract glyph outline and warp it
     let mut cursor_x = 0.0_f64;
-    let ascender = face.ascender() as f64 / units_per_em * font_size as f64;
+    // Track previous endpoint for quad-to-cubic conversion
+    let mut prev_x = 0.0_f64;
+    let mut prev_y = 0.0_f64;
 
     for &(ch, advance) in &char_advances {
         if let Some(glyph) = extract_glyph_path(&face, ch) {
             for cmd in &glyph.commands {
                 match cmd {
                     GlyphCommand::MoveTo(gx, gy) => {
-                        let px = cursor_x + *gx as f64 * scale;
-                        let py = *gy as f64 * scale;
-                        let (wx, wy) =
-                            warp_point(px, py, text_w, text_h, &top_boundary, &bottom_boundary);
-                        content.move_to(
-                            (tb_x as f64 + x_offset + wx) as f32,
-                            (tb_y_top as f64 - text_h + wy) as f32,
-                        );
+                        let (px, py) = transform(*gx as f64, *gy as f64, cursor_x);
+                        content.move_to(px, py);
+                        prev_x = *gx as f64;
+                        prev_y = *gy as f64;
                     }
                     GlyphCommand::LineTo(gx, gy) => {
-                        let px = cursor_x + *gx as f64 * scale;
-                        let py = *gy as f64 * scale;
-                        let (wx, wy) =
-                            warp_point(px, py, text_w, text_h, &top_boundary, &bottom_boundary);
-                        content.line_to(
-                            (tb_x as f64 + x_offset + wx) as f32,
-                            (tb_y_top as f64 - text_h + wy) as f32,
-                        );
+                        let (px, py) = transform(*gx as f64, *gy as f64, cursor_x);
+                        content.line_to(px, py);
+                        prev_x = *gx as f64;
+                        prev_y = *gy as f64;
                     }
-                    GlyphCommand::QuadTo(x1, y1, x2, y2) => {
-                        // Convert quad to cubic for PDF
-                        let qx1 = cursor_x + *x1 as f64 * scale;
-                        let qy1 = *y1 as f64 * scale;
-                        let qx2 = cursor_x + *x2 as f64 * scale;
-                        let qy2 = *y2 as f64 * scale;
+                    GlyphCommand::QuadTo(qcx, qcy, qx, qy) => {
+                        // Quad-to-cubic: cp1 = p0 + 2/3*(qcp - p0), cp2 = p1 + 2/3*(qcp - p1)
+                        let p0x = prev_x;
+                        let p0y = prev_y;
+                        let qcx = *qcx as f64;
+                        let qcy = *qcy as f64;
+                        let p1x = *qx as f64;
+                        let p1y = *qy as f64;
 
-                        // Get previous point for quad-to-cubic conversion
-                        let (wx1, wy1) = warp_point(
-                            qx1, qy1, text_w, text_h, &top_boundary, &bottom_boundary,
-                        );
-                        let (wx2, wy2) = warp_point(
-                            qx2, qy2, text_w, text_h, &top_boundary, &bottom_boundary,
-                        );
-                        // Approximate as line segments for warped quads
-                        // (warping distorts control points, so subdivision is more correct)
-                        content.line_to(
-                            (tb_x as f64 + x_offset + wx1) as f32,
-                            (tb_y_top as f64 - text_h + wy1) as f32,
-                        );
-                        content.line_to(
-                            (tb_x as f64 + x_offset + wx2) as f32,
-                            (tb_y_top as f64 - text_h + wy2) as f32,
-                        );
+                        let cp1x = p0x + (2.0 / 3.0) * (qcx - p0x);
+                        let cp1y = p0y + (2.0 / 3.0) * (qcy - p0y);
+                        let cp2x = p1x + (2.0 / 3.0) * (qcx - p1x);
+                        let cp2y = p1y + (2.0 / 3.0) * (qcy - p1y);
+
+                        let (wx1, wy1) = transform(cp1x, cp1y, cursor_x);
+                        let (wx2, wy2) = transform(cp2x, cp2y, cursor_x);
+                        let (wx3, wy3) = transform(p1x, p1y, cursor_x);
+                        content.cubic_to(wx1, wy1, wx2, wy2, wx3, wy3);
+
+                        prev_x = p1x;
+                        prev_y = p1y;
                     }
                     GlyphCommand::CubicTo(x1, y1, x2, y2, x3, y3) => {
-                        let cx1 = cursor_x + *x1 as f64 * scale;
-                        let cy1 = *y1 as f64 * scale;
-                        let cx2 = cursor_x + *x2 as f64 * scale;
-                        let cy2 = *y2 as f64 * scale;
-                        let cx3 = cursor_x + *x3 as f64 * scale;
-                        let cy3 = *y3 as f64 * scale;
-
-                        let (wx1, wy1) = warp_point(
-                            cx1, cy1, text_w, text_h, &top_boundary, &bottom_boundary,
-                        );
-                        let (wx2, wy2) = warp_point(
-                            cx2, cy2, text_w, text_h, &top_boundary, &bottom_boundary,
-                        );
-                        let (wx3, wy3) = warp_point(
-                            cx3, cy3, text_w, text_h, &top_boundary, &bottom_boundary,
-                        );
-                        content.cubic_to(
-                            (tb_x as f64 + x_offset + wx1) as f32,
-                            (tb_y_top as f64 - text_h + wy1) as f32,
-                            (tb_x as f64 + x_offset + wx2) as f32,
-                            (tb_y_top as f64 - text_h + wy2) as f32,
-                            (tb_x as f64 + x_offset + wx3) as f32,
-                            (tb_y_top as f64 - text_h + wy3) as f32,
-                        );
+                        let (wx1, wy1) = transform(*x1 as f64, *y1 as f64, cursor_x);
+                        let (wx2, wy2) = transform(*x2 as f64, *y2 as f64, cursor_x);
+                        let (wx3, wy3) = transform(*x3 as f64, *y3 as f64, cursor_x);
+                        content.cubic_to(wx1, wy1, wx2, wy2, wx3, wy3);
+                        prev_x = *x3 as f64;
+                        prev_y = *y3 as f64;
                     }
                     GlyphCommand::Close => {
                         content.close_path();
@@ -446,7 +478,82 @@ pub(super) fn render_warped_textbox(
         cursor_x += advance;
     }
 
-    // Fill all glyph paths at once
-    content.fill_nonzero();
+    // Fill all glyph paths
+    let has_outline = first_outline.is_some();
+    let no_fill = matches!(&first_fill, Some(TextFill::NoFill));
+
+    if has_outline && !no_fill {
+        // Need to fill AND stroke — use fill_nonzero first, then re-emit paths for stroke
+        content.fill_nonzero();
+    } else if no_fill {
+        // NoFill: don't fill, just end the path (stroke happens below)
+        content.end_path();
+    } else {
+        content.fill_nonzero();
+    }
+
+    // Apply text outline by re-emitting glyph paths and stroking
+    if let Some(ref outline) = first_outline {
+        content.set_line_width(outline.width_pt);
+        let [r, g, b] = outline.color;
+        content.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+
+        cursor_x = 0.0;
+        for &(ch, advance) in &char_advances {
+            if let Some(glyph) = extract_glyph_path(&face, ch) {
+                prev_x = 0.0;
+                prev_y = 0.0;
+                for cmd in &glyph.commands {
+                    match cmd {
+                        GlyphCommand::MoveTo(gx, gy) => {
+                            let (px, py) = transform(*gx as f64, *gy as f64, cursor_x);
+                            content.move_to(px, py);
+                            prev_x = *gx as f64;
+                            prev_y = *gy as f64;
+                        }
+                        GlyphCommand::LineTo(gx, gy) => {
+                            let (px, py) = transform(*gx as f64, *gy as f64, cursor_x);
+                            content.line_to(px, py);
+                            prev_x = *gx as f64;
+                            prev_y = *gy as f64;
+                        }
+                        GlyphCommand::QuadTo(qcx, qcy, qx, qy) => {
+                            let p0x = prev_x;
+                            let p0y = prev_y;
+                            let qcx = *qcx as f64;
+                            let qcy = *qcy as f64;
+                            let p1x = *qx as f64;
+                            let p1y = *qy as f64;
+                            let cp1x = p0x + (2.0 / 3.0) * (qcx - p0x);
+                            let cp1y = p0y + (2.0 / 3.0) * (qcy - p0y);
+                            let cp2x = p1x + (2.0 / 3.0) * (qcx - p1x);
+                            let cp2y = p1y + (2.0 / 3.0) * (qcy - p1y);
+                            let (wx1, wy1) = transform(cp1x, cp1y, cursor_x);
+                            let (wx2, wy2) = transform(cp2x, cp2y, cursor_x);
+                            let (wx3, wy3) = transform(p1x, p1y, cursor_x);
+                            content.cubic_to(wx1, wy1, wx2, wy2, wx3, wy3);
+                            prev_x = p1x;
+                            prev_y = p1y;
+                        }
+                        GlyphCommand::CubicTo(x1, y1, x2, y2, x3, y3) => {
+                            let (wx1, wy1) = transform(*x1 as f64, *y1 as f64, cursor_x);
+                            let (wx2, wy2) = transform(*x2 as f64, *y2 as f64, cursor_x);
+                            let (wx3, wy3) = transform(*x3 as f64, *y3 as f64, cursor_x);
+                            content.cubic_to(wx1, wy1, wx2, wy2, wx3, wy3);
+                            prev_x = *x3 as f64;
+                            prev_y = *y3 as f64;
+                        }
+                        GlyphCommand::Close => {
+                            content.close_path();
+                        }
+                    }
+                }
+            }
+            cursor_x += advance;
+        }
+        content.stroke();
+    }
+
     content.restore_state();
+    true
 }

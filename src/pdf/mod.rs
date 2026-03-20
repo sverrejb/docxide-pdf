@@ -282,8 +282,10 @@ fn render_single_textbox(
         .as_ref()
         .is_some_and(|w| w.preset != "textNoShape" && w.preset != "textPlain")
     {
-        wordart::render_warped_textbox(tb, content, ctx.fonts, tb_x, tb_y_top, content_w);
-        return;
+        if wordart::render_warped_textbox(tb, content, ctx.fonts, tb_x, tb_y_top, align_w) {
+            return;
+        }
+        // Warp rendering failed (e.g. single-path preset) — fall through to flat rendering
     }
 
     let anchor_offset = match tb.text_anchor {
