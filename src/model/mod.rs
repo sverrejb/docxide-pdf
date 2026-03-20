@@ -190,6 +190,14 @@ pub enum WrapType {
     TopAndBottom,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum WrapText {
+    BothSides,
+    Left,
+    Right,
+    Largest,
+}
+
 #[derive(Clone)]
 pub struct ParagraphBorder {
     pub width_pt: f32,  // line thickness in points

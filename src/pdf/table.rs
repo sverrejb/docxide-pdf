@@ -235,6 +235,7 @@ fn render_cell_content(
                     &mut Vec::new(),
                     0.0,
                     ctx.fonts,
+                    None,
                 );
 
                 cursor_y -= para.lines.len() as f32 * para.line_h;
@@ -444,6 +445,7 @@ fn render_partial_cell_content(
                     &mut Vec::new(),
                     0.0,
                     ctx.fonts,
+                    None,
                 );
 
                 cursor_y -= para.lines.len() as f32 * para.line_h;
@@ -719,6 +721,7 @@ fn compute_row_layouts(
                                         para_text_w,
                                         para.indent_hanging,
                                         &std::collections::HashMap::new(),
+                                        None,
                                         None,
                                     );
                                     if is_rotated {
@@ -1393,6 +1396,8 @@ pub(super) fn render_table(
                 obj_right: table_left + table_total_w,
                 left_from_text: fp.left_from_text,
                 right_from_text: fp.right_from_text,
+                polygon_pts: None,
+                wrap_text: crate::model::WrapText::Largest,
             });
         }
     }

@@ -152,6 +152,79 @@ p8 = doc.add_paragraph(
     "is not enough horizontal space on either side for text wrapping. " + LOREM
 )
 
+# --- Section 4: Left-aligned SMALL image (diagnostic: does size mask the shift?) ---
+
+doc.add_page_break()
+
+p9 = doc.add_paragraph(
+    "Page 4: Left-aligned SMALL image (1.5x1 inch). Same structure as page 1 "
+    "but smaller image to reveal any vertical shift more clearly."
+)
+
+# Reuse green image for small case
+p_img4 = doc.add_paragraph()
+p_img4.add_run().add_picture(green_path, width=Inches(1.5), height=Inches(1))
+
+p10 = doc.add_paragraph(
+    "This text wraps beside the small left-aligned image. " + LOREM +
+    "The text should flow back to full width below the image."
+)
+
+p11 = doc.add_paragraph("Full-width text below the small image.")
+
+# --- Section 5: Right-aligned TALL image (diagnostic: same height as page 1) ---
+
+doc.add_page_break()
+
+p12 = doc.add_paragraph(
+    "Page 5: Right-aligned image same size as page 1 (2.5x2.5 inch). "
+    "Compare with page 2 which uses a shorter image."
+)
+
+p_img5 = doc.add_paragraph()
+p_img5.add_run().add_picture(blue_path, width=Inches(2.5), height=Inches(2.5))
+
+p13 = doc.add_paragraph(
+    "This text wraps to the left of the tall right-aligned image. " + LOREM +
+    "Compare the image vertical position with page 2."
+)
+
+p14 = doc.add_paragraph("Full-width text below the tall right-aligned image.")
+
+# --- Section 6: Image IN the text paragraph (not standalone) ---
+
+doc.add_page_break()
+
+p15 = doc.add_paragraph(
+    "Page 6: Image is in the SAME paragraph as text, not in its own paragraph. "
+    "This is the control case."
+)
+
+# Image placed in a paragraph that also has text
+p_img6 = doc.add_paragraph("Text before image in same paragraph. ")
+p_img6.add_run().add_picture(green_path, width=Inches(2.5), height=Inches(2))
+
+p16 = doc.add_paragraph(
+    "This text wraps beside the image that shares a paragraph with text. " + LOREM
+)
+
+p17 = doc.add_paragraph("Full-width text after the shared-paragraph image.")
+
+# --- Section 7: Image-only paragraph at TOP of page (no preceding text) ---
+
+doc.add_page_break()
+
+p_img7 = doc.add_paragraph()
+p_img7.add_run().add_picture(blue_path, width=Inches(2.5), height=Inches(2.5))
+
+p18 = doc.add_paragraph(
+    "Page 7: The left-aligned image is at the top of this page with no "
+    "preceding text paragraph. " + LOREM +
+    "This tests whether the image position depends on a preceding paragraph."
+)
+
+p19 = doc.add_paragraph("Full-width text below the top-of-page image.")
+
 # Save initial DOCX
 tmp = tempfile.mktemp(suffix=".docx")
 doc.save(tmp)
@@ -215,26 +288,30 @@ with zipfile.ZipFile(tmp, "r") as zin:
         inline_re = re.compile(r'<wp:inline\b[^>]*>.*?</wp:inline>', re.DOTALL)
         inlines = list(inline_re.finditer(doc_xml))
 
-        if len(inlines) >= 3:
-            # Process in reverse order to preserve positions
-            # Image 3: center-aligned, 4.5" x 2.5"
-            cx3 = int(4.5 * 914400)
-            cy3 = int(2.5 * 914400)
-            m3 = inlines[2]
-            anchor3 = make_anchor(m3.group(), "center", gap, gap, gap, gap, cx3, cy3)
-            doc_xml = doc_xml[:m3.start()] + anchor3 + doc_xml[m3.end():]
-
-            # Image 2: right-aligned, 2.5" x 2"
-            cx2 = int(2.5 * 914400)
-            cy2 = int(2.0 * 914400)
-            m2 = inlines[1]
-            anchor2 = make_anchor(m2.group(), "right", gap, 0, gap, gap, cx2, cy2)
-            doc_xml = doc_xml[:m2.start()] + anchor2 + doc_xml[m2.end():]
-
+        # Define all image conversions: (index, h_align, dist_l, dist_r, dist_t, dist_b, cx, cy)
+        conversions = [
             # Image 1: left-aligned, 2.5" x 2.5"
-            m1 = inlines[0]
-            anchor1 = make_anchor(m1.group(), "left", 0, gap, gap, gap, cx1, cy1)
-            doc_xml = doc_xml[:m1.start()] + anchor1 + doc_xml[m1.end():]
+            (0, "left", 0, gap, gap, gap, int(2.5 * 914400), int(2.5 * 914400)),
+            # Image 2: right-aligned, 2.5" x 2"
+            (1, "right", gap, 0, gap, gap, int(2.5 * 914400), int(2.0 * 914400)),
+            # Image 3: center-aligned, 4.5" x 2.5"
+            (2, "center", gap, gap, gap, gap, int(4.5 * 914400), int(2.5 * 914400)),
+            # Image 4: left-aligned SMALL, 1.5" x 1"
+            (3, "left", 0, gap, gap, gap, int(1.5 * 914400), int(1.0 * 914400)),
+            # Image 5: right-aligned TALL, 2.5" x 2.5"
+            (4, "right", gap, 0, gap, gap, int(2.5 * 914400), int(2.5 * 914400)),
+            # Image 6: left-aligned (in paragraph WITH text), 2.5" x 2"
+            (5, "left", 0, gap, gap, gap, int(2.5 * 914400), int(2.0 * 914400)),
+            # Image 7: left-aligned at top of page, 2.5" x 2.5"
+            (6, "left", 0, gap, gap, gap, int(2.5 * 914400), int(2.5 * 914400)),
+        ]
+
+        # Process in reverse order to preserve string positions
+        for idx, h_align, dl, dr, dt, db, cx, cy in reversed(conversions):
+            if idx < len(inlines):
+                m = inlines[idx]
+                anchor = make_anchor(m.group(), h_align, dl, dr, dt, db, cx, cy)
+                doc_xml = doc_xml[:m.start()] + anchor + doc_xml[m.end():]
 
         # Ensure DrawingML namespace prefixes are declared at root level
         # (python-docx declares them locally on wp:inline which we replaced)

@@ -3,7 +3,7 @@ use std::io::Read;
 
 use crate::model::{
     EmbeddedImage, FloatingImage, HRelativeFrom, HorizontalPosition, ImageFormat, InlineChart,
-    SmartArtDiagram, VRelativeFrom, VerticalPosition, WrapType,
+    SmartArtDiagram, VRelativeFrom, VerticalPosition, WrapText, WrapType,
 };
 
 use super::charts::parse_chart_from_zip;
@@ -207,21 +207,70 @@ pub(super) fn parse_anchor_position(
     (h_position, h_relative, v_position, v_relative)
 }
 
-pub(super) fn parse_wrap_type(container: roxmltree::Node) -> WrapType {
+pub(super) fn parse_wrap_type(
+    container: roxmltree::Node,
+) -> (WrapType, WrapText, Option<Vec<(i32, i32)>>) {
     for child in container.children() {
         if child.tag_name().namespace() != Some(WPD_NS) {
             continue;
         }
+        let wrap_text = match child.attribute("wrapText") {
+            Some("bothSides") => WrapText::BothSides,
+            Some("left") => WrapText::Left,
+            Some("right") => WrapText::Right,
+            Some("largest") => WrapText::Largest,
+            _ => WrapText::BothSides,
+        };
         match child.tag_name().name() {
-            "wrapSquare" => return WrapType::Square,
-            "wrapTight" => return WrapType::Tight,
-            "wrapThrough" => return WrapType::Through,
-            "wrapTopAndBottom" => return WrapType::TopAndBottom,
-            "wrapNone" => return WrapType::None,
+            "wrapSquare" => return (WrapType::Square, wrap_text, None),
+            "wrapTight" | "wrapThrough" => {
+                let polygon = parse_wrap_polygon(child);
+                let wt = if child.tag_name().name() == "wrapTight" {
+                    WrapType::Tight
+                } else {
+                    WrapType::Through
+                };
+                return (wt, wrap_text, polygon);
+            }
+            "wrapTopAndBottom" => {
+                return (WrapType::TopAndBottom, WrapText::BothSides, None)
+            }
+            "wrapNone" => return (WrapType::None, WrapText::BothSides, None),
             _ => {}
         }
     }
-    WrapType::None
+    (WrapType::None, WrapText::BothSides, None)
+}
+
+fn parse_wrap_polygon(wrap_elem: roxmltree::Node) -> Option<Vec<(i32, i32)>> {
+    let poly = wrap_elem
+        .children()
+        .find(|c| c.tag_name().name() == "wrapPolygon" && c.tag_name().namespace() == Some(WPD_NS))?;
+    let mut vertices = Vec::new();
+    for child in poly.children() {
+        if child.tag_name().namespace() != Some(WPD_NS) {
+            continue;
+        }
+        match child.tag_name().name() {
+            "start" | "lineTo" => {
+                let x = child
+                    .attribute("x")
+                    .and_then(|v| v.parse::<i32>().ok())
+                    .unwrap_or(0);
+                let y = child
+                    .attribute("y")
+                    .and_then(|v| v.parse::<i32>().ok())
+                    .unwrap_or(0);
+                vertices.push((x, y));
+            }
+            _ => {}
+        }
+    }
+    if vertices.is_empty() {
+        None
+    } else {
+        Some(vertices)
+    }
 }
 
 pub(super) enum RunDrawingResult {
@@ -263,7 +312,7 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
                     VerticalPosition::Offset(o) => o,
                     _ => 0.0,
                 };
-                let wrap_type = parse_wrap_type(container);
+                let (wrap_type, _, _) = parse_wrap_type(container);
                 let behind_doc = container.attribute("behindDoc") == Some("1");
                 return Some(RunDrawingResult::TextBox(crate::model::Textbox {
                     paragraphs: wsp.paragraphs,
@@ -296,7 +345,7 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
                 if let Some(img) = read_image_from_zip(embed_id, rels, zip, display_w, display_h) {
                     let (h_position, h_relative, v_position, v_relative) =
                         parse_anchor_position(container);
-                    let wrap_type = parse_wrap_type(container);
+                    let (wrap_type, wrap_text, wrap_polygon) = parse_wrap_type(container);
                     let behind_doc = container.attribute("behindDoc") == Some("1");
                     return Some(RunDrawingResult::Floating(FloatingImage {
                         image: img,
@@ -305,6 +354,8 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
                         v_position,
                         v_relative_from: v_relative,
                         wrap_type,
+                        wrap_text,
+                        wrap_polygon,
                         behind_doc,
                         dist_top: emu_attr(container, "distT"),
                         dist_bottom: emu_attr(container, "distB"),

@@ -203,14 +203,14 @@
     "text_boundary": 0.5
   },
   "cases/case41": {
-    "jaccard": 0.8033,
-    "ssim": 0.8539,
-    "text_boundary": 0.9333
+    "jaccard": 0.8595,
+    "ssim": 0.8647,
+    "text_boundary": 0.8442
   },
   "cases/case42": {
-    "jaccard": 0.4731,
-    "ssim": 0.5064,
-    "text_boundary": 0.1667
+    "jaccard": 0.4706,
+    "ssim": 0.514,
+    "text_boundary": 0.1905
   },
   "cases/case5": {
     "jaccard": 0.7607,
@@ -357,9 +357,9 @@
     "convert_ms": 70.6
   },
   "scraped/indonesian_bench..": {
-    "jaccard": 0.2202,
-    "ssim": 0.4129,
-    "text_boundary": 0.33,
+    "jaccard": 0.2286,
+    "ssim": 0.4303,
+    "text_boundary": 0.3629,
     "convert_ms": 170.5
   },
   "scraped/italian_evaluati..": {

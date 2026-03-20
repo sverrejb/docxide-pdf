@@ -96,6 +96,18 @@ Final mode (insertions included, deletions removed) is done. Remaining:
 - **Paragraph-level changes** — `w:ins`/`w:del` wrapping entire `w:p` elements at `w:body` level
 - **Property changes** — `w:rPrChange`, `w:pPrChange`, `w:sectPrChange`, `w:tblPrChange` (formatting revisions)
 
+## WordArt (TODO — LOW IMPACT)
+
+WordArt appears in two forms: modern DrawingML (current Word) and legacy VML (older docs).
+
+**Level 1 — Flat rendering (easy, most value):** Modern WordArt is structurally a `wsp` textbox with `prstTxWarp` in `a:bodyPr` and `fromWordArt="1"`. We already parse `wsp` textboxes. Ignoring the warp and text effects, the text would render flat and readable. Mainly needs: not skipping shapes with `fromWordArt`, passing through to existing textbox rendering.
+
+**Level 2 — Text effects:** Parse `a:solidFill`/`a:gradFill` on DrawingML text runs (`a:rPr`), text outlines (`a:ln`), and basic shadows. Makes flat WordArt look decent.
+
+**Level 3 — Text warping (hard):** Implement `prstTxWarp` preset geometries. Requires extracting glyph outlines from fonts, converting text to paths, then distorting through warp geometry. Significant effort.
+
+**Level 4 — Legacy VML:** Parse `v:textpath @string` and render as flat text. Lower priority since modern Word converts these to DrawingML on save.
+
 ## Unimplemented Spec Features
 
 - **`w:tblLook` / `w:tblStylePr`** — table conditional formatting (firstRow, lastRow, firstCol, bands, etc.)
@@ -139,6 +151,14 @@ The `render()` function in `pdf/mod.rs` is ~2400 lines with many closures and sh
 
 - Compress font file streams with FlateDecode (currently uncompressed)
 - Memory usage for large DOCX files with many images
+
+## Floating Image Wrapping (PARTIALLY DONE)
+
+- **Fixed**: `lines_beside` calculation used `.round()` which over-counted narrow lines when the last line barely overlapped the float zone bottom. Added -0.1 bias to correctly handle marginal cases. Case41 Jaccard +5.7pp.
+- **Fixed**: Self-wrapping — paragraphs now wrap around their own floating images (float zone set before line building, not after). Polygon data from `wp:wrapPolygon` parsed and used for per-line contour-aware exclusion.
+- **Remaining y-shift (page 2 only)**: Extracted exact positions from reference PDF — Word places page 2's image (180×144pt) 14.8pt higher than all other images, despite identical `posOffset=0`. Pages 1,3,4,5,7 match perfectly (delta <0.02pt). Pages 2 and 6 (both cy=1828800/144pt) are the outliers. Likely Word snapping to grid/text boundaries based on image dimensions — needs further investigation. Zeroing `content_h` for image-only paragraphs was proven WRONG (breaks pages that currently match).
+- **Both-sides wrapping (TODO)**: `wrapText="bothSides"` should flow text on both left and right of the image simultaneously. Currently picks the wider side per line. Requires a dual-region line builder. Case42 score limited by this (47% Jaccard). Case41 page 3 also affected.
+- **Image in text paragraph**: Case41 page 6 — last line of text paragraph overlaps the image. Look-ahead only fires for the NEXT block, not same-paragraph floats.
 
 ## Scraped Fixture Status
 

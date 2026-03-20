@@ -270,6 +270,7 @@ pub(super) fn build_paragraph_lines(
     first_line_hanging: f32,
     inline_image_names: &HashMap<usize, String>,
     width_after_line: Option<(usize, f32)>,
+    per_line_widths: Option<&[f32]>,
 ) -> Vec<TextLine> {
     let mut lines: Vec<TextLine> = Vec::new();
     let mut current_chunks: Vec<WordChunk> = Vec::new();
@@ -278,6 +279,12 @@ pub(super) fn build_paragraph_lines(
     let mut key_buf = String::new();
 
     let effective_max = |line_count: usize| -> f32 {
+        if let Some(widths) = per_line_widths {
+            if let Some(&w) = widths.get(line_count) {
+                return w;
+            }
+            return max_width;
+        }
         match width_after_line {
             Some((n, w)) if line_count >= n => w,
             _ => max_width,
@@ -712,6 +719,7 @@ pub(super) fn render_paragraph_lines(
     links: &mut Vec<LinkAnnotation>,
     first_line_hanging: f32,
     seen_fonts: &HashMap<String, FontEntry>,
+    line_geometry: Option<&[(f32, f32)]>,
 ) {
     let mut current_color: Option<[u8; 3]> = None;
     let mut cur_font_name = String::new();
@@ -757,13 +765,17 @@ pub(super) fn render_paragraph_lines(
             && !line.ends_with_break
             && line.chunks.len() > 1;
 
+        let (base_margin, base_width) = line_geometry
+            .and_then(|g| g.get(global_line_idx))
+            .copied()
+            .unwrap_or((margin_left, text_width));
         let (eff_margin, eff_width) = if global_line_idx == 0 && first_line_hanging.abs() > 0.001 {
             (
-                margin_left - first_line_hanging,
-                text_width + first_line_hanging,
+                base_margin - first_line_hanging,
+                base_width + first_line_hanging,
             )
         } else {
-            (margin_left, text_width)
+            (base_margin, base_width)
         };
 
         let line_start_x = match alignment {

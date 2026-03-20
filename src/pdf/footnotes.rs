@@ -42,7 +42,7 @@ fn layout_paragraph(
     }
     let (fs, tallest_lhr, tallest_ar) = tallest_run_metrics(runs, ctx.fonts);
     let lh = resolve_line_h(line_spacing, fs, tallest_lhr);
-    let lines = build_paragraph_lines(runs, ctx.fonts, text_width, 0.0, &HashMap::new(), None);
+    let lines = build_paragraph_lines(runs, ctx.fonts, text_width, 0.0, &HashMap::new(), None, None);
     if lines.is_empty() {
         return None;
     }
@@ -135,6 +135,7 @@ pub(super) fn render_page_footnotes(
                 &mut Vec::new(),
                 0.0,
                 ctx.fonts,
+                None,
             );
 
             fn_y -= line_count as f32 * layout.line_height;

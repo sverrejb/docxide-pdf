@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::geometry::{FormulaOp, PathFill};
 
-use super::{HRelativeFrom, HorizontalPosition, Paragraph, VRelativeFrom, WrapType};
+use super::{HRelativeFrom, HorizontalPosition, Paragraph, VRelativeFrom, WrapText, WrapType};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ImageFormat {
@@ -34,6 +34,9 @@ pub struct FloatingImage {
     pub v_position: super::VerticalPosition,
     pub v_relative_from: VRelativeFrom,
     pub wrap_type: WrapType,
+    pub wrap_text: WrapText,
+    /// Polygon vertices in 1/21600 of extent (from wp:wrapPolygon)
+    pub wrap_polygon: Option<Vec<(i32, i32)>>,
     pub behind_doc: bool,
     pub dist_top: f32,
     pub dist_bottom: f32,

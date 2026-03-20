@@ -210,7 +210,7 @@ fn build_lines(
     if has_tabs {
         build_tabbed_line(runs, fonts, tab_stops, indent_left, text_width, text_hanging, inline_images, default_tab_stop)
     } else {
-        build_paragraph_lines(runs, fonts, text_width, text_hanging, inline_images, None)
+        build_paragraph_lines(runs, fonts, text_width, text_hanging, inline_images, None, None)
     }
 }
 
@@ -353,6 +353,7 @@ pub(super) fn render_header_footer(
                             &mut Vec::new(),
                             0.0,
                             ctx.fonts,
+                            None,
                         );
                         tb_cursor -=
                             tp.space_before + (tb_lines.len() as f32) * tb_line_h + tp.space_after;
@@ -489,6 +490,7 @@ pub(super) fn render_header_footer(
                     &mut Vec::new(),
                     text_hanging,
                     ctx.fonts,
+                    None,
                 );
 
                 let max_img_h = lines

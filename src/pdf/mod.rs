@@ -20,7 +20,7 @@ use crate::model::{
     Alignment, Block, ConnectorShape, ConnectorType, DocGridType, Document, FloatingImage,
     HRelativeFrom, HorizontalPosition, LineSpacing, Paragraph, ParagraphBorder, ParagraphBorders,
     Run, SectionBreakType, SectionProperties, ShapeFill, ShapeGeometry, TextAnchor, Textbox,
-    VRelativeFrom, VerticalPosition, WrapType,
+    VRelativeFrom, VerticalPosition, WrapText, WrapType,
 };
 
 use assembly::{HeadingEntry, assemble_pdf_pages};
@@ -261,7 +261,7 @@ fn render_single_textbox(
                     )
                 } else {
                     build_paragraph_lines(
-                        &tp.runs, ctx.fonts, tp_text_w, text_hanging, &empty_inline_imgs_pre, None,
+                        &tp.runs, ctx.fonts, tp_text_w, text_hanging, &empty_inline_imgs_pre, None, None,
                     )
                 };
                 let (fs, lhr, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
@@ -312,6 +312,7 @@ fn render_single_textbox(
                 text_hanging,
                 &empty_inline_imgs,
                 None,
+                None,
             )
         };
         if tb_lines.is_empty() {
@@ -345,6 +346,7 @@ fn render_single_textbox(
             page_links,
             0.0,
             ctx.fonts,
+            None,
         );
         cursor_y -= tp.space_before + (tb_lines.len() as f32) * tb_line_h + tp.space_after;
     }
@@ -593,6 +595,70 @@ pub(super) struct FloatZone {
     pub obj_right: f32,
     pub left_from_text: f32,
     pub right_from_text: f32,
+    /// Polygon vertices in absolute page coords (PDF: x from left, y from bottom)
+    pub polygon_pts: Option<Vec<(f32, f32)>>,
+    pub wrap_text: WrapText,
+}
+
+impl FloatZone {
+    /// Returns (left_edge, right_edge) of the exclusion zone at the given Y.
+    /// Falls back to rectangular bounds if no polygon or scanline misses.
+    fn exclusion_at_y(&self, y: f32) -> (f32, f32) {
+        if let Some(ref pts) = self.polygon_pts {
+            if let Some((left, right)) = poly_scanline(pts, y) {
+                return (left, right);
+            }
+        }
+        (self.obj_left, self.obj_right)
+    }
+}
+
+/// Scanline intersection: find the leftmost and rightmost x where polygon edges cross y.
+fn poly_scanline(pts: &[(f32, f32)], y: f32) -> Option<(f32, f32)> {
+    let n = pts.len();
+    if n < 3 {
+        return None;
+    }
+    let mut min_x = f32::MAX;
+    let mut max_x = f32::MIN;
+    for i in 0..n {
+        let (x0, y0) = pts[i];
+        let (x1, y1) = pts[(i + 1) % n];
+        if (y0 <= y && y1 >= y) || (y1 <= y && y0 >= y) {
+            if (y1 - y0).abs() < 0.001 {
+                min_x = min_x.min(x0).min(x1);
+                max_x = max_x.max(x0).max(x1);
+            } else {
+                let t = (y - y0) / (y1 - y0);
+                let x = x0 + t * (x1 - x0);
+                min_x = min_x.min(x);
+                max_x = max_x.max(x);
+            }
+        }
+    }
+    if min_x <= max_x {
+        Some((min_x, max_x))
+    } else {
+        None
+    }
+}
+
+/// Convert polygon vertices from 1/21600-of-extent coords to absolute page coords.
+fn convert_polygon_to_page_coords(
+    vertices: &[(i32, i32)],
+    img_x: f32,
+    img_y_top: f32,
+    display_w: f32,
+    display_h: f32,
+) -> Vec<(f32, f32)> {
+    vertices
+        .iter()
+        .map(|&(px, py)| {
+            let x_pt = img_x + (px as f32 / 21600.0) * display_w;
+            let y_pt = img_y_top - (py as f32 / 21600.0) * display_h;
+            (x_pt, y_pt)
+        })
+        .collect()
 }
 
 pub(super) struct FloatingTablePos {
@@ -890,8 +956,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 } else if pb.slot_top <= fz.top_y {
                     // Cursor is within or entering the zone — check horizontal space
                     let (col_x, col_w) = col_geometry[current_col];
-                    let space_right = (col_x + col_w) - (fz.obj_right + fz.right_from_text);
-                    let space_left = (fz.obj_left - fz.left_from_text) - col_x;
+                    let (ex_left, ex_right) = fz.exclusion_at_y(pb.slot_top);
+                    let space_right = (col_x + col_w) - (ex_right + fz.right_from_text);
+                    let space_left = (ex_left - fz.left_from_text) - col_x;
                     let best_side = space_right.max(space_left);
                     const MIN_WRAP_WIDTH: f32 = 72.0; // ~1 inch minimum
                     if best_side < MIN_WRAP_WIDTH {
@@ -998,24 +1065,25 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         (col_w - para.indent_left - para.indent_right).max(1.0);
                     let mut label_x = col_x + para.indent_left - para.indent_hanging;
 
-                    // When inside a floating table zone, narrow the paragraph to
-                    // fit beside the table rather than overlapping it.
+                    // When inside a floating object zone, narrow the paragraph to
+                    // fit beside the object rather than overlapping it.
                     if let Some(ref fz) = pb.float_zone {
                         if pb.slot_top <= fz.top_y && pb.slot_top > fz.bottom_y {
                             let col_right = col_x + col_w;
+                            let (ex_left, ex_right) = fz.exclusion_at_y(pb.slot_top);
                             let space_right =
-                                col_right - (fz.obj_right + fz.right_from_text);
-                            let space_left = (fz.obj_left - fz.left_from_text) - col_x;
+                                col_right - (ex_right + fz.right_from_text);
+                            let space_left = (ex_left - fz.left_from_text) - col_x;
 
                             if space_right >= space_left && space_right >= 72.0 {
-                                let new_left = fz.obj_right + fz.right_from_text;
+                                let new_left = ex_right + fz.right_from_text;
                                 para_text_width =
                                     (col_right - new_left - para.indent_right).max(1.0);
                                 para_text_x = new_left + para.indent_left;
                                 label_x =
                                     new_left + para.indent_left - para.indent_hanging;
                             } else if space_left >= 72.0 {
-                                let avail_right = fz.obj_left - fz.left_from_text;
+                                let avail_right = ex_left - fz.left_from_text;
                                 para_text_width = (avail_right - col_x
                                     - para.indent_left
                                     - para.indent_right)
@@ -1061,6 +1129,181 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         .filter(|((bi, _), _)| *bi == global_block_idx)
                         .map(|((_, ri), name)| (*ri, name.clone()))
                         .collect();
+                    // Self-wrapping: if this paragraph anchors a wrapping float
+                    // and has text, set up the float zone NOW so width-narrowing
+                    // applies to this paragraph's own lines.
+                    if !para.floating_images.is_empty()
+                        && !text_empty
+                        && pb.float_zone.is_none()
+                    {
+                        if let Some(fi) = para.floating_images.iter().find(|fi| {
+                            matches!(
+                                fi.wrap_type,
+                                WrapType::Square | WrapType::Tight | WrapType::Through
+                            )
+                        }) {
+                            let fi_x =
+                                resolve_fi_x(fi, sp, col_x, col_w, text_width);
+                            let fi_y_top =
+                                resolve_fi_y_top(fi, sp, pb.slot_top);
+                            let fi_y_bottom =
+                                fi_y_top - fi.image.display_height;
+                            let polygon_pts =
+                                fi.wrap_polygon.as_ref().map(|verts| {
+                                    convert_polygon_to_page_coords(
+                                        verts,
+                                        fi_x,
+                                        fi_y_top,
+                                        fi.image.display_width,
+                                        fi.image.display_height,
+                                    )
+                                });
+                            pb.float_zone = Some(FloatZone {
+                                top_y: fi_y_top + fi.dist_top,
+                                bottom_y: fi_y_bottom - fi.dist_bottom,
+                                obj_left: fi_x,
+                                obj_right: fi_x + fi.image.display_width,
+                                left_from_text: fi.dist_left,
+                                right_from_text: fi.dist_right,
+                                polygon_pts,
+                                wrap_text: fi.wrap_text,
+                            });
+                            // Re-narrow para_text_x / para_text_width using the
+                            // new float zone (same logic as the block above).
+                            let fz = pb.float_zone.as_ref().unwrap();
+                            if pb.slot_top <= fz.top_y && pb.slot_top > fz.bottom_y
+                            {
+                                let col_right = col_x + col_w;
+                                let (ex_left, ex_right) =
+                                    fz.exclusion_at_y(pb.slot_top);
+                                let space_right = col_right
+                                    - (ex_right + fz.right_from_text);
+                                let space_left =
+                                    (ex_left - fz.left_from_text) - col_x;
+
+                                if space_right >= space_left
+                                    && space_right >= 72.0
+                                {
+                                    let new_left =
+                                        ex_right + fz.right_from_text;
+                                    para_text_width = (col_right
+                                        - new_left
+                                        - para.indent_right)
+                                        .max(1.0);
+                                    para_text_x =
+                                        new_left + para.indent_left;
+                                    label_x = new_left + para.indent_left
+                                        - para.indent_hanging;
+                                } else if space_left >= 72.0 {
+                                    let avail_right =
+                                        ex_left - fz.left_from_text;
+                                    para_text_width = (avail_right - col_x
+                                        - para.indent_left
+                                        - para.indent_right)
+                                        .max(1.0);
+                                }
+                            }
+                        }
+                    }
+
+                    // Per-line geometry: when a float zone is active and the
+                    // paragraph may overlap it, compute per-line (margin_left,
+                    // text_width) pairs. Needed for:
+                    //  - polygon-based tight wrapping (exclusion varies by Y)
+                    //  - self-wrapping (paragraph starts above zone, then enters it)
+                    let bdr_top_pad_early = para
+                        .borders
+                        .top
+                        .as_ref()
+                        .map(|b| b.space_pt + b.width_pt / 2.0)
+                        .unwrap_or(0.0);
+                    let ascender_ratio_early =
+                        tallest_ar.unwrap_or(0.75);
+                    let poly_line_geom: Option<Vec<(f32, f32)>> =
+                        pb.float_zone.as_ref().and_then(|fz| {
+                            // Use effective top after inter-paragraph spacing
+                            let eff_top = pb.slot_top - inter_gap;
+                            // Skip if paragraph is entirely past the zone
+                            if eff_top <= fz.bottom_y {
+                                return None;
+                            }
+                            // Use per-line geometry when: polygon is present,
+                            // OR paragraph starts above the zone (self-wrap:
+                            // first lines full-width, then narrow)
+                            let has_polygon = fz.polygon_pts.is_some();
+                            let starts_above = eff_top > fz.top_y;
+                            if !has_polygon && !starts_above {
+                                return None;
+                            }
+                            let full_w = (col_w
+                                - para.indent_left
+                                - para.indent_right)
+                                .max(1.0);
+                            let col_right = col_x + col_w;
+                            // Use post-inter_gap slot_top so line Y positions
+                            // match the rendering baseline calculations.
+                            let geom_top = pb.slot_top - inter_gap;
+                            let max_lines = ((geom_top - fz.bottom_y)
+                                / line_h)
+                                .ceil() as usize
+                                + 5;
+                            let max_lines = max_lines.max(50);
+                            let mut geom = Vec::with_capacity(max_lines);
+                            for i in 0..max_lines {
+                                let y = geom_top
+                                    - bdr_top_pad_early
+                                    - font_size * ascender_ratio_early
+                                    - i as f32 * line_h;
+                                if y <= fz.top_y && y > fz.bottom_y {
+                                    let (ex_left, ex_right) =
+                                        fz.exclusion_at_y(y);
+                                    let sr = col_right
+                                        - (ex_right + fz.right_from_text);
+                                    let sl =
+                                        (ex_left - fz.left_from_text) - col_x;
+
+                                    if sr >= sl && sr >= 72.0 {
+                                        let nl =
+                                            ex_right + fz.right_from_text;
+                                        let w = (col_right
+                                            - nl
+                                            - para.indent_right)
+                                            .max(1.0);
+                                        geom.push((
+                                            nl + para.indent_left,
+                                            w,
+                                        ));
+                                    } else if sl >= 72.0 {
+                                        let ar =
+                                            ex_left - fz.left_from_text;
+                                        let w = (ar - col_x
+                                            - para.indent_left
+                                            - para.indent_right)
+                                            .max(1.0);
+                                        geom.push((
+                                            col_x + para.indent_left,
+                                            w,
+                                        ));
+                                    } else {
+                                        geom.push((
+                                            col_x + para.indent_left,
+                                            full_w,
+                                        ));
+                                    }
+                                } else {
+                                    geom.push((
+                                        col_x + para.indent_left,
+                                        full_w,
+                                    ));
+                                }
+                            }
+                            Some(geom)
+                        });
+                    let poly_line_widths: Option<Vec<f32>> =
+                        poly_line_geom.as_ref().map(|g| {
+                            g.iter().map(|&(_, w)| w).collect()
+                        });
+
                     let mut float_width_change: Option<(usize, f32)> = None;
                     // For look-ahead: (narrow_x, narrow_w) for lines after the split
                     let mut lookahead_narrow: Option<(f32, f32)> = None;
@@ -1086,7 +1329,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 && (para_text_width - full_width).abs() > 1.0
                             {
                                 let effective_top = pb.slot_top - inter_gap;
-                                let lines_beside = ((effective_top - fz.bottom_y) / line_h).round() as usize;
+                                // Bias slightly toward fewer narrow lines: a line
+                                // barely overlapping the dist margin is full-width.
+                                let lines_beside = ((effective_top - fz.bottom_y) / line_h - 0.1).round().max(0.0) as usize;
                                 if lines_beside > 0 { Some((lines_beside, full_width)) } else { None }
                             } else {
                                 None
@@ -1117,7 +1362,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             // Two-pass: build at full width, then narrow bottom lines
                             let full_lines = build_paragraph_lines(
                                 &effective_runs, ctx.fonts, para_text_width,
-                                text_hanging, &block_inline_images, None,
+                                text_hanging, &block_inline_images, None, None,
                             );
                             let num_lines = full_lines.len();
                             let content_h_est = num_lines as f32 * line_h;
@@ -1154,7 +1399,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 let rebuilt = build_paragraph_lines(
                                     &effective_runs, ctx.fonts, para_text_width,
                                     text_hanging, &block_inline_images,
-                                    Some((lines_above, narrow_w)),
+                                    Some((lines_above, narrow_w)), None,
                                 );
                                 (rebuilt, Some((lines_above, narrow_w)))
                             } else {
@@ -1165,6 +1410,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             let built = build_paragraph_lines(
                                 &effective_runs, ctx.fonts, para_text_width,
                                 text_hanging, &block_inline_images, width_change,
+                                poly_line_widths.as_deref(),
                             );
                             (built, width_change)
                         };
@@ -1386,6 +1632,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 &mut pb.links,
                                 text_hanging,
                                 ctx.fonts,
+                                None,
                             );
 
                             pb.advance_column_or_page(
@@ -1419,6 +1666,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 &mut pb.links,
                                 text_hanging,
                                 ctx.fonts,
+                                None,
                             );
 
                             pb.slot_top -= rest_content_h;
@@ -1479,19 +1727,20 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     if let Some(ref fz) = pb.float_zone {
                         if pb.slot_top <= fz.top_y && pb.slot_top > fz.bottom_y {
                             let col_right = col_x + col_w;
+                            let (ex_left, ex_right) = fz.exclusion_at_y(pb.slot_top);
                             let space_right =
-                                col_right - (fz.obj_right + fz.right_from_text);
-                            let space_left = (fz.obj_left - fz.left_from_text) - col_x;
+                                col_right - (ex_right + fz.right_from_text);
+                            let space_left = (ex_left - fz.left_from_text) - col_x;
 
                             if space_right >= space_left && space_right >= 72.0 {
-                                let new_left = fz.obj_right + fz.right_from_text;
+                                let new_left = ex_right + fz.right_from_text;
                                 para_text_width =
                                     (col_right - new_left - para.indent_right).max(1.0);
                                 para_text_x = new_left + para.indent_left;
                                 label_x =
                                     new_left + para.indent_left - para.indent_hanging;
                             } else if space_left >= 72.0 {
-                                let avail_right = fz.obj_left - fz.left_from_text;
+                                let avail_right = ex_left - fz.left_from_text;
                                 para_text_width = (avail_right - col_x
                                     - para.indent_left
                                     - para.indent_right)
@@ -1578,6 +1827,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     );
 
                     // Set FloatZone for wrapping floating images
+                    // (may already be set by self-wrapping above; overwrite
+                    // to ensure polygon data is included)
                     for fi in &para.floating_images {
                         match fi.wrap_type {
                             WrapType::Square | WrapType::Tight | WrapType::Through => {
@@ -1587,6 +1838,16 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     resolve_fi_y_top(fi, sp, pb.slot_top);
                                 let fi_y_bottom =
                                     fi_y_top - fi.image.display_height;
+                                let polygon_pts =
+                                    fi.wrap_polygon.as_ref().map(|verts| {
+                                        convert_polygon_to_page_coords(
+                                            verts,
+                                            fi_x,
+                                            fi_y_top,
+                                            fi.image.display_width,
+                                            fi.image.display_height,
+                                        )
+                                    });
                                 pb.float_zone = Some(FloatZone {
                                     top_y: fi_y_top + fi.dist_top,
                                     bottom_y: fi_y_bottom - fi.dist_bottom,
@@ -1594,6 +1855,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     obj_right: fi_x + fi.image.display_width,
                                     left_from_text: fi.dist_left,
                                     right_from_text: fi.dist_right,
+                                    polygon_pts,
+                                    wrap_text: fi.wrap_text,
                                 });
                             }
                             _ => {}
@@ -1722,6 +1985,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     &mut pb.links,
                                     text_hanging,
                                     ctx.fonts,
+                                    poly_line_geom.as_deref(),
                                 );
                                 // Render second part at different width/position
                                 let (after_x, after_w) = if let Some((nx, nw)) = lookahead_narrow {
@@ -1747,6 +2011,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     &mut pb.links,
                                     text_hanging,
                                     ctx.fonts,
+                                    poly_line_geom.as_deref(),
                                 );
                             } else {
                                 // All lines fit beside the table
@@ -1763,6 +2028,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     &mut pb.links,
                                     text_hanging,
                                     ctx.fonts,
+                                    poly_line_geom.as_deref(),
                                 );
                             }
                         } else {
@@ -1779,6 +2045,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 &mut pb.links,
                                 text_hanging,
                                 ctx.fonts,
+                                poly_line_geom.as_deref(),
                             );
                         }
                     }
