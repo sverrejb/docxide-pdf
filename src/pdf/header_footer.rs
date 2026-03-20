@@ -45,7 +45,12 @@ pub(super) fn substitute_hf_runs(
         .collect()
 }
 
-pub(super) fn compute_header_height(hf: &HeaderFooter, ctx: &RenderContext) -> f32 {
+pub(super) fn compute_header_height(
+    hf: &HeaderFooter,
+    ctx: &RenderContext,
+    sp: &SectionProperties,
+    is_header: bool,
+) -> f32 {
     let mut height = 0.0f32;
     let mut prev_space_after = 0.0f32;
     for block in &hf.blocks {
@@ -80,6 +85,13 @@ pub(super) fn compute_header_height(hf: &HeaderFooter, ctx: &RenderContext) -> f
                             VRelativeFrom::Paragraph => {
                                 content_h = content_h.max(tb_bottom);
                             }
+                            VRelativeFrom::Page if is_header => {
+                                // tb_bottom is absolute from page top; convert to
+                                // distance relative to the current position in the header
+                                let current_pos = sp.header_margin + height;
+                                let contribution = (tb_bottom - current_pos).max(0.0);
+                                content_h = content_h.max(contribution);
+                            }
                             _ => {
                                 content_h += tb_bottom;
                             }
@@ -113,7 +125,7 @@ pub(super) fn effective_slot_top(
     let base = sp.page_height - sp.margin_top;
     match header {
         Some(hf) => {
-            base.min(sp.page_height - sp.header_margin - compute_header_height(hf, ctx))
+            base.min(sp.page_height - sp.header_margin - compute_header_height(hf, ctx, sp, true))
         }
         None => base,
     }
@@ -133,7 +145,7 @@ pub(super) fn compute_effective_margin_bottom(
     let base = sp.margin_bottom;
     match footer {
         Some(hf) => {
-            base.max(sp.footer_margin + compute_header_height(hf, ctx))
+            base.max(sp.footer_margin + compute_header_height(hf, ctx, sp, false))
         }
         None => base,
     }
@@ -246,7 +258,7 @@ pub(super) fn render_header_footer(
     let mut cursor_y = if is_header {
         sp.page_height - sp.header_margin
     } else {
-        sp.footer_margin + compute_header_height(hf, ctx)
+        sp.footer_margin + compute_header_height(hf, ctx, sp, false)
     };
 
     let mut pi = 0usize;

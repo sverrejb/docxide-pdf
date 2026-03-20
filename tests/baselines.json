@@ -213,8 +213,8 @@
     "text_boundary": 0.1905
   },
   "cases/case43": {
-    "jaccard": 0.2603,
-    "ssim": 0.3173,
+    "jaccard": 0.2111,
+    "ssim": 0.2758,
     "text_boundary": 0.0
   },
   "cases/case5": {
@@ -332,8 +332,8 @@
     "convert_ms": 22.0
   },
   "scraped/education_consul..": {
-    "jaccard": 0.1045,
-    "ssim": 0.207,
+    "jaccard": 0.1221,
+    "ssim": 0.2408,
     "text_boundary": 0.5191,
     "convert_ms": 47.1
   },
