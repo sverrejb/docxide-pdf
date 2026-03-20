@@ -336,6 +336,9 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
                     dist_bottom: emu_attr(container, "distB"),
                     behind_doc,
                     no_text_wrap: wsp.no_text_wrap,
+                    is_wordart: wsp.is_wordart,
+                    text_warp: wsp.text_warp,
+                    auto_fit: wsp.auto_fit,
                 }));
             }
             if let Some(conn) = parse_connector_from_wsp(container, theme) {

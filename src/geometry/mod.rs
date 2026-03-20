@@ -1,6 +1,7 @@
 pub mod definitions;
 pub mod formulas;
 pub mod path;
+pub mod text_warp_definitions;
 
 pub use definitions::PresetDef;
 pub use formulas::{FormulaOp, GuideDef, GuideEnv};

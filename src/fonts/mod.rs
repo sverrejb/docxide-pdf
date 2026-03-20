@@ -21,6 +21,8 @@ pub(crate) struct FontMetrics {
     pub(crate) char_widths_1000: HashMap<char, f32>,
     pub(crate) kern_pairs: HashMap<(u16, u16), f32>,
     pub(crate) synthetic_bold: bool,
+    pub(crate) font_path: Option<std::path::PathBuf>,
+    pub(crate) face_index: u32,
 }
 
 pub(crate) struct FontEntry {
@@ -35,6 +37,9 @@ pub(crate) struct FontEntry {
     pub(crate) synthetic_bold: bool,
     /// CJK chars requested but not present in this font (need fallback rendering).
     pub(crate) missing_cjk_chars: HashSet<char>,
+    /// Font file path for glyph outline extraction (text warping).
+    pub(crate) font_path: Option<std::path::PathBuf>,
+    pub(crate) face_index: u32,
 }
 
 impl FontEntry {
@@ -159,6 +164,8 @@ fn try_font(
     let embedded_key = (candidate.to_lowercase(), bold, italic);
     if let Some(mut metrics) = embedded_fonts.get(&embedded_key).and_then(|d| embed(d, 0)) {
         metrics.synthetic_bold = false;
+        metrics.font_path = None;
+        metrics.face_index = 0;
         return Some(metrics);
     }
 
@@ -166,6 +173,8 @@ fn try_font(
     let data = std::fs::read(&path).ok()?;
     let mut metrics = embed(&data, face_index)?;
     metrics.synthetic_bold = bold && !exact_match;
+    metrics.font_path = Some(path);
+    metrics.face_index = face_index;
     Some(metrics)
 }
 
@@ -348,6 +357,8 @@ pub(crate) fn register_font(
             },
             synthetic_bold: m.synthetic_bold,
             missing_cjk_chars: missing_cjk,
+            font_path: m.font_path,
+            face_index: m.face_index,
         },
         None => {
             log::warn!("Font not found: {font_name} bold={bold} italic={italic} — using Helvetica");
@@ -365,6 +376,8 @@ pub(crate) fn register_font(
                 kern_pairs: None,
                 synthetic_bold: false,
                 missing_cjk_chars: missing_cjk,
+                font_path: None,
+                face_index: 0,
             }
         }
     };

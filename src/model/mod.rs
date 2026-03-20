@@ -292,6 +292,40 @@ pub struct Run {
     pub is_footnote_ref_mark: bool,
     pub kern_threshold: Option<f32>,
     pub char_style_id: Option<String>,
+    pub text_outline: Option<TextOutline>,
+    pub text_fill: Option<TextFill>,
+    pub text_shadow: Option<TextShadow>,
+    pub text_glow: Option<TextGlow>,
+}
+
+#[derive(Clone, Debug)]
+pub struct TextOutline {
+    pub width_pt: f32,
+    pub color: [u8; 3],
+}
+
+#[derive(Clone, Debug)]
+pub enum TextFill {
+    Solid([u8; 3]),
+    Gradient {
+        stops: Vec<([u8; 3], f32)>,
+        angle_deg: f32,
+    },
+    NoFill,
+}
+
+#[derive(Clone, Debug)]
+pub struct TextShadow {
+    pub color: [u8; 3],
+    pub offset_x: f32,
+    pub offset_y: f32,
+    pub alpha: f32,
+}
+
+#[derive(Clone, Debug)]
+pub struct TextGlow {
+    pub color: [u8; 3],
+    pub radius_pt: f32,
 }
 
 impl Default for Run {
@@ -323,6 +357,10 @@ impl Default for Run {
             is_footnote_ref_mark: false,
             kern_threshold: None,
             char_style_id: None,
+            text_outline: None,
+            text_fill: None,
+            text_shadow: None,
+            text_glow: None,
         }
     }
 }

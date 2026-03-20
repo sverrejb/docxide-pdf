@@ -181,6 +181,23 @@ pub enum ShapeFill {
     },
 }
 
+#[derive(Clone, Debug)]
+pub struct TextWarp {
+    pub preset: String,
+    pub adjustments: Vec<(String, i64)>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub enum AutoFit {
+    #[default]
+    None,
+    Normal {
+        font_scale: Option<f32>,
+        line_space_reduction: Option<f32>,
+    },
+    Shape,
+}
+
 pub struct Textbox {
     pub paragraphs: Vec<Paragraph>,
     pub width_pt: f32,
@@ -204,4 +221,7 @@ pub struct Textbox {
     pub dist_bottom: f32,
     pub behind_doc: bool,
     pub no_text_wrap: bool,
+    pub is_wordart: bool,
+    pub text_warp: Option<TextWarp>,
+    pub auto_fit: AutoFit,
 }

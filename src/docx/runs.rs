@@ -3,7 +3,7 @@ use std::io::Read;
 
 use crate::model::{
     ConnectorShape, FieldCode, FloatingImage, HorizontalRule, InlineChart, Run, SmartArtDiagram,
-    Textbox, VertAlign,
+    TextFill, TextGlow, TextOutline, TextShadow, Textbox, VertAlign,
 };
 
 use super::images::{RunDrawingResult, parse_run_drawing};
@@ -13,6 +13,7 @@ use super::styles::{
     StylesInfo, ThemeFonts, resolve_east_asia_font_from_node, resolve_font_from_node,
 };
 use super::textbox::parse_textbox_from_vml;
+use super::wordart;
 use super::{
     WML_NS, highlight_color, parse_hex_color, parse_text_color, twips_to_pts, wml, wml_attr,
     wml_bool,
@@ -86,6 +87,10 @@ struct RunFormat {
     highlight: Option<[u8; 3]>,
     kern_threshold: Option<f32>,
     char_style_id: Option<String>,
+    text_outline: Option<TextOutline>,
+    text_fill: Option<TextFill>,
+    text_shadow: Option<TextShadow>,
+    text_glow: Option<TextGlow>,
 }
 
 impl RunFormat {
@@ -111,6 +116,10 @@ impl RunFormat {
             highlight: self.highlight,
             kern_threshold: self.kern_threshold,
             char_style_id: self.char_style_id.clone(),
+            text_outline: self.text_outline.clone(),
+            text_fill: self.text_fill.clone(),
+            text_shadow: self.text_shadow.clone(),
+            text_glow: self.text_glow.clone(),
             hyperlink_url,
             ..Run::default()
         }
@@ -443,6 +452,10 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                 .or_else(|| char_style.and_then(|cs| cs.kern_threshold))
                 .or(style_kern_threshold),
             char_style_id: char_style_id_str.map(|s| s.to_string()),
+            text_outline: rpr.and_then(wordart::parse_text_outline),
+            text_fill: rpr.and_then(wordart::parse_text_fill),
+            text_shadow: rpr.and_then(wordart::parse_text_shadow),
+            text_glow: rpr.and_then(wordart::parse_text_glow),
         };
 
         let flush_pending = |pending: &mut String, runs: &mut Vec<Run>| {

@@ -96,17 +96,17 @@ Final mode (insertions included, deletions removed) is done. Remaining:
 - **Paragraph-level changes** — `w:ins`/`w:del` wrapping entire `w:p` elements at `w:body` level
 - **Property changes** — `w:rPrChange`, `w:pPrChange`, `w:sectPrChange`, `w:tblPrChange` (formatting revisions)
 
-## WordArt (TODO — LOW IMPACT)
+## WordArt (IN PROGRESS — LOW IMPACT)
 
 WordArt appears in two forms: modern DrawingML (current Word) and legacy VML (older docs).
 
-**Level 1 — Flat rendering (easy, most value):** Modern WordArt is structurally a `wsp` textbox with `prstTxWarp` in `a:bodyPr` and `fromWordArt="1"`. We already parse `wsp` textboxes. Ignoring the warp and text effects, the text would render flat and readable. Mainly needs: not skipping shapes with `fromWordArt`, passing through to existing textbox rendering.
+**Level 1 — Flat rendering (DONE):** Dedicated `src/docx/wordart.rs` and `src/pdf/wordart.rs` modules. Parses `fromWordArt`, `prstTxWarp` (stored, not yet applied), `spAutoFit` from `bodyPr`. Parses `w14:textOutline` and `w14:textFill` from WML run properties. VML `v:textpath @string` fallback renders as flat text. Text outlines render via `TextRenderingMode::FillStroke`. Auto-fit (`spAutoFit`) computes textbox height from content.
 
-**Level 2 — Text effects:** Parse `a:solidFill`/`a:gradFill` on DrawingML text runs (`a:rPr`), text outlines (`a:ln`), and basic shadows. Makes flat WordArt look decent.
+**Level 2 — Text effects (DONE):** Solid `w14:textFill` color override applied during rendering. Text shadows (`w14:shadow`) parsed and rendered as offset pre-pass with blended shadow color. Text glow (`w14:glow`) parsed and rendered as thick stroke pre-pass with round joins. Gradient text fills parsed but rendering deferred (requires PDF clip-then-pattern).
 
-**Level 3 — Text warping (hard):** Implement `prstTxWarp` preset geometries. Requires extracting glyph outlines from fonts, converting text to paths, then distorting through warp geometry. Significant effort.
+**Level 3 — Text warping (DONE):** All 40 `prstTxWarp` presets auto-generated from ECMA-376 `presetTextWarpDefinitions.xml` into `src/geometry/text_warp_definitions.rs`. Glyph outlines extracted via `ttf_parser::OutlineBuilder`. Font paths stored in `FontEntry` for reload at render time. Warp algorithm: evaluate preset → sample top/bottom boundary curves → transform each glyph point through envelope interpolation → emit as filled PDF paths. Cubic beziers flattened to 20 segments for boundary sampling. Warped textboxes bypass normal text rendering and use path fills instead.
 
-**Level 4 — Legacy VML:** Parse `v:textpath @string` and render as flat text. Lower priority since modern Word converts these to DrawingML on save.
+**Level 4 — Legacy VML enhancement:** VML fill types (gradient/pattern), VML shadow, VML shapetype-to-prstTxWarp mapping. Basic flat rendering already done in Level 1.
 
 ## Unimplemented Spec Features
 

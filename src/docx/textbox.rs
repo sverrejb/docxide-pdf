@@ -19,7 +19,10 @@ use super::{
     resolve_theme_color_key, wml, wml_attr,
 };
 
-fn find_dml<'a>(parent: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
+pub(super) fn find_dml<'a>(
+    parent: roxmltree::Node<'a, 'a>,
+    name: &str,
+) -> Option<roxmltree::Node<'a, 'a>> {
     parent
         .children()
         .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(DML_NS))
@@ -373,7 +376,7 @@ pub(super) fn parse_shape_geometry(sp_pr: roxmltree::Node) -> ShapeGeometry {
     ShapeGeometry::default()
 }
 
-fn parse_avlst(parent: roxmltree::Node) -> Vec<(String, i64)> {
+pub(super) fn parse_avlst(parent: roxmltree::Node) -> Vec<(String, i64)> {
     let Some(avlst) = find_dml(parent, "avLst") else {
         return Vec::new();
     };
@@ -525,6 +528,25 @@ fn parse_body_margins(wsp: roxmltree::Node) -> (f32, f32, f32, f32) {
     )
 }
 
+/// WordArt defaults to 0 margins unless explicitly set.
+fn parse_wordart_body_margins(wsp: roxmltree::Node) -> (f32, f32, f32, f32) {
+    let Some(bp) = find_wps(wsp, "bodyPr") else {
+        return (0.0, 0.0, 0.0, 0.0);
+    };
+    let emu_to_pt = |attr: &str| -> f32 {
+        bp.attribute(attr)
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(|emu| emu / 12700.0)
+            .unwrap_or(0.0)
+    };
+    (
+        emu_to_pt("tIns"),
+        emu_to_pt("lIns"),
+        emu_to_pt("bIns"),
+        emu_to_pt("rIns"),
+    )
+}
+
 pub(super) struct WspResult {
     pub(super) paragraphs: Vec<Paragraph>,
     pub(super) fill: Option<ShapeFill>,
@@ -537,6 +559,9 @@ pub(super) struct WspResult {
     pub(super) margin_bottom: f32,
     pub(super) margin_right: f32,
     pub(super) no_text_wrap: bool,
+    pub(super) is_wordart: bool,
+    pub(super) text_warp: Option<crate::model::TextWarp>,
+    pub(super) auto_fit: crate::model::AutoFit,
 }
 
 pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
@@ -579,7 +604,8 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
 
     let shape_type = sp_pr.map(parse_shape_geometry).unwrap_or_default();
 
-    let (margin_top, margin_left, margin_bottom, margin_right) = parse_body_margins(wsp);
+    let (mut margin_top, mut margin_left, mut margin_bottom, mut margin_right) =
+        parse_body_margins(wsp);
 
     let body_pr = find_wps(wsp, "bodyPr");
     let no_text_wrap = body_pr
@@ -591,6 +617,23 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
         Some("b") => TextAnchor::Bottom,
         _ => TextAnchor::Top,
     };
+
+    let wa_props = body_pr
+        .map(super::wordart::parse_wordart_body_pr)
+        .unwrap_or(super::wordart::WordArtBodyProps {
+            is_wordart: false,
+            text_warp: None,
+            auto_fit: crate::model::AutoFit::None,
+        });
+
+    // WordArt defaults to zero body margins unless explicitly set
+    if wa_props.is_wordart {
+        let (wt, wl, wb, wr) = parse_wordart_body_margins(wsp);
+        margin_top = wt;
+        margin_left = wl;
+        margin_bottom = wb;
+        margin_right = wr;
+    }
 
     let paragraphs = find_wps(wsp, "txbx")
         .and_then(|txbx| {
@@ -617,6 +660,9 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
         margin_bottom,
         margin_right,
         no_text_wrap,
+        is_wordart: wa_props.is_wordart,
+        text_warp: wa_props.text_warp,
+        auto_fit: wa_props.auto_fit,
     })
 }
 
@@ -744,10 +790,20 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
     let shape = pict_node.children().find(|n| {
         n.tag_name().namespace() == Some(VML_NS) && matches!(n.tag_name().name(), "shape" | "rect")
     })?;
-    let textbox = shape
+
+    // VML WordArt uses v:textpath instead of v:textbox
+    let textbox_node = shape
         .children()
-        .find(|n| n.tag_name().name() == "textbox" && n.tag_name().namespace() == Some(VML_NS))?;
-    let txbx_content = textbox.children().find(|n| {
+        .find(|n| n.tag_name().name() == "textbox" && n.tag_name().namespace() == Some(VML_NS));
+    if textbox_node.is_none() {
+        if let Some(tp) = shape.children().find(|n| {
+            n.tag_name().name() == "textpath" && n.tag_name().namespace() == Some(VML_NS)
+        }) {
+            return super::wordart::parse_vml_wordart(shape, tp, styles, theme);
+        }
+        return None;
+    }
+    let txbx_content = textbox_node.unwrap().children().find(|n| {
         n.tag_name().name() == "txbxContent" && n.tag_name().namespace() == Some(WML_NS)
     })?;
 
@@ -814,6 +870,9 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         dist_bottom: 0.0,
         behind_doc: false,
         no_text_wrap: false,
+        is_wordart: false,
+        text_warp: None,
+        auto_fit: crate::model::AutoFit::None,
     })
 }
 
@@ -883,6 +942,9 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                                 dist_bottom,
                                 behind_doc,
                                 no_text_wrap: wsp.no_text_wrap,
+                                is_wordart: wsp.is_wordart,
+                                text_warp: wsp.text_warp,
+                                auto_fit: wsp.auto_fit,
                             });
                         }
                     }

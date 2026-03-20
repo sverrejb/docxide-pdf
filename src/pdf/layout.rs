@@ -5,7 +5,7 @@ use pdf_writer::types::TextRenderingMode;
 use pdf_writer::{Content, Name, Rect, Str};
 
 use crate::fonts::{FontEntry, encode_as_gids, font_key, font_key_buf, to_winansi_bytes};
-use crate::model::{Alignment, Run, TabAlignment, TabStop, VertAlign};
+use crate::model::{Alignment, Run, TabAlignment, TabStop, TextFill, TextOutline, VertAlign};
 
 fn set_fill_color(content: &mut Content, color: Option<[u8; 3]>) {
     if let Some([r, g, b]) = color {
@@ -101,6 +101,8 @@ pub(super) struct WordChunk {
     pub(super) inline_image_name: Option<String>,
     pub(super) inline_image_height: f32,
     pub(super) synthetic_bold: bool,
+    pub(super) text_outline: Option<TextOutline>,
+    pub(super) text_fill: Option<TextFill>,
 }
 
 impl WordChunk {
@@ -132,6 +134,8 @@ impl WordChunk {
             inline_image_name: None,
             inline_image_height: 0.0,
             synthetic_bold: entry.synthetic_bold,
+            text_outline: run.text_outline.clone(),
+            text_fill: run.text_fill.clone(),
         }
     }
 
@@ -160,6 +164,8 @@ impl WordChunk {
             inline_image_name: Some(pdf_name.to_string()),
             inline_image_height: display_height,
             synthetic_bold: false,
+            text_outline: None,
+            text_fill: None,
         }
     }
 
@@ -189,6 +195,8 @@ impl WordChunk {
             inline_image_name: None,
             inline_image_height: 0.0,
             synthetic_bold: false,
+            text_outline: None,
+            text_fill: None,
         }
     }
 }
@@ -727,6 +735,7 @@ pub(super) fn render_paragraph_lines(
     let mut cur_char_spacing: f32 = 0.0;
     let mut cur_text_scale: f32 = 100.0;
     let mut cur_synthetic_bold = false;
+    let mut has_text_outline = false;
 
     let pdf_name_to_entry: HashMap<&str, &FontEntry> = seen_fonts
         .values()
@@ -852,12 +861,37 @@ pub(super) fn render_paragraph_lines(
                 let x = line_start_x + chunk.x_offset + chunk_idx as f32 * extra_per_gap;
                 let cy = y + chunk.y_offset;
 
-                if chunk.color != current_color {
-                    set_fill_color(content, chunk.color);
-                    current_color = chunk.color;
+                // w14:textFill solid color overrides w:color
+                let effective_color = match chunk.text_fill {
+                    Some(TextFill::Solid(c)) => Some(c),
+                    _ => chunk.color,
+                };
+                if effective_color != current_color {
+                    set_fill_color(content, effective_color);
+                    current_color = effective_color;
                 }
 
-                if chunk.synthetic_bold != cur_synthetic_bold {
+                // Text outline takes priority over synthetic bold
+                if let Some(ref outline) = chunk.text_outline {
+                    if !has_text_outline {
+                        super::wordart::apply_text_outline(
+                            content,
+                            outline,
+                            chunk.text_fill.as_ref(),
+                        );
+                        has_text_outline = true;
+                    }
+                } else if has_text_outline {
+                    super::wordart::reset_text_outline(content);
+                    has_text_outline = false;
+                    if cur_synthetic_bold {
+                        content.set_line_width(chunk.font_size * 0.02);
+                        set_stroke_color(content, chunk.color);
+                        content.set_text_rendering_mode(TextRenderingMode::FillStroke);
+                    }
+                }
+
+                if !has_text_outline && chunk.synthetic_bold != cur_synthetic_bold {
                     if chunk.synthetic_bold {
                         content.set_line_width(chunk.font_size * 0.02);
                         set_stroke_color(content, chunk.color);

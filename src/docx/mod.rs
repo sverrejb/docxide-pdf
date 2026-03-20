@@ -11,6 +11,7 @@ pub(crate) mod smartart;
 mod styles;
 mod tables;
 mod textbox;
+mod wordart;
 
 use std::collections::HashMap;
 use std::io::Read;

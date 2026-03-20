@@ -159,6 +159,8 @@ pub(super) fn embed_truetype(
         char_widths_1000,
         kern_pairs,
         synthetic_bold: false,
+        font_path: None,
+        face_index: 0,
     })
 }
 
