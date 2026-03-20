@@ -99,6 +99,7 @@ pub(super) struct StyleDefaults {
     pub(super) indent_right: f32,
     pub(super) indent_hanging: f32,
     pub(super) indent_first_line: f32,
+    pub(super) alignment: Alignment,
 }
 
 #[derive(Default)]
@@ -455,6 +456,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         indent_right: 0.0,
         indent_hanging: 0.0,
         indent_first_line: 0.0,
+        alignment: Alignment::Left,
     };
     let mut paragraph_styles = HashMap::new();
     let mut character_styles = HashMap::new();
@@ -535,6 +537,9 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
             if let Some(v) = first {
                 defaults.indent_first_line = v;
             }
+        }
+        if let Some(jc) = default_ppr.and_then(|ppr| wml_attr(ppr, "jc")) {
+            defaults.alignment = parse_alignment(jc);
         }
     }
 

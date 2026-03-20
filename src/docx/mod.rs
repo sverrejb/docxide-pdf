@@ -541,7 +541,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     .and_then(|ppr| wml_attr(ppr, "jc"))
                     .map(parse_alignment)
                     .or_else(|| para_style.and_then(|s| s.alignment))
-                    .unwrap_or(Alignment::Left);
+                    .unwrap_or(styles.defaults.alignment);
 
                 let contextual_spacing = ppr
                     .and_then(|ppr| wml_bool(ppr, "contextualSpacing"))

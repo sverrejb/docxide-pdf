@@ -249,7 +249,7 @@
       "x_pt": 521.32245,
       "y_pt": 124.66205,
       "note": "Text should be justified here (not ragged right edge of text block) See reference",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 28,
@@ -399,7 +399,7 @@
       "x_pt": 499.98782,
       "y_pt": 700.7213,
       "note": "Text should be justified here as well.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 44,

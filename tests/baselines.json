@@ -261,8 +261,8 @@
     "convert_ms": 12.0
   },
   "scraped/brazilian_logist..": {
-    "jaccard": 0.1287,
-    "ssim": 0.2441,
+    "jaccard": 0.1362,
+    "ssim": 0.2594,
     "text_boundary": 0.1433,
     "convert_ms": 744.0
   },
@@ -393,8 +393,8 @@
     "convert_ms": 1027.5
   },
   "scraped/lithuanian_ethic..": {
-    "jaccard": 0.402,
-    "ssim": 0.5868,
+    "jaccard": 0.4288,
+    "ssim": 0.6226,
     "text_boundary": 0.65,
     "convert_ms": 7.3
   },
