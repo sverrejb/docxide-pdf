@@ -260,6 +260,8 @@ pub struct HorizontalRule {
     pub height_pt: f32,
     pub fill_color: [u8; 3],
     pub width_pct: f32,
+    /// Standard HR (o:hrstd="t"): render as thin line, height_pt is just spacing
+    pub is_standard: bool,
 }
 
 #[derive(Clone)]

@@ -69,3 +69,21 @@ Additionally, the floating image was in a separate paragraph (paragraph 0) from 
 **Impact**:
 - `scraped/czech_municipal_grant_form`: Jaccard +0.8pp (10.5→11.3%), SSIM +2.2pp (27.8→30.1%)
 - No regressions across all 91 test cases
+
+---
+
+## 2026-03-20: Fixed standard HR thickness (annotation #45)
+
+**Problem**: In `scraped/croatian_grant_guidelines`, the horizontal rule separating the header from the body text was rendered as a thick 1.5pt filled rectangle, while the reference shows a thin ~0.5pt line.
+
+**Root cause**: The VML horizontal rule element `<v:rect o:hr="t" o:hrstd="t" style="height:1.5pt" .../>` has the `o:hrstd="t"` attribute indicating a "standard" HR. In Word, standard HRs render as a thin 0.5pt line, with the `height` style attribute controlling the total spacing consumed (not the line thickness). Our parser captured the height correctly but ignored `o:hrstd`, causing the full 1.5pt to be used as the drawn rectangle height.
+
+**Fix**:
+- Added `is_standard: bool` field to `HorizontalRule` struct in `src/model/mod.rs`
+- Parse `o:hrstd` attribute from VML shape in `src/docx/runs.rs`
+- In rendering (`src/pdf/mod.rs`), when `is_standard` is true, draw a 0.5pt line centered within the specified height space instead of filling the full height
+
+**Impact**:
+- `scraped/croatian_grant_guidelines`: HR now visually matches reference (thin line vs thick bar)
+- `scraped/mandated_reporter_child_abuse`: Jaccard +0.3pp (26.0→26.3%)
+- No regressions across all 91 test cases

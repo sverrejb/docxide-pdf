@@ -1915,8 +1915,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 Alignment::Right => col_w - rule_w,
                                 _ => 0.0,
                             };
+                        // Standard HRs (o:hrstd) render as a thin 0.5pt line
+                        // centered in the specified height space
+                        let draw_h = if hr.is_standard { 0.5 } else { hr.height_pt };
                         let rule_y =
-                            pb.slot_top - (content_h - hr.height_pt) / 2.0 - hr.height_pt;
+                            pb.slot_top - (content_h - draw_h) / 2.0 - draw_h;
                         let [r, g, b] = hr.fill_color;
                         pb.content.save_state();
                         pb.content.set_fill_rgb(
@@ -1925,7 +1928,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             b as f32 / 255.0,
                         );
                         pb.content
-                            .rect(rule_x, rule_y, rule_w, hr.height_pt);
+                            .rect(rule_x, rule_y, rule_w, draw_h);
                         pb.content.fill_nonzero();
                         pb.content.restore_state();
                     } else if (para.image.is_some() || text_empty) && para.content_height > 0.0 {

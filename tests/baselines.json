@@ -285,9 +285,9 @@
     "convert_ms": 59.6
   },
   "scraped/croatian_grant_g..": {
-    "jaccard": 0.0701,
+    "jaccard": 0.0702,
     "ssim": 0.1821,
-    "text_boundary": 0.0735,
+    "text_boundary": 0.034,
     "convert_ms": 270.5
   },
   "scraped/croatian_regulat..": {
@@ -405,7 +405,7 @@
     "convert_ms": 5.6
   },
   "scraped/mandated_reporte..": {
-    "jaccard": 0.2604,
+    "jaccard": 0.2629,
     "ssim": 0.5064,
     "text_boundary": 0.2963,
     "convert_ms": 43.3

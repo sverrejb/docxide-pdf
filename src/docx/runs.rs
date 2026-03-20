@@ -746,9 +746,14 @@ fn parse_vml_horizontal_rule(pict_node: roxmltree::Node) -> Option<HorizontalRul
         .map(|v| v / 10.0);
     let width_pct = hrpct.unwrap_or(100.0);
 
+    let is_standard = shape
+        .attribute((OFFICE_NS, "hrstd"))
+        .is_some_and(|v| v == "t" || v == "true");
+
     Some(HorizontalRule {
         height_pt,
         fill_color,
         width_pct,
+        is_standard,
     })
 }

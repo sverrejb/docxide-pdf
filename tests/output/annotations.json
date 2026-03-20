@@ -1,5 +1,5 @@
 {
-  "next_id": 45,
+  "next_id": 52,
   "annotations": [
     {
       "id": 2,
@@ -9,16 +9,6 @@
       "x_pt": 514.2692,
       "y_pt": 506.1648,
       "note": "Text should be directly above the grey line, not floating above it.",
-      "fixed": true
-    },
-    {
-      "id": 4,
-      "case": "scraped/croatian_grant_guidelines",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 286.9996,
-      "y_pt": 283.83087,
-      "note": "Missing a \"hr\" about here compared to the reference.",
       "fixed": true
     },
     {
@@ -39,17 +29,7 @@
       "x_pt": 226.17776,
       "y_pt": 451.33154,
       "note": "Green box should be broken across two pages like the reference.",
-      "fixed": true
-    },
-    {
-      "id": 7,
-      "case": "scraped/czech_municipal_grant_form",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 111.64876,
-      "y_pt": 780.05676,
-      "note": "Heading is rendered above the logo.",
-      "fixed": true
+      "fixed": false
     },
     {
       "id": 8,
@@ -382,16 +362,6 @@
       "fixed": false
     },
     {
-      "id": 42,
-      "case": "scraped/croatian_grant_guidelines",
-      "page": 6,
-      "source": "Generated",
-      "x_pt": 543.74835,
-      "y_pt": 132.68329,
-      "note": "Links overflow the page width",
-      "fixed": false
-    },
-    {
       "id": 43,
       "case": "scraped/brazilian_logistics_study",
       "page": 1,
@@ -409,6 +379,76 @@
       "x_pt": 359.17673,
       "y_pt": 608.8364,
       "note": "Lines should not start or bein at the edge, but rather where the month-\"limits\" are set. See annotation 1.",
+      "fixed": false
+    },
+    {
+      "id": 45,
+      "case": "scraped/croatian_grant_guidelines",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 285.73715,
+      "y_pt": 304.72943,
+      "note": "HR too thick",
+      "fixed": true
+    },
+    {
+      "id": 46,
+      "case": "scraped/czech_municipal_grant_form",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 93.743935,
+      "y_pt": 760.83185,
+      "note": "This numbered text overlaps logo in header",
+      "fixed": false
+    },
+    {
+      "id": 47,
+      "case": "scraped/croatian_grant_guidelines",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 294.41983,
+      "y_pt": 733.9307,
+      "note": "Y-shift of whole page, starting with the flag an logo at the top, but also header, text and rest of the page. Measure against reference and see if it is the same offset for the whole page.",
+      "fixed": false
+    },
+    {
+      "id": 48,
+      "case": "scraped/croatian_grant_guidelines",
+      "page": 3,
+      "source": "Generated",
+      "x_pt": 233.24855,
+      "y_pt": 248.89056,
+      "note": "Breakpoint of the green box (table?) should be in the fourth paragraph. Not where we break it. There is still a lot of space below the box.",
+      "fixed": false
+    },
+    {
+      "id": 49,
+      "case": "scraped/croatian_grant_guidelines",
+      "page": 7,
+      "source": "Generated",
+      "x_pt": 541.4858,
+      "y_pt": 461.67197,
+      "note": "Links overflow the page width.",
+      "fixed": false
+    },
+    {
+      "id": 50,
+      "case": "scraped/croatian_grant_guidelines",
+      "page": 9,
+      "source": "Reference",
+      "x_pt": 274.85178,
+      "y_pt": 113.91907,
+      "note": "We don't render this footer present in the reference at all it looks like.",
+      "fixed": false
+    },
+    {
+      "id": 51,
+      "case": "scraped/croatian_grant_guidelines",
+      "page": 17,
+      "source": "Generated",
+      "x_pt": 292.67557,
+      "y_pt": 64.10364,
+      "note": "If this is the footer, it is rendered kinda wrong. The link overlaps the page number, and the horizontal line is nowhere to be seen. It is also too close to the body text.",
       "fixed": false
     }
   ]
