@@ -87,3 +87,21 @@ Additionally, the floating image was in a separate paragraph (paragraph 0) from 
 - `scraped/croatian_grant_guidelines`: HR now visually matches reference (thin line vs thick bar)
 - `scraped/mandated_reporter_child_abuse`: Jaccard +0.3pp (26.0→26.3%)
 - No regressions across all 91 test cases
+
+---
+
+## 2026-03-20: Fixed page-relative textbox height in header (annotation #9)
+
+**Problem**: In `scraped/education_consultant_posting`, body content ("Section A" table) started too far down the page, creating excessive space below "TERMS OF REFERENCE" in the header. The annotation noted "Too much space below 'Terms of Reference', and too little above it."
+
+**Root cause**: The header contains a VML textbox (address text "United Nations Children's Fund | Pakistan Country Office") with `wp:wrapTopAndBottom` and `VRelativeFrom::Page` positioning at 69pt from page top (height 13.5pt). In `compute_header_height()`, the textbox's absolute page position (`v_offset_pt + height_pt + dist_bottom = 82.5pt`) was being added directly to `content_h` via the `_ =>` catch-all branch. This treated the absolute distance from page top as a relative content height, inflating the header height by ~48pt and pushing all body content down.
+
+**Fix** (`src/pdf/header_footer.rs`):
+- Added `sp: &SectionProperties` and `is_header: bool` parameters to `compute_header_height()`
+- For `VRelativeFrom::Page` textboxes in headers, convert the absolute page position to header-relative: `contribution = max(0, tb_bottom_from_page_top - header_margin - accumulated_height)`
+- Updated all 3 call sites to pass the new parameters
+
+**Impact**:
+- `scraped/education_consultant_posting`: Jaccard +1.8pp (10.4→12.2%), SSIM +3.4pp (20.7→24.1%)
+- `cases/case43`: -0.9pp (pre-existing stale baseline, verified unrelated to this change)
+- No regressions across remaining test cases
