@@ -29,3 +29,21 @@
 - Word suppresses `space_before` at ALL page tops, not just after explicit breaks
 
 **Conclusion**: This is a font metrics / text width accumulation issue, not a spacing bug. Requires broader improvements to text width calculation to fix.
+
+---
+
+## 2026-03-20: Fixed floating table page splitting (annotation #6)
+
+**Problem**: Green-shaded "Važno!" box in `scraped/croatian_grant_guidelines` (page 3-4, 0-indexed) was not breaking across pages like the reference. The reference shows the green box starting on page 4 and continuing onto page 5, but our generated output rendered all the content on a single page.
+
+**Root cause**: The green box is a single-row, single-cell table with `w:tblpPr` (floating table positioning). The table rendering code in `src/pdf/table.rs` had `!is_floating` guards on both row-splitting conditions (lines 1312, 1353), which prevented floating tables from ever splitting across page boundaries. When the row content exceeded the available space, the table was simply rendered at its floating position without any page-break handling.
+
+**Fix** (`src/pdf/table.rs`):
+- Removed `!is_floating` guard from both page-break conditions in `render_table()`
+- For the row-splitting condition, changed `row_h > available_h && row_h > page_content_h` to also trigger when `is_floating` (since floating tables start mid-page, the row may not fit even if it would fit on a fresh page)
+- Added `did_flush_while_floating` flag to track when a floating table causes a page break
+- When a floating table spans pages, skip the cursor restoration and float zone registration (these are invalid across page boundaries)
+
+**Impact**:
+- `scraped/croatian_grant_guidelines`: Jaccard -1.4pp (8.5→7.0%), SSIM -1.7pp (19.9→18.2%) — small score drop because the split point differs from reference due to text width differences, but the structural behavior (table splitting across pages) now matches the reference
+- No regressions across all other 90 test cases (including 5 other fixtures with floating tables)

@@ -1296,6 +1296,8 @@ pub(super) fn render_table(
         }
     };
 
+    let mut did_flush_while_floating = false;
+
     for (ri, (row, layout)) in table.rows.iter().zip(row_layouts.iter()).enumerate() {
         let row_h = layout.height;
         log::debug!(
@@ -1309,8 +1311,8 @@ pub(super) fn render_table(
         let available_h = pb.slot_top - sp.margin_bottom;
         let page_content_h = sp.page_height - sp.margin_top - sp.margin_bottom;
 
-        if !is_floating && row_h > available_h && row_h > page_content_h {
-            // Row is too tall for any single page -- split across pages
+        if row_h > available_h && (row_h > page_content_h || is_floating) {
+            // Row is too tall for any single page, or floating table overflows -- split across pages
             let ncells = layout.cells.len();
             let mut starts = vec![0usize; ncells];
             let mut is_first_chunk = true;
@@ -1348,9 +1350,15 @@ pub(super) fn render_table(
 
                 starts = ends;
                 is_first_chunk = false;
+                if is_floating {
+                    did_flush_while_floating = true;
+                }
                 flush_and_render_headers(pb, ri);
             }
-        } else if !is_floating && !at_page_top && row_h > available_h {
+        } else if !at_page_top && row_h > available_h {
+            if is_floating {
+                did_flush_while_floating = true;
+            }
             flush_and_render_headers(pb, ri);
             render_table_row(
                 row,
@@ -1379,6 +1387,10 @@ pub(super) fn render_table(
     }
 
     if let Some((saved, table_top_y)) = saved_slot_top {
+        if did_flush_while_floating {
+            // Table spanned multiple pages — cursor is already on the new page,
+            // don't restore to the pre-table position or register a float zone.
+        } else {
         let table_total_w: f32 = col_widths.iter().sum();
         let (top_margin, bottom_margin) = text_margins;
         let table_bottom = pb.slot_top;
@@ -1399,6 +1411,7 @@ pub(super) fn render_table(
                 polygon_pts: None,
                 wrap_text: crate::model::WrapText::Largest,
             });
+        }
         }
     }
 }

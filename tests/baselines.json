@@ -285,8 +285,8 @@
     "convert_ms": 59.6
   },
   "scraped/croatian_grant_g..": {
-    "jaccard": 0.0845,
-    "ssim": 0.1991,
+    "jaccard": 0.0701,
+    "ssim": 0.1821,
     "text_boundary": 0.0735,
     "convert_ms": 270.5
   },

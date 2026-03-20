@@ -39,7 +39,7 @@
       "x_pt": 226.17776,
       "y_pt": 451.33154,
       "note": "Green box should be broken across two pages like the reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 7,
