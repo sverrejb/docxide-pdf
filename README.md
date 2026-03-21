@@ -39,6 +39,7 @@ While the idea, architecture, testing strategy and validation of output are all 
 - **Tables**: column widths with auto-fit, merged cells (horizontal `gridSpan` and vertical `vMerge`), row heights (exact and minimum), per-cell borders with color/width, inline `w:tblBorders`, cell shading, vertical alignment, cell margins, floating/positioned tables (`tblpPr`)
 - **Images**: inline JPEG/PNG embedding with sizing and alpha transparency, grayscale and CMYK JPEG support, anchored/floating images (all wrap modes), floating image positioning relative to page/margin/column, behind-document z-ordering
 - **Text boxes**: DrawingML textboxes (`wps:txbx`) and VML fallback (`v:textbox`), shape fills (solid color with theme color support including lumMod/lumOff, linear gradients with multiple color stops), textbox body margins
+- **WordArt**: modern DrawingML WordArt with all 40 `prstTxWarp` presets — two-path envelope warping (wave, slant, inflate, etc.) and single-path text-on-a-path (arch, circle), text outlines, shadows, glow effects, bold/italic font variant selection, VML WordArt fallback
 - **Shapes & geometry**: all 187 OOXML preset shapes via formula-based geometry engine (guide formulas, adjustment values), custom geometry paths (`a:custGeom` with moveTo, lineTo, cubicBezTo, arcTo), shape fills and strokes
 - **Charts**: bar (clustered/stacked, vertical/horizontal), line, pie, area, doughnut, radar, scatter, bubble — with axis labels, tick marks, gridlines, legends, bubble fill opacity
 - **Page layout**: page size, margins, document grid (`linePitch`), explicit page breaks, `pageBreakBefore`, automatic page breaking with widow/orphan control
@@ -64,8 +65,7 @@ While the idea, architecture, testing strategy and validation of output are all 
 - **Layout**: distribute alignment (`w:jc val="distribute"`), vertical page alignment (`w:vAlign` on section), right-to-left (bidi) text
 - **Charts**: 3D charts, stock charts, combo charts, stacked bar rendering, data labels, chart titles, secondary axes
 - **SmartArt**: only pre-flattened `dsp:drawing` fallback; no layout engine for documents missing the fallback (see roadmap)
-- **PDF features**: bookmarks/outline, document metadata (title, author)
-- **Features**: table of contents generation, endnotes, OLE objects, radial/pattern gradient fills
+- **Features**: table of contents generation, endnotes, OLE objects, radial/pattern gradient fills, WordArt gradient text fills
 - **Fonts**: bundled fallback fonts, CJK fallback font chain, text shaping via rustybuzz (ligatures, complex scripts)
 
 ## Examples

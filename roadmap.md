@@ -96,17 +96,19 @@ Final mode (insertions included, deletions removed) is done. Remaining:
 - **Paragraph-level changes** — `w:ins`/`w:del` wrapping entire `w:p` elements at `w:body` level
 - **Property changes** — `w:rPrChange`, `w:pPrChange`, `w:sectPrChange`, `w:tblPrChange` (formatting revisions)
 
-## WordArt (IN PROGRESS — LOW IMPACT)
+## WordArt (MOSTLY DONE — LOW IMPACT)
 
 WordArt appears in two forms: modern DrawingML (current Word) and legacy VML (older docs).
 
-**Level 1 — Flat rendering (DONE):** Dedicated `src/docx/wordart.rs` and `src/pdf/wordart.rs` modules. Parses `fromWordArt`, `prstTxWarp` (stored, not yet applied), `spAutoFit` from `bodyPr`. Parses `w14:textOutline` and `w14:textFill` from WML run properties. VML `v:textpath @string` fallback renders as flat text. Text outlines render via `TextRenderingMode::FillStroke`. Auto-fit (`spAutoFit`) computes textbox height from content.
+**Level 1 — Flat rendering (DONE):** Dedicated `src/docx/wordart.rs` and `src/pdf/wordart.rs` modules. Parses `fromWordArt`, `prstTxWarp`, `spAutoFit` from `bodyPr`. Parses `w14:textOutline` and `w14:textFill` from WML run properties. VML `v:textpath @string` fallback renders as flat text. Text outlines render via `TextRenderingMode::FillStroke`. Auto-fit (`spAutoFit`) computes textbox height from content.
 
 **Level 2 — Text effects (DONE):** Solid `w14:textFill` color override applied during rendering. Text shadows (`w14:shadow`) parsed and rendered as offset pre-pass with blended shadow color. Text glow (`w14:glow`) parsed and rendered as thick stroke pre-pass with round joins. Gradient text fills parsed but rendering deferred (requires PDF clip-then-pattern).
 
-**Level 3 — Text warping (DONE):** All 40 `prstTxWarp` presets auto-generated from ECMA-376 `presetTextWarpDefinitions.xml` into `src/geometry/text_warp_definitions.rs`. Glyph outlines extracted via `ttf_parser::OutlineBuilder`. Font paths stored in `FontEntry` for reload at render time. Warp algorithm: evaluate preset → sample top/bottom boundary curves → transform each glyph point through envelope interpolation → emit as filled PDF paths. Cubic beziers flattened to 20 segments for boundary sampling. Warped textboxes bypass normal text rendering and use path fills instead.
+**Level 3 — Two-path envelope warping (DONE):** All 40 `prstTxWarp` presets auto-generated from ECMA-376 spec. Glyph outlines extracted via `ttf_parser::OutlineBuilder` with correct bold/italic font variant selection. Warp algorithm: evaluate preset → sample top/bottom boundary curves → transform each glyph point through envelope interpolation → emit as filled PDF paths. Boundary sizing: natural text width horizontally (centered in textbox), shape height vertically. Text height normalized using `font_size × (ascender / glyph_extent)` to match Word's cap-height fill ratio. Shared helpers (`collect_text_info`, `emit_glyph_commands`, `fill_and_stroke_glyphs`) eliminate code duplication between renderers.
 
-**Level 4 — Legacy VML enhancement:** VML fill types (gradient/pattern), VML shadow, VML shapetype-to-prstTxWarp mapping. Basic flat rendering already done in Level 1.
+**Level 4 — Single-path text-on-a-path (DONE):** Arch/circle presets (`textArchUp`, `textArchDown`, `textCircle`) use a text-on-a-path algorithm: arc-length parameterize the single curve path, place each character along the arc with tangent-angle rotation, anchor text at `font_size / 2` from the path. Boundary sized to natural text advance (produces correct curvature). Case43 Jaccard improved from 22% → 50%.
+
+**Level 5 — Legacy VML enhancement (TODO):** VML fill types (gradient/pattern), VML shadow, VML shapetype-to-prstTxWarp mapping. Basic flat rendering already done in Level 1.
 
 ## Unimplemented Spec Features
 
