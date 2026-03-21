@@ -1,5 +1,5 @@
 {
-  "next_id": 58,
+  "next_id": 71,
   "annotations": [
     {
       "id": 2,
@@ -22,16 +22,6 @@
       "fixed": false
     },
     {
-      "id": 6,
-      "case": "scraped/croatian_grant_guidelines",
-      "page": 3,
-      "source": "Generated",
-      "x_pt": 226.17776,
-      "y_pt": 451.33154,
-      "note": "Green box should be broken across two pages like the reference.",
-      "fixed": true
-    },
-    {
       "id": 8,
       "case": "scraped/east_asia_conference_form",
       "page": 0,
@@ -40,56 +30,6 @@
       "y_pt": 164.30786,
       "note": "This text should come on page 2.",
       "fixed": false
-    },
-    {
-      "id": 16,
-      "case": "scraped/japanese_interlibrary_loan",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 316.12506,
-      "y_pt": 308.1038,
-      "note": "Page 2 should not exist.",
-      "fixed": true
-    },
-    {
-      "id": 17,
-      "case": "scraped/polish_building_procurement_spec",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 81.622795,
-      "y_pt": 195.54712,
-      "note": "\"Nazawa\" should not be indented here",
-      "fixed": true
-    },
-    {
-      "id": 18,
-      "case": "scraped/polish_municipal_letter",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 66.15268,
-      "y_pt": 754.8083,
-      "note": "We are missing the \"logo\" / emblem / seal here.",
-      "fixed": true
-    },
-    {
-      "id": 19,
-      "case": "scraped/stem_partnerships_guide",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 271.31982,
-      "y_pt": 798.97766,
-      "note": "\"Best Practice Guide: .....\" should not be rendered on page 2, only 3, 4 and so on. See reference.",
-      "fixed": true
-    },
-    {
-      "id": 20,
-      "case": "scraped/uk_commercial_lease_template",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 299.56885,
-      "y_pt": 203.6264,
-      "note": "Text needs to be higher up.",
-      "fixed": true
     },
     {
       "id": 21,
@@ -142,16 +82,6 @@
       "fixed": false
     },
     {
-      "id": 27,
-      "case": "scraped/brazilian_logistics_study",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 521.32245,
-      "y_pt": 124.66205,
-      "note": "Text should be justified here (not ragged right edge of text block) See reference",
-      "fixed": true
-    },
-    {
       "id": 28,
       "case": "scraped/mandated_reporter_child_abuse",
       "page": 0,
@@ -192,16 +122,6 @@
       "fixed": false
     },
     {
-      "id": 32,
-      "case": "scraped/stem_partnerships_guide",
-      "page": 2,
-      "source": "Generated",
-      "x_pt": 519.4701,
-      "y_pt": 54.766785,
-      "note": "Reference says this is page 2, not page 1.",
-      "fixed": true
-    },
-    {
       "id": 33,
       "case": "scraped/turkish_ancient_religions_plan",
       "page": 0,
@@ -209,16 +129,6 @@
       "x_pt": 177.98225,
       "y_pt": 463.97626,
       "note": "Some of the horizontal borders in the table should be bolder/darker.",
-      "fixed": false
-    },
-    {
-      "id": 34,
-      "case": "scraped/turkish_ancient_religions_plan",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 122.45199,
-      "y_pt": 630.3104,
-      "note": "\"ŞAMANİZM\" is indented here, it should not be. Compare to reference.",
       "fixed": true
     },
     {
@@ -262,16 +172,6 @@
       "fixed": false
     },
     {
-      "id": 40,
-      "case": "case33",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 92.75124,
-      "y_pt": 560.3922,
-      "note": "Looks like each bullet point causes a slightly larger vertical drift from the reference.",
-      "fixed": false
-    },
-    {
       "id": 41,
       "case": "scraped/education_consultant_posting",
       "page": 6,
@@ -280,16 +180,6 @@
       "y_pt": 730.32324,
       "note": "This table part ovelaps the \"Header\" with \"United Nations Children's Fund\" and the \"TERMS OF REFERENCE\". It should come after that. See reference.",
       "fixed": false
-    },
-    {
-      "id": 43,
-      "case": "scraped/brazilian_logistics_study",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 499.98782,
-      "y_pt": 700.7213,
-      "note": "Text should be justified here as well.",
-      "fixed": true
     },
     {
       "id": 44,
@@ -419,6 +309,136 @@
       "x_pt": 749.0845,
       "y_pt": 81.639404,
       "note": "Table extends into footer, overlaps page number.",
+      "fixed": false
+    },
+    {
+      "id": 58,
+      "case": "scraped/brazilian_logistics_study",
+      "page": 8,
+      "source": "Generated",
+      "x_pt": 225.96582,
+      "y_pt": 445.6176,
+      "note": "Too much empty space between image and caption (Fonte: ALARCOM, (2019)).",
+      "fixed": false
+    },
+    {
+      "id": 59,
+      "case": "scraped/brazilian_logistics_study",
+      "page": 8,
+      "source": "Generated",
+      "x_pt": 167.81552,
+      "y_pt": 677.6182,
+      "note": "Too much white space above image.",
+      "fixed": false
+    },
+    {
+      "id": 60,
+      "case": "samples/sample500kB",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 341.69458,
+      "y_pt": 233.18866,
+      "note": "Wrong font used on labels. Should be something without serifs. Compare to reference.",
+      "fixed": false
+    },
+    {
+      "id": 61,
+      "case": "case43",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 310.21964,
+      "y_pt": 304.56003,
+      "note": "Arch text is not arched at all.",
+      "fixed": false
+    },
+    {
+      "id": 62,
+      "case": "case43",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 299.70386,
+      "y_pt": 411.33264,
+      "note": "Wave effect is too wide.",
+      "fixed": false
+    },
+    {
+      "id": 63,
+      "case": "case43",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 281.46933,
+      "y_pt": 637.79175,
+      "note": "Flat Outline should be a lot taller.",
+      "fixed": false
+    },
+    {
+      "id": 64,
+      "case": "case43",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 300.57584,
+      "y_pt": 538.3462,
+      "note": "SHADOW TEXT should be a lot taller.",
+      "fixed": false
+    },
+    {
+      "id": 65,
+      "case": "case43",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 279.11563,
+      "y_pt": 104.726685,
+      "note": "SLANT UP is way too wide.",
+      "fixed": false
+    },
+    {
+      "id": 66,
+      "case": "case33",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 119.409325,
+      "y_pt": 572.0255,
+      "note": "Looks like each bullet point causes a slightly larger vertical drift from the reference. This acumulates. Do not brush this off or defer it. Do a thorough examination and compare to reference.",
+      "fixed": false
+    },
+    {
+      "id": 67,
+      "case": "scraped/uk_commercial_lease_template",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 73.460205,
+      "y_pt": 200.68597,
+      "note": "Text [DRAFTING NOTE: ... needs to be higher up, as it overlaps the red logo below.",
+      "fixed": false
+    },
+    {
+      "id": 68,
+      "case": "scraped/slovak_misdemeanor_amendment",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 128.13309,
+      "y_pt": 713.25714,
+      "note": "\"Dôvodová správa\" should be centered here. See reference.",
+      "fixed": false
+    },
+    {
+      "id": 69,
+      "case": "scraped/stem_partnerships_guide",
+      "page": 7,
+      "source": "Generated",
+      "x_pt": 553.0935,
+      "y_pt": 453.259,
+      "note": "Text goes out of bounds here, goes outside the table cell.",
+      "fixed": false
+    },
+    {
+      "id": 70,
+      "case": "scraped/polish_municipal_letter",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 292.87393,
+      "y_pt": 690.47534,
+      "note": "This HR should span the whole width, also under the image.",
       "fixed": false
     }
   ]

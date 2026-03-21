@@ -213,8 +213,8 @@
     "text_boundary": 0.1905
   },
   "cases/case43": {
-    "jaccard": 0.2111,
-    "ssim": 0.2758,
+    "jaccard": 0.2206,
+    "ssim": 0.2842,
     "text_boundary": 0.0
   },
   "cases/case5": {
@@ -446,8 +446,8 @@
     "convert_ms": 10.4
   },
   "scraped/polish_municipal..": {
-    "jaccard": 0.327,
-    "ssim": 0.7198,
+    "jaccard": 0.3329,
+    "ssim": 0.7129,
     "text_boundary": 0.9259,
     "convert_ms": 11.8
   },
@@ -512,8 +512,8 @@
     "convert_ms": 493.0
   },
   "scraped/turkish_ancient_..": {
-    "jaccard": 0.2052,
-    "ssim": 0.5457,
+    "jaccard": 0.2248,
+    "ssim": 0.5292,
     "text_boundary": 1.0,
     "convert_ms": 4.2
   },

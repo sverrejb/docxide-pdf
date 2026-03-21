@@ -62,8 +62,10 @@ fn draw_border(content: &mut Content, border: &CellBorder, x1: f32, y1: f32, x2:
             );
         }
         BorderStyle::Double => {
-            let gap = w.max(0.75);
-            let thin = (w / 3.0).max(0.25);
+            // Word renders each line of a double border at the full
+            // specified width, separated by a gap equal to the width.
+            let thin = w.max(0.25);
+            let gap = thin;
             content.set_line_width(thin);
             content.move_to(x1, y1);
             content.line_to(x2, y2);

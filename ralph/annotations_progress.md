@@ -320,3 +320,21 @@ For the "Dated" cell (vAlign=bottom, Normal style space_after=9pt):
 - `scraped/turkish_prostate_cancer_course`: Jaccard +2.1pp (35.8→37.9%), SSIM +0.3pp
 - `scraped/turkish_ancient_religions_plan`: Jaccard -2.8pp (23.3→20.5%), SSIM +0.1pp — the dense center-aligned table shifted text direction in Jaccard overlap, but SSIM confirms spatial improvement
 - No other regressions across all 92 test cases
+
+---
+
+## 2026-03-21: Fixed double border rendering thickness (annotation #33)
+
+**Problem**: In `scraped/turkish_ancient_religions_plan`, the horizontal borders separating major table sections (e.g., between "ŞAMANİZM" and "ZERDÜŞTLİK") appeared the same thin width as inner row borders. The reference shows these section separators as visibly thicker/bolder double-line borders.
+
+**Root cause**: The table uses `w:val="double" w:sz="4"` for section separator borders (via `tcBorders`) and `w:val="single" w:sz="4"` for inner borders (via `tblBorders insideH`). The double border rendering in `draw_border()` used `thin = max(w/3, 0.25)` for each line and `gap = max(w, 0.75)`. For `w:sz="4"` (0.5pt), this produced two 0.25pt lines with 0.75pt gap — barely distinguishable from a 0.5pt single line. Word renders each line of a double border at approximately the full specified width, making them clearly thicker than single borders.
+
+**Fix** (`src/pdf/table.rs`):
+- Changed double border line thickness from `(w / 3.0).max(0.25)` to `w.max(0.25)` — each line now uses the full border width
+- Changed gap from `w.max(0.75)` to `thin` (= the line width) — proportional gap matching Word's rendering
+
+**Impact**:
+- `scraped/turkish_ancient_religions_plan`: Jaccard +2.0pp (20.5→22.5%)
+- `cases/case43`: Jaccard +0.9pp (21.1→22.1%)
+- `scraped/polish_municipal_letter`: Jaccard +0.6pp (32.7→33.3%)
+- No Jaccard regressions across all 92 test cases
