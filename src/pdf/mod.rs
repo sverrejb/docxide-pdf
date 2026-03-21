@@ -804,7 +804,10 @@ pub(super) struct PageBuilder {
     all_footnote_ids: Vec<Vec<u32>>,
     all_alpha_states: Vec<HashSet<u8>>,
     all_gradient_specs: Vec<Vec<GradientSpec>>,
-    page_section_indices: Vec<(usize, bool)>,
+    /// Per-page tuples: (hf_section, is_first_page, content_section).
+    /// hf_section: which section provides headers/footers.
+    /// content_section: which section is being rendered (for page numbering, geometry).
+    page_section_indices: Vec<(usize, bool, usize)>,
     all_styleref: Vec<HashMap<String, String>>,
     all_first_styleref: Vec<HashMap<String, String>>,
 }
@@ -844,8 +847,11 @@ impl PageBuilder {
             .push(std::mem::take(&mut self.alpha_states));
         self.all_gradient_specs
             .push(std::mem::take(&mut self.gradient_specs));
-        self.page_section_indices
-            .push((self.page_hf_section, self.is_first_page_of_section));
+        self.page_section_indices.push((
+            self.page_hf_section,
+            self.is_first_page_of_section,
+            sect_idx,
+        ));
         self.all_styleref.push(self.styleref_running.clone());
         self.all_first_styleref
             .push(std::mem::take(&mut self.styleref_page_first));
@@ -860,7 +866,8 @@ impl PageBuilder {
         self.all_footnote_ids.push(Vec::new());
         self.all_alpha_states.push(HashSet::new());
         self.all_gradient_specs.push(Vec::new());
-        self.page_section_indices.push((self.page_hf_section, false));
+        self.page_section_indices
+            .push((self.page_hf_section, false, sect_idx));
         self.all_styleref.push(self.styleref_running.clone());
         self.all_first_styleref
             .push(std::mem::take(&mut self.styleref_page_first));
@@ -2409,7 +2416,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
     // Phase 2b: column separator lines
     for (page_idx, content) in pb.all_contents.iter_mut().enumerate() {
-        let (si, _) = pb.page_section_indices[page_idx];
+        let (.., si) = pb.page_section_indices[page_idx];
         let sp = &doc.sections[si].properties;
 
         if let Some(cfg) = &sp.columns {
@@ -2434,7 +2441,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
     // Phase 2c: render footnotes at page bottom
     for (page_idx, content) in pb.all_contents.iter_mut().enumerate() {
-        let (si, _) = pb.page_section_indices[page_idx];
+        let (.., si) = pb.page_section_indices[page_idx];
         let sp = &doc.sections[si].properties;
         let text_width = sp.page_width - sp.margin_left - sp.margin_right;
         render_page_footnotes(
@@ -2481,14 +2488,17 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     let empty_styleref: HashMap<String, String> = HashMap::new();
     let mut all_hf_contents: Vec<Option<Content>> = (0..total_pages).map(|_| None).collect();
     for (page_idx, hf_content) in all_hf_contents.iter_mut().enumerate() {
-        let (si, is_first) = pb.page_section_indices[page_idx];
+        let (si, is_first, content_si) = pb.page_section_indices[page_idx];
         let sp = &doc.sections[si].properties;
 
-        let page_num = if let Some(start) = sp.page_num_start {
+        // Page numbering uses content_section (the section being rendered),
+        // not hf_section (which may differ for continuous section breaks)
+        let num_sp = &doc.sections[content_si].properties;
+        let page_num = if let Some(start) = num_sp.page_num_start {
             // Section specifies explicit start: count pages within this section
             let pages_before_in_section = pb.page_section_indices[..page_idx]
                 .iter()
-                .filter(|&&(s, _)| s == si)
+                .filter(|&&(_, _, cs)| cs == content_si)
                 .count();
             start as usize + pages_before_in_section
         } else {

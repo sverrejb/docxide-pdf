@@ -42,7 +42,7 @@ pub(super) fn assemble_pdf_pages(
     all_page_links: &[Vec<LinkAnnotation>],
     all_page_alpha_states: &[HashSet<u8>],
     all_page_gradient_specs: &[Vec<GradientSpec>],
-    page_section_indices: &[(usize, bool)],
+    page_section_indices: &[(usize, bool, usize)],
     seen_fonts: &HashMap<String, FontEntry>,
     font_order: &[String],
     image_xobjects: &[(String, Ref)],
@@ -333,7 +333,7 @@ pub(super) fn assemble_pdf_pages(
         .collect();
 
     for i in 0..n {
-        let (si, _) = page_section_indices[i];
+        let (.., si) = page_section_indices[i];
         let sp = &doc.sections[si].properties;
         let mut page = pdf.page(page_ids[i]);
         page.media_box(Rect::new(0.0, 0.0, sp.page_width, sp.page_height))

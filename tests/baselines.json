@@ -213,8 +213,8 @@
     "text_boundary": 0.1905
   },
   "cases/case43": {
-    "jaccard": 0.2206,
-    "ssim": 0.2842,
+    "jaccard": 0.2111,
+    "ssim": 0.2758,
     "text_boundary": 0.0
   },
   "cases/case5": {
@@ -494,8 +494,8 @@
     "convert_ms": 13.2
   },
   "scraped/stem_partnership..": {
-    "jaccard": 0.2432,
-    "ssim": 0.3109,
+    "jaccard": 0.2433,
+    "ssim": 0.3111,
     "text_boundary": 0.2214,
     "convert_ms": 32.2
   },
@@ -506,8 +506,8 @@
     "convert_ms": 22.0
   },
   "scraped/transition_to_wo..": {
-    "jaccard": 0.2609,
-    "ssim": 0.378,
+    "jaccard": 0.2624,
+    "ssim": 0.3799,
     "text_boundary": 0.2034,
     "convert_ms": 493.0
   },
