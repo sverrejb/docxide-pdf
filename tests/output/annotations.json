@@ -109,7 +109,7 @@
       "x_pt": 41.093235,
       "y_pt": 70.68347,
       "note": "Text in bottom row has too little padding above. Reference has some gap above the text.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 16,

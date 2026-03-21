@@ -239,7 +239,8 @@ fn render_cell_content(
 
                 let text_x = cell_x + cm.left + para.indent_left;
                 let text_w = (col_w - cm.left - cm.right - para.indent_left).max(0.0);
-                let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
+                // Word positions first baseline at cell_top - font_size (full em)
+                let baseline_y = cursor_y - para.font_size;
 
                 let first_line_hanging = if para.list_label.is_empty() {
                     para.indent_hanging
@@ -470,7 +471,8 @@ fn render_partial_cell_content(
 
                 let text_x = cell_x + cm.left + para.indent_left;
                 let text_w = (col_w - cm.left - cm.right - para.indent_left).max(0.0);
-                let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
+                // Word positions first baseline at cell_top - font_size (full em)
+                let baseline_y = cursor_y - para.font_size;
 
                 let first_line_hanging = if para.list_label.is_empty() {
                     para.indent_hanging

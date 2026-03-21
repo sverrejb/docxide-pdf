@@ -253,3 +253,25 @@ The image was a `wp:anchor` with `layoutInCell="1"`, `wrapNone`, positioned `rel
 - `scraped/japanese_interlibrary_loan`: Jaccard +0.1pp (4.1→4.3%), SSIM +0.2pp (26.7→26.8%)
 - Small improvement because the overall score is dominated by font differences (MS Gothic not available on macOS)
 - No regressions across all 92 test cases
+
+---
+
+## 2026-03-21: Fixed table cell baseline positioning using full font size (annotation #15)
+
+**Problem**: In `scraped/japanese_interlibrary_loan`, text in the bottom row of the form table had too little padding above it compared to the reference. The annotation at (41.09, 70.68) on page 0 noted visible gap difference between reference and generated output.
+
+**Root cause**: The table cell baseline formula used `cursor_y - font_size * ascender_ratio` to position the first line's baseline below the cell top. Word instead uses `cursor_y - font_size` (full em-square height, not just the ascender). Precise PDF coordinate analysis confirmed: for MS Gothic 11pt in the reference, the gap from cell top to baseline was exactly 11.0pt (= font_size), while our code produced 9.45pt (= font_size × 0.86 ascender_ratio). The difference of ~1.55pt was visible as insufficient top padding.
+
+**Fix** (`src/pdf/table.rs`):
+- Changed both `render_cell_content()` and `render_partial_cell_content()` baseline formula from `cursor_y - para.font_size * para.ascender_ratio` to `cursor_y - para.font_size`
+- This shifts text down by `font_size * (1 - ascender_ratio)` in all table cells, matching Word's positioning
+
+**Impact**:
+- `scraped/japanese_interlibrary_loan`: Jaccard +0.6pp (4.3→4.8%), SSIM +0.1pp (26.8→26.9%)
+- `cases/case6`: Jaccard +3.9pp (39.5→43.4%) — handcrafted test confirms formula correctness
+- `scraped/parish_housing_data_profile`: Jaccard +2.7pp (30.0→32.7%)
+- `scraped/russian_university_proceedings`: Jaccard +2.1pp (20.2→22.3%)
+- `scraped/traditional_skills_heritage`: Jaccard +2.0pp (13.3→15.3%)
+- `scraped/polish_archery_range_plan`: Jaccard +1.8pp (15.2→16.9%)
+- Two minor Jaccard regressions (SSIM unchanged, confirming shift-only effect): `scraped/italian_project_..` -2.3pp, `scraped/polish_municipal..` -2.8pp
+- No structural layout changes in any case (text boundary scores unchanged)
