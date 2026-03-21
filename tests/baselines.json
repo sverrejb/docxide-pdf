@@ -392,8 +392,8 @@
     "convert_ms": 18.4
   },
   "scraped/learning_culture..": {
-    "jaccard": 0.3307,
-    "ssim": 0.4562,
+    "jaccard": 0.331,
+    "ssim": 0.4563,
     "text_boundary": 0.3794,
     "convert_ms": 1027.5
   },
@@ -428,7 +428,7 @@
     "convert_ms": 97.8
   },
   "scraped/polish_archery_r..": {
-    "jaccard": 0.1693,
+    "jaccard": 0.1692,
     "ssim": 0.4952,
     "text_boundary": 0.4718,
     "convert_ms": 16.3
@@ -500,8 +500,8 @@
     "convert_ms": 32.2
   },
   "scraped/traditional_skil..": {
-    "jaccard": 0.1534,
-    "ssim": 0.4862,
+    "jaccard": 0.1533,
+    "ssim": 0.486,
     "text_boundary": 0.7386,
     "convert_ms": 22.0
   },
@@ -512,20 +512,20 @@
     "convert_ms": 493.0
   },
   "scraped/turkish_ancient_..": {
-    "jaccard": 0.233,
-    "ssim": 0.5443,
+    "jaccard": 0.2052,
+    "ssim": 0.5457,
     "text_boundary": 1.0,
     "convert_ms": 4.2
   },
   "scraped/turkish_prostate..": {
-    "jaccard": 0.3583,
-    "ssim": 0.7537,
+    "jaccard": 0.3794,
+    "ssim": 0.7569,
     "text_boundary": 1.0,
     "convert_ms": 2.4
   },
   "scraped/uk_commercial_le..": {
-    "jaccard": 0.1579,
-    "ssim": 0.3292,
+    "jaccard": 0.1582,
+    "ssim": 0.3295,
     "text_boundary": 0.1355,
     "convert_ms": 326.3
   },

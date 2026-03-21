@@ -1,5 +1,5 @@
 {
-  "next_id": 52,
+  "next_id": 58,
   "annotations": [
     {
       "id": 2,
@@ -9,7 +9,7 @@
       "x_pt": 514.2692,
       "y_pt": 506.1648,
       "note": "Text should be directly above the grey line, not floating above it.",
-      "fixed": true
+      "fixed": false
     },
     {
       "id": 5,
@@ -42,76 +42,6 @@
       "fixed": false
     },
     {
-      "id": 9,
-      "case": "scraped/education_consultant_posting",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 295.79837,
-      "y_pt": 706.1211,
-      "note": "Too much space below \"Terms of Reference\", and too little above it.",
-      "fixed": true
-    },
-    {
-      "id": 10,
-      "case": "scraped/feminist_voice_dissertation",
-      "page": 7,
-      "source": "Generated",
-      "x_pt": 155.08342,
-      "y_pt": 712.2301,
-      "note": "Keywords should be on the page before compared to reference.",
-      "fixed": true
-    },
-    {
-      "id": 11,
-      "case": "scraped/feminist_voice_dissertation",
-      "page": 1,
-      "source": "Reference",
-      "x_pt": 305.85876,
-      "y_pt": 55.196655,
-      "note": "We are missing the roman numerals page numbers in the preamble.",
-      "fixed": true
-    },
-    {
-      "id": 12,
-      "case": "scraped/feminist_voice_dissertation",
-      "page": 9,
-      "source": "Generated",
-      "x_pt": 310.00793,
-      "y_pt": 59.561157,
-      "note": "We are also missing page numbers here.",
-      "fixed": true
-    },
-    {
-      "id": 13,
-      "case": "scraped/indonesian_benchmarking_guide",
-      "page": 5,
-      "source": "Generated",
-      "x_pt": 193.22345,
-      "y_pt": 700.9636,
-      "note": "This image is rendered on top of other content. Should come on the next page, compare to the reference.",
-      "fixed": true
-    },
-    {
-      "id": 14,
-      "case": "scraped/japanese_interlibrary_loan",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 36.972225,
-      "y_pt": 343.99335,
-      "note": "Vertical text in first column is not vertically centered. See reference.",
-      "fixed": true
-    },
-    {
-      "id": 15,
-      "case": "scraped/japanese_interlibrary_loan",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 41.093235,
-      "y_pt": 70.68347,
-      "note": "Text in bottom row has too little padding above. Reference has some gap above the text.",
-      "fixed": true
-    },
-    {
       "id": 16,
       "case": "scraped/japanese_interlibrary_loan",
       "page": 1,
@@ -119,7 +49,7 @@
       "x_pt": 316.12506,
       "y_pt": 308.1038,
       "note": "Page 2 should not exist.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 17,
@@ -149,7 +79,7 @@
       "x_pt": 271.31982,
       "y_pt": 798.97766,
       "note": "\"Best Practice Guide: .....\" should not be rendered on page 2, only 3, 4 and so on. See reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 20,
@@ -159,7 +89,7 @@
       "x_pt": 299.56885,
       "y_pt": 203.6264,
       "note": "Text needs to be higher up.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 21,
@@ -189,16 +119,6 @@
       "x_pt": 555.4253,
       "y_pt": 467.83395,
       "note": "The space above the \"Medarbeiderens egenevaluering\" is too large.",
-      "fixed": false
-    },
-    {
-      "id": 24,
-      "case": "samples/sample500kB",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 343.72385,
-      "y_pt": 232.46417,
-      "note": "Labels show up in the .png files, but opening the generated PDF in MacOS preview does not show the labels.",
       "fixed": false
     },
     {
@@ -279,7 +199,7 @@
       "x_pt": 519.4701,
       "y_pt": 54.766785,
       "note": "Reference says this is page 2, not page 1.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 33,
@@ -382,16 +302,6 @@
       "fixed": false
     },
     {
-      "id": 45,
-      "case": "scraped/croatian_grant_guidelines",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 285.73715,
-      "y_pt": 304.72943,
-      "note": "HR too thick",
-      "fixed": true
-    },
-    {
       "id": 46,
       "case": "scraped/czech_municipal_grant_form",
       "page": 1,
@@ -449,6 +359,66 @@
       "x_pt": 292.67557,
       "y_pt": 64.10364,
       "note": "If this is the footer, it is rendered kinda wrong. The link overlaps the page number, and the horizontal line is nowhere to be seen. It is also too close to the body text.",
+      "fixed": false
+    },
+    {
+      "id": 52,
+      "case": "scraped/education_consultant_posting",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 299.66245,
+      "y_pt": 706.0231,
+      "note": "Too little space above \"Terms of reference\". It should be lower. But the table under Section A is spot on, so do not move that.",
+      "fixed": false
+    },
+    {
+      "id": 53,
+      "case": "scraped/federal_procurement_terms",
+      "page": 8,
+      "source": "Generated",
+      "x_pt": 260.95786,
+      "y_pt": 667.14197,
+      "note": "We are not rendering the framed text box with text \"Applicable to Grants, Subgrants ...\".",
+      "fixed": false
+    },
+    {
+      "id": 54,
+      "case": "scraped/go_math_grade4_guide",
+      "page": 19,
+      "source": "Generated",
+      "x_pt": 362.79602,
+      "y_pt": 236.97723,
+      "note": "The table cells are wrong here. Compare to reference. There should be two cells, one under \"Chapter 10 rule of thumb\" and one under \"Rationale\"",
+      "fixed": false
+    },
+    {
+      "id": 55,
+      "case": "scraped/japanese_interlibrary_loan",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 36.071957,
+      "y_pt": 279.16833,
+      "note": "This text in the first column, top and middle cell should be vertically centered. The third cell looks correct.",
+      "fixed": false
+    },
+    {
+      "id": 56,
+      "case": "scraped/indonesian_benchmarking_guide",
+      "page": 6,
+      "source": "Generated",
+      "x_pt": 357.7669,
+      "y_pt": 666.1637,
+      "note": "Text should not wrap around this image, compare to reference.",
+      "fixed": false
+    },
+    {
+      "id": 57,
+      "case": "scraped/go_math_grade4_guide",
+      "page": 2,
+      "source": "Generated",
+      "x_pt": 749.0845,
+      "y_pt": 81.639404,
+      "note": "Table extends into footer, overlaps page number.",
       "fixed": false
     }
   ]

@@ -275,3 +275,48 @@ The image was a `wp:anchor` with `layoutInCell="1"`, `wrapNone`, positioned `rel
 - `scraped/polish_archery_range_plan`: Jaccard +1.8pp (15.2→16.9%)
 - Two minor Jaccard regressions (SSIM unchanged, confirming shift-only effect): `scraped/italian_project_..` -2.3pp, `scraped/polish_municipal..` -2.8pp
 - No structural layout changes in any case (text boundary scores unchanged)
+
+---
+
+## 2026-03-21: Fixed page numbering for continuous sections (annotation #32)
+
+**Problem**: In `scraped/stem_partnerships_guide`, the footer page numbers were off by one. Physical page 3 showed "1" instead of "2" as in the reference. The document has three sections: section 0 (cover, NextPage), section 1 (empty, Continuous), and section 2 (body content, Continuous with `pgNumType start=1`).
+
+**Root cause**: The `page_section_indices` tuple stored only `(hf_section, is_first)`. For continuous section breaks, `hf_section` stays as the previous section (correct for header/footer selection), but page numbering also used `hf_section` to count pages within a section. Pages where section 2's content was rendering but `hf_section = 0` (inherited from section 0) were not counted as part of section 2, giving wrong page numbers.
+
+**Fix** (`src/pdf/mod.rs`, `src/pdf/assembly.rs`):
+- Expanded `page_section_indices` from `(usize, bool)` to `(usize, bool, usize)` — `(hf_section, is_first, content_section)`
+- `content_section` always tracks the actual section being rendered (set to `sect_idx` in `flush_page`)
+- Page numbering now uses `content_section` to count pages within a section
+- Geometry lookups (columns, footnotes, page size) also use `content_section`
+- Header/footer resolution continues using `hf_section`
+
+**Also verified**: Annotations #16 ("Page 2 should not exist" in `japanese_interlibrary_loan`) and #19 ("Best Practice Guide should not be on page 2" in `stem_partnerships_guide`) were already fixed — marked as fixed.
+
+**Impact**:
+- `scraped/stem_partnerships_guide`: Page numbers now match reference (page 3 shows "2" instead of "1")
+- `scraped/transition_to_work`: Jaccard +0.2pp (26.1→26.2%)
+- No regressions above 2% threshold across all test cases
+
+---
+
+## 2026-03-21: Fixed table cell vAlign content height (annotation #20)
+
+**Problem**: In `scraped/uk_commercial_lease_template`, all text on page 1 was shifted ~9.5pt too low compared to the reference. The annotation at (299.57, 203.63) on page 0 noted "Text needs to be higher up." Precise measurement showed "Dated" text was at 103.59pt from page top vs 94.12pt in reference (9.47pt error). The centered "[LANDLORD]" block was 5.03pt too low.
+
+**Root cause**: The `valign_offset()` calculation for bottom/center-aligned table cells used a `content_h` that excluded the trailing `space_after` of the last paragraph. However, `compute_row_layouts()` correctly included `prev_space_after` in the row's `total_h` (line 896). This mismatch meant the rendering code underestimated the content block size, making `v_offset` too large and pushing text too far down.
+
+For the "Dated" cell (vAlign=bottom, Normal style space_after=9pt):
+- Before: content_h=12.65pt → baseline 2.65pt from cell bottom (reference: 12.0pt)
+- After: content_h=21.65pt → baseline 11.65pt from cell bottom — within 0.35pt of reference
+
+**Fix** (`src/pdf/table.rs`):
+- Added `space_after: f32` field to `CellParagraphLayout` struct
+- Created `cell_content_h_for_valign()` helper that computes content height including the last paragraph's `space_after`
+- Replaced inline content_h calculations at all three rendering sites (normal rows, split rows, header rows) with the helper
+
+**Impact**:
+- `scraped/uk_commercial_lease_template`: "Dated" position error reduced from 9.47pt to 0.47pt; "[LANDLORD]" from 5.03pt to 0.53pt
+- `scraped/turkish_prostate_cancer_course`: Jaccard +2.1pp (35.8→37.9%), SSIM +0.3pp
+- `scraped/turkish_ancient_religions_plan`: Jaccard -2.8pp (23.3→20.5%), SSIM +0.1pp — the dense center-aligned table shifted text direction in Jaccard overlap, but SSIM confirms spatial improvement
+- No other regressions across all 92 test cases

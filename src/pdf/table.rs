@@ -157,6 +157,23 @@ fn para_block_height(p: &CellParagraphLayout) -> f32 {
     }
 }
 
+/// Total content height including trailing space_after, matching Word's vAlign calculation.
+fn cell_content_h_for_valign(items: &[CellContentItem]) -> f32 {
+    let mut h: f32 = items
+        .iter()
+        .map(|item| match item {
+            CellContentItem::Paragraph(p) => p.space_before + para_block_height(p),
+            CellContentItem::NestedTable { height } => *height,
+        })
+        .sum();
+    // Word includes the last paragraph's space_after in the content block height
+    // used for vertical alignment, so bottom/center-aligned cells position correctly.
+    if let Some(CellContentItem::Paragraph(last_para)) = items.last() {
+        h += last_para.space_after;
+    }
+    h
+}
+
 fn cell_has_visible_content(items: &[CellContentItem]) -> bool {
     items.iter().any(|item| match item {
         CellContentItem::Paragraph(p) => para_has_visible_content(p),
@@ -348,16 +365,7 @@ fn render_nested_table(
 
             if cell_has_visible_content(&cell_layout.items) {
                 let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
-                let content_h: f32 = cell_layout
-                    .items
-                    .iter()
-                    .map(|item| match item {
-                        CellContentItem::Paragraph(p) => {
-                            p.space_before + para_block_height(p)
-                        }
-                        CellContentItem::NestedTable { height } => *height,
-                    })
-                    .sum();
+                let content_h = cell_content_h_for_valign(&cell_layout.items);
 
                 let avail = effective_h - ecm.top - ecm.bottom;
                 let v_offset = valign_offset(cell.v_align, avail, content_h);
@@ -625,6 +633,7 @@ struct CellParagraphLayout {
     content_height: f32,
     paragraph_mark_vanish: bool,
     floating_images: Vec<CellFloatingImageLayout>,
+    space_after: f32,
 }
 
 enum CellContentItem {
@@ -874,6 +883,7 @@ fn compute_row_layouts(
                                     content_height: para.content_height,
                                     paragraph_mark_vanish: para.paragraph_mark_vanish,
                                     floating_images: cell_floats,
+                                    space_after: para.space_after,
                                 }));
 
                                 prev_space_after = para.space_after;
@@ -1025,16 +1035,7 @@ fn render_table_row(
                 ctx,
             );
         } else if has_content {
-            let content_h: f32 = cell_layout
-                .items
-                .iter()
-                .map(|item| match item {
-                    CellContentItem::Paragraph(p) => {
-                        p.space_before + para_block_height(p)
-                    }
-                    CellContentItem::NestedTable { height } => *height,
-                })
-                .sum();
+            let content_h = cell_content_h_for_valign(&cell_layout.items);
 
             let avail = effective_h - ecm.top - ecm.bottom;
             let v_offset = valign_offset(cell.v_align, avail, content_h);
@@ -1596,16 +1597,7 @@ pub(super) fn render_header_footer_table(
 
             if cell_has_visible_content(&cell_layout.items) {
                 let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
-                let content_h: f32 = cell_layout
-                    .items
-                    .iter()
-                    .map(|item| match item {
-                        CellContentItem::Paragraph(p) => {
-                            p.space_before + para_block_height(p)
-                        }
-                        CellContentItem::NestedTable { height } => *height,
-                    })
-                    .sum();
+                let content_h = cell_content_h_for_valign(&cell_layout.items);
 
                 let avail = effective_h - ecm.top - ecm.bottom;
                 let v_offset = valign_offset(cell.v_align, avail, content_h);
