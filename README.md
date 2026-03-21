@@ -70,22 +70,30 @@ See more examples in the [showcase](https://github.com/sverrejb/docxide-pdf/tree
 
 <!-- showcase-start -->
 <table>
-  <tr><th>MS Word</th><th>Docxside-PDF</th></tr>
+  <tr><th>MS Word</th><th>docxide-pdf</th></tr>
   <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case4_ref.png"/><br/><sub>case4 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case4_gen.png"/><br/><sub>case4 — 89.5% SSIM</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case11_ref.png"/><br/><sub>Report with headers, footers & page numbers — reference</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case11_gen.png"/><br/><sub>92.0% SSIM</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case6_ref.png"/><br/><sub>case6 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case6_gen.png"/><br/><sub>case6 — 54.8% SSIM</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case34_ref.png"/><br/><sub>20 preset shapes via geometry engine — reference</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case34_gen.png"/><br/><sub>96.9% SSIM</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case7_ref.png"/><br/><sub>case7 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case7_gen.png"/><br/><sub>case7 — 91.7% SSIM</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case8_ref.png"/><br/><sub>Embedded fonts & mixed typography — reference</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case8_gen.png"/><br/><sub>94.1% SSIM</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case8_ref.png"/><br/><sub>case8 — reference</sub></td>
-    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case8_gen.png"/><br/><sub>case8 — 94.1% SSIM</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case22_ref.png"/><br/><sub>Three-column newsletter layout — reference</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case22_gen.png"/><br/><sub>93.3% SSIM</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case30_ref.png"/><br/><sub>Line, pie & area charts — reference</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/case30_gen.png"/><br/><sub>83.3% SSIM</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/centrifugal_ref.png"/><br/><sub>Real-world document (scraped) — reference</sub></td>
+    <td align="center"><img src="https://raw.githubusercontent.com/sverrejb/docxide-pdf/main/showcase/centrifugal_gen.png"/><br/><sub>94.0% SSIM</sub></td>
   </tr>
 </table>
 <!-- showcase-end -->

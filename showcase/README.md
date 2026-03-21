@@ -42,7 +42,7 @@ Reference (MS Word) on the left, docxide-pdf on the right.
 
 <img src="case10_ref.png" width="420"/> <img src="case10_gen.png" width="420"/>
 
-## case11 — 91.5% SSIM
+## case11 — 92.0% SSIM
 
 <img src="case11_ref.png" width="420"/> <img src="case11_gen.png" width="420"/>
 
@@ -126,6 +126,22 @@ Reference (MS Word) on the left, docxide-pdf on the right.
 
 <img src="case31_ref.png" width="420"/> <img src="case31_gen.png" width="420"/>
 
-## case32 — 76.0% SSIM
+## case32 — 92.4% SSIM
 
 <img src="case32_ref.png" width="420"/> <img src="case32_gen.png" width="420"/>
+
+## case34 — 96.9% SSIM (Preset shapes gallery)
+
+<img src="case34_ref.png" width="420"/> <img src="case34_gen.png" width="420"/>
+
+## case36 — 99.5% SSIM (Custom geometry)
+
+<img src="case36_ref.png" width="420"/> <img src="case36_gen.png" width="420"/>
+
+## case38 — 95.6% SSIM (Gradient fills)
+
+<img src="case38_ref.png" width="420"/> <img src="case38_gen.png" width="420"/>
+
+## centrifugal_water_chillers (scraped) — 94.0% SSIM
+
+<img src="centrifugal_ref.png" width="420"/> <img src="centrifugal_gen.png" width="420"/>
