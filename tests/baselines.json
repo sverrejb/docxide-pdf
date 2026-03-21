@@ -213,8 +213,8 @@
     "text_boundary": 0.1905
   },
   "cases/case43": {
-    "jaccard": 0.2206,
-    "ssim": 0.2842,
+    "jaccard": 0.2111,
+    "ssim": 0.2758,
     "text_boundary": 0.0
   },
   "cases/case5": {
@@ -332,8 +332,8 @@
     "convert_ms": 22.0
   },
   "scraped/education_consul..": {
-    "jaccard": 0.1221,
-    "ssim": 0.2408,
+    "jaccard": 0.1225,
+    "ssim": 0.2418,
     "text_boundary": 0.4444,
     "convert_ms": 47.1
   },
@@ -356,8 +356,8 @@
     "convert_ms": 33.4
   },
   "scraped/go_math_grade4_g..": {
-    "jaccard": 0.2771,
-    "ssim": 0.4939,
+    "jaccard": 0.2772,
+    "ssim": 0.4936,
     "text_boundary": 0.5595,
     "convert_ms": 70.6
   },
@@ -428,8 +428,8 @@
     "convert_ms": 97.8
   },
   "scraped/polish_archery_r..": {
-    "jaccard": 0.1487,
-    "ssim": 0.4844,
+    "jaccard": 0.1515,
+    "ssim": 0.4972,
     "text_boundary": 0.4718,
     "convert_ms": 16.3
   },
@@ -512,8 +512,8 @@
     "convert_ms": 493.0
   },
   "scraped/turkish_ancient_..": {
-    "jaccard": 0.2326,
-    "ssim": 0.5399,
+    "jaccard": 0.2357,
+    "ssim": 0.5442,
     "text_boundary": 1.0,
     "convert_ms": 4.2
   },

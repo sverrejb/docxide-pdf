@@ -217,10 +217,13 @@ fn render_cell_content(
                 let text_w = (col_w - cm.left - cm.right - para.indent_left).max(0.0);
                 let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
 
-                if !para.list_label.is_empty() {
+                let first_line_hanging = if para.list_label.is_empty() {
+                    para.indent_hanging
+                } else {
                     let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging;
                     draw_cell_label(content, para, label_x, baseline_y, ctx.fonts);
-                }
+                    0.0
+                };
 
                 render_paragraph_lines(
                     content,
@@ -233,7 +236,7 @@ fn render_cell_content(
                     para.lines.len(),
                     0,
                     &mut Vec::new(),
-                    0.0,
+                    first_line_hanging,
                     ctx.fonts,
                     None,
                 );
@@ -427,10 +430,13 @@ fn render_partial_cell_content(
                 let text_w = (col_w - cm.left - cm.right - para.indent_left).max(0.0);
                 let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
 
-                if !para.list_label.is_empty() {
+                let first_line_hanging = if para.list_label.is_empty() {
+                    para.indent_hanging
+                } else {
                     let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging;
                     draw_cell_label(content, para, label_x, baseline_y, ctx.fonts);
-                }
+                    0.0
+                };
 
                 render_paragraph_lines(
                     content,
@@ -443,7 +449,7 @@ fn render_partial_cell_content(
                     para.lines.len(),
                     0,
                     &mut Vec::new(),
-                    0.0,
+                    first_line_hanging,
                     ctx.fonts,
                     None,
                 );

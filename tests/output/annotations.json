@@ -299,7 +299,7 @@
       "x_pt": 122.45199,
       "y_pt": 630.3104,
       "note": "\"ŞAMANİZM\" is indented here, it should not be. Compare to reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 35,

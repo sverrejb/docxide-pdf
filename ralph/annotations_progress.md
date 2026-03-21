@@ -142,3 +142,23 @@ Additionally, the floating image was in a separate paragraph (paragraph 0) from 
 - `scraped/polish_building_procurement_spec`: Item 1 text now at x=70.8pt (matching items 2-6), reference shows x=74.0pt — much closer
 - `cases/case43`: Jaccard +0.9pp (21.1→22.1%)
 - No Jaccard regressions across all test cases
+
+---
+
+## 2026-03-21: Fixed hanging indent in table cell rendering (annotation #34)
+
+**Problem**: In `scraped/turkish_ancient_religions_plan`, the heading "ŞAMANİZM" was indented to the right compared to other headings like "BUDİZM" and "ZERDÜŞTLİK". All headings should start at the same x-position within their table cell.
+
+**Root cause**: The paragraph uses the `OkumaParas` style (which has `numId=1` for list formatting) but overrides with `numId=0` (no list) and explicit `w:ind w:left="432" w:hanging="360"`. With hanging indent, the first line should start at `indent_left - indent_hanging = 3.6pt` — same as the `Konu-basligi` style's `ind left=72 twips = 3.6pt`.
+
+The bug was in `src/pdf/table.rs`: the table cell rendering code always passed `0.0` as `first_line_hanging` to `render_paragraph_lines()`, even when the paragraph had a non-zero `indent_hanging`. The lines were correctly built with the hanging indent width in `compute_row_layouts()`, but the rendering didn't shift the first line left to account for it.
+
+**Fix** (`src/pdf/table.rs`):
+- At both cell rendering locations, compute `first_line_hanging` based on whether the paragraph is a list or not
+- For non-list paragraphs: pass `para.indent_hanging` as `first_line_hanging`
+- For list paragraphs: keep `0.0` (label handles positioning separately)
+
+**Impact**:
+- `scraped/turkish_ancient_religions_plan`: Jaccard +0.3pp (23.3→23.6%), SSIM +0.4pp (54.0→54.4%)
+- `scraped/polish_archery_range_plan`: Jaccard +0.3pp (14.9→15.2%), SSIM +1.3pp (48.4→49.7%)
+- No regressions above 2% threshold across all test cases
