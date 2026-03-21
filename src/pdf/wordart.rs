@@ -104,16 +104,31 @@ pub(super) fn extract_glyph_path(
 }
 
 /// Load font data for glyph outline extraction.
-/// Searches seen_fonts for an entry whose key starts with the given font name and has a stored path.
+/// Searches seen_fonts for a matching entry with the right bold/italic variant.
 pub(super) fn load_font_data(
     font_name: &str,
+    bold: bool,
+    italic: bool,
     seen_fonts: &HashMap<String, FontEntry>,
 ) -> Option<(Vec<u8>, u32)> {
     // Font keys are "FontName", "FontName/B", "FontName/I", "FontName/BI"
+    let suffix = match (bold, italic) {
+        (true, true) => "/BI",
+        (true, false) => "/B",
+        (false, true) => "/I",
+        (false, false) => "",
+    };
+    let preferred_key = format!("{}{}", font_name, suffix);
+    // Try exact match first, then fall back to any variant
     let entry = seen_fonts
-        .iter()
-        .find(|(k, e)| k.starts_with(font_name) && e.font_path.is_some())
-        .map(|(_, e)| e)?;
+        .get(&preferred_key)
+        .filter(|e| e.font_path.is_some())
+        .or_else(|| {
+            seen_fonts
+                .iter()
+                .find(|(k, e)| k.starts_with(font_name) && e.font_path.is_some())
+                .map(|(_, e)| e)
+        })?;
     let path = entry.font_path.as_ref()?;
     let data = std::fs::read(path).ok()?;
     Some((data, entry.face_index))
@@ -320,6 +335,8 @@ pub(super) fn render_warped_textbox(
     let mut text_color: Option<[u8; 3]> = None;
     let mut first_outline: Option<TextOutline> = None;
     let mut first_fill: Option<TextFill> = None;
+    let mut is_bold = false;
+    let mut is_italic = false;
     for para in &tb.paragraphs {
         for run in &para.runs {
             if !run.text.is_empty() {
@@ -330,6 +347,8 @@ pub(super) fn render_warped_textbox(
                     text_color = run.color;
                     first_outline = run.text_outline.clone();
                     first_fill = run.text_fill.clone();
+                    is_bold = run.bold;
+                    is_italic = run.italic;
                 }
             }
         }
@@ -339,8 +358,8 @@ pub(super) fn render_warped_textbox(
         return false;
     }
 
-    // Load font for glyph outlines
-    let Some((font_data, face_index)) = load_font_data(&font_name, seen_fonts) else {
+    // Load font for glyph outlines (use bold/italic variant if available)
+    let Some((font_data, face_index)) = load_font_data(&font_name, is_bold, is_italic, seen_fonts) else {
         return false;
     };
     let Some(face) = ttf_parser::Face::parse(&font_data, face_index).ok() else {
@@ -692,6 +711,8 @@ pub(super) fn render_text_on_path(
     let mut text_color: Option<[u8; 3]> = None;
     let mut first_outline: Option<TextOutline> = None;
     let mut first_fill: Option<TextFill> = None;
+    let mut is_bold = false;
+    let mut is_italic = false;
     for para in &tb.paragraphs {
         for run in &para.runs {
             if !run.text.is_empty() {
@@ -702,6 +723,8 @@ pub(super) fn render_text_on_path(
                     text_color = run.color;
                     first_outline = run.text_outline.clone();
                     first_fill = run.text_fill.clone();
+                    is_bold = run.bold;
+                    is_italic = run.italic;
                 }
             }
         }
@@ -712,7 +735,7 @@ pub(super) fn render_text_on_path(
     }
 
     // Load font
-    let Some((font_data, face_index)) = load_font_data(&font_name, seen_fonts) else {
+    let Some((font_data, face_index)) = load_font_data(&font_name, is_bold, is_italic, seen_fonts) else {
         return false;
     };
     let Some(face) = ttf_parser::Face::parse(&font_data, face_index).ok() else {
