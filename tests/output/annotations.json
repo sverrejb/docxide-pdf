@@ -99,7 +99,7 @@
       "x_pt": 36.972225,
       "y_pt": 343.99335,
       "note": "Vertical text in first column is not vertically centered. See reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 15,

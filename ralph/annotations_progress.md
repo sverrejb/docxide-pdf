@@ -234,3 +234,22 @@ The image was a `wp:anchor` with `layoutInCell="1"`, `wrapNone`, positioned `rel
 - `scraped/polish_municipal_letter`: Jaccard +8.3pp (27.2→35.5%), SSIM +2.5pp (69.4→71.9%)
 - `cases/case43`: Jaccard +0.9pp (21.1→22.1%), SSIM +0.8pp (27.6→28.4%)
 - No regressions across all 92 test cases
+
+---
+
+## 2026-03-21: Fixed vertical text centering in table cells (annotation #14)
+
+**Problem**: In `scraped/japanese_interlibrary_loan`, vertical text (e.g., "申込者", "申込図書") in the first column of the form table was rendered at the top of its cell instead of being vertically centered like the reference. The cells used `w:textDirection w:val="tbRlV"` for vertical text but had no explicit `w:vAlign` attribute.
+
+**Root cause**: In vertical text cells, `w:jc` (paragraph justification) controls alignment along the text flow direction, which is vertical. So `w:jc w:val="center"` means the text should be centered vertically within the cell. The `render_vertical_cjk_cell()` function in `src/pdf/table.rs` only checked `cell.v_align` (which defaulted to `Top` since no `w:vAlign` was specified) and ignored the paragraph's `jc` alignment entirely.
+
+**Fix** (`src/pdf/table.rs`):
+- In `render_vertical_cjk_cell()`, when `cell.v_align` is `Top` (default), check the first paragraph's alignment
+- If the paragraph has `Alignment::Center`, use `CellVAlign::Center` for the vertical offset
+- If the paragraph has `Alignment::Right`, use `CellVAlign::Bottom` for the vertical offset
+- This correctly maps horizontal paragraph alignment to vertical positioning in vertical text cells
+
+**Impact**:
+- `scraped/japanese_interlibrary_loan`: Jaccard +0.1pp (4.1→4.3%), SSIM +0.2pp (26.7→26.8%)
+- Small improvement because the overall score is dominated by font differences (MS Gothic not available on macOS)
+- No regressions across all 92 test cases

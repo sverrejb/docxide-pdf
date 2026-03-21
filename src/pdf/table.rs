@@ -1119,7 +1119,17 @@ fn render_vertical_cjk_cell(
         .sum();
 
     let avail_h = row_h - cm.top - cm.bottom;
-    let v_offset = valign_offset(cell.v_align, avail_h, total_char_h);
+    // In vertical text cells, paragraph jc controls vertical positioning
+    let effective_v_align = if cell.v_align == CellVAlign::Top {
+        match paras.first().map(|p| p.alignment) {
+            Some(Alignment::Center) => CellVAlign::Center,
+            Some(Alignment::Right) => CellVAlign::Bottom,
+            _ => cell.v_align,
+        }
+    } else {
+        cell.v_align
+    };
+    let v_offset = valign_offset(effective_v_align, avail_h, total_char_h);
 
     let avail_w = col_w - cm.left - cm.right;
     let mut char_y = row_top - cm.top - v_offset;
