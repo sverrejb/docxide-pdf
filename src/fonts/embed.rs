@@ -286,9 +286,10 @@ fn compute_line_metrics(face: &Face, units: f32) -> (f32, f32) {
         let win_asc = os2.windows_ascender() as f32;
         let win_desc = os2.windows_descender() as f32;
         // usWinAscent/Descent define glyph clipping bounds; hhea lineGap
-        // provides external leading that Word includes in line spacing
+        // provides external leading that Word includes in both line spacing
+        // and baseline positioning (ascender offset from slot top)
         let gap = face.line_gap() as f32;
-        return ((win_asc - win_desc + gap) / units, win_asc / units);
+        return ((win_asc - win_desc + gap) / units, (win_asc + gap) / units);
     }
 
     let line_gap = face.line_gap() as f32;

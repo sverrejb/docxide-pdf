@@ -51,7 +51,7 @@ Document metadata (title, author, subject, keywords) is now parsed from `docProp
 
 ## Line Height: OS/2 Win Metrics (DONE)
 
-OS/2 Win Metrics are already implemented in `compute_line_metrics()` in `src/fonts/embed.rs`. The function correctly uses `usWinAscent + usWinDescent` when `USE_TYPO_METRICS` is not set. The remaining vertical drift in failing text-only fixtures has other root causes — not line metrics.
+OS/2 Win Metrics are already implemented in `compute_line_metrics()` in `src/fonts/embed.rs`. The function correctly uses `usWinAscent + usWinDescent` when `USE_TYPO_METRICS` is not set. The `ascender_ratio` now includes `hhea.lineGap` for non-USE_TYPO fonts (`(win_asc + gap) / UPM`), matching Word's baseline positioning. This fixed ~1pt vertical offset for Arial (lineGap=67) and TNR (lineGap=87), improving 33 fixtures — seminary_hill +32.7pp, feminist_voice +22.6pp, bush_fires +18.9pp, slovak_misdemeanor +18.6pp. Fonts with lineGap=0 (Calibri, Georgia, Cambria) were unaffected.
 
 ## Vertical Drift Investigation (TODO — HIGH IMPACT)
 
@@ -62,7 +62,6 @@ The 8 failing text-only fixtures still show accumulated vertical shift. Investig
 
 Remaining avenues to investigate:
 - **Text wrapping around floating tables** — Word wraps body text around `tblpPr` tables, pushing subsequent paragraphs below. We render them as overlapping, causing large visual diffs (case32).
-- **Per-font line height calibration** — different fonts may have subtle differences in how their Win Metrics translate to actual line spacing in Word.
 
 ## SmartArt Remaining Work
 
@@ -177,11 +176,11 @@ The `render()` function in `pdf/mod.rs` is ~2400 lines with many closures and sh
 
 ## Scraped Fixture Status
 
-33 passing, 16 failing, 0 skipped out of 49 scraped fixtures. Breakdown of 16 failures by dominant issue:
-- **text/layout only**: 8 fixtures (all show accumulated vertical shift from wrong line metrics)
+32 passing, 16 failing, 0 skipped out of 48 scraped fixtures. Breakdown of 16 failures by dominant issue:
+- **text/layout only**: 8 fixtures
 - **anchored images**: 4 fixtures
 - **floating tables**: 3 fixtures
-- **structured doc tags**: 1 fixture
+- **structured doc tags**: 2 fixtures
 
 Run `./tools/target/debug/analyze-fixtures --failing` for current breakdown.
 
