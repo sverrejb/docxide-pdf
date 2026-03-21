@@ -698,7 +698,7 @@ pub(super) fn render_text_on_path(
 
     let start_s = (total_arc - total_advance) / 2.0;
     let x_offset = (content_w as f64 - boundary_w) / 2.0;
-    let descender = face.descender() as f64 / units_per_em * info.font_size as f64;
+    let path_anchor = info.font_size as f64 / 2.0;
 
     let emit_on_path = |content: &mut Content| {
         let mut cursor_s = start_s;
@@ -716,7 +716,7 @@ pub(super) fn render_text_on_path(
 
             let transform_pt = |gx_font: f64, gy_font: f64| -> (f32, f32) {
                 let lx = gx_font * scale - advance / 2.0;
-                let ly = gy_font * scale - descender;
+                let ly = gy_font * scale - path_anchor;
                 let rx = lx * cos_a - ly * sin_a;
                 let ry = lx * sin_a + ly * cos_a;
                 let pdf_x = (tb_x as f64 + x_offset + cx + rx) as f32;

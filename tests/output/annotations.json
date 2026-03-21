@@ -332,16 +332,6 @@
       "fixed": false
     },
     {
-      "id": 61,
-      "case": "case43",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 310.21964,
-      "y_pt": 304.56003,
-      "note": "Arch text is not arched at all.",
-      "fixed": true
-    },
-    {
       "id": 66,
       "case": "case33",
       "page": 0,
