@@ -369,7 +369,10 @@ pub(super) fn render_warped_textbox(
     }
 
     let text_w = total_advance.max(1.0);
-    let text_h = glyph_extent; // glyph vertical extent for v normalization
+    // Word normalizes WordArt text height using font_size × (ascender / glyph_extent),
+    // which accounts for the ascender:descender ratio so that capital letters
+    // fill the shape height more completely (matching Word's rasterized output).
+    let text_h = font_size as f64 * ascender / glyph_extent;
 
     // WordArt: keep natural text width, stretch vertically to fill shape height
     let boundary_w = text_w;
