@@ -213,8 +213,8 @@
     "text_boundary": 0.1905
   },
   "cases/case43": {
-    "jaccard": 0.2206,
-    "ssim": 0.2842,
+    "jaccard": 0.2111,
+    "ssim": 0.2758,
     "text_boundary": 0.0
   },
   "cases/case5": {
@@ -362,8 +362,8 @@
     "convert_ms": 70.6
   },
   "scraped/indonesian_bench..": {
-    "jaccard": 0.2286,
-    "ssim": 0.4303,
+    "jaccard": 0.3285,
+    "ssim": 0.5214,
     "text_boundary": 0.3629,
     "convert_ms": 170.5
   },

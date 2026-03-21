@@ -183,3 +183,22 @@ The calculation: after the body text, `slot_top ≈ 99.70` (PDF coords from bott
 - `scraped/brazilian_logistics_study`: Jaccard +0.9pp (13.6→14.6%), SSIM +1.6pp (25.9→27.6%)
 - `cases/case43`: Jaccard +0.9pp (21.1→22.1%), SSIM +0.8pp (27.6→28.4%)
 - No regressions across all 92 test cases
+
+---
+
+## 2026-03-21: Fixed floating image page overflow for paragraph-relative wrapSquare images (annotation #13)
+
+**Problem**: In `scraped/indonesian_benchmarking_guide`, a large floating anchor image (questionnaire table, 251×374pt with `wrapSquare`) was rendered on top of the "Benchmarking Process" flowchart and other content on page 6, instead of being pushed to page 7 like the reference. The image overlapped existing content because no page break was triggered.
+
+**Root cause**: The page-break decision in `src/pdf/mod.rs` computed `content_h` for each paragraph and checked if `slot_top - needed < margin_bottom`. For floating images with `wrapSquare`, the image height was only included in `content_h` when the image was wider than 90% of text width (meaning text couldn't wrap beside it). The questionnaire image was ~56% of text width, so its 374pt height was excluded from `content_h`. The paragraph's text content was ~14pt (one empty line), so the page-break check saw only 14pt needed — far below the remaining page space — and didn't trigger a page break. The 374pt image was then rendered at the paragraph's position, extending far below the bottom margin and overlapping subsequent content.
+
+**Fix** (`src/pdf/mod.rs`):
+- Added a separate `float_overflow_h` variable to track the height of paragraph-relative floating images with `wrapSquare`/`Tight`/`Through` that are narrower than 90% of text width
+- These images have text wrapping beside them, so their height should NOT inflate `content_h` (which controls cursor advancement after the paragraph)
+- Computed `needed_with_floats = max(needed, inter_gap + float_overflow_h)` for use only in the page-break condition
+- This ensures the page-break check accounts for the full image height while cursor advancement still uses the text-only height
+
+**Impact**:
+- `scraped/indonesian_benchmarking_guide`: Jaccard +10.0pp (22.9→32.9%), SSIM +9.1pp (43.0→52.1%)
+- `cases/case43`: Jaccard -0.9pp (22.1→21.1%) — within noise, this case fluctuates at this level
+- No regressions above 2% threshold across all 92 test cases

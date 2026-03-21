@@ -89,7 +89,7 @@
       "x_pt": 193.22345,
       "y_pt": 700.9636,
       "note": "This image is rendered on top of other content. Should come on the next page, compare to the reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 14,

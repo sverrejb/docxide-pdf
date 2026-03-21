@@ -1581,6 +1581,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         }
                     };
 
+                    // Extra height from floating images that extends beyond
+                    // the text content — used only for page-break decisions,
+                    // not for cursor advancement (text wraps beside the image).
+                    let mut float_overflow_h = 0.0f32;
+
                     for fi in &para.floating_images {
                         let reserve = match fi.wrap_type {
                             WrapType::TopAndBottom => true,
@@ -1589,14 +1594,24 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             }
                             WrapType::None => false,
                         };
+                        let fi_h = match fi.v_position {
+                            VerticalPosition::Offset(o) => {
+                                o + fi.dist_top + fi.image.display_height + fi.dist_bottom
+                            }
+                            _ => fi.dist_top + fi.image.display_height + fi.dist_bottom,
+                        };
                         if reserve {
-                            let fi_h = match fi.v_position {
-                                VerticalPosition::Offset(o) => {
-                                    o + fi.dist_top + fi.image.display_height + fi.dist_bottom
-                                }
-                                _ => fi.dist_top + fi.image.display_height + fi.dist_bottom,
-                            };
+                            // Wide images block all text — add to content_h
                             content_h = content_h.max(fi_h);
+                        } else if fi.v_relative_from == VRelativeFrom::Paragraph
+                            && matches!(
+                                fi.wrap_type,
+                                WrapType::Square | WrapType::Tight | WrapType::Through
+                            )
+                        {
+                            // Narrower paragraph-relative images: track overflow
+                            // for page-break check only (text wraps beside them)
+                            float_overflow_h = float_overflow_h.max(fi_h);
                         }
                     }
 
@@ -1655,6 +1670,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     };
 
                     let needed = inter_gap + bdr_top_pad + content_h;
+                    // For page-break decisions, also account for floating
+                    // images that extend below the text content.
+                    let needed_with_floats = needed.max(inter_gap + float_overflow_h);
                     let at_page_top = pb.is_at_page_top(cur_sp);
 
                     // Word allows the last line's trailing inter-line
@@ -1709,7 +1727,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     };
 
                     if !at_page_top
-                        && pb.slot_top - needed - keep_next_extra + last_line_lead
+                        && pb.slot_top - needed_with_floats - keep_next_extra + last_line_lead
                             < effective_margin_bottom
                     {
                         let available = pb.slot_top - inter_gap - effective_margin_bottom;
