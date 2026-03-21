@@ -29,7 +29,7 @@
       "x_pt": 226.17776,
       "y_pt": 451.33154,
       "note": "Green box should be broken across two pages like the reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 8,
@@ -59,7 +59,7 @@
       "x_pt": 155.08342,
       "y_pt": 712.2301,
       "note": "Keywords should be on the page before compared to reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 11,
@@ -129,7 +129,7 @@
       "x_pt": 81.622795,
       "y_pt": 195.54712,
       "note": "\"Nazawa\" should not be indented here",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 18,

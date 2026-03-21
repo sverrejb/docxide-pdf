@@ -213,8 +213,8 @@
     "text_boundary": 0.1905
   },
   "cases/case43": {
-    "jaccard": 0.2111,
-    "ssim": 0.2758,
+    "jaccard": 0.2206,
+    "ssim": 0.2842,
     "text_boundary": 0.0
   },
   "cases/case5": {
@@ -266,8 +266,8 @@
     "convert_ms": 12.0
   },
   "scraped/brazilian_logist..": {
-    "jaccard": 0.1362,
-    "ssim": 0.2594,
+    "jaccard": 0.1456,
+    "ssim": 0.2758,
     "text_boundary": 0.1433,
     "convert_ms": 744.0
   },
@@ -344,8 +344,8 @@
     "convert_ms": 57.1
   },
   "scraped/feminist_voice_d..": {
-    "jaccard": 0.3363,
-    "ssim": 0.6946,
+    "jaccard": 0.4003,
+    "ssim": 0.8231,
     "text_boundary": 0.7059,
     "convert_ms": 305.8
   },
@@ -524,7 +524,7 @@
     "convert_ms": 2.4
   },
   "scraped/uk_commercial_le..": {
-    "jaccard": 0.1569,
+    "jaccard": 0.1579,
     "ssim": 0.3291,
     "text_boundary": 0.1384,
     "convert_ms": 326.3

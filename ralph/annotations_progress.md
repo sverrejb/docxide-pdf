@@ -162,3 +162,24 @@ The bug was in `src/pdf/table.rs`: the table cell rendering code always passed `
 - `scraped/turkish_ancient_religions_plan`: Jaccard +0.3pp (23.3→23.6%), SSIM +0.4pp (54.0→54.4%)
 - `scraped/polish_archery_range_plan`: Jaccard +0.3pp (14.9→15.2%), SSIM +1.3pp (48.4→49.7%)
 - No regressions above 2% threshold across all test cases
+
+---
+
+## 2026-03-21: Fixed page break trailing leading tolerance (annotation #10)
+
+**Problem**: In `scraped/feminist_voice_dissertation`, the "Keywords: Feminist, Feminism, Patriarchy..." line was pushed to page 8 instead of fitting at the bottom of page 7 (the ABSTRACT page) like the reference. The abstract text content was identical between reference and generated (same line breaks, same Y positions within ±1pt), but the Keywords line overflowed.
+
+**Root cause**: The page break decision in `src/pdf/mod.rs` checked whether the FULL `content_h` (including the last line's inter-line spacing) fit within the remaining content area. For the Keywords paragraph with Times New Roman 12pt at 1.5× line spacing, `content_h = line_h = 20.70pt`. But only ~13.80pt of actual text height was needed — the remaining 6.90pt was trailing inter-line spacing that serves no purpose for the last line on a page.
+
+The calculation: after the body text, `slot_top ≈ 99.70` (PDF coords from bottom). Keywords `needed = 10pt (inter-paragraph gap) + 20.70pt (full line_h) = 30.70pt`. Check: `99.70 - 30.70 = 69.00 < 72.00 (margin_bottom)` → overflow! But the Keywords baseline at y≈79 from bottom with descent ~2.6pt ends at ~76.4, well within the 72pt margin. Word allows the trailing leading to extend past the bottom margin.
+
+**Fix** (`src/pdf/mod.rs`):
+- Compute `last_line_lead`: the excess of `line_h` over the font's single-line height (`font_size * line_h_ratio`), representing trailing inter-line spacing that can overflow into the bottom margin
+- Adjust the page break condition from `slot_top - needed < margin_bottom` to `slot_top - needed + last_line_lead < margin_bottom`
+- Only applies to text paragraphs with non-Exact line spacing (Auto/AtLeast); images, charts, and SmartArt are excluded
+
+**Impact**:
+- `scraped/feminist_voice_dissertation`: Jaccard +6.4pp (33.6→40.0%), SSIM +12.9pp (69.5→82.3%)
+- `scraped/brazilian_logistics_study`: Jaccard +0.9pp (13.6→14.6%), SSIM +1.6pp (25.9→27.6%)
+- `cases/case43`: Jaccard +0.9pp (21.1→22.1%), SSIM +0.8pp (27.6→28.4%)
+- No regressions across all 92 test cases

@@ -1657,6 +1657,25 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     let needed = inter_gap + bdr_top_pad + content_h;
                     let at_page_top = pb.is_at_page_top(cur_sp);
 
+                    // Word allows the last line's trailing inter-line
+                    // spacing to extend past the bottom margin — only the
+                    // text (ascent + descent) must fit inside the content
+                    // area.  Compute the excess leading so the page-break
+                    // check can tolerate it.
+                    let last_line_lead = if !lines.is_empty()
+                        && para.image.is_none()
+                        && para.inline_chart.is_none()
+                        && para.smartart.is_none()
+                        && !matches!(effective_ls, LineSpacing::Exact(_))
+                    {
+                        let single_h = tallest_lhr
+                            .map(|r| font_size * r)
+                            .unwrap_or(font_size * 1.2);
+                        (line_h - single_h).max(0.0)
+                    } else {
+                        0.0
+                    };
+
                     let keep_next_extra = if para.keep_next {
                         let mut extra = 0.0;
                         let mut prev_sa = effective_space_after;
@@ -1690,7 +1709,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     };
 
                     if !at_page_top
-                        && pb.slot_top - needed - keep_next_extra < effective_margin_bottom
+                        && pb.slot_top - needed - keep_next_extra + last_line_lead
+                            < effective_margin_bottom
                     {
                         let available = pb.slot_top - inter_gap - effective_margin_bottom;
                         let first_line_h = tallest_lhr
