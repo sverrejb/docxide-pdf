@@ -42,18 +42,7 @@ fn read_font_style(data: &[u8], face_index: u32) -> Option<(Vec<String>, bool, b
 fn font_directories() -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = Vec::new();
 
-    // 1. User-configured directories via DOCXSIDE_FONTS env var
-    if let Ok(val) = std::env::var("DOCXSIDE_FONTS") {
-        let sep = if cfg!(windows) { ';' } else { ':' };
-        for part in val.split(sep) {
-            let trimmed = part.trim();
-            if !trimmed.is_empty() {
-                dirs.push(PathBuf::from(trimmed));
-            }
-        }
-    }
-
-    // 2. Platform-specific system font directories
+    // Platform-specific system font directories (added first = lower priority in LIFO stack)
     #[cfg(target_os = "macos")]
     {
         dirs.extend([
@@ -91,6 +80,18 @@ fn font_directories() -> Vec<PathBuf> {
             dirs.push(PathBuf::from(windir).join("Fonts"));
         } else {
             dirs.push("C:\\Windows\\Fonts".into());
+        }
+    }
+
+    // DOCXSIDE_FONTS added last = highest priority (LIFO stack pops these first,
+    // and or_insert means first-scanned entries win)
+    if let Ok(val) = std::env::var("DOCXSIDE_FONTS") {
+        let sep = if cfg!(windows) { ';' } else { ':' };
+        for part in val.split(sep) {
+            let trimmed = part.trim();
+            if !trimmed.is_empty() {
+                dirs.push(PathBuf::from(trimmed));
+            }
         }
     }
 
