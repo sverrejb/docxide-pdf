@@ -105,3 +105,40 @@ Additionally, the floating image was in a separate paragraph (paragraph 0) from 
 - `scraped/education_consultant_posting`: Jaccard +1.8pp (10.4→12.2%), SSIM +3.4pp (20.7→24.1%)
 - `cases/case43`: -0.9pp (pre-existing stale baseline, verified unrelated to this change)
 - No regressions across remaining test cases
+
+---
+
+## 2026-03-21: Investigated annotation #8 (east_asia_conference_form page overflow)
+
+**Problem**: In `scraped/east_asia_conference_form`, all content renders on page 1 but the reference has "신청자(申請者):" on page 2. The page overflow is caused by natural content height, not explicit page breaks.
+
+**Analysis**: The document contains a floating table (`tblpPr`) with 6 rows of Korean/Japanese form content. Our table renders as ~471pt total height, but the reference table is ~38pt taller. This difference is caused by font metric disparities:
+- Reference (Windows): Uses MalgunGothicBold (맑은 고딕) at 12.96pt with Windows-native metrics
+- Generated (macOS): Falls back to HiraginoSansW3 with line_h_ratio=1.33
+- The fallback font's larger line_h_ratio inflates cell content heights, causing rows 3-4 to exceed their trHeight minimums (42.75pt) by 15.88pt each
+- Row heights that exceed minimums make the table taller in our rendering, but the total table height is STILL shorter than Word's because the correct font would produce different wrapping/metrics overall
+
+**Conclusion**: This is a font availability issue on macOS. Malgun Gothic (맑은 고딕) is not installed, and the fallback font has different line height metrics. Fixing requires either installing the correct fonts or implementing font metric estimation for unavailable fonts.
+
+---
+
+## 2026-03-21: Fixed numbering level tab stop for list paragraph indentation (annotation #17)
+
+**Problem**: In `scraped/polish_building_procurement_spec`, the first numbered list item "1. Nazwa..." had its text indented too far to the right compared to the reference. The "1." label was at x=56.7pt (correct) but "Nazwa" started at x=80.2pt instead of x=70.8pt.
+
+**Root cause**: The first list item had an explicit paragraph-level `w:ind w:left="470" w:hanging="470"` (23.5pt each) that overrode the numbering level's default indent of 283 twips (14.15pt). The numbering level also defined a tab stop at position 283 for positioning text after the label. Two issues:
+
+1. The numbering level's tab stop was not being parsed or propagated to the paragraph's tab list
+2. The `text_hanging` for list paragraphs was always set to 0.0, meaning the first line text started at `indent_left` (23.5pt from margin) instead of at the numbering level's tab stop position (14.15pt)
+
+**Fix**:
+- Added `tab_stop: Option<f32>` to `LevelDef` and `ListLabelInfo` in `src/docx/numbering.rs`
+- Parse `<w:tabs><w:tab>` from the numbering level's `<w:pPr>` element
+- Added `num_level_tab_stop: Option<f32>` to the `Paragraph` model
+- Propagated the numbering tab stop to the paragraph's tab list in `src/docx/mod.rs`
+- In the rendering code (`src/pdf/mod.rs`, `src/pdf/header_footer.rs`), when a list paragraph has `indent_left == indent_hanging` (first line at margin) and a numbering tab stop exists, compute `text_hanging = indent_left - num_tab_stop` to shift the first line text left to the tab stop position
+
+**Impact**:
+- `scraped/polish_building_procurement_spec`: Item 1 text now at x=70.8pt (matching items 2-6), reference shows x=74.0pt — much closer
+- `cases/case43`: Jaccard +0.9pp (21.1→22.1%)
+- No Jaccard regressions across all test cases

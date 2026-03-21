@@ -297,7 +297,15 @@ fn render_single_textbox(
                 let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
                 let tp_text_w = (content_w - tp.indent_left - tp.indent_right).max(1.0);
                 let text_hanging = if !tp.list_label.is_empty() {
-                    0.0
+                    if let Some(nts) = tp.num_level_tab_stop {
+                        if nts < tp.indent_left && (tp.indent_left - tp.indent_hanging).abs() < 0.5 {
+                            (tp.indent_left - nts).max(0.0)
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        0.0
+                    }
                 } else if tp.indent_hanging > 0.0 {
                     tp.indent_hanging
                 } else {
@@ -397,7 +405,11 @@ fn render_textbox_paragraphs(
         let tp_text_w = (content_w - tp.indent_left - tp.indent_right).max(1.0);
         let tp_align_w = (align_w - tp.indent_left - tp.indent_right).max(1.0);
         let text_hanging = if !tp.list_label.is_empty() {
-            0.0
+            if let Some(nts) = tp.num_level_tab_stop {
+                (tp.indent_left - nts).max(0.0)
+            } else {
+                0.0
+            }
         } else if tp.indent_hanging > 0.0 {
             tp.indent_hanging
         } else {
@@ -1186,7 +1198,15 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     }
 
                     let text_hanging = if !para.list_label.is_empty() {
-                        0.0
+                        if let Some(nts) = para.num_level_tab_stop {
+                            if nts < para.indent_left && (para.indent_left - para.indent_hanging).abs() < 0.5 {
+                                (para.indent_left - nts).max(0.0)
+                            } else {
+                                0.0
+                            }
+                        } else {
+                            0.0
+                        }
                     } else if para.indent_hanging > 0.0 {
                         para.indent_hanging
                     } else {

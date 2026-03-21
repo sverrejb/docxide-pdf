@@ -356,6 +356,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                     let ListLabelInfo {
                         mut indent_left,
                         mut indent_hanging,
+                        tab_stop: _,
                         label: list_label,
                         font: list_label_font,
                         font_size: list_label_font_size,

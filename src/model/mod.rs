@@ -231,6 +231,9 @@ pub struct Paragraph {
     pub list_label_font_size: Option<f32>,
     pub list_label_bold: bool,
     pub list_label_color: Option<[u8; 3]>,
+    /// Tab stop from the numbering level definition (pts from paragraph left edge).
+    /// Used to position text after the list label on the first line.
+    pub num_level_tab_stop: Option<f32>,
     pub contextual_spacing: bool,
     pub keep_next: bool,
     pub keep_lines: bool,

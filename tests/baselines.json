@@ -213,8 +213,8 @@
     "text_boundary": 0.1905
   },
   "cases/case43": {
-    "jaccard": 0.2111,
-    "ssim": 0.2758,
+    "jaccard": 0.2206,
+    "ssim": 0.2842,
     "text_boundary": 0.0
   },
   "cases/case5": {
@@ -334,7 +334,7 @@
   "scraped/education_consul..": {
     "jaccard": 0.1221,
     "ssim": 0.2408,
-    "text_boundary": 0.5191,
+    "text_boundary": 0.4444,
     "convert_ms": 47.1
   },
   "scraped/federal_procurem..": {
@@ -434,8 +434,8 @@
     "convert_ms": 16.3
   },
   "scraped/polish_building_..": {
-    "jaccard": 0.1557,
-    "ssim": 0.3337,
+    "jaccard": 0.1558,
+    "ssim": 0.3339,
     "text_boundary": 0.2133,
     "convert_ms": 56.9
   },

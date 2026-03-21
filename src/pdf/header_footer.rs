@@ -501,7 +501,15 @@ pub(super) fn render_header_footer(
                 let mut para_text_width =
                     (text_width - para.indent_left - para.indent_right).max(1.0);
                 let text_hanging = if !para.list_label.is_empty() {
-                    0.0
+                    if let Some(nts) = para.num_level_tab_stop {
+                        if nts < para.indent_left && (para.indent_left - para.indent_hanging).abs() < 0.5 {
+                            (para.indent_left - nts).max(0.0)
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        0.0
+                    }
                 } else if para.indent_hanging > 0.0 {
                     para.indent_hanging
                 } else {

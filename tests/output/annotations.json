@@ -49,7 +49,7 @@
       "x_pt": 295.79837,
       "y_pt": 706.1211,
       "note": "Too much space below \"Terms of Reference\", and too little above it.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 10,

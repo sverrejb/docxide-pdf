@@ -8,6 +8,7 @@ pub(super) struct LevelDef {
     pub(super) lvl_text: String,
     pub(super) indent_left: f32,
     pub(super) indent_hanging: f32,
+    pub(super) tab_stop: Option<f32>,
     pub(super) start: u32,
     pub(super) bullet_font: Option<String>,
     pub(super) label_font_size: Option<f32>,
@@ -19,6 +20,7 @@ pub(super) struct LevelDef {
 pub(super) struct ListLabelInfo {
     pub(super) indent_left: f32,
     pub(super) indent_hanging: f32,
+    pub(super) tab_stop: Option<f32>,
     pub(super) label: String,
     pub(super) font: Option<String>,
     pub(super) font_size: Option<f32>,
@@ -78,6 +80,13 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
                         .and_then(|n| twips_attr(n, "start").or_else(|| twips_attr(n, "left")))
                         .unwrap_or(0.0);
                     let indent_hanging = ind.and_then(|n| twips_attr(n, "hanging")).unwrap_or(0.0);
+                    let tab_stop = wml(lvl, "pPr")
+                        .and_then(|ppr| wml(ppr, "tabs"))
+                        .and_then(|tabs| {
+                            tabs.children()
+                                .filter(|n| n.has_tag_name((WML_NS, "tab")))
+                                .find_map(|t| twips_attr(t, "pos"))
+                        });
                     let rpr = wml(lvl, "rPr");
                     let bullet_font = rpr
                         .and_then(|r| wml(r, "rFonts"))
@@ -101,6 +110,7 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
                             lvl_text,
                             indent_left,
                             indent_hanging,
+                            tab_stop,
                             start,
                             bullet_font,
                             label_font_size,
@@ -348,6 +358,7 @@ pub(super) fn parse_list_info(
     ListLabelInfo {
         indent_left: def.indent_left,
         indent_hanging: def.indent_hanging,
+        tab_stop: def.tab_stop,
         label,
         font: if is_bullet {
             def.bullet_font.clone()

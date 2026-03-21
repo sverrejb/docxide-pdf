@@ -126,6 +126,7 @@ pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
         let ListLabelInfo {
             mut indent_left,
             mut indent_hanging,
+            tab_stop: _,
             label: list_label,
             font: list_label_font,
             font_size: list_label_font_size,

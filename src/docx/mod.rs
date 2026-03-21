@@ -572,6 +572,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                 let ListLabelInfo {
                     mut indent_left,
                     mut indent_hanging,
+                    tab_stop: num_tab_stop,
                     label: list_label,
                     font: list_label_font,
                     font_size: list_label_font_size,
@@ -661,6 +662,19 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     }
                     tab_stops.sort_by(|a, b| a.position.total_cmp(&b.position));
                 }
+                // Add the numbering level's explicit tab stop so the label-text
+                // gap matches Word (which uses this instead of the implicit
+                // hanging-indent tab when it is closer).
+                if let Some(nts) = num_tab_stop {
+                    if !tab_stops.iter().any(|t| (t.position - nts).abs() < 0.5) {
+                        tab_stops.push(TabStop {
+                            position: nts,
+                            alignment: TabAlignment::Left,
+                            leader: None,
+                        });
+                        tab_stops.sort_by(|a, b| a.position.total_cmp(&b.position));
+                    }
+                }
                 // OOXML §17.3.1.38: hanging indent implicitly creates a tab stop
                 if indent_hanging > 0.0 {
                     let hang_pos = indent_left;
@@ -733,6 +747,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     list_label_font_size,
                     list_label_bold,
                     list_label_color,
+                    num_level_tab_stop: num_tab_stop,
                     contextual_spacing,
                     keep_next,
                     keep_lines,
