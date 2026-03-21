@@ -202,3 +202,35 @@ The calculation: after the body text, `slot_top ≈ 99.70` (PDF coords from bott
 - `scraped/indonesian_benchmarking_guide`: Jaccard +10.0pp (22.9→32.9%), SSIM +9.1pp (43.0→52.1%)
 - `cases/case43`: Jaccard -0.9pp (22.1→21.1%) — within noise, this case fluctuates at this level
 - No regressions above 2% threshold across all 92 test cases
+
+---
+
+## 2026-03-21: Fixed floating images in table cells not rendering (annotation #18)
+
+**Problem**: In `scraped/polish_municipal_letter`, the municipal coat of arms (red emblem) in the header table was missing from the generated PDF. The reference shows the emblem in the top-left cell of the floating table.
+
+**Root cause**: Three issues prevented floating images in table cells from rendering:
+
+1. **Parsing** (`src/docx/tables.rs`): `parse_runs()` correctly extracted floating images from the cell paragraph's `wp:anchor` elements, but the `Paragraph` struct was constructed with `..Paragraph::default()` which set `floating_images` to an empty vec, discarding the parsed data.
+
+2. **Image embedding** (`src/pdf/images.rs`): The table cell image embedding loop only iterated `para.image` (inline images), not `para.floating_images`. The floating image's XObject was never written to the PDF.
+
+3. **Rendering** (`src/pdf/table.rs`): Two sub-issues:
+   - `para_has_visible_content()` only checked for text lines and labels, not floating images. A paragraph containing only a floating image was considered "invisible" and the entire cell was skipped.
+   - `render_cell_content()` and `render_partial_cell_content()` had no code to draw floating images at their positions.
+
+The image was a `wp:anchor` with `layoutInCell="1"`, `wrapNone`, positioned `relativeFrom="column"` (h_offset=19.35pt) and `relativeFrom="paragraph"` (v_offset=8.2pt), dimensions 67.5×82.2pt.
+
+**Fix**:
+- `src/docx/tables.rs`: Pass `floating_images: parsed.floating_images` to the Paragraph struct
+- `src/pdf/images.rs`: Extended table cell image embedding to also iterate `para.floating_images` and embed each one via `embed_single_image`
+- `src/pdf/table.rs`:
+  - Added `CellFloatingImageLayout` struct to store pre-resolved PDF name, dimensions, and cell-relative offsets
+  - Updated `para_has_visible_content()` to return true when floating images are present
+  - In `compute_row_layouts()`: resolve FloatingImage positions to cell-relative offsets and look up PDF names from `table_cell_image_names`
+  - In `render_cell_content()` and `render_partial_cell_content()`: draw floating images at their cell-relative positions
+
+**Impact**:
+- `scraped/polish_municipal_letter`: Jaccard +8.3pp (27.2→35.5%), SSIM +2.5pp (69.4→71.9%)
+- `cases/case43`: Jaccard +0.9pp (21.1→22.1%), SSIM +0.8pp (27.6→28.4%)
+- No regressions across all 92 test cases

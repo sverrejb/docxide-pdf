@@ -213,8 +213,8 @@
     "text_boundary": 0.1905
   },
   "cases/case43": {
-    "jaccard": 0.2111,
-    "ssim": 0.2758,
+    "jaccard": 0.2206,
+    "ssim": 0.2842,
     "text_boundary": 0.0
   },
   "cases/case5": {
@@ -356,8 +356,8 @@
     "convert_ms": 33.4
   },
   "scraped/go_math_grade4_g..": {
-    "jaccard": 0.2772,
-    "ssim": 0.4936,
+    "jaccard": 0.2773,
+    "ssim": 0.4935,
     "text_boundary": 0.5595,
     "convert_ms": 70.6
   },
@@ -392,8 +392,8 @@
     "convert_ms": 18.4
   },
   "scraped/learning_culture..": {
-    "jaccard": 0.331,
-    "ssim": 0.4569,
+    "jaccard": 0.3308,
+    "ssim": 0.4563,
     "text_boundary": 0.3794,
     "convert_ms": 1027.5
   },
@@ -446,8 +446,8 @@
     "convert_ms": 10.4
   },
   "scraped/polish_municipal..": {
-    "jaccard": 0.2716,
-    "ssim": 0.6942,
+    "jaccard": 0.3546,
+    "ssim": 0.7191,
     "text_boundary": 0.9259,
     "convert_ms": 11.8
   },

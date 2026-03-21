@@ -4,8 +4,8 @@ use pdf_writer::{Content, Name, Str};
 
 use crate::fonts::{FontEntry, encode_as_gids, font_key_buf, to_winansi_bytes};
 use crate::model::{
-    Alignment, Block, BorderStyle, CellBorder, CellMargins, CellVAlign, SectionProperties, Table,
-    TableAlignment, TableRow, TextDirection, VMerge,
+    Alignment, Block, BorderStyle, CellBorder, CellMargins, CellVAlign, HorizontalPosition,
+    SectionProperties, Table, TableAlignment, TableRow, TextDirection, VMerge, VerticalPosition,
 };
 
 use super::RenderContext;
@@ -137,6 +137,7 @@ fn valign_offset(v_align: CellVAlign, available: f32, content_h: f32) -> f32 {
 fn para_has_visible_content(para: &CellParagraphLayout) -> bool {
     !para.list_label.is_empty()
         || (!para.lines.is_empty() && para.lines.iter().any(|l| !l.chunks.is_empty()))
+        || !para.floating_images.is_empty()
 }
 
 /// Height of a paragraph's text content, matching the layout computation in
@@ -188,12 +189,35 @@ fn render_cell_content(
                     block_idx += 1;
                 }
 
-                if !para_has_visible_content(para) && para.image_name.is_none() {
+                let has_floats = !para.floating_images.is_empty();
+
+                if !para_has_visible_content(para)
+                    && para.image_name.is_none()
+                    && !has_floats
+                {
                     cursor_y -= para.space_before + para_block_height(para);
                     continue;
                 }
 
                 cursor_y -= para.space_before;
+
+                // Render floating images positioned relative to this paragraph
+                for fi in &para.floating_images {
+                    let fi_x = cell_x + fi.h_offset;
+                    let fi_y_top = cursor_y - fi.v_offset;
+                    let fi_y_bottom = fi_y_top - fi.display_height;
+                    content.save_state();
+                    content.transform([
+                        fi.display_width,
+                        0.0,
+                        0.0,
+                        fi.display_height,
+                        fi_x,
+                        fi_y_bottom,
+                    ]);
+                    content.x_object(Name(fi.pdf_name.as_bytes()));
+                    content.restore_state();
+                }
 
                 if let Some(ref img_name) = para.image_name {
                     let img_x = cell_x + cm.left;
@@ -420,12 +444,30 @@ fn render_partial_cell_content(
             CellContentItem::Paragraph(para) => {
                 let sb = if pi == start { 0.0 } else { para.space_before };
 
-                if !para_has_visible_content(para) {
+                if !para_has_visible_content(para) && para.floating_images.is_empty() {
                     cursor_y -= sb + para_block_height(para);
                     continue;
                 }
 
                 cursor_y -= sb;
+
+                for fi in &para.floating_images {
+                    let fi_x = cell_x + fi.h_offset;
+                    let fi_y_top = cursor_y - fi.v_offset;
+                    let fi_y_bottom = fi_y_top - fi.display_height;
+                    content.save_state();
+                    content.transform([
+                        fi.display_width,
+                        0.0,
+                        0.0,
+                        fi.display_height,
+                        fi_x,
+                        fi_y_bottom,
+                    ]);
+                    content.x_object(Name(fi.pdf_name.as_bytes()));
+                    content.restore_state();
+                }
+
                 let text_x = cell_x + cm.left + para.indent_left;
                 let text_w = (col_w - cm.left - cm.right - para.indent_left).max(0.0);
                 let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
@@ -552,6 +594,15 @@ fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>) -> Vec<f3
     widths
 }
 
+struct CellFloatingImageLayout {
+    pdf_name: String,
+    display_width: f32,
+    display_height: f32,
+    h_offset: f32,
+    v_offset: f32,
+    behind_doc: bool,
+}
+
 struct CellParagraphLayout {
     lines: Vec<TextLine>,
     line_h: f32,
@@ -571,6 +622,7 @@ struct CellParagraphLayout {
     image_height: f32,
     content_height: f32,
     paragraph_mark_vanish: bool,
+    floating_images: Vec<CellFloatingImageLayout>,
 }
 
 enum CellContentItem {
@@ -767,6 +819,39 @@ fn compute_row_layouts(
                                     .map(|img| (img.display_width, img.display_height))
                                     .unwrap_or((0.0, 0.0));
 
+                                let cell_floats: Vec<CellFloatingImageLayout> = para
+                                    .floating_images
+                                    .iter()
+                                    .filter_map(|fi| {
+                                        let key =
+                                            std::sync::Arc::as_ptr(&fi.image.data) as usize;
+                                        let pdf_name =
+                                            ctx.table_cell_image_names.get(&key)?.clone();
+                                        let h_offset = match fi.h_position {
+                                            HorizontalPosition::Offset(o) => o,
+                                            HorizontalPosition::AlignCenter => {
+                                                (col_w - fi.image.display_width) / 2.0
+                                            }
+                                            HorizontalPosition::AlignRight => {
+                                                col_w - fi.image.display_width
+                                            }
+                                            HorizontalPosition::AlignLeft => 0.0,
+                                        };
+                                        let v_offset = match fi.v_position {
+                                            VerticalPosition::Offset(o) => o,
+                                            _ => 0.0,
+                                        };
+                                        Some(CellFloatingImageLayout {
+                                            pdf_name,
+                                            display_width: fi.image.display_width,
+                                            display_height: fi.image.display_height,
+                                            h_offset,
+                                            v_offset,
+                                            behind_doc: fi.behind_doc,
+                                        })
+                                    })
+                                    .collect();
+
                                 items.push(CellContentItem::Paragraph(CellParagraphLayout {
                                     lines,
                                     line_h,
@@ -786,6 +871,7 @@ fn compute_row_layouts(
                                     image_height,
                                     content_height: para.content_height,
                                     paragraph_mark_vanish: para.paragraph_mark_vanish,
+                                    floating_images: cell_floats,
                                 }));
 
                                 prev_space_after = para.space_after;

@@ -226,6 +226,14 @@ pub(super) fn embed_all_images(
                                 table_cell_image_names.insert(key, name);
                             }
                         }
+                        for fi in &para.floating_images {
+                            let key = std::sync::Arc::as_ptr(&fi.image.data) as usize;
+                            if !table_cell_image_names.contains_key(&key) {
+                                let name =
+                                    embed_single_image(&fi.image, &mut image_xobjects, pdf, alloc);
+                                table_cell_image_names.insert(key, name);
+                            }
+                        }
                     }
                 }
             }
