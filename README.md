@@ -2,11 +2,13 @@
 
 Library and CLI for converting DOCX files to PDF, matching Microsoft Word's output as closely as possible.
 
-## ⚠️ Work in progress. This is in no way ready for use in production. The API, output quality, and supported features are all actively changing.
+## ⚠️ Work in progress.
+
+This is *probably* not ready for use in production, but do give it a try! The API, output quality, and supported features are all actively changing.
 
 ### Got a weird DOCX?
 
-If you have a `.docx` file that produces ugly, broken, or just plain wrong output, send it to me! Real-world documents with surprising formatting are the best way to improve the converter. Open an issue or PR with the file included and I will try to make it work.
+If you have a `.docx` file that produces ugly, broken, or just plain wrong output, send it to me! Real-world documents with surprising formatting are the best way to improve. Open an issue or PR with the file included and I will try to make it work.
 
 
 ## Goals
@@ -24,7 +26,7 @@ A Rust library and CLI tool for converting DOCX files to PDF, with the goal of m
 
 ## AI usage disclaimer 🤖
 
-While the idea, architecture, testing strategy and validation of output are all human, the vast majority of the code as of now is written by Claude Opus 4.6 with access to the PDF specification (ISO-32000) and the Office Open XML File Formats specification (ECMA-376).
+While the idea, architecture, testing strategy and validation of output are all human, the vast majority of the code as of now is written by Claude Opus 4.6 with access to the PDF specification (ISO-32000) and the Office Open XML File Formats specification (ECMA-376). This project was done as an exercise to get experience with the usage of coding agents.
 
 ## Supported features
 
@@ -167,19 +169,6 @@ cargo test visual_comparison -- --nocapture
 
 # Run only SSIM comparison
 cargo test ssim_comparison -- --nocapture
-```
-
-Each test prints a summary table at the end:
-
-```
-+-------+---------+------+
-| Case  | Jaccard | Pass |
-+-------+---------+------+
-| case1 |   44.2% | ✓    |
-| case2 |   27.0% | ✓    |
-| case3 |   33.5% | ✓    |
-+-------+---------+------+
-  threshold: 25%
 ```
 
 Results are appended to `tests/output/results.csv` and `tests/output/ssim_results.csv`. Run `python tools/graph.py` to see a live-updating graph of scores over time.

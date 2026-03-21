@@ -152,14 +152,26 @@ The `render()` function in `pdf/mod.rs` is ~2400 lines with many closures and sh
 - Compress font file streams with FlateDecode (currently uncompressed)
 - Memory usage for large DOCX files with many images
 
-## Floating Image Wrapping (PARTIALLY DONE)
+## Floating Image Wrapping
 
-- **Fixed**: `lines_beside` calculation used `.round()` which over-counted narrow lines when the last line barely overlapped the float zone bottom. Added -0.1 bias to correctly handle marginal cases. Case41 Jaccard +5.7pp.
-- **Fixed**: Self-wrapping — paragraphs now wrap around their own floating images (float zone set before line building, not after). Polygon data from `wp:wrapPolygon` parsed and used for per-line contour-aware exclusion.
-- **Remaining y-shift (page 2 only)**: Extracted exact positions from reference PDF — Word places page 2's image (180×144pt) 14.8pt higher than all other images, despite identical `posOffset=0`. Pages 1,3,4,5,7 match perfectly (delta <0.02pt). Pages 2 and 6 (both cy=1828800/144pt) are the outliers. Likely Word snapping to grid/text boundaries based on image dimensions — needs further investigation. Zeroing `content_h` for image-only paragraphs was proven WRONG (breaks pages that currently match).
-- **Both-sides wrapping (DONE)**: `wrapText="bothSides"` flows text on both left and right of the image simultaneously. Dual-region line builder splits each line into left and right segments. `wrapText` variants (`Left`/`Right`/`Largest`/`BothSides`) are now respected in all four side-selection locations. Combined-width threshold used for BothSides minimum check (both sides together must meet 72pt minimum). Self-wrapping always triggers for paragraphs with floating images (previous float zone replaced). Case42: text now wraps both sides of Mario image. Case41 page 3: text wraps both sides of centered image.
-- **Look-back wrapping (TODO)**: Paragraphs BEFORE the image anchor cannot wrap beside the image because the float zone isn't set until the anchor paragraph renders. In Word, text from preceding paragraphs also wraps (e.g. case41 page 3 — the first paragraph's lower lines should wrap beside the centered image). Requires either a paginator or a two-pass layout approach.
+### Done
+
+- **`lines_beside` bias**: `.round()` over-counted narrow lines when the last line barely overlapped the float zone bottom. Added -0.1 bias. Case41 Jaccard +5.7pp.
+- **Self-wrapping**: Paragraphs wrap around their own floating images (float zone set before line building). Polygon data from `wp:wrapPolygon` parsed and used for per-line contour-aware exclusion. Self-wrapping now always triggers for paragraphs with floating images (previous float zone replaced, not blocked by pre-existing zone).
+- **`wrapText` variants**: All four side-selection locations and the per-paragraph minimum-width gate now respect `wrapText`. Previously `wrapText` was parsed but completely ignored — all modes behaved as `Largest`.
+  - `Left`: force text to left region only
+  - `Right`: force text to right region only
+  - `Largest`: pick the wider side (pre-existing default behavior)
+  - `BothSides`: dual-region line builder fills left region first, overflows to right region on the same line. Combined-width threshold (both sides together must meet 72pt) instead of single-side threshold.
+- **Both-sides wrapping**: `wrapText="bothSides"` flows text on both left and right of the image simultaneously. Implementation: `RightRegion` struct on `TextLine`, `per_line_dual` parameter on `build_paragraph_lines`, per-region alignment/justify in `render_paragraph_lines`. Works with all wrap types (Square, Tight, Through). Case42 (Mario): text wraps both sides. Case41 page 3 (centered image): text wraps both sides.
+
+### Remaining
+
+- **Remaining y-shift (page 2 only)**: Word places page 2's image (180×144pt) 14.8pt higher than all other images, despite identical `posOffset=0`. Pages 1,3,4,5,7 match perfectly (delta <0.02pt). Pages 2 and 6 (both cy=1828800/144pt) are the outliers. Likely Word snapping to grid/text boundaries based on image dimensions.
+- **Look-back wrapping (TODO — MEDIUM IMPACT)**: Paragraphs BEFORE the image anchor cannot wrap beside the image because the float zone isn't set until the anchor paragraph renders. In Word, text from preceding paragraphs also wraps (e.g. case41 page 3 — the first paragraph's lower lines should wrap beside the centered image). Requires either a paginator or a two-pass layout with look-back: after rendering the image paragraph, go back and re-render preceding paragraphs that overlap the float zone.
 - **Image in text paragraph**: Case41 page 6 — last line of text paragraph overlaps the image. Look-ahead only fires for the NEXT block, not same-paragraph floats.
+- **Tight vs Through distinction**: Both currently use convex-hull polygon scanline (`poly_scanline` returns min/max x). For Through wrapping, text should fill polygon concavities. Requires returning per-line interval segments instead of hull bounds. Rare in practice — most polygons are convex.
+- **Word-break precision**: BothSides wrapping produces correct structure but slightly different word breaks from Word, causing ~2pp Jaccard differences on case41. Likely due to font metric differences and rounding in the dual-region fill algorithm.
 
 ## Scraped Fixture Status
 
