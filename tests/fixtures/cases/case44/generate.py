@@ -65,11 +65,8 @@ def wordart_xml(
     adj_values=None,
     width_emu=int(5.5 * EMU_PER_INCH),
     height_emu=int(1.0 * EMU_PER_INCH),
-    font_name=None,
 ):
     """Generate mc:AlternateContent XML for a WordArt textbox."""
-
-    font_size_pt = font_size_hps // 2
 
     # w14:textOutline
     outline_xml = ""
@@ -101,11 +98,6 @@ def wordart_xml(
             f"</w14:srgbClr>"
             f"</w14:glow>"
         )
-
-    # Font override
-    font_xml = ""
-    if font_name:
-        font_xml = f'<w:rFonts w:ascii="{font_name}" w:hAnsi="{font_name}"/>'
 
     # Adjustment values
     av_xml = "<a:avLst/>"
@@ -148,7 +140,6 @@ def wordart_xml(
                     <w:r>
                       <w:rPr>
                         <w:b/>
-                        {font_xml}
                         <w:color w:val="{color}"/>
                         <w:sz w:val="{font_size_hps}"/>
                         <w:szCs w:val="{font_size_hps}"/>
@@ -174,64 +165,49 @@ def wordart_xml(
 </mc:AlternateContent>"""
 
 
-def build_page(wordarts_spec, page_y_base=0):
-    """Build WordArt XML for a set of specs on one page."""
-    xml_parts = []
-    for spec in wordarts_spec:
-        text, preset = spec[0], spec[1]
-        y_inches = spec[2]
-        kwargs = spec[3] if len(spec) > 3 else {}
-        y_emu = int(y_inches * EMU_PER_INCH) + page_y_base
-        xml_parts.append(wordart_xml(
-            text=text,
-            warp_preset=preset,
-            y_offset_emu=y_emu,
-            **kwargs,
-        ))
-    return "".join(xml_parts)
-
-
 def main():
     doc = Document()
 
-    # Page 1: title + first batch of warp presets
+    # Page 1 title
     title = doc.add_paragraph()
-    run = title.add_run("Extended WordArt Tests — Page 1")
+    run = title.add_run("Extended WordArt Tests \u2014 Page 1")
     run.bold = True
     run.font.size = Pt(14)
 
     # Spacers for page 1
-    for _ in range(22):
+    for _ in range(20):
         doc.add_paragraph("")
 
-    # Page break via run break type="page"
+    # Page break
     p_break = doc.add_paragraph()
     run_br = p_break.add_run()
     br = OxmlElement("w:br")
     br.set(qn("w:type"), "page")
     run_br._element.append(br)
 
-    # Page 2: title + more presets
+    # Page 2 title
     title2 = doc.add_paragraph()
-    run2 = title2.add_run("Extended WordArt Tests — Page 2")
+    run2 = title2.add_run("Extended WordArt Tests \u2014 Page 2")
     run2.bold = True
     run2.font.size = Pt(14)
 
-    for _ in range(22):
+    for _ in range(20):
         doc.add_paragraph("")
 
     # Page break
     p_break2 = doc.add_paragraph()
-    p_break2_run = p_break2.add_run()
-    p_break2_run.add_break(docx.oxml.ns.qn("w:br"))
+    run_br2 = p_break2.add_run()
+    br2 = OxmlElement("w:br")
+    br2.set(qn("w:type"), "page")
+    run_br2._element.append(br2)
 
-    # Page 3: title + effects combinations
+    # Page 3 title
     title3 = doc.add_paragraph()
-    run3 = title3.add_run("Extended WordArt Tests — Page 3")
+    run3 = title3.add_run("Extended WordArt Tests \u2014 Page 3")
     run3.bold = True
     run3.font.size = Pt(14)
 
-    for _ in range(22):
+    for _ in range(20):
         doc.add_paragraph("")
 
     # Save base document
@@ -247,7 +223,7 @@ def main():
             if name != "word/document.xml":
                 other_files[name] = zin.read(name)
 
-    # Add w14 namespace
+    # Add w14 namespace if not present
     if f'xmlns:w14="{W14_NS}"' not in doc_xml:
         doc_xml = doc_xml.replace(
             'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"',
@@ -261,85 +237,79 @@ def main():
             doc_xml,
         )
 
-    # Page 1 WordArts: diverse warp presets
-    page1 = [
-        ("DEFLATE", "textDeflate", 0.7, {"color": "2E75B6", "outline_color": "1F4E79"}),
-        ("INFLATE", "textInflate", 2.2, {"color": "ED7D31", "outline_color": "C44F1A"}),
-        ("CHEVRON", "textChevron", 3.8, {"color": "70AD47"}),
-        ("TRIANGLE", "textTriangle", 5.5, {"color": "C00000", "outline_color": "800000"}),
-        ("CIRCLE", "textCircle", 7.2, {
-            "color": "7030A0",
-            "height_emu": int(1.5 * EMU_PER_INCH),
-            "adj_values": [("adj", "10800000")],
-        }),
+    # Define the WordArt specs for each page
+    # y offsets in inches from anchor paragraph
+    page1_specs = [
+        ("DEFLATE", "textDeflate", 0.7, "2E75B6", 72, "1F4E79", False, False, None, None),
+        ("INFLATE", "textInflate", 2.2, "ED7D31", 72, "C44F1A", False, False, None, None),
+        ("CHEVRON", "textChevron", 3.8, "70AD47", 72, None, False, False, None, None),
+        ("TRIANGLE", "textTriangle", 5.5, "C00000", 72, "800000", False, False, None, None),
+        ("CIRCLE", "textCircle", 7.2, "7030A0", 72, None, False, False,
+         [("adj", "10800000")], int(1.5 * EMU_PER_INCH)),
     ]
 
-    # Page 2 WordArts: more warps
-    page2 = [
-        ("CASCADE", "textCascadeDown", 0.7, {"color": "4472C4", "outline_color": "2E5FA1"}),
-        ("DOUBLE WAVE", "textDoubleWave1", 2.2, {"color": "ED7D31"}),
-        ("FADE RIGHT", "textFadeRight", 3.8, {"color": "70AD47", "outline_color": "4A7A2E"}),
-        ("BARREL", "textCanDown", 5.5, {"color": "C00000"}),
-        ("RING", "textRingOutside", 7.2, {
-            "color": "7030A0",
-            "height_emu": int(1.5 * EMU_PER_INCH),
-        }),
+    page2_specs = [
+        ("CASCADE", "textCascadeDown", 0.7, "4472C4", 72, "2E5FA1", False, False, None, None),
+        ("DOUBLE WAVE", "textDoubleWave1", 2.2, "ED7D31", 72, None, False, False, None, None),
+        ("FADE RIGHT", "textFadeRight", 3.8, "70AD47", 72, "4A7A2E", False, False, None, None),
+        ("BARREL", "textCanDown", 5.5, "C00000", 72, None, False, False, None, None),
+        ("RING", "textRingOutside", 7.2, "7030A0", 72, None, False, False,
+         None, int(1.5 * EMU_PER_INCH)),
     ]
 
-    # Page 3 WordArts: effects and combinations
-    page3 = [
-        ("DEFLATE BTM", "textDeflateBottom", 0.7, {"color": "2E75B6", "outline_color": "1F4E79"}),
-        ("CURVE UP", "textCurveUp", 2.2, {"color": "ED7D31"}),
-        ("GLOW TEXT", "textPlain", 3.8, {
-            "color": "4472C4",
-            "glow": True,
-            "glow_color": "FFC000",
-            "font_size_hps": 64,
-        }),
-        ("WAVE COMBO", "textWave2", 5.5, {
-            "color": "C00000",
-            "outline_color": "800000",
-            "shadow": True,
-        }),
-        ("STOP", "textStop", 7.2, {
-            "color": "70AD47",
-            "outline_color": "4A7A2E",
-            "font_size_hps": 48,
-        }),
+    page3_specs = [
+        ("DEFLATE BTM", "textDeflateBottom", 0.7, "2E75B6", 72, "1F4E79", False, False, None, None),
+        ("CURVE UP", "textCurveUp", 2.2, "ED7D31", 72, None, False, False, None, None),
+        ("GLOW TEXT", "textPlain", 3.8, "4472C4", 64, None, False, True, None, None),
+        ("WAVE COMBO", "textWave2", 5.5, "C00000", 72, "800000", True, False, None, None),
+        ("STOP", "textStop", 7.2, "70AD47", 48, "4A7A2E", False, False, None, None),
     ]
 
-    # Find all <w:p> elements and inject into the first one on each page
-    # The structure is: title1, spacers..., break, title2, spacers..., break, title3, spacers...
-    # We inject all page1 arts into title1's <w:p>, page2 into title2, page3 into title3
+    def build_arts(specs):
+        parts = []
+        for text, preset, y_in, color, hps, outline, shadow, glow, adj, h_emu in specs:
+            y_emu = int(y_in * EMU_PER_INCH)
+            kwargs = {"color": color, "font_size_hps": hps}
+            if outline:
+                kwargs["outline_color"] = outline
+            if shadow:
+                kwargs["shadow"] = True
+            if glow:
+                kwargs["glow"] = True
+                kwargs["glow_color"] = "FFC000"
+            if adj:
+                kwargs["adj_values"] = adj
+            if h_emu:
+                kwargs["height_emu"] = h_emu
+            parts.append(wordart_xml(text=text, warp_preset=preset, y_offset_emu=y_emu, **kwargs))
+        return "".join(parts)
 
-    # Count <w:p> to find injection points
-    # Page 1 title = 1st <w:p>
-    # Page 1 has 22 spacers → positions 2-23
-    # Page break paragraph = 24th <w:p>
-    # Page 2 title = 25th <w:p>
-    # Page 2 has 22 spacers → positions 26-47
-    # Page break paragraph = 48th <w:p>
-    # Page 3 title = 49th <w:p>
+    page1_xml = build_arts(page1_specs)
+    page2_xml = build_arts(page2_specs)
+    page3_xml = build_arts(page3_specs)
 
-    page1_xml = build_page(page1)
-    page2_xml = build_page(page2)
-    page3_xml = build_page(page3)
+    # Inject WordArt by finding title paragraphs via their text content.
+    # Each title has unique text we can locate.
+    markers = [
+        ("Extended WordArt Tests \u2014 Page 1", page1_xml),
+        ("Extended WordArt Tests \u2014 Page 2", page2_xml),
+        ("Extended WordArt Tests \u2014 Page 3", page3_xml),
+    ]
 
-    # Inject by replacing </w:p> at specific positions
-    parts = doc_xml.split("</w:p>")
-
-    # Inject page 1 arts after the first paragraph (index 0)
-    parts[0] = parts[0] + page1_xml
-
-    # Inject page 2 arts after the 25th paragraph (index 24)
-    if len(parts) > 24:
-        parts[24] = parts[24] + page2_xml
-
-    # Inject page 3 arts after the 49th paragraph (index 48)
-    if len(parts) > 48:
-        parts[48] = parts[48] + page3_xml
-
-    doc_xml = "</w:p>".join(parts)
+    for marker_text, arts_xml in markers:
+        # Find the closing </w:t> after the marker text, then the next </w:r>
+        # and inject WordArt after the </w:r> (inside the same <w:p>)
+        marker_pos = doc_xml.find(marker_text)
+        if marker_pos == -1:
+            print(f"WARNING: Could not find marker '{marker_text}'")
+            continue
+        # Find the next </w:r> after the marker
+        r_close = doc_xml.find("</w:r>", marker_pos)
+        if r_close == -1:
+            print(f"WARNING: Could not find </w:r> after marker '{marker_text}'")
+            continue
+        insert_pos = r_close + len("</w:r>")
+        doc_xml = doc_xml[:insert_pos] + arts_xml + doc_xml[insert_pos:]
 
     # Write output
     OUT.parent.mkdir(parents=True, exist_ok=True)
@@ -353,5 +323,4 @@ def main():
 
 
 if __name__ == "__main__":
-    import docx.oxml.ns
     main()

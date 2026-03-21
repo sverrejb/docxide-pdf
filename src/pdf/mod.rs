@@ -285,8 +285,9 @@ fn render_single_textbox(
         if wordart::render_warped_textbox(tb, content, ctx.fonts, tb_x, tb_y_top, align_w) {
             return;
         }
-        // TODO: single-path presets (arch/circle) need text-on-a-path rendering
-        // wordart::render_text_on_path is implemented but needs boundary/positioning tuning
+        if wordart::render_text_on_path(tb, content, ctx.fonts, tb_x, tb_y_top, align_w) {
+            return;
+        }
     }
 
     let anchor_offset = match tb.text_anchor {

@@ -1,5 +1,5 @@
 {
-  "next_id": 72,
+  "next_id": 73,
   "annotations": [
     {
       "id": 2,
@@ -120,16 +120,6 @@
       "y_pt": 278.26538,
       "note": "We are not rendering drop shadow for this image. Compare to reference.",
       "fixed": false
-    },
-    {
-      "id": 33,
-      "case": "scraped/turkish_ancient_religions_plan",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 177.98225,
-      "y_pt": 463.97626,
-      "note": "Some of the horizontal borders in the table should be bolder/darker.",
-      "fixed": true
     },
     {
       "id": 35,
@@ -349,47 +339,7 @@
       "x_pt": 310.21964,
       "y_pt": 304.56003,
       "note": "Arch text is not arched at all.",
-      "fixed": false
-    },
-    {
-      "id": 62,
-      "case": "case43",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 299.70386,
-      "y_pt": 411.33264,
-      "note": "Wave effect is too wide.",
-      "fixed": false
-    },
-    {
-      "id": 63,
-      "case": "case43",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 281.46933,
-      "y_pt": 637.79175,
-      "note": "Flat Outline should be a lot taller.",
-      "fixed": false
-    },
-    {
-      "id": 64,
-      "case": "case43",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 300.57584,
-      "y_pt": 538.3462,
-      "note": "SHADOW TEXT should be a lot taller.",
-      "fixed": false
-    },
-    {
-      "id": 65,
-      "case": "case43",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 279.11563,
-      "y_pt": 104.726685,
-      "note": "SLANT UP is way too wide.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 66,
@@ -449,6 +399,16 @@
       "x_pt": 91.900505,
       "y_pt": 266.24353,
       "note": "\"Vaccines\" should be indented here at the start of the paragraph. But do make extra sure this does not indent paragraphs that it shouldn't in other cases.",
+      "fixed": false
+    },
+    {
+      "id": 72,
+      "case": "scraped/turkish_ancient_religions_plan",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 168.12482,
+      "y_pt": 463.8406,
+      "note": "Lines between cells are wrong in several places. Compare systematically with reference.",
       "fixed": false
     }
   ]
