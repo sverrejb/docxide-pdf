@@ -206,10 +206,20 @@ pub(crate) struct LinkAnnotation {
     pub(super) url: String,
 }
 
+/// When a line spans two text regions (bothSides wrapping around a float),
+/// this stores where the right region begins and its geometry.
+pub(super) struct RightRegion {
+    pub(super) first_chunk_idx: usize,
+    pub(super) region_x: f32,
+    pub(super) region_width: f32,
+    pub(super) content_width: f32,
+}
+
 pub(super) struct TextLine {
     pub(super) chunks: Vec<WordChunk>,
     pub(super) total_width: f32,
     pub(super) ends_with_break: bool,
+    pub(super) right_region: Option<RightRegion>,
 }
 
 /// True when a paragraph has no visible text (may still have phantom font-info runs).
@@ -255,6 +265,7 @@ fn finish_line(chunks: &mut Vec<WordChunk>) -> TextLine {
         chunks: std::mem::take(chunks),
         total_width,
         ends_with_break: false,
+        right_region: None,
     }
 }
 
@@ -271,6 +282,10 @@ fn finish_line_with_break(chunks: &mut Vec<WordChunk>) -> TextLine {
 /// `width_after_line`: after building this many lines, switch to a different
 /// max_width (used for text wrapping around floating tables where lines beside
 /// the table are narrow, then lines below it expand to full column width).
+/// Dual-region geometry for bothSides wrapping: (left_x, left_w, right_x, right_w).
+/// For lines outside the float zone, right_w is 0.0 (single region).
+pub(super) type DualRegion = (f32, f32, f32, f32);
+
 pub(super) fn build_paragraph_lines(
     runs: &[Run],
     seen_fonts: &HashMap<String, FontEntry>,
@@ -279,14 +294,24 @@ pub(super) fn build_paragraph_lines(
     inline_image_names: &HashMap<usize, String>,
     width_after_line: Option<(usize, f32)>,
     per_line_widths: Option<&[f32]>,
+    per_line_dual: Option<&[DualRegion]>,
 ) -> Vec<TextLine> {
     let mut lines: Vec<TextLine> = Vec::new();
     let mut current_chunks: Vec<WordChunk> = Vec::new();
     let mut current_x: f32 = 0.0;
     let mut pending_space_w: f32 = 0.0;
     let mut key_buf = String::new();
+    // Track whether we're filling the right region on the current line
+    let mut in_right_region = false;
+    // Info for the right region of the current line being built
+    let mut cur_right_info: Option<(usize, f32, f32)> = None; // (first_chunk_idx, region_x, region_w)
 
-    let effective_max = |line_count: usize| -> f32 {
+    let left_max = |line_count: usize| -> f32 {
+        if let Some(dual) = per_line_dual {
+            if let Some(&(_, lw, _, _)) = dual.get(line_count) {
+                return lw;
+            }
+        }
         if let Some(widths) = per_line_widths {
             if let Some(&w) = widths.get(line_count) {
                 return w;
@@ -299,13 +324,44 @@ pub(super) fn build_paragraph_lines(
         }
     };
 
+    let right_region_for = |line_count: usize| -> Option<(f32, f32, f32)> {
+        per_line_dual.and_then(|dual| {
+            dual.get(line_count).and_then(|&(_, _, rx, rw)| {
+                if rw > 0.0 { Some((rx, rw, rw)) } else { None }
+            })
+        })
+    };
+
+    // Finish current line, recording right-region info if applicable
+    let finish_dual_line = |chunks: &mut Vec<WordChunk>,
+                            in_right: &mut bool,
+                            right_info: &mut Option<(usize, f32, f32)>| -> TextLine {
+        let mut line = finish_line(chunks);
+        if let Some((first_idx, rx, rw)) = right_info.take() {
+            let content_w = line.chunks[first_idx..]
+                .last()
+                .map(|c| c.x_offset + c.width)
+                .unwrap_or(0.0);
+            line.right_region = Some(RightRegion {
+                first_chunk_idx: first_idx,
+                region_x: rx,
+                region_width: rw,
+                content_width: content_w,
+            });
+        }
+        *in_right = false;
+        line
+    };
+
     for (run_idx, run) in runs.iter().enumerate() {
         if run.vanish || run.is_tab {
-            continue; // vanished runs hidden; tabs handled in build_tabbed_line
+            continue;
         }
 
         if run.is_line_break {
-            lines.push(finish_line_with_break(&mut current_chunks));
+            let line = finish_dual_line(&mut current_chunks, &mut in_right_region, &mut cur_right_info);
+            let line = TextLine { ends_with_break: true, ..line };
+            lines.push(line);
             current_x = 0.0;
             pending_space_w = 0.0;
             continue;
@@ -322,14 +378,36 @@ pub(super) fn build_paragraph_lines(
                     current_x
                 };
 
-                let eff_w = effective_max(lines.len());
-                let line_max = if lines.is_empty() {
+                let eff_w = left_max(lines.len());
+                let line_max = if lines.is_empty() && !in_right_region {
                     eff_w + first_line_hanging
                 } else {
                     eff_w
                 };
-                if !current_chunks.is_empty() && proposed_x + img_w > line_max {
-                    lines.push(finish_line(&mut current_chunks));
+                let cur_max = if in_right_region {
+                    cur_right_info.map(|(_, _, rw)| rw).unwrap_or(eff_w)
+                } else {
+                    line_max
+                };
+                if !current_chunks.is_empty() && proposed_x + img_w > cur_max {
+                    if !in_right_region {
+                        if let Some((rx, rw, _)) = right_region_for(lines.len()) {
+                            cur_right_info = Some((current_chunks.len(), rx, rw));
+                            in_right_region = true;
+                            current_x = 0.0;
+                            pending_space_w = 0.0;
+                            // Retry placement in right region
+                            let proposed_x2 = 0.0;
+                            if proposed_x2 + img_w <= rw {
+                                current_chunks.push(WordChunk::image(
+                                    pdf_name, run.font_size, proposed_x2, img_w, img.display_height,
+                                ));
+                                current_x = img_w;
+                                continue;
+                            }
+                        }
+                    }
+                    lines.push(finish_dual_line(&mut current_chunks, &mut in_right_region, &mut cur_right_info));
                     current_x = 0.0;
                 } else {
                     current_x = proposed_x;
@@ -337,11 +415,7 @@ pub(super) fn build_paragraph_lines(
                 pending_space_w = 0.0;
 
                 current_chunks.push(WordChunk::image(
-                    pdf_name,
-                    run.font_size,
-                    current_x,
-                    img_w,
-                    img.display_height,
+                    pdf_name, run.font_size, current_x, img_w, img.display_height,
                 ));
                 current_x += img_w;
             }
@@ -374,15 +448,63 @@ pub(super) fn build_paragraph_lines(
                 current_x
             };
 
-            let eff_w = effective_max(lines.len());
-            let line_max = if lines.is_empty() {
+            let eff_w = left_max(lines.len());
+            let line_max = if lines.is_empty() && !in_right_region {
                 eff_w + first_line_hanging
             } else {
                 eff_w
             };
-            if !current_chunks.is_empty() && proposed_x + ww > line_max {
-                lines.push(finish_line(&mut current_chunks));
+            let cur_max = if in_right_region {
+                cur_right_info.map(|(_, _, rw)| rw).unwrap_or(eff_w)
+            } else {
+                line_max
+            };
+
+            let overflows = proposed_x + ww > cur_max;
+            // For the first word on a line, also overflow if the
+            // left region is zero-width (so words go straight to
+            // the right region for e.g. left-aligned images).
+            let first_word_overflow = current_chunks.is_empty()
+                && !in_right_region
+                && cur_max <= 0.0
+                && right_region_for(lines.len()).is_some();
+
+
+            if (!current_chunks.is_empty() && overflows) || first_word_overflow {
+                // Word doesn't fit in current region
+                if !in_right_region {
+                    // Try spilling to the right region on the same line
+                    if let Some((rx, rw, _)) = right_region_for(lines.len()) {
+                        cur_right_info = Some((current_chunks.len(), rx, rw));
+                        in_right_region = true;
+                        current_x = 0.0;
+                        pending_space_w = 0.0;
+                        // Place this word at the start of the right region
+                        current_chunks.push(WordChunk::text(
+                            entry, run, word, eff_fs, cs, y_off, 0.0, ww,
+                        ));
+                        current_x = ww;
+                        continue;
+                    }
+                }
+                // No right region or right region also full — wrap to next line
+                lines.push(finish_dual_line(&mut current_chunks, &mut in_right_region, &mut cur_right_info));
                 current_x = 0.0;
+                // If the new line's left region is zero-width, go
+                // straight to the right region for this word.
+                if let Some((rx, rw, _)) = right_region_for(lines.len()) {
+                    let new_left_max = left_max(lines.len());
+                    if new_left_max <= 0.0 {
+                        cur_right_info = Some((0, rx, rw));
+                        in_right_region = true;
+                        pending_space_w = 0.0;
+                        current_chunks.push(WordChunk::text(
+                            entry, run, word, eff_fs, cs, y_off, 0.0, ww,
+                        ));
+                        current_x = ww;
+                        continue;
+                    }
+                }
             } else {
                 current_x = proposed_x;
             }
@@ -400,7 +522,7 @@ pub(super) fn build_paragraph_lines(
     }
 
     if !current_chunks.is_empty() {
-        lines.push(finish_line(&mut current_chunks));
+        lines.push(finish_dual_line(&mut current_chunks, &mut in_right_region, &mut cur_right_info));
     }
 
     if lines.is_empty() {
@@ -408,6 +530,7 @@ pub(super) fn build_paragraph_lines(
             chunks: vec![],
             total_width: 0.0,
             ends_with_break: false,
+            right_region: None,
         });
     }
     lines
@@ -692,6 +815,7 @@ pub(super) fn build_tabbed_line(
             chunks: vec![],
             total_width: 0.0,
             ends_with_break: false,
+            right_region: None,
         });
     }
 
@@ -769,11 +893,6 @@ pub(super) fn render_paragraph_lines(
         let y = first_baseline_y - line_y_offsets[line_num];
         let global_line_idx = first_line_index + line_num;
 
-        let is_justified = *alignment == Alignment::Justify
-            && global_line_idx != last_line_idx
-            && !line.ends_with_break
-            && line.chunks.len() > 1;
-
         let (base_margin, base_width) = line_geometry
             .and_then(|g| g.get(global_line_idx))
             .copied()
@@ -787,16 +906,64 @@ pub(super) fn render_paragraph_lines(
             (base_margin, base_width)
         };
 
+        // Compute left-region content width (for alignment/justify)
+        let left_content_width = if let Some(ref rr) = line.right_region {
+            line.chunks[..rr.first_chunk_idx]
+                .last()
+                .map(|c| c.x_offset + c.width)
+                .unwrap_or(0.0)
+        } else {
+            line.total_width
+        };
+
+        let left_chunk_count = line.right_region.as_ref()
+            .map(|rr| rr.first_chunk_idx)
+            .unwrap_or(line.chunks.len());
+
+        let is_justified = *alignment == Alignment::Justify
+            && global_line_idx != last_line_idx
+            && !line.ends_with_break
+            && left_chunk_count > 1;
+
         let line_start_x = match alignment {
-            Alignment::Center => eff_margin + (eff_width - line.total_width) / 2.0,
-            Alignment::Right => eff_margin + eff_width - line.total_width,
+            Alignment::Center => eff_margin + (eff_width - left_content_width) / 2.0,
+            Alignment::Right => eff_margin + eff_width - left_content_width,
             Alignment::Left | Alignment::Justify => eff_margin,
         };
 
         let extra_per_gap = if is_justified {
-            (eff_width - line.total_width) / (line.chunks.len() - 1) as f32
+            (eff_width - left_content_width) / (left_chunk_count - 1).max(1) as f32
         } else {
             0.0
+        };
+
+        // Right-region start x and justify gap (if dual-region line)
+        let (right_start_x, right_extra_per_gap) = if let Some(ref rr) = line.right_region {
+            let right_chunks = line.chunks.len() - rr.first_chunk_idx;
+            let rx = match alignment {
+                Alignment::Center => rr.region_x + (rr.region_width - rr.content_width) / 2.0,
+                Alignment::Right => rr.region_x + rr.region_width - rr.content_width,
+                Alignment::Left | Alignment::Justify => rr.region_x,
+            };
+            let rgap = if is_justified && right_chunks > 1 {
+                (rr.region_width - rr.content_width) / (right_chunks - 1) as f32
+            } else {
+                0.0
+            };
+            (rx, rgap)
+        } else {
+            (0.0, 0.0)
+        };
+
+        // Helper: compute absolute x for a chunk, accounting for dual regions
+        let chunk_abs_x = |chunk_idx: usize, chunk: &WordChunk| -> f32 {
+            if let Some(ref rr) = line.right_region {
+                if chunk_idx >= rr.first_chunk_idx {
+                    let local_idx = chunk_idx - rr.first_chunk_idx;
+                    return right_start_x + chunk.x_offset + local_idx as f32 * right_extra_per_gap;
+                }
+            }
+            line_start_x + chunk.x_offset + chunk_idx as f32 * extra_per_gap
         };
 
         let mut decorations: Vec<(f32, f32, f32, f32, Option<[u8; 3]>)> = Vec::new();
@@ -820,7 +987,7 @@ pub(super) fn render_paragraph_lines(
                 };
 
             for (chunk_idx, chunk) in line.chunks.iter().enumerate() {
-                let x = line_start_x + chunk.x_offset + chunk_idx as f32 * extra_per_gap;
+                let x = chunk_abs_x(chunk_idx, chunk);
                 if chunk.highlight == hl_color && hl_color.is_some() {
                     hl_end_x = x + chunk.width;
                     hl_fs = hl_fs.max(chunk.font_size);
@@ -858,7 +1025,7 @@ pub(super) fn render_paragraph_lines(
                     continue;
                 }
 
-                let x = line_start_x + chunk.x_offset + chunk_idx as f32 * extra_per_gap;
+                let x = chunk_abs_x(chunk_idx, chunk);
                 let cy = y + chunk.y_offset;
 
                 // w14:textFill solid color overrides w:color
@@ -1066,7 +1233,7 @@ pub(super) fn render_paragraph_lines(
         // Draw inline images outside text block
         for (chunk_idx, chunk) in line.chunks.iter().enumerate() {
             if let Some(ref img_name) = chunk.inline_image_name {
-                let x = line_start_x + chunk.x_offset + chunk_idx as f32 * extra_per_gap;
+                let x = chunk_abs_x(chunk_idx, chunk);
                 let img_bottom = y - (chunk.inline_image_height - chunk.font_size);
                 content.save_state();
                 content.transform([

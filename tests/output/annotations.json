@@ -1,5 +1,5 @@
 {
-  "next_id": 71,
+  "next_id": 72,
   "annotations": [
     {
       "id": 2,
@@ -439,6 +439,16 @@
       "x_pt": 292.87393,
       "y_pt": 690.47534,
       "note": "This HR should span the whole width, also under the image.",
+      "fixed": false
+    },
+    {
+      "id": 71,
+      "case": "scraped/vaccines_history_chapter",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 91.900505,
+      "y_pt": 266.24353,
+      "note": "\"Vaccines\" should be indented here at the start of the paragraph. But do make extra sure this does not indent paragraphs that it shouldn't in other cases.",
       "fixed": false
     }
   ]

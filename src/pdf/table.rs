@@ -794,6 +794,7 @@ fn compute_row_layouts(
                                         &std::collections::HashMap::new(),
                                         None,
                                         None,
+                                        None,
                                     );
                                     if is_rotated {
                                         for line in &lines {

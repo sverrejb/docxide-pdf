@@ -203,14 +203,14 @@
     "text_boundary": 0.5
   },
   "cases/case41": {
-    "jaccard": 0.8595,
-    "ssim": 0.8647,
-    "text_boundary": 0.8442
+    "jaccard": 0.8401,
+    "ssim": 0.8402,
+    "text_boundary": 0.6596
   },
   "cases/case42": {
-    "jaccard": 0.4706,
-    "ssim": 0.514,
-    "text_boundary": 0.1905
+    "jaccard": 0.4686,
+    "ssim": 0.5076,
+    "text_boundary": 0.3095
   },
   "cases/case43": {
     "jaccard": 0.2206,
@@ -508,7 +508,7 @@
   "scraped/transition_to_wo..": {
     "jaccard": 0.2624,
     "ssim": 0.3799,
-    "text_boundary": 0.2034,
+    "text_boundary": 0.2051,
     "convert_ms": 493.0
   },
   "scraped/turkish_ancient_..": {

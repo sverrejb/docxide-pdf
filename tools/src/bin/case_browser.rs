@@ -460,20 +460,37 @@ impl eframe::App for App {
         });
 
         // Right panel: case list
-        let case_labels: Vec<(String, usize)> = self
+        // Build per-case annotation status: (total, fixed)
+        let mut annotation_counts: HashMap<&str, (usize, usize)> = HashMap::new();
+        for a in &self.annotations.annotations {
+            let entry = annotation_counts.entry(a.case.as_str()).or_insert((0, 0));
+            entry.0 += 1;
+            if a.fixed {
+                entry.1 += 1;
+            }
+        }
+        // None = no annotations, Some(color) = has annotations
+        let case_labels: Vec<(String, usize, Option<egui::Color32>)> = self
             .cases
             .iter()
             .enumerate()
             .map(|(i, c)| {
                 let key = baseline_key(&c.name);
+                let color = match annotation_counts.get(c.name.as_str()) {
+                    Some(&(total, fixed)) if fixed == total => Some(egui::Color32::from_rgb(0, 180, 0)),
+                    Some(&(_, fixed)) if fixed > 0 => Some(egui::Color32::from_rgb(220, 180, 0)),
+                    Some(_) => Some(egui::Color32::from_rgb(220, 40, 40)),
+                    None => None,
+                };
+                let pad = if color.is_some() { "     " } else { "" };
                 let label = if let Some(b) = self.baselines.get(&key) {
                     let j = b.jaccard.map(|v| format!("{:.0}", v * 100.0)).unwrap_or_else(|| "-".into());
                     let s = b.ssim.map(|v| format!("{:.0}", v * 100.0)).unwrap_or_else(|| "-".into());
-                    format!("{} ({}p) {}/{}", c.name, c.page_count, j, s)
+                    format!("{} ({}p) {}/{}{}", c.name, c.page_count, j, s, pad)
                 } else {
-                    format!("{} ({}p)", c.name, c.page_count)
+                    format!("{} ({}p){}", c.name, c.page_count, pad)
                 };
-                (label, i)
+                (label, i, color)
             })
             .collect();
         let cur = self.current_case;
@@ -488,9 +505,14 @@ impl eframe::App for App {
                 ui.heading("Cases");
                 ui.separator();
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    for (label, i) in &case_labels {
+                    for (label, i, color) in &case_labels {
                         let selected = *i == cur;
                         let resp = ui.selectable_label(selected, label);
+                        if let Some(c) = color {
+                            let rect = resp.rect;
+                            let center = egui::pos2(rect.right() - 6.0, rect.center().y);
+                            ui.painter().circle_filled(center, 4.0, *c);
+                        }
                         if resp.clicked() {
                             clicked_case = Some(*i);
                         }
