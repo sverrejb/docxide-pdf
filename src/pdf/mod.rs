@@ -1761,6 +1761,13 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         .as_ref()
                         .map(|b| b.space_pt + b.width_pt / 2.0)
                         .unwrap_or(0.0);
+                    // Full extent of bottom border below content (to border bottom edge)
+                    let bdr_bottom_extent = para
+                        .borders
+                        .bottom
+                        .as_ref()
+                        .map(|b| b.space_pt + b.width_pt)
+                        .unwrap_or(0.0);
 
                     // For bottom-only borders (no top border), the border acts
                     // as a separator/underline and should sit close to the text.
@@ -1778,7 +1785,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         0.0
                     };
 
-                    let needed = inter_gap + bdr_top_pad + content_h;
+                    let needed = inter_gap + bdr_top_pad + content_h + bdr_bottom_extent;
                     // For page-break decisions, also account for floating
                     // images that extend below the text content.
                     let needed_with_floats = needed.max(inter_gap + float_overflow_h);
@@ -2411,7 +2418,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         }
                     }
 
-                    pb.slot_top -= content_h + bdr_top_pad;
+                    pb.slot_top -= content_h + bdr_top_pad + bdr_bottom_extent;
                     if !(text_empty && para.paragraph_mark_vanish) {
                         prev_space_after = effective_space_after;
                     }

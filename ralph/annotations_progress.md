@@ -338,3 +338,42 @@ For the "Dated" cell (vAlign=bottom, Normal style space_after=9pt):
 - `cases/case43`: Jaccard +0.9pp (21.1→22.1%)
 - `scraped/polish_municipal_letter`: Jaccard +0.6pp (32.7→33.3%)
 - No Jaccard regressions across all 92 test cases
+
+---
+
+## 2026-03-23: Fixed table auto-fit ignoring cell margins (annotation #35)
+
+**Problem**: In `cases/case6`, the text "/api/auth/refresh" in the Performance Metrics table overflowed its cell boundary into the adjacent column. The reference shows the first column wide enough to contain the text.
+
+**Root cause**: The `auto_fit_columns()` function in `src/pdf/table.rs` computed minimum column widths based on word widths alone, without accounting for cell margins (padding). The default cell margins are 5.4pt left + 5.4pt right = 10.8pt total horizontal padding. For a column of 86.4pt with 10.8pt padding, the available text width is only 75.6pt. The word "/api/auth/refresh" at ~77pt exceeded this, but the auto-fit check compared against the full 86.4pt column width (77 < 86.4) and didn't expand the column.
+
+**Fix** (`src/pdf/table.rs`):
+- In `auto_fit_columns()`, resolve each cell's effective margins (`cell.cell_margins` or table-level `cell_margins`)
+- Add horizontal padding (`ecm.left + ecm.right`) to each word width before comparing against column widths
+- This ensures columns expand to fit text INCLUDING the cell padding
+
+**Impact**:
+- `cases/case6`: Jaccard +2.1pp (43.4→45.5%), SSIM +2.4pp (85.2→87.5%)
+- No regressions across all test cases
+
+---
+
+## 2026-03-23: Fixed paragraph bottom border extent double-counted in space_after (annotation #2)
+
+**Problem**: In `samples/samtale`, the answer text (e.g., "I stor grad.") was floating above the grey bottom border lines instead of sitting directly above them. This caused cumulative vertical drift — each bordered paragraph added extra space, and by items 4-5 on page 2, the text was visibly shifted down compared to the reference.
+
+**Root cause**: In `src/docx/mod.rs`, the paragraph parsing code added `bdr_bottom_extra = space_pt + width_pt` from the bottom border to `space_after`. This meant the border extent was treated as inter-paragraph spacing rather than paragraph height. Two problems:
+1. **Double-counting**: The rendering code separately handled border positioning via `bdr_bottom_pad`, so the border space was accounted for twice — once in `space_after` and once in the border drawing
+2. **Incorrect contextualSpacing interaction**: When `contextualSpacing` suppressed `space_after` to 0, the border extent was also suppressed, leaving no room below the border
+
+For the samtale answer paragraphs (Normal style with `w:pBdr bottom sz="18" space="1"`), this added 3.25pt extra per bordered paragraph (space_pt=1 + width_pt=2.25). Over 5 question-answer pairs, this accumulated ~16pt of vertical drift.
+
+**Fix**:
+- `src/docx/mod.rs`: Removed `bdr_bottom_extra` from `space_after` calculation — border extent is not spacing
+- `src/pdf/mod.rs`: Added `bdr_bottom_extent` (= `space_pt + width_pt`) to the slot_top advancement and `needed` page-break calculation, treating the border extent as part of the paragraph's consumed height rather than inter-paragraph spacing
+
+This ensures the border extent is always consumed (not suppressible by `contextualSpacing`) and doesn't inflate the inter-paragraph gap via `max(prev_space_after, next_space_before)` collapsing.
+
+**Impact**:
+- `samples/samtale`: SSIM +3.4pp (54.3→57.7%), Jaccard -0.3pp (12.8→12.6%, within noise)
+- No regressions across all test cases

@@ -1,5 +1,5 @@
 {
-  "next_id": 73,
+  "next_id": 74,
   "annotations": [
     {
       "id": 2,
@@ -9,7 +9,7 @@
       "x_pt": 514.2692,
       "y_pt": 506.1648,
       "note": "Text should be directly above the grey line, not floating above it.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 5,
@@ -129,7 +129,7 @@
       "x_pt": 172.97893,
       "y_pt": 157.12347,
       "note": "\"refresh\" goes out of bounds here. The table cell should either be wider, or the text should be narrower.  Compare to reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 37,
@@ -399,6 +399,16 @@
       "x_pt": 168.12482,
       "y_pt": 463.8406,
       "note": "Lines between cells are wrong in several places. Compare systematically with reference.",
+      "fixed": false
+    },
+    {
+      "id": 73,
+      "case": "scraped/feminist_voice_dissertation",
+      "page": 12,
+      "source": "Generated",
+      "x_pt": 538.46295,
+      "y_pt": 110.0354,
+      "note": "We should not split in the middle of a word like \"procreation\" is split here.",
       "fixed": false
     }
   ]
