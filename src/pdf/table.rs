@@ -534,6 +534,7 @@ fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>) -> Vec<f3
         return table.col_widths.clone();
     }
 
+    let cm = &table.cell_margins;
     let mut min_widths = vec![0.0f32; ncols];
 
     for row in &table.rows {
@@ -544,6 +545,8 @@ fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>) -> Vec<f3
                 grid_col += span;
                 continue;
             }
+            let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
+            let h_pad = ecm.left + ecm.right;
             let mut key_buf = String::new();
             for para in cell.all_paragraphs() {
                 for run in &para.runs {
@@ -563,7 +566,7 @@ fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>) -> Vec<f3
                     };
                     for word in text.split_whitespace() {
                         let kern = run.kern_threshold.is_some_and(|t| fs >= t);
-                        let ww = entry.word_width(word, fs, kern);
+                        let ww = entry.word_width(word, fs, kern) + h_pad;
                         min_widths[grid_col] = min_widths[grid_col].max(ww);
                     }
                 }

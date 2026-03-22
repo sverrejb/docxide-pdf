@@ -224,8 +224,8 @@
     "convert_ms": 9.3
   },
   "cases/case6": {
-    "jaccard": 0.4338,
-    "ssim": 0.8517,
+    "jaccard": 0.4548,
+    "ssim": 0.8754,
     "text_boundary": 0.9909,
     "convert_ms": 15.3
   },
