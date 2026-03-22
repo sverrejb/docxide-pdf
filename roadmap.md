@@ -9,6 +9,20 @@ We split text on whitespace only via `split_preserving_spaces()`. This fails for
 
 Small integration effort, high impact for non-Latin documents.
 
+## Hyphenation (TODO — MEDIUM IMPACT)
+
+Word supports automatic hyphenation via `w:autoHyphenation` in document settings and `w:suppressAutoHyphens` on individual paragraphs. When enabled, Word breaks words at syllable boundaries (e.g., "pro-creation") using language-specific hyphenation dictionaries. We currently never hyphenate — words either fit on the line or wrap entirely to the next line.
+
+Implementation would require:
+1. **Parse `w:autoHyphenation`** from `word/settings.xml` and `w:suppressAutoHyphens` from paragraph properties
+2. **Integrate a hyphenation library** — e.g., `hyphenation` crate (Knuth-Liang algorithm, same as TeX/LibreOffice) with language dictionaries
+3. **Modify line-breaking** in `build_paragraph_lines()` — when a word overflows, try hyphenation points and break at the last one that fits, adding a hyphen glyph
+4. **Language detection** — use `w:lang` on runs to select the correct dictionary
+
+The `hyphenation` crate supports 70+ languages and is ~2MB with all dictionaries. Could be behind a feature flag.
+
+Impact: improves line utilization (less ragged right edge in non-justified text, fewer overfull lines), fixes cases where Word hyphenates but we don't (causing different page breaks).
+
 ## CJK Rendering Polish (TODO — MEDIUM IMPACT)
 
 Core CJK support is implemented: CIDFont/Identity-H/ToUnicode encoding, platform-specific font fallback chains (Hiragino/Noto/Yu Gothic), per-character font fallback at render time, script-based run splitting via `w:rFonts @eastAsia`, and vertical text rendering (`w:textDirection="tbRlV"`). CJK fixtures render readable output but score low (4–9% Jaccard) due to spacing/positioning precision issues:

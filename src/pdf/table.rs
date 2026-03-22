@@ -1510,6 +1510,16 @@ pub(super) fn render_table(
 
         if table_bottom < saved {
             let fp = override_pos.as_ref().unwrap();
+            // Use BothSides wrapping when the table has ≥72pt of space on each side
+            let text_area_left = sp.margin_left;
+            let text_area_right = sp.page_width - sp.margin_right;
+            let space_left = table_left - text_area_left;
+            let space_right = text_area_right - (table_left + table_total_w);
+            let wrap_text = if space_left >= 72.0 && space_right >= 72.0 {
+                crate::model::WrapText::BothSides
+            } else {
+                crate::model::WrapText::Largest
+            };
             pb.float_zone = Some(super::FloatZone {
                 top_y: table_top_y + top_margin,
                 bottom_y: table_bottom - bottom_margin,
@@ -1517,8 +1527,9 @@ pub(super) fn render_table(
                 obj_right: table_left + table_total_w,
                 left_from_text: fp.left_from_text,
                 right_from_text: fp.right_from_text,
+                bottom_from_text: fp.bottom_from_text,
                 polygon_pts: None,
-                wrap_text: crate::model::WrapText::Largest,
+                wrap_text,
             });
         }
         }

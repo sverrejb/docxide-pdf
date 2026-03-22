@@ -301,13 +301,13 @@ pub struct Run {
     pub text_glow: Option<TextGlow>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TextOutline {
     pub width_pt: f32,
     pub color: [u8; 3],
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TextFill {
     Solid([u8; 3]),
     Gradient {
@@ -317,7 +317,7 @@ pub enum TextFill {
     NoFill,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TextShadow {
     pub color: [u8; 3],
     pub offset_x: f32,
@@ -325,7 +325,7 @@ pub struct TextShadow {
     pub alpha: f32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TextGlow {
     pub color: [u8; 3],
     pub radius_pt: f32,

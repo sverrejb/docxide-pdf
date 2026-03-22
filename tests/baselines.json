@@ -198,8 +198,8 @@
     "convert_ms": 10.7
   },
   "cases/case40": {
-    "jaccard": 0.3538,
-    "ssim": 0.5165,
+    "jaccard": 0.3413,
+    "ssim": 0.498,
     "text_boundary": 0.5
   },
   "cases/case41": {
@@ -208,9 +208,9 @@
     "text_boundary": 0.6596
   },
   "cases/case42": {
-    "jaccard": 0.4632,
-    "ssim": 0.4987,
-    "text_boundary": 0.3095
+    "jaccard": 0.4629,
+    "ssim": 0.501,
+    "text_boundary": 0.2195
   },
   "cases/case43": {
     "jaccard": 0.5028,
@@ -223,9 +223,14 @@
     "text_boundary": 0.0
   },
   "cases/case45": {
-    "jaccard": 0.3537,
-    "ssim": 0.5447,
-    "text_boundary": 0.1452
+    "jaccard": 0.3644,
+    "ssim": 0.5587,
+    "text_boundary": 0.2097
+  },
+  "cases/case46": {
+    "jaccard": 0.1097,
+    "ssim": 0.2734,
+    "text_boundary": 0.0453
   },
   "cases/case5": {
     "jaccard": 0.7607,
@@ -294,33 +299,33 @@
     "convert_ms": 18.3
   },
   "samples/samtale": {
-    "jaccard": 0.1284,
-    "ssim": 0.5427,
+    "jaccard": 0.1283,
+    "ssim": 0.5421,
     "text_boundary": 0.24,
     "convert_ms": 11.0
   },
   "scraped/air_pollution_pe..": {
-    "jaccard": 0.1552,
-    "ssim": 0.3577,
+    "jaccard": 0.1527,
+    "ssim": 0.3525,
     "text_boundary": 0.9429,
     "convert_ms": 12.0
   },
   "scraped/brazilian_logist..": {
-    "jaccard": 0.1639,
+    "jaccard": 0.164,
     "ssim": 0.2759,
     "text_boundary": 0.1832,
     "convert_ms": 744.0
   },
   "scraped/bush_fires_act_c..": {
-    "jaccard": 0.6,
-    "ssim": 0.8281,
-    "text_boundary": 0.1601,
+    "jaccard": 0.5881,
+    "ssim": 0.7998,
+    "text_boundary": 0.8801,
     "convert_ms": 248.6
   },
   "scraped/centrifugal_wate..": {
-    "jaccard": 0.8019,
-    "ssim": 0.9402,
-    "text_boundary": 0.1728,
+    "jaccard": 0.8118,
+    "ssim": 0.9489,
+    "text_boundary": 0.9954,
     "convert_ms": 40.9
   },
   "scraped/classroom_weekly..": {
@@ -330,15 +335,15 @@
     "convert_ms": 59.6
   },
   "scraped/croatian_grant_g..": {
-    "jaccard": 0.074,
-    "ssim": 0.1829,
-    "text_boundary": 0.0313,
+    "jaccard": 0.0765,
+    "ssim": 0.1877,
+    "text_boundary": 0.034,
     "convert_ms": 270.5
   },
   "scraped/croatian_regulat..": {
     "jaccard": 0.0782,
     "ssim": 0.2656,
-    "text_boundary": 0.3089,
+    "text_boundary": 0.4737,
     "convert_ms": 22.0
   },
   "scraped/czech_cafeteria_..": {
@@ -348,8 +353,8 @@
     "convert_ms": 6.9
   },
   "scraped/czech_expert_wit..": {
-    "jaccard": 0.6933,
-    "ssim": 0.8892,
+    "jaccard": 0.772,
+    "ssim": 0.9555,
     "text_boundary": 0.9792,
     "convert_ms": 39.4
   },
@@ -366,27 +371,27 @@
     "convert_ms": 4.8
   },
   "scraped/east_asia_confer..": {
-    "jaccard": 0.0938,
-    "ssim": 0.2221,
+    "jaccard": 0.097,
+    "ssim": 0.2314,
     "text_boundary": 0.5714,
     "convert_ms": 22.0
   },
   "scraped/education_consul..": {
-    "jaccard": 0.1212,
+    "jaccard": 0.1211,
     "ssim": 0.2429,
     "text_boundary": 0.4444,
     "convert_ms": 47.1
   },
   "scraped/federal_procurem..": {
     "jaccard": 0.5381,
-    "ssim": 0.7367,
+    "ssim": 0.7366,
     "text_boundary": 0.8,
     "convert_ms": 57.1
   },
   "scraped/feminist_voice_d..": {
-    "jaccard": 0.6267,
-    "ssim": 0.8231,
-    "text_boundary": 0.027,
+    "jaccard": 0.6734,
+    "ssim": 0.8651,
+    "text_boundary": 0.8495,
     "convert_ms": 305.8
   },
   "scraped/german_mezzo_sop..": {
@@ -396,20 +401,20 @@
     "convert_ms": 33.4
   },
   "scraped/go_math_grade4_g..": {
-    "jaccard": 0.2783,
-    "ssim": 0.4958,
+    "jaccard": 0.2781,
+    "ssim": 0.4981,
     "text_boundary": 0.5595,
     "convert_ms": 70.6
   },
   "scraped/indonesian_bench..": {
-    "jaccard": 0.3489,
-    "ssim": 0.5241,
+    "jaccard": 0.3579,
+    "ssim": 0.5345,
     "text_boundary": 0.4522,
     "convert_ms": 170.5
   },
   "scraped/italian_evaluati..": {
-    "jaccard": 0.3421,
-    "ssim": 0.4442,
+    "jaccard": 0.3422,
+    "ssim": 0.4441,
     "text_boundary": 0.5768,
     "convert_ms": 115.1
   },
@@ -426,74 +431,74 @@
     "convert_ms": 4.5
   },
   "scraped/korean_japanese_..": {
-    "jaccard": 0.1061,
-    "ssim": 0.1939,
+    "jaccard": 0.1095,
+    "ssim": 0.2022,
     "text_boundary": 0.7619,
     "convert_ms": 18.4
   },
   "scraped/learning_culture..": {
-    "jaccard": 0.3328,
-    "ssim": 0.4563,
-    "text_boundary": 0.3816,
+    "jaccard": 0.3368,
+    "ssim": 0.4603,
+    "text_boundary": 0.3794,
     "convert_ms": 1027.5
   },
   "scraped/lithuanian_ethic..": {
-    "jaccard": 0.4327,
-    "ssim": 0.6229,
+    "jaccard": 0.4456,
+    "ssim": 0.6568,
     "text_boundary": 0.65,
     "convert_ms": 7.3
   },
   "scraped/lithuanian_food_..": {
-    "jaccard": 0.4447,
-    "ssim": 0.5939,
+    "jaccard": 0.4436,
+    "ssim": 0.5921,
     "text_boundary": 0.4815,
     "convert_ms": 5.6
   },
   "scraped/mandated_reporte..": {
     "jaccard": 0.2642,
     "ssim": 0.505,
-    "text_boundary": 0.2286,
+    "text_boundary": 0.2963,
     "convert_ms": 43.3
   },
   "scraped/mongolian_human_..": {
-    "jaccard": 0.1387,
-    "ssim": 0.2134,
-    "text_boundary": 0.3927,
+    "jaccard": 0.1393,
+    "ssim": 0.2144,
+    "text_boundary": 0.1838,
     "convert_ms": 32.0
   },
   "scraped/parish_housing_d..": {
-    "jaccard": 0.3266,
-    "ssim": 0.6256,
+    "jaccard": 0.2912,
+    "ssim": 0.5381,
     "text_boundary": 0.8235,
     "convert_ms": 97.8
   },
   "scraped/polish_archery_r..": {
-    "jaccard": 0.1802,
-    "ssim": 0.5,
-    "text_boundary": 0.4752,
+    "jaccard": 0.1999,
+    "ssim": 0.6029,
+    "text_boundary": 0.4718,
     "convert_ms": 16.3
   },
   "scraped/polish_building_..": {
-    "jaccard": 0.1886,
-    "ssim": 0.3369,
-    "text_boundary": 0.0453,
+    "jaccard": 0.189,
+    "ssim": 0.3377,
+    "text_boundary": 0.2133,
     "convert_ms": 56.9
   },
   "scraped/polish_council_r..": {
-    "jaccard": 0.3007,
-    "ssim": 0.452,
+    "jaccard": 0.3026,
+    "ssim": 0.4558,
     "text_boundary": 0.3902,
     "convert_ms": 10.4
   },
   "scraped/polish_municipal..": {
-    "jaccard": 0.377,
-    "ssim": 0.7147,
+    "jaccard": 0.3844,
+    "ssim": 0.7477,
     "text_boundary": 0.9259,
     "convert_ms": 11.8
   },
   "scraped/polish_tender_de..": {
-    "jaccard": 0.3197,
-    "ssim": 0.4165,
+    "jaccard": 0.32,
+    "ssim": 0.4176,
     "text_boundary": 0.4366,
     "convert_ms": 19.0
   },
@@ -504,15 +509,15 @@
     "convert_ms": 9.8
   },
   "scraped/russian_sports_r..": {
-    "jaccard": 0.1214,
-    "ssim": 0.233,
+    "jaccard": 0.1215,
+    "ssim": 0.2323,
     "text_boundary": 0.3421,
     "convert_ms": 11.7
   },
   "scraped/russian_universi..": {
-    "jaccard": 0.2267,
-    "ssim": 0.5028,
-    "text_boundary": 0.8602,
+    "jaccard": 0.2268,
+    "ssim": 0.5039,
+    "text_boundary": 0.5824,
     "convert_ms": 23.3
   },
   "scraped/school_mandated_..": {
@@ -528,9 +533,9 @@
     "convert_ms": 12.9
   },
   "scraped/slovak_misdemean..": {
-    "jaccard": 0.6241,
-    "ssim": 0.758,
-    "text_boundary": 0.4063,
+    "jaccard": 0.6272,
+    "ssim": 0.7611,
+    "text_boundary": 0.7231,
     "convert_ms": 13.2
   },
   "scraped/stem_partnership..": {
@@ -541,55 +546,55 @@
   },
   "scraped/traditional_skil..": {
     "jaccard": 0.1544,
-    "ssim": 0.486,
-    "text_boundary": 0.2353,
+    "ssim": 0.4859,
+    "text_boundary": 0.7386,
     "convert_ms": 22.0
   },
   "scraped/transition_to_wo..": {
-    "jaccard": 0.2624,
-    "ssim": 0.3799,
+    "jaccard": 0.2673,
+    "ssim": 0.3844,
     "text_boundary": 0.2051,
     "convert_ms": 493.0
   },
   "scraped/turkish_ancient_..": {
-    "jaccard": 0.2248,
-    "ssim": 0.5292,
+    "jaccard": 0.2246,
+    "ssim": 0.529,
     "text_boundary": 1.0,
     "convert_ms": 4.2
   },
   "scraped/turkish_prostate..": {
-    "jaccard": 0.3794,
-    "ssim": 0.7569,
+    "jaccard": 0.3795,
+    "ssim": 0.757,
     "text_boundary": 1.0,
     "convert_ms": 2.4
   },
   "scraped/uk_commercial_le..": {
-    "jaccard": 0.1868,
-    "ssim": 0.3307,
+    "jaccard": 0.1923,
+    "ssim": 0.3401,
     "text_boundary": 0.1355,
     "convert_ms": 326.3
   },
   "scraped/ukraine_humanita..": {
-    "jaccard": 0.386,
-    "ssim": 0.5093,
+    "jaccard": 0.3816,
+    "ssim": 0.5053,
     "text_boundary": 0.2407,
     "convert_ms": 12.9
   },
   "scraped/usep_handbook": {
-    "jaccard": 0.5425,
-    "ssim": 0.7284,
+    "jaccard": 0.541,
+    "ssim": 0.727,
     "text_boundary": 0.5804,
     "convert_ms": 38.6
   },
   "scraped/vaccines_history..": {
-    "jaccard": 0.421,
+    "jaccard": 0.4207,
     "ssim": 0.5162,
-    "text_boundary": 0.1293,
+    "text_boundary": 0.1316,
     "convert_ms": 23.3
   },
   "scraped/waste_management..": {
-    "jaccard": 0.6845,
-    "ssim": 0.9155,
+    "jaccard": 0.7465,
+    "ssim": 0.976,
     "text_boundary": 0.6,
     "convert_ms": 5.6
   }

@@ -284,6 +284,63 @@ macro_rules! handle_drawing_result {
     };
 }
 
+/// Merge consecutive text runs with identical visual properties.
+/// Word often splits a single word across multiple `w:r` elements for revision
+/// tracking (different rsidR). Without merging, the layout engine treats each
+/// run's text independently, allowing line breaks mid-word.
+fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
+    if runs.len() <= 1 {
+        return runs;
+    }
+    let mut result: Vec<Run> = Vec::with_capacity(runs.len());
+    for run in runs {
+        let can_merge = result.last().is_some_and(|prev: &Run| {
+            // Both must be plain text runs
+            !prev.is_tab
+                && !run.is_tab
+                && !prev.is_line_break
+                && !run.is_line_break
+                && prev.inline_image.is_none()
+                && run.inline_image.is_none()
+                && prev.footnote_id.is_none()
+                && run.footnote_id.is_none()
+                && !prev.is_footnote_ref_mark
+                && !run.is_footnote_ref_mark
+                && prev.field_code.is_none()
+                && run.field_code.is_none()
+                // All visual properties must match
+                && prev.font_name == run.font_name
+                && prev.east_asia_font_name == run.east_asia_font_name
+                && prev.font_size == run.font_size
+                && prev.bold == run.bold
+                && prev.italic == run.italic
+                && prev.underline == run.underline
+                && prev.strikethrough == run.strikethrough
+                && prev.dstrike == run.dstrike
+                && prev.char_spacing == run.char_spacing
+                && prev.text_scale == run.text_scale
+                && prev.caps == run.caps
+                && prev.small_caps == run.small_caps
+                && prev.vanish == run.vanish
+                && prev.color == run.color
+                && prev.highlight == run.highlight
+                && prev.vertical_align == run.vertical_align
+                && prev.kern_threshold == run.kern_threshold
+                && prev.hyperlink_url == run.hyperlink_url
+                && prev.text_outline == run.text_outline
+                && prev.text_fill == run.text_fill
+                && prev.text_shadow == run.text_shadow
+                && prev.text_glow == run.text_glow
+        });
+        if can_merge {
+            result.last_mut().unwrap().text.push_str(&run.text);
+        } else {
+            result.push(run);
+        }
+    }
+    result
+}
+
 pub(super) fn parse_runs<R: Read + std::io::Seek>(
     para_node: roxmltree::Node,
     styles: &StylesInfo,
@@ -704,6 +761,8 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
             ..Run::default()
         });
     }
+
+    let runs = merge_compatible_runs(runs);
 
     ParsedRuns {
         runs,

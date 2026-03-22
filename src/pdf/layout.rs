@@ -433,8 +433,17 @@ pub(super) fn build_paragraph_lines(
         let ts = run.text_scale / 100.0;
         let space_w_cs = space_w * ts + cs;
 
+        let mut is_first_word_in_run = true;
         for (space_count, word) in split_preserving_spaces(&text) {
             pending_space_w += space_count as f32 * space_w_cs;
+
+            // A word continues the previous word across a run boundary when
+            // there is no whitespace between runs and no leading spaces.
+            let is_continuation = is_first_word_in_run
+                && space_count == 0
+                && pending_space_w == 0.0
+                && !current_chunks.is_empty();
+            is_first_word_in_run = false;
 
             let char_count = word.chars().count();
             let kern = run.kern_threshold.is_some_and(|t| eff_fs >= t);
@@ -470,7 +479,7 @@ pub(super) fn build_paragraph_lines(
                 && right_region_for(lines.len()).is_some();
 
 
-            if (!current_chunks.is_empty() && overflows) || first_word_overflow {
+            if (!current_chunks.is_empty() && overflows && !is_continuation) || first_word_overflow {
                 // Word doesn't fit in current region
                 if !in_right_region {
                     // Try spilling to the right region on the same line
@@ -782,18 +791,19 @@ pub(super) fn build_tabbed_line(
                 let char_count = word.chars().count();
                 let kern = run.kern_threshold.is_some_and(|t| eff_fs >= t);
                 let ww = entry.word_width(word, eff_fs, kern) * ts + cs * char_count as f32;
-                if !all_chunks.is_empty()
-                    && (i > 0 || prev_ws || text.starts_with(is_break_space))
-                {
+                let has_space_before = i > 0 || prev_ws || text.starts_with(is_break_space);
+                if !all_chunks.is_empty() && has_space_before {
                     current_x += space_w * ts + cs;
                 }
+                // Word continues previous word across run boundary (no whitespace between)
+                let is_continuation = i == 0 && !has_space_before && !all_chunks.is_empty();
                 let cur_line_max = if is_first_line {
                     max_width + first_line_hanging
                 } else {
                     max_width
                 };
                 // Wrap word to new line if it exceeds max_width
-                if current_x + ww > cur_line_max && !all_chunks.is_empty() {
+                if current_x + ww > cur_line_max && !all_chunks.is_empty() && !is_continuation {
                     result_lines.push(finish_line(&mut all_chunks));
                     current_x = 0.0;
                     is_first_line = false;
