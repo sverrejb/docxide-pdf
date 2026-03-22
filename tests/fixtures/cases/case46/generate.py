@@ -125,6 +125,13 @@ def main():
 
     doc_xml = re.sub(r'<w:tblPr>.*?</w:tblPr>', inject_tblpr, doc_xml, flags=re.DOTALL)
 
+    # Fix gridCol widths to match tblW (3600 twips / 2 cols = 1800 each)
+    doc_xml = re.sub(
+        r'<w:tblGrid><w:gridCol w:w="\d+"/><w:gridCol w:w="\d+"/></w:tblGrid>',
+        '<w:tblGrid><w:gridCol w:w="1800"/><w:gridCol w:w="1800"/></w:tblGrid>',
+        doc_xml,
+    )
+
     # Inject row heights
     cfg_idx = [0]
     row_in_tbl = [0]

@@ -702,7 +702,6 @@ pub(super) struct FloatZone {
     pub obj_right: f32,
     pub left_from_text: f32,
     pub right_from_text: f32,
-    pub bottom_from_text: f32,
     /// Polygon vertices in absolute page coords (PDF: x from left, y from bottom)
     pub polygon_pts: Option<Vec<(f32, f32)>>,
     pub wrap_text: WrapText,
@@ -1325,7 +1324,6 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 obj_right: fi_x + fi.image.display_width,
                                 left_from_text: fi.dist_left,
                                 right_from_text: fi.dist_right,
-                                bottom_from_text: fi.dist_bottom,
                                 polygon_pts,
                                 wrap_text: fi.wrap_text,
                             });
@@ -1550,9 +1548,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 && (para_text_width - full_width).abs() > 1.0
                             {
                                 let effective_top = pb.slot_top - inter_gap;
-                                // Bias slightly toward fewer narrow lines: a line
-                                // barely overlapping the dist margin is full-width.
-                                let lines_beside = ((effective_top - fz.bottom_y) / line_h - 0.1).round().max(0.0) as usize;
+                                let lines_beside = ((effective_top - fz.bottom_y) / line_h + 0.3).round().max(0.0) as usize;
                                 if lines_beside > 0 { Some((lines_beside, full_width)) } else { None }
                             } else {
                                 None
@@ -2141,7 +2137,6 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     obj_right: fi_x + fi.image.display_width,
                                     left_from_text: fi.dist_left,
                                     right_from_text: fi.dist_right,
-                                    bottom_from_text: fi.dist_bottom,
                                     polygon_pts,
                                     wrap_text: fi.wrap_text,
                                 });

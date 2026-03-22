@@ -135,6 +135,7 @@ WordArt appears in two forms: modern DrawingML (current Word) and legacy VML (ol
 
 - **Line spacing** — Auto and Exact work. AtLeast parsed but may not enforce minimum correctly.
 - **Tab stops** — basic left/center/right tabs work but leader rendering and decimal alignment have precision issues.
+- **Table auto-fit vs `tblW`** — our `auto_fit_columns` uses `gridCol` widths from `tblGrid`, ignoring the specified `tblW` when `type="dxa"`. Word treats `tblW` as the authoritative total width and scales/caps columns to fit. This causes tables to render at full page width when python-docx (or other generators) emit oversized `gridCol` values alongside a smaller `tblW`.
 
 ## Code Structure
 

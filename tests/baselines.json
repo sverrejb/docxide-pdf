@@ -198,8 +198,8 @@
     "convert_ms": 10.7
   },
   "cases/case40": {
-    "jaccard": 0.3413,
-    "ssim": 0.498,
+    "jaccard": 0.3538,
+    "ssim": 0.5165,
     "text_boundary": 0.5
   },
   "cases/case41": {
@@ -223,14 +223,14 @@
     "text_boundary": 0.0
   },
   "cases/case45": {
-    "jaccard": 0.3644,
-    "ssim": 0.5587,
+    "jaccard": 0.3652,
+    "ssim": 0.5624,
     "text_boundary": 0.2097
   },
   "cases/case46": {
-    "jaccard": 0.1097,
-    "ssim": 0.2734,
-    "text_boundary": 0.0453
+    "jaccard": 0.5159,
+    "ssim": 0.6606,
+    "text_boundary": 0.7516
   },
   "cases/case5": {
     "jaccard": 0.7607,

@@ -1527,7 +1527,6 @@ pub(super) fn render_table(
                 obj_right: table_left + table_total_w,
                 left_from_text: fp.left_from_text,
                 right_from_text: fp.right_from_text,
-                bottom_from_text: fp.bottom_from_text,
                 polygon_pts: None,
                 wrap_text,
             });
