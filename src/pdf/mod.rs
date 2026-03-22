@@ -1387,22 +1387,6 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         }
                     }
 
-                    // Per-line geometry: when a float zone is active and the
-                    // paragraph may overlap it, compute per-line (margin_left,
-                    // text_width) pairs. Needed for:
-                    //  - polygon-based tight wrapping (exclusion varies by Y)
-                    //  - self-wrapping (paragraph starts above zone, then enters it)
-                    let bdr_top_pad_early = para
-                        .borders
-                        .top
-                        .as_ref()
-                        .map(|b| b.space_pt + b.width_pt / 2.0)
-                        .unwrap_or(0.0);
-                    let ascender_ratio_early =
-                        tallest_ar.unwrap_or(0.75);
-                    let is_both_sides = pb.float_zone.as_ref()
-                        .is_some_and(|fz| fz.wrap_text == WrapText::BothSides);
-
                     // Build per-line geometry and dual-region geometry
                     let (poly_line_geom, poly_dual_geom): (Option<Vec<(f32, f32)>>, Option<Vec<DualRegion>>) =
                         if let Some(fz) = pb.float_zone.as_ref() {
@@ -1410,107 +1394,105 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             if eff_top <= fz.bottom_y {
                                 (None, None)
                             } else {
-                                let has_polygon = fz.polygon_pts.is_some();
-                                let starts_above = eff_top > fz.top_y;
-                                if !has_polygon && !starts_above && !is_both_sides {
-                                    (None, None)
+                                let is_both_sides =
+                                    fz.wrap_text == WrapText::BothSides;
+                                let full_w = (col_w
+                                    - para.indent_left
+                                    - para.indent_right)
+                                    .max(1.0);
+                                let col_right = col_x + col_w;
+                                let max_lines = ((eff_top - fz.bottom_y)
+                                    / line_h)
+                                    .ceil() as usize
+                                    + 5;
+                                let max_lines = max_lines.max(50);
+                                let mut geom = Vec::with_capacity(max_lines);
+                                let mut dual = if is_both_sides {
+                                    Some(Vec::with_capacity(max_lines))
                                 } else {
-                                    let full_w = (col_w
-                                        - para.indent_left
-                                        - para.indent_right)
-                                        .max(1.0);
-                                    let col_right = col_x + col_w;
-                                    let geom_top = pb.slot_top - inter_gap;
-                                    let max_lines = ((geom_top - fz.bottom_y)
-                                        / line_h)
-                                        .ceil() as usize
-                                        + 5;
-                                    let max_lines = max_lines.max(50);
-                                    let mut geom = Vec::with_capacity(max_lines);
-                                    let mut dual = if is_both_sides {
-                                        Some(Vec::with_capacity(max_lines))
-                                    } else {
-                                        None
-                                    };
-                                    for i in 0..max_lines {
-                                        let y = geom_top
-                                            - bdr_top_pad_early
-                                            - font_size * ascender_ratio_early
-                                            - i as f32 * line_h;
-                                        if y <= fz.top_y && y > fz.bottom_y {
-                                            let (ex_left, ex_right) =
-                                                fz.exclusion_at_y(y);
-                                            let sr = col_right
-                                                - (ex_right + fz.right_from_text);
-                                            let sl =
-                                                (ex_left - fz.left_from_text) - col_x;
+                                    None
+                                };
+                                // Bottom threshold of 0.2 * line_h excludes lines
+                                // barely overlapping the zone, matching Word's behavior.
+                                let bottom_threshold = fz.bottom_y + line_h * 0.2;
+                                for i in 0..max_lines {
+                                    // Use line slot top for zone check (not baseline).
+                                    let line_top = eff_top - i as f32 * line_h;
+                                    if line_top <= fz.top_y
+                                        && line_top > bottom_threshold
+                                    {
+                                        let (ex_left, ex_right) =
+                                            fz.exclusion_at_y(line_top);
+                                        let sr = col_right
+                                            - (ex_right + fz.right_from_text);
+                                        let sl =
+                                            (ex_left - fz.left_from_text) - col_x;
 
-                                            if is_both_sides {
-                                                // BothSides: provide both regions
-                                                let lx = col_x + para.indent_left;
-                                                let lw = (sl - para.indent_left).max(0.0);
-                                                let rx = ex_right + fz.right_from_text;
-                                                let rw = (sr - para.indent_right).max(0.0);
-                                                if let Some(ref mut d) = dual {
-                                                    d.push((lx, lw, rx, rw));
-                                                }
-                                                // Single-region geometry always stores the
-                                                // LEFT region — render_paragraph_lines uses
-                                                // this for left-chunk x positioning.
-                                                geom.push((lx, lw));
-                                            } else {
-                                                // Left/Right/Largest: pick one side
-                                                let use_right = match fz.wrap_text {
-                                                    WrapText::Right => sr >= 1.0,
-                                                    WrapText::Left => !(sl >= 1.0),
-                                                    _ => sr >= sl && sr >= 72.0,
-                                                };
-                                                let use_left = match fz.wrap_text {
-                                                    WrapText::Left => sl >= 1.0,
-                                                    WrapText::Right => false,
-                                                    _ => sl >= 72.0,
-                                                };
-                                                if use_right {
-                                                    let nl =
-                                                        ex_right + fz.right_from_text;
-                                                    let w = (col_right
-                                                        - nl
-                                                        - para.indent_right)
-                                                        .max(1.0);
-                                                    geom.push((
-                                                        nl + para.indent_left,
-                                                        w,
-                                                    ));
-                                                } else if use_left {
-                                                    let ar =
-                                                        ex_left - fz.left_from_text;
-                                                    let w = (ar - col_x
-                                                        - para.indent_left
-                                                        - para.indent_right)
-                                                        .max(1.0);
-                                                    geom.push((
-                                                        col_x + para.indent_left,
-                                                        w,
-                                                    ));
-                                                } else {
-                                                    geom.push((
-                                                        col_x + para.indent_left,
-                                                        full_w,
-                                                    ));
-                                                }
-                                            }
-                                        } else {
-                                            geom.push((
-                                                col_x + para.indent_left,
-                                                full_w,
-                                            ));
+                                        if is_both_sides {
+                                            // BothSides: provide both regions
+                                            let lx = col_x + para.indent_left;
+                                            let lw = (sl - para.indent_left).max(0.0);
+                                            let rx = ex_right + fz.right_from_text;
+                                            let rw = (sr - para.indent_right).max(0.0);
                                             if let Some(ref mut d) = dual {
-                                                d.push((col_x + para.indent_left, full_w, 0.0, 0.0));
+                                                d.push((lx, lw, rx, rw));
+                                            }
+                                            // Single-region geometry always stores the
+                                            // LEFT region — render_paragraph_lines uses
+                                            // this for left-chunk x positioning.
+                                            geom.push((lx, lw));
+                                        } else {
+                                            // Left/Right/Largest: pick one side
+                                            let use_right = match fz.wrap_text {
+                                                WrapText::Right => sr >= 1.0,
+                                                WrapText::Left => !(sl >= 1.0),
+                                                _ => sr >= sl && sr >= 72.0,
+                                            };
+                                            let use_left = match fz.wrap_text {
+                                                WrapText::Left => sl >= 1.0,
+                                                WrapText::Right => false,
+                                                _ => sl >= 72.0,
+                                            };
+                                            if use_right {
+                                                let nl =
+                                                    ex_right + fz.right_from_text;
+                                                let w = (col_right
+                                                    - nl
+                                                    - para.indent_right)
+                                                    .max(1.0);
+                                                geom.push((
+                                                    nl + para.indent_left,
+                                                    w,
+                                                ));
+                                            } else if use_left {
+                                                let ar =
+                                                    ex_left - fz.left_from_text;
+                                                let w = (ar - col_x
+                                                    - para.indent_left
+                                                    - para.indent_right)
+                                                    .max(1.0);
+                                                geom.push((
+                                                    col_x + para.indent_left,
+                                                    w,
+                                                ));
+                                            } else {
+                                                geom.push((
+                                                    col_x + para.indent_left,
+                                                    full_w,
+                                                ));
                                             }
                                         }
+                                    } else {
+                                        geom.push((
+                                            col_x + para.indent_left,
+                                            full_w,
+                                        ));
+                                        if let Some(ref mut d) = dual {
+                                            d.push((col_x + para.indent_left, full_w, 0.0, 0.0));
+                                        }
                                     }
-                                    (Some(geom), dual)
                                 }
+                                (Some(geom), dual)
                             }
                         } else {
                             (None, None)
@@ -1538,23 +1520,6 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             doc.default_tab_stop,
                         )
                     } else {
-                        // When wrapping beside a floating object, compute how many
-                        // lines fit at narrow width, then expand to full column width.
-                        // (Skip for BothSides — dual geometry handles the transition.)
-                        let width_change: Option<(usize, f32)> = pb.float_zone.as_ref().and_then(|fz| {
-                            if fz.wrap_text == WrapText::BothSides { return None; }
-                            let full_width = (col_w - para.indent_left - para.indent_right).max(1.0);
-                            if pb.slot_top <= fz.top_y && pb.slot_top > fz.bottom_y
-                                && (para_text_width - full_width).abs() > 1.0
-                            {
-                                let effective_top = pb.slot_top - inter_gap;
-                                let lines_beside = ((effective_top - fz.bottom_y) / line_h + 0.3).round().max(0.0) as usize;
-                                if lines_beside > 0 { Some((lines_beside, full_width)) } else { None }
-                            } else {
-                                None
-                            }
-                        });
-
                         // Look-ahead: if next block is an image-only paragraph
                         // with wrapping, build lines at full width first, then
                         // check if the bottom lines need narrowing.
@@ -1623,20 +1588,17 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 (full_lines, None)
                             }
                         } else {
-                            float_width_change = width_change;
-                            // When dual geometry is active, don't also pass
-                            // single-region widths (dual takes priority).
+                            // Per-line geometry handles narrow→wide transitions;
+                            // dual geometry takes priority over single-region widths.
                             let plw: Option<&[f32]> = if poly_dual_geom.is_some() { None } else { poly_line_widths.as_deref() };
                             let built = build_paragraph_lines(
                                 &effective_runs, ctx.fonts, para_text_width,
-                                text_hanging, &block_inline_images, width_change,
+                                text_hanging, &block_inline_images, None,
                                 plw, poly_dual_geom.as_deref(),
                             );
-                            (built, width_change)
+                            (built, None)
                         };
-                        if final_width_change.is_some() {
-                            float_width_change = final_width_change;
-                        }
+                        float_width_change = final_width_change;
                         lines
                     };
 
@@ -1890,7 +1852,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 &mut pb.links,
                                 text_hanging,
                                 ctx.fonts,
-                                None,
+                                poly_line_geom.as_deref(),
                             );
 
                             pb.advance_column_or_page(
@@ -2272,16 +2234,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     ctx.fonts,
                                     poly_line_geom.as_deref(),
                                 );
-                                // Render second part at different width/position
-                                let (after_x, after_w) = if let Some((nx, nw)) = lookahead_narrow {
-                                    // Look-ahead: second part is narrow (beside image)
-                                    (nx, nw)
-                                } else {
-                                    // Normal: second part is full width (below object)
-                                    let full_text_x = col_x + para.indent_left;
-                                    let full_text_w = (col_w - para.indent_left - para.indent_right).max(1.0);
-                                    (full_text_x, full_text_w)
-                                };
+                                // float_width_change only comes from the lookahead path,
+                                // which always sets lookahead_narrow in the same branch.
+                                let (after_x, after_w) = lookahead_narrow
+                                    .expect("lookahead_narrow set when float_width_change is Some");
                                 let below_baseline = baseline_y - split_at as f32 * line_h;
                                 render_paragraph_lines(
                                     &mut pb.content,
@@ -2299,7 +2255,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     poly_line_geom.as_deref(),
                                 );
                             } else {
-                                // All lines fit beside the table
+                                // Split point beyond paragraph — render all at once
                                 render_paragraph_lines(
                                     &mut pb.content,
                                     &lines,

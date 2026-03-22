@@ -203,14 +203,14 @@
     "text_boundary": 0.5
   },
   "cases/case41": {
-    "jaccard": 0.8401,
-    "ssim": 0.8402,
-    "text_boundary": 0.6596
+    "jaccard": 0.8643,
+    "ssim": 0.8628,
+    "text_boundary": 0.6702
   },
   "cases/case42": {
-    "jaccard": 0.4629,
-    "ssim": 0.501,
-    "text_boundary": 0.2195
+    "jaccard": 0.4612,
+    "ssim": 0.4953,
+    "text_boundary": 0.1707
   },
   "cases/case43": {
     "jaccard": 0.5028,
@@ -223,14 +223,19 @@
     "text_boundary": 0.0
   },
   "cases/case45": {
-    "jaccard": 0.3652,
-    "ssim": 0.5624,
-    "text_boundary": 0.2097
+    "jaccard": 0.3834,
+    "ssim": 0.5531,
+    "text_boundary": 0.5902
   },
   "cases/case46": {
     "jaccard": 0.5159,
     "ssim": 0.6606,
     "text_boundary": 0.7516
+  },
+  "cases/case47": {
+    "jaccard": 0.7195,
+    "ssim": 0.7663,
+    "text_boundary": 0.6338
   },
   "cases/case5": {
     "jaccard": 0.7607,
@@ -319,13 +324,13 @@
   "scraped/bush_fires_act_c..": {
     "jaccard": 0.5881,
     "ssim": 0.7998,
-    "text_boundary": 0.8801,
+    "text_boundary": 0.0564,
     "convert_ms": 248.6
   },
   "scraped/centrifugal_wate..": {
     "jaccard": 0.8118,
     "ssim": 0.9489,
-    "text_boundary": 0.9954,
+    "text_boundary": 1.0,
     "convert_ms": 40.9
   },
   "scraped/classroom_weekly..": {
@@ -337,7 +342,7 @@
   "scraped/croatian_grant_g..": {
     "jaccard": 0.0765,
     "ssim": 0.1877,
-    "text_boundary": 0.034,
+    "text_boundary": 0.056,
     "convert_ms": 270.5
   },
   "scraped/croatian_regulat..": {
@@ -355,7 +360,7 @@
   "scraped/czech_expert_wit..": {
     "jaccard": 0.772,
     "ssim": 0.9555,
-    "text_boundary": 0.9792,
+    "text_boundary": 1.0,
     "convert_ms": 39.4
   },
   "scraped/czech_municipal_..": {
@@ -379,7 +384,7 @@
   "scraped/education_consul..": {
     "jaccard": 0.1211,
     "ssim": 0.2429,
-    "text_boundary": 0.4444,
+    "text_boundary": 0.4389,
     "convert_ms": 47.1
   },
   "scraped/federal_procurem..": {
@@ -391,7 +396,7 @@
   "scraped/feminist_voice_d..": {
     "jaccard": 0.6734,
     "ssim": 0.8651,
-    "text_boundary": 0.8495,
+    "text_boundary": 0.863,
     "convert_ms": 305.8
   },
   "scraped/german_mezzo_sop..": {
@@ -403,13 +408,13 @@
   "scraped/go_math_grade4_g..": {
     "jaccard": 0.2781,
     "ssim": 0.4981,
-    "text_boundary": 0.5595,
+    "text_boundary": 0.5417,
     "convert_ms": 70.6
   },
   "scraped/indonesian_bench..": {
     "jaccard": 0.3579,
     "ssim": 0.5345,
-    "text_boundary": 0.4522,
+    "text_boundary": 0.4545,
     "convert_ms": 170.5
   },
   "scraped/italian_evaluati..": {
@@ -439,7 +444,7 @@
   "scraped/learning_culture..": {
     "jaccard": 0.3368,
     "ssim": 0.4603,
-    "text_boundary": 0.3794,
+    "text_boundary": 0.3866,
     "convert_ms": 1027.5
   },
   "scraped/lithuanian_ethic..": {
@@ -463,19 +468,19 @@
   "scraped/mongolian_human_..": {
     "jaccard": 0.1393,
     "ssim": 0.2144,
-    "text_boundary": 0.1838,
+    "text_boundary": 0.1949,
     "convert_ms": 32.0
   },
   "scraped/parish_housing_d..": {
     "jaccard": 0.2912,
     "ssim": 0.5381,
-    "text_boundary": 0.8235,
+    "text_boundary": 0.6235,
     "convert_ms": 97.8
   },
   "scraped/polish_archery_r..": {
     "jaccard": 0.1999,
     "ssim": 0.6029,
-    "text_boundary": 0.4718,
+    "text_boundary": 0.3986,
     "convert_ms": 16.3
   },
   "scraped/polish_building_..": {
@@ -499,7 +504,7 @@
   "scraped/polish_tender_de..": {
     "jaccard": 0.32,
     "ssim": 0.4176,
-    "text_boundary": 0.4366,
+    "text_boundary": 0.4648,
     "convert_ms": 19.0
   },
   "scraped/rehab_centre_phy..": {
@@ -511,7 +516,7 @@
   "scraped/russian_sports_r..": {
     "jaccard": 0.1215,
     "ssim": 0.2323,
-    "text_boundary": 0.3421,
+    "text_boundary": 0.4211,
     "convert_ms": 11.7
   },
   "scraped/russian_universi..": {
@@ -541,7 +546,7 @@
   "scraped/stem_partnership..": {
     "jaccard": 0.2433,
     "ssim": 0.3111,
-    "text_boundary": 0.2214,
+    "text_boundary": 0.25,
     "convert_ms": 32.2
   },
   "scraped/traditional_skil..": {
@@ -553,7 +558,7 @@
   "scraped/transition_to_wo..": {
     "jaccard": 0.2673,
     "ssim": 0.3844,
-    "text_boundary": 0.2051,
+    "text_boundary": 0.2099,
     "convert_ms": 493.0
   },
   "scraped/turkish_ancient_..": {
@@ -571,7 +576,7 @@
   "scraped/uk_commercial_le..": {
     "jaccard": 0.1923,
     "ssim": 0.3401,
-    "text_boundary": 0.1355,
+    "text_boundary": 0.136,
     "convert_ms": 326.3
   },
   "scraped/ukraine_humanita..": {
@@ -583,7 +588,7 @@
   "scraped/usep_handbook": {
     "jaccard": 0.541,
     "ssim": 0.727,
-    "text_boundary": 0.5804,
+    "text_boundary": 0.545,
     "convert_ms": 38.6
   },
   "scraped/vaccines_history..": {
@@ -595,7 +600,7 @@
   "scraped/waste_management..": {
     "jaccard": 0.7465,
     "ssim": 0.976,
-    "text_boundary": 0.6,
+    "text_boundary": 1.0,
     "convert_ms": 5.6
   }
 }
