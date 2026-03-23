@@ -1769,21 +1769,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         .map(|b| b.space_pt + b.width_pt)
                         .unwrap_or(0.0);
 
-                    // For bottom-only borders (no top border), the border acts
-                    // as a separator/underline and should sit close to the text.
-                    // Exclude the last line's trailing leading from the border
-                    // box so the space attribute is measured from the text bottom.
-                    let trailing_lead = if !lines.is_empty()
-                        && para.image.is_none()
-                        && para.inline_chart.is_none()
-                        && para.smartart.is_none()
-                        && bdr_bottom_pad > 0.0
-                        && para.borders.top.is_none()
-                    {
-                        (line_h - font_size).max(0.0)
-                    } else {
-                        0.0
-                    };
+                    // Word measures the bottom border `space` attribute from
+                    // the full line-height content bottom, not from the text
+                    // descent.  No trailing-lead adjustment is needed.
 
                     let needed = inter_gap + bdr_top_pad + content_h + bdr_bottom_extent;
                     // For page-break decisions, also account for floating
@@ -2086,7 +2074,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         let shd_right = col_x + col_w + shd_right_outset;
                         let shd_top = pb.slot_top;
                         let shd_bottom =
-                            pb.slot_top - bdr_top_pad - content_h + trailing_lead - bdr_bottom_pad;
+                            pb.slot_top - bdr_top_pad - content_h - bdr_bottom_pad;
                         pb.content.save_state();
                         pb.content.set_fill_rgb(
                             r as f32 / 255.0,
@@ -2350,7 +2338,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         let bdr = &para.borders;
                         let box_top = pb.slot_top;
                         let box_bottom =
-                            pb.slot_top - bdr_top_pad - content_h + trailing_lead - bdr_bottom_pad;
+                            pb.slot_top - bdr_top_pad - content_h - bdr_bottom_pad;
                         let bdr_left_outset = bdr
                             .left
                             .as_ref()

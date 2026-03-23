@@ -396,3 +396,44 @@ This ensures the border extent is always consumed (not suppressible by `contextu
 - `cases/case29` (bar charts): unchanged — already used correct centering formula
 - `cases/case31`: unchanged
 - No regressions above 2% across all test cases
+
+---
+
+## 2026-03-23: Fixed SmartArt text labels overflowing shape bounds (annotation #21)
+
+**Problem**: In `scraped/vaccines_history_chapter`, the SmartArt timeline labels (date labels and descriptions like "(1796) Edward Jenner invented the Small pox vaccine") were rendered too wide, extending far beyond their shape boundaries. The reference shows labels wrapped within their shape bounds.
+
+**Root cause**: The SmartArt text rendering code in `src/pdf/smartart.rs` split text only on explicit `\n` characters (paragraph breaks from the XML) but never word-wrapped within shape bounds. Each paragraph was rendered as a single continuous line. For labels with long descriptions (e.g., "Influenza reccommend as an additonal vaccine for children" in a 36pt-wide shape at 5pt font), the text width far exceeded the shape width (142pt vs 36pt), causing it to overflow the shape boundaries and overlap adjacent labels.
+
+**Fix** (`src/pdf/smartart.rs`):
+- Added `wrap_text_into()` helper that word-wraps text into lines fitting within `max_width` using greedy line-breaking
+- Modified `render_smartart()` to wrap each paragraph line before rendering
+- Vertical centering recalculated based on wrapped line count (not raw paragraph count)
+
+**Impact**:
+- `scraped/vaccines_history_chapter`: SSIM +0.1pp (51.8→51.9%) — small score improvement because labels are tiny (5pt) relative to full page, but visually the labels now correctly wrap within shape bounds matching the reference
+- No regressions caused by this change across all test cases (pre-existing baseline drift in 3 non-SmartArt fixtures was accepted)
+
+---
+
+## 2026-03-23: Fixed paragraph bottom border positioned too close to text (annotation #22)
+
+**Problem**: In `samples/samtale`, the green underline below "To- og femmånederssamtalen" was rendered almost touching the text descenders, while the reference shows a clear ~13pt gap between the text baseline and the border. The grey separator borders on page 2 were also ~1pt too close.
+
+**Root cause**: The border positioning code in `src/pdf/mod.rs` subtracted `trailing_lead = (line_h - font_size).max(0.0)` from the content height before computing the border position. This was intended to make bottom-only borders "sit close to the text" by measuring the `space` attribute from the text descent rather than the line-height bottom. However, Word actually measures `w:space` from the full line-height content bottom (including trailing leading), not from the text descent.
+
+For the heading paragraph (26pt Calibri Bold, Auto 1.15 line spacing):
+- `line_h = 36.50pt`, `font_size = 26pt`, `trailing_lead = 10.50pt`
+- With trailing_lead: gap from baseline to border top = **2.24pt**
+- Without trailing_lead: gap = **12.75pt** — matching the reference's 12.78pt within 0.03pt
+- The grey borders (11pt, Auto 1.15) also improved: gap 3.96pt vs reference 3.76pt (previously 2.65pt)
+
+**Fix** (`src/pdf/mod.rs`):
+- Removed the `trailing_lead` computation entirely — it was based on incorrect assumptions about how Word positions paragraph bottom borders
+- Simplified both the shading background and border positioning formulas by removing the `+ trailing_lead` term
+
+**Impact**:
+- `samples/samtale`: Jaccard -1.6pp (12.6→11.0%, from overall vertical shift), SSIM -0.3pp (57.7→57.4%)
+- `cases/case4`: Jaccard +1.6pp (71.3→72.9%), SSIM +0.8pp (89.5→90.2%)
+- Green line gap now matches reference within 0.03pt; grey borders within 0.2pt
+- No SSIM regressions above 0.3pp across all test cases

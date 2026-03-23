@@ -39,7 +39,7 @@
       "x_pt": 459.57916,
       "y_pt": 450.31363,
       "note": "We are rendering the labels too wide. Compare to reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 22,
@@ -49,7 +49,7 @@
       "x_pt": 604.5412,
       "y_pt": 512.56494,
       "note": "The green line under \"To- og femmån... .\" is too close to the text.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 23,

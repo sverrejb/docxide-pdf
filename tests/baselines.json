@@ -192,8 +192,8 @@
     "convert_ms": 4.5
   },
   "cases/case4": {
-    "jaccard": 0.7131,
-    "ssim": 0.8945,
+    "jaccard": 0.7293,
+    "ssim": 0.9025,
     "text_boundary": 1.0,
     "convert_ms": 10.7
   },
@@ -286,8 +286,8 @@
     "convert_ms": 18.3
   },
   "samples/samtale": {
-    "jaccard": 0.1257,
-    "ssim": 0.577,
+    "jaccard": 0.1099,
+    "ssim": 0.5738,
     "text_boundary": 0.24,
     "convert_ms": 11.0
   },
@@ -323,7 +323,7 @@
   },
   "scraped/croatian_grant_g..": {
     "jaccard": 0.0714,
-    "ssim": 0.1826,
+    "ssim": 0.1824,
     "text_boundary": 0.034,
     "convert_ms": 270.5
   },
@@ -460,7 +460,7 @@
     "convert_ms": 97.8
   },
   "scraped/polish_archery_r..": {
-    "jaccard": 0.1692,
+    "jaccard": 0.1705,
     "ssim": 0.4952,
     "text_boundary": 0.4718,
     "convert_ms": 16.3
