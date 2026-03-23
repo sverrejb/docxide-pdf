@@ -5,33 +5,21 @@ use crate::model::{SmartArtDiagram, SmartArtShape};
 
 use super::styles::ThemeFonts;
 use super::textbox::{parse_shape_geometry, parse_solid_fill};
-use super::{DML_NS, read_zip_text};
+use super::{DML_NS, DSP_NS, emu_attr, find_child, read_zip_text};
 
-const DSP_NS: &str = "http://schemas.microsoft.com/office/drawing/2008/diagram";
 const DIAGRAM_URI: &str = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
-const EMU_PER_PT: f64 = 12700.0;
 
 fn dsp<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
-    node.children()
-        .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(DSP_NS))
+    find_child(node, name, DSP_NS)
 }
 
 fn dml<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
-    node.children()
-        .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(DML_NS))
+    find_child(node, name, DML_NS)
 }
 
 fn has_dml(node: roxmltree::Node, name: &str) -> bool {
     node.children()
         .any(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(DML_NS))
-}
-
-fn emu_attr(node: roxmltree::Node, attr: &str) -> f32 {
-    (node
-        .attribute(attr)
-        .and_then(|v| v.parse::<f64>().ok())
-        .unwrap_or(0.0)
-        / EMU_PER_PT) as f32
 }
 
 pub(super) fn has_diagram_ref(container: roxmltree::Node) -> bool {
@@ -107,7 +95,7 @@ fn parse_dsp_shape(sp: roxmltree::Node, theme: &ThemeFonts) -> Option<SmartArtSh
             let width = ln
                 .attribute("w")
                 .and_then(|v| v.parse::<f32>().ok())
-                .map(|emu| emu / EMU_PER_PT as f32)
+                .map(super::emu_to_pts)
                 .unwrap_or(0.75);
             Some((color, width))
         })

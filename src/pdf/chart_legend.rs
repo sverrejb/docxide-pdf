@@ -3,7 +3,8 @@ use pdf_writer::Content;
 use crate::fonts::FontEntry;
 use crate::model::MarkerSymbol;
 
-use super::charts::{draw_marker, fill_rgb, show_text, stroke_rgb, text_width};
+use super::charts::{draw_marker, show_text, text_width};
+use super::color::{fill_rgb, stroke_rgb};
 
 pub(super) enum SwatchStyle {
     Rect,

@@ -15,12 +15,9 @@ use super::styles::{
 use super::textbox::parse_textbox_from_vml;
 use super::wordart;
 use super::{
-    WML_NS, highlight_color, parse_hex_color, parse_text_color, twips_to_pts, wml, wml_attr,
-    wml_bool,
+    MC_NS_TOP, REL_NS, VML_NS, WML_NS, highlight_color, parse_hex_color, parse_text_color,
+    twips_to_pts, wml, wml_attr, wml_bool,
 };
-
-const MC_NS: &str = "http://schemas.openxmlformats.org/markup-compatibility/2006";
-const REL_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
 fn is_dynamic_field(instr: &str) -> bool {
     let keyword = instr.split_whitespace().next().unwrap_or("");
@@ -47,10 +44,10 @@ fn parse_styleref_arg(instr: &str) -> Option<String> {
 fn mc_choice_or_fallback<'a>(node: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
     let choice = node
         .children()
-        .find(|n| n.tag_name().namespace() == Some(MC_NS) && n.tag_name().name() == "Choice");
+        .find(|n| n.tag_name().namespace() == Some(MC_NS_TOP) && n.tag_name().name() == "Choice");
     let fallback = node
         .children()
-        .find(|n| n.tag_name().namespace() == Some(MC_NS) && n.tag_name().name() == "Fallback");
+        .find(|n| n.tag_name().namespace() == Some(MC_NS_TOP) && n.tag_name().name() == "Fallback");
     choice.or(fallback)
 }
 
@@ -91,6 +88,7 @@ struct RunFormat {
     text_fill: Option<TextFill>,
     text_shadow: Option<TextShadow>,
     text_glow: Option<TextGlow>,
+    lang: Option<String>,
 }
 
 impl RunFormat {
@@ -120,6 +118,7 @@ impl RunFormat {
             text_fill: self.text_fill.clone(),
             text_shadow: self.text_shadow.clone(),
             text_glow: self.text_glow.clone(),
+            lang: self.lang.clone(),
             hyperlink_url,
             ..Run::default()
         }
@@ -256,7 +255,7 @@ fn collect_run_nodes<'a>(
             if let Some(content) = wml(child, "sdtContent") {
                 collect_run_nodes(content, rels, out);
             }
-        } else if ns == Some(MC_NS) && name == "AlternateContent" {
+        } else if ns == Some(MC_NS_TOP) && name == "AlternateContent" {
             if let Some(branch) = mc_choice_or_fallback(child) {
                 collect_run_nodes(branch, rels, out);
             }
@@ -331,6 +330,7 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
                 && prev.text_fill == run.text_fill
                 && prev.text_shadow == run.text_shadow
                 && prev.text_glow == run.text_glow
+                && prev.lang == run.lang
         });
         if can_merge {
             result.last_mut().unwrap().text.push_str(&run.text);
@@ -513,6 +513,10 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
             text_fill: rpr.and_then(wordart::parse_text_fill),
             text_shadow: rpr.and_then(wordart::parse_text_shadow),
             text_glow: rpr.and_then(wordart::parse_text_glow),
+            lang: rpr
+                .and_then(|n| wml(n, "lang"))
+                .and_then(|n| n.attribute((WML_NS, "val")))
+                .map(|s| s.to_string()),
         };
 
         let flush_pending = |pending: &mut String, runs: &mut Vec<Run>| {
@@ -525,9 +529,9 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
         let mut pending_text = String::new();
         for child in run_node.children() {
             let child_ns = child.tag_name().namespace();
-            if child_ns == Some(MC_NS) && child.tag_name().name() == "AlternateContent" {
+            if child_ns == Some(MC_NS_TOP) && child.tag_name().name() == "AlternateContent" {
                 let choice = child.children().find(|n| {
-                    n.tag_name().namespace() == Some(MC_NS) && n.tag_name().name() == "Choice"
+                    n.tag_name().namespace() == Some(MC_NS_TOP) && n.tag_name().name() == "Choice"
                 });
                 if let Some(branch) = choice {
                     for drawing in branch.children().filter(|n| {
@@ -547,7 +551,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                         );
                     }
                 } else if let Some(branch) = child.children().find(|n| {
-                    n.tag_name().namespace() == Some(MC_NS) && n.tag_name().name() == "Fallback"
+                    n.tag_name().namespace() == Some(MC_NS_TOP) && n.tag_name().name() == "Fallback"
                 }) {
                     for pict in branch.descendants().filter(|n| {
                         n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "pict"
@@ -779,11 +783,10 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
 }
 
 const OFFICE_NS: &str = "urn:schemas-microsoft-com:office:office";
-const VML_NS_RUNS: &str = "urn:schemas-microsoft-com:vml";
 
 fn parse_vml_horizontal_rule(pict_node: roxmltree::Node) -> Option<HorizontalRule> {
     let shape = pict_node.children().find(|n| {
-        n.tag_name().namespace() == Some(VML_NS_RUNS)
+        n.tag_name().namespace() == Some(VML_NS)
             && matches!(n.tag_name().name(), "rect" | "shape")
     })?;
 

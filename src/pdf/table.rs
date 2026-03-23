@@ -8,6 +8,8 @@ use crate::model::{
     SectionProperties, Table, TableAlignment, TableRow, TextDirection, VMerge, VerticalPosition,
 };
 
+use super::color::{fill_rgb, stroke_rgb};
+
 use super::RenderContext;
 use super::header_footer::substitute_hf_runs;
 use super::layout::{
@@ -36,8 +38,8 @@ fn draw_border(content: &mut Content, border: &CellBorder, x1: f32, y1: f32, x2:
     let w = border.width;
     content.save_state();
     content.set_line_width(w);
-    if let Some([r, g, b]) = border.color {
-        content.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+    if let Some(c) = border.color {
+        stroke_rgb(content, c);
     }
     match border.style {
         BorderStyle::Dotted => {
@@ -118,11 +120,7 @@ fn draw_cell_shading(
     let inset =
         (borders.top.width + borders.bottom.width + borders.left.width + borders.right.width) / 8.0;
     content.save_state();
-    content.set_fill_rgb(
-        shading[0] as f32 / 255.0,
-        shading[1] as f32 / 255.0,
-        shading[2] as f32 / 255.0,
-    );
+    fill_rgb(content, shading);
     content.rect(x + inset, y + inset, w - 2.0 * inset, h - 2.0 * inset);
     content.fill_nonzero();
     content.restore_state();
@@ -355,11 +353,7 @@ fn render_nested_table(
 
             if let Some(shading) = cell.shading {
                 content.save_state();
-                content.set_fill_rgb(
-                    shading[0] as f32 / 255.0,
-                    shading[1] as f32 / 255.0,
-                    shading[2] as f32 / 255.0,
-                );
+                fill_rgb(content, shading);
                 content.rect(cx, row_bottom, col_w, row_h);
                 content.fill_nonzero();
                 content.restore_state();
@@ -677,8 +671,8 @@ fn draw_cell_label(
     };
     let bytes = encode_label(&para.list_label, entry);
 
-    if let Some([r, g, b]) = para.label_color {
-        content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+    if let Some(c) = para.label_color {
+        fill_rgb(content, c);
     }
     content
         .begin_text()
@@ -1152,8 +1146,8 @@ fn render_vertical_cjk_cell(
                 let ascender_ratio = entry.and_then(|e| e.ascender_ratio).unwrap_or(0.75);
                 let widths = entry.and_then(|e| e.char_widths_1000.as_ref());
 
-                if let Some([r, g, b]) = chunk.color {
-                    content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+                if let Some(c) = chunk.color {
+                    fill_rgb(content, c);
                 }
 
                 content.begin_text();
@@ -1598,11 +1592,7 @@ pub(super) fn render_header_footer_table(
 
             if let Some(shading) = cell.shading {
                 content.save_state();
-                content.set_fill_rgb(
-                    shading[0] as f32 / 255.0,
-                    shading[1] as f32 / 255.0,
-                    shading[2] as f32 / 255.0,
-                );
+                fill_rgb(content, shading);
                 content.rect(cell_x, row_bottom, col_w, row_h);
                 content.fill_nonzero();
                 content.restore_state();

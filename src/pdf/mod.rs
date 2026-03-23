@@ -2,6 +2,7 @@ mod assembly;
 mod chart_legend;
 mod charts;
 mod charts_radial;
+pub(crate) mod color;
 mod fonts;
 mod footnotes;
 mod header_footer;
@@ -35,6 +36,7 @@ use layout::{
     DualRegion, LinkAnnotation, build_paragraph_lines, build_tabbed_line, is_text_empty,
     render_paragraph_lines, tallest_run_metrics,
 };
+use color::{fill_rgb, stroke_rgb};
 use smartart::draw_shape_path;
 use table::render_table;
 
@@ -68,9 +70,9 @@ pub(super) fn render_shape_fill(
     gradient_specs: &mut Vec<GradientSpec>,
 ) {
     match fill {
-        ShapeFill::Solid([r, g, b]) => {
+        ShapeFill::Solid(c) => {
             content.save_state();
-            content.set_fill_rgb(*r as f32 / 255.0, *g as f32 / 255.0, *b as f32 / 255.0);
+            fill_rgb(content, *c);
             draw_shape_path(content, x, y, w, h, shape);
             content.fill_nonzero();
             content.restore_state();
@@ -251,11 +253,7 @@ fn render_single_textbox(
         if tb.stroke_width > 0.0 {
             content.save_state();
             content.set_line_width(tb.stroke_width);
-            content.set_stroke_rgb(
-                stroke[0] as f32 / 255.0,
-                stroke[1] as f32 / 255.0,
-                stroke[2] as f32 / 255.0,
-            );
+            stroke_rgb(content, stroke);
             draw_shape_path(
                 content,
                 tb_x,
@@ -343,8 +341,7 @@ fn render_single_textbox(
     // Glow pass: render text as thick stroke in glow color behind everything
     if let Some(glow) = wordart::find_text_glow(tb) {
         content.save_state();
-        let [gr, gg, gb] = glow.color;
-        content.set_stroke_rgb(gr as f32 / 255.0, gg as f32 / 255.0, gb as f32 / 255.0);
+        stroke_rgb(content, glow.color);
         content.set_line_width(glow.radius_pt * 2.0);
         content.set_line_join(pdf_writer::types::LineJoinStyle::RoundJoin);
         content.set_text_rendering_mode(pdf_writer::types::TextRenderingMode::Stroke);
@@ -437,8 +434,8 @@ fn render_textbox_paragraphs(
         let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_lhr);
         let tb_baseline = cursor_y - tp.space_before - tb_fs * tb_ar.unwrap_or(0.75) - y_offset;
         let tp_text_x = content_x + tp.indent_left + x_offset;
-        if let Some([r, g, b]) = force_color {
-            content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+        if let Some(c) = force_color {
+            fill_rgb(content, c);
         }
         if render_labels {
             render_list_label(
@@ -500,11 +497,7 @@ fn render_connector(conn: &ConnectorShape, content: &mut Content, col_x: f32, sl
     let cy = slot_top - conn.y;
 
     content.save_state();
-    content.set_stroke_rgb(
-        conn.stroke_color[0] as f32 / 255.0,
-        conn.stroke_color[1] as f32 / 255.0,
-        conn.stroke_color[2] as f32 / 255.0,
-    );
+    stroke_rgb(content, conn.stroke_color);
     content.set_line_width(conn.stroke_width);
 
     match &conn.connector_type {
@@ -2022,7 +2015,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     }
 
                     // Draw paragraph shading (background), extending outward to match borders
-                    if let Some([r, g, b]) = para.shading {
+                    if let Some(shd_color) = para.shading {
                         let shd_left_outset = para
                             .borders
                             .left
@@ -2041,11 +2034,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         let shd_bottom =
                             pb.slot_top - bdr_top_pad - content_h + trailing_lead - bdr_bottom_pad;
                         pb.content.save_state();
-                        pb.content.set_fill_rgb(
-                            r as f32 / 255.0,
-                            g as f32 / 255.0,
-                            b as f32 / 255.0,
-                        );
+                        fill_rgb(&mut pb.content, shd_color);
                         pb.content.rect(
                             shd_left,
                             shd_bottom,
@@ -2164,13 +2153,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         let draw_h = if hr.is_standard { 0.5 } else { hr.height_pt };
                         let rule_y =
                             pb.slot_top - (content_h - draw_h) / 2.0 - draw_h;
-                        let [r, g, b] = hr.fill_color;
                         pb.content.save_state();
-                        pb.content.set_fill_rgb(
-                            r as f32 / 255.0,
-                            g as f32 / 255.0,
-                            b as f32 / 255.0,
-                        );
+                        fill_rgb(&mut pb.content, hr.fill_color);
                         pb.content
                             .rect(rule_x, rule_y, rule_w, draw_h);
                         pb.content.fill_nonzero();
@@ -2312,28 +2296,18 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         let box_right = col_x + col_w + bdr_right_outset;
 
                         let draw_h_border = |content: &mut Content, b: &ParagraphBorder, y: f32| {
-                            let [r, g, b_c] = b.color;
                             content.save_state();
                             content.set_line_width(b.width_pt);
-                            content.set_stroke_rgb(
-                                r as f32 / 255.0,
-                                g as f32 / 255.0,
-                                b_c as f32 / 255.0,
-                            );
+                            stroke_rgb(content, b.color);
                             content.move_to(box_left, y);
                             content.line_to(box_right, y);
                             content.stroke();
                             content.restore_state();
                         };
                         let draw_v_border = |content: &mut Content, b: &ParagraphBorder, x: f32| {
-                            let [r, g, b_c] = b.color;
                             content.save_state();
                             content.set_line_width(b.width_pt);
-                            content.set_stroke_rgb(
-                                r as f32 / 255.0,
-                                g as f32 / 255.0,
-                                b_c as f32 / 255.0,
-                            );
+                            stroke_rgb(content, b.color);
                             content.move_to(x, box_top);
                             content.line_to(x, box_bottom);
                             content.stroke();
@@ -2782,8 +2756,8 @@ fn render_list_label(
     let label_color = para
         .list_label_color
         .or_else(|| para.runs.first().and_then(|r| r.color));
-    if let Some([r, g, b]) = label_color {
-        content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+    if let Some(c) = label_color {
+        fill_rgb(content, c);
     }
     let label_fs = para.list_label_font_size.unwrap_or(fallback_font_size);
     content

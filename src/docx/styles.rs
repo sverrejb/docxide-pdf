@@ -3,15 +3,13 @@ use std::collections::HashMap;
 use crate::model::{Alignment, CellBorder, LineSpacing, TabStop};
 
 use super::{
-    DML_NS, WML_NS, parse_cell_border, parse_cell_border_left, parse_cell_border_right,
-    parse_paragraph_borders, parse_tab_stops_with_clears, parse_text_color, read_zip_text,
-    twips_attr,
-    twips_to_pts, wml, wml_attr, wml_bool,
+    DML_NS, WML_NS, find_child, parse_cell_border, parse_cell_border_left,
+    parse_cell_border_right, parse_paragraph_borders, parse_tab_stops_with_clears,
+    parse_text_color, read_zip_text, twips_attr, twips_to_pts, wml, wml_attr, wml_bool,
 };
 
 fn dml<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
-    node.children()
-        .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(DML_NS))
+    find_child(node, name, DML_NS)
 }
 
 fn dml_typeface<'a>(node: roxmltree::Node<'a, 'a>, element: &str) -> Option<&'a str> {
@@ -139,6 +137,7 @@ pub(super) struct ParagraphStyle {
     pub(super) num_ilvl: Option<u8>,
     pub(super) outline_level: Option<u8>,
     pub(super) snap_to_grid: Option<bool>,
+    pub(super) suppress_auto_hyphens: Option<bool>,
 }
 
 pub(super) struct CharacterStyle {
@@ -644,6 +643,8 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                     .filter(|&lvl| lvl <= 8);
 
                 let snap_to_grid = ppr.and_then(|ppr| wml_bool(ppr, "snapToGrid"));
+                let suppress_auto_hyphens =
+                    ppr.and_then(|ppr| wml_bool(ppr, "suppressAutoHyphens"));
 
                 let based_on = wml(style_node, "basedOn")
                     .and_then(|n| n.attribute((WML_NS, "val")))
@@ -687,6 +688,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                         num_ilvl,
                         outline_level,
                         snap_to_grid,
+                        suppress_auto_hyphens,
                     },
                 );
             }
@@ -827,6 +829,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     num_ilvl,
                     outline_level,
                     snap_to_grid,
+                    suppress_auto_hyphens,
                 );
                 // Tab stops are additive: accumulate from ancestors, child overrides at same pos
                 // Clear tabs remove inherited tabs at matching positions
@@ -878,6 +881,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             s.num_ilvl = s.num_ilvl.or(inh.num_ilvl);
             s.outline_level = s.outline_level.or(inh.outline_level);
             s.snap_to_grid = s.snap_to_grid.or(inh.snap_to_grid);
+            s.suppress_auto_hyphens = s.suppress_auto_hyphens.or(inh.suppress_auto_hyphens);
             s.tab_stops = inh.tab_stops;
         }
     }

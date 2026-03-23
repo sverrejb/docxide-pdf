@@ -6,7 +6,8 @@ use crate::fonts::FontEntry;
 use crate::model::{InlineChart, LegendPosition};
 
 use super::chart_legend::{LegendItem, LegendPlacement, SwatchStyle, render_chart_legend};
-use super::charts::{fill_rgb, resolve_accent_colors, text_width};
+use super::charts::{resolve_accent_colors, text_width};
+use super::color::fill_rgb;
 
 struct RadialLayout {
     cx: f32,

@@ -15,17 +15,15 @@ use super::styles::{
     parse_color_transforms,
 };
 use super::{
-    DML_NS, MC_NS_TOP, WML_NS, WPD_NS, WPS_NS, extract_indents, parse_paragraph_spacing,
-    resolve_theme_color_key, wml, wml_attr,
+    DML_NS, MC_NS_TOP, VML_NS, WML_NS, WPD_NS, WPS_NS, emu_attr, extract_indents, find_child,
+    parse_paragraph_spacing, resolve_theme_color_key, wml, wml_attr,
 };
 
 pub(super) fn find_dml<'a>(
     parent: roxmltree::Node<'a, 'a>,
     name: &str,
 ) -> Option<roxmltree::Node<'a, 'a>> {
-    parent
-        .children()
-        .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(DML_NS))
+    find_child(parent, name, DML_NS)
 }
 
 fn find_dml_all<'a>(
@@ -49,9 +47,7 @@ fn collect_dml_points(parent: roxmltree::Node) -> Vec<(String, String)> {
 }
 
 fn find_wps<'a>(parent: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
-    parent
-        .children()
-        .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(WPS_NS))
+    find_child(parent, name, WPS_NS)
 }
 
 fn find_sp_pr<'a>(wsp: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
@@ -82,13 +78,6 @@ fn find_wps_style_ref<'a>(
 ) -> Option<roxmltree::Node<'a, 'a>> {
     let style = find_wps(wsp, "style")?;
     find_dml(style, ref_name)
-}
-
-fn emu_attr(node: roxmltree::Node, attr: &str) -> f32 {
-    node.attribute(attr)
-        .and_then(|v| v.parse::<f32>().ok())
-        .unwrap_or(0.0)
-        / 12700.0
 }
 
 pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
@@ -518,7 +507,7 @@ fn parse_body_margins(wsp: roxmltree::Node) -> (f32, f32, f32, f32) {
     let emu_to_pt = |attr: &str, default: f32| -> f32 {
         bp.attribute(attr)
             .and_then(|v| v.parse::<f32>().ok())
-            .map(|emu| emu / 12700.0)
+            .map(super::emu_to_pts)
             .unwrap_or(default)
     };
     (
@@ -537,7 +526,7 @@ fn parse_wordart_body_margins(wsp: roxmltree::Node) -> (f32, f32, f32, f32) {
     let emu_to_pt = |attr: &str| -> f32 {
         bp.attribute(attr)
             .and_then(|v| v.parse::<f32>().ok())
-            .map(|emu| emu / 12700.0)
+            .map(super::emu_to_pts)
             .unwrap_or(0.0)
     };
     (
@@ -597,7 +586,7 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
             let width = ln
                 .attribute("w")
                 .and_then(|v| v.parse::<f32>().ok())
-                .map(|emu| emu / 12700.0)
+                .map(super::emu_to_pts)
                 .unwrap_or(0.75);
             Some((color, width))
         })
@@ -777,8 +766,6 @@ fn parse_style_stroke_width(wsp: roxmltree::Node) -> f32 {
         _ => 1.0,
     }
 }
-
-const VML_NS: &str = "urn:schemas-microsoft-com:vml";
 
 pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
     pict_node: roxmltree::Node,

@@ -37,13 +37,38 @@ use textbox::collect_textboxes_from_paragraph;
 
 pub(super) const WML_NS: &str = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 pub(super) const DML_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/main";
-const WPD_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
-const WPS_NS: &str = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape";
-const REL_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-const MC_NS_TOP: &str = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+pub(super) const WPD_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
+pub(super) const WPS_NS: &str = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape";
+pub(super) const REL_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+pub(super) const MC_NS_TOP: &str = "http://schemas.openxmlformats.org/markup-compatibility/2006";
+pub(super) const CHART_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+pub(super) const DSP_NS: &str = "http://schemas.microsoft.com/office/drawing/2008/diagram";
+pub(super) const W14_NS: &str = "http://schemas.microsoft.com/office/word/2010/wordml";
+pub(super) const VML_NS: &str = "urn:schemas-microsoft-com:vml";
 
 pub(super) fn twips_to_pts(twips: f32) -> f32 {
     twips / 20.0
+}
+
+pub(super) fn emu_to_pts(emu: f32) -> f32 {
+    emu / 12700.0
+}
+
+pub(super) fn emu_attr(node: roxmltree::Node, attr: &str) -> f32 {
+    node.attribute(attr)
+        .and_then(|v| v.parse::<f32>().ok())
+        .unwrap_or(0.0)
+        / 12700.0
+}
+
+/// Find a child element by name and namespace.
+pub(super) fn find_child<'a>(
+    node: roxmltree::Node<'a, 'a>,
+    name: &str,
+    namespace: &str,
+) -> Option<roxmltree::Node<'a, 'a>> {
+    node.children()
+        .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(namespace))
 }
 
 pub(crate) fn is_east_asian_char(ch: char) -> bool {
@@ -566,6 +591,11 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     .or_else(|| para_style.and_then(|s| s.snap_to_grid))
                     .unwrap_or(true);
 
+                let suppress_auto_hyphens = ppr
+                    .and_then(|ppr| wml_bool(ppr, "suppressAutoHyphens"))
+                    .or_else(|| para_style.and_then(|s| s.suppress_auto_hyphens))
+                    .unwrap_or(false);
+
                 let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
                 let style_num = para_style.and_then(|s| s.num_id.as_deref());
                 let style_ilvl = para_style.and_then(|s| s.num_ilvl);
@@ -778,6 +808,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     outline_level,
                     paragraph_mark_vanish,
                     snap_to_grid,
+                    suppress_auto_hyphens,
                 }));
 
                 // Mid-document section break: sectPr inside pPr ends the current section
@@ -855,5 +886,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         author,
         subject,
         keywords,
+        auto_hyphenation: settings.auto_hyphenation,
+        default_lang: settings.default_lang,
     })
 }

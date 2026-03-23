@@ -7,6 +7,7 @@ use crate::geometry::{self, ResolvedCommand};
 use crate::model::{ShapeGeometry, SmartArtDiagram};
 
 use super::charts;
+use super::color;
 
 pub(super) fn draw_shape_path(
     content: &mut Content,
@@ -95,11 +96,11 @@ pub(super) fn render_smartart(
         if has_fill || has_stroke {
             content.save_state();
             if let Some(fill) = shape.fill {
-                charts::fill_rgb(content, fill);
+                color::fill_rgb(content, fill);
             }
             if let Some(stroke) = shape.stroke_color {
                 content.set_line_width(shape.stroke_width);
-                charts::stroke_rgb(content, stroke);
+                color::stroke_rgb(content, stroke);
             }
             draw_shape_path(
                 content,
@@ -126,7 +127,7 @@ pub(super) fn render_smartart(
             let text_top_y = diag_y - shape.y - (shape.height - total_text_h) / 2.0;
             content.save_state();
             if let Some(color) = shape.text_color {
-                charts::fill_rgb(content, color);
+                color::fill_rgb(content, color);
             } else {
                 content.set_fill_gray(0.0);
             }

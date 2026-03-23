@@ -31,6 +31,8 @@ fn nice_tick_step(max_val: f32, target_ticks: usize) -> f32 {
     ceil_nice(raw_step)
 }
 
+use super::color::{fill_rgb, stroke_rgb};
+
 pub(super) fn text_width_approx(text: &str, font_size: f32) -> f32 {
     text.len() as f32 * font_size * 0.5
 }
@@ -48,22 +50,6 @@ fn format_tick_label(val: f32, step: f32) -> String {
     } else {
         format!("{:.1}", val)
     }
-}
-
-pub(super) fn fill_rgb(content: &mut Content, color: [u8; 3]) {
-    content.set_fill_rgb(
-        color[0] as f32 / 255.0,
-        color[1] as f32 / 255.0,
-        color[2] as f32 / 255.0,
-    );
-}
-
-pub(super) fn stroke_rgb(content: &mut Content, color: [u8; 3]) {
-    content.set_stroke_rgb(
-        color[0] as f32 / 255.0,
-        color[1] as f32 / 255.0,
-        color[2] as f32 / 255.0,
-    );
 }
 
 fn set_color(content: &mut Content, color: Option<[u8; 3]>) {

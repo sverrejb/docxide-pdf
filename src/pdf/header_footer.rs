@@ -463,14 +463,9 @@ pub(super) fn render_header_footer(
                     let box_bottom = cursor_y - line_h;
                     let draw_h_border =
                         |content: &mut Content, b: &crate::model::ParagraphBorder, y: f32| {
-                            let [r, g, b_c] = b.color;
                             content.save_state();
                             content.set_line_width(b.width_pt);
-                            content.set_stroke_rgb(
-                                r as f32 / 255.0,
-                                g as f32 / 255.0,
-                                b_c as f32 / 255.0,
-                            );
+                            super::color::stroke_rgb(content, b.color);
                             content.move_to(box_left, y);
                             content.line_to(box_right, y);
                             content.stroke();

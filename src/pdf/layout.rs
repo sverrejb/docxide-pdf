@@ -7,21 +7,7 @@ use pdf_writer::{Content, Name, Rect, Str};
 use crate::fonts::{FontEntry, encode_as_gids, font_key, font_key_buf, to_winansi_bytes};
 use crate::model::{Alignment, Run, TabAlignment, TabStop, TextFill, TextOutline, VertAlign};
 
-fn set_fill_color(content: &mut Content, color: Option<[u8; 3]>) {
-    if let Some([r, g, b]) = color {
-        content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-    } else {
-        content.set_fill_gray(0.0);
-    }
-}
-
-fn set_stroke_color(content: &mut Content, color: Option<[u8; 3]>) {
-    if let Some([r, g, b]) = color {
-        content.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-    } else {
-        content.set_stroke_gray(0.0);
-    }
-}
+use super::color::{fill_color_or_black, stroke_color_or_black};
 
 /// Resolve aligned segment start position given a tab stop, segment runs, and minimum x.
 fn resolve_tab_aligned_start(
@@ -990,7 +976,7 @@ pub(super) fn render_paragraph_lines(
                     let hl_bottom = y - fs * 0.2;
                     let hl_height = fs * 1.15;
                     content.save_state();
-                    set_fill_color(content, Some(color));
+                    fill_color_or_black(content, Some(color));
                     content.rect(sx, hl_bottom, ex - sx, hl_height);
                     content.fill_nonzero();
                     content.restore_state();
@@ -1044,7 +1030,7 @@ pub(super) fn render_paragraph_lines(
                     _ => chunk.color,
                 };
                 if effective_color != current_color {
-                    set_fill_color(content, effective_color);
+                    fill_color_or_black(content, effective_color);
                     current_color = effective_color;
                 }
 
@@ -1063,7 +1049,7 @@ pub(super) fn render_paragraph_lines(
                     has_text_outline = false;
                     if cur_synthetic_bold {
                         content.set_line_width(chunk.font_size * 0.02);
-                        set_stroke_color(content, chunk.color);
+                        stroke_color_or_black(content, chunk.color);
                         content.set_text_rendering_mode(TextRenderingMode::FillStroke);
                     }
                 }
@@ -1071,7 +1057,7 @@ pub(super) fn render_paragraph_lines(
                 if !has_text_outline && chunk.synthetic_bold != cur_synthetic_bold {
                     if chunk.synthetic_bold {
                         content.set_line_width(chunk.font_size * 0.02);
-                        set_stroke_color(content, chunk.color);
+                        stroke_color_or_black(content, chunk.color);
                         content.set_text_rendering_mode(TextRenderingMode::FillStroke);
                     } else {
                         content.set_text_rendering_mode(TextRenderingMode::Fill);
@@ -1261,7 +1247,7 @@ pub(super) fn render_paragraph_lines(
 
         for &(dx, dy, dw, dh, dcolor) in &decorations {
             if dcolor != current_color {
-                set_fill_color(content, dcolor);
+                fill_color_or_black(content, dcolor);
                 current_color = dcolor;
             }
             content.rect(dx, dy, dw, dh).fill_nonzero();

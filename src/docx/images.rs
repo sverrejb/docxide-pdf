@@ -11,31 +11,22 @@ use super::numbering::NumberingInfo;
 use super::smartart::{has_diagram_ref, parse_smartart_drawing};
 use super::styles::{StylesInfo, ThemeFonts};
 use super::textbox::{parse_connector_from_wsp, parse_textbox_from_wsp};
-use super::{DML_NS, REL_NS, WML_NS, WPD_NS, wml};
+use super::{DML_NS, REL_NS, WML_NS, WPD_NS, emu_attr, emu_to_pts, find_child, wml};
 
 const CHART_URI: &str = "http://schemas.openxmlformats.org/drawingml/2006/chart";
-
-fn emu_to_pts(emu: f32) -> f32 {
-    emu / 12700.0
-}
 
 fn parse_emu_text(text: Option<&str>) -> f32 {
     emu_to_pts(text.unwrap_or("0").parse::<f32>().unwrap_or(0.0))
 }
 
 fn wpd<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
-    node.children()
-        .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(WPD_NS))
+    find_child(node, name, WPD_NS)
 }
 
 fn wpd_child_text<'a>(parent: Option<roxmltree::Node<'a, 'a>>, name: &str) -> Option<&'a str> {
     parent
         .and_then(|n| n.children().find(|c| c.tag_name().name() == name))
         .and_then(|n| n.text())
-}
-
-fn emu_attr(node: roxmltree::Node, attr: &str) -> f32 {
-    parse_emu_text(node.attribute(attr))
 }
 
 /// Extra vertical space for an inline image: (total, top_portion).

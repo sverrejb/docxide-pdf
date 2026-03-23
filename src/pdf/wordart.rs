@@ -15,7 +15,7 @@ pub(super) fn apply_text_outline(
     text_fill: Option<&TextFill>,
 ) -> bool {
     content.set_line_width(outline.width_pt);
-    set_stroke_color(content, outline.color);
+    stroke_rgb(content, outline.color);
 
     let mode = match text_fill {
         Some(TextFill::NoFill) => TextRenderingMode::Stroke,
@@ -175,28 +175,18 @@ fn collect_text_info(tb: &Textbox) -> Option<WordArtTextInfo> {
     Some(info)
 }
 
+use super::color::{fill_color_or_black, stroke_rgb};
+
 /// Resolve the effective fill color from text_fill + run color.
 fn resolve_fill_color(
     text_fill: &Option<TextFill>,
     text_color: Option<[u8; 3]>,
-) -> Option<(u8, u8, u8)> {
+) -> Option<[u8; 3]> {
     match text_fill {
-        Some(TextFill::Solid([r, g, b])) => Some((*r, *g, *b)),
+        Some(TextFill::Solid(c)) => Some(*c),
         Some(TextFill::NoFill) => None,
-        _ => text_color.map(|[r, g, b]| (r, g, b)),
+        _ => text_color,
     }
-}
-
-fn set_fill_from_color(content: &mut Content, color: Option<(u8, u8, u8)>) {
-    if let Some((r, g, b)) = color {
-        content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
-    } else {
-        content.set_fill_gray(0.0);
-    }
-}
-
-fn set_stroke_color(content: &mut Content, [r, g, b]: [u8; 3]) {
-    content.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
 }
 
 /// Emit glyph path commands into a PDF content stream, applying a coordinate
@@ -284,7 +274,7 @@ fn fill_and_stroke_glyphs(
 
     if let Some(outline) = outline {
         content.set_line_width(outline.width_pt);
-        set_stroke_color(content, outline.color);
+        stroke_rgb(content, outline.color);
         emit_stroke_paths(content);
         content.stroke();
     }
@@ -506,7 +496,7 @@ pub(super) fn render_warped_textbox(
     let fill_color = resolve_fill_color(&info.fill, info.text_color);
 
     content.save_state();
-    set_fill_from_color(content, fill_color);
+    fill_color_or_black(content, fill_color);
 
     // Geometry engine already converts boundaries to PDF y-up coords (shape_h - scaled),
     // so boundary y=0 is bottom of envelope, y=boundary_h is top.
@@ -694,7 +684,7 @@ pub(super) fn render_text_on_path(
     let fill_color = resolve_fill_color(&info.fill, info.text_color);
 
     content.save_state();
-    set_fill_from_color(content, fill_color);
+    fill_color_or_black(content, fill_color);
 
     let start_s = (total_arc - total_advance) / 2.0;
     let x_offset = (content_w as f64 - boundary_w) / 2.0;

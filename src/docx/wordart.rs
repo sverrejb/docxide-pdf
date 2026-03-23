@@ -6,10 +6,7 @@ use crate::model::{
 
 use super::styles::{StylesInfo, ThemeFonts};
 use super::textbox::{find_dml, parse_avlst};
-use super::{parse_hex_color, DML_NS};
-
-const W14_NS: &str = "http://schemas.microsoft.com/office/word/2010/wordml";
-const VML_NS: &str = "urn:schemas-microsoft-com:vml";
+use super::{DML_NS, W14_NS, parse_hex_color};
 
 /// Parsed WordArt-specific properties from wps:bodyPr.
 pub(super) struct WordArtBodyProps {
@@ -68,7 +65,7 @@ pub(super) fn parse_text_outline(rpr: roxmltree::Node) -> Option<TextOutline> {
     let width_pt = outline
         .attribute((W14_NS, "w"))
         .and_then(|v| v.parse::<f32>().ok())
-        .map(|emu| emu / 12700.0)
+        .map(super::emu_to_pts)
         .unwrap_or(0.75);
 
     let color = find_w14_solid_fill_color(outline)?;
@@ -116,13 +113,13 @@ pub(super) fn parse_text_shadow(rpr: roxmltree::Node) -> Option<TextShadow> {
     let blur_rad = shadow
         .attribute((W14_NS, "blurRad"))
         .and_then(|v| v.parse::<f32>().ok())
-        .map(|emu| emu / 12700.0)
+        .map(super::emu_to_pts)
         .unwrap_or(0.0);
 
     let dist = shadow
         .attribute((W14_NS, "dist"))
         .and_then(|v| v.parse::<f32>().ok())
-        .map(|emu| emu / 12700.0)
+        .map(super::emu_to_pts)
         .unwrap_or(blur_rad.max(1.5));
 
     // Direction in 60000ths of a degree, clockwise from right
@@ -166,7 +163,7 @@ pub(super) fn parse_text_glow(rpr: roxmltree::Node) -> Option<TextGlow> {
     let radius_pt = glow
         .attribute((W14_NS, "rad"))
         .and_then(|v| v.parse::<f32>().ok())
-        .map(|emu| emu / 12700.0)
+        .map(super::emu_to_pts)
         .unwrap_or(0.0);
 
     if radius_pt <= 0.0 {
