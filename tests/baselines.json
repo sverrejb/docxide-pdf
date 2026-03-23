@@ -217,6 +217,14 @@
     "ssim": 0.5342,
     "text_boundary": 0.0
   },
+  "cases/case44": {
+    "jaccard": 0.5056,
+    "ssim": 0.5448
+  },
+  "cases/case45": {
+    "jaccard": 0.3537,
+    "ssim": 0.5447
+  },
   "cases/case5": {
     "jaccard": 0.7607,
     "ssim": 0.9027,
@@ -246,6 +254,30 @@
     "ssim": 0.9013,
     "text_boundary": 1.0,
     "convert_ms": 4.9
+  },
+  "fonts/arial": {
+    "jaccard": 0.6126,
+    "ssim": 0.9313
+  },
+  "fonts/calibri": {
+    "jaccard": 0.7834,
+    "ssim": 0.9179
+  },
+  "fonts/cambria": {
+    "jaccard": 0.7259,
+    "ssim": 0.9183
+  },
+  "fonts/georgia": {
+    "jaccard": 0.7745,
+    "ssim": 0.9223
+  },
+  "fonts/multi_font": {
+    "jaccard": 0.2454,
+    "ssim": 0.4441
+  },
+  "fonts/times_new_roman": {
+    "jaccard": 0.4661,
+    "ssim": 0.8883
   },
   "samples/sample500kB": {
     "jaccard": 0.3143,
@@ -374,14 +406,14 @@
     "convert_ms": 115.1
   },
   "scraped/italian_project_..": {
-    "jaccard": 0.2623,
-    "ssim": 0.575,
+    "jaccard": 0.2569,
+    "ssim": 0.5592,
     "text_boundary": 0.25,
     "convert_ms": 2.4
   },
   "scraped/japanese_interli..": {
-    "jaccard": 0.0484,
-    "ssim": 0.2693,
+    "jaccard": 0.0412,
+    "ssim": 0.2619,
     "text_boundary": 0.1,
     "convert_ms": 4.5
   },
@@ -500,8 +532,8 @@
     "convert_ms": 32.2
   },
   "scraped/traditional_skil..": {
-    "jaccard": 0.1533,
-    "ssim": 0.486,
+    "jaccard": 0.1418,
+    "ssim": 0.4616,
     "text_boundary": 0.7386,
     "convert_ms": 22.0
   },
@@ -542,8 +574,8 @@
     "convert_ms": 38.6
   },
   "scraped/vaccines_history..": {
-    "jaccard": 0.4155,
-    "ssim": 0.5181,
+    "jaccard": 0.4156,
+    "ssim": 0.5189,
     "text_boundary": 0.1316,
     "convert_ms": 23.3
   },

@@ -120,9 +120,16 @@ pub(super) fn render_smartart(
 
         if !shape.text.is_empty() && shape.font_size > 0.0 {
             let fs = shape.font_size;
-            let lines: Vec<&str> = shape.text.split('\n').collect();
+            let para_lines: Vec<&str> = shape.text.split('\n').collect();
             let line_h = fs * 1.2;
-            let total_text_h = lines.len() as f32 * line_h;
+
+            // Word-wrap each paragraph line to fit within shape width
+            let mut wrapped: Vec<String> = Vec::new();
+            for para in &para_lines {
+                wrap_text_into(para, fs, shape.width, sa_font_entry, &mut wrapped);
+            }
+
+            let total_text_h = wrapped.len() as f32 * line_h;
             let text_top_y = diag_y - shape.y - (shape.height - total_text_h) / 2.0;
             content.save_state();
             if let Some(color) = shape.text_color {
@@ -130,7 +137,7 @@ pub(super) fn render_smartart(
             } else {
                 content.set_fill_gray(0.0);
             }
-            for (i, line) in lines.iter().enumerate() {
+            for (i, line) in wrapped.iter().enumerate() {
                 let tw = charts::text_width(line, fs, sa_font_entry);
                 let tx = diag_x + shape.x + (shape.width - tw) / 2.0;
                 let ty = text_top_y - fs - (i as f32) * line_h;
@@ -146,5 +153,47 @@ pub(super) fn render_smartart(
             }
             content.restore_state();
         }
+    }
+}
+
+/// Word-wrap `text` into lines that fit within `max_width` at the given font size.
+fn wrap_text_into(
+    text: &str,
+    font_size: f32,
+    max_width: f32,
+    font_entry: Option<&FontEntry>,
+    out: &mut Vec<String>,
+) {
+    if text.is_empty() {
+        out.push(String::new());
+        return;
+    }
+    let full_w = charts::text_width(text, font_size, font_entry);
+    if full_w <= max_width {
+        out.push(text.to_string());
+        return;
+    }
+    let words: Vec<&str> = text.split_whitespace().collect();
+    if words.is_empty() {
+        out.push(text.to_string());
+        return;
+    }
+    let mut current_line = String::new();
+    for word in &words {
+        if current_line.is_empty() {
+            current_line.push_str(word);
+        } else {
+            let candidate = format!("{} {}", current_line, word);
+            let cw = charts::text_width(&candidate, font_size, font_entry);
+            if cw <= max_width {
+                current_line = candidate;
+            } else {
+                out.push(current_line);
+                current_line = word.to_string();
+            }
+        }
+    }
+    if !current_line.is_empty() {
+        out.push(current_line);
     }
 }
