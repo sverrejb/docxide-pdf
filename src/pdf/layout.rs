@@ -1282,6 +1282,11 @@ pub(super) fn tallest_run_metrics(
     let mut key_buf = String::new();
 
     for run in runs {
+        // Line-break runs only affect the empty line they create, not
+        // the paragraph's overall line height.
+        if run.is_line_break {
+            continue;
+        }
         let key = font_key_buf(run, &mut key_buf);
         let entry = seen_fonts.get(key);
         let ar = entry.and_then(|e| e.ascender_ratio).unwrap_or(0.75);

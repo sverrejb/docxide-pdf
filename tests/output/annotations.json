@@ -9,7 +9,7 @@
       "x_pt": 514.2692,
       "y_pt": 506.1648,
       "note": "Text should be directly above the grey line, not floating above it.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 5,
@@ -39,7 +39,7 @@
       "x_pt": 459.57916,
       "y_pt": 450.31363,
       "note": "We are rendering the labels too wide. Compare to reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 22,
@@ -49,7 +49,7 @@
       "x_pt": 604.5412,
       "y_pt": 512.56494,
       "note": "The green line under \"To- og femmån... .\" is too close to the text.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 23,
@@ -59,7 +59,7 @@
       "x_pt": 555.4253,
       "y_pt": 467.83395,
       "note": "The space above the \"Medarbeiderens egenevaluering\" is too large.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 25,
@@ -129,7 +129,7 @@
       "x_pt": 172.97893,
       "y_pt": 157.12347,
       "note": "\"refresh\" goes out of bounds here. The table cell should either be wider, or the text should be narrower.  Compare to reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 37,
@@ -139,7 +139,7 @@
       "x_pt": 114.08524,
       "y_pt": 445.33157,
       "note": "Labels should be between the little markers on the x-axis. See reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 38,

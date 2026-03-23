@@ -545,16 +545,9 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                 } else {
                     para_style.map(|s| s.borders.clone()).unwrap_or_default()
                 };
-                let bdr_bottom_extra = borders
-                    .bottom
-                    .as_ref()
-                    .map(|b| b.space_pt + b.width_pt)
-                    .unwrap_or(0.0);
-
                 let (sp_before, sp_after, line_spacing) = parse_paragraph_spacing(ppr, para_style);
                 let space_before = sp_before.unwrap_or(0.0);
-                let space_after =
-                    sp_after.unwrap_or(styles.defaults.space_after) + bdr_bottom_extra;
+                let space_after = sp_after.unwrap_or(styles.defaults.space_after);
 
                 let para_shading = ppr
                     .and_then(|ppr| wml(ppr, "shd"))

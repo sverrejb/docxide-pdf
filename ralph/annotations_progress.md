@@ -338,3 +338,123 @@ For the "Dated" cell (vAlign=bottom, Normal style space_after=9pt):
 - `cases/case43`: Jaccard +0.9pp (21.1→22.1%)
 - `scraped/polish_municipal_letter`: Jaccard +0.6pp (32.7→33.3%)
 - No Jaccard regressions across all 92 test cases
+
+---
+
+## 2026-03-23: Fixed table auto-fit ignoring cell margins (annotation #35)
+
+**Problem**: In `cases/case6`, the text "/api/auth/refresh" in the Performance Metrics table overflowed its cell boundary into the adjacent column. The reference shows the first column wide enough to contain the text.
+
+**Root cause**: The `auto_fit_columns()` function in `src/pdf/table.rs` computed minimum column widths based on word widths alone, without accounting for cell margins (padding). The default cell margins are 5.4pt left + 5.4pt right = 10.8pt total horizontal padding. For a column of 86.4pt with 10.8pt padding, the available text width is only 75.6pt. The word "/api/auth/refresh" at ~77pt exceeded this, but the auto-fit check compared against the full 86.4pt column width (77 < 86.4) and didn't expand the column.
+
+**Fix** (`src/pdf/table.rs`):
+- In `auto_fit_columns()`, resolve each cell's effective margins (`cell.cell_margins` or table-level `cell_margins`)
+- Add horizontal padding (`ecm.left + ecm.right`) to each word width before comparing against column widths
+- This ensures columns expand to fit text INCLUDING the cell padding
+
+**Impact**:
+- `cases/case6`: Jaccard +2.1pp (43.4→45.5%), SSIM +2.4pp (85.2→87.5%)
+- No regressions across all test cases
+
+---
+
+## 2026-03-23: Fixed paragraph bottom border extent double-counted in space_after (annotation #2)
+
+**Problem**: In `samples/samtale`, the answer text (e.g., "I stor grad.") was floating above the grey bottom border lines instead of sitting directly above them. This caused cumulative vertical drift — each bordered paragraph added extra space, and by items 4-5 on page 2, the text was visibly shifted down compared to the reference.
+
+**Root cause**: In `src/docx/mod.rs`, the paragraph parsing code added `bdr_bottom_extra = space_pt + width_pt` from the bottom border to `space_after`. This meant the border extent was treated as inter-paragraph spacing rather than paragraph height. Two problems:
+1. **Double-counting**: The rendering code separately handled border positioning via `bdr_bottom_pad`, so the border space was accounted for twice — once in `space_after` and once in the border drawing
+2. **Incorrect contextualSpacing interaction**: When `contextualSpacing` suppressed `space_after` to 0, the border extent was also suppressed, leaving no room below the border
+
+For the samtale answer paragraphs (Normal style with `w:pBdr bottom sz="18" space="1"`), this added 3.25pt extra per bordered paragraph (space_pt=1 + width_pt=2.25). Over 5 question-answer pairs, this accumulated ~16pt of vertical drift.
+
+**Fix**:
+- `src/docx/mod.rs`: Removed `bdr_bottom_extra` from `space_after` calculation — border extent is not spacing
+- `src/pdf/mod.rs`: Added `bdr_bottom_extent` (= `space_pt + width_pt`) to the slot_top advancement and `needed` page-break calculation, treating the border extent as part of the paragraph's consumed height rather than inter-paragraph spacing
+
+This ensures the border extent is always consumed (not suppressible by `contextualSpacing`) and doesn't inflate the inter-paragraph gap via `max(prev_space_after, next_space_before)` collapsing.
+
+**Impact**:
+- `samples/samtale`: SSIM +3.4pp (54.3→57.7%), Jaccard -0.3pp (12.8→12.6%, within noise)
+- No regressions across all test cases
+
+---
+
+## 2026-03-23: Fixed chart category axis label positioning (annotation #37)
+
+**Problem**: In `cases/case30`, the x-axis labels ("Jan", "Feb", etc.) on the line chart were positioned directly on the tick marks instead of being centered between them. The reference shows labels centered in each category segment between adjacent tick marks.
+
+**Root cause**: The label positioning code in `src/pdf/charts.rs` had a special case for line/area charts (`is_point_chart`) that used `plot_w / (num_categories - 1)` spacing — the same edge-to-edge spacing as data points. This placed labels at data point positions (ON tick marks). However, tick marks were already correctly drawn at segment boundaries using `plot_w / num_categories` spacing. The label and tick mark coordinate systems were inconsistent.
+
+**Fix** (`src/pdf/charts.rs`):
+- Removed the `is_point_chart` special case for label positioning
+- All category axis labels now use the same formula: `plot_x + (ci + 0.5) * (plot_w / num_categories) - tw/2` — centered in each category segment between tick marks
+- Data point positions remain unchanged (edge-to-edge spacing for line/area charts)
+
+**Impact**:
+- `cases/case30`: Jaccard -0.1pp (81.9→81.8%, within noise), SSIM -1.1pp (83.3→82.2%) — labels shifted to correct positions but font width differences cause imperfect centering
+- `cases/case29` (bar charts): unchanged — already used correct centering formula
+- `cases/case31`: unchanged
+- No regressions above 2% across all test cases
+
+---
+
+## 2026-03-23: Fixed SmartArt text labels overflowing shape bounds (annotation #21)
+
+**Problem**: In `scraped/vaccines_history_chapter`, the SmartArt timeline labels (date labels and descriptions like "(1796) Edward Jenner invented the Small pox vaccine") were rendered too wide, extending far beyond their shape boundaries. The reference shows labels wrapped within their shape bounds.
+
+**Root cause**: The SmartArt text rendering code in `src/pdf/smartart.rs` split text only on explicit `\n` characters (paragraph breaks from the XML) but never word-wrapped within shape bounds. Each paragraph was rendered as a single continuous line. For labels with long descriptions (e.g., "Influenza reccommend as an additonal vaccine for children" in a 36pt-wide shape at 5pt font), the text width far exceeded the shape width (142pt vs 36pt), causing it to overflow the shape boundaries and overlap adjacent labels.
+
+**Fix** (`src/pdf/smartart.rs`):
+- Added `wrap_text_into()` helper that word-wraps text into lines fitting within `max_width` using greedy line-breaking
+- Modified `render_smartart()` to wrap each paragraph line before rendering
+- Vertical centering recalculated based on wrapped line count (not raw paragraph count)
+
+**Impact**:
+- `scraped/vaccines_history_chapter`: SSIM +0.1pp (51.8→51.9%) — small score improvement because labels are tiny (5pt) relative to full page, but visually the labels now correctly wrap within shape bounds matching the reference
+- No regressions caused by this change across all test cases (pre-existing baseline drift in 3 non-SmartArt fixtures was accepted)
+
+---
+
+## 2026-03-23: Fixed paragraph bottom border positioned too close to text (annotation #22)
+
+**Problem**: In `samples/samtale`, the green underline below "To- og femmånederssamtalen" was rendered almost touching the text descenders, while the reference shows a clear ~13pt gap between the text baseline and the border. The grey separator borders on page 2 were also ~1pt too close.
+
+**Root cause**: The border positioning code in `src/pdf/mod.rs` subtracted `trailing_lead = (line_h - font_size).max(0.0)` from the content height before computing the border position. This was intended to make bottom-only borders "sit close to the text" by measuring the `space` attribute from the text descent rather than the line-height bottom. However, Word actually measures `w:space` from the full line-height content bottom (including trailing leading), not from the text descent.
+
+For the heading paragraph (26pt Calibri Bold, Auto 1.15 line spacing):
+- `line_h = 36.50pt`, `font_size = 26pt`, `trailing_lead = 10.50pt`
+- With trailing_lead: gap from baseline to border top = **2.24pt**
+- Without trailing_lead: gap = **12.75pt** — matching the reference's 12.78pt within 0.03pt
+- The grey borders (11pt, Auto 1.15) also improved: gap 3.96pt vs reference 3.76pt (previously 2.65pt)
+
+**Fix** (`src/pdf/mod.rs`):
+- Removed the `trailing_lead` computation entirely — it was based on incorrect assumptions about how Word positions paragraph bottom borders
+- Simplified both the shading background and border positioning formulas by removing the `+ trailing_lead` term
+
+**Impact**:
+- `samples/samtale`: Jaccard -1.6pp (12.6→11.0%, from overall vertical shift), SSIM -0.3pp (57.7→57.4%)
+- `cases/case4`: Jaccard +1.6pp (71.3→72.9%), SSIM +0.8pp (89.5→90.2%)
+- Green line gap now matches reference within 0.03pt; grey borders within 0.2pt
+- No SSIM regressions above 0.3pp across all test cases
+
+---
+
+## 2026-03-23: Fixed line break run inflating paragraph line height (annotation #23)
+
+**Problem**: In `samples/samtale`, the space above "Medarbeiderens egenevaluering" was too large compared to the reference. The subheading was at 122.38pt from page top while the reference had it at 114.78pt — a 7.60pt vertical error.
+
+**Root cause**: The paragraph containing "Medarbeiderens egenevaluering" (14pt font) also had a trailing `<w:br/>` line break run with `w:sz="52"` (26pt). The `tallest_run_metrics()` function in `src/pdf/layout.rs` iterated over ALL runs to find the tallest font, including line break runs. The 26pt break run was selected as the tallest, causing:
+- `font_size = 26pt` instead of `14pt` for the paragraph
+- `line_h = 26 × 1.22 × 1.15 = 36.5pt` instead of `~19.7pt`
+- Baseline positioned 19.5pt below slot_top (26×0.75) instead of 10.5pt (14×0.75)
+- This pushed the visible 14pt text 9pt lower than it should be
+
+The gap between heading and subheading measured 36.35pt (generated) vs 25.13pt (reference).
+
+**Fix** (`src/pdf/layout.rs`):
+- Skip runs with `is_line_break: true` in `tallest_run_metrics()` — line break runs only affect the empty line they create, not the paragraph's overall line height
+
+**Impact**:
+- `samples/samtale`: SSIM +0.3pp (57.4→57.6%), subheading gap now 24.92pt vs reference 25.13pt (0.21pt difference — essentially perfect)
+- No regressions across all 100 test cases

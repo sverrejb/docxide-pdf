@@ -698,19 +698,13 @@ pub(super) fn render_chart(
             }
         }
 
-        // Category axis labels
-        let is_point_chart = matches!(c.chart_type, ChartType::Line | ChartType::Area);
+        // Category axis labels — always centered in each category segment
         if !is_scatter_like && let Some(ref cat_axis) = c.cat_axis {
             for (ci, label) in cat_axis.labels.iter().enumerate() {
                 let tw = text_width(label, font_size, label_font);
                 if !horizontal {
-                    let cx = if is_point_chart && num_categories > 1 {
-                        let cat_w = plot_w / (num_categories - 1) as f32;
-                        plot_x + ci as f32 * cat_w - tw / 2.0
-                    } else {
-                        let group_w = plot_w / num_categories as f32;
-                        plot_x + ci as f32 * group_w + group_w / 2.0 - tw / 2.0
-                    };
+                    let group_w = plot_w / num_categories as f32;
+                    let cx = plot_x + (ci as f32 + 0.5) * group_w - tw / 2.0;
                     let cy = plot_y - font_size - 8.0;
                     show_text(content, label_font_key, font_size, cx, cy, label);
                 } else {
