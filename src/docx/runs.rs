@@ -10,7 +10,8 @@ use super::images::{RunDrawingResult, parse_run_drawing};
 use super::is_east_asian_char;
 use super::numbering::NumberingInfo;
 use super::styles::{
-    StylesInfo, ThemeFonts, resolve_east_asia_font_from_node, resolve_font_from_node,
+    CharacterStyle, ParagraphStyle, StyleDefaults, StylesInfo, ThemeFonts,
+    resolve_east_asia_font_from_node, resolve_font_from_node,
 };
 use super::textbox::parse_textbox_from_vml;
 use super::wordart;
@@ -149,6 +150,216 @@ impl RunFormat {
             vertical_align: VertAlign::Superscript,
             ..self.styled_run()
         }
+    }
+}
+
+/// Paragraph-level formatting defaults resolved from the paragraph style chain
+/// and document defaults. Used as fallbacks when run-level properties are absent.
+struct ParagraphRunDefaults {
+    font_size: f32,
+    font_name: String,
+    bold: bool,
+    italic: bool,
+    caps: bool,
+    small_caps: bool,
+    vanish: bool,
+    underline: bool,
+    strikethrough: bool,
+    dstrike: bool,
+    color: Option<[u8; 3]>,
+    char_spacing: f32,
+    kern_threshold: Option<f32>,
+    east_asia_font: Option<String>,
+}
+
+impl ParagraphRunDefaults {
+    fn from_style(para_style: Option<&ParagraphStyle>, defaults: &StyleDefaults) -> Self {
+        Self {
+            font_size: para_style
+                .and_then(|s| s.font_size)
+                .unwrap_or(defaults.font_size),
+            font_name: para_style
+                .and_then(|s| s.font_name.as_deref())
+                .unwrap_or(&defaults.font_name)
+                .to_string(),
+            bold: para_style
+                .and_then(|s| s.bold)
+                .unwrap_or(defaults.bold),
+            italic: para_style
+                .and_then(|s| s.italic)
+                .unwrap_or(defaults.italic),
+            caps: para_style
+                .and_then(|s| s.caps)
+                .unwrap_or(defaults.caps),
+            small_caps: para_style
+                .and_then(|s| s.small_caps)
+                .unwrap_or(defaults.small_caps),
+            vanish: para_style
+                .and_then(|s| s.vanish)
+                .unwrap_or(defaults.vanish),
+            underline: para_style
+                .and_then(|s| s.underline)
+                .unwrap_or(defaults.underline),
+            strikethrough: para_style
+                .and_then(|s| s.strikethrough)
+                .unwrap_or(defaults.strikethrough),
+            dstrike: para_style
+                .and_then(|s| s.dstrike)
+                .unwrap_or(defaults.dstrike),
+            color: para_style.and_then(|s| s.color).or(defaults.color),
+            char_spacing: para_style
+                .and_then(|s| s.char_spacing)
+                .unwrap_or(defaults.char_spacing),
+            kern_threshold: para_style
+                .and_then(|s| s.kern_threshold)
+                .or(defaults.kern_threshold),
+            east_asia_font: para_style
+                .and_then(|s| s.east_asia_font.clone())
+                .or_else(|| defaults.east_asia_font.clone()),
+        }
+    }
+
+    fn resolve_run_format(
+        &self,
+        rpr: Option<roxmltree::Node>,
+        char_style: Option<&CharacterStyle>,
+        char_style_id_str: Option<&str>,
+        theme: &ThemeFonts,
+    ) -> RunFormat {
+        let rfonts_node = rpr.and_then(|n| wml(n, "rFonts"));
+        RunFormat {
+            font_size: rpr
+                .and_then(|n| wml_attr(n, "sz"))
+                .and_then(|v| v.parse::<f32>().ok())
+                .map(|hp| hp / 2.0)
+                .or_else(|| char_style.and_then(|cs| cs.font_size))
+                .unwrap_or(self.font_size),
+            font_name: rfonts_node
+                .map(|rfonts| resolve_font_from_node(rfonts, theme, &self.font_name))
+                .or_else(|| char_style.and_then(|cs| cs.font_name.clone()))
+                .unwrap_or_else(|| self.font_name.clone()),
+            east_asia_font_name: rfonts_node
+                .and_then(|rfonts| resolve_east_asia_font_from_node(rfonts, theme))
+                .or_else(|| char_style.and_then(|cs| cs.east_asia_font.clone()))
+                .or_else(|| self.east_asia_font.clone()),
+            bold: rpr
+                .and_then(|n| wml_bool(n, "b"))
+                .or_else(|| char_style.and_then(|cs| cs.bold))
+                .unwrap_or(self.bold),
+            italic: rpr
+                .and_then(|n| wml_bool(n, "i"))
+                .or_else(|| char_style.and_then(|cs| cs.italic))
+                .unwrap_or(self.italic),
+            underline: rpr
+                .and_then(|n| {
+                    wml(n, "u")
+                        .and_then(|u| u.attribute((WML_NS, "val")))
+                        .map(|v| v != "none")
+                })
+                .or_else(|| char_style.and_then(|cs| cs.underline))
+                .unwrap_or(self.underline),
+            strikethrough: rpr
+                .and_then(|n| wml_bool(n, "strike"))
+                .or_else(|| char_style.and_then(|cs| cs.strikethrough))
+                .unwrap_or(self.strikethrough),
+            dstrike: rpr
+                .and_then(|n| wml_bool(n, "dstrike"))
+                .unwrap_or(self.dstrike),
+            char_spacing: rpr
+                .and_then(|n| wml(n, "spacing"))
+                .and_then(|n| n.attribute((WML_NS, "val")))
+                .and_then(|v| v.parse::<f32>().ok())
+                .map(twips_to_pts)
+                .unwrap_or(self.char_spacing),
+            text_scale: rpr
+                .and_then(|n| wml_attr(n, "w"))
+                .and_then(|v| v.trim_end_matches('%').parse::<f32>().ok())
+                .unwrap_or(100.0),
+            caps: rpr
+                .and_then(|n| wml_bool(n, "caps"))
+                .or_else(|| char_style.and_then(|cs| cs.caps))
+                .unwrap_or(self.caps),
+            small_caps: rpr
+                .and_then(|n| wml_bool(n, "smallCaps"))
+                .or_else(|| char_style.and_then(|cs| cs.small_caps))
+                .unwrap_or(self.small_caps),
+            vanish: rpr
+                .and_then(|n| wml_bool(n, "vanish"))
+                .or_else(|| char_style.and_then(|cs| cs.vanish))
+                .unwrap_or(self.vanish),
+            color: rpr
+                .and_then(|n| wml_attr(n, "color"))
+                .and_then(parse_text_color)
+                .or_else(|| char_style.and_then(|cs| cs.color))
+                .or(self.color),
+            vertical_align: rpr
+                .and_then(|n| wml_attr(n, "vertAlign"))
+                .map(|v| match v {
+                    "superscript" => VertAlign::Superscript,
+                    "subscript" => VertAlign::Subscript,
+                    _ => VertAlign::Baseline,
+                })
+                .unwrap_or(VertAlign::Baseline),
+            highlight: rpr
+                .and_then(|n| wml_attr(n, "highlight"))
+                .and_then(highlight_color),
+            kern_threshold: rpr
+                .and_then(|n| wml_attr(n, "kern"))
+                .and_then(|v| v.parse::<f32>().ok())
+                .map(|hp| hp / 2.0)
+                .or_else(|| char_style.and_then(|cs| cs.kern_threshold))
+                .or(self.kern_threshold),
+            char_style_id: char_style_id_str.map(|s| s.to_string()),
+            text_outline: rpr.and_then(wordart::parse_text_outline),
+            text_fill: rpr.and_then(wordart::parse_text_fill),
+            text_shadow: rpr.and_then(wordart::parse_text_shadow),
+            text_glow: rpr.and_then(wordart::parse_text_glow),
+            lang: rpr
+                .and_then(|n| wml(n, "lang"))
+                .and_then(|n| n.attribute((WML_NS, "val")))
+                .map(|s| s.to_string()),
+        }
+    }
+}
+
+/// Create synthetic runs for empty paragraphs so the renderer computes the
+/// correct line height from the paragraph mark's formatting.
+fn ensure_nonempty_paragraph(
+    runs: &mut Vec<Run>,
+    ppr: Option<roxmltree::Node>,
+    defaults: &ParagraphRunDefaults,
+    theme: &ThemeFonts,
+    has_page_break_before: bool,
+) {
+    if !runs.is_empty() || has_page_break_before {
+        return;
+    }
+    let mark_rpr = ppr.and_then(|ppr| wml(ppr, "rPr"));
+    let mark_font_size = mark_rpr
+        .and_then(|n| wml_attr(n, "sz"))
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(|hp| hp / 2.0);
+    if let Some(mark_font_size) = mark_font_size {
+        let mark_font_name = mark_rpr
+            .and_then(|n| wml(n, "rFonts"))
+            .map(|rfonts| resolve_font_from_node(rfonts, theme, &defaults.font_name))
+            .unwrap_or_else(|| defaults.font_name.clone());
+        runs.push(Run {
+            font_size: mark_font_size,
+            font_name: mark_font_name,
+            bold: defaults.bold,
+            italic: defaults.italic,
+            ..Run::default()
+        });
+    }
+    if runs.is_empty() {
+        runs.push(Run {
+            font_size: defaults.font_size,
+            font_name: defaults.font_name.clone(),
+            bold: defaults.bold,
+            italic: defaults.italic,
+            ..Run::default()
+        });
     }
 }
 
@@ -354,48 +565,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
         .and_then(|ppr| wml_attr(ppr, "pStyle"))
         .unwrap_or(&styles.default_paragraph_style_id);
     let para_style = styles.paragraph_styles.get(para_style_id);
-
-    let style_font_size = para_style
-        .and_then(|s| s.font_size)
-        .unwrap_or(styles.defaults.font_size);
-    let style_font_name = para_style
-        .and_then(|s| s.font_name.as_deref())
-        .unwrap_or(&styles.defaults.font_name)
-        .to_string();
-    let style_bold = para_style
-        .and_then(|s| s.bold)
-        .unwrap_or(styles.defaults.bold);
-    let style_italic = para_style
-        .and_then(|s| s.italic)
-        .unwrap_or(styles.defaults.italic);
-    let style_caps = para_style
-        .and_then(|s| s.caps)
-        .unwrap_or(styles.defaults.caps);
-    let style_small_caps = para_style
-        .and_then(|s| s.small_caps)
-        .unwrap_or(styles.defaults.small_caps);
-    let style_vanish = para_style
-        .and_then(|s| s.vanish)
-        .unwrap_or(styles.defaults.vanish);
-    let style_underline = para_style
-        .and_then(|s| s.underline)
-        .unwrap_or(styles.defaults.underline);
-    let style_strikethrough = para_style
-        .and_then(|s| s.strikethrough)
-        .unwrap_or(styles.defaults.strikethrough);
-    let style_dstrike = para_style
-        .and_then(|s| s.dstrike)
-        .unwrap_or(styles.defaults.dstrike);
-    let style_color: Option<[u8; 3]> = para_style.and_then(|s| s.color).or(styles.defaults.color);
-    let style_char_spacing = para_style
-        .and_then(|s| s.char_spacing)
-        .unwrap_or(styles.defaults.char_spacing);
-    let style_kern_threshold: Option<f32> = para_style
-        .and_then(|s| s.kern_threshold)
-        .or(styles.defaults.kern_threshold);
-    let style_east_asia_font: Option<&str> = para_style
-        .and_then(|s| s.east_asia_font.as_deref())
-        .or(styles.defaults.east_asia_font.as_deref());
+    let defaults = ParagraphRunDefaults::from_style(para_style, &styles.defaults);
 
     let mut run_nodes: Vec<(roxmltree::Node, Option<String>, bool)> = Vec::new();
     collect_run_nodes(para_node, rels, &mut run_nodes);
@@ -425,99 +595,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
             char_style_id_str.and_then(|id| styles.character_styles.get(id))
         };
 
-        let rfonts_node = rpr.and_then(|n| wml(n, "rFonts"));
-        let fmt = RunFormat {
-            font_size: rpr
-                .and_then(|n| wml_attr(n, "sz"))
-                .and_then(|v| v.parse::<f32>().ok())
-                .map(|hp| hp / 2.0)
-                .or_else(|| char_style.and_then(|cs| cs.font_size))
-                .unwrap_or(style_font_size),
-            font_name: rfonts_node
-                .map(|rfonts| resolve_font_from_node(rfonts, theme, &style_font_name))
-                .or_else(|| char_style.and_then(|cs| cs.font_name.clone()))
-                .unwrap_or_else(|| style_font_name.clone()),
-            east_asia_font_name: rfonts_node
-                .and_then(|rfonts| resolve_east_asia_font_from_node(rfonts, theme))
-                .or_else(|| char_style.and_then(|cs| cs.east_asia_font.clone()))
-                .or_else(|| style_east_asia_font.map(|s| s.to_string())),
-            bold: rpr
-                .and_then(|n| wml_bool(n, "b"))
-                .or_else(|| char_style.and_then(|cs| cs.bold))
-                .unwrap_or(style_bold),
-            italic: rpr
-                .and_then(|n| wml_bool(n, "i"))
-                .or_else(|| char_style.and_then(|cs| cs.italic))
-                .unwrap_or(style_italic),
-            underline: rpr
-                .and_then(|n| {
-                    wml(n, "u")
-                        .and_then(|u| u.attribute((WML_NS, "val")))
-                        .map(|v| v != "none")
-                })
-                .or_else(|| char_style.and_then(|cs| cs.underline))
-                .unwrap_or(style_underline),
-            strikethrough: rpr
-                .and_then(|n| wml_bool(n, "strike"))
-                .or_else(|| char_style.and_then(|cs| cs.strikethrough))
-                .unwrap_or(style_strikethrough),
-            dstrike: rpr
-                .and_then(|n| wml_bool(n, "dstrike"))
-                .unwrap_or(style_dstrike),
-            char_spacing: rpr
-                .and_then(|n| wml(n, "spacing"))
-                .and_then(|n| n.attribute((WML_NS, "val")))
-                .and_then(|v| v.parse::<f32>().ok())
-                .map(twips_to_pts)
-                .unwrap_or(style_char_spacing),
-            text_scale: rpr
-                .and_then(|n| wml_attr(n, "w"))
-                .and_then(|v| v.trim_end_matches('%').parse::<f32>().ok())
-                .unwrap_or(100.0),
-            caps: rpr
-                .and_then(|n| wml_bool(n, "caps"))
-                .or_else(|| char_style.and_then(|cs| cs.caps))
-                .unwrap_or(style_caps),
-            small_caps: rpr
-                .and_then(|n| wml_bool(n, "smallCaps"))
-                .or_else(|| char_style.and_then(|cs| cs.small_caps))
-                .unwrap_or(style_small_caps),
-            vanish: rpr
-                .and_then(|n| wml_bool(n, "vanish"))
-                .or_else(|| char_style.and_then(|cs| cs.vanish))
-                .unwrap_or(style_vanish),
-            color: rpr
-                .and_then(|n| wml_attr(n, "color"))
-                .and_then(parse_text_color)
-                .or_else(|| char_style.and_then(|cs| cs.color))
-                .or(style_color),
-            vertical_align: rpr
-                .and_then(|n| wml_attr(n, "vertAlign"))
-                .map(|v| match v {
-                    "superscript" => VertAlign::Superscript,
-                    "subscript" => VertAlign::Subscript,
-                    _ => VertAlign::Baseline,
-                })
-                .unwrap_or(VertAlign::Baseline),
-            highlight: rpr
-                .and_then(|n| wml_attr(n, "highlight"))
-                .and_then(highlight_color),
-            kern_threshold: rpr
-                .and_then(|n| wml_attr(n, "kern"))
-                .and_then(|v| v.parse::<f32>().ok())
-                .map(|hp| hp / 2.0)
-                .or_else(|| char_style.and_then(|cs| cs.kern_threshold))
-                .or(style_kern_threshold),
-            char_style_id: char_style_id_str.map(|s| s.to_string()),
-            text_outline: rpr.and_then(wordart::parse_text_outline),
-            text_fill: rpr.and_then(wordart::parse_text_fill),
-            text_shadow: rpr.and_then(wordart::parse_text_shadow),
-            text_glow: rpr.and_then(wordart::parse_text_glow),
-            lang: rpr
-                .and_then(|n| wml(n, "lang"))
-                .and_then(|n| n.attribute((WML_NS, "val")))
-                .map(|s| s.to_string()),
-        };
+        let fmt = defaults.resolve_run_format(rpr, char_style, char_style_id_str, theme);
 
         let flush_pending = |pending: &mut String, runs: &mut Vec<Run>| {
             if !pending.is_empty() {
@@ -731,40 +809,7 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
         .unwrap_or(false)
         || page_break_before_content;
 
-    // Empty paragraphs with explicit font sizing in their paragraph mark (pPr/rPr)
-    // need a synthetic run so the renderer computes the correct line height.
-    if runs.is_empty() && !has_page_break_before {
-        let mark_rpr = ppr.and_then(|ppr| wml(ppr, "rPr"));
-        let mark_font_size = mark_rpr
-            .and_then(|n| wml_attr(n, "sz"))
-            .and_then(|v| v.parse::<f32>().ok())
-            .map(|hp| hp / 2.0);
-        if let Some(mark_font_size) = mark_font_size {
-            let mark_font_name = mark_rpr
-                .and_then(|n| wml(n, "rFonts"))
-                .map(|rfonts| resolve_font_from_node(rfonts, theme, &style_font_name))
-                .unwrap_or_else(|| style_font_name.clone());
-            runs.push(Run {
-                font_size: mark_font_size,
-                font_name: mark_font_name,
-                bold: style_bold,
-                italic: style_italic,
-                ..Run::default()
-            });
-        }
-    }
-
-    // Word's paragraph mark uses the paragraph style's font even in empty
-    // paragraphs; ensure we carry that font info so line height is correct.
-    if runs.is_empty() {
-        runs.push(Run {
-            font_size: style_font_size,
-            font_name: style_font_name.clone(),
-            bold: style_bold,
-            italic: style_italic,
-            ..Run::default()
-        });
-    }
+    ensure_nonempty_paragraph(&mut runs, ppr, &defaults, theme, has_page_break_before);
 
     let runs = merge_compatible_runs(runs);
 

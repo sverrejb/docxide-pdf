@@ -13,6 +13,9 @@ pub(crate) use encoding::{encode_as_gids, to_winansi_bytes};
 
 /// Metrics returned from font embedding: widths, line-height ratio, ascender ratio,
 /// char-to-gid mapping, per-char widths, and kerning pairs.
+/// Metrics extracted from a font file during embedding: glyph widths, line metrics,
+/// character-to-glyph mapping, and kerning pairs. Does not include font resolution
+/// metadata (path, face index, synthetic bold) which is tracked separately.
 pub(crate) struct FontMetrics {
     pub(crate) widths_1000: Vec<f32>,
     pub(crate) line_h_ratio: f32,
@@ -20,9 +23,14 @@ pub(crate) struct FontMetrics {
     pub(crate) char_to_gid: HashMap<char, u16>,
     pub(crate) char_widths_1000: HashMap<char, f32>,
     pub(crate) kern_pairs: HashMap<(u16, u16), f32>,
-    pub(crate) synthetic_bold: bool,
-    pub(crate) font_path: Option<std::path::PathBuf>,
-    pub(crate) face_index: u32,
+}
+
+/// Font metrics bundled with resolution metadata from the font discovery phase.
+struct ResolvedFont {
+    metrics: FontMetrics,
+    synthetic_bold: bool,
+    font_path: Option<std::path::PathBuf>,
+    face_index: u32,
 }
 
 pub(crate) struct FontEntry {
@@ -146,7 +154,7 @@ fn try_font(
     alloc: &mut impl FnMut() -> Ref,
     embedded_fonts: &EmbeddedFonts,
     used_chars: &HashSet<char>,
-) -> Option<FontMetrics> {
+) -> Option<ResolvedFont> {
     let mut embed = |data: &[u8], face_index: u32| {
         embed::embed_truetype(
             pdf,
@@ -162,20 +170,24 @@ fn try_font(
     };
 
     let embedded_key = (candidate.to_lowercase(), bold, italic);
-    if let Some(mut metrics) = embedded_fonts.get(&embedded_key).and_then(|d| embed(d, 0)) {
-        metrics.synthetic_bold = false;
-        metrics.font_path = None;
-        metrics.face_index = 0;
-        return Some(metrics);
+    if let Some(metrics) = embedded_fonts.get(&embedded_key).and_then(|d| embed(d, 0)) {
+        return Some(ResolvedFont {
+            metrics,
+            synthetic_bold: false,
+            font_path: None,
+            face_index: 0,
+        });
     }
 
     let (path, face_index, exact_match) = discovery::find_font_file(candidate, bold, italic)?;
     let data = std::fs::read(&path).ok()?;
-    let mut metrics = embed(&data, face_index)?;
-    metrics.synthetic_bold = bold && !exact_match;
-    metrics.font_path = Some(path);
-    metrics.face_index = face_index;
-    Some(metrics)
+    let metrics = embed(&data, face_index)?;
+    Some(ResolvedFont {
+        metrics,
+        synthetic_bold: bold && !exact_match,
+        font_path: Some(path),
+        face_index,
+    })
 }
 
 fn lookup_font_table<'a>(
@@ -330,7 +342,7 @@ pub(crate) fn register_font(
     let missing_cjk = if needs_cjk {
         let covered: HashSet<char> = result
             .as_ref()
-            .map(|m| m.char_to_gid.keys().copied().collect())
+            .map(|r| r.metrics.char_to_gid.keys().copied().collect())
             .unwrap_or_default();
         used_chars
             .iter()
@@ -342,23 +354,23 @@ pub(crate) fn register_font(
     };
 
     let entry = match result {
-        Some(m) => FontEntry {
+        Some(r) => FontEntry {
             pdf_name,
             font_ref,
-            widths_1000: m.widths_1000,
-            line_h_ratio: Some(m.line_h_ratio),
-            ascender_ratio: Some(m.ascender_ratio),
-            char_to_gid: Some(m.char_to_gid),
-            char_widths_1000: Some(m.char_widths_1000),
-            kern_pairs: if m.kern_pairs.is_empty() {
+            widths_1000: r.metrics.widths_1000,
+            line_h_ratio: Some(r.metrics.line_h_ratio),
+            ascender_ratio: Some(r.metrics.ascender_ratio),
+            char_to_gid: Some(r.metrics.char_to_gid),
+            char_widths_1000: Some(r.metrics.char_widths_1000),
+            kern_pairs: if r.metrics.kern_pairs.is_empty() {
                 None
             } else {
-                Some(m.kern_pairs)
+                Some(r.metrics.kern_pairs)
             },
-            synthetic_bold: m.synthetic_bold,
+            synthetic_bold: r.synthetic_bold,
             missing_cjk_chars: missing_cjk,
-            font_path: m.font_path,
-            face_index: m.face_index,
+            font_path: r.font_path,
+            face_index: r.face_index,
         },
         None => {
             log::warn!("Font not found: {font_name} bold={bold} italic={italic} — using Helvetica");
