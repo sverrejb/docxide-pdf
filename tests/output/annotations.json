@@ -59,7 +59,7 @@
       "x_pt": 555.4253,
       "y_pt": 467.83395,
       "note": "The space above the \"Medarbeiderens egenevaluering\" is too large.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 25,

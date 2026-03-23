@@ -437,3 +437,24 @@ For the heading paragraph (26pt Calibri Bold, Auto 1.15 line spacing):
 - `cases/case4`: Jaccard +1.6pp (71.3→72.9%), SSIM +0.8pp (89.5→90.2%)
 - Green line gap now matches reference within 0.03pt; grey borders within 0.2pt
 - No SSIM regressions above 0.3pp across all test cases
+
+---
+
+## 2026-03-23: Fixed line break run inflating paragraph line height (annotation #23)
+
+**Problem**: In `samples/samtale`, the space above "Medarbeiderens egenevaluering" was too large compared to the reference. The subheading was at 122.38pt from page top while the reference had it at 114.78pt — a 7.60pt vertical error.
+
+**Root cause**: The paragraph containing "Medarbeiderens egenevaluering" (14pt font) also had a trailing `<w:br/>` line break run with `w:sz="52"` (26pt). The `tallest_run_metrics()` function in `src/pdf/layout.rs` iterated over ALL runs to find the tallest font, including line break runs. The 26pt break run was selected as the tallest, causing:
+- `font_size = 26pt` instead of `14pt` for the paragraph
+- `line_h = 26 × 1.22 × 1.15 = 36.5pt` instead of `~19.7pt`
+- Baseline positioned 19.5pt below slot_top (26×0.75) instead of 10.5pt (14×0.75)
+- This pushed the visible 14pt text 9pt lower than it should be
+
+The gap between heading and subheading measured 36.35pt (generated) vs 25.13pt (reference).
+
+**Fix** (`src/pdf/layout.rs`):
+- Skip runs with `is_line_break: true` in `tallest_run_metrics()` — line break runs only affect the empty line they create, not the paragraph's overall line height
+
+**Impact**:
+- `samples/samtale`: SSIM +0.3pp (57.4→57.6%), subheading gap now 24.92pt vs reference 25.13pt (0.21pt difference — essentially perfect)
+- No regressions across all 100 test cases
