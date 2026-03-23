@@ -139,7 +139,7 @@
       "x_pt": 114.08524,
       "y_pt": 445.33157,
       "note": "Labels should be between the little markers on the x-axis. See reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 38,

@@ -377,3 +377,22 @@ This ensures the border extent is always consumed (not suppressible by `contextu
 **Impact**:
 - `samples/samtale`: SSIM +3.4pp (54.3→57.7%), Jaccard -0.3pp (12.8→12.6%, within noise)
 - No regressions across all test cases
+
+---
+
+## 2026-03-23: Fixed chart category axis label positioning (annotation #37)
+
+**Problem**: In `cases/case30`, the x-axis labels ("Jan", "Feb", etc.) on the line chart were positioned directly on the tick marks instead of being centered between them. The reference shows labels centered in each category segment between adjacent tick marks.
+
+**Root cause**: The label positioning code in `src/pdf/charts.rs` had a special case for line/area charts (`is_point_chart`) that used `plot_w / (num_categories - 1)` spacing — the same edge-to-edge spacing as data points. This placed labels at data point positions (ON tick marks). However, tick marks were already correctly drawn at segment boundaries using `plot_w / num_categories` spacing. The label and tick mark coordinate systems were inconsistent.
+
+**Fix** (`src/pdf/charts.rs`):
+- Removed the `is_point_chart` special case for label positioning
+- All category axis labels now use the same formula: `plot_x + (ci + 0.5) * (plot_w / num_categories) - tw/2` — centered in each category segment between tick marks
+- Data point positions remain unchanged (edge-to-edge spacing for line/area charts)
+
+**Impact**:
+- `cases/case30`: Jaccard -0.1pp (81.9→81.8%, within noise), SSIM -1.1pp (83.3→82.2%) — labels shifted to correct positions but font width differences cause imperfect centering
+- `cases/case29` (bar charts): unchanged — already used correct centering formula
+- `cases/case31`: unchanged
+- No regressions above 2% across all test cases
