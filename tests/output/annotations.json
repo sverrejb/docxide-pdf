@@ -1,16 +1,6 @@
 {
-  "next_id": 74,
+  "next_id": 77,
   "annotations": [
-    {
-      "id": 2,
-      "case": "samples/samtale",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 514.2692,
-      "y_pt": 506.1648,
-      "note": "Text should be directly above the grey line, not floating above it.",
-      "fixed": true
-    },
     {
       "id": 5,
       "case": "scraped/croatian_grant_guidelines",
@@ -30,36 +20,6 @@
       "y_pt": 164.30786,
       "note": "This text should come on page 2.",
       "fixed": false
-    },
-    {
-      "id": 21,
-      "case": "scraped/vaccines_history_chapter",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 459.57916,
-      "y_pt": 450.31363,
-      "note": "We are rendering the labels too wide. Compare to reference.",
-      "fixed": true
-    },
-    {
-      "id": 22,
-      "case": "samples/samtale",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 604.5412,
-      "y_pt": 512.56494,
-      "note": "The green line under \"To- og femmån... .\" is too close to the text.",
-      "fixed": true
-    },
-    {
-      "id": 23,
-      "case": "samples/samtale",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 555.4253,
-      "y_pt": 467.83395,
-      "note": "The space above the \"Medarbeiderens egenevaluering\" is too large.",
-      "fixed": true
     },
     {
       "id": 25,
@@ -120,26 +80,6 @@
       "y_pt": 278.26538,
       "note": "We are not rendering drop shadow for this image. Compare to reference.",
       "fixed": false
-    },
-    {
-      "id": 35,
-      "case": "case6",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 172.97893,
-      "y_pt": 157.12347,
-      "note": "\"refresh\" goes out of bounds here. The table cell should either be wider, or the text should be narrower.  Compare to reference.",
-      "fixed": true
-    },
-    {
-      "id": 37,
-      "case": "case30",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 114.08524,
-      "y_pt": 445.33157,
-      "note": "Labels should be between the little markers on the x-axis. See reference.",
-      "fixed": true
     },
     {
       "id": 38,
@@ -409,6 +349,36 @@
       "x_pt": 538.46295,
       "y_pt": 110.0354,
       "note": "We should not split in the middle of a word like \"procreation\" is split here.",
+      "fixed": false
+    },
+    {
+      "id": 74,
+      "case": "case30",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 111.39671,
+      "y_pt": 544.3965,
+      "note": "data points should be aligned with markers on the x-axis",
+      "fixed": false
+    },
+    {
+      "id": 75,
+      "case": "samples/samtale",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 537.1642,
+      "y_pt": 249.48694,
+      "note": "\"Medarbeiderens navn: \" should be lower down on the page. Compare with reference.",
+      "fixed": false
+    },
+    {
+      "id": 76,
+      "case": "samples/samtale",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 517.85864,
+      "y_pt": 495.68063,
+      "note": "\"I stor grad\"-text is floating above the grey line. Compare with reference.",
       "fixed": false
     }
   ]

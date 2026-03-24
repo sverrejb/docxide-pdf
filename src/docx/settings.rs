@@ -7,6 +7,8 @@ pub(super) struct DocumentSettings {
     pub default_tab_stop: f32,
     pub mirror_margins: bool,
     pub east_asia_lang: Option<String>,
+    pub auto_hyphenation: bool,
+    pub default_lang: Option<String>,
 }
 
 impl Default for DocumentSettings {
@@ -16,6 +18,8 @@ impl Default for DocumentSettings {
             default_tab_stop: 36.0, // 0.5 inches = 720 twips = 36pt
             mirror_margins: false,
             east_asia_lang: None,
+            auto_hyphenation: false,
+            default_lang: None,
         }
     }
 }
@@ -36,8 +40,12 @@ pub(super) fn parse_settings<R: Read + std::io::Seek>(
         .map(twips_to_pts)
         .unwrap_or(36.0);
 
-    let east_asia_lang = wml(root, "themeFontLang")
+    let theme_font_lang = wml(root, "themeFontLang");
+    let east_asia_lang = theme_font_lang
         .and_then(|n| n.attribute((WML_NS, "eastAsia")))
+        .map(|s| s.to_string());
+    let default_lang = theme_font_lang
+        .and_then(|n| n.attribute((WML_NS, "val")))
         .map(|s| s.to_string());
 
     DocumentSettings {
@@ -45,5 +53,7 @@ pub(super) fn parse_settings<R: Read + std::io::Seek>(
         default_tab_stop,
         mirror_margins: wml_bool(root, "mirrorMargins").unwrap_or(false),
         east_asia_lang,
+        auto_hyphenation: wml_bool(root, "autoHyphenation").unwrap_or(false),
+        default_lang,
     }
 }

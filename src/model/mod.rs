@@ -148,6 +148,8 @@ pub struct Document {
     pub author: Option<String>,
     pub subject: Option<String>,
     pub keywords: Option<String>,
+    pub auto_hyphenation: bool,
+    pub default_lang: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -257,6 +259,7 @@ pub struct Paragraph {
     pub outline_level: Option<u8>,
     pub paragraph_mark_vanish: bool,
     pub snap_to_grid: bool,
+    pub suppress_auto_hyphens: bool,
 }
 
 pub struct HorizontalRule {
@@ -299,6 +302,7 @@ pub struct Run {
     pub text_fill: Option<TextFill>,
     pub text_shadow: Option<TextShadow>,
     pub text_glow: Option<TextGlow>,
+    pub lang: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -364,6 +368,7 @@ impl Default for Run {
             text_fill: None,
             text_shadow: None,
             text_glow: None,
+            lang: None,
         }
     }
 }
