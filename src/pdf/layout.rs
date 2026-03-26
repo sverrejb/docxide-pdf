@@ -39,30 +39,65 @@ fn is_break_space(c: char) -> bool {
     c.is_whitespace() && c != '\u{00a0}' && c != '\u{3000}'
 }
 
-/// Split text into (preceding_space_count, word) pairs.
-/// Leading and inter-word spaces are counted. Trailing spaces (after the last word)
-/// are handled separately by the caller.
-/// Non-breaking spaces (U+00A0) are kept within words — they don't create break points.
+/// Split text into (preceding_space_count, word) segments using UAX #14 line break rules.
+/// Handles CJK character boundaries, hyphens, and punctuation break opportunities
+/// in addition to whitespace. Non-breaking spaces (U+00A0) and ideographic spaces
+/// (U+3000) are kept within words. Trailing spaces after the last word are handled
+/// separately by the caller.
 fn split_preserving_spaces(text: &str) -> Vec<(usize, &str)> {
-    let mut result = Vec::new();
-    let mut chars = text.char_indices().peekable();
-    let mut space_count: usize = 0;
+    if text.is_empty() {
+        return Vec::new();
+    }
 
-    while let Some(&(i, c)) = chars.peek() {
-        if is_break_space(c) {
-            space_count += 1;
-            chars.next();
+    let mut result = Vec::new();
+    let mut pending_spaces: usize = 0;
+
+    // Collect UAX #14 break positions (byte offsets where breaks are allowed/mandatory)
+    let breaks: Vec<usize> = unicode_linebreak::linebreaks(text)
+        .map(|(pos, _)| pos)
+        .collect();
+
+    let mut prev = 0;
+    for &brk in &breaks {
+        let segment = &text[prev..brk];
+        prev = brk;
+
+        if segment.is_empty() {
+            continue;
+        }
+
+        // Count leading break-spaces in this segment
+        let leading_bytes: usize = segment
+            .chars()
+            .take_while(|c| is_break_space(*c))
+            .map(|c| c.len_utf8())
+            .sum();
+        let leading_count = segment[..leading_bytes].chars().count();
+
+        // Count trailing break-spaces
+        let trailing_bytes: usize = segment
+            .chars()
+            .rev()
+            .take_while(|c| is_break_space(*c))
+            .map(|c| c.len_utf8())
+            .sum();
+        let trailing_count = if trailing_bytes < segment.len() - leading_bytes {
+            segment[segment.len() - trailing_bytes..].chars().count()
         } else {
-            let start = i;
-            while let Some(&(_, c)) = chars.peek() {
-                if is_break_space(c) {
-                    break;
-                }
-                chars.next();
-            }
-            let end = chars.peek().map(|&(i, _)| i).unwrap_or(text.len());
-            result.push((space_count, &text[start..end]));
-            space_count = 0;
+            0
+        };
+
+        pending_spaces += leading_count;
+
+        let word_start = leading_bytes;
+        let word_end = segment.len() - trailing_bytes;
+
+        if word_start < word_end {
+            result.push((pending_spaces, &segment[word_start..word_end]));
+            pending_spaces = trailing_count;
+        } else {
+            // Segment is all spaces
+            pending_spaces += trailing_count;
         }
     }
 
@@ -482,6 +517,7 @@ pub(super) fn build_paragraph_lines(
                         continue;
                     }
                 }
+                // Try hyphenation before wrapping whole word
                 // No right region or right region also full — wrap to next line
                 lines.push(finish_dual_line(&mut current_chunks, &mut in_right_region, &mut cur_right_info));
                 current_x = 0.0;
@@ -772,17 +808,18 @@ pub(super) fn build_tabbed_line(
 
             let cs = run.char_spacing;
             let ts = run.text_scale / 100.0;
-            let words: Vec<&str> = text.split(is_break_space).filter(|s| !s.is_empty()).collect();
-            for (i, word) in words.iter().enumerate() {
+            let segments = split_preserving_spaces(&text);
+            for (seg_idx, &(space_count, word)) in segments.iter().enumerate() {
                 let char_count = word.chars().count();
                 let kern = run.kern_threshold.is_some_and(|t| eff_fs >= t);
                 let ww = entry.word_width(word, eff_fs, kern) * ts + cs * char_count as f32;
-                let has_space_before = i > 0 || prev_ws || text.starts_with(is_break_space);
+                let has_space_before =
+                    space_count > 0 || (seg_idx == 0 && (prev_ws || text.starts_with(is_break_space)));
                 if !all_chunks.is_empty() && has_space_before {
                     current_x += space_w * ts + cs;
                 }
                 // Word continues previous word across run boundary (no whitespace between)
-                let is_continuation = i == 0 && !has_space_before && !all_chunks.is_empty();
+                let is_continuation = seg_idx == 0 && !has_space_before && !all_chunks.is_empty();
                 let cur_line_max = if is_first_line {
                     max_width + first_line_hanging
                 } else {

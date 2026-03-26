@@ -47,6 +47,7 @@ memmap2 = "0.9.10"
 subsetter = "0.2"
 image = { version = "0.25", default-features = false, features = ["png", "bmp"] }
 miniz_oxide = "0.8"
+unicode-linebreak = "0.1.5"
 
 [dev-dependencies]
 image = { version = "0.25" }
