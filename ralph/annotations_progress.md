@@ -458,3 +458,63 @@ The gap between heading and subheading measured 36.35pt (generated) vs 25.13pt (
 **Impact**:
 - `samples/samtale`: SSIM +0.3pp (57.4→57.6%), subheading gap now 24.92pt vs reference 25.13pt (0.21pt difference — essentially perfect)
 - No regressions across all 100 test cases
+
+---
+
+## 2026-03-29: Fixed leading-space paragraph indent (annotation #71)
+
+**Problem**: In `scraped/vaccines_history_chapter`, the paragraph starting with "Vaccines are an important part..." had no visible first-line indent. The reference shows the paragraph indented ~7 spaces from the left margin. The annotation at (91.9, 266.24) on page 0 noted "Vaccines should be indented here at the start of the paragraph."
+
+**Root cause**: The paragraph's first run contained 7 space characters `"       "` followed by a second run with `"Vaccines are an important..."`. In `build_paragraph_lines()`, the trailing-space accumulation correctly added the 7 spaces to `pending_space_w`. However, when placing the first word on a line (`current_chunks.is_empty()`), the code set `proposed_x = current_x` (= 0.0), ignoring `pending_space_w`. The `need_space` check required `current_chunks` to be non-empty, so leading spaces before the first word were always lost.
+
+**Fix** (`src/pdf/layout.rs`):
+- Added a third branch to the `proposed_x` calculation: when `current_chunks.is_empty()` and `pending_space_w > 0.0`, set `proposed_x = pending_space_w` to preserve leading spaces as a visual indent
+
+**Also fixed** (`src/pdf/textbox_render.rs`):
+- Added PDF-level clipping (save_state + clip rect + restore_state) for fixed-size textboxes (AutoFit::None)
+- Added text-level overflow break: `render_textbox_paragraphs` stops rendering when cursor_y drops below the textbox bottom boundary
+
+**Impact**:
+- `scraped/vaccines_history_chapter`: Jaccard +0.5pp (42.2→42.7%), SSIM +3.4pp (51.7→55.2%)
+- `scraped/russian_university_proceedings`: Jaccard +1.1pp (22.7→23.8%), SSIM +1.6pp (50.7→52.4%)
+- `scraped/feminist_voice_dissertation`: Jaccard +0.5pp (65.9→66.4%), SSIM +0.5pp (85.2→85.7%)
+- `scraped/federal_procurement_terms`: Jaccard +0.4pp (53.7→54.2%)
+- 16 fixtures improved overall, no regressions above 0.1pp
+
+---
+
+## 2026-03-29: Fixed inline textbox rendering (annotation #53)
+
+**Problem**: In `scraped/federal_procurement_terms`, a bordered text box containing "Applicable to Grants, Subgrants, Cooperative Agreements, and Contracts exceeding $100,000 in federal funds" was completely missing from the generated PDF (page 9). The reference shows it as a bordered box below the "ATTACHMENT B: LOBBYING CERTIFICATION" heading.
+
+**Root cause**: The text box was an **inline drawing** (`wp:inline`) containing a `wps:wsp` with text content, not a floating anchor (`wp:anchor`). In `parse_run_drawing()` (`src/docx/images.rs`), the inline drawing path only handled images (`find_blip_embed`), charts, and SmartArt. Inline textboxes (`wps:wsp` with `wps:txbx`) were silently ignored.
+
+**Fix** (`src/docx/images.rs`):
+- Added inline textbox detection in the `is_inline` branch of `parse_run_drawing()`
+- Calls `parse_textbox_from_wsp()` (same as the anchor path) to parse the textbox content
+- Returns `RunDrawingResult::TextBox` with paragraph-relative positioning and `WrapType::TopAndBottom` so it renders as a block element at the paragraph position
+- Preserves fill, stroke, margins, and text anchor from the parsed wsp properties
+
+**Also verified**:
+- Annotation #68 (`scraped/slovak_misdemeanor_amendment`, "Dôvodová správa" centering) was already fixed by the leading-space indent fix in annotation #71 — marked as fixed
+- Annotation #73 (`scraped/feminist_voice_dissertation`, word splitting "procreation") no longer reproduces — marked as fixed
+
+**Impact**:
+- `scraped/federal_procurement_terms`: Jaccard +0.9pp (54.2→55.0%), SSIM +4.5pp (73.9→78.4%)
+- No regressions across all test cases
+
+---
+
+## 2026-03-30: Fixed table bottom border missing for vMerge continuation cells (annotation #70)
+
+**Problem**: In `scraped/polish_municipal_letter`, the gray double-line HR separating the header table from the body text did not span the full table width. The border started at column 2 (x=141.9pt) instead of column 1 (x=39.8pt), leaving a gap where the first column (containing the coat of arms via a floating image) has a vertically merged empty cell.
+
+**Root cause**: The `render_table_row()` function in `src/pdf/table.rs` completely skipped vMerge=Continue cells in its border drawing loop (line 623-625: `if cell.v_merge == VMerge::Continue { continue; }`). The design intent was that the vMerge=Restart cell handles all borders for the merged area using `merge_extra` to extend the bottom position. However, the Restart cell uses ROW 0's border definitions — and for a non-last row, the bottom border is `tblBorders/insideH` (which was `none` in this document), not `tblBorders/bottom` (the table's outer bottom border). So the merged cell's bottom got `insideH=none` instead of the table's `bottom=double`.
+
+**Fix** (`src/pdf/table.rs`):
+- In `render_table_row()`, when a vMerge=Continue cell is encountered, still draw its bottom border if present
+- Creates a temporary `CellBorders` with only the bottom border set (top/left/right remain default/non-present) to avoid drawing duplicate borders for the merged interior
+
+**Impact**:
+- `scraped/polish_municipal_letter`: Jaccard +0.3pp (38.4→38.7%), SSIM +0.7pp (73.9→74.5%)
+- No regressions across all test cases

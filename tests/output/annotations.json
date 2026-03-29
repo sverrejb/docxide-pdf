@@ -319,7 +319,7 @@
       "x_pt": 292.87393,
       "y_pt": 690.47534,
       "note": "This HR should span the whole width, also under the image.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 72,

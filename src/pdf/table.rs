@@ -4,7 +4,7 @@ use pdf_writer::{Content, Name, Str};
 
 use crate::fonts::{FontEntry, encode_as_gids, to_winansi_bytes};
 use crate::model::{
-    Alignment, Block, BorderStyle, CellBorder, CellMargins, CellVAlign,
+    Alignment, Block, BorderStyle, CellBorder, CellBorders, CellMargins, CellVAlign,
     SectionProperties, Table, TableAlignment, TableRow, TextDirection, VMerge,
 };
 
@@ -615,6 +615,23 @@ fn render_table_row(
         let bx = cell_x_offset(col_widths, table_left, grid_col);
 
         if cell.v_merge == VMerge::Continue {
+            // Still draw the bottom border for vMerge continuation cells so that
+            // table-level bottom borders span the full width including merged columns
+            if cell.borders.bottom.present {
+                draw_cell_borders(
+                    &mut pb.content,
+                    &CellBorders {
+                        bottom: cell.borders.bottom,
+                        ..CellBorders::default()
+                    },
+                    bx,
+                    row_top,
+                    row_bottom,
+                    col_w,
+                    false,
+                    true,
+                );
+            }
             grid_col += span;
             continue;
         }
