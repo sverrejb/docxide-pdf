@@ -121,6 +121,15 @@ pub(super) fn render_single_textbox(
     let content_w = if tb.no_text_wrap { 10000.0 } else { natural_w };
     let align_w = natural_w;
 
+    // Clip text content to textbox bounds for fixed-size textboxes (Word clips overflow)
+    let needs_clip = !matches!(tb.auto_fit, crate::model::AutoFit::Shape);
+    if needs_clip {
+        content.save_state();
+        content.rect(tb_x, tb_y_top - tb_height, tb.width_pt, tb_height);
+        content.clip_nonzero();
+        content.end_path();
+    }
+
     // Text warp: render glyphs as warped paths instead of normal text
     if tb
         .text_warp
@@ -128,9 +137,11 @@ pub(super) fn render_single_textbox(
         .is_some_and(|w| w.preset != "textNoShape")
     {
         if wordart::render_warped_textbox(tb, content, ctx.fonts, tb_x, tb_y_top, align_w) {
+            if needs_clip { content.restore_state(); }
             return;
         }
         if wordart::render_text_on_path(tb, content, ctx.fonts, tb_x, tb_y_top, align_w) {
+            if needs_clip { content.restore_state(); }
             return;
         }
     }
@@ -185,6 +196,13 @@ pub(super) fn render_single_textbox(
         }
     };
 
+    // For fixed-size textboxes, stop rendering content below the textbox bounds
+    let clip_bottom = if needs_clip {
+        Some(tb_y_top - tb_height)
+    } else {
+        None
+    };
+
     // Glow pass: render text as thick stroke in glow color behind everything
     if let Some(glow) = wordart::find_text_glow(tb) {
         content.save_state();
@@ -196,7 +214,7 @@ pub(super) fn render_single_textbox(
         render_textbox_paragraphs(
             &tb.paragraphs, content, content_x, content_w, align_w,
             tb_y_top - tb.margin_top - anchor_offset,
-            0.0, 0.0, None, false, &mut discard_links, ctx,
+            0.0, 0.0, None, false, &mut discard_links, ctx, clip_bottom,
         );
         content.restore_state();
     }
@@ -215,7 +233,7 @@ pub(super) fn render_single_textbox(
             &tb.paragraphs, content, content_x, content_w, align_w,
             tb_y_top - tb.margin_top - anchor_offset,
             shadow.offset_x, shadow.offset_y, Some(shadow_color),
-            false, &mut discard_links, ctx,
+            false, &mut discard_links, ctx, clip_bottom,
         );
         content.restore_state();
     }
@@ -223,8 +241,12 @@ pub(super) fn render_single_textbox(
     render_textbox_paragraphs(
         &tb.paragraphs, content, content_x, content_w, align_w,
         tb_y_top - tb.margin_top - anchor_offset,
-        0.0, 0.0, None, true, page_links, ctx,
+        0.0, 0.0, None, true, page_links, ctx, clip_bottom,
     );
+
+    if needs_clip {
+        content.restore_state();
+    }
 }
 
 /// Shared paragraph iteration loop used by the glow, shadow, and normal text passes
@@ -243,10 +265,17 @@ pub(super) fn render_textbox_paragraphs(
     render_labels: bool,
     links: &mut Vec<LinkAnnotation>,
     ctx: &RenderContext,
+    clip_bottom: Option<f32>,
 ) {
     let mut cursor_y = start_y;
     let empty_imgs: HashMap<usize, String> = HashMap::new();
     for tp in paragraphs {
+        // Stop rendering when content overflows the textbox bounds
+        if let Some(bottom) = clip_bottom {
+            if cursor_y - tp.space_before < bottom {
+                break;
+            }
+        }
         let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
         let tp_text_w = (content_w - tp.indent_left - tp.indent_right).max(1.0);
         let tp_align_w = (align_w - tp.indent_left - tp.indent_right).max(1.0);

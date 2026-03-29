@@ -474,6 +474,9 @@ pub(super) fn build_paragraph_lines(
 
             let proposed_x = if need_space {
                 current_x + pending_space_w
+            } else if current_chunks.is_empty() && pending_space_w > 0.0 {
+                // Leading spaces at the start of a line act as a visual indent
+                pending_space_w
             } else {
                 current_x
             };
