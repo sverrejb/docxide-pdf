@@ -424,8 +424,8 @@
     "convert_ms": 47.1
   },
   "scraped/federal_procurem..": {
-    "jaccard": 0.5418,
-    "ssim": 0.739,
+    "jaccard": 0.5504,
+    "ssim": 0.7842,
     "text_boundary": 0.8,
     "convert_ms": 57.1
   },

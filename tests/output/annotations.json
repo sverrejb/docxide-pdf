@@ -199,7 +199,7 @@
       "x_pt": 260.95786,
       "y_pt": 667.14197,
       "note": "We are not rendering the framed text box with text \"Applicable to Grants, Subgrants ...\".",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 54,
@@ -299,7 +299,7 @@
       "x_pt": 128.13309,
       "y_pt": 713.25714,
       "note": "\"Dôvodová správa\" should be centered here. See reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 69,
@@ -339,7 +339,7 @@
       "x_pt": 538.46295,
       "y_pt": 110.0354,
       "note": "We should not split in the middle of a word like \"procreation\" is split here.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 74,

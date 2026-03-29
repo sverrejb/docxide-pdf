@@ -361,6 +361,40 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
             continue;
         }
 
+        // Inline textbox: wp:inline containing wps:wsp with text content
+        if let Some(wsp) =
+            parse_textbox_from_wsp(container, rels, zip, styles, theme, numbering)
+        {
+            // Treat inline textbox as a floating textbox at paragraph position
+            // with TopAndBottom wrap so it acts as a block element
+            return Some(RunDrawingResult::TextBox(crate::model::Textbox {
+                paragraphs: wsp.paragraphs,
+                width_pt: display_w,
+                height_pt: display_h,
+                h_position: HorizontalPosition::Offset(0.0),
+                h_relative_from: HRelativeFrom::Column,
+                v_offset_pt: 0.0,
+                v_relative_from: crate::model::VRelativeFrom::Paragraph,
+                fill: wsp.fill,
+                shape_type: wsp.shape_type,
+                stroke_color: wsp.stroke_color,
+                stroke_width: wsp.stroke_width,
+                text_anchor: wsp.text_anchor,
+                margin_left: wsp.margin_left,
+                margin_right: wsp.margin_right,
+                margin_top: wsp.margin_top,
+                margin_bottom: wsp.margin_bottom,
+                wrap_type: crate::model::WrapType::TopAndBottom,
+                dist_top: 0.0,
+                dist_bottom: 0.0,
+                behind_doc: false,
+                no_text_wrap: wsp.no_text_wrap,
+                is_wordart: wsp.is_wordart,
+                text_warp: wsp.text_warp,
+                auto_fit: wsp.auto_fit,
+            }));
+        }
+
         if let Some(embed_id) = find_blip_embed(container) {
             let (extra_h, extra_top) = inline_extra_height(container);
             if let Some(img) =
