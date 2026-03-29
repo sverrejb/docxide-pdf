@@ -518,3 +518,31 @@ The gap between heading and subheading measured 36.35pt (generated) vs 25.13pt (
 **Impact**:
 - `scraped/polish_municipal_letter`: Jaccard +0.3pp (38.4→38.7%), SSIM +0.7pp (73.9→74.5%)
 - No regressions across all test cases
+
+---
+
+## 2026-03-30: Fixed trailing line break creating empty line with proper height (annotation #75)
+
+**Problem**: In `samples/samtale`, the text "Medarbeiderens navn: Ola Normann" was positioned too high on the page compared to the reference. The right column content had cumulative vertical drift of ~47pt by the bottom. The main source was a ~30pt gap difference between "Medarbeiderens egenevaluering" and "Slik gjør du" — our generated output had 52pt gap vs the reference's 82pt.
+
+**Root cause**: Two issues with `<w:br/>` (line break) handling in paragraph height calculation:
+
+1. **Trailing breaks didn't create empty lines**: In `build_paragraph_lines()`, a `<w:br/>` at the end of a paragraph finalized the current line but didn't create the subsequent empty line that Word renders. In the samtale document, paragraph 18 ("Medarbeiderens egenevaluering") ends with `<w:br w:sz="52"/>` (26pt), which should produce a text line PLUS an empty break line. Our code only produced the text line.
+
+2. **Break-created lines used wrong font metrics**: When a `<w:br/>` run has a different font size than the paragraph text (e.g., 26pt break vs 14pt text), Word uses the break run's font metrics for the empty line's height. Our code used the paragraph's text-based `line_h` for all lines, ignoring the break run's font size entirely. The annotation #23 fix correctly prevented break runs from inflating text line heights, but went too far — break-created empty lines still need the break run's metrics.
+
+For the samtale paragraph with the 26pt break:
+- Our code: content_h = 1 × 19.64pt (text line only) = 19.64pt
+- With fix: content_h = 19.64pt (text) + 36.45pt (break line at 26pt) = 56.09pt
+
+Similarly, paragraph 19 (2 breaks at 10pt) went from 2 lines to 3 lines, gaining ~12pt.
+
+**Fix**:
+- `src/pdf/layout.rs`: Added trailing empty line generation in both `build_paragraph_lines()` and `build_tabbed_line()` — when the last line ends with a break, push an additional empty `TextLine` with the break run's `font_size` stored in a new `break_font_size` field
+- `src/pdf/mod.rs`: Added `break_run_lhr()` helper to look up a break run's font metrics. Updated the content_h calculation to use the break run's font size and line_h_ratio for break-created lines instead of the paragraph's text-based line_h
+
+**Impact**:
+- `scraped/mandated_reporter_child_abuse`: Jaccard **+20.6pp** (26.4→47.0%), SSIM **+16.7pp** (50.5→67.2%)
+- `scraped/german_mezzo_soprano_bio`: Jaccard +3.3pp (51.0→54.3%), SSIM +11.7pp (53.2→64.9%)
+- `samples/samtale`: Jaccard +1.0pp (10.8→11.9%), SSIM +0.9pp (57.6→58.5%)
+- No regressions across all test cases

@@ -241,6 +241,10 @@ pub(super) struct TextLine {
     pub(super) total_width: f32,
     pub(super) ends_with_break: bool,
     pub(super) right_region: Option<RightRegion>,
+    /// Font size of the line break run that created this empty line.
+    /// Used to compute the correct line height for break-created lines
+    /// (Word uses the break run's font metrics, not the paragraph's).
+    pub(super) break_font_size: Option<f32>,
 }
 
 /// True when a paragraph has no visible text (may still have phantom font-info runs).
@@ -287,6 +291,7 @@ fn finish_line(chunks: &mut Vec<WordChunk>) -> TextLine {
         total_width,
         ends_with_break: false,
         right_region: None,
+        break_font_size: None,
     }
 }
 
@@ -559,12 +564,29 @@ pub(super) fn build_paragraph_lines(
         lines.push(finish_dual_line(&mut current_chunks, &mut in_right_region, &mut cur_right_info));
     }
 
+    // A trailing line break creates an empty line after it (Word adds a blank
+    // line for each w:br at the end of a paragraph).  Store the break run's
+    // font size so the caller can compute the correct height for this line.
+    if lines.last().is_some_and(|l| l.ends_with_break) {
+        let break_fs = runs.iter().rev()
+            .find(|r| r.is_line_break)
+            .map(|r| r.font_size);
+        lines.push(TextLine {
+            chunks: vec![],
+            total_width: 0.0,
+            ends_with_break: false,
+            right_region: None,
+            break_font_size: break_fs,
+        });
+    }
+
     if lines.is_empty() {
         lines.push(TextLine {
             chunks: vec![],
             total_width: 0.0,
             ends_with_break: false,
             right_region: None,
+            break_font_size: None,
         });
     }
     lines
@@ -852,6 +874,21 @@ pub(super) fn build_tabbed_line(
             total_width: 0.0,
             ends_with_break: false,
             right_region: None,
+            break_font_size: None,
+        });
+    }
+
+    // Trailing break creates an empty line (same as build_paragraph_lines)
+    if result_lines.last().is_some_and(|l| l.ends_with_break) {
+        let break_fs = runs.iter().rev()
+            .find(|r| r.is_line_break)
+            .map(|r| r.font_size);
+        result_lines.push(TextLine {
+            chunks: vec![],
+            total_width: 0.0,
+            ends_with_break: false,
+            right_region: None,
+            break_font_size: break_fs,
         });
     }
 

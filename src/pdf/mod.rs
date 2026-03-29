@@ -45,6 +45,7 @@ use layout::{
     DualRegion, LinkAnnotation, build_paragraph_lines, build_tabbed_line, is_text_empty,
     render_paragraph_lines, tallest_run_metrics,
 };
+use crate::fonts::font_key;
 use color::{fill_rgb, stroke_rgb};
 use list_label::{collect_paras, label_font_key, para_runs_with_textboxes, render_list_label};
 use smartart::draw_shape_path;
@@ -109,6 +110,24 @@ pub(super) fn render_shape_fill(
                 h,
             });
         }
+    }
+}
+
+/// Look up the line_h_ratio for a break run's font, matching by font_size.
+fn break_run_lhr(
+    runs: &[Run],
+    break_fs: f32,
+    fonts: &HashMap<String, FontEntry>,
+) -> Option<f32> {
+    // Find the break run with the matching font size
+    let br_run = runs.iter()
+        .filter(|r| r.is_line_break && (r.font_size - break_fs).abs() < 0.01)
+        .last();
+    if let Some(run) = br_run {
+        let key = font_key(run);
+        fonts.get(&key).and_then(|e| e.line_h_ratio)
+    } else {
+        None
     }
 }
 
@@ -1262,9 +1281,26 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             line_h
                         };
                         if num_lines <= 1 {
-                            first_line_h
+                            // If the single line was created by a break, use its font size
+                            if let Some(bfs) = lines.first().and_then(|l| l.break_font_size) {
+                                let blhr = break_run_lhr(&effective_runs, bfs, ctx.fonts);
+                                resolve_line_h(effective_ls, bfs, blhr)
+                            } else {
+                                first_line_h
+                            }
                         } else {
-                            first_line_h + (num_lines - 1) as f32 * line_h
+                            // Per-line height: break-created lines use the break
+                            // run's font metrics instead of the paragraph's text metrics.
+                            let mut h = first_line_h;
+                            for line in lines.iter().skip(1) {
+                                if let Some(bfs) = line.break_font_size {
+                                    let blhr = break_run_lhr(&effective_runs, bfs, ctx.fonts);
+                                    h += resolve_line_h(effective_ls, bfs, blhr);
+                                } else {
+                                    h += line_h;
+                                }
+                            }
+                            h
                         }
                     };
 

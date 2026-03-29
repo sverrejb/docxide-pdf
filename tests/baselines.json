@@ -356,8 +356,8 @@
     "convert_ms": 18.3
   },
   "samples/samtale": {
-    "jaccard": 0.1084,
-    "ssim": 0.5757,
+    "jaccard": 0.1186,
+    "ssim": 0.5848,
     "text_boundary": 0.2083,
     "convert_ms": 11.0
   },
@@ -452,8 +452,8 @@
     "convert_ms": 305.8
   },
   "scraped/german_mezzo_sop..": {
-    "jaccard": 0.5097,
-    "ssim": 0.5318,
+    "jaccard": 0.5427,
+    "ssim": 0.6492,
     "text_boundary": 0.8621,
     "convert_ms": 33.4
   },
@@ -464,8 +464,8 @@
     "convert_ms": 70.6
   },
   "scraped/indonesian_bench..": {
-    "jaccard": 0.3554,
-    "ssim": 0.531,
+    "jaccard": 0.3558,
+    "ssim": 0.5315,
     "text_boundary": 0.4545,
     "convert_ms": 170.5
   },
@@ -512,8 +512,8 @@
     "convert_ms": 5.6
   },
   "scraped/mandated_reporte..": {
-    "jaccard": 0.2642,
-    "ssim": 0.505,
+    "jaccard": 0.4698,
+    "ssim": 0.6723,
     "text_boundary": 0.2963,
     "convert_ms": 43.3
   },
