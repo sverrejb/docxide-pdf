@@ -68,11 +68,17 @@ pub(super) fn assemble_pdf_pages(
                         .border(0.0, 0.0, 0.0, None);
                     if let Some(anchor) = link.url.strip_prefix('#') {
                         if let Some(&(dest_page_idx, dest_y)) = bookmark_positions.get(anchor) {
+                            debug_assert!(
+                                dest_page_idx < page_ids.len(),
+                                "bookmark '{anchor}' points to page {dest_page_idx} but only {} pages exist",
+                                page_ids.len(),
+                            );
+                            let safe_idx = dest_page_idx.min(page_ids.len().saturating_sub(1));
                             annot
                                 .action()
                                 .action_type(pdf_writer::types::ActionType::GoTo)
                                 .destination()
-                                .page(page_ids[dest_page_idx])
+                                .page(page_ids[safe_idx])
                                 .xyz(0.0, dest_y, None);
                             Some(annot_ref)
                         } else {

@@ -25,6 +25,7 @@ fn is_dynamic_field(instr: &str) -> bool {
     keyword.eq_ignore_ascii_case("PAGE")
         || keyword.eq_ignore_ascii_case("NUMPAGES")
         || keyword.eq_ignore_ascii_case("STYLEREF")
+        || keyword.eq_ignore_ascii_case("PAGEREF")
 }
 
 fn parse_styleref_arg(instr: &str) -> Option<String> {
@@ -667,6 +668,9 @@ pub(super) fn parse_runs<R: Read + std::io::Seek>(
                                 Some(FieldCode::NumPages)
                             } else if keyword.eq_ignore_ascii_case("STYLEREF") {
                                 parse_styleref_arg(&field_instr).map(FieldCode::StyleRef)
+                            } else if keyword.eq_ignore_ascii_case("PAGEREF") {
+                                field_instr.split_whitespace().nth(1)
+                                    .map(|s| FieldCode::PageRef(s.to_string()))
                             } else {
                                 None
                             };

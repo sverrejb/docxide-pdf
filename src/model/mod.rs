@@ -378,6 +378,7 @@ pub enum FieldCode {
     Page,
     NumPages,
     StyleRef(String),
+    PageRef(String),
 }
 
 pub enum Block {

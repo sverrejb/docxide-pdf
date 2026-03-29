@@ -66,7 +66,7 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
         }
         if let Some(ref fc) = run.field_code {
             match fc {
-                FieldCode::Page | FieldCode::NumPages => {
+                FieldCode::Page | FieldCode::NumPages | FieldCode::PageRef(_) => {
                     chars.extend('0'..='9');
                 }
                 FieldCode::StyleRef(_) => {}
@@ -172,7 +172,7 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
                     }
                     if let Some(ref fc) = run.field_code {
                         match fc {
-                            FieldCode::Page | FieldCode::NumPages => {
+                            FieldCode::Page | FieldCode::NumPages | FieldCode::PageRef(_) => {
                                 chars.extend('0'..='9');
                                 for fmt in &all_page_num_formats {
                                     extend_chars_for_num_format(chars, fmt);

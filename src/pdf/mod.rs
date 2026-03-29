@@ -24,7 +24,7 @@ use pdf_writer::{Content, Name, Pdf, Ref};
 use crate::error::Error;
 use crate::fonts::FontEntry;
 use crate::model::{
-    Alignment, Block, DocGridType, Document,
+    Alignment, Block, DocGridType, Document, FieldCode,
     HorizontalPosition, LineSpacing, Paragraph, ParagraphBorder,
     Run, SectionBreakType, SectionProperties, ShapeFill, ShapeGeometry, TextAnchor, Textbox,
     VRelativeFrom, VerticalPosition, WrapText, WrapType,
@@ -439,12 +439,158 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         }
     }
 
+    // Map bookmarks to page indices so PAGEREF fields (e.g. TOC) can show
+    // correct page numbers for bookmarks that appear later in the document.
+    // Uses real line-building for accurate paragraph heights.
+    let has_pagerefs = doc.sections.iter().any(|s| s.blocks.iter().any(|b| match b {
+        Block::Paragraph(p) => p.runs.iter().any(|r| matches!(&r.field_code, Some(FieldCode::PageRef(_)))),
+        _ => false,
+    }));
+    let mut bookmark_positions: HashMap<String, (usize, f32)> = HashMap::new();
+    if has_pagerefs {
+        let mut page_idx = 0usize;
+        let first_sp = &doc.sections[0].properties;
+        let mut sp = first_sp;
+        let mut slot_top = effective_slot_top(sp, true, &ctx);
+        let mut margin_bottom = compute_effective_margin_bottom(sp, true, &ctx);
+        let mut prev_space_after: f32 = 0.0;
+        let mut prev_contextual: bool = false;
+        let empty_imgs: HashMap<usize, String> = HashMap::new();
+
+        for (si, section) in doc.sections.iter().enumerate() {
+            sp = &section.properties;
+            if si > 0 {
+                match sp.break_type {
+                    SectionBreakType::NextPage
+                    | SectionBreakType::OddPage
+                    | SectionBreakType::EvenPage => {
+                        page_idx += 1;
+                        slot_top = effective_slot_top(sp, true, &ctx);
+                        margin_bottom = compute_effective_margin_bottom(sp, true, &ctx);
+                        prev_space_after = 0.0;
+                    }
+                    SectionBreakType::Continuous => {}
+                }
+            }
+            let text_width = sp.page_width - sp.margin_left - sp.margin_right;
+            let blocks = &section.blocks;
+            for (bi, block) in blocks.iter().enumerate() {
+                match block {
+                    Block::Paragraph(para) => {
+                        if para.page_break_before && slot_top < effective_slot_top(sp, false, &ctx) {
+                            page_idx += 1;
+                            slot_top = effective_slot_top(sp, false, &ctx);
+                            margin_bottom = compute_effective_margin_bottom(sp, false, &ctx);
+                            prev_space_after = 0.0;
+                        }
+                        for bm in &para.bookmarks {
+                            bookmark_positions.insert(bm.clone(), (page_idx, slot_top));
+                        }
+                        if para.is_section_break && is_text_empty(&para.runs) {
+                            continue;
+                        }
+                        let (font_size, tallest_lhr, _) =
+                            tallest_run_metrics(&para.runs, ctx.fonts);
+                        let effective_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
+                        let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
+                        let line_h = if para.snap_to_grid
+                            && matches!(sp.grid_type, DocGridType::Lines | DocGridType::LinesAndChars | DocGridType::SnapToChars)
+                            && !matches!(effective_ls, LineSpacing::Exact(_))
+                            && sp.line_pitch > 0.0
+                        {
+                            (line_h / sp.line_pitch).ceil() * sp.line_pitch
+                        } else {
+                            line_h
+                        };
+                        let para_w = (text_width - para.indent_left - para.indent_right).max(1.0);
+                        let hanging = if !para.list_label.is_empty() {
+                            if let Some(nts) = para.num_level_tab_stop {
+                                if nts < para.indent_left && (para.indent_left - para.indent_hanging).abs() < 0.5 {
+                                    (para.indent_left - nts).max(0.0)
+                                } else { 0.0 }
+                            } else { 0.0 }
+                        } else if para.indent_hanging > 0.0 {
+                            para.indent_hanging
+                        } else {
+                            -para.indent_first_line
+                        };
+                        let has_tabs = para.runs.iter().any(|r| r.is_tab);
+                        let lines = if is_text_empty(&para.runs) {
+                            vec![]
+                        } else if has_tabs {
+                            build_tabbed_line(
+                                &para.runs, ctx.fonts, &para.tab_stops,
+                                para.indent_left, para_w, hanging,
+                                &empty_imgs, doc.default_tab_stop,
+                            )
+                        } else {
+                            build_paragraph_lines(
+                                &para.runs, ctx.fonts, para_w,
+                                hanging, &empty_imgs, None, None, None,
+                            )
+                        };
+                        let num_lines = lines.len().max(1);
+                        let content_h = if para.image.is_some() || para.inline_chart.is_some() {
+                            para.content_height
+                        } else {
+                            num_lines as f32 * line_h
+                        };
+                        let effective_sb = if para.contextual_spacing && prev_contextual {
+                            0.0
+                        } else {
+                            para.space_before
+                        };
+                        let next_contextual = blocks.get(bi + 1).is_some_and(|b| {
+                            matches!(b, Block::Paragraph(p) if p.contextual_spacing)
+                        });
+                        let effective_sa = if para.contextual_spacing && next_contextual {
+                            0.0
+                        } else {
+                            para.space_after
+                        };
+                        let inter_gap = f32::max(prev_space_after, effective_sb);
+                        let needed = inter_gap + content_h;
+                        if slot_top - needed < margin_bottom
+                            && slot_top < effective_slot_top(sp, false, &ctx)
+                        {
+                            page_idx += 1;
+                            slot_top = effective_slot_top(sp, false, &ctx);
+                            margin_bottom = compute_effective_margin_bottom(sp, false, &ctx);
+                            slot_top -= content_h;
+                        } else {
+                            slot_top -= inter_gap + content_h;
+                        }
+                        prev_space_after = effective_sa;
+                        prev_contextual = para.contextual_spacing;
+                    }
+                    Block::Table(table) => {
+                        // ~12pt default font at ~1.15x line spacing ≈ 14pt per line
+                        let para_count: usize = table.rows.iter()
+                            .flat_map(|r| r.cells.iter())
+                            .map(|c| c.all_paragraphs().len().max(1))
+                            .max()
+                            .unwrap_or(1)
+                            * table.rows.len();
+                        let est_h = para_count as f32 * 14.0;
+                        if slot_top - est_h < margin_bottom {
+                            page_idx += 1;
+                            slot_top = effective_slot_top(sp, false, &ctx);
+                            margin_bottom = compute_effective_margin_bottom(sp, false, &ctx);
+                        }
+                        slot_top -= est_h;
+                        prev_space_after = 0.0;
+                        prev_contextual = false;
+                    }
+                }
+            }
+        }
+    }
+
     // Phase 2: build multi-page content streams (section-aware)
     let first_sp = &doc.sections[0].properties;
     let mut cur_sp = first_sp;
     let initial_slot_top = effective_slot_top(cur_sp, true, &ctx);
     let mut pb = PageBuilder::new(initial_slot_top);
-    let mut bookmark_positions: HashMap<String, (usize, f32)> = HashMap::new();
     let mut heading_entries: Vec<HeadingEntry> = Vec::new();
     let mut prev_space_after: f32 = 0.0;
     let mut effective_margin_bottom: f32 = compute_effective_margin_bottom(cur_sp, true, &ctx);
@@ -724,9 +870,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         -para.indent_first_line
                     };
 
-                    // Substitute footnote reference runs with display numbers
+                    // Substitute footnote refs and resolve PAGEREF fields
                     let has_footnote_refs = para.runs.iter().any(|r| r.footnote_id.is_some());
-                    let effective_runs: std::borrow::Cow<'_, Vec<Run>> = if has_footnote_refs {
+                    let has_pageref = para.runs.iter().any(|r| matches!(&r.field_code, Some(FieldCode::PageRef(_))));
+                    let effective_runs: std::borrow::Cow<'_, Vec<Run>> = if has_footnote_refs || has_pageref {
                         let substituted: Vec<Run> = para
                             .runs
                             .iter()
@@ -735,6 +882,12 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     let num = footnote_display_order.get(&id).copied().unwrap_or(0);
                                     let mut r = run.clone();
                                     r.text = num.to_string();
+                                    r
+                                } else if let Some(FieldCode::PageRef(ref bookmark)) = run.field_code {
+                                    let mut r = run.clone();
+                                    if let Some(&(page_idx, _)) = bookmark_positions.get(bookmark) {
+                                        r.text = (page_idx + 1).to_string();
+                                    }
                                     r
                                 } else {
                                     run.clone()
@@ -1381,8 +1534,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                     for bookmark in &para.bookmarks {
                         bookmark_positions
-                            .entry(bookmark.clone())
-                            .or_insert((pb.all_contents.len(), pb.slot_top));
+                            .insert(bookmark.clone(), (pb.all_contents.len(), pb.slot_top));
                     }
 
                     if let Some(level) = para.outline_level {

@@ -38,6 +38,7 @@ pub(super) fn substitute_hf_runs(
                     FieldCode::StyleRef(name) => {
                         styleref_values.get(name).cloned().unwrap_or_default()
                     }
+                    FieldCode::PageRef(_) => run.text.clone(),
                 };
             }
             r
