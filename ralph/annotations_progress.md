@@ -8,17 +8,16 @@
 
 The XML structure: `pic:spPr > a:effectLst > a:outerShdw blurRad="292100" dist="139700" dir="2700000" > a:srgbClr val="333333" > a:alpha val="65000"` — a shadow with ~11pt distance at 45° (southeast), color #333333 at 65% opacity.
 
-**Fix**:
-- `src/model/drawing.rs`: Added `ImageShadow` struct (`offset_x`, `offset_y`, `color`) and `shadow: Option<ImageShadow>` to `EmbeddedImage`
-- `src/docx/images.rs`: Added `parse_pic_shadow()` to extract `a:outerShdw` from `pic:spPr/a:effectLst`. Parses distance/direction → x,y offsets, color with alpha pre-blended against white. Applied in all three image creation paths: `parse_run_drawing` (inline + floating) and `compute_drawing_info` (paragraph-level).
-- `src/pdf/layout.rs`: Draw shadow filled rectangle before inline image XObject
-- `src/pdf/positioning.rs`: Draw shadow before floating image
-- `src/pdf/table.rs`: Draw shadow before table cell image
-- `src/pdf/header_footer.rs`: Draw shadow before header/footer image
+**Fix** (two commits):
+- `src/model/drawing.rs`: Added `ImageShadow` struct (`offset_x`, `offset_y`, `blur_radius`, `color`) and `shadow: Option<ImageShadow>` to `EmbeddedImage`
+- `src/docx/images.rs`: Added `parse_pic_shadow()` to extract `a:outerShdw` from `pic:spPr/a:effectLst`. Parses blurRad, distance/direction → x,y offsets, color with alpha pre-blended against white. Applied in all three image creation paths: `parse_run_drawing` (inline + floating) and `compute_drawing_info` (paragraph-level).
+- `src/pdf/color.rs`: Added `draw_image_shadow()` helper — draws shadow rect expanded by `blur_radius * 0.5` on each side to approximate gaussian blur spread
+- `src/pdf/mod.rs`: Draw shadow before body-level paragraph images (the main code path for this fixture)
+- `src/pdf/layout.rs`, `positioning.rs`, `table.rs`, `header_footer.rs`: Draw shadow before images in all other rendering paths
 - Shadow is pre-blended with white rather than using ExtGState alpha to avoid threading alpha_states through all rendering paths
 
 **Impact**:
-- `scraped/parish_housing_data_profile`: Drop shadow now visible on map image. Jaccard/SSIM stable (shadow area small relative to page; solid rect vs blurred reference creates minor diff)
+- `scraped/parish_housing_data_profile`: Drop shadow clearly visible on map image. Jaccard 33.5% → 33.9% (+0.4pp), SSIM 63.5% → 63.7% (+0.2pp)
 - No regressions across all 114 test cases
 
 ---
