@@ -120,8 +120,8 @@
     "convert_ms": 10.0
   },
   "cases/case29": {
-    "jaccard": 0.704,
-    "ssim": 0.7245,
+    "jaccard": 0.7548,
+    "ssim": 0.7822,
     "text_boundary": 0.9474,
     "convert_ms": 6.9
   },
@@ -132,14 +132,14 @@
     "convert_ms": 2.5
   },
   "cases/case30": {
-    "jaccard": 0.8179,
-    "ssim": 0.8216,
+    "jaccard": 0.8233,
+    "ssim": 0.8278,
     "text_boundary": 0.963,
     "convert_ms": 6.7
   },
   "cases/case31": {
-    "jaccard": 0.5659,
-    "ssim": 0.7472,
+    "jaccard": 0.5819,
+    "ssim": 0.7505,
     "text_boundary": 0.875,
     "convert_ms": 7.0
   },
@@ -256,12 +256,12 @@
     "ssim": 0.3012
   },
   "cases/case52": {
-    "jaccard": 0.4181,
-    "ssim": 0.6021
+    "jaccard": 0.3987,
+    "ssim": 0.5992
   },
   "cases/case53": {
-    "jaccard": 0.4479,
-    "ssim": 0.4005
+    "jaccard": 0.4782,
+    "ssim": 0.429
   },
   "cases/case6": {
     "jaccard": 0.4505,
@@ -350,8 +350,8 @@
     "ssim": 0.8253
   },
   "samples/sample500kB": {
-    "jaccard": 0.3294,
-    "ssim": 0.5246,
+    "jaccard": 0.3373,
+    "ssim": 0.5273,
     "text_boundary": 0.7816,
     "convert_ms": 18.3
   },
@@ -394,7 +394,7 @@
   "scraped/croatian_grant_g..": {
     "jaccard": 0.0724,
     "ssim": 0.1812,
-    "text_boundary": 0.056,
+    "text_boundary": 0.0138,
     "convert_ms": 270.5
   },
   "scraped/croatian_regulat..": {
@@ -524,8 +524,8 @@
     "convert_ms": 32.0
   },
   "scraped/parish_housing_d..": {
-    "jaccard": 0.3474,
-    "ssim": 0.6416,
+    "jaccard": 0.3468,
+    "ssim": 0.6426,
     "text_boundary": 0.6235,
     "convert_ms": 97.8
   },

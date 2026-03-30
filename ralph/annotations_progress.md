@@ -90,6 +90,21 @@ The image has `a:outerShdw blurRad="292100" dist="139700" dir="2700000"` with `s
 
 ---
 
+## Annotation #38 — Chart rendered too wide (case30) — 2026-03-30
+
+**Problem**: Line chart in case30 extends too far to the right compared to reference. The "Jun" x-axis label is 20pt further right in generated (329.8pt) vs reference (310.3pt).
+
+**Analysis**: Measured text positions in generated vs reference PDFs. The legend area is too small: our code allocated ~95pt for the right margin while Word uses ~115pt. Root cause: the legend swatch width for point charts (line/area/scatter/bubble) was 5.5pt, matching bar chart squares, but Word uses wider line+marker swatches (~20pt). Also, inter-element padding was insufficient.
+
+**Fix**: In `pdf/charts.rs`, changed legend margin calculation:
+1. Increased legend swatch width from 5.5pt to 20pt for point charts (line/area/scatter/bubble)
+2. Increased inter-element padding (6pt gap + 12pt right padding, was 4pt + 8pt)
+3. Raised proportional minimum from 12% to 15% of chart width
+
+**Result**: Improvements across all chart test cases: case29 +5.1pp, case30 +0.5pp, case31 +1.6pp, case53 +3.0pp, sample500kB +0.8pp. One small regression: case52 -1.9pp (within threshold). No regression flags.
+
+---
+
 ## Summary of systemic themes
 
 All remaining unfixed annotations fall into these categories:

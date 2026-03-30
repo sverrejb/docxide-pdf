@@ -42,16 +42,6 @@
       "fixed": false
     },
     {
-      "id": 31,
-      "case": "scraped/parish_housing_data_profile",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 319.59677,
-      "y_pt": 278.26538,
-      "note": "We are not rendering drop shadow for this image. Compare to reference.",
-      "fixed": true
-    },
-    {
       "id": 38,
       "case": "case30",
       "page": 0,
@@ -59,7 +49,7 @@
       "x_pt": 358.61722,
       "y_pt": 513.2798,
       "note": "We render this table too wide, compare to reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 39,
@@ -69,7 +59,7 @@
       "x_pt": 377.55087,
       "y_pt": 620.78094,
       "note": "This graph is also too wide.  The left edge is aligned, but our right is too far to the right.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 41,

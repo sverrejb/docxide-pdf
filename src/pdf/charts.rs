@@ -345,8 +345,10 @@ pub(super) fn render_chart(
             .iter()
             .map(|s| text_width(&s.label, 10.0, label_font))
             .fold(0.0f32, f32::max);
-        let computed = legend_gap + legend_swatch + 4.0 + max_label_w + 8.0;
-        computed.max(w * 0.12)
+        // Word's chart engine uses wider line+marker swatches for point charts
+        let swatch_w = if is_point_chart { 20.0 } else { legend_swatch };
+        let computed = legend_gap + swatch_w + 6.0 + max_label_w + 12.0;
+        computed.max(w * 0.15)
     } else if is_point_chart {
         (w * 0.06).max(20.0)
     } else {
