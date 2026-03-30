@@ -28,9 +28,9 @@ pub(super) fn stroke_color_or_black(content: &mut Content, color: Option<[u8; 3]
     }
 }
 
-/// Draw an image drop shadow using layered semi-transparent rectangles to
-/// approximate gaussian blur. Each layer is slightly larger and overlaps,
-/// so the center accumulates to the target alpha while edges fade out.
+/// Draw an image drop shadow with soft edges using layered semi-transparent
+/// rectangles. Layers expand only in the shadow-cast direction (away from
+/// the light source) so the image covers the light-facing sides.
 ///
 /// When `alpha_states` is provided, uses proper PDF transparency (ExtGState).
 /// When `None`, falls back to a single pre-blended rectangle.
@@ -49,51 +49,48 @@ pub(super) fn draw_image_shadow(
     let sy = y_bottom - shadow.offset_y;
 
     let Some(alpha_states) = alpha_states else {
-        // Fallback: single pre-blended rectangle
         let a = shadow.alpha;
         let blended = [
             (a * shadow.color[0] as f32 + (1.0 - a) * 255.0) as u8,
             (a * shadow.color[1] as f32 + (1.0 - a) * 255.0) as u8,
             (a * shadow.color[2] as f32 + (1.0 - a) * 255.0) as u8,
         ];
-        let expand = shadow.blur_radius * 0.5;
         content.save_state();
         fill_color_or_black(content, Some(blended));
-        content.rect(sx - expand, sy - expand, width + expand * 2.0, height + expand * 2.0);
+        content.rect(sx, sy, width, height);
         content.fill_nonzero();
         content.restore_state();
         return;
     };
 
     const NUM_LAYERS: usize = 10;
+    let blur = shadow.blur_radius * 0.5;
 
-    // Solve for per-layer alpha so stacking NUM_LAYERS gives target alpha:
-    // 1 - (1 - per_alpha)^N = target  =>  per_alpha = 1 - (1-target)^(1/N)
     let per_alpha = 1.0 - (1.0 - shadow.alpha).powf(1.0 / NUM_LAYERS as f32);
     let pct = (per_alpha * 100.0).round().max(1.0).min(100.0) as u8;
     alpha_states.insert(pct);
 
-    let gs_name_str = format!("GSa{pct}");
+    // Expand only in the shadow-cast direction (the image covers the other sides)
+    let exp_right = if shadow.offset_x >= 0.0 { 1.0 } else { 0.0 };
+    let exp_left = if shadow.offset_x <= 0.0 { 1.0 } else { 0.0 };
+    // PDF y-up: offset_y>0 means screen-down = expand in -y
+    let exp_down = if shadow.offset_y >= 0.0 { 1.0 } else { 0.0 };
+    let exp_up = if shadow.offset_y <= 0.0 { 1.0 } else { 0.0 };
 
     content.save_state();
     fill_rgb(content, shadow.color);
-    content.set_parameters(Name(gs_name_str.as_bytes()));
+    content.set_parameters(Name(format!("GSa{pct}").as_bytes()));
 
-    // Draw layers from outermost (largest expansion) to innermost (no expansion).
-    // Each is a full rectangle so inner areas get covered by all layers.
     for i in (0..NUM_LAYERS).rev() {
-        let t = (i + 1) as f32 / NUM_LAYERS as f32;
-        let expand = shadow.blur_radius * t;
-        content.rect(
-            sx - expand,
-            sy - expand,
-            width + expand * 2.0,
-            height + expand * 2.0,
-        );
+        let t = blur * (i + 1) as f32 / NUM_LAYERS as f32;
+        let lx = sx - t * exp_left;
+        let ly = sy - t * exp_down;
+        let lw = width + t * (exp_left + exp_right);
+        let lh = height + t * (exp_up + exp_down);
+        content.rect(lx, ly, lw, lh);
         content.fill_nonzero();
     }
 
-    // Restore full opacity and previous state
     alpha_states.insert(100);
     content.set_parameters(Name(b"GSa100"));
     content.restore_state();

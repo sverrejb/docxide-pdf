@@ -524,8 +524,8 @@
     "convert_ms": 32.0
   },
   "scraped/parish_housing_d..": {
-    "jaccard": 0.3292,
-    "ssim": 0.64,
+    "jaccard": 0.3474,
+    "ssim": 0.6416,
     "text_boundary": 0.6235,
     "convert_ms": 97.8
   },
