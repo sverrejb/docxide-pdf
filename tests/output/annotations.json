@@ -159,7 +159,7 @@
       "x_pt": 36.071957,
       "y_pt": 279.16833,
       "note": "This text in the first column, top and middle cell should be vertically centered. The third cell looks correct.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 56,
