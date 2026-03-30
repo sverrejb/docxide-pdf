@@ -122,6 +122,12 @@ WordArt appears in two forms: modern DrawingML (current Word) and legacy VML (ol
 - **`w:vAlign` on sectPr** — vertical alignment of text on the page (top/center/bottom/both)
 - **Panose font matching** — fontTable.xml contains panose classification bytes; could use for more precise substitution
 
+### Improve Image Drop Shadow Quality (TODO — LOW IMPACT)
+
+Basic drop shadow rendering is implemented (`a:effectLst/a:outerShdw`): offset, color, alpha, and directional soft edge via layered transparent rectangles. Current limitations:
+- **No real gaussian blur** — approximated with 10 stepped layers, visible banding at close zoom
+- **Fallback paths lack alpha** — inline images in text lines, floating images, table/header images use pre-blended solid color instead of PDF ExtGState transparency (only body-level paragraph images get proper alpha)
+
 ### Partially Implemented
 
 - **Line spacing** — Auto and Exact work. AtLeast parsed but may not enforce minimum correctly.
@@ -192,9 +198,8 @@ Run `./tools/target/debug/analyze-fixtures --failing` for current breakdown.
 
 ## Test Corpus Expansion
 
-Additional fixture ideas not yet covered:
-- Deep style inheritance (3+ level chains with run vs style vs paragraph conflicts)
-- Nested tables (tables inside table cells)
-- Table of Contents (right-aligned tabs + dot leaders + page field codes)
-- Stacked bar chart rendering
-- Charts with extreme data (50+ categories, very small/large values)
+- Deep style inheritance (3+ level chains with run vs style vs paragraph conflicts) — **case50** (awaiting reference PDF)
+- Nested tables (tables inside table cells, 2-level and 3-level nesting) — **case51** (awaiting reference PDF)
+- Table of Contents (right-aligned tabs + dot leaders + page field codes) — **case49** (DONE)
+- Stacked bar chart rendering (stacked + percentStacked, vertical + horizontal) — **case52** (awaiting reference PDF)
+- Charts with extreme data (50 categories, small/large/mixed-range values) — **case53** (awaiting reference PDF)
