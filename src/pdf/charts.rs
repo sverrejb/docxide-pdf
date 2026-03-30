@@ -497,16 +497,16 @@ pub(super) fn render_chart(
         }
         ChartType::Line => {
             content.set_line_width(2.0);
+            let group_w = plot_w / num_categories as f32;
             for (si, series) in c.series.iter().enumerate() {
                 set_stroke_color(content, series.color);
-                let cat_w = plot_w / (num_categories - 1).max(1) as f32;
                 let pts: Vec<(f32, f32)> = series
                     .values
                     .iter()
                     .enumerate()
                     .map(|(ci, &val)| {
                         (
-                            plot_x + ci as f32 * cat_w,
+                            plot_x + (ci as f32 + 0.5) * group_w,
                             plot_y + (val / axis_max) * plot_h,
                         )
                     })
@@ -540,7 +540,7 @@ pub(super) fn render_chart(
                 let marker_r = 3.5;
                 let sym = resolve_marker(series.marker, si);
                 for (ci, &val) in series.values.iter().enumerate() {
-                    let lx = plot_x + ci as f32 * cat_w;
+                    let lx = plot_x + (ci as f32 + 0.5) * group_w;
                     let ly = plot_y + (val / axis_max) * plot_h;
                     draw_marker(content, sym, lx, ly, marker_r);
                 }

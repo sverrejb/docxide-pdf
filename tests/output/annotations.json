@@ -69,7 +69,7 @@
       "x_pt": 359.17673,
       "y_pt": 608.8364,
       "note": "Lines should not start or bein at the edge, but rather where the month-\"limits\" are set. See annotation 1.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 46,
@@ -249,7 +249,7 @@
       "x_pt": 111.39671,
       "y_pt": 544.3965,
       "note": "data points should be aligned with markers on the x-axis",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 76,

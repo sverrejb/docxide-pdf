@@ -144,6 +144,20 @@ This brings margin_right from 76.2pt down to ~62pt for scatter charts, producing
 
 ---
 
+## Annotation #44/#74 — Line chart data points at wrong x-positions (case30) — 2026-03-30
+
+**Problem**: Line chart data points started and ended at the plot area edges instead of aligning with category labels. The "Jan" data point was at the left axis and "Jun" at the right edge, but category labels (placed at section midpoints) were inset from the edges.
+
+**Analysis**: The Line chart code used `cat_w = plot_w / (num_categories - 1)` to space data points edge-to-edge. But category labels were correctly placed at section midpoints using `(ci + 0.5) * group_w` where `group_w = plot_w / num_categories`. This caused data markers to misalign with their category labels.
+
+The Area chart uses a different convention — data points at edges to fill the entire plot width — so the fix was only applied to Line charts.
+
+**Fix**: In `pdf/charts.rs`, changed Line chart data point placement from edge-to-edge (`plot_x + ci * plot_w/(n-1)`) to category midpoints (`plot_x + (ci + 0.5) * plot_w/n`), matching the existing category label positions.
+
+**Result**: case30 Jaccard +1.9pp (82.3% → 84.2%), SSIM +1.1pp (82.8% → 83.9%). No regressions on any fixture.
+
+---
+
 ## Summary of systemic themes
 
 All remaining unfixed annotations fall into these categories:
