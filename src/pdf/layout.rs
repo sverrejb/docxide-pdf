@@ -735,11 +735,14 @@ pub(super) fn build_tabbed_line(
             indent_left
         };
 
+        // Track the tab stop position so we can ensure current_x advances past it
+        let mut tab_stop_pos: Option<f32> = None;
+
         if seg_idx > 0 {
             let stop = find_next_tab_stop(current_x, tab_stops, line_indent, default_tab_stop);
-            let tab_target = stop.position - line_indent;
+            let mut effective_tab_target = stop.position - line_indent;
             let mut seg_start =
-                resolve_tab_aligned_start(&stop, tab_target, seg_runs, seen_fonts, current_x);
+                resolve_tab_aligned_start(&stop, effective_tab_target, seg_runs, seen_fonts, current_x);
             let mut resolved_leader = stop.leader;
 
             if seg_start > line_max && !all_chunks.is_empty() {
@@ -751,6 +754,7 @@ pub(super) fn build_tabbed_line(
                 seg_start =
                     resolve_tab_aligned_start(&new_stop, new_target, seg_runs, seen_fonts, 0.0);
                 resolved_leader = new_stop.leader;
+                effective_tab_target = new_target;
             }
 
             // Draw leader fill between end of previous text and start of aligned text
@@ -796,6 +800,7 @@ pub(super) fn build_tabbed_line(
             }
 
             current_x = seg_start;
+            tab_stop_pos = Some(effective_tab_target);
         }
 
         // Layout text in this segment from current_x
@@ -862,6 +867,12 @@ pub(super) fn build_tabbed_line(
                 current_x += ww;
             }
             prev_ws = text.ends_with(is_break_space);
+        }
+
+        // For decimal/right/center tabs, text may end before the tab stop position.
+        // Advance current_x past the tab stop so the next tab finds the correct stop.
+        if let Some(ts_pos) = tab_stop_pos {
+            current_x = current_x.max(ts_pos);
         }
     }
 
