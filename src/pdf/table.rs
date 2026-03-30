@@ -215,7 +215,7 @@ fn render_cell_content(
                     if let Some(ref shadow) = para.image_shadow {
                         super::color::draw_image_shadow(
                             content, shadow, img_x, img_y,
-                            para.image_width, para.image_height,
+                            para.image_width, para.image_height, None,
                         );
                     }
 

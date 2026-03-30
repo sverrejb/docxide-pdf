@@ -189,18 +189,12 @@ fn parse_pic_shadow(container: roxmltree::Node) -> Option<ImageShadow> {
         .map(|v| v / 100000.0)
         .unwrap_or(1.0);
 
-    // Pre-blend with white: blended = alpha * color + (1-alpha) * 255
-    let blended = [
-        (alpha * rgb[0] as f32 + (1.0 - alpha) * 255.0) as u8,
-        (alpha * rgb[1] as f32 + (1.0 - alpha) * 255.0) as u8,
-        (alpha * rgb[2] as f32 + (1.0 - alpha) * 255.0) as u8,
-    ];
-
     Some(ImageShadow {
         offset_x,
         offset_y,
         blur_radius,
-        color: blended,
+        color: rgb,
+        alpha,
     })
 }
 

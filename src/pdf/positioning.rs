@@ -106,7 +106,7 @@ pub(super) fn render_floating_images(
             if let Some(ref shadow) = img.shadow {
                 super::color::draw_image_shadow(
                     content, shadow, fi_x, fi_y_bottom,
-                    img.display_width, img.display_height,
+                    img.display_width, img.display_height, None,
                 );
             }
 

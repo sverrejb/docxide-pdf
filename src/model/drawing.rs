@@ -38,8 +38,8 @@ pub struct ImageShadow {
     pub offset_x: f32,    // points, positive = right
     pub offset_y: f32,    // points, positive = down in screen coords
     pub blur_radius: f32, // points — expands the shadow rect beyond the image
-    /// Shadow color pre-blended with white at the specified alpha
-    pub color: [u8; 3],
+    pub color: [u8; 3],   // raw shadow color
+    pub alpha: f32,       // 0.0–1.0
 }
 
 #[derive(Clone)]

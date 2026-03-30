@@ -443,7 +443,7 @@ pub(super) fn render_header_footer(
                         if let Some(ref shadow) = img.shadow {
                             super::color::draw_image_shadow(
                                 content, shadow, x, y_bottom,
-                                img.display_width, img.display_height,
+                                img.display_width, img.display_height, None,
                             );
                         }
                         emit_image_xobject(

@@ -1344,7 +1344,7 @@ pub(super) fn render_paragraph_lines(
                 if let Some(ref shadow) = chunk.inline_image_shadow {
                     super::color::draw_image_shadow(
                         content, shadow, x, img_bottom,
-                        chunk.width, chunk.inline_image_height,
+                        chunk.width, chunk.inline_image_height, None,
                     );
                 }
 

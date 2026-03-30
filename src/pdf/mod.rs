@@ -1861,6 +1861,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 color::draw_image_shadow(
                                     &mut pb.content, shadow, x, y_bottom,
                                     img.display_width, img.display_height,
+                                    Some(&mut pb.alpha_states),
                                 );
                             }
                             pb.content.save_state();
