@@ -126,6 +126,24 @@ Meanwhile, the main render loop in `pdf/mod.rs` consistently uses `effective_slo
 
 ---
 
+## Annotation #39 — Scatter/Bubble chart plot area too narrow (case31) — 2026-03-30
+
+**Problem**: Scatter chart plot area was narrower than Word's reference. The annotation reported the graph as "too wide" but measurements showed the opposite: our plot_w was ~252pt vs reference ~259pt, and our legend was 23pt closer to the plot area.
+
+**Analysis**: The margin_right calculation for right-side legends used `swatch_w = 20.0` for ALL point charts (Line/Area/Scatter/Bubble), matching the width of line+marker legend swatches. However, Scatter and Bubble charts render legend swatches as small marker dots (`SwatchStyle::Marker`, swatch_size=5.5) without any line extension, so 20pt was ~14.5pt more than needed. This over-allocation compressed the plot area.
+
+Measurements confirmed: generated margin_right=76.2pt vs reference ~69pt; generated plot_w=252.1pt vs reference ~259pt.
+
+**Fix**: In `pdf/charts.rs`, differentiated the legend swatch width reservation by chart type:
+- Line/Area charts: keep `swatch_w = 20.0` (accounts for line+marker swatches)
+- Scatter/Bubble/Bar charts: use `swatch_w = 5.5` (marker dot or rect only)
+
+This brings margin_right from 76.2pt down to ~62pt for scatter charts, producing a wider plot area that better matches Word's layout.
+
+**Result**: case31 Jaccard +1.4pp (58.2% → 59.5%), SSIM +2.5pp (75.0% → 77.6%). No regressions on case29, case30, sample500kB, or any other fixture.
+
+---
+
 ## Summary of systemic themes
 
 All remaining unfixed annotations fall into these categories:

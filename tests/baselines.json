@@ -138,8 +138,8 @@
     "convert_ms": 6.7
   },
   "cases/case31": {
-    "jaccard": 0.5819,
-    "ssim": 0.7505,
+    "jaccard": 0.5954,
+    "ssim": 0.7757,
     "text_boundary": 0.875,
     "convert_ms": 7.0
   },

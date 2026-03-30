@@ -49,7 +49,7 @@
       "x_pt": 377.55087,
       "y_pt": 620.78094,
       "note": "This graph is also too wide.  The left edge is aligned, but our right is too far to the right.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 41,
