@@ -151,6 +151,11 @@ fn parse_pic_shadow(container: roxmltree::Node) -> Option<ImageShadow> {
             .find(|c| c.tag_name().name() == "outerShdw" && c.tag_name().namespace() == Some(DML_NS))
     })?;
 
+    let blur_radius = outer_shdw
+        .attribute("blurRad")
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(emu_to_pts)
+        .unwrap_or(0.0);
     let dist = outer_shdw
         .attribute("dist")
         .and_then(|v| v.parse::<f32>().ok())
@@ -194,6 +199,7 @@ fn parse_pic_shadow(container: roxmltree::Node) -> Option<ImageShadow> {
     Some(ImageShadow {
         offset_x,
         offset_y,
+        blur_radius,
         color: blended,
     })
 }

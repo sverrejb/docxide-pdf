@@ -1342,17 +1342,10 @@ pub(super) fn render_paragraph_lines(
 
                 // Drop shadow (rendered before image so it appears behind)
                 if let Some(ref shadow) = chunk.inline_image_shadow {
-                    content.save_state();
-                    fill_color_or_black(content, Some(shadow.color));
-                    // offset_y is positive-down in screen coords; PDF y-axis is up
-                    content.rect(
-                        x + shadow.offset_x,
-                        img_bottom - shadow.offset_y,
-                        chunk.width,
-                        chunk.inline_image_height,
+                    super::color::draw_image_shadow(
+                        content, shadow, x, img_bottom,
+                        chunk.width, chunk.inline_image_height,
                     );
-                    content.fill_nonzero();
-                    content.restore_state();
                 }
 
                 content.save_state();

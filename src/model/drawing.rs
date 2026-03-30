@@ -35,8 +35,9 @@ pub struct EmbeddedImage {
 /// Drop shadow effect parsed from a:outerShdw
 #[derive(Clone, Debug)]
 pub struct ImageShadow {
-    pub offset_x: f32, // points, positive = right
-    pub offset_y: f32, // points, positive = down in screen coords
+    pub offset_x: f32,    // points, positive = right
+    pub offset_y: f32,    // points, positive = down in screen coords
+    pub blur_radius: f32, // points — expands the shadow rect beyond the image
     /// Shadow color pre-blended with white at the specified alpha
     pub color: [u8; 3],
 }

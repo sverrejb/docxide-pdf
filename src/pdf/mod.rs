@@ -1857,6 +1857,12 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     Alignment::Right => (col_w - img.display_width).max(0.0),
                                     _ => 0.0,
                                 };
+                            if let Some(ref shadow) = img.shadow {
+                                color::draw_image_shadow(
+                                    &mut pb.content, shadow, x, y_bottom,
+                                    img.display_width, img.display_height,
+                                );
+                            }
                             pb.content.save_state();
                             pb.content.transform([
                                 img.display_width,

@@ -27,3 +27,27 @@ pub(super) fn stroke_color_or_black(content: &mut Content, color: Option<[u8; 3]
         content.set_stroke_gray(0.0);
     }
 }
+
+/// Draw an image drop shadow as a filled rect expanded by the blur radius.
+/// `x`, `y_bottom` are the image's bottom-left corner in PDF coords.
+/// `offset_y` is positive-down (screen); PDF y-axis is up so we subtract.
+pub(super) fn draw_image_shadow(
+    content: &mut Content,
+    shadow: &crate::model::ImageShadow,
+    x: f32,
+    y_bottom: f32,
+    width: f32,
+    height: f32,
+) {
+    let expand = shadow.blur_radius * 0.5;
+    content.save_state();
+    fill_color_or_black(content, Some(shadow.color));
+    content.rect(
+        x + shadow.offset_x - expand,
+        y_bottom - shadow.offset_y - expand,
+        width + expand * 2.0,
+        height + expand * 2.0,
+    );
+    content.fill_nonzero();
+    content.restore_state();
+}

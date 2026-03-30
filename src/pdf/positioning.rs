@@ -7,7 +7,7 @@ use crate::model::{
     SectionProperties, VRelativeFrom, VerticalPosition,
 };
 
-use super::color::{fill_color_or_black, stroke_rgb};
+use super::color::stroke_rgb;
 
 pub(crate) fn resolve_h_position(
     h_relative_from: HRelativeFrom,
@@ -104,16 +104,10 @@ pub(super) fn render_floating_images(
             let fi_y_bottom = fi_y_top - img.display_height;
 
             if let Some(ref shadow) = img.shadow {
-                content.save_state();
-                fill_color_or_black(content, Some(shadow.color));
-                content.rect(
-                    fi_x + shadow.offset_x,
-                    fi_y_bottom - shadow.offset_y,
-                    img.display_width,
-                    img.display_height,
+                super::color::draw_image_shadow(
+                    content, shadow, fi_x, fi_y_bottom,
+                    img.display_width, img.display_height,
                 );
-                content.fill_nonzero();
-                content.restore_state();
             }
 
             content.save_state();

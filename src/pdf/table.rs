@@ -8,7 +8,7 @@ use crate::model::{
     SectionProperties, Table, TableAlignment, TableRow, TextDirection, VMerge,
 };
 
-use super::color::{fill_color_or_black, fill_rgb, stroke_rgb};
+use super::color::{fill_rgb, stroke_rgb};
 
 use super::RenderContext;
 use super::layout::{
@@ -213,16 +213,10 @@ fn render_cell_content(
                     let img_y = cursor_y - para.image_height;
 
                     if let Some(ref shadow) = para.image_shadow {
-                        content.save_state();
-                        fill_color_or_black(content, Some(shadow.color));
-                        content.rect(
-                            img_x + shadow.offset_x,
-                            img_y - shadow.offset_y,
-                            para.image_width,
-                            para.image_height,
+                        super::color::draw_image_shadow(
+                            content, shadow, img_x, img_y,
+                            para.image_width, para.image_height,
                         );
-                        content.fill_nonzero();
-                        content.restore_state();
                     }
 
                     content.save_state();
