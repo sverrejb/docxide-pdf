@@ -70,9 +70,10 @@ pub(super) fn compute_header_height(
                 let mut content_h = max_img_h.max(line_h);
 
                 for fi in &para.floating_images {
-                    if matches!(fi.wrap_type, WrapType::TopAndBottom) {
+                    // In headers/footers, any text-displacing wrap type affects height
+                    if !matches!(fi.wrap_type, WrapType::None) {
                         let fi_h = match fi.v_position {
-                            VerticalPosition::Offset(o) => o + fi.image.display_height,
+                            VerticalPosition::Offset(o) => o.max(0.0) + fi.image.display_height,
                             _ => fi.image.display_height,
                         };
                         content_h = content_h.max(fi_h);

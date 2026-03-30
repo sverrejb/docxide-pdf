@@ -158,6 +158,18 @@ The Area chart uses a different convention — data points at edges to fill the 
 
 ---
 
+## Annotation #46 — Header floating image not counted in header height (czech_municipal_grant_form) — 2026-03-30
+
+**Problem**: On page 2, numbered text overlapped the header logo. The body content started too high, rendering on top of the coat-of-arms logo in the page header.
+
+**Analysis**: The header contains a floating image (45.4×48.7pt) with `WrapType::Square` wrap. The `compute_header_height()` function only counted floating images with `WrapType::TopAndBottom`, ignoring `Square`/`Tight`/`Through` wrap types. Since the logo uses Square wrapping, its height (~48.7pt) was not included in the header height calculation, so `effective_slot_top()` placed body content too high.
+
+**Fix**: In `pdf/header_footer.rs`, changed the floating image filter in `compute_header_height()` from `matches!(fi.wrap_type, WrapType::TopAndBottom)` to `!matches!(fi.wrap_type, WrapType::None)`. In headers/footers, any text-displacing wrap type (TopAndBottom, Square, Tight, Through) should contribute to the header height. Also clamped negative offsets to 0 to prevent negative height contributions.
+
+**Result**: czech_municipal_grant_form SSIM +4.1pp (30.0% → 34.1%), Jaccard -0.2pp (noise). education_consultant_posting also improved: SSIM +0.6pp. No regressions.
+
+---
+
 ## Summary of systemic themes
 
 All remaining unfixed annotations fall into these categories:

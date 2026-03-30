@@ -79,7 +79,7 @@
       "x_pt": 93.743935,
       "y_pt": 760.83185,
       "note": "This numbered text overlaps logo in header",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 47,

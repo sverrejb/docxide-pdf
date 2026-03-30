@@ -260,7 +260,7 @@
     "ssim": 0.5992
   },
   "cases/case53": {
-    "jaccard": 0.4782,
+    "jaccard": 0.4784,
     "ssim": 0.429
   },
   "cases/case6": {
@@ -416,8 +416,8 @@
     "convert_ms": 39.4
   },
   "scraped/czech_municipal_..": {
-    "jaccard": 0.1133,
-    "ssim": 0.3002,
+    "jaccard": 0.1116,
+    "ssim": 0.341,
     "text_boundary": 0.42,
     "convert_ms": 34.9
   },
@@ -434,8 +434,8 @@
     "convert_ms": 22.0
   },
   "scraped/education_consul..": {
-    "jaccard": 0.1438,
-    "ssim": 0.3212,
+    "jaccard": 0.1446,
+    "ssim": 0.3268,
     "text_boundary": 0.4389,
     "convert_ms": 47.1
   },
