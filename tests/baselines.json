@@ -512,8 +512,8 @@
     "convert_ms": 5.6
   },
   "scraped/mandated_reporte..": {
-    "jaccard": 0.4695,
-    "ssim": 0.6733,
+    "jaccard": 0.4697,
+    "ssim": 0.6735,
     "text_boundary": 0.7485,
     "convert_ms": 43.3
   },

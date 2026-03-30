@@ -230,7 +230,10 @@ fn render_cell_content(
                         content.stroke();
                         content.restore_state();
                     }
-                    cursor_y -= para.content_height;
+                    // Advance cursor by display height only; distT/distB in
+                    // layout_extra_height contribute to row height calculation
+                    // but don't add spacing between image and following text.
+                    cursor_y -= para.image_height;
                     continue;
                 }
 
