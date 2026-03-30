@@ -7,7 +7,7 @@ use pdf_writer::{Content, Name, Rect, Str};
 use crate::fonts::{FontEntry, encode_as_gids, font_key, font_key_buf, to_winansi_bytes};
 use crate::model::{Alignment, Run, TabAlignment, TabStop, TextFill, TextOutline, VertAlign};
 
-use super::color::{fill_color_or_black, stroke_color_or_black};
+use super::color::{fill_color_or_black, stroke_color_or_black, stroke_rgb};
 
 /// Resolve aligned segment start position given a tab stop, segment runs, and minimum x.
 fn resolve_tab_aligned_start(
@@ -121,6 +121,8 @@ pub(super) struct WordChunk {
     pub(super) hyperlink_url: Option<String>,
     pub(super) inline_image_name: Option<String>,
     pub(super) inline_image_height: f32,
+    pub(super) inline_image_stroke_color: Option<[u8; 3]>,
+    pub(super) inline_image_stroke_width: f32,
     pub(super) synthetic_bold: bool,
     pub(super) text_outline: Option<TextOutline>,
     pub(super) text_fill: Option<TextFill>,
@@ -154,6 +156,8 @@ impl WordChunk {
             hyperlink_url: run.hyperlink_url.clone(),
             inline_image_name: None,
             inline_image_height: 0.0,
+            inline_image_stroke_color: None,
+            inline_image_stroke_width: 0.0,
             synthetic_bold: entry.synthetic_bold,
             text_outline: run.text_outline.clone(),
             text_fill: run.text_fill.clone(),
@@ -166,6 +170,8 @@ impl WordChunk {
         x_offset: f32,
         display_width: f32,
         display_height: f32,
+        stroke_color: Option<[u8; 3]>,
+        stroke_width: f32,
     ) -> Self {
         Self {
             pdf_font: String::new(),
@@ -184,6 +190,8 @@ impl WordChunk {
             hyperlink_url: None,
             inline_image_name: Some(pdf_name.to_string()),
             inline_image_height: display_height,
+            inline_image_stroke_color: stroke_color,
+            inline_image_stroke_width: stroke_width,
             synthetic_bold: false,
             text_outline: None,
             text_fill: None,
@@ -215,6 +223,8 @@ impl WordChunk {
             hyperlink_url: None,
             inline_image_name: None,
             inline_image_height: 0.0,
+            inline_image_stroke_color: None,
+            inline_image_stroke_width: 0.0,
             synthetic_bold: false,
             text_outline: None,
             text_fill: None,
@@ -427,6 +437,7 @@ pub(super) fn build_paragraph_lines(
                             if proposed_x2 + img_w <= rw {
                                 current_chunks.push(WordChunk::image(
                                     pdf_name, run.font_size, proposed_x2, img_w, img.display_height,
+                                    img.stroke_color, img.stroke_width,
                                 ));
                                 current_x = img_w;
                                 continue;
@@ -442,6 +453,7 @@ pub(super) fn build_paragraph_lines(
 
                 current_chunks.push(WordChunk::image(
                     pdf_name, run.font_size, current_x, img_w, img.display_height,
+                    img.stroke_color, img.stroke_width,
                 ));
                 current_x += img_w;
             }
@@ -823,6 +835,8 @@ pub(super) fn build_tabbed_line(
                         current_x,
                         img.display_width,
                         img.display_height,
+                        img.stroke_color,
+                        img.stroke_width,
                     ));
                     current_x += img.display_width;
                 }
@@ -1330,6 +1344,15 @@ pub(super) fn render_paragraph_lines(
                 ]);
                 content.x_object(Name(img_name.as_bytes()));
                 content.restore_state();
+
+                if let Some(sc) = chunk.inline_image_stroke_color {
+                    content.save_state();
+                    stroke_rgb(content, sc);
+                    content.set_line_width(chunk.inline_image_stroke_width);
+                    content.rect(x, img_bottom, chunk.width, chunk.inline_image_height);
+                    content.stroke();
+                    content.restore_state();
+                }
             }
         }
 

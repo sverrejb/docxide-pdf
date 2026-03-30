@@ -24,6 +24,10 @@ pub struct EmbeddedImage {
     pub layout_extra_height: f32,
     /// Top portion of extra space: effectExtent.t + distT (points)
     pub layout_extra_top: f32,
+    /// Outline/border color from pic:spPr/a:ln
+    pub stroke_color: Option<[u8; 3]>,
+    /// Outline/border width in points from pic:spPr/a:ln @w
+    pub stroke_width: f32,
 }
 
 #[derive(Clone)]

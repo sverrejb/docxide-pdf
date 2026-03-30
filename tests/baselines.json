@@ -362,14 +362,14 @@
     "convert_ms": 11.0
   },
   "scraped/air_pollution_pe..": {
-    "jaccard": 0.1496,
-    "ssim": 0.3315,
+    "jaccard": 0.1498,
+    "ssim": 0.3319,
     "text_boundary": 0.9429,
     "convert_ms": 12.0
   },
   "scraped/brazilian_logist..": {
-    "jaccard": 0.1632,
-    "ssim": 0.2733,
+    "jaccard": 0.1633,
+    "ssim": 0.2744,
     "text_boundary": 0.1832,
     "convert_ms": 744.0
   },
@@ -512,9 +512,9 @@
     "convert_ms": 5.6
   },
   "scraped/mandated_reporte..": {
-    "jaccard": 0.4698,
-    "ssim": 0.6723,
-    "text_boundary": 0.2963,
+    "jaccard": 0.4695,
+    "ssim": 0.6733,
+    "text_boundary": 0.7485,
     "convert_ms": 43.3
   },
   "scraped/mongolian_human_..": {

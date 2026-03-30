@@ -222,6 +222,14 @@ fn render_cell_content(
                     ]);
                     content.x_object(Name(img_name.as_bytes()));
                     content.restore_state();
+                    if let Some(sc) = para.image_stroke_color {
+                        content.save_state();
+                        stroke_rgb(content, sc);
+                        content.set_line_width(para.image_stroke_width);
+                        content.rect(img_x, img_y, para.image_width, para.image_height);
+                        content.stroke();
+                        content.restore_state();
+                    }
                     cursor_y -= para.content_height;
                     continue;
                 }

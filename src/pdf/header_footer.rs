@@ -448,6 +448,14 @@ pub(super) fn render_header_footer(
                             img.display_width,
                             img.display_height,
                         );
+                        if let Some(sc) = img.stroke_color {
+                            content.save_state();
+                            super::color::stroke_rgb(content, sc);
+                            content.set_line_width(img.stroke_width);
+                            content.rect(x, y_bottom, img.display_width, img.display_height);
+                            content.stroke();
+                            content.restore_state();
+                        }
                     }
                     cursor_y -= line_h;
                     prev_space_after = para.space_after;

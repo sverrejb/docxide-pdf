@@ -11,7 +11,7 @@ use super::numbering::NumberingInfo;
 use super::smartart::{has_diagram_ref, parse_smartart_drawing};
 use super::styles::{StylesInfo, ThemeFonts};
 use super::textbox::{parse_connector_from_wsp, parse_textbox_from_wsp};
-use super::{DML_NS, REL_NS, WML_NS, WPD_NS, emu_attr, emu_to_pts, find_child, wml};
+use super::{DML_NS, REL_NS, WML_NS, WPD_NS, emu_attr, emu_to_pts, find_child, parse_hex_color, wml};
 
 const CHART_URI: &str = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 
@@ -96,6 +96,41 @@ fn parse_jpeg_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat, u8)> {
     None
 }
 
+/// Parse outline stroke from `pic:spPr/a:ln` inside a pic:pic element.
+fn parse_pic_outline(container: roxmltree::Node) -> (Option<[u8; 3]>, f32) {
+    let pic_ns = "http://schemas.openxmlformats.org/drawingml/2006/picture";
+    let pic_node = container
+        .descendants()
+        .find(|n| n.tag_name().name() == "pic" && n.tag_name().namespace() == Some(pic_ns));
+    // pic:spPr uses the pic namespace, but a:ln inside it uses DML_NS
+    let sp_pr = pic_node.and_then(|p| {
+        p.children()
+            .find(|c| c.tag_name().name() == "spPr" && c.tag_name().namespace() == Some(pic_ns))
+    });
+    let ln = sp_pr.and_then(|s| {
+        s.children()
+            .find(|c| c.tag_name().name() == "ln" && c.tag_name().namespace() == Some(DML_NS))
+    });
+    let Some(ln) = ln else {
+        return (None, 0.0);
+    };
+    let width = ln
+        .attribute("w")
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(emu_to_pts)
+        .unwrap_or(0.75); // default 0.75pt
+    let color = ln
+        .descendants()
+        .find(|n| n.tag_name().name() == "srgbClr" && n.tag_name().namespace() == Some(DML_NS))
+        .and_then(|n| n.attribute("val"))
+        .and_then(parse_hex_color);
+    if color.is_some() {
+        (color, width)
+    } else {
+        (None, 0.0)
+    }
+}
+
 pub(super) fn read_image_from_zip<R: Read + std::io::Seek>(
     embed_id: &str,
     rels: &HashMap<String, String>,
@@ -134,6 +169,8 @@ pub(super) fn read_image_from_zip_extra<R: Read + std::io::Seek>(
         jpeg_components: components,
         layout_extra_height,
         layout_extra_top,
+        stroke_color: None,
+        stroke_width: 0.0,
     })
 }
 
@@ -336,7 +373,10 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
                 return Some(RunDrawingResult::Connector(conn));
             }
             if let Some(embed_id) = find_blip_embed(container) {
-                if let Some(img) = read_image_from_zip(embed_id, rels, zip, display_w, display_h) {
+                if let Some(mut img) = read_image_from_zip(embed_id, rels, zip, display_w, display_h) {
+                    let (stroke_color, stroke_width) = parse_pic_outline(container);
+                    img.stroke_color = stroke_color;
+                    img.stroke_width = stroke_width;
                     let (h_position, h_relative, v_position, v_relative) =
                         parse_anchor_position(container);
                     let (wrap_type, wrap_text, wrap_polygon) = parse_wrap_type(container);
@@ -397,9 +437,12 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
 
         if let Some(embed_id) = find_blip_embed(container) {
             let (extra_h, extra_top) = inline_extra_height(container);
-            if let Some(img) =
+            if let Some(mut img) =
                 read_image_from_zip_extra(embed_id, rels, zip, display_w, display_h, extra_h, extra_top)
             {
+                let (stroke_color, stroke_width) = parse_pic_outline(container);
+                img.stroke_color = stroke_color;
+                img.stroke_width = stroke_width;
                 return Some(RunDrawingResult::Inline(img));
             }
         }

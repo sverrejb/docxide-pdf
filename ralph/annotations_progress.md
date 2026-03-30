@@ -1,5 +1,45 @@
 # Annotations Progress
 
+## 2026-03-30: Render image outline/border from pic:spPr/a:ln (annotation #28)
+
+**Problem**: In `scraped/mandated_reporter_child_abuse`, the JCS Inc. logo in the first-page header had no blue rectangular border. The reference shows a dark blue (#1E4D78) 2pt solid outline around the logo image.
+
+**Root cause**: Image outline/border properties (`a:ln` inside `pic:spPr`) were entirely unimplemented. The DOCX parsing code extracted the image's blip data and dimensions but ignored the shape properties element that defines the outline. The rendering code placed images with no border support at all.
+
+The XML structure: `wp:inline > a:graphic > a:graphicData > pic:pic > pic:spPr > a:ln w="25400" > a:solidFill > a:srgbClr val="1E4D78"` — a 2pt solid dark blue border.
+
+**Fix**:
+- `src/model/drawing.rs`: Added `stroke_color: Option<[u8; 3]>` and `stroke_width: f32` to `EmbeddedImage`
+- `src/docx/images.rs`: Added `parse_pic_outline()` to extract `a:ln` from `pic:spPr` (color + width in EMU → points). Applied to both inline and floating image paths. Key detail: `pic:spPr` uses the `pic` namespace, not DML_NS.
+- `src/pdf/layout.rs`: Draw stroke rectangle after inline image XObject placement
+- `src/pdf/positioning.rs`: Draw stroke rectangle after floating image placement
+- `src/pdf/table.rs`: Draw stroke rectangle after table cell image placement
+- `src/pdf/header_footer.rs`: Draw stroke rectangle after header/footer image placement
+- `src/pdf/table_layout.rs`: Propagate stroke fields through `CellParagraphLayout`
+
+**Impact**:
+- `scraped/mandated_reporter_child_abuse`: SSIM +0.1pp (67.2→67.3%), Jaccard stable at ~47%
+- No regressions across all test cases
+
+---
+
+## 2026-03-30: Fixed decimal tab stop reuse preventing dot leader rendering (annotation #26)
+
+**Problem**: In `scraped/air_pollution_permit_form`, the "V:" line at the bottom of the form was missing dotted leader lines between "dňa" and "2020". The reference shows `V: .................., dňa.............................................2020` but the generated output showed `V: ..................., dňa2020` with no dots.
+
+**Root cause**: The paragraph uses two tab stops with dot leaders: a decimal tab at 120.5pt and a left tab at 276.5pt. When the decimal tab aligned the text segment ", dňa " before its tab position (seg_start=93.5pt), the text ended at current_x=117.5pt — slightly below the tab stop at 120.5pt. The next `find_next_tab_stop(117.5)` call found `120.5 > 118.0` and returned the **same** decimal tab stop again instead of advancing to the left tab at 276.5pt. With the same tab stop reused, the "2020" segment was positioned at ~117.5pt (right after "dňa") with zero gap — no room for leader dots.
+
+**Fix** (`src/pdf/layout.rs`):
+- After each tab segment's text layout, advance `current_x` to at least the tab stop position (`current_x = current_x.max(effective_tab_target)`)
+- This ensures `find_next_tab_stop` skips already-consumed tab stops on subsequent tab characters
+- Also properly tracks the effective tab target through line overflow (when a tab causes a new line, the target updates to the new stop's position)
+
+**Impact**:
+- `scraped/air_pollution_permit_form`: Dot leaders now render correctly between "dňa" and "2020" on both V: lines. Jaccard score unchanged at 15.0% (dots gained offset by position shift of "2020" to correct location)
+- No regressions across all test cases
+
+---
+
 ## 2026-03-30: Include list label font metrics in line height calculation (annotation #66)
 
 **Problem**: In `case33`, each bullet point caused a slightly larger vertical drift from the reference. The accumulated drift was ~2pt by the end of the page. The annotation explicitly asked for a thorough examination.

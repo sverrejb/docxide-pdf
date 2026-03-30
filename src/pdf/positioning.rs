@@ -113,6 +113,15 @@ pub(super) fn render_floating_images(
             ]);
             content.x_object(Name(pdf_name.as_bytes()));
             content.restore_state();
+
+            if let Some(sc) = img.stroke_color {
+                content.save_state();
+                stroke_rgb(content, sc);
+                content.set_line_width(img.stroke_width);
+                content.rect(fi_x, fi_y_bottom, img.display_width, img.display_height);
+                content.stroke();
+                content.restore_state();
+            }
         }
     }
 }
