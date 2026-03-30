@@ -49,7 +49,7 @@
       "x_pt": 319.59677,
       "y_pt": 278.26538,
       "note": "We are not rendering drop shadow for this image. Compare to reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 38,

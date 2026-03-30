@@ -29,8 +29,8 @@ pub(super) fn stroke_color_or_black(content: &mut Content, color: Option<[u8; 3]
 }
 
 /// Draw an image drop shadow with soft edges using layered semi-transparent
-/// rectangles. Layers expand only in the shadow-cast direction (away from
-/// the light source) so the image covers the light-facing sides.
+/// rectangles. Layers expand in the shadow-cast direction with a quadratic
+/// distribution that concentrates opacity near the image edge.
 ///
 /// When `alpha_states` is provided, uses proper PDF transparency (ExtGState).
 /// When `None`, falls back to a single pre-blended rectangle.
@@ -64,13 +64,13 @@ pub(super) fn draw_image_shadow(
     };
 
     const NUM_LAYERS: usize = 10;
-    let blur = shadow.blur_radius * 0.5;
+    let blur = shadow.blur_radius * 0.75;
 
     let per_alpha = 1.0 - (1.0 - shadow.alpha).powf(1.0 / NUM_LAYERS as f32);
     let pct = (per_alpha * 100.0).round().max(1.0).min(100.0) as u8;
     alpha_states.insert(pct);
 
-    // Expand only in the shadow-cast direction (the image covers the other sides)
+    // Expand primarily in the shadow-cast direction (the image covers the other sides)
     let exp_right = if shadow.offset_x >= 0.0 { 1.0 } else { 0.0 };
     let exp_left = if shadow.offset_x <= 0.0 { 1.0 } else { 0.0 };
     // PDF y-up: offset_y>0 means screen-down = expand in -y
@@ -81,8 +81,11 @@ pub(super) fn draw_image_shadow(
     fill_rgb(content, shadow.color);
     content.set_parameters(Name(format!("GSa{pct}").as_bytes()));
 
+    // Quadratic distribution: layers are denser near the image (inner edge)
+    // producing a more concentrated shadow body with gentle outer fade
     for i in (0..NUM_LAYERS).rev() {
-        let t = blur * (i + 1) as f32 / NUM_LAYERS as f32;
+        let frac = (i + 1) as f32 / NUM_LAYERS as f32;
+        let t = blur * frac * frac;
         let lx = sx - t * exp_left;
         let ly = sy - t * exp_down;
         let lw = width + t * (exp_left + exp_right);
