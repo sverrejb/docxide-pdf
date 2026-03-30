@@ -113,6 +113,38 @@ pub(super) fn render_shape_fill(
     }
 }
 
+/// Compute line height from the list label font if it exceeds the text-run line height.
+/// Word includes the numbering label character's font metrics in the tallest-font
+/// calculation, so a bullet from Symbol font can make the line taller than text-only Calibri.
+/// Only applied when label and text use the same font size (the common bullet case);
+/// when the label has a dramatically different size it's a special numbering style
+/// handled separately via the existing label_fs > font_size path.
+fn label_boosted_line_h(
+    para: &Paragraph,
+    fonts: &HashMap<String, FontEntry>,
+    text_line_h: f32,
+    effective_ls: LineSpacing,
+    text_font_size: f32,
+) -> f32 {
+    if para.list_label.is_empty() {
+        return text_line_h;
+    }
+    let label_fs = para.list_label_font_size.unwrap_or(text_font_size);
+    // Only boost when the label font size matches the text font size (common bullet case).
+    // Large label sizes (e.g. 20pt label on 10pt text) are handled separately.
+    if (label_fs - text_font_size).abs() > 1.0 {
+        return text_line_h;
+    }
+    let Some(key) = label_font_key(para) else {
+        return text_line_h;
+    };
+    let Some(entry) = fonts.get(&key) else {
+        return text_line_h;
+    };
+    let label_lh = resolve_line_h(effective_ls, label_fs, entry.line_h_ratio);
+    text_line_h.max(label_lh)
+}
+
 /// Look up the line_h_ratio for a break run's font, matching by font_size.
 fn break_run_lhr(
     runs: &[Run],
@@ -1280,6 +1312,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         } else {
                             line_h
                         };
+                        let first_line_h = label_boosted_line_h(para, ctx.fonts, first_line_h, effective_ls, font_size);
                         if num_lines <= 1 {
                             // If the single line was created by a break, use its font size
                             if let Some(bfs) = lines.first().and_then(|l| l.break_font_size) {

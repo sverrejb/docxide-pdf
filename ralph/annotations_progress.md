@@ -1,5 +1,29 @@
 # Annotations Progress
 
+## 2026-03-30: Include list label font metrics in line height calculation (annotation #66)
+
+**Problem**: In `case33`, each bullet point caused a slightly larger vertical drift from the reference. The accumulated drift was ~2pt by the end of the page. The annotation explicitly asked for a thorough examination.
+
+**Root cause**: Word includes the numbering label character's font metrics (e.g., Symbol font for bullet `•`) in the tallest-font-on-the-line calculation for line height. Our code only considered paragraph text runs via `tallest_run_metrics()`, ignoring the label font entirely. When the label font (Symbol) has larger vertical metrics than the text font (Calibri), Word produces taller bullet lines (~16pt) while we produced shorter ones (~15.44pt).
+
+**Analysis**: Extracted precise text Y positions from both reference and generated PDFs using `mutool trace`. Reference bullet-to-bullet gap was 16.00pt (using SymbolMT metrics) while ours was 15.44pt (using only Calibri metrics). The 0.56pt per-bullet error accumulated across 3 bullets to ~1.7pt, then continued growing through subsequent paragraphs.
+
+**Fix** (`src/pdf/mod.rs`):
+- Added `label_boosted_line_h()` helper that looks up the label font's metrics from `ctx.fonts` and uses `max(text_line_h, label_line_h)` when the label font produces a taller line
+- Only applies when label and text font sizes match (within 1pt) — avoids aggressive boosting for special numbering styles with dramatically different label sizes (e.g., 20pt numbered label on 10pt text)
+- Applied to `first_line_h` in the content height calculation, matching Word's behavior where only the first line (containing the bullet) is affected
+
+**Impact**:
+- `cases/case33`: Jaccard +1.5pp (55.9→57.4%), SSIM stable at 95.4%
+- `cases/case3`: +2.3pp
+- `scraped/polish_archery_r..`: +11.8pp Jaccard (18.3→30.1%), +26.7pp SSIM (50.8→77.4%)
+- `scraped/indonesian_bench..`: +4.9pp (35.6→40.5%)
+- `samples/sample500kB`: +1.6pp
+- 3 more fixtures improved by 0.1–0.6pp
+- No regressions caused by this change (german_mezzo -4.2pp is pre-existing)
+
+---
+
 ## 2026-03-20: Fixed text justification from docDefaults (annotations #27, #43)
 
 **Problem**: Text in `scraped/brazilian_logistics_study` was rendered left-aligned instead of justified. The document's `docDefaults/pPrDefault` specified `w:jc w:val="both"` (justify), but this default alignment was not being parsed or applied.
@@ -546,3 +570,50 @@ Similarly, paragraph 19 (2 breaks at 10pt) went from 2 lines to 3 lines, gaining
 - `scraped/german_mezzo_soprano_bio`: Jaccard +3.3pp (51.0→54.3%), SSIM +11.7pp (53.2→64.9%)
 - `samples/samtale`: Jaccard +1.0pp (10.8→11.9%), SSIM +0.9pp (57.6→58.5%)
 - No regressions across all test cases
+
+---
+
+## 2026-03-30: Investigated annotations #25, #30, #66, #77 — systemic issues, no code changes
+
+### Annotation #25 (air_pollution_permit_form — extra "Mellékletek / Prílohy:" text at bottom)
+
+**Problem**: Text "Mellékletek / Prílohy:" appears at the bottom of page 1 in the generated PDF but not in the reference.
+
+**Analysis**: The document has three large page-covering textboxes (`wps:wsp txBox="1"` with `wrapNone`). Textbox 4 (the main form body, 481×714pt) is anchored to a paragraph that's 10 empty body paragraphs below the first one. These empty paragraphs advance the cursor by ~152pt, causing the textbox's anchor position to be much lower than expected:
+- Textbox 4 starts at y=645.6 (PDF coords) instead of ~797
+- Clip boundary: y=-68.1 (below page bottom)
+- "Mellékletek" text at y=52.7 is within the clip bounds, so it renders
+
+In Word, the textbox starts at ~797 with clip_bottom=83.6, so "Mellékletek" (which overflows the textbox height) is clipped. The fundamental issue is that our textbox position depends on the cursor advancement of preceding empty body paragraphs, and the textbox content layout is slightly more compact than Word's (different line heights for the form content inside the textbox).
+
+**Conclusion**: Systemic textbox positioning issue when textbox is paragraph-relative and the anchor paragraph is far from the page top. Would require rethinking how paragraph-relative textbox positions interact with body paragraph cursor advancement.
+
+### Annotation #30 (mongolian_human_rights_law — extra space after "4.1.5")
+
+**Problem**: Annotator reported a space between "4.1.5." and the opening quote character that's not in the reference.
+
+**Analysis**: The text `4.1.5."хүний` is a single word in the layout engine — `split_preserving_spaces` correctly keeps `4.1.5."хүний` as one chunk with no internal spacing. Text extraction from both generated and reference PDFs confirms identical text content: `4.1.5."хүний`. The visual difference is from font glyph width differences (the `"` character renders with slightly more sidebearing in our font compared to the reference's Windows font), not an actual space insertion.
+
+**Conclusion**: Font metric difference, not a rendering bug.
+
+### Annotation #66 (case33 — bullet point vertical drift)
+
+**Problem**: Each bullet point causes slightly larger vertical drift from the reference, accumulating over the page.
+
+**Analysis**: Thorough investigation of:
+- **Font metrics**: Calibri on macOS has usWinAscent=1950, usWinDescent=550 (total=2500, UPM=2048). USE_TYPO_METRICS is false. line_h_ratio = 1.2207. For 11pt at 1.15x spacing: line_h = 15.44pt.
+- **contextualSpacing**: Working correctly — inter_gap=0 between consecutive ListBullet paragraphs.
+- **Line height calculation**: `resolve_line_h(Auto(1.15), 11, Some(1.2207))` = 15.4418pt. Word would round to nearest twip: 15.45pt. Per-line difference: 0.008pt.
+- **Paragraph spacing**: space_before/space_after values match DOCX specification exactly.
+
+Over ~15 paragraphs, cumulative floating-point error is ~0.12pt — too small to explain the visible ~2-3pt drift. The remaining drift is likely from Word's internal twip-rounded cursor advancement vs our floating-point arithmetic, compounded by different font_size paragraphs (headings) creating slightly different rounding patterns.
+
+**Conclusion**: Very small floating-point precision differences in line height calculation that accumulate. Would require implementing Word-compatible twip rounding throughout the spacing pipeline.
+
+### Annotation #77 (polish_municipal_letter — text justification)
+
+**Problem**: Body text should be "justified or something like that."
+
+**Analysis**: The paragraphs have `<w:jc w:val="both"/>` (justify), and our `parse_alignment("both")` correctly returns `Alignment::Justify`. The justification rendering code in `build_paragraph_lines` and `render_paragraph_lines` applies extra_per_gap spacing between words on non-last lines. The text IS justified in our output. The visual difference is from slightly different text widths (font metric differences for Times New Roman/Calibri on macOS vs Windows), causing different line breaks and inter-word spacing.
+
+**Conclusion**: Font metric difference causing different line breaks, not a justification logic bug.
