@@ -42,16 +42,6 @@
       "fixed": false
     },
     {
-      "id": 38,
-      "case": "case30",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 358.61722,
-      "y_pt": 513.2798,
-      "note": "We render this table too wide, compare to reference.",
-      "fixed": true
-    },
-    {
       "id": 39,
       "case": "case31",
       "page": 0,
@@ -59,7 +49,7 @@
       "x_pt": 377.55087,
       "y_pt": 620.78094,
       "note": "This graph is also too wide.  The left edge is aligned, but our right is too far to the right.",
-      "fixed": true
+      "fixed": false
     },
     {
       "id": 41,
@@ -69,7 +59,7 @@
       "x_pt": 302.06705,
       "y_pt": 730.32324,
       "note": "This table part ovelaps the \"Header\" with \"United Nations Children's Fund\" and the \"TERMS OF REFERENCE\". It should come after that. See reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 44,

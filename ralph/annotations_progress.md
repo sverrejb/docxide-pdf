@@ -105,6 +105,27 @@ The image has `a:outerShdw blurRad="292100" dist="139700" dir="2700000"` with `s
 
 ---
 
+## Annotation #41 — Table overlaps header on continuation pages (education_consultant_posting) — 2026-03-30
+
+**Problem**: On page 7, a table continuation from the previous page rendered on top of the page header content ("United Nations Children's Fund" and "TERMS OF REFERENCE"), overlapping it. The table should start below the header.
+
+**Analysis**: When a table spans multiple pages, `flush_and_render_headers()` in `pdf/table.rs` resets the cursor to `sp.page_height - sp.margin_top` — the raw top margin. This ignores the page header height entirely. The same issue affected `at_page_top` detection, `available_h`, and `page_content_h` calculations, which all used raw `sp.margin_top` / `sp.margin_bottom` instead of the effective values that account for header/footer content height.
+
+Meanwhile, the main render loop in `pdf/mod.rs` consistently uses `effective_slot_top()` and `compute_effective_margin_bottom()` for all page break decisions.
+
+**Fix**: In `pdf/table.rs`:
+1. Changed `flush_and_render_headers()` to use `effective_slot_top(sp, false, ctx)` instead of `sp.page_height - sp.margin_top`
+2. Changed `at_page_top` check to compare against `effective_slot_top()` instead of raw margin
+3. Changed `available_h` to use `compute_effective_margin_bottom()` instead of `sp.margin_bottom`
+4. Changed `page_content_h` to use effective top - effective bottom
+5. Changed the split-row loop's `avail` calculation to use `compute_effective_margin_bottom()`
+
+**Result**: `education_consultant_posting` Jaccard +2.3pp (12.1% → 14.4%), SSIM +8.0pp (24.2% → 32.1%). `go_math_grade4_guide` Jaccard +2.4pp (27.7% → 30.0%), SSIM +1.2pp. No regressions. Table content now properly appears below headers on continuation pages.
+
+**Note**: The header rendering on this page still has garbled text ("nited ations Childrens und" instead of "United Nations Children's Fund") — this is a separate font encoding issue unrelated to the table positioning fix.
+
+---
+
 ## Summary of systemic themes
 
 All remaining unfixed annotations fall into these categories:

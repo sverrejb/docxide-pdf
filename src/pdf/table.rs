@@ -9,6 +9,7 @@ use crate::model::{
 };
 
 use super::color::{fill_rgb, stroke_rgb};
+use super::header_footer::{compute_effective_margin_bottom, effective_slot_top};
 
 use super::RenderContext;
 use super::layout::{
@@ -953,7 +954,7 @@ pub(super) fn render_table(
     let flush_and_render_headers = |pb: &mut super::PageBuilder, ri: usize| {
         pb.flush_page(sect_idx);
         pb.is_first_page_of_section = false;
-        pb.slot_top = sp.page_height - sp.margin_top;
+        pb.slot_top = effective_slot_top(sp, false, ctx);
         if header_count > 0 && ri >= header_count {
             render_header_rows(
                 table,
@@ -980,9 +981,11 @@ pub(super) fn render_table(
             layout.cells.len(),
             pb.slot_top
         );
-        let at_page_top = (pb.slot_top - (sp.page_height - sp.margin_top)).abs() < 1.0;
-        let available_h = pb.slot_top - sp.margin_bottom;
-        let page_content_h = sp.page_height - sp.margin_top - sp.margin_bottom;
+        let eff_top = effective_slot_top(sp, pb.is_first_page_of_section, ctx);
+        let eff_bottom = compute_effective_margin_bottom(sp, pb.is_first_page_of_section, ctx);
+        let at_page_top = (pb.slot_top - eff_top).abs() < 1.0;
+        let available_h = pb.slot_top - eff_bottom;
+        let page_content_h = eff_top - eff_bottom;
 
         if row_h > available_h && (row_h > page_content_h || is_floating) {
             // Row is too tall for any single page, or floating table overflows -- split across pages
@@ -991,7 +994,7 @@ pub(super) fn render_table(
             let mut is_first_chunk = true;
 
             loop {
-                let avail = pb.slot_top - sp.margin_bottom;
+                let avail = pb.slot_top - compute_effective_margin_bottom(sp, pb.is_first_page_of_section, ctx);
                 let mut ends = Vec::with_capacity(ncells);
                 let mut all_done = true;
 

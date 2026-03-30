@@ -434,8 +434,8 @@
     "convert_ms": 22.0
   },
   "scraped/education_consul..": {
-    "jaccard": 0.1208,
-    "ssim": 0.2416,
+    "jaccard": 0.1438,
+    "ssim": 0.3212,
     "text_boundary": 0.4389,
     "convert_ms": 47.1
   },
@@ -458,8 +458,8 @@
     "convert_ms": 33.4
   },
   "scraped/go_math_grade4_g..": {
-    "jaccard": 0.2765,
-    "ssim": 0.4963,
+    "jaccard": 0.3003,
+    "ssim": 0.5084,
     "text_boundary": 0.5417,
     "convert_ms": 70.6
   },
