@@ -496,7 +496,22 @@ pub(super) fn render_header_footer(
                 }
 
                 if text_empty {
-                    cursor_y -= line_h;
+                    let mut advance = line_h;
+                    // TopAndBottom textboxes push content below them
+                    for tb in &para.textboxes {
+                        if matches!(tb.wrap_type, WrapType::TopAndBottom) {
+                            let tb_bottom_y = match tb.v_relative_from {
+                                VRelativeFrom::Page => {
+                                    sp.page_height
+                                        - (tb.v_offset_pt + tb.height_pt + tb.dist_bottom)
+                                }
+                                _ => cursor_y - tb.v_offset_pt - tb.height_pt - tb.dist_bottom,
+                            };
+                            let needed = (cursor_y - tb_bottom_y).max(0.0);
+                            advance = advance.max(needed);
+                        }
+                    }
+                    cursor_y -= advance;
                     prev_space_after = para.space_after;
                     pi += 1;
                     continue;

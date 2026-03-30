@@ -170,6 +170,35 @@ The Area chart uses a different convention — data points at edges to fill the 
 
 ---
 
+## Annotation #52 — Header textbox TopAndBottom cursor not advancing (education_consultant_posting) — 2026-03-30
+
+**Problem**: "TERMS OF REFERENCE" heading in the header was rendered 20.5pt too high (y=80.50 vs reference y=101.00). The annotator noted the table below was correctly positioned, confirming this was a header-internal spacing issue.
+
+**Analysis**: The page header contains a TopAndBottom textbox (mc:AlternateContent with DrawingML/VML textbox) at page-relative y=69pt, 13.5pt tall. This textbox holds the subtitle text ("United Nations Children's Fund | Pakistan Country Office"). The textbox acts as a vertical spacer — content below it should start after its bottom edge (82.5pt from top). Two issues found:
+
+1. **mc:AlternateContent not collected in headers**: The `parse_header_footer_xml` function skipped non-WML namespace elements, missing `mc:AlternateContent` blocks that wrap paragraphs in mc:Choice/mc:Fallback. Fixed by using `collect_block_nodes()` (which now also handles mc:AlternateContent via mc:Fallback).
+
+2. **Header rendering cursor didn't advance past TopAndBottom textboxes**: When a paragraph with a TopAndBottom textbox had empty text, the cursor only advanced by `line_h` (14.4pt), ignoring the textbox's vertical extent. The textbox bottom at 82.5pt from page top was never reached by the cursor (which was at ~65pt from top after para 1). Fixed by computing the needed advance to clear the textbox bottom in PDF coordinates.
+
+**Fix**:
+1. In `src/docx/mod.rs`: Extended `collect_block_nodes()` to handle `mc:AlternateContent` by descending into `mc:Fallback` children.
+2. In `src/docx/headers_footers.rs`: Replaced manual block iteration with `collect_block_nodes(root)`.
+3. In `src/pdf/header_footer.rs`: For empty paragraphs with TopAndBottom textboxes, compute the cursor advance needed to clear the textbox bottom (page-relative or paragraph-relative) and use the maximum of that and `line_h`.
+
+**Result**: `education_consultant_posting` Jaccard +1.2pp (14.5% → 15.7%), SSIM +1.9pp (32.7% → 34.5%). "TERMS OF REFERENCE" now at y=100.86 (reference: 101.00, 0.14pt difference). No regressions on any fixture.
+
+---
+
+## Annotation #48 — Floating table breakpoint (croatian_grant_guidelines) — 2026-03-30 (investigated, not fixed)
+
+**Problem**: The green "Važno!" floating table on page 4 splits one paragraph too early. Reference fits 8 items (paragraphs 0-7) on the page, but we fit only 7 (0-6).
+
+**Analysis**: Cumulative item heights: items 0-7 need 386.00pt, but only 383.80pt is available. The 2.2pt shortfall traces to the floating table starting ~16pt lower in our rendering (at 387pt from top vs 371pt in reference). This is the same systemic vertical shift as annotation #47 — accumulated text height differences from pages 1-3 push the floating table down on page 4.
+
+**Root cause**: Consequence of the systemic Y-shift (annotation #47). Not independently fixable.
+
+---
+
 ## Summary of systemic themes
 
 All remaining unfixed annotations fall into these categories:

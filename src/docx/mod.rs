@@ -346,6 +346,18 @@ pub(super) fn collect_block_nodes<'a>(
             if let Some(content) = wml(child, "sdtContent") {
                 nodes.extend(collect_block_nodes(content));
             }
+        } else if child.tag_name().namespace() == Some(MC_NS_TOP)
+            && child.tag_name().name() == "AlternateContent"
+        {
+            // mc:AlternateContent wraps block-level content in mc:Choice/mc:Fallback.
+            // Use mc:Fallback for compatibility (it avoids newer namespace requirements).
+            let fallback = child.children().find(|n| {
+                n.tag_name().namespace() == Some(MC_NS_TOP)
+                    && n.tag_name().name() == "Fallback"
+            });
+            if let Some(fb) = fallback {
+                nodes.extend(collect_block_nodes(fb));
+            }
         } else {
             nodes.push(child);
         }

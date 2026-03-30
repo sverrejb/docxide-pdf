@@ -434,8 +434,8 @@
     "convert_ms": 22.0
   },
   "scraped/education_consul..": {
-    "jaccard": 0.1446,
-    "ssim": 0.3268,
+    "jaccard": 0.1567,
+    "ssim": 0.3453,
     "text_boundary": 0.4389,
     "convert_ms": 47.1
   },

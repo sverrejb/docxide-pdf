@@ -8,17 +8,14 @@ use super::parse_table_node;
 use super::runs::parse_runs;
 use super::styles::{ParagraphStyle, StylesInfo, ThemeFonts, parse_alignment};
 use super::{
-    WML_NS, extract_indents, parse_paragraph_borders, parse_paragraph_spacing, parse_tab_stops,
-    wml, wml_attr,
+    WML_NS, collect_block_nodes, extract_indents, parse_paragraph_borders,
+    parse_paragraph_spacing, parse_tab_stops, wml, wml_attr,
 };
 
 fn is_wml_element(node: roxmltree::Node, name: &str) -> bool {
     node.tag_name().namespace() == Some(WML_NS) && node.tag_name().name() == name
 }
 
-fn is_block_element(node: roxmltree::Node) -> bool {
-    node.tag_name().namespace() == Some(WML_NS) && matches!(node.tag_name().name(), "p" | "tbl")
-}
 
 fn resolve_alignment(
     ppr: Option<roxmltree::Node>,
@@ -41,25 +38,16 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
     let root = xml.root_element();
     let mut blocks = Vec::new();
 
-    let mut top_nodes: Vec<roxmltree::Node> = Vec::new();
-    for child in root.children() {
-        if child.tag_name().namespace() != Some(WML_NS) {
-            continue;
-        }
-        if is_wml_element(child, "sdt") {
-            if let Some(content) = wml(child, "sdtContent") {
-                top_nodes.extend(content.children().filter(|n| is_block_element(*n)));
-            }
-        } else if is_block_element(child) {
-            top_nodes.push(child);
-        }
-    }
+    let top_nodes = collect_block_nodes(root);
 
     let numbering = NumberingInfo::default();
     let mut counters = HashMap::new();
     let mut last_seen_level = HashMap::new();
 
     for node in top_nodes {
+        if node.tag_name().namespace() != Some(WML_NS) {
+            continue;
+        }
         match node.tag_name().name() {
             "tbl" => {
                 let table = parse_table_node(
