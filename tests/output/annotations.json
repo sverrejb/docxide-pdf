@@ -32,36 +32,6 @@
       "fixed": false
     },
     {
-      "id": 26,
-      "case": "scraped/air_pollution_permit_form",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 183.82957,
-      "y_pt": 140.08453,
-      "note": "We are missing dotted lines between \"a\" and 2020 here.",
-      "fixed": true
-    },
-    {
-      "id": 28,
-      "case": "scraped/mandated_reporter_child_abuse",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 65.31869,
-      "y_pt": 717.6384,
-      "note": "We are not rendering the blue outline on this logo",
-      "fixed": true
-    },
-    {
-      "id": 29,
-      "case": "scraped/mandated_reporter_child_abuse",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 68.444786,
-      "y_pt": 659.99646,
-      "note": "JCS-Inc. Form should be directly below the Logo/image. The spacing is too much now compared to the reference.",
-      "fixed": true
-    },
-    {
       "id": 30,
       "case": "scraped/mongolian_human_rights_law",
       "page": 1,
@@ -79,7 +49,7 @@
       "x_pt": 319.59677,
       "y_pt": 278.26538,
       "note": "We are not rendering drop shadow for this image. Compare to reference.",
-      "fixed": true
+      "fixed": false
     },
     {
       "id": 38,
