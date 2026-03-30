@@ -119,7 +119,7 @@
       "x_pt": 362.79602,
       "y_pt": 236.97723,
       "note": "The table cells are wrong here. Compare to reference. There should be two cells, one under \"Chapter 10 rule of thumb\" and one under \"Rationale\"",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 55,
@@ -139,7 +139,7 @@
       "x_pt": 357.7669,
       "y_pt": 666.1637,
       "note": "Text should not wrap around this image, compare to reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 57,

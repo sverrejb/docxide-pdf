@@ -968,7 +968,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             matches!(
                                 fi.wrap_type,
                                 WrapType::Square | WrapType::Tight | WrapType::Through
-                            )
+                            ) && fi.image.display_width < text_width * 0.5
                         }) {
                             let fi_x =
                                 resolve_fi_x(fi, sp, col_x, col_w, text_width);
@@ -1203,7 +1203,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                         np.floating_images.iter().find(|fi| matches!(
                                             fi.wrap_type,
                                             WrapType::Square | WrapType::Tight | WrapType::Through
-                                        ))
+                                        ) && fi.image.display_width < text_width * 0.5)
                                     } else { None }
                                 } else { None }
                             })
@@ -1346,7 +1346,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         let reserve = match fi.wrap_type {
                             WrapType::TopAndBottom => true,
                             WrapType::Square | WrapType::Tight | WrapType::Through => {
-                                fi.image.display_width >= text_width * 0.9
+                                fi.image.display_width >= text_width * 0.5
                             }
                             WrapType::None => false,
                         };
@@ -1374,7 +1374,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     for tb in &para.textboxes {
                         let reserve = match tb.wrap_type {
                             WrapType::TopAndBottom => true,
-                            WrapType::Square => tb.width_pt >= text_width * 0.9,
+                            WrapType::Square => tb.width_pt >= text_width * 0.5,
                             _ => false,
                         };
                         if reserve {
@@ -1752,7 +1752,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     // to ensure polygon data is included)
                     for fi in &para.floating_images {
                         match fi.wrap_type {
-                            WrapType::Square | WrapType::Tight | WrapType::Through => {
+                            WrapType::Square | WrapType::Tight | WrapType::Through
+                                if fi.image.display_width < text_width * 0.5 =>
+                            {
                                 let fi_x =
                                     resolve_fi_x(fi, sp, col_x, col_w, text_width);
                                 let fi_y_top =

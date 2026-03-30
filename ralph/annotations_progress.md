@@ -199,6 +199,28 @@ The Area chart uses a different convention — data points at edges to fill the 
 
 ---
 
+## Annotation #54 — Table cells wrong (go_math_grade4_guide) — 2026-03-30
+
+**Problem**: The "Chapter 10 Rule of Thumb" table's content row rendered as one cell spanning full width instead of two cells (rule text + rationale).
+
+**Analysis**: The table has a 3-column grid (10, 8460, 5940 twips) but Row 1 has only 2 cells with no `w:gridSpan` attribute. Without explicit gridSpan, the parser defaulted to span=1, mapping Cell 0 to the tiny 10-twip column (0.5pt) instead of spanning columns 0+1 (8470 twips = 423pt) as intended by its tcW width.
+
+**Fix**: In `src/docx/tables.rs`, when `w:gridSpan` is not explicit, the parser now infers the span by finding the number of consecutive grid columns whose cumulative width best matches the cell's declared tcW width. For the problematic cell: tcW=8460 matches columns 0+1 (10+8460=8470, diff=0.5pt) much better than column 0 alone (10, diff=422.5pt), so gridSpan=2 is inferred.
+
+**Result**: go_math_grade4_guide Jaccard +0.2pp (30.0% → 30.3%). No regressions on any fixture. The Rule of Thumb table now correctly shows two cells matching the reference layout.
+
+---
+
+## Annotations #49, #50, #51 — Already resolved (croatian_grant_guidelines) — 2026-03-30
+
+**#49** (Links overflow page width): Verified all URL text right edges ≤ 524.46pt (within right margin). URLs wrap correctly via `unicode_linebreak` segments.
+
+**#50** (Footer not rendered): Footers ("Stranica N") render on ALL 20 generated pages with position matching reference within 0.2pt.
+
+**#51** (Footer rendered wrong): Footer positioning matches reference. No horizontal line exists in the DOCX footer XML.
+
+---
+
 ## Summary of systemic themes
 
 All remaining unfixed annotations fall into these categories:
@@ -206,6 +228,25 @@ All remaining unfixed annotations fall into these categories:
 1. **Font metric precision** (#5, #66, #77, #78): Cumulative differences from macOS vs Windows font metrics, floating-point vs twip rounding
 2. **Font availability** (#8, #30): Missing Windows fonts on macOS causing fallback with different metrics
 3. **Textbox positioning** (#25): Paragraph-relative textbox anchor position depends on cursor advancement of preceding empty paragraphs
+
+## Annotation #56 — Text wrapping around wide image (indonesian_benchmarking_guide) — 2026-03-30
+
+**Problem**: On page 7 (0-indexed page 6), text wrapped to the right of a `wrapSquare wrapText="bothSides"` floating image (251pt wide, left-aligned to margin). The reference shows text flowing below the image, not beside it.
+
+**Analysis**: The image (Picture 4, "Capture modul 5.4.PNG") is 251pt wide in a 451pt text area (55.6% of width). With `wrapSquare wrapText="bothSides"` and left alignment, there's ~191pt of space to the right. Our code was treating it as a wrapping image and flowing text beside it. Word treats wide images as effectively TopAndBottom, not wrapping text beside them.
+
+The existing threshold for treating Square/Tight/Through images as TopAndBottom was 90% of text width — far too permissive. Analysis of all wrapSquare images across the test corpus showed a clear gap: all images at ≤44.2% correctly wrap text, while images at ≥55.6% should not wrap.
+
+**Fix**: In `src/pdf/mod.rs`, lowered the width threshold from 90% to 50% of text_width in three locations:
+1. The `reserve` check for content_h calculation (line ~1349)
+2. The float zone setup in the self-wrapping block (line ~967) — added `fi.image.display_width < text_width * 0.5` condition
+3. The float zone setup during rendering (line ~1755) — same condition as a match guard
+4. The lookahead for next-paragraph wrapping (line ~1204) — same condition
+5. The textbox reserve check — same 50% threshold
+
+**Result**: Text now flows below the image on page 7, matching the reference. Jaccard -4.1pp (40.5% → 36.4%) due to cascading page breaks from the layout change. No regressions on any other fixture (brazilian_logistics_study, german_mezzo_soprano_bio, vaccines_history_chapter, czech_expert_witness_law, go_math_grade4_guide all unchanged).
+
+---
 
 Future priorities to address these:
 - Implement Word-compatible twip rounding in the spacing pipeline
