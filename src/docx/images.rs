@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::io::Read;
 
 use crate::model::{
-    EmbeddedImage, FloatingImage, HRelativeFrom, HorizontalPosition, ImageFormat, InlineChart,
-    SmartArtDiagram, VRelativeFrom, VerticalPosition, WrapText, WrapType,
+    EmbeddedImage, FloatingImage, HRelativeFrom, HorizontalPosition, ImageFormat, ImageShadow,
+    InlineChart, SmartArtDiagram, VRelativeFrom, VerticalPosition, WrapText, WrapType,
 };
 
 use super::charts::parse_chart_from_zip;
@@ -131,6 +131,73 @@ fn parse_pic_outline(container: roxmltree::Node) -> (Option<[u8; 3]>, f32) {
     }
 }
 
+/// Parse drop shadow from `pic:spPr/a:effectLst/a:outerShdw`.
+/// Returns color pre-blended with white at the shadow's alpha.
+fn parse_pic_shadow(container: roxmltree::Node) -> Option<ImageShadow> {
+    let pic_ns = "http://schemas.openxmlformats.org/drawingml/2006/picture";
+    let pic_node = container
+        .descendants()
+        .find(|n| n.tag_name().name() == "pic" && n.tag_name().namespace() == Some(pic_ns));
+    let sp_pr = pic_node.and_then(|p| {
+        p.children()
+            .find(|c| c.tag_name().name() == "spPr" && c.tag_name().namespace() == Some(pic_ns))
+    });
+    let effect_lst = sp_pr.and_then(|s| {
+        s.children()
+            .find(|c| c.tag_name().name() == "effectLst" && c.tag_name().namespace() == Some(DML_NS))
+    });
+    let outer_shdw = effect_lst.and_then(|e| {
+        e.children()
+            .find(|c| c.tag_name().name() == "outerShdw" && c.tag_name().namespace() == Some(DML_NS))
+    })?;
+
+    let dist = outer_shdw
+        .attribute("dist")
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(emu_to_pts)
+        .unwrap_or(0.0);
+    // Direction in 60000ths of a degree, clockwise from east
+    let dir_deg = outer_shdw
+        .attribute("dir")
+        .and_then(|v| v.parse::<f32>().ok())
+        .unwrap_or(0.0)
+        / 60000.0;
+    let dir_rad = dir_deg.to_radians();
+    let offset_x = dist * dir_rad.cos();
+    let offset_y = dist * dir_rad.sin();
+
+    let color_node = outer_shdw
+        .descendants()
+        .find(|n| n.tag_name().name() == "srgbClr" && n.tag_name().namespace() == Some(DML_NS));
+    let rgb = color_node
+        .and_then(|n| n.attribute("val"))
+        .and_then(parse_hex_color)
+        .unwrap_or([0, 0, 0]);
+    // Alpha in thousandths of percent (e.g. 65000 = 65%)
+    let alpha = color_node
+        .and_then(|n| {
+            n.children()
+                .find(|c| c.tag_name().name() == "alpha" && c.tag_name().namespace() == Some(DML_NS))
+        })
+        .and_then(|a| a.attribute("val"))
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(|v| v / 100000.0)
+        .unwrap_or(1.0);
+
+    // Pre-blend with white: blended = alpha * color + (1-alpha) * 255
+    let blended = [
+        (alpha * rgb[0] as f32 + (1.0 - alpha) * 255.0) as u8,
+        (alpha * rgb[1] as f32 + (1.0 - alpha) * 255.0) as u8,
+        (alpha * rgb[2] as f32 + (1.0 - alpha) * 255.0) as u8,
+    ];
+
+    Some(ImageShadow {
+        offset_x,
+        offset_y,
+        color: blended,
+    })
+}
+
 pub(super) fn read_image_from_zip<R: Read + std::io::Seek>(
     embed_id: &str,
     rels: &HashMap<String, String>,
@@ -171,6 +238,7 @@ pub(super) fn read_image_from_zip_extra<R: Read + std::io::Seek>(
         layout_extra_top,
         stroke_color: None,
         stroke_width: 0.0,
+        shadow: None,
     })
 }
 
@@ -377,6 +445,7 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
                     let (stroke_color, stroke_width) = parse_pic_outline(container);
                     img.stroke_color = stroke_color;
                     img.stroke_width = stroke_width;
+                    img.shadow = parse_pic_shadow(container);
                     let (h_position, h_relative, v_position, v_relative) =
                         parse_anchor_position(container);
                     let (wrap_type, wrap_text, wrap_polygon) = parse_wrap_type(container);
@@ -443,6 +512,7 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
                 let (stroke_color, stroke_width) = parse_pic_outline(container);
                 img.stroke_color = stroke_color;
                 img.stroke_width = stroke_width;
+                img.shadow = parse_pic_shadow(container);
                 return Some(RunDrawingResult::Inline(img));
             }
         }
@@ -513,6 +583,12 @@ pub(super) fn compute_drawing_info<R: Read + std::io::Seek>(
                 if let Some(embed_id) = find_blip_embed(container) {
                     image =
                         read_image_from_zip_extra(embed_id, rels, zip, display_w, display_h, extra_h, extra_top);
+                    if let Some(ref mut img) = image {
+                        let (stroke_color, stroke_width) = parse_pic_outline(container);
+                        img.stroke_color = stroke_color;
+                        img.stroke_width = stroke_width;
+                        img.shadow = parse_pic_shadow(container);
+                    }
                 }
             }
         }

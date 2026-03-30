@@ -440,6 +440,18 @@ pub(super) fn render_header_footer(
                                 Alignment::Right => (text_width - img.display_width).max(0.0),
                                 _ => 0.0,
                             };
+                        if let Some(ref shadow) = img.shadow {
+                            content.save_state();
+                            super::color::fill_color_or_black(content, Some(shadow.color));
+                            content.rect(
+                                x + shadow.offset_x,
+                                y_bottom - shadow.offset_y,
+                                img.display_width,
+                                img.display_height,
+                            );
+                            content.fill_nonzero();
+                            content.restore_state();
+                        }
                         emit_image_xobject(
                             content,
                             pdf_name,

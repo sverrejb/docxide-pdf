@@ -153,6 +153,7 @@ pub(super) struct CellParagraphLayout {
     pub(super) image_height: f32,
     pub(super) image_stroke_color: Option<[u8; 3]>,
     pub(super) image_stroke_width: f32,
+    pub(super) image_shadow: Option<crate::model::ImageShadow>,
     pub(super) content_height: f32,
     pub(super) paragraph_mark_vanish: bool,
     pub(super) floating_images: Vec<CellFloatingImageLayout>,
@@ -311,11 +312,11 @@ pub(super) fn compute_row_layouts(
                                     let key = std::sync::Arc::as_ptr(&img.data) as usize;
                                     ctx.table_cell_image_names.get(&key).cloned()
                                 });
-                                let (image_width, image_height, img_stroke_color, img_stroke_width) = para
+                                let (image_width, image_height, img_stroke_color, img_stroke_width, img_shadow) = para
                                     .image
                                     .as_ref()
-                                    .map(|img| (img.display_width, img.display_height, img.stroke_color, img.stroke_width))
-                                    .unwrap_or((0.0, 0.0, None, 0.0));
+                                    .map(|img| (img.display_width, img.display_height, img.stroke_color, img.stroke_width, img.shadow.clone()))
+                                    .unwrap_or((0.0, 0.0, None, 0.0, None));
 
                                 let cell_floats: Vec<CellFloatingImageLayout> = para
                                     .floating_images
@@ -369,6 +370,7 @@ pub(super) fn compute_row_layouts(
                                     image_height,
                                     image_stroke_color: img_stroke_color,
                                     image_stroke_width: img_stroke_width,
+                                    image_shadow: img_shadow,
                                     content_height: para.content_height,
                                     paragraph_mark_vanish: para.paragraph_mark_vanish,
                                     floating_images: cell_floats,

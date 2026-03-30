@@ -59,7 +59,7 @@
       "x_pt": 68.444786,
       "y_pt": 659.99646,
       "note": "JCS-Inc. Form should be directly below the Logo/image. The spacing is too much now compared to the reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 30,
@@ -79,7 +79,7 @@
       "x_pt": 319.59677,
       "y_pt": 278.26538,
       "note": "We are not rendering drop shadow for this image. Compare to reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 38,

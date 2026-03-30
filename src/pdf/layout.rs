@@ -123,6 +123,7 @@ pub(super) struct WordChunk {
     pub(super) inline_image_height: f32,
     pub(super) inline_image_stroke_color: Option<[u8; 3]>,
     pub(super) inline_image_stroke_width: f32,
+    pub(super) inline_image_shadow: Option<crate::model::ImageShadow>,
     pub(super) synthetic_bold: bool,
     pub(super) text_outline: Option<TextOutline>,
     pub(super) text_fill: Option<TextFill>,
@@ -158,6 +159,7 @@ impl WordChunk {
             inline_image_height: 0.0,
             inline_image_stroke_color: None,
             inline_image_stroke_width: 0.0,
+            inline_image_shadow: None,
             synthetic_bold: entry.synthetic_bold,
             text_outline: run.text_outline.clone(),
             text_fill: run.text_fill.clone(),
@@ -172,6 +174,7 @@ impl WordChunk {
         display_height: f32,
         stroke_color: Option<[u8; 3]>,
         stroke_width: f32,
+        shadow: Option<crate::model::ImageShadow>,
     ) -> Self {
         Self {
             pdf_font: String::new(),
@@ -192,6 +195,7 @@ impl WordChunk {
             inline_image_height: display_height,
             inline_image_stroke_color: stroke_color,
             inline_image_stroke_width: stroke_width,
+            inline_image_shadow: shadow,
             synthetic_bold: false,
             text_outline: None,
             text_fill: None,
@@ -225,6 +229,7 @@ impl WordChunk {
             inline_image_height: 0.0,
             inline_image_stroke_color: None,
             inline_image_stroke_width: 0.0,
+            inline_image_shadow: None,
             synthetic_bold: false,
             text_outline: None,
             text_fill: None,
@@ -437,7 +442,7 @@ pub(super) fn build_paragraph_lines(
                             if proposed_x2 + img_w <= rw {
                                 current_chunks.push(WordChunk::image(
                                     pdf_name, run.font_size, proposed_x2, img_w, img.display_height,
-                                    img.stroke_color, img.stroke_width,
+                                    img.stroke_color, img.stroke_width, img.shadow.clone(),
                                 ));
                                 current_x = img_w;
                                 continue;
@@ -453,7 +458,7 @@ pub(super) fn build_paragraph_lines(
 
                 current_chunks.push(WordChunk::image(
                     pdf_name, run.font_size, current_x, img_w, img.display_height,
-                    img.stroke_color, img.stroke_width,
+                    img.stroke_color, img.stroke_width, img.shadow.clone(),
                 ));
                 current_x += img_w;
             }
@@ -837,6 +842,7 @@ pub(super) fn build_tabbed_line(
                         img.display_height,
                         img.stroke_color,
                         img.stroke_width,
+                        img.shadow.clone(),
                     ));
                     current_x += img.display_width;
                 }
@@ -1333,6 +1339,22 @@ pub(super) fn render_paragraph_lines(
             if let Some(ref img_name) = chunk.inline_image_name {
                 let x = chunk_abs_x(chunk_idx, chunk);
                 let img_bottom = y - (chunk.inline_image_height - chunk.font_size);
+
+                // Drop shadow (rendered before image so it appears behind)
+                if let Some(ref shadow) = chunk.inline_image_shadow {
+                    content.save_state();
+                    fill_color_or_black(content, Some(shadow.color));
+                    // offset_y is positive-down in screen coords; PDF y-axis is up
+                    content.rect(
+                        x + shadow.offset_x,
+                        img_bottom - shadow.offset_y,
+                        chunk.width,
+                        chunk.inline_image_height,
+                    );
+                    content.fill_nonzero();
+                    content.restore_state();
+                }
+
                 content.save_state();
                 content.transform([
                     chunk.width,

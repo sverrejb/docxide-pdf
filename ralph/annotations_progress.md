@@ -1,5 +1,75 @@
 # Annotations Progress
 
+## 2026-03-30: Render image drop shadow from a:effectLst/a:outerShdw (annotation #31)
+
+**Problem**: In `scraped/parish_housing_data_profile`, the map image on page 1 had no drop shadow. The reference shows a blurred gray shadow offset to the bottom-right of the image.
+
+**Root cause**: Image drop shadow effects (`a:outerShdw` inside `pic:spPr/a:effectLst`) were entirely unimplemented. The DOCX parsing code extracted image blip data and dimensions but ignored the effect list element on the shape properties.
+
+The XML structure: `pic:spPr > a:effectLst > a:outerShdw blurRad="292100" dist="139700" dir="2700000" > a:srgbClr val="333333" > a:alpha val="65000"` — a shadow with ~11pt distance at 45° (southeast), color #333333 at 65% opacity.
+
+**Fix**:
+- `src/model/drawing.rs`: Added `ImageShadow` struct (`offset_x`, `offset_y`, `color`) and `shadow: Option<ImageShadow>` to `EmbeddedImage`
+- `src/docx/images.rs`: Added `parse_pic_shadow()` to extract `a:outerShdw` from `pic:spPr/a:effectLst`. Parses distance/direction → x,y offsets, color with alpha pre-blended against white. Applied in all three image creation paths: `parse_run_drawing` (inline + floating) and `compute_drawing_info` (paragraph-level).
+- `src/pdf/layout.rs`: Draw shadow filled rectangle before inline image XObject
+- `src/pdf/positioning.rs`: Draw shadow before floating image
+- `src/pdf/table.rs`: Draw shadow before table cell image
+- `src/pdf/header_footer.rs`: Draw shadow before header/footer image
+- Shadow is pre-blended with white rather than using ExtGState alpha to avoid threading alpha_states through all rendering paths
+
+**Impact**:
+- `scraped/parish_housing_data_profile`: Drop shadow now visible on map image. Jaccard/SSIM stable (shadow area small relative to page; solid rect vs blurred reference creates minor diff)
+- No regressions across all 114 test cases
+
+---
+
+## 2026-03-30: Deep investigation of remaining unfixed annotations
+
+**Annotations investigated**: #5, #8, #25, #30, #55, #77, #78
+
+**Findings**: All remaining unfixed annotations fall into two categories:
+
+### Category 1: Page break positioning (annotations #5, #8, #25)
+These annotations report content being on the wrong page — either too much or too little content on page 1, causing subsequent pages to be misaligned. Root cause analysis of annotation #5 (`scraped/croatian_grant_guidelines`) using `mutool trace` revealed:
+
+- Reference page 2: empty paragraph baseline at y=760.72, first TOC entry "1 Opće informacije" at y=734.22 (gap of 26.5pt)
+- Generated page 2: first TOC entry directly at y=759.624 (no empty paragraph)
+- The empty SDT paragraph that should be on page 2 stays on page 1 because our page 1 consumes ~17pt less vertical space than Word's
+- The 17pt difference accumulates from multiple empty paragraphs on the cover page with large paragraph mark font sizes (18pt from `pPr/rPr/w:sz=36`)
+- Attempted fix: use `paragraph_mark_font_size` for empty paragraph heights → no effect because the "empty" paragraphs already have text-empty runs with the correct font sizes from `tallest_run_metrics`
+- True root cause: cumulative font metric and line height precision differences
+
+### Category 2: Font metric / text width differences (#30, #77, #78)
+- Annotation #30 (`mongolian_human_rights_law`): extra space after "4.1.5." is a tab/text width difference
+- Annotation #77 (`polish_municipal_letter`): text alignment IS correct (justified), confirmed via debug that `is_justified=true` with `extra_per_gap` applied. The visual difference is from font width differences causing different line widths (content_w=322pt vs eff_w=454pt on a line ending with `w:br`)
+- Annotation #78 (`stem_partnerships_guide`): text overflow likely from column width calculation differences
+
+### Already working: annotation #55
+Annotation #55 (`japanese_interlibrary_loan`) — vertical centering in table cells IS implemented and working correctly. Debug confirmed `valign_offset` producing offsets of 5-12pt. The low overall score (4.1% Jaccard) is due to missing Japanese fonts, not vAlign.
+
+**Conclusion**: The remaining unfixed annotations require broader improvements to font metrics precision, text width calculation, and line breaking algorithms — not targeted bug fixes. Future priorities:
+- Improve OS/2 font metric handling for less common fonts
+- Better paragraph mark height calculation for empty paragraphs
+- Investigate Word's exact line pitch / document grid behavior
+
+---
+
+## 2026-03-30: Fix table cell inline image spacing (annotation #29)
+
+**Problem**: In `scraped/mandated_reporter_child_abuse`, the "JCS-Inc. Form" text below the logo image had too much spacing compared to the reference. The text was 17.5pt too far down the page.
+
+**Root cause**: The table cell rendering code advanced the cursor by the full `content_height` (which includes `display_height + layout_extra_height`) after rendering an inline image. The `layout_extra_height` consists of `distT + distB + effectExtent` from the `wp:inline` element (22pt total for this image: 9pt distT + 9pt distB + 2pt effectExtent top + 2pt effectExtent bottom). Word does not apply `distT`/`distB` as inter-content spacing inside table cells — they only contribute to the overall row height calculation, not to cursor advancement between paragraphs.
+
+**Fix** (`src/pdf/table.rs`):
+- Changed the cursor advancement for image paragraphs in `render_cell_content` from `cursor_y -= para.content_height` to `cursor_y -= para.image_height`
+- The `para_block_height()` function still returns the full `content_height` (including `layout_extra_height`), preserving correct row height computation
+
+**Impact**:
+- `scraped/mandated_reporter_child_abuse`: "JCS-Inc. Form" positioning error reduced from 17.5pt to 4.5pt. Jaccard +0.1pp (46.9→47.0%)
+- No regressions across all 114 test cases
+
+---
+
 ## 2026-03-30: Render image outline/border from pic:spPr/a:ln (annotation #28)
 
 **Problem**: In `scraped/mandated_reporter_child_abuse`, the JCS Inc. logo in the first-page header had no blue rectangular border. The reference shows a dark blue (#1E4D78) 2pt solid outline around the logo image.

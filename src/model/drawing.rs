@@ -28,6 +28,17 @@ pub struct EmbeddedImage {
     pub stroke_color: Option<[u8; 3]>,
     /// Outline/border width in points from pic:spPr/a:ln @w
     pub stroke_width: f32,
+    /// Drop shadow from pic:spPr/a:effectLst/a:outerShdw
+    pub shadow: Option<ImageShadow>,
+}
+
+/// Drop shadow effect parsed from a:outerShdw
+#[derive(Clone, Debug)]
+pub struct ImageShadow {
+    pub offset_x: f32, // points, positive = right
+    pub offset_y: f32, // points, positive = down in screen coords
+    /// Shadow color pre-blended with white at the specified alpha
+    pub color: [u8; 3],
 }
 
 #[derive(Clone)]
