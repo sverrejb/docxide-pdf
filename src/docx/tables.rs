@@ -241,7 +241,27 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
             let grid_span = tc_pr
                 .and_then(|pr| wml_attr(pr, "gridSpan"))
                 .and_then(|v| v.parse::<u16>().ok())
-                .unwrap_or(1);
+                .unwrap_or_else(|| {
+                    // Infer gridSpan from cell width when not explicit:
+                    // find consecutive grid columns whose cumulative width
+                    // best matches the cell's declared width (tcW).
+                    if ci < num_cols {
+                        let mut best_span = 1u16;
+                        let mut best_diff = (col_widths.get(ci).copied().unwrap_or(0.0) - cell_width).abs();
+                        let mut cumulative = col_widths.get(ci).copied().unwrap_or(0.0);
+                        for s in 2..=(num_cols - ci) as u16 {
+                            cumulative += col_widths.get(ci + s as usize - 1).copied().unwrap_or(0.0);
+                            let diff = (cumulative - cell_width).abs();
+                            if diff < best_diff {
+                                best_diff = diff;
+                                best_span = s;
+                            }
+                        }
+                        best_span
+                    } else {
+                        1
+                    }
+                });
 
             let v_merge = tc_pr
                 .and_then(|pr| wml(pr, "vMerge"))

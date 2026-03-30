@@ -79,7 +79,7 @@
       "x_pt": 541.4858,
       "y_pt": 461.67197,
       "note": "Links overflow the page width.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 50,
@@ -89,7 +89,7 @@
       "x_pt": 274.85178,
       "y_pt": 113.91907,
       "note": "We don't render this footer present in the reference at all it looks like.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 51,
@@ -99,7 +99,7 @@
       "x_pt": 292.67557,
       "y_pt": 64.10364,
       "note": "If this is the footer, it is rendered kinda wrong. The link overlaps the page number, and the horizontal line is nowhere to be seen. It is also too close to the body text.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 52,
