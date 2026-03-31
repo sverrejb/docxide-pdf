@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::fonts::{FontEntry, font_key_buf};
 use crate::model::{
     Alignment, Block, CellMargins, HorizontalPosition, Table, TableRow, TextDirection, VMerge,
-    VerticalPosition,
+    VerticalPosition, WrapType,
 };
 
 use super::RenderContext;
@@ -144,6 +144,9 @@ pub(super) struct CellParagraphLayout {
     pub(super) indent_left: f32,
     pub(super) indent_right: f32,
     pub(super) indent_hanging: f32,
+    /// Extra left indent from wrapSquare/Tight floating images in this paragraph.
+    /// Text lines are laid out narrower and rendered further right to avoid the image.
+    pub(super) float_indent_left: f32,
     pub(super) list_label: String,
     pub(super) list_label_font: Option<String>,
     pub(super) label_color: Option<[u8; 3]>,
@@ -267,10 +270,36 @@ pub(super) fn compute_row_layouts(
                                     .and_then(|e| e.ascender_ratio)
                                     .unwrap_or(0.75);
 
+                                // Compute extra left indent from left-aligned
+                                // wrapSquare/Tight floating images so text wraps
+                                // to the right of the image within the cell.
+                                let float_indent_left: f32 = para
+                                    .floating_images
+                                    .iter()
+                                    .filter(|fi| {
+                                        matches!(
+                                            fi.wrap_type,
+                                            WrapType::Square | WrapType::Tight | WrapType::Through
+                                        ) && matches!(
+                                            fi.h_position,
+                                            HorizontalPosition::AlignLeft
+                                                | HorizontalPosition::Offset(_)
+                                        )
+                                    })
+                                    .map(|fi| {
+                                        let left_edge = match fi.h_position {
+                                            HorizontalPosition::Offset(o) => o,
+                                            _ => 0.0,
+                                        };
+                                        left_edge + fi.image.display_width + fi.dist_right
+                                    })
+                                    .fold(0.0f32, f32::max);
+
                                 let lines = if !is_text_empty(runs) {
                                     let para_text_w = (cell_text_w
                                         - para.indent_left
-                                        - para.indent_right)
+                                        - para.indent_right
+                                        - float_indent_left)
                                         .max(0.0);
                                     let lines = build_paragraph_lines(
                                         runs,
@@ -367,6 +396,7 @@ pub(super) fn compute_row_layouts(
                                     indent_left: para.indent_left,
                                     indent_right: para.indent_right,
                                     indent_hanging: para.indent_hanging,
+                                    float_indent_left,
                                     list_label: para.list_label.clone(),
                                     list_label_font: para.list_label_font.clone(),
                                     label_color: para.runs.first().and_then(|r| r.color),

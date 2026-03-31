@@ -246,8 +246,10 @@ fn render_cell_content(
                     continue;
                 }
 
-                let text_x = cell_x + cm.left + para.indent_left;
-                let text_w = (col_w - cm.left - cm.right - para.indent_left).max(0.0);
+                let text_x = cell_x + cm.left + para.indent_left + para.float_indent_left;
+                let text_w =
+                    (col_w - cm.left - cm.right - para.indent_left - para.float_indent_left)
+                        .max(0.0);
                 // Word positions first baseline at cell_top - font_size (full em)
                 let baseline_y = cursor_y - para.font_size;
 
@@ -475,8 +477,10 @@ fn render_partial_cell_content(
                     content.restore_state();
                 }
 
-                let text_x = cell_x + cm.left + para.indent_left;
-                let text_w = (col_w - cm.left - cm.right - para.indent_left).max(0.0);
+                let text_x = cell_x + cm.left + para.indent_left + para.float_indent_left;
+                let text_w =
+                    (col_w - cm.left - cm.right - para.indent_left - para.float_indent_left)
+                        .max(0.0);
                 // Word positions first baseline at cell_top - font_size (full em)
                 let baseline_y = cursor_y - para.font_size;
 

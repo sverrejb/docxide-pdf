@@ -459,8 +459,8 @@
   },
   "scraped/go_math_grade4_g..": {
     "jaccard": 0.3041,
-    "ssim": 0.5084,
-    "text_boundary": 0.5417,
+    "ssim": 0.5086,
+    "text_boundary": 0.6303,
     "convert_ms": 70.6
   },
   "scraped/indonesian_bench..": {
