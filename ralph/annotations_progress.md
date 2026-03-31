@@ -366,6 +366,18 @@ The float zone absorption logic in `pdf/mod.rs` checked `is_text_empty(&p.runs)`
 
 ---
 
+## Annotation #81 — Footnotes rendered below footer (go_math_grade4_guide) — 2026-03-31
+
+**Problem**: On page 1 (0-indexed), footnotes rendered ~48pt too low, appearing BELOW the page footer (page number "2") instead of above it. The footnote "1Student Achievement Partners..." was at y=35.8pt from bottom while the footer was at y=58.9pt.
+
+**Analysis**: The page has `w:pgMar bottom="274"` (13.7pt) and `w:footer="720"` (36pt). The body content layout correctly used `compute_effective_margin_bottom()` (=61.3pt) to account for the footer, but footnote rendering in Phase 2c used raw `sp.margin_bottom` (13.7pt) as its base Y position.
+
+**Fix**: In `src/pdf/mod.rs` Phase 2c, changed footnote rendering to use `compute_effective_margin_bottom(sp, is_first, &ctx)` from the header/footer section instead of raw `sp.margin_bottom`. Also destructured the full `(hf_si, is_first, content_si)` tuple to use the correct section for footer height computation.
+
+**Result**: Footnote line 1: y=35.8pt → y=83.4pt from bottom (reference: 83.8pt, 0.4pt diff). Footnote line 2: y=23.6pt → y=71.2pt (reference: 71.1pt, 0.1pt diff). go_math_grade4_guide Jaccard +0.1pp (30.3% → 30.4%), SSIM +0.2pp (50.7% → 50.8%). No regressions.
+
+---
+
 Future priorities to address these:
 - Implement Word-compatible twip rounding in the spacing pipeline
 - Improve OS/2 font metric handling for less common fonts

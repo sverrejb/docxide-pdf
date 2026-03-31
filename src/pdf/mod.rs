@@ -2196,19 +2196,21 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         }
     }
 
-    // Phase 2c: render footnotes at page bottom
+    // Phase 2c: render footnotes at page bottom (above footer)
     for (page_idx, content) in pb.all_contents.iter_mut().enumerate() {
-        let (.., si) = pb.page_section_indices[page_idx];
-        let sp = &doc.sections[si].properties;
-        let text_width = sp.page_width - sp.margin_left - sp.margin_right;
+        let (hf_si, is_first, si) = pb.page_section_indices[page_idx];
+        let sp = &doc.sections[hf_si].properties;
+        let eff_bottom = compute_effective_margin_bottom(sp, is_first, &ctx);
+        let content_sp = &doc.sections[si].properties;
+        let text_width = content_sp.page_width - content_sp.margin_left - content_sp.margin_right;
         render_page_footnotes(
             content,
             &pb.all_footnote_ids[page_idx],
             &doc.footnotes,
             &footnote_display_order,
             &ctx,
-            sp.margin_left,
-            sp.margin_bottom,
+            content_sp.margin_left,
+            eff_bottom,
             text_width,
         );
     }

@@ -43,3 +43,19 @@
 ## Completed: Annotation #79 — Garbled header text (education_consultant_posting) — 2026-03-31
 
 **Status**: Fixed. "United Nations Children's Fund | Pakistan Country Office" in the page header rendered as "□nited □ations Children□s □und" with missing characters. Root cause: `collect_all_runs()` in `src/pdf/fonts.rs` used `p.runs.iter()` for header/footer paragraphs but `para_runs_with_textboxes(p)` for body paragraphs. Header textbox runs (containing the title text in a VML textbox) were never scanned during font character collection, so their characters were missing from the font's `char_to_gid` map. During rendering, these characters encoded as glyph ID 0 (`.notdef`), producing garbled output. Fixed by using `para_runs_with_textboxes(p)` for both header/footer runs and footnote runs. Jaccard +0.3pp, SSIM +0.9pp, text boundary +23.4pp. No regressions.
+
+## Completed: Annotation #80 — Empty space below image too large (indonesian_benchmarking_guide) — 2026-03-31
+
+**Status**: Fixed. Excessive empty space (~28pt) between floating questionnaire image and "3. Metode Benchmarking" heading on page 7. Root cause: a paragraph containing only a `w:br` (soft line break, no text) between the image and heading was not absorbed by the float zone because `is_text_empty()` returns false for line-break runs. This paragraph triggered the float-zone push and added its full content_h (28.2pt = 2 lines) below the image. Fix: expanded the `is_empty_para` check in float zone absorption code to treat line-break-only runs as empty content, so br-only paragraphs are absorbed within the float zone. Jaccard +1.8pp (40.8% → 42.6%), SSIM +1.7pp (54.9% → 56.6%). No regressions. Committed as 8dc5c50.
+
+## Completed: Annotation #81 — Footnotes rendered below footer (go_math_grade4_guide) — 2026-03-31
+
+**Status**: Fixed. The annotation described as "footer too low" was actually about footnotes being rendered ~48pt too low on page 1, appearing BELOW the page footer (page number) instead of above it.
+
+**Root cause**: In Phase 2c of the render pipeline (`pdf/mod.rs`), `render_page_footnotes` received raw `sp.margin_bottom` (13.7pt) as the base Y position. This ignored the footer content entirely. The footer margin was 36pt with ~25pt of content, so the effective margin bottom should have been ~61pt. Footnotes rendered at y=36pt and y=24pt from bottom, while the footer was at y=59pt — making footnotes appear below the footer.
+
+**Fix**: Changed Phase 2c to use `compute_effective_margin_bottom(sp, is_first, &ctx)` instead of raw `sp.margin_bottom`. This accounts for the footer margin and footer content height when positioning footnotes, placing them correctly above the footer.
+
+Also needed to destructure the full `(hf_si, is_first, content_si)` tuple from `page_section_indices` to get the correct section for footer height computation (hf_si) vs text width computation (content_si).
+
+**Result**: Footnote line 1 moved from y=35.8pt to y=83.4pt from bottom (reference: 83.8pt, 0.4pt diff). Footnote line 2 moved from y=23.6pt to y=71.2pt (reference: 71.1pt, 0.1pt diff). Jaccard +0.1pp (30.3% → 30.4%), SSIM +0.2pp (50.7% → 50.8%). No regressions on any fixture.

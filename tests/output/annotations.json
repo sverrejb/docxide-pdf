@@ -112,16 +112,6 @@
       "fixed": false
     },
     {
-      "id": 76,
-      "case": "samples/samtale",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 517.85864,
-      "y_pt": 495.68063,
-      "note": "\"I stor grad\"-text is floating above the grey line. Compare with reference.",
-      "fixed": true
-    },
-    {
       "id": 77,
       "case": "scraped/polish_municipal_letter",
       "page": 0,
@@ -142,26 +132,6 @@
       "fixed": false
     },
     {
-      "id": 79,
-      "case": "scraped/education_consultant_posting",
-      "page": 6,
-      "source": "Generated",
-      "x_pt": 93.160484,
-      "y_pt": 721.80725,
-      "note": "The \"United Nations Children's Fund .... \" is rendered looking broken, with letters missing etc-",
-      "fixed": true
-    },
-    {
-      "id": 80,
-      "case": "scraped/indonesian_benchmarking_guide",
-      "page": 6,
-      "source": "Generated",
-      "x_pt": 80.43723,
-      "y_pt": 371.02457,
-      "note": "Empty space below image here is way too large.",
-      "fixed": true
-    },
-    {
       "id": 81,
       "case": "scraped/go_math_grade4_guide",
       "page": 1,
@@ -169,7 +139,7 @@
       "x_pt": 72.93026,
       "y_pt": 45.97284,
       "note": "Footer is rendered too low on page. Compare with reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 82,
