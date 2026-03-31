@@ -495,6 +495,45 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
         }
     }
 
+    // For vertically merged cells, the restart cell draws the full merged
+    // region's borders.  Copy the last continuation cell's bottom border
+    // to the restart cell so it uses the correct edge style (e.g. table-
+    // edge double border rather than interior insideH).
+    for ri in 0..rows.len() {
+        let mut grid_col = 0usize;
+        for ci in 0..rows[ri].cells.len() {
+            let span = rows[ri].cells[ci].grid_span.max(1) as usize;
+            if rows[ri].cells[ci].v_merge == VMerge::Restart {
+                let mut last_ri = ri;
+                for next_ri in (ri + 1)..rows.len() {
+                    let mut g = 0usize;
+                    let mut is_continue = false;
+                    for c in &rows[next_ri].cells {
+                        if g == grid_col {
+                            is_continue = c.v_merge == VMerge::Continue;
+                            break;
+                        }
+                        g += c.grid_span.max(1) as usize;
+                        if g > grid_col { break; }
+                    }
+                    if is_continue { last_ri = next_ri; } else { break; }
+                }
+                if last_ri > ri {
+                    let mut g = 0usize;
+                    for c in &rows[last_ri].cells {
+                        if g == grid_col {
+                            rows[ri].cells[ci].borders.bottom = c.borders.bottom;
+                            break;
+                        }
+                        g += c.grid_span.max(1) as usize;
+                        if g > grid_col { break; }
+                    }
+                }
+            }
+            grid_col += span;
+        }
+    }
+
     Table {
         col_widths,
         rows,

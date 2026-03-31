@@ -31,7 +31,7 @@
   },
   "cases/case15": {
     "jaccard": 0.2343,
-    "ssim": 0.8719,
+    "ssim": 0.8731,
     "text_boundary": 1.0,
     "convert_ms": 7.5
   },
@@ -458,8 +458,8 @@
     "convert_ms": 33.4
   },
   "scraped/go_math_grade4_g..": {
-    "jaccard": 0.3026,
-    "ssim": 0.5069,
+    "jaccard": 0.3027,
+    "ssim": 0.5068,
     "text_boundary": 0.5417,
     "convert_ms": 70.6
   },
@@ -476,14 +476,14 @@
     "convert_ms": 115.1
   },
   "scraped/italian_project_..": {
-    "jaccard": 0.251,
-    "ssim": 0.5596,
+    "jaccard": 0.2566,
+    "ssim": 0.5591,
     "text_boundary": 0.25,
     "convert_ms": 2.4
   },
   "scraped/japanese_interli..": {
     "jaccard": 0.0412,
-    "ssim": 0.2659,
+    "ssim": 0.2619,
     "text_boundary": 0.1,
     "convert_ms": 4.5
   },
@@ -512,7 +512,7 @@
     "convert_ms": 5.6
   },
   "scraped/mandated_reporte..": {
-    "jaccard": 0.4697,
+    "jaccard": 0.4696,
     "ssim": 0.6735,
     "text_boundary": 0.7485,
     "convert_ms": 43.3
@@ -602,20 +602,20 @@
     "convert_ms": 32.2
   },
   "scraped/traditional_skil..": {
-    "jaccard": 0.1408,
-    "ssim": 0.4485,
+    "jaccard": 0.1412,
+    "ssim": 0.4484,
     "text_boundary": 0.7386,
     "convert_ms": 22.0
   },
   "scraped/transition_to_wo..": {
     "jaccard": 0.2684,
-    "ssim": 0.3858,
+    "ssim": 0.385,
     "text_boundary": 0.2099,
     "convert_ms": 493.0
   },
   "scraped/turkish_ancient_..": {
-    "jaccard": 0.2226,
-    "ssim": 0.5293,
+    "jaccard": 0.2245,
+    "ssim": 0.529,
     "text_boundary": 1.0,
     "convert_ms": 4.2
   },

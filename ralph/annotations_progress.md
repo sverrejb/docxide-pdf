@@ -302,6 +302,24 @@ In Word, these empty paragraphs exist within the image's vertical extent (flowin
 
 ---
 
+## Annotation #72 — Lines between cells wrong (turkish_ancient_religions_plan) — 2026-03-31
+
+**Problem**: Horizontal borders were drawn through vertically merged cells in the left "Haftalar" column, creating lines that should not exist. In Word, merged cells appear as one tall cell without internal horizontal borders.
+
+**Analysis**: The table has `insideH: single` and cell-level `tcBorders` with `dotted` borders. The left column uses `vMerge` to merge groups of 3-4 rows per "Hafta". Four border rendering paths (`render_table_row`, `render_nested_table`, `render_partial_row`, `render_header_footer_table`) handled `VMerge::Continue` cells incorrectly:
+- `render_table_row`: Drew the bottom border of every continuation cell, creating lines through the merged area
+- The other three paths: Drew all borders for continuation cells without any vMerge handling
+
+Additionally, when a merge group extended to the table edge, the restart cell's `borders.bottom` used `insideH` (set during parsing based on the restart row's position) instead of the table-edge border.
+
+**Fix**: Two-part fix:
+1. **Parsing** (`src/docx/tables.rs`): After border resolution, a new pass propagates the last continuation cell's bottom border to the restart cell. This ensures the merged region uses the correct bottom edge style (e.g., table-edge double border rather than interior insideH).
+2. **Rendering** (`src/pdf/table.rs`): All four border rendering paths now skip `VMerge::Continue` cells entirely. For `VMerge::Restart` cells, borders extend to `effective_bottom` (row_bottom minus merge_extra), covering the full merged region.
+
+**Result**: turkish_ancient_religions_plan Jaccard +0.2pp (22.3% → 22.5%). Also improved: italian_project +0.6pp, case15 +0.1pp. Minor: japanese_interlibrary_loan -0.4pp (corrected border rendering in tables with vMerge). No SSIM regressions.
+
+---
+
 Future priorities to address these:
 - Implement Word-compatible twip rounding in the spacing pipeline
 - Improve OS/2 font metric handling for less common fonts

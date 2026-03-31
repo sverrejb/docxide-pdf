@@ -377,17 +377,27 @@ fn render_nested_table(
             let span = cell.grid_span.max(1) as usize;
             let col_w = cell_span_width(&col_widths, grid_col, span);
             let bx = cell_x_offset(&col_widths, table_left, grid_col);
+            let cell_grid_col = grid_col;
             grid_col += span;
 
-            let draw_top = cell.v_merge != VMerge::Continue && ri == 0;
+            if cell.v_merge == VMerge::Continue {
+                continue;
+            }
+
+            let merge_extra = merge_spans
+                .get(&(ri, cell_grid_col))
+                .copied()
+                .unwrap_or(0.0);
+            let effective_bottom = row_bottom - merge_extra;
+
             draw_cell_borders(
                 content,
                 &cell.borders,
                 bx,
                 row_top,
-                row_bottom,
+                effective_bottom,
                 col_w,
-                draw_top,
+                ri == 0,
                 true,
             );
         }
@@ -635,23 +645,6 @@ fn render_table_row(
         let bx = cell_x_offset(col_widths, table_left, grid_col);
 
         if cell.v_merge == VMerge::Continue {
-            // Still draw the bottom border for vMerge continuation cells so that
-            // table-level bottom borders span the full width including merged columns
-            if cell.borders.bottom.present {
-                draw_cell_borders(
-                    &mut pb.content,
-                    &CellBorders {
-                        bottom: cell.borders.bottom,
-                        ..CellBorders::default()
-                    },
-                    bx,
-                    row_top,
-                    row_bottom,
-                    col_w,
-                    false,
-                    true,
-                );
-            }
             grid_col += span;
             continue;
         }
@@ -868,7 +861,11 @@ fn render_partial_row(
         let bx = cell_x_offset(col_widths, table_left, grid_col);
         grid_col += span;
 
-        let draw_top = is_first && cell.v_merge != VMerge::Continue;
+        if cell.v_merge == VMerge::Continue {
+            continue;
+        }
+
+        let draw_top = is_first;
         draw_cell_borders(
             &mut pb.content,
             &cell.borders,
@@ -1197,17 +1194,27 @@ pub(super) fn render_header_footer_table(
             let span = cell.grid_span.max(1) as usize;
             let col_w = cell_span_width(&col_widths, grid_col, span);
             let bx = cell_x_offset(&col_widths, table_left, grid_col);
+            let cell_grid_col = grid_col;
             grid_col += span;
 
-            let draw_top = cell.v_merge != VMerge::Continue && ri == 0;
+            if cell.v_merge == VMerge::Continue {
+                continue;
+            }
+
+            let merge_extra = merge_spans
+                .get(&(ri, cell_grid_col))
+                .copied()
+                .unwrap_or(0.0);
+            let effective_bottom = row_bottom - merge_extra;
+
             draw_cell_borders(
                 content,
                 &cell.borders,
                 bx,
                 row_top,
-                row_bottom,
+                effective_bottom,
                 col_w,
-                draw_top,
+                ri == 0,
                 true,
             );
         }

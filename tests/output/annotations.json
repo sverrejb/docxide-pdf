@@ -149,7 +149,7 @@
       "x_pt": 168.12482,
       "y_pt": 463.8406,
       "note": "Lines between cells are wrong in several places. Compare systematically with reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 76,
