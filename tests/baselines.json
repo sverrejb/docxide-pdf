@@ -464,8 +464,8 @@
     "convert_ms": 70.6
   },
   "scraped/indonesian_bench..": {
-    "jaccard": 0.4084,
-    "ssim": 0.5494,
+    "jaccard": 0.4261,
+    "ssim": 0.5663,
     "text_boundary": 0.31,
     "convert_ms": 170.5
   },

@@ -159,7 +159,7 @@
       "x_pt": 80.43723,
       "y_pt": 371.02457,
       "note": "Empty space below image here is way too large.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 81,

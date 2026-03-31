@@ -352,6 +352,20 @@ The same issue affected **footnote** paragraphs, which also used `p.runs.iter()`
 
 ---
 
+## Annotation #80 — Empty space below image too large (indonesian_benchmarking_guide) — 2026-03-31
+
+**Problem**: On page 7 (0-indexed page 6), excessive empty space (~28pt) between the floating questionnaire image and "3. Metode Benchmarking" heading below it.
+
+**Analysis**: The floating image (Capture modul 5.4.PNG, 251×374pt, wrapSquare bothSides) creates a float zone covering most of the page. Between the image's anchor paragraph and "3. Metode Benchmarking", there are 5 completely empty paragraphs plus 1 paragraph containing only a `w:br` (soft line break) element with no text.
+
+The float zone absorption logic in `pdf/mod.rs` checked `is_text_empty(&p.runs)` to decide whether a paragraph should be absorbed within the float zone. `is_text_empty()` returns false for runs with `is_line_break=true`, so the br-only paragraph was NOT absorbed. Instead, it triggered the float-zone push (setting slot_top to fz.bottom_y) and then added its own content_h of 28.2pt (2 lines × 14.1pt) below the image — creating visible empty space.
+
+**Fix**: In `src/pdf/mod.rs`, expanded the `is_empty_para` check in the float zone absorption code to treat line-break-only runs as empty content. Changed from `is_text_empty(&p.runs)` to an inline check that allows `r.is_line_break` (in addition to vanished and truly empty runs), so paragraphs with only soft line breaks are absorbed within the float zone just like truly empty paragraphs.
+
+**Result**: indonesian_benchmarking_guide Jaccard +1.8pp (40.8% → 42.6%), SSIM +1.7pp (54.9% → 56.6%). "3. Metode Benchmarking" heading moved from 476pt to 448pt from top (reference: 462pt). More content now fits on page 7 (including section 3.1.3), matching the reference layout. No regressions on any fixture.
+
+---
+
 Future priorities to address these:
 - Implement Word-compatible twip rounding in the spacing pipeline
 - Improve OS/2 font metric handling for less common fonts

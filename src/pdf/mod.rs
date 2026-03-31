@@ -750,8 +750,13 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     if !enough_space {
                         // Empty paragraphs can be absorbed within a wide
                         // image's vertical extent without needing wrap space.
+                        // Include paragraphs with only line breaks (w:br)
+                        // as "empty" — they have no visible text content.
                         let is_empty_para = matches!(block,
-                            Block::Paragraph(p) if is_text_empty(&p.runs)
+                            Block::Paragraph(p) if p.runs.iter().all(|r|
+                                r.vanish || r.is_line_break
+                                || (r.text.is_empty() && !r.is_tab && r.inline_image.is_none())
+                            )
                                 && p.image.is_none()
                                 && p.inline_chart.is_none()
                                 && p.smartart.is_none()
