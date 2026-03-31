@@ -221,6 +221,10 @@ pub(super) struct FloatZone {
     /// Polygon vertices in absolute page coords (PDF: x from left, y from bottom)
     pub polygon_pts: Option<Vec<(f32, f32)>>,
     pub wrap_text: WrapText,
+    /// True when the zone was created by a paragraph-relative floating image
+    /// (positionV relativeFrom="paragraph").  Paragraphs whose cursor is
+    /// slightly above the zone should still be pushed below wide images.
+    pub para_relative: bool,
 }
 
 impl FloatZone {
@@ -729,8 +733,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 if pb.slot_top <= fz.bottom_y {
                     // Already past the zone — clear it
                     pb.float_zone = None;
-                } else if pb.slot_top <= fz.top_y {
-                    // Cursor is within or entering the zone — check horizontal space
+                } else if pb.slot_top <= fz.top_y
+                    || (fz.para_relative && pb.slot_top <= fz.top_y + 30.0)
+                {
+                    // Cursor is within, entering, or (for paragraph-relative
+                    // zones) slightly above the zone.  Paragraph-relative
+                    // images with a positive vertical offset create zones that
+                    // start below the anchor paragraph; the next paragraph's
+                    // cursor may still be above the zone top.
                     let (col_x, col_w) = col_geometry[current_col];
                     let (ex_left, ex_right) = fz.exclusion_at_y(pb.slot_top);
                     let space_right = (col_x + col_w) - (ex_right + fz.right_from_text);
@@ -1009,6 +1019,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 right_from_text: fi.dist_right,
                                 polygon_pts,
                                 wrap_text: fi.wrap_text,
+                                para_relative: fi.v_relative_from == VRelativeFrom::Paragraph,
                             });
                             // Re-narrow para_text_x / para_text_width using the
                             // new float zone (same logic as the block above).
@@ -1786,6 +1797,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     right_from_text: fi.dist_right,
                                     polygon_pts,
                                     wrap_text: fi.wrap_text,
+                                    para_relative: fi.v_relative_from == VRelativeFrom::Paragraph,
                                 });
                             }
                             _ => {}

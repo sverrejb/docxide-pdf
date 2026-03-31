@@ -392,6 +392,36 @@ In Word, paragraphs 2 and 3 flow *beside* the wrapSquare image (it's narrow — 
 
 ---
 
+## Annotation #83 — Table heading overlaps thumbs up icon (go_math_grade4_guide) — 2026-03-31
+
+**Problem**: On page 3 (0-indexed page 2), the "Rule of Thumb" table header text rendered directly on top of a small thumbs-up icon (20.85pt square floating image with `wrapSquare bothSides`, `positionH: margin/left`, `positionV: margin/top`). The icon was invisible because the text covered it completely.
+
+**Analysis**: The floating image was correctly parsed, registered as an XObject (Im1), and rendered in the PDF content stream at the correct position (cell_x=30.6, cursor_y=375.9). The PDF content stream confirmed: grey cell shading → image at (30.6, 355.06) → text at (35.6, 364.91). The text starting at x=35.6 overlapped the image extending to x=51.45.
+
+Root cause: Table cell text layout in `table_layout.rs` computed `para_text_w` without accounting for the horizontal space consumed by `wrapSquare` floating images. The text was laid out at the full cell width, and rendered starting at `cell_x + cm.left + indent_left` regardless of any floating images occupying space on the left side of the cell.
+
+**Fix**: Added `float_indent_left` field to `CellParagraphLayout` struct. During layout (`table_layout.rs`), compute the horizontal space consumed by left-aligned wrapSquare/Tight/Through floating images (image width + dist_right). Reduce `para_text_w` by this amount so lines are built narrower. During rendering (`table.rs`), shift `text_x` right by `float_indent_left` and reduce `text_w` accordingly.
+
+**Result**: go_math_grade4_guide SSIM +0.1pp (50.8% → 50.9%), text boundary +8.9pp (54.2% → 63.0%). The "Rule of Thumb" text now starts to the right of the thumbs-up icon, matching the reference layout. No regressions on any fixture.
+
+---
+
+## Annotation #84 — Fonte caption overlaps Figura 3 image (brazilian_logistics_study) — 2026-04-01
+
+**Problem**: On page 9 (0-indexed page 8), "Fonte: ALARCOM, (2019)." text rendered on top of the Figura 3 image instead of below it.
+
+**Analysis**: The paragraph "Figura 3 – Funcionalidade Relatórios do site Alarcom" contains both caption text and a `wp:anchor` floating image with `wrapSquare bothSides`, `positionV relativeFrom="paragraph" posOffset=321310` (25.3pt below paragraph), size 416×174pt (92% of text width). The immediately following paragraph "Fonte: ALARCOM, (2019)." comes after the anchor paragraph in document order.
+
+After rendering the caption paragraph, the text cursor advances by only ~14pt (one line height), while the float zone starts 25.3pt below the anchor paragraph. So the cursor for "Fonte:" (at slot_top - 14pt) is **above** the float zone top (at slot_top - 25.3pt). The float zone check `pb.slot_top <= fz.top_y` failed because the cursor was 4.6pt above the zone, so the float zone had no effect on the "Fonte:" paragraph. It rendered at the cursor position, overlapping the image that starts just below.
+
+**Fix**: Extended the float zone check in `src/pdf/mod.rs` to also apply when the cursor is slightly above the zone (within 30pt), but only for **paragraph-relative** float zones. Added a `para_relative: bool` field to `FloatZone` to distinguish paragraph-relative image zones (where this case occurs) from page/margin-relative floating table zones (where text above the zone should flow normally until reaching it).
+
+The condition changed from `pb.slot_top <= fz.top_y` to `pb.slot_top <= fz.top_y || (fz.para_relative && pb.slot_top <= fz.top_y + 30.0)`. This pushes text below wide paragraph-relative images even when the cursor hasn't reached the zone yet.
+
+**Result**: "Fonte:" moved from y=506pt to y=687pt from top (reference: y=605pt). The text is now correctly below the Figura 3 image, matching the reference's relative layout (caption → image → Fonte). The ~82pt absolute offset is from systemic Y-shift on this page. Overall scores unchanged (17.6% Jaccard, 30.5% SSIM) because the page has significant cumulative positioning differences. No regressions on any fixture.
+
+---
+
 Future priorities to address these:
 - Implement Word-compatible twip rounding in the spacing pipeline
 - Improve OS/2 font metric handling for less common fonts

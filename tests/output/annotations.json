@@ -1,5 +1,5 @@
 {
-  "next_id": 90,
+  "next_id": 91,
   "annotations": [
     {
       "id": 5,
@@ -62,26 +62,6 @@
       "fixed": false
     },
     {
-      "id": 50,
-      "case": "scraped/croatian_grant_guidelines",
-      "page": 9,
-      "source": "Reference",
-      "x_pt": 274.85178,
-      "y_pt": 113.91907,
-      "note": "We don't render this footer present in the reference at all it looks like.",
-      "fixed": true
-    },
-    {
-      "id": 51,
-      "case": "scraped/croatian_grant_guidelines",
-      "page": 17,
-      "source": "Generated",
-      "x_pt": 292.67557,
-      "y_pt": 64.10364,
-      "note": "If this is the footer, it is rendered kinda wrong. The link overlaps the page number, and the horizontal line is nowhere to be seen. It is also too close to the body text.",
-      "fixed": true
-    },
-    {
       "id": 55,
       "case": "scraped/japanese_interlibrary_loan",
       "page": 0,
@@ -139,7 +119,7 @@
       "x_pt": 81.04862,
       "y_pt": 744.497,
       "note": "Too much space below \"header\" with image and text and above numbered list.",
-      "fixed": true
+      "fixed": false
     },
     {
       "id": 83,
@@ -149,7 +129,7 @@
       "x_pt": 39.477592,
       "y_pt": 361.21497,
       "note": "Table heading overlaps thumbs up icon",
-      "fixed": true
+      "fixed": false
     },
     {
       "id": 84,
@@ -159,7 +139,7 @@
       "x_pt": 130.12518,
       "y_pt": 328.59778,
       "note": "Fonte: ALARCOM (2019) overlaps the image \"Figura 3\"",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 85,
@@ -209,6 +189,16 @@
       "x_pt": 89.74833,
       "y_pt": 722.8735,
       "note": "\"Part 1:\"  and \"Tenant's Rights\" overlaps-",
+      "fixed": false
+    },
+    {
+      "id": 90,
+      "case": "scraped/croatian_grant_guidelines",
+      "page": 17,
+      "source": "Generated",
+      "x_pt": 154.40811,
+      "y_pt": 92.55475,
+      "note": "Body text overlaps footer here.",
       "fixed": false
     }
   ]

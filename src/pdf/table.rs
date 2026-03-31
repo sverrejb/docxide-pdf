@@ -1097,6 +1097,7 @@ pub(super) fn render_table(
                 right_from_text: fp.right_from_text,
                 polygon_pts: None,
                 wrap_text,
+                para_relative: false,
             });
         }
         }
