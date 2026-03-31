@@ -416,9 +416,9 @@
     "convert_ms": 39.4
   },
   "scraped/czech_municipal_..": {
-    "jaccard": 0.1116,
-    "ssim": 0.341,
-    "text_boundary": 0.42,
+    "jaccard": 0.1038,
+    "ssim": 0.388,
+    "text_boundary": 0.4118,
     "convert_ms": 34.9
   },
   "scraped/czech_tree_cutti..": {
@@ -434,8 +434,8 @@
     "convert_ms": 22.0
   },
   "scraped/education_consul..": {
-    "jaccard": 0.1601,
-    "ssim": 0.3545,
+    "jaccard": 0.1594,
+    "ssim": 0.3489,
     "text_boundary": 0.6732,
     "convert_ms": 47.1
   },

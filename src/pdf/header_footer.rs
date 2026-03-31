@@ -52,8 +52,12 @@ pub(super) fn compute_header_height(
     sp: &SectionProperties,
     is_header: bool,
 ) -> f32 {
+    let text_width = sp.page_width - sp.margin_left - sp.margin_right;
     let mut height = 0.0f32;
     let mut prev_space_after = 0.0f32;
+    // Track bottom of wrapping float zones (Square/Tight/Through): subsequent
+    // paragraphs flow beside the image so their height is absorbed, not additive.
+    let mut float_bottom_h = 0.0f32;
     for block in &hf.blocks {
         match block {
             Block::Paragraph(para) => {
@@ -70,12 +74,23 @@ pub(super) fn compute_header_height(
                 let mut content_h = max_img_h.max(line_h);
 
                 for fi in &para.floating_images {
-                    // In headers/footers, any text-displacing wrap type affects height
-                    if !matches!(fi.wrap_type, WrapType::None) {
-                        let fi_h = match fi.v_position {
-                            VerticalPosition::Offset(o) => o.max(0.0) + fi.image.display_height,
-                            _ => fi.image.display_height,
-                        };
+                    if matches!(fi.wrap_type, WrapType::None) {
+                        continue;
+                    }
+                    let fi_h = match fi.v_position {
+                        VerticalPosition::Offset(o) => o.max(0.0) + fi.image.display_height,
+                        _ => fi.image.display_height,
+                    };
+                    if matches!(
+                        fi.wrap_type,
+                        WrapType::Square | WrapType::Tight | WrapType::Through
+                    ) && fi.image.display_width < text_width * 0.5
+                    {
+                        // Narrow wrapping image: text flows beside it. Track
+                        // its bottom separately instead of inflating content_h.
+                        float_bottom_h = float_bottom_h.max(height + fi_h);
+                    } else {
+                        // TopAndBottom or wide wrapping image
                         content_h = content_h.max(fi_h);
                     }
                 }
@@ -110,7 +125,7 @@ pub(super) fn compute_header_height(
             }
         }
     }
-    height + prev_space_after
+    (height + prev_space_after).max(float_bottom_h)
 }
 
 pub(super) fn effective_slot_top(

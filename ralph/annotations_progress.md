@@ -378,6 +378,20 @@ The float zone absorption logic in `pdf/mod.rs` checked `is_text_empty(&p.runs)`
 
 ---
 
+## Annotation #82 — Header wrapping image inflating header height (czech_municipal_grant_form) — 2026-03-31
+
+**Problem**: On page 2 (0-indexed page 1), ~20pt excess space between the header (coat of arms image + "OBEC TUHAŇ" + address + green line) and the body content (numbered list starting with "1) Osoba oprávněná...").
+
+**Analysis**: The header contains 3 paragraphs: (1) empty text with a `wrapSquare` floating image (45.4×48.7pt coat of arms, ~10% of text width), (2) "OBEC TUHAŇ" in Cambria 11pt bold, (3) address text with a green connector line shape. In `compute_header_height()`, paragraph 1's `content_h` was set to `max(line_h, fi_h) = max(12pt, 48.7pt) = 48.7pt`, then paragraphs 2 and 3 each added their own ~13pt line heights on top. Total: ~75pt.
+
+In Word, paragraphs 2 and 3 flow *beside* the wrapSquare image (it's narrow — only 10% of text width), so they don't add height beyond the image's vertical extent. The header height should be `max(sum_of_text_heights, float_bottom)`, not `float_height + text_heights`.
+
+**Fix**: In `src/pdf/header_footer.rs`, changed `compute_header_height()` to track narrow wrapping images (Square/Tight/Through, width < 50% of text width) separately via `float_bottom_h` instead of inflating `content_h`. The final height is `max(accumulated_text_height, float_bottom_h)`. Wide wrapping images and TopAndBottom images still inflate `content_h` directly.
+
+**Result**: czech_municipal_grant_form SSIM +4.7pp (34.1% → 38.8%), Jaccard -0.8pp (content reflow). education_consultant_posting SSIM -0.6pp (noise, no wrapping images in its header). No regression flags.
+
+---
+
 Future priorities to address these:
 - Implement Word-compatible twip rounding in the spacing pipeline
 - Improve OS/2 font metric handling for less common fonts

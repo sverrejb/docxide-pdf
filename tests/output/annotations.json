@@ -132,16 +132,6 @@
       "fixed": false
     },
     {
-      "id": 81,
-      "case": "scraped/go_math_grade4_guide",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 72.93026,
-      "y_pt": 45.97284,
-      "note": "Footer is rendered too low on page. Compare with reference.",
-      "fixed": true
-    },
-    {
       "id": 82,
       "case": "scraped/czech_municipal_grant_form",
       "page": 1,
@@ -149,7 +139,7 @@
       "x_pt": 81.04862,
       "y_pt": 744.497,
       "note": "Too much space below \"header\" with image and text and above numbered list.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 83,
