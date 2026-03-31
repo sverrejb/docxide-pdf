@@ -112,16 +112,6 @@
       "fixed": false
     },
     {
-      "id": 67,
-      "case": "scraped/uk_commercial_lease_template",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 73.460205,
-      "y_pt": 200.68597,
-      "note": "Text [DRAFTING NOTE: ... needs to be higher up, as it overlaps the red logo below.",
-      "fixed": true
-    },
-    {
       "id": 76,
       "case": "samples/samtale",
       "page": 1,

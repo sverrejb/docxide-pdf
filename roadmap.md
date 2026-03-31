@@ -1,9 +1,5 @@
 # Roadmap
 
-## Unicode Line Breaking (DONE)
-
-`split_preserving_spaces()` now uses the `unicode-linebreak` crate (UAX #14) for break opportunity detection. This handles CJK character boundaries, hyphens, and punctuation break opportunities in addition to whitespace. Non-breaking spaces (U+00A0) and ideographic spaces (U+3000) remain non-breaking.
-
 ## Hyphenation (PARKED — Word's online converter doesn't hyphenate)
 
 `w:autoHyphenation` and `w:suppressAutoHyphens` are parsed from DOCX. `w:lang` is parsed on runs. However, **Word's online PDF converter does not perform syllable-break hyphenation** for any language, even when `autoHyphenation` is set. Every line-ending hyphen in reference PDFs comes from pre-existing hyphens in compound words (verified across 8 language-specific fixtures and all scraped fixtures).
@@ -16,12 +12,10 @@ Test fixtures in `tests/fixtures/hyphenation/` (8 languages with Wikipedia text,
 
 ## CJK Rendering Polish (TODO — MEDIUM IMPACT)
 
-Core CJK support is implemented: CIDFont/Identity-H/ToUnicode encoding, platform-specific font fallback chains (Hiragino/Noto/Yu Gothic), per-character font fallback at render time, script-based run splitting via `w:rFonts @eastAsia`, and vertical text rendering (`w:textDirection="tbRlV"`). CJK fixtures render readable output but score low (4–9% Jaccard) due to spacing/positioning precision issues:
+Core CJK support is implemented: CIDFont/Identity-H/ToUnicode encoding, platform-specific font fallback chains (Hiragino/Noto/Yu Gothic), per-character font fallback at render time, script-based run splitting via `w:rFonts @eastAsia`, and vertical text rendering. CJK fixtures render readable output but score low (4-9% Jaccard) due to spacing/positioning precision issues:
 
-1. **`w:snapToGrid`** (DONE) — implemented. Paragraphs with `snap_to_grid: true` (spec default) snap line heights to grid pitch multiples when the section's `docGrid @type` is "lines", "linesAndChars", or "snapToChars". Paragraphs with `snapToGrid="0"` skip grid snapping. `DocGridType` enum and `grid_type` field added to `SectionProperties`.
-2. **Vanished paragraph mark** (DONE) — `w:pPr/w:rPr/w:vanish` on the paragraph mark now produces zero height and zero spacing for empty paragraphs. Prevents phantom page breaks from trailing vanished paragraphs.
-3. **`w:firstLineChars`** (MEDIUM) — character-based indent (e.g. `firstLineChars="100"` = 1 character width). Not parsed; we only handle `w:firstLine` (twip-based). In practice, twip fallback is always present alongside firstLineChars.
-4. **Vertical text centering** — `render_vertical_cjk_cell` uses a simplistic height calculation (chars × font_size) that doesn't account for paragraph spacing, causing vertical misalignment in merged cells.
+1. **`w:firstLineChars`** (MEDIUM) — character-based indent (e.g. `firstLineChars="100"` = 1 character width). Not parsed; we only handle `w:firstLine` (twip-based). In practice, twip fallback is always present alongside firstLineChars.
+2. **Vertical text centering** — `render_vertical_cjk_cell` uses a simplistic height calculation (chars x font_size) that doesn't account for paragraph spacing, causing vertical misalignment in merged cells.
 
 ## Bundled Fallback Fonts (TODO — MEDIUM IMPACT)
 
@@ -34,29 +28,12 @@ Metric compatibility means identical advance widths, so layout stays correct eve
 
 ## Paginator Extraction (TODO — MEDIUM IMPACT, HIGH ARCHITECTURAL VALUE)
 
-The `render()` function in `pdf/mod.rs` mixes pagination with rendering. Extracting a dedicated pagination pass would:
-1. **Enable widow/orphan control** — `w:widowControl` (default on) requires knowing whether ≥2 lines fit before committing a paragraph to the page. Currently we can't split paragraphs across pages line-by-line.
-2. **Enable table header row repeat** — `w:tblHeader` marks rows that should repeat when a table breaks across pages. Requires pagination to know where the break falls.
-3. **Enable keep-with-next / keep-lines** — `w:keepNext` and `w:keepLines` paragraph properties need look-ahead during pagination.
-4. **Enable post-pagination field resolution** — PAGE/NUMPAGES fields could be resolved after layout instead of during rendering, which is cleaner and more correct.
+The `render()` function in `pdf/mod.rs` mixes pagination with rendering. widowControl, keepNext, keepLines, and tblHeader are already implemented inline, but extracting a dedicated pagination pass would:
+1. **Clean up widow/orphan / keep-* logic** — currently embedded in the render loop with complex state tracking. A separate pass would be cleaner and more correct.
+2. **Enable look-back wrapping** — paragraphs before a floating image anchor can't wrap beside it because the float zone isn't set until the anchor renders. Requires two-pass layout.
+3. **Enable post-pagination field resolution** — PAGE/NUMPAGES fields could be resolved after layout instead of during rendering.
 
-Architecture: a `Paginator` takes the document model and produces `Vec<Page>` where each `Page` contains positioned elements. The PDF renderer then simply draws them. This is a significant refactor but unlocks multiple features that are impossible without it.
-
-## TOC Internal Link Navigation (DONE)
-
-`w:hyperlink w:anchor="name"` links in TOC entries now produce PDF GoTo annotations that jump to the target heading. `w:bookmarkStart w:name="..."` elements are collected during DOCX parsing and their page/y positions are tracked during rendering. The annotation writer emits `/S /GoTo` with `/XYZ` destinations for `#name` URLs and falls back to `/S /URI` for external links. Tested in case39.
-
-## PDF Bookmarks (DONE)
-
-PDF outline/bookmarks (sidebar navigation panel) are now generated from heading styles. Implementation tracks heading paragraphs via `w:outlineLvl` attributes in styles or paragraphs, builds a hierarchical outline tree using parent-child relationships from heading levels, and writes PDF Outline objects. The catalog sets `PageMode::UseOutlines` so the outline sidebar opens automatically. Tested in case39 (Introduction and Methods headings with proper nesting).
-
-## PDF Metadata (DONE)
-
-Document metadata (title, author, subject, keywords) is now parsed from `docProps/core.xml` and written to the PDF info dictionary. Producer is set to "docxside-pdf".
-
-## Line Height: OS/2 Win Metrics (DONE)
-
-OS/2 Win Metrics are already implemented in `compute_line_metrics()` in `src/fonts/embed.rs`. The function correctly uses `usWinAscent + usWinDescent` when `USE_TYPO_METRICS` is not set. The `ascender_ratio` now includes `hhea.lineGap` for non-USE_TYPO fonts (`(win_asc + gap) / UPM`), matching Word's baseline positioning. This fixed ~1pt vertical offset for Arial (lineGap=67) and TNR (lineGap=87), improving 33 fixtures — seminary_hill +32.7pp, feminist_voice +22.6pp, bush_fires +18.9pp, slovak_misdemeanor +18.6pp. Fonts with lineGap=0 (Calibri, Georgia, Cambria) were unaffected.
+Architecture: a `Paginator` takes the document model and produces `Vec<Page>` where each `Page` contains positioned elements. The PDF renderer then simply draws them. This is a significant refactor but would simplify the render loop and enable features that require look-ahead/look-back.
 
 ## Vertical Drift Investigation (TODO — HIGH IMPACT)
 
@@ -67,6 +44,79 @@ The 8 failing text-only fixtures still show accumulated vertical shift. Investig
 
 Remaining avenues to investigate:
 - **Text wrapping around floating tables** — Word wraps body text around `tblpPr` tables, pushing subsequent paragraphs below. We render them as overlapping, causing large visual diffs (case32).
+
+## Unimplemented Run Properties
+
+### `w:emboss` / `w:imprint` / `w:shadow` (TODO — MEDIUM IMPACT)
+
+636 hits across fixtures, 1 failing fixture. These are WML text effects (mutually exclusive per spec):
+- **`w:emboss`** — raised/embossed appearance (highlight color on top-left, shadow on bottom-right)
+- **`w:imprint`** — engraved/debossed appearance (inverse of emboss)
+- **`w:shadow`** — drop shadow on text (offset copy in shadow color)
+
+Not parsed, not rendered. Trivially implementable: parsing is `wml_bool`, rendering is offset/color-shift drawing passes.
+
+### `w:outline` (legacy) (TODO — LOW IMPACT)
+
+The legacy WML `w:rPr/w:outline` element (hollow text, no fill) is not parsed. We handle the modern `w14:textOutline` but not the pre-Word 2010 equivalent.
+
+### `w:shd` on runs (TODO — LOW IMPACT)
+
+Run-level shading (`w:rPr/w:shd`) is not parsed. We handle paragraph-level and cell-level `w:shd` but not run-level. Different from `w:highlight` (named colors) — `w:shd` supports arbitrary hex fill colors and patterns.
+
+## Unimplemented Paragraph / Layout Features
+
+### `w:jc val="distribute"` (TODO — MEDIUM IMPACT)
+
+Distribute alignment (equal spacing including edges, different from justify). Currently silently treated as left-align — should at minimum fall back to justify.
+
+### `w:mirrorMargins` (TODO — MEDIUM IMPACT)
+
+Parsed from `word/settings.xml` and stored in `DocumentSettings.mirror_margins`, but **never applied to layout**. Fix: swap `margin_left`/`margin_right` on even-numbered pages.
+
+### `w:gutter` (TODO — LOW IMPACT)
+
+Gutter margin (`w:pgMar @gutter`) is not parsed. Adds extra space on the binding side for printed documents.
+
+### `w:pgBorders` (TODO — LOW IMPACT)
+
+Page borders (decorative borders around entire page) are not parsed or rendered. Defined in `w:sectPr/w:pgBorders` with per-side border definitions.
+
+### `w:vAlign` on `sectPr` (TODO — LOW IMPACT)
+
+Vertical alignment of text on the page (top/center/bottom/both). Not parsed from section properties. Mainly affects title pages and short documents.
+
+### `w:textAlignment` (TODO — LOW IMPACT)
+
+Vertical alignment of runs within a line (top/center/baseline/bottom/auto). Only superscript/subscript are handled; the paragraph-level `w:textAlignment` property for mixed-size runs is not.
+
+### RTL / BiDi (TODO — HIGH EFFORT, MEDIUM IMPACT)
+
+`w:bidi` (paragraph-level) and `w:rtl` (run-level) right-to-left support is completely absent. Requires implementing the Unicode BiDi algorithm (UAX #9) for correct visual reordering. Architecturally complex — affects line building, text rendering, and alignment.
+
+## Unimplemented Table Features
+
+### `w:tblLook` / `w:tblStylePr` (TODO — MEDIUM IMPACT)
+
+Table conditional formatting (firstRow, lastRow, firstCol, lastCol, banded rows/cols). The table style is resolved for default borders but conditional formatting overrides (bold headers, alternating row shading, etc.) are not applied.
+
+### Table auto-fit vs `tblW` (TODO — MEDIUM IMPACT)
+
+Our `auto_fit_columns` uses `gridCol` widths from `tblGrid`, ignoring the specified `tblW` when `type="dxa"`. Word treats `tblW` as the authoritative total width and scales/caps columns to fit. This causes tables to render at full page width when python-docx (or other generators) emit oversized `gridCol` values alongside a smaller `tblW`.
+
+## Unimplemented Document Features
+
+### Endnotes (TODO — MEDIUM IMPACT)
+
+`w:endnoteReference` is completely unimplemented. Footnotes already work — the plumbing (reference parsing, content parsing, rendering at page bottom) exists and could be adapted. Endnotes collect at the end of a section or document rather than at the page bottom.
+
+### Additional Field Codes (TODO — LOW IMPACT)
+
+Only PAGE, NUMPAGES, STYLEREF, and PAGEREF field codes are supported. Others (DATE, TIME, AUTHOR, FILENAME, IF, MERGEFIELD, SEQ, etc.) are silently dropped — only the cached display text is used. For static PDF export this is usually acceptable since Word pre-computes the display text, but dynamic fields (DATE, PAGE in headers) may show stale values.
+
+## `w:smallCaps` Rendering Accuracy (TODO — LOW IMPACT)
+
+The spec says: lowercase letters display as capitals at font_size - 2pt; uppercase letters stay at original font_size. Our implementation converts ALL text to uppercase and shrinks ALL text by 2pt. Fix: only apply the size reduction to originally-lowercase characters, render uppercase characters at the original size. Affects 68 XML hits across 10 fixtures (6 failing).
 
 ## SmartArt Remaining Work
 
@@ -88,7 +138,7 @@ All 8 chart types are supported (bar, line, pie, area, doughnut, radar, scatter,
 - **Data labels**: not parsed or rendered
 - **Chart title**: not parsed or rendered
 - **Secondary axes**: not handled
-- **Chart label positioning**: axis labels still have small offsets vs Word. `text_width_approx` (len × fs × 0.5) is crude — real font metrics would help.
+- **Chart label positioning**: axis labels still have small offsets vs Word. `text_width_approx` (len x fs x 0.5) is crude — real font metrics would help.
 - **Legend placement fine-tuning**: small positional offsets vs Word. Centering formula and spacing need per-chart-type calibration.
 - **Font selection in chart labels**: picks arbitrary font from seen_fonts, not theme font
 
@@ -100,39 +150,31 @@ Final mode (insertions included, deletions removed) is done. Remaining:
 - **Paragraph-level changes** — `w:ins`/`w:del` wrapping entire `w:p` elements at `w:body` level
 - **Property changes** — `w:rPrChange`, `w:pPrChange`, `w:sectPrChange`, `w:tblPrChange` (formatting revisions)
 
-## WordArt (MOSTLY DONE — LOW IMPACT)
+## WordArt Remaining Work (LOW IMPACT)
 
-WordArt appears in two forms: modern DrawingML (current Word) and legacy VML (older docs).
-
-**Level 1 — Flat rendering (DONE):** Dedicated `src/docx/wordart.rs` and `src/pdf/wordart.rs` modules. Parses `fromWordArt`, `prstTxWarp`, `spAutoFit` from `bodyPr`. Parses `w14:textOutline` and `w14:textFill` from WML run properties. VML `v:textpath @string` fallback renders as flat text. Text outlines render via `TextRenderingMode::FillStroke`. Auto-fit (`spAutoFit`) computes textbox height from content.
-
-**Level 2 — Text effects (DONE):** Solid `w14:textFill` color override applied during rendering. Text shadows (`w14:shadow`) parsed and rendered as offset pre-pass with blended shadow color. Text glow (`w14:glow`) parsed and rendered as thick stroke pre-pass with round joins. Gradient text fills parsed but rendering deferred (requires PDF clip-then-pattern).
-
-**Level 3 — Two-path envelope warping (DONE):** All 40 `prstTxWarp` presets auto-generated from ECMA-376 spec. Glyph outlines extracted via `ttf_parser::OutlineBuilder` with correct bold/italic font variant selection. Warp algorithm: evaluate preset → sample top/bottom boundary curves → transform each glyph point through envelope interpolation → emit as filled PDF paths. Boundary sizing: natural text width horizontally (centered in textbox), shape height vertically. Text height normalized using `font_size × (ascender / glyph_extent)` to match Word's cap-height fill ratio. Shared helpers (`collect_text_info`, `emit_glyph_commands`, `fill_and_stroke_glyphs`) eliminate code duplication between renderers.
-
-**Level 4 — Single-path text-on-a-path (DONE):** Arch/circle presets (`textArchUp`, `textArchDown`, `textCircle`) use a text-on-a-path algorithm: arc-length parameterize the single curve path, place each character along the arc with tangent-angle rotation, anchor text at `font_size / 2` from the path. Boundary sized to natural text advance (produces correct curvature). Case43 Jaccard improved from 22% → 50%.
+Levels 1-4 are done (flat rendering, text effects, envelope warping, text-on-a-path).
 
 **Level 5 — Legacy VML enhancement (TODO):** VML fill types (gradient/pattern), VML shadow, VML shapetype-to-prstTxWarp mapping. Basic flat rendering already done in Level 1.
 
-## Unimplemented Spec Features
-
-- **`w:tblLook` / `w:tblStylePr`** — table conditional formatting (firstRow, lastRow, firstCol, bands, etc.)
-- **`w:jc val="distribute"`** — distribute alignment (equal spacing including edges), different from justified
-- **`w:textDirection`** — text direction in table cells (btLr, tbRl)
-- **`w:vAlign` on sectPr** — vertical alignment of text on the page (top/center/bottom/both)
-- **Panose font matching** — fontTable.xml contains panose classification bytes; could use for more precise substitution
-
-### Improve Image Drop Shadow Quality (TODO — LOW IMPACT)
+## Image Drop Shadow Quality (TODO — LOW IMPACT)
 
 Basic drop shadow rendering is implemented (`a:effectLst/a:outerShdw`): offset, color, alpha, and directional soft edge via layered transparent rectangles. Current limitations:
 - **No real gaussian blur** — approximated with 10 stepped layers, visible banding at close zoom
 - **Fallback paths lack alpha** — inline images in text lines, floating images, table/header images use pre-blended solid color instead of PDF ExtGState transparency (only body-level paragraph images get proper alpha)
 
-### Partially Implemented
+## Partially Implemented
 
 - **Line spacing** — Auto and Exact work. AtLeast parsed but may not enforce minimum correctly.
-- **Tab stops** — basic left/center/right tabs work but leader rendering and decimal alignment have precision issues.
-- **Table auto-fit vs `tblW`** — our `auto_fit_columns` uses `gridCol` widths from `tblGrid`, ignoring the specified `tblW` when `type="dxa"`. Word treats `tblW` as the authoritative total width and scales/caps columns to fit. This causes tables to render at full page width when python-docx (or other generators) emit oversized `gridCol` values alongside a smaller `tblW`.
+- **Tab stops** — basic left/center/right tabs work but decimal alignment has precision issues.
+- **Panose font matching** — fontTable.xml contains panose classification bytes; could use for more precise font substitution.
+
+## Floating Image Wrapping — Remaining
+
+- **Remaining y-shift (page 2 only)**: Word places page 2's image (180x144pt) 14.8pt higher than all other images, despite identical `posOffset=0`. Pages 1,3,4,5,7 match perfectly (delta <0.02pt). Pages 2 and 6 (both cy=1828800/144pt) are the outliers. Likely Word snapping to grid/text boundaries based on image dimensions.
+- **Look-back wrapping (TODO — MEDIUM IMPACT)**: Paragraphs BEFORE the image anchor cannot wrap beside the image because the float zone isn't set until the anchor paragraph renders. In Word, text from preceding paragraphs also wraps (e.g. case41 page 3 — the first paragraph's lower lines should wrap beside the centered image). Requires either a paginator or a two-pass layout with look-back.
+- **Image in text paragraph**: Case41 page 6 — last line of text paragraph overlaps the image. Look-ahead only fires for the NEXT block, not same-paragraph floats.
+- **Tight vs Through distinction**: Both currently use convex-hull polygon scanline. For Through wrapping, text should fill polygon concavities. Requires returning per-line interval segments instead of hull bounds. Rare in practice.
+- **Word-break precision**: BothSides wrapping produces correct structure but slightly different word breaks from Word, causing ~2pp Jaccard differences on case41.
 
 ## Code Structure
 
@@ -140,9 +182,7 @@ Basic drop shadow rendering is implemented (`a:effectLst/a:outerShdw`): offset, 
 
 The `render()` function in `pdf/mod.rs` is ~2400 lines with many closures and shared mutable state. The right fix is the paginator extraction described above. In the meantime, smaller extractions are possible:
 
-- `pdf/headers_footers.rs` — `render_header_footer` (~220 lines, already a free fn)
-- `pdf/footnotes.rs` — footnote height computation + rendering (~120 lines)
-- `pdf/images.rs` — `embed_image` closure → free fn (~140 lines)
+- `pdf/images.rs` — `embed_image` closure -> free fn (~140 lines)
 - `pdf/list_labels.rs` — `label_for_run`, `label_for_paragraph` (~30 lines)
 
 ## Performance
@@ -165,34 +205,13 @@ The `render()` function in `pdf/mod.rs` is ~2400 lines with many closures and sh
 - Compress font file streams with FlateDecode (currently uncompressed)
 - Memory usage for large DOCX files with many images
 
-## Floating Image Wrapping
-
-### Done
-
-- **`lines_beside` bias**: `.round()` over-counted narrow lines when the last line barely overlapped the float zone bottom. Added -0.1 bias. Case41 Jaccard +5.7pp.
-- **Self-wrapping**: Paragraphs wrap around their own floating images (float zone set before line building). Polygon data from `wp:wrapPolygon` parsed and used for per-line contour-aware exclusion. Self-wrapping now always triggers for paragraphs with floating images (previous float zone replaced, not blocked by pre-existing zone).
-- **`wrapText` variants**: All four side-selection locations and the per-paragraph minimum-width gate now respect `wrapText`. Previously `wrapText` was parsed but completely ignored — all modes behaved as `Largest`.
-  - `Left`: force text to left region only
-  - `Right`: force text to right region only
-  - `Largest`: pick the wider side (pre-existing default behavior)
-  - `BothSides`: dual-region line builder fills left region first, overflows to right region on the same line. Combined-width threshold (both sides together must meet 72pt) instead of single-side threshold.
-- **Both-sides wrapping**: `wrapText="bothSides"` flows text on both left and right of the image simultaneously. Implementation: `RightRegion` struct on `TextLine`, `per_line_dual` parameter on `build_paragraph_lines`, per-region alignment/justify in `render_paragraph_lines`. Works with all wrap types (Square, Tight, Through). Case42 (Mario): text wraps both sides. Case41 page 3 (centered image): text wraps both sides.
-
-### Remaining
-
-- **Remaining y-shift (page 2 only)**: Word places page 2's image (180×144pt) 14.8pt higher than all other images, despite identical `posOffset=0`. Pages 1,3,4,5,7 match perfectly (delta <0.02pt). Pages 2 and 6 (both cy=1828800/144pt) are the outliers. Likely Word snapping to grid/text boundaries based on image dimensions.
-- **Look-back wrapping (TODO — MEDIUM IMPACT)**: Paragraphs BEFORE the image anchor cannot wrap beside the image because the float zone isn't set until the anchor paragraph renders. In Word, text from preceding paragraphs also wraps (e.g. case41 page 3 — the first paragraph's lower lines should wrap beside the centered image). Requires either a paginator or a two-pass layout with look-back: after rendering the image paragraph, go back and re-render preceding paragraphs that overlap the float zone.
-- **Image in text paragraph**: Case41 page 6 — last line of text paragraph overlaps the image. Look-ahead only fires for the NEXT block, not same-paragraph floats.
-- **Tight vs Through distinction**: Both currently use convex-hull polygon scanline (`poly_scanline` returns min/max x). For Through wrapping, text should fill polygon concavities. Requires returning per-line interval segments instead of hull bounds. Rare in practice — most polygons are convex.
-- **Word-break precision**: BothSides wrapping produces correct structure but slightly different word breaks from Word, causing ~2pp Jaccard differences on case41. Likely due to font metric differences and rounding in the dual-region fill algorithm.
-
 ## Scraped Fixture Status
 
 32 passing, 16 failing, 0 skipped out of 48 scraped fixtures. Breakdown of 16 failures by dominant issue:
 - **text/layout only**: 8 fixtures
 - **anchored images**: 4 fixtures
 - **floating tables**: 3 fixtures
-- **structured doc tags**: 2 fixtures
+- **structured doc tags**: 2 fixtures (SDT content is extracted but wrapping may cause layout shifts)
 
 Run `./tools/target/debug/analyze-fixtures --failing` for current breakdown.
 
@@ -200,6 +219,5 @@ Run `./tools/target/debug/analyze-fixtures --failing` for current breakdown.
 
 - Deep style inheritance (3+ level chains with run vs style vs paragraph conflicts) — **case50** (awaiting reference PDF)
 - Nested tables (tables inside table cells, 2-level and 3-level nesting) — **case51** (awaiting reference PDF)
-- Table of Contents (right-aligned tabs + dot leaders + page field codes) — **case49** (DONE)
 - Stacked bar chart rendering (stacked + percentStacked, vertical + horizontal) — **case52** (awaiting reference PDF)
 - Charts with extreme data (50 categories, small/large/mixed-range values) — **case53** (awaiting reference PDF)

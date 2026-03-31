@@ -26,7 +26,7 @@
 
 ## Completed: Annotation #60 — Wrong font used on labels (sample500kB)
 
-**Status**: Already fixed. Both reference and generated PDFs use Aptos (sans-serif) for chart labels. The chart font correctly defaults to the theme minor font. Verified via mutool info showing identical font (AAAAAN+Aptos in reference, Aptos in generated).
+**Status**: Fixed. Chart labels used the raw font name "Aptos" in PDF content stream `set_font()` calls, but page resources mapped fonts as "F1", "F2", etc. The PDF viewer couldn't find "Aptos" in resources and fell back to a serif substitute. Fix: resolve the FontEntry's `pdf_name` for the chart font key, and pass the font entry to `show_text()` so CID fonts encode glyph IDs correctly. Improved all chart cases: case29 +1.0pp, case30 +1.2pp, case31 +1.7pp SSIM. Committed as 4603e34.
 
 ## Completed: Annotation #67 — DRAFTING NOTE overlaps MCL logo (uk_commercial_lease_template)
 
