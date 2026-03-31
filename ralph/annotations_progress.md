@@ -320,6 +320,20 @@ Additionally, when a merge group extended to the table edge, the restart cell's 
 
 ---
 
+## Annotation #76 — List label font size boosting line height (samples/samtale) — 2026-03-31
+
+**Problem**: In paragraphs with large list labels (e.g., 20pt numbered "6." on 10pt text), "I stor grad." answer text floated ~17pt above the grey paragraph bottom border instead of the correct ~5pt gap.
+
+**Analysis**: The document uses a 2-column layout with numbered Q&A sections. Each question uses `numId=6` at `ilvl=0` with `w:sz w:val="40"` (20pt) for the list number label, while paragraph text is 10pt. The `content_h` calculation in `pdf/mod.rs` boosted `first_line_h` to `resolve_line_h(Auto(1.0), 20.0, tallest_lhr)` ≈ 24.4pt when `list_label_font_size > font_size`, adding ~12.2pt extra per paragraph. Word does not do this — list labels sit in the margin and don't affect line height.
+
+For Q6 (right column): content_h was 24.4 + 12.2 + 12.2 = 48.8pt instead of correct 36.6pt. The border at `box_bottom = slot_top - content_h - bdr_bottom_pad` was placed 12.2pt too low, creating a 17pt gap between "I stor grad." baseline and the border (reference: ~5.8pt).
+
+**Fix**: In `src/pdf/mod.rs`, removed the `first_line_h` boost for `list_label_font_size > font_size`. Now `first_line_h` always starts at `line_h` (based on text font), and only `label_boosted_line_h()` adjusts it for labels with font size close to text (within 1pt difference, e.g. bullet symbols).
+
+**Result**: Q6 text-to-border gap: 17.0pt → 4.8pt (reference: 5.8pt). Text boundary score improved +7.7pp (20.8% → 28.6%). Jaccard -2.2pp (11.9% → 9.7%) and SSIM -15.3pp due to secondary column-break effect: more compact Q1-Q5 spacing caused "Vurdering" heading to fit in column 1 instead of flowing to column 2. No regressions on any other fixture.
+
+---
+
 Future priorities to address these:
 - Implement Word-compatible twip rounding in the spacing pipeline
 - Improve OS/2 font metric handling for less common fonts

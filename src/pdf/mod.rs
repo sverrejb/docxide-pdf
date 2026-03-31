@@ -1312,16 +1312,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         h
                     } else {
                         let num_lines = lines.len();
-                        let first_line_h = if let Some(label_fs) = para.list_label_font_size {
-                            if label_fs > font_size {
-                                resolve_line_h(effective_ls, label_fs, tallest_lhr)
-                            } else {
-                                line_h
-                            }
-                        } else {
-                            line_h
-                        };
-                        let first_line_h = label_boosted_line_h(para, ctx.fonts, first_line_h, effective_ls, font_size);
+                        // List label font size doesn't boost line height — labels
+                        // sit in the margin and Word uses the text font for line
+                        // height, not the numbering run's font.
+                        let first_line_h = label_boosted_line_h(para, ctx.fonts, line_h, effective_ls, font_size);
                         if num_lines <= 1 {
                             // If the single line was created by a break, use its font size
                             if let Some(bfs) = lines.first().and_then(|l| l.break_font_size) {

@@ -35,3 +35,7 @@
 ## Completed: Annotation #72 — Lines between cells wrong (turkish_ancient_religions_plan)
 
 **Status**: Fixed. Vertically merged cells (vMerge) incorrectly drew horizontal borders through the merged area. Two fixes: (1) In parsing (docx/tables.rs), propagate the last continuation cell's bottom border to the restart cell so the merged region uses the correct edge style. (2) In rendering (pdf/table.rs), skip border drawing for VMerge::Continue cells across all four render paths (render_table_row, render_nested_table, render_partial_row, render_header_footer_table). For restart cells, borders extend to the full merge height via effective_bottom. Jaccard +0.2pp, italian_project +0.6pp, case15 +0.1pp. Minor: japanese_interlibrary -0.4pp (corrected border rendering).
+
+## Completed: Annotation #76 — List label font size boosting line height (samples/samtale)
+
+**Status**: Fixed. Paragraphs with large list number labels (20pt) on small text (10pt) had inflated content_h because first_line_h was boosted to 24.4pt instead of 12.2pt. This caused paragraph bottom borders (grey lines) to be drawn ~12pt too low, creating a 17pt gap between answer text "I stor grad." and the grey separator line (reference: ~5.8pt). Fixed by removing the first_line_h boost for list_label_font_size > font_size — Word's list labels sit in the margin and don't affect line height. Text-to-border gap: 17pt → 4.8pt. Text boundary +7.7pp. Jaccard -2.2pp (column-break side effect). No regressions on other fixtures.
