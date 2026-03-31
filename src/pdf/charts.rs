@@ -189,8 +189,9 @@ pub(super) fn show_text(
     x: f32,
     y: f32,
     text: &str,
+    font_entry: Option<&FontEntry>,
 ) {
-    show_text_encoded(content, font_key, font_size, x, y, text, None);
+    show_text_encoded(content, font_key, font_size, x, y, text, font_entry);
 }
 
 pub(super) fn show_text_encoded(
@@ -237,9 +238,11 @@ pub(super) fn render_chart(
     let h = chart.display_height;
 
     let font_size = 10.0;
-    let label_font_key = default_font_name;
-    let has_font = seen_fonts.contains_key(label_font_key);
-    let label_font = seen_fonts.get(label_font_key);
+    let label_font = seen_fonts.get(default_font_name);
+    let has_font = label_font.is_some();
+    let label_font_key = label_font
+        .map(|e| e.pdf_name.as_str())
+        .unwrap_or(default_font_name);
 
     let num_categories = c
         .cat_axis
@@ -680,11 +683,11 @@ pub(super) fn render_chart(
             if !horizontal {
                 let ly = plot_y + frac * plot_h - font_size * 0.3;
                 let lx = plot_x - tw - 9.0;
-                show_text(content, label_font_key, font_size, lx, ly, &label);
+                show_text(content, label_font_key, font_size, lx, ly, &label, label_font);
             } else {
                 let lx = plot_x + frac * plot_w - tw / 2.0;
                 let ly = plot_y - font_size - 8.0;
-                show_text(content, label_font_key, font_size, lx, ly, &label);
+                show_text(content, label_font_key, font_size, lx, ly, &label, label_font);
             }
         }
 
@@ -698,7 +701,7 @@ pub(super) fn render_chart(
                 let frac = val / x_axis_max;
                 let lx = plot_x + frac * plot_w - tw / 2.0;
                 let ly = plot_y - font_size - 8.0;
-                show_text(content, label_font_key, font_size, lx, ly, &label);
+                show_text(content, label_font_key, font_size, lx, ly, &label, label_font);
             }
         }
 
@@ -710,12 +713,12 @@ pub(super) fn render_chart(
                     let group_w = plot_w / num_categories as f32;
                     let cx = plot_x + (ci as f32 + 0.5) * group_w - tw / 2.0;
                     let cy = plot_y - font_size - 8.0;
-                    show_text(content, label_font_key, font_size, cx, cy, label);
+                    show_text(content, label_font_key, font_size, cx, cy, label, label_font);
                 } else {
                     let group_h = plot_h / num_categories as f32;
                     let cy = plot_y + ci as f32 * group_h + group_h / 2.0 - font_size * 0.3;
                     let cx = plot_x - tw - 9.0;
-                    show_text(content, label_font_key, font_size, cx, cy, label);
+                    show_text(content, label_font_key, font_size, cx, cy, label, label_font);
                 }
             }
         }
@@ -941,7 +944,7 @@ fn render_radar(
                 } else {
                     ly - font_size * 0.3
                 };
-                show_text(content, label_font_key, font_size, tx, ty, label);
+                show_text(content, label_font_key, font_size, tx, ty, label, label_font);
             }
         }
 
@@ -956,6 +959,7 @@ fn render_radar(
                 cx - tw - val_gap,
                 cy - font_size * 0.3,
                 "0",
+                label_font,
             );
         }
         for ti in 1..=num_ticks {
@@ -971,6 +975,7 @@ fn render_radar(
                 cx - tw - val_gap,
                 ly,
                 &label,
+                label_font,
             );
         }
 

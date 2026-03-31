@@ -1,5 +1,5 @@
 {
-  "next_id": 86,
+  "next_id": 90,
   "annotations": [
     {
       "id": 5,
@@ -62,16 +62,6 @@
       "fixed": false
     },
     {
-      "id": 49,
-      "case": "scraped/croatian_grant_guidelines",
-      "page": 7,
-      "source": "Generated",
-      "x_pt": 541.4858,
-      "y_pt": 461.67197,
-      "note": "Links overflow the page width.",
-      "fixed": true
-    },
-    {
       "id": 50,
       "case": "scraped/croatian_grant_guidelines",
       "page": 9,
@@ -112,16 +102,6 @@
       "fixed": false
     },
     {
-      "id": 60,
-      "case": "samples/sample500kB",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 341.69458,
-      "y_pt": 233.18866,
-      "note": "Wrong font used on labels. Should be something without serifs. Compare to reference.",
-      "fixed": true
-    },
-    {
       "id": 66,
       "case": "case33",
       "page": 0,
@@ -139,16 +119,6 @@
       "x_pt": 73.460205,
       "y_pt": 200.68597,
       "note": "Text [DRAFTING NOTE: ... needs to be higher up, as it overlaps the red logo below.",
-      "fixed": true
-    },
-    {
-      "id": 72,
-      "case": "scraped/turkish_ancient_religions_plan",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 168.12482,
-      "y_pt": 463.8406,
-      "note": "Lines between cells are wrong in several places. Compare systematically with reference.",
       "fixed": true
     },
     {
@@ -249,6 +219,46 @@
       "x_pt": 39.7331,
       "y_pt": 232.83224,
       "note": "Two empty cells here that should be merged with the one above",
+      "fixed": false
+    },
+    {
+      "id": 86,
+      "case": "scraped/uk_commercial_lease_template",
+      "page": 4,
+      "source": "Generated",
+      "x_pt": 350.3871,
+      "y_pt": 275.9408,
+      "note": "these cells should be split joined. See Reference. (LR4. Property)",
+      "fixed": false
+    },
+    {
+      "id": 87,
+      "case": "scraped/uk_commercial_lease_template",
+      "page": 14,
+      "source": "Generated",
+      "x_pt": 238.4957,
+      "y_pt": 619.84717,
+      "note": "We are not highlighting the footnote numbers. Compare to reference.",
+      "fixed": false
+    },
+    {
+      "id": 88,
+      "case": "scraped/uk_commercial_lease_template",
+      "page": 14,
+      "source": "Generated",
+      "x_pt": 178.60835,
+      "y_pt": 262.6701,
+      "note": "\"Risk Period\" body text overlaps footnote text.",
+      "fixed": false
+    },
+    {
+      "id": 89,
+      "case": "scraped/uk_commercial_lease_template",
+      "page": 43,
+      "source": "Generated",
+      "x_pt": 89.74833,
+      "y_pt": 722.8735,
+      "note": "\"Part 1:\"  and \"Tenant's Rights\" overlaps-",
       "fixed": false
     }
   ]

@@ -120,8 +120,8 @@
     "convert_ms": 10.0
   },
   "cases/case29": {
-    "jaccard": 0.7548,
-    "ssim": 0.7822,
+    "jaccard": 0.7568,
+    "ssim": 0.7925,
     "text_boundary": 0.9474,
     "convert_ms": 6.9
   },
@@ -132,14 +132,14 @@
     "convert_ms": 2.5
   },
   "cases/case30": {
-    "jaccard": 0.842,
-    "ssim": 0.8389,
+    "jaccard": 0.8463,
+    "ssim": 0.8511,
     "text_boundary": 0.963,
     "convert_ms": 6.7
   },
   "cases/case31": {
-    "jaccard": 0.5954,
-    "ssim": 0.7757,
+    "jaccard": 0.6022,
+    "ssim": 0.7924,
     "text_boundary": 0.875,
     "convert_ms": 7.0
   },
@@ -256,12 +256,12 @@
     "ssim": 0.2743
   },
   "cases/case52": {
-    "jaccard": 0.3987,
-    "ssim": 0.5992
+    "jaccard": 0.3992,
+    "ssim": 0.6024
   },
   "cases/case53": {
-    "jaccard": 0.4784,
-    "ssim": 0.429
+    "jaccard": 0.4804,
+    "ssim": 0.4365
   },
   "cases/case6": {
     "jaccard": 0.4505,
@@ -350,8 +350,8 @@
     "ssim": 0.8253
   },
   "samples/sample500kB": {
-    "jaccard": 0.3353,
-    "ssim": 0.5207,
+    "jaccard": 0.3352,
+    "ssim": 0.5211,
     "text_boundary": 0.7816,
     "convert_ms": 18.3
   },

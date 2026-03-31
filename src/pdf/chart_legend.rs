@@ -60,6 +60,7 @@ pub(super) fn render_chart_legend(
                     text_x,
                     ly - 0.3,
                     item.label,
+                    label_font,
                 );
             }
         }
@@ -78,6 +79,7 @@ pub(super) fn render_chart_legend(
                     text_x,
                     ly + 1.0,
                     item.label,
+                    label_font,
                 );
                 lx += item_width(item);
             }
