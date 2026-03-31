@@ -248,6 +248,26 @@ The existing threshold for treating Square/Tight/Through images as TopAndBottom 
 
 ---
 
+## Annotation #58 — Too much empty space between image and caption (brazilian_logistics_study) — 2026-03-31
+
+**Problem**: On page 8, too much empty space (~120pt) between a floating image and its caption "Fonte: ALARCOM, (2019)."
+
+**Analysis**: The paragraph contains a `wp:anchor` floating image (364.5pt wide, 146.9pt tall) with `wrapSquare wrapText="bothSides"`. The image occupies 80.4% of the 453.5pt text area. Between the image paragraph and the caption, there are 8 empty paragraphs with 1.5x line spacing at 10pt (~17pt each).
+
+Previously, wide wrapSquare images (≥50% of text width) were treated as TopAndBottom — their height was added to content_h, advancing the cursor past the image. The 8 empty paragraphs then added ~120pt MORE space on top of the image height, creating excessive vertical space.
+
+In Word, these empty paragraphs exist within the image's vertical extent (flowing beside it in the narrow wrap zones), contributing no extra space below the image.
+
+**Fix**: Three changes in `src/pdf/mod.rs`:
+1. **content_h reservation**: Square/Tight/Through wrapping images no longer add their height to content_h. Their height is tracked via `float_overflow_h` for page break decisions only.
+2. **Float zone creation**: All Square/Tight/Through images now create float zones (removed the `< 0.5 * text_width` guard). This means subsequent paragraphs are aware of the image's vertical extent.
+3. **Dynamic MIN_WRAP_WIDTH**: Changed from fixed 72pt to `(col_w * 0.5).max(72.0)`. This prevents text from wrapping beside wide images (where combined wrap space < 50% of column width) while still allowing narrow images to wrap correctly.
+4. **Empty paragraph absorption**: When a float zone has insufficient wrap space, empty paragraphs are no longer pushed below the zone. They advance the cursor naturally within the zone, effectively being "absorbed" by the image's vertical extent. Non-empty paragraphs are still pushed below.
+
+**Result**: brazilian_logistics_study Jaccard +1.3pp (16.3% → 17.6%), SSIM +3.1pp (27.4% → 30.5%). indonesian_benchmarking_guide also improved: Jaccard +4.5pp (36.4% → 40.8%), SSIM +4.6pp (50.3% → 54.9%). Minor noise on case41 (-0.3pp) and sample500kB (-0.2pp/-0.7pp). No regression flags.
+
+---
+
 Future priorities to address these:
 - Implement Word-compatible twip rounding in the spacing pipeline
 - Improve OS/2 font metric handling for less common fonts

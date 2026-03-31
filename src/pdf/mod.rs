@@ -735,22 +735,31 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     let (ex_left, ex_right) = fz.exclusion_at_y(pb.slot_top);
                     let space_right = (col_x + col_w) - (ex_right + fz.right_from_text);
                     let space_left = (ex_left - fz.left_from_text) - col_x;
-                    const MIN_WRAP_WIDTH: f32 = 72.0; // ~1 inch minimum
+                    let min_wrap_w = (col_w * 0.5).max(72.0);
                     let enough_space = if fz.wrap_text == WrapText::BothSides {
                         // For bothSides, check combined width of both regions
-                        (space_left + space_right) >= MIN_WRAP_WIDTH
+                        (space_left + space_right) >= min_wrap_w
                     } else {
                         let best_side = match fz.wrap_text {
                             WrapText::Left => space_left,
                             WrapText::Right => space_right,
                             _ => space_right.max(space_left),
                         };
-                        best_side >= MIN_WRAP_WIDTH
+                        best_side >= min_wrap_w
                     };
                     if !enough_space {
-                        // Not enough room — push below
-                        pb.slot_top = fz.bottom_y;
-                        pb.float_zone = None;
+                        // Empty paragraphs can be absorbed within a wide
+                        // image's vertical extent without needing wrap space.
+                        let is_empty_para = matches!(block,
+                            Block::Paragraph(p) if is_text_empty(&p.runs)
+                                && p.image.is_none()
+                                && p.inline_chart.is_none()
+                                && p.smartart.is_none()
+                        );
+                        if !is_empty_para {
+                            pb.slot_top = fz.bottom_y;
+                            pb.float_zone = None;
+                        }
                     }
                     // Otherwise leave zone active — paragraph layout adjusts width
                 }
@@ -1345,9 +1354,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     for fi in &para.floating_images {
                         let reserve = match fi.wrap_type {
                             WrapType::TopAndBottom => true,
-                            WrapType::Square | WrapType::Tight | WrapType::Through => {
-                                fi.image.display_width >= text_width * 0.5
-                            }
+                            // Square/Tight/Through use float zones for vertical
+                            // extent — don't block content_h, even for wide images.
+                            WrapType::Square | WrapType::Tight | WrapType::Through => false,
                             WrapType::None => false,
                         };
                         let fi_h = match fi.v_position {
@@ -1752,9 +1761,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     // to ensure polygon data is included)
                     for fi in &para.floating_images {
                         match fi.wrap_type {
-                            WrapType::Square | WrapType::Tight | WrapType::Through
-                                if fi.image.display_width < text_width * 0.5 =>
-                            {
+                            WrapType::Square | WrapType::Tight | WrapType::Through => {
                                 let fi_x =
                                     resolve_fi_x(fi, sp, col_x, col_w, text_width);
                                 let fi_y_top =

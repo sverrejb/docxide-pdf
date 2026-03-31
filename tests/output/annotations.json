@@ -1,5 +1,5 @@
 {
-  "next_id": 80,
+  "next_id": 84,
   "annotations": [
     {
       "id": 5,
@@ -40,16 +40,6 @@
       "y_pt": 474.28906,
       "note": "We render a space here after the 4.1.5\" that is not present in the reference pdf",
       "fixed": false
-    },
-    {
-      "id": 46,
-      "case": "scraped/czech_municipal_grant_form",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 93.743935,
-      "y_pt": 760.83185,
-      "note": "This numbered text overlaps logo in header",
-      "fixed": true
     },
     {
       "id": 47,
@@ -102,16 +92,6 @@
       "fixed": true
     },
     {
-      "id": 52,
-      "case": "scraped/education_consultant_posting",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 299.66245,
-      "y_pt": 706.0231,
-      "note": "Too little space above \"Terms of reference\". It should be lower. But the table under Section A is spot on, so do not move that.",
-      "fixed": true
-    },
-    {
       "id": 54,
       "case": "scraped/go_math_grade4_guide",
       "page": 19,
@@ -132,26 +112,6 @@
       "fixed": true
     },
     {
-      "id": 56,
-      "case": "scraped/indonesian_benchmarking_guide",
-      "page": 6,
-      "source": "Generated",
-      "x_pt": 357.7669,
-      "y_pt": 666.1637,
-      "note": "Text should not wrap around this image, compare to reference.",
-      "fixed": true
-    },
-    {
-      "id": 57,
-      "case": "scraped/go_math_grade4_guide",
-      "page": 2,
-      "source": "Generated",
-      "x_pt": 749.0845,
-      "y_pt": 81.639404,
-      "note": "Table extends into footer, overlaps page number.",
-      "fixed": false
-    },
-    {
       "id": 58,
       "case": "scraped/brazilian_logistics_study",
       "page": 8,
@@ -159,7 +119,7 @@
       "x_pt": 225.96582,
       "y_pt": 445.6176,
       "note": "Too much empty space between image and caption (Fonte: ALARCOM, (2019)).",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 59,
@@ -249,6 +209,46 @@
       "x_pt": 93.160484,
       "y_pt": 721.80725,
       "note": "The \"United Nations Children's Fund .... \" is rendered looking broken, with letters missing etc-",
+      "fixed": false
+    },
+    {
+      "id": 80,
+      "case": "scraped/indonesian_benchmarking_guide",
+      "page": 6,
+      "source": "Generated",
+      "x_pt": 80.43723,
+      "y_pt": 371.02457,
+      "note": "Empty space below image here is way too large.",
+      "fixed": false
+    },
+    {
+      "id": 81,
+      "case": "scraped/go_math_grade4_guide",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 72.93026,
+      "y_pt": 45.97284,
+      "note": "Footer is rendered too low on page. Compare with reference.",
+      "fixed": false
+    },
+    {
+      "id": 82,
+      "case": "scraped/czech_municipal_grant_form",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 81.04862,
+      "y_pt": 744.497,
+      "note": "Too much space below \"header\" with image and text and above numbered list.",
+      "fixed": false
+    },
+    {
+      "id": 83,
+      "case": "scraped/go_math_grade4_guide",
+      "page": 2,
+      "source": "Generated",
+      "x_pt": 39.477592,
+      "y_pt": 361.21497,
+      "note": "Table heading overlaps thumbs up icon",
       "fixed": false
     }
   ]

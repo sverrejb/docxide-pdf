@@ -203,8 +203,8 @@
     "text_boundary": 0.5
   },
   "cases/case41": {
-    "jaccard": 0.859,
-    "ssim": 0.8583,
+    "jaccard": 0.8559,
+    "ssim": 0.8552,
     "text_boundary": 0.6702
   },
   "cases/case42": {
@@ -350,8 +350,8 @@
     "ssim": 0.8253
   },
   "samples/sample500kB": {
-    "jaccard": 0.3373,
-    "ssim": 0.5273,
+    "jaccard": 0.3353,
+    "ssim": 0.5207,
     "text_boundary": 0.7816,
     "convert_ms": 18.3
   },
@@ -368,8 +368,8 @@
     "convert_ms": 12.0
   },
   "scraped/brazilian_logist..": {
-    "jaccard": 0.1633,
-    "ssim": 0.2744,
+    "jaccard": 0.1761,
+    "ssim": 0.305,
     "text_boundary": 0.1832,
     "convert_ms": 744.0
   },
@@ -464,8 +464,8 @@
     "convert_ms": 70.6
   },
   "scraped/indonesian_bench..": {
-    "jaccard": 0.3636,
-    "ssim": 0.5032,
+    "jaccard": 0.4084,
+    "ssim": 0.5494,
     "text_boundary": 0.31,
     "convert_ms": 170.5
   },
