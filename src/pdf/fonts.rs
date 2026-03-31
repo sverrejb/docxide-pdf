@@ -23,14 +23,14 @@ pub(super) fn collect_all_runs(doc: &Document) -> Vec<&Run> {
         .into_iter()
         .filter_map(|hf| hf.as_ref())
         .flat_map(|hf| hf_paragraphs(hf))
-        .flat_map(|p| p.runs.iter())
+        .flat_map(|p| para_runs_with_textboxes(p))
     });
 
     let footnote_runs = doc
         .footnotes
         .values()
         .flat_map(|fn_| fn_.paragraphs.iter())
-        .flat_map(|p| p.runs.iter());
+        .flat_map(|p| para_runs_with_textboxes(p));
 
     doc.sections
         .iter()

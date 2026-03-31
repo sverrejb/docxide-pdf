@@ -434,9 +434,9 @@
     "convert_ms": 22.0
   },
   "scraped/education_consul..": {
-    "jaccard": 0.1567,
-    "ssim": 0.3453,
-    "text_boundary": 0.4389,
+    "jaccard": 0.1601,
+    "ssim": 0.3545,
+    "text_boundary": 0.6732,
     "convert_ms": 47.1
   },
   "scraped/federal_procurem..": {
@@ -608,8 +608,8 @@
     "convert_ms": 22.0
   },
   "scraped/transition_to_wo..": {
-    "jaccard": 0.2684,
-    "ssim": 0.385,
+    "jaccard": 0.2683,
+    "ssim": 0.3848,
     "text_boundary": 0.2099,
     "convert_ms": 493.0
   },

@@ -334,6 +334,24 @@ For Q6 (right column): content_h was 24.4 + 12.2 + 12.2 = 48.8pt instead of corr
 
 ---
 
+## Annotation #79 — Garbled header text (education_consultant_posting) — 2026-03-31
+
+**Problem**: On page 7 (0-indexed page 6), the header text "United Nations Children's Fund | Pakistan Country Office" rendered with missing characters: "□nited □ations Children□s □und". Letters like U, N, F, and the curly apostrophe were replaced with `.notdef` glyphs.
+
+**Analysis**: The header contains a VML textbox (`mc:AlternateContent` → VML shape) with the title text in Calibri Bold at color #00B0F0. The text is rendered via `render_header_footer_textboxes()` in `pdf/header_footer.rs`, which correctly iterates textbox paragraphs and their runs.
+
+However, the font subsetting pipeline in `src/pdf/fonts.rs` (`collect_all_runs()`) collects characters from all runs to determine which glyphs to include in each subsetted font. For **body** paragraphs, it used `para_runs_with_textboxes(para)` which recursively includes runs from nested textbox paragraphs. But for **header/footer** paragraphs, it only used `p.runs.iter()` — skipping textbox runs entirely.
+
+Characters that appeared *only* in header textboxes (and nowhere else in the document) were never added to the font's `char_to_gid` mapping. During PDF rendering, `encode_as_gids()` mapped these unknown characters to glyph ID 0 (`.notdef`), producing garbled output.
+
+The same issue affected **footnote** paragraphs, which also used `p.runs.iter()` instead of `para_runs_with_textboxes(p)`.
+
+**Fix**: In `src/pdf/fonts.rs`, changed both header/footer and footnote run collection to use `para_runs_with_textboxes(p)` instead of `p.runs.iter()`, ensuring all textbox-nested runs are included in font character collection.
+
+**Result**: education_consultant_posting Jaccard +0.3pp (15.7% → 16.0%), SSIM +0.9pp (34.5% → 35.4%), text boundary +23.4pp (43.9% → 67.3%). Header text now renders correctly. No regressions on any fixture.
+
+---
+
 Future priorities to address these:
 - Implement Word-compatible twip rounding in the spacing pipeline
 - Improve OS/2 font metric handling for less common fonts
