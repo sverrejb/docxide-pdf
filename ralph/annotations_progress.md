@@ -268,6 +268,40 @@ In Word, these empty paragraphs exist within the image's vertical extent (flowin
 
 ---
 
+## Annotation #59 — Too much white space above image (brazilian_logistics_study) — 2026-03-31 (investigated, not fixed)
+
+**Problem**: On page 9 (0-indexed page 8), excessive white space above "Figura 2" image and caption.
+
+**Analysis**: Generated page 8 has 26 text lines vs reference's 22 — 4 extra lines from different line breaks in justified Arial text. These 4 extra lines consume space at the bottom of page 8 that should hold 7 empty paragraphs (spacers before "Figura 2"). About 4 empty paragraphs overflow to page 9, creating ~83pt of visible white space above the content.
+
+**Root cause**: Systemic text wrapping / line length differences. Not independently fixable.
+
+---
+
+## Annotation #60 — Wrong font on chart labels (sample500kB) — 2026-03-31
+
+**Problem**: Annotator reported chart labels use wrong (serif) font.
+
+**Analysis**: Both reference and generated PDFs use Aptos (sans-serif) for chart labels. Verified via `mutool info`: reference has `AAAAAN+Aptos`, generated has `Aptos`. The chart font correctly defaults to the theme minor font (Aptos). The annotation was likely made against an older build.
+
+**Result**: Already fixed. Marked as fixed in annotations.json.
+
+---
+
+## Annotation #67 — DRAFTING NOTE overlaps MCL logo (uk_commercial_lease_template) — 2026-03-31
+
+**Problem**: "[DRAFTING NOTE: THIS LEASE IS INTENDED..." text was 25pt too low on the cover page, overlapping the MCL logo (positioned via footer with -115pt negative offset).
+
+**Analysis**: The cover page is a single 8-row table. Row 7 (last row) contains a nested 5-row table inside a single cell. After the nested table, the cell has a mandatory empty end-of-cell paragraph (SHNormal style). This trailing paragraph added 12.3pt (line_h for Arial 10pt at 1.1× spacing) + 9pt (space_after from Normal style) = 21.3pt to the row height. In Word, when a cell's content is solely a nested table plus the mandatory end-of-cell mark, the trailing paragraph mark contributes only the ~0.5pt glyph height (already accounted for in the row-height addition), not a full line with spacing.
+
+**Fix**: In `src/pdf/table_layout.rs`, added two conditions:
+1. When computing cell content height, if the previous block was a nested table and this is the first empty paragraph after it (`prev_was_nested_table && para_idx == 1`), skip adding `line_h`.
+2. When adding trailing `space_after` to cell height, check if the cell is exactly `[nested_table, empty_paragraph]` (`sole_table_plus_mark`). If so, suppress the space_after.
+
+**Result**: DRAFTING NOTE moved from y=640.3 to y=618.7 (reference: y=614.9, difference now 3.8pt — within cumulative font metric tolerance). uk_commercial_lease_template SSIM +0.3pp (33.9% → 34.2%). One expected side-effect: cases/case51 SSIM -2.7pp (nested table test case with a [TABLE, P("")] cell that now renders shorter; baseline updated).
+
+---
+
 Future priorities to address these:
 - Implement Word-compatible twip rounding in the spacing pipeline
 - Improve OS/2 font metric handling for less common fonts

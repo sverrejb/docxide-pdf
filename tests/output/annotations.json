@@ -1,5 +1,5 @@
 {
-  "next_id": 84,
+  "next_id": 86,
   "annotations": [
     {
       "id": 5,
@@ -92,16 +92,6 @@
       "fixed": true
     },
     {
-      "id": 54,
-      "case": "scraped/go_math_grade4_guide",
-      "page": 19,
-      "source": "Generated",
-      "x_pt": 362.79602,
-      "y_pt": 236.97723,
-      "note": "The table cells are wrong here. Compare to reference. There should be two cells, one under \"Chapter 10 rule of thumb\" and one under \"Rationale\"",
-      "fixed": true
-    },
-    {
       "id": 55,
       "case": "scraped/japanese_interlibrary_loan",
       "page": 0,
@@ -109,16 +99,6 @@
       "x_pt": 36.071957,
       "y_pt": 279.16833,
       "note": "This text in the first column, top and middle cell should be vertically centered. The third cell looks correct.",
-      "fixed": true
-    },
-    {
-      "id": 58,
-      "case": "scraped/brazilian_logistics_study",
-      "page": 8,
-      "source": "Generated",
-      "x_pt": 225.96582,
-      "y_pt": 445.6176,
-      "note": "Too much empty space between image and caption (Fonte: ALARCOM, (2019)).",
       "fixed": true
     },
     {
@@ -139,7 +119,7 @@
       "x_pt": 341.69458,
       "y_pt": 233.18866,
       "note": "Wrong font used on labels. Should be something without serifs. Compare to reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 66,
@@ -159,7 +139,7 @@
       "x_pt": 73.460205,
       "y_pt": 200.68597,
       "note": "Text [DRAFTING NOTE: ... needs to be higher up, as it overlaps the red logo below.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 72,
@@ -249,6 +229,26 @@
       "x_pt": 39.477592,
       "y_pt": 361.21497,
       "note": "Table heading overlaps thumbs up icon",
+      "fixed": false
+    },
+    {
+      "id": 84,
+      "case": "scraped/brazilian_logistics_study",
+      "page": 8,
+      "source": "Generated",
+      "x_pt": 130.12518,
+      "y_pt": 328.59778,
+      "note": "Fonte: ALARCOM (2019) overlaps the image \"Figura 3\"",
+      "fixed": false
+    },
+    {
+      "id": 85,
+      "case": "scraped/japanese_interlibrary_loan",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 39.7331,
+      "y_pt": 232.83224,
+      "note": "Two empty cells here that should be merged with the one above",
       "fixed": false
     }
   ]

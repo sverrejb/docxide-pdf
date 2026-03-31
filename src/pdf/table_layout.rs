@@ -226,6 +226,7 @@ pub(super) fn compute_row_layouts(
                     let mut items: Vec<CellContentItem> = Vec::new();
                     let mut prev_space_after = 0.0f32;
                     let mut para_idx = 0usize;
+                    let mut prev_was_nested_table = false;
 
                     for block in &cell.content {
                         match block {
@@ -292,6 +293,11 @@ pub(super) fn compute_row_layouts(
                                 } else {
                                     if para.paragraph_mark_vanish {
                                         // vanished paragraph mark: zero height
+                                    } else if prev_was_nested_table && para_idx == 1 {
+                                        // Cell = [nested table, empty ¶]: the mark
+                                        // glyph height is covered by the +0.5pt
+                                        // row addition; space_after is suppressed
+                                        // in the trailing-space block below.
                                     } else if para.content_height > 0.0 {
                                         total_h += para.content_height;
                                     } else {
@@ -378,6 +384,7 @@ pub(super) fn compute_row_layouts(
                                 }));
 
                                 prev_space_after = para.space_after;
+                                prev_was_nested_table = false;
                                 para_idx += 1;
                             }
                             Block::Table(nested_table) => {
@@ -389,12 +396,23 @@ pub(super) fn compute_row_layouts(
                                 total_h += nested_h;
                                 items.push(CellContentItem::NestedTable { height: nested_h });
                                 prev_space_after = 0.0;
+                                prev_was_nested_table = true;
                                 para_idx += 1;
                             }
                         }
                     }
 
-                    total_h += prev_space_after;
+                    // When a cell contains only a nested table plus the
+                    // mandatory end-of-cell paragraph mark (empty, no text),
+                    // Word does not count the trailing paragraph's space_after
+                    // toward the row height — the mark glyph height and
+                    // line_h are already suppressed above via prev_was_nested_table.
+                    let sole_table_plus_mark = items.len() == 2
+                        && matches!(items.first(), Some(CellContentItem::NestedTable { .. }))
+                        && matches!(items.last(), Some(CellContentItem::Paragraph(p)) if p.lines.is_empty() && p.image_name.is_none() && p.floating_images.is_empty());
+                    if !sole_table_plus_mark {
+                        total_h += prev_space_after;
+                    }
                     if is_rotated {
                         total_h = ecm.top + ecm.bottom + max_rotated_line_w;
                     }

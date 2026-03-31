@@ -252,8 +252,8 @@
     "ssim": 0.8054
   },
   "cases/case51": {
-    "jaccard": 0.1119,
-    "ssim": 0.3012
+    "jaccard": 0.1049,
+    "ssim": 0.2743
   },
   "cases/case52": {
     "jaccard": 0.3987,
@@ -626,8 +626,8 @@
     "convert_ms": 2.4
   },
   "scraped/uk_commercial_le..": {
-    "jaccard": 0.1916,
-    "ssim": 0.3391,
+    "jaccard": 0.1918,
+    "ssim": 0.3418,
     "text_boundary": 0.136,
     "convert_ms": 326.3
   },
