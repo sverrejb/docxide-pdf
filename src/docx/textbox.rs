@@ -106,7 +106,7 @@ pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
             .map(parse_alignment)
             .or_else(|| para_style.and_then(|s| s.alignment))
             .unwrap_or(Alignment::Left);
-        let (sp_before, sp_after, ls) = parse_paragraph_spacing(ppr, para_style);
+        let (sp_before, sp_after, ls) = parse_paragraph_spacing(ppr, para_style, Some(styles.defaults.font_size));
         let space_before = sp_before.unwrap_or(0.0);
         let space_after = sp_after.unwrap_or(styles.defaults.space_after);
         let line_spacing = Some(ls.unwrap_or(styles.defaults.line_spacing));

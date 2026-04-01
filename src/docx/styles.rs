@@ -118,6 +118,8 @@ pub(super) struct ParagraphStyle {
     pub(super) char_spacing: Option<f32>,
     pub(super) space_before: Option<f32>,
     pub(super) space_after: Option<f32>,
+    pub(super) space_before_autospacing: Option<bool>,
+    pub(super) space_after_autospacing: Option<bool>,
     pub(super) alignment: Option<Alignment>,
     pub(super) contextual_spacing: bool,
     pub(super) keep_next: bool,
@@ -574,6 +576,10 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                 let spacing = ppr.and_then(|n| wml(n, "spacing"));
                 let space_before = spacing.and_then(|n| twips_attr(n, "before"));
                 let space_after = spacing.and_then(|n| twips_attr(n, "after"));
+                let space_before_autospacing = spacing
+                    .and_then(|n| n.attribute((WML_NS, "beforeAutospacing")).map(|v| v == "1" || v == "true"));
+                let space_after_autospacing = spacing
+                    .and_then(|n| n.attribute((WML_NS, "afterAutospacing")).map(|v| v == "1" || v == "true"));
                 let borders = ppr.map(parse_paragraph_borders).unwrap_or_default();
 
                 let rpr = wml(style_node, "rPr");
@@ -670,6 +676,8 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                         char_spacing,
                         space_before,
                         space_after,
+                        space_before_autospacing,
+                        space_after_autospacing,
                         alignment,
                         contextual_spacing,
                         keep_next,
@@ -829,6 +837,8 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     alignment,
                     space_before,
                     space_after,
+                    space_before_autospacing,
+                    space_after_autospacing,
                     line_spacing,
                     indent_left,
                     indent_right,
@@ -881,6 +891,8 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             s.alignment = s.alignment.or(inh.alignment);
             s.space_before = s.space_before.or(inh.space_before);
             s.space_after = s.space_after.or(inh.space_after);
+            s.space_before_autospacing = s.space_before_autospacing.or(inh.space_before_autospacing);
+            s.space_after_autospacing = s.space_after_autospacing.or(inh.space_after_autospacing);
             s.line_spacing = s.line_spacing.or(inh.line_spacing);
             s.indent_left = s.indent_left.or(inh.indent_left);
             s.indent_right = s.indent_right.or(inh.indent_right);

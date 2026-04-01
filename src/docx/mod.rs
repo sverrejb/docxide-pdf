@@ -311,14 +311,49 @@ pub(super) fn resolve_theme_color_key(scheme_name: &str) -> &str {
 pub(in crate::docx) fn parse_paragraph_spacing(
     ppr: Option<roxmltree::Node>,
     para_style: Option<&ParagraphStyle>,
+    autospacing_font_size: Option<f32>,
 ) -> (Option<f32>, Option<f32>, Option<LineSpacing>) {
     let inline_spacing = ppr.and_then(|ppr| wml(ppr, "spacing"));
-    let space_before = inline_spacing
-        .and_then(|n| twips_attr(n, "before"))
-        .or_else(|| para_style.and_then(|s| s.space_before));
-    let space_after = inline_spacing
-        .and_then(|n| twips_attr(n, "after"))
-        .or_else(|| para_style.and_then(|s| s.space_after));
+
+    let (space_before, space_after) = if let Some(fs) = autospacing_font_size {
+        // Auto-spacing (beforeAutospacing/afterAutospacing="1"): when set, Word
+        // uses the font's em-size (≈ font_size) as spacing. Inline "0" disables.
+        let before_auto = inline_spacing
+            .and_then(|n| n.attribute((WML_NS, "beforeAutospacing")).map(|v| v == "1" || v == "true"))
+            .or_else(|| para_style.and_then(|s| s.space_before_autospacing))
+            .unwrap_or(false);
+        let after_auto = inline_spacing
+            .and_then(|n| n.attribute((WML_NS, "afterAutospacing")).map(|v| v == "1" || v == "true"))
+            .or_else(|| para_style.and_then(|s| s.space_after_autospacing))
+            .unwrap_or(false);
+
+        let effective_fs = para_style.and_then(|s| s.font_size).unwrap_or(fs);
+
+        let sb = if before_auto {
+            Some(effective_fs)
+        } else {
+            inline_spacing
+                .and_then(|n| twips_attr(n, "before"))
+                .or_else(|| para_style.and_then(|s| s.space_before))
+        };
+        let sa = if after_auto {
+            Some(effective_fs)
+        } else {
+            inline_spacing
+                .and_then(|n| twips_attr(n, "after"))
+                .or_else(|| para_style.and_then(|s| s.space_after))
+        };
+        (sb, sa)
+    } else {
+        let sb = inline_spacing
+            .and_then(|n| twips_attr(n, "before"))
+            .or_else(|| para_style.and_then(|s| s.space_before));
+        let sa = inline_spacing
+            .and_then(|n| twips_attr(n, "after"))
+            .or_else(|| para_style.and_then(|s| s.space_after));
+        (sb, sa)
+    };
+
     let line_spacing = inline_spacing
         .and_then(|n| {
             n.attribute((WML_NS, "line"))
@@ -560,7 +595,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                 } else {
                     para_style.map(|s| s.borders.clone()).unwrap_or_default()
                 };
-                let (sp_before, sp_after, line_spacing) = parse_paragraph_spacing(ppr, para_style);
+                let (sp_before, sp_after, line_spacing) = parse_paragraph_spacing(ppr, para_style, None);
                 let space_before = sp_before.unwrap_or(0.0);
                 let space_after = sp_after.unwrap_or(styles.defaults.space_after);
 

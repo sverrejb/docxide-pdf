@@ -45,6 +45,7 @@ pub(super) fn render_single_textbox(
         VRelativeFrom::Paragraph => slot_top - tb.v_offset_pt,
     };
 
+
     // For AutoFit::Shape, compute height from content instead of using tb.height_pt
     let tb_height = if matches!(tb.auto_fit, crate::model::AutoFit::Shape) {
         let tmp_w = if tb.no_text_wrap {
@@ -276,11 +277,18 @@ pub(super) fn render_textbox_paragraphs(
     clip_bottom: Option<f32>,
 ) {
     let mut cursor_y = start_y;
+    let mut prev_space_after = 0.0f32;
     let empty_imgs: HashMap<usize, String> = HashMap::new();
-    for tp in paragraphs {
+    for (tp_idx, tp) in paragraphs.iter().enumerate() {
+        // Collapse adjacent spacing: use max(prev_after, current_before) like body text
+        let inter_gap = if tp_idx == 0 {
+            tp.space_before
+        } else {
+            prev_space_after.max(tp.space_before)
+        };
         // Stop rendering when content overflows the textbox bounds
         if let Some(bottom) = clip_bottom {
-            if cursor_y - tp.space_before < bottom {
+            if cursor_y - inter_gap < bottom {
                 break;
             }
         }
@@ -313,12 +321,13 @@ pub(super) fn render_textbox_paragraphs(
         if tb_lines.is_empty() {
             let (fs, lhr, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
             let lh = resolve_line_h(tp_ls, fs, lhr);
-            cursor_y -= tp.space_before + lh + tp.space_after;
+            cursor_y -= inter_gap + lh;
+            prev_space_after = tp.space_after;
             continue;
         }
         let (tb_fs, tb_lhr, tb_ar) = tallest_run_metrics(&tp.runs, ctx.fonts);
         let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_lhr);
-        let tb_baseline = cursor_y - tp.space_before - tb_fs * tb_ar.unwrap_or(0.75) - y_offset;
+        let tb_baseline = cursor_y - inter_gap - tb_fs * tb_ar.unwrap_or(0.75) - y_offset;
         let tp_text_x = content_x + tp.indent_left + x_offset;
         if let Some(c) = force_color {
             fill_rgb(content, c);
@@ -338,6 +347,7 @@ pub(super) fn render_textbox_paragraphs(
             tb_baseline, tb_line_h, tb_lines.len(), 0,
             links, 0.0, ctx.fonts, None,
         );
-        cursor_y -= tp.space_before + (tb_lines.len() as f32) * tb_line_h + tp.space_after;
+        cursor_y -= inter_gap + (tb_lines.len() as f32) * tb_line_h;
+        prev_space_after = tp.space_after;
     }
 }

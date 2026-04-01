@@ -70,7 +70,7 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
                 let para_style = styles.paragraph_styles.get(para_style_id);
 
                 let alignment = resolve_alignment(ppr, para_style);
-                let (sp_before, sp_after, line_spacing) = parse_paragraph_spacing(ppr, para_style);
+                let (sp_before, sp_after, line_spacing) = parse_paragraph_spacing(ppr, para_style, None);
                 let parsed = parse_runs(node, styles, theme, rels, zip, &numbering);
 
                 let (mut indent_left, mut indent_right, mut indent_hanging, mut indent_first_line) =
@@ -154,7 +154,7 @@ pub(super) fn parse_footnotes<R: Read + std::io::Seek>(
 
             let alignment = resolve_alignment(ppr, para_style);
             let parsed = parse_runs(p, styles, theme, &empty_rels, zip, &numbering);
-            let (sp_before, sp_after, ls) = parse_paragraph_spacing(ppr, para_style);
+            let (sp_before, sp_after, ls) = parse_paragraph_spacing(ppr, para_style, None);
 
             paragraphs.push(Paragraph {
                 runs: parsed.runs,

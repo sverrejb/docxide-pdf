@@ -1,16 +1,6 @@
 {
-  "next_id": 92,
+  "next_id": 93,
   "annotations": [
-    {
-      "id": 5,
-      "case": "scraped/croatian_grant_guidelines",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 156.05186,
-      "y_pt": 767.3191,
-      "note": "TOC starts a bit too high up on the page compared to reference.",
-      "fixed": false
-    },
     {
       "id": 8,
       "case": "scraped/east_asia_conference_form",
@@ -29,7 +19,7 @@
       "x_pt": 107.463844,
       "y_pt": 52.710266,
       "note": "I don't see this line in the reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 30,
@@ -40,16 +30,6 @@
       "y_pt": 474.28906,
       "note": "We render a space here after the 4.1.5\" that is not present in the reference pdf",
       "fixed": false
-    },
-    {
-      "id": 47,
-      "case": "scraped/croatian_grant_guidelines",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 294.41983,
-      "y_pt": 733.9307,
-      "note": "Y-shift of whole page, starting with the flag an logo at the top, but also header, text and rest of the page. Measure against reference and see if it is the same offset for the whole page.",
-      "fixed": true
     },
     {
       "id": 48,
@@ -132,56 +112,6 @@
       "fixed": true
     },
     {
-      "id": 85,
-      "case": "scraped/japanese_interlibrary_loan",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 39.7331,
-      "y_pt": 232.83224,
-      "note": "Two empty cells here that should be merged with the one above",
-      "fixed": true
-    },
-    {
-      "id": 86,
-      "case": "scraped/uk_commercial_lease_template",
-      "page": 4,
-      "source": "Generated",
-      "x_pt": 350.3871,
-      "y_pt": 275.9408,
-      "note": "these cells should be split joined. See Reference. (LR4. Property)",
-      "fixed": true
-    },
-    {
-      "id": 87,
-      "case": "scraped/uk_commercial_lease_template",
-      "page": 14,
-      "source": "Generated",
-      "x_pt": 238.4957,
-      "y_pt": 619.84717,
-      "note": "We are not highlighting the footnote numbers. Compare to reference.",
-      "fixed": true
-    },
-    {
-      "id": 88,
-      "case": "scraped/uk_commercial_lease_template",
-      "page": 14,
-      "source": "Generated",
-      "x_pt": 178.60835,
-      "y_pt": 262.6701,
-      "note": "\"Risk Period\" body text overlaps footnote text.",
-      "fixed": true
-    },
-    {
-      "id": 89,
-      "case": "scraped/uk_commercial_lease_template",
-      "page": 43,
-      "source": "Generated",
-      "x_pt": 89.74833,
-      "y_pt": 722.8735,
-      "note": "\"Part 1:\"  and \"Tenant's Rights\" overlaps-",
-      "fixed": true
-    },
-    {
       "id": 90,
       "case": "scraped/croatian_grant_guidelines",
       "page": 17,
@@ -192,14 +122,14 @@
       "fixed": true
     },
     {
-      "id": 91,
+      "id": 92,
       "case": "scraped/brazilian_logistics_study",
       "page": 9,
       "source": "Generated",
-      "x_pt": 90.18349,
-      "y_pt": 346.76318,
-      "note": "Bullet points should be indented. Also, bullets and text overlaps here. Compare with reference.",
-      "fixed": true
+      "x_pt": 104.19403,
+      "y_pt": 413.99887,
+      "note": "We are missing the \"Fonte: ALARCOM (2019)\"-caption here.",
+      "fixed": false
     }
   ]
 }
