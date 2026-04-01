@@ -1,5 +1,5 @@
 {
-  "next_id": 91,
+  "next_id": 92,
   "annotations": [
     {
       "id": 5,
@@ -129,16 +129,6 @@
       "x_pt": 39.477592,
       "y_pt": 361.21497,
       "note": "Table heading overlaps thumbs up icon",
-      "fixed": false
-    },
-    {
-      "id": 84,
-      "case": "scraped/brazilian_logistics_study",
-      "page": 8,
-      "source": "Generated",
-      "x_pt": 130.12518,
-      "y_pt": 328.59778,
-      "note": "Fonte: ALARCOM (2019) overlaps the image \"Figura 3\"",
       "fixed": true
     },
     {
@@ -149,7 +139,7 @@
       "x_pt": 39.7331,
       "y_pt": 232.83224,
       "note": "Two empty cells here that should be merged with the one above",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 86,
@@ -159,7 +149,7 @@
       "x_pt": 350.3871,
       "y_pt": 275.9408,
       "note": "these cells should be split joined. See Reference. (LR4. Property)",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 87,
@@ -199,6 +189,16 @@
       "x_pt": 154.40811,
       "y_pt": 92.55475,
       "note": "Body text overlaps footer here.",
+      "fixed": false
+    },
+    {
+      "id": 91,
+      "case": "scraped/brazilian_logistics_study",
+      "page": 9,
+      "source": "Generated",
+      "x_pt": 90.18349,
+      "y_pt": 346.76318,
+      "note": "Bullet points should be indented. Also, bullets and text overlaps here. Compare with reference.",
       "fixed": false
     }
   ]

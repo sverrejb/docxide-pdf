@@ -189,6 +189,25 @@ The Area chart uses a different convention — data points at edges to fill the 
 
 ---
 
+## Annotation #82 — Too much space below header (czech_municipal_grant_form) — 2026-04-01 (investigated, not fixed)
+
+**Problem**: Annotator reported "Too much space below 'header' with image and text and above numbered list" on page 2. The visual impression is a gap between the header (coat of arms + text) and the body content.
+
+**Analysis**: Thorough investigation revealed this is a pagination issue, not a spacing issue. The body content gap on page 2 is actually similar between generated (21pt) and reference (26pt). The visual difference comes from different CONTENT on page 2: the reference shows 5 lines (parent item + 3 sub-items + continuation) between header and ROZPOČET, while the generated shows only 3 lines (sub-items 1-3). The parent "1) Osoba oprávněná..." paragraph fits on page 1 in the generated but page 2 in the reference.
+
+Page 1 has 7+ single-row form tables, each separated by empty paragraphs. Each table row is consistently ~2.5pt shorter in our rendering vs the reference, accumulating ~18pt over the page. This allows more content to fit on page 1, pushing less to page 2.
+
+**Header height investigation**: Header computes to 48.70pt (coat of arms wrapSquare float), with text height of 39.60pt. The reference effective header height is ~44pt. Attempted fixes:
+1. Accounting for negative image offset (-2pt) → reduced to 46.70pt, but SSIM dropped -3.9pp
+2. Using text-only height (39.60pt) → SSIM dropped -8.8pp
+Both made things worse because they allow even MORE content on page 1, compounding the table height difference.
+
+**Table height investigation**: Tables use custom styles based on "TableNormal" with cell margins top=0, bottom=0, confirmed by the OOXML spec. Row height = max(cell_h) + 0.5pt (mark). For Calibri 11pt: 13.43 + 0.5 = 13.93pt per row. But the reference shows ~16.6pt per row (2.67pt extra). The source of this extra padding is unclear — all explicit margins, borders, and spacing are 0.
+
+**Root cause**: Systemic table row height difference (~2.5pt per row) accumulates over 7+ tables to cause a ~18pt pagination shift on page 1. The header height adds ~7pt initial offset (in the wrong direction), but reducing it makes things worse. Not independently fixable without addressing the broader table row height calculation.
+
+---
+
 ## Annotation #48 — Floating table breakpoint (croatian_grant_guidelines) — 2026-03-30 (investigated, not fixed)
 
 **Problem**: The green "Važno!" floating table on page 4 splits one paragraph too early. Reference fits 8 items (paragraphs 0-7) on the page, but we fit only 7 (0-6).
@@ -422,9 +441,58 @@ The condition changed from `pb.slot_top <= fz.top_y` to `pb.slot_top <= fz.top_y
 
 ---
 
+## Annotation #82 — Too much space below header (czech_municipal_grant_form) — 2026-04-01 (investigated, deferred)
+
+**Problem**: On page 2 (0-indexed page 1), ~13pt excess space between the header (coat of arms logo + "OBEC TUHAŇ" + address + green line) and body content. Body starts at 84.1pt from page top; reference starts at ~71pt (margin_top = 70.85pt).
+
+**Analysis**: The header has a narrow `wrapSquare` floating image (45.4×48.7pt coat of arms, ~10% of text width) and 3 text paragraphs. In `compute_header_height()`:
+- Para 0 (float anchor, no text): contributes 13.8pt line_h (TNR 12pt from docDefaults)
+- Para 1 ("OBEC TUHAŇ"): 12.9pt (Cambria 11pt)
+- Para 2 ("Tuhaň čp. 91, 277 41 Kly"): 12.9pt
+- text_h = 39.6pt (but with para 0 at 0pt it would be 25.8pt)
+- float_bottom_h = 48.7pt (image bottom from paragraph top, with negative offset clamped to 0)
+- header_height = max(39.6, 48.7) = 48.7pt → body at 35.4 + 48.7 = 84.1pt from top
+
+In Word, body starts at margin_top (70.85pt). The float extends below margin_top (to 82.1pt from top) but Word doesn't push body content down for it.
+
+**Fixes attempted**:
+1. **Full fix** (float-only para=0 + offset fix + cap float at available space): body at 70.85pt ✓ but SSIM -9.2pp from major page break change. Reverted.
+2. **Conservative fix** (float-only para=0 + offset fix, no cap): body at 82.1pt, 2pt improvement. SSIM -3.9pp, Jaccard +1.1pp. Still regresses.
+
+**Root cause**: The float image (48.7pt) exceeds available header space (margin_top - header_margin = 35.45pt) by 13.25pt. Word allows header floats to visually extend into the body area without displacing it. Our code pushes body content down by the full float extent.
+
+**Why deferred**: Both fixes cause SSIM regressions (the 2pt conservative fix shifts page breaks enough to cause -3.9pp). Fixing this properly requires either accepting the regression or implementing float-zone absorption in header height computation (where text paragraphs beside the float don't add height beyond the float zone).
+
+---
+
+## Annotation #85 — vMerge continuation cells visual appearance (japanese_interlibrary_loan) — 2026-04-01 (already fixed)
+
+**Problem**: "Two empty cells here that should be merged with the one above" at (39.73, 232.83) on page 1.
+
+**Analysis**: The first column has vMerge groups (`申込機関` spanning rows 0-1, `申込者` spanning rows 2-5). The PDF content stream confirmed: no internal horizontal borders within the merged cell. Pixel values at row boundaries within the first column are pure white (255,255,255). The "empty cells" visual impression comes from the adjacent second column's row boundaries creating T-junctions at the shared edge.
+
+**Result**: Already fixed (likely by annotation #72 vMerge fix). The merged cell renders correctly.
+
+---
+
+## Annotation #86 — Nil cell borders not overriding table style (uk_commercial_lease_template) — 2026-04-01
+
+**Problem**: On page 5 (0-indexed page 4), the LR4 "Property" section shows a visible horizontal border between "In the case of a conflict..." and "The property described as..." paragraphs, but in the reference these form one continuous cell.
+
+**Analysis**: Both rows explicitly set their shared borders to `nil` via `<w:bottom w:val="nil"/>` and `<w:top w:val="nil"/>` in `<w:tcBorders>`. However, the table has `tblBorders` with `insideH` (inside horizontal border) defined. In `border_or_fallback()`, when a cell border had `val="nil"`, `parse_cell_border` returned `CellBorder { present: false, is_override: false }` — identical to a MISSING border element. Since `present` was false and `is_override` was false, the fallback (the table's `insideH` border) was used, overriding the explicit nil.
+
+**Fix**: Two changes:
+1. In `parse_cell_border()` (`src/docx/mod.rs`): when `val == "nil"` or `val == "none"`, set `is_override: true` on the returned `CellBorder` to distinguish "explicitly nil" from "not specified".
+2. In `border_or_fallback()` (`src/docx/tables.rs`): check `inline.is_override` in addition to `inline.present`. When `is_override` is true, use the inline border (which has `present: false`) instead of the table style fallback.
+
+**Result**: uk_commercial_lease_template SSIM -0.1pp (noise). education_consultant_posting Jaccard +0.1pp (improved). The nil border between the two paragraphs is now correctly suppressed, matching the reference.
+
+---
+
 Future priorities to address these:
 - Implement Word-compatible twip rounding in the spacing pipeline
 - Improve OS/2 font metric handling for less common fonts
 - Better paragraph mark height calculation for empty paragraphs
 - Investigate Word's exact line pitch / document grid behavior
 - Rethink paragraph-relative textbox positioning
+- Header float zone absorption for narrow wrapping images (annotation #82)

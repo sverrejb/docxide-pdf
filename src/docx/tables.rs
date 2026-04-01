@@ -27,7 +27,7 @@ fn margin_twips(mar: roxmltree::Node, primary: &str, fallback: &str) -> Option<f
 }
 
 fn border_or_fallback(inline: CellBorder, fallback: CellBorder) -> CellBorder {
-    if inline.present {
+    if inline.present || inline.is_override {
         CellBorder {
             is_override: true,
             ..inline

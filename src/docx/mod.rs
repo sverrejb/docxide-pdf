@@ -206,7 +206,10 @@ pub(super) fn parse_cell_border(parent: roxmltree::Node, name: &str) -> crate::m
     };
     let val = n.attribute((WML_NS, "val")).unwrap_or("none");
     if val == "nil" || val == "none" {
-        return crate::model::CellBorder::default();
+        return crate::model::CellBorder {
+            is_override: true,
+            ..crate::model::CellBorder::default()
+        };
     }
     let width = n
         .attribute((WML_NS, "sz"))
