@@ -129,7 +129,7 @@
       "x_pt": 104.19403,
       "y_pt": 413.99887,
       "note": "We are missing the \"Fonte: ALARCOM (2019)\"-caption here.",
-      "fixed": false
+      "fixed": true
     }
   ]
 }

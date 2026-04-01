@@ -368,9 +368,9 @@
     "convert_ms": 12.0
   },
   "scraped/brazilian_logist..": {
-    "jaccard": 0.1693,
-    "ssim": 0.2934,
-    "text_boundary": 0.1832,
+    "jaccard": 0.1664,
+    "ssim": 0.2944,
+    "text_boundary": 0.1544,
     "convert_ms": 744.0
   },
   "scraped/bush_fires_act_c..": {

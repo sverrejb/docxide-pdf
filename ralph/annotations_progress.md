@@ -397,6 +397,29 @@ The float zone absorption logic in `pdf/mod.rs` checked `is_text_empty(&p.runs)`
 
 ---
 
+## Annotation #25 — Textbox overflow text visible (air_pollution_permit_form) — 2026-04-01
+
+**Problem**: "Mellékletek / Prílohy:" appeared at y=52.7pt from page bottom in the generated output but not in the reference PDF. The text is near the end of textbox 4 (481×714pt, 29 paragraphs) which extends past the page bottom.
+
+**Analysis**: The document has 3 overlapping page-covering textboxes with `wrapNone`. Textbox 4 (highest z-order) is anchored to paragraph 11 (after 10 empty body paragraphs) with `positionV relativeFrom="paragraph"`. Two issues caused the textbox content to be ~86pt shorter than Word's:
+
+1. **Missing auto-spacing**: The textbox paragraphs use `NormlWeb` style with `beforeAutospacing="1"` / `afterAutospacing="1"`. When these attributes are set, Word uses 1em (= font_size, 12pt for TNR) as spacing instead of the raw 100 twips (5pt). We used 5pt, making each NormlWeb transition ~7pt too compact.
+
+2. **Missing spacing collapse in textboxes**: Body text rendering correctly uses `max(prev_after, current_before)` for inter-paragraph spacing, but textbox rendering summed both (`space_after + space_before`). This double-counted spacing between adjacent paragraphs.
+
+The net effect: shorter textbox content kept "Mellékletek" (paragraph 27 of 29) visible on the page, while in Word the taller content pushed it below the page boundary where it's naturally invisible.
+
+**Fix**: Two changes:
+1. In `parse_paragraph_spacing()`: Added auto-spacing support — when `beforeAutospacing="1"` or `afterAutospacing="1"` is active, use the paragraph style's font_size as spacing. Applied via `autospacing_font_size: Option<f32>` parameter: `Some(font_size)` for textbox paragraphs, `None` for body/header/footer/table contexts.
+
+2. In `textbox_render.rs`: Changed `render_textbox_paragraphs` to collapse adjacent paragraph spacing using `max(prev_space_after, current_space_before)` instead of summing both independently.
+
+Also added `space_before_autospacing` / `space_after_autospacing` fields to `ParagraphStyle` with inheritance through the basedOn chain.
+
+**Result**: "Mellékletek / Prílohy:" no longer appears on the page. Signature line position improved from 78.8pt off-reference to 13.8pt (cumulative font metric difference). SSIM +9.6pp (33.2% → 42.8%), Jaccard -0.3pp (noise). No regressions on any fixture. Committed as aa326b9.
+
+---
+
 ## Annotation #87 — Footnote reference numbers not highlighted (uk_commercial_lease_template) — 2026-04-01
 
 **Problem**: On page 14 (0-indexed), footnote reference numbers in body text and footnote area lacked yellow background highlighting. The reference PDF shows bold superscript numbers with yellow `w:shd` background; our generated output showed plain superscript numbers without any highlight.
@@ -650,3 +673,23 @@ Investigation revealed two bugs causing footnote IDs to not be tracked during pa
 - Page 29: Footnotes 5 & 6 (property ownership proofs)
 
 Each has a separator line and properly formatted text. Jaccard -0.1pp (7.4→7.3, noise), SSIM +0.1pp (18.6→18.7). No regressions on any fixture.
+
+---
+
+## Annotation #92 — Fonte caption rendered above image instead of below (brazilian_logistics_study) — 2026-04-01 (FIXED)
+
+**Problem**: On page 10 (0-indexed page 9), "Fonte: ALARCOM, (2019)." rendered at the top of the Figura 4 screenshot image instead of below it. The annotation noted the caption was "missing" because it appeared overlapping the image's top edge rather than in its expected position below.
+
+**Analysis**: The "Fonte: ALARCOM, (2019)." paragraph contains BOTH the text AND a `wp:anchor` floating image (`wrapSquare bothSides`, 452.3pt wide = 99.7% of text area, 235.3pt tall, paragraph-relative posOffset=2.3pt). In Word, the image renders below the paragraph's anchor position, and since it's too wide for text to flow beside it, the paragraph's text is pushed below the image.
+
+In our code, the self-wrapping section only handled narrow wrapping images (<50% of text width), creating float zones and narrowing text to fit beside them. For wide images (≥50%), no self-wrapping occurred — the paragraph text rendered at the cursor position (overlapping the image), and the float zone was only created AFTER rendering (for subsequent paragraphs). The anchor paragraph's own text was never pushed below its own wide image.
+
+**Fix**: In `src/pdf/mod.rs`, extended the self-wrapping section to handle wide `wrapSquare` images:
+1. When a paragraph has a wrapSquare image ≥50% of text width, compute the float zone and check available wrap space using the same `min_wrap_w` logic as subsequent-paragraph handling.
+2. If not enough space: save the original `pb.slot_top` as `anchor_slot_top_for_fi`, push `pb.slot_top` below the image so text lays out below it.
+3. Use `anchor_slot_top_for_fi` for floating image rendering (behind-doc and foreground) and post-render float zone creation, so the image stays at its original paragraph-relative position.
+4. Skip `float_overflow_h` tracking when text was pushed (to avoid double-counting image height in page-break decisions).
+
+Note: Only `wrapSquare` triggers push-below — `wrapTight`/`wrapThrough` use polygon contours that allow text to flow around the image at varying widths.
+
+**Result**: "Fonte: ALARCOM, (2019)." now correctly appears below the Figura 4 image. SSIM +0.1pp (29.3%→29.4%), Jaccard -0.3pp (16.9%→16.6%, pagination cascading). No regressions on any fixture.
