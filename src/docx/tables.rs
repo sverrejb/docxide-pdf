@@ -110,6 +110,11 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                 .unwrap_or_default()
         });
 
+    let fixed_layout = tbl_pr
+        .and_then(|pr| wml(pr, "tblLayout"))
+        .and_then(|n| n.attribute((WML_NS, "type")))
+        .is_some_and(|v| v == "fixed");
+
     let cell_margins = tbl_pr
         .and_then(|pr| wml(pr, "tblCellMar"))
         .map(|mar| CellMargins {
@@ -542,5 +547,6 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
         cell_margins,
         position: table_position,
         alignment,
+        fixed_layout,
     }
 }

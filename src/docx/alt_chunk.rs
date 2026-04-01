@@ -718,5 +718,6 @@ fn convert_table(
         cell_margins: CellMargins::default(),
         position: None,
         alignment: TableAlignment::default(),
+        fixed_layout: false,
     })
 }

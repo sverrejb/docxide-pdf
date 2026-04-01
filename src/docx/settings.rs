@@ -6,6 +6,7 @@ pub(super) struct DocumentSettings {
     pub even_and_odd_headers: bool,
     pub default_tab_stop: f32,
     pub mirror_margins: bool,
+    pub gutter_at_top: bool,
     pub east_asia_lang: Option<String>,
     pub auto_hyphenation: bool,
     pub default_lang: Option<String>,
@@ -17,6 +18,7 @@ impl Default for DocumentSettings {
             even_and_odd_headers: false,
             default_tab_stop: 36.0, // 0.5 inches = 720 twips = 36pt
             mirror_margins: false,
+            gutter_at_top: false,
             east_asia_lang: None,
             auto_hyphenation: false,
             default_lang: None,
@@ -52,6 +54,7 @@ pub(super) fn parse_settings<R: Read + std::io::Seek>(
         even_and_odd_headers: wml_bool(root, "evenAndOddHeaders").unwrap_or(false),
         default_tab_stop,
         mirror_margins: wml_bool(root, "mirrorMargins").unwrap_or(false),
+        gutter_at_top: wml_bool(root, "gutterAtTop").unwrap_or(false),
         east_asia_lang,
         auto_hyphenation: wml_bool(root, "autoHyphenation").unwrap_or(false),
         default_lang,

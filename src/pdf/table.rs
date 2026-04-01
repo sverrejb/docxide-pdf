@@ -314,7 +314,7 @@ fn render_nested_table(
     cursor_y: &mut f32,
     ctx: &RenderContext,
 ) {
-    let col_widths = auto_fit_columns(table, ctx.fonts);
+    let col_widths = auto_fit_columns(table, ctx.fonts, Some(available_w));
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     let cm = &table.cell_margins;
     let table_total_w: f32 = col_widths.iter().sum();
@@ -929,7 +929,7 @@ pub(super) fn render_table(
     prev_space_after: f32,
     override_pos: Option<super::FloatingTablePos>,
 ) {
-    let col_widths = auto_fit_columns(table, ctx.fonts);
+    let col_widths = auto_fit_columns(table, ctx.fonts, None);
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     let merge_spans = compute_merge_spans(table, &row_layouts);
     let cm = &table.cell_margins;
@@ -1113,7 +1113,7 @@ pub(super) fn render_table(
 }
 
 pub(super) fn compute_hf_table_height(table: &Table, ctx: &RenderContext) -> f32 {
-    let col_widths = auto_fit_columns(table, ctx.fonts);
+    let col_widths = auto_fit_columns(table, ctx.fonts, None);
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     row_layouts.iter().map(|r| r.height).sum()
 }
@@ -1128,7 +1128,7 @@ pub(super) fn render_header_footer_table(
     total_pages: usize,
     styleref_values: &HashMap<String, String>,
 ) {
-    let col_widths = auto_fit_columns(table, ctx.fonts);
+    let col_widths = auto_fit_columns(table, ctx.fonts, None);
     let hf_sub = HfSubstitution {
         page_num,
         total_pages,

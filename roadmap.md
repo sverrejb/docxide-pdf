@@ -37,13 +37,27 @@ Architecture: a `Paginator` takes the document model and produces `Vec<Page>` wh
 
 ## Vertical Drift Investigation (TODO — HIGH IMPACT)
 
-The 8 failing text-only fixtures still show accumulated vertical shift. Investigation of three hypothesized root causes found:
-1. **Image paragraph height rounding** — fixed: removed unconditional `line_pitch` floor for image paragraphs, using exact `content_height` instead.
-2. **Table trailing spacing** — investigated and disproven: `render_table` already accounts for cell margins and borders, so `prev_space_after = 0.0` is approximately correct. Adding the last paragraph's `space_after` double-counts spacing.
-3. **List paragraph spacing** — investigated and disproven for `polish_archery_range_plan`: the fixture uses manual numbering in tables, not `w:numPr` list formatting, and no styles define inter-paragraph spacing.
+**Root cause identified: glyph advance width precision.** Thorough investigation (April 2025) proved the drift is NOT from line height errors — line heights match Word exactly. The drift comes from our character advance widths being ~0.003pt/char wider than Word's at 12pt, causing ~1 fewer character per line on borderline lines. Over 48+ pages, this compounds into 1 extra page.
 
-Remaining avenues to investigate:
-- **Text wrapping around floating tables** — Word wraps body text around `tblpPr` tables, pushing subsequent paragraphs below. We render them as overlapping, causing large visual diffs (case32).
+Evidence:
+- Character-level comparison on case4 (Calibri 12pt): by char 89, our x-position is +0.27pt ahead of Word's (0.003pt/char average drift)
+- Our widths match the font file exactly (verified via fontTools), but Word's widths are systematically narrower
+- Removing hhea lineGap from line_h_ratio was tested and disproven — caused massive regressions with no benefit
+- ceil() rounding of line heights was tested and disproven — too aggressive, destroyed all scores
+
+**Disproven hypotheses:**
+1. Line height formula (hhea lineGap inclusion) — disproven: removing it causes 80+ regressions
+2. Line height rounding (ceil to whole points) — disproven: too aggressive, 90% regressions
+3. Margin calculation error — disproven: our margins match DOCX spec exactly
+4. Image paragraph height rounding — fixed in prior work
+5. Table trailing spacing — disproven in prior work
+
+**Most likely remaining cause:** Word computes advance widths at a device-specific resolution (ppem at some reference DPI) with sub-pixel rounding that slightly narrows each glyph. This is a ~0.05% systematic bias. Fixing requires discovering Word's exact rounding formula.
+
+**Next steps:**
+- Create more diagnostic fixtures with different fonts/sizes to map the width error precisely
+- Test ppem-based rounding at 96 DPI, 72 DPI, and EMU resolution
+- Alternatively: add a small configurable "text width tolerance" that widens the line-break boundary by ~0.5pt to match Word's slightly looser behavior
 
 ## Unimplemented Run Properties
 

@@ -44,7 +44,9 @@ pub(super) fn para_block_height(p: &CellParagraphLayout) -> f32 {
 /// Auto-fit column widths so that the longest non-breakable word in each column
 /// fits within the cell (including padding). Columns that need more space grow;
 /// other columns shrink proportionally. Total width is preserved.
-pub(super) fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>) -> Vec<f32> {
+/// When `available_width` is provided and the table exceeds it, all columns
+/// are scaled down proportionally to fit (matching Word's behavior).
+pub(super) fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>, available_width: Option<f32>) -> Vec<f32> {
     let ncols = table.col_widths.len();
     if ncols == 0 {
         return table.col_widths.clone();
@@ -116,6 +118,16 @@ pub(super) fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>
         let new_total: f32 = widths.iter().sum();
         if (new_total - total).abs() > 0.01 {
             let scale = total / new_total;
+            for w in &mut widths {
+                *w *= scale;
+            }
+        }
+    }
+
+    if let Some(avail) = available_width {
+        let final_total: f32 = widths.iter().sum();
+        if final_total > avail && avail > 0.0 {
+            let scale = avail / final_total;
             for w in &mut widths {
                 *w *= scale;
             }
@@ -435,7 +447,7 @@ pub(super) fn compute_row_layouts(
                                 para_idx += 1;
                             }
                             Block::Table(nested_table) => {
-                                let nested_cw = auto_fit_columns(nested_table, ctx.fonts);
+                                let nested_cw = auto_fit_columns(nested_table, ctx.fonts, None);
                                 let nested_layouts =
                                     compute_row_layouts(nested_table, &nested_cw, ctx, hf_sub);
                                 let nested_h: f32 =

@@ -120,6 +120,7 @@ pub struct Table {
     pub cell_margins: CellMargins,
     pub position: Option<TablePosition>,
     pub alignment: TableAlignment,
+    pub fixed_layout: bool,
 }
 
 pub struct TableRow {

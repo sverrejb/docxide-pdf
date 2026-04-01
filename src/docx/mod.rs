@@ -890,6 +890,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                         &theme,
                         zip,
                         default_line_pitch,
+                        settings.gutter_at_top,
                     );
                     sections.push(Section {
                         properties: props,
@@ -908,7 +909,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
 
     // Final section: body-level sectPr
     let final_props = if let Some(sect_node) = wml(body, "sectPr") {
-        parse_section_properties(sect_node, &rels, &styles, &theme, zip, default_line_pitch)
+        parse_section_properties(sect_node, &rels, &styles, &theme, zip, default_line_pitch, settings.gutter_at_top)
     } else {
         SectionProperties {
             page_width: 612.0,

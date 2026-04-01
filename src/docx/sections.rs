@@ -6,7 +6,7 @@ use crate::model::{ColumnDef, ColumnsConfig, DocGridType, HeaderFooter, SectionB
 use super::headers_footers::parse_header_footer_xml;
 use super::relationships::parse_part_relationships;
 use super::styles::{StylesInfo, ThemeFonts};
-use super::{REL_NS, WML_NS, read_zip_text, twips_attr, twips_to_pts, wml};
+use super::{REL_NS, WML_NS, read_zip_text, twips_attr, twips_to_pts, wml, wml_bool};
 
 pub(super) fn parse_section_properties<R: Read + std::io::Seek>(
     sect_node: roxmltree::Node,
@@ -15,6 +15,7 @@ pub(super) fn parse_section_properties<R: Read + std::io::Seek>(
     theme: &ThemeFonts,
     zip: &mut zip::ZipArchive<R>,
     default_line_pitch: f32,
+    gutter_at_top: bool,
 ) -> SectionProperties {
     let pg_sz = wml(sect_node, "pgSz");
     let pg_mar = wml(sect_node, "pgMar");
@@ -22,12 +23,23 @@ pub(super) fn parse_section_properties<R: Read + std::io::Seek>(
 
     let page_width = pg_sz.and_then(|n| twips_attr(n, "w")).unwrap_or(612.0);
     let page_height = pg_sz.and_then(|n| twips_attr(n, "h")).unwrap_or(792.0);
-    let margin_top = pg_mar.and_then(|n| twips_attr(n, "top")).unwrap_or(72.0);
+    let mut margin_top = pg_mar.and_then(|n| twips_attr(n, "top")).unwrap_or(72.0);
     let margin_bottom = pg_mar.and_then(|n| twips_attr(n, "bottom")).unwrap_or(72.0);
-    let margin_left = pg_mar.and_then(|n| twips_attr(n, "left")).unwrap_or(72.0);
-    let margin_right = pg_mar.and_then(|n| twips_attr(n, "right")).unwrap_or(72.0);
+    let mut margin_left = pg_mar.and_then(|n| twips_attr(n, "left")).unwrap_or(72.0);
+    let mut margin_right = pg_mar.and_then(|n| twips_attr(n, "right")).unwrap_or(72.0);
     let header_margin = pg_mar.and_then(|n| twips_attr(n, "header")).unwrap_or(36.0);
     let footer_margin = pg_mar.and_then(|n| twips_attr(n, "footer")).unwrap_or(36.0);
+
+    let gutter = pg_mar.and_then(|n| twips_attr(n, "gutter")).unwrap_or(0.0);
+    if gutter > 0.0 {
+        if gutter_at_top {
+            margin_top += gutter;
+        } else if wml_bool(sect_node, "rtlGutter").unwrap_or(false) {
+            margin_right += gutter;
+        } else {
+            margin_left += gutter;
+        }
+    }
     let line_pitch = doc_grid
         .and_then(|n| twips_attr(n, "linePitch"))
         .unwrap_or(default_line_pitch);
