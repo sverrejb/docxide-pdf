@@ -302,11 +302,26 @@ pub(super) fn compute_row_layouts(
                                         - para.indent_right
                                         - float_indent_left)
                                         .max(0.0);
+                                    // Match the rendering's first_line_hanging: when a
+                                    // list label is present, the label is drawn separately
+                                    // and the text starts at indent_left, so the first
+                                    // line has no extra hanging width.
+                                    let hanging = if !para.list_label.is_empty() {
+                                        if para.indent_first_line > 0.0
+                                            && para.indent_hanging == 0.0
+                                        {
+                                            -para.indent_first_line
+                                        } else {
+                                            0.0
+                                        }
+                                    } else {
+                                        para.indent_hanging
+                                    };
                                     let lines = build_paragraph_lines(
                                         runs,
                                         ctx.fonts,
                                         para_text_w,
-                                        para.indent_hanging,
+                                        hanging,
                                         &std::collections::HashMap::new(),
                                         None,
                                         None,

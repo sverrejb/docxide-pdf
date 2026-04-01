@@ -553,6 +553,22 @@ Also affected: `SHScheduleHeading` style (ilvl=0, same numbering, `suff="nothing
 
 ---
 
+## Annotation #78 — Text out of table bounds (stem_partnerships_guide) — 2026-04-01 (fixed)
+
+**Problem**: On page 7 (0-indexed), bullet text in the "How" cells of What/How tables extended past the table's right cell border. At the annotation point (x=551.3, y=453.1 from bottom), text like "If appropriate, embed partnership through formal documentation e.g. partnership agreements" rendered to x=552.8pt while the cell right border was at x=548.3pt — a 4.5pt overflow. Other lines ("Confirm commitment...") overflowed by up to 8.4pt.
+
+**Analysis**: The document's What/How tables have `tblW w:type="dxa" w:w="9634"` (481.7pt fixed width) which intentionally extends past the text area (451.3pt). Both Word's reference and our output render these tables wider than the text area. The REAL issue was text extending past the TABLE's own right boundary.
+
+Root cause: a mismatch between the table LAYOUT and RENDERING code for first-line width of list label paragraphs. The layout code (`table_layout.rs:309`) passed `para.indent_hanging` as the `first_line_hanging` parameter to `build_paragraph_lines()`. This widened the first line by `indent_hanging` (17.85pt for ListBullet), giving a first-line width of `para_text_w + 17.85 = 428.6pt`. But the rendering code (`table.rs:256-266`) set `first_line_hanging = 0.0` when a list label was present (because the label is drawn separately). The rendering placed text starting at `text_x = cell_x + cm.left + indent_left` with `eff_width = text_w + 0`, which was only 411.35pt.
+
+So the line builder built lines up to 428.6pt wide, but the renderer started them at a position 17.85pt further right (indent_left), causing the rightmost text to extend 17.85pt past the intended cell boundary.
+
+**Fix**: In `src/pdf/table_layout.rs`, changed the `first_line_hanging` passed to `build_paragraph_lines()` to match the rendering logic: when a list label is present, use 0.0 (not `indent_hanging`). For non-label paragraphs, still use `indent_hanging`. Also handles the edge case where `indent_first_line > 0 && indent_hanging == 0` (first-line indent instead of hanging indent).
+
+**Result**: Max text right edge dropped from 556.7pt to 540.9pt, now well within the table boundary of 548.3pt. stem_partnerships_guide SSIM -0.3pp (30.9%, text wraps differently in narrower first lines). Multiple other cases improved: croatian_grant_guidelines SSIM +0.1pp, parish_housing_data_profile SSIM +0.1pp, transition_to_work Jaccard +0.1pp. No regressions.
+
+---
+
 ## Annotation #90 — Body text overlaps footer (croatian_grant_guidelines) — 2026-04-01 (investigated, not reproducible)
 
 **Problem**: Annotator reported "Body text overlaps footer here" on page 17 (0-indexed) at y=92.55pt from bottom.

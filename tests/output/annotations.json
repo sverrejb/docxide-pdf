@@ -109,7 +109,7 @@
       "x_pt": 551.286,
       "y_pt": 453.0514,
       "note": "Text out of table bounds",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 82,

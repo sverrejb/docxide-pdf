@@ -392,8 +392,8 @@
     "convert_ms": 59.6
   },
   "scraped/croatian_grant_g..": {
-    "jaccard": 0.0715,
-    "ssim": 0.1799,
+    "jaccard": 0.0712,
+    "ssim": 0.1807,
     "text_boundary": 0.0138,
     "convert_ms": 270.5
   },
@@ -434,14 +434,14 @@
     "convert_ms": 22.0
   },
   "scraped/education_consul..": {
-    "jaccard": 0.1598,
-    "ssim": 0.3489,
+    "jaccard": 0.1601,
+    "ssim": 0.3493,
     "text_boundary": 0.6732,
     "convert_ms": 47.1
   },
   "scraped/federal_procurem..": {
-    "jaccard": 0.5504,
-    "ssim": 0.7842,
+    "jaccard": 0.5505,
+    "ssim": 0.7845,
     "text_boundary": 0.8,
     "convert_ms": 57.1
   },
@@ -524,8 +524,8 @@
     "convert_ms": 32.0
   },
   "scraped/parish_housing_d..": {
-    "jaccard": 0.3468,
-    "ssim": 0.6426,
+    "jaccard": 0.3469,
+    "ssim": 0.6431,
     "text_boundary": 0.6235,
     "convert_ms": 97.8
   },
@@ -596,8 +596,8 @@
     "convert_ms": 13.2
   },
   "scraped/stem_partnership..": {
-    "jaccard": 0.244,
-    "ssim": 0.3117,
+    "jaccard": 0.2444,
+    "ssim": 0.3086,
     "text_boundary": 0.25,
     "convert_ms": 32.2
   },
@@ -608,8 +608,8 @@
     "convert_ms": 22.0
   },
   "scraped/transition_to_wo..": {
-    "jaccard": 0.2683,
-    "ssim": 0.3848,
+    "jaccard": 0.2686,
+    "ssim": 0.3851,
     "text_boundary": 0.2099,
     "convert_ms": 493.0
   },
