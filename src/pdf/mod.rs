@@ -288,6 +288,72 @@ fn convert_polygon_to_page_coords(
         .collect()
 }
 
+/// Draw debug overlays for the wrap polygon and effective exclusion zone.
+/// Green = raw polygon, blue = wrap zone (polygon ± dist margins), red = top/bottom bounds.
+fn draw_debug_wrap_overlay(content: &mut Content, fz: &FloatZone) {
+    content.save_state();
+
+    // Green: raw polygon outline
+    if let Some(ref pts) = fz.polygon_pts {
+        if pts.len() >= 3 {
+            content.set_stroke_rgb(0.0, 0.7, 0.0);
+            content.set_line_width(0.5);
+            content.move_to(pts[0].0, pts[0].1);
+            for &(x, y) in &pts[1..] {
+                content.line_to(x, y);
+            }
+            content.close_path();
+            content.stroke();
+        }
+    }
+
+    // Blue: effective wrap zone boundaries (polygon shifted by dist margins)
+    if let Some(ref pts) = fz.polygon_pts {
+        content.set_stroke_rgb(0.0, 0.0, 0.8);
+        content.set_line_width(0.3);
+        let steps = ((fz.top_y - fz.bottom_y) / 1.0).ceil() as usize;
+        if steps > 0 {
+            let mut left_pts = Vec::with_capacity(steps + 1);
+            let mut right_pts = Vec::with_capacity(steps + 1);
+            for i in 0..=steps {
+                let y = fz.top_y - i as f32 * (fz.top_y - fz.bottom_y) / steps as f32;
+                if let Some((l, r)) = poly_scanline(pts, y) {
+                    left_pts.push((l - fz.left_from_text, y));
+                    right_pts.push((r + fz.right_from_text, y));
+                }
+            }
+            if left_pts.len() >= 2 {
+                content.move_to(left_pts[0].0, left_pts[0].1);
+                for &(x, y) in &left_pts[1..] {
+                    content.line_to(x, y);
+                }
+                content.stroke();
+            }
+            if right_pts.len() >= 2 {
+                content.move_to(right_pts[0].0, right_pts[0].1);
+                for &(x, y) in &right_pts[1..] {
+                    content.line_to(x, y);
+                }
+                content.stroke();
+            }
+        }
+    }
+
+    // Red: top and bottom zone boundaries
+    content.set_stroke_rgb(0.8, 0.0, 0.0);
+    content.set_line_width(0.3);
+    let page_left = fz.obj_left - 20.0;
+    let page_right = fz.obj_right + 20.0;
+    content.move_to(page_left, fz.top_y);
+    content.line_to(page_right, fz.top_y);
+    content.stroke();
+    content.move_to(page_left, fz.bottom_y);
+    content.line_to(page_right, fz.bottom_y);
+    content.stroke();
+
+    content.restore_state();
+}
+
 pub(super) struct FloatingTablePos {
     pub x: f32,
     pub y: f32,
@@ -429,6 +495,7 @@ impl PageBuilder {
 
 
 pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
+    let debug_wrap = std::env::var("DOCXSIDE_DEBUG_WRAP").is_ok();
     let t0 = std::time::Instant::now();
     let mut pdf = Pdf::new();
     let mut next_id = 1i32;
@@ -749,7 +816,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     let (ex_left, ex_right) = fz.exclusion_at_y(pb.slot_top);
                     let space_right = (col_x + col_w) - (ex_right + fz.right_from_text);
                     let space_left = (ex_left - fz.left_from_text) - col_x;
-                    let min_wrap_w = (col_w * 0.5).max(72.0);
+                    let min_wrap_w: f32 = 72.0;
                     let enough_space = if fz.wrap_text == WrapText::BothSides {
                         // For bothSides, check combined width of both regions
                         (space_left + space_right) >= min_wrap_w
@@ -989,9 +1056,6 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         .filter(|((bi, _), _)| *bi == global_block_idx)
                         .map(|((_, ri), name)| (*ri, name.clone()))
                         .collect();
-                    // When a paragraph's own wide wrapping image pushes text
-                    // below, save the original slot_top for image rendering.
-                    let mut anchor_slot_top_for_fi: Option<f32> = None;
                     // Self-wrapping: if this paragraph anchors a wrapping float
                     // and has text, set up the float zone NOW so width-narrowing
                     // applies to this paragraph's own lines.  Always replace any
@@ -1003,7 +1067,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             matches!(
                                 fi.wrap_type,
                                 WrapType::Square | WrapType::Tight | WrapType::Through
-                            ) && fi.image.display_width < text_width * 0.5
+                            )
                         }) {
                             let fi_x =
                                 resolve_fi_x(fi, sp, col_x, col_w, text_width);
@@ -1089,67 +1153,6 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     }
                                 }
                             }
-                        } else if let Some(fi) = para.floating_images.iter().find(|fi| {
-                            // Only wrapSquare needs push-below for wide images;
-                            // wrapTight/Through use polygon contours that allow
-                            // text to flow around the image at varying widths.
-                            fi.wrap_type == WrapType::Square
-                                && fi.image.display_width >= text_width * 0.5
-                        }) {
-                            // Wide wrapSquare image in same paragraph — check
-                            // if there's enough space for text beside it.
-                            let fi_x =
-                                resolve_fi_x(fi, sp, col_x, col_w, text_width);
-                            let fi_y_top =
-                                resolve_fi_y_top(fi, sp, pb.slot_top);
-                            let fi_y_bottom =
-                                fi_y_top - fi.image.display_height;
-                            let polygon_pts =
-                                fi.wrap_polygon.as_ref().map(|verts| {
-                                    convert_polygon_to_page_coords(
-                                        verts,
-                                        fi_x,
-                                        fi_y_top,
-                                        fi.image.display_width,
-                                        fi.image.display_height,
-                                    )
-                                });
-                            let fz = FloatZone {
-                                top_y: fi_y_top + fi.dist_top,
-                                bottom_y: fi_y_bottom - fi.dist_bottom,
-                                obj_left: fi_x,
-                                obj_right: fi_x + fi.image.display_width,
-                                left_from_text: fi.dist_left,
-                                right_from_text: fi.dist_right,
-                                polygon_pts,
-                                wrap_text: fi.wrap_text,
-                                para_relative: fi.v_relative_from == VRelativeFrom::Paragraph,
-                            };
-                            // Check wrap space (same logic as subsequent-para check)
-                            let col_right = col_x + col_w;
-                            let (ex_left, ex_right) =
-                                fz.exclusion_at_y(pb.slot_top);
-                            let space_right = col_right
-                                - (ex_right + fz.right_from_text);
-                            let space_left =
-                                (ex_left - fz.left_from_text) - col_x;
-                            let min_wrap_w = (col_w * 0.5).max(72.0);
-                            let enough_space = if fz.wrap_text == WrapText::BothSides {
-                                (space_left + space_right) >= min_wrap_w
-                            } else {
-                                let best = match fz.wrap_text {
-                                    WrapText::Left => space_left,
-                                    WrapText::Right => space_right,
-                                    _ => space_right.max(space_left),
-                                };
-                                best >= min_wrap_w
-                            };
-                            if !enough_space {
-                                // Not enough space beside image — push text below
-                                anchor_slot_top_for_fi = Some(pb.slot_top);
-                                pb.slot_top = fi_y_bottom - fi.dist_bottom;
-                            }
-                            pb.float_zone = Some(fz);
                         }
                     }
 
@@ -1182,13 +1185,18 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 // barely overlapping the zone, matching Word's behavior.
                                 let bottom_threshold = fz.bottom_y + line_h * 0.2;
                                 for i in 0..max_lines {
-                                    // Use line slot top for zone check (not baseline).
                                     let line_top = eff_top - i as f32 * line_h;
-                                    if line_top <= fz.top_y
+                                    let line_bottom = line_top - line_h;
+                                    // A line overlaps the zone if any part of it
+                                    // is within [fz.bottom_y, fz.top_y].
+                                    if line_bottom < fz.top_y
                                         && line_top > bottom_threshold
                                     {
+                                        // Query polygon at the line top, clamped to
+                                        // the zone so we stay inside the polygon.
+                                        let query_y = line_top.min(fz.top_y);
                                         let (ex_left, ex_right) =
-                                            fz.exclusion_at_y(line_top);
+                                            fz.exclusion_at_y(query_y);
                                         let sr = col_right
                                             - (ex_right + fz.right_from_text);
                                         let sl =
@@ -1455,12 +1463,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 fi.wrap_type,
                                 WrapType::Square | WrapType::Tight | WrapType::Through
                             )
-                            && anchor_slot_top_for_fi.is_none()
                         {
-                            // Narrower paragraph-relative images: track overflow
+                            // Paragraph-relative wrapping images: track overflow
                             // for page-break check only (text wraps beside them).
-                            // Skip when text was pushed below a wide image — the
-                            // image height is already in the slot_top offset.
                             float_overflow_h = float_overflow_h.max(fi_h);
                         }
                     }
@@ -1826,7 +1831,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         col_x,
                         col_w,
                         text_width,
-                        anchor_slot_top_for_fi.unwrap_or(pb.slot_top),
+                        pb.slot_top,
                         &mut pb.content,
                     );
                     for tb in para.textboxes.iter().filter(|t| t.behind_doc) {
@@ -1876,9 +1881,6 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     }
 
                     // Render foreground layer: floating images + textboxes
-                    // Use saved anchor position for images whose paragraph
-                    // text was pushed below (wide wrapping image in same para).
-                    let fi_render_y = anchor_slot_top_for_fi.unwrap_or(pb.slot_top);
                     render_floating_images(
                         &para.floating_images,
                         false,
@@ -1888,21 +1890,20 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         col_x,
                         col_w,
                         text_width,
-                        fi_render_y,
+                        pb.slot_top,
                         &mut pb.content,
                     );
 
                     // Set FloatZone for wrapping floating images
                     // (may already be set by self-wrapping above; overwrite
-                    // to ensure polygon data is included).  Use the original
-                    // anchor position when text was pushed below a wide image.
+                    // to ensure polygon data is included).
                     for fi in &para.floating_images {
                         match fi.wrap_type {
                             WrapType::Square | WrapType::Tight | WrapType::Through => {
                                 let fi_x =
                                     resolve_fi_x(fi, sp, col_x, col_w, text_width);
                                 let fi_y_top =
-                                    resolve_fi_y_top(fi, sp, fi_render_y);
+                                    resolve_fi_y_top(fi, sp, pb.slot_top);
                                 let fi_y_bottom =
                                     fi_y_top - fi.image.display_height;
                                 let polygon_pts =
@@ -1928,6 +1929,12 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 });
                             }
                             _ => {}
+                        }
+                    }
+
+                    if debug_wrap {
+                        if let Some(ref fz) = pb.float_zone {
+                            draw_debug_wrap_overlay(&mut pb.content, fz);
                         }
                     }
 

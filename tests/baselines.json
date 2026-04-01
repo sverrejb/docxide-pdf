@@ -203,14 +203,14 @@
     "text_boundary": 0.5
   },
   "cases/case41": {
-    "jaccard": 0.8559,
-    "ssim": 0.8552,
-    "text_boundary": 0.6702
+    "jaccard": 0.8642,
+    "ssim": 0.8628,
+    "text_boundary": 0.8052
   },
   "cases/case42": {
-    "jaccard": 0.4648,
-    "ssim": 0.4812,
-    "text_boundary": 0.1707
+    "jaccard": 0.4632,
+    "ssim": 0.4983,
+    "text_boundary": 0.0
   },
   "cases/case43": {
     "jaccard": 0.5028,
@@ -223,8 +223,8 @@
     "text_boundary": 0.0
   },
   "cases/case45": {
-    "jaccard": 0.3792,
-    "ssim": 0.5463,
+    "jaccard": 0.4005,
+    "ssim": 0.6032,
     "text_boundary": 0.5902
   },
   "cases/case46": {
@@ -233,8 +233,8 @@
     "text_boundary": 0.7516
   },
   "cases/case47": {
-    "jaccard": 0.7195,
-    "ssim": 0.7663,
+    "jaccard": 0.8214,
+    "ssim": 0.8977,
     "text_boundary": 0.6338
   },
   "cases/case49": {
@@ -368,8 +368,8 @@
     "convert_ms": 12.0
   },
   "scraped/brazilian_logist..": {
-    "jaccard": 0.1664,
-    "ssim": 0.2944,
+    "jaccard": 0.1693,
+    "ssim": 0.2934,
     "text_boundary": 0.1544,
     "convert_ms": 744.0
   },
@@ -464,9 +464,9 @@
     "convert_ms": 70.6
   },
   "scraped/indonesian_bench..": {
-    "jaccard": 0.4261,
-    "ssim": 0.5663,
-    "text_boundary": 0.31,
+    "jaccard": 0.4047,
+    "ssim": 0.546,
+    "text_boundary": 0.4372,
     "convert_ms": 170.5
   },
   "scraped/italian_evaluati..": {
