@@ -562,7 +562,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             if let Some(nts) = para.num_level_tab_stop {
                                 if nts < para.indent_left && (para.indent_left - para.indent_hanging).abs() < 0.5 {
                                     (para.indent_left - nts).max(0.0)
+                                } else if para.indent_first_line > 0.0 && para.indent_hanging == 0.0 {
+                                    -para.indent_first_line
                                 } else { 0.0 }
+                            } else if para.indent_first_line > 0.0 && para.indent_hanging == 0.0 {
+                                -para.indent_first_line
                             } else { 0.0 }
                         } else if para.indent_hanging > 0.0 {
                             para.indent_hanging
@@ -933,9 +937,13 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         if let Some(nts) = para.num_level_tab_stop {
                             if nts < para.indent_left && (para.indent_left - para.indent_hanging).abs() < 0.5 {
                                 (para.indent_left - nts).max(0.0)
+                            } else if para.indent_first_line > 0.0 && para.indent_hanging == 0.0 {
+                                -para.indent_first_line
                             } else {
                                 0.0
                             }
+                        } else if para.indent_first_line > 0.0 && para.indent_hanging == 0.0 {
+                            -para.indent_first_line
                         } else {
                             0.0
                         }

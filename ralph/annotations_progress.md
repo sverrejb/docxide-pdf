@@ -550,3 +550,30 @@ Our code never parsed `w:suff`, treating all labels as if `suff="tab"`. With `su
 Also affected: `SHScheduleHeading` style (ilvl=0, same numbering, `suff="nothing"`) — produces labels like "Schedule 1", "Schedule 2" that are now correctly inline.
 
 **Result**: "Part 1: Tenant's Rights" now renders correctly as one line. SSIM +0.1pp (35.5%). No regressions (croatian_grant_guidelines -0.1pp is noise).
+
+---
+
+## Annotation #90 — Body text overlaps footer (croatian_grant_guidelines) — 2026-04-01 (investigated, not reproducible)
+
+**Problem**: Annotator reported "Body text overlaps footer here" on page 17 (0-indexed) at y=92.55pt from bottom.
+
+**Analysis**: On the current build, page 18 (1-indexed) has the last body text at y_from_bottom=121.5pt and footer "Stranica 18" at y_from_bottom=60.2pt — a 61pt gap. No overlap. Checked all 72 generated pages: tightest body-footer gaps are 10.6-12.3pt (pages 23, 28, 19), compared to reference PDF's tightest gaps of 12.5-14.3pt. The ~2pt difference is consistent with cumulative font metric precision differences. The footer position (y≈774pt from top) is identical between generated and reference.
+
+**Root cause**: The annotation was likely made on an older build where pagination placed more content on this page. The systemic ~2pt body-footer gap difference is a consequence of floating-point line height calculations vs Word's twip-rounded cursor advancement.
+
+---
+
+## Annotation #91 — Bullet points not indented, text overlaps (brazilian_logistics_study) — 2026-04-01 (FIXED)
+
+**Problem**: On page 9 (0-indexed), bullet points ("Cadastro de Pontos", "Controle de Velocidade", etc.) had no indentation — text started at the left margin with no visible ● bullet character. The annotation noted "bullets and text overlaps."
+
+**Analysis**: The bullet paragraphs have `w:numPr` (numId=1, ilvl=0) with bullet "●" in Noto Sans Symbols. The numbering definition specifies `w:ind left="1429" hanging="360"`, but each paragraph overrides with `w:ind left="0" firstLine="709"`. This means:
+- Left indent = 0 (at the margin)
+- First line indent = 35.45pt (where the bullet goes)
+- Continuation text wraps at the margin
+
+The bug was in the `hanging` computation for list-labeled paragraphs in the render loop. When `list_label` is not empty, the code always set `hanging = 0` (ignoring `indent_first_line`). For non-list paragraphs, `hanging = -indent_first_line` correctly creates first-line indentation. This meant list paragraphs with `firstLine` override (instead of `hanging`) had no first-line offset — the bullet label at `label_x = col_x` and first-line text at `para_text_x = col_x` both occupied the same position, causing overlap.
+
+**Fix**: In 7 locations across `src/pdf/mod.rs`, `src/pdf/header_footer.rs`, `src/pdf/textbox_render.rs`, and `src/pdf/table.rs` (plus adding `indent_first_line` field to `CellParagraphLayout` in `table_layout.rs`): when a list paragraph has `indent_first_line > 0.0` and `indent_hanging == 0.0`, set `hanging = -indent_first_line` instead of `0.0`. This shifts the first-line text rightward by `firstLine` amount, leaving the bullet character at `label_x` (the margin) with proper spacing before the text.
+
+**Result**: Bullet characters now visible with correct ~35pt indentation from margin. Continuation text wraps at the margin. Matches reference layout. Jaccard -0.7pp (17.6% → 16.9%), SSIM -1.1pp (30.5% → 29.3%) — score drop from cascading page breaks due to the now-correct indentation adding extra line wraps. No regressions on any other fixture.

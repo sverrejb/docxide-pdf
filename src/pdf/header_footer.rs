@@ -351,7 +351,11 @@ pub(super) fn render_header_footer(
                         let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
                         let tp_text_w = (content_w - tp.indent_left - tp.indent_right).max(1.0);
                         let tp_hanging = if !tp.list_label.is_empty() {
-                            0.0
+                            if tp.indent_first_line > 0.0 && tp.indent_hanging == 0.0 {
+                                -tp.indent_first_line
+                            } else {
+                                0.0
+                            }
                         } else if tp.indent_hanging > 0.0 {
                             tp.indent_hanging
                         } else {
@@ -545,9 +549,13 @@ pub(super) fn render_header_footer(
                     if let Some(nts) = para.num_level_tab_stop {
                         if nts < para.indent_left && (para.indent_left - para.indent_hanging).abs() < 0.5 {
                             (para.indent_left - nts).max(0.0)
+                        } else if para.indent_first_line > 0.0 && para.indent_hanging == 0.0 {
+                            -para.indent_first_line
                         } else {
                             0.0
                         }
+                    } else if para.indent_first_line > 0.0 && para.indent_hanging == 0.0 {
+                        -para.indent_first_line
                     } else {
                         0.0
                     }

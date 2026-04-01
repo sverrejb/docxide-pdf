@@ -144,6 +144,7 @@ pub(super) struct CellParagraphLayout {
     pub(super) indent_left: f32,
     pub(super) indent_right: f32,
     pub(super) indent_hanging: f32,
+    pub(super) indent_first_line: f32,
     /// Extra left indent from wrapSquare/Tight floating images in this paragraph.
     /// Text lines are laid out narrower and rendered further right to avoid the image.
     pub(super) float_indent_left: f32,
@@ -396,6 +397,7 @@ pub(super) fn compute_row_layouts(
                                     indent_left: para.indent_left,
                                     indent_right: para.indent_right,
                                     indent_hanging: para.indent_hanging,
+                                    indent_first_line: para.indent_first_line,
                                     float_indent_left,
                                     list_label: para.list_label.clone(),
                                     list_label_font: para.list_label_font.clone(),

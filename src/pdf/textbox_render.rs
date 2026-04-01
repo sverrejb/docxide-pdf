@@ -58,7 +58,11 @@ pub(super) fn render_single_textbox(
             let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
             let tw = (tmp_w - tp.indent_left - tp.indent_right).max(1.0);
             let hang = if !tp.list_label.is_empty() {
-                0.0
+                if tp.indent_first_line > 0.0 && tp.indent_hanging == 0.0 {
+                    -tp.indent_first_line
+                } else {
+                    0.0
+                }
             } else if tp.indent_hanging > 0.0 {
                 tp.indent_hanging
             } else {
@@ -158,9 +162,13 @@ pub(super) fn render_single_textbox(
                     if let Some(nts) = tp.num_level_tab_stop {
                         if nts < tp.indent_left && (tp.indent_left - tp.indent_hanging).abs() < 0.5 {
                             (tp.indent_left - nts).max(0.0)
+                        } else if tp.indent_first_line > 0.0 && tp.indent_hanging == 0.0 {
+                            -tp.indent_first_line
                         } else {
                             0.0
                         }
+                    } else if tp.indent_first_line > 0.0 && tp.indent_hanging == 0.0 {
+                        -tp.indent_first_line
                     } else {
                         0.0
                     }
@@ -282,6 +290,8 @@ pub(super) fn render_textbox_paragraphs(
         let text_hanging = if !tp.list_label.is_empty() {
             if let Some(nts) = tp.num_level_tab_stop {
                 (tp.indent_left - nts).max(0.0)
+            } else if tp.indent_first_line > 0.0 && tp.indent_hanging == 0.0 {
+                -tp.indent_first_line
             } else {
                 0.0
             }

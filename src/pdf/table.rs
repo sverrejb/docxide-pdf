@@ -258,7 +258,11 @@ fn render_cell_content(
                 } else {
                     let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging;
                     draw_cell_label(content, para, label_x, baseline_y, ctx.fonts);
-                    0.0
+                    if para.indent_first_line > 0.0 && para.indent_hanging == 0.0 {
+                        -para.indent_first_line
+                    } else {
+                        0.0
+                    }
                 };
 
                 render_paragraph_lines(
@@ -489,7 +493,11 @@ fn render_partial_cell_content(
                 } else {
                     let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging;
                     draw_cell_label(content, para, label_x, baseline_y, ctx.fonts);
-                    0.0
+                    if para.indent_first_line > 0.0 && para.indent_hanging == 0.0 {
+                        -para.indent_first_line
+                    } else {
+                        0.0
+                    }
                 };
 
                 render_paragraph_lines(

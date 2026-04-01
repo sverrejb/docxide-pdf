@@ -199,7 +199,7 @@
       "x_pt": 90.18349,
       "y_pt": 346.76318,
       "note": "Bullet points should be indented. Also, bullets and text overlaps here. Compare with reference.",
-      "fixed": false
+      "fixed": true
     }
   ]
 }
