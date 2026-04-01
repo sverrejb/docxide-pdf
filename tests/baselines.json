@@ -626,8 +626,8 @@
     "convert_ms": 2.4
   },
   "scraped/uk_commercial_le..": {
-    "jaccard": 0.1918,
-    "ssim": 0.3415,
+    "jaccard": 0.2025,
+    "ssim": 0.3546,
     "text_boundary": 0.136,
     "convert_ms": 326.3
   },

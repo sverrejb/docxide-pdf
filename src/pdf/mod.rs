@@ -1496,11 +1496,39 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         0.0
                     };
 
+                    // Pre-compute footnote space for this paragraph so the
+                    // page-break check accounts for footnotes the paragraph
+                    // introduces (otherwise they're only tracked after
+                    // rendering, which can cause body/footnote overlap).
+                    let para_fn_extra = {
+                        let mut extra = 0.0f32;
+                        let mut seen_ids = Vec::new();
+                        for run in para.runs.iter() {
+                            if let Some(id) = run.footnote_id {
+                                if !pb.footnote_ids.contains(&id)
+                                    && !seen_ids.contains(&id)
+                                {
+                                    seen_ids.push(id);
+                                    if let Some(footnote) = doc.footnotes.get(&id) {
+                                        extra += compute_footnote_height(
+                                            footnote, &ctx, text_width,
+                                        );
+                                    }
+                                }
+                            }
+                        }
+                        if extra > 0.0 && pb.footnote_ids.is_empty() {
+                            extra += 12.0;
+                        }
+                        extra
+                    };
+
                     if !at_page_top
                         && pb.slot_top - needed_with_floats - keep_next_extra + last_line_lead
-                            < effective_margin_bottom
+                            < effective_margin_bottom + para_fn_extra
                     {
-                        let available = pb.slot_top - inter_gap - effective_margin_bottom;
+                        let available =
+                            pb.slot_top - inter_gap - effective_margin_bottom - para_fn_extra;
                         let first_line_h = tallest_lhr
                             .map(|ratio| font_size * ratio)
                             .unwrap_or(font_size);

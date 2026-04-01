@@ -169,7 +169,7 @@
       "x_pt": 178.60835,
       "y_pt": 262.6701,
       "note": "\"Risk Period\" body text overlaps footnote text.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 89,

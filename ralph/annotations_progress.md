@@ -397,6 +397,26 @@ The float zone absorption logic in `pdf/mod.rs` checked `is_text_empty(&p.runs)`
 
 ---
 
+## Annotation #87 — Footnote reference numbers not highlighted (uk_commercial_lease_template) — 2026-04-01
+
+**Problem**: On page 14 (0-indexed), footnote reference numbers in body text and footnote area lacked yellow background highlighting. The reference PDF shows bold superscript numbers with yellow `w:shd` background; our generated output showed plain superscript numbers without any highlight.
+
+**Analysis**: The `FootnoteReference` character style defines `w:shd w:val="clear" w:color="auto" w:fill="FFFF00"` (yellow shading), `w:b` (bold), Arial 10pt, and `w:vertAlign w:val="superscript"`. Three issues prevented the highlight from rendering:
+
+1. **`CharacterStyle` had no `highlight` field**: The struct in `styles.rs` stored font, bold, italic, color, etc., but not highlight/shading. Character styles with `w:shd` or `w:highlight` were silently ignored.
+2. **`resolve_run_format` only parsed `w:highlight`**: Run-level highlight resolution checked `w:highlight` (named colors like "yellow") but not `w:shd @fill` (arbitrary hex colors). The FootnoteReference style uses `w:shd`, not `w:highlight`. Additionally, there was no fallback to the character style's highlight.
+3. **`styled_run()` didn't copy highlight**: The `styled_run()` method (used by `superscript_run()` for footnote references) only copied `font_size`, `font_name`, `bold`, `italic`, `color` — missing `highlight`.
+
+**Fix**: Three changes:
+1. Added `highlight: Option<[u8; 3]>` to `CharacterStyle` in `styles.rs`, parsed from `w:highlight` (named) or `w:shd @fill` (hex).
+2. In `resolve_run_format` (`runs.rs`), added `w:shd @fill` as fallback after `w:highlight`, then character style highlight as final fallback.
+3. In `styled_run()` (`runs.rs`), added `highlight: self.highlight` to copy the field to footnote reference runs.
+4. Made `highlight_color()` in `mod.rs` `pub(super)` so `styles.rs` can use it.
+
+**Result**: Yellow highlighting now renders on all 22 footnote reference numbers in body text and footnote area, matching the reference PDF. SSIM +0.1pp (34.1% → 34.2%). No regressions on any fixture. Committed as 69dc510.
+
+---
+
 ## Annotation #82 — Header wrapping image inflating header height (czech_municipal_grant_form) — 2026-03-31
 
 **Problem**: On page 2 (0-indexed page 1), ~20pt excess space between the header (coat of arms image + "OBEC TUHAŇ" + address + green line) and the body content (numbered list starting with "1) Osoba oprávněná...").
@@ -486,6 +506,18 @@ In Word, body starts at margin_top (70.85pt). The float extends below margin_top
 2. In `border_or_fallback()` (`src/docx/tables.rs`): check `inline.is_override` in addition to `inline.present`. When `is_override` is true, use the inline border (which has `present: false`) instead of the table style fallback.
 
 **Result**: uk_commercial_lease_template SSIM -0.1pp (noise). education_consultant_posting Jaccard +0.1pp (improved). The nil border between the two paragraphs is now correctly suppressed, matching the reference.
+
+---
+
+## Annotation #88 — Body text overlaps footnote text (uk_commercial_lease_template) — 2026-04-01
+
+**Problem**: On page 15 (0-indexed 14), the "Risk Period" definition body text overlapped with footnote text at the bottom of the page. The page had 7 footnotes (26-32) and the body text ran into the footnote area.
+
+**Analysis**: Footnote space was tracked AFTER paragraph rendering (line 2062-2079 in pdf/mod.rs), but the page break check happened BEFORE rendering (line 1499). When checking if the "Risk Period" paragraph fit on the page, `effective_margin_bottom` did not include footnote 32's space (which "Risk Period" references). The paragraph was placed on the page, then footnote 32's space was added — too late to prevent overlap.
+
+**Fix**: Added footnote pre-computation before the page break check. A new block scans the current paragraph's runs for footnote references not yet tracked on the page, computes their combined height via `compute_footnote_height()`, and adds this as `para_fn_extra` to both the page break condition and the available-space calculation. The existing post-render tracking (which adds IDs to `pb.footnote_ids` and updates `effective_margin_bottom`) remains unchanged. If the paragraph doesn't fit and triggers a page break, `effective_margin_bottom` resets and the footnotes are correctly re-tracked on the new page.
+
+**Result**: "Risk Period" correctly pushed to next page. Body text on page 15 now ends at "Rent Days" with footnotes 26-31 below, properly separated. Jaccard +1.1pp (19.2% → 20.2%), SSIM +1.3pp (34.2% → 35.5%). Only noise regression: croatian_grant_guidelines -0.1pp. No assertion failures.
 
 ---
 
