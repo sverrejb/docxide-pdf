@@ -168,11 +168,27 @@ pub(super) struct TableBordersDef {
     pub(super) inside_v: CellBorder,
 }
 
+/// Conditional formatting for a specific table region (e.g. firstRow, band1Horiz).
+pub(super) struct TableConditionalFormat {
+    pub(super) borders: Option<TableBordersDef>,
+    pub(super) shading: Option<[u8; 3]>,
+    pub(super) bold: Option<bool>,
+}
+
+/// Full table style definition including conditional overrides.
+pub(super) struct TableStyleDef {
+    pub(super) base_borders: Option<TableBordersDef>,
+    /// Conditional overrides keyed by type: "firstRow", "lastRow", "firstCol",
+    /// "lastCol", "band1Horiz", "band2Horiz", "band1Vert", "band2Vert",
+    /// "nwCell", "neCell", "swCell", "seCell"
+    pub(super) conditionals: HashMap<String, TableConditionalFormat>,
+}
+
 pub(super) struct StylesInfo {
     pub(super) defaults: StyleDefaults,
     pub(super) paragraph_styles: HashMap<String, ParagraphStyle>,
     pub(super) character_styles: HashMap<String, CharacterStyle>,
-    pub(super) table_border_styles: HashMap<String, TableBordersDef>,
+    pub(super) table_styles: HashMap<String, TableStyleDef>,
     /// Maps style ID → display name (for STYLEREF resolution)
     pub(super) style_id_to_name: HashMap<String, String>,
     /// The styleId of the default paragraph style (w:default="1" w:type="paragraph").
@@ -471,7 +487,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
             defaults,
             paragraph_styles,
             character_styles,
-            table_border_styles: HashMap::new(),
+            table_styles: HashMap::new(),
             style_id_to_name,
             default_paragraph_style_id,
         };
@@ -481,7 +497,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
             defaults,
             paragraph_styles,
             character_styles,
-            table_border_styles: HashMap::new(),
+            table_styles: HashMap::new(),
             style_id_to_name,
             default_paragraph_style_id,
         };
@@ -546,7 +562,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         }
     }
 
-    let mut table_border_styles = HashMap::new();
+    let mut table_styles = HashMap::new();
 
     for style_node in root.children() {
         if style_node.tag_name().name() != "style"
@@ -750,19 +766,54 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                 );
             }
             Some("table") => {
-                if let Some(tbl_borders) =
-                    wml(style_node, "tblPr").and_then(|pr| wml(pr, "tblBorders"))
-                {
-                    table_border_styles.insert(
+                let base_borders = wml(style_node, "tblPr")
+                    .and_then(|pr| wml(pr, "tblBorders"))
+                    .map(|tbl_borders| TableBordersDef {
+                        top: parse_cell_border(tbl_borders, "top"),
+                        bottom: parse_cell_border(tbl_borders, "bottom"),
+                        left: parse_cell_border_left(tbl_borders),
+                        right: parse_cell_border_right(tbl_borders),
+                        inside_h: parse_cell_border(tbl_borders, "insideH"),
+                        inside_v: parse_cell_border(tbl_borders, "insideV"),
+                    });
+
+                let mut conditionals = HashMap::new();
+                for child in style_node.children() {
+                    if !child.has_tag_name((WML_NS, "tblStylePr")) {
+                        continue;
+                    }
+                    let Some(cond_type) = child.attribute((WML_NS, "type")) else {
+                        continue;
+                    };
+                    let cond_borders = wml(child, "tcPr")
+                        .and_then(|tc| wml(tc, "tcBorders"))
+                        .map(|b| TableBordersDef {
+                            top: parse_cell_border(b, "top"),
+                            bottom: parse_cell_border(b, "bottom"),
+                            left: parse_cell_border_left(b),
+                            right: parse_cell_border_right(b),
+                            inside_h: parse_cell_border(b, "insideH"),
+                            inside_v: parse_cell_border(b, "insideV"),
+                        });
+                    let cond_shading = wml(child, "tcPr")
+                        .and_then(|tc| wml(tc, "shd"))
+                        .and_then(|shd| shd.attribute((WML_NS, "fill")))
+                        .and_then(parse_hex_color);
+                    let cond_bold = wml(child, "rPr")
+                        .and_then(|rpr| wml_bool(rpr, "b"));
+                    if cond_borders.is_some() || cond_shading.is_some() || cond_bold.is_some() {
+                        conditionals.insert(cond_type.to_string(), TableConditionalFormat {
+                            borders: cond_borders,
+                            shading: cond_shading,
+                            bold: cond_bold,
+                        });
+                    }
+                }
+
+                if base_borders.is_some() || !conditionals.is_empty() {
+                    table_styles.insert(
                         style_id.to_string(),
-                        TableBordersDef {
-                            top: parse_cell_border(tbl_borders, "top"),
-                            bottom: parse_cell_border(tbl_borders, "bottom"),
-                            left: parse_cell_border_left(tbl_borders),
-                            right: parse_cell_border_right(tbl_borders),
-                            inside_h: parse_cell_border(tbl_borders, "insideH"),
-                            inside_v: parse_cell_border(tbl_borders, "insideV"),
-                        },
+                        TableStyleDef { base_borders, conditionals },
                     );
                 }
             }
@@ -784,7 +835,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
         defaults,
         paragraph_styles,
         character_styles,
-        table_border_styles,
+        table_styles,
         style_id_to_name,
         default_paragraph_style_id,
     }
