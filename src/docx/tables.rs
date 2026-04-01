@@ -382,6 +382,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                         font_size: list_label_font_size,
                         bold: list_label_bold,
                         color: list_label_color,
+                        suff: _,
                     } = parse_list_info(
                         num_pr,
                         style_num,

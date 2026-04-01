@@ -528,3 +528,25 @@ Future priorities to address these:
 - Investigate Word's exact line pitch / document grid behavior
 - Rethink paragraph-relative textbox positioning
 - Header float zone absorption for narrow wrapping images (annotation #82)
+
+---
+
+## Annotation #89 — "Part 1:" and "Tenant's Rights" overlaps (uk_commercial_lease_template) — 2026-04-01 (fixed)
+
+**Problem**: On page 43 (0-indexed), "Part 1:" and "Tenant's Rights" text overlaps. The list label "Part 1" and paragraph text ": Tenant's Rights" rendered at the same x position, creating garbled text "Plartnt's Rights".
+
+**Analysis**: The `SHPart` style uses numbering definition abstractNumId=1, ilvl=1, which has `w:suff w:val="nothing"` and `w:ind w:left="0" w:firstLine="0"`. The `w:suff` element controls the separator between the numbering label and paragraph text:
+- `tab` (default): tab character separates label and text
+- `space`: space character separates them
+- `nothing`: no separator — label is inline with text
+
+Our code never parsed `w:suff`, treating all labels as if `suff="tab"`. With `suff="nothing"` and zero indent, both the label ("Part 1") and text (": Tenant's Rights") rendered at `col_x + 0 - 0 = col_x`, overlapping completely.
+
+**Fix**: Three changes:
+1. **Parse `w:suff`** (`src/docx/numbering.rs`): Added `suff` and `label_font` fields to `LevelDef` and `suff` to `ListLabelInfo`. Parse `w:suff` from the numbering level XML (default: "tab").
+2. **Propagate** through `ListLabelInfo` → paragraph parsing in `docx/mod.rs`, `tables.rs`, `textbox.rs`.
+3. **Inline label when `suff="nothing"`** (`src/docx/mod.rs`): When `suff="nothing"`, create a synthetic `Run` with the label text, font, size, bold, and color from the numbering level definition. Prepend it to the paragraph's runs and clear the `list_label` field so it's not rendered separately in the margin. This makes the label flow naturally as inline text.
+
+Also affected: `SHScheduleHeading` style (ilvl=0, same numbering, `suff="nothing"`) — produces labels like "Schedule 1", "Schedule 2" that are now correctly inline.
+
+**Result**: "Part 1: Tenant's Rights" now renders correctly as one line. SSIM +0.1pp (35.5%). No regressions (croatian_grant_guidelines -0.1pp is noise).

@@ -14,6 +14,10 @@ pub(super) struct LevelDef {
     pub(super) label_font_size: Option<f32>,
     pub(super) label_bold: bool,
     pub(super) label_color: Option<[u8; 3]>,
+    /// w:suff value: "tab" (default), "space", or "nothing"
+    pub(super) suff: String,
+    /// Font name from rPr/rFonts for non-bullet labels
+    pub(super) label_font: Option<String>,
 }
 
 #[derive(Default)]
@@ -26,6 +30,8 @@ pub(super) struct ListLabelInfo {
     pub(super) font_size: Option<f32>,
     pub(super) bold: bool,
     pub(super) color: Option<[u8; 3]>,
+    /// w:suff value: "tab" (default), "space", or "nothing"
+    pub(super) suff: String,
 }
 
 #[derive(Default)]
@@ -103,6 +109,14 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
                     let label_color = rpr
                         .and_then(|r| wml_attr(r, "color"))
                         .and_then(parse_hex_color);
+                    let suff = wml_attr(lvl, "suff").unwrap_or("tab").to_string();
+                    let label_font = rpr
+                        .and_then(|r| wml(r, "rFonts"))
+                        .and_then(|rf| {
+                            rf.attribute((WML_NS, "ascii"))
+                                .or_else(|| rf.attribute((WML_NS, "hAnsi")))
+                        })
+                        .map(|s| s.to_string());
                     levels.insert(
                         ilvl,
                         LevelDef {
@@ -116,6 +130,8 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
                             label_font_size,
                             label_bold,
                             label_color,
+                            suff,
+                            label_font,
                         },
                     );
                 }
@@ -362,11 +378,16 @@ pub(super) fn parse_list_info(
         label,
         font: if is_bullet {
             def.bullet_font.clone()
+        } else if def.suff == "nothing" {
+            // suff=nothing: label flows inline with text and needs
+            // its own font for the synthetic Run we prepend.
+            def.label_font.clone()
         } else {
             None
         },
         font_size: def.label_font_size,
         bold: def.label_bold,
         color: def.label_color,
+        suff: def.suff.clone(),
     }
 }

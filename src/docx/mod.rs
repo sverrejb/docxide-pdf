@@ -18,7 +18,7 @@ use std::io::Read;
 
 use crate::error::Error;
 use crate::model::{
-    Alignment, Block, Document, LineSpacing, Paragraph, ParagraphBorders, Section,
+    Alignment, Block, Document, LineSpacing, Paragraph, ParagraphBorders, Run, Section,
     SectionBreakType, SectionProperties, TabAlignment, TabStop,
 };
 
@@ -611,11 +611,12 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     mut indent_left,
                     mut indent_hanging,
                     tab_stop: num_tab_stop,
-                    label: list_label,
-                    font: list_label_font,
-                    font_size: list_label_font_size,
-                    bold: list_label_bold,
-                    color: list_label_color,
+                    label: mut list_label,
+                    font: mut list_label_font,
+                    font_size: mut list_label_font_size,
+                    bold: mut list_label_bold,
+                    color: mut list_label_color,
+                    suff: list_label_suff,
                 } = parse_list_info(
                     num_pr,
                     style_num,
@@ -669,6 +670,29 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
 
                 let parsed = parse_runs(node, &styles, &theme, &rels, zip, &numbering);
                 let mut runs = parsed.runs;
+
+                // When w:suff="nothing", the label is inline with text — prepend
+                // it as a run rather than rendering it separately in the margin.
+                if !list_label.is_empty() && list_label_suff == "nothing" {
+                    let first_run = runs.first();
+                    let label_run = Run {
+                        text: list_label.clone(),
+                        font_size: list_label_font_size
+                            .unwrap_or_else(|| first_run.map(|r| r.font_size).unwrap_or(10.0)),
+                        font_name: list_label_font
+                            .clone()
+                            .unwrap_or_else(|| first_run.map(|r| r.font_name.clone()).unwrap_or_default()),
+                        bold: list_label_bold,
+                        color: list_label_color,
+                        ..Run::default()
+                    };
+                    runs.insert(0, label_run);
+                    list_label = String::new();
+                    list_label_font = None;
+                    list_label_font_size = None;
+                    list_label_bold = false;
+                    list_label_color = None;
+                }
 
                 if let Some(color) = style_color {
                     for run in &mut runs {

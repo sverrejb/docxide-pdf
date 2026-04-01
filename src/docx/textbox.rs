@@ -121,6 +121,7 @@ pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
             font_size: list_label_font_size,
             bold: list_label_bold,
             color: list_label_color,
+            suff: _,
         } = super::numbering::parse_list_info(
             num_pr,
             None,
