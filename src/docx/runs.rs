@@ -142,6 +142,7 @@ impl RunFormat {
             bold: self.bold,
             italic: self.italic,
             color: self.color,
+            highlight: self.highlight,
             ..Run::default()
         }
     }
@@ -303,7 +304,14 @@ impl ParagraphRunDefaults {
                 .unwrap_or(VertAlign::Baseline),
             highlight: rpr
                 .and_then(|n| wml_attr(n, "highlight"))
-                .and_then(highlight_color),
+                .and_then(highlight_color)
+                .or_else(|| {
+                    rpr.and_then(|n| wml(n, "shd"))
+                        .and_then(|shd| shd.attribute((WML_NS, "fill")))
+                        .filter(|f| *f != "none" && *f != "auto")
+                        .and_then(parse_hex_color)
+                })
+                .or_else(|| char_style.and_then(|cs| cs.highlight)),
             kern_threshold: rpr
                 .and_then(|n| wml_attr(n, "kern"))
                 .and_then(|v| v.parse::<f32>().ok())

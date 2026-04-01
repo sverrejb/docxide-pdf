@@ -495,7 +495,7 @@
   },
   "scraped/learning_culture..": {
     "jaccard": 0.3408,
-    "ssim": 0.4645,
+    "ssim": 0.465,
     "text_boundary": 0.3866,
     "convert_ms": 1027.5
   },
@@ -519,7 +519,7 @@
   },
   "scraped/mongolian_human_..": {
     "jaccard": 0.1407,
-    "ssim": 0.2179,
+    "ssim": 0.2178,
     "text_boundary": 0.1949,
     "convert_ms": 32.0
   },
@@ -627,7 +627,7 @@
   },
   "scraped/uk_commercial_le..": {
     "jaccard": 0.1918,
-    "ssim": 0.3414,
+    "ssim": 0.3415,
     "text_boundary": 0.136,
     "convert_ms": 326.3
   },
@@ -644,7 +644,7 @@
     "convert_ms": 38.6
   },
   "scraped/vaccines_history..": {
-    "jaccard": 0.4272,
+    "jaccard": 0.4273,
     "ssim": 0.5516,
     "text_boundary": 0.1282,
     "convert_ms": 23.3

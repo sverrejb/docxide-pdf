@@ -115,7 +115,7 @@ pub(super) fn parse_text_color(val: &str) -> Option<[u8; 3]> {
     parse_hex_color(val)
 }
 
-fn highlight_color(name: &str) -> Option<[u8; 3]> {
+pub(super) fn highlight_color(name: &str) -> Option<[u8; 3]> {
     match name {
         "yellow" => Some([255, 255, 0]),
         "green" => Some([0, 255, 0]),

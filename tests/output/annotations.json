@@ -159,7 +159,7 @@
       "x_pt": 238.4957,
       "y_pt": 619.84717,
       "note": "We are not highlighting the footnote numbers. Compare to reference.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 88,
