@@ -1628,6 +1628,26 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
                             pb.slot_top -= rest_content_h;
                             prev_space_after = effective_space_after;
+
+                            // Track footnotes for the split paragraph on the new page
+                            for run in para.runs.iter() {
+                                if let Some(id) = run.footnote_id {
+                                    if !pb.footnote_ids.contains(&id) {
+                                        pb.footnote_ids.push(id);
+                                        if let Some(footnote) = doc.footnotes.get(&id) {
+                                            let fn_height =
+                                                compute_footnote_height(footnote, &ctx, text_width);
+                                            let separator_h = if pb.footnote_ids.len() == 1 {
+                                                12.0
+                                            } else {
+                                                0.0
+                                            };
+                                            effective_margin_bottom += separator_h + fn_height;
+                                        }
+                                    }
+                                }
+                            }
+
                             global_block_idx += 1;
                             continue;
                         }
@@ -2200,6 +2220,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     p,
                                     &doc.style_id_to_name,
                                 );
+                                // Track footnotes referenced in table cells
+                                for run in p.runs.iter() {
+                                    if let Some(id) = run.footnote_id {
+                                        if !pb.footnote_ids.contains(&id) {
+                                            pb.footnote_ids.push(id);
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

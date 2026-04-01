@@ -392,8 +392,8 @@
     "convert_ms": 59.6
   },
   "scraped/croatian_grant_g..": {
-    "jaccard": 0.0737,
-    "ssim": 0.1865,
+    "jaccard": 0.0731,
+    "ssim": 0.187,
     "text_boundary": 0.012,
     "convert_ms": 270.5
   },
@@ -434,7 +434,7 @@
     "convert_ms": 22.0
   },
   "scraped/education_consul..": {
-    "jaccard": 0.1601,
+    "jaccard": 0.1599,
     "ssim": 0.3493,
     "text_boundary": 0.6732,
     "convert_ms": 47.1
@@ -626,7 +626,7 @@
     "convert_ms": 2.4
   },
   "scraped/uk_commercial_le..": {
-    "jaccard": 0.2029,
+    "jaccard": 0.2027,
     "ssim": 0.3552,
     "text_boundary": 0.136,
     "convert_ms": 326.3

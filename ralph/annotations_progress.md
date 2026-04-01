@@ -623,3 +623,30 @@ The gap of 2.83pt is tight but NOT actual overlap. The 0.44pt difference from th
 **Fix**: In `compute_header_height()`, count `is_line_break` runs per paragraph and add `br_count * line_h` to `content_h`. This accounts for additional lines created by explicit line breaks.
 
 **Result**: "UPUTE ZA PRIJAVITELJE" baseline moved from y=210.91pt to y=226.35pt (reference: 227.83pt). Remaining difference: 1.48pt (within font metric tolerance, was 16.9pt). Jaccard +0.25pp, SSIM +0.58pp. No regressions on any fixture.
+
+---
+
+## Annotation #90 — Body text overlaps footer / missing footnotes (croatian_grant_guidelines) — 2026-04-01
+
+**Problem**: On page 17 (0-indexed), body text appeared to overlap the footer zone. The annotated area was near the bottom of the page where dense body text ran very close to "Stranica 18".
+
+**Analysis**: The underlying issue was that **footnotes were not being rendered** in this document. The reference PDF shows footnotes at the bottom of pages 10 and 17 (with separator lines), but the generated PDF had none. The document has 6 footnotes (IDs 2-7).
+
+Investigation revealed two bugs causing footnote IDs to not be tracked during page rendering:
+
+1. **Split paragraph `continue` skips footnote tracking** (`src/pdf/mod.rs` ~line 1632): When a body paragraph is split across pages (first part on page N, rest on page N+1), the `continue` statement after rendering the rest skipped the footnote tracking code at ~line 2098. Footnotes 3 and 4 were in paragraphs that split across pages, so their IDs were never added to `pb.footnote_ids`. The footnote display numbers ("2", "3") were correctly substituted in the body text (via the earlier substitution code at ~line 964), but the actual footnote content was never rendered at the bottom of the page.
+
+2. **Table cell footnotes not tracked** (`src/pdf/mod.rs` ~line 2214): The post-table loop that updates `styleref_running` iterated table cell paragraphs but did not check for `footnote_id` in their runs. Footnote 2 was inside a table cell, so its ID was never tracked. The pre-scan for `footnote_display_order` (line 475) correctly included table cells, which is why the display number "1" appeared in the body text, but the footnote content was missing.
+
+**Fix**: Two changes in `src/pdf/mod.rs`:
+1. Added footnote tracking before the `continue` in the split paragraph case (~line 1632). After `advance_column_or_page()` and rendering the rest of the paragraph, but before `continue`, iterate `para.runs` to find footnote IDs and add them to `pb.footnote_ids` with proper `effective_margin_bottom` adjustment.
+2. Added footnote tracking in the post-table styleref loop (~line 2214). For each table cell paragraph, check runs for `footnote_id` and add to `pb.footnote_ids`.
+
+**Result**: All 6 footnotes now render correctly across the document:
+- Page 12 (0-indexed): Footnote 1 (enterprise classification, 4 paragraphs with bullet list)
+- Page 18: Footnote 2 (ITP criteria URL)
+- Page 26: Footnote 3 (project eligibility period)
+- Page 27: Footnote 4 (climate assessment)
+- Page 29: Footnotes 5 & 6 (property ownership proofs)
+
+Each has a separator line and properly formatted text. Jaccard -0.1pp (7.4→7.3, noise), SSIM +0.1pp (18.6→18.7). No regressions on any fixture.

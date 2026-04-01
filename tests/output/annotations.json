@@ -189,7 +189,7 @@
       "x_pt": 154.40811,
       "y_pt": 92.55475,
       "note": "Body text overlaps footer here.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 91,
