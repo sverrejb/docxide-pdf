@@ -593,3 +593,33 @@ The bug was in the `hanging` computation for list-labeled paragraphs in the rend
 **Fix**: In 7 locations across `src/pdf/mod.rs`, `src/pdf/header_footer.rs`, `src/pdf/textbox_render.rs`, and `src/pdf/table.rs` (plus adding `indent_first_line` field to `CellParagraphLayout` in `table_layout.rs`): when a list paragraph has `indent_first_line > 0.0` and `indent_hanging == 0.0`, set `hanging = -indent_first_line` instead of `0.0`. This shifts the first-line text rightward by `firstLine` amount, leaving the bullet character at `label_x` (the margin) with proper spacing before the text.
 
 **Result**: Bullet characters now visible with correct ~35pt indentation from margin. Continuation text wraps at the margin. Matches reference layout. Jaccard -0.7pp (17.6% → 16.9%), SSIM -1.1pp (30.5% → 29.3%) — score drop from cascading page breaks due to the now-correct indentation adding extra line wraps. No regressions on any other fixture.
+
+---
+
+## Annotation #90 — Body text overlaps footer (croatian_grant_guidelines) — 2026-04-01 (investigated, not fixed)
+
+**Problem**: Annotator reported "Body text overlaps footer here" on page 18 (0-indexed page 17) at coordinates (154.4, 92.6).
+
+**Analysis**: Thorough measurement of text positions using mutool stext extraction on both generated and reference PDFs:
+
+- **Generated** (all pages consistent): body text bottom at 771.05pt from top (70.85pt from bottom = exactly margin_bottom), footer text top at 773.87pt (68.03pt from bottom). **Gap = 2.83pt**.
+- **Reference** (all pages consistent): body text bottom at 770.81pt from top (71.09pt from bottom), footer text top at 774.09pt (67.81pt from bottom). **Gap = 3.27pt**.
+- **Difference**: 0.44pt total (0.24pt from body position, 0.22pt from footer position).
+
+The `compute_effective_margin_bottom` function correctly returns `max(margin_bottom, footer_margin + footer_content_height)` = max(70.85, 35.4 + ~14) = 70.85pt. The body text fills to exactly this boundary. The reference fills to 0.24pt above this boundary due to Word's twip-rounded line height calculations producing slightly different cumulative heights.
+
+The gap of 2.83pt is tight but NOT actual overlap. The 0.44pt difference from the reference is from cumulative line height precision (same root cause as annotation #66).
+
+**Root cause**: Systemic line height precision difference — floating-point vs twip-rounded cursor advancement. Same category as annotation #66. Not independently fixable without implementing Word-compatible twip rounding throughout the spacing pipeline.
+
+---
+
+## Annotation #47 — Page 1 Y-shift (croatian_grant_guidelines) — 2026-04-01 (FIXED)
+
+**Problem**: Entire page 1 content (flag, logo, header text, body) shifted ~16.7pt too high compared to reference. Footer was correctly positioned.
+
+**Analysis**: The first-page header (header2.xml) has two paragraphs. Paragraph 2 contains two inline images (EU flag 76.5pt, Croatian logo 55.3pt) plus a trailing `w:br` (line break). `compute_header_height()` in `src/pdf/header_footer.rs` computed `content_h = max(max_img_h, line_h)` — counting only one line per paragraph. The trailing `w:br` creates an additional line (~15.4pt) that was not counted, causing the header height to be underestimated by ~15.4pt. This made `effective_slot_top()` too high, shifting all body content up.
+
+**Fix**: In `compute_header_height()`, count `is_line_break` runs per paragraph and add `br_count * line_h` to `content_h`. This accounts for additional lines created by explicit line breaks.
+
+**Result**: "UPUTE ZA PRIJAVITELJE" baseline moved from y=210.91pt to y=226.35pt (reference: 227.83pt). Remaining difference: 1.48pt (within font metric tolerance, was 16.9pt). Jaccard +0.25pp, SSIM +0.58pp. No regressions on any fixture.

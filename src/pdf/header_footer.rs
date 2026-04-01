@@ -116,6 +116,10 @@ pub(super) fn compute_header_height(
                     }
                 }
 
+                // Each w:br (line break) in the paragraph creates an additional line.
+                let br_count = para.runs.iter().filter(|r| r.is_line_break).count();
+                content_h += br_count as f32 * line_h;
+
                 height += content_h;
                 prev_space_after = para.space_after;
             }

@@ -49,7 +49,7 @@
       "x_pt": 294.41983,
       "y_pt": 733.9307,
       "note": "Y-shift of whole page, starting with the flag an logo at the top, but also header, text and rest of the page. Measure against reference and see if it is the same offset for the whole page.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 48,
