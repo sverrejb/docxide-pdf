@@ -62,16 +62,6 @@
       "fixed": false
     },
     {
-      "id": 78,
-      "case": "scraped/stem_partnerships_guide",
-      "page": 7,
-      "source": "Generated",
-      "x_pt": 551.286,
-      "y_pt": 453.0514,
-      "note": "Text out of table bounds",
-      "fixed": true
-    },
-    {
       "id": 82,
       "case": "scraped/czech_municipal_grant_form",
       "page": 1,

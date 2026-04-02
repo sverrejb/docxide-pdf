@@ -196,6 +196,8 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
                 chart_label_chars.extend('0'..='9');
                 chart_label_chars.insert('.');
                 chart_label_chars.insert('-');
+                chart_label_chars.insert(',');
+                chart_label_chars.insert('%');
                 for series in &ic.chart.series {
                     chart_label_chars.extend(series.label.chars());
                 }

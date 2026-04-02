@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::io::Read;
 
 use crate::model::{
-    Chart, ChartAxis, ChartLegend, ChartSeries, ChartType, InlineChart, LegendPosition,
-    MarkerSymbol,
+    BarGrouping, Chart, ChartAxis, ChartLegend, ChartSeries, ChartType, InlineChart,
+    LegendPosition, MarkerSymbol,
 };
 
 use super::{CHART_NS, DML_NS, find_child, parse_hex_color, read_zip_text};
@@ -68,16 +68,21 @@ fn collect_indexed_pts<T: Clone>(
     values
 }
 
-fn parse_num_cache(parent: roxmltree::Node, child_name: &str) -> Vec<f32> {
+fn parse_num_cache(parent: roxmltree::Node, child_name: &str) -> (Vec<f32>, Option<String>) {
     let num_cache = chart_child(parent, child_name)
         .and_then(|c| chart_child(c, "numRef"))
         .and_then(|nr| chart_child(nr, "numCache"));
     let Some(num_cache) = num_cache else {
-        return Vec::new();
+        return (Vec::new(), None);
     };
-    collect_indexed_pts(num_cache, 0.0, |pt| {
+    let format_code = chart_child(num_cache, "formatCode")
+        .and_then(|n| n.text())
+        .map(str::to_string)
+        .filter(|s| s != "General");
+    let values = collect_indexed_pts(num_cache, 0.0, |pt| {
         chart_child(pt, "v")?.text()?.parse::<f32>().ok()
-    })
+    });
+    (values, format_code)
 }
 
 fn parse_str_cache(container: Option<roxmltree::Node>) -> Vec<String> {
@@ -108,7 +113,7 @@ fn parse_marker_symbol(val: &str) -> Option<MarkerSymbol> {
     }
 }
 
-fn parse_series(ser_node: roxmltree::Node) -> (ChartSeries, Vec<String>) {
+fn parse_series(ser_node: roxmltree::Node) -> (ChartSeries, Vec<String>, Option<String>) {
     let label = chart_child(ser_node, "tx")
         .and_then(|tx| chart_child(tx, "strRef"))
         .and_then(|sr| chart_child(sr, "strCache"))
@@ -136,15 +141,17 @@ fn parse_series(ser_node: roxmltree::Node) -> (ChartSeries, Vec<String>) {
         .and_then(parse_marker_symbol);
 
     // Scatter/bubble use yVal instead of val
-    let y_vals = parse_num_cache(ser_node, "yVal");
-    let values = if !y_vals.is_empty() {
-        y_vals
+    let (y_vals, y_fmt) = parse_num_cache(ser_node, "yVal");
+    let (values, val_fmt) = if !y_vals.is_empty() {
+        (y_vals, y_fmt)
     } else {
         parse_num_cache(ser_node, "val")
     };
 
-    let x_values = non_empty_vec(parse_num_cache(ser_node, "xVal"));
-    let bubble_sizes = non_empty_vec(parse_num_cache(ser_node, "bubbleSize"));
+    let (x_values_raw, _) = parse_num_cache(ser_node, "xVal");
+    let x_values = non_empty_vec(x_values_raw);
+    let (bubble_raw, _) = parse_num_cache(ser_node, "bubbleSize");
+    let bubble_sizes = non_empty_vec(bubble_raw);
 
     let cat_labels = parse_str_cache(chart_child(ser_node, "cat"));
 
@@ -159,6 +166,7 @@ fn parse_series(ser_node: roxmltree::Node) -> (ChartSeries, Vec<String>) {
             marker,
         },
         cat_labels,
+        val_fmt,
     )
 }
 
@@ -193,20 +201,24 @@ fn parse_legend(legend_node: roxmltree::Node) -> ChartLegend {
     ChartLegend { position }
 }
 
-fn collect_series(type_node: roxmltree::Node) -> (Vec<ChartSeries>, Vec<String>) {
+fn collect_series(type_node: roxmltree::Node) -> (Vec<ChartSeries>, Vec<String>, Option<String>) {
     let mut series_list = Vec::new();
     let mut cat_labels = Vec::new();
+    let mut val_format_code = None;
     for ser_node in type_node
         .children()
         .filter(|n| n.tag_name().name() == "ser" && n.tag_name().namespace() == Some(CHART_NS))
     {
-        let (series, labels) = parse_series(ser_node);
+        let (series, labels, fmt) = parse_series(ser_node);
         if cat_labels.is_empty() && !labels.is_empty() {
             cat_labels = labels;
         }
+        if val_format_code.is_none() {
+            val_format_code = fmt;
+        }
         series_list.push(series);
     }
-    (series_list, cat_labels)
+    (series_list, cat_labels, val_format_code)
 }
 
 fn assign_cat_labels(cat_axis: &mut Option<ChartAxis>, cat_labels: Vec<String>) {
@@ -239,7 +251,7 @@ fn parse_chart_space(xml_content: &str, accent_colors: Vec<[u8; 3]>) -> Option<C
 
     let (type_node, chart_type, gap_width_pct) = detect_chart_type(plot_area)?;
 
-    let (series_list, cat_labels) = collect_series(type_node);
+    let (series_list, cat_labels, val_format_code) = collect_series(type_node);
 
     // Scatter/bubble have two valAx; use first as cat_axis, second as val_axis
     let (mut cat_axis, val_axis) = if matches!(chart_type, ChartType::Scatter | ChartType::Bubble) {
@@ -269,6 +281,7 @@ fn parse_chart_space(xml_content: &str, accent_colors: Vec<[u8; 3]>) -> Option<C
         gap_width_pct,
         plot_border_color: extract_plot_border(plot_area),
         accent_colors,
+        val_format_code,
     })
 }
 
@@ -277,10 +290,11 @@ fn detect_chart_type<'a>(
 ) -> Option<(roxmltree::Node<'a, 'a>, ChartType, f32)> {
     if let Some(n) = chart_child(plot_area, "barChart") {
         let horizontal = chart_attr(n, "barDir") == Some("bar");
-        let stacked = matches!(
-            chart_attr(n, "grouping"),
-            Some("stacked") | Some("percentStacked")
-        );
+        let grouping = match chart_attr(n, "grouping") {
+            Some("stacked") => BarGrouping::Stacked,
+            Some("percentStacked") => BarGrouping::PercentStacked,
+            _ => BarGrouping::Clustered,
+        };
         let gap_width_pct = chart_attr(n, "gapWidth")
             .and_then(|v| v.parse::<f32>().ok())
             .unwrap_or(150.0);
@@ -288,7 +302,7 @@ fn detect_chart_type<'a>(
             n,
             ChartType::Bar {
                 horizontal,
-                stacked,
+                grouping,
             },
             gap_width_pct,
         ));

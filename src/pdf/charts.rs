@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use pdf_writer::{Content, Name, Str};
 
 use crate::fonts::{FontEntry, encode_as_gids, to_winansi_bytes};
-use crate::model::{ChartType, InlineChart, LegendPosition, MarkerSymbol};
+use crate::model::{BarGrouping, ChartType, InlineChart, LegendPosition, MarkerSymbol};
 
 use super::chart_legend::{LegendItem, LegendPlacement, SwatchStyle, render_chart_legend};
 use super::charts_radial;
@@ -44,12 +44,97 @@ pub(super) fn text_width(text: &str, font_size: f32, font: Option<&FontEntry>) -
     }
 }
 
-fn format_tick_label(val: f32, step: f32) -> String {
-    if step.fract() == 0.0 {
-        format!("{}", val as i32)
-    } else {
-        format!("{:.1}", val)
+fn format_tick_label(val: f32, step: f32, format_code: Option<&str>) -> String {
+    match format_code {
+        Some(fmt) => apply_number_format(val, fmt),
+        None => {
+            if step.fract() == 0.0 {
+                format!("{}", val as i64)
+            } else {
+                format!("{:.1}", val)
+            }
+        }
     }
+}
+
+fn apply_number_format(val: f32, fmt: &str) -> String {
+    let has_comma = fmt.contains(',');
+    let has_percent = fmt.contains('%');
+    let effective_val = if has_percent { val * 100.0 } else { val };
+
+    let decimals = if let Some(dot_pos) = fmt.rfind('.') {
+        fmt[dot_pos + 1..]
+            .chars()
+            .take_while(|&c| c == '0' || c == '#')
+            .count()
+    } else {
+        0
+    };
+
+    let formatted = format!("{:.prec$}", effective_val as f64, prec = decimals);
+
+    let result = if has_comma {
+        insert_thousands_separator(&formatted)
+    } else {
+        formatted
+    };
+
+    if has_percent {
+        format!("{}%", result)
+    } else {
+        result
+    }
+}
+
+fn insert_thousands_separator(s: &str) -> String {
+    let (int_part, dec_part) = match s.find('.') {
+        Some(pos) => (&s[..pos], Some(&s[pos..])),
+        None => (s, None),
+    };
+    let negative = int_part.starts_with('-');
+    let digits = if negative { &int_part[1..] } else { int_part };
+    let mut result = String::new();
+    for (i, ch) in digits.chars().rev().enumerate() {
+        if i > 0 && i % 3 == 0 {
+            result.push(',');
+        }
+        result.push(ch);
+    }
+    let mut out: String = result.chars().rev().collect();
+    if negative {
+        out.insert(0, '-');
+    }
+    if let Some(d) = dec_part {
+        out.push_str(d);
+    }
+    out
+}
+
+fn wrap_label(text: &str, max_width: f32, font_size: f32, font: Option<&FontEntry>) -> Vec<String> {
+    let full_w = text_width(text, font_size, font);
+    if full_w <= max_width || !text.contains(' ') {
+        return vec![text.to_string()];
+    }
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let mut lines: Vec<String> = Vec::new();
+    let mut current_line = String::new();
+    for word in &words {
+        let test = if current_line.is_empty() {
+            word.to_string()
+        } else {
+            format!("{} {}", current_line, word)
+        };
+        if text_width(&test, font_size, font) > max_width && !current_line.is_empty() {
+            lines.push(current_line);
+            current_line = word.to_string();
+        } else {
+            current_line = test;
+        }
+    }
+    if !current_line.is_empty() {
+        lines.push(current_line);
+    }
+    lines
 }
 
 fn set_color(content: &mut Content, color: Option<[u8; 3]>) {
@@ -291,21 +376,38 @@ pub(super) fn render_chart(
             ..
         }
     );
+    let bar_grouping = match c.chart_type {
+        ChartType::Bar { grouping, .. } => grouping,
+        _ => BarGrouping::Clustered,
+    };
+    let is_stacked = bar_grouping == BarGrouping::Stacked;
+    let is_percent_stacked = bar_grouping == BarGrouping::PercentStacked;
 
     let legend_pos = c.legend.as_ref().map(|l| l.position);
     let has_legend = legend_pos.is_some();
     let legend_on_right = legend_pos == Some(LegendPosition::Right);
     let legend_on_bottom = legend_pos == Some(LegendPosition::Bottom);
 
-    let max_val = c
-        .series
-        .iter()
-        .flat_map(|s| s.values.iter())
-        .copied()
-        .fold(0.0f32, f32::max);
+    let max_val = if is_stacked {
+        (0..num_categories)
+            .map(|ci| {
+                c.series
+                    .iter()
+                    .map(|s| s.values.get(ci).copied().unwrap_or(0.0))
+                    .sum::<f32>()
+            })
+            .fold(0.0f32, f32::max)
+    } else {
+        c.series
+            .iter()
+            .flat_map(|s| s.values.iter())
+            .copied()
+            .fold(0.0f32, f32::max)
+    };
 
-    let (tick_step, axis_max) = if matches!(c.chart_type, ChartType::Scatter) {
-        // Scatter Y-axis: target ~10 ticks, only add headroom if data hits ceiling
+    let (tick_step, axis_max) = if is_percent_stacked {
+        (10.0, 100.0)
+    } else if matches!(c.chart_type, ChartType::Scatter) {
         compute_axis_range(max_val, 10, 0.98)
     } else {
         compute_axis_range(max_val, 5, 0.9)
@@ -331,9 +433,13 @@ pub(super) fn render_chart(
         (0.0, 0.0)
     };
 
-    let max_tick_label = format_tick_label(axis_max, tick_step);
+    let val_fmt = c.val_format_code.as_deref();
+    let max_tick_label = if is_percent_stacked {
+        "100%".to_string()
+    } else {
+        format_tick_label(axis_max, tick_step, val_fmt)
+    };
     let val_label_w = text_width(&max_tick_label, font_size, label_font) + 15.0;
-    let cat_label_h = font_size + 6.0;
 
     let is_point_chart = matches!(
         c.chart_type,
@@ -360,6 +466,28 @@ pub(super) fn render_chart(
         8.0
     };
     let margin_top = h * 0.05;
+
+    // Estimate plot_w for label wrapping and thinning calculations
+    let plot_w_est = w - margin_left - margin_right;
+    let line_h = font_size + 2.0;
+
+    let max_wrap_lines = if !horizontal && !is_scatter_like && num_categories > 0 {
+        if let Some(ref cat_axis) = c.cat_axis {
+            let slot_w = plot_w_est / num_categories as f32;
+            cat_axis
+                .labels
+                .iter()
+                .map(|l| wrap_label(l, slot_w * 0.9, font_size, label_font).len())
+                .max()
+                .unwrap_or(1)
+        } else {
+            1
+        }
+    } else {
+        1
+    };
+
+    let cat_label_h = line_h * max_wrap_lines as f32 + 4.0;
     let margin_bottom = if has_legend && legend_on_bottom {
         h * 0.22
     } else {
@@ -459,7 +587,8 @@ pub(super) fn render_chart(
     // Data rendering
     match c.chart_type {
         ChartType::Bar {
-            horizontal: false, ..
+            horizontal: false,
+            grouping: BarGrouping::Clustered,
         } => {
             let gap_ratio = c.gap_width_pct / 100.0;
             let group_w = plot_w / num_categories as f32;
@@ -479,7 +608,43 @@ pub(super) fn render_chart(
             }
         }
         ChartType::Bar {
-            horizontal: true, ..
+            horizontal: false,
+            grouping: BarGrouping::Stacked | BarGrouping::PercentStacked,
+        } => {
+            let gap_ratio = c.gap_width_pct / 100.0;
+            let group_w = plot_w / num_categories as f32;
+            let bar_w = group_w / (1.0 + gap_ratio);
+            let gap = gap_ratio * bar_w;
+
+            for ci in 0..num_categories {
+                let bx = plot_x + ci as f32 * group_w + gap / 2.0;
+                let cat_total = if is_percent_stacked {
+                    c.series
+                        .iter()
+                        .map(|s| s.values.get(ci).copied().unwrap_or(0.0))
+                        .sum::<f32>()
+                } else {
+                    0.0
+                };
+                let mut cumulative_h = 0.0;
+                for series in c.series.iter() {
+                    let raw = series.values.get(ci).copied().unwrap_or(0.0);
+                    let val = if is_percent_stacked && cat_total > 0.0 {
+                        (raw / cat_total) * 100.0
+                    } else {
+                        raw
+                    };
+                    let bar_h = (val / axis_max) * plot_h;
+                    set_color(content, series.color);
+                    content.rect(bx, plot_y + cumulative_h, bar_w, bar_h);
+                    content.fill_nonzero();
+                    cumulative_h += bar_h;
+                }
+            }
+        }
+        ChartType::Bar {
+            horizontal: true,
+            grouping: BarGrouping::Clustered,
         } => {
             let gap_ratio = c.gap_width_pct / 100.0;
             let group_h = plot_h / num_categories as f32;
@@ -495,6 +660,41 @@ pub(super) fn render_chart(
                     set_color(content, series.color);
                     content.rect(plot_x, by, bw, bar_h);
                     content.fill_nonzero();
+                }
+            }
+        }
+        ChartType::Bar {
+            horizontal: true,
+            grouping: BarGrouping::Stacked | BarGrouping::PercentStacked,
+        } => {
+            let gap_ratio = c.gap_width_pct / 100.0;
+            let group_h = plot_h / num_categories as f32;
+            let bar_h = group_h / (1.0 + gap_ratio);
+            let gap = gap_ratio * bar_h;
+
+            for ci in 0..num_categories {
+                let by = plot_y + ci as f32 * group_h + gap / 2.0;
+                let cat_total = if is_percent_stacked {
+                    c.series
+                        .iter()
+                        .map(|s| s.values.get(ci).copied().unwrap_or(0.0))
+                        .sum::<f32>()
+                } else {
+                    0.0
+                };
+                let mut cumulative_w = 0.0;
+                for series in c.series.iter() {
+                    let raw = series.values.get(ci).copied().unwrap_or(0.0);
+                    let val = if is_percent_stacked && cat_total > 0.0 {
+                        (raw / cat_total) * 100.0
+                    } else {
+                        raw
+                    };
+                    let bw = (val / axis_max) * plot_w;
+                    set_color(content, series.color);
+                    content.rect(plot_x + cumulative_w, by, bw, bar_h);
+                    content.fill_nonzero();
+                    cumulative_w += bw;
                 }
             }
         }
@@ -676,7 +876,11 @@ pub(super) fn render_chart(
         let num_ticks = (axis_max / tick_step).round() as usize;
         for i in 0..=num_ticks {
             let val = i as f32 * tick_step;
-            let label = format_tick_label(val, tick_step);
+            let label = if is_percent_stacked {
+                format!("{}%", val as i32)
+            } else {
+                format_tick_label(val, tick_step, val_fmt)
+            };
             let tw = text_width(&label, font_size, label_font);
             let frac = val / axis_max;
 
@@ -696,7 +900,7 @@ pub(super) fn render_chart(
             let num_x_ticks = (x_axis_max / x_tick_step).round() as usize;
             for i in 0..=num_x_ticks {
                 let val = i as f32 * x_tick_step;
-                let label = format_tick_label(val, x_tick_step);
+                let label = format_tick_label(val, x_tick_step, None);
                 let tw = text_width(&label, font_size, label_font);
                 let frac = val / x_axis_max;
                 let lx = plot_x + frac * plot_w - tw / 2.0;
@@ -705,16 +909,47 @@ pub(super) fn render_chart(
             }
         }
 
-        // Category axis labels — always centered in each category segment
+        // Category axis labels with auto-skip and multi-line wrapping
         if !is_scatter_like && let Some(ref cat_axis) = c.cat_axis {
+            let label_skip = if !horizontal {
+                let slot_w = plot_w / num_categories.max(1) as f32;
+                // Measure the widest wrapped line to decide thinning.
+                // Labels that wrap at spaces are allowed to slightly exceed the slot.
+                let can_wrap = cat_axis.labels.iter().any(|l| l.contains(' '));
+                let max_wrapped_line_w = cat_axis
+                    .labels
+                    .iter()
+                    .flat_map(|l| wrap_label(l, slot_w, font_size, label_font))
+                    .map(|line| text_width(&line, font_size, label_font))
+                    .fold(0.0f32, f32::max);
+                // Word is tolerant of slight overflow for wrapped labels
+                let threshold = if can_wrap { slot_w * 1.5 } else { slot_w };
+                if max_wrapped_line_w > threshold {
+                    ((max_wrapped_line_w + 2.0) / slot_w).ceil() as usize
+                } else {
+                    1
+                }
+            } else {
+                1
+            };
+
             for (ci, label) in cat_axis.labels.iter().enumerate() {
-                let tw = text_width(label, font_size, label_font);
+                if ci % label_skip != 0 {
+                    continue;
+                }
                 if !horizontal {
                     let group_w = plot_w / num_categories as f32;
-                    let cx = plot_x + (ci as f32 + 0.5) * group_w - tw / 2.0;
-                    let cy = plot_y - font_size - 8.0;
-                    show_text(content, label_font_key, font_size, cx, cy, label, label_font);
+                    let slot_w = group_w * label_skip as f32;
+                    let cx_center = plot_x + (ci as f32 + 0.5) * group_w;
+                    let lines = wrap_label(label, slot_w * 0.9, font_size, label_font);
+                    for (li, line) in lines.iter().enumerate() {
+                        let tw = text_width(line, font_size, label_font);
+                        let lx = cx_center - tw / 2.0;
+                        let ly = plot_y - font_size - 8.0 - (li as f32 * line_h);
+                        show_text(content, label_font_key, font_size, lx, ly, line, label_font);
+                    }
                 } else {
+                    let tw = text_width(label, font_size, label_font);
                     let group_h = plot_h / num_categories as f32;
                     let cy = plot_y + ci as f32 * group_h + group_h / 2.0 - font_size * 0.3;
                     let cx = plot_x - tw - 9.0;
@@ -734,7 +969,10 @@ pub(super) fn render_chart(
                 c.chart_type,
                 ChartType::Bar {
                     horizontal: true,
-                    ..
+                    grouping: BarGrouping::Clustered,
+                } | ChartType::Bar {
+                    horizontal: false,
+                    grouping: BarGrouping::Stacked | BarGrouping::PercentStacked,
                 }
             );
             let series_order: Vec<(usize, &crate::model::ChartSeries)> = if reverse_legend {
@@ -964,7 +1202,7 @@ fn render_radar(
         }
         for ti in 1..=num_ticks {
             let val = ti as f32 * tick_step;
-            let label = format_tick_label(val, tick_step);
+            let label = format_tick_label(val, tick_step, None);
             let r = radius * (ti as f32 / num_ticks as f32);
             let ly = cy + r - font_size * 0.3;
             let tw = text_width(&label, font_size, label_font);

@@ -22,12 +22,18 @@ pub struct ChartSeries {
     pub marker: Option<MarkerSymbol>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum BarGrouping {
+    Clustered,
+    Stacked,
+    PercentStacked,
+}
+
 #[derive(Clone)]
 pub enum ChartType {
     Bar {
         horizontal: bool,
-        #[allow(dead_code)]
-        stacked: bool,
+        grouping: BarGrouping,
     },
     Line,
     Pie,
@@ -70,6 +76,7 @@ pub struct Chart {
     pub gap_width_pct: f32,
     pub plot_border_color: Option<[u8; 3]>,
     pub accent_colors: Vec<[u8; 3]>,
+    pub val_format_code: Option<String>,
 }
 
 pub struct InlineChart {

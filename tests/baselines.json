@@ -264,14 +264,14 @@
     "text_boundary": 0.0
   },
   "cases/case52": {
-    "jaccard": 0.3992,
-    "ssim": 0.6024,
-    "text_boundary": 0.0789
+    "jaccard": 0.7062,
+    "ssim": 0.7782,
+    "text_boundary": 0.5349
   },
   "cases/case53": {
-    "jaccard": 0.4804,
-    "ssim": 0.4365,
-    "text_boundary": 0.375
+    "jaccard": 0.5605,
+    "ssim": 0.5454,
+    "text_boundary": 0.7561
   },
   "cases/case54": {
     "jaccard": 0.6946,
