@@ -1,5 +1,5 @@
 {
-  "next_id": 93,
+  "next_id": 107,
   "annotations": [
     {
       "id": 8,
@@ -10,16 +10,6 @@
       "y_pt": 164.30786,
       "note": "This text should come on page 2.",
       "fixed": false
-    },
-    {
-      "id": 25,
-      "case": "scraped/air_pollution_permit_form",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 107.463844,
-      "y_pt": 52.710266,
-      "note": "I don't see this line in the reference.",
-      "fixed": true
     },
     {
       "id": 30,
@@ -40,16 +30,6 @@
       "y_pt": 248.89056,
       "note": "Breakpoint of the green box (table?) should be in the fourth paragraph. Not where we break it. There is still a lot of space below the box.",
       "fixed": false
-    },
-    {
-      "id": 55,
-      "case": "scraped/japanese_interlibrary_loan",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 36.071957,
-      "y_pt": 279.16833,
-      "note": "This text in the first column, top and middle cell should be vertically centered. The third cell looks correct.",
-      "fixed": true
     },
     {
       "id": 59,
@@ -122,14 +102,114 @@
       "fixed": true
     },
     {
-      "id": 92,
-      "case": "scraped/brazilian_logistics_study",
-      "page": 9,
+      "id": 93,
+      "case": "new/czech_works_contract_proposal",
+      "page": 0,
       "source": "Generated",
-      "x_pt": 104.19403,
-      "y_pt": 413.99887,
-      "note": "We are missing the \"Fonte: ALARCOM (2019)\"-caption here.",
-      "fixed": true
+      "x_pt": 539.4887,
+      "y_pt": 410.5048,
+      "note": "is this a line break we are adding, or just word wrapping?  Splitting in the middle of a phone number is unfortunate, but it migjt just be a result of  word with difference.",
+      "fixed": false
+    },
+    {
+      "id": 94,
+      "case": "case53",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 132.55759,
+      "y_pt": 445.7109,
+      "note": "I think the word version omits some of the labels or something? We are printing them overlaping, and that does not work.",
+      "fixed": false
+    },
+    {
+      "id": 95,
+      "case": "case53",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 146.72275,
+      "y_pt": 512.488,
+      "note": "Labels are too wide here, they should break into \"Region\" on one line and \"A\" on the other",
+      "fixed": false
+    },
+    {
+      "id": 96,
+      "case": "case52",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 132.67159,
+      "y_pt": 509.45786,
+      "note": "We are not supporting stacked bars at all. Fix that.",
+      "fixed": false
+    },
+    {
+      "id": 98,
+      "case": "new/english_town_council_report",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 150.86743,
+      "y_pt": 609.95953,
+      "note": "This box should have a blue background.",
+      "fixed": false
+    },
+    {
+      "id": 99,
+      "case": "new/english_town_council_report",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 71.75009,
+      "y_pt": 767.3529,
+      "note": "this blue outline box should not be here.",
+      "fixed": false
+    },
+    {
+      "id": 100,
+      "case": "new/english_town_council_report",
+      "page": 2,
+      "source": "Generated",
+      "x_pt": 527.4346,
+      "y_pt": 750.5171,
+      "note": "Several gaps in the border on right and left side.",
+      "fixed": false
+    },
+    {
+      "id": 101,
+      "case": "new/english_town_council_report",
+      "page": 7,
+      "source": "Generated",
+      "x_pt": 96.81949,
+      "y_pt": 793.3853,
+      "note": "No room between numbering and text \"The Contractor...\"",
+      "fixed": false
+    },
+    {
+      "id": 102,
+      "case": "new/english_town_council_report",
+      "page": 7,
+      "source": "Generated",
+      "x_pt": 94.28856,
+      "y_pt": 546.1387,
+      "note": "Text overlaps with numbering, as well as itself here.",
+      "fixed": false
+    },
+    {
+      "id": 103,
+      "case": "new/spanish_constitutional_ruling",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 146.91533,
+      "y_pt": 797.2121,
+      "note": "Page numbers should be rendered on the right side. We do left.",
+      "fixed": false
+    },
+    {
+      "id": 104,
+      "case": "new/taiwanese_education_fraud_ruling",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 271.99023,
+      "y_pt": 765.0616,
+      "note": "The whole document is shifted in the y-direction, even line one.",
+      "fixed": false
     }
   ]
 }

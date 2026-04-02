@@ -1,6 +1,6 @@
 use eframe::egui;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -58,13 +58,17 @@ struct CaseInfo {
 fn discover_cases(output_dir: &Path) -> Vec<CaseInfo> {
     let mut cases = Vec::new();
 
-    // Scan cases/, scraped/, samples/ subdirs
-    for subdir in &["cases", "scraped", "samples"] {
-        let dir = output_dir.join(subdir);
-        if !dir.is_dir() {
+    // Scan all subdirs (cases/, scraped/, samples/, fonts/, new/, etc.)
+    let Ok(top_entries) = std::fs::read_dir(output_dir) else {
+        return cases;
+    };
+    for top_entry in top_entries.flatten() {
+        let subdir_path = top_entry.path();
+        if !subdir_path.is_dir() {
             continue;
         }
-        let Ok(entries) = std::fs::read_dir(&dir) else {
+        let subdir = top_entry.file_name().to_string_lossy().into_owned();
+        let Ok(entries) = std::fs::read_dir(&subdir_path) else {
             continue;
         };
         for entry in entries.flatten() {
@@ -81,7 +85,7 @@ fn discover_cases(output_dir: &Path) -> Vec<CaseInfo> {
             if page_count == 0 {
                 continue;
             }
-            let name = if *subdir == "cases" {
+            let name = if subdir == "cases" {
                 entry.file_name().to_string_lossy().into_owned()
             } else {
                 format!("{}/{}", subdir, entry.file_name().to_string_lossy())
@@ -296,6 +300,7 @@ struct App {
     show_annotations: bool,
     show_notes_panel: bool,
     baselines: HashMap<String, BaselineScores>,
+    collapsed_groups: HashSet<String>,
 }
 
 impl App {
@@ -319,6 +324,7 @@ impl App {
             show_annotations: true,
             show_notes_panel: true,
             baselines,
+            collapsed_groups: HashSet::new(),
         }
     }
 
@@ -469,12 +475,23 @@ impl eframe::App for App {
                 entry.1 += 1;
             }
         }
-        // None = no annotations, Some(color) = has annotations
-        let case_labels: Vec<(String, usize, Option<egui::Color32>)> = self
+        // Build case labels with group info
+        struct CaseLabel {
+            group: String,
+            label: String,
+            index: usize,
+            color: Option<egui::Color32>,
+        }
+        let case_labels: Vec<CaseLabel> = self
             .cases
             .iter()
             .enumerate()
             .map(|(i, c)| {
+                let (group, display_name) = if let Some(pos) = c.name.find('/') {
+                    (c.name[..pos].to_string(), c.name[pos + 1..].to_string())
+                } else {
+                    ("cases".to_string(), c.name.clone())
+                };
                 let key = baseline_key(&c.name);
                 let color = match annotation_counts.get(c.name.as_str()) {
                     Some(&(total, fixed)) if fixed == total => Some(egui::Color32::from_rgb(0, 180, 0)),
@@ -486,15 +503,33 @@ impl eframe::App for App {
                 let label = if let Some(b) = self.baselines.get(&key) {
                     let j = b.jaccard.map(|v| format!("{:.0}", v * 100.0)).unwrap_or_else(|| "-".into());
                     let s = b.ssim.map(|v| format!("{:.0}", v * 100.0)).unwrap_or_else(|| "-".into());
-                    format!("{} ({}p) {}/{}{}", c.name, c.page_count, j, s, pad)
+                    format!("{} ({}p) {}/{}{}", display_name, c.page_count, j, s, pad)
                 } else {
-                    format!("{} ({}p){}", c.name, c.page_count, pad)
+                    format!("{} ({}p){}", display_name, c.page_count, pad)
                 };
-                (label, i, color)
+                CaseLabel { group, label, index: i, color }
             })
             .collect();
+
+        // Group labels by folder, preserving order
+        let mut groups: Vec<(String, Vec<&CaseLabel>)> = Vec::new();
+        for cl in &case_labels {
+            if groups.last().is_some_and(|(g, _)| g == &cl.group) {
+                groups.last_mut().unwrap().1.push(cl);
+            } else {
+                groups.push((cl.group.clone(), vec![cl]));
+            }
+        }
+
         let cur = self.current_case;
         let scroll = self.scroll_to_current;
+        // Expand the group containing the current case when scrolling to it
+        if scroll {
+            let cur_group = case_labels.get(cur).map(|cl| cl.group.as_str());
+            if let Some(g) = cur_group {
+                self.collapsed_groups.remove(g);
+            }
+        }
 
         let mut clicked_case = None;
         let mut did_scroll = false;
@@ -505,20 +540,41 @@ impl eframe::App for App {
                 ui.heading("Cases");
                 ui.separator();
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    for (label, i, color) in &case_labels {
-                        let selected = *i == cur;
-                        let resp = ui.selectable_label(selected, label);
-                        if let Some(c) = color {
-                            let rect = resp.rect;
-                            let center = egui::pos2(rect.right() - 6.0, rect.center().y);
-                            ui.painter().circle_filled(center, 4.0, *c);
+                    for (group_name, items) in &groups {
+                        let collapsed = self.collapsed_groups.contains(group_name);
+                        let header = format!(
+                            "{} {} ({})",
+                            if collapsed { "\u{25B6}" } else { "\u{25BC}" },
+                            group_name,
+                            items.len()
+                        );
+                        let header_resp = ui.selectable_label(false,
+                            egui::RichText::new(&header).strong()
+                        );
+                        if header_resp.clicked() {
+                            if collapsed {
+                                self.collapsed_groups.remove(group_name);
+                            } else {
+                                self.collapsed_groups.insert(group_name.clone());
+                            }
                         }
-                        if resp.clicked() {
-                            clicked_case = Some(*i);
-                        }
-                        if selected && scroll {
-                            resp.scroll_to_me(Some(egui::Align::Center));
-                            did_scroll = true;
+                        if !collapsed {
+                            for cl in items {
+                                let selected = cl.index == cur;
+                                let resp = ui.selectable_label(selected, &cl.label);
+                                if let Some(c) = cl.color {
+                                    let rect = resp.rect;
+                                    let center = egui::pos2(rect.right() - 6.0, rect.center().y);
+                                    ui.painter().circle_filled(center, 4.0, c);
+                                }
+                                if resp.clicked() {
+                                    clicked_case = Some(cl.index);
+                                }
+                                if selected && scroll {
+                                    resp.scroll_to_me(Some(egui::Align::Center));
+                                    did_scroll = true;
+                                }
+                            }
                         }
                     }
                 });

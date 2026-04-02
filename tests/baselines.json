@@ -277,8 +277,9 @@
     "ssim": 0.8712
   },
   "cases/case55": {
-    "jaccard": 0.452,
-    "ssim": 0.5211
+    "jaccard": 0.44,
+    "ssim": 0.5773,
+    "text_boundary": 1.0
   },
   "cases/case6": {
     "jaccard": 0.4505,
@@ -375,16 +376,18 @@
     "text_boundary": 0.9667
   },
   "new/czech_health_sta..": {
-    "jaccard": 0.2267,
-    "ssim": 0.3424
+    "jaccard": 0.5392,
+    "ssim": 0.7516,
+    "text_boundary": 0.8974
   },
   "new/czech_works_cont..": {
     "jaccard": 0.2844,
     "ssim": 0.4195
   },
   "new/dutch_school_eva..": {
-    "jaccard": 0.4846,
-    "ssim": 0.8806
+    "jaccard": 0.5016,
+    "ssim": 0.9125,
+    "text_boundary": 1.0
   },
   "new/english_town_cou..": {
     "jaccard": 0.177,

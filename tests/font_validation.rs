@@ -316,14 +316,81 @@ fn has_runs_without_font(
     false
 }
 
-/// Collect w:pStyle and w:rStyle values from document content XML.
+/// Collect w:pStyle and w:rStyle values from document content XML,
+/// but only when at least one text-bearing run actually relies on that
+/// style for its font (i.e. the run has no explicit w:rFonts override).
 fn collect_used_styles(doc: &roxmltree::Document, styles: &mut BTreeSet<String>) {
     let w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     for node in doc.descendants() {
-        let name = node.tag_name().name();
-        if name == "pStyle" || name == "rStyle" {
-            if let Some(val) = node.attribute((w, "val")).or_else(|| node.attribute("val")) {
-                styles.insert(val.to_string());
+        if node.tag_name().name() != "p" {
+            continue;
+        }
+        // Find pStyle for this paragraph
+        let p_style = node.children().find_map(|child| {
+            if child.tag_name().name() == "pPr" {
+                child.children().find_map(|n| {
+                    if n.tag_name().name() == "pStyle" {
+                        n.attribute((w, "val")).or_else(|| n.attribute("val"))
+                    } else {
+                        None
+                    }
+                })
+            } else {
+                None
+            }
+        });
+
+        // Check if any text-bearing run lacks an explicit w:rFonts
+        let has_run_needing_style_font = node.children().any(|child| {
+            if child.tag_name().name() != "r" {
+                return false;
+            }
+            let has_text = child
+                .children()
+                .any(|c| c.tag_name().name() == "t" || c.tag_name().name() == "br");
+            if !has_text {
+                return false;
+            }
+            let has_explicit_font = child.children().any(|c| {
+                c.tag_name().name() == "rPr"
+                    && c.children().any(|n| n.tag_name().name() == "rFonts")
+            });
+            !has_explicit_font
+        });
+
+        if has_run_needing_style_font {
+            if let Some(style_id) = p_style {
+                styles.insert(style_id.to_string());
+            }
+        }
+
+        // Also collect rStyle from runs that lack explicit w:rFonts
+        for run in node.children() {
+            if run.tag_name().name() != "r" {
+                continue;
+            }
+            let has_text = run
+                .children()
+                .any(|c| c.tag_name().name() == "t" || c.tag_name().name() == "br");
+            if !has_text {
+                continue;
+            }
+            let rpr = run.children().find(|c| c.tag_name().name() == "rPr");
+            let has_explicit_font = rpr.is_some_and(|rpr| {
+                rpr.children().any(|n| n.tag_name().name() == "rFonts")
+            });
+            if !has_explicit_font {
+                if let Some(rpr) = rpr {
+                    for n in rpr.children() {
+                        if n.tag_name().name() == "rStyle" {
+                            if let Some(val) =
+                                n.attribute((w, "val")).or_else(|| n.attribute("val"))
+                            {
+                                styles.insert(val.to_string());
+                            }
+                        }
+                    }
+                }
             }
         }
     }

@@ -8,7 +8,7 @@ use super::parse_table_node;
 use super::runs::parse_runs;
 use super::styles::{ParagraphStyle, StylesInfo, ThemeFonts, parse_alignment};
 use super::{
-    WML_NS, collect_block_nodes, extract_indents, parse_paragraph_borders,
+    WML_NS, collect_block_nodes, extract_indents, parse_frame_props, parse_paragraph_borders,
     parse_paragraph_spacing, parse_tab_stops, wml, wml_attr,
 };
 
@@ -103,6 +103,7 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
                     indent_hanging,
                     indent_first_line,
                     snap_to_grid: true,
+                    frame_props: ppr.and_then(parse_frame_props),
                     ..Paragraph::default()
                 }));
             }

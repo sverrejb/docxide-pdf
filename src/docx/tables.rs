@@ -208,9 +208,6 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                 inside_v: parse_cell_border(bdr_node, "insideV"),
             });
 
-    let effective_tbl_borders: Option<&TableBordersDef> =
-        inline_tbl_borders.as_ref().or(tbl_style_borders);
-
     // Parse tblLook — controls which conditional formats from the style apply.
     // Supports both named attributes (w:firstRow="1") and legacy hex bitmask (w:val="04A0").
     let tbl_look_node = tbl_pr.and_then(|pr| wml(pr, "tblLook"));
@@ -251,6 +248,40 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
             })
             .unwrap_or((None, false));
         let is_header = tr_pr.and_then(|pr| wml(pr, "tblHeader")).is_some();
+
+        // Per-row table property exceptions (§17.4.60): merge with base table
+        // borders — specified exception borders override, unspecified inherit.
+        let base_tbl_borders: Option<&TableBordersDef> =
+            inline_tbl_borders.as_ref().or(tbl_style_borders);
+        let merged_row_borders;
+        let row_effective_tbl_borders = match wml(*tr, "tblPrEx")
+            .and_then(|prex| wml(prex, "tblBorders"))
+        {
+            Some(bdr_node) => {
+                let exc = TableBordersDef {
+                    top: parse_cell_border(bdr_node, "top"),
+                    bottom: parse_cell_border(bdr_node, "bottom"),
+                    left: parse_cell_border_left(bdr_node),
+                    right: parse_cell_border_right(bdr_node),
+                    inside_h: parse_cell_border(bdr_node, "insideH"),
+                    inside_v: parse_cell_border(bdr_node, "insideV"),
+                };
+                merged_row_borders = if let Some(base) = base_tbl_borders {
+                    TableBordersDef {
+                        top: border_or_fallback(exc.top, base.top),
+                        bottom: border_or_fallback(exc.bottom, base.bottom),
+                        left: border_or_fallback(exc.left, base.left),
+                        right: border_or_fallback(exc.right, base.right),
+                        inside_h: border_or_fallback(exc.inside_h, base.inside_h),
+                        inside_v: border_or_fallback(exc.inside_v, base.inside_v),
+                    }
+                } else {
+                    exc
+                };
+                Some(&merged_row_borders)
+            }
+            None => base_tbl_borders,
+        };
 
         let mut cells = Vec::new();
         let mut grid_col = 0usize;
@@ -313,7 +344,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
             let span_end = ci + grid_span as usize;
 
             // Base style borders (position-aware: outer vs inner)
-            let style_borders = effective_tbl_borders.map(|tb| CellBorders {
+            let style_borders = row_effective_tbl_borders.map(|tb| CellBorders {
                 top: if ri == 0 { tb.top } else { tb.inside_h },
                 bottom: if ri == num_rows - 1 {
                     tb.bottom
@@ -330,65 +361,119 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
 
             // Apply conditional formatting overrides from tblStylePr.
             // Order per spec: wholeTable → bands → first/last row/col → corners.
+            //
+            // Per OOXML §17.4.23, tblStylePr borders use inside/outside semantics:
+            // top/bottom/left/right are the outer edges of the conditional region,
+            // insideH/insideV are borders between cells within the region.
             let mut cond_borders = style_borders.unwrap_or_default();
             let mut cond_shading: Option<[u8; 3]> = None;
+            let mut cond_bold: Option<bool> = None;
+            let mut cond_color: Option<[u8; 3]> = None;
             if let Some(style_def) = tbl_style {
-                let apply_cond = |key: &str, borders: &mut CellBorders, shading: &mut Option<[u8; 3]>| {
-                    if let Some(cond) = style_def.conditionals.get(key) {
-                        if let Some(cb) = &cond.borders {
-                            borders.top = border_or_fallback(cb.top, borders.top);
-                            borders.bottom = border_or_fallback(cb.bottom, borders.bottom);
-                            borders.left = border_or_fallback(cb.left, borders.left);
-                            borders.right = border_or_fallback(cb.right, borders.right);
+                let apply_cond =
+                    |key: &str,
+                     borders: &mut CellBorders,
+                     shading: &mut Option<[u8; 3]>,
+                     bold: &mut Option<bool>,
+                     color: &mut Option<[u8; 3]>,
+                     top_edge: bool,
+                     bottom_edge: bool,
+                     left_edge: bool,
+                     right_edge: bool| {
+                        if let Some(cond) = style_def.conditionals.get(key) {
+                            if let Some(cb) = &cond.borders {
+                                let ct = if top_edge { cb.top } else { cb.inside_h };
+                                let cb_b = if bottom_edge { cb.bottom } else { cb.inside_h };
+                                let cl = if left_edge { cb.left } else { cb.inside_v };
+                                let cr = if right_edge { cb.right } else { cb.inside_v };
+                                borders.top = border_or_fallback(ct, borders.top);
+                                borders.bottom = border_or_fallback(cb_b, borders.bottom);
+                                borders.left = border_or_fallback(cl, borders.left);
+                                borders.right = border_or_fallback(cr, borders.right);
+                            }
+                            if let Some(s) = cond.shading {
+                                *shading = Some(s);
+                            }
+                            if let Some(b) = cond.bold {
+                                *bold = Some(b);
+                            }
+                            if let Some(c) = cond.color {
+                                *color = Some(c);
+                            }
                         }
-                        if let Some(s) = cond.shading {
-                            *shading = Some(s);
-                        }
-                    }
-                };
-                // Row banding (odd/even rows, excluding first/last if those are enabled)
+                    };
+                let is_first_col = ci == 0;
+                let is_last_col = span_end >= num_cols;
+                let is_first_row = ri == 0;
+                let is_last_row = ri == num_rows - 1;
+                // Row banding — skip rows consumed by firstRow/lastRow
                 if !look_no_h_band {
-                    let band_row = if look_first_row { ri.saturating_sub(1) } else { ri };
-                    if band_row % 2 == 0 {
-                        apply_cond("band1Horiz", &mut cond_borders, &mut cond_shading);
-                    } else {
-                        apply_cond("band2Horiz", &mut cond_borders, &mut cond_shading);
+                    let skip_first = look_first_row && is_first_row;
+                    let skip_last = look_last_row && is_last_row;
+                    if !skip_first && !skip_last {
+                        let band_row = if look_first_row { ri - 1 } else { ri };
+                        let key = if band_row % 2 == 0 { "band1Horz" } else { "band2Horz" };
+                        // Row bands: single row, so top/bottom are always edges
+                        apply_cond(key, &mut cond_borders, &mut cond_shading,
+                            &mut cond_bold, &mut cond_color,
+                            true, true, is_first_col, is_last_col);
                     }
                 }
-                // Column banding
+                // Column banding — skip cols consumed by firstCol/lastCol
                 if !look_no_v_band {
-                    if ci % 2 == 0 {
-                        apply_cond("band1Vert", &mut cond_borders, &mut cond_shading);
-                    } else {
-                        apply_cond("band2Vert", &mut cond_borders, &mut cond_shading);
+                    let skip_first = look_first_col && is_first_col;
+                    let skip_last = look_last_col && is_last_col;
+                    if !skip_first && !skip_last {
+                        let band_col = if look_first_col { ci - 1 } else { ci };
+                        let key = if band_col % 2 == 0 { "band1Vert" } else { "band2Vert" };
+                        // Column bands: single column, so left/right are always edges
+                        apply_cond(key, &mut cond_borders, &mut cond_shading,
+                            &mut cond_bold, &mut cond_color,
+                            is_first_row, is_last_row, true, true);
                     }
                 }
-                // First/last row
-                if look_first_row && ri == 0 {
-                    apply_cond("firstRow", &mut cond_borders, &mut cond_shading);
+                // First/last row — row region: top/bottom are edges, left/right depend on col
+                if look_first_row && is_first_row {
+                    apply_cond("firstRow", &mut cond_borders, &mut cond_shading,
+                        &mut cond_bold, &mut cond_color,
+                        true, true, is_first_col, is_last_col);
                 }
-                if look_last_row && ri == num_rows - 1 {
-                    apply_cond("lastRow", &mut cond_borders, &mut cond_shading);
+                if look_last_row && is_last_row {
+                    apply_cond("lastRow", &mut cond_borders, &mut cond_shading,
+                        &mut cond_bold, &mut cond_color,
+                        true, true, is_first_col, is_last_col);
                 }
-                // First/last column
-                if look_first_col && ci == 0 {
-                    apply_cond("firstCol", &mut cond_borders, &mut cond_shading);
+                // First/last column — column region: left/right are edges, top/bottom depend on row
+                if look_first_col && is_first_col {
+                    apply_cond("firstCol", &mut cond_borders, &mut cond_shading,
+                        &mut cond_bold, &mut cond_color,
+                        is_first_row, is_last_row, true, true);
                 }
-                if look_last_col && span_end >= num_cols {
-                    apply_cond("lastCol", &mut cond_borders, &mut cond_shading);
+                if look_last_col && is_last_col {
+                    apply_cond("lastCol", &mut cond_borders, &mut cond_shading,
+                        &mut cond_bold, &mut cond_color,
+                        is_first_row, is_last_row, true, true);
                 }
-                // Corner cells (override everything)
-                if look_first_row && ri == 0 && look_first_col && ci == 0 {
-                    apply_cond("nwCell", &mut cond_borders, &mut cond_shading);
+                // Corner cells — single cell, all edges
+                if look_first_row && is_first_row && look_first_col && is_first_col {
+                    apply_cond("nwCell", &mut cond_borders, &mut cond_shading,
+                        &mut cond_bold, &mut cond_color,
+                        true, true, true, true);
                 }
-                if look_first_row && ri == 0 && look_last_col && span_end >= num_cols {
-                    apply_cond("neCell", &mut cond_borders, &mut cond_shading);
+                if look_first_row && is_first_row && look_last_col && is_last_col {
+                    apply_cond("neCell", &mut cond_borders, &mut cond_shading,
+                        &mut cond_bold, &mut cond_color,
+                        true, true, true, true);
                 }
-                if look_last_row && ri == num_rows - 1 && look_first_col && ci == 0 {
-                    apply_cond("swCell", &mut cond_borders, &mut cond_shading);
+                if look_last_row && is_last_row && look_first_col && is_first_col {
+                    apply_cond("swCell", &mut cond_borders, &mut cond_shading,
+                        &mut cond_bold, &mut cond_color,
+                        true, true, true, true);
                 }
-                if look_last_row && ri == num_rows - 1 && look_last_col && span_end >= num_cols {
-                    apply_cond("seCell", &mut cond_borders, &mut cond_shading);
+                if look_last_row && is_last_row && look_last_col && is_last_col {
+                    apply_cond("seCell", &mut cond_borders, &mut cond_shading,
+                        &mut cond_bold, &mut cond_color,
+                        true, true, true, true);
                 }
             }
 
@@ -433,6 +518,19 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                     let p = *n;
                     let parsed = parse_runs(p, styles, theme, rels, zip, numbering);
                     let mut runs = parsed.runs;
+                    // Apply conditional formatting text overrides from tblStylePr.
+                    if cond_bold == Some(true) {
+                        for run in &mut runs {
+                            run.bold = true;
+                        }
+                    }
+                    if let Some(cc) = cond_color {
+                        for run in &mut runs {
+                            if run.color.is_none() {
+                                run.color = Some(cc);
+                            }
+                        }
+                    }
                     let has_text = runs.iter().any(|r| !r.text.is_empty() || r.is_tab);
                     let has_inline_images = runs.iter().any(|r| r.inline_image.is_some());
                     let (para_image, content_height) = if has_inline_images && !has_text {

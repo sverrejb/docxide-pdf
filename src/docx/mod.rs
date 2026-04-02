@@ -18,8 +18,9 @@ use std::io::Read;
 
 use crate::error::Error;
 use crate::model::{
-    Alignment, Block, Document, LineSpacing, Paragraph, ParagraphBorders, Run, Section,
-    SectionBreakType, SectionProperties, TabAlignment, TabStop,
+    Alignment, Block, Document, FrameProperties, HRelativeFrom, HorizontalPosition, LineSpacing,
+    Paragraph, ParagraphBorders, Run, Section, SectionBreakType, SectionProperties, TabAlignment,
+    TabStop, VRelativeFrom,
 };
 
 use styles::{ParagraphStyle, parse_alignment, parse_line_spacing, parse_styles, parse_theme};
@@ -235,7 +236,7 @@ fn parse_cell_border_with_fallback(
     fallback: &str,
 ) -> crate::model::CellBorder {
     let border = parse_cell_border(parent, primary);
-    if border.present {
+    if border.present || border.is_override {
         border
     } else {
         parse_cell_border(parent, fallback)
@@ -250,6 +251,42 @@ pub(super) fn parse_cell_border_left(parent: roxmltree::Node) -> crate::model::C
 /// Parse right border with "end" fallback per OOXML bidi naming.
 pub(super) fn parse_cell_border_right(parent: roxmltree::Node) -> crate::model::CellBorder {
     parse_cell_border_with_fallback(parent, "right", "end")
+}
+
+pub(super) fn parse_frame_props(ppr: roxmltree::Node) -> Option<FrameProperties> {
+    let fp = wml(ppr, "framePr")?;
+    let h_anchor = match wml_attr(fp, "hAnchor").unwrap_or("text") {
+        "margin" => HRelativeFrom::Margin,
+        "page" => HRelativeFrom::Page,
+        _ => HRelativeFrom::Column,
+    };
+    let h_position = if let Some(xa) = wml_attr(fp, "xAlign") {
+        match xa {
+            "center" => HorizontalPosition::AlignCenter,
+            "right" | "outside" => HorizontalPosition::AlignRight,
+            _ => HorizontalPosition::AlignLeft,
+        }
+    } else {
+        let x_twips: f32 = wml_attr(fp, "x")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0.0);
+        HorizontalPosition::Offset(x_twips / 20.0)
+    };
+    let v_anchor = match wml_attr(fp, "vAnchor").unwrap_or("text") {
+        "margin" => VRelativeFrom::Margin,
+        "page" => VRelativeFrom::Page,
+        _ => VRelativeFrom::Paragraph,
+    };
+    let y_pts = wml_attr(fp, "y")
+        .and_then(|v| v.parse::<f32>().ok())
+        .unwrap_or(0.0)
+        / 20.0;
+    Some(FrameProperties {
+        h_relative_from: h_anchor,
+        h_position,
+        v_relative_from: v_anchor,
+        y_offset: y_pts,
+    })
 }
 
 pub(super) fn parse_tab_stops(ppr: roxmltree::Node) -> Vec<TabStop> {
@@ -876,6 +913,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     paragraph_mark_vanish,
                     snap_to_grid,
                     suppress_auto_hyphens,
+                    frame_props: ppr.and_then(parse_frame_props),
                 }));
 
                 // Mid-document section break: sectPr inside pPr ends the current section

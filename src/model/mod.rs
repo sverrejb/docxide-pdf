@@ -200,6 +200,14 @@ pub enum WrapText {
     Largest,
 }
 
+#[derive(Clone, Debug)]
+pub struct FrameProperties {
+    pub h_relative_from: HRelativeFrom,
+    pub h_position: HorizontalPosition,
+    pub v_relative_from: VRelativeFrom,
+    pub y_offset: f32,
+}
+
 #[derive(Clone)]
 pub struct ParagraphBorder {
     pub width_pt: f32,  // line thickness in points
@@ -260,6 +268,7 @@ pub struct Paragraph {
     pub paragraph_mark_vanish: bool,
     pub snap_to_grid: bool,
     pub suppress_auto_hyphens: bool,
+    pub frame_props: Option<FrameProperties>,
 }
 
 pub struct HorizontalRule {

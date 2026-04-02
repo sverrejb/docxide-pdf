@@ -11,6 +11,7 @@ use super::layout::{
     TextLine, build_paragraph_lines, build_tabbed_line, is_text_empty, render_paragraph_lines,
     tallest_run_metrics,
 };
+use super::positioning::resolve_h_position;
 use super::table;
 use super::{RenderContext, resolve_line_h};
 
@@ -60,6 +61,9 @@ pub(super) fn compute_header_height(
     let mut float_bottom_h = 0.0f32;
     for block in &hf.blocks {
         match block {
+            Block::Paragraph(para) if para.frame_props.is_some() => {
+                // Frame paragraphs are out-of-flow; skip height contribution
+            }
             Block::Paragraph(para) => {
                 height += prev_space_after.max(para.space_before);
                 let (font_size, tallest_lhr, _) = tallest_run_metrics(&para.runs, ctx.fonts);
@@ -300,6 +304,41 @@ pub(super) fn render_header_footer(
                     styleref_values,
                 );
                 prev_space_after = 0.0;
+            }
+            Block::Paragraph(para) if para.frame_props.is_some() => {
+                let fp = para.frame_props.as_ref().unwrap();
+                let substituted_runs = substitute_hf_runs(
+                    &para.runs, page_num, total_pages, styleref_values,
+                    sp.page_num_format.as_deref(),
+                );
+                let (font_size, _, tallest_ar) =
+                    tallest_run_metrics(&substituted_runs, ctx.fonts);
+                let ascender_ratio = tallest_ar.unwrap_or(0.75);
+
+                let empty_inline_imgs: HashMap<usize, String> = HashMap::new();
+                let lines = build_lines(
+                    &substituted_runs, ctx.fonts, &para.tab_stops,
+                    text_width, &empty_inline_imgs, ctx.default_tab_stop,
+                    0.0, 0.0,
+                );
+                let content_width = lines.iter()
+                    .map(|l| l.total_width)
+                    .fold(0.0f32, f32::max);
+
+                let frame_x = resolve_h_position(
+                    fp.h_relative_from, &fp.h_position, content_width,
+                    sp, sp.margin_left, text_width, text_width,
+                );
+                let frame_baseline = cursor_y - font_size * ascender_ratio;
+
+                render_paragraph_lines(
+                    content, &lines, &Alignment::Left,
+                    frame_x, content_width, frame_baseline,
+                    font_size, lines.len(), 0,
+                    &mut Vec::new(), 0.0, ctx.fonts, None,
+                );
+                // Frame paragraphs are out-of-flow: do not advance cursor_y
+                pi += 1;
             }
             Block::Paragraph(para) => {
                 let has_para_image = para.image.is_some();

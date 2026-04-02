@@ -107,8 +107,8 @@ fn draw_cell_shading(
     w: f32,
     h: f32,
 ) {
-    let inset =
-        (borders.top.width + borders.bottom.width + borders.left.width + borders.right.width) / 8.0;
+    let bw = |b: &crate::model::CellBorder| if b.present { b.width } else { 0.0 };
+    let inset = (bw(&borders.top) + bw(&borders.bottom) + bw(&borders.left) + bw(&borders.right)) / 8.0;
     content.save_state();
     fill_rgb(content, shading);
     content.rect(x + inset, y + inset, w - 2.0 * inset, h - 2.0 * inset);

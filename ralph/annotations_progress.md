@@ -193,18 +193,22 @@ The Area chart uses a different convention — data points at edges to fill the 
 
 **Problem**: Annotator reported "Too much space below 'header' with image and text and above numbered list" on page 2. The visual impression is a gap between the header (coat of arms + text) and the body content.
 
-**Analysis**: Thorough investigation revealed this is a pagination issue, not a spacing issue. The body content gap on page 2 is actually similar between generated (21pt) and reference (26pt). The visual difference comes from different CONTENT on page 2: the reference shows 5 lines (parent item + 3 sub-items + continuation) between header and ROZPOČET, while the generated shows only 3 lines (sub-items 1-3). The parent "1) Osoba oprávněná..." paragraph fits on page 1 in the generated but page 2 in the reference.
+**Analysis (initial)**: Pagination issue, not spacing. Different content on page 2 because generated fits more on page 1.
 
-Page 1 has 7+ single-row form tables, each separated by empty paragraphs. Each table row is consistently ~2.5pt shorter in our rendering vs the reference, accumulating ~18pt over the page. This allows more content to fit on page 1, pushing less to page 2.
+**Detailed re-investigation (2026-04-01, second pass)**: Measured actual text positions via `mutool draw -F stext` for both generated and reference PDFs. The earlier "~2.5pt per row" claim was **incorrect**. Actual measurements:
 
-**Header height investigation**: Header computes to 48.70pt (coat of arms wrapSquare float), with text height of 39.60pt. The reference effective header height is ~44pt. Attempted fixes:
-1. Accounting for negative image offset (-2pt) → reduced to 46.70pt, but SSIM dropped -3.9pp
-2. Using text-only height (39.60pt) → SSIM dropped -8.8pp
-Both made things worse because they allow even MORE content on page 1, compounding the table height difference.
+- **Per-row height difference**: Only **0.07pt** per row (13.93pt generated vs 14.0pt reference cell content area). Over 7 rows: 0.49pt total — negligible.
+- **Cumulative drift**: 26pt across the full page, from text position comparison:
+  - "ŽADATEL:" heading: generated 4.88pt lower than reference
+  - "Bankovní účet": generated 3.78pt HIGHER than reference
+  - "Seznam příloh" (bottom): generated 18.78pt higher
+- **Per table+gap spacing**: Generated is ~1.5-2pt shorter per table+empty-paragraph cycle. The difference is NOT from row height but from the **empty paragraphs between tables** (~0.6pt each) and other small accumulations.
 
-**Table height investigation**: Tables use custom styles based on "TableNormal" with cell margins top=0, bottom=0, confirmed by the OOXML spec. Row height = max(cell_h) + 0.5pt (mark). For Calibri 11pt: 13.43 + 0.5 = 13.93pt per row. But the reference shows ~16.6pt per row (2.67pt extra). The source of this extra padding is unclear — all explicit margins, borders, and spacing are 0.
+**Empty paragraph font resolution bug found**: `ensure_nonempty_paragraph()` in `runs.rs` creates a synthetic run for empty paragraphs. When the paragraph rPr has `rFonts` (Calibri) but no `sz`, the synthetic run uses the style-cascade font_name ("Times New Roman" from docDefaults) instead of the paragraph's own rFonts. However, fixing this would make things WORSE: TNR's line_h_ratio (1.2446) produces 14.94pt (closer to reference ~15pt), while Calibri's (1.2207) gives 14.65pt (further from reference).
 
-**Root cause**: Systemic table row height difference (~2.5pt per row) accumulates over 7+ tables to cause a ~18pt pagination shift on page 1. The header height adds ~7pt initial offset (in the wrong direction), but reducing it makes things worse. Not independently fixable without addressing the broader table row height calculation.
+**Table positioning `- cm.left` investigation**: Discovered that `table_left = margin + tblInd - cm.left` in `pdf/table.rs` (lines 324, 950, 1147) causes table text to start at x=65.35 (table edge) instead of x≈71 (inside cell margin). This is 5.4pt too far left for the czech document (tblInd=-108). However, removing `- cm.left` caused regressions in case6 (-11.1pp) and case15 (-8.5pp) because for `tblInd=0` tables, the `- cm.left` is correct behavior (Word also shifts the table border left so text aligns with margin). The fix would need to be conditional on tblInd value — not attempted.
+
+**Root cause**: Systemic accumulation of many tiny differences: per-row (0.07pt), per-empty-paragraph (~0.6pt), border widths, and font metric variations. No single fix addresses the cumulative effect. Total ~26pt drift across 7+ table+paragraph cycles on page 1 causes different pagination.
 
 ---
 

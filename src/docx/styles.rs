@@ -168,18 +168,19 @@ pub(super) struct TableBordersDef {
     pub(super) inside_v: CellBorder,
 }
 
-/// Conditional formatting for a specific table region (e.g. firstRow, band1Horiz).
+/// Conditional formatting for a specific table region (e.g. firstRow, band1Horz).
 pub(super) struct TableConditionalFormat {
     pub(super) borders: Option<TableBordersDef>,
     pub(super) shading: Option<[u8; 3]>,
     pub(super) bold: Option<bool>,
+    pub(super) color: Option<[u8; 3]>,
 }
 
 /// Full table style definition including conditional overrides.
 pub(super) struct TableStyleDef {
     pub(super) base_borders: Option<TableBordersDef>,
     /// Conditional overrides keyed by type: "firstRow", "lastRow", "firstCol",
-    /// "lastCol", "band1Horiz", "band2Horiz", "band1Vert", "band2Vert",
+    /// "lastCol", "band1Horz", "band2Horz", "band1Vert", "band2Vert",
     /// "nwCell", "neCell", "swCell", "seCell"
     pub(super) conditionals: HashMap<String, TableConditionalFormat>,
 }
@@ -799,13 +800,21 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
                         .and_then(|tc| wml(tc, "shd"))
                         .and_then(|shd| shd.attribute((WML_NS, "fill")))
                         .and_then(parse_hex_color);
-                    let cond_bold = wml(child, "rPr")
-                        .and_then(|rpr| wml_bool(rpr, "b"));
-                    if cond_borders.is_some() || cond_shading.is_some() || cond_bold.is_some() {
+                    let cond_rpr = wml(child, "rPr");
+                    let cond_bold = cond_rpr.and_then(|rpr| wml_bool(rpr, "b"));
+                    let cond_color = cond_rpr
+                        .and_then(|rpr| wml_attr(rpr, "color"))
+                        .and_then(parse_text_color);
+                    if cond_borders.is_some()
+                        || cond_shading.is_some()
+                        || cond_bold.is_some()
+                        || cond_color.is_some()
+                    {
                         conditionals.insert(cond_type.to_string(), TableConditionalFormat {
                             borders: cond_borders,
                             shading: cond_shading,
                             bold: cond_bold,
+                            color: cond_color,
                         });
                     }
                 }

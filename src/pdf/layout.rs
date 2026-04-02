@@ -515,7 +515,8 @@ pub(super) fn build_paragraph_lines(
                 line_max
             };
 
-            let overflows = proposed_x + ww > cur_max;
+            // Small tolerance for floating-point width accumulation over many glyphs
+            let overflows = proposed_x + ww > cur_max + 0.05;
             // For the first word on a line, also overflow if the
             // left region is zero-width (so words go straight to
             // the right region for e.g. left-aligned images).
@@ -863,13 +864,18 @@ pub(super) fn build_tabbed_line(
                 let char_count = word.chars().count();
                 let kern = run.kern_threshold.is_some_and(|t| eff_fs >= t);
                 let ww = entry.word_width(word, eff_fs, kern) * ts + cs * char_count as f32;
-                let has_space_before =
-                    space_count > 0 || (seg_idx == 0 && (prev_ws || text.starts_with(is_break_space)));
-                if !all_chunks.is_empty() && has_space_before {
-                    current_x += space_w * ts + cs;
+                let space_before_count = if space_count > 0 {
+                    space_count
+                } else if seg_idx == 0 && (prev_ws || text.starts_with(is_break_space)) {
+                    1
+                } else {
+                    0
+                };
+                if space_before_count > 0 && (!all_chunks.is_empty() || space_count > 0) {
+                    current_x += space_before_count as f32 * (space_w * ts + cs);
                 }
                 // Word continues previous word across run boundary (no whitespace between)
-                let is_continuation = seg_idx == 0 && !has_space_before && !all_chunks.is_empty();
+                let is_continuation = seg_idx == 0 && space_before_count == 0 && !all_chunks.is_empty();
                 let cur_line_max = if is_first_line {
                     max_width + first_line_hanging
                 } else {
