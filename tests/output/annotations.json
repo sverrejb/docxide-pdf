@@ -1,5 +1,5 @@
 {
-  "next_id": 107,
+  "next_id": 108,
   "annotations": [
     {
       "id": 8,
@@ -209,6 +209,16 @@
       "x_pt": 271.99023,
       "y_pt": 765.0616,
       "note": "The whole document is shifted in the y-direction, even line one.",
+      "fixed": false
+    },
+    {
+      "id": 107,
+      "case": "scraped/learning_cultures_dissertation",
+      "page": 2,
+      "source": "Generated",
+      "x_pt": 154.92354,
+      "y_pt": 343.73575,
+      "note": "We are missing HR's on this page",
       "fixed": false
     }
   ]

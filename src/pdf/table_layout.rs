@@ -63,6 +63,10 @@ pub(super) fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>
                 grid_col += span;
                 continue;
             }
+            if cell.text_direction != TextDirection::LrTb {
+                grid_col += span;
+                continue;
+            }
             let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
             let h_pad = ecm.left + ecm.right;
             let mut key_buf = String::new();

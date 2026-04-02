@@ -625,7 +625,7 @@ fn render_table_row(
                 cell,
                 cell_x,
                 row_top,
-                row_h,
+                effective_h,
                 col_w,
                 ecm,
                 ctx,
@@ -723,7 +723,7 @@ fn render_vertical_cjk_cell(
         match paras.first().map(|p| p.alignment) {
             Some(Alignment::Center) => CellVAlign::Center,
             Some(Alignment::Right) => CellVAlign::Bottom,
-            _ => cell.v_align,
+            _ => CellVAlign::Center,
         }
     } else {
         cell.v_align
