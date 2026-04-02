@@ -1,5 +1,5 @@
 {
-  "next_id": 108,
+  "next_id": 110,
   "annotations": [
     {
       "id": 8,
@@ -89,16 +89,6 @@
       "x_pt": 39.477592,
       "y_pt": 361.21497,
       "note": "Table heading overlaps thumbs up icon",
-      "fixed": true
-    },
-    {
-      "id": 90,
-      "case": "scraped/croatian_grant_guidelines",
-      "page": 17,
-      "source": "Generated",
-      "x_pt": 154.40811,
-      "y_pt": 92.55475,
-      "note": "Body text overlaps footer here.",
       "fixed": true
     },
     {
@@ -219,6 +209,26 @@
       "x_pt": 154.92354,
       "y_pt": 343.73575,
       "note": "We are missing HR's on this page",
+      "fixed": false
+    },
+    {
+      "id": 108,
+      "case": "scraped/croatian_grant_guidelines",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 366.7227,
+      "y_pt": 747.4167,
+      "note": "The European logo is too high compared to the other image. They should be aligned at the top just about.",
+      "fixed": false
+    },
+    {
+      "id": 109,
+      "case": "scraped/learning_cultures_dissertation",
+      "page": 12,
+      "source": "Generated",
+      "x_pt": 111.3406,
+      "y_pt": 60.7041,
+      "note": "Roman page numbers should be centered.",
       "fixed": false
     }
   ]

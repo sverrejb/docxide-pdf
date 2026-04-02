@@ -300,18 +300,16 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                 .and_then(|pr| wml_attr(pr, "gridSpan"))
                 .and_then(|v| v.parse::<u16>().ok())
                 .unwrap_or_else(|| {
-                    // Infer gridSpan from cell width when not explicit:
-                    // find consecutive grid columns whose cumulative width
-                    // best matches the cell's declared width (tcW).
+                    // Per OOXML §17.4.17, absent gridSpan defaults to 1.
+                    // Only infer span > 1 when tcW closely matches the
+                    // cumulative width of multiple grid columns (within 10%).
                     if ci < num_cols {
                         let mut best_span = 1u16;
-                        let mut best_diff = (col_widths.get(ci).copied().unwrap_or(0.0) - cell_width).abs();
                         let mut cumulative = col_widths.get(ci).copied().unwrap_or(0.0);
                         for s in 2..=(num_cols - ci) as u16 {
                             cumulative += col_widths.get(ci + s as usize - 1).copied().unwrap_or(0.0);
                             let diff = (cumulative - cell_width).abs();
-                            if diff < best_diff {
-                                best_diff = diff;
+                            if diff < cumulative * 0.1 {
                                 best_span = s;
                             }
                         }
