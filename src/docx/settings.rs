@@ -1,4 +1,4 @@
-use std::io::Read;
+use std::io::{Read, Seek};
 
 use super::{WML_NS, read_zip_text, twips_to_pts, wml, wml_attr, wml_bool};
 
@@ -26,7 +26,7 @@ impl Default for DocumentSettings {
     }
 }
 
-pub(super) fn parse_settings<R: Read + std::io::Seek>(
+pub(super) fn parse_settings<R: Read + Seek>(
     zip: &mut zip::ZipArchive<R>,
 ) -> DocumentSettings {
     let Some(xml_text) = read_zip_text(zip, "word/settings.xml") else {

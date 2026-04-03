@@ -568,3 +568,40 @@ pub(super) fn find_cell_split(cell: &CellLayout, start: usize, available_h: f32,
     }
     cell.items.len()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_cell_span_width_single() {
+        let widths = vec![100.0, 200.0, 300.0];
+        assert_eq!(cell_span_width(&widths, 0, 1), 100.0);
+        assert_eq!(cell_span_width(&widths, 1, 1), 200.0);
+        assert_eq!(cell_span_width(&widths, 2, 1), 300.0);
+    }
+
+    #[test]
+    fn test_cell_span_width_multi() {
+        let widths = vec![100.0, 200.0, 300.0];
+        assert_eq!(cell_span_width(&widths, 0, 2), 300.0);
+        assert_eq!(cell_span_width(&widths, 0, 3), 600.0);
+        assert_eq!(cell_span_width(&widths, 1, 2), 500.0);
+    }
+
+    #[test]
+    fn test_cell_span_width_clamps_to_len() {
+        let widths = vec![100.0, 200.0];
+        // span=5 but only 2 columns from index 0
+        assert_eq!(cell_span_width(&widths, 0, 5), 300.0);
+    }
+
+    #[test]
+    fn test_cell_x_offset() {
+        let widths = vec![100.0, 200.0, 300.0];
+        assert_eq!(cell_x_offset(&widths, 50.0, 0), 50.0);
+        assert_eq!(cell_x_offset(&widths, 50.0, 1), 150.0);
+        assert_eq!(cell_x_offset(&widths, 50.0, 2), 350.0);
+        assert_eq!(cell_x_offset(&widths, 50.0, 3), 650.0);
+    }
+}

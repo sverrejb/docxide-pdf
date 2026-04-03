@@ -1,10 +1,11 @@
 use std::collections::HashMap;
+use std::io::{Read, Seek};
 
-use crate::model::{Alignment, CellBorder, LineSpacing, TabStop};
+use crate::model::{Alignment, CellBorder, LineSpacing, ParagraphBorders, TabStop};
 
 use super::{
-    DML_NS, WML_NS, find_child, highlight_color, parse_cell_border, parse_cell_border_left,
-    parse_cell_border_right, parse_hex_color, parse_paragraph_borders,
+    DML_NS, WML_NS, extract_indents, find_child, highlight_color, parse_cell_border,
+    parse_cell_border_left, parse_cell_border_right, parse_hex_color, parse_paragraph_borders,
     parse_tab_stops_with_clears, parse_text_color, read_zip_text, twips_attr, twips_to_pts, wml,
     wml_attr, wml_bool,
 };
@@ -131,7 +132,7 @@ pub(super) struct ParagraphStyle {
     pub(super) indent_right: Option<f32>,
     pub(super) indent_hanging: Option<f32>,
     pub(super) indent_first_line: Option<f32>,
-    pub(super) borders: crate::model::ParagraphBorders,
+    pub(super) borders: ParagraphBorders,
     pub(super) based_on: Option<String>,
     pub(super) kern_threshold: Option<f32>,
     pub(super) tab_stops: Vec<TabStop>,
@@ -231,7 +232,7 @@ fn parse_char_spacing(rpr: roxmltree::Node) -> Option<f32> {
         .map(twips_to_pts)
 }
 
-pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(
+pub(super) fn parse_theme<R: Read + Seek>(
     zip: &mut zip::ZipArchive<R>,
     east_asia_lang: Option<&str>,
 ) -> ThemeFonts {
@@ -244,11 +245,11 @@ pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(
 
     let script = east_asia_lang.map(lang_to_script).unwrap_or("Jpan");
 
-    let names: Vec<String> = zip.file_names().map(|s: &str| s.to_string()).collect();
+    let names: Vec<String> = zip.file_names().map(|s| s.to_string()).collect();
     let xml_content = names
         .iter()
-        .find(|n: &&String| n.starts_with("word/theme/") && n.ends_with(".xml"))
-        .and_then(|name| read_zip_text(zip, name.as_str()));
+        .find(|n| n.starts_with("word/theme/") && n.ends_with(".xml"))
+        .and_then(|name| read_zip_text(zip, name));
 
     if let Some(xml_content) = xml_content
         && let Ok(xml) = roxmltree::Document::parse(&xml_content)
@@ -284,13 +285,13 @@ pub(super) fn parse_theme<R: std::io::Read + std::io::Seek>(
                         let scheme_name = child.tag_name().name();
                         if let Some(srgb) = dml(child, "srgbClr") {
                             if let Some(hex) =
-                                srgb.attribute("val").and_then(super::parse_hex_color)
+                                srgb.attribute("val").and_then(parse_hex_color)
                             {
                                 colors.insert(scheme_name.to_string(), hex);
                             }
                         } else if let Some(hex) = dml(child, "sysClr")
                             .and_then(|sys| sys.attribute("lastClr"))
-                            .and_then(super::parse_hex_color)
+                            .and_then(parse_hex_color)
                         {
                             colors.insert(scheme_name.to_string(), hex);
                         }
@@ -450,7 +451,7 @@ pub(super) fn parse_line_spacing(spacing_node: roxmltree::Node, line_val: f32) -
     }
 }
 
-pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
+pub(super) fn parse_styles<R: Read + Seek>(
     zip: &mut zip::ZipArchive<R>,
     theme: &ThemeFonts,
 ) -> StylesInfo {
@@ -480,7 +481,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
     };
     let mut paragraph_styles = HashMap::new();
     let mut character_styles = HashMap::new();
-    let mut style_id_to_name: HashMap<String, String> = HashMap::new();
+    let mut style_id_to_name = HashMap::new();
     let mut default_paragraph_style_id = String::from("Normal");
 
     let Some(xml_content) = read_zip_text(zip, "word/styles.xml") else {
@@ -544,7 +545,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
             }
         }
         if let Some(ind) = default_ppr.and_then(|n| wml(n, "ind")) {
-            let (left, right, hanging, first) = super::extract_indents(ind);
+            let (left, right, hanging, first) = extract_indents(ind);
             if let Some(v) = left {
                 defaults.indent_left = v;
             }
@@ -647,7 +648,7 @@ pub(super) fn parse_styles<R: std::io::Read + std::io::Seek>(
 
                 let (indent_left, indent_right, indent_hanging, indent_first_line) = ppr
                     .and_then(|n| wml(n, "ind"))
-                    .map(super::extract_indents)
+                    .map(extract_indents)
                     .unwrap_or_default();
 
                 let (tab_stops, clear_tab_positions) = ppr
@@ -967,5 +968,21 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             s.suppress_auto_hyphens = s.suppress_auto_hyphens.or(inh.suppress_auto_hyphens);
             s.tab_stops = inh.tab_stops;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_alignment() {
+        assert_eq!(parse_alignment("center"), Alignment::Center);
+        assert_eq!(parse_alignment("right"), Alignment::Right);
+        assert_eq!(parse_alignment("end"), Alignment::Right);
+        assert_eq!(parse_alignment("both"), Alignment::Justify);
+        assert_eq!(parse_alignment("left"), Alignment::Left);
+        assert_eq!(parse_alignment("start"), Alignment::Left); // unknown → Left
+        assert_eq!(parse_alignment(""), Alignment::Left);
     }
 }

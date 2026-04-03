@@ -4,7 +4,6 @@ mod table;
 
 use std::collections::HashMap;
 
-// Re-export all public types so consumers keep using `crate::model::*`
 pub use chart::*;
 pub use drawing::*;
 pub use table::*;
@@ -74,8 +73,8 @@ pub enum SectionBreakType {
 }
 
 pub struct ColumnDef {
-    pub width: f32, // points
-    pub space: f32, // gap after this column, in points
+    pub width: f32,
+    pub space: f32,
 }
 
 pub struct ColumnsConfig {
@@ -210,9 +209,9 @@ pub struct FrameProperties {
 
 #[derive(Clone)]
 pub struct ParagraphBorder {
-    pub width_pt: f32,  // line thickness in points
-    pub space_pt: f32,  // gap between text and border in points
-    pub color: [u8; 3], // RGB
+    pub width_pt: f32,
+    pub space_pt: f32,
+    pub color: [u8; 3],
 }
 
 #[derive(Clone, Default)]
@@ -241,8 +240,7 @@ pub struct Paragraph {
     pub list_label_font_size: Option<f32>,
     pub list_label_bold: bool,
     pub list_label_color: Option<[u8; 3]>,
-    /// Tab stop from the numbering level definition (pts from paragraph left edge).
-    /// Used to position text after the list label on the first line.
+    /// Numbering level tab stop (pts from paragraph left edge)
     pub num_level_tab_stop: Option<f32>,
     pub contextual_spacing: bool,
     pub keep_next: bool,
@@ -275,7 +273,7 @@ pub struct HorizontalRule {
     pub height_pt: f32,
     pub fill_color: [u8; 3],
     pub width_pct: f32,
-    /// Standard HR (o:hrstd="t"): render as thin line, height_pt is just spacing
+    /// When true (o:hrstd), render as thin line; height_pt is spacing only
     pub is_standard: bool,
 }
 
@@ -291,11 +289,11 @@ pub struct Run {
     pub strikethrough: bool,
     pub dstrike: bool,
     pub char_spacing: f32,
-    pub text_scale: f32, // percentage, 100.0 = normal
+    pub text_scale: f32,
     pub caps: bool,
     pub small_caps: bool,
     pub vanish: bool,
-    pub color: Option<[u8; 3]>, // None = automatic (black)
+    pub color: Option<[u8; 3]>, // None = DOCX "automatic" (typically black)
     pub highlight: Option<[u8; 3]>,
     pub is_tab: bool,
     pub is_line_break: bool,

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::Read;
+use std::io::{Read, Seek};
 
 use crate::model::{
     Alignment, Block, CellBorder, CellBorders, CellMargins, CellVAlign, HorizontalPosition,
@@ -24,6 +24,17 @@ fn margin_twips(mar: roxmltree::Node, primary: &str, fallback: &str) -> Option<f
     wml(mar, primary)
         .or_else(|| wml(mar, fallback))
         .and_then(|n| twips_attr(n, "w"))
+}
+
+fn parse_table_borders_def(bdr_node: roxmltree::Node) -> TableBordersDef {
+    TableBordersDef {
+        top: parse_cell_border(bdr_node, "top"),
+        bottom: parse_cell_border(bdr_node, "bottom"),
+        left: parse_cell_border_left(bdr_node),
+        right: parse_cell_border_right(bdr_node),
+        inside_h: parse_cell_border(bdr_node, "insideH"),
+        inside_v: parse_cell_border(bdr_node, "insideV"),
+    }
 }
 
 fn border_or_fallback(inline: CellBorder, fallback: CellBorder) -> CellBorder {
@@ -63,7 +74,7 @@ fn resolve_h_border(upper_bottom: CellBorder, lower_top: CellBorder) -> CellBord
 }
 
 
-pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
+pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     node: roxmltree::Node,
     styles: &styles::StylesInfo,
     theme: &styles::ThemeFonts,
@@ -196,17 +207,9 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
     let tbl_style_borders = tbl_style.and_then(|s| s.base_borders.as_ref());
     let has_tbl_style = tbl_style_borders.is_some();
 
-    let inline_tbl_borders =
-        tbl_pr
-            .and_then(|pr| wml(pr, "tblBorders"))
-            .map(|bdr_node| TableBordersDef {
-                top: parse_cell_border(bdr_node, "top"),
-                bottom: parse_cell_border(bdr_node, "bottom"),
-                left: parse_cell_border_left(bdr_node),
-                right: parse_cell_border_right(bdr_node),
-                inside_h: parse_cell_border(bdr_node, "insideH"),
-                inside_v: parse_cell_border(bdr_node, "insideV"),
-            });
+    let inline_tbl_borders = tbl_pr
+        .and_then(|pr| wml(pr, "tblBorders"))
+        .map(parse_table_borders_def);
 
     // Parse tblLook — controls which conditional formats from the style apply.
     // Supports both named attributes (w:firstRow="1") and legacy hex bitmask (w:val="04A0").
@@ -258,14 +261,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
             .and_then(|prex| wml(prex, "tblBorders"))
         {
             Some(bdr_node) => {
-                let exc = TableBordersDef {
-                    top: parse_cell_border(bdr_node, "top"),
-                    bottom: parse_cell_border(bdr_node, "bottom"),
-                    left: parse_cell_border_left(bdr_node),
-                    right: parse_cell_border_right(bdr_node),
-                    inside_h: parse_cell_border(bdr_node, "insideH"),
-                    inside_v: parse_cell_border(bdr_node, "insideV"),
-                };
+                let exc = parse_table_borders_def(bdr_node);
                 merged_row_borders = if let Some(base) = base_tbl_borders {
                     TableBordersDef {
                         top: border_or_fallback(exc.top, base.top),
@@ -517,20 +513,24 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                     let parsed = parse_runs(p, styles, theme, rels, zip, numbering);
                     let mut runs = parsed.runs;
                     // Apply conditional formatting text overrides from tblStylePr.
-                    if cond_bold == Some(true) {
-                        for run in &mut runs {
+                    let mut has_text = false;
+                    let mut has_inline_images = false;
+                    for run in &mut runs {
+                        if cond_bold == Some(true) {
                             run.bold = true;
                         }
-                    }
-                    if let Some(cc) = cond_color {
-                        for run in &mut runs {
+                        if let Some(cc) = cond_color {
                             if run.color.is_none() {
                                 run.color = Some(cc);
                             }
                         }
+                        if !run.text.is_empty() || run.is_tab {
+                            has_text = true;
+                        }
+                        if run.inline_image.is_some() {
+                            has_inline_images = true;
+                        }
                     }
-                    let has_text = runs.iter().any(|r| !r.text.is_empty() || r.is_tab);
-                    let has_inline_images = runs.iter().any(|r| r.inline_image.is_some());
                     let (para_image, content_height) = if has_inline_images && !has_text {
                         let idx = runs.iter().position(|r| r.inline_image.is_some());
                         let img = idx.and_then(|i| runs[i].inline_image.take());
@@ -576,8 +576,8 @@ pub(in crate::docx) fn parse_table_node<R: Read + std::io::Seek>(
                         counters,
                         last_seen_level,
                     );
-                    let mut indent_first_line = 0.0f32;
-                    let mut indent_right = 0.0f32;
+                    let mut indent_first_line = 0.0;
+                    let mut indent_right = 0.0;
                     if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
                         let (left, right, hanging, first) = extract_indents(ind);
                         if let Some(v) = left {

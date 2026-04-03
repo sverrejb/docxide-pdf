@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
+use std::time::Instant;
+use std::{env, fs};
 
 use memmap2::Mmap;
 use ttf_parser::Face;
@@ -40,7 +42,7 @@ fn read_font_style(data: &[u8], face_index: u32) -> Option<(Vec<String>, bool, b
 }
 
 fn font_directories() -> Vec<PathBuf> {
-    let mut dirs: Vec<PathBuf> = Vec::new();
+    let mut dirs = Vec::new();
 
     // Platform-specific system font directories (added first = lower priority in LIFO stack)
     #[cfg(target_os = "macos")]
@@ -52,11 +54,11 @@ fn font_directories() -> Vec<PathBuf> {
             "/System/Library/Fonts".into(),
             "/System/Library/Fonts/Supplemental".into(),
         ]);
-        if let Ok(home) = std::env::var("HOME") {
+        if let Ok(home) = env::var("HOME") {
             dirs.push(PathBuf::from(&home).join("Library/Fonts"));
             let cloud = PathBuf::from(&home)
                 .join("Library/Group Containers/UBF8T346G9.Office/FontCache/4/CloudFonts");
-            if let Ok(families) = std::fs::read_dir(&cloud) {
+            if let Ok(families) = fs::read_dir(&cloud) {
                 for entry in families.flatten() {
                     if entry.path().is_dir() {
                         dirs.push(entry.path());
@@ -69,14 +71,14 @@ fn font_directories() -> Vec<PathBuf> {
     #[cfg(target_os = "linux")]
     {
         dirs.extend(["/usr/share/fonts".into(), "/usr/local/share/fonts".into()]);
-        if let Ok(home) = std::env::var("HOME") {
+        if let Ok(home) = env::var("HOME") {
             dirs.push(PathBuf::from(home).join(".local/share/fonts"));
         }
     }
 
     #[cfg(target_os = "windows")]
     {
-        if let Ok(windir) = std::env::var("WINDIR") {
+        if let Ok(windir) = env::var("WINDIR") {
             dirs.push(PathBuf::from(windir).join("Fonts"));
         } else {
             dirs.push("C:\\Windows\\Fonts".into());
@@ -85,7 +87,7 @@ fn font_directories() -> Vec<PathBuf> {
 
     // DOCXSIDE_FONTS added last = highest priority (LIFO stack pops these first,
     // and or_insert means first-scanned entries win)
-    if let Ok(val) = std::env::var("DOCXSIDE_FONTS") {
+    if let Ok(val) = env::var("DOCXSIDE_FONTS") {
         let sep = if cfg!(windows) { ';' } else { ':' };
         for part in val.split(sep) {
             let trimmed = part.trim();
@@ -109,11 +111,11 @@ fn is_font_file(path: &Path) -> bool {
 }
 
 fn scan_font_dirs() -> FontLookup {
-    let t0 = std::time::Instant::now();
+    let t0 = Instant::now();
     let mut index = FontLookup::new();
     let dirs = font_directories();
 
-    let no_cache = std::env::var("DOCXSIDE_NO_FONT_CACHE").is_ok();
+    let no_cache = env::var("DOCXSIDE_NO_FONT_CACHE").is_ok();
 
     let cache = if no_cache {
         FontCache::default()
@@ -121,10 +123,10 @@ fn scan_font_dirs() -> FontLookup {
         load_cache()
     };
     let mut new_cache = FontCache::default();
-    let mut files_scanned = 0u32;
-    let mut dirs_cached = 0u32;
-    let mut dirs_scanned = 0u32;
-    let mut visited_dirs: HashSet<PathBuf> = HashSet::new();
+    let mut files_scanned: u32 = 0;
+    let mut dirs_cached: u32 = 0;
+    let mut dirs_scanned: u32 = 0;
+    let mut visited_dirs = HashSet::new();
 
     let mut stack: Vec<PathBuf> = dirs;
     while let Some(dir) = stack.pop() {
@@ -132,11 +134,10 @@ fn scan_font_dirs() -> FontLookup {
             continue;
         }
 
-        let Ok(entries) = std::fs::read_dir(&dir) else {
+        let Ok(entries) = fs::read_dir(&dir) else {
             continue;
         };
 
-        // Collect directory listing: subdirs to recurse, font files to process
         let mut subdirs = Vec::new();
         let mut font_files = Vec::new();
         for entry in entries.flatten() {
@@ -180,7 +181,7 @@ fn scan_font_dirs() -> FontLookup {
         new_cache.dir_mtimes.insert(dir, current_mtime);
         for file_path in font_files {
             files_scanned += 1;
-            let Ok(file) = std::fs::File::open(&file_path) else {
+            let Ok(file) = fs::File::open(&file_path) else {
                 continue;
             };
             let Ok(data) = (unsafe { Mmap::map(&file) }) else {
@@ -190,12 +191,10 @@ fn scan_font_dirs() -> FontLookup {
             let mut faces = Vec::new();
             for face_idx in 0..face_count {
                 if let Some((families, bold, italic)) = read_font_style(&data, face_idx) {
-                    for family in &families {
+                    for family in families {
                         index
                             .entry((family.to_lowercase(), bold, italic))
                             .or_insert((file_path.clone(), face_idx));
-                    }
-                    for family in families {
                         faces.push(CachedFace {
                             family,
                             bold,

@@ -23,7 +23,7 @@ for ((i=1; i<=iterations; i++)); do
   You are to do the following steps:
 1. Read the progress file. \
 2. Select a not-yet processed file from @src \
-3. Simplify that file with code-simplifier:code-simplifier. \
+3. Simplify that file with code-simplifier:code-simplifier. and /simplify\
 4. Update the progress file with processed files and details of what was done.
 ONLY DO ONE FILE AT A TIME. \
 If all files have been processed: \

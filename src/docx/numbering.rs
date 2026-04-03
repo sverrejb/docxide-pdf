@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::io::{Read, Seek};
 
 use super::{WML_NS, parse_hex_color, twips_attr, wml, wml_attr, wml_bool};
 
@@ -14,9 +15,7 @@ pub(super) struct LevelDef {
     pub(super) label_font_size: Option<f32>,
     pub(super) label_bold: bool,
     pub(super) label_color: Option<[u8; 3]>,
-    /// w:suff value: "tab" (default), "space", or "nothing"
     pub(super) suff: String,
-    /// Font name from rPr/rFonts for non-bullet labels
     pub(super) label_font: Option<String>,
 }
 
@@ -30,7 +29,6 @@ pub(super) struct ListLabelInfo {
     pub(super) font_size: Option<f32>,
     pub(super) bold: bool,
     pub(super) color: Option<[u8; 3]>,
-    /// w:suff value: "tab" (default), "space", or "nothing"
     pub(super) suff: String,
 }
 
@@ -41,7 +39,7 @@ pub(super) struct NumberingInfo {
     pub(super) start_overrides: HashMap<String, HashMap<u8, u32>>,
 }
 
-pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
+pub(super) fn parse_numbering<R: Read + Seek>(
     zip: &mut zip::ZipArchive<R>,
 ) -> NumberingInfo {
     let Some(xml_content) = super::read_zip_text(zip, "word/numbering.xml") else {
@@ -51,11 +49,11 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
         return NumberingInfo::default();
     };
 
-    let mut abstract_nums: HashMap<String, HashMap<u8, LevelDef>> = HashMap::new();
-    let mut num_to_abstract: HashMap<String, String> = HashMap::new();
-    let mut num_style_link: HashMap<String, String> = HashMap::new();
-    let mut style_link_target: HashMap<String, String> = HashMap::new();
-    let mut start_overrides: HashMap<String, HashMap<u8, u32>> = HashMap::new();
+    let mut abstract_nums = HashMap::new();
+    let mut num_to_abstract = HashMap::new();
+    let mut num_style_link = HashMap::new();
+    let mut style_link_target = HashMap::new();
+    let mut start_overrides = HashMap::new();
 
     let root = xml.root_element();
 
@@ -68,7 +66,7 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
                 let Some(abs_id) = node.attribute((WML_NS, "abstractNumId")) else {
                     continue;
                 };
-                let mut levels: HashMap<u8, LevelDef> = HashMap::new();
+                let mut levels = HashMap::new();
                 for lvl in node.children().filter(|n| n.has_tag_name((WML_NS, "lvl"))) {
                     let Some(ilvl) = lvl
                         .attribute((WML_NS, "ilvl"))
@@ -81,20 +79,21 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
                     let start = wml_attr(lvl, "start")
                         .and_then(|v| v.parse::<u32>().ok())
                         .unwrap_or(1);
-                    let ind = wml(lvl, "pPr").and_then(|ppr| wml(ppr, "ind"));
+                    let ppr = wml(lvl, "pPr");
+                    let ind = ppr.and_then(|p| wml(p, "ind"));
                     let indent_left = ind
                         .and_then(|n| twips_attr(n, "start").or_else(|| twips_attr(n, "left")))
                         .unwrap_or(0.0);
                     let indent_hanging = ind.and_then(|n| twips_attr(n, "hanging")).unwrap_or(0.0);
-                    let tab_stop = wml(lvl, "pPr")
-                        .and_then(|ppr| wml(ppr, "tabs"))
+                    let tab_stop = ppr
+                        .and_then(|p| wml(p, "tabs"))
                         .and_then(|tabs| {
                             tabs.children()
                                 .filter(|n| n.has_tag_name((WML_NS, "tab")))
                                 .find_map(|t| twips_attr(t, "pos"))
                         });
                     let rpr = wml(lvl, "rPr");
-                    let bullet_font = rpr
+                    let rpr_font = rpr
                         .and_then(|r| wml(r, "rFonts"))
                         .and_then(|rf| {
                             rf.attribute((WML_NS, "ascii"))
@@ -110,13 +109,6 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
                         .and_then(|r| wml_attr(r, "color"))
                         .and_then(parse_hex_color);
                     let suff = wml_attr(lvl, "suff").unwrap_or("tab").to_string();
-                    let label_font = rpr
-                        .and_then(|r| wml(r, "rFonts"))
-                        .and_then(|rf| {
-                            rf.attribute((WML_NS, "ascii"))
-                                .or_else(|| rf.attribute((WML_NS, "hAnsi")))
-                        })
-                        .map(|s| s.to_string());
                     levels.insert(
                         ilvl,
                         LevelDef {
@@ -126,12 +118,12 @@ pub(super) fn parse_numbering<R: std::io::Read + std::io::Seek>(
                             indent_hanging,
                             tab_stop,
                             start,
-                            bullet_font,
+                            bullet_font: rpr_font.clone(),
                             label_font_size,
                             label_bold,
                             label_color,
                             suff,
-                            label_font,
+                            label_font: rpr_font,
                         },
                     );
                 }
@@ -389,5 +381,92 @@ pub(super) fn parse_list_info(
         bold: def.label_bold,
         color: def.label_color,
         suff: def.suff.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- Decimal ---
+
+    #[test]
+    fn test_format_number_decimal() {
+        assert_eq!(format_number(1, "decimal"), "1");
+        assert_eq!(format_number(10, "decimal"), "10");
+        assert_eq!(format_number(999, "decimal"), "999");
+    }
+
+    #[test]
+    fn test_format_number_decimal_zero() {
+        assert_eq!(format_number(1, "decimalZero"), "01");
+        assert_eq!(format_number(9, "decimalZero"), "09");
+        assert_eq!(format_number(10, "decimalZero"), "10");
+        assert_eq!(format_number(99, "decimalZero"), "99");
+    }
+
+    // --- Letters ---
+
+    #[test]
+    fn test_format_number_lower_letter() {
+        assert_eq!(format_number(1, "lowerLetter"), "a");
+        assert_eq!(format_number(2, "lowerLetter"), "b");
+        assert_eq!(format_number(26, "lowerLetter"), "z");
+        assert_eq!(format_number(27, "lowerLetter"), "aa");
+        assert_eq!(format_number(28, "lowerLetter"), "ab");
+    }
+
+    #[test]
+    fn test_format_number_upper_letter() {
+        assert_eq!(format_number(1, "upperLetter"), "A");
+        assert_eq!(format_number(26, "upperLetter"), "Z");
+        assert_eq!(format_number(27, "upperLetter"), "AA");
+    }
+
+    // --- Roman numerals ---
+
+    #[test]
+    fn test_format_number_lower_roman() {
+        assert_eq!(format_number(1, "lowerRoman"), "i");
+        assert_eq!(format_number(2, "lowerRoman"), "ii");
+        assert_eq!(format_number(3, "lowerRoman"), "iii");
+        assert_eq!(format_number(4, "lowerRoman"), "iv");
+        assert_eq!(format_number(5, "lowerRoman"), "v");
+        assert_eq!(format_number(9, "lowerRoman"), "ix");
+        assert_eq!(format_number(10, "lowerRoman"), "x");
+        assert_eq!(format_number(14, "lowerRoman"), "xiv");
+        assert_eq!(format_number(40, "lowerRoman"), "xl");
+        assert_eq!(format_number(99, "lowerRoman"), "xcix");
+    }
+
+    #[test]
+    fn test_format_number_upper_roman() {
+        assert_eq!(format_number(1, "upperRoman"), "I");
+        assert_eq!(format_number(4, "upperRoman"), "IV");
+        assert_eq!(format_number(14, "upperRoman"), "XIV");
+        assert_eq!(format_number(1999, "upperRoman"), "MCMXCIX");
+    }
+
+    // --- Edge cases ---
+
+    #[test]
+    fn test_format_number_none() {
+        assert_eq!(format_number(5, "none"), "");
+    }
+
+    #[test]
+    fn test_format_number_unknown_falls_back_to_decimal() {
+        assert_eq!(format_number(42, "unknownFormat"), "42");
+    }
+
+    #[test]
+    fn test_to_letter_zero() {
+        assert_eq!(to_letter(0, b'a'), "");
+    }
+
+    #[test]
+    fn test_to_roman_large() {
+        assert_eq!(to_roman(2024), "mmxxiv");
+        assert_eq!(to_roman(3999), "mmmcmxcix");
     }
 }

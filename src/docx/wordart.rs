@@ -1,12 +1,18 @@
-use crate::model::{AutoFit, TextWarp};
 use crate::model::{
-    Alignment, HRelativeFrom, HorizontalPosition, Paragraph, Run, TextFill, TextGlow, TextOutline,
-    TextShadow, Textbox, VRelativeFrom, WrapType,
+    Alignment, AutoFit, HRelativeFrom, HorizontalPosition, Paragraph, Run, TextFill, TextGlow,
+    TextOutline, TextShadow, TextWarp, Textbox, VRelativeFrom, WrapType,
 };
 
 use super::styles::{StylesInfo, ThemeFonts};
 use super::textbox::{find_dml, parse_avlst};
-use super::{DML_NS, W14_NS, parse_hex_color};
+use super::{DML_NS, W14_NS, find_child, parse_hex_color};
+
+fn find_w14<'a>(
+    parent: roxmltree::Node<'a, 'a>,
+    name: &str,
+) -> Option<roxmltree::Node<'a, 'a>> {
+    find_child(parent, name, W14_NS)
+}
 
 /// Parsed WordArt-specific properties from wps:bodyPr.
 pub(super) struct WordArtBodyProps {
@@ -58,9 +64,7 @@ pub(super) fn parse_wordart_body_pr(body_pr: roxmltree::Node) -> WordArtBodyProp
 
 /// Parse w14:textOutline from a w:rPr node.
 pub(super) fn parse_text_outline(rpr: roxmltree::Node) -> Option<TextOutline> {
-    let outline = rpr.children().find(|n| {
-        n.tag_name().name() == "textOutline" && n.tag_name().namespace() == Some(W14_NS)
-    })?;
+    let outline = find_w14(rpr, "textOutline")?;
 
     let width_pt = outline
         .attribute((W14_NS, "w"))
@@ -74,28 +78,17 @@ pub(super) fn parse_text_outline(rpr: roxmltree::Node) -> Option<TextOutline> {
 
 /// Parse w14:textFill from a w:rPr node.
 pub(super) fn parse_text_fill(rpr: roxmltree::Node) -> Option<TextFill> {
-    let text_fill = rpr.children().find(|n| {
-        n.tag_name().name() == "textFill" && n.tag_name().namespace() == Some(W14_NS)
-    })?;
+    let text_fill = find_w14(rpr, "textFill")?;
 
-    if text_fill
-        .children()
-        .any(|n| n.tag_name().name() == "noFill" && n.tag_name().namespace() == Some(W14_NS))
-    {
+    if find_w14(text_fill, "noFill").is_some() {
         return Some(TextFill::NoFill);
     }
 
-    if let Some(solid) = text_fill.children().find(|n| {
-        n.tag_name().name() == "solidFill" && n.tag_name().namespace() == Some(W14_NS)
-    }) {
-        if let Some(color) = resolve_w14_color(solid) {
-            return Some(TextFill::Solid(color));
-        }
+    if let Some(color) = find_w14(text_fill, "solidFill").and_then(resolve_w14_color) {
+        return Some(TextFill::Solid(color));
     }
 
-    if let Some(grad) = text_fill.children().find(|n| {
-        n.tag_name().name() == "gradFill" && n.tag_name().namespace() == Some(W14_NS)
-    }) {
+    if let Some(grad) = find_w14(text_fill, "gradFill") {
         return parse_w14_gradient(grad);
     }
 
@@ -104,9 +97,7 @@ pub(super) fn parse_text_fill(rpr: roxmltree::Node) -> Option<TextFill> {
 
 /// Parse w14:shadow from a w:rPr node.
 pub(super) fn parse_text_shadow(rpr: roxmltree::Node) -> Option<TextShadow> {
-    let shadow = rpr.children().find(|n| {
-        n.tag_name().name() == "shadow" && n.tag_name().namespace() == Some(W14_NS)
-    })?;
+    let shadow = find_w14(rpr, "shadow")?;
 
     let color = find_w14_solid_fill_color(shadow).unwrap_or([128, 128, 128]);
 
@@ -129,16 +120,11 @@ pub(super) fn parse_text_shadow(rpr: roxmltree::Node) -> Option<TextShadow> {
         .map(|v| v / 60_000.0)
         .unwrap_or(225.0);
 
-    let alpha = shadow
-        .children()
-        .find(|n| n.tag_name().name() == "srgbClr" && n.tag_name().namespace() == Some(W14_NS))
-        .and_then(|srgb| {
-            srgb.children()
-                .find(|n| n.tag_name().name() == "alpha" && n.tag_name().namespace() == Some(W14_NS))
-                .and_then(|a| a.attribute((W14_NS, "val")))
-                .and_then(|v| v.parse::<f32>().ok())
-                .map(|v| v / 100_000.0)
-        })
+    let alpha = find_w14(shadow, "srgbClr")
+        .and_then(|srgb| find_w14(srgb, "alpha"))
+        .and_then(|a| a.attribute((W14_NS, "val")))
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(|v| v / 100_000.0)
         .unwrap_or(0.6);
 
     // Convert polar (dist, dir) to cartesian offsets
@@ -156,9 +142,7 @@ pub(super) fn parse_text_shadow(rpr: roxmltree::Node) -> Option<TextShadow> {
 
 /// Parse w14:glow from a w:rPr node.
 pub(super) fn parse_text_glow(rpr: roxmltree::Node) -> Option<TextGlow> {
-    let glow = rpr.children().find(|n| {
-        n.tag_name().name() == "glow" && n.tag_name().namespace() == Some(W14_NS)
-    })?;
+    let glow = find_w14(rpr, "glow")?;
 
     let radius_pt = glow
         .attribute((W14_NS, "rad"))
@@ -240,47 +224,30 @@ pub(super) fn parse_vml_wordart(
     })
 }
 
-// --- Private helpers ---
-
 fn resolve_w14_color(fill_node: roxmltree::Node) -> Option<[u8; 3]> {
-    if let Some(srgb) = fill_node.children().find(|n| {
-        n.tag_name().name() == "srgbClr" && n.tag_name().namespace() == Some(W14_NS)
-    }) {
+    if let Some(srgb) = find_w14(fill_node, "srgbClr") {
         return srgb.attribute((W14_NS, "val")).and_then(parse_hex_color);
     }
-    if let Some(srgb) = fill_node.children().find(|n| {
-        n.tag_name().name() == "srgbClr" && n.tag_name().namespace() == Some(DML_NS)
-    }) {
+    if let Some(srgb) = find_child(fill_node, "srgbClr", DML_NS) {
         return srgb.attribute("val").and_then(parse_hex_color);
     }
     None
 }
 
 fn find_w14_solid_fill_color(parent: roxmltree::Node) -> Option<[u8; 3]> {
-    let solid = parent.children().find(|n| {
-        n.tag_name().name() == "solidFill" && n.tag_name().namespace() == Some(W14_NS)
-    });
-    if let Some(s) = solid {
-        if let Some(c) = resolve_w14_color(s) {
-            return Some(c);
-        }
-    }
-    let dml_solid = find_dml(parent, "solidFill");
-    if let Some(s) = dml_solid {
-        return resolve_w14_color(s);
-    }
-    None
+    find_w14(parent, "solidFill")
+        .and_then(resolve_w14_color)
+        .or_else(|| find_dml(parent, "solidFill").and_then(resolve_w14_color))
 }
 
 fn parse_w14_gradient(grad: roxmltree::Node) -> Option<TextFill> {
-    let gs_lst = grad.children().find(|n| {
-        n.tag_name().name() == "gsLst" && n.tag_name().namespace() == Some(W14_NS)
-    })?;
+    let gs_lst = find_w14(grad, "gsLst")?;
 
     let mut stops = Vec::new();
-    for gs in gs_lst.children().filter(|n| {
-        n.tag_name().name() == "gs" && n.tag_name().namespace() == Some(W14_NS)
-    }) {
+    for gs in gs_lst
+        .children()
+        .filter(|n| n.tag_name().name() == "gs" && n.tag_name().namespace() == Some(W14_NS))
+    {
         let pos = gs
             .attribute((W14_NS, "pos"))
             .and_then(|v| v.parse::<f32>().ok())
@@ -295,9 +262,7 @@ fn parse_w14_gradient(grad: roxmltree::Node) -> Option<TextFill> {
         return None;
     }
 
-    let angle_deg = grad
-        .children()
-        .find(|n| n.tag_name().name() == "lin" && n.tag_name().namespace() == Some(W14_NS))
+    let angle_deg = find_w14(grad, "lin")
         .and_then(|lin| lin.attribute((W14_NS, "ang")))
         .and_then(|v| v.parse::<f32>().ok())
         .map(|v| v / 60_000.0)

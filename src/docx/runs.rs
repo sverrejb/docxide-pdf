@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::Read;
+use std::io::{Read, Seek};
 
 use crate::model::{
     ConnectorShape, FieldCode, FloatingImage, HorizontalRule, InlineChart, Run, SmartArtDiagram,
@@ -14,7 +14,7 @@ use super::styles::{
     resolve_east_asia_font_from_node, resolve_font_from_node,
 };
 use super::textbox::parse_textbox_from_vml;
-use super::wordart;
+use super::wordart::{parse_text_fill, parse_text_glow, parse_text_outline, parse_text_shadow};
 use super::{
     MC_NS_TOP, REL_NS, VML_NS, WML_NS, highlight_color, parse_hex_color, parse_text_color,
     twips_to_pts, wml, wml_attr, wml_bool,
@@ -44,13 +44,18 @@ fn parse_styleref_arg(instr: &str) -> Option<String> {
 }
 
 fn mc_choice_or_fallback<'a>(node: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
-    let choice = node
-        .children()
-        .find(|n| n.tag_name().namespace() == Some(MC_NS_TOP) && n.tag_name().name() == "Choice");
-    let fallback = node
-        .children()
-        .find(|n| n.tag_name().namespace() == Some(MC_NS_TOP) && n.tag_name().name() == "Fallback");
-    choice.or(fallback)
+    let mut fallback: Option<roxmltree::Node<'a, 'a>> = None;
+    for n in node.children() {
+        if n.tag_name().namespace() != Some(MC_NS_TOP) {
+            continue;
+        }
+        match n.tag_name().name() {
+            "Choice" => return Some(n),
+            "Fallback" if fallback.is_none() => fallback = Some(n),
+            _ => {}
+        }
+    }
+    fallback
 }
 
 pub(super) struct ParsedRuns {
@@ -319,10 +324,10 @@ impl ParagraphRunDefaults {
                 .or_else(|| char_style.and_then(|cs| cs.kern_threshold))
                 .or(self.kern_threshold),
             char_style_id: char_style_id_str.map(|s| s.to_string()),
-            text_outline: rpr.and_then(wordart::parse_text_outline),
-            text_fill: rpr.and_then(wordart::parse_text_fill),
-            text_shadow: rpr.and_then(wordart::parse_text_shadow),
-            text_glow: rpr.and_then(wordart::parse_text_glow),
+            text_outline: rpr.and_then(parse_text_outline),
+            text_fill: rpr.and_then(parse_text_fill),
+            text_shadow: rpr.and_then(parse_text_shadow),
+            text_glow: rpr.and_then(parse_text_glow),
             lang: rpr
                 .and_then(|n| wml(n, "lang"))
                 .and_then(|n| n.attribute((WML_NS, "val")))
@@ -513,8 +518,7 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
     }
     let mut result: Vec<Run> = Vec::with_capacity(runs.len());
     for run in runs {
-        let can_merge = result.last().is_some_and(|prev: &Run| {
-            // Both must be plain text runs
+        let can_merge = result.last().is_some_and(|prev| {
             !prev.is_tab
                 && !run.is_tab
                 && !prev.is_line_break
@@ -527,7 +531,6 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
                 && !run.is_footnote_ref_mark
                 && prev.field_code.is_none()
                 && run.field_code.is_none()
-                // All visual properties must match
                 && prev.font_name == run.font_name
                 && prev.east_asia_font_name == run.east_asia_font_name
                 && prev.font_size == run.font_size
@@ -561,7 +564,7 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
     result
 }
 
-pub(super) fn parse_runs<R: Read + std::io::Seek>(
+pub(super) fn parse_runs<R: Read + Seek>(
     para_node: roxmltree::Node,
     styles: &StylesInfo,
     theme: &ThemeFonts,

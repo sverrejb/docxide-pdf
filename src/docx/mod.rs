@@ -18,9 +18,9 @@ use std::io::Read;
 
 use crate::error::Error;
 use crate::model::{
-    Alignment, Block, Document, FrameProperties, HRelativeFrom, HorizontalPosition, LineSpacing,
-    Paragraph, ParagraphBorders, Run, Section, SectionBreakType, SectionProperties, TabAlignment,
-    TabStop, VRelativeFrom,
+    Alignment, Block, BorderStyle, CellBorder, DocGridType, Document, FrameProperties,
+    HRelativeFrom, HorizontalPosition, LineSpacing, Paragraph, ParagraphBorder, ParagraphBorders,
+    Run, Section, SectionBreakType, SectionProperties, TabAlignment, TabStop, VRelativeFrom,
 };
 
 use styles::{ParagraphStyle, parse_alignment, parse_line_spacing, parse_styles, parse_theme};
@@ -163,7 +163,7 @@ pub(super) fn twips_attr(node: roxmltree::Node, attr: &str) -> Option<f32> {
         .map(twips_to_pts)
 }
 
-fn parse_one_border(node: roxmltree::Node) -> Option<crate::model::ParagraphBorder> {
+fn parse_one_border(node: roxmltree::Node) -> Option<ParagraphBorder> {
     let val = node.attribute((WML_NS, "val")).unwrap_or("none");
     if val == "none" || val == "nil" {
         return None;
@@ -181,7 +181,7 @@ fn parse_one_border(node: roxmltree::Node) -> Option<crate::model::ParagraphBord
         .attribute((WML_NS, "color"))
         .and_then(parse_hex_color)
         .unwrap_or([0, 0, 0]);
-    Some(crate::model::ParagraphBorder {
+    Some(ParagraphBorder {
         width_pt,
         space_pt,
         color,
@@ -201,15 +201,15 @@ pub(super) fn parse_paragraph_borders(ppr: roxmltree::Node) -> ParagraphBorders 
     }
 }
 
-pub(super) fn parse_cell_border(parent: roxmltree::Node, name: &str) -> crate::model::CellBorder {
+pub(super) fn parse_cell_border(parent: roxmltree::Node, name: &str) -> CellBorder {
     let Some(n) = wml(parent, name) else {
-        return crate::model::CellBorder::default();
+        return CellBorder::default();
     };
     let val = n.attribute((WML_NS, "val")).unwrap_or("none");
     if val == "nil" || val == "none" {
-        return crate::model::CellBorder {
+        return CellBorder {
             is_override: true,
-            ..crate::model::CellBorder::default()
+            ..CellBorder::default()
         };
     }
     let width = n
@@ -219,22 +219,22 @@ pub(super) fn parse_cell_border(parent: roxmltree::Node, name: &str) -> crate::m
         .unwrap_or(0.5);
     let color = n.attribute((WML_NS, "color")).and_then(parse_hex_color);
     let style = match val {
-        "dotted" => crate::model::BorderStyle::Dotted,
-        "dashed" => crate::model::BorderStyle::Dashed,
-        "dashSmallGap" => crate::model::BorderStyle::DashSmallGap,
-        "dashDotStroked" | "dashDot" => crate::model::BorderStyle::DashDot,
-        "dashDotDot" => crate::model::BorderStyle::DashDotDot,
-        "double" => crate::model::BorderStyle::Double,
-        _ => crate::model::BorderStyle::Single,
+        "dotted" => BorderStyle::Dotted,
+        "dashed" => BorderStyle::Dashed,
+        "dashSmallGap" => BorderStyle::DashSmallGap,
+        "dashDotStroked" | "dashDot" => BorderStyle::DashDot,
+        "dashDotDot" => BorderStyle::DashDotDot,
+        "double" => BorderStyle::Double,
+        _ => BorderStyle::Single,
     };
-    crate::model::CellBorder::visible(color, width, style)
+    CellBorder::visible(color, width, style)
 }
 
 fn parse_cell_border_with_fallback(
     parent: roxmltree::Node,
     primary: &str,
     fallback: &str,
-) -> crate::model::CellBorder {
+) -> CellBorder {
     let border = parse_cell_border(parent, primary);
     if border.present || border.is_override {
         border
@@ -244,12 +244,12 @@ fn parse_cell_border_with_fallback(
 }
 
 /// Parse left border with "start" fallback per OOXML bidi naming.
-pub(super) fn parse_cell_border_left(parent: roxmltree::Node) -> crate::model::CellBorder {
+pub(super) fn parse_cell_border_left(parent: roxmltree::Node) -> CellBorder {
     parse_cell_border_with_fallback(parent, "left", "start")
 }
 
 /// Parse right border with "end" fallback per OOXML bidi naming.
-pub(super) fn parse_cell_border_right(parent: roxmltree::Node) -> crate::model::CellBorder {
+pub(super) fn parse_cell_border_right(parent: roxmltree::Node) -> CellBorder {
     parse_cell_border_with_fallback(parent, "right", "end")
 }
 
@@ -966,7 +966,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
             footer_even: None,
             different_first_page: false,
             line_pitch: default_line_pitch,
-            grid_type: crate::model::DocGridType::Default,
+            grid_type: DocGridType::Default,
             break_type: SectionBreakType::NextPage,
             columns: None,
             page_num_start: None,
@@ -995,4 +995,226 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         auto_hyphenation: settings.auto_hyphenation,
         default_lang: settings.default_lang,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- Pure math / conversion ---
+
+    #[test]
+    fn test_twips_to_pts() {
+        assert_eq!(twips_to_pts(0.0), 0.0);
+        assert_eq!(twips_to_pts(20.0), 1.0);
+        assert_eq!(twips_to_pts(360.0), 18.0);
+        assert_eq!(twips_to_pts(1440.0), 72.0); // 1 inch
+    }
+
+    #[test]
+    fn test_emu_to_pts() {
+        assert_eq!(emu_to_pts(0.0), 0.0);
+        assert_eq!(emu_to_pts(12700.0), 1.0);
+        assert_eq!(emu_to_pts(914400.0), 72.0); // 1 inch
+    }
+
+    // --- Color parsing ---
+
+    #[test]
+    fn test_parse_hex_color() {
+        assert_eq!(parse_hex_color("FF0000"), Some([255, 0, 0]));
+        assert_eq!(parse_hex_color("00FF00"), Some([0, 255, 0]));
+        assert_eq!(parse_hex_color("0000FF"), Some([0, 0, 255]));
+        assert_eq!(parse_hex_color("4472C4"), Some([68, 114, 196]));
+        assert_eq!(parse_hex_color("auto"), None);
+        assert_eq!(parse_hex_color("red"), None); // wrong length
+        assert_eq!(parse_hex_color(""), None);
+        assert_eq!(parse_hex_color("ZZZZZZ"), None); // invalid hex
+    }
+
+    #[test]
+    fn test_parse_text_color() {
+        assert_eq!(parse_text_color("auto"), Some([0, 0, 0])); // auto → black
+        assert_eq!(parse_text_color("FF0000"), Some([255, 0, 0]));
+        assert_eq!(parse_text_color("invalid"), None);
+    }
+
+    #[test]
+    fn test_highlight_color() {
+        assert_eq!(highlight_color("yellow"), Some([255, 255, 0]));
+        assert_eq!(highlight_color("red"), Some([255, 0, 0]));
+        assert_eq!(highlight_color("blue"), Some([0, 0, 255]));
+        assert_eq!(highlight_color("darkGreen"), Some([0, 128, 0]));
+        assert_eq!(highlight_color("lightGray"), Some([192, 192, 192]));
+        assert_eq!(highlight_color("black"), Some([0, 0, 0]));
+        assert_eq!(highlight_color("white"), Some([255, 255, 255]));
+        assert_eq!(highlight_color("unknown"), None);
+    }
+
+    // --- East Asian character detection ---
+
+    #[test]
+    fn test_is_east_asian_char() {
+        assert!(is_east_asian_char('漢')); // CJK Unified Ideograph
+        assert!(is_east_asian_char('あ')); // Hiragana
+        assert!(is_east_asian_char('ア')); // Katakana
+        assert!(is_east_asian_char('한')); // Hangul
+        assert!(is_east_asian_char('、')); // CJK Symbols
+        assert!(is_east_asian_char('\u{FF01}')); // Fullwidth !
+        assert!(!is_east_asian_char('A'));
+        assert!(!is_east_asian_char('1'));
+        assert!(!is_east_asian_char(' '));
+        assert!(!is_east_asian_char('é'));
+    }
+
+    // --- XML-based utility tests ---
+
+    #[test]
+    fn test_wml_bool() {
+        let xml = format!(
+            r#"<w:pPr xmlns:w="{}">
+                <w:b/>
+                <w:i w:val="0"/>
+                <w:caps w:val="true"/>
+                <w:vanish w:val="false"/>
+            </w:pPr>"#,
+            WML_NS
+        );
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        let node = doc.root_element();
+        // Present with no val attribute → true
+        assert_eq!(wml_bool(node, "b"), Some(true));
+        // val="0" → false
+        assert_eq!(wml_bool(node, "i"), Some(false));
+        // val="true" → true
+        assert_eq!(wml_bool(node, "caps"), Some(true));
+        // val="false" → false
+        assert_eq!(wml_bool(node, "vanish"), Some(false));
+        // Missing element → None
+        assert_eq!(wml_bool(node, "strike"), None);
+    }
+
+    #[test]
+    fn test_wml_attr() {
+        let xml = format!(
+            r#"<w:pPr xmlns:w="{}">
+                <w:jc w:val="center"/>
+                <w:sz w:val="24"/>
+            </w:pPr>"#,
+            WML_NS
+        );
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        let node = doc.root_element();
+        assert_eq!(wml_attr(node, "jc"), Some("center"));
+        assert_eq!(wml_attr(node, "sz"), Some("24"));
+        assert_eq!(wml_attr(node, "missing"), None);
+    }
+
+    #[test]
+    fn test_twips_attr() {
+        let xml = format!(
+            r#"<w:ind xmlns:w="{}" w:left="720" w:right="360"/>"#,
+            WML_NS
+        );
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        let node = doc.root_element();
+        assert_eq!(twips_attr(node, "left"), Some(36.0)); // 720/20=36pt
+        assert_eq!(twips_attr(node, "right"), Some(18.0)); // 360/20=18pt
+        assert_eq!(twips_attr(node, "hanging"), None);
+    }
+
+    // --- Tab stops ---
+
+    #[test]
+    fn test_parse_tab_stops() {
+        let xml = format!(
+            r#"<w:pPr xmlns:w="{}">
+                <w:tabs>
+                    <w:tab w:val="center" w:pos="4320"/>
+                    <w:tab w:val="right" w:pos="8640" w:leader="dot"/>
+                    <w:tab w:val="left" w:pos="1440"/>
+                </w:tabs>
+            </w:pPr>"#,
+            WML_NS
+        );
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        let node = doc.root_element();
+        let stops = parse_tab_stops(node);
+        assert_eq!(stops.len(), 3);
+        // Sorted by position
+        assert_eq!(stops[0].position, 72.0); // 1440/20
+        assert_eq!(stops[0].alignment, TabAlignment::Left);
+        assert_eq!(stops[0].leader, None);
+        assert_eq!(stops[1].position, 216.0); // 4320/20
+        assert_eq!(stops[1].alignment, TabAlignment::Center);
+        assert_eq!(stops[2].position, 432.0); // 8640/20
+        assert_eq!(stops[2].alignment, TabAlignment::Right);
+        assert_eq!(stops[2].leader, Some('.'));
+    }
+
+    #[test]
+    fn test_parse_tab_stops_with_clears() {
+        let xml = format!(
+            r#"<w:pPr xmlns:w="{}">
+                <w:tabs>
+                    <w:tab w:val="clear" w:pos="720"/>
+                    <w:tab w:val="right" w:pos="9360"/>
+                </w:tabs>
+            </w:pPr>"#,
+            WML_NS
+        );
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        let node = doc.root_element();
+        let (stops, clears) = parse_tab_stops_with_clears(node);
+        assert_eq!(stops.len(), 1);
+        assert_eq!(stops[0].alignment, TabAlignment::Right);
+        assert_eq!(clears.len(), 1);
+        assert_eq!(clears[0], 36.0); // 720/20
+    }
+
+    // --- Indents ---
+
+    #[test]
+    fn test_extract_indents() {
+        let xml = format!(
+            r#"<w:ind xmlns:w="{}" w:left="720" w:right="360" w:hanging="360" w:firstLine="0"/>"#,
+            WML_NS
+        );
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        let node = doc.root_element();
+        let (left, right, hanging, first_line) = extract_indents(node);
+        assert_eq!(left, Some(36.0)); // 720/20
+        assert_eq!(right, Some(18.0)); // 360/20
+        assert_eq!(hanging, Some(18.0)); // 360/20
+        assert_eq!(first_line, Some(0.0));
+    }
+
+    #[test]
+    fn test_extract_indents_start_end() {
+        // w:start/w:end are the modern equivalents of w:left/w:right
+        let xml = format!(
+            r#"<w:ind xmlns:w="{}" w:start="1440" w:end="720"/>"#,
+            WML_NS
+        );
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        let node = doc.root_element();
+        let (left, right, hanging, first_line) = extract_indents(node);
+        assert_eq!(left, Some(72.0)); // 1440/20
+        assert_eq!(right, Some(36.0)); // 720/20
+        assert_eq!(hanging, None);
+        assert_eq!(first_line, None);
+    }
+
+    // --- Theme color key resolution ---
+
+    #[test]
+    fn test_resolve_theme_color_key() {
+        assert_eq!(resolve_theme_color_key("dk1"), "dk1");
+        assert_eq!(resolve_theme_color_key("tx1"), "dk1");
+        assert_eq!(resolve_theme_color_key("tx2"), "dk2");
+        assert_eq!(resolve_theme_color_key("accent1"), "accent1");
+        assert_eq!(resolve_theme_color_key("accent6"), "accent6");
+        assert_eq!(resolve_theme_color_key("bg1"), "lt1");
+        assert_eq!(resolve_theme_color_key("bg2"), "lt2");
+    }
 }

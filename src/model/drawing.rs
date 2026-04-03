@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use crate::geometry::{FormulaOp, PathFill};
 
-use super::{HRelativeFrom, HorizontalPosition, Paragraph, VRelativeFrom, WrapText, WrapType};
+use super::{
+    HRelativeFrom, HorizontalPosition, Paragraph, VRelativeFrom, VerticalPosition, WrapText,
+    WrapType,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ImageFormat {
@@ -17,28 +20,24 @@ pub struct EmbeddedImage {
     pub format: ImageFormat,
     pub pixel_width: u32,
     pub pixel_height: u32,
-    pub display_width: f32,  // points
-    pub display_height: f32, // points
+    pub display_width: f32,
+    pub display_height: f32,
     pub jpeg_components: u8,
-    /// Extra vertical space from wp:effectExtent + wp:inline distT/distB (points)
+    /// effectExtent + distT/distB combined (points)
     pub layout_extra_height: f32,
-    /// Top portion of extra space: effectExtent.t + distT (points)
+    /// effectExtent.t + distT (points)
     pub layout_extra_top: f32,
-    /// Outline/border color from pic:spPr/a:ln
     pub stroke_color: Option<[u8; 3]>,
-    /// Outline/border width in points from pic:spPr/a:ln @w
     pub stroke_width: f32,
-    /// Drop shadow from pic:spPr/a:effectLst/a:outerShdw
     pub shadow: Option<ImageShadow>,
 }
 
-/// Drop shadow effect parsed from a:outerShdw
 #[derive(Clone, Debug)]
 pub struct ImageShadow {
     pub offset_x: f32,    // points, positive = right
-    pub offset_y: f32,    // points, positive = down in screen coords
-    pub blur_radius: f32, // points — expands the shadow rect beyond the image
-    pub color: [u8; 3],   // raw shadow color
+    pub offset_y: f32,    // points, positive = down (screen coords, not PDF)
+    pub blur_radius: f32, // points
+    pub color: [u8; 3],
     pub alpha: f32,       // 0.0–1.0
 }
 
@@ -47,11 +46,11 @@ pub struct FloatingImage {
     pub image: EmbeddedImage,
     pub h_position: HorizontalPosition,
     pub h_relative_from: HRelativeFrom,
-    pub v_position: super::VerticalPosition,
+    pub v_position: VerticalPosition,
     pub v_relative_from: VRelativeFrom,
     pub wrap_type: WrapType,
     pub wrap_text: WrapText,
-    /// Polygon vertices in 1/21600 of extent (from wp:wrapPolygon)
+    /// Vertices in 1/21600 of extent (OOXML wrapPolygon coordinate space)
     pub wrap_polygon: Option<Vec<(i32, i32)>>,
     pub behind_doc: bool,
     pub dist_top: f32,
@@ -60,8 +59,7 @@ pub struct FloatingImage {
     pub dist_right: f32,
 }
 
-/// Geometry definition for a shape — either a preset name or custom paths.
-/// Supports all 187 OOXML preset shapes and arbitrary custom geometry (a:custGeom).
+/// Covers all 187 OOXML preset shapes and arbitrary custom geometry (a:custGeom).
 #[derive(Clone, Debug)]
 pub struct ShapeGeometry {
     pub preset: Option<String>,

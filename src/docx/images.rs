@@ -1,9 +1,10 @@
 use std::collections::HashMap;
-use std::io::Read;
+use std::io::{Read, Seek};
 
 use crate::model::{
-    EmbeddedImage, FloatingImage, HRelativeFrom, HorizontalPosition, ImageFormat, ImageShadow,
-    InlineChart, SmartArtDiagram, VRelativeFrom, VerticalPosition, WrapText, WrapType,
+    ConnectorShape, EmbeddedImage, FloatingImage, HRelativeFrom, HorizontalPosition, ImageFormat,
+    ImageShadow, InlineChart, SmartArtDiagram, Textbox, VRelativeFrom, VerticalPosition, WrapText,
+    WrapType,
 };
 
 use super::charts::parse_chart_from_zip;
@@ -14,6 +15,7 @@ use super::textbox::{parse_connector_from_wsp, parse_textbox_from_wsp};
 use super::{DML_NS, REL_NS, WML_NS, WPD_NS, emu_attr, emu_to_pts, find_child, parse_hex_color, wml};
 
 const CHART_URI: &str = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+const PIC_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/picture";
 
 fn parse_emu_text(text: Option<&str>) -> f32 {
     emu_to_pts(text.unwrap_or("0").parse::<f32>().unwrap_or(0.0))
@@ -96,17 +98,18 @@ fn parse_jpeg_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat, u8)> {
     None
 }
 
-/// Parse outline stroke from `pic:spPr/a:ln` inside a pic:pic element.
-fn parse_pic_outline(container: roxmltree::Node) -> (Option<[u8; 3]>, f32) {
-    let pic_ns = "http://schemas.openxmlformats.org/drawingml/2006/picture";
-    let pic_node = container
+fn find_pic_sp_pr<'a>(container: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
+    container
         .descendants()
-        .find(|n| n.tag_name().name() == "pic" && n.tag_name().namespace() == Some(pic_ns));
-    // pic:spPr uses the pic namespace, but a:ln inside it uses DML_NS
-    let sp_pr = pic_node.and_then(|p| {
-        p.children()
-            .find(|c| c.tag_name().name() == "spPr" && c.tag_name().namespace() == Some(pic_ns))
-    });
+        .find(|n| n.tag_name().name() == "pic" && n.tag_name().namespace() == Some(PIC_NS))
+        .and_then(|p| {
+            p.children()
+                .find(|c| c.tag_name().name() == "spPr" && c.tag_name().namespace() == Some(PIC_NS))
+        })
+}
+
+/// Parse outline stroke from `pic:spPr/a:ln`.
+fn parse_pic_outline(sp_pr: Option<roxmltree::Node>) -> (Option<[u8; 3]>, f32) {
     let ln = sp_pr.and_then(|s| {
         s.children()
             .find(|c| c.tag_name().name() == "ln" && c.tag_name().namespace() == Some(DML_NS))
@@ -133,19 +136,9 @@ fn parse_pic_outline(container: roxmltree::Node) -> (Option<[u8; 3]>, f32) {
 
 /// Parse drop shadow from `pic:spPr/a:effectLst/a:outerShdw`.
 /// Returns color pre-blended with white at the shadow's alpha.
-fn parse_pic_shadow(container: roxmltree::Node) -> Option<ImageShadow> {
-    let pic_ns = "http://schemas.openxmlformats.org/drawingml/2006/picture";
-    let pic_node = container
-        .descendants()
-        .find(|n| n.tag_name().name() == "pic" && n.tag_name().namespace() == Some(pic_ns));
-    let sp_pr = pic_node.and_then(|p| {
-        p.children()
-            .find(|c| c.tag_name().name() == "spPr" && c.tag_name().namespace() == Some(pic_ns))
-    });
-    let effect_lst = sp_pr.and_then(|s| {
-        s.children()
-            .find(|c| c.tag_name().name() == "effectLst" && c.tag_name().namespace() == Some(DML_NS))
-    });
+fn parse_pic_shadow(sp_pr: Option<roxmltree::Node>) -> Option<ImageShadow> {
+    let effect_lst = sp_pr?.children()
+        .find(|c| c.tag_name().name() == "effectLst" && c.tag_name().namespace() == Some(DML_NS));
     let outer_shdw = effect_lst.and_then(|e| {
         e.children()
             .find(|c| c.tag_name().name() == "outerShdw" && c.tag_name().namespace() == Some(DML_NS))
@@ -198,7 +191,7 @@ fn parse_pic_shadow(container: roxmltree::Node) -> Option<ImageShadow> {
     })
 }
 
-pub(super) fn read_image_from_zip<R: Read + std::io::Seek>(
+pub(super) fn read_image_from_zip<R: Read + Seek>(
     embed_id: &str,
     rels: &HashMap<String, String>,
     zip: &mut zip::ZipArchive<R>,
@@ -208,7 +201,7 @@ pub(super) fn read_image_from_zip<R: Read + std::io::Seek>(
     read_image_from_zip_extra(embed_id, rels, zip, display_w, display_h, 0.0, 0.0)
 }
 
-pub(super) fn read_image_from_zip_extra<R: Read + std::io::Seek>(
+pub(super) fn read_image_from_zip_extra<R: Read + Seek>(
     embed_id: &str,
     rels: &HashMap<String, String>,
     zip: &mut zip::ZipArchive<R>,
@@ -372,8 +365,8 @@ fn parse_wrap_polygon(wrap_elem: roxmltree::Node) -> Option<Vec<(i32, i32)>> {
 pub(super) enum RunDrawingResult {
     Inline(EmbeddedImage),
     Floating(FloatingImage),
-    TextBox(crate::model::Textbox),
-    Connector(crate::model::ConnectorShape),
+    TextBox(Textbox),
+    Connector(ConnectorShape),
     Chart(InlineChart),
     SmartArt(SmartArtDiagram),
 }
@@ -382,7 +375,7 @@ fn is_wpd_drawing(node: roxmltree::Node, expected: &str) -> bool {
     node.tag_name().name() == expected && node.tag_name().namespace() == Some(WPD_NS)
 }
 
-pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
+pub(super) fn parse_run_drawing<R: Read + Seek>(
     drawing_node: roxmltree::Node,
     rels: &HashMap<String, String>,
     zip: &mut zip::ZipArchive<R>,
@@ -410,7 +403,7 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
                 };
                 let (wrap_type, _, _) = parse_wrap_type(container);
                 let behind_doc = container.attribute("behindDoc") == Some("1");
-                return Some(RunDrawingResult::TextBox(crate::model::Textbox {
+                return Some(RunDrawingResult::TextBox(Textbox {
                     paragraphs: wsp.paragraphs,
                     width_pt: display_w,
                     height_pt: display_h,
@@ -442,10 +435,11 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
             }
             if let Some(embed_id) = find_blip_embed(container) {
                 if let Some(mut img) = read_image_from_zip(embed_id, rels, zip, display_w, display_h) {
-                    let (stroke_color, stroke_width) = parse_pic_outline(container);
+                    let sp_pr = find_pic_sp_pr(container);
+                    let (stroke_color, stroke_width) = parse_pic_outline(sp_pr);
                     img.stroke_color = stroke_color;
                     img.stroke_width = stroke_width;
-                    img.shadow = parse_pic_shadow(container);
+                    img.shadow = parse_pic_shadow(sp_pr);
                     let (h_position, h_relative, v_position, v_relative) =
                         parse_anchor_position(container);
                     let (wrap_type, wrap_text, wrap_polygon) = parse_wrap_type(container);
@@ -476,14 +470,14 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
         {
             // Treat inline textbox as a floating textbox at paragraph position
             // with TopAndBottom wrap so it acts as a block element
-            return Some(RunDrawingResult::TextBox(crate::model::Textbox {
+            return Some(RunDrawingResult::TextBox(Textbox {
                 paragraphs: wsp.paragraphs,
                 width_pt: display_w,
                 height_pt: display_h,
                 h_position: HorizontalPosition::Offset(0.0),
                 h_relative_from: HRelativeFrom::Column,
                 v_offset_pt: 0.0,
-                v_relative_from: crate::model::VRelativeFrom::Paragraph,
+                v_relative_from: VRelativeFrom::Paragraph,
                 fill: wsp.fill,
                 shape_type: wsp.shape_type,
                 stroke_color: wsp.stroke_color,
@@ -493,7 +487,7 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
                 margin_right: wsp.margin_right,
                 margin_top: wsp.margin_top,
                 margin_bottom: wsp.margin_bottom,
-                wrap_type: crate::model::WrapType::TopAndBottom,
+                wrap_type: WrapType::TopAndBottom,
                 dist_top: 0.0,
                 dist_bottom: 0.0,
                 behind_doc: false,
@@ -509,10 +503,11 @@ pub(super) fn parse_run_drawing<R: Read + std::io::Seek>(
             if let Some(mut img) =
                 read_image_from_zip_extra(embed_id, rels, zip, display_w, display_h, extra_h, extra_top)
             {
-                let (stroke_color, stroke_width) = parse_pic_outline(container);
+                let sp_pr = find_pic_sp_pr(container);
+                let (stroke_color, stroke_width) = parse_pic_outline(sp_pr);
                 img.stroke_color = stroke_color;
                 img.stroke_width = stroke_width;
-                img.shadow = parse_pic_shadow(container);
+                img.shadow = parse_pic_shadow(sp_pr);
                 return Some(RunDrawingResult::Inline(img));
             }
         }
@@ -551,7 +546,7 @@ fn find_chart_ref<'a>(container: roxmltree::Node<'a, 'a>) -> Option<&'a str> {
         })
 }
 
-pub(super) fn compute_drawing_info<R: Read + std::io::Seek>(
+pub(super) fn compute_drawing_info<R: Read + Seek>(
     para_node: roxmltree::Node,
     rels: &HashMap<String, String>,
     zip: &mut zip::ZipArchive<R>,
@@ -584,10 +579,11 @@ pub(super) fn compute_drawing_info<R: Read + std::io::Seek>(
                     image =
                         read_image_from_zip_extra(embed_id, rels, zip, display_w, display_h, extra_h, extra_top);
                     if let Some(ref mut img) = image {
-                        let (stroke_color, stroke_width) = parse_pic_outline(container);
+                        let sp_pr = find_pic_sp_pr(container);
+                        let (stroke_color, stroke_width) = parse_pic_outline(sp_pr);
                         img.stroke_color = stroke_color;
                         img.stroke_width = stroke_width;
-                        img.shadow = parse_pic_shadow(container);
+                        img.shadow = parse_pic_shadow(sp_pr);
                     }
                 }
             }

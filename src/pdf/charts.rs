@@ -1260,3 +1260,98 @@ fn render_radar(
     content.set_fill_gray(0.0);
     content.restore_state();
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ceil_nice_zero_and_negative() {
+        assert_eq!(ceil_nice(0.0), 1.0);
+        assert_eq!(ceil_nice(-5.0), 1.0);
+    }
+
+    #[test]
+    fn test_ceil_nice_values() {
+        assert_eq!(ceil_nice(0.3), 0.2); // mag=0.1, norm=3.0, nice=2.0
+        assert_eq!(ceil_nice(0.8), 1.0); // mag=0.1, norm=8.0, nice=10.0
+        assert_eq!(ceil_nice(1.5), 1.0); // mag=1.0, norm=1.5, nice=1.0
+        assert_eq!(ceil_nice(25.0), 20.0); // mag=10, norm=2.5, nice=2.0
+        assert_eq!(ceil_nice(70.0), 50.0); // mag=10, norm=7.0, nice=5.0 (<=7.0)
+        assert_eq!(ceil_nice(15.0), 10.0); // mag=10, norm=1.5, nice=1.0
+        assert_eq!(ceil_nice(800.0), 1000.0);
+        assert_eq!(ceil_nice(3500.0), 5000.0);
+    }
+
+    #[test]
+    fn test_nice_tick_step() {
+        assert_eq!(nice_tick_step(100.0, 5), 20.0);
+        assert_eq!(nice_tick_step(1000.0, 5), 200.0);
+        assert_eq!(nice_tick_step(80.0, 5), 20.0);
+    }
+
+    #[test]
+    fn test_compute_axis_range_with_headroom() {
+        let (step, max) = compute_axis_range(100.0, 5, 0.9);
+        assert_eq!(step, 20.0);
+        assert_eq!(max, 120.0);
+    }
+
+    #[test]
+    fn test_compute_axis_range_tight() {
+        let (step, max) = compute_axis_range(85.0, 10, 0.98);
+        assert_eq!(step, 10.0);
+        assert_eq!(max, 90.0);
+    }
+
+    #[test]
+    fn test_format_tick_label_integer_step() {
+        assert_eq!(format_tick_label(100.0, 20.0, None), "100");
+        assert_eq!(format_tick_label(0.0, 10.0, None), "0");
+    }
+
+    #[test]
+    fn test_format_tick_label_fractional_step() {
+        assert_eq!(format_tick_label(1.5, 0.5, None), "1.5");
+    }
+
+    #[test]
+    fn test_format_tick_label_with_format_code() {
+        assert_eq!(format_tick_label(1234.5, 100.0, Some("#,##0")), "1,234");
+        assert_eq!(format_tick_label(0.15, 0.1, Some("0.0%")), "15.0%");
+    }
+
+    #[test]
+    fn test_apply_number_format_basic() {
+        assert_eq!(apply_number_format(1234.56, "0.00"), "1234.56");
+        assert_eq!(apply_number_format(1234.0, "0"), "1234");
+    }
+
+    #[test]
+    fn test_apply_number_format_comma() {
+        assert_eq!(apply_number_format(1234567.0, "#,##0"), "1,234,567");
+        assert_eq!(apply_number_format(999.0, "#,##0"), "999");
+    }
+
+    #[test]
+    fn test_apply_number_format_percent() {
+        assert_eq!(apply_number_format(0.15, "0%"), "15%");
+        assert_eq!(apply_number_format(1.0, "0%"), "100%");
+    }
+
+    #[test]
+    fn test_insert_thousands_separator() {
+        assert_eq!(insert_thousands_separator("1234"), "1,234");
+        assert_eq!(insert_thousands_separator("1234567"), "1,234,567");
+        assert_eq!(insert_thousands_separator("999"), "999");
+        assert_eq!(insert_thousands_separator("1234.56"), "1,234.56");
+        assert_eq!(insert_thousands_separator("-1234"), "-1,234");
+    }
+
+    #[test]
+    fn test_text_width_approx() {
+        assert_eq!(text_width_approx("Hello", 12.0), 30.0);
+        assert_eq!(text_width_approx("", 12.0), 0.0);
+        assert_eq!(text_width_approx("A", 10.0), 5.0);
+    }
+}

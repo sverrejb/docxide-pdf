@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use std::io::Read;
 
+use crate::geometry::{FormulaOp, PathFill};
 use crate::model::{
-    Alignment, ConnectorShape, ConnectorType, CustomGeometry, CustomGuideDef, CustomPathCommand,
-    CustomPathDef, HRelativeFrom, HorizontalPosition, LineSpacing, Paragraph, ShapeFill,
-    ShapeGeometry, TextAnchor, Textbox, VRelativeFrom, WrapType,
+    Alignment, AutoFit, ConnectorShape, ConnectorType, CustomGeometry, CustomGuideDef,
+    CustomPathCommand, CustomPathDef, HRelativeFrom, HorizontalPosition, Paragraph, ShapeFill,
+    ShapeGeometry, TextAnchor, TextWarp, Textbox, VRelativeFrom, VerticalPosition, WrapType,
 };
 
 use super::images::{extent_dimensions, parse_anchor_position};
@@ -382,9 +383,6 @@ pub(super) fn parse_avlst(parent: roxmltree::Node) -> Vec<(String, i64)> {
 }
 
 fn parse_custom_geometry(cust_geom: roxmltree::Node) -> Option<CustomGeometry> {
-    use crate::geometry::FormulaOp;
-    use crate::geometry::PathFill;
-
     let adjust_defaults = parse_avlst(cust_geom);
 
     let guides = find_dml(cust_geom, "gdLst")
@@ -551,8 +549,8 @@ pub(super) struct WspResult {
     pub(super) margin_right: f32,
     pub(super) no_text_wrap: bool,
     pub(super) is_wordart: bool,
-    pub(super) text_warp: Option<crate::model::TextWarp>,
-    pub(super) auto_fit: crate::model::AutoFit,
+    pub(super) text_warp: Option<TextWarp>,
+    pub(super) auto_fit: AutoFit,
 }
 
 pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
@@ -614,7 +612,7 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
         .unwrap_or(super::wordart::WordArtBodyProps {
             is_wordart: false,
             text_warp: None,
-            auto_fit: crate::model::AutoFit::None,
+            auto_fit: AutoFit::None,
         });
 
     // WordArt defaults to zero body margins unless explicitly set
@@ -722,7 +720,7 @@ pub(super) fn parse_connector_from_wsp(
     let (h_position, _, v_pos, _) = parse_anchor_position(anchor);
     let (display_w, display_h) = extent_dimensions(anchor);
     let v_offset = match v_pos {
-        crate::model::VerticalPosition::Offset(o) => o,
+        VerticalPosition::Offset(o) => o,
         _ => 0.0,
     };
 
@@ -781,18 +779,16 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
     })?;
 
     // VML WordArt uses v:textpath instead of v:textbox
-    let textbox_node = shape
+    let Some(textbox_node) = shape
         .children()
-        .find(|n| n.tag_name().name() == "textbox" && n.tag_name().namespace() == Some(VML_NS));
-    if textbox_node.is_none() {
-        if let Some(tp) = shape.children().find(|n| {
+        .find(|n| n.tag_name().name() == "textbox" && n.tag_name().namespace() == Some(VML_NS))
+    else {
+        let tp = shape.children().find(|n| {
             n.tag_name().name() == "textpath" && n.tag_name().namespace() == Some(VML_NS)
-        }) {
-            return super::wordart::parse_vml_wordart(shape, tp, styles, theme);
-        }
-        return None;
-    }
-    let txbx_content = textbox_node.unwrap().children().find(|n| {
+        });
+        return tp.and_then(|tp| super::wordart::parse_vml_wordart(shape, tp, styles, theme));
+    };
+    let txbx_content = textbox_node.children().find(|n| {
         n.tag_name().name() == "txbxContent" && n.tag_name().namespace() == Some(WML_NS)
     })?;
 
@@ -861,7 +857,7 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         no_text_wrap: false,
         is_wordart: false,
         text_warp: None,
-        auto_fit: crate::model::AutoFit::None,
+        auto_fit: AutoFit::None,
     })
 }
 
@@ -887,7 +883,6 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
             });
 
             if let Some(branch) = choice {
-                // DrawingML path: mc:Choice -> w:drawing -> wp:anchor -> wps:wsp -> wps:txbx
                 for drawing in branch.children().filter(|n| {
                     n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "drawing"
                 }) {
@@ -902,7 +897,7 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                             let (h_position, h_relative, v_pos, v_relative) =
                                 parse_anchor_position(container);
                             let v_offset = match v_pos {
-                                crate::model::VerticalPosition::Offset(o) => o,
+                                VerticalPosition::Offset(o) => o,
                                 _ => 0.0,
                             };
                             let (wrap_type, _, _) = super::images::parse_wrap_type(container);
@@ -939,7 +934,6 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                     }
                 }
             } else if let Some(branch) = fallback {
-                // VML fallback: mc:Fallback -> w:pict -> v:shape -> v:textbox
                 for pict in branch.children().filter(|n| {
                     n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "pict"
                 }) {

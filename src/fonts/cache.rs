@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::fmt::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::time::UNIX_EPOCH;
+use std::{env, fs};
 
 #[derive(Clone)]
 pub(super) struct CachedFace {
@@ -25,19 +27,19 @@ pub(super) const CACHE_VERSION: &str = "v2";
 
 pub(super) fn cache_path() -> Option<PathBuf> {
     let dir = if cfg!(target_os = "macos") {
-        std::env::var("HOME")
+        env::var("HOME")
             .ok()
             .map(|h| PathBuf::from(h).join("Library/Caches/docxide-pdf"))
     } else if cfg!(target_os = "windows") {
-        std::env::var("LOCALAPPDATA")
+        env::var("LOCALAPPDATA")
             .ok()
             .map(|d| PathBuf::from(d).join("docxide-pdf/cache"))
     } else {
-        std::env::var("XDG_CACHE_HOME")
+        env::var("XDG_CACHE_HOME")
             .ok()
             .map(PathBuf::from)
             .or_else(|| {
-                std::env::var("HOME")
+                env::var("HOME")
                     .ok()
                     .map(|h| PathBuf::from(h).join(".cache"))
             })
@@ -51,7 +53,7 @@ pub(super) fn load_cache() -> FontCache {
     let Some(path) = cache_path() else {
         return fc;
     };
-    let Ok(content) = std::fs::read_to_string(&path) else {
+    let Ok(content) = fs::read_to_string(&path) else {
         return fc;
     };
     let mut lines = content.lines();
@@ -96,7 +98,7 @@ pub(super) fn save_cache(cache: &FontCache) {
         return;
     };
     if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
+        let _ = fs::create_dir_all(dir);
     }
     let mut out = String::from(CACHE_VERSION);
     out.push('\n');
@@ -120,14 +122,14 @@ pub(super) fn save_cache(cache: &FontCache) {
             }
         }
     }
-    let _ = std::fs::write(&path, out);
+    let _ = fs::write(&path, out);
 }
 
-pub(super) fn dir_mtime(path: &std::path::Path) -> i64 {
-    std::fs::metadata(path)
+pub(super) fn dir_mtime(path: &Path) -> i64 {
+    fs::metadata(path)
         .ok()
         .and_then(|m| m.modified().ok())
-        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
 }

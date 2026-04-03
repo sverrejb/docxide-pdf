@@ -72,14 +72,23 @@ pub(super) fn char_to_winansi(c: char) -> u8 {
 
 /// Convert a UTF-8 string to WinAnsi (Windows-1252) bytes for PDF Str encoding.
 pub(crate) fn to_winansi_bytes(s: &str) -> Vec<u8> {
-    s.chars().map(char_to_winansi).filter(|&b| b != 0).collect()
+    let mut out = Vec::with_capacity(s.len());
+    for ch in s.chars() {
+        let b = char_to_winansi(ch);
+        if b != 0 {
+            out.push(b);
+        }
+    }
+    out
 }
 
 /// Encode UTF-8 text as big-endian 2-byte glyph IDs for CIDFont content streams.
 pub(crate) fn encode_as_gids(text: &str, char_to_gid: &HashMap<char, u16>) -> Vec<u8> {
-    text.chars()
-        .flat_map(|ch| char_to_gid.get(&ch).copied().unwrap_or(0).to_be_bytes())
-        .collect()
+    let mut out = Vec::with_capacity(text.len() * 2);
+    for ch in text.chars() {
+        out.extend_from_slice(&char_to_gid.get(&ch).copied().unwrap_or(0).to_be_bytes());
+    }
+    out
 }
 
 /// Approximate Helvetica widths at 1000 units/em for WinAnsi chars 32..=255.

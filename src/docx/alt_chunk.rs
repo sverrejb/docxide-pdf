@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::io::{Read, Seek};
 
 use crate::model::{
-    Alignment, Block, BorderStyle, CellBorder, CellBorders, CellMargins, Paragraph, Run, Table,
-    TableAlignment, TableCell, TableRow,
+    Alignment, Block, BorderStyle, CellBorder, CellBorders, CellMargins, CellVAlign, LineSpacing,
+    Paragraph, Run, Table, TableAlignment, TableCell, TableRow, TextDirection, VMerge,
 };
 
 use super::parse_hex_color;
@@ -39,8 +39,6 @@ pub(super) fn parse_alt_chunk<R: Read + Seek>(
     let css = extract_css(&doc);
     convert_html_to_blocks(&doc, &css)
 }
-
-// --- MHT / MIME envelope ---
 
 fn extract_html_from_mht(raw: &str) -> Option<String> {
     let boundary = raw.lines().find_map(|line| {
@@ -125,8 +123,6 @@ fn hex_val(b: u8) -> Option<u8> {
     }
 }
 
-// --- XHTML fixup ---
-
 fn fix_xhtml_void_tags(html: &str) -> String {
     let mut result = String::with_capacity(html.len());
     let mut rest = html;
@@ -162,8 +158,6 @@ fn fix_xhtml_void_tags(html: &str) -> String {
     result.push_str(rest);
     result
 }
-
-// --- CSS parsing ---
 
 #[derive(Default, Clone)]
 struct CssProperties {
@@ -309,8 +303,6 @@ fn parse_css_block(text: &str, map: &mut HashMap<String, CssProperties>) {
     }
 }
 
-// --- HTML → IR conversion ---
-
 fn convert_html_to_blocks(
     doc: &roxmltree::Document,
     css: &HashMap<String, CssProperties>,
@@ -440,12 +432,11 @@ fn convert_paragraph(node: roxmltree::Node, css: &HashMap<String, CssProperties>
     let line_spacing = if max_run_fs > 0.0 && font_size > max_run_fs + 0.1 {
         // Paragraph CSS font-size exceeds tallest run (e.g. 30pt paragraph
         // with 16pt spans) — use it as minimum line height.
-        Some(crate::model::LineSpacing::AtLeast(font_size))
+        Some(LineSpacing::AtLeast(font_size))
     } else if let Some(pct) = props.line_height_pct {
-        Some(crate::model::LineSpacing::Auto(pct / 100.0))
+        Some(LineSpacing::Auto(pct / 100.0))
     } else {
-        // Default for HTML content without explicit line-height
-        Some(crate::model::LineSpacing::Auto(1.1))
+        Some(LineSpacing::Auto(1.1))
     };
 
     Paragraph {
@@ -567,8 +558,6 @@ fn find_element<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltr
     None
 }
 
-// --- Table conversion ---
-
 fn is_table_cell(n: &roxmltree::Node) -> bool {
     n.is_element() && matches!(n.tag_name().name(), "td" | "th")
 }
@@ -656,9 +645,9 @@ fn convert_table(
             };
 
             let v_align = match td_css.vertical_align.as_deref() {
-                Some("middle") => crate::model::CellVAlign::Center,
-                Some("bottom") => crate::model::CellVAlign::Bottom,
-                _ => crate::model::CellVAlign::Top,
+                Some("middle") => CellVAlign::Center,
+                Some("bottom") => CellVAlign::Bottom,
+                _ => CellVAlign::Top,
             };
 
             let mut cell_paras = Vec::new();
@@ -692,13 +681,13 @@ fn convert_table(
 
             cells.push(TableCell {
                 width: w_pt,
-                content: cell_paras.into_iter().map(crate::model::Block::Paragraph).collect(),
+                content: cell_paras.into_iter().map(Block::Paragraph).collect(),
                 borders,
                 shading: None,
                 grid_span: colspan as u16,
-                v_merge: crate::model::VMerge::None,
+                v_merge: VMerge::None,
                 v_align,
-                text_direction: crate::model::TextDirection::default(),
+                text_direction: TextDirection::default(),
                 cell_margins: None,
             });
         }

@@ -4,6 +4,8 @@ mod embed;
 mod encoding;
 
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
+use std::time::Instant;
 
 use pdf_writer::{Name, Pdf, Ref};
 
@@ -11,10 +13,7 @@ use crate::model::{FontFamily, FontTable, Run};
 
 pub(crate) use encoding::{encode_as_gids, to_winansi_bytes};
 
-/// Metrics returned from font embedding: widths, line-height ratio, ascender ratio,
-/// char-to-gid mapping, per-char widths, and kerning pairs.
-/// Metrics extracted from a font file during embedding: glyph widths, line metrics,
-/// character-to-glyph mapping, and kerning pairs. Does not include font resolution
+/// Metrics extracted from a font file during embedding. Does not include font resolution
 /// metadata (path, face index, synthetic bold) which is tracked separately.
 pub(crate) struct FontMetrics {
     pub(crate) widths_1000: Vec<f32>,
@@ -29,7 +28,7 @@ pub(crate) struct FontMetrics {
 struct ResolvedFont {
     metrics: FontMetrics,
     synthetic_bold: bool,
-    font_path: Option<std::path::PathBuf>,
+    font_path: Option<PathBuf>,
     face_index: u32,
 }
 
@@ -46,7 +45,7 @@ pub(crate) struct FontEntry {
     /// CJK chars requested but not present in this font (need fallback rendering).
     pub(crate) missing_cjk_chars: HashSet<char>,
     /// Font file path for glyph outline extraction (text warping).
-    pub(crate) font_path: Option<std::path::PathBuf>,
+    pub(crate) font_path: Option<PathBuf>,
     pub(crate) face_index: u32,
 }
 
@@ -90,7 +89,7 @@ impl FontEntry {
         }
         let scale = font_size / 1000.0;
         let mut prev: Option<char> = None;
-        let mut w: f32 = 0.0;
+        let mut w = 0.0;
         for ch in word.chars() {
             if let Some(p) = prev {
                 w += self.kern_1000(p, ch) * scale;
@@ -262,7 +261,7 @@ pub(crate) fn register_font(
     used_chars: &HashSet<char>,
     font_table: &FontTable,
 ) -> FontEntry {
-    let t0 = std::time::Instant::now();
+    let t0 = Instant::now();
     let font_ref = alloc();
     let descriptor_ref = alloc();
     let data_ref = alloc();
@@ -285,11 +284,20 @@ pub(crate) fn register_font(
     };
 
     let needs_cjk = has_cjk_chars(used_chars);
+    let table_entry = lookup_font_table(font_table, primary);
+
+    let try_cjk_fallback = |tc: &mut dyn FnMut(&str) -> Option<ResolvedFont>| {
+        cjk_fallback_fonts().iter().find_map(|cjk_font| {
+            let m = tc(cjk_font)?;
+            log::info!("Font substitution: {primary} → CJK fallback \"{cjk_font}\"");
+            Some(m)
+        })
+    };
 
     // If the fontTable provides an altName, try it first — it's the document's
     // explicit mapping and more reliable than the system font index (which may
     // resolve a localized name like "바탕" to a different font than "Batang").
-    let result = lookup_font_table(font_table, primary)
+    let result = table_entry
         .and_then(|entry| {
             let alt = entry.alt_name.as_ref()?;
             let m = try_candidate(alt)?;
@@ -303,17 +311,12 @@ pub(crate) fn register_font(
                 .find_map(|c| try_candidate(c))
         })
         .or_else(|| {
-            let entry = lookup_font_table(font_table, primary)?;
+            let entry = table_entry?;
             // Try CJK fallback before family fallback — family fonts (TNR, Courier)
             // lack CJK glyphs and would produce squares
             if needs_cjk {
-                for cjk_font in cjk_fallback_fonts() {
-                    if let Some(m) = try_candidate(cjk_font) {
-                        log::info!(
-                            "Font substitution: {primary} → CJK fallback \"{cjk_font}\""
-                        );
-                        return Some(m);
-                    }
+                if let Some(m) = try_cjk_fallback(&mut try_candidate) {
+                    return Some(m);
                 }
             }
             let fallback = family_fallback(entry.family)?;
@@ -328,14 +331,7 @@ pub(crate) fn register_font(
             if !needs_cjk {
                 return None;
             }
-            // Font not in fontTable at all — try CJK fallback as last resort
-            for cjk_font in cjk_fallback_fonts() {
-                if let Some(m) = try_candidate(cjk_font) {
-                    log::info!("Font substitution: {primary} → CJK fallback \"{cjk_font}\"");
-                    return Some(m);
-                }
-            }
-            None
+            try_cjk_fallback(&mut try_candidate)
         });
 
     // Compute which CJK chars are missing from the resolved font
@@ -400,4 +396,103 @@ pub(crate) fn register_font(
     );
 
     entry
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::VertAlign;
+
+    #[test]
+    fn test_primary_font_name_simple() {
+        assert_eq!(primary_font_name("Arial"), "Arial");
+        assert_eq!(primary_font_name("Times New Roman"), "Times New Roman");
+    }
+
+    #[test]
+    fn test_primary_font_name_with_fallback() {
+        assert_eq!(primary_font_name("Arial; Helvetica"), "Arial");
+        assert_eq!(primary_font_name("Calibri; sans-serif"), "Calibri");
+    }
+
+    #[test]
+    fn test_primary_font_name_with_whitespace() {
+        assert_eq!(primary_font_name("  Arial  ; Helvetica"), "Arial");
+    }
+
+    #[test]
+    fn test_primary_font_name_empty() {
+        assert_eq!(primary_font_name(""), "");
+    }
+
+    fn make_run(font: &str, bold: bool, italic: bool) -> Run {
+        Run {
+            text: String::new(),
+            font_name: font.to_string(),
+            font_size: 12.0,
+            bold,
+            italic,
+            underline: false,
+            strikethrough: false,
+            dstrike: false,
+            color: None,
+            highlight: None,
+            vertical_align: VertAlign::Baseline,
+            text_shadow: None,
+            text_glow: None,
+            text_outline: None,
+            text_fill: None,
+            vanish: false,
+            small_caps: false,
+            caps: false,
+            char_style_id: None,
+            lang: None,
+            char_spacing: 0.0,
+            text_scale: 100.0,
+            east_asia_font_name: None,
+            is_tab: false,
+            is_line_break: false,
+            field_code: None,
+            hyperlink_url: None,
+            inline_image: None,
+            footnote_id: None,
+            is_footnote_ref_mark: false,
+            kern_threshold: None,
+        }
+    }
+
+    #[test]
+    fn test_font_key_regular() {
+        let run = make_run("Arial", false, false);
+        let mut buf = String::new();
+        assert_eq!(font_key_buf(&run, &mut buf), "Arial");
+    }
+
+    #[test]
+    fn test_font_key_bold() {
+        let run = make_run("Arial", true, false);
+        let mut buf = String::new();
+        assert_eq!(font_key_buf(&run, &mut buf), "Arial/B");
+    }
+
+    #[test]
+    fn test_font_key_italic() {
+        let run = make_run("Arial", false, true);
+        let mut buf = String::new();
+        assert_eq!(font_key_buf(&run, &mut buf), "Arial/I");
+    }
+
+    #[test]
+    fn test_font_key_bold_italic() {
+        let run = make_run("Arial", true, true);
+        let mut buf = String::new();
+        assert_eq!(font_key_buf(&run, &mut buf), "Arial/BI");
+    }
+
+    #[test]
+    fn test_font_key_with_fallback_font() {
+        let run = make_run("Calibri; sans-serif", false, false);
+        let mut buf = String::new();
+        assert_eq!(font_key_buf(&run, &mut buf), "Calibri");
+    }
 }

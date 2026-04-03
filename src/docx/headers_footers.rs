@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::Read;
+use std::io::{Read, Seek};
 
 use crate::model::{Alignment, Block, Footnote, HeaderFooter, LineSpacing, Paragraph};
 
@@ -16,7 +16,6 @@ fn is_wml_element(node: roxmltree::Node, name: &str) -> bool {
     node.tag_name().namespace() == Some(WML_NS) && node.tag_name().name() == name
 }
 
-
 fn resolve_alignment(
     ppr: Option<roxmltree::Node>,
     para_style: Option<&ParagraphStyle>,
@@ -27,7 +26,7 @@ fn resolve_alignment(
         .unwrap_or(Alignment::Left)
 }
 
-pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
+pub(super) fn parse_header_footer_xml<R: Read + Seek>(
     xml_content: &str,
     styles: &StylesInfo,
     theme: &ThemeFonts,
@@ -74,7 +73,7 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
                 let parsed = parse_runs(node, styles, theme, rels, zip, &numbering);
 
                 let (mut indent_left, mut indent_right, mut indent_hanging, mut indent_first_line) =
-                    (0.0f32, 0.0f32, 0.0f32, 0.0f32);
+                    (0.0, 0.0, 0.0, 0.0);
                 if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
                     let (left, right, hanging, first) = extract_indents(ind);
                     indent_left = left.unwrap_or(0.0);
@@ -114,7 +113,7 @@ pub(super) fn parse_header_footer_xml<R: Read + std::io::Seek>(
     (!blocks.is_empty()).then(|| HeaderFooter { blocks })
 }
 
-pub(super) fn parse_footnotes<R: Read + std::io::Seek>(
+pub(super) fn parse_footnotes<R: Read + Seek>(
     zip: &mut zip::ZipArchive<R>,
     styles: &StylesInfo,
     theme: &ThemeFonts,

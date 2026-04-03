@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::Read;
+use std::io::{Read, Seek};
 
 use crate::model::{ColumnDef, ColumnsConfig, DocGridType, HeaderFooter, SectionBreakType, SectionProperties};
 
@@ -8,7 +8,7 @@ use super::relationships::parse_part_relationships;
 use super::styles::{StylesInfo, ThemeFonts};
 use super::{REL_NS, WML_NS, read_zip_text, twips_attr, twips_to_pts, wml, wml_bool};
 
-pub(super) fn parse_section_properties<R: Read + std::io::Seek>(
+pub(super) fn parse_section_properties<R: Read + Seek>(
     sect_node: roxmltree::Node,
     rels: &HashMap<String, String>,
     styles: &StylesInfo,

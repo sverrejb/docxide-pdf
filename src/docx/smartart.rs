@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::Read;
+use std::io::{Read, Seek};
 
 use crate::model::{SmartArtDiagram, SmartArtShape};
 
@@ -8,6 +8,10 @@ use super::textbox::{parse_shape_geometry, parse_solid_fill};
 use super::{DML_NS, DSP_NS, emu_attr, find_child, read_zip_text};
 
 const DIAGRAM_URI: &str = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
+
+fn is_ns(node: roxmltree::Node, name: &str, ns: &str) -> bool {
+    node.tag_name().name() == name && node.tag_name().namespace() == Some(ns)
+}
 
 fn dsp<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
     find_child(node, name, DSP_NS)
@@ -18,8 +22,7 @@ fn dml<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<
 }
 
 fn has_dml(node: roxmltree::Node, name: &str) -> bool {
-    node.children()
-        .any(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(DML_NS))
+    node.children().any(|n| is_ns(n, name, DML_NS))
 }
 
 pub(super) fn has_diagram_ref(container: roxmltree::Node) -> bool {
@@ -30,7 +33,7 @@ pub(super) fn has_diagram_ref(container: roxmltree::Node) -> bool {
     })
 }
 
-pub(super) fn parse_smartart_drawing<R: Read + std::io::Seek>(
+pub(super) fn parse_smartart_drawing<R: Read + Seek>(
     rels: &HashMap<String, String>,
     zip: &mut zip::ZipArchive<R>,
     theme: &ThemeFonts,
@@ -52,9 +55,7 @@ pub(super) fn parse_smartart_drawing<R: Read + std::io::Seek>(
                 if let Some(tree) = sp_tree {
                     shapes = tree
                         .children()
-                        .filter(|n| {
-                            n.tag_name().name() == "sp" && n.tag_name().namespace() == Some(DSP_NS)
-                        })
+                        .filter(|n| is_ns(*n, "sp", DSP_NS))
                         .filter_map(|sp| parse_dsp_shape(sp, theme))
                         .collect();
                 }
@@ -128,18 +129,12 @@ fn parse_dsp_text(sp: roxmltree::Node, theme: &ThemeFonts) -> (String, f32, Opti
     };
 
     let mut lines = Vec::new();
-    let mut font_size = 0.0_f32;
-    let mut text_color: Option<[u8; 3]> = None;
+    let mut font_size = 0.0;
+    let mut text_color = None;
 
-    for p in body
-        .children()
-        .filter(|n| n.tag_name().name() == "p" && n.tag_name().namespace() == Some(DML_NS))
-    {
+    for p in body.children().filter(|n| is_ns(*n, "p", DML_NS)) {
         let mut line_text = String::new();
-        for r in p
-            .children()
-            .filter(|n| n.tag_name().name() == "r" && n.tag_name().namespace() == Some(DML_NS))
-        {
+        for r in p.children().filter(|n| is_ns(*n, "r", DML_NS)) {
             if let Some(rpr) = dml(r, "rPr") {
                 if font_size == 0.0 {
                     if let Some(sz) = rpr.attribute("sz").and_then(|v| v.parse::<f32>().ok()) {

@@ -114,7 +114,7 @@ pub enum TableAlignment {
 }
 
 pub struct Table {
-    pub col_widths: Vec<f32>, // points
+    pub col_widths: Vec<f32>,
     pub rows: Vec<TableRow>,
     pub table_indent: f32,
     pub cell_margins: CellMargins,
@@ -131,7 +131,7 @@ pub struct TableRow {
 }
 
 pub struct TableCell {
-    pub width: f32, // points
+    pub width: f32,
     pub content: Vec<Block>,
     pub borders: CellBorders,
     pub shading: Option<[u8; 3]>,
@@ -143,8 +143,7 @@ pub struct TableCell {
 }
 
 impl TableCell {
-    /// Recursively collect all paragraphs from this cell's content,
-    /// including paragraphs inside nested tables.
+    /// Includes paragraphs inside nested tables.
     pub fn all_paragraphs(&self) -> Vec<&Paragraph> {
         fn collect<'a>(blocks: &'a [Block], out: &mut Vec<&'a Paragraph>) {
             for block in blocks {

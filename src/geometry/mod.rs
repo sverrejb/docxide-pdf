@@ -3,6 +3,8 @@ pub mod formulas;
 pub mod path;
 pub mod text_warp_definitions;
 
+use crate::model::CustomGeometry;
+
 pub use definitions::PresetDef;
 pub use formulas::{FormulaOp, GuideDef, GuideEnv};
 pub use path::{PathCommandDef, PathDef, PathFill, ResolvedCommand, resolve_custom_path};
@@ -69,7 +71,7 @@ pub fn evaluate_def(
 }
 
 pub fn evaluate_custom(
-    custom: &crate::model::CustomGeometry,
+    custom: &CustomGeometry,
     w: f64,
     h: f64,
     adj_overrides: &[(String, i64)],

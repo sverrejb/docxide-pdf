@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::io::Read;
+use std::io::{Read, Seek};
 
 use crate::model::{
     BarGrouping, Chart, ChartAxis, ChartLegend, ChartSeries, ChartType, InlineChart,
@@ -14,6 +14,15 @@ fn chart_child<'a>(parent: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmlt
 
 fn chart_attr<'a>(parent: roxmltree::Node<'a, 'a>, child: &str) -> Option<&'a str> {
     chart_child(parent, child).and_then(|n| n.attribute("val"))
+}
+
+fn chart_children<'a>(
+    parent: roxmltree::Node<'a, 'a>,
+    name: &str,
+) -> impl Iterator<Item = roxmltree::Node<'a, 'a>> {
+    parent
+        .children()
+        .filter(move |n| n.tag_name().name() == name && n.tag_name().namespace() == Some(CHART_NS))
 }
 
 fn dml_child<'a>(parent: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
@@ -32,13 +41,12 @@ fn extract_srgb_fill(sp_pr: roxmltree::Node) -> Option<[u8; 3]> {
 
 fn extract_fill_alpha(sp_pr: roxmltree::Node) -> Option<f32> {
     let alpha_node = dml_child(find_srgb_clr(sp_pr)?, "alpha")?;
-    let val: f32 = alpha_node.attribute("val")?.parse().ok()?;
+    let val = alpha_node.attribute("val")?.parse::<f32>().ok()?;
     Some(val / 100_000.0)
 }
 
 fn extract_line_color(sp_pr: roxmltree::Node) -> Option<[u8; 3]> {
     let ln = dml_child(sp_pr, "ln")?;
-    // noFill means no line
     if dml_child(ln, "noFill").is_some() {
         return None;
     }
@@ -50,9 +58,7 @@ fn collect_indexed_pts<T: Clone>(
     default: T,
     extract: impl Fn(roxmltree::Node) -> Option<T>,
 ) -> Vec<T> {
-    let mut pts: Vec<(usize, T)> = cache_node
-        .children()
-        .filter(|n| n.tag_name().name() == "pt" && n.tag_name().namespace() == Some(CHART_NS))
+    let mut pts: Vec<(usize, T)> = chart_children(cache_node, "pt")
         .filter_map(|pt| {
             let idx = pt.attribute("idx")?.parse::<usize>().ok()?;
             let v = extract(pt)?;
@@ -205,10 +211,7 @@ fn collect_series(type_node: roxmltree::Node) -> (Vec<ChartSeries>, Vec<String>,
     let mut series_list = Vec::new();
     let mut cat_labels = Vec::new();
     let mut val_format_code = None;
-    for ser_node in type_node
-        .children()
-        .filter(|n| n.tag_name().name() == "ser" && n.tag_name().namespace() == Some(CHART_NS))
-    {
+    for ser_node in chart_children(type_node, "ser") {
         let (series, labels, fmt) = parse_series(ser_node);
         if cat_labels.is_empty() && !labels.is_empty() {
             cat_labels = labels;
@@ -237,10 +240,7 @@ fn assign_cat_labels(cat_axis: &mut Option<ChartAxis>, cat_labels: Vec<String>) 
 }
 
 fn extract_plot_border(plot_area: roxmltree::Node) -> Option<[u8; 3]> {
-    plot_area
-        .children()
-        .find(|n| n.tag_name().name() == "spPr" && n.tag_name().namespace() == Some(CHART_NS))
-        .and_then(extract_line_color)
+    chart_child(plot_area, "spPr").and_then(extract_line_color)
 }
 
 fn parse_chart_space(xml_content: &str, accent_colors: Vec<[u8; 3]>) -> Option<Chart> {
@@ -255,11 +255,7 @@ fn parse_chart_space(xml_content: &str, accent_colors: Vec<[u8; 3]>) -> Option<C
 
     // Scatter/bubble have two valAx; use first as cat_axis, second as val_axis
     let (mut cat_axis, val_axis) = if matches!(chart_type, ChartType::Scatter | ChartType::Bubble) {
-        let val_axes: Vec<_> = plot_area
-            .children()
-            .filter(|n| {
-                n.tag_name().name() == "valAx" && n.tag_name().namespace() == Some(CHART_NS)
-            })
+        let val_axes: Vec<_> = chart_children(plot_area, "valAx")
             .map(parse_axis)
             .collect();
         (val_axes.first().cloned(), val_axes.get(1).cloned())
@@ -335,7 +331,7 @@ fn detect_chart_type<'a>(
     None
 }
 
-pub(super) fn parse_chart_from_zip<R: Read + std::io::Seek>(
+pub(super) fn parse_chart_from_zip<R: Read + Seek>(
     r_id: &str,
     rels: &HashMap<String, String>,
     zip: &mut zip::ZipArchive<R>,

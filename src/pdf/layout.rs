@@ -1432,3 +1432,111 @@ pub(super) fn tallest_run_metrics(
     }
     (best_font_size, best_line_h_ratio, best_ascender_ratio)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::VertAlign;
+
+    #[test]
+    fn test_is_break_space() {
+        assert!(is_break_space(' '));
+        assert!(is_break_space('\t'));
+        assert!(is_break_space('\n'));
+        // Non-breaking space is NOT a break space
+        assert!(!is_break_space('\u{00a0}'));
+        // Ideographic space is NOT a break space
+        assert!(!is_break_space('\u{3000}'));
+        // Regular chars
+        assert!(!is_break_space('a'));
+        assert!(!is_break_space('1'));
+    }
+
+    fn make_run(font_size: f32, valign: VertAlign, small_caps: bool) -> Run {
+        Run {
+            text: String::new(),
+            font_name: "Arial".to_string(),
+            font_size,
+            bold: false,
+            italic: false,
+            underline: false,
+            strikethrough: false,
+            dstrike: false,
+            color: None,
+            highlight: None,
+            vertical_align: valign,
+            text_shadow: None,
+            text_glow: None,
+            text_outline: None,
+            text_fill: None,
+            vanish: false,
+            small_caps,
+            caps: false,
+            char_style_id: None,
+            lang: None,
+            char_spacing: 0.0,
+            text_scale: 100.0,
+            east_asia_font_name: None,
+            is_tab: false,
+            is_line_break: false,
+            field_code: None,
+            hyperlink_url: None,
+            inline_image: None,
+            footnote_id: None,
+            is_footnote_ref_mark: false,
+            kern_threshold: None,
+        }
+    }
+
+    #[test]
+    fn test_effective_font_size_baseline() {
+        let run = make_run(12.0, VertAlign::Baseline, false);
+        assert_eq!(effective_font_size(&run), 12.0);
+    }
+
+    #[test]
+    fn test_effective_font_size_superscript() {
+        let run = make_run(12.0, VertAlign::Superscript, false);
+        let expected = 12.0 * 0.58; // 6.96
+        assert!((effective_font_size(&run) - expected).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_effective_font_size_subscript() {
+        let run = make_run(12.0, VertAlign::Subscript, false);
+        let expected = 12.0 * 0.58;
+        assert!((effective_font_size(&run) - expected).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_effective_font_size_small_caps() {
+        let run = make_run(12.0, VertAlign::Baseline, true);
+        assert_eq!(effective_font_size(&run), 10.0); // 12 - 2
+    }
+
+    #[test]
+    fn test_effective_font_size_small_caps_minimum() {
+        let run = make_run(2.0, VertAlign::Baseline, true);
+        assert_eq!(effective_font_size(&run), 1.0); // max(2-2, 1) = 1
+    }
+
+    #[test]
+    fn test_vert_y_offset_baseline() {
+        let run = make_run(12.0, VertAlign::Baseline, false);
+        assert_eq!(vert_y_offset(&run), 0.0);
+    }
+
+    #[test]
+    fn test_vert_y_offset_superscript() {
+        let run = make_run(12.0, VertAlign::Superscript, false);
+        let expected = 12.0 * 0.35; // 4.2
+        assert!((vert_y_offset(&run) - expected).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_vert_y_offset_subscript() {
+        let run = make_run(12.0, VertAlign::Subscript, false);
+        let expected = -12.0 * 0.14; // -1.68
+        assert!((vert_y_offset(&run) - expected).abs() < 0.01);
+    }
+}

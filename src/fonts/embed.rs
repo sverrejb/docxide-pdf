@@ -2,11 +2,11 @@ use std::collections::{HashMap, HashSet};
 
 use pdf_writer::types::{CidFontType, FontFlags, SystemInfo, UnicodeCmap};
 use pdf_writer::{Name, Pdf, Rect, Ref, Str};
-use ttf_parser::Face;
 use ttf_parser::gpos::{PairAdjustment, PositioningSubtable};
+use ttf_parser::Face;
 
-use super::FontMetrics;
 use super::encoding::winansi_to_char;
+use super::FontMetrics;
 
 pub(super) fn embed_truetype(
     pdf: &mut Pdf,
@@ -44,7 +44,7 @@ pub(super) fn embed_truetype(
             .unwrap_or(0.0)
     };
 
-    let widths_1000: Vec<f32> = (32u8..=255u8)
+    let widths_1000 = (32u8..=255u8)
         .map(|byte| {
             face.glyph_index(winansi_to_char(byte))
                 .map(&advance_1000)
@@ -191,12 +191,15 @@ fn extract_kern_pairs(
     let Some(kern) = face.tables().kern else {
         return;
     };
+    let subtables: Vec<_> = kern
+        .subtables
+        .into_iter()
+        .filter(|st| st.horizontal && !st.variable)
+        .collect();
     for &(l_orig, l_new) in char_gids {
         for &(r_orig, r_new) in char_gids {
-            let total: i16 = kern
-                .subtables
-                .into_iter()
-                .filter(|st| st.horizontal && !st.variable)
+            let total: i16 = subtables
+                .iter()
                 .filter_map(|st| st.glyphs_kerning(l_orig, r_orig))
                 .sum();
             if total != 0 {
