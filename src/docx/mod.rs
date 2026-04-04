@@ -1,9 +1,11 @@
 mod alt_chunk;
 mod charts;
+mod color;
 mod embedded_fonts;
 mod headers_footers;
 mod images;
 pub(crate) mod numbering;
+mod paragraph;
 mod runs;
 mod sections;
 mod settings;
@@ -18,23 +20,20 @@ use std::io::Read;
 
 use crate::error::Error;
 use crate::model::{
-    Alignment, Block, BorderStyle, CellBorder, DocGridType, Document, FrameProperties,
-    HRelativeFrom, HorizontalPosition, LineSpacing, Paragraph, ParagraphBorder, ParagraphBorders,
-    Run, Section, SectionBreakType, SectionProperties, TabAlignment, TabStop, VRelativeFrom,
+    Block, BorderStyle, CellBorder, DocGridType, Document, FrameProperties,
+    HRelativeFrom, HorizontalPosition, LineSpacing, ParagraphBorder, ParagraphBorders,
+    Section, SectionBreakType, SectionProperties, TabAlignment, TabStop, VRelativeFrom,
 };
 
-use styles::{ParagraphStyle, parse_alignment, parse_line_spacing, parse_styles, parse_theme};
+use styles::{ParagraphStyle, parse_line_spacing, parse_styles, parse_theme};
 
 use embedded_fonts::parse_font_table;
 use headers_footers::parse_footnotes;
-use images::compute_drawing_info;
-use numbering::{ListLabelInfo, parse_list_info, parse_numbering};
+use numbering::parse_numbering;
 use relationships::parse_relationships;
-use runs::parse_runs;
 use sections::parse_section_properties;
 use settings::parse_settings;
 use tables::parse_table_node;
-use textbox::collect_textboxes_from_paragraph;
 
 pub(super) const WML_NS: &str = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 pub(super) const DML_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/main";
@@ -70,6 +69,75 @@ pub(super) fn find_child<'a>(
 ) -> Option<roxmltree::Node<'a, 'a>> {
     node.children()
         .find(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(namespace))
+}
+
+pub(super) fn dml<'a>(
+    node: roxmltree::Node<'a, 'a>,
+    name: &str,
+) -> Option<roxmltree::Node<'a, 'a>> {
+    find_child(node, name, DML_NS)
+}
+
+pub(super) fn dml_attr<'a>(node: roxmltree::Node<'a, 'a>, child: &str) -> Option<&'a str> {
+    dml(node, child).and_then(|n| n.attribute("val"))
+}
+
+pub(super) fn dml_children<'a>(
+    parent: roxmltree::Node<'a, 'a>,
+    name: &str,
+) -> impl Iterator<Item = roxmltree::Node<'a, 'a>> {
+    parent
+        .children()
+        .filter(move |n| n.tag_name().name() == name && n.tag_name().namespace() == Some(DML_NS))
+}
+
+pub(super) fn wpd<'a>(
+    node: roxmltree::Node<'a, 'a>,
+    name: &str,
+) -> Option<roxmltree::Node<'a, 'a>> {
+    find_child(node, name, WPD_NS)
+}
+
+pub(super) fn wps<'a>(
+    node: roxmltree::Node<'a, 'a>,
+    name: &str,
+) -> Option<roxmltree::Node<'a, 'a>> {
+    find_child(node, name, WPS_NS)
+}
+
+pub(super) fn dsp<'a>(
+    node: roxmltree::Node<'a, 'a>,
+    name: &str,
+) -> Option<roxmltree::Node<'a, 'a>> {
+    find_child(node, name, DSP_NS)
+}
+
+pub(super) fn chart_ns<'a>(
+    node: roxmltree::Node<'a, 'a>,
+    name: &str,
+) -> Option<roxmltree::Node<'a, 'a>> {
+    find_child(node, name, CHART_NS)
+}
+
+pub(super) fn chart_ns_attr<'a>(node: roxmltree::Node<'a, 'a>, child: &str) -> Option<&'a str> {
+    chart_ns(node, child).and_then(|n| n.attribute("val"))
+}
+
+pub(super) fn chart_ns_children<'a>(
+    parent: roxmltree::Node<'a, 'a>,
+    name: &str,
+) -> impl Iterator<Item = roxmltree::Node<'a, 'a>> {
+    parent
+        .children()
+        .filter(move |n| n.tag_name().name() == name && n.tag_name().namespace() == Some(CHART_NS))
+}
+
+pub(in crate::docx) struct ParseContext<'a, R: std::io::Read + std::io::Seek> {
+    pub(in crate::docx) styles: &'a styles::StylesInfo,
+    pub(in crate::docx) theme: &'a styles::ThemeFonts,
+    pub(in crate::docx) rels: &'a HashMap<String, String>,
+    pub(in crate::docx) zip: &'a mut zip::ZipArchive<R>,
+    pub(in crate::docx) numbering: &'a numbering::NumberingInfo,
 }
 
 pub(crate) fn is_east_asian_char(ch: char) -> bool {
@@ -585,6 +653,14 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
 
     let default_line_pitch = styles.defaults.font_size * 1.2;
 
+    let mut ctx = ParseContext {
+        styles: &styles,
+        theme: &theme,
+        rels: &rels,
+        zip,
+        numbering: &numbering,
+    };
+
     let mut sections: Vec<Section> = Vec::new();
     let mut blocks = Vec::new();
     let mut counters: HashMap<(String, u8), u32> = HashMap::new();
@@ -598,11 +674,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
             "tbl" => {
                 let table = parse_table_node(
                     node,
-                    &styles,
-                    &theme,
-                    &rels,
-                    zip,
-                    &numbering,
+                    &mut ctx,
                     &mut counters,
                     &mut last_seen_level,
                 );
@@ -610,311 +682,24 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
             }
             "p" => {
                 let ppr = wml(node, "pPr");
-
-                let paragraph_mark_vanish = ppr
-                    .and_then(|ppr| wml(ppr, "rPr"))
-                    .and_then(|rpr| wml_bool(rpr, "vanish"))
-                    .unwrap_or(false);
-
                 let para_style_id = ppr
                     .and_then(|ppr| wml_attr(ppr, "pStyle"))
                     .unwrap_or(&styles.default_paragraph_style_id);
-
                 let para_style = styles.paragraph_styles.get(para_style_id);
 
-                let inline_borders = ppr.map(parse_paragraph_borders).unwrap_or_default();
-                let has_inline_borders = inline_borders.top.is_some()
-                    || inline_borders.bottom.is_some()
-                    || inline_borders.left.is_some()
-                    || inline_borders.right.is_some();
-                let borders = if has_inline_borders {
-                    inline_borders
-                } else {
-                    para_style.map(|s| s.borders.clone()).unwrap_or_default()
+                let opts = paragraph::ParagraphOptions {
+                    resolve_bookmarks: true,
+                    resolve_outline_level: true,
+                    resolve_drawings: true,
+                    collect_extra_textboxes: true,
+                    style_num_id: para_style.and_then(|s| s.num_id.clone()),
+                    style_num_ilvl: para_style.and_then(|s| s.num_ilvl),
                 };
-                let (sp_before, sp_after, line_spacing) = parse_paragraph_spacing(ppr, para_style, None);
-                let space_before = sp_before.unwrap_or(0.0);
-                let space_after = sp_after.unwrap_or(styles.defaults.space_after);
-
-                let para_shading = ppr
-                    .and_then(|ppr| wml(ppr, "shd"))
-                    .and_then(|shd| shd.attribute((WML_NS, "fill")))
-                    .and_then(parse_hex_color);
-
-                let style_color = para_style.and_then(|s| s.color);
-
-                let alignment = ppr
-                    .and_then(|ppr| wml_attr(ppr, "jc"))
-                    .map(parse_alignment)
-                    .or_else(|| para_style.and_then(|s| s.alignment))
-                    .unwrap_or(styles.defaults.alignment);
-
-                let contextual_spacing = ppr
-                    .and_then(|ppr| wml_bool(ppr, "contextualSpacing"))
-                    .unwrap_or_else(|| para_style.is_some_and(|s| s.contextual_spacing));
-
-                let keep_next = ppr
-                    .and_then(|ppr| wml_bool(ppr, "keepNext"))
-                    .unwrap_or_else(|| para_style.is_some_and(|s| s.keep_next));
-
-                let keep_lines = ppr
-                    .and_then(|ppr| wml_bool(ppr, "keepLines"))
-                    .unwrap_or_else(|| para_style.is_some_and(|s| s.keep_lines));
-
-                let widow_control = ppr
-                    .and_then(|ppr| wml_bool(ppr, "widowControl"))
-                    .or_else(|| para_style.and_then(|s| s.widow_control))
-                    .unwrap_or(styles.defaults.widow_control);
-
-                let snap_to_grid = ppr
-                    .and_then(|ppr| wml_bool(ppr, "snapToGrid"))
-                    .or_else(|| para_style.and_then(|s| s.snap_to_grid))
-                    .unwrap_or(true);
-
-                let suppress_auto_hyphens = ppr
-                    .and_then(|ppr| wml_bool(ppr, "suppressAutoHyphens"))
-                    .or_else(|| para_style.and_then(|s| s.suppress_auto_hyphens))
-                    .unwrap_or(false);
-
-                let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
-                let style_num = para_style.and_then(|s| s.num_id.as_deref());
-                let style_ilvl = para_style.and_then(|s| s.num_ilvl);
-                let ListLabelInfo {
-                    mut indent_left,
-                    mut indent_hanging,
-                    tab_stop: num_tab_stop,
-                    label: mut list_label,
-                    font: mut list_label_font,
-                    font_size: mut list_label_font_size,
-                    bold: mut list_label_bold,
-                    color: mut list_label_color,
-                    suff: list_label_suff,
-                } = parse_list_info(
-                    num_pr,
-                    style_num,
-                    style_ilvl,
-                    &numbering,
-                    &mut counters,
-                    &mut last_seen_level,
+                let para = paragraph::build_paragraph(
+                    node, &mut ctx, &mut counters, &mut last_seen_level, &opts,
                 );
 
-                let mut indent_first_line = styles.defaults.indent_first_line;
-                let mut indent_right = styles.defaults.indent_right;
-                let (left, right, hanging, first) =
-                    if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
-                        extract_indents(ind)
-                    } else if list_label.is_empty()
-                        && let Some(s) = para_style
-                    {
-                        (
-                            s.indent_left,
-                            s.indent_right,
-                            s.indent_hanging,
-                            s.indent_first_line,
-                        )
-                    } else {
-                        (None, None, None, None)
-                    };
-                if let Some(v) = left {
-                    if !list_label.is_empty() {
-                        let style_indent =
-                            para_style.and_then(|s| s.indent_left).unwrap_or(0.0);
-                        indent_left = v.max(style_indent);
-                    } else {
-                        indent_left = v;
-                    }
-                } else if indent_left == 0.0 {
-                    indent_left = styles.defaults.indent_left;
-                }
-                if let Some(v) = right {
-                    indent_right = v;
-                }
-                if let Some(v) = hanging {
-                    indent_hanging = v;
-                } else if first.is_some() {
-                    indent_hanging = 0.0;
-                } else if indent_hanging == 0.0 {
-                    indent_hanging = styles.defaults.indent_hanging;
-                }
-                if let Some(v) = first {
-                    indent_first_line = v;
-                }
-
-                let parsed = parse_runs(node, &styles, &theme, &rels, zip, &numbering);
-                let mut runs = parsed.runs;
-
-                // When w:suff="nothing", the label is inline with text — prepend
-                // it as a run rather than rendering it separately in the margin.
-                if !list_label.is_empty() && list_label_suff == "nothing" {
-                    let first_run = runs.first();
-                    let label_run = Run {
-                        text: list_label.clone(),
-                        font_size: list_label_font_size
-                            .unwrap_or_else(|| first_run.map(|r| r.font_size).unwrap_or(10.0)),
-                        font_name: list_label_font
-                            .clone()
-                            .unwrap_or_else(|| first_run.map(|r| r.font_name.clone()).unwrap_or_default()),
-                        bold: list_label_bold,
-                        color: list_label_color,
-                        ..Run::default()
-                    };
-                    runs.insert(0, label_run);
-                    list_label = String::new();
-                    list_label_font = None;
-                    list_label_font_size = None;
-                    list_label_bold = false;
-                    list_label_color = None;
-                }
-
-                if let Some(color) = style_color {
-                    for run in &mut runs {
-                        run.color.get_or_insert(color);
-                    }
-                }
-
-                let mut tab_stops = if let Some(s) = para_style {
-                    s.tab_stops.clone()
-                } else {
-                    vec![]
-                };
-                let (para_tabs, para_clears) = ppr
-                    .map(parse_tab_stops_with_clears)
-                    .unwrap_or_default();
-                if !para_tabs.is_empty() || !para_clears.is_empty() {
-                    for &clear_pos in &para_clears {
-                        tab_stops.retain(|t| (t.position - clear_pos).abs() >= 0.5);
-                    }
-                    for ts in para_tabs {
-                        if let Some(existing) = tab_stops
-                            .iter_mut()
-                            .find(|t| (t.position - ts.position).abs() < 0.5)
-                        {
-                            *existing = ts;
-                        } else {
-                            tab_stops.push(ts);
-                        }
-                    }
-                    tab_stops.sort_by(|a, b| a.position.total_cmp(&b.position));
-                }
-                // Add the numbering level's explicit tab stop so the label-text
-                // gap matches Word (which uses this instead of the implicit
-                // hanging-indent tab when it is closer).
-                if let Some(nts) = num_tab_stop {
-                    if !tab_stops.iter().any(|t| (t.position - nts).abs() < 0.5) {
-                        tab_stops.push(TabStop {
-                            position: nts,
-                            alignment: TabAlignment::Left,
-                            leader: None,
-                        });
-                        tab_stops.sort_by(|a, b| a.position.total_cmp(&b.position));
-                    }
-                }
-                // OOXML §17.3.1.38: hanging indent implicitly creates a tab stop
-                if indent_hanging > 0.0 {
-                    let hang_pos = indent_left;
-                    if !tab_stops
-                        .iter()
-                        .any(|t| (t.position - hang_pos).abs() < 0.5)
-                    {
-                        tab_stops.push(TabStop {
-                            position: hang_pos,
-                            alignment: TabAlignment::Left,
-                            leader: None,
-                        });
-                        tab_stops.sort_by(|a, b| a.position.total_cmp(&b.position));
-                    }
-                }
-
-                let has_text = runs.iter().any(|r| !r.text.is_empty() || r.is_tab);
-                let has_inline_images = runs.iter().any(|r| r.inline_image.is_some());
-
-                let mut floating_images = parsed.floating_images;
-
-                let (para_image, mut content_height) = if has_inline_images && !has_text {
-                    let img_run_idx = runs.iter().position(|r| r.inline_image.is_some());
-                    let img = img_run_idx.and_then(|i| runs[i].inline_image.take());
-                    let h = img.as_ref().map(|i| i.display_height + i.layout_extra_height).unwrap_or(0.0);
-                    (img, h)
-                } else if has_inline_images {
-                    (None, 0.0)
-                } else {
-                    let drawing = compute_drawing_info(node, &rels, zip);
-                    floating_images.extend(drawing.floating_images);
-                    (drawing.image, drawing.height)
-                };
-
-                if let Some(ref ic) = parsed.inline_chart {
-                    content_height = content_height.max(ic.display_height);
-                }
-                if let Some(ref sa) = parsed.smartart {
-                    content_height = content_height.max(sa.display_height);
-                }
-
-                let outline_level = ppr
-                    .and_then(|ppr| wml_attr(ppr, "outlineLvl"))
-                    .and_then(|v| v.parse::<u8>().ok())
-                    .filter(|&lvl| lvl <= 8)
-                    .or_else(|| para_style.and_then(|s| s.outline_level));
-
-                let bookmarks: Vec<String> = node
-                    .children()
-                    .filter(|n| {
-                        n.tag_name().namespace() == Some(WML_NS)
-                            && n.tag_name().name() == "bookmarkStart"
-                    })
-                    .filter_map(|n| n.attribute((WML_NS, "name")).map(|s| s.to_string()))
-                    .collect();
-
-                blocks.push(Block::Paragraph(Paragraph {
-                    runs,
-                    style_id: Some(para_style_id.to_string()),
-                    space_before,
-                    space_after,
-                    content_height,
-                    alignment,
-                    indent_left,
-                    indent_right,
-                    indent_hanging,
-                    indent_first_line,
-                    list_label,
-                    list_label_font,
-                    list_label_font_size,
-                    list_label_bold,
-                    list_label_color,
-                    num_level_tab_stop: num_tab_stop,
-                    contextual_spacing,
-                    keep_next,
-                    keep_lines,
-                    widow_control,
-                    line_spacing,
-                    image: para_image,
-                    borders,
-                    shading: para_shading,
-                    page_break_before: parsed.has_page_break_before
-                        || para_style.is_some_and(|s| s.page_break_before),
-                    page_break_after: parsed.has_page_break_after,
-                    column_break_before: parsed.has_column_break,
-                    tab_stops,
-                    floating_images,
-                    textboxes: {
-                        let mut tbs = parsed.textboxes;
-                        tbs.extend(collect_textboxes_from_paragraph(
-                            node, &rels, zip, &styles, &theme, &numbering,
-                        ));
-                        tbs
-                    },
-                    connectors: parsed.connectors,
-                    inline_chart: parsed.inline_chart,
-                    smartart: parsed.smartart,
-                    horizontal_rule: parsed.horizontal_rule,
-                    is_section_break: false,
-                    bookmarks,
-                    outline_level,
-                    paragraph_mark_vanish,
-                    snap_to_grid,
-                    suppress_auto_hyphens,
-                    frame_props: ppr.and_then(parse_frame_props),
-                }));
+                blocks.push(Block::Paragraph(para));
 
                 // Mid-document section break: sectPr inside pPr ends the current section
                 if let Some(sect_node) = ppr.and_then(|ppr| wml(ppr, "sectPr")) {
@@ -923,10 +708,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     }
                     let props = parse_section_properties(
                         sect_node,
-                        &rels,
-                        &styles,
-                        &theme,
-                        zip,
+                        &mut ctx,
                         default_line_pitch,
                         settings.gutter_at_top,
                     );
@@ -938,7 +720,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
             }
             "altChunk" => {
                 if let Some(id) = node.attribute((REL_NS, "id")) {
-                    blocks.extend(alt_chunk::parse_alt_chunk(id, &rels, zip));
+                    blocks.extend(alt_chunk::parse_alt_chunk(id, ctx.rels, ctx.zip));
                 }
             }
             _ => {}
@@ -947,7 +729,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
 
     // Final section: body-level sectPr
     let final_props = if let Some(sect_node) = wml(body, "sectPr") {
-        parse_section_properties(sect_node, &rels, &styles, &theme, zip, default_line_pitch, settings.gutter_at_top)
+        parse_section_properties(sect_node, &mut ctx, default_line_pitch, settings.gutter_at_top)
     } else {
         SectionProperties {
             page_width: 612.0,

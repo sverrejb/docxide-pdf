@@ -7,13 +7,13 @@ use crate::model::{
     TextDirection, VMerge,
 };
 
-use super::numbering::{self, ListLabelInfo, parse_list_info};
+use super::numbering::{ListLabelInfo, parse_list_info};
 use super::runs::parse_runs;
-use super::styles::{self, TableBordersDef, parse_alignment};
+use super::styles::{TableBordersDef, parse_alignment};
 use super::{
-    WML_NS, collect_block_nodes, extract_indents, parse_cell_border, parse_cell_border_left,
-    parse_cell_border_right, parse_hex_color, parse_paragraph_spacing, twips_attr, twips_to_pts,
-    wml, wml_attr,
+    ParseContext, WML_NS, collect_block_nodes, extract_indents, parse_cell_border,
+    parse_cell_border_left, parse_cell_border_right, parse_hex_color, parse_paragraph_spacing,
+    twips_attr, twips_to_pts, wml, wml_attr,
 };
 
 fn is_wml(node: &roxmltree::Node, name: &str) -> bool {
@@ -76,11 +76,7 @@ fn resolve_h_border(upper_bottom: CellBorder, lower_top: CellBorder) -> CellBord
 
 pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     node: roxmltree::Node,
-    styles: &styles::StylesInfo,
-    theme: &styles::ThemeFonts,
-    rels: &HashMap<String, String>,
-    zip: &mut zip::ZipArchive<R>,
-    numbering: &numbering::NumberingInfo,
+    ctx: &mut ParseContext<'_, R>,
     counters: &mut HashMap<(String, u8), u32>,
     last_seen_level: &mut HashMap<String, u8>,
 ) -> Table {
@@ -203,7 +199,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
 
     let tbl_style = tbl_pr
         .and_then(|pr| wml_attr(pr, "tblStyle"))
-        .and_then(|id| styles.table_styles.get(id));
+        .and_then(|id| ctx.styles.table_styles.get(id));
     let tbl_style_borders = tbl_style.and_then(|s| s.base_borders.as_ref());
     let has_tbl_style = tbl_style_borders.is_some();
 
@@ -510,7 +506,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
             for n in &block_nodes {
                 if is_wml(n, "p") {
                     let p = *n;
-                    let parsed = parse_runs(p, styles, theme, rels, zip, numbering);
+                    let parsed = parse_runs(p, ctx);
                     let mut runs = parsed.runs;
                     // Apply conditional formatting text overrides from tblStylePr.
                     let mut has_text = false;
@@ -545,8 +541,8 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     let ppr = wml(p, "pPr");
                     let para_style_id = ppr
                         .and_then(|ppr| wml_attr(ppr, "pStyle"))
-                        .unwrap_or(&styles.default_paragraph_style_id);
-                    let para_style = styles.paragraph_styles.get(para_style_id);
+                        .unwrap_or(&ctx.styles.default_paragraph_style_id);
+                    let para_style = ctx.styles.paragraph_styles.get(para_style_id);
                     let alignment = ppr
                         .and_then(|ppr| wml_attr(ppr, "jc"))
                         .map(parse_alignment)
@@ -572,7 +568,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         num_pr,
                         style_num,
                         style_ilvl,
-                        numbering,
+                        ctx.numbering,
                         counters,
                         last_seen_level,
                     );
@@ -597,7 +593,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     let space_after = sp_after.unwrap_or(if has_tbl_style {
                         0.0
                     } else {
-                        styles.defaults.space_after
+                        ctx.styles.defaults.space_after
                     });
                     cell_blocks.push(Block::Paragraph(Paragraph {
                         runs,
@@ -622,7 +618,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     }));
                 } else if is_wml(n, "tbl") {
                     let nested = parse_table_node(
-                        *n, styles, theme, rels, zip, numbering, counters, last_seen_level,
+                        *n, ctx, counters, last_seen_level,
                     );
                     cell_blocks.push(Block::Table(nested));
                 }
@@ -647,9 +643,24 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
             is_header,
         });
     }
-    // Resolve border conflicts between adjacent rows. When a cell-level override
-    // border (from tcBorders) meets a table-level default (from tblBorders) at the
-    // same horizontal edge, the cell-level border wins per OOXML §17.4.38.
+    resolve_h_border_conflicts(&mut rows);
+    propagate_vmerge_borders(&mut rows);
+
+    Table {
+        col_widths,
+        rows,
+        table_indent,
+        cell_margins,
+        position: table_position,
+        alignment,
+        fixed_layout,
+    }
+}
+
+/// Resolve border conflicts between adjacent rows. When a cell-level override
+/// border meets a table-level default at the same horizontal edge, the
+/// cell-level border wins per OOXML §17.4.38.
+fn resolve_h_border_conflicts(rows: &mut [TableRow]) {
     for ri in 0..rows.len().saturating_sub(1) {
         let (upper, lower) = rows.split_at_mut(ri + 1);
         let upper_row = &mut upper[ri];
@@ -680,11 +691,11 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
             }
         }
     }
+}
 
-    // For vertically merged cells, the restart cell draws the full merged
-    // region's borders.  Copy the last continuation cell's bottom border
-    // to the restart cell so it uses the correct edge style (e.g. table-
-    // edge double border rather than interior insideH).
+/// For vertically merged cells, copy the last continuation cell's bottom
+/// border to the restart cell so it draws the correct edge style.
+fn propagate_vmerge_borders(rows: &mut [TableRow]) {
     for ri in 0..rows.len() {
         let mut grid_col = 0usize;
         for ci in 0..rows[ri].cells.len() {
@@ -700,9 +711,15 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                             break;
                         }
                         g += c.grid_span.max(1) as usize;
-                        if g > grid_col { break; }
+                        if g > grid_col {
+                            break;
+                        }
                     }
-                    if is_continue { last_ri = next_ri; } else { break; }
+                    if is_continue {
+                        last_ri = next_ri;
+                    } else {
+                        break;
+                    }
                 }
                 if last_ri > ri {
                     let mut g = 0usize;
@@ -712,21 +729,13 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                             break;
                         }
                         g += c.grid_span.max(1) as usize;
-                        if g > grid_col { break; }
+                        if g > grid_col {
+                            break;
+                        }
                     }
                 }
             }
             grid_col += span;
         }
-    }
-
-    Table {
-        col_widths,
-        rows,
-        table_indent,
-        cell_margins,
-        position: table_position,
-        alignment,
-        fixed_layout,
     }
 }

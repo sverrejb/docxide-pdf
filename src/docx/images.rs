@@ -8,21 +8,15 @@ use crate::model::{
 };
 
 use super::charts::parse_chart_from_zip;
-use super::numbering::NumberingInfo;
 use super::smartart::{has_diagram_ref, parse_smartart_drawing};
-use super::styles::{StylesInfo, ThemeFonts};
 use super::textbox::{parse_connector_from_wsp, parse_textbox_from_wsp};
-use super::{DML_NS, REL_NS, WML_NS, WPD_NS, emu_attr, emu_to_pts, find_child, parse_hex_color, wml};
+use super::{DML_NS, ParseContext, REL_NS, WML_NS, WPD_NS, emu_attr, emu_to_pts, parse_hex_color, wml, wpd};
 
 const CHART_URI: &str = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 const PIC_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/picture";
 
 fn parse_emu_text(text: Option<&str>) -> f32 {
     emu_to_pts(text.unwrap_or("0").parse::<f32>().unwrap_or(0.0))
-}
-
-fn wpd<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
-    find_child(node, name, WPD_NS)
 }
 
 fn wpd_child_text<'a>(parent: Option<roxmltree::Node<'a, 'a>>, name: &str) -> Option<&'a str> {
@@ -377,11 +371,7 @@ fn is_wpd_drawing(node: roxmltree::Node, expected: &str) -> bool {
 
 pub(super) fn parse_run_drawing<R: Read + Seek>(
     drawing_node: roxmltree::Node,
-    rels: &HashMap<String, String>,
-    zip: &mut zip::ZipArchive<R>,
-    styles: &StylesInfo,
-    theme: &ThemeFonts,
-    numbering: &NumberingInfo,
+    ctx: &mut ParseContext<'_, R>,
 ) -> Option<RunDrawingResult> {
     for container in drawing_node.children() {
         let is_inline = is_wpd_drawing(container, "inline");
@@ -394,7 +384,7 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
 
         if is_anchor {
             if let Some(wsp) =
-                parse_textbox_from_wsp(container, rels, zip, styles, theme, numbering)
+                parse_textbox_from_wsp(container, ctx)
             {
                 let (h_position, h_relative, v_pos, v_relative) = parse_anchor_position(container);
                 let v_offset = match v_pos {
@@ -430,11 +420,11 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                     auto_fit: wsp.auto_fit,
                 }));
             }
-            if let Some(conn) = parse_connector_from_wsp(container, theme) {
+            if let Some(conn) = parse_connector_from_wsp(container, ctx.theme) {
                 return Some(RunDrawingResult::Connector(conn));
             }
             if let Some(embed_id) = find_blip_embed(container) {
-                if let Some(mut img) = read_image_from_zip(embed_id, rels, zip, display_w, display_h) {
+                if let Some(mut img) = read_image_from_zip(embed_id, ctx.rels, ctx.zip, display_w, display_h) {
                     let sp_pr = find_pic_sp_pr(container);
                     let (stroke_color, stroke_width) = parse_pic_outline(sp_pr);
                     img.stroke_color = stroke_color;
@@ -466,7 +456,7 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
 
         // Inline textbox: wp:inline containing wps:wsp with text content
         if let Some(wsp) =
-            parse_textbox_from_wsp(container, rels, zip, styles, theme, numbering)
+            parse_textbox_from_wsp(container, ctx)
         {
             // Treat inline textbox as a floating textbox at paragraph position
             // with TopAndBottom wrap so it acts as a block element
@@ -501,7 +491,7 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
         if let Some(embed_id) = find_blip_embed(container) {
             let (extra_h, extra_top) = inline_extra_height(container);
             if let Some(mut img) =
-                read_image_from_zip_extra(embed_id, rels, zip, display_w, display_h, extra_h, extra_top)
+                read_image_from_zip_extra(embed_id, ctx.rels, ctx.zip, display_w, display_h, extra_h, extra_top)
             {
                 let sp_pr = find_pic_sp_pr(container);
                 let (stroke_color, stroke_width) = parse_pic_outline(sp_pr);
@@ -514,17 +504,17 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
 
         if let Some(chart_rid) = find_chart_ref(container) {
             let accent_colors: Vec<[u8; 3]> = (1..=6)
-                .filter_map(|i| theme.colors.get(&format!("accent{i}")).copied())
+                .filter_map(|i| ctx.theme.colors.get(&format!("accent{i}")).copied())
                 .collect();
             if let Some(ic) =
-                parse_chart_from_zip(chart_rid, rels, zip, display_w, display_h, accent_colors)
+                parse_chart_from_zip(chart_rid, ctx.rels, ctx.zip, display_w, display_h, accent_colors)
             {
                 return Some(RunDrawingResult::Chart(ic));
             }
         }
 
         if display_h > 0.0 && has_diagram_ref(container) {
-            let diagram = parse_smartart_drawing(rels, zip, theme, display_w, display_h);
+            let diagram = parse_smartart_drawing(ctx.rels, ctx.zip, ctx.theme, display_w, display_h);
             return Some(RunDrawingResult::SmartArt(diagram));
         }
     }

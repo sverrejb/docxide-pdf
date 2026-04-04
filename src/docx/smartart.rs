@@ -4,25 +4,19 @@ use std::io::{Read, Seek};
 use crate::model::{SmartArtDiagram, SmartArtShape};
 
 use super::styles::ThemeFonts;
-use super::textbox::{parse_shape_geometry, parse_solid_fill};
-use super::{DML_NS, DSP_NS, emu_attr, find_child, read_zip_text};
-
-const DIAGRAM_URI: &str = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
+use super::color::parse_solid_fill;
+use super::textbox::parse_shape_geometry;
+use super::{DML_NS, DSP_NS, dml, dsp, emu_attr, read_zip_text};
 
 fn is_ns(node: roxmltree::Node, name: &str, ns: &str) -> bool {
     node.tag_name().name() == name && node.tag_name().namespace() == Some(ns)
 }
 
-fn dsp<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
-    find_child(node, name, DSP_NS)
-}
-
-fn dml<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
-    find_child(node, name, DML_NS)
-}
+const DIAGRAM_URI: &str = "http://schemas.openxmlformats.org/drawingml/2006/diagram";
 
 fn has_dml(node: roxmltree::Node, name: &str) -> bool {
-    node.children().any(|n| is_ns(n, name, DML_NS))
+    node.children()
+        .any(|n| n.tag_name().name() == name && n.tag_name().namespace() == Some(DML_NS))
 }
 
 pub(super) fn has_diagram_ref(container: roxmltree::Node) -> bool {

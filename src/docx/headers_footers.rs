@@ -8,8 +8,7 @@ use super::parse_table_node;
 use super::runs::parse_runs;
 use super::styles::{ParagraphStyle, StylesInfo, ThemeFonts, parse_alignment};
 use super::{
-    WML_NS, collect_block_nodes, extract_indents, parse_frame_props, parse_paragraph_borders,
-    parse_paragraph_spacing, parse_tab_stops, wml, wml_attr,
+    ParseContext, WML_NS, collect_block_nodes, parse_paragraph_spacing, wml, wml_attr,
 };
 
 fn is_wml_element(node: roxmltree::Node, name: &str) -> bool {
@@ -28,10 +27,7 @@ fn resolve_alignment(
 
 pub(super) fn parse_header_footer_xml<R: Read + Seek>(
     xml_content: &str,
-    styles: &StylesInfo,
-    theme: &ThemeFonts,
-    rels: &HashMap<String, String>,
-    zip: &mut zip::ZipArchive<R>,
+    ctx: &mut ParseContext<'_, R>,
 ) -> Option<HeaderFooter> {
     let xml = roxmltree::Document::parse(xml_content).ok()?;
     let root = xml.root_element();
@@ -39,7 +35,6 @@ pub(super) fn parse_header_footer_xml<R: Read + Seek>(
 
     let top_nodes = collect_block_nodes(root);
 
-    let numbering = NumberingInfo::default();
     let mut counters = HashMap::new();
     let mut last_seen_level = HashMap::new();
 
@@ -51,60 +46,18 @@ pub(super) fn parse_header_footer_xml<R: Read + Seek>(
             "tbl" => {
                 let table = parse_table_node(
                     node,
-                    styles,
-                    theme,
-                    rels,
-                    zip,
-                    &numbering,
+                    ctx,
                     &mut counters,
                     &mut last_seen_level,
                 );
                 blocks.push(Block::Table(table));
             }
             "p" => {
-                let ppr = wml(node, "pPr");
-                let para_style_id = ppr
-                    .and_then(|ppr| wml_attr(ppr, "pStyle"))
-                    .unwrap_or(&styles.default_paragraph_style_id);
-                let para_style = styles.paragraph_styles.get(para_style_id);
-
-                let alignment = resolve_alignment(ppr, para_style);
-                let (sp_before, sp_after, line_spacing) = parse_paragraph_spacing(ppr, para_style, None);
-                let parsed = parse_runs(node, styles, theme, rels, zip, &numbering);
-
-                let (mut indent_left, mut indent_right, mut indent_hanging, mut indent_first_line) =
-                    (0.0, 0.0, 0.0, 0.0);
-                if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
-                    let (left, right, hanging, first) = extract_indents(ind);
-                    indent_left = left.unwrap_or(0.0);
-                    indent_right = right.unwrap_or(0.0);
-                    indent_hanging = hanging.unwrap_or(0.0);
-                    indent_first_line = first.unwrap_or(0.0);
-                } else if let Some(s) = para_style {
-                    indent_left = s.indent_left.unwrap_or(0.0);
-                    indent_right = s.indent_right.unwrap_or(0.0);
-                    indent_hanging = s.indent_hanging.unwrap_or(0.0);
-                    indent_first_line = s.indent_first_line.unwrap_or(0.0);
-                }
-
-                blocks.push(Block::Paragraph(Paragraph {
-                    runs: parsed.runs,
-                    alignment,
-                    line_spacing,
-                    space_before: sp_before.unwrap_or(0.0),
-                    space_after: sp_after.unwrap_or(0.0),
-                    borders: ppr.map(parse_paragraph_borders).unwrap_or_default(),
-                    tab_stops: ppr.map(parse_tab_stops).unwrap_or_default(),
-                    floating_images: parsed.floating_images,
-                    textboxes: parsed.textboxes,
-                    indent_left,
-                    indent_right,
-                    indent_hanging,
-                    indent_first_line,
-                    snap_to_grid: true,
-                    frame_props: ppr.and_then(parse_frame_props),
-                    ..Paragraph::default()
-                }));
+                let para = super::paragraph::build_paragraph(
+                    node, ctx, &mut counters, &mut last_seen_level,
+                    &super::paragraph::ParagraphOptions::default(),
+                );
+                blocks.push(Block::Paragraph(para));
             }
             _ => {}
         }
@@ -129,6 +82,14 @@ pub(super) fn parse_footnotes<R: Read + Seek>(
     let empty_rels = HashMap::new();
     let numbering = NumberingInfo::default();
 
+    let mut fn_ctx = ParseContext {
+        styles,
+        theme,
+        rels: &empty_rels,
+        zip,
+        numbering: &numbering,
+    };
+
     for node in root.children() {
         if !is_wml_element(node, "footnote") {
             continue;
@@ -150,10 +111,10 @@ pub(super) fn parse_footnotes<R: Read + Seek>(
             let para_style_id = ppr
                 .and_then(|ppr| wml_attr(ppr, "pStyle"))
                 .unwrap_or("FootnoteText");
-            let para_style = styles.paragraph_styles.get(para_style_id);
+            let para_style = fn_ctx.styles.paragraph_styles.get(para_style_id);
 
             let alignment = resolve_alignment(ppr, para_style);
-            let parsed = parse_runs(p, styles, theme, &empty_rels, zip, &numbering);
+            let parsed = parse_runs(p, &mut fn_ctx);
             let (sp_before, sp_after, ls) = parse_paragraph_spacing(ppr, para_style, None);
 
             paragraphs.push(Paragraph {

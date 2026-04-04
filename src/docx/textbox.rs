@@ -3,38 +3,21 @@ use std::io::Read;
 
 use crate::geometry::{FormulaOp, PathFill};
 use crate::model::{
-    Alignment, AutoFit, ConnectorShape, ConnectorType, CustomGeometry, CustomGuideDef,
+    AutoFit, ConnectorShape, ConnectorType, CustomGeometry, CustomGuideDef,
     CustomPathCommand, CustomPathDef, HRelativeFrom, HorizontalPosition, Paragraph, ShapeFill,
     ShapeGeometry, TextAnchor, TextWarp, Textbox, VRelativeFrom, VerticalPosition, WrapType,
 };
 
 use super::images::{extent_dimensions, parse_anchor_position};
-use super::numbering::{ListLabelInfo, NumberingInfo};
-use super::runs::parse_runs;
+use super::color::{apply_color_transforms, parse_solid_fill, resolve_dml_color};
 use super::styles::{
-    ColorTransforms, StylesInfo, ThemeFillStyle, ThemeFonts, parse_alignment,
-    parse_color_transforms,
+    ThemeFillStyle, ThemeFonts,
 };
 use super::{
-    DML_NS, MC_NS_TOP, VML_NS, WML_NS, WPD_NS, WPS_NS, emu_attr, extract_indents, find_child,
-    parse_paragraph_spacing, resolve_theme_color_key, wml, wml_attr,
+    DML_NS, MC_NS_TOP, ParseContext, VML_NS, WML_NS, WPD_NS, WPS_NS,
+    dml as find_dml, dml_children as find_dml_all, wps as find_wps,
+    emu_attr,
 };
-
-pub(super) fn find_dml<'a>(
-    parent: roxmltree::Node<'a, 'a>,
-    name: &str,
-) -> Option<roxmltree::Node<'a, 'a>> {
-    find_child(parent, name, DML_NS)
-}
-
-fn find_dml_all<'a>(
-    parent: roxmltree::Node<'a, 'a>,
-    name: &str,
-) -> impl Iterator<Item = roxmltree::Node<'a, 'a>> {
-    parent
-        .children()
-        .filter(move |n| n.tag_name().name() == name && n.tag_name().namespace() == Some(DML_NS))
-}
 
 fn collect_dml_points(parent: roxmltree::Node) -> Vec<(String, String)> {
     find_dml_all(parent, "pt")
@@ -47,30 +30,12 @@ fn collect_dml_points(parent: roxmltree::Node) -> Vec<(String, String)> {
         .collect()
 }
 
-fn find_wps<'a>(parent: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
-    find_child(parent, name, WPS_NS)
-}
-
 fn find_sp_pr<'a>(wsp: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
     wsp.children().find(|n| {
         n.tag_name().name() == "spPr"
             && (n.tag_name().namespace() == Some(WPS_NS)
                 || n.tag_name().namespace() == Some(DML_NS))
     })
-}
-
-fn resolve_color_child(parent: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]> {
-    if let Some(srgb) = find_dml(parent, "srgbClr") {
-        return srgb.attribute("val").and_then(super::parse_hex_color);
-    }
-    if let Some(scheme) = find_dml(parent, "schemeClr") {
-        let val = scheme.attribute("val")?;
-        let theme_key = resolve_theme_color_key(val);
-        let base = *theme.colors.get(theme_key)?;
-        let transforms = parse_color_transforms(scheme);
-        return Some(apply_color_transforms(base, &transforms));
-    }
-    None
 }
 
 fn find_wps_style_ref<'a>(
@@ -83,204 +48,21 @@ fn find_wps_style_ref<'a>(
 
 pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
     txbx_content: roxmltree::Node,
-    styles: &StylesInfo,
-    theme: &ThemeFonts,
-    rels: &HashMap<String, String>,
-    zip: &mut zip::ZipArchive<R>,
-    numbering: &NumberingInfo,
+    ctx: &mut ParseContext<'_, R>,
 ) -> Vec<Paragraph> {
     let mut paragraphs = Vec::new();
     let mut counters: HashMap<(String, u8), u32> = HashMap::new();
     let mut last_seen_level: HashMap<String, u8> = HashMap::new();
+    let opts = super::paragraph::ParagraphOptions::default();
     for p in txbx_content
         .children()
         .filter(|n| n.tag_name().name() == "p" && n.tag_name().namespace() == Some(WML_NS))
     {
-        let parsed = parse_runs(p, styles, theme, rels, zip, numbering);
-        let ppr = wml(p, "pPr");
-        let para_style_id = ppr
-            .and_then(|ppr| wml_attr(ppr, "pStyle"))
-            .unwrap_or(&styles.default_paragraph_style_id);
-        let para_style = styles.paragraph_styles.get(para_style_id);
-        let alignment = ppr
-            .and_then(|ppr| wml_attr(ppr, "jc"))
-            .map(parse_alignment)
-            .or_else(|| para_style.and_then(|s| s.alignment))
-            .unwrap_or(Alignment::Left);
-        let (sp_before, sp_after, ls) = parse_paragraph_spacing(ppr, para_style, Some(styles.defaults.font_size));
-        let space_before = sp_before.unwrap_or(0.0);
-        let space_after = sp_after.unwrap_or(styles.defaults.space_after);
-        let line_spacing = Some(ls.unwrap_or(styles.defaults.line_spacing));
-        let tab_stops = ppr.map(super::parse_tab_stops).unwrap_or_default();
-        let num_pr = ppr.and_then(|ppr| wml(ppr, "numPr"));
-        let ListLabelInfo {
-            mut indent_left,
-            mut indent_hanging,
-            tab_stop: _,
-            label: list_label,
-            font: list_label_font,
-            font_size: list_label_font_size,
-            bold: list_label_bold,
-            color: list_label_color,
-            suff: _,
-        } = super::numbering::parse_list_info(
-            num_pr,
-            None,
-            None,
-            numbering,
-            &mut counters,
-            &mut last_seen_level,
-        );
-        let mut indent_first_line = 0.0f32;
-        let mut indent_right = 0.0f32;
-        if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
-            let (left, right, hanging, first) = extract_indents(ind);
-            if let Some(v) = left {
-                indent_left = v;
-            }
-            if let Some(v) = right {
-                indent_right = v;
-            }
-            if let Some(v) = hanging {
-                indent_hanging = v;
-            }
-            if let Some(v) = first {
-                indent_first_line = v;
-            }
-        } else if list_label.is_empty() {
-            if let Some(s) = para_style {
-                if let Some(v) = s.indent_left {
-                    indent_left = v;
-                }
-                if let Some(v) = s.indent_right {
-                    indent_right = v;
-                }
-                if let Some(v) = s.indent_hanging {
-                    indent_hanging = v;
-                }
-                if let Some(v) = s.indent_first_line {
-                    indent_first_line = v;
-                }
-            }
-        }
-        paragraphs.push(Paragraph {
-            runs: parsed.runs,
-            space_before,
-            space_after,
-            alignment,
-            indent_left,
-            indent_right,
-            indent_hanging,
-            indent_first_line,
-            list_label,
-            list_label_font,
-            list_label_font_size,
-            list_label_bold,
-            list_label_color,
-            line_spacing,
-            tab_stops,
-            floating_images: parsed.floating_images,
-            textboxes: parsed.textboxes,
-            snap_to_grid: true,
-            ..Paragraph::default()
-        });
+        paragraphs.push(super::paragraph::build_paragraph(
+            p, ctx, &mut counters, &mut last_seen_level, &opts,
+        ));
     }
     paragraphs
-}
-
-fn rgb_to_hsl(c: [u8; 3]) -> (f32, f32, f32) {
-    let r = c[0] as f32 / 255.0;
-    let g = c[1] as f32 / 255.0;
-    let b = c[2] as f32 / 255.0;
-    let max = r.max(g).max(b);
-    let min = r.min(g).min(b);
-    let l = (max + min) / 2.0;
-    if (max - min).abs() < f32::EPSILON {
-        return (0.0, 0.0, l);
-    }
-    let d = max - min;
-    let s = if l > 0.5 {
-        d / (2.0 - max - min)
-    } else {
-        d / (max + min)
-    };
-    let h = if (max - r).abs() < f32::EPSILON {
-        ((g - b) / d + if g < b { 6.0 } else { 0.0 }) / 6.0
-    } else if (max - g).abs() < f32::EPSILON {
-        ((b - r) / d + 2.0) / 6.0
-    } else {
-        ((r - g) / d + 4.0) / 6.0
-    };
-    (h, s, l)
-}
-
-fn hsl_to_rgb(h: f32, s: f32, l: f32) -> [u8; 3] {
-    if s.abs() < f32::EPSILON {
-        let v = (l * 255.0).clamp(0.0, 255.0) as u8;
-        return [v, v, v];
-    }
-    let q = if l < 0.5 {
-        l * (1.0 + s)
-    } else {
-        l + s - l * s
-    };
-    let p = 2.0 * l - q;
-    let hue_to_rgb = |t: f32| -> f32 {
-        let t = ((t % 1.0) + 1.0) % 1.0;
-        if t < 1.0 / 6.0 {
-            p + (q - p) * 6.0 * t
-        } else if t < 1.0 / 2.0 {
-            q
-        } else if t < 2.0 / 3.0 {
-            p + (q - p) * (2.0 / 3.0 - t) * 6.0
-        } else {
-            p
-        }
-    };
-    [
-        (hue_to_rgb(h + 1.0 / 3.0) * 255.0).clamp(0.0, 255.0) as u8,
-        (hue_to_rgb(h) * 255.0).clamp(0.0, 255.0) as u8,
-        (hue_to_rgb(h - 1.0 / 3.0) * 255.0).clamp(0.0, 255.0) as u8,
-    ]
-}
-
-fn apply_color_transforms(base: [u8; 3], t: &ColorTransforms) -> [u8; 3] {
-    let mut color = base;
-    if let Some(tint) = t.tint {
-        color = [
-            (255.0 - tint * (255.0 - color[0] as f32)).clamp(0.0, 255.0) as u8,
-            (255.0 - tint * (255.0 - color[1] as f32)).clamp(0.0, 255.0) as u8,
-            (255.0 - tint * (255.0 - color[2] as f32)).clamp(0.0, 255.0) as u8,
-        ];
-    }
-    if let Some(shade) = t.shade {
-        color = [
-            (color[0] as f32 * shade).clamp(0.0, 255.0) as u8,
-            (color[1] as f32 * shade).clamp(0.0, 255.0) as u8,
-            (color[2] as f32 * shade).clamp(0.0, 255.0) as u8,
-        ];
-    }
-    if let Some(sat_mod) = t.sat_mod {
-        if (sat_mod - 1.0).abs() > 0.001 {
-            let (h, s, l) = rgb_to_hsl(color);
-            color = hsl_to_rgb(h, (s * sat_mod).clamp(0.0, 1.0), l);
-        }
-    }
-    if t.lum_mod.is_some() || t.lum_off.is_some() {
-        let m = t.lum_mod.unwrap_or(1.0);
-        let o = t.lum_off.unwrap_or(0.0);
-        color = [
-            ((color[0] as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8,
-            ((color[1] as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8,
-            ((color[2] as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8,
-        ];
-    }
-    color
-}
-
-pub(super) fn parse_solid_fill(sp_pr: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]> {
-    let fill = find_dml(sp_pr, "solidFill")?;
-    resolve_color_child(fill, theme)
 }
 
 fn parse_gradient_fill(sp_pr: roxmltree::Node, theme: &ThemeFonts) -> Option<ShapeFill> {
@@ -294,7 +76,7 @@ fn parse_gradient_fill(sp_pr: roxmltree::Node, theme: &ThemeFonts) -> Option<Sha
                 .and_then(|v| v.parse::<f32>().ok())
                 .map(|v| v / 100_000.0)
                 .unwrap_or(0.0);
-            resolve_color_child(gs, theme).map(|color| (color, pos))
+            resolve_dml_color(gs, theme).map(|color| (color, pos))
         })
         .collect();
     if stops.is_empty() {
@@ -322,7 +104,7 @@ fn parse_style_fill(wsp: roxmltree::Node, theme: &ThemeFonts) -> Option<ShapeFil
         return None;
     }
 
-    let base_color = resolve_color_child(fill_ref, theme)?;
+    let base_color = resolve_dml_color(fill_ref, theme)?;
 
     let fill_style_idx = (idx as usize).saturating_sub(1);
     match theme.fill_styles.get(fill_style_idx) {
@@ -555,11 +337,7 @@ pub(super) struct WspResult {
 
 pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
     anchor: roxmltree::Node,
-    rels: &HashMap<String, String>,
-    zip: &mut zip::ZipArchive<R>,
-    styles: &StylesInfo,
-    theme: &ThemeFonts,
-    numbering: &NumberingInfo,
+    ctx: &mut ParseContext<'_, R>,
 ) -> Option<WspResult> {
     let wsp = anchor
         .descendants()
@@ -568,11 +346,11 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
     let sp_pr = find_sp_pr(wsp);
     let fill: Option<ShapeFill> = sp_pr
         .and_then(|sp| {
-            parse_solid_fill(sp, theme)
+            parse_solid_fill(sp, ctx.theme)
                 .map(ShapeFill::Solid)
-                .or_else(|| parse_gradient_fill(sp, theme))
+                .or_else(|| parse_gradient_fill(sp, ctx.theme))
         })
-        .or_else(|| parse_style_fill(wsp, theme));
+        .or_else(|| parse_style_fill(wsp, ctx.theme));
     let has_no_fill = sp_pr.is_some_and(|sp| find_dml(sp, "noFill").is_some());
 
     let (stroke_color, stroke_width) = sp_pr
@@ -581,7 +359,7 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
             if find_dml(ln, "noFill").is_some() {
                 return None;
             }
-            let color = parse_solid_fill(ln, theme)?;
+            let color = parse_solid_fill(ln, ctx.theme)?;
             let width = ln
                 .attribute("w")
                 .and_then(|v| v.parse::<f32>().ok())
@@ -630,7 +408,7 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
                 n.tag_name().name() == "txbxContent" && n.tag_name().namespace() == Some(WML_NS)
             })
         })
-        .map(|tc| parse_txbx_content_paragraphs(tc, styles, theme, rels, zip, numbering))
+        .map(|tc| parse_txbx_content_paragraphs(tc, ctx))
         .unwrap_or_default();
 
     if paragraphs.is_empty() && (has_no_fill || fill.is_none()) {
@@ -749,7 +527,7 @@ fn parse_style_stroke(wsp: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3
     if idx == 0 {
         return None;
     }
-    resolve_color_child(ln_ref, theme)
+    resolve_dml_color(ln_ref, theme)
 }
 
 fn parse_style_stroke_width(wsp: roxmltree::Node) -> f32 {
@@ -768,11 +546,7 @@ fn parse_style_stroke_width(wsp: roxmltree::Node) -> f32 {
 
 pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
     pict_node: roxmltree::Node,
-    rels: &HashMap<String, String>,
-    zip: &mut zip::ZipArchive<R>,
-    styles: &StylesInfo,
-    theme: &ThemeFonts,
-    numbering: &NumberingInfo,
+    ctx: &mut ParseContext<'_, R>,
 ) -> Option<Textbox> {
     let shape = pict_node.children().find(|n| {
         n.tag_name().namespace() == Some(VML_NS) && matches!(n.tag_name().name(), "shape" | "rect")
@@ -786,7 +560,7 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         let tp = shape.children().find(|n| {
             n.tag_name().name() == "textpath" && n.tag_name().namespace() == Some(VML_NS)
         });
-        return tp.and_then(|tp| super::wordart::parse_vml_wordart(shape, tp, styles, theme));
+        return tp.and_then(|tp| super::wordart::parse_vml_wordart(shape, tp, ctx.styles, ctx.theme));
     };
     let txbx_content = textbox_node.children().find(|n| {
         n.tag_name().name() == "txbxContent" && n.tag_name().namespace() == Some(WML_NS)
@@ -829,7 +603,7 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
     }
 
     let paragraphs =
-        parse_txbx_content_paragraphs(txbx_content, styles, theme, rels, zip, numbering);
+        parse_txbx_content_paragraphs(txbx_content, ctx);
     if paragraphs.is_empty() {
         return None;
     }
@@ -863,11 +637,7 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
 
 pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
     para_node: roxmltree::Node,
-    rels: &HashMap<String, String>,
-    zip: &mut zip::ZipArchive<R>,
-    styles: &StylesInfo,
-    theme: &ThemeFonts,
-    numbering: &NumberingInfo,
+    ctx: &mut ParseContext<'_, R>,
 ) -> Vec<Textbox> {
     let mut textboxes = Vec::new();
 
@@ -892,7 +662,7 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                         let (display_w, display_h) = extent_dimensions(container);
 
                         if let Some(wsp) =
-                            parse_textbox_from_wsp(container, rels, zip, styles, theme, numbering)
+                            parse_textbox_from_wsp(container, ctx)
                         {
                             let (h_position, h_relative, v_pos, v_relative) =
                                 parse_anchor_position(container);
@@ -938,7 +708,7 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                     n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "pict"
                 }) {
                     if let Some(tb) =
-                        parse_textbox_from_vml(pict, rels, zip, styles, theme, numbering)
+                        parse_textbox_from_vml(pict, ctx)
                     {
                         textboxes.push(tb);
                     }
@@ -950,7 +720,7 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                         n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "pict"
                     }) {
                         if let Some(tb) =
-                            parse_textbox_from_vml(pict, rels, zip, styles, theme, numbering)
+                            parse_textbox_from_vml(pict, ctx)
                         {
                             textboxes.push(tb);
                         }

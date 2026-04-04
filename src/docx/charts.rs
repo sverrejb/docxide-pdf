@@ -6,28 +6,7 @@ use crate::model::{
     LegendPosition, MarkerSymbol,
 };
 
-use super::{CHART_NS, DML_NS, find_child, parse_hex_color, read_zip_text};
-
-fn chart_child<'a>(parent: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
-    find_child(parent, name, CHART_NS)
-}
-
-fn chart_attr<'a>(parent: roxmltree::Node<'a, 'a>, child: &str) -> Option<&'a str> {
-    chart_child(parent, child).and_then(|n| n.attribute("val"))
-}
-
-fn chart_children<'a>(
-    parent: roxmltree::Node<'a, 'a>,
-    name: &str,
-) -> impl Iterator<Item = roxmltree::Node<'a, 'a>> {
-    parent
-        .children()
-        .filter(move |n| n.tag_name().name() == name && n.tag_name().namespace() == Some(CHART_NS))
-}
-
-fn dml_child<'a>(parent: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
-    find_child(parent, name, DML_NS)
-}
+use super::{chart_ns as chart_child, chart_ns_attr as chart_attr, chart_ns_children as chart_children, dml as dml_child, parse_hex_color, read_zip_text};
 
 fn find_srgb_clr<'a>(sp_pr: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
     dml_child(dml_child(sp_pr, "solidFill")?, "srgbClr")

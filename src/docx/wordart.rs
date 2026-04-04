@@ -4,8 +4,8 @@ use crate::model::{
 };
 
 use super::styles::{StylesInfo, ThemeFonts};
-use super::textbox::{find_dml, parse_avlst};
-use super::{DML_NS, W14_NS, find_child, parse_hex_color};
+use super::textbox::parse_avlst;
+use super::{DML_NS, W14_NS, dml as find_dml, find_child, parse_hex_color};
 
 fn find_w14<'a>(
     parent: roxmltree::Node<'a, 'a>,

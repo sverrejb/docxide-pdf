@@ -3,16 +3,13 @@ use std::io::{Read, Seek};
 
 use crate::model::{Alignment, CellBorder, LineSpacing, ParagraphBorders, TabStop};
 
+pub(super) use super::color::{ColorTransforms, parse_color_transforms};
 use super::{
-    DML_NS, WML_NS, extract_indents, find_child, highlight_color, parse_cell_border,
+    DML_NS, WML_NS, dml, extract_indents, highlight_color, parse_cell_border,
     parse_cell_border_left, parse_cell_border_right, parse_hex_color, parse_paragraph_borders,
     parse_tab_stops_with_clears, parse_text_color, read_zip_text, twips_attr, twips_to_pts, wml,
     wml_attr, wml_bool,
 };
-
-fn dml<'a>(node: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
-    find_child(node, name, DML_NS)
-}
 
 fn dml_typeface<'a>(node: roxmltree::Node<'a, 'a>, element: &str) -> Option<&'a str> {
     dml(node, element)
@@ -44,15 +41,6 @@ fn lang_to_script(lang: &str) -> &'static str {
     } else {
         "Jpan"
     }
-}
-
-#[derive(Clone, Default)]
-pub(super) struct ColorTransforms {
-    pub(super) lum_mod: Option<f32>,
-    pub(super) lum_off: Option<f32>,
-    pub(super) sat_mod: Option<f32>,
-    pub(super) tint: Option<f32>,
-    pub(super) shade: Option<f32>,
 }
 
 pub(super) struct ThemeGradientStop {
@@ -357,28 +345,6 @@ fn parse_theme_gradient_stops(gs_lst: roxmltree::Node) -> Vec<ThemeGradientStop>
             }
         })
         .collect()
-}
-
-pub(super) fn parse_color_transforms(scheme_clr: roxmltree::Node) -> ColorTransforms {
-    let mut t = ColorTransforms::default();
-    for child in scheme_clr
-        .children()
-        .filter(|n| n.tag_name().namespace() == Some(DML_NS))
-    {
-        let val = child
-            .attribute("val")
-            .and_then(|v| v.parse::<f32>().ok())
-            .map(|v| v / 100_000.0);
-        match child.tag_name().name() {
-            "lumMod" => t.lum_mod = val,
-            "lumOff" => t.lum_off = val,
-            "satMod" => t.sat_mod = val,
-            "tint" => t.tint = val,
-            "shade" => t.shade = val,
-            _ => {}
-        }
-    }
-    t
 }
 
 pub(super) fn resolve_font(

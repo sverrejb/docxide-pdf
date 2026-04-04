@@ -8,16 +8,15 @@ use crate::model::{
 
 use super::images::{RunDrawingResult, parse_run_drawing};
 use super::is_east_asian_char;
-use super::numbering::NumberingInfo;
 use super::styles::{
-    CharacterStyle, ParagraphStyle, StyleDefaults, StylesInfo, ThemeFonts,
+    CharacterStyle, ParagraphStyle, StyleDefaults, ThemeFonts,
     resolve_east_asia_font_from_node, resolve_font_from_node,
 };
 use super::textbox::parse_textbox_from_vml;
 use super::wordart::{parse_text_fill, parse_text_glow, parse_text_outline, parse_text_shadow};
 use super::{
-    MC_NS_TOP, REL_NS, VML_NS, WML_NS, highlight_color, parse_hex_color, parse_text_color,
-    twips_to_pts, wml, wml_attr, wml_bool,
+    MC_NS_TOP, ParseContext, REL_NS, VML_NS, WML_NS, highlight_color, parse_hex_color,
+    parse_text_color, twips_to_pts, wml, wml_attr, wml_bool,
 };
 
 fn is_dynamic_field(instr: &str) -> bool {
@@ -566,21 +565,17 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
 
 pub(super) fn parse_runs<R: Read + Seek>(
     para_node: roxmltree::Node,
-    styles: &StylesInfo,
-    theme: &ThemeFonts,
-    rels: &HashMap<String, String>,
-    zip: &mut zip::ZipArchive<R>,
-    numbering: &NumberingInfo,
+    ctx: &mut ParseContext<'_, R>,
 ) -> ParsedRuns {
     let ppr = wml(para_node, "pPr");
     let para_style_id = ppr
         .and_then(|ppr| wml_attr(ppr, "pStyle"))
-        .unwrap_or(&styles.default_paragraph_style_id);
-    let para_style = styles.paragraph_styles.get(para_style_id);
-    let defaults = ParagraphRunDefaults::from_style(para_style, &styles.defaults);
+        .unwrap_or(&ctx.styles.default_paragraph_style_id);
+    let para_style = ctx.styles.paragraph_styles.get(para_style_id);
+    let defaults = ParagraphRunDefaults::from_style(para_style, &ctx.styles.defaults);
 
     let mut run_nodes: Vec<(roxmltree::Node, Option<String>, bool)> = Vec::new();
-    collect_run_nodes(para_node, rels, &mut run_nodes);
+    collect_run_nodes(para_node, ctx.rels, &mut run_nodes);
 
     let mut runs = Vec::new();
     let mut floating_images: Vec<FloatingImage> = Vec::new();
@@ -604,10 +599,10 @@ pub(super) fn parse_runs<R: Read + Seek>(
         let char_style = if is_anchor_hyperlink {
             None
         } else {
-            char_style_id_str.and_then(|id| styles.character_styles.get(id))
+            char_style_id_str.and_then(|id| ctx.styles.character_styles.get(id))
         };
 
-        let fmt = defaults.resolve_run_format(rpr, char_style, char_style_id_str, theme);
+        let fmt = defaults.resolve_run_format(rpr, char_style, char_style_id_str, ctx.theme);
 
         let flush_pending = |pending: &mut String, runs: &mut Vec<Run>| {
             if !pending.is_empty() {
@@ -628,7 +623,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "drawing"
                     }) {
                         let result =
-                            parse_run_drawing(drawing, rels, zip, styles, theme, numbering);
+                            parse_run_drawing(drawing, ctx);
                         handle_drawing_result!(
                             result,
                             fmt,
@@ -647,7 +642,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "pict"
                     }) {
                         if let Some(tb) =
-                            parse_textbox_from_vml(pict, rels, zip, styles, theme, numbering)
+                            parse_textbox_from_vml(pict, ctx)
                         {
                             textboxes.push(tb);
                         }
@@ -748,7 +743,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                 "drawing" if in_field => {}
                 "drawing" => {
                     flush_pending(&mut pending_text, &mut runs);
-                    let result = parse_run_drawing(child, rels, zip, styles, theme, numbering);
+                    let result = parse_run_drawing(child, ctx);
                     handle_drawing_result!(
                         result,
                         fmt,
@@ -764,7 +759,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                     if let Some(hr) = parse_vml_horizontal_rule(child) {
                         horizontal_rule = Some(hr);
                     } else if let Some(tb) =
-                        parse_textbox_from_vml(child, rels, zip, styles, theme, numbering)
+                        parse_textbox_from_vml(child, ctx)
                     {
                         textboxes.push(tb);
                     }
@@ -824,7 +819,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
         .unwrap_or(false)
         || page_break_before_content;
 
-    ensure_nonempty_paragraph(&mut runs, ppr, &defaults, theme, has_page_break_before);
+    ensure_nonempty_paragraph(&mut runs, ppr, &defaults, ctx.theme, has_page_break_before);
 
     let runs = merge_compatible_runs(runs);
 

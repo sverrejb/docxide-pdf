@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use pdf_writer::{Content, Name};
 
 use crate::model::{
-    Alignment, Block, FieldCode, HeaderFooter, Paragraph, Run, SectionProperties, VRelativeFrom,
-    VerticalPosition, WrapType,
+    Alignment, Block, Document, FieldCode, HeaderFooter, Paragraph, Run, SectionProperties,
+    VRelativeFrom, VerticalPosition, WrapType,
 };
 
 use super::layout::{
@@ -750,4 +750,60 @@ pub(super) fn render_header_footer(
             }
         }
     }
+}
+
+/// Resolve which header to use for a given page, walking sections backward
+/// for inheritance. Returns `(header_data, hf_type_id, section_index)`.
+pub(super) fn resolve_header_for_page<'a>(
+    doc: &'a Document,
+    section_idx: usize,
+    is_first_page: bool,
+    page_num: usize,
+) -> (Option<&'a HeaderFooter>, u8, usize) {
+    for idx in (0..=section_idx).rev() {
+        let s = &doc.sections[idx].properties;
+        let (h, t) = if idx == section_idx {
+            if is_first_page && s.different_first_page {
+                (s.header_first.as_ref(), 1u8)
+            } else if doc.even_and_odd_headers && page_num % 2 == 0 && s.header_even.is_some() {
+                (s.header_even.as_ref(), 4u8)
+            } else {
+                (s.header_default.as_ref(), 0u8)
+            }
+        } else {
+            (s.header_default.as_ref(), 0u8)
+        };
+        if h.is_some() {
+            return (h, t, idx);
+        }
+    }
+    (None, 0, section_idx)
+}
+
+/// Resolve which footer to use for a given page, walking sections backward
+/// for inheritance. Returns `(footer_data, hf_type_id, section_index)`.
+pub(super) fn resolve_footer_for_page<'a>(
+    doc: &'a Document,
+    section_idx: usize,
+    is_first_page: bool,
+    page_num: usize,
+) -> (Option<&'a HeaderFooter>, u8, usize) {
+    for idx in (0..=section_idx).rev() {
+        let s = &doc.sections[idx].properties;
+        let (f, t) = if idx == section_idx {
+            if is_first_page && s.different_first_page {
+                (s.footer_first.as_ref(), 3u8)
+            } else if doc.even_and_odd_headers && page_num % 2 == 0 && s.footer_even.is_some() {
+                (s.footer_even.as_ref(), 5u8)
+            } else {
+                (s.footer_default.as_ref(), 2u8)
+            }
+        } else {
+            (s.footer_default.as_ref(), 2u8)
+        };
+        if f.is_some() {
+            return (f, t, idx);
+        }
+    }
+    (None, 2, section_idx)
 }

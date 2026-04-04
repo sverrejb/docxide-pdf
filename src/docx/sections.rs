@@ -1,19 +1,14 @@
-use std::collections::HashMap;
 use std::io::{Read, Seek};
 
 use crate::model::{ColumnDef, ColumnsConfig, DocGridType, HeaderFooter, SectionBreakType, SectionProperties};
 
 use super::headers_footers::parse_header_footer_xml;
 use super::relationships::parse_part_relationships;
-use super::styles::{StylesInfo, ThemeFonts};
-use super::{REL_NS, WML_NS, read_zip_text, twips_attr, twips_to_pts, wml, wml_bool};
+use super::{ParseContext, REL_NS, WML_NS, read_zip_text, twips_attr, twips_to_pts, wml, wml_bool};
 
 pub(super) fn parse_section_properties<R: Read + Seek>(
     sect_node: roxmltree::Node,
-    rels: &HashMap<String, String>,
-    styles: &StylesInfo,
-    theme: &ThemeFonts,
-    zip: &mut zip::ZipArchive<R>,
+    ctx: &mut ParseContext<'_, R>,
     default_line_pitch: f32,
     gutter_at_top: bool,
 ) -> SectionProperties {
@@ -125,39 +120,12 @@ pub(super) fn parse_section_properties<R: Read + Seek>(
         })
     });
 
-    let find_ref_rid = |tag: &str, hf_type: &str| -> Option<&str> {
-        sect_node.children().find_map(|child| {
-            if child.tag_name().namespace() == Some(WML_NS)
-                && child.tag_name().name() == tag
-                && child.attribute((WML_NS, "type")) == Some(hf_type)
-            {
-                child.attribute((REL_NS, "id"))
-            } else {
-                None
-            }
-        })
-    };
-
-    let resolve_hf =
-        |tag: &str, hf_type: &str, zip: &mut zip::ZipArchive<R>| -> Option<HeaderFooter> {
-            let rid = find_ref_rid(tag, hf_type)?;
-            let target = rels.get(rid)?;
-            let zip_path = if let Some(stripped) = target.strip_prefix('/') {
-                stripped.to_string()
-            } else {
-                format!("word/{}", target)
-            };
-            let part_rels = parse_part_relationships(zip, &zip_path);
-            let xml_text = read_zip_text(zip, &zip_path)?;
-            parse_header_footer_xml(&xml_text, styles, theme, &part_rels, zip)
-        };
-
-    let header_default = resolve_hf("headerReference", "default", zip);
-    let header_first = resolve_hf("headerReference", "first", zip);
-    let header_even = resolve_hf("headerReference", "even", zip);
-    let footer_default = resolve_hf("footerReference", "default", zip);
-    let footer_first = resolve_hf("footerReference", "first", zip);
-    let footer_even = resolve_hf("footerReference", "even", zip);
+    let header_default = resolve_hf(sect_node, "headerReference", "default", ctx);
+    let header_first = resolve_hf(sect_node, "headerReference", "first", ctx);
+    let header_even = resolve_hf(sect_node, "headerReference", "even", ctx);
+    let footer_default = resolve_hf(sect_node, "footerReference", "default", ctx);
+    let footer_first = resolve_hf(sect_node, "footerReference", "first", ctx);
+    let footer_even = resolve_hf(sect_node, "footerReference", "even", ctx);
 
     SectionProperties {
         page_width,
@@ -182,4 +150,38 @@ pub(super) fn parse_section_properties<R: Read + Seek>(
         page_num_start,
         page_num_format,
     }
+}
+
+fn resolve_hf<R: Read + Seek>(
+    sect_node: roxmltree::Node,
+    tag: &str,
+    hf_type: &str,
+    ctx: &mut ParseContext<'_, R>,
+) -> Option<HeaderFooter> {
+    let rid = sect_node.children().find_map(|child| {
+        if child.tag_name().namespace() == Some(WML_NS)
+            && child.tag_name().name() == tag
+            && child.attribute((WML_NS, "type")) == Some(hf_type)
+        {
+            child.attribute((REL_NS, "id"))
+        } else {
+            None
+        }
+    })?;
+    let target = ctx.rels.get(rid)?;
+    let zip_path = if let Some(stripped) = target.strip_prefix('/') {
+        stripped.to_string()
+    } else {
+        format!("word/{}", target)
+    };
+    let part_rels = parse_part_relationships(ctx.zip, &zip_path);
+    let xml_text = read_zip_text(ctx.zip, &zip_path)?;
+    let mut hf_ctx = ParseContext {
+        styles: ctx.styles,
+        theme: ctx.theme,
+        rels: &part_rels,
+        zip: ctx.zip,
+        numbering: ctx.numbering,
+    };
+    parse_header_footer_xml(&xml_text, &mut hf_ctx)
 }
