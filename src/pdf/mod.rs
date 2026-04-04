@@ -1436,25 +1436,43 @@ fn render_paragraph_block(
         inter_gap = 0.0;
     }
 
-    let bdr_top_pad = para
-        .borders
-        .top
-        .as_ref()
-        .map(|b| b.space_pt + b.width_pt / 2.0)
-        .unwrap_or(0.0);
-    let bdr_bottom_pad = para
-        .borders
-        .bottom
-        .as_ref()
-        .map(|b| b.space_pt + b.width_pt / 2.0)
-        .unwrap_or(0.0);
+    // When consecutive paragraphs share matching borders, Word
+    // suppresses the border padding on the continuous sides — only
+    // the first paragraph in a group gets top padding and only the
+    // last gets bottom padding.
+    let prev_borders_match = prev_para
+        .is_some_and(|pp| borders_match(&pp.borders, &para.borders));
+    let next_borders_match = next_para
+        .is_some_and(|np| borders_match(&para.borders, &np.borders));
+
+    let bdr_top_pad = if prev_borders_match {
+        0.0
+    } else {
+        para.borders
+            .top
+            .as_ref()
+            .map(|b| b.space_pt + b.width_pt / 2.0)
+            .unwrap_or(0.0)
+    };
+    let bdr_bottom_pad = if next_borders_match {
+        0.0
+    } else {
+        para.borders
+            .bottom
+            .as_ref()
+            .map(|b| b.space_pt + b.width_pt / 2.0)
+            .unwrap_or(0.0)
+    };
     // Full extent of bottom border below content (to border bottom edge)
-    let bdr_bottom_extent = para
-        .borders
-        .bottom
-        .as_ref()
-        .map(|b| b.space_pt + b.width_pt)
-        .unwrap_or(0.0);
+    let bdr_bottom_extent = if next_borders_match {
+        0.0
+    } else {
+        para.borders
+            .bottom
+            .as_ref()
+            .map(|b| b.space_pt + b.width_pt)
+            .unwrap_or(0.0)
+    };
 
     // Word measures the bottom border `space` attribute from
     // the full line-height content bottom, not from the text
@@ -2103,11 +2121,6 @@ fn render_paragraph_block(
             content.stroke();
             content.restore_state();
         };
-
-        let prev_borders_match = prev_para
-            .is_some_and(|pp| borders_match(&pp.borders, &para.borders));
-        let next_borders_match = next_para
-            .is_some_and(|np| borders_match(&para.borders, &np.borders));
 
         if !prev_borders_match {
             if let Some(b) = &bdr.top {
