@@ -220,6 +220,11 @@ pub(crate) fn cjk_fallback_fonts() -> &'static [&'static str] {
     {
         &[
             "Malgun Gothic",
+            "Hiragino Sans GB",
+            "Hiragino Sans GB W3",
+            "PMingLiU",
+            "MingLiU",
+            "Songti TC",
             "AppleSD Gothic Neo",
             "Apple SD Gothic Neo",
             "Hiragino Sans W3",
@@ -288,6 +293,7 @@ pub(crate) fn register_font(
 
     let try_cjk_fallback = |tc: &mut dyn FnMut(&str) -> Option<ResolvedFont>| {
         cjk_fallback_fonts().iter().find_map(|cjk_font| {
+            log::debug!("Trying CJK fallback \"{cjk_font}\" for \"{primary}\"");
             let m = tc(cjk_font)?;
             log::info!("Font substitution: {primary} → CJK fallback \"{cjk_font}\"");
             Some(m)
@@ -349,7 +355,7 @@ pub(crate) fn register_font(
         HashSet::new()
     };
 
-    let entry = match result {
+    let mut entry = match result {
         Some(r) => FontEntry {
             pdf_name,
             font_ref,

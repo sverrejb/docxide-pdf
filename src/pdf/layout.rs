@@ -299,6 +299,36 @@ fn vert_y_offset(run: &Run) -> f32 {
 
 const DEFAULT_TAB_INTERVAL: f32 = 36.0; // 0.5 inches
 
+/// Count CJK↔Latin/Digit boundaries in text for autoSpaceDE/DN.
+/// Word adds ~1/4 em spacing at each boundary by default.
+fn count_script_boundaries(text: &str) -> usize {
+    let mut count = 0;
+    let mut prev_cjk: Option<bool> = None;
+    for ch in text.chars() {
+        if ch.is_whitespace() {
+            prev_cjk = None;
+            continue;
+        }
+        let is_cjk = crate::docx::is_east_asian_char(ch)
+            || is_cjk_punctuation(ch);
+        if let Some(was_cjk) = prev_cjk {
+            if was_cjk != is_cjk {
+                count += 1;
+            }
+        }
+        prev_cjk = Some(is_cjk);
+    }
+    count
+}
+
+fn is_cjk_punctuation(ch: char) -> bool {
+    matches!(ch as u32,
+        0x3000..=0x303F  // CJK Symbols and Punctuation (includes ，。、)
+        | 0xFF00..=0xFFEF // Halfwidth and Fullwidth Forms
+        | 0xFE30..=0xFE4F // CJK Compatibility Forms
+    )
+}
+
 fn finish_line(chunks: &mut Vec<WordChunk>) -> TextLine {
     let total_width = chunks.last().map(|c| c.x_offset + c.width).unwrap_or(0.0);
     TextLine {
@@ -1030,10 +1060,23 @@ pub(super) fn render_paragraph_lines(
             .map(|rr| rr.first_chunk_idx)
             .unwrap_or(line.chunks.len());
 
-        let is_justified = *alignment == Alignment::Justify
+        // CJK justification: distribute space between every character, not just chunks.
+        // Word treats CJK inter-character gaps the same as word gaps for justify.
+        let left_char_count: usize = line.chunks[..left_chunk_count]
+            .iter()
+            .map(|c| c.text.chars().count())
+            .sum();
+        let has_cjk_content = line.chunks[..left_chunk_count]
+            .iter()
+            .any(|c| c.text.chars().any(crate::docx::is_east_asian_char));
+
+        let can_justify = *alignment == Alignment::Justify
             && global_line_idx != last_line_idx
-            && !line.ends_with_break
-            && left_chunk_count > 1;
+            && !line.ends_with_break;
+
+        let is_cjk_justified = can_justify && has_cjk_content && left_char_count > 1;
+        let is_justified = is_cjk_justified
+            || (can_justify && left_chunk_count > 1);
 
         let line_start_x = match alignment {
             Alignment::Center => eff_margin + (eff_width - left_content_width) / 2.0,
@@ -1041,7 +1084,17 @@ pub(super) fn render_paragraph_lines(
             Alignment::Left | Alignment::Justify => eff_margin,
         };
 
-        let extra_per_gap = if is_justified {
+        // For CJK justify, distribute via Tc (char spacing) across all characters.
+        // Tc adds space after each char including the last, so:
+        //   content_width + total_chars * Tc = eff_width
+        //   Tc = (eff_width - content_width) / total_chars
+        let justify_tc = if is_cjk_justified {
+            (eff_width - left_content_width) / left_char_count as f32
+        } else {
+            0.0
+        };
+
+        let extra_per_gap = if is_justified && !is_cjk_justified {
             (eff_width - left_content_width) / (left_chunk_count - 1).max(1) as f32
         } else {
             0.0
@@ -1073,7 +1126,17 @@ pub(super) fn render_paragraph_lines(
                     return right_start_x + chunk.x_offset + local_idx as f32 * right_extra_per_gap;
                 }
             }
-            line_start_x + chunk.x_offset + chunk_idx as f32 * extra_per_gap
+            if is_cjk_justified {
+                // Tc adds extra space after each character; shift chunk start
+                // by the cumulative Tc of all chars in preceding chunks.
+                let chars_before: usize = line.chunks[..chunk_idx]
+                    .iter()
+                    .map(|c| c.text.chars().count())
+                    .sum();
+                line_start_x + chunk.x_offset + chars_before as f32 * justify_tc
+            } else {
+                line_start_x + chunk.x_offset + chunk_idx as f32 * extra_per_gap
+            }
         };
 
         let mut decorations: Vec<(f32, f32, f32, f32, Option<[u8; 3]>)> = Vec::new();
@@ -1179,9 +1242,10 @@ pub(super) fn render_paragraph_lines(
                     cur_synthetic_bold = chunk.synthetic_bold;
                 }
 
-                if chunk.char_spacing != cur_char_spacing {
-                    content.set_char_spacing(chunk.char_spacing);
-                    cur_char_spacing = chunk.char_spacing;
+                let effective_cs = chunk.char_spacing + justify_tc;
+                if effective_cs != cur_char_spacing {
+                    content.set_char_spacing(effective_cs);
+                    cur_char_spacing = effective_cs;
                 }
                 if chunk.text_scale != cur_text_scale {
                     content.set_horizontal_scaling(chunk.text_scale);

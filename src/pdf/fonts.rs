@@ -301,7 +301,7 @@ pub(super) fn collect_and_register_fonts(
         // Try comprehensive fonts first, then language-specific ones.
         #[cfg(target_os = "macos")]
         let fallback_font_name =
-            "Hiragino Sans W3;Hiragino Kaku Gothic ProN W3;Arial Unicode MS;Malgun Gothic";
+            "PMingLiU;MingLiU;Songti TC;Hiragino Sans GB;Hiragino Sans GB W3;Hiragino Sans W3;Hiragino Kaku Gothic ProN W3;Arial Unicode MS;Malgun Gothic";
         #[cfg(target_os = "linux")]
         let fallback_font_name = "Noto Sans CJK SC;Noto Sans CJK KR;Noto Sans CJK JP";
         #[cfg(target_os = "windows")]

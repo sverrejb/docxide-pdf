@@ -264,9 +264,9 @@
     "text_boundary": 0.0
   },
   "cases/case52": {
-    "jaccard": 0.7062,
-    "ssim": 0.7782,
-    "text_boundary": 0.5349
+    "jaccard": 0.7064,
+    "ssim": 0.7802,
+    "text_boundary": 0.814
   },
   "cases/case53": {
     "jaccard": 0.5605,
@@ -413,8 +413,8 @@
     "text_boundary": 1.0
   },
   "new/taiwanese_educat..": {
-    "jaccard": 0.1015,
-    "ssim": 0.195,
+    "jaccard": 0.1021,
+    "ssim": 0.1996,
     "text_boundary": 0.0625
   },
   "new/who_prescribing_..": {
@@ -434,8 +434,8 @@
     "convert_ms": 18.3
   },
   "samples/samtale": {
-    "jaccard": 0.0969,
-    "ssim": 0.4313,
+    "jaccard": 0.2836,
+    "ssim": 0.4405,
     "text_boundary": 0.2857,
     "convert_ms": 11.0
   },
@@ -470,8 +470,8 @@
     "convert_ms": 59.6
   },
   "scraped/croatian_grant_g..": {
-    "jaccard": 0.0731,
-    "ssim": 0.187,
+    "jaccard": 0.0726,
+    "ssim": 0.1869,
     "text_boundary": 0.0138,
     "convert_ms": 270.5
   },
@@ -506,8 +506,8 @@
     "convert_ms": 4.8
   },
   "scraped/east_asia_confer..": {
-    "jaccard": 0.0931,
-    "ssim": 0.2202,
+    "jaccard": 0.0926,
+    "ssim": 0.2207,
     "text_boundary": 0.619,
     "convert_ms": 22.0
   },
@@ -542,14 +542,14 @@
     "convert_ms": 70.6
   },
   "scraped/indonesian_bench..": {
-    "jaccard": 0.4047,
-    "ssim": 0.546,
+    "jaccard": 0.4053,
+    "ssim": 0.5468,
     "text_boundary": 0.4685,
     "convert_ms": 170.5
   },
   "scraped/italian_evaluati..": {
-    "jaccard": 0.3385,
-    "ssim": 0.4341,
+    "jaccard": 0.34,
+    "ssim": 0.4373,
     "text_boundary": 0.5768,
     "convert_ms": 115.1
   },
@@ -566,15 +566,15 @@
     "convert_ms": 4.5
   },
   "scraped/korean_japanese_..": {
-    "jaccard": 0.1054,
-    "ssim": 0.1923,
+    "jaccard": 0.1055,
+    "ssim": 0.1922,
     "text_boundary": 0.8571,
     "convert_ms": 18.4
   },
   "scraped/learning_culture..": {
-    "jaccard": 0.3045,
-    "ssim": 0.4244,
-    "text_boundary": 0.3526,
+    "jaccard": 0.3348,
+    "ssim": 0.4584,
+    "text_boundary": 0.3941,
     "convert_ms": 1027.5
   },
   "scraped/lithuanian_ethic..": {

@@ -125,6 +125,7 @@ pub enum FontFamily {
 pub struct FontTableEntry {
     pub alt_name: Option<String>,
     pub family: FontFamily,
+    pub pitch_fixed: bool,
 }
 
 pub type FontTable = HashMap<String, FontTableEntry>;
