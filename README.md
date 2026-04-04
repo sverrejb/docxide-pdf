@@ -32,12 +32,13 @@ While the idea, architecture, testing strategy and validation of output are all 
 
 ## Supported features
 
-- **Text**: font embedding (TTF/OTF/TTC), bold, italic, underline, strikethrough, double strikethrough, font size, text color, superscript/subscript, small caps, all caps, character spacing, text expansion/compression (`w:w`), hidden text (`w:vanish`), kerning (legacy kern table + GPOS PairAdjustment)
+- **Text**: font embedding (TTF/OTF/TTC), bold, italic, underline, strikethrough, double strikethrough, font size, text color, superscript/subscript, small caps, all caps, character spacing, text expansion/compression (`w:w`), hidden text (`w:vanish`), kerning (legacy kern table + GPOS PairAdjustment), vertical text (CJK)
 - **Paragraphs**: left/center/right/justify alignment, space before/after, line spacing (auto, exact, at-least), first-line and hanging indentation, left/right indentation, contextual spacing, keep-next, keep-lines, paragraph borders (top/bottom/left/right/between) with color, paragraph shading, run highlighting
 - **Styles**: paragraph and run style inheritance (`basedOn` chains), document defaults from `docDefaults` (all run properties: bold, italic, caps, smallCaps, vanish, strikethrough, dstrike, underline, color, char_spacing), theme fonts and colors
 - **Lists**: bullet and numbered lists with multi-level nesting, custom number formats, list style inheritance
 - **Tables**: column widths with auto-fit, merged cells (horizontal `gridSpan` and vertical `vMerge`), row heights (exact and minimum), per-cell borders with color/width, inline `w:tblBorders`, cell shading, vertical alignment, cell margins, floating/positioned tables (`tblpPr`)
-- **Images**: inline JPEG/PNG embedding with sizing and alpha transparency, grayscale and CMYK JPEG support, anchored/floating images (all wrap modes), floating image positioning relative to page/margin/column, behind-document z-ordering
+- **CJK text**: CIDFont/Identity-H/ToUnicode encoding, platform-specific font fallback chains (Hiragino/Noto/Yu Gothic), per-character font fallback at render time, script-based run splitting via `w:rFonts @eastAsia`
+- **Images**: inline JPEG/PNG embedding with sizing and alpha transparency, grayscale and CMYK JPEG support, anchored/floating images with wrap modes (square, tight, through, topAndBottom), floating image positioning relative to page/margin/column, behind-document z-ordering, drop shadows (`a:outerShdw`)
 - **Text boxes**: DrawingML textboxes (`wps:txbx`) and VML fallback (`v:textbox`), shape fills (solid color with theme color support including lumMod/lumOff, linear gradients with multiple color stops), textbox body margins
 - **WordArt**: modern DrawingML WordArt with all 40 `prstTxWarp` presets — two-path envelope warping (wave, slant, inflate, etc.) and single-path text-on-a-path (arch, circle), text outlines, shadows, glow effects, bold/italic font variant selection, VML WordArt fallback
 - **Shapes & geometry**: all 187 OOXML preset shapes via formula-based geometry engine (guide formulas, adjustment values), custom geometry paths (`a:custGeom` with moveTo, lineTo, cubicBezTo, arcTo), shape fills and strokes
@@ -47,7 +48,7 @@ While the idea, architecture, testing strategy and validation of output are all 
 - **Multi-column layout**: 2+ columns with custom widths and spacing, column breaks, column separators
 - **Headers/footers**: default, first-page, and even/odd variants, per-section headers/footers, STYLEREF field resolution (spec-compliant backward search), page number and page count fields, images in headers/footers, correct z-ordering (behind body content)
 - **Footnotes**: footnote references, footnote rendering at page bottom with separator line
-- **Fields**: PAGE, NUMPAGES, STYLEREF (with spec-compliant search order), field code cached results for non-dynamic fields
+- **Fields**: PAGE, NUMPAGES, PAGEREF, STYLEREF (with spec-compliant search order), field code cached results for non-dynamic fields
 - **Hyperlinks**: clickable links in PDF output (URI link annotations)
 - **Tab stops**: left, center, right, decimal with leader dots
 - **Track changes**: final mode (insertions included, deletions removed — matches Word's PDF export)
@@ -59,14 +60,14 @@ While the idea, architecture, testing strategy and validation of output are all 
 
 ### Not yet supported
 
-- **Text**: text shaping/ligatures (fi, fl), complex script shaping (Arabic, Devanagari, etc.), Unicode line breaking for CJK/Thai
+- **Text**: text shaping/ligatures (fi, fl), complex script shaping (Arabic, Devanagari, etc.), Unicode line breaking for CJK/Thai, text emboss/imprint/shadow effects, legacy `w:outline`
 - **Tables**: conditional formatting (`tblLook`/`tblStylePr` — banded rows, first/last column styles), nested tables, text direction in cells (`textDirection`)
-- **Images**: text wrapping around floating images/textboxes/shapes, EMF/WMF vector images, shape clipping to bounding box
-- **Layout**: distribute alignment (`w:jc val="distribute"`), vertical page alignment (`w:vAlign` on section), right-to-left (bidi) text
-- **Charts**: 3D charts, stock charts, combo charts, stacked bar rendering, data labels, chart titles, secondary axes
-- **SmartArt**: only pre-flattened `dsp:drawing` fallback; no layout engine for documents missing the fallback (see roadmap)
+- **Images**: look-back text wrapping (text before float anchor wrapping beside image), tight vs through wrapping distinction, EMF/WMF vector images, shape clipping to bounding box
+- **Layout**: distribute alignment (`w:jc val="distribute"`), mirror margins (parsed but not applied to even pages), page borders (`w:pgBorders`), gutter margins, vertical page alignment (`w:vAlign` on section), right-to-left (bidi) text
+- **Charts**: 3D charts, stock charts, combo charts, stacked bar rendering (parsed but renders as clustered), data labels, chart titles, secondary axes
+- **SmartArt**: group shapes, connector shapes, image-filled shapes; no layout engine for documents missing the `dsp:drawing` fallback (see roadmap)
 - **Features**: table of contents generation, endnotes, OLE objects, radial/pattern gradient fills, WordArt gradient text fills
-- **Fonts**: bundled fallback fonts, CJK fallback font chain, text shaping via rustybuzz (ligatures, complex scripts)
+- **Fonts**: bundled fallback fonts, text shaping via rustybuzz (ligatures, complex scripts)
 
 ## Examples
 
