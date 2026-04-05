@@ -18,6 +18,63 @@ pub(super) struct EmbeddedImages {
     pub(super) table_cell_image_names: HashMap<usize, String>,
 }
 
+const DOWNSAMPLE_DPI_THRESHOLD: f32 = 200.0;
+const DOWNSAMPLE_DPI_TARGET: f32 = 150.0;
+const JPEG_QUALITY: u8 = 85;
+
+/// If pixel dimensions far exceed what's needed at the display size, return
+/// target pixel dimensions for downscaling. Returns `None` if no downscaling needed.
+fn downscale_target(
+    pixel_w: u32,
+    pixel_h: u32,
+    display_w: f32,
+    display_h: f32,
+) -> Option<(u32, u32)> {
+    if display_w <= 0.0 || display_h <= 0.0 {
+        return None;
+    }
+    let eff_dpi_x = pixel_w as f32 / (display_w / 72.0);
+    let eff_dpi_y = pixel_h as f32 / (display_h / 72.0);
+    let eff_dpi = eff_dpi_x.max(eff_dpi_y);
+
+    if eff_dpi <= DOWNSAMPLE_DPI_THRESHOLD {
+        return None;
+    }
+
+    let target_w = ((display_w / 72.0) * DOWNSAMPLE_DPI_TARGET).round() as u32;
+    let target_h = ((display_h / 72.0) * DOWNSAMPLE_DPI_TARGET).round() as u32;
+
+    if target_w >= pixel_w || target_h >= pixel_h || target_w < 4 || target_h < 4 {
+        return None;
+    }
+
+    Some((target_w, target_h))
+}
+
+/// Encode an RGB image as JPEG, returning the bytes. Returns `None` on failure.
+fn encode_jpeg(rgb: &image::RgbImage) -> Option<Vec<u8>> {
+    let mut buf = Vec::new();
+    let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut buf, JPEG_QUALITY);
+    match encoder.encode_image(rgb) {
+        Ok(()) => Some(buf),
+        Err(e) => {
+            log::warn!("JPEG encode failed: {e}");
+            None
+        }
+    }
+}
+
+/// Write a JPEG XObject into the PDF.
+fn write_jpeg_xobject(pdf: &mut Pdf, xobj_ref: Ref, data: &[u8], w: u32, h: u32) {
+    let mut xobj = pdf.image_xobject(xobj_ref, data);
+    xobj.filter(Filter::DctDecode);
+    xobj.width(w as i32);
+    xobj.height(h as i32);
+    xobj.color_space().device_rgb();
+    xobj.bits_per_component(8);
+    xobj.interpolate(true);
+}
+
 fn embed_single_image(
     img: &EmbeddedImage,
     image_xobjects: &mut Vec<(String, Ref)>,
@@ -26,9 +83,43 @@ fn embed_single_image(
 ) -> String {
     let xobj_ref = alloc();
     let pdf_name = format!("Im{}", image_xobjects.len() + 1);
+    let target = downscale_target(
+        img.pixel_width,
+        img.pixel_height,
+        img.display_width,
+        img.display_height,
+    );
 
     match img.format {
         ImageFormat::Jpeg => {
+            if let Some((tw, th)) = target {
+                // Decode -> resize -> re-encode as JPEG
+                let cursor = std::io::Cursor::new(img.data.as_slice());
+                let reader = image::ImageReader::with_format(
+                    std::io::BufReader::new(cursor),
+                    image::ImageFormat::Jpeg,
+                );
+                if let Ok(decoded) = reader.decode() {
+                    let resized =
+                        decoded.resize_exact(tw, th, image::imageops::FilterType::Lanczos3);
+                    if let Some(jpeg_buf) = encode_jpeg(&resized.to_rgb8()) {
+                        log::debug!(
+                            "Downscaled JPEG {}x{} -> {}x{} ({} -> {} bytes)",
+                            img.pixel_width,
+                            img.pixel_height,
+                            tw,
+                            th,
+                            img.data.len(),
+                            jpeg_buf.len()
+                        );
+                        write_jpeg_xobject(pdf, xobj_ref, &jpeg_buf, tw, th);
+                        image_xobjects.push((pdf_name.clone(), xobj_ref));
+                        return pdf_name;
+                    }
+                }
+                // Fall through to raw embed on failure
+            }
+            // Passthrough: embed original JPEG bytes directly
             let mut xobj = pdf.image_xobject(xobj_ref, &*img.data);
             xobj.filter(Filter::DctDecode);
             xobj.width(img.pixel_width as i32);
@@ -47,10 +138,8 @@ fn embed_single_image(
                 _ => image::ImageFormat::Png,
             };
             let cursor = std::io::Cursor::new(img.data.as_slice());
-            let reader = image::ImageReader::with_format(
-                std::io::BufReader::new(cursor),
-                img_fmt,
-            );
+            let reader =
+                image::ImageReader::with_format(std::io::BufReader::new(cursor), img_fmt);
             let decoded = match reader.decode() {
                 Ok(d) => d,
                 Err(e) => {
@@ -64,15 +153,23 @@ fn embed_single_image(
                     return pdf_name;
                 }
             };
+
+            let decoded = if let Some((tw, th)) = target {
+                log::debug!(
+                    "Downscaling PNG/BMP {}x{} -> {}x{}",
+                    decoded.width(),
+                    decoded.height(),
+                    tw,
+                    th
+                );
+                decoded.resize_exact(tw, th, image::imageops::FilterType::Lanczos3)
+            } else {
+                decoded
+            };
+
             let rgba: image::RgbaImage = decoded.to_rgba8();
             let (w, h) = (rgba.width(), rgba.height());
             let has_alpha = rgba.pixels().any(|p| p.0[3] < 255);
-
-            let rgb_data: Vec<u8> = rgba
-                .pixels()
-                .flat_map(|p| [p.0[0], p.0[1], p.0[2]])
-                .collect();
-            let compressed_rgb = miniz_oxide::deflate::compress_to_vec_zlib(&rgb_data, 6);
 
             let smask_ref = if has_alpha {
                 let alpha_data: Vec<u8> = rgba.pixels().map(|p| p.0[3]).collect();
@@ -89,15 +186,33 @@ fn embed_single_image(
                 None
             };
 
-            let mut xobj = pdf.image_xobject(xobj_ref, &compressed_rgb);
-            xobj.filter(Filter::FlateDecode);
-            xobj.width(w as i32);
-            xobj.height(h as i32);
-            xobj.color_space().device_rgb();
-            xobj.bits_per_component(8);
-            xobj.interpolate(true);
-            if let Some(mask_ref) = smask_ref {
-                xobj.s_mask(mask_ref);
+            // Use JPEG for the RGB portion (much smaller than FlateDecode)
+            let rgb = image::DynamicImage::ImageRgba8(rgba).to_rgb8();
+            if let Some(jpeg_buf) = encode_jpeg(&rgb) {
+                let mut xobj = pdf.image_xobject(xobj_ref, &jpeg_buf);
+                xobj.filter(Filter::DctDecode);
+                xobj.width(w as i32);
+                xobj.height(h as i32);
+                xobj.color_space().device_rgb();
+                xobj.bits_per_component(8);
+                xobj.interpolate(true);
+                if let Some(mask_ref) = smask_ref {
+                    xobj.s_mask(mask_ref);
+                }
+            } else {
+                // Fallback to FlateDecode if JPEG encoding fails
+                let rgb_data: Vec<u8> = rgb.into_raw();
+                let compressed_rgb = miniz_oxide::deflate::compress_to_vec_zlib(&rgb_data, 6);
+                let mut xobj = pdf.image_xobject(xobj_ref, &compressed_rgb);
+                xobj.filter(Filter::FlateDecode);
+                xobj.width(w as i32);
+                xobj.height(h as i32);
+                xobj.color_space().device_rgb();
+                xobj.bits_per_component(8);
+                xobj.interpolate(true);
+                if let Some(mask_ref) = smask_ref {
+                    xobj.s_mask(mask_ref);
+                }
             }
         }
     }
