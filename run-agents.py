@@ -270,7 +270,7 @@ def build_prompt(case_name: str, case_path: str, progress_file: Path, logs_dir: 
 
         ## Workflow
         1. **Investigate first.** Run the test for just this case to confirm the baseline:
-           DOCXIDE_CASE={case_name} cargo test visual_comparison -- --nocapture 2>&1 | tail -20
+           ./tools/run-tests.sh --case {case_name} --test visual_comparison
            Log the starting scores.
 
         2. **Inspect the fixture.** Use `./tools/target/debug/docx-inspect tests/fixtures/{case_path}/input.docx` to list ZIP entries. Then dump only the specific XML files you need (e.g. `word/document.xml`, `word/styles.xml`). Do NOT dump everything at once — large XML files waste context.
@@ -280,18 +280,19 @@ def build_prompt(case_name: str, case_path: str, progress_file: Path, logs_dir: 
         4. **Identify the root cause.** What's the biggest visual difference? Is it a missing feature, wrong spacing, missing font, incorrect layout?
 
         5. **Make targeted fixes** in the Rust source code. Focus on fixes that help this case without breaking others. After each change, run:
-           DOCXIDE_CASE={case_name} cargo test visual_comparison -- --nocapture 2>&1 | tail -20
+           ./tools/run-tests.sh --case {case_name} --test visual_comparison
            to see if scores improved.
 
-        6. **Check for regressions.** Before finalizing, run the full test suite but only check for failures — do NOT use --nocapture for the full run:
-           cargo test visual_comparison 2>&1 | tail -5
-           If it fails, investigate which case regressed by reading tests/output/latest_scores.json and comparing against tests/baselines.json.
+        6. **Check for regressions.** Before finalizing, run the full test suite:
+           ./tools/run-tests.sh --test visual_comparison
+           This produces compact output showing only regressions and improvements.
 
         7. **Accept baselines** for all changed scores:
            ./tools/target/debug/accept-baselines
 
         ## Token efficiency — IMPORTANT
-        - Always pipe test output through `| tail -20` or `| grep -A2 {case_name}` — never dump full test output into context
+        - ALWAYS use `./tools/run-tests.sh` instead of raw `cargo test` — it produces ~2 lines instead of ~666
+        - Use `./tools/run-tests.sh --verbose` ONLY if you need full output for debugging
         - When reading source files, read only the specific line ranges you need, not entire files
         - When inspecting DOCX XML, dump only the specific internal file you need, not all of them
         - Do NOT re-read files you've already read unless you've made changes to them
@@ -345,7 +346,9 @@ def build_prompt(case_name: str, case_path: str, progress_file: Path, logs_dir: 
         - The DOCX spec can be queried via the local RAG tool (mcp__local-rag__query_documents) if you need to look up XML element semantics
 
         ## Key environment
-        - Filter to single case: DOCXIDE_CASE={case_name} cargo test visual_comparison -- --nocapture
+        - Run tests (compact): ./tools/run-tests.sh --case {case_name} --test visual_comparison
+        - Run tests (verbose): ./tools/run-tests.sh --case {case_name} --test visual_comparison --verbose
+        - Run full suite: ./tools/run-tests.sh
         - Inspect DOCX: ./tools/target/debug/docx-inspect tests/fixtures/{case_path}/input.docx [path]
         - Analysis: ./tools/target/debug/analyze-fixtures --grep "pattern"
     """)
