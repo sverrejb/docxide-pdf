@@ -418,8 +418,8 @@
     "text_boundary": 0.0625
   },
   "new/who_prescribing_..": {
-    "jaccard": 0.0867,
-    "ssim": 0.2764,
+    "jaccard": 0.1225,
+    "ssim": 0.525,
     "text_boundary": 0.9667
   },
   "new/zimbabwe_gold_mi..": {
@@ -452,8 +452,8 @@
     "convert_ms": 744.0
   },
   "scraped/bush_fires_act_c..": {
-    "jaccard": 0.586,
-    "ssim": 0.7977,
+    "jaccard": 0.5849,
+    "ssim": 0.7934,
     "text_boundary": 0.0564,
     "convert_ms": 248.6
   },
@@ -494,8 +494,8 @@
     "convert_ms": 39.4
   },
   "scraped/czech_municipal_..": {
-    "jaccard": 0.1038,
-    "ssim": 0.388,
+    "jaccard": 0.1174,
+    "ssim": 0.4225,
     "text_boundary": 0.4118,
     "convert_ms": 34.9
   },
@@ -512,8 +512,8 @@
     "convert_ms": 22.0
   },
   "scraped/education_consul..": {
-    "jaccard": 0.16,
-    "ssim": 0.3493,
+    "jaccard": 0.1613,
+    "ssim": 0.3503,
     "text_boundary": 0.6863,
     "convert_ms": 47.1
   },
@@ -536,8 +536,8 @@
     "convert_ms": 33.4
   },
   "scraped/go_math_grade4_g..": {
-    "jaccard": 0.3043,
-    "ssim": 0.5109,
+    "jaccard": 0.3173,
+    "ssim": 0.5469,
     "text_boundary": 0.6303,
     "convert_ms": 70.6
   },
@@ -554,8 +554,8 @@
     "convert_ms": 115.1
   },
   "scraped/italian_project_..": {
-    "jaccard": 0.2566,
-    "ssim": 0.5591,
+    "jaccard": 0.262,
+    "ssim": 0.5749,
     "text_boundary": 0.25,
     "convert_ms": 2.4
   },
@@ -608,8 +608,8 @@
     "convert_ms": 97.8
   },
   "scraped/polish_archery_r..": {
-    "jaccard": 0.3009,
-    "ssim": 0.7743,
+    "jaccard": 0.2985,
+    "ssim": 0.7685,
     "text_boundary": 0.6294,
     "convert_ms": 16.3
   },
@@ -680,8 +680,8 @@
     "convert_ms": 32.2
   },
   "scraped/traditional_skil..": {
-    "jaccard": 0.1412,
-    "ssim": 0.4484,
+    "jaccard": 0.1529,
+    "ssim": 0.4733,
     "text_boundary": 0.75,
     "convert_ms": 22.0
   },
@@ -704,8 +704,8 @@
     "convert_ms": 2.4
   },
   "scraped/uk_commercial_le..": {
-    "jaccard": 0.2027,
-    "ssim": 0.3552,
+    "jaccard": 0.2028,
+    "ssim": 0.3557,
     "text_boundary": 0.2074,
     "convert_ms": 326.3
   },

@@ -88,10 +88,11 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
         .collect();
 
     let tbl_pr = wml(node, "tblPr");
-    let table_indent = tbl_pr
+    let table_indent_opt = tbl_pr
         .and_then(|pr| wml(pr, "tblInd"))
-        .and_then(|ind| twips_attr(ind, "w"))
-        .unwrap_or(0.0);
+        .and_then(|ind| twips_attr(ind, "w"));
+    let table_indent = table_indent_opt.unwrap_or(0.0);
+    let table_indent_explicit = table_indent_opt.is_some();
 
     let alignment = tbl_pr
         .and_then(|pr| wml(pr, "jc"))
@@ -650,6 +651,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
         col_widths,
         rows,
         table_indent,
+        table_indent_explicit,
         cell_margins,
         position: table_position,
         alignment,

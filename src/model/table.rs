@@ -117,6 +117,7 @@ pub struct Table {
     pub col_widths: Vec<f32>,
     pub rows: Vec<TableRow>,
     pub table_indent: f32,
+    pub table_indent_explicit: bool,
     pub cell_margins: CellMargins,
     pub position: Option<TablePosition>,
     pub alignment: TableAlignment,

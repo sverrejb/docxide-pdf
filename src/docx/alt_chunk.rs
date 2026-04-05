@@ -704,6 +704,7 @@ fn convert_table(
         col_widths,
         rows,
         table_indent: 0.0,
+        table_indent_explicit: false,
         cell_margins: CellMargins::default(),
         position: None,
         alignment: TableAlignment::default(),

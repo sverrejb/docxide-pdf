@@ -929,7 +929,11 @@ pub(super) fn render_table(
     prev_space_after: f32,
     override_pos: Option<super::FloatingTablePos>,
 ) {
-    let col_widths = auto_fit_columns(table, ctx.fonts, None);
+    let col_widths = if table.fixed_layout {
+        table.col_widths.clone()
+    } else {
+        auto_fit_columns(table, ctx.fonts, None)
+    };
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     let merge_spans = compute_merge_spans(table, &row_layouts);
     let cm = &table.cell_margins;
@@ -947,7 +951,21 @@ pub(super) fn render_table(
         let left = match table.alignment {
             TableAlignment::Center => sp.margin_left + (text_width - table_total_w) / 2.0,
             TableAlignment::Right => sp.margin_left + text_width - table_total_w,
-            TableAlignment::Left => sp.margin_left + table.table_indent - cm.left,
+            // When tblInd is explicitly set AND significantly different
+            // from the cell margin, it positions the table edge directly.
+            // When absent, or when tblInd ≈ cm.left (common in
+            // LibreOffice-generated DOCX), legacy behavior subtracts
+            // cm.left so first-cell text aligns with the page margin.
+            TableAlignment::Left => {
+                let ind = table.table_indent;
+                let explicit_real_indent = table.table_indent_explicit
+                    && (ind - cm.left).abs() > 1.0;
+                if explicit_real_indent {
+                    sp.margin_left + ind
+                } else {
+                    sp.margin_left + ind - cm.left
+                }
+            }
         };
         (left, None, (0.0, 0.0))
     };
