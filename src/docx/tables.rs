@@ -77,8 +77,8 @@ fn resolve_h_border(upper_bottom: CellBorder, lower_top: CellBorder) -> CellBord
 pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     node: roxmltree::Node,
     ctx: &mut ParseContext<'_, R>,
-    counters: &mut HashMap<(String, u8), u32>,
-    last_seen_level: &mut HashMap<String, u8>,
+    counters: &mut HashMap<(u32, u8), u32>,
+    last_seen_level: &mut HashMap<u32, u8>,
 ) -> Table {
     let col_widths: Vec<f32> = wml(node, "tblGrid")
         .into_iter()

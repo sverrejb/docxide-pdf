@@ -169,10 +169,24 @@ fn embed_single_image(
 
             let rgba: image::RgbaImage = decoded.to_rgba8();
             let (w, h) = (rgba.width(), rgba.height());
-            let has_alpha = rgba.pixels().any(|p| p.0[3] < 255);
+            let pixel_count = (w * h) as usize;
+
+            // Single pass: split RGBA into RGB + alpha, detect transparency
+            let mut rgb_data = Vec::with_capacity(pixel_count * 3);
+            let mut alpha_data = Vec::with_capacity(pixel_count);
+            let mut has_alpha = false;
+            for p in rgba.pixels() {
+                rgb_data.push(p.0[0]);
+                rgb_data.push(p.0[1]);
+                rgb_data.push(p.0[2]);
+                let a = p.0[3];
+                alpha_data.push(a);
+                if a < 255 {
+                    has_alpha = true;
+                }
+            }
 
             let smask_ref = if has_alpha {
-                let alpha_data: Vec<u8> = rgba.pixels().map(|p| p.0[3]).collect();
                 let compressed_alpha = miniz_oxide::deflate::compress_to_vec_zlib(&alpha_data, 6);
                 let mask_ref = alloc();
                 let mut mask = pdf.image_xobject(mask_ref, &compressed_alpha);
@@ -187,7 +201,8 @@ fn embed_single_image(
             };
 
             // Use JPEG for the RGB portion (much smaller than FlateDecode)
-            let rgb = image::DynamicImage::ImageRgba8(rgba).to_rgb8();
+            let rgb = image::RgbImage::from_raw(w, h, rgb_data)
+                .expect("RGB data size matches dimensions");
             if let Some(jpeg_buf) = encode_jpeg(&rgb) {
                 let mut xobj = pdf.image_xobject(xobj_ref, &jpeg_buf);
                 xobj.filter(Filter::DctDecode);

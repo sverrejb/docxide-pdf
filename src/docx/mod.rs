@@ -663,8 +663,8 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
 
     let mut sections: Vec<Section> = Vec::new();
     let mut blocks = Vec::new();
-    let mut counters: HashMap<(String, u8), u32> = HashMap::new();
-    let mut last_seen_level: HashMap<String, u8> = HashMap::new();
+    let mut counters: HashMap<(u32, u8), u32> = HashMap::new();
+    let mut last_seen_level: HashMap<u32, u8> = HashMap::new();
 
     for node in collect_block_nodes(body) {
         if node.tag_name().namespace() != Some(WML_NS) {

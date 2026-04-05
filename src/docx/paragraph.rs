@@ -45,8 +45,8 @@ impl Default for ParagraphOptions {
 pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     node: roxmltree::Node,
     ctx: &mut ParseContext<'_, R>,
-    counters: &mut HashMap<(String, u8), u32>,
-    last_seen_level: &mut HashMap<String, u8>,
+    counters: &mut HashMap<(u32, u8), u32>,
+    last_seen_level: &mut HashMap<u32, u8>,
     opts: &ParagraphOptions,
 ) -> Paragraph {
     let ppr = wml(node, "pPr");

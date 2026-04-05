@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
 
 use crate::model::{Alignment, CellBorder, LineSpacing, ParagraphBorders, TabStop};
@@ -820,10 +820,11 @@ pub(super) fn parse_styles<R: Read + Seek>(
 fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
     let ids: Vec<String> = styles.keys().cloned().collect();
     for id in ids {
+        let mut visited: HashSet<String> = HashSet::new();
         let mut chain: Vec<String> = Vec::new();
         let mut current = id.clone();
         loop {
-            if chain.contains(&current) {
+            if !visited.insert(current.clone()) {
                 break;
             }
             chain.push(current.clone());

@@ -429,6 +429,7 @@ pub(super) struct PageBuilder {
     pub(super) content: Content,
     pub(super) links: Vec<LinkAnnotation>,
     pub(super) footnote_ids: Vec<u32>,
+    footnote_ids_set: HashSet<u32>,
     pub(super) alpha_states: HashSet<u8>,
     pub(super) gradient_specs: Vec<GradientSpec>,
 
@@ -467,6 +468,7 @@ impl PageBuilder {
             content: Content::new(),
             links: Vec::new(),
             footnote_ids: Vec::new(),
+            footnote_ids_set: HashSet::new(),
             alpha_states: HashSet::new(),
             gradient_specs: Vec::new(),
             styleref_running: HashMap::new(),
@@ -492,6 +494,7 @@ impl PageBuilder {
         self.all_links.push(std::mem::take(&mut self.links));
         self.all_footnote_ids
             .push(std::mem::take(&mut self.footnote_ids));
+        self.footnote_ids_set.clear();
         self.all_alpha_states
             .push(std::mem::take(&mut self.alpha_states));
         self.all_gradient_specs
@@ -1541,13 +1544,12 @@ fn render_paragraph_block(
     // rendering, which can cause body/footnote overlap).
     let para_fn_extra = {
         let mut extra = 0.0f32;
-        let mut seen_ids = Vec::new();
+        let mut seen_ids = HashSet::new();
         for run in para.runs.iter() {
             if let Some(id) = run.footnote_id {
-                if !state.pb.footnote_ids.contains(&id)
-                    && !seen_ids.contains(&id)
+                if !state.pb.footnote_ids_set.contains(&id)
+                    && seen_ids.insert(id)
                 {
-                    seen_ids.push(id);
                     if let Some(footnote) = doc.footnotes.get(&id) {
                         extra += compute_footnote_height(
                             footnote, &ctx, text_width,
@@ -1663,7 +1665,7 @@ fn render_paragraph_block(
             // Track footnotes for the split paragraph on the new page
             for run in para.runs.iter() {
                 if let Some(id) = run.footnote_id {
-                    if !state.pb.footnote_ids.contains(&id) {
+                    if state.pb.footnote_ids_set.insert(id) {
                         state.pb.footnote_ids.push(id);
                         if let Some(footnote) = doc.footnotes.get(&id) {
                             let fn_height =
@@ -2150,7 +2152,7 @@ fn render_paragraph_block(
     // Track footnotes referenced on this page
     for run in para.runs.iter() {
         if let Some(id) = run.footnote_id {
-            if !state.pb.footnote_ids.contains(&id) {
+            if state.pb.footnote_ids_set.insert(id) {
                 state.pb.footnote_ids.push(id);
                 if let Some(footnote) = doc.footnotes.get(&id) {
                     let fn_height =
@@ -2487,7 +2489,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 // Track footnotes referenced in table cells
                                 for run in p.runs.iter() {
                                     if let Some(id) = run.footnote_id {
-                                        if !state.pb.footnote_ids.contains(&id) {
+                                        if state.pb.footnote_ids_set.insert(id) {
                                             state.pb.footnote_ids.push(id);
                                         }
                                     }
@@ -2559,32 +2561,27 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
     // Phase 2d: render headers/footers into separate content streams (behind body)
     let total_pages = state.pb.all_contents.len();
-    let build_hf_maps = |si: usize,
-                         hf_type: u8|
-     -> (
+
+    // Pre-index header/footer image maps by (section_index, hf_type)
+    type HfMaps = (
         HashMap<usize, String>,
         HashMap<(usize, usize), String>,
         HashMap<(usize, usize), String>,
-    ) {
-        let pi_map: HashMap<usize, String> = hf_image_names
-            .iter()
-            .filter(|((s, t, _), _)| *s == si && *t == hf_type)
-            .map(|((_, _, pi), name)| (*pi, name.clone()))
-            .collect();
-        let ii_map: HashMap<(usize, usize), String> = hf_inline_image_names
-            .iter()
-            .filter(|((s, t, _, _), _)| *s == si && *t == hf_type)
-            .map(|((_, _, pi, ri), name)| ((*pi, *ri), name.clone()))
-            .collect();
-        let fi_map: HashMap<(usize, usize), String> = hf_floating_image_names
-            .iter()
-            .filter(|((s, t, _, _), _)| *s == si && *t == hf_type)
-            .map(|((_, _, pi, fi), name)| ((*pi, *fi), name.clone()))
-            .collect();
-        (pi_map, ii_map, fi_map)
-    };
+    );
+    let mut hf_maps_index: HashMap<(usize, u8), HfMaps> = HashMap::new();
+    for ((s, t, pi), name) in &hf_image_names {
+        hf_maps_index.entry((*s, *t)).or_default().0.insert(*pi, name.clone());
+    }
+    for ((s, t, pi, ri), name) in &hf_inline_image_names {
+        hf_maps_index.entry((*s, *t)).or_default().1.insert((*pi, *ri), name.clone());
+    }
+    for ((s, t, pi, fi), name) in &hf_floating_image_names {
+        hf_maps_index.entry((*s, *t)).or_default().2.insert((*pi, *fi), name.clone());
+    }
+    let empty_hf_maps: HfMaps = Default::default();
 
     let empty_styleref: HashMap<String, String> = HashMap::new();
+    let mut page_styleref_merged: HashMap<String, String> = HashMap::new();
     let mut all_hf_contents: Vec<Option<Content>> = (0..total_pages).map(|_| None).collect();
     for (page_idx, hf_content) in all_hf_contents.iter_mut().enumerate() {
         let (si, is_first, content_si) = state.pb.page_section_indices[page_idx];
@@ -2616,7 +2613,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         } else {
             &empty_styleref
         };
-        let mut page_styleref_merged = prev_running.clone();
+        page_styleref_merged.clone_from(prev_running);
         // Current-page first occurrences take priority (top-to-bottom search)
         for (k, v) in page_first {
             page_styleref_merged.insert(k.clone(), v.clone());
@@ -2629,7 +2626,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         let (header, hdr_type, hdr_si) =
             resolve_header_for_page(doc, si, is_first, page_num);
         if let Some(header_data) = header {
-            let (pi_map, ii_map, fi_map) = build_hf_maps(hdr_si, hdr_type);
+            let (pi_map, ii_map, fi_map) = hf_maps_index.get(&(hdr_si, hdr_type)).unwrap_or(&empty_hf_maps);
             render_header_footer(
                 &mut hf,
                 header_data,
@@ -2638,9 +2635,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 true,
                 page_num,
                 total_pages,
-                &pi_map,
-                &ii_map,
-                &fi_map,
+                pi_map,
+                ii_map,
+                fi_map,
                 page_styleref,
                 &mut state.pb.all_gradient_specs[page_idx],
             );
@@ -2650,7 +2647,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         let (footer, ftr_type, ftr_si) =
             resolve_footer_for_page(doc, si, is_first, page_num);
         if let Some(footer_data) = footer {
-            let (pi_map, ii_map, fi_map) = build_hf_maps(ftr_si, ftr_type);
+            let (pi_map, ii_map, fi_map) = hf_maps_index.get(&(ftr_si, ftr_type)).unwrap_or(&empty_hf_maps);
             render_header_footer(
                 &mut hf,
                 footer_data,
@@ -2659,9 +2656,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 false,
                 page_num,
                 total_pages,
-                &pi_map,
-                &ii_map,
-                &fi_map,
+                pi_map,
+                ii_map,
+                fi_map,
                 page_styleref,
                 &mut state.pb.all_gradient_specs[page_idx],
             );

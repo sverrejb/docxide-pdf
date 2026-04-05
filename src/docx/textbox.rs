@@ -51,8 +51,8 @@ pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
     ctx: &mut ParseContext<'_, R>,
 ) -> Vec<Paragraph> {
     let mut paragraphs = Vec::new();
-    let mut counters: HashMap<(String, u8), u32> = HashMap::new();
-    let mut last_seen_level: HashMap<String, u8> = HashMap::new();
+    let mut counters: HashMap<(u32, u8), u32> = HashMap::new();
+    let mut last_seen_level: HashMap<u32, u8> = HashMap::new();
     let opts = super::paragraph::ParagraphOptions::default();
     for p in txbx_content
         .children()

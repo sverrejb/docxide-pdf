@@ -273,8 +273,8 @@ pub(super) fn parse_list_info(
     style_num_id: Option<&str>,
     style_num_ilvl: Option<u8>,
     numbering: &NumberingInfo,
-    counters: &mut HashMap<(String, u8), u32>,
-    last_seen_level: &mut HashMap<String, u8>,
+    counters: &mut HashMap<(u32, u8), u32>,
+    last_seen_level: &mut HashMap<u32, u8>,
 ) -> ListLabelInfo {
     let (num_id, ilvl) = if let Some(np) = num_pr {
         let nid = wml_attr(np, "numId");
@@ -287,13 +287,13 @@ pub(super) fn parse_list_info(
     } else {
         return ListLabelInfo::default();
     };
-    let Some(num_id) = num_id else {
+    let Some(num_id_str) = num_id else {
         return ListLabelInfo::default();
     };
-    if num_id == "0" {
+    if num_id_str == "0" {
         return ListLabelInfo::default();
     }
-    let Some(abs_id) = numbering.num_to_abstract.get(num_id) else {
+    let Some(abs_id) = numbering.num_to_abstract.get(num_id_str) else {
         return ListLabelInfo::default();
     };
     let Some(levels) = numbering.abstract_nums.get(abs_id.as_str()) else {
@@ -303,23 +303,25 @@ pub(super) fn parse_list_info(
         return ListLabelInfo::default();
     };
 
+    let num_key: u32 = num_id_str.parse().unwrap_or(0);
+
     // Reset deeper-level counters when returning to a higher level
-    if let Some(&prev) = last_seen_level.get(num_id) {
+    if let Some(&prev) = last_seen_level.get(&num_key) {
         for deeper in (ilvl + 1)..=prev {
-            counters.remove(&(num_id.to_string(), deeper));
+            counters.remove(&(num_key, deeper));
         }
     }
-    last_seen_level.insert(num_id.to_string(), ilvl);
+    last_seen_level.insert(num_key, ilvl);
 
     // Increment or initialize counter using the level's start value
     let start = numbering
         .start_overrides
-        .get(num_id)
+        .get(num_id_str)
         .and_then(|m| m.get(&ilvl))
         .copied()
         .unwrap_or(def.start);
     let current_counter = *counters
-        .entry((num_id.to_string(), ilvl))
+        .entry((num_key, ilvl))
         .and_modify(|c| *c += 1)
         .or_insert(start);
 
@@ -350,7 +352,7 @@ pub(super) fn parse_list_info(
                     current_counter
                 } else {
                     counters
-                        .get(&(num_id.to_string(), lvl_idx))
+                        .get(&(num_key, lvl_idx))
                         .copied()
                         .unwrap_or(levels.get(&lvl_idx).map(|d| d.start).unwrap_or(1))
                 };

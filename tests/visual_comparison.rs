@@ -348,54 +348,73 @@ fn ssim_score(img_a_dyn: &DynamicImage, img_b_dyn: &DynamicImage) -> Result<f64,
     let c1: f64 = 6.5025;
     let c2: f64 = 58.5225;
     const WINDOW: u32 = 8;
+    const WN: usize = WINDOW as usize;
     const SEARCH_RADIUS: i32 = 8;
+    let n = (WINDOW * WINDOW) as f64;
+
+    let raw_a = img_a.as_raw();
+    let raw_b = img_b.as_raw();
+    let stride_a = w as usize;
+    let stride_b = w2 as usize;
+
     let mut ssim_sum = 0.0f64;
     let mut count = 0u64;
     for by in 0..ch / WINDOW {
         for bx in 0..cw / WINDOW {
-            let x0 = bx * WINDOW;
-            let y0 = by * WINDOW;
-            let n = (WINDOW * WINDOW) as f64;
-            let has_ink = (y0..y0 + WINDOW)
-                .any(|y| (x0..x0 + WINDOW).any(|x| img_a.get_pixel(x, y).0[0] < 200));
+            let x0 = (bx * WINDOW) as usize;
+            let y0 = (by * WINDOW) as usize;
+
+            // Single pass: check ink, compute sum_a, cache pixel values
+            let mut has_ink = false;
+            let mut sum_a = 0.0f64;
+            let mut win_a = [0.0f64; WN * WN];
+            for wy in 0..WN {
+                let row_off = (y0 + wy) * stride_a + x0;
+                for wx in 0..WN {
+                    let v = raw_a[row_off + wx] as f64;
+                    win_a[wy * WN + wx] = v;
+                    sum_a += v;
+                    if !has_ink && v < 200.0 {
+                        has_ink = true;
+                    }
+                }
+            }
             if !has_ink {
                 continue;
             }
-            let mut sum_a = 0.0f64;
-            for y in y0..y0 + WINDOW {
-                for x in x0..x0 + WINDOW {
-                    sum_a += img_a.get_pixel(x, y).0[0] as f64;
-                }
-            }
+
             let mu_a = sum_a / n;
             let mut var_a = 0.0f64;
-            for y in y0..y0 + WINDOW {
-                for x in x0..x0 + WINDOW {
-                    let da = img_a.get_pixel(x, y).0[0] as f64 - mu_a;
-                    var_a += da * da;
-                }
+            for &v in &win_a {
+                let da = v - mu_a;
+                var_a += da * da;
             }
             var_a /= n;
+
             let mut best_ssim = f64::NEG_INFINITY;
             for dy in -SEARCH_RADIUS..=SEARCH_RADIUS {
                 let sy0 = y0 as i32 + dy;
                 if sy0 < 0 || (sy0 as u32 + WINDOW) > ch {
                     continue;
                 }
-                let sy0 = sy0 as u32;
+                let sy0 = sy0 as usize;
+
                 let mut sum_b = 0.0f64;
-                for y in sy0..sy0 + WINDOW {
-                    for x in x0..x0 + WINDOW {
-                        sum_b += img_b.get_pixel(x, y).0[0] as f64;
+                for wy in 0..WN {
+                    let row_off = (sy0 + wy) * stride_b + x0;
+                    for wx in 0..WN {
+                        sum_b += raw_b[row_off + wx] as f64;
                     }
                 }
                 let mu_b = sum_b / n;
+
                 let mut var_b = 0.0f64;
                 let mut cov = 0.0f64;
-                for y in 0..WINDOW {
-                    for x in x0..x0 + WINDOW {
-                        let da = img_a.get_pixel(x, y0 + y).0[0] as f64 - mu_a;
-                        let db = img_b.get_pixel(x, sy0 + y).0[0] as f64 - mu_b;
+                for wy in 0..WN {
+                    let row_off = (sy0 + wy) * stride_b + x0;
+                    for wx in 0..WN {
+                        let da = win_a[wy * WN + wx] - mu_a;
+                        let db = raw_b[row_off + wx] as f64 - mu_b;
                         var_b += db * db;
                         cov += da * db;
                     }

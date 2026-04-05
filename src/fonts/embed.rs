@@ -53,8 +53,8 @@ pub(super) fn embed_truetype(
         .collect();
 
     let mut remapper = subsetter::GlyphRemapper::new();
-    let mut char_to_gid = HashMap::new();
-    let mut char_widths_1000 = HashMap::new();
+    let mut char_to_gid = HashMap::with_capacity(used_chars.len());
+    let mut char_widths_1000 = HashMap::with_capacity(used_chars.len());
 
     for &ch in used_chars {
         let gid = resolve_glyph(&face, ch);

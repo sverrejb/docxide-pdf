@@ -1,8 +1,12 @@
 use std::collections::HashMap;
+use std::sync::LazyLock;
 
 use crate::fonts::{FontEntry, font_key_buf};
+
+static EMPTY_INLINE_IMAGE_MAP: LazyLock<HashMap<usize, String>> =
+    LazyLock::new(HashMap::new);
 use crate::model::{
-    Alignment, Block, CellMargins, HorizontalPosition, Table, TableRow, TextDirection, VMerge,
+    Alignment, Block, CellMargins, HorizontalPosition, Table, TextDirection, VMerge,
     VerticalPosition, WrapType,
 };
 
@@ -415,7 +419,7 @@ pub(super) fn compute_row_layouts(
                                         ctx.fonts,
                                         para_text_w,
                                         hanging,
-                                        &std::collections::HashMap::new(),
+                                        &EMPTY_INLINE_IMAGE_MAP,
                                         None,
                                         None,
                                         None,
@@ -582,24 +586,26 @@ pub(super) fn compute_row_layouts(
         .collect()
 }
 
-/// Look up the vMerge value for the cell at `target_col` in `row`.
-pub(super) fn vmerge_at_col(row: &TableRow, target_col: usize) -> VMerge {
-    let mut col = 0usize;
-    for cell in &row.cells {
-        if col == target_col {
-            return cell.v_merge;
-        }
-        col += cell.grid_span.max(1) as usize;
-        if col > target_col {
-            break;
-        }
-    }
-    VMerge::None
-}
-
 /// Pre-compute how much extra height each vMerge Restart cell spans beyond its own row.
 /// Returns a map from (row_idx, grid_col) to the sum of Continue row heights below.
 pub(super) fn compute_merge_spans(table: &Table, row_layouts: &[RowLayout]) -> HashMap<(usize, usize), f32> {
+    // Build a grid index: vmerge_grid[row][grid_col] = VMerge value
+    let max_cols = table.rows.iter().map(|r| {
+        r.cells.iter().map(|c| c.grid_span.max(1) as usize).sum::<usize>()
+    }).max().unwrap_or(0);
+    let mut vmerge_grid: Vec<Vec<VMerge>> = Vec::with_capacity(table.rows.len());
+    for row in &table.rows {
+        let mut row_vmerge = vec![VMerge::None; max_cols];
+        let mut col = 0usize;
+        for cell in &row.cells {
+            if col < max_cols {
+                row_vmerge[col] = cell.v_merge;
+            }
+            col += cell.grid_span.max(1) as usize;
+        }
+        vmerge_grid.push(row_vmerge);
+    }
+
     let mut spans = HashMap::new();
     for (ri, row) in table.rows.iter().enumerate() {
         let mut grid_col = 0usize;
@@ -608,7 +614,7 @@ pub(super) fn compute_merge_spans(table: &Table, row_layouts: &[RowLayout]) -> H
             if cell.v_merge == VMerge::Restart {
                 let mut extra = 0.0f32;
                 for next_ri in (ri + 1)..table.rows.len() {
-                    if vmerge_at_col(&table.rows[next_ri], grid_col) != VMerge::Continue {
+                    if grid_col >= max_cols || vmerge_grid[next_ri][grid_col] != VMerge::Continue {
                         break;
                     }
                     extra += row_layouts[next_ri].height;

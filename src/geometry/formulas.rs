@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -66,25 +67,25 @@ fn rad_to_ang(rad: f64) -> f64 {
 }
 
 pub struct GuideEnv {
-    values: HashMap<String, i64>,
+    values: HashMap<Cow<'static, str>, i64>,
 }
 
 impl GuideEnv {
     pub fn new(w: i64, h: i64) -> Self {
-        let mut values = HashMap::new();
+        let mut values = HashMap::with_capacity(48);
         let ss = w.min(h);
         let ls = w.max(h);
 
-        values.insert("w".into(), w);
-        values.insert("h".into(), h);
-        values.insert("l".into(), 0);
-        values.insert("t".into(), 0);
-        values.insert("r".into(), w);
-        values.insert("b".into(), h);
-        values.insert("ss".into(), ss);
-        values.insert("ls".into(), ls);
-        values.insert("hc".into(), w / 2);
-        values.insert("vc".into(), h / 2);
+        values.insert(Cow::Borrowed("w"), w);
+        values.insert(Cow::Borrowed("h"), h);
+        values.insert(Cow::Borrowed("l"), 0);
+        values.insert(Cow::Borrowed("t"), 0);
+        values.insert(Cow::Borrowed("r"), w);
+        values.insert(Cow::Borrowed("b"), h);
+        values.insert(Cow::Borrowed("ss"), ss);
+        values.insert(Cow::Borrowed("ls"), ls);
+        values.insert(Cow::Borrowed("hc"), w / 2);
+        values.insert(Cow::Borrowed("vc"), h / 2);
 
         for (prefix, val, divisors) in [
             ("wd", w, [2_i64, 3, 4, 5, 6, 8, 10, 12].as_slice()),
@@ -92,28 +93,28 @@ impl GuideEnv {
             ("ssd", ss, &[2, 4, 6, 8, 16, 32]),
         ] {
             for &d in divisors {
-                values.insert(format!("{prefix}{d}"), val / d);
+                values.insert(Cow::Owned(format!("{prefix}{d}")), val / d);
             }
         }
 
         // Angle constants (in 60000ths of a degree)
-        values.insert("cd2".into(), 10_800_000); // 180 deg
-        values.insert("cd4".into(), 5_400_000); // 90 deg
-        values.insert("cd8".into(), 2_700_000); // 45 deg
-        values.insert("3cd4".into(), 16_200_000); // 270 deg
-        values.insert("3cd8".into(), 8_100_000); // 135 deg
-        values.insert("5cd8".into(), 13_500_000); // 225 deg
-        values.insert("7cd8".into(), 18_900_000); // 315 deg
+        values.insert(Cow::Borrowed("cd2"), 10_800_000); // 180 deg
+        values.insert(Cow::Borrowed("cd4"), 5_400_000); // 90 deg
+        values.insert(Cow::Borrowed("cd8"), 2_700_000); // 45 deg
+        values.insert(Cow::Borrowed("3cd4"), 16_200_000); // 270 deg
+        values.insert(Cow::Borrowed("3cd8"), 8_100_000); // 135 deg
+        values.insert(Cow::Borrowed("5cd8"), 13_500_000); // 225 deg
+        values.insert(Cow::Borrowed("7cd8"), 18_900_000); // 315 deg
 
         Self { values }
     }
 
-    pub fn set_adjustments(&mut self, defaults: &[(&str, i64)], overrides: &[(String, i64)]) {
+    pub fn set_adjustments(&mut self, defaults: &[(&'static str, i64)], overrides: &[(String, i64)]) {
         for &(name, val) in defaults {
-            self.values.insert(name.to_string(), val);
+            self.values.insert(Cow::Borrowed(name), val);
         }
         for (name, val) in overrides {
-            self.values.insert(name.clone(), *val);
+            self.values.insert(Cow::Owned(name.clone()), *val);
         }
     }
 
@@ -133,14 +134,14 @@ impl GuideEnv {
     pub fn evaluate_guides(&mut self, guides: &[GuideDef]) {
         for g in guides {
             let val = self.eval_op(g.op, g.x, g.y, g.z);
-            self.values.insert(g.name.to_string(), val);
+            self.values.insert(Cow::Borrowed(g.name), val);
         }
     }
 
     pub fn evaluate_custom_guides(&mut self, guides: &[crate::model::CustomGuideDef]) {
         for g in guides {
             let val = self.eval_op(g.op, &g.x, &g.y, &g.z);
-            self.values.insert(g.name.clone(), val);
+            self.values.insert(Cow::Owned(g.name.clone()), val);
         }
     }
 

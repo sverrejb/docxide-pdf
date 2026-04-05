@@ -403,9 +403,9 @@
     "text_boundary": 1.0
   },
   "new/english_town_cou..": {
-    "jaccard": 0.3387,
-    "ssim": 0.5356,
-    "text_boundary": 0.6908
+    "jaccard": 0.3389,
+    "ssim": 0.5333,
+    "text_boundary": 0.7895
   },
   "new/environmental_la..": {
     "jaccard": 0.0851,
@@ -615,8 +615,8 @@
     "convert_ms": 5.6
   },
   "scraped/mandated_reporte..": {
-    "jaccard": 0.469,
-    "ssim": 0.6721,
+    "jaccard": 0.4689,
+    "ssim": 0.6716,
     "text_boundary": 0.7368,
     "convert_ms": 43.3
   },
@@ -729,8 +729,8 @@
     "convert_ms": 2.4
   },
   "scraped/uk_commercial_le..": {
-    "jaccard": 0.2028,
-    "ssim": 0.3557,
+    "jaccard": 0.203,
+    "ssim": 0.357,
     "text_boundary": 0.2074,
     "convert_ms": 326.3
   },
