@@ -321,7 +321,7 @@ fn render_nested_table(
     let table_left = match table.alignment {
         TableAlignment::Center => available_x + (available_w - table_total_w) / 2.0,
         TableAlignment::Right => available_x + available_w - table_total_w,
-        TableAlignment::Left => available_x + table.table_indent - cm.left,
+        TableAlignment::Left => available_x + table.table_indent,
     };
 
     let merge_spans = compute_merge_spans(table, &row_layouts);

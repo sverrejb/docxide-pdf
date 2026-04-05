@@ -46,6 +46,9 @@ pub(super) fn para_block_height(p: &CellParagraphLayout) -> f32 {
 /// other columns shrink proportionally. Total width is preserved.
 /// When `available_width` is provided and the table exceeds it, all columns
 /// are scaled down proportionally to fit (matching Word's behavior).
+/// For nested auto-fit tables (`available_width` is Some and not fixed layout),
+/// Word shrinks columns to content-based minimum widths rather than using the
+/// gridCol preferred widths.
 pub(super) fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>, available_width: Option<f32>) -> Vec<f32> {
     let ncols = table.col_widths.len();
     if ncols == 0 {
@@ -95,6 +98,71 @@ pub(super) fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>
             }
             grid_col += span;
         }
+    }
+
+    // For nested auto-fit tables, Word shrinks columns to content-based widths
+    // rather than preserving the gridCol total. Each column is sized based on
+    // a blend of the minimum width (longest word) and the natural width
+    // (longest single-line paragraph), capped by the gridCol preferred width.
+    if available_width.is_some() && !table.fixed_layout {
+        let mut natural_widths = vec![0.0f32; ncols];
+        for row in &table.rows {
+            let mut grid_col = 0usize;
+            for cell in &row.cells {
+                let span = cell.grid_span.max(1) as usize;
+                if grid_col >= ncols || span > 1 {
+                    grid_col += span;
+                    continue;
+                }
+                let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
+                let h_pad = ecm.left + ecm.right;
+                let mut key_buf = String::new();
+                for para in cell.all_paragraphs() {
+                    let mut para_w = 0.0f32;
+                    for run in &para.runs {
+                        let key = font_key_buf(run, &mut key_buf);
+                        let Some(entry) = fonts.get(key) else { continue };
+                        let fs = if run.small_caps {
+                            (run.font_size - 2.0).max(1.0)
+                        } else {
+                            run.font_size
+                        };
+                        let text = if run.caps || run.small_caps {
+                            std::borrow::Cow::Owned(run.text.to_uppercase())
+                        } else {
+                            std::borrow::Cow::Borrowed(&run.text)
+                        };
+                        let kern = run.kern_threshold.is_some_and(|t| fs >= t);
+                        para_w += entry.word_width(&text, fs, kern);
+                    }
+                    natural_widths[grid_col] =
+                        natural_widths[grid_col].max(para_w + h_pad);
+                }
+                grid_col += span;
+            }
+        }
+        // Word's auto-fit for nested tables produces column widths slightly
+        // below the full natural paragraph width. Scale down by 0.9 to
+        // approximate Word's sizing, ensuring text wraps where Word wraps it.
+        let min_cell = cm.left + cm.right;
+        let mut widths: Vec<f32> = (0..ncols)
+            .map(|i| {
+                let mw = min_widths[i].max(min_cell);
+                let nw = natural_widths[i].max(mw);
+                let fitted = (nw * 0.9).max(mw);
+                fitted.min(table.col_widths.get(i).copied().unwrap_or(f32::MAX))
+            })
+            .collect();
+        if let Some(avail) = available_width {
+            let total: f32 = widths.iter().sum();
+            if total > avail && avail > 0.0 {
+                let scale = avail / total;
+                for w in &mut widths {
+                    *w *= scale;
+                }
+            }
+        }
+        return widths;
     }
 
     let total: f32 = table.col_widths.iter().sum();
@@ -223,7 +291,16 @@ pub(super) fn compute_row_layouts(
                 .iter()
                 .map(|cell| {
                     let span = cell.grid_span.max(1) as usize;
-                    let col_w = cell_span_width(col_widths, grid_col, span).max(cell.width);
+                    let span_w = cell_span_width(col_widths, grid_col, span);
+                    // When content-based column widths are narrower than the
+                    // cell's preferred width (nested auto-fit tables), respect
+                    // the computed widths instead of overriding with cell.width.
+                    let grid_w = cell_span_width(&table.col_widths, grid_col, span);
+                    let col_w = if span_w < grid_w * 0.9 {
+                        span_w
+                    } else {
+                        span_w.max(cell.width)
+                    };
                     grid_col += span;
 
                     if cell.v_merge == VMerge::Continue {
@@ -451,7 +528,7 @@ pub(super) fn compute_row_layouts(
                                 para_idx += 1;
                             }
                             Block::Table(nested_table) => {
-                                let nested_cw = auto_fit_columns(nested_table, ctx.fonts, None);
+                                let nested_cw = auto_fit_columns(nested_table, ctx.fonts, Some(cell_text_w));
                                 let nested_layouts =
                                     compute_row_layouts(nested_table, &nested_cw, ctx, hf_sub);
                                 let nested_h: f32 =
