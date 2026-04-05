@@ -1,5 +1,5 @@
 {
-  "next_id": 110,
+  "next_id": 112,
   "annotations": [
     {
       "id": 8,
@@ -182,16 +182,6 @@
       "fixed": false
     },
     {
-      "id": 104,
-      "case": "new/taiwanese_education_fraud_ruling",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 271.99023,
-      "y_pt": 765.0616,
-      "note": "The whole document is shifted in the y-direction, even line one.",
-      "fixed": false
-    },
-    {
       "id": 107,
       "case": "scraped/learning_cultures_dissertation",
       "page": 2,
@@ -219,6 +209,16 @@
       "x_pt": 111.3406,
       "y_pt": 60.7041,
       "note": "Roman page numbers should be centered.",
+      "fixed": false
+    },
+    {
+      "id": 111,
+      "case": "scraped/indonesian_benchmarking_guide",
+      "page": 6,
+      "source": "Generated",
+      "x_pt": 226.61615,
+      "y_pt": 637.20514,
+      "note": "We wrap this image. Word does not.",
       "fixed": false
     }
   ]

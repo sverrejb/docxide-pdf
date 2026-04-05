@@ -23,13 +23,19 @@ REPO_ROOT = Path(__file__).resolve().parent
 FIXTURES_DIR = REPO_ROOT / "tests" / "fixtures"
 BASELINES_PATH = REPO_ROOT / "tests" / "baselines.json"
 SKIPLIST_PATH = FIXTURES_DIR / "SKIPLIST"
+CASE_HISTORY_DIR = REPO_ROOT / "logs" / "case-history"
 
-# Gitignored dirs to symlink into worktrees
-GITIGNORED_DIRS = [
-    "tests/output",
+# Gitignored dirs to symlink into worktrees (shared, read-heavy)
+SYMLINK_DIRS = [
     "tests/fixtures/scraped",
     "tools/target",
     "target",
+]
+
+# Files to copy from tests/output/ into the worktree's own output dir
+OUTPUT_SEED_FILES = [
+    "annotations.json",
+    "latest_scores.json",
 ]
 
 
@@ -53,9 +59,9 @@ def load_baselines() -> dict:
 
 
 def baseline_key_for(dirname: str) -> str:
-    """Baselines truncate long names to 20 chars + '..'"""
-    if len(dirname) > 20:
-        return f"new/{dirname[:20]}.."
+    """Baselines truncate long names to 16 chars + '..'"""
+    if len(dirname) > 16:
+        return f"new/{dirname[:16]}.."
     return f"new/{dirname}"
 
 
@@ -79,8 +85,8 @@ def pick_worst_cases(n: int) -> list[str]:
         real_name = key_to_dir.get(key, key.split("/")[-1])
         if real_name in skips or "new" in skips:
             continue
-        avg_score = (v.get("jaccard", 0) + v.get("ssim", 0)) / 2
-        scored.append((avg_score, real_name))
+        ssim = v.get("ssim", 0)
+        scored.append((ssim, real_name))
 
     scored.sort()
     return [name for _, name in scored[:n]]
@@ -104,20 +110,58 @@ def get_scores(case_path: str) -> str:
     return "No baseline scores found"
 
 
-def count_annotations(case_name: str) -> int:
+def get_annotations(case_name: str, case_path: str) -> list[dict]:
+    """Get unfixed annotations for a case. Matches on both case_path and case_name."""
     ann_path = REPO_ROOT / "tests" / "output" / "annotations.json"
     if not ann_path.exists():
-        return 0
+        return []
     try:
         with open(ann_path) as f:
             data = json.load(f)
-        return sum(
-            1
-            for a in data
-            if a.get("case") == case_name and not a.get("fixed", False)
-        )
+        annotations = data.get("annotations", data) if isinstance(data, dict) else data
+        return [
+            a for a in annotations
+            if not a.get("fixed", False)
+            and a.get("case") in (case_name, case_path, f"{case_path}")
+        ]
     except Exception:
-        return 0
+        return []
+
+
+def format_annotations(annotations: list[dict]) -> str:
+    """Format annotations into readable text for the agent prompt."""
+    if not annotations:
+        return ""
+    lines = []
+    for a in annotations:
+        page = a.get("page", "?")
+        source = a.get("source", "?")
+        x = a.get("x_pt", 0)
+        y = a.get("y_pt", 0)
+        note = a.get("note", "")
+        lines.append(f"  - Page {page} ({source}) at ({x:.1f}, {y:.1f}pt): {note}")
+    return "\n".join(lines)
+
+
+MAX_HISTORY_CHARS = 4000  # ~1k tokens — enough for context, not a context hog
+
+
+def get_case_history(case_name: str) -> str:
+    """Read persistent history for a case from previous agent runs."""
+    history_file = CASE_HISTORY_DIR / f"{case_name}.md"
+    if not history_file.exists():
+        return ""
+    text = history_file.read_text()
+    if len(text) > MAX_HISTORY_CHARS:
+        # Keep the most recent entries (at the end of the file)
+        text = "... (earlier history truncated) ...\n" + text[-MAX_HISTORY_CHARS:]
+    return text
+
+
+def history_file_for(case_name: str) -> Path:
+    """Return the path to the persistent history file for a case."""
+    CASE_HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+    return CASE_HISTORY_DIR / f"{case_name}.md"
 
 
 # ── Worktree management ─────────────────────────────────────────────────────
@@ -145,8 +189,10 @@ def setup_worktree(case_name: str) -> Path:
         run_git("branch", "-D", branch, check=False)
         run_git("worktree", "add", "-b", branch, str(wt_path), "HEAD")
 
-    # Symlink gitignored directories
-    for rel in GITIGNORED_DIRS:
+    import shutil
+
+    # Symlink shared gitignored directories
+    for rel in SYMLINK_DIRS:
         src = REPO_ROOT / rel
         dst = wt_path / rel
         if src.is_dir():
@@ -155,10 +201,17 @@ def setup_worktree(case_name: str) -> Path:
                 if dst.is_symlink() or dst.is_file():
                     dst.unlink()
                 else:
-                    import shutil
-
                     shutil.rmtree(dst)
             dst.symlink_to(src)
+
+    # Create a private tests/output/ so parallel agents don't clobber each other
+    wt_output = wt_path / "tests" / "output"
+    wt_output.mkdir(parents=True, exist_ok=True)
+    main_output = REPO_ROOT / "tests" / "output"
+    for fname in OUTPUT_SEED_FILES:
+        src = main_output / fname
+        if src.exists():
+            shutil.copy2(str(src), str(wt_output / fname))
 
     return wt_path
 
@@ -168,12 +221,17 @@ def setup_worktree(case_name: str) -> Path:
 
 def build_prompt(case_name: str, case_path: str, progress_file: Path, logs_dir: Path) -> str:
     scores = get_scores(case_path)
-    ann_count = count_annotations(case_name)
+    annotations = get_annotations(case_name, case_path)
+    history = get_case_history(case_name)
+    history_path = history_file_for(case_name)
 
     annotations_section = ""
-    if ann_count > 0:
+    if annotations:
+        formatted = format_annotations(annotations)
         annotations_section = f"""
-4. **Read annotations.** There are {ann_count} unfixed annotations for this case in tests/output/annotations.json. Read them first — they contain precise coordinates and descriptions of rendering issues.
+        **Human-annotated issues ({len(annotations)}):** These are manually identified rendering problems for this case. Prioritize fixing these — they describe exactly what's wrong and where.
+
+{formatted}
 """
 
     return dedent(f"""\
@@ -182,9 +240,27 @@ def build_prompt(case_name: str, case_path: str, progress_file: Path, logs_dir: 
 
         ## Current scores
         {scores}
+        {"" if not history else f"""
+        ## History from previous runs
+        The following is a log from previous agent runs on this case. Read it carefully — it documents what was tried, what worked, what failed, and what was learned. Do NOT repeat failed approaches.
 
+        ```
+{history}
+        ```
+        """}
         ## Your goal
         Improve the Jaccard similarity and/or SSIM score for this case. Even small improvements (1-5%) are valuable. Focus on the most impactful issues first.
+
+        ## PRIME DIRECTIVE — what to focus on
+        Focus on **bugs, missing features, and things we are not rendering** — e.g. missing borders, backgrounds, images, shapes, text effects, paragraph properties, or entire content blocks that are absent from our output.
+
+        Do NOT work on:
+        - Word/character spacing or kerning precision
+        - Line height or line spacing drift
+        - Vertical or horizontal positional drift/accumulation
+        - Any x/y micro-alignment issues
+
+        These spacing/drift issues are known and tracked separately. Your time is best spent on things that are completely wrong or missing, not on fine-tuning positions.
 
         ## Progress logging
         After each significant action (investigation finding, code change, test run), append a timestamped entry to your progress file:
@@ -194,27 +270,44 @@ def build_prompt(case_name: str, case_path: str, progress_file: Path, logs_dir: 
 
         ## Workflow
         1. **Investigate first.** Run the test for just this case to confirm the baseline:
-           DOCXIDE_CASE={case_name} cargo test visual_comparison -- --nocapture
+           DOCXIDE_CASE={case_name} cargo test visual_comparison -- --nocapture 2>&1 | tail -20
            Log the starting scores.
 
-        2. **Inspect the fixture.** Use `./tools/target/debug/docx-inspect tests/fixtures/{case_path}/input.docx` to understand what DOCX features are used. Dump specific XML files to see the structure.
+        2. **Inspect the fixture.** Use `./tools/target/debug/docx-inspect tests/fixtures/{case_path}/input.docx` to list ZIP entries. Then dump only the specific XML files you need (e.g. `word/document.xml`, `word/styles.xml`). Do NOT dump everything at once — large XML files waste context.
 
         3. **Compare output.** After running the test, look at the diff images in tests/output/{case_path}/diff/ — blue pixels = reference only, red = generated only. The reference screenshots are in tests/output/{case_path}/reference/ and generated in tests/output/{case_path}/generated/.
         {annotations_section}
         4. **Identify the root cause.** What's the biggest visual difference? Is it a missing feature, wrong spacing, missing font, incorrect layout?
 
         5. **Make targeted fixes** in the Rust source code. Focus on fixes that help this case without breaking others. After each change, run:
-           DOCXIDE_CASE={case_name} cargo test visual_comparison -- --nocapture
+           DOCXIDE_CASE={case_name} cargo test visual_comparison -- --nocapture 2>&1 | tail -20
            to see if scores improved.
 
-        6. **Check for regressions.** Run the full test suite before finalizing:
-           cargo test visual_comparison -- --nocapture
+        6. **Check for regressions.** Before finalizing, run the full test suite but only check for failures — do NOT use --nocapture for the full run:
+           cargo test visual_comparison 2>&1 | tail -5
+           If it fails, investigate which case regressed by reading tests/output/latest_scores.json and comparing against tests/baselines.json.
 
         7. **Accept baselines** for all changed scores:
            ./tools/target/debug/accept-baselines
 
+        ## Token efficiency — IMPORTANT
+        - Always pipe test output through `| tail -20` or `| grep -A2 {case_name}` — never dump full test output into context
+        - When reading source files, read only the specific line ranges you need, not entire files
+        - When inspecting DOCX XML, dump only the specific internal file you need, not all of them
+        - Do NOT re-read files you've already read unless you've made changes to them
+        - Keep bash command output short — use head/tail/grep to filter
+
         ## Finalization — MANDATORY
 
+        **Step 1: Update the case history log.** Append a summary of this run to the persistent history file at `{history_path}`. This file persists across runs so future agents learn from your work. Write in plain text, appending to whatever is already there. Include:
+        - Date and starting/ending scores
+        - What you investigated and found (DOCX features, root causes)
+        - What you tried and whether it worked or not
+        - What you changed and why
+        - What remains to be done
+        - Any dead ends future agents should avoid
+
+        **Step 2: Write the outcome file.**
         When you are done (whether you improved scores or not), you MUST write an outcome file.
         This file is machine-read by the orchestrator script to decide whether to auto-merge your work.
 
@@ -322,6 +415,15 @@ def launch_agent(
 # ── Outcome processing ──────────────────────────────────────────────────────
 
 
+def _extract_dict(data: dict, *keys) -> dict:
+    """Try multiple key names, return the first that's a dict."""
+    for k in keys:
+        v = data.get(k)
+        if isinstance(v, dict):
+            return v
+    return {}
+
+
 def parse_outcome(outcome_file: str) -> dict | None:
     path = Path(outcome_file)
     if not path.exists():
@@ -329,13 +431,33 @@ def parse_outcome(outcome_file: str) -> dict | None:
     try:
         with open(path) as f:
             data = json.load(f)
+
+        # Agents use varying field names — normalize them
         reg = data.get("regressions", [])
+
+        # improved: bool field, or infer from "status" == "improved"
+        improved = data.get("improved")
+        if improved is None:
+            improved = data.get("status") == "improved"
+
+        # summary: try several field names
+        summary = (
+            data.get("summary")
+            or data.get("changes_summary")
+            or data.get("description")
+            or "No summary"
+        )
+
+        # before/after scores: agents use target_before, before, score_before, etc.
+        before = _extract_dict(data, "target_before", "before", "score_before")
+        after = _extract_dict(data, "target_after", "after", "score_after")
+
         return {
-            "improved": bool(data.get("improved")),
+            "improved": bool(improved),
             "regressions": reg if isinstance(reg, list) else [],
-            "summary": data.get("summary", "No summary"),
-            "target_before": data.get("target_before", {}) if isinstance(data.get("target_before"), dict) else {},
-            "target_after": data.get("target_after", {}) if isinstance(data.get("target_after"), dict) else {},
+            "summary": summary,
+            "target_before": before,
+            "target_after": after,
         }
     except Exception as e:
         return {"error": str(e)}
@@ -496,7 +618,6 @@ def main():
     parser = argparse.ArgumentParser(description="Launch parallel Claude agents to improve test cases")
     parser.add_argument("cases", nargs="*", help="Case names to work on")
     parser.add_argument("--worst", type=int, default=0, help="Auto-select N worst-scoring cases from new/")
-    parser.add_argument("--workers", type=int, default=3, help="Number of parallel agents (default: 3)")
     parser.add_argument("--model", default="opus", help="Claude model (default: opus)")
     parser.add_argument("--max-turns", type=int, default=None, help="Max conversation turns per agent")
     parser.add_argument("--permission", default="auto", help="Permission mode (default: auto)")
@@ -520,12 +641,14 @@ def main():
     logs_dir.mkdir(parents=True, exist_ok=True)
     print(f"Logs: {logs_dir}")
 
-    print(f"\nLaunching {len(cases)} cases across {args.workers} workers...")
-    print(f"Cases: {' '.join(cases)}\n")
+    print(f"\nLaunching {len(cases)} agents (one per case)...")
+    print(f"Cases: {' '.join(cases)}")
+    print(f"\nMonitor progress:")
+    print(f"  tail -f {logs_dir}/*.log\n")
 
-    # Launch agents in parallel with worker pool
+    # Launch one agent per case, all in parallel
     results = []
-    with ProcessPoolExecutor(max_workers=args.workers) as pool:
+    with ProcessPoolExecutor(max_workers=len(cases)) as pool:
         futures = {
             pool.submit(
                 launch_agent,
@@ -549,8 +672,6 @@ def main():
     # Sort results back to original case order
     order = {name: i for i, name in enumerate(cases)}
     results.sort(key=lambda r: order.get(r["case"], 999))
-
-    print(f"\nMonitor progress: tail -f {logs_dir}/*.log")
 
     process_results(results, logs_dir)
 
