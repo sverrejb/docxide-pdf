@@ -12,10 +12,13 @@ docxide-pdf is a Rust library for converting DOCX files to PDF with the goal of 
 # Build the library
 cargo build
 
-# Run tests
-cargo test
+# Run tests (compact output — ALWAYS use this instead of raw cargo test)
+./tools/run-tests.sh                              # all tests, compact report
+./tools/run-tests.sh --test visual_comparison      # one test suite
+./tools/run-tests.sh --case case5                  # one fixture
+./tools/run-tests.sh --verbose                     # full cargo output (debugging only)
 
-# Run a specific test
+# Run a specific test (verbose — avoid unless debugging)
 cargo test test_name
 
 # Build in release mode
