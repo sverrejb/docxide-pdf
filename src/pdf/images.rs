@@ -64,15 +64,27 @@ fn encode_jpeg(rgb: &image::RgbImage) -> Option<Vec<u8>> {
     }
 }
 
-/// Write a JPEG XObject into the PDF.
-fn write_jpeg_xobject(pdf: &mut Pdf, xobj_ref: Ref, data: &[u8], w: u32, h: u32) {
+/// Write an image XObject into the PDF with the given filter and data.
+/// Optionally attaches a soft mask (alpha channel) reference.
+fn write_image_xobject(
+    pdf: &mut Pdf,
+    xobj_ref: Ref,
+    data: &[u8],
+    filter: Filter,
+    w: u32,
+    h: u32,
+    smask: Option<Ref>,
+) {
     let mut xobj = pdf.image_xobject(xobj_ref, data);
-    xobj.filter(Filter::DctDecode);
+    xobj.filter(filter);
     xobj.width(w as i32);
     xobj.height(h as i32);
     xobj.color_space().device_rgb();
     xobj.bits_per_component(8);
     xobj.interpolate(true);
+    if let Some(mask_ref) = smask {
+        xobj.s_mask(mask_ref);
+    }
 }
 
 fn embed_single_image(
@@ -112,7 +124,9 @@ fn embed_single_image(
                             img.data.len(),
                             jpeg_buf.len()
                         );
-                        write_jpeg_xobject(pdf, xobj_ref, &jpeg_buf, tw, th);
+                        write_image_xobject(
+                            pdf, xobj_ref, &jpeg_buf, Filter::DctDecode, tw, th, None,
+                        );
                         image_xobjects.push((pdf_name.clone(), xobj_ref));
                         return pdf_name;
                     }
@@ -211,30 +225,12 @@ fn embed_single_image(
                 .as_ref()
                 .is_some_and(|j| j.len() < compressed_rgb.len());
 
-            if use_jpeg {
-                let jpeg_data = jpeg_buf.unwrap();
-                let mut xobj = pdf.image_xobject(xobj_ref, &jpeg_data);
-                xobj.filter(Filter::DctDecode);
-                xobj.width(w as i32);
-                xobj.height(h as i32);
-                xobj.color_space().device_rgb();
-                xobj.bits_per_component(8);
-                xobj.interpolate(true);
-                if let Some(mask_ref) = smask_ref {
-                    xobj.s_mask(mask_ref);
-                }
+            let (filter, data) = if use_jpeg {
+                (Filter::DctDecode, jpeg_buf.unwrap())
             } else {
-                let mut xobj = pdf.image_xobject(xobj_ref, &compressed_rgb);
-                xobj.filter(Filter::FlateDecode);
-                xobj.width(w as i32);
-                xobj.height(h as i32);
-                xobj.color_space().device_rgb();
-                xobj.bits_per_component(8);
-                xobj.interpolate(true);
-                if let Some(mask_ref) = smask_ref {
-                    xobj.s_mask(mask_ref);
-                }
-            }
+                (Filter::FlateDecode, compressed_rgb)
+            };
+            write_image_xobject(pdf, xobj_ref, &data, filter, w, h, smask_ref);
         }
     }
 
