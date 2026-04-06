@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use pdf_writer::types::{CidFontType, FontFlags, SystemInfo, UnicodeCmap};
-use pdf_writer::{Name, Pdf, Rect, Ref, Str};
+use pdf_writer::{Filter, Name, Pdf, Rect, Ref, Str};
 use ttf_parser::gpos::{PairAdjustment, PositioningSubtable};
 use ttf_parser::Face;
 
@@ -88,8 +88,12 @@ pub(super) fn embed_truetype(
     });
 
     let data_len = i32::try_from(subset_data.len()).ok()?;
-    pdf.stream(data_ref, &subset_data)
-        .pair(Name(b"Length1"), data_len);
+    let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&subset_data, 6);
+    {
+        let mut stream = pdf.stream(data_ref, &compressed);
+        stream.filter(Filter::FlateDecode);
+        stream.pair(Name(b"Length1"), data_len);
+    }
 
     let ps_name = font_name.replace(' ', "");
     let ps_name_ref = Name(ps_name.as_bytes());

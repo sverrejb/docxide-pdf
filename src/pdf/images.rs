@@ -200,11 +200,20 @@ fn embed_single_image(
                 None
             };
 
-            // Use JPEG for the RGB portion (much smaller than FlateDecode)
+            // Try both JPEG and Flate, pick whichever is smaller.
+            // JPEG wins for photographic content; Flate wins for synthetic/chart images.
+            let compressed_rgb = miniz_oxide::deflate::compress_to_vec_zlib(&rgb_data, 6);
             let rgb = image::RgbImage::from_raw(w, h, rgb_data)
                 .expect("RGB data size matches dimensions");
-            if let Some(jpeg_buf) = encode_jpeg(&rgb) {
-                let mut xobj = pdf.image_xobject(xobj_ref, &jpeg_buf);
+            let jpeg_buf = encode_jpeg(&rgb);
+
+            let use_jpeg = jpeg_buf
+                .as_ref()
+                .is_some_and(|j| j.len() < compressed_rgb.len());
+
+            if use_jpeg {
+                let jpeg_data = jpeg_buf.unwrap();
+                let mut xobj = pdf.image_xobject(xobj_ref, &jpeg_data);
                 xobj.filter(Filter::DctDecode);
                 xobj.width(w as i32);
                 xobj.height(h as i32);
@@ -215,9 +224,6 @@ fn embed_single_image(
                     xobj.s_mask(mask_ref);
                 }
             } else {
-                // Fallback to FlateDecode if JPEG encoding fails
-                let rgb_data: Vec<u8> = rgb.into_raw();
-                let compressed_rgb = miniz_oxide::deflate::compress_to_vec_zlib(&rgb_data, 6);
                 let mut xobj = pdf.image_xobject(xobj_ref, &compressed_rgb);
                 xobj.filter(Filter::FlateDecode);
                 xobj.width(w as i32);
