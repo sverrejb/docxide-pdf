@@ -1095,7 +1095,7 @@ pub(super) fn render_paragraph_lines(
         };
 
         let extra_per_gap = if is_justified && !is_cjk_justified {
-            (eff_width - left_content_width) / (left_chunk_count - 1).max(1) as f32
+            ((eff_width - left_content_width) / (left_chunk_count - 1).max(1) as f32).max(0.0)
         } else {
             0.0
         };
@@ -1109,7 +1109,7 @@ pub(super) fn render_paragraph_lines(
                 Alignment::Left | Alignment::Justify => rr.region_x,
             };
             let rgap = if is_justified && right_chunks > 1 {
-                (rr.region_width - rr.content_width) / (right_chunks - 1) as f32
+                ((rr.region_width - rr.content_width) / (right_chunks - 1) as f32).max(0.0)
             } else {
                 0.0
             };

@@ -12,7 +12,7 @@ use crate::model::{
 
 use super::RenderContext;
 use super::header_footer::substitute_hf_runs;
-use super::layout::{TextLine, build_paragraph_lines, font_metric, is_text_empty};
+use super::layout::{TextLine, build_paragraph_lines, build_tabbed_line, font_metric, is_text_empty};
 use super::resolve_line_h;
 
 pub(super) fn cell_span_width(col_widths: &[f32], grid_col: usize, span: usize) -> f32 {
@@ -414,16 +414,30 @@ pub(super) fn compute_row_layouts(
                                     } else {
                                         para.indent_hanging
                                     };
-                                    let lines = build_paragraph_lines(
-                                        runs,
-                                        ctx.fonts,
-                                        para_text_w,
-                                        hanging,
-                                        &EMPTY_INLINE_IMAGE_MAP,
-                                        None,
-                                        None,
-                                        None,
-                                    );
+                                    let has_tabs = runs.iter().any(|r| r.is_tab);
+                                    let lines = if has_tabs {
+                                        build_tabbed_line(
+                                            runs,
+                                            ctx.fonts,
+                                            &para.tab_stops,
+                                            para.indent_left,
+                                            para_text_w,
+                                            hanging,
+                                            &EMPTY_INLINE_IMAGE_MAP,
+                                            ctx.default_tab_stop,
+                                        )
+                                    } else {
+                                        build_paragraph_lines(
+                                            runs,
+                                            ctx.fonts,
+                                            para_text_w,
+                                            hanging,
+                                            &EMPTY_INLINE_IMAGE_MAP,
+                                            None,
+                                            None,
+                                            None,
+                                        )
+                                    };
                                     if is_rotated {
                                         for line in &lines {
                                             max_rotated_line_w =
