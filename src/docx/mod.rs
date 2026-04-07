@@ -323,29 +323,30 @@ pub(super) fn parse_cell_border_right(parent: roxmltree::Node) -> CellBorder {
 
 pub(super) fn parse_frame_props(ppr: roxmltree::Node) -> Option<FrameProperties> {
     let fp = wml(ppr, "framePr")?;
-    let h_anchor = match wml_attr(fp, "hAnchor").unwrap_or("text") {
+    let attr = |name| fp.attribute((WML_NS, name));
+    let h_anchor = match attr("hAnchor").unwrap_or("text") {
         "margin" => HRelativeFrom::Margin,
         "page" => HRelativeFrom::Page,
         _ => HRelativeFrom::Column,
     };
-    let h_position = if let Some(xa) = wml_attr(fp, "xAlign") {
+    let h_position = if let Some(xa) = attr("xAlign") {
         match xa {
             "center" => HorizontalPosition::AlignCenter,
             "right" | "outside" => HorizontalPosition::AlignRight,
             _ => HorizontalPosition::AlignLeft,
         }
     } else {
-        let x_twips: f32 = wml_attr(fp, "x")
+        let x_twips: f32 = attr("x")
             .and_then(|v| v.parse().ok())
             .unwrap_or(0.0);
         HorizontalPosition::Offset(x_twips / 20.0)
     };
-    let v_anchor = match wml_attr(fp, "vAnchor").unwrap_or("text") {
+    let v_anchor = match attr("vAnchor").unwrap_or("text") {
         "margin" => VRelativeFrom::Margin,
         "page" => VRelativeFrom::Page,
         _ => VRelativeFrom::Paragraph,
     };
-    let y_pts = wml_attr(fp, "y")
+    let y_pts = attr("y")
         .and_then(|v| v.parse::<f32>().ok())
         .unwrap_or(0.0)
         / 20.0;

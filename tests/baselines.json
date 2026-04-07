@@ -433,8 +433,8 @@
     "text_boundary": 0.1411
   },
   "new/spanish_constitu..": {
-    "jaccard": 0.5898,
-    "ssim": 0.8085,
+    "jaccard": 0.5903,
+    "ssim": 0.8093,
     "text_boundary": 1.0
   },
   "new/taiwanese_educat..": {
