@@ -403,8 +403,8 @@
     "text_boundary": 1.0
   },
   "new/english_town_cou..": {
-    "jaccard": 0.3795,
-    "ssim": 0.5437,
+    "jaccard": 0.2671,
+    "ssim": 0.3961,
     "text_boundary": 0.7895
   },
   "new/environmental_la..": {

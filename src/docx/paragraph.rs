@@ -62,16 +62,11 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
 
     let para_style = ctx.styles.paragraph_styles.get(para_style_id);
 
-    let inline_borders = ppr.map(parse_paragraph_borders).unwrap_or_default();
-    let has_inline_borders = inline_borders.top.is_some()
-        || inline_borders.bottom.is_some()
-        || inline_borders.left.is_some()
-        || inline_borders.right.is_some();
-    let borders = if has_inline_borders {
-        inline_borders
-    } else {
-        para_style.map(|s| s.borders.clone()).unwrap_or_default()
-    };
+    // A paragraph-level pBdr element overrides the style borders even when
+    // all individual borders are set to val="none" (parsed as None).
+    let borders = ppr
+        .and_then(parse_paragraph_borders)
+        .unwrap_or_else(|| para_style.map(|s| s.borders.clone()).unwrap_or_default());
     let (sp_before, sp_after, line_spacing) = parse_paragraph_spacing(ppr, para_style, None);
     let space_before = sp_before.unwrap_or(0.0);
     let space_after = sp_after.unwrap_or(ctx.styles.defaults.space_after);

@@ -256,17 +256,17 @@ fn parse_one_border(node: roxmltree::Node) -> Option<ParagraphBorder> {
     })
 }
 
-pub(super) fn parse_paragraph_borders(ppr: roxmltree::Node) -> ParagraphBorders {
-    let Some(pbdr) = wml(ppr, "pBdr") else {
-        return ParagraphBorders::default();
-    };
-    ParagraphBorders {
+/// Returns `None` when the pBdr element is absent, `Some` when present
+/// (even if all individual borders are none/nil).
+pub(super) fn parse_paragraph_borders(ppr: roxmltree::Node) -> Option<ParagraphBorders> {
+    let pbdr = wml(ppr, "pBdr")?;
+    Some(ParagraphBorders {
         top: wml(pbdr, "top").and_then(parse_one_border),
         bottom: wml(pbdr, "bottom").and_then(parse_one_border),
         left: wml(pbdr, "left").and_then(parse_one_border),
         right: wml(pbdr, "right").and_then(parse_one_border),
         between: wml(pbdr, "between").and_then(parse_one_border),
-    }
+    })
 }
 
 pub(super) fn parse_cell_border(parent: roxmltree::Node, name: &str) -> CellBorder {

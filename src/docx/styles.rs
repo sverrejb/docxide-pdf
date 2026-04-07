@@ -565,7 +565,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                     .and_then(|n| n.attribute((WML_NS, "beforeAutospacing")).map(|v| v == "1" || v == "true"));
                 let space_after_autospacing = spacing
                     .and_then(|n| n.attribute((WML_NS, "afterAutospacing")).map(|v| v == "1" || v == "true"));
-                let borders = ppr.map(parse_paragraph_borders).unwrap_or_default();
+                let borders = ppr.and_then(parse_paragraph_borders).unwrap_or_default();
                 let shading = ppr
                     .and_then(|n| wml(n, "shd"))
                     .and_then(|shd| shd.attribute((WML_NS, "fill")))

@@ -935,25 +935,7 @@ fn render_paragraph_block(
         }
     }
 
-    let text_hanging = if !para.list_label.is_empty() {
-        if let Some(nts) = para.num_level_tab_stop {
-            if nts < para.indent_left && (para.indent_left - para.indent_hanging).abs() < 0.5 {
-                (para.indent_left - nts).max(0.0)
-            } else if para.indent_first_line > 0.0 && para.indent_hanging == 0.0 {
-                -para.indent_first_line
-            } else {
-                0.0
-            }
-        } else if para.indent_first_line > 0.0 && para.indent_hanging == 0.0 {
-            -para.indent_first_line
-        } else {
-            0.0
-        }
-    } else if para.indent_hanging > 0.0 {
-        para.indent_hanging
-    } else {
-        -para.indent_first_line
-    };
+    let text_hanging = compute_text_hanging(para);
 
     // Substitute footnote refs and resolve PAGEREF fields
     let has_footnote_refs = para.runs.iter().any(|r| r.footnote_id.is_some());
@@ -1707,6 +1689,7 @@ fn render_paragraph_block(
         }
     }
 
+    let applied_inter_gap = inter_gap;
     state.pb.slot_top -= inter_gap;
 
     for bookmark in &para.bookmarks {
@@ -1826,7 +1809,8 @@ fn render_paragraph_block(
             .unwrap_or(0.0);
         let shd_left = col_x - shd_left_outset;
         let shd_right = col_x + col_w + shd_right_outset;
-        let shd_top = state.pb.slot_top;
+        let shd_top = state.pb.slot_top
+            + if prev_borders_match { applied_inter_gap } else { 0.0 };
         let shd_bottom =
             state.pb.slot_top - bdr_top_pad - content_h - bdr_bottom_pad;
         state.pb.content.save_state();
@@ -2105,20 +2089,29 @@ fn render_paragraph_block(
         let box_left = col_x - bdr_left_outset;
         let box_right = col_x + col_w + bdr_right_outset;
 
+        // Extend horizontal borders past the corners so they cover
+        // the corner gap left by butt-capped vertical border strokes.
+        let h_left_ext = bdr.left.as_ref().map(|b| b.width_pt / 2.0).unwrap_or(0.0);
+        let h_right_ext = bdr.right.as_ref().map(|b| b.width_pt / 2.0).unwrap_or(0.0);
         let draw_h_border = |content: &mut Content, b: &ParagraphBorder, y: f32| {
             content.save_state();
             content.set_line_width(b.width_pt);
             stroke_rgb(content, b.color);
-            content.move_to(box_left, y);
-            content.line_to(box_right, y);
+            content.move_to(box_left - h_left_ext, y);
+            content.line_to(box_right + h_right_ext, y);
             content.stroke();
             content.restore_state();
         };
+        // When this paragraph continues a border group, extend vertical
+        // borders upward through the inter-paragraph gap so there is no
+        // visible break between consecutive paragraphs' left/right borders.
+        let v_border_top = box_top
+            + if prev_borders_match { applied_inter_gap } else { 0.0 };
         let draw_v_border = |content: &mut Content, b: &ParagraphBorder, x: f32| {
             content.save_state();
             content.set_line_width(b.width_pt);
             stroke_rgb(content, b.color);
-            content.move_to(x, box_top);
+            content.move_to(x, v_border_top);
             content.line_to(x, box_bottom);
             content.stroke();
             content.restore_state();
@@ -2145,6 +2138,12 @@ fn render_paragraph_block(
     }
 
     state.pb.slot_top -= content_h + bdr_top_pad + bdr_bottom_extent;
+    if state.pb.slot_top < state.effective_margin_bottom - 1.0 {
+        log::warn!(
+            "Body overflow: slot_top={:.2} < eff_margin_bottom={:.2} after paragraph on page {}",
+            state.pb.slot_top, state.effective_margin_bottom, state.pb.all_contents.len(),
+        );
+    }
     if !(text_empty && para.paragraph_mark_vanish) {
         state.prev_space_after = effective_space_after;
     }

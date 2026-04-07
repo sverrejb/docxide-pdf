@@ -4,7 +4,7 @@ use pdf_writer::{Content, Name, Str};
 
 use crate::fonts::{FontEntry, encode_as_gids, to_winansi_bytes};
 use crate::model::{
-    Alignment, Block, BorderStyle, CellBorder, CellBorders, CellMargins, CellVAlign,
+    Alignment, Block, BorderStyle, CellBorder, CellMargins, CellVAlign,
     SectionProperties, Table, TableAlignment, TableRow, TextDirection, VMerge,
 };
 
@@ -999,6 +999,48 @@ pub(super) fn render_table(
 
     let mut did_flush_while_floating = false;
 
+    // Split an oversized row across pages, rendering partial rows and
+    // flushing pages between chunks until every cell is fully emitted.
+    let split_row_across_pages = |row: &TableRow,
+                                   layout: &RowLayout,
+                                   pb: &mut super::PageBuilder,
+                                   ri: usize,
+                                   did_flush: &mut bool| {
+        let ncells = layout.cells.len();
+        let mut starts = vec![0usize; ncells];
+        let mut is_first_chunk = true;
+
+        loop {
+            let avail = pb.slot_top - compute_effective_margin_bottom(sp, pb.is_first_page_of_section, ctx);
+            let mut ends = Vec::with_capacity(ncells);
+            let mut all_done = true;
+
+            for ci in 0..ncells {
+                let end = find_cell_split(&layout.cells[ci], starts[ci], avail, cm);
+                if end < layout.cells[ci].items.len() {
+                    all_done = false;
+                }
+                ends.push(end);
+            }
+
+            render_partial_row(
+                row, layout, &col_widths, cm, table_left,
+                pb, ctx, &starts, &ends, is_first_chunk, all_done,
+            );
+
+            if all_done {
+                break;
+            }
+
+            starts = ends;
+            is_first_chunk = false;
+            if is_floating {
+                *did_flush = true;
+            }
+            flush_and_render_headers(pb, ri);
+        }
+    };
+
     for (ri, (row, layout)) in table.rows.iter().zip(row_layouts.iter()).enumerate() {
         let row_h = layout.height;
         log::debug!(
@@ -1015,65 +1057,28 @@ pub(super) fn render_table(
         let page_content_h = eff_top - eff_bottom;
 
         if row_h > available_h && (row_h > page_content_h || is_floating) {
-            // Row is too tall for any single page, or floating table overflows -- split across pages
-            let ncells = layout.cells.len();
-            let mut starts = vec![0usize; ncells];
-            let mut is_first_chunk = true;
-
-            loop {
-                let avail = pb.slot_top - compute_effective_margin_bottom(sp, pb.is_first_page_of_section, ctx);
-                let mut ends = Vec::with_capacity(ncells);
-                let mut all_done = true;
-
-                for ci in 0..ncells {
-                    let end = find_cell_split(&layout.cells[ci], starts[ci], avail, cm);
-                    if end < layout.cells[ci].items.len() {
-                        all_done = false;
-                    }
-                    ends.push(end);
-                }
-
-                render_partial_row(
-                    row,
-                    layout,
-                    &col_widths,
-                    cm,
-                    table_left,
-                    pb,
-                    ctx,
-                    &starts,
-                    &ends,
-                    is_first_chunk,
-                    all_done,
-                );
-
-                if all_done {
-                    break;
-                }
-
-                starts = ends;
-                is_first_chunk = false;
-                if is_floating {
-                    did_flush_while_floating = true;
-                }
-                flush_and_render_headers(pb, ri);
-            }
+            split_row_across_pages(row, layout, pb, ri, &mut did_flush_while_floating);
         } else if !at_page_top && row_h > available_h {
             if is_floating {
                 did_flush_while_floating = true;
             }
             flush_and_render_headers(pb, ri);
-            render_table_row(
-                row,
-                layout,
-                &col_widths,
-                cm,
-                table_left,
-                pb,
-                ctx,
-                ri,
-                &merge_spans,
-            );
+            // After flushing + rendering header rows, re-check if the row
+            // fits on the fresh page.  If repeating headers consumed enough
+            // space that the row no longer fits, split it across pages
+            // instead of rendering blindly (which would overflow the footer).
+            let new_eff_top = effective_slot_top(sp, pb.is_first_page_of_section, ctx);
+            let new_eff_bot = compute_effective_margin_bottom(sp, pb.is_first_page_of_section, ctx);
+            let new_available = pb.slot_top - new_eff_bot;
+            let new_page_h = new_eff_top - new_eff_bot;
+            if row_h > new_available && (row_h > new_page_h || is_floating) {
+                split_row_across_pages(row, layout, pb, ri, &mut did_flush_while_floating);
+            } else {
+                render_table_row(
+                    row, layout, &col_widths, cm, table_left,
+                    pb, ctx, ri, &merge_spans,
+                );
+            }
         } else {
             render_table_row(
                 row,
@@ -1085,6 +1090,13 @@ pub(super) fn render_table(
                 ctx,
                 ri,
                 &merge_spans,
+            );
+        }
+        let eff_bot = compute_effective_margin_bottom(sp, pb.is_first_page_of_section, ctx);
+        if pb.slot_top < eff_bot - 1.0 {
+            log::warn!(
+                "Table overflow: row={} slot_top={:.2} < eff_margin_bottom={:.2} row_h={:.2} page={}",
+                ri, pb.slot_top, eff_bot, row_h, pb.all_contents.len(),
             );
         }
     }
