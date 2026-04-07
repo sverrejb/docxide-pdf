@@ -265,20 +265,34 @@ fn build_lines_with_float(
     }
 }
 
+/// Per-page context for header/footer rendering: field substitution values
+/// and image name mappings resolved by the caller.
+pub(super) struct HfPageContext<'a> {
+    pub(super) page_num: usize,
+    pub(super) total_pages: usize,
+    pub(super) para_image_names: &'a HashMap<usize, String>,
+    pub(super) inline_image_names: &'a HashMap<(usize, usize), String>,
+    pub(super) floating_image_names: &'a HashMap<(usize, usize), String>,
+    pub(super) styleref_values: &'a HashMap<String, String>,
+    pub(super) page_num_format: Option<&'a str>,
+}
+
 pub(super) fn render_header_footer(
     content: &mut Content,
     hf: &HeaderFooter,
     ctx: &RenderContext,
     sp: &SectionProperties,
     is_header: bool,
-    page_num: usize,
-    total_pages: usize,
-    para_image_names: &HashMap<usize, String>,
-    inline_image_names: &HashMap<(usize, usize), String>,
-    floating_image_names: &HashMap<(usize, usize), String>,
-    styleref_values: &HashMap<String, String>,
+    pc: &HfPageContext,
     gradient_specs: &mut Vec<super::GradientSpec>,
 ) {
+    let page_num = pc.page_num;
+    let total_pages = pc.total_pages;
+    let para_image_names = pc.para_image_names;
+    let inline_image_names = pc.inline_image_names;
+    let floating_image_names = pc.floating_image_names;
+    let styleref_values = pc.styleref_values;
+    let page_num_format = pc.page_num_format;
     let text_width = sp.page_width - sp.margin_left - sp.margin_right;
     let mut cursor_y = if is_header {
         sp.page_height - sp.header_margin
@@ -302,6 +316,7 @@ pub(super) fn render_header_footer(
                     page_num,
                     total_pages,
                     styleref_values,
+                    page_num_format,
                 );
                 prev_space_after = 0.0;
             }
@@ -309,7 +324,7 @@ pub(super) fn render_header_footer(
                 let fp = para.frame_props.as_ref().unwrap();
                 let substituted_runs = substitute_hf_runs(
                     &para.runs, page_num, total_pages, styleref_values,
-                    sp.page_num_format.as_deref(),
+                    page_num_format,
                 );
                 let (font_size, _, tallest_ar) =
                     tallest_run_metrics(&substituted_runs, ctx.fonts);
@@ -348,7 +363,7 @@ pub(super) fn render_header_footer(
                 cursor_y -= prev_space_after.max(para.space_before);
 
                 let substituted_runs =
-                    substitute_hf_runs(&para.runs, page_num, total_pages, styleref_values, sp.page_num_format.as_deref());
+                    substitute_hf_runs(&para.runs, page_num, total_pages, styleref_values, page_num_format);
 
                 let (font_size, tallest_lhr, tallest_ar) =
                     tallest_run_metrics(&substituted_runs, ctx.fonts);

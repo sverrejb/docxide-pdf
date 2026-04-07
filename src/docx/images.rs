@@ -451,6 +451,12 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                     }));
                 }
             }
+            // SmartArt diagrams lack floating layout support; treat anchored
+            // diagrams the same as inline to avoid dropping them entirely
+            if display_h > 0.0 && has_diagram_ref(container) {
+                let diagram = parse_smartart_drawing(ctx.rels, ctx.zip, ctx.theme, display_w, display_h);
+                return Some(RunDrawingResult::SmartArt(diagram));
+            }
             continue;
         }
 

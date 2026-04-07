@@ -1157,13 +1157,14 @@ pub(super) fn render_header_footer_table(
     page_num: usize,
     total_pages: usize,
     styleref_values: &HashMap<String, String>,
+    page_num_format: Option<&str>,
 ) {
     let col_widths = auto_fit_columns(table, ctx.fonts, None);
     let hf_sub = HfSubstitution {
         page_num,
         total_pages,
         styleref_values,
-        page_num_format: sp.page_num_format.as_deref(),
+        page_num_format,
     };
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, Some(&hf_sub));
     let cm = &table.cell_margins;

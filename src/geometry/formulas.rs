@@ -160,7 +160,7 @@ impl GuideEnv {
                     (x() as i128 * y() as i128 / denom as i128) as i64
                 }
             }
-            FormulaOp::AddSub => x() + y() - z(),
+            FormulaOp::AddSub => x().saturating_add(y()).saturating_sub(z()),
             FormulaOp::AddDiv => {
                 let denom = z();
                 if denom == 0 { 0 } else { (x() + y()) / denom }

@@ -128,6 +128,12 @@ Our `auto_fit_columns` uses `gridCol` widths from `tblGrid`, ignoring the specif
 
 Only PAGE, NUMPAGES, STYLEREF, and PAGEREF field codes are supported. Others (DATE, TIME, AUTHOR, FILENAME, IF, MERGEFIELD, SEQ, etc.) are silently dropped — only the cached display text is used. For static PDF export this is usually acceptable since Word pre-computes the display text, but dynamic fields (DATE, PAGE in headers) may show stale values.
 
+## Floating Image Positioning (TODO — MEDIUM IMPACT)
+
+Floating images (`wp:anchor`) with large `posOffset` values can render off-page. Word appears to clamp or reflow these positions, but we render at the raw coordinates. Observed in `learning_cultures_dissertation` (rId14: column-relative offset 4702029 EMU = 370pt, placing a 334pt-wide image past the 612pt page edge). A naive right-edge clamp was tested but regressed `stem_partnerships_guide` — a more nuanced approach is needed (possibly only clamping when the image would be entirely off-page, or respecting wrap constraints).
+
+Additionally, truncated/corrupt PNG images in DOCX files cause the `image` crate to fail with "unexpected end of file". Currently falls back to a 1x1 placeholder via `decode_png_raw` (using the `png` crate directly). Word renders these partially — investigate partial PNG decoding to match. Observed in `learning_cultures_dissertation` image1.png (216KB file, 2205 bytes short of complete IDAT data, no IEND chunk).
+
 ## `w:smallCaps` Rendering Accuracy (TODO — LOW IMPACT)
 
 The spec says: lowercase letters display as capitals at font_size - 2pt; uppercase letters stay at original font_size. Our implementation converts ALL text to uppercase and shrinks ALL text by 2pt. Fix: only apply the size reduction to originally-lowercase characters, render uppercase characters at the original size. Affects 68 XML hits across 10 fixtures (6 failing).

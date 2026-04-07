@@ -451,6 +451,7 @@ dependencies = [
  "memmap2",
  "miniz_oxide",
  "pdf-writer",
+ "png",
  "rayon",
  "roxmltree",
  "serde",

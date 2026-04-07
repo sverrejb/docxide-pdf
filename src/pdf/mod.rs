@@ -34,7 +34,7 @@ use assembly::{HeadingEntry, assemble_pdf_pages};
 use fonts::collect_and_register_fonts;
 use footnotes::{compute_footnote_height, render_page_footnotes};
 use header_footer::{
-    compute_effective_margin_bottom, effective_slot_top, render_header_footer,
+    HfPageContext, compute_effective_margin_bottom, effective_slot_top, render_header_footer,
     resolve_footer_for_page, resolve_header_for_page,
 };
 pub(super) use helpers::resolve_line_h;
@@ -2579,6 +2579,43 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     }
     let empty_hf_maps: HfMaps = Default::default();
 
+    // Pre-compute page numbers and formats: sections without w:pgNumType
+    // continue numbering/format from the previous section (OOXML §17.6.12)
+    let mut page_numbers: Vec<usize> = Vec::with_capacity(total_pages);
+    // Track which section's format applies to each page (None = decimal default).
+    // Uses a section index to avoid cloning the format string for every page.
+    let mut page_format_sources: Vec<Option<usize>> = Vec::with_capacity(total_pages);
+    {
+        let mut running_num: usize = 0;
+        let mut running_format_si: Option<usize> = None;
+        let mut prev_content_si: Option<usize> = None;
+        for page_idx in 0..total_pages {
+            let (_, _, content_si) = state.pb.page_section_indices[page_idx];
+            let csp = &doc.sections[content_si].properties;
+            if prev_content_si != Some(content_si) {
+                // New section boundary
+                if let Some(start) = csp.page_num_start {
+                    running_num = start as usize;
+                    // Section explicitly sets pgNumType: use its format,
+                    // or default to decimal if fmt is absent
+                    running_format_si = if csp.page_num_format.is_some() {
+                        Some(content_si)
+                    } else {
+                        None
+                    };
+                } else {
+                    // No pgNumType at all: inherit both number and format
+                    running_num += 1;
+                }
+            } else {
+                running_num += 1;
+            }
+            page_numbers.push(running_num);
+            page_format_sources.push(running_format_si);
+            prev_content_si = Some(content_si);
+        }
+    }
+
     let empty_styleref: HashMap<String, String> = HashMap::new();
     let mut page_styleref_merged: HashMap<String, String> = HashMap::new();
     let mut all_hf_contents: Vec<Option<Content>> = (0..total_pages).map(|_| None).collect();
@@ -2586,20 +2623,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         let (si, is_first, content_si) = state.pb.page_section_indices[page_idx];
         let sp = &doc.sections[si].properties;
 
-        // Page numbering uses content_section (the section being rendered),
-        // not hf_section (which may differ for continuous section breaks)
-        let num_sp = &doc.sections[content_si].properties;
-        let page_num = if let Some(start) = num_sp.page_num_start {
-            // Section specifies explicit start: count pages within this section
-            let pages_before_in_section = state.pb.page_section_indices[..page_idx]
-                .iter()
-                .filter(|&&(_, _, cs)| cs == content_si)
-                .count();
-            start as usize + pages_before_in_section
-        } else {
-            // No explicit start: continue absolute numbering
-            page_idx + 1
-        };
+        let page_num = page_numbers[page_idx];
+        let effective_page_num_format = page_format_sources[page_idx]
+            .and_then(|si| doc.sections[si].properties.page_num_format.as_deref());
 
         // Per spec §17.16.5.59: in headers/footers of a printed document, STYLEREF
         // searches the current page top-to-bottom first, then backward to doc start.
@@ -2626,18 +2652,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             resolve_header_for_page(doc, si, is_first, page_num);
         if let Some(header_data) = header {
             let (pi_map, ii_map, fi_map) = hf_maps_index.get(&(hdr_si, hdr_type)).unwrap_or(&empty_hf_maps);
+            let pc = HfPageContext {
+                page_num, total_pages,
+                para_image_names: pi_map, inline_image_names: ii_map,
+                floating_image_names: fi_map, styleref_values: page_styleref,
+                page_num_format: effective_page_num_format,
+            };
             render_header_footer(
-                &mut hf,
-                header_data,
-                &ctx,
-                sp,
-                true,
-                page_num,
-                total_pages,
-                pi_map,
-                ii_map,
-                fi_map,
-                page_styleref,
+                &mut hf, header_data, &ctx, sp, true, &pc,
                 &mut state.pb.all_gradient_specs[page_idx],
             );
             has_hf = true;
@@ -2647,18 +2669,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             resolve_footer_for_page(doc, si, is_first, page_num);
         if let Some(footer_data) = footer {
             let (pi_map, ii_map, fi_map) = hf_maps_index.get(&(ftr_si, ftr_type)).unwrap_or(&empty_hf_maps);
+            let pc = HfPageContext {
+                page_num, total_pages,
+                para_image_names: pi_map, inline_image_names: ii_map,
+                floating_image_names: fi_map, styleref_values: page_styleref,
+                page_num_format: effective_page_num_format,
+            };
             render_header_footer(
-                &mut hf,
-                footer_data,
-                &ctx,
-                sp,
-                false,
-                page_num,
-                total_pages,
-                pi_map,
-                ii_map,
-                fi_map,
-                page_styleref,
+                &mut hf, footer_data, &ctx, sp, false, &pc,
                 &mut state.pb.all_gradient_specs[page_idx],
             );
             has_hf = true;

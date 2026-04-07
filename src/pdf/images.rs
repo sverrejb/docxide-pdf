@@ -64,6 +64,44 @@ fn encode_jpeg(rgb: &image::RgbImage) -> Option<Vec<u8>> {
     }
 }
 
+/// Fallback PNG decoder using the `png` crate directly. The `image` crate's
+/// format-pinned reader can fail on interlaced or unusual PNGs; this handles
+/// those cases by decoding with EXPAND+ALPHA transformations.
+fn decode_png_raw(data: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
+    let mut decoder = png::Decoder::new(std::io::Cursor::new(data));
+    decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::ALPHA);
+    let mut reader = decoder.read_info().ok()?;
+    let buf_size = reader.output_buffer_size().unwrap_or(reader.info().raw_bytes() as usize);
+    let mut buf = vec![0u8; buf_size];
+    let info = reader.next_frame(&mut buf).ok()?;
+    let (w, h) = (info.width, info.height);
+    let rgba = match (info.color_type, info.bit_depth) {
+        (png::ColorType::Rgba, png::BitDepth::Eight) => {
+            buf.truncate(info.buffer_size());
+            buf
+        }
+        (png::ColorType::Rgb, png::BitDepth::Eight) => {
+            let rgb = &buf[..info.buffer_size()];
+            let mut rgba = Vec::with_capacity((w * h * 4) as usize);
+            for chunk in rgb.chunks_exact(3) {
+                rgba.extend_from_slice(chunk);
+                rgba.push(255);
+            }
+            rgba
+        }
+        (png::ColorType::Grayscale, png::BitDepth::Eight) => {
+            let gray = &buf[..info.buffer_size()];
+            let mut rgba = Vec::with_capacity((w * h * 4) as usize);
+            for &g in gray {
+                rgba.extend_from_slice(&[g, g, g, 255]);
+            }
+            rgba
+        }
+        _ => return None,
+    };
+    Some((w, h, rgba))
+}
+
 /// Write an image XObject into the PDF with the given filter and data.
 /// Optionally attaches a soft mask (alpha channel) reference.
 fn write_image_xobject(
@@ -156,15 +194,27 @@ fn embed_single_image(
                 image::ImageReader::with_format(std::io::BufReader::new(cursor), img_fmt);
             let decoded = match reader.decode() {
                 Ok(d) => d,
-                Err(e) => {
-                    log::warn!("PNG decode failed: {e} — writing 1x1 placeholder");
-                    let mut xobj = pdf.image_xobject(xobj_ref, &[255, 255, 255]);
-                    xobj.width(1);
-                    xobj.height(1);
-                    xobj.color_space().device_rgb();
-                    xobj.bits_per_component(8);
-                    image_xobjects.push((pdf_name.clone(), xobj_ref));
-                    return pdf_name;
+                Err(_) => {
+                    // Fallback: use png crate directly for PNGs the image
+                    // crate's format-pinned reader can't decode
+                    match decode_png_raw(&img.data) {
+                        Some((w, h, rgba_data)) => {
+                            image::DynamicImage::ImageRgba8(
+                                image::RgbaImage::from_raw(w, h, rgba_data)
+                                    .expect("RGBA data size matches dimensions"),
+                            )
+                        }
+                        None => {
+                            log::warn!("PNG decode failed — writing 1x1 placeholder");
+                            let mut xobj = pdf.image_xobject(xobj_ref, &[255, 255, 255]);
+                            xobj.width(1);
+                            xobj.height(1);
+                            xobj.color_space().device_rgb();
+                            xobj.bits_per_component(8);
+                            image_xobjects.push((pdf_name.clone(), xobj_ref));
+                            return pdf_name;
+                        }
+                    }
                 }
             };
 
