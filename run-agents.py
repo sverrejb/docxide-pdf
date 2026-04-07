@@ -228,11 +228,21 @@ def build_prompt(case_name: str, case_path: str, progress_file: Path, logs_dir: 
     annotations_section = ""
     if annotations:
         formatted = format_annotations(annotations)
-        annotations_section = f"""
-        **Human-annotated issues ({len(annotations)}):** These are manually identified rendering problems for this case. Prioritize fixing these — they describe exactly what's wrong and where.
+        annotations_section = (
+            f"\n        **Human-annotated issues ({len(annotations)}):** These are manually identified rendering problems"
+            f" for this case. Prioritize fixing these — they describe exactly what's wrong and where.\n\n"
+            f"{formatted}\n"
+        )
 
-{formatted}
-"""
+    history_section = ""
+    if history:
+        history_section = (
+            "\n        ## History from previous runs\n"
+            "        The following is a log from previous agent runs on this case. Read it carefully —"
+            " it documents what was tried, what worked, what failed, and what was learned."
+            " Do NOT repeat failed approaches.\n\n"
+            f"        ```\n{history}\n        ```\n"
+        )
 
     return dedent(f"""\
         You are working on the docxside-pdf project — a Rust library that converts DOCX files to PDF.
@@ -240,14 +250,7 @@ def build_prompt(case_name: str, case_path: str, progress_file: Path, logs_dir: 
 
         ## Current scores
         {scores}
-        {"" if not history else f"""
-        ## History from previous runs
-        The following is a log from previous agent runs on this case. Read it carefully — it documents what was tried, what worked, what failed, and what was learned. Do NOT repeat failed approaches.
-
-        ```
-{history}
-        ```
-        """}
+        {history_section}
         ## Your goal
         Improve the Jaccard similarity and/or SSIM score for this case. Even small improvements (1-5%) are valuable. Focus on the most impactful issues first.
 

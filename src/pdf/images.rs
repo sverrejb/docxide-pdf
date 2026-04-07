@@ -3,7 +3,8 @@ use std::collections::HashMap;
 use pdf_writer::{Filter, Pdf, Ref};
 
 use crate::model::{
-    Block, Document, EmbeddedImage, HeaderFooter, ImageFormat, SectionProperties, Table,
+    Block, Document, EmbeddedImage, HeaderFooter, ImageFormat, ImageShadow, SectionProperties,
+    Table,
 };
 
 pub(super) struct EmbeddedImages {
@@ -16,6 +17,14 @@ pub(super) struct EmbeddedImages {
     pub(super) hf_floating_image_names: HashMap<(usize, u8, usize, usize), String>,
     /// Images in table cell paragraphs, keyed by Arc data pointer address.
     pub(super) table_cell_image_names: HashMap<usize, String>,
+    // Shadow XObject names (parallel to image name maps)
+    pub(super) shadow_names: HashMap<usize, String>,
+    pub(super) shadow_floating_names: HashMap<(usize, usize), String>,
+    pub(super) shadow_inline_names: HashMap<(usize, usize), String>,
+    pub(super) shadow_hf_names: HashMap<(usize, u8, usize), String>,
+    pub(super) shadow_hf_inline_names: HashMap<(usize, u8, usize, usize), String>,
+    pub(super) shadow_hf_floating_names: HashMap<(usize, u8, usize, usize), String>,
+    pub(super) shadow_table_names: HashMap<usize, String>,
 }
 
 const DOWNSAMPLE_DPI_THRESHOLD: f32 = 200.0;
@@ -288,6 +297,75 @@ fn embed_single_image(
     pdf_name
 }
 
+/// Embed a shadow as a 1x1 solid-color Image XObject whose SMask is a
+/// full-resolution Gaussian-blur grayscale mask. Returns the XObject name.
+fn embed_shadow(
+    shadow: &ImageShadow,
+    display_width: f32,
+    display_height: f32,
+    image_xobjects: &mut Vec<(String, Ref)>,
+    shadow_counter: &mut usize,
+    pdf: &mut Pdf,
+    alloc: &mut impl FnMut() -> Ref,
+) -> String {
+    let (mask_pixels, mask_w, mask_h) =
+        super::color::generate_shadow_mask(display_width, display_height, shadow.blur_radius, shadow.alpha);
+
+    // Compress the grayscale mask
+    let compressed_mask = miniz_oxide::deflate::compress_to_vec_zlib(&mask_pixels, 6);
+
+    // Create the grayscale mask Image XObject
+    let mask_ref = alloc();
+    let mut mask = pdf.image_xobject(mask_ref, &compressed_mask);
+    mask.filter(Filter::FlateDecode);
+    mask.width(mask_w as i32);
+    mask.height(mask_h as i32);
+    mask.color_space().device_gray();
+    mask.bits_per_component(8);
+    mask.interpolate(true);
+    drop(mask);
+
+    // Create a 1x1 solid-color RGB image with the mask as SMask
+    let color_data = [shadow.color[0], shadow.color[1], shadow.color[2]];
+    let color_ref = alloc();
+    let mut color_img = pdf.image_xobject(color_ref, &color_data);
+    color_img.width(1);
+    color_img.height(1);
+    color_img.color_space().device_rgb();
+    color_img.bits_per_component(8);
+    color_img.interpolate(true);
+    color_img.s_mask(mask_ref);
+    drop(color_img);
+
+    *shadow_counter += 1;
+    let name = format!("Sh{}", *shadow_counter);
+    image_xobjects.push((name.clone(), color_ref));
+    name
+}
+
+/// Helper: if the image has a blurred shadow, embed the shadow mask and return its XObject name.
+fn maybe_embed_shadow(
+    img: &EmbeddedImage,
+    image_xobjects: &mut Vec<(String, Ref)>,
+    shadow_counter: &mut usize,
+    pdf: &mut Pdf,
+    alloc: &mut impl FnMut() -> Ref,
+) -> Option<String> {
+    let shadow = img.shadow.as_ref()?;
+    if shadow.blur_radius <= 0.0 {
+        return None;
+    }
+    Some(embed_shadow(
+        shadow,
+        img.display_width,
+        img.display_height,
+        image_xobjects,
+        shadow_counter,
+        pdf,
+        alloc,
+    ))
+}
+
 pub(super) fn embed_all_images(
     doc: &Document,
     pdf: &mut Pdf,
@@ -297,6 +375,10 @@ pub(super) fn embed_all_images(
     let mut inline_image_pdf_names: HashMap<(usize, usize), String> = HashMap::new();
     let mut image_xobjects: Vec<(String, Ref)> = Vec::new();
     let mut floating_image_pdf_names: HashMap<(usize, usize), String> = HashMap::new();
+    let mut shadow_counter = 0usize;
+    let mut shadow_names: HashMap<usize, String> = HashMap::new();
+    let mut shadow_floating_names: HashMap<(usize, usize), String> = HashMap::new();
+    let mut shadow_inline_names: HashMap<(usize, usize), String> = HashMap::new();
 
     {
         let mut global_block_idx = 0usize;
@@ -306,16 +388,25 @@ pub(super) fn embed_all_images(
                     if let Some(img) = &para.image {
                         let name = embed_single_image(img, &mut image_xobjects, pdf, alloc);
                         image_pdf_names.insert(global_block_idx, name);
+                        if let Some(sn) = maybe_embed_shadow(img, &mut image_xobjects, &mut shadow_counter, pdf, alloc) {
+                            shadow_names.insert(global_block_idx, sn);
+                        }
                     }
                     for (run_idx, run) in para.runs.iter().enumerate() {
                         if let Some(img) = &run.inline_image {
                             let name = embed_single_image(img, &mut image_xobjects, pdf, alloc);
                             inline_image_pdf_names.insert((global_block_idx, run_idx), name);
+                            if let Some(sn) = maybe_embed_shadow(img, &mut image_xobjects, &mut shadow_counter, pdf, alloc) {
+                                shadow_inline_names.insert((global_block_idx, run_idx), sn);
+                            }
                         }
                     }
                     for (fi_idx, fi) in para.floating_images.iter().enumerate() {
                         let name = embed_single_image(&fi.image, &mut image_xobjects, pdf, alloc);
                         floating_image_pdf_names.insert((global_block_idx, fi_idx), name);
+                        if let Some(sn) = maybe_embed_shadow(&fi.image, &mut image_xobjects, &mut shadow_counter, pdf, alloc) {
+                            shadow_floating_names.insert((global_block_idx, fi_idx), sn);
+                        }
                     }
                 }
                 global_block_idx += 1;
@@ -326,6 +417,9 @@ pub(super) fn embed_all_images(
     let mut hf_image_names: HashMap<(usize, u8, usize), String> = HashMap::new();
     let mut hf_inline_image_names: HashMap<(usize, u8, usize, usize), String> = HashMap::new();
     let mut hf_floating_image_names: HashMap<(usize, u8, usize, usize), String> = HashMap::new();
+    let mut shadow_hf_names: HashMap<(usize, u8, usize), String> = HashMap::new();
+    let mut shadow_hf_inline_names: HashMap<(usize, u8, usize, usize), String> = HashMap::new();
+    let mut shadow_hf_floating_names: HashMap<(usize, u8, usize, usize), String> = HashMap::new();
     {
         let hf_variants: [(u8, fn(&SectionProperties) -> Option<&HeaderFooter>); 6] = [
             (0, |sp| sp.header_default.as_ref()),
@@ -344,12 +438,18 @@ pub(super) fn embed_all_images(
                             if let Some(img) = &para.image {
                                 let name = embed_single_image(img, &mut image_xobjects, pdf, alloc);
                                 hf_image_names.insert((si, hf_type, pi), name);
+                                if let Some(sn) = maybe_embed_shadow(img, &mut image_xobjects, &mut shadow_counter, pdf, alloc) {
+                                    shadow_hf_names.insert((si, hf_type, pi), sn);
+                                }
                             }
                             for (ri, run) in para.runs.iter().enumerate() {
                                 if let Some(img) = &run.inline_image {
                                     let name =
                                         embed_single_image(img, &mut image_xobjects, pdf, alloc);
                                     hf_inline_image_names.insert((si, hf_type, pi, ri), name);
+                                    if let Some(sn) = maybe_embed_shadow(img, &mut image_xobjects, &mut shadow_counter, pdf, alloc) {
+                                        shadow_hf_inline_names.insert((si, hf_type, pi, ri), sn);
+                                    }
                                 }
                             }
                             for (fi, floating) in para.floating_images.iter().enumerate() {
@@ -360,6 +460,9 @@ pub(super) fn embed_all_images(
                                     alloc,
                                 );
                                 hf_floating_image_names.insert((si, hf_type, pi, fi), name);
+                                if let Some(sn) = maybe_embed_shadow(&floating.image, &mut image_xobjects, &mut shadow_counter, pdf, alloc) {
+                                    shadow_hf_floating_names.insert((si, hf_type, pi, fi), sn);
+                                }
                             }
                             pi += 1;
                         }
@@ -370,6 +473,7 @@ pub(super) fn embed_all_images(
     }
 
     let mut table_cell_image_names: HashMap<usize, String> = HashMap::new();
+    let mut shadow_table_names: HashMap<usize, String> = HashMap::new();
     {
         let mut tables: Vec<&Table> = Vec::new();
         for section in &doc.sections {
@@ -405,7 +509,10 @@ pub(super) fn embed_all_images(
                             if !table_cell_image_names.contains_key(&key) {
                                 let name =
                                     embed_single_image(img, &mut image_xobjects, pdf, alloc);
-                                table_cell_image_names.insert(key, name);
+                                table_cell_image_names.insert(key, name.clone());
+                                if let Some(sn) = maybe_embed_shadow(img, &mut image_xobjects, &mut shadow_counter, pdf, alloc) {
+                                    shadow_table_names.insert(key, sn);
+                                }
                             }
                         }
                         for fi in &para.floating_images {
@@ -413,7 +520,10 @@ pub(super) fn embed_all_images(
                             if !table_cell_image_names.contains_key(&key) {
                                 let name =
                                     embed_single_image(&fi.image, &mut image_xobjects, pdf, alloc);
-                                table_cell_image_names.insert(key, name);
+                                table_cell_image_names.insert(key, name.clone());
+                                if let Some(sn) = maybe_embed_shadow(&fi.image, &mut image_xobjects, &mut shadow_counter, pdf, alloc) {
+                                    shadow_table_names.insert(key, sn);
+                                }
                             }
                         }
                     }
@@ -431,5 +541,12 @@ pub(super) fn embed_all_images(
         hf_inline_image_names,
         hf_floating_image_names,
         table_cell_image_names,
+        shadow_names,
+        shadow_floating_names,
+        shadow_inline_names,
+        shadow_hf_names,
+        shadow_hf_inline_names,
+        shadow_hf_floating_names,
+        shadow_table_names,
     }
 }

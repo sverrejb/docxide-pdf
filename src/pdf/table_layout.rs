@@ -246,6 +246,7 @@ pub(super) struct CellParagraphLayout {
     pub(super) image_stroke_color: Option<[u8; 3]>,
     pub(super) image_stroke_width: f32,
     pub(super) image_shadow: Option<crate::model::ImageShadow>,
+    pub(super) image_shadow_xobj: Option<String>,
     pub(super) content_height: f32,
     pub(super) paragraph_mark_vanish: bool,
     pub(super) floating_images: Vec<CellFloatingImageLayout>,
@@ -424,6 +425,7 @@ pub(super) fn compute_row_layouts(
                                             para_text_w,
                                             hanging,
                                             &EMPTY_INLINE_IMAGE_MAP,
+                                            &EMPTY_INLINE_IMAGE_MAP,
                                             ctx.default_tab_stop,
                                         )
                                     } else {
@@ -432,6 +434,7 @@ pub(super) fn compute_row_layouts(
                                             ctx.fonts,
                                             para_text_w,
                                             hanging,
+                                            &EMPTY_INLINE_IMAGE_MAP,
                                             &EMPTY_INLINE_IMAGE_MAP,
                                             None,
                                             None,
@@ -479,6 +482,10 @@ pub(super) fn compute_row_layouts(
                                     .as_ref()
                                     .map(|img| (img.display_width, img.display_height, img.stroke_color, img.stroke_width, img.shadow.clone()))
                                     .unwrap_or((0.0, 0.0, None, 0.0, None));
+                                let img_shadow_xobj = para.image.as_ref().and_then(|img| {
+                                    let key = std::sync::Arc::as_ptr(&img.data) as usize;
+                                    ctx.shadow_table_names.get(&key).cloned()
+                                });
 
                                 let cell_floats: Vec<CellFloatingImageLayout> = para
                                     .floating_images
@@ -535,6 +542,7 @@ pub(super) fn compute_row_layouts(
                                     image_stroke_color: img_stroke_color,
                                     image_stroke_width: img_stroke_width,
                                     image_shadow: img_shadow,
+                                    image_shadow_xobj: img_shadow_xobj,
                                     content_height: para.content_height,
                                     paragraph_mark_vanish: para.paragraph_mark_vanish,
                                     floating_images: cell_floats,

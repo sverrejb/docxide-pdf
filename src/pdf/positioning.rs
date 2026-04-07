@@ -86,6 +86,7 @@ pub(super) fn render_floating_images(
     behind_doc: bool,
     global_block_idx: usize,
     pdf_names: &HashMap<(usize, usize), String>,
+    shadow_pdf_names: &HashMap<(usize, usize), String>,
     sp: &SectionProperties,
     col_x: f32,
     col_w: f32,
@@ -106,7 +107,8 @@ pub(super) fn render_floating_images(
             if let Some(ref shadow) = img.shadow {
                 super::color::draw_image_shadow(
                     content, shadow, fi_x, fi_y_bottom,
-                    img.display_width, img.display_height, None,
+                    img.display_width, img.display_height,
+                    shadow_pdf_names.get(&(global_block_idx, fi_idx)).map(|s| s.as_str()),
                 );
             }
 

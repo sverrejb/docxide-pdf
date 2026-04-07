@@ -72,11 +72,11 @@ pub(super) fn render_single_textbox(
             let lines = if tp.runs.iter().any(|r| r.is_tab) {
                 build_tabbed_line(
                     &tp.runs, ctx.fonts, &tp.tab_stops, tp.indent_left,
-                    tw, hang, &empty_imgs, ctx.default_tab_stop,
+                    tw, hang, &empty_imgs, &empty_imgs, ctx.default_tab_stop,
                 )
             } else {
                 build_paragraph_lines(
-                    &tp.runs, ctx.fonts, tw, hang, &empty_imgs, None, None, None,
+                    &tp.runs, ctx.fonts, tw, hang, &empty_imgs, &empty_imgs, None, None, None,
                 )
             };
             let (fs, lhr, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
@@ -183,11 +183,11 @@ pub(super) fn render_single_textbox(
                     build_tabbed_line(
                         &tp.runs, ctx.fonts, &tp.tab_stops, tp.indent_left,
                         tp_text_w, text_hanging, &empty_inline_imgs_pre,
-                        ctx.default_tab_stop,
+                        &empty_inline_imgs_pre, ctx.default_tab_stop,
                     )
                 } else {
                     build_paragraph_lines(
-                        &tp.runs, ctx.fonts, tp_text_w, text_hanging, &empty_inline_imgs_pre, None, None, None,
+                        &tp.runs, ctx.fonts, tp_text_w, text_hanging, &empty_inline_imgs_pre, &empty_inline_imgs_pre, None, None, None,
                     )
                 };
                 let (fs, lhr, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
@@ -311,11 +311,11 @@ pub(super) fn render_textbox_paragraphs(
         let tb_lines = if tp.runs.iter().any(|r| r.is_tab) {
             build_tabbed_line(
                 &tp.runs, ctx.fonts, &tp.tab_stops, tp.indent_left,
-                tp_text_w, text_hanging, &empty_imgs, ctx.default_tab_stop,
+                tp_text_w, text_hanging, &empty_imgs, &empty_imgs, ctx.default_tab_stop,
             )
         } else {
             build_paragraph_lines(
-                &tp.runs, ctx.fonts, tp_text_w, text_hanging, &empty_imgs, None, None, None,
+                &tp.runs, ctx.fonts, tp_text_w, text_hanging, &empty_imgs, &empty_imgs, None, None, None,
             )
         };
         if tb_lines.is_empty() {

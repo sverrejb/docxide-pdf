@@ -1,5 +1,5 @@
 {
-  "next_id": 112,
+  "next_id": 116,
   "annotations": [
     {
       "id": 8,
@@ -9,16 +9,6 @@
       "x_pt": 322.27734,
       "y_pt": 164.30786,
       "note": "This text should come on page 2.",
-      "fixed": false
-    },
-    {
-      "id": 30,
-      "case": "scraped/mongolian_human_rights_law",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 192.72809,
-      "y_pt": 474.28906,
-      "note": "We render a space here after the 4.1.5\" that is not present in the reference pdf",
       "fixed": false
     },
     {
@@ -72,16 +62,6 @@
       "fixed": false
     },
     {
-      "id": 83,
-      "case": "scraped/go_math_grade4_guide",
-      "page": 2,
-      "source": "Generated",
-      "x_pt": 39.477592,
-      "y_pt": 361.21497,
-      "note": "Table heading overlaps thumbs up icon",
-      "fixed": true
-    },
-    {
       "id": 93,
       "case": "new/czech_works_contract_proposal",
       "page": 0,
@@ -122,66 +102,6 @@
       "fixed": false
     },
     {
-      "id": 98,
-      "case": "new/english_town_council_report",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 150.86743,
-      "y_pt": 609.95953,
-      "note": "This box should have a blue background.",
-      "fixed": false
-    },
-    {
-      "id": 99,
-      "case": "new/english_town_council_report",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 71.75009,
-      "y_pt": 767.3529,
-      "note": "this blue outline box should not be here.",
-      "fixed": false
-    },
-    {
-      "id": 100,
-      "case": "new/english_town_council_report",
-      "page": 2,
-      "source": "Generated",
-      "x_pt": 527.4346,
-      "y_pt": 750.5171,
-      "note": "Several gaps in the border on right and left side.",
-      "fixed": false
-    },
-    {
-      "id": 101,
-      "case": "new/english_town_council_report",
-      "page": 7,
-      "source": "Generated",
-      "x_pt": 96.81949,
-      "y_pt": 793.3853,
-      "note": "No room between numbering and text \"The Contractor...\"",
-      "fixed": false
-    },
-    {
-      "id": 102,
-      "case": "new/english_town_council_report",
-      "page": 7,
-      "source": "Generated",
-      "x_pt": 94.28856,
-      "y_pt": 546.1387,
-      "note": "Text overlaps with numbering, as well as itself here.",
-      "fixed": false
-    },
-    {
-      "id": 103,
-      "case": "new/spanish_constitutional_ruling",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 146.91533,
-      "y_pt": 797.2121,
-      "note": "Page numbers should be rendered on the right side. We do left.",
-      "fixed": false
-    },
-    {
       "id": 107,
       "case": "scraped/learning_cultures_dissertation",
       "page": 2,
@@ -202,16 +122,6 @@
       "fixed": false
     },
     {
-      "id": 109,
-      "case": "scraped/learning_cultures_dissertation",
-      "page": 12,
-      "source": "Generated",
-      "x_pt": 111.3406,
-      "y_pt": 60.7041,
-      "note": "Roman page numbers should be centered.",
-      "fixed": false
-    },
-    {
       "id": 111,
       "case": "scraped/indonesian_benchmarking_guide",
       "page": 6,
@@ -219,6 +129,46 @@
       "x_pt": 226.61615,
       "y_pt": 637.20514,
       "note": "We wrap this image. Word does not.",
+      "fixed": false
+    },
+    {
+      "id": 112,
+      "case": "new/master_thesis_learning_agreement",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 74.381256,
+      "y_pt": 144.82404,
+      "note": "We overflow into the footer here.",
+      "fixed": false
+    },
+    {
+      "id": 113,
+      "case": "new/croatian_military_burial_request",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 140.50388,
+      "y_pt": 92.46936,
+      "note": "We overflow the footer here.",
+      "fixed": false
+    },
+    {
+      "id": 114,
+      "case": "scraped/learning_cultures_dissertation",
+      "page": 8,
+      "source": "Generated",
+      "x_pt": 449.4605,
+      "y_pt": 348.35162,
+      "note": "\"Preparation....\" should be on the next line",
+      "fixed": false
+    },
+    {
+      "id": 115,
+      "case": "new/english_town_council_report",
+      "page": 6,
+      "source": "Generated",
+      "x_pt": 516.4139,
+      "y_pt": 127.313354,
+      "note": "Text outside table here.",
       "fixed": false
     }
   ]

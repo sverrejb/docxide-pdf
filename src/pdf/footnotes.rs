@@ -42,7 +42,7 @@ fn layout_paragraph(
     }
     let (fs, tallest_lhr, tallest_ar) = tallest_run_metrics(runs, ctx.fonts);
     let lh = resolve_line_h(line_spacing, fs, tallest_lhr);
-    let lines = build_paragraph_lines(runs, ctx.fonts, text_width, 0.0, &HashMap::new(), None, None, None);
+    let lines = build_paragraph_lines(runs, ctx.fonts, text_width, 0.0, &HashMap::new(), &HashMap::new(), None, None, None);
     if lines.is_empty() {
         return None;
     }

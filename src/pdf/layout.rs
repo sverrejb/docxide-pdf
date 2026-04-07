@@ -124,6 +124,7 @@ pub(super) struct WordChunk {
     pub(super) inline_image_stroke_color: Option<[u8; 3]>,
     pub(super) inline_image_stroke_width: f32,
     pub(super) inline_image_shadow: Option<crate::model::ImageShadow>,
+    pub(super) inline_image_shadow_xobj: Option<String>,
     pub(super) synthetic_bold: bool,
     pub(super) text_outline: Option<TextOutline>,
     pub(super) text_fill: Option<TextFill>,
@@ -160,6 +161,7 @@ impl WordChunk {
             inline_image_stroke_color: None,
             inline_image_stroke_width: 0.0,
             inline_image_shadow: None,
+            inline_image_shadow_xobj: None,
             synthetic_bold: entry.synthetic_bold,
             text_outline: run.text_outline.clone(),
             text_fill: run.text_fill.clone(),
@@ -175,6 +177,7 @@ impl WordChunk {
         stroke_color: Option<[u8; 3]>,
         stroke_width: f32,
         shadow: Option<crate::model::ImageShadow>,
+        shadow_xobj: Option<String>,
     ) -> Self {
         Self {
             pdf_font: String::new(),
@@ -196,6 +199,7 @@ impl WordChunk {
             inline_image_stroke_color: stroke_color,
             inline_image_stroke_width: stroke_width,
             inline_image_shadow: shadow,
+            inline_image_shadow_xobj: shadow_xobj,
             synthetic_bold: false,
             text_outline: None,
             text_fill: None,
@@ -230,6 +234,7 @@ impl WordChunk {
             inline_image_stroke_color: None,
             inline_image_stroke_width: 0.0,
             inline_image_shadow: None,
+            inline_image_shadow_xobj: None,
             synthetic_bold: false,
             text_outline: None,
             text_fill: None,
@@ -363,6 +368,7 @@ pub(super) fn build_paragraph_lines(
     max_width: f32,
     first_line_hanging: f32,
     inline_image_names: &HashMap<usize, String>,
+    shadow_inline_names: &HashMap<usize, String>,
     width_after_line: Option<(usize, f32)>,
     per_line_widths: Option<&[f32]>,
     per_line_dual: Option<&[DualRegion]>,
@@ -473,6 +479,7 @@ pub(super) fn build_paragraph_lines(
                                 current_chunks.push(WordChunk::image(
                                     pdf_name, run.font_size, proposed_x2, img_w, img.display_height,
                                     img.stroke_color, img.stroke_width, img.shadow.clone(),
+                                    shadow_inline_names.get(&run_idx).cloned(),
                                 ));
                                 current_x = img_w;
                                 continue;
@@ -489,6 +496,7 @@ pub(super) fn build_paragraph_lines(
                 current_chunks.push(WordChunk::image(
                     pdf_name, run.font_size, current_x, img_w, img.display_height,
                     img.stroke_color, img.stroke_width, img.shadow.clone(),
+                    shadow_inline_names.get(&run_idx).cloned(),
                 ));
                 current_x += img_w;
             }
@@ -731,6 +739,7 @@ pub(super) fn build_tabbed_line(
     max_width: f32,
     first_line_hanging: f32,
     inline_image_names: &HashMap<usize, String>,
+    shadow_inline_names: &HashMap<usize, String>,
     default_tab_stop: f32,
 ) -> Vec<TextLine> {
     // Split runs into segments at tab markers, tracking original run indices
@@ -874,6 +883,7 @@ pub(super) fn build_tabbed_line(
                         img.stroke_color,
                         img.stroke_width,
                         img.shadow.clone(),
+                        shadow_inline_names.get(&seg_indices[local_idx]).cloned(),
                     ));
                     current_x += img.display_width;
                 }
@@ -1414,7 +1424,8 @@ pub(super) fn render_paragraph_lines(
                 if let Some(ref shadow) = chunk.inline_image_shadow {
                     super::color::draw_image_shadow(
                         content, shadow, x, img_bottom,
-                        chunk.width, chunk.inline_image_height, None,
+                        chunk.width, chunk.inline_image_height,
+                        chunk.inline_image_shadow_xobj.as_deref(),
                     );
                 }
 

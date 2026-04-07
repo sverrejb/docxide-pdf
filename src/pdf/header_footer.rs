@@ -257,11 +257,12 @@ fn build_lines_with_float(
     text_hanging: f32,
     per_line_widths: Option<&[f32]>,
 ) -> Vec<TextLine> {
+    let empty_shadows: HashMap<usize, String> = HashMap::new();
     let has_tabs = runs.iter().any(|r| r.is_tab);
     if has_tabs {
-        build_tabbed_line(runs, fonts, tab_stops, indent_left, text_width, text_hanging, inline_images, default_tab_stop)
+        build_tabbed_line(runs, fonts, tab_stops, indent_left, text_width, text_hanging, inline_images, &empty_shadows, default_tab_stop)
     } else {
-        build_paragraph_lines(runs, fonts, text_width, text_hanging, inline_images, None, per_line_widths, None)
+        build_paragraph_lines(runs, fonts, text_width, text_hanging, inline_images, &empty_shadows, None, per_line_widths, None)
     }
 }
 
@@ -273,6 +274,8 @@ pub(super) struct HfPageContext<'a> {
     pub(super) para_image_names: &'a HashMap<usize, String>,
     pub(super) inline_image_names: &'a HashMap<(usize, usize), String>,
     pub(super) floating_image_names: &'a HashMap<(usize, usize), String>,
+    pub(super) shadow_para_names: &'a HashMap<usize, String>,
+    pub(super) shadow_floating_names: &'a HashMap<(usize, usize), String>,
     pub(super) styleref_values: &'a HashMap<String, String>,
     pub(super) page_num_format: Option<&'a str>,
 }
@@ -521,7 +524,8 @@ pub(super) fn render_header_footer(
                         if let Some(ref shadow) = img.shadow {
                             super::color::draw_image_shadow(
                                 content, shadow, x, y_bottom,
-                                img.display_width, img.display_height, None,
+                                img.display_width, img.display_height,
+                                pc.shadow_para_names.get(&pi).map(|s| s.as_str()),
                             );
                         }
                         emit_image_xobject(
