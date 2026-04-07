@@ -92,6 +92,12 @@ fn parse_dsp_shape(sp: roxmltree::Node, theme: &ThemeFonts) -> Option<SmartArtSh
     let y = emu_attr(off, "y");
     let w = emu_attr(ext, "cx");
     let h = emu_attr(ext, "cy");
+    // rot is in 60,000ths of a degree
+    let rotation_deg = xfrm
+        .attribute("rot")
+        .and_then(|v| v.parse::<f64>().ok())
+        .map(|v| (v / 60_000.0) as f32)
+        .unwrap_or(0.0);
 
     let fill = if has_dml(sp_pr, "noFill") {
         None
@@ -125,6 +131,7 @@ fn parse_dsp_shape(sp: roxmltree::Node, theme: &ThemeFonts) -> Option<SmartArtSh
         y,
         width: w,
         height: h,
+        rotation_deg,
         shape_type: parse_shape_geometry(sp_pr),
         fill,
         stroke_color,

@@ -140,6 +140,8 @@ pub struct SmartArtShape {
     pub y: f32,
     pub width: f32,
     pub height: f32,
+    /// Rotation in degrees (clockwise in OOXML, converted for PDF)
+    pub rotation_deg: f32,
     pub shape_type: ShapeGeometry,
     pub fill: Option<[u8; 3]>,
     pub stroke_color: Option<[u8; 3]>,

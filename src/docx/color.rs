@@ -8,6 +8,10 @@ pub(super) struct ColorTransforms {
     pub(super) sat_mod: Option<f32>,
     pub(super) tint: Option<f32>,
     pub(super) shade: Option<f32>,
+    /// Hue offset in 60,000ths of a degree (SmartArt per-shape color variation)
+    pub(super) hue_off: Option<f32>,
+    /// Saturation offset in 1/1000ths of a percent
+    pub(super) sat_off: Option<f32>,
 }
 
 pub(super) fn parse_color_transforms(scheme_clr: roxmltree::Node) -> ColorTransforms {
@@ -20,12 +24,16 @@ pub(super) fn parse_color_transforms(scheme_clr: roxmltree::Node) -> ColorTransf
             .attribute("val")
             .and_then(|v| v.parse::<f32>().ok())
             .map(|v| v / 100_000.0);
+        // hueOff/satOff/lumOff use raw integer units, not the /100_000 scaling
+        let raw_val = child.attribute("val").and_then(|v| v.parse::<f32>().ok());
         match child.tag_name().name() {
             "lumMod" => t.lum_mod = val,
             "lumOff" => t.lum_off = val,
             "satMod" => t.sat_mod = val,
             "tint" => t.tint = val,
             "shade" => t.shade = val,
+            "hueOff" => t.hue_off = raw_val,
+            "satOff" => t.sat_off = raw_val,
             _ => {}
         }
     }
@@ -62,6 +70,23 @@ pub(super) fn apply_color_transforms(base: [u8; 3], t: &ColorTransforms) -> [u8;
             ((color[1] as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8,
             ((color[2] as f32 / 255.0 * m + o) * 255.0).clamp(0.0, 255.0) as u8,
         ];
+    }
+    // HSL offsets (used by SmartArt for per-shape color variation)
+    if t.hue_off.is_some() || t.sat_off.is_some() {
+        let (h, s, l) = rgb_to_hsl(color);
+        // hueOff is in 60,000ths of a degree; convert to 0..1 range
+        let h2 = if let Some(ho) = t.hue_off {
+            (h + ho / (360.0 * 60_000.0)).rem_euclid(1.0)
+        } else {
+            h
+        };
+        // satOff is in 1/1000ths of a percent; convert to 0..1 range
+        let s2 = if let Some(so) = t.sat_off {
+            (s + so / 100_000.0).clamp(0.0, 1.0)
+        } else {
+            s
+        };
+        color = hsl_to_rgb(h2, s2, l);
     }
     color
 }

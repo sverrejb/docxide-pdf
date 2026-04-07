@@ -93,6 +93,23 @@ pub(super) fn render_smartart(
         let has_fill = shape.fill.is_some();
         let has_stroke = shape.stroke_color.is_some() && shape.stroke_width > 0.0;
 
+        // Apply rotation around the shape's center if non-zero
+        let rotated = shape.rotation_deg.abs() > 0.01;
+        if rotated {
+            content.save_state();
+            let cx = sx + shape.width / 2.0;
+            let cy = sy + shape.height / 2.0;
+            let rad = -shape.rotation_deg.to_radians();
+            let cos = rad.cos();
+            let sin = rad.sin();
+            // Rotate around (cx, cy): translate to origin, rotate, translate back
+            content.transform([
+                cos, sin, -sin, cos,
+                cx - cos * cx + sin * cy,
+                cy - sin * cx - cos * cy,
+            ]);
+        }
+
         if has_fill || has_stroke {
             content.save_state();
             if let Some(fill) = shape.fill {
@@ -152,6 +169,10 @@ pub(super) fn render_smartart(
                     sa_font_entry,
                 );
             }
+            content.restore_state();
+        }
+
+        if rotated {
             content.restore_state();
         }
     }
