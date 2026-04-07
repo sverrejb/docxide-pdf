@@ -76,10 +76,16 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     let space_before = sp_before.unwrap_or(0.0);
     let space_after = sp_after.unwrap_or(ctx.styles.defaults.space_after);
 
-    let para_shading = ppr
-        .and_then(|ppr| wml(ppr, "shd"))
-        .and_then(|shd| shd.attribute((WML_NS, "fill")))
-        .and_then(parse_hex_color);
+    let inline_shd_node = ppr.and_then(|ppr| wml(ppr, "shd"));
+    let para_shading = if inline_shd_node.is_some() {
+        // Inline w:shd present — use it even if fill="auto" (None), don't inherit
+        inline_shd_node
+            .and_then(|shd| shd.attribute((WML_NS, "fill")))
+            .and_then(parse_hex_color)
+    } else {
+        // No inline w:shd — inherit from paragraph style
+        para_style.and_then(|s| s.shading)
+    };
 
     let style_color = para_style.and_then(|s| s.color);
 

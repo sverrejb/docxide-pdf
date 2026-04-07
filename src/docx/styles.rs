@@ -121,6 +121,7 @@ pub(super) struct ParagraphStyle {
     pub(super) indent_hanging: Option<f32>,
     pub(super) indent_first_line: Option<f32>,
     pub(super) borders: ParagraphBorders,
+    pub(super) shading: Option<[u8; 3]>,
     pub(super) based_on: Option<String>,
     pub(super) kern_threshold: Option<f32>,
     pub(super) tab_stops: Vec<TabStop>,
@@ -565,6 +566,10 @@ pub(super) fn parse_styles<R: Read + Seek>(
                 let space_after_autospacing = spacing
                     .and_then(|n| n.attribute((WML_NS, "afterAutospacing")).map(|v| v == "1" || v == "true"));
                 let borders = ppr.map(parse_paragraph_borders).unwrap_or_default();
+                let shading = ppr
+                    .and_then(|n| wml(n, "shd"))
+                    .and_then(|shd| shd.attribute((WML_NS, "fill")))
+                    .and_then(parse_hex_color);
 
                 let rpr = wml(style_node, "rPr");
 
@@ -674,6 +679,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         indent_hanging,
                         indent_first_line,
                         borders,
+                        shading,
                         based_on,
                         kern_threshold,
                         tab_stops,
@@ -879,6 +885,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     outline_level,
                     snap_to_grid,
                     suppress_auto_hyphens,
+                    shading,
                 );
                 // Tab stops are additive: accumulate from ancestors, child overrides at same pos
                 // Clear tabs remove inherited tabs at matching positions
@@ -933,6 +940,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             s.outline_level = s.outline_level.or(inh.outline_level);
             s.snap_to_grid = s.snap_to_grid.or(inh.snap_to_grid);
             s.suppress_auto_hyphens = s.suppress_auto_hyphens.or(inh.suppress_auto_hyphens);
+            s.shading = s.shading.or(inh.shading);
             s.tab_stops = inh.tab_stops;
         }
     }
