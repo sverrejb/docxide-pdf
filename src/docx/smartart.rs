@@ -27,7 +27,23 @@ pub(super) fn has_diagram_ref(container: roxmltree::Node) -> bool {
     })
 }
 
+/// Resolve the drawing file for a specific SmartArt diagram by extracting
+/// the r:dm (data) relationship from dgm:relIds and deriving the drawing path.
+fn find_diagram_drawing(
+    container: roxmltree::Node,
+    rels: &HashMap<String, String>,
+) -> Option<String> {
+    let dgm_rel_ids = container.descendants().find(|n| {
+        n.tag_name().name() == "relIds"
+            && n.tag_name().namespace() == Some(DIAGRAM_URI)
+    })?;
+    let dm_rid = dgm_rel_ids.attribute((super::REL_NS, "dm"))?;
+    let data_target = rels.get(dm_rid)?;
+    Some(data_target.replace("/data", "/drawing"))
+}
+
 pub(super) fn parse_smartart_drawing<R: Read + Seek>(
+    container: roxmltree::Node,
     rels: &HashMap<String, String>,
     zip: &mut zip::ZipArchive<R>,
     theme: &ThemeFonts,
@@ -36,7 +52,9 @@ pub(super) fn parse_smartart_drawing<R: Read + Seek>(
 ) -> SmartArtDiagram {
     let mut shapes = Vec::new();
 
-    if let Some(target) = rels.values().find(|t| t.contains("diagrams/drawing")) {
+    let drawing_target = find_diagram_drawing(container, rels)
+        .or_else(|| rels.values().find(|t| t.contains("diagrams/drawing")).cloned());
+    if let Some(target) = drawing_target {
         let zip_path = target
             .strip_prefix('/')
             .map(String::from)
