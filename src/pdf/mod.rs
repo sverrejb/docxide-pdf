@@ -1933,7 +1933,10 @@ fn render_paragraph_block(
             &mut state.pb.alpha_states,
         );
     } else if !para.smartart.is_empty() {
-        for diagram in &para.smartart {
+        for (i, diagram) in para.smartart.iter().enumerate() {
+            if i > 0 {
+                state.pb.slot_top -= diagram.display_height;
+            }
             smartart::render_smartart(
                 &mut state.pb.content,
                 diagram,
