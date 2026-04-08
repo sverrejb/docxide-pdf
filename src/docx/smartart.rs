@@ -120,7 +120,19 @@ fn parse_dsp_shape(sp: roxmltree::Node, theme: &ThemeFonts) -> Option<SmartArtSh
         })
         .map_or((None, 0.0), |(c, w)| (Some(c), w));
 
-    let (text, font_size, text_color) = parse_dsp_text(sp, theme);
+    let (text, font_size, text_color, text_inset_left) = parse_dsp_text(sp, theme);
+
+    // dsp:txXfrm provides a separate rectangle for text placement
+    let text_rect = dsp(sp, "txXfrm").and_then(|tx| {
+        let tx_off = dml(tx, "off")?;
+        let tx_ext = dml(tx, "ext")?;
+        Some((
+            emu_attr(tx_off, "x"),
+            emu_attr(tx_off, "y"),
+            emu_attr(tx_ext, "cx"),
+            emu_attr(tx_ext, "cy"),
+        ))
+    });
 
     if fill.is_none() && text.is_empty() {
         return None;
@@ -139,13 +151,20 @@ fn parse_dsp_shape(sp: roxmltree::Node, theme: &ThemeFonts) -> Option<SmartArtSh
         text,
         font_size,
         text_color,
+        text_rect,
+        text_inset_left,
     })
 }
 
-fn parse_dsp_text(sp: roxmltree::Node, theme: &ThemeFonts) -> (String, f32, Option<[u8; 3]>) {
+fn parse_dsp_text(sp: roxmltree::Node, theme: &ThemeFonts) -> (String, f32, Option<[u8; 3]>, f32) {
     let Some(body) = dsp(sp, "txBody") else {
-        return (String::new(), 0.0, None);
+        return (String::new(), 0.0, None, 0.0);
     };
+    let left_inset = dml(body, "bodyPr")
+        .and_then(|bp| bp.attribute("lIns"))
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(super::emu_to_pts)
+        .unwrap_or(0.0);
 
     let mut lines = Vec::new();
     let mut font_size = 0.0;
@@ -175,5 +194,5 @@ fn parse_dsp_text(sp: roxmltree::Node, theme: &ThemeFonts) -> (String, f32, Opti
         }
     }
 
-    (lines.join("\n"), font_size, text_color)
+    (lines.join("\n"), font_size, text_color, left_inset)
 }

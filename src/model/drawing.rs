@@ -30,6 +30,10 @@ pub struct EmbeddedImage {
     pub stroke_color: Option<[u8; 3]>,
     pub stroke_width: f32,
     pub shadow: Option<ImageShadow>,
+    pub soft_edge: Option<SoftEdge>,
+    pub glow: Option<ImageGlow>,
+    pub inner_shadow: Option<InnerShadow>,
+    pub reflection: Option<ImageReflection>,
 }
 
 #[derive(Clone, Debug)]
@@ -39,6 +43,35 @@ pub struct ImageShadow {
     pub blur_radius: f32, // points
     pub color: [u8; 3],
     pub alpha: f32,       // 0.0–1.0
+}
+
+#[derive(Clone, Debug)]
+pub struct SoftEdge {
+    pub radius: f32, // points
+}
+
+#[derive(Clone, Debug)]
+pub struct ImageGlow {
+    pub radius: f32,    // points
+    pub color: [u8; 3],
+    pub alpha: f32,     // 0.0–1.0
+}
+
+#[derive(Clone, Debug)]
+pub struct InnerShadow {
+    pub offset_x: f32,
+    pub offset_y: f32,
+    pub blur_radius: f32,
+    pub color: [u8; 3],
+    pub alpha: f32,
+}
+
+#[derive(Clone, Debug)]
+pub struct ImageReflection {
+    pub start_alpha: f32, // 0.0–1.0
+    pub end_alpha: f32,   // 0.0–1.0
+    pub distance: f32,    // points (gap between image and reflection)
+    pub blur_radius: f32, // points
 }
 
 #[derive(Clone)]
@@ -149,6 +182,10 @@ pub struct SmartArtShape {
     pub text: String,
     pub font_size: f32,
     pub text_color: Option<[u8; 3]>,
+    /// Separate text rectangle from dsp:txXfrm (x, y, w, h in pts)
+    pub text_rect: Option<(f32, f32, f32, f32)>,
+    /// Left inset from a:bodyPr lIns (pts)
+    pub text_inset_left: f32,
 }
 
 pub struct SmartArtDiagram {

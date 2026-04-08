@@ -136,19 +136,32 @@ pub(super) fn render_smartart(
             content.restore_state();
         }
 
+        // Close rotation before drawing text — txXfrm coordinates are in
+        // the unrotated diagram space and already account for the shape rotation
+        if rotated {
+            content.restore_state();
+        }
+
         if !shape.text.is_empty() && shape.font_size > 0.0 {
             let fs = shape.font_size;
             let para_lines: Vec<&str> = shape.text.split('\n').collect();
             let line_h = fs * 1.2;
 
-            // Word-wrap each paragraph line to fit within shape width
+            // Use txXfrm text rectangle if available, otherwise shape bounds
+            let (txt_x, txt_y, txt_w, txt_h) = if let Some((tx, ty, tw, th)) = shape.text_rect {
+                (tx, ty, tw, th)
+            } else {
+                (shape.x, shape.y, shape.width, shape.height)
+            };
+
             let mut wrapped: Vec<String> = Vec::new();
             for para in &para_lines {
-                wrap_text_into(para, fs, shape.width, sa_font_entry, &mut wrapped);
+                wrap_text_into(para, fs, txt_w, sa_font_entry, &mut wrapped);
             }
 
-            let total_text_h = wrapped.len() as f32 * line_h;
-            let text_top_y = diag_y - shape.y - (shape.height - total_text_h) / 2.0;
+            let _total_text_h = wrapped.len() as f32 * line_h;
+            // Text uses anchor="t" (top-aligned) in SmartArt diagrams
+            let text_top_y = diag_y - txt_y;
             content.save_state();
             if let Some(color) = shape.text_color {
                 color::fill_rgb(content, color);
@@ -157,7 +170,7 @@ pub(super) fn render_smartart(
             }
             for (i, line) in wrapped.iter().enumerate() {
                 let tw = charts::text_width(line, fs, sa_font_entry);
-                let tx = diag_x + shape.x + (shape.width - tw) / 2.0;
+                let tx = diag_x + txt_x + shape.text_inset_left;
                 let ty = text_top_y - fs - (i as f32) * line_h;
                 charts::show_text_encoded(
                     content,
@@ -169,10 +182,6 @@ pub(super) fn render_smartart(
                     sa_font_entry,
                 );
             }
-            content.restore_state();
-        }
-
-        if rotated {
             content.restore_state();
         }
     }
