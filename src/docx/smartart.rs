@@ -120,7 +120,24 @@ fn parse_dsp_shape(sp: roxmltree::Node, theme: &ThemeFonts) -> Option<SmartArtSh
         })
         .map_or((None, 0.0), |(c, w)| (Some(c), w));
 
-    let tp = parse_dsp_text(sp, theme);
+    let mut tp = parse_dsp_text(sp, theme);
+
+    // Fall back to dsp:style/a:fontRef color if text has no explicit color
+    if tp.text_color.is_none() {
+        tp.text_color = dsp(sp, "style")
+            .and_then(|style| dml(style, "fontRef"))
+            .and_then(|fr| parse_solid_fill(fr, theme)
+                .or_else(|| {
+                    // fontRef may have schemeClr directly as a child
+                    fr.children()
+                        .find(|n| n.tag_name().name() == "schemeClr" && n.tag_name().namespace() == Some(DML_NS))
+                        .and_then(|sc| {
+                            let val = sc.attribute("val")?;
+                            let key = super::resolve_theme_color_key(val);
+                            theme.colors.get(key).copied()
+                        })
+                }));
+    }
 
     // dsp:txXfrm provides a separate rectangle for text placement
     let text_rect = dsp(sp, "txXfrm").and_then(|tx| {
