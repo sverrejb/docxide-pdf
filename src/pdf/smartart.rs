@@ -4,7 +4,7 @@ use pdf_writer::Content;
 
 use crate::fonts::FontEntry;
 use crate::geometry::{self, ResolvedCommand};
-use crate::model::{ShapeGeometry, SmartArtDiagram};
+use crate::model::{ShapeGeometry, SmartArtDiagram, SmartArtTextAnchor, SmartArtTextAlign};
 
 use super::charts;
 use super::color;
@@ -159,9 +159,12 @@ pub(super) fn render_smartart(
                 wrap_text_into(para, fs, txt_w, sa_font_entry, &mut wrapped);
             }
 
-            let _total_text_h = wrapped.len() as f32 * line_h;
-            // Text uses anchor="t" (top-aligned) in SmartArt diagrams
-            let text_top_y = diag_y - txt_y;
+            let total_text_h = wrapped.len() as f32 * line_h;
+            let text_top_y = match shape.text_anchor {
+                SmartArtTextAnchor::Top => diag_y - txt_y,
+                SmartArtTextAnchor::Center => diag_y - txt_y - (txt_h - total_text_h) / 2.0,
+                SmartArtTextAnchor::Bottom => diag_y - txt_y - (txt_h - total_text_h),
+            };
             content.save_state();
             if let Some(color) = shape.text_color {
                 color::fill_rgb(content, color);
@@ -170,7 +173,11 @@ pub(super) fn render_smartart(
             }
             for (i, line) in wrapped.iter().enumerate() {
                 let tw = charts::text_width(line, fs, sa_font_entry);
-                let tx = diag_x + txt_x + shape.text_inset_left;
+                let tx = diag_x + txt_x + match shape.text_align {
+                    SmartArtTextAlign::Left => shape.text_inset_left,
+                    SmartArtTextAlign::Center => (txt_w - tw) / 2.0,
+                    SmartArtTextAlign::Right => txt_w - tw - shape.text_inset_left,
+                };
                 let ty = text_top_y - fs - (i as f32) * line_h;
                 charts::show_text_encoded(
                     content,

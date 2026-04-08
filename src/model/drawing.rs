@@ -168,6 +168,22 @@ pub enum CustomPathCommand {
     Close,
 }
 
+#[derive(Clone, Copy, Default)]
+pub enum SmartArtTextAnchor {
+    #[default]
+    Top,
+    Center,
+    Bottom,
+}
+
+#[derive(Clone, Copy, Default)]
+pub enum SmartArtTextAlign {
+    #[default]
+    Left,
+    Center,
+    Right,
+}
+
 pub struct SmartArtShape {
     pub x: f32,
     pub y: f32,
@@ -186,6 +202,8 @@ pub struct SmartArtShape {
     pub text_rect: Option<(f32, f32, f32, f32)>,
     /// Left inset from a:bodyPr lIns (pts)
     pub text_inset_left: f32,
+    pub text_anchor: SmartArtTextAnchor,
+    pub text_align: SmartArtTextAlign,
 }
 
 pub struct SmartArtDiagram {

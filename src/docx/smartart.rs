@@ -120,7 +120,7 @@ fn parse_dsp_shape(sp: roxmltree::Node, theme: &ThemeFonts) -> Option<SmartArtSh
         })
         .map_or((None, 0.0), |(c, w)| (Some(c), w));
 
-    let (text, font_size, text_color, text_inset_left) = parse_dsp_text(sp, theme);
+    let tp = parse_dsp_text(sp, theme);
 
     // dsp:txXfrm provides a separate rectangle for text placement
     let text_rect = dsp(sp, "txXfrm").and_then(|tx| {
@@ -134,7 +134,7 @@ fn parse_dsp_shape(sp: roxmltree::Node, theme: &ThemeFonts) -> Option<SmartArtSh
         ))
     });
 
-    if fill.is_none() && text.is_empty() {
+    if fill.is_none() && tp.text.is_empty() && stroke_color.is_none() {
         return None;
     }
 
@@ -148,23 +148,56 @@ fn parse_dsp_shape(sp: roxmltree::Node, theme: &ThemeFonts) -> Option<SmartArtSh
         fill,
         stroke_color,
         stroke_width,
-        text,
-        font_size,
-        text_color,
+        text: tp.text,
+        font_size: tp.font_size,
+        text_color: tp.text_color,
         text_rect,
-        text_inset_left,
+        text_inset_left: tp.left_inset,
+        text_anchor: tp.anchor,
+        text_align: tp.align,
     })
 }
 
-fn parse_dsp_text(sp: roxmltree::Node, theme: &ThemeFonts) -> (String, f32, Option<[u8; 3]>, f32) {
+use crate::model::{SmartArtTextAnchor, SmartArtTextAlign};
+
+struct DspTextProps {
+    text: String,
+    font_size: f32,
+    text_color: Option<[u8; 3]>,
+    left_inset: f32,
+    anchor: SmartArtTextAnchor,
+    align: SmartArtTextAlign,
+}
+
+fn parse_dsp_text(sp: roxmltree::Node, theme: &ThemeFonts) -> DspTextProps {
     let Some(body) = dsp(sp, "txBody") else {
-        return (String::new(), 0.0, None, 0.0);
+        return DspTextProps {
+            text: String::new(), font_size: 0.0, text_color: None,
+            left_inset: 0.0, anchor: SmartArtTextAnchor::Top, align: SmartArtTextAlign::Left,
+        };
     };
-    let left_inset = dml(body, "bodyPr")
+    let body_pr = dml(body, "bodyPr");
+    let left_inset = body_pr
         .and_then(|bp| bp.attribute("lIns"))
         .and_then(|v| v.parse::<f32>().ok())
         .map(super::emu_to_pts)
         .unwrap_or(0.0);
+    let anchor = match body_pr.and_then(|bp| bp.attribute("anchor")) {
+        Some("ctr") => SmartArtTextAnchor::Center,
+        Some("b") => SmartArtTextAnchor::Bottom,
+        _ => SmartArtTextAnchor::Top,
+    };
+    // Get paragraph alignment from first paragraph's pPr
+    let align = body.children()
+        .find(|n| is_ns(*n, "p", DML_NS))
+        .and_then(|p| dml(p, "pPr"))
+        .and_then(|ppr| ppr.attribute("algn"))
+        .map(|a| match a {
+            "ctr" => SmartArtTextAlign::Center,
+            "r" => SmartArtTextAlign::Right,
+            _ => SmartArtTextAlign::Left,
+        })
+        .unwrap_or(SmartArtTextAlign::Left);
 
     let mut lines = Vec::new();
     let mut font_size = 0.0;
@@ -194,5 +227,12 @@ fn parse_dsp_text(sp: roxmltree::Node, theme: &ThemeFonts) -> (String, f32, Opti
         }
     }
 
-    (lines.join("\n"), font_size, text_color, left_inset)
+    DspTextProps {
+        text: lines.join("\n"),
+        font_size,
+        text_color,
+        left_inset,
+        anchor,
+        align,
+    }
 }
