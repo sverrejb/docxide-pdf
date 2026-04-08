@@ -259,7 +259,7 @@ pub struct Paragraph {
     pub textboxes: Vec<Textbox>,
     pub connectors: Vec<ConnectorShape>,
     pub inline_chart: Option<InlineChart>,
-    pub smartart: Option<SmartArtDiagram>,
+    pub smartart: Vec<SmartArtDiagram>,
     pub horizontal_rule: Option<HorizontalRule>,
     pub is_section_break: bool,
     pub bookmarks: Vec<String>,

@@ -66,7 +66,7 @@ pub(super) struct ParsedRuns {
     pub(super) textboxes: Vec<Textbox>,
     pub(super) connectors: Vec<ConnectorShape>,
     pub(super) inline_chart: Option<InlineChart>,
-    pub(super) smartart: Option<SmartArtDiagram>,
+    pub(super) smartart: Vec<SmartArtDiagram>,
     pub(super) horizontal_rule: Option<HorizontalRule>,
 }
 
@@ -500,7 +500,7 @@ macro_rules! handle_drawing_result {
             Some(RunDrawingResult::Floating(fi)) => $floating_images.push(fi),
             Some(RunDrawingResult::TextBox(tb)) => $textboxes.push(tb),
             Some(RunDrawingResult::Chart(ic)) => $inline_chart = Some(ic),
-            Some(RunDrawingResult::SmartArt(diagram)) => $smartart = Some(diagram),
+            Some(RunDrawingResult::SmartArt(diagram)) => $smartart.push(diagram),
             Some(RunDrawingResult::Connector(c)) => $connectors.push(c),
             None => {}
         }
@@ -582,7 +582,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
     let mut textboxes: Vec<Textbox> = Vec::new();
     let mut connectors: Vec<ConnectorShape> = Vec::new();
     let mut inline_chart: Option<InlineChart> = None;
-    let mut smartart: Option<SmartArtDiagram> = None;
+    let mut smartart: Vec<SmartArtDiagram> = Vec::new();
     let mut horizontal_rule: Option<HorizontalRule> = None;
     let mut has_page_break_after = false;
     let mut page_break_before_content = false;

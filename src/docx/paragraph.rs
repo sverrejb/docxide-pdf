@@ -291,7 +291,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     if let Some(ref ic) = parsed.inline_chart {
         content_height = content_height.max(ic.display_height);
     }
-    if let Some(ref sa) = parsed.smartart {
+    for sa in &parsed.smartart {
         content_height = content_height.max(sa.display_height);
     }
 

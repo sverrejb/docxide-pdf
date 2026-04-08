@@ -41,7 +41,7 @@ pub(super) use helpers::resolve_line_h;
 use helpers::borders_match;
 use positioning::{render_connector, render_floating_images, resolve_fi_x};
 pub(super) use positioning::{resolve_h_position, resolve_fi_y_top};
-use images::{EmbeddedImages, embed_all_images};
+use images::{EffectXObjs, EmbeddedImages, embed_all_images};
 use layout::{
     DualRegion, LinkAnnotation, build_paragraph_lines, build_tabbed_line, is_text_empty,
     render_paragraph_lines, tallest_run_metrics,
@@ -59,7 +59,7 @@ pub(super) struct RenderContext<'a> {
     pub(super) default_tab_stop: f32,
     /// Image names for inline images in table cells, keyed by Arc data pointer address.
     pub(super) table_cell_image_names: &'a HashMap<usize, String>,
-    pub(super) shadow_table_names: &'a HashMap<usize, String>,
+    pub(super) effect_table_names: &'a HashMap<usize, EffectXObjs>,
     pub(super) chart_font_name: &'a str,
 }
 
@@ -622,6 +622,7 @@ fn compute_bookmark_positions(
     let mut prev_space_after: f32 = 0.0;
     let mut prev_contextual: bool = false;
     let empty_imgs: HashMap<usize, String> = HashMap::new();
+    let empty_fx: HashMap<usize, images::EffectXObjs> = HashMap::new();
 
     for (si, section) in doc.sections.iter().enumerate() {
         sp = &section.properties;
@@ -690,13 +691,13 @@ fn compute_bookmark_positions(
                             para_w,
                             hanging,
                             &empty_imgs,
-                            &empty_imgs,
+                            &empty_fx,
                             doc.default_tab_stop,
                         )
                     } else {
                         build_paragraph_lines(
                             &para.runs, ctx.fonts, para_w, hanging, &empty_imgs,
-                            &empty_imgs, None, None, None,
+                            &empty_fx, None, None, None,
                         )
                     };
                     let num_lines = lines.len().max(1);
@@ -778,9 +779,9 @@ fn render_paragraph_block(
     floating_image_pdf_names: &HashMap<(usize, usize), String>,
     inline_image_pdf_names: &HashMap<(usize, usize), String>,
     image_pdf_names: &HashMap<usize, String>,
-    shadow_names: &HashMap<usize, String>,
-    shadow_floating_names: &HashMap<(usize, usize), String>,
-    shadow_inline_names: &HashMap<(usize, usize), String>,
+    effect_names: &HashMap<usize, EffectXObjs>,
+    effect_floating_names: &HashMap<(usize, usize), EffectXObjs>,
+    effect_inline_names: &HashMap<(usize, usize), EffectXObjs>,
     footnote_display_order: &HashMap<u32, u32>,
     doc: &Document,
     smartart_font_key: &str,
@@ -798,7 +799,7 @@ fn render_paragraph_block(
         && is_text_empty(&para.runs)
         && para.image.is_none()
         && para.inline_chart.is_none()
-        && para.smartart.is_none()
+        && para.smartart.is_empty()
         && para.floating_images.is_empty()
         && para.textboxes.is_empty()
     {
@@ -978,10 +979,10 @@ fn render_paragraph_block(
         .filter(|((bi, _), _)| *bi == state.global_block_idx)
         .map(|((_, ri), name)| (*ri, name.clone()))
         .collect();
-    let block_shadow_inlines: HashMap<usize, String> = shadow_inline_names
+    let block_effect_inlines: HashMap<usize, images::EffectXObjs> = effect_inline_names
         .iter()
         .filter(|((bi, _), _)| *bi == state.global_block_idx)
-        .map(|((_, ri), name)| (*ri, name.clone()))
+        .map(|((_, ri), fx)| (*ri, fx.clone()))
         .collect();
     // Self-wrapping: if this paragraph anchors a wrapping float
     // and has text, set up the float zone NOW so width-narrowing
@@ -1227,7 +1228,7 @@ fn render_paragraph_block(
             para_text_width,
             text_hanging,
             &block_inline_images,
-            &block_shadow_inlines,
+            &block_effect_inlines,
             doc.default_tab_stop,
         )
     } else {
@@ -1255,7 +1256,7 @@ fn render_paragraph_block(
             // Two-pass: build at full width, then narrow bottom lines
             let full_lines = build_paragraph_lines(
                 &effective_runs, ctx.fonts, para_text_width,
-                text_hanging, &block_inline_images, &block_shadow_inlines, None, None, None,
+                text_hanging, &block_inline_images, &block_effect_inlines, None, None, None,
             );
             let num_lines = full_lines.len();
             let content_h_est = num_lines as f32 * line_h;
@@ -1291,7 +1292,7 @@ fn render_paragraph_block(
                 lookahead_narrow = Some((narrow_x, narrow_w));
                 let rebuilt = build_paragraph_lines(
                     &effective_runs, ctx.fonts, para_text_width,
-                    text_hanging, &block_inline_images, &block_shadow_inlines,
+                    text_hanging, &block_inline_images, &block_effect_inlines,
                     Some((lines_above, narrow_w)), None, None,
                 );
                 (rebuilt, Some((lines_above, narrow_w)))
@@ -1304,7 +1305,7 @@ fn render_paragraph_block(
             let plw: Option<&[f32]> = if poly_dual_geom.is_some() { None } else { poly_line_widths.as_deref() };
             let built = build_paragraph_lines(
                 &effective_runs, ctx.fonts, para_text_width,
-                text_hanging, &block_inline_images, &block_shadow_inlines, None,
+                text_hanging, &block_inline_images, &block_effect_inlines, None,
                 plw, poly_dual_geom.as_deref(),
             );
             (built, None)
@@ -1488,7 +1489,7 @@ fn render_paragraph_block(
     let last_line_lead = if !lines.is_empty()
         && para.image.is_none()
         && para.inline_chart.is_none()
-        && para.smartart.is_none()
+        && para.smartart.is_empty()
         && !matches!(effective_ls, LineSpacing::Exact(_))
     {
         let single_h = tallest_lhr
@@ -1782,7 +1783,7 @@ fn render_paragraph_block(
         true,
         state.global_block_idx,
         &floating_image_pdf_names,
-        &shadow_floating_names,
+        &effect_floating_names,
         sp,
         col_x,
         col_w,
@@ -1843,7 +1844,7 @@ fn render_paragraph_block(
         false,
         state.global_block_idx,
         &floating_image_pdf_names,
-        &shadow_floating_names,
+        &effect_floating_names,
         sp,
         col_x,
         col_w,
@@ -1931,15 +1932,17 @@ fn render_paragraph_block(
             ctx.chart_font_name,
             &mut state.pb.alpha_states,
         );
-    } else if let Some(ref diagram) = para.smartart {
-        smartart::render_smartart(
-            &mut state.pb.content,
-            diagram,
-            col_x,
-            state.pb.slot_top,
-            ctx.fonts,
-            smartart_font_key,
-        );
+    } else if !para.smartart.is_empty() {
+        for diagram in &para.smartart {
+            smartart::render_smartart(
+                &mut state.pb.content,
+                diagram,
+                col_x,
+                state.pb.slot_top,
+                ctx.fonts,
+                smartart_font_key,
+            );
+        }
     } else if let Some(ref hr) = para.horizontal_rule {
         let rule_w = col_w * hr.width_pct / 100.0;
         let rule_x = col_x
@@ -1969,11 +1972,19 @@ fn render_paragraph_block(
                     Alignment::Right => (col_w - img.display_width).max(0.0),
                     _ => 0.0,
                 };
+            let img_fx = effect_names.get(&state.global_block_idx);
             if let Some(ref shadow) = img.shadow {
                 color::draw_image_shadow(
                     &mut state.pb.content, shadow, x, y_bottom,
                     img.display_width, img.display_height,
-                    shadow_names.get(&state.global_block_idx).map(|s| s.as_str()),
+                    img_fx.and_then(|fx| fx.shadow.as_deref()),
+                );
+            }
+            if let Some(ref glow) = img.glow {
+                color::draw_image_glow(
+                    &mut state.pb.content, glow, x, y_bottom,
+                    img.display_width, img.display_height,
+                    img_fx.and_then(|fx| fx.glow.as_deref()),
                 );
             }
             state.pb.content.save_state();
@@ -1987,6 +1998,21 @@ fn render_paragraph_block(
             ]);
             state.pb.content.x_object(Name(pdf_name.as_bytes()));
             state.pb.content.restore_state();
+            // Post-image effects: inner shadow, reflection (drawn on top / below)
+            if let Some(ref inner) = img.inner_shadow {
+                color::draw_inner_shadow(
+                    &mut state.pb.content, inner, x, y_bottom,
+                    img.display_width, img.display_height,
+                    img_fx.and_then(|fx| fx.inner_shadow.as_deref()),
+                );
+            }
+            if let Some(ref refl) = img.reflection {
+                color::draw_reflection(
+                    &mut state.pb.content, refl, x, y_bottom,
+                    img.display_width, img.display_height,
+                    img_fx.and_then(|fx| fx.reflection.as_deref()),
+                );
+            }
         } else if para.image.is_some() {
             state.pb.content
                 .set_fill_gray(0.5)
@@ -2227,13 +2253,13 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         hf_inline_image_names,
         hf_floating_image_names,
         table_cell_image_names,
-        shadow_names,
-        shadow_floating_names,
-        shadow_inline_names,
-        shadow_hf_names,
-        shadow_hf_inline_names,
-        shadow_hf_floating_names,
-        shadow_table_names,
+        effect_names,
+        effect_floating_names,
+        effect_inline_names,
+        effect_hf_names,
+        effect_hf_inline_names: _,
+        effect_hf_floating_names,
+        effect_table_names,
     } = embed_all_images(doc, &mut pdf, &mut alloc);
 
     let ctx = RenderContext {
@@ -2241,7 +2267,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         doc_line_spacing: doc.line_spacing,
         default_tab_stop: doc.default_tab_stop,
         table_cell_image_names: &table_cell_image_names,
-        shadow_table_names: &shadow_table_names,
+        effect_table_names: &effect_table_names,
         chart_font_name: &doc.chart_font_name,
     };
 
@@ -2402,7 +2428,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             )
                                 && p.image.is_none()
                                 && p.inline_chart.is_none()
-                                && p.smartart.is_none()
+                                && p.smartart.is_empty()
                         );
                         if !is_empty_para {
                             state.pb.slot_top = fz.bottom_y;
@@ -2429,9 +2455,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         &floating_image_pdf_names,
                         &inline_image_pdf_names,
                         &image_pdf_names,
-                        &shadow_names,
-                        &shadow_floating_names,
-                        &shadow_inline_names,
+                        &effect_names,
+                        &effect_floating_names,
+                        &effect_inline_names,
                         &footnote_display_order,
                         doc,
                         smartart_font_key,
@@ -2586,13 +2612,13 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     let total_pages = state.pb.all_contents.len();
 
     // Pre-index header/footer image maps by (section_index, hf_type)
-    // Fields: (para_images, inline_images, floating_images, shadow_para, shadow_floating)
+    // Fields: (para_images, inline_images, floating_images, effect_para, effect_floating)
     type HfMaps = (
         HashMap<usize, String>,
         HashMap<(usize, usize), String>,
         HashMap<(usize, usize), String>,
-        HashMap<usize, String>,
-        HashMap<(usize, usize), String>,
+        HashMap<usize, EffectXObjs>,
+        HashMap<(usize, usize), EffectXObjs>,
     );
     let mut hf_maps_index: HashMap<(usize, u8), HfMaps> = HashMap::new();
     for ((s, t, pi), name) in &hf_image_names {
@@ -2604,11 +2630,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     for ((s, t, pi, fi), name) in &hf_floating_image_names {
         hf_maps_index.entry((*s, *t)).or_default().2.insert((*pi, *fi), name.clone());
     }
-    for ((s, t, pi), name) in &shadow_hf_names {
-        hf_maps_index.entry((*s, *t)).or_default().3.insert(*pi, name.clone());
+    for ((s, t, pi), fx) in &effect_hf_names {
+        hf_maps_index.entry((*s, *t)).or_default().3.insert(*pi, fx.clone());
     }
-    for ((s, t, pi, fi), name) in &shadow_hf_floating_names {
-        hf_maps_index.entry((*s, *t)).or_default().4.insert((*pi, *fi), name.clone());
+    for ((s, t, pi, fi), fx) in &effect_hf_floating_names {
+        hf_maps_index.entry((*s, *t)).or_default().4.insert((*pi, *fi), fx.clone());
     }
     let empty_hf_maps: HfMaps = Default::default();
 
@@ -2689,7 +2715,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 page_num, total_pages,
                 para_image_names: pi_map, inline_image_names: ii_map,
                 floating_image_names: fi_map,
-                shadow_para_names: sh_para, shadow_floating_names: sh_float,
+                effect_para_names: sh_para, effect_floating_names: sh_float,
                 styleref_values: page_styleref,
                 page_num_format: effective_page_num_format,
             };
@@ -2708,7 +2734,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 page_num, total_pages,
                 para_image_names: pi_map, inline_image_names: ii_map,
                 floating_image_names: fi_map,
-                shadow_para_names: sh_para, shadow_floating_names: sh_float,
+                effect_para_names: sh_para, effect_floating_names: sh_float,
                 styleref_values: page_styleref,
                 page_num_format: effective_page_num_format,
             };

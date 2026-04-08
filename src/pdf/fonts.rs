@@ -117,7 +117,7 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
         let sa_key = font_key_buf(first_run, &mut key_buf).to_string();
         let chars = used.entry(sa_key).or_default();
         for para in &all_paras {
-            if let Some(ref diagram) = para.smartart {
+            for diagram in &para.smartart {
                 for shape in &diagram.shapes {
                     chars.extend(shape.text.chars());
                 }
