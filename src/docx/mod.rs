@@ -78,10 +78,6 @@ pub(super) fn dml<'a>(
     find_child(node, name, DML_NS)
 }
 
-pub(super) fn dml_attr<'a>(node: roxmltree::Node<'a, 'a>, child: &str) -> Option<&'a str> {
-    dml(node, child).and_then(|n| n.attribute("val"))
-}
-
 pub(super) fn dml_children<'a>(
     parent: roxmltree::Node<'a, 'a>,
     name: &str,
@@ -358,6 +354,7 @@ pub(super) fn parse_frame_props(ppr: roxmltree::Node) -> Option<FrameProperties>
     })
 }
 
+#[allow(dead_code)]
 pub(super) fn parse_tab_stops(ppr: roxmltree::Node) -> Vec<TabStop> {
     let (stops, _) = parse_tab_stops_with_clears(ppr);
     stops

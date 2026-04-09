@@ -221,6 +221,7 @@ pub(super) struct CellFloatingImageLayout {
     pub(super) display_height: f32,
     pub(super) h_offset: f32,
     pub(super) v_offset: f32,
+    #[allow(dead_code)]
     pub(super) behind_doc: bool,
 }
 
@@ -228,10 +229,12 @@ pub(super) struct CellParagraphLayout {
     pub(super) lines: Vec<TextLine>,
     pub(super) line_h: f32,
     pub(super) font_size: f32,
+    #[allow(dead_code)]
     pub(super) ascender_ratio: f32,
     pub(super) alignment: Alignment,
     pub(super) space_before: f32,
     pub(super) indent_left: f32,
+    #[allow(dead_code)]
     pub(super) indent_right: f32,
     pub(super) indent_hanging: f32,
     pub(super) indent_first_line: f32,
@@ -264,6 +267,7 @@ pub(super) enum CellContentItem {
 
 pub(super) struct CellLayout {
     pub(super) items: Vec<CellContentItem>,
+    #[allow(dead_code)]
     pub(super) total_height: f32,
     pub(super) text_direction: TextDirection,
 }

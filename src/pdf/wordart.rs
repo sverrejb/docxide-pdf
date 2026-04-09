@@ -49,6 +49,7 @@ pub(super) fn find_text_glow(tb: &Textbox) -> Option<&TextGlow> {
 
 pub(super) struct GlyphPath {
     pub commands: Vec<GlyphCommand>,
+    #[allow(dead_code)]
     pub advance_width: f32,
 }
 
@@ -299,7 +300,7 @@ fn eval_cubic(cx: f64, cy: f64, x1: f64, y1: f64, x2: f64, y2: f64, x: f64, y: f
 
 /// A boundary curve sampled into (x, y) points for fast interpolation.
 /// Points are sorted by x-coordinate.
-struct SampledBoundary {
+pub(super) struct SampledBoundary {
     points: Vec<(f64, f64)>,
 }
 
@@ -375,6 +376,7 @@ impl SampledBoundary {
         y0 + t * (y1 - y0)
     }
 
+    #[allow(dead_code)]
     fn min_y(&self) -> f64 {
         self.points
             .iter()
@@ -389,6 +391,7 @@ impl SampledBoundary {
             .fold(f64::NEG_INFINITY, f64::max)
     }
 
+    #[allow(dead_code)]
     fn x_range(&self) -> f64 {
         if self.points.len() < 2 {
             return 0.0;

@@ -311,6 +311,7 @@ const DEFAULT_TAB_INTERVAL: f32 = 36.0; // 0.5 inches
 
 /// Count CJK↔Latin/Digit boundaries in text for autoSpaceDE/DN.
 /// Word adds ~1/4 em spacing at each boundary by default.
+#[allow(dead_code)]
 fn count_script_boundaries(text: &str) -> usize {
     let mut count = 0;
     let mut prev_cjk: Option<bool> = None;
@@ -331,6 +332,7 @@ fn count_script_boundaries(text: &str) -> usize {
     count
 }
 
+#[allow(dead_code)]
 fn is_cjk_punctuation(ch: char) -> bool {
     matches!(ch as u32,
         0x3000..=0x303F  // CJK Symbols and Punctuation (includes ，。、)
@@ -476,7 +478,6 @@ pub(super) fn build_paragraph_lines(
                         if let Some((rx, rw, _)) = right_region_for(lines.len()) {
                             cur_right_info = Some((current_chunks.len(), rx, rw));
                             in_right_region = true;
-                            current_x = 0.0;
                             pending_space_w = 0.0;
                             // Retry placement in right region
                             let proposed_x2 = 0.0;
@@ -576,7 +577,6 @@ pub(super) fn build_paragraph_lines(
                     if let Some((rx, rw, _)) = right_region_for(lines.len()) {
                         cur_right_info = Some((current_chunks.len(), rx, rw));
                         in_right_region = true;
-                        current_x = 0.0;
                         pending_space_w = 0.0;
                         // Place this word at the start of the right region
                         current_chunks.push(WordChunk::text(
@@ -1289,7 +1289,7 @@ pub(super) fn render_paragraph_lines(
                     .flatten();
 
                 if let (Some(primary), Some(fallback)) = (primary_entry, fallback_entry) {
-                    let primary_gids = primary.char_to_gid.as_ref();
+                    let _primary_gids = primary.char_to_gid.as_ref();
                     let fallback_gids = fallback.char_to_gid.as_ref();
                     // Split text into runs of primary vs fallback chars
                     let mut seg_start = 0;

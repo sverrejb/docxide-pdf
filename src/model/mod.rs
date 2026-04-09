@@ -125,6 +125,7 @@ pub enum FontFamily {
 pub struct FontTableEntry {
     pub alt_name: Option<String>,
     pub family: FontFamily,
+    #[allow(dead_code)]
     pub pitch_fixed: bool,
 }
 
@@ -148,7 +149,9 @@ pub struct Document {
     pub author: Option<String>,
     pub subject: Option<String>,
     pub keywords: Option<String>,
+    #[allow(dead_code)]
     pub auto_hyphenation: bool,
+    #[allow(dead_code)]
     pub default_lang: Option<String>,
 }
 
@@ -204,7 +207,9 @@ pub enum WrapText {
 pub struct FrameProperties {
     pub h_relative_from: HRelativeFrom,
     pub h_position: HorizontalPosition,
+    #[allow(dead_code)]
     pub v_relative_from: VRelativeFrom,
+    #[allow(dead_code)]
     pub y_offset: f32,
 }
 
@@ -266,6 +271,7 @@ pub struct Paragraph {
     pub outline_level: Option<u8>,
     pub paragraph_mark_vanish: bool,
     pub snap_to_grid: bool,
+    #[allow(dead_code)]
     pub suppress_auto_hyphens: bool,
     pub frame_props: Option<FrameProperties>,
 }

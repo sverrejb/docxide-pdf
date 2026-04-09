@@ -5,6 +5,7 @@ use super::{WML_NS, read_zip_text, twips_to_pts, wml, wml_attr, wml_bool};
 pub(super) struct DocumentSettings {
     pub even_and_odd_headers: bool,
     pub default_tab_stop: f32,
+    #[allow(dead_code)]
     pub mirror_margins: bool,
     pub gutter_at_top: bool,
     pub east_asia_lang: Option<String>,

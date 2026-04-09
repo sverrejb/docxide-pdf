@@ -40,6 +40,7 @@ pub enum PathFill {
 }
 
 impl PathFill {
+    #[allow(dead_code)]
     pub fn is_filled(self) -> bool {
         self != PathFill::None
     }

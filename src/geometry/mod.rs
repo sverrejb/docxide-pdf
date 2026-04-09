@@ -6,17 +6,20 @@ pub mod text_warp_definitions;
 use crate::model::CustomGeometry;
 
 pub use definitions::PresetDef;
-pub use formulas::{FormulaOp, GuideDef, GuideEnv};
-pub use path::{PathCommandDef, PathDef, PathFill, ResolvedCommand, resolve_custom_path};
+pub use formulas::{FormulaOp, GuideEnv};
+pub use path::{PathFill, ResolvedCommand, resolve_custom_path};
 
 pub struct EvaluatedPath {
     pub commands: Vec<ResolvedCommand>,
+    #[allow(dead_code)]
     pub fill: PathFill,
+    #[allow(dead_code)]
     pub stroke: bool,
 }
 
 pub struct EvaluatedShape {
     pub paths: Vec<EvaluatedPath>,
+    #[allow(dead_code)]
     pub text_rect: Option<(f64, f64, f64, f64)>,
 }
 

@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use pdf_writer::Content;
 
-use crate::fonts::FontEntry;
 use crate::model::{Paragraph, SectionProperties, TextAnchor, Textbox, VRelativeFrom};
 
 use super::color::{fill_rgb, stroke_rgb};

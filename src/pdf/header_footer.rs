@@ -275,6 +275,7 @@ pub(super) struct HfPageContext<'a> {
     pub(super) inline_image_names: &'a HashMap<(usize, usize), String>,
     pub(super) floating_image_names: &'a HashMap<(usize, usize), String>,
     pub(super) effect_para_names: &'a HashMap<usize, super::images::EffectXObjs>,
+    #[allow(dead_code)]
     pub(super) effect_floating_names: &'a HashMap<(usize, usize), super::images::EffectXObjs>,
     pub(super) styleref_values: &'a HashMap<String, String>,
     pub(super) page_num_format: Option<&'a str>,

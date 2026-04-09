@@ -66,6 +66,7 @@ impl FontEntry {
 
     /// Width with CJK fallback: if this font is missing a CJK char, use the
     /// fallback font's width instead.
+    #[allow(dead_code)]
     pub(crate) fn char_width_1000_with_fallback(
         &self,
         ch: char,
@@ -355,7 +356,7 @@ pub(crate) fn register_font(
         HashSet::new()
     };
 
-    let mut entry = match result {
+    let entry = match result {
         Some(r) => FontEntry {
             pdf_name,
             font_ref,

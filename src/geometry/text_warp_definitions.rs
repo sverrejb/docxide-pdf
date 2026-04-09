@@ -2,7 +2,7 @@
 // Source: presetTextWarpDefinitions.xml (ECMA-376, Annex D)
 // Text warp presets: 40
 
-use super::definitions::{PresetDef, TextRectDef};
+use super::definitions::PresetDef;
 use super::formulas::{FormulaOp, GuideDef};
 use super::path::{PathCommandDef, PathDef, PathFill};
 

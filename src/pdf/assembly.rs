@@ -8,7 +8,7 @@ use crate::model::Document;
 use super::layout::LinkAnnotation;
 use super::GradientSpec;
 
-pub(super) struct HeadingEntry {
+pub(crate) struct HeadingEntry {
     pub(super) title: String,
     pub(super) level: u8,
     pub(super) page_idx: usize,
