@@ -174,3 +174,178 @@ pub(super) fn draw_image_shadow(
     content.fill_nonzero();
     content.restore_state();
 }
+
+/// Generate a soft-edge mask: fully opaque interior, fading to transparent
+/// at the edges over `radius_px` pixels. Analytical distance-to-edge formula.
+pub(super) fn generate_soft_edge_mask(w: u32, h: u32, radius_px: f32) -> Vec<u8> {
+    let mut mask = vec![0u8; (w * h) as usize];
+    if radius_px <= 0.0 {
+        mask.fill(255);
+        return mask;
+    }
+    for y in 0..h {
+        for x in 0..w {
+            let dx = (x as f32).min((w - 1 - x) as f32);
+            let dy = (y as f32).min((h - 1 - y) as f32);
+            let d = dx.min(dy);
+            let v = (d / radius_px).min(1.0);
+            mask[(y * w + x) as usize] = (v * 255.0).round() as u8;
+        }
+    }
+    mask
+}
+
+/// Generate an inner shadow mask: opaque border that fades inward via blur.
+/// The mask covers the image area (no padding). The border region is opaque
+/// at `alpha`, the interior is transparent, and blur bleeds inward.
+pub(super) fn generate_inner_shadow_mask(
+    width_pt: f32,
+    height_pt: f32,
+    blur_radius: f32,
+    alpha: f32,
+) -> (Vec<u8>, u32, u32) {
+    let px_w = (width_pt * SHADOW_SCALE).ceil().max(1.0) as u32;
+    let px_h = (height_pt * SHADOW_SCALE).ceil().max(1.0) as u32;
+
+    let mut buf = vec![0u8; (px_w * px_h) as usize];
+    let inner_val = (alpha * 255.0).round().min(255.0) as u8;
+    let border_px = (blur_radius * SHADOW_SCALE).round().max(1.0) as u32;
+
+    // Fill entire buffer with alpha (opaque border)
+    buf.fill(inner_val);
+
+    // Clear interior (everything inside the border becomes transparent)
+    for y in border_px..px_h.saturating_sub(border_px) {
+        for x in border_px..px_w.saturating_sub(border_px) {
+            buf[(y * px_w + x) as usize] = 0;
+        }
+    }
+
+    // 3-pass box blur to soften the edge inward
+    let box_r = ((blur_radius * SHADOW_SCALE) / 3.0).ceil().max(0.0) as usize;
+    if box_r > 0 {
+        let w = px_w as usize;
+        let h = px_h as usize;
+        let mut tmp = vec![0u8; w * h];
+        for _pass in 0..3 {
+            for y in 0..h {
+                let mut acc: u32 = 0;
+                for x2 in 0..=box_r.min(w - 1) {
+                    acc += buf[y * w + x2] as u32;
+                }
+                for x in 0..w {
+                    let right = x + box_r;
+                    if right < w && x > 0 {
+                        acc += buf[y * w + right] as u32;
+                    }
+                    let left_edge = if x > box_r { x - box_r } else { 0 };
+                    let right_edge = right.min(w - 1);
+                    let count = (right_edge - left_edge + 1) as u32;
+                    tmp[y * w + x] = (acc / count).min(255) as u8;
+                    if x >= box_r {
+                        acc -= buf[y * w + (x - box_r)] as u32;
+                    }
+                }
+            }
+            for x in 0..w {
+                let mut acc: u32 = 0;
+                for y2 in 0..=box_r.min(h - 1) {
+                    acc += tmp[y2 * w + x] as u32;
+                }
+                for y in 0..h {
+                    let bottom = y + box_r;
+                    if bottom < h && y > 0 {
+                        acc += tmp[bottom * w + x] as u32;
+                    }
+                    let top_edge = if y > box_r { y - box_r } else { 0 };
+                    let bottom_edge = bottom.min(h - 1);
+                    let count = (bottom_edge - top_edge + 1) as u32;
+                    buf[y * w + x] = (acc / count).min(255) as u8;
+                    if y >= box_r {
+                        acc -= tmp[(y - box_r) * w + x] as u32;
+                    }
+                }
+            }
+        }
+    }
+
+    (buf, px_w, px_h)
+}
+
+/// Draw an inner shadow effect on top of an image. Drawn AFTER the image.
+/// Clipped to the image rectangle so the shadow doesn't bleed outside.
+pub(super) fn draw_inner_shadow(
+    content: &mut Content,
+    inner: &crate::model::InnerShadow,
+    x: f32,
+    y_bottom: f32,
+    width: f32,
+    height: f32,
+    xobj_name: Option<&str>,
+) {
+    use pdf_writer::Name;
+
+    if let Some(name) = xobj_name {
+        content.save_state();
+        // Clip to image rectangle
+        content.rect(x, y_bottom, width, height);
+        content.clip_nonzero();
+        content.end_path();
+        // Draw the inner shadow mask offset by shadow direction
+        let sx = x + inner.offset_x;
+        let sy = y_bottom - inner.offset_y;
+        content.transform([width, 0.0, 0.0, height, sx, sy]);
+        content.x_object(Name(name.as_bytes()));
+        content.restore_state();
+    }
+}
+
+/// Draw a reflection below an image. Drawn AFTER the image.
+/// The reflection XObject is the same image with a gradient SMask (fading alpha).
+pub(super) fn draw_reflection(
+    content: &mut Content,
+    reflection: &crate::model::ImageReflection,
+    x: f32,
+    y_bottom: f32,
+    width: f32,
+    height: f32,
+    reflection_xobj_name: Option<&str>,
+) {
+    use pdf_writer::Name;
+
+    if let Some(name) = reflection_xobj_name {
+        content.save_state();
+        // Position: below the image by `distance`, flipped vertically (negative height)
+        let refl_y = y_bottom - reflection.distance;
+        content.transform([width, 0.0, 0.0, -height, x, refl_y]);
+        content.x_object(Name(name.as_bytes()));
+        content.restore_state();
+    }
+}
+
+/// Draw a glow effect around an image. Drawn BEFORE the image.
+/// Glow is like a shadow but centered (no offset) with a custom color.
+pub(super) fn draw_image_glow(
+    content: &mut Content,
+    glow: &crate::model::ImageGlow,
+    x: f32,
+    y_bottom: f32,
+    width: f32,
+    height: f32,
+    glow_xobj_name: Option<&str>,
+) {
+    use pdf_writer::Name;
+
+    if let Some(name) = glow_xobj_name {
+        let r = glow.radius;
+        let gx = x - r;
+        let gy = y_bottom - r;
+        let gw = width + 2.0 * r;
+        let gh = height + 2.0 * r;
+
+        content.save_state();
+        content.transform([gw, 0.0, 0.0, gh, gx, gy]);
+        content.x_object(Name(name.as_bytes()));
+        content.restore_state();
+    }
+}

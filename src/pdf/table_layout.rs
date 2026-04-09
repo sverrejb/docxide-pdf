@@ -5,6 +5,8 @@ use crate::fonts::{FontEntry, font_key_buf};
 
 static EMPTY_INLINE_IMAGE_MAP: LazyLock<HashMap<usize, String>> =
     LazyLock::new(HashMap::new);
+static EMPTY_EFFECT_MAP: LazyLock<HashMap<usize, super::images::EffectXObjs>> =
+    LazyLock::new(HashMap::new);
 use crate::model::{
     Alignment, Block, CellMargins, HorizontalPosition, Table, TextDirection, VMerge,
     VerticalPosition, WrapType,
@@ -247,6 +249,8 @@ pub(super) struct CellParagraphLayout {
     pub(super) image_stroke_width: f32,
     pub(super) image_shadow: Option<crate::model::ImageShadow>,
     pub(super) image_shadow_xobj: Option<String>,
+    pub(super) image_glow: Option<crate::model::ImageGlow>,
+    pub(super) image_glow_xobj: Option<String>,
     pub(super) content_height: f32,
     pub(super) paragraph_mark_vanish: bool,
     pub(super) floating_images: Vec<CellFloatingImageLayout>,
@@ -425,7 +429,7 @@ pub(super) fn compute_row_layouts(
                                             para_text_w,
                                             hanging,
                                             &EMPTY_INLINE_IMAGE_MAP,
-                                            &EMPTY_INLINE_IMAGE_MAP,
+                                            &EMPTY_EFFECT_MAP,
                                             ctx.default_tab_stop,
                                         )
                                     } else {
@@ -435,7 +439,7 @@ pub(super) fn compute_row_layouts(
                                             para_text_w,
                                             hanging,
                                             &EMPTY_INLINE_IMAGE_MAP,
-                                            &EMPTY_INLINE_IMAGE_MAP,
+                                            &EMPTY_EFFECT_MAP,
                                             None,
                                             None,
                                             None,
@@ -482,10 +486,13 @@ pub(super) fn compute_row_layouts(
                                     .as_ref()
                                     .map(|img| (img.display_width, img.display_height, img.stroke_color, img.stroke_width, img.shadow.clone()))
                                     .unwrap_or((0.0, 0.0, None, 0.0, None));
-                                let img_shadow_xobj = para.image.as_ref().and_then(|img| {
+                                let table_fx = para.image.as_ref().and_then(|img| {
                                     let key = std::sync::Arc::as_ptr(&img.data) as usize;
-                                    ctx.shadow_table_names.get(&key).cloned()
+                                    ctx.effect_table_names.get(&key)
                                 });
+                                let img_shadow_xobj = table_fx.and_then(|fx| fx.shadow.clone());
+                                let img_glow = para.image.as_ref().and_then(|img| img.glow.clone());
+                                let img_glow_xobj = table_fx.and_then(|fx| fx.glow.clone());
 
                                 let cell_floats: Vec<CellFloatingImageLayout> = para
                                     .floating_images
@@ -543,6 +550,8 @@ pub(super) fn compute_row_layouts(
                                     image_stroke_width: img_stroke_width,
                                     image_shadow: img_shadow,
                                     image_shadow_xobj: img_shadow_xobj,
+                                    image_glow: img_glow,
+                                    image_glow_xobj: img_glow_xobj,
                                     content_height: para.content_height,
                                     paragraph_mark_vanish: para.paragraph_mark_vanish,
                                     floating_images: cell_floats,

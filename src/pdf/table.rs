@@ -220,6 +220,13 @@ fn render_cell_content(
                             para.image_shadow_xobj.as_deref(),
                         );
                     }
+                    if let Some(ref glow) = para.image_glow {
+                        super::color::draw_image_glow(
+                            content, glow, img_x, img_y,
+                            para.image_width, para.image_height,
+                            para.image_glow_xobj.as_deref(),
+                        );
+                    }
 
                     content.save_state();
                     content.transform([

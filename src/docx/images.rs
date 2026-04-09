@@ -3,7 +3,8 @@ use std::io::{Read, Seek};
 
 use crate::model::{
     ConnectorShape, EmbeddedImage, FloatingImage, HRelativeFrom, HorizontalPosition, ImageFormat,
-    ImageShadow, InlineChart, SmartArtDiagram, Textbox, VRelativeFrom, VerticalPosition, WrapText,
+    ImageGlow, ImageReflection, ImageShadow, InlineChart, InnerShadow, SmartArtDiagram, SoftEdge,
+    Textbox, VRelativeFrom, VerticalPosition, WrapText,
     WrapType,
 };
 
@@ -128,44 +129,19 @@ fn parse_pic_outline(sp_pr: Option<roxmltree::Node>) -> (Option<[u8; 3]>, f32) {
     }
 }
 
-/// Parse drop shadow from `pic:spPr/a:effectLst/a:outerShdw`.
-/// Returns color pre-blended with white at the shadow's alpha.
-fn parse_pic_shadow(sp_pr: Option<roxmltree::Node>) -> Option<ImageShadow> {
-    let effect_lst = sp_pr?.children()
-        .find(|c| c.tag_name().name() == "effectLst" && c.tag_name().namespace() == Some(DML_NS));
-    let outer_shdw = effect_lst.and_then(|e| {
-        e.children()
-            .find(|c| c.tag_name().name() == "outerShdw" && c.tag_name().namespace() == Some(DML_NS))
-    })?;
-
-    let blur_radius = outer_shdw
-        .attribute("blurRad")
-        .and_then(|v| v.parse::<f32>().ok())
-        .map(emu_to_pts)
-        .unwrap_or(0.0);
-    let dist = outer_shdw
-        .attribute("dist")
-        .and_then(|v| v.parse::<f32>().ok())
-        .map(emu_to_pts)
-        .unwrap_or(0.0);
-    // Direction in 60000ths of a degree, clockwise from east
-    let dir_deg = outer_shdw
-        .attribute("dir")
-        .and_then(|v| v.parse::<f32>().ok())
-        .unwrap_or(0.0)
-        / 60000.0;
-    let dir_rad = dir_deg.to_radians();
-    let offset_x = dist * dir_rad.cos();
-    let offset_y = dist * dir_rad.sin();
-
-    let color_node = outer_shdw
+/// Parse color + alpha from a DML element that has `a:srgbClr` or `a:schemeClr`
+/// with optional `a:alpha` child.
+fn parse_dml_color_alpha(node: roxmltree::Node) -> ([u8; 3], f32) {
+    // Try srgbClr first, fall back to schemeClr (theme color — use black as fallback)
+    let color_node = node
         .descendants()
-        .find(|n| n.tag_name().name() == "srgbClr" && n.tag_name().namespace() == Some(DML_NS));
+        .find(|n| n.tag_name().namespace() == Some(DML_NS)
+            && (n.tag_name().name() == "srgbClr" || n.tag_name().name() == "schemeClr"));
     let rgb = color_node
+        .filter(|n| n.tag_name().name() == "srgbClr")
         .and_then(|n| n.attribute("val"))
         .and_then(parse_hex_color)
         .unwrap_or([0, 0, 0]);
-    // Alpha in thousandths of percent (e.g. 65000 = 65%)
     let alpha = color_node
         .and_then(|n| {
             n.children()
@@ -175,14 +151,85 @@ fn parse_pic_shadow(sp_pr: Option<roxmltree::Node>) -> Option<ImageShadow> {
         .and_then(|v| v.parse::<f32>().ok())
         .map(|v| v / 100000.0)
         .unwrap_or(1.0);
+    (rgb, alpha)
+}
 
-    Some(ImageShadow {
-        offset_x,
-        offset_y,
-        blur_radius,
-        color: rgb,
-        alpha,
-    })
+/// Parse dist+dir attributes (common to outerShdw, innerShdw) into (offset_x, offset_y).
+fn parse_dist_dir(node: roxmltree::Node) -> (f32, f32) {
+    let dist = node.attribute("dist")
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(emu_to_pts)
+        .unwrap_or(0.0);
+    let dir_deg = node.attribute("dir")
+        .and_then(|v| v.parse::<f32>().ok())
+        .unwrap_or(0.0)
+        / 60000.0;
+    let dir_rad = dir_deg.to_radians();
+    (dist * dir_rad.cos(), dist * dir_rad.sin())
+}
+
+struct PicEffects {
+    shadow: Option<ImageShadow>,
+    soft_edge: Option<SoftEdge>,
+    glow: Option<ImageGlow>,
+    inner_shadow: Option<InnerShadow>,
+    reflection: Option<ImageReflection>,
+}
+
+/// Parse all picture effects from `pic:spPr/a:effectLst`.
+fn parse_pic_effects(sp_pr: Option<roxmltree::Node>) -> PicEffects {
+    let mut fx = PicEffects { shadow: None, soft_edge: None, glow: None, inner_shadow: None, reflection: None };
+    let Some(sp) = sp_pr else { return fx; };
+    let Some(effect_lst) = sp.children()
+        .find(|c| c.tag_name().name() == "effectLst" && c.tag_name().namespace() == Some(DML_NS))
+    else { return fx; };
+
+    for child in effect_lst.children().filter(|c| c.tag_name().namespace() == Some(DML_NS)) {
+        match child.tag_name().name() {
+            "outerShdw" => {
+                let blur_radius = child.attribute("blurRad")
+                    .and_then(|v| v.parse::<f32>().ok()).map(emu_to_pts).unwrap_or(0.0);
+                let (offset_x, offset_y) = parse_dist_dir(child);
+                let (color, alpha) = parse_dml_color_alpha(child);
+                fx.shadow = Some(ImageShadow { offset_x, offset_y, blur_radius, color, alpha });
+            }
+            "softEdge" => {
+                let radius = child.attribute("rad")
+                    .and_then(|v| v.parse::<f32>().ok()).map(emu_to_pts).unwrap_or(0.0);
+                if radius > 0.0 {
+                    fx.soft_edge = Some(SoftEdge { radius });
+                }
+            }
+            "glow" => {
+                let radius = child.attribute("rad")
+                    .and_then(|v| v.parse::<f32>().ok()).map(emu_to_pts).unwrap_or(0.0);
+                let (color, alpha) = parse_dml_color_alpha(child);
+                if radius > 0.0 {
+                    fx.glow = Some(ImageGlow { radius, color, alpha });
+                }
+            }
+            "innerShdw" => {
+                let blur_radius = child.attribute("blurRad")
+                    .and_then(|v| v.parse::<f32>().ok()).map(emu_to_pts).unwrap_or(0.0);
+                let (offset_x, offset_y) = parse_dist_dir(child);
+                let (color, alpha) = parse_dml_color_alpha(child);
+                fx.inner_shadow = Some(InnerShadow { offset_x, offset_y, blur_radius, color, alpha });
+            }
+            "reflection" => {
+                let start_alpha = child.attribute("stA")
+                    .and_then(|v| v.parse::<f32>().ok()).map(|v| v / 100000.0).unwrap_or(0.5);
+                let end_alpha = child.attribute("endA")
+                    .and_then(|v| v.parse::<f32>().ok()).map(|v| v / 100000.0).unwrap_or(0.0);
+                let distance = child.attribute("dist")
+                    .and_then(|v| v.parse::<f32>().ok()).map(emu_to_pts).unwrap_or(0.0);
+                let blur_radius = child.attribute("blurRad")
+                    .and_then(|v| v.parse::<f32>().ok()).map(emu_to_pts).unwrap_or(0.0);
+                fx.reflection = Some(ImageReflection { start_alpha, end_alpha, distance, blur_radius });
+            }
+            _ => {}
+        }
+    }
+    fx
 }
 
 pub(super) fn read_image_from_zip<R: Read + Seek>(
@@ -226,6 +273,10 @@ pub(super) fn read_image_from_zip_extra<R: Read + Seek>(
         stroke_color: None,
         stroke_width: 0.0,
         shadow: None,
+        soft_edge: None,
+        glow: None,
+        inner_shadow: None,
+        reflection: None,
     })
 }
 
@@ -429,7 +480,12 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                     let (stroke_color, stroke_width) = parse_pic_outline(sp_pr);
                     img.stroke_color = stroke_color;
                     img.stroke_width = stroke_width;
-                    img.shadow = parse_pic_shadow(sp_pr);
+                    let effects = parse_pic_effects(sp_pr);
+                    img.shadow = effects.shadow;
+                    img.soft_edge = effects.soft_edge;
+                    img.glow = effects.glow;
+                    img.inner_shadow = effects.inner_shadow;
+                    img.reflection = effects.reflection;
                     let (h_position, h_relative, v_position, v_relative) =
                         parse_anchor_position(container);
                     let (wrap_type, wrap_text, wrap_polygon) = parse_wrap_type(container);
@@ -503,7 +559,12 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                 let (stroke_color, stroke_width) = parse_pic_outline(sp_pr);
                 img.stroke_color = stroke_color;
                 img.stroke_width = stroke_width;
-                img.shadow = parse_pic_shadow(sp_pr);
+                let effects = parse_pic_effects(sp_pr);
+                img.shadow = effects.shadow;
+                img.soft_edge = effects.soft_edge;
+                img.glow = effects.glow;
+                img.inner_shadow = effects.inner_shadow;
+                img.reflection = effects.reflection;
                 return Some(RunDrawingResult::Inline(img));
             }
         }
@@ -579,7 +640,12 @@ pub(super) fn compute_drawing_info<R: Read + Seek>(
                         let (stroke_color, stroke_width) = parse_pic_outline(sp_pr);
                         img.stroke_color = stroke_color;
                         img.stroke_width = stroke_width;
-                        img.shadow = parse_pic_shadow(sp_pr);
+                        let effects = parse_pic_effects(sp_pr);
+                    img.shadow = effects.shadow;
+                    img.soft_edge = effects.soft_edge;
+                    img.glow = effects.glow;
+                    img.inner_shadow = effects.inner_shadow;
+                    img.reflection = effects.reflection;
                     }
                 }
             }

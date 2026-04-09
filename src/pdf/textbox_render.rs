@@ -54,6 +54,7 @@ pub(super) fn render_single_textbox(
             (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0)
         };
         let empty_imgs: HashMap<usize, String> = HashMap::new();
+        let empty_fx: HashMap<usize, super::images::EffectXObjs> = HashMap::new();
         let mut h = 0.0f32;
         for tp in &tb.paragraphs {
             let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
@@ -72,11 +73,11 @@ pub(super) fn render_single_textbox(
             let lines = if tp.runs.iter().any(|r| r.is_tab) {
                 build_tabbed_line(
                     &tp.runs, ctx.fonts, &tp.tab_stops, tp.indent_left,
-                    tw, hang, &empty_imgs, &empty_imgs, ctx.default_tab_stop,
+                    tw, hang, &empty_imgs, &empty_fx, ctx.default_tab_stop,
                 )
             } else {
                 build_paragraph_lines(
-                    &tp.runs, ctx.fonts, tw, hang, &empty_imgs, &empty_imgs, None, None, None,
+                    &tp.runs, ctx.fonts, tw, hang, &empty_imgs, &empty_fx, None, None, None,
                 )
             };
             let (fs, lhr, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
@@ -155,6 +156,7 @@ pub(super) fn render_single_textbox(
         TextAnchor::Top => 0.0,
         TextAnchor::Middle | TextAnchor::Bottom => {
             let empty_inline_imgs_pre: HashMap<usize, String> = HashMap::new();
+            let empty_fx_pre: HashMap<usize, super::images::EffectXObjs> = HashMap::new();
             let mut total_h = 0.0f32;
             for tp in &tb.paragraphs {
                 let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
@@ -183,11 +185,11 @@ pub(super) fn render_single_textbox(
                     build_tabbed_line(
                         &tp.runs, ctx.fonts, &tp.tab_stops, tp.indent_left,
                         tp_text_w, text_hanging, &empty_inline_imgs_pre,
-                        &empty_inline_imgs_pre, ctx.default_tab_stop,
+                        &empty_fx_pre, ctx.default_tab_stop,
                     )
                 } else {
                     build_paragraph_lines(
-                        &tp.runs, ctx.fonts, tp_text_w, text_hanging, &empty_inline_imgs_pre, &empty_inline_imgs_pre, None, None, None,
+                        &tp.runs, ctx.fonts, tp_text_w, text_hanging, &empty_inline_imgs_pre, &empty_fx_pre, None, None, None,
                     )
                 };
                 let (fs, lhr, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
@@ -279,6 +281,7 @@ pub(super) fn render_textbox_paragraphs(
     let mut cursor_y = start_y;
     let mut prev_space_after = 0.0f32;
     let empty_imgs: HashMap<usize, String> = HashMap::new();
+    let empty_fx: HashMap<usize, super::images::EffectXObjs> = HashMap::new();
     for (tp_idx, tp) in paragraphs.iter().enumerate() {
         // Collapse adjacent spacing: use max(prev_after, current_before) like body text
         let inter_gap = if tp_idx == 0 {
@@ -311,11 +314,11 @@ pub(super) fn render_textbox_paragraphs(
         let tb_lines = if tp.runs.iter().any(|r| r.is_tab) {
             build_tabbed_line(
                 &tp.runs, ctx.fonts, &tp.tab_stops, tp.indent_left,
-                tp_text_w, text_hanging, &empty_imgs, &empty_imgs, ctx.default_tab_stop,
+                tp_text_w, text_hanging, &empty_imgs, &empty_fx, ctx.default_tab_stop,
             )
         } else {
             build_paragraph_lines(
-                &tp.runs, ctx.fonts, tp_text_w, text_hanging, &empty_imgs, &empty_imgs, None, None, None,
+                &tp.runs, ctx.fonts, tp_text_w, text_hanging, &empty_imgs, &empty_fx, None, None, None,
             )
         };
         if tb_lines.is_empty() {

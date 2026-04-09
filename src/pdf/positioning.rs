@@ -86,7 +86,7 @@ pub(super) fn render_floating_images(
     behind_doc: bool,
     global_block_idx: usize,
     pdf_names: &HashMap<(usize, usize), String>,
-    shadow_pdf_names: &HashMap<(usize, usize), String>,
+    effect_pdf_names: &HashMap<(usize, usize), super::images::EffectXObjs>,
     sp: &SectionProperties,
     col_x: f32,
     col_w: f32,
@@ -104,11 +104,19 @@ pub(super) fn render_floating_images(
             let fi_y_top = resolve_fi_y_top(fi, sp, slot_top);
             let fi_y_bottom = fi_y_top - img.display_height;
 
+            let fi_fx = effect_pdf_names.get(&(global_block_idx, fi_idx));
             if let Some(ref shadow) = img.shadow {
                 super::color::draw_image_shadow(
                     content, shadow, fi_x, fi_y_bottom,
                     img.display_width, img.display_height,
-                    shadow_pdf_names.get(&(global_block_idx, fi_idx)).map(|s| s.as_str()),
+                    fi_fx.and_then(|fx| fx.shadow.as_deref()),
+                );
+            }
+            if let Some(ref glow) = img.glow {
+                super::color::draw_image_glow(
+                    content, glow, fi_x, fi_y_bottom,
+                    img.display_width, img.display_height,
+                    fi_fx.and_then(|fx| fx.glow.as_deref()),
                 );
             }
 
@@ -123,6 +131,21 @@ pub(super) fn render_floating_images(
             ]);
             content.x_object(Name(pdf_name.as_bytes()));
             content.restore_state();
+
+            if let Some(ref inner) = img.inner_shadow {
+                super::color::draw_inner_shadow(
+                    content, inner, fi_x, fi_y_bottom,
+                    img.display_width, img.display_height,
+                    fi_fx.and_then(|fx| fx.inner_shadow.as_deref()),
+                );
+            }
+            if let Some(ref refl) = img.reflection {
+                super::color::draw_reflection(
+                    content, refl, fi_x, fi_y_bottom,
+                    img.display_width, img.display_height,
+                    fi_fx.and_then(|fx| fx.reflection.as_deref()),
+                );
+            }
 
             if let Some(sc) = img.stroke_color {
                 content.save_state();

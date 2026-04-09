@@ -257,12 +257,12 @@ fn build_lines_with_float(
     text_hanging: f32,
     per_line_widths: Option<&[f32]>,
 ) -> Vec<TextLine> {
-    let empty_shadows: HashMap<usize, String> = HashMap::new();
+    let empty_fx: HashMap<usize, super::images::EffectXObjs> = HashMap::new();
     let has_tabs = runs.iter().any(|r| r.is_tab);
     if has_tabs {
-        build_tabbed_line(runs, fonts, tab_stops, indent_left, text_width, text_hanging, inline_images, &empty_shadows, default_tab_stop)
+        build_tabbed_line(runs, fonts, tab_stops, indent_left, text_width, text_hanging, inline_images, &empty_fx, default_tab_stop)
     } else {
-        build_paragraph_lines(runs, fonts, text_width, text_hanging, inline_images, &empty_shadows, None, per_line_widths, None)
+        build_paragraph_lines(runs, fonts, text_width, text_hanging, inline_images, &empty_fx, None, per_line_widths, None)
     }
 }
 
@@ -274,8 +274,8 @@ pub(super) struct HfPageContext<'a> {
     pub(super) para_image_names: &'a HashMap<usize, String>,
     pub(super) inline_image_names: &'a HashMap<(usize, usize), String>,
     pub(super) floating_image_names: &'a HashMap<(usize, usize), String>,
-    pub(super) shadow_para_names: &'a HashMap<usize, String>,
-    pub(super) shadow_floating_names: &'a HashMap<(usize, usize), String>,
+    pub(super) effect_para_names: &'a HashMap<usize, super::images::EffectXObjs>,
+    pub(super) effect_floating_names: &'a HashMap<(usize, usize), super::images::EffectXObjs>,
     pub(super) styleref_values: &'a HashMap<String, String>,
     pub(super) page_num_format: Option<&'a str>,
 }
@@ -521,11 +521,19 @@ pub(super) fn render_header_footer(
                                 Alignment::Right => (text_width - img.display_width).max(0.0),
                                 _ => 0.0,
                             };
+                        let hf_fx = pc.effect_para_names.get(&pi);
                         if let Some(ref shadow) = img.shadow {
                             super::color::draw_image_shadow(
                                 content, shadow, x, y_bottom,
                                 img.display_width, img.display_height,
-                                pc.shadow_para_names.get(&pi).map(|s| s.as_str()),
+                                hf_fx.and_then(|fx| fx.shadow.as_deref()),
+                            );
+                        }
+                        if let Some(ref glow) = img.glow {
+                            super::color::draw_image_glow(
+                                content, glow, x, y_bottom,
+                                img.display_width, img.display_height,
+                                hf_fx.and_then(|fx| fx.glow.as_deref()),
                             );
                         }
                         emit_image_xobject(

@@ -10,6 +10,15 @@ The `hyphenation` crate (Knuth-Liang algorithm) was tested with 8 languages but 
 
 Test fixtures in `tests/fixtures/hyphenation/` (8 languages with Wikipedia text, `autoHyphenation` enabled) are ready for comparison when desktop-Word references become available.
 
+## Picture Effects (PARTIALLY DONE)
+
+**Done:** Smooth outer shadow (rasterized Gaussian blur mask via SMask), soft edge (edge-fade SMask on image), glow (centered blur), inner shadow (inverted blur mask), reflection (flipped image with gradient SMask). All use the same rasterized mask + SMask XObject infrastructure. Test fixtures: case56 (shadow variations), case57 (2D effects), case58 (3D effects — deferred).
+
+**Remaining (deferred — no real-world fixtures use these):**
+- **3D effects** (`a:scene3d`, `a:sp3d`) — bevel, metal frame, perspective rotation. Would require 3D lighting simulation. case58 has test fixtures ready.
+- **Preset shadows** (`a:prstShdw`) — 20 built-in shadow presets. Need mapping table from preset names to parameters.
+- **Theme color resolution in effects** — inner shadow with `a:schemeClr` falls back to black instead of resolving the theme accent color.
+
 ## CJK Rendering Polish (TODO — MEDIUM IMPACT)
 
 Core CJK support is implemented: CIDFont/Identity-H/ToUnicode encoding, platform-specific font fallback chains (Hiragino/Noto/Yu Gothic), per-character font fallback at render time, script-based run splitting via `w:rFonts @eastAsia`, and vertical text rendering. CJK fixtures render readable output but score low (4-9% Jaccard) due to spacing/positioning precision issues:
@@ -54,10 +63,36 @@ Evidence:
 
 **Most likely remaining cause:** Word computes advance widths at a device-specific resolution (ppem at some reference DPI) with sub-pixel rounding that slightly narrows each glyph. This is a ~0.05% systematic bias. Fixing requires discovering Word's exact rounding formula.
 
-**Next steps:**
+**Next steps — data-driven width correction (April 2026):**
+
+The correction varies per glyph (some positive, some negative — not a uniform scale factor) and is likely ppem-level rounding from DirectWrite hinting. Plus, 6/9 inter-glyph adjustments in Word's TJ output aren't in font data at all. Rule-based reverse-engineering has hit a wall — data-driven learning is the natural next step.
+
+**Phase 1 — Data collection pipeline:**
+Build a synthetic DOCX generator producing controlled text for width extraction:
+1. Single-glyph sheets: one character repeated per line (e.g., "TTTTTT...") at a specific font + size. TJ positions in Word's PDF give the exact advance width Word uses.
+2. Bigram sheets: pairs like "THTHTH..." to capture inter-glyph adjustments (the proprietary DirectWrite corrections).
+3. Font × size matrix: Calibri, TNR, Arial, Aptos, Cambria at sizes 8–24pt in 1pt steps.
+Pipeline: `generate_width_sheets.py → .docx → Word conversion → extract_widths.py → width_corrections.json`
+
+**Phase 2 — Analysis (formula or model?):**
+Before any ML, test whether corrections follow a discoverable formula:
+- ppem rounding: `round(advance * ppem / UPM) / ppem * fontSize` where `ppem = fontSize * 96 / 72`
+- hdmx table: TNR has device-specific metrics — check if they match Word's widths
+- Linear correction per font: maybe each font just needs a single scale factor per size
+If a formula fits → implement directly. No model needed.
+
+**Phase 3 — Correction table or model (if no formula):**
+- Option A — Lookup table: `{font, ppem, glyph_id} → width_correction_pts`. ~20K entries × 4 bytes = 80KB. Simplest, most accurate.
+- Option B — Small regression model: input = `[glyph_advance_units, lsb, rsb, ppem, font_class]`, output = `width_correction_pts`. 2-layer MLP (~1K params). Generalizes to unseen fonts.
+- Option C — Per-font scale function: learn `correction(ppem) → scale_factor` per font. Small polynomial per font.
+
+**Phase 4 — Kerning corrections (stretch goal):**
+Same pipeline for bigrams. Input space is `glyphs²` but only ~500 common pairs matter. Sparse lookup table.
+
+**Previous next-step ideas (still valid as fallbacks):**
 - Create more diagnostic fixtures with different fonts/sizes to map the width error precisely
 - Test ppem-based rounding at 96 DPI, 72 DPI, and EMU resolution
-- Alternatively: add a small configurable "text width tolerance" that widens the line-break boundary by ~0.5pt to match Word's slightly looser behavior
+- Add a small configurable "text width tolerance" that widens the line-break boundary by ~0.5pt
 
 ## Unimplemented Run Properties
 
