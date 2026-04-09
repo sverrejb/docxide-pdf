@@ -26,7 +26,7 @@ use crate::fonts::FontEntry;
 use crate::model::{
     Alignment, Block, DocGridType, Document, FieldCode,
     HorizontalPosition, LineSpacing, Paragraph, ParagraphBorder,
-    Run, SectionBreakType, SectionProperties, ShapeFill, ShapeGeometry, TextAnchor, Textbox,
+    Run, SectionBreakType, SectionProperties, ShapeFill, ShapeGeometry,
     VRelativeFrom, VerticalPosition, WrapText, WrapType,
 };
 
@@ -244,6 +244,7 @@ impl FloatZone {
     /// Narrow paragraph geometry to fit beside this floating object.
     /// Returns `Some((para_text_x, para_text_width, label_x))` if the zone
     /// is active at `slot_top`, or `None` if no narrowing is needed.
+    #[allow(dead_code)]
     fn narrow_paragraph_geometry(
         &self,
         slot_top: f32,
@@ -785,6 +786,7 @@ fn render_paragraph_block(
     footnote_display_order: &HashMap<u32, u32>,
     doc: &Document,
     smartart_font_key: &str,
+    smartart_image_names: &HashMap<usize, String>,
     debug_wrap: bool,
 ) -> bool {
     let adjacent_para = |idx: usize| -> Option<&Paragraph> {
@@ -1259,7 +1261,7 @@ fn render_paragraph_block(
                 text_hanging, &block_inline_images, &block_effect_inlines, None, None, None,
             );
             let num_lines = full_lines.len();
-            let content_h_est = num_lines as f32 * line_h;
+            let _content_h_est = num_lines as f32 * line_h;
             let fi_x = resolve_fi_x(fi, sp, col_x, col_w, col_w);
             let space_right = (col_x + col_w)
                 - (fi_x + fi.image.display_width + fi.dist_right);
@@ -1944,6 +1946,7 @@ fn render_paragraph_block(
                 state.pb.slot_top,
                 ctx.fonts,
                 smartart_font_key,
+                &smartart_image_names,
             );
         }
     } else if let Some(ref hr) = para.horizontal_rule {
@@ -2256,6 +2259,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         hf_inline_image_names,
         hf_floating_image_names,
         table_cell_image_names,
+        smartart_image_names,
         effect_names,
         effect_floating_names,
         effect_inline_names,
@@ -2464,6 +2468,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         &footnote_display_order,
                         doc,
                         smartart_font_key,
+                        &smartart_image_names,
                         debug_wrap,
                     ) {
                         continue;
@@ -2682,7 +2687,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     let mut page_styleref_merged: HashMap<String, String> = HashMap::new();
     let mut all_hf_contents: Vec<Option<Content>> = (0..total_pages).map(|_| None).collect();
     for (page_idx, hf_content) in all_hf_contents.iter_mut().enumerate() {
-        let (si, is_first, content_si) = state.pb.page_section_indices[page_idx];
+        let (si, is_first, _content_si) = state.pb.page_section_indices[page_idx];
         let sp = &doc.sections[si].properties;
 
         let page_num = page_numbers[page_idx];

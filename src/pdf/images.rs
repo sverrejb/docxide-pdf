@@ -10,7 +10,7 @@ use crate::model::{
 /// Per-image effect XObject names (shadow, glow, inner shadow, reflection).
 /// Soft edge has no XObject — it modifies the image's own SMask.
 #[derive(Default, Clone)]
-pub(super) struct EffectXObjs {
+pub(crate) struct EffectXObjs {
     pub shadow: Option<String>,
     pub glow: Option<String>,
     pub inner_shadow: Option<String>,
@@ -34,11 +34,14 @@ pub(super) struct EmbeddedImages {
     pub(super) hf_floating_image_names: HashMap<(usize, u8, usize, usize), String>,
     /// Images in table cell paragraphs, keyed by Arc data pointer address.
     pub(super) table_cell_image_names: HashMap<usize, String>,
+    /// SmartArt image fills, keyed by Arc data pointer address.
+    pub(super) smartart_image_names: HashMap<usize, String>,
     // Effect XObject names (parallel to image name maps)
     pub(super) effect_names: HashMap<usize, EffectXObjs>,
     pub(super) effect_floating_names: HashMap<(usize, usize), EffectXObjs>,
     pub(super) effect_inline_names: HashMap<(usize, usize), EffectXObjs>,
     pub(super) effect_hf_names: HashMap<(usize, u8, usize), EffectXObjs>,
+    #[allow(dead_code)]
     pub(super) effect_hf_inline_names: HashMap<(usize, u8, usize, usize), EffectXObjs>,
     pub(super) effect_hf_floating_names: HashMap<(usize, u8, usize, usize), EffectXObjs>,
     pub(super) effect_table_names: HashMap<usize, EffectXObjs>,
@@ -710,6 +713,25 @@ pub(super) fn embed_all_images(
         }
     }
 
+    let mut smartart_image_names: HashMap<usize, String> = HashMap::new();
+    for section in &doc.sections {
+        for block in &section.blocks {
+            if let Block::Paragraph(para) = block {
+                for diagram in &para.smartart {
+                    for shape in &diagram.shapes {
+                        if let Some(ref img) = shape.image_fill {
+                            let key = std::sync::Arc::as_ptr(&img.data) as usize;
+                            if !smartart_image_names.contains_key(&key) {
+                                let name = embed_single_image(img, &mut image_xobjects, pdf, alloc);
+                                smartart_image_names.insert(key, name);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     EmbeddedImages {
         image_pdf_names,
         inline_image_pdf_names,
@@ -719,6 +741,7 @@ pub(super) fn embed_all_images(
         hf_inline_image_names,
         hf_floating_image_names,
         table_cell_image_names,
+        smartart_image_names,
         effect_names,
         effect_floating_names,
         effect_inline_names,

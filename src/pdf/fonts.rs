@@ -113,13 +113,24 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
         }
     }
 
+    // Collect SmartArt text chars into the default document font (for shapes
+    // without per-run font names, which fall back to the global SmartArt font)
     if let Some(first_run) = all_runs.first() {
         let sa_key = font_key_buf(first_run, &mut key_buf).to_string();
         let chars = used.entry(sa_key).or_default();
         for para in &all_paras {
             for diagram in &para.smartart {
                 for shape in &diagram.shapes {
-                    chars.extend(shape.text.chars());
+                    for sa_para in &shape.paragraphs {
+                        for run in &sa_para.runs {
+                            if run.font_name.is_none() {
+                                chars.extend(run.text.chars());
+                            }
+                        }
+                        if let Some(ref b) = sa_para.bullet {
+                            chars.extend(b.chars());
+                        }
+                    }
                 }
             }
         }
@@ -232,6 +243,18 @@ fn extend_chars_for_num_format(chars: &mut HashSet<char>, fmt: &str) {
     }
 }
 
+/// Build a font key for SmartArt shapes, matching the `font_key_buf` format.
+pub(super) fn smartart_font_key_str(name: &str, bold: bool, italic: bool) -> String {
+    let mut key = crate::fonts::primary_font_name(name).to_string();
+    match (bold, italic) {
+        (true, true) => key.push_str("/BI"),
+        (true, false) => key.push_str("/B"),
+        (false, true) => key.push_str("/I"),
+        (false, false) => {}
+    }
+    key
+}
+
 pub(super) fn collect_and_register_fonts(
     doc: &Document,
     pdf: &mut Pdf,
@@ -240,7 +263,34 @@ pub(super) fn collect_and_register_fonts(
     let mut seen_fonts: HashMap<String, FontEntry> = HashMap::new();
     let mut font_order: Vec<String> = Vec::new();
     let all_runs = collect_all_runs(doc);
-    let used_chars_per_font = collect_used_chars(doc, &all_runs);
+    let mut used_chars_per_font = collect_used_chars(doc, &all_runs);
+
+    for section in &doc.sections {
+        for block in &section.blocks {
+            if let Block::Paragraph(para) = block {
+                for diagram in &para.smartart {
+                    for shape in &diagram.shapes {
+                        for sa_para in &shape.paragraphs {
+                            for (i, run) in sa_para.runs.iter().enumerate() {
+                                if let Some(ref name) = run.font_name {
+                                    let key = smartart_font_key_str(name, run.bold, run.italic);
+                                    let chars = used_chars_per_font.entry(key).or_default();
+                                    chars.extend(run.text.chars());
+                                    if i == 0 {
+                                        if let Some(ref b) = sa_para.bullet {
+                                            chars.extend(b.chars());
+                                            chars.insert(' ');
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     let mut key_buf = String::new();
 
     for run in &all_runs {
@@ -269,22 +319,24 @@ pub(super) fn collect_and_register_fonts(
     }
 
     for (key, used) in &used_chars_per_font {
-        if !seen_fonts.contains_key(key) {
-            let pdf_name = format!("F{}", font_order.len() + 1);
-            let entry = register_font(
-                pdf,
-                key,
-                false,
-                false,
-                pdf_name,
-                alloc,
-                &doc.embedded_fonts,
-                used,
-                &doc.font_table,
-            );
-            seen_fonts.insert(key.clone(), entry);
-            font_order.push(key.clone());
+        if seen_fonts.contains_key(key) {
+            continue;
         }
+        // SmartArt keys have style suffixes like /B, /I, /BI — extract the flags
+        let (base, bold, italic) = if let Some((name, suffix)) = key.split_once('/') {
+            let b = suffix.contains('B');
+            let i = suffix.contains('I');
+            (name, b, i)
+        } else {
+            (key.as_str(), false, false)
+        };
+        let pdf_name = format!("F{}", font_order.len() + 1);
+        let entry = register_font(
+            pdf, base, bold, italic, pdf_name, alloc,
+            &doc.embedded_fonts, used, &doc.font_table,
+        );
+        seen_fonts.insert(key.clone(), entry);
+        font_order.push(key.clone());
     }
 
     // Collect all CJK chars missing from their primary fonts and register a

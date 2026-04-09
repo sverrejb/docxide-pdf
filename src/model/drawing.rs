@@ -71,6 +71,7 @@ pub struct ImageReflection {
     pub start_alpha: f32, // 0.0–1.0
     pub end_alpha: f32,   // 0.0–1.0
     pub distance: f32,    // points (gap between image and reflection)
+    #[allow(dead_code)]
     pub blur_radius: f32, // points
 }
 
@@ -184,6 +185,26 @@ pub enum SmartArtTextAlign {
     Right,
 }
 
+pub struct SmartArtRun {
+    pub text: String,
+    pub font_name: Option<String>,
+    pub font_size: f32,
+    pub bold: bool,
+    pub italic: bool,
+    pub color: Option<[u8; 3]>,
+    pub underline: bool,
+    pub strikethrough: bool,
+    /// Baseline shift in 1000ths of %. >0 = superscript, <0 = subscript.
+    pub baseline: i32,
+    pub highlight: Option<[u8; 3]>,
+}
+
+pub struct SmartArtPara {
+    pub runs: Vec<SmartArtRun>,
+    pub bullet: Option<String>,
+    pub align: SmartArtTextAlign,
+}
+
 pub struct SmartArtShape {
     pub x: f32,
     pub y: f32,
@@ -193,17 +214,15 @@ pub struct SmartArtShape {
     pub rotation_deg: f32,
     pub shape_type: ShapeGeometry,
     pub fill: Option<[u8; 3]>,
+    pub image_fill: Option<EmbeddedImage>,
     pub stroke_color: Option<[u8; 3]>,
     pub stroke_width: f32,
-    pub text: String,
-    pub font_size: f32,
-    pub text_color: Option<[u8; 3]>,
+    pub paragraphs: Vec<SmartArtPara>,
     /// Separate text rectangle from dsp:txXfrm (x, y, w, h in pts)
     pub text_rect: Option<(f32, f32, f32, f32)>,
     /// Left inset from a:bodyPr lIns (pts)
     pub text_inset_left: f32,
     pub text_anchor: SmartArtTextAnchor,
-    pub text_align: SmartArtTextAlign,
 }
 
 pub struct SmartArtDiagram {
@@ -262,6 +281,7 @@ pub struct TextWarp {
 pub enum AutoFit {
     #[default]
     None,
+    #[allow(dead_code)]
     Normal {
         font_scale: Option<f32>,
         line_space_reduction: Option<f32>,
@@ -292,6 +312,7 @@ pub struct Textbox {
     pub dist_bottom: f32,
     pub behind_doc: bool,
     pub no_text_wrap: bool,
+    #[allow(dead_code)]
     pub is_wordart: bool,
     pub text_warp: Option<TextWarp>,
     pub auto_fit: AutoFit,

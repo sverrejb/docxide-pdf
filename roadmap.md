@@ -184,7 +184,7 @@ Basic fallback rendering via pre-flattened `dsp:drawing` shape trees is done, wi
 
 1. **Group shapes** (MEDIUM EFFORT) — `dsp:grpSp` groups with nested transforms. Need recursive parsing.
 2. **Connector shapes** (MEDIUM EFFORT) — `dsp:cxnSp` connectors between shapes (arrows, lines).
-3. **Image shapes** (MEDIUM EFFORT) — shapes that contain embedded images (`a:blipFill`).
+3. ~~**Image shapes**~~ (DONE) — `a:blipFill` image fills parsed from diagram-specific relationships, rendered with cover-fill scaling and shape clipping.
 4. **Full layout engine** (VERY HIGH EFFORT) — implement the constraint-based layout algorithm that interprets ~200 XML layout recipes. Only needed for files that lack the `dsp:drawing` fallback. Not planned for the near term.
 
 ## Charts Remaining Work
