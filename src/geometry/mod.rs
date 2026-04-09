@@ -266,4 +266,67 @@ mod tests {
         }
         assert!(matches!(&cmds[8], ResolvedCommand::Close));
     }
+
+    /// circularArrow with case59 adjustments must produce a crescent, not a blob.
+    ///
+    /// The guide formulas compute circle-circle intersections via squared-distance
+    /// products (q5 = q3 * q4 / 1) that exceed i64 range at EMU scale. With i128
+    /// guide storage, the intersection is computed correctly and the path forms a
+    /// thin crescent arc with arrowhead.
+    #[test]
+    fn test_circular_arrow_crescent_not_blob() {
+        let adjs = vec![
+            ("adj1".into(), 4688_i64),
+            ("adj2".into(), 299029),
+            ("adj3".into(), 2486671),
+            ("adj4".into(), 15926341),
+            ("adj5".into(), 5469),
+        ];
+        let w = 177.4;
+        let h = 177.4;
+        let shape = evaluate_preset("circularArrow", w, h, &adjs).unwrap();
+        let cmds = &shape.paths[0].commands;
+
+        // Must have cubic segments (from the two arcs)
+        let cubic_count = cmds
+            .iter()
+            .filter(|c| matches!(c, ResolvedCommand::CubicTo { .. }))
+            .count();
+        assert!(
+            cubic_count >= 4,
+            "Expected at least 4 cubic segments from two arcs, got {cubic_count}"
+        );
+
+        // Collect the LineTo points (the arrowhead vertices between the two arcs).
+        // In a correct crescent, these cluster near each other (small arrowhead).
+        // In the blob case, they scatter across the full shape.
+        let line_pts: Vec<(f64, f64)> = cmds
+            .iter()
+            .filter_map(|c| match c {
+                ResolvedCommand::LineTo(x, y) => Some((*x, *y)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(line_pts.len(), 4, "Expected 4 LineTo commands for arrowhead");
+
+        // The 4 arrowhead points should span a small region (< 30% of shape size)
+        let (mut x_min, mut x_max) = (f64::INFINITY, f64::NEG_INFINITY);
+        let (mut y_min, mut y_max) = (f64::INFINITY, f64::NEG_INFINITY);
+        for &(x, y) in &line_pts {
+            x_min = x_min.min(x);
+            x_max = x_max.max(x);
+            y_min = y_min.min(y);
+            y_max = y_max.max(y);
+        }
+        let x_span = x_max - x_min;
+        let y_span = y_max - y_min;
+        assert!(
+            x_span < w * 0.3,
+            "Arrowhead x-span {x_span:.1} is too large (> 30% of {w})"
+        );
+        assert!(
+            y_span < h * 0.3,
+            "Arrowhead y-span {y_span:.1} is too large (> 30% of {h})"
+        );
+    }
 }

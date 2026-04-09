@@ -67,12 +67,14 @@ fn rad_to_ang(rad: f64) -> f64 {
 }
 
 pub struct GuideEnv {
-    values: HashMap<Cow<'static, str>, i64>,
+    values: HashMap<Cow<'static, str>, i128>,
 }
 
 impl GuideEnv {
     pub fn new(w: i64, h: i64) -> Self {
         let mut values = HashMap::with_capacity(48);
+        let w = w as i128;
+        let h = h as i128;
         let ss = w.min(h);
         let ls = w.max(h);
 
@@ -88,7 +90,7 @@ impl GuideEnv {
         values.insert(Cow::Borrowed("vc"), h / 2);
 
         for (prefix, val, divisors) in [
-            ("wd", w, [2_i64, 3, 4, 5, 6, 8, 10, 12].as_slice()),
+            ("wd", w, [2_i128, 3, 4, 5, 6, 8, 10, 12].as_slice()),
             ("hd", h, &[2, 3, 4, 5, 6, 8, 10]),
             ("ssd", ss, &[2, 4, 6, 8, 16, 32]),
         ] {
@@ -111,21 +113,21 @@ impl GuideEnv {
 
     pub fn set_adjustments(&mut self, defaults: &[(&'static str, i64)], overrides: &[(String, i64)]) {
         for &(name, val) in defaults {
-            self.values.insert(Cow::Borrowed(name), val);
+            self.values.insert(Cow::Borrowed(name), val as i128);
         }
         for (name, val) in overrides {
-            self.values.insert(Cow::Owned(name.clone()), *val);
+            self.values.insert(Cow::Owned(name.clone()), *val as i128);
         }
     }
 
-    pub fn resolve(&self, arg: &str) -> i64 {
+    pub fn resolve(&self, arg: &str) -> i128 {
         if arg.is_empty() {
             return 0;
         }
         if let Some(&val) = self.values.get(arg) {
             return val;
         }
-        arg.parse::<i64>().unwrap_or_else(|_| {
+        arg.parse::<i128>().unwrap_or_else(|_| {
             log::debug!("Unknown shape guide variable: {arg:?}");
             0
         })
@@ -145,7 +147,7 @@ impl GuideEnv {
         }
     }
 
-    fn eval_op(&self, op: FormulaOp, xa: &str, ya: &str, za: &str) -> i64 {
+    fn eval_op(&self, op: FormulaOp, xa: &str, ya: &str, za: &str) -> i128 {
         let x = || self.resolve(xa);
         let y = || self.resolve(ya);
         let z = || self.resolve(za);
@@ -157,10 +159,10 @@ impl GuideEnv {
                 if denom == 0 {
                     0
                 } else {
-                    (x() as i128 * y() as i128 / denom as i128) as i64
+                    x() * y() / denom
                 }
             }
-            FormulaOp::AddSub => (x() as i128 + y() as i128 - z() as i128) as i64,
+            FormulaOp::AddSub => x() + y() - z(),
             FormulaOp::AddDiv => {
                 let denom = z();
                 if denom == 0 { 0 } else { (x() + y()) / denom }
@@ -175,7 +177,7 @@ impl GuideEnv {
             FormulaOp::Abs => x().abs(),
             FormulaOp::Sqrt => {
                 let v = x();
-                if v <= 0 { 0 } else { (v as f64).sqrt() as i64 }
+                if v <= 0 { 0 } else { (v as f64).sqrt() as i128 }
             }
             FormulaOp::Min => x().min(y()),
             FormulaOp::Max => x().max(y()),
@@ -185,21 +187,21 @@ impl GuideEnv {
                 let hi = z();
                 val.clamp(lo, hi)
             }
-            FormulaOp::Sin => (x() as f64 * ang_to_rad(y() as f64).sin()) as i64,
-            FormulaOp::Cos => (x() as f64 * ang_to_rad(y() as f64).cos()) as i64,
-            FormulaOp::Tan => (x() as f64 * ang_to_rad(y() as f64).tan()) as i64,
-            FormulaOp::Atan2 => rad_to_ang((y() as f64).atan2(x() as f64)) as i64,
+            FormulaOp::Sin => (x() as f64 * ang_to_rad(y() as f64).sin()) as i128,
+            FormulaOp::Cos => (x() as f64 * ang_to_rad(y() as f64).cos()) as i128,
+            FormulaOp::Tan => (x() as f64 * ang_to_rad(y() as f64).tan()) as i128,
+            FormulaOp::Atan2 => rad_to_ang((y() as f64).atan2(x() as f64)) as i128,
             FormulaOp::CosAtan2 => {
                 let ang = (z() as f64).atan2(y() as f64);
-                (x() as f64 * ang.cos()) as i64
+                (x() as f64 * ang.cos()) as i128
             }
             FormulaOp::SinAtan2 => {
                 let ang = (z() as f64).atan2(y() as f64);
-                (x() as f64 * ang.sin()) as i64
+                (x() as f64 * ang.sin()) as i128
             }
             FormulaOp::Mod => {
                 let (xv, yv, zv) = (x() as f64, y() as f64, z() as f64);
-                (xv * xv + yv * yv + zv * zv).sqrt() as i64
+                (xv * xv + yv * yv + zv * zv).sqrt() as i128
             }
         }
     }
@@ -626,5 +628,19 @@ mod tests {
         assert_eq!(env.resolve(""), 0);
         assert_eq!(env.resolve("unknown_name"), 0);
     }
-}
 
+    /// MulDiv with large values must not overflow -- regression test for the
+    /// squared-distance products in circularArrow intersection formulas.
+    #[test]
+    fn test_muldiv_large_values_no_overflow() {
+        let mut env = GuideEnv::new(2_250_000, 2_250_000);
+        env.evaluate_guides(&[
+            GuideDef { name: "a", op: FormulaOp::MulDiv, x: "1000000", y: "1000000", z: "1" },
+            GuideDef { name: "b", op: FormulaOp::MulDiv, x: "150000", y: "150000", z: "1" },
+            GuideDef { name: "prod", op: FormulaOp::MulDiv, x: "a", y: "b", z: "1" },
+        ]);
+        assert_eq!(env.resolve("a"), 1_000_000_000_000);
+        assert_eq!(env.resolve("b"), 22_500_000_000);
+        assert_eq!(env.resolve("prod"), 22_500_000_000_000_000_000_000);
+    }
+}

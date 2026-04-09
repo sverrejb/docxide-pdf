@@ -293,6 +293,11 @@
     "ssim": 0.7885,
     "text_boundary": 1.0
   },
+  "cases/case59": {
+    "jaccard": 0.9037,
+    "ssim": 0.8817,
+    "text_boundary": 1.0
+  },
   "cases/case6": {
     "jaccard": 0.4505,
     "ssim": 0.8723,
@@ -392,25 +397,10 @@
     "ssim": 0.5816,
     "text_boundary": 0.7193
   },
-  "scraped/czech_health_sta..": {
-    "jaccard": 0.5445,
-    "ssim": 0.7544,
-    "text_boundary": 1.0
-  },
   "new/czech_works_cont..": {
     "jaccard": 0.4528,
     "ssim": 0.617,
     "text_boundary": 0.6508
-  },
-  "scraped/destination_loya..": {
-    "jaccard": 0.7144,
-    "ssim": 0.9128,
-    "text_boundary": 1.0
-  },
-  "scraped/dutch_school_eva..": {
-    "jaccard": 0.5016,
-    "ssim": 0.9125,
-    "text_boundary": 1.0
   },
   "new/english_town_cou..": {
     "jaccard": 0.2672,
@@ -432,20 +422,10 @@
     "ssim": 0.2035,
     "text_boundary": 0.3023
   },
-  "scraped/russian_student_..": {
-    "jaccard": 0.2287,
-    "ssim": 0.8232,
-    "text_boundary": 0.9574
-  },
   "new/russian_voluntee..": {
     "jaccard": 0.262,
     "ssim": 0.3745,
     "text_boundary": 0.1411
-  },
-  "scraped/spanish_constitu..": {
-    "jaccard": 0.5903,
-    "ssim": 0.8093,
-    "text_boundary": 1.0
   },
   "new/taiwanese_educat..": {
     "jaccard": 0.1021,
@@ -528,6 +508,11 @@
     "text_boundary": 1.0,
     "convert_ms": 39.4
   },
+  "scraped/czech_health_sta..": {
+    "jaccard": 0.5445,
+    "ssim": 0.7544,
+    "text_boundary": 1.0
+  },
   "scraped/czech_municipal_..": {
     "jaccard": 0.1184,
     "ssim": 0.4234,
@@ -539,6 +524,16 @@
     "ssim": 0.9663,
     "text_boundary": 1.0,
     "convert_ms": 4.8
+  },
+  "scraped/destination_loya..": {
+    "jaccard": 0.7144,
+    "ssim": 0.9128,
+    "text_boundary": 1.0
+  },
+  "scraped/dutch_school_eva..": {
+    "jaccard": 0.5016,
+    "ssim": 0.9125,
+    "text_boundary": 1.0
   },
   "scraped/east_asia_confer..": {
     "jaccard": 0.0926,
@@ -684,6 +679,11 @@
     "text_boundary": 0.4211,
     "convert_ms": 11.7
   },
+  "scraped/russian_student_..": {
+    "jaccard": 0.2287,
+    "ssim": 0.8232,
+    "text_boundary": 0.9574
+  },
   "scraped/russian_universi..": {
     "jaccard": 0.2443,
     "ssim": 0.5049,
@@ -707,6 +707,11 @@
     "ssim": 0.7638,
     "text_boundary": 0.7231,
     "convert_ms": 13.2
+  },
+  "scraped/spanish_constitu..": {
+    "jaccard": 0.5903,
+    "ssim": 0.8093,
+    "text_boundary": 1.0
   },
   "scraped/stem_partnership..": {
     "jaccard": 0.2442,
