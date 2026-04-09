@@ -150,11 +150,62 @@ Over 48 pages × ~40 lines/page = ~1920 lines, ~40 lines are affected → net +1
 
 **Status:** Not tested. This would produce a different error pattern — positions would be quantized to `1/UPM * fontSize` steps rather than smooth accumulation.
 
-### H. Small tolerance / "slop" in line breaking (NOT YET TESTED)
+### H. Small tolerance / "slop" in line breaking (TESTED — FRAGILE)
 
 **Theory:** Instead of matching Word's exact width formula, add a small tolerance to the line-break decision. If the last word overshoots by less than ~0.5pt, still fit it on the line.
 
-**Status:** Not tested. This is a pragmatic fix rather than a root-cause fix. Would need careful tuning to avoid regressions on cases that currently break correctly. Could be implemented as: `let overflows = proposed_x + ww > cur_max + TOLERANCE;`
+**Tested (April 2026):** Exhaustive sweep of tolerance values from 0.07pt to 0.75pt.
+
+Results:
+- **0.07pt**: Zero effect (same as baseline 0.05pt for all test cases)
+- **0.10pt**: 2 regressions (case11 -5.7pp TxtBnd, education_consul -9.4pp), 1 improvement
+- **0.15pt**: Same regressions as 0.10pt — the flip threshold is between 0.07pt and 0.10pt
+- **0.35pt**: 20 regressions, 3 improvements (Lithuanian +45pp, but too many losses)
+- **Adaptive per-char tolerance** (0.002–0.005pt × char_count): Same regression pattern as fixed tolerance because the per-char scaling doesn't help — the issue is font-specific, not line-length-specific
+
+**Conclusion:** Tolerance approach is fundamentally fragile. It can't distinguish between "barely overflows due to width bias" (should fit) and "genuinely doesn't fit but our metrics accidentally agree" (should not fit). Case11 (Cambria body text, near-zero width bias) regresses at ANY tolerance above 0.07pt because its correct line break happens at ~0.05pt overflow, and any additional tolerance overrides it.
+
+### I. Global layout width correction factor (TESTED — PROMISING BUT FONT-DEPENDENT)
+
+**Theory:** Multiply all layout-time advance widths by a small factor (e.g., 0.9998 = 0.02% narrower) to compensate for Word's systematic narrowing. PDF-embedded widths stay exact.
+
+**Tested (April 2026):** Sweep from 0.9990 to 0.9999, both global and per-font.
+
+**Measured per-font signed width bias** (from reference PDF character positions via mutool stext):
+
+| Font | Size | Mean signed diff | Implied factor | Cum error/80 chars | Sample size |
+|------|------|-----------------|---------------|-------------------|-------------|
+| Calibri | 12pt (body text, case4) | +0.007pt/char | 0.9987 | 0.55pt | 5052 chars |
+| Calibri | 12pt (repeated, case54) | +0.016pt/char | 0.9974 | 1.31pt | 1200 chars |
+| Calibri | 11pt | +0.008pt/char | 0.9984 | 0.64pt | 2160 chars |
+| Arial | 12pt | +0.003pt/char | 0.9995 | 0.20pt | 1360 chars |
+
+Note: Calibri-Bold 13/14pt showed NEGATIVE bias (our widths narrower) but this may be due to font-path mismatch in the analysis script (loading regular Calibri.ttf for bold text).
+
+**Global factor results:**
+
+| Factor | Regressions | Improvements | Notes |
+|--------|------------|-------------|-------|
+| 0.999 | 46 | 8 | Way too aggressive — Lithuanian +45pp but massive regressions |
+| 0.9997 | 8 | 7 | Near-balanced but too many regressions |
+| 0.9998 | 2 | 4 | Better ratio but case11 (Cambria) and seminary_hill regress |
+| 0.9999 | 1 (case11) | 2 | Even minimal correction breaks case11 |
+
+**Per-font factor results** (Calibri/TNR get correction, Cambria/Aptos/others get 1.0):
+
+| Calibri/TNR factor | Regressions | Improvements | Notes |
+|---------------------|------------|-------------|-------|
+| 0.9997 | 4 | 4 | feminist_voice, mandated_reporter, seminary_hill regress |
+| 0.9998 | 1 (seminary_hill) | 4 | case49 +3.4pp, case54 +2.6pp, polish +2.8pp |
+| 0.99985 | 0 | 3 | **CLEAN — zero regressions**, case49 +2.7pp, case54 +2.2pp, polish +2.8pp |
+| 0.99982 | 0 | 3 | **CLEAN**, case49 +3.0pp, case54 +2.4pp, polish +2.8pp |
+
+**Conclusion:** Per-font factors work but are limited:
+1. The optimal factor varies by font (Cambria needs 1.0, Calibri needs ~0.9998)
+2. It also varies by font size (TJ adjustments change sign between sizes — see kerning_and_shaping.md)
+3. A single per-font factor is too simplistic: it helps for the average case but can't track size-dependent hinting
+4. The clean-improvement range (0.99982–0.99985 for Calibri/TNR) captures only ~30% of the theoretical correction (need ~0.9987 but can only safely apply ~0.99985)
+5. A per-font × per-size lookup table is needed for full correction — confirms the data-driven approach in the roadmap
 
 ## Diagnostic Fixtures Created
 
@@ -173,25 +224,32 @@ Result: 69.5% Jaccard, 87.1% SSIM. The "mm" and "test" blocks match Word's line 
 ## What We Know For Sure
 
 1. Our glyph widths match the raw font file metrics (verified via fontTools)
-2. Word uses slightly narrower widths (~0.003pt/char at 12pt, ~0.05% systematic bias)
+2. Word uses slightly narrower widths (~0.003–0.016pt/char at 12pt depending on font and text)
 3. Word's widths are NOT quantized to twips
 4. The effect is per-character, not per-line or per-paragraph
 5. Line heights, paragraph spacing, and margins are all correct
-6. The issue affects ALL fonts tested (Calibri, TNR, Arial)
+6. The issue affects ALL fonts tested (Calibri, TNR, Arial) but magnitude varies greatly:
+   - Calibri 12pt: +0.007pt/char signed bias (0.55pt over 80 chars)
+   - Arial 12pt: +0.003pt/char signed bias (0.20pt over 80 chars)
+   - Cambria 12pt: ~0pt signed bias (near-zero, from shaping_compare: 0.07 per-mille absolute)
 7. The effect compounds over long documents, producing extra pages
+8. A per-font correction factor DOES help (Calibri/TNR 0.99985 gives 3 improvements, 0 regressions) but captures only ~30% of the needed correction — size-dependent effects prevent going further
+9. Tolerance-based approaches are fundamentally fragile — can't distinguish genuine overflows from bias-caused overflows
+10. The correction is size-dependent: TJ adjustments change sign between font sizes (e.g., Aptos H→e is +7 at 10pt but -6 at 14pt) — a per-font × per-size table is necessary for full correction
 
 ## What We Don't Know
 
 1. Word's exact advance width computation formula
-2. Whether the narrowing is DPI-dependent, font-size-dependent, or both
-3. Whether it's a rounding operation on individual glyphs or on accumulated positions
+2. The precise per-glyph, per-ppem correction values for each common font
+3. Whether a formula (ppem rounding variant) can approximate the corrections, or if a lookup table from Word's actual output is required
 4. Whether the `hdmx` table (device-specific metrics) plays a role (Calibri has no hdmx; TNR has one — untested)
-5. Whether Word uses a different text shaping engine that produces different widths
 
 ## Recommended Next Steps
 
-1. **Test ppem-based rounding** at 96 DPI (the most promising unexplored theory)
-2. **Check TNR's hdmx table** — TNR has one, which could explain device-specific width differences
-3. **Test the tolerance approach** — add ~0.5pt line-break slop as a pragmatic fix
-4. **Create more diagnostic fixtures** with varying font sizes (8pt, 10pt, 14pt, 18pt) to see if the error scales with font size or ppem
-5. **Compare with LibreOffice** — does LibreOffice match Word's widths or ours? This would indicate whether the issue is Word-specific or a known font rendering convention
+The data-driven approach outlined in the roadmap (Phases 1-4) is confirmed as the right path forward. Specific priorities:
+
+1. **Phase 1: Data collection** — Generate single-glyph and bigram width sheets for Calibri, TNR, Arial, Aptos, Cambria at sizes 8-24pt. Convert via Word online. Extract TJ adjustments as ground truth.
+2. **Phase 2: Formula testing** — Test ppem rounding variants against the ground truth. Also check TNR's hdmx table. If a formula fits → implement directly.
+3. **Phase 3: Lookup table** — If no formula, build `{font, ppem, glyph_id} → correction` table from the collected data. ~20K entries, ~80KB.
+4. **Interim: consider shipping the per-font factor** — Calibri/TNR at 0.99985, Arial at 0.9999, others at 1.0 gives 3 improvements with zero regressions. Small but safe win while the data pipeline is built.
+5. **Analysis script preserved** — `tools/experiments/width_analysis.py` extracts per-character signed width errors from reference PDFs via mutool stext. Useful for validating future corrections.

@@ -60,8 +60,11 @@ Evidence:
 3. Margin calculation error — disproven: our margins match DOCX spec exactly
 4. Image paragraph height rounding — fixed in prior work
 5. Table trailing spacing — disproven in prior work
+6. Line-break tolerance (0.07–0.75pt) — tested April 2026: fragile, can't distinguish bias from genuine overflow. Any tolerance >0.07pt regresses Cambria-based cases (case11)
+7. Global width correction factor — tested April 2026: helps Calibri/TNR but overcorrects Cambria. Magnitude varies by font and by font size.
+8. Per-font width correction factor — tested April 2026: Calibri/TNR=0.99985, Arial=0.9999, others=1.0 gives 3 improvements, 0 regressions. Safe but captures only ~30% of needed correction. Can't go further because correction is size-dependent.
 
-**Most likely remaining cause:** Word computes advance widths at a device-specific resolution (ppem at some reference DPI) with sub-pixel rounding that slightly narrows each glyph. This is a ~0.05% systematic bias. Fixing requires discovering Word's exact rounding formula.
+**Root cause confirmed:** Word's DirectWrite engine applies proprietary grid-fitting corrections that vary per glyph AND per font size (signs flip between sizes). These corrections are not in font data and can't be reproduced by FreeType or rustybuzz. The signed bias varies by font: Calibri +0.007pt/char, Arial +0.003pt/char, Cambria ~0pt at 12pt.
 
 **Next steps — data-driven width correction (April 2026):**
 
@@ -89,10 +92,12 @@ If a formula fits → implement directly. No model needed.
 **Phase 4 — Kerning corrections (stretch goal):**
 Same pipeline for bigrams. Input space is `glyphs²` but only ~500 common pairs matter. Sparse lookup table.
 
-**Previous next-step ideas (still valid as fallbacks):**
-- Create more diagnostic fixtures with different fonts/sizes to map the width error precisely
-- Test ppem-based rounding at 96 DPI, 72 DPI, and EMU resolution
-- Add a small configurable "text width tolerance" that widens the line-break boundary by ~0.5pt
+**Previous next-step ideas (status updated April 2026):**
+- ~~Add a small configurable "text width tolerance"~~ — tested, fragile, regresses low-bias fonts
+- ~~Test ppem-based rounding at various DPIs~~ — tested in March 2026 (see kerning_and_shaping.md), none match
+- Create more diagnostic fixtures with different fonts/sizes — still valid, needed for Phase 1 data collection
+- **Interim safe win:** ship per-font factor (Calibri/TNR=0.99985, Arial=0.9999, others=1.0) for 3 clean improvements while data pipeline is built
+- **Analysis tooling:** `tools/experiments/width_analysis.py` extracts per-char signed width errors from reference PDFs
 
 ## Unimplemented Run Properties
 

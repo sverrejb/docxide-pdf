@@ -1,6 +1,6 @@
 [package]
 name = "docxide-pdf"
-version = "0.11.0"
+version = "0.12.0"
 edition = "2024"
 description = "Library and CLI for converting DOCX files to PDF, matching Microsoft Word's output as closely as possible"
 license = "Apache-2.0"
