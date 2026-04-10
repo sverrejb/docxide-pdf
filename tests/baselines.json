@@ -294,8 +294,8 @@
     "text_boundary": 1.0
   },
   "cases/case59": {
-    "jaccard": 0.9232,
-    "ssim": 0.9218,
+    "jaccard": 0.922,
+    "ssim": 0.9201,
     "text_boundary": 1.0
   },
   "cases/case6": {
@@ -305,8 +305,8 @@
     "convert_ms": 15.3
   },
   "cases/case60": {
-    "jaccard": 0.7477,
-    "ssim": 0.8733,
+    "jaccard": 0.7508,
+    "ssim": 0.8807,
     "text_boundary": 0.0
   },
   "cases/case7": {
@@ -417,6 +417,11 @@
     "ssim": 0.1844,
     "text_boundary": 0.0351
   },
+  "new/irish_school_enr..": {
+    "jaccard": 0.3347,
+    "ssim": 0.5292,
+    "text_boundary": 0.6964
+  },
   "new/lithuanian_publi..": {
     "jaccard": 0.3196,
     "ssim": 0.4419,
@@ -427,10 +432,25 @@
     "ssim": 0.2035,
     "text_boundary": 0.3023
   },
+  "new/russian_municipa..": {
+    "jaccard": 0.4836,
+    "ssim": 0.8039,
+    "text_boundary": 0.8043
+  },
   "new/russian_voluntee..": {
     "jaccard": 0.262,
     "ssim": 0.3745,
     "text_boundary": 0.1411
+  },
+  "new/slovak_electoral..": {
+    "jaccard": 0.3662,
+    "ssim": 0.5268,
+    "text_boundary": 0.3861
+  },
+  "new/slovak_eu_direct..": {
+    "jaccard": 0.1139,
+    "ssim": 0.1604,
+    "text_boundary": 0.2571
   },
   "new/taiwanese_educat..": {
     "jaccard": 0.1021,
@@ -607,9 +627,9 @@
     "convert_ms": 18.4
   },
   "scraped/learning_culture..": {
-    "jaccard": 0.3356,
-    "ssim": 0.4605,
-    "text_boundary": 0.4061,
+    "jaccard": 0.3353,
+    "ssim": 0.4604,
+    "text_boundary": 0.406,
     "convert_ms": 1027.5
   },
   "scraped/lithuanian_ethic..": {
@@ -768,8 +788,8 @@
   },
   "scraped/vaccines_history..": {
     "jaccard": 0.4273,
-    "ssim": 0.5516,
-    "text_boundary": 0.1111,
+    "ssim": 0.5515,
+    "text_boundary": 0.114,
     "convert_ms": 23.3
   },
   "scraped/waste_management..": {

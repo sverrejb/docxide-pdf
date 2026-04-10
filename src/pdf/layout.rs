@@ -561,6 +561,21 @@ pub(super) fn build_paragraph_lines(
 
             // Small tolerance for floating-point width accumulation over many glyphs
             let overflows = proposed_x + ww > cur_max + 0.05;
+
+            // When leading spaces push the first word past the line width,
+            // emit a blank line for the spaces and start the word at x=0.
+            // Word absorbs the spaces onto the current line and wraps the
+            // word to the next line.
+            if current_chunks.is_empty() && overflows && pending_space_w > 0.0 && !in_right_region {
+                lines.push(finish_dual_line(&mut current_chunks, &mut in_right_region, &mut cur_right_info));
+                pending_space_w = 0.0;
+                current_chunks.push(WordChunk::text(
+                    entry, run, word, eff_fs, cs, y_off, 0.0, ww,
+                ));
+                current_x = ww;
+                continue;
+            }
+
             // For the first word on a line, also overflow if the
             // left region is zero-width (so words go straight to
             // the right region for e.g. left-aligned images).
@@ -568,7 +583,6 @@ pub(super) fn build_paragraph_lines(
                 && !in_right_region
                 && cur_max <= 0.0
                 && right_region_for(lines.len()).is_some();
-
 
             if (!current_chunks.is_empty() && overflows && !is_continuation) || first_word_overflow {
                 // Word doesn't fit in current region

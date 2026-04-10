@@ -116,6 +116,65 @@ fn draw_cell_shading(
     content.restore_state();
 }
 
+/// Render an inline image within a table cell paragraph, handling alignment,
+/// shadow, glow, stroke, and the image transform. Returns the image height
+/// consumed so the caller can advance its cursor.
+fn render_cell_inline_image(
+    content: &mut Content,
+    para: &CellParagraphLayout,
+    img_name: &str,
+    cell_x: f32,
+    col_w: f32,
+    cursor_y: f32,
+    cm: &CellMargins,
+) -> f32 {
+    let text_w = (col_w - cm.left - cm.right).max(0.0);
+    let img_x = match para.alignment {
+        Alignment::Center => cell_x + cm.left + (text_w - para.image_width) / 2.0,
+        Alignment::Right => cell_x + cm.left + text_w - para.image_width,
+        _ => cell_x + cm.left,
+    };
+    let img_y = cursor_y - para.image_height;
+
+    if let Some(ref shadow) = para.image_shadow {
+        super::color::draw_image_shadow(
+            content, shadow, img_x, img_y,
+            para.image_width, para.image_height,
+            para.image_shadow_xobj.as_deref(),
+        );
+    }
+    if let Some(ref glow) = para.image_glow {
+        super::color::draw_image_glow(
+            content, glow, img_x, img_y,
+            para.image_width, para.image_height,
+            para.image_glow_xobj.as_deref(),
+        );
+    }
+
+    content.save_state();
+    content.transform([
+        para.image_width,
+        0.0,
+        0.0,
+        para.image_height,
+        img_x,
+        img_y,
+    ]);
+    content.x_object(Name(img_name.as_bytes()));
+    content.restore_state();
+
+    if let Some(sc) = para.image_stroke_color {
+        content.save_state();
+        stroke_rgb(content, sc);
+        content.set_line_width(para.image_stroke_width);
+        content.rect(img_x, img_y, para.image_width, para.image_height);
+        content.stroke();
+        content.restore_state();
+    }
+
+    para.image_height
+}
+
 fn valign_offset(v_align: CellVAlign, available: f32, content_h: f32) -> f32 {
     match v_align {
         CellVAlign::Top => 0.0,
@@ -128,6 +187,7 @@ fn para_has_visible_content(para: &CellParagraphLayout) -> bool {
     !para.list_label.is_empty()
         || (!para.lines.is_empty() && para.lines.iter().any(|l| !l.chunks.is_empty()))
         || !para.floating_images.is_empty()
+        || para.image_name.is_some()
 }
 
 /// Total content height including trailing space_after, matching Word's vAlign calculation.
@@ -179,12 +239,7 @@ fn render_cell_content(
                     block_idx += 1;
                 }
 
-                let has_floats = !para.floating_images.is_empty();
-
-                if !para_has_visible_content(para)
-                    && para.image_name.is_none()
-                    && !has_floats
-                {
+                if !para_has_visible_content(para) {
                     cursor_y -= para.space_before + para_block_height(para);
                     continue;
                 }
@@ -210,47 +265,11 @@ fn render_cell_content(
                 }
 
                 if let Some(ref img_name) = para.image_name {
-                    let img_x = cell_x + cm.left;
-                    let img_y = cursor_y - para.image_height;
-
-                    if let Some(ref shadow) = para.image_shadow {
-                        super::color::draw_image_shadow(
-                            content, shadow, img_x, img_y,
-                            para.image_width, para.image_height,
-                            para.image_shadow_xobj.as_deref(),
-                        );
-                    }
-                    if let Some(ref glow) = para.image_glow {
-                        super::color::draw_image_glow(
-                            content, glow, img_x, img_y,
-                            para.image_width, para.image_height,
-                            para.image_glow_xobj.as_deref(),
-                        );
-                    }
-
-                    content.save_state();
-                    content.transform([
-                        para.image_width,
-                        0.0,
-                        0.0,
-                        para.image_height,
-                        img_x,
-                        img_y,
-                    ]);
-                    content.x_object(Name(img_name.as_bytes()));
-                    content.restore_state();
-                    if let Some(sc) = para.image_stroke_color {
-                        content.save_state();
-                        stroke_rgb(content, sc);
-                        content.set_line_width(para.image_stroke_width);
-                        content.rect(img_x, img_y, para.image_width, para.image_height);
-                        content.stroke();
-                        content.restore_state();
-                    }
-                    // Advance cursor by display height only; distT/distB in
-                    // layout_extra_height contribute to row height calculation
-                    // but don't add spacing between image and following text.
-                    cursor_y -= para.image_height;
+                    // distT/distB in layout_extra_height contribute to row
+                    // height but don't add spacing between image and text.
+                    cursor_y -= render_cell_inline_image(
+                        content, para, img_name, cell_x, col_w, cursor_y, cm,
+                    );
                     continue;
                 }
 
@@ -465,7 +484,7 @@ fn render_partial_cell_content(
             CellContentItem::Paragraph(para) => {
                 let sb = if pi == start { 0.0 } else { para.space_before };
 
-                if !para_has_visible_content(para) && para.floating_images.is_empty() {
+                if !para_has_visible_content(para) {
                     cursor_y -= sb + para_block_height(para);
                     continue;
                 }
@@ -487,6 +506,13 @@ fn render_partial_cell_content(
                     ]);
                     content.x_object(Name(fi.pdf_name.as_bytes()));
                     content.restore_state();
+                }
+
+                if let Some(ref img_name) = para.image_name {
+                    cursor_y -= render_cell_inline_image(
+                        content, para, img_name, cell_x, col_w, cursor_y, cm,
+                    );
+                    continue;
                 }
 
                 let text_x = cell_x + cm.left + para.indent_left + para.float_indent_left;
