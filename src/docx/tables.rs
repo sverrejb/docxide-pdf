@@ -295,14 +295,19 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                 .unwrap_or_else(|| {
                     // Per OOXML §17.4.17, absent gridSpan defaults to 1.
                     // Only infer span > 1 when tcW closely matches the
-                    // cumulative width of multiple grid columns (within 10%).
+                    // cumulative width of multiple grid columns. Prefer the
+                    // smallest span whose cumulative width is closest to tcW,
+                    // with a tighter tolerance (5% or 50 twips, whichever is
+                    // larger) to avoid false matches from narrow columns.
                     if ci < num_cols {
                         let mut best_span = 1u16;
+                        let mut best_diff = (col_widths.get(ci).copied().unwrap_or(0.0) - cell_width).abs();
                         let mut cumulative = col_widths.get(ci).copied().unwrap_or(0.0);
                         for s in 2..=(num_cols - ci) as u16 {
                             cumulative += col_widths.get(ci + s as usize - 1).copied().unwrap_or(0.0);
                             let diff = (cumulative - cell_width).abs();
-                            if diff < cumulative * 0.1 {
+                            if diff < best_diff {
+                                best_diff = diff;
                                 best_span = s;
                             }
                         }
