@@ -1,5 +1,5 @@
 {
-  "next_id": 123,
+  "next_id": 131,
   "annotations": [
     {
       "id": 8,
@@ -82,26 +82,6 @@
       "fixed": false
     },
     {
-      "id": 95,
-      "case": "case53",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 146.72275,
-      "y_pt": 512.488,
-      "note": "Labels are too wide here, they should break into \"Region\" on one line and \"A\" on the other",
-      "fixed": false
-    },
-    {
-      "id": 96,
-      "case": "case52",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 132.67159,
-      "y_pt": 509.45786,
-      "note": "We are not supporting stacked bars at all. Fix that.",
-      "fixed": false
-    },
-    {
       "id": 107,
       "case": "scraped/learning_cultures_dissertation",
       "page": 2,
@@ -139,16 +119,6 @@
       "x_pt": 74.381256,
       "y_pt": 144.82404,
       "note": "We overflow into the footer here.",
-      "fixed": false
-    },
-    {
-      "id": 113,
-      "case": "new/croatian_military_burial_request",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 140.50388,
-      "y_pt": 92.46936,
-      "note": "We overflow the footer here.",
       "fixed": false
     },
     {
@@ -229,6 +199,46 @@
       "x_pt": 501.98163,
       "y_pt": 250.85443,
       "note": "Missing grey line between 12. and 13. here",
+      "fixed": false
+    },
+    {
+      "id": 123,
+      "case": "case60",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 327.21265,
+      "y_pt": 172.58423,
+      "note": "Sit Amet should fall on two lines",
+      "fixed": false
+    },
+    {
+      "id": 124,
+      "case": "new/english_town_council_report",
+      "page": 2,
+      "source": "Generated",
+      "x_pt": 75.68638,
+      "y_pt": 794.8483,
+      "note": "We start higher up here than reference for some reason.",
+      "fixed": false
+    },
+    {
+      "id": 127,
+      "case": "new/master_thesis_learning_agreement",
+      "page": 3,
+      "source": "Generated",
+      "x_pt": 525.98883,
+      "y_pt": 609.20374,
+      "note": "Missing line under \"Signature\". Also Signature and Date is too much to the right.",
+      "fixed": false
+    },
+    {
+      "id": 129,
+      "case": "new/master_thesis_learning_agreement",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 85.421844,
+      "y_pt": 751.51,
+      "note": "Header text is too large",
       "fixed": false
     }
   ]

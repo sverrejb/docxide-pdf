@@ -301,6 +301,8 @@ struct App {
     show_notes_panel: bool,
     baselines: HashMap<String, BaselineScores>,
     collapsed_groups: HashSet<String>,
+    search_query: String,
+    search_active: bool,
 }
 
 impl App {
@@ -325,6 +327,8 @@ impl App {
             show_notes_panel: true,
             baselines,
             collapsed_groups: HashSet::new(),
+            search_query: String::new(),
+            search_active: false,
         }
     }
 
@@ -410,11 +414,28 @@ impl App {
 impl eframe::App for App {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Handle keyboard input (skip when text input has focus)
-        let text_has_focus = self.pending_annotation.is_some()
+        let text_has_focus = (self.pending_annotation.is_some() || self.search_active)
             && ctx.memory(|m| m.focused().is_some());
         ctx.input(|i| {
             if i.key_pressed(egui::Key::Escape) {
-                self.pending_annotation = None;
+                if self.search_active {
+                    self.search_active = false;
+                    self.search_query.clear();
+                } else {
+                    self.pending_annotation = None;
+                }
+            }
+            if self.search_active && i.key_pressed(egui::Key::Enter) {
+                let q = self.search_query.to_lowercase().replace(' ', "_");
+                if !q.is_empty() {
+                    if let Some(idx) = self.cases.iter().position(|c| {
+                        c.name.to_lowercase().replace(' ', "_").contains(&q)
+                    }) {
+                        self.set_case(idx);
+                    }
+                }
+                self.search_active = false;
+                self.search_query.clear();
             }
             if text_has_focus {
                 return;
@@ -433,7 +454,7 @@ impl eframe::App for App {
             if i.key_pressed(egui::Key::ArrowUp) {
                 self.current_page = self.current_page.saturating_sub(1);
             }
-            if i.key_pressed(egui::Key::Num1) || i.key_pressed(egui::Key::S) {
+            if i.key_pressed(egui::Key::Num1) {
                 self.view_mode = ViewMode::SideBySide;
             }
             if i.key_pressed(egui::Key::Num2) || i.key_pressed(egui::Key::R) {
@@ -444,6 +465,9 @@ impl eframe::App for App {
             }
             if i.key_pressed(egui::Key::Num4) || i.key_pressed(egui::Key::O) {
                 self.view_mode = ViewMode::Overlay;
+            }
+            if i.key_pressed(egui::Key::S) {
+                self.search_active = true;
             }
             if i.key_pressed(egui::Key::F5) || i.key_pressed(egui::Key::F) {
                 self.refresh();
@@ -534,32 +558,58 @@ impl eframe::App for App {
         let mut clicked_case = None;
         let mut did_scroll = false;
 
+        // Normalize query for substring matching (lowercase, spaces→underscores)
+        let query_norm: String = self.search_query.to_lowercase().replace(' ', "_");
+        let search_active = self.search_active;
+
         egui::SidePanel::right("case_list")
             .default_width(260.0)
             .show(ctx, |ui| {
                 ui.heading("Cases");
-                ui.separator();
+                if search_active {
+                    let resp = ui.text_edit_singleline(&mut self.search_query);
+                    if self.search_active {
+                        resp.request_focus();
+                    }
+                } else {
+                    ui.separator();
+                }
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     for (group_name, items) in &groups {
-                        let collapsed = self.collapsed_groups.contains(group_name);
+                        // Filter items by search query
+                        let filtered: Vec<&&CaseLabel> = if query_norm.is_empty() {
+                            items.iter().collect()
+                        } else {
+                            items
+                                .iter()
+                                .filter(|cl| {
+                                    let name_norm = cl.label.to_lowercase().replace(' ', "_");
+                                    name_norm.contains(&query_norm)
+                                })
+                                .collect()
+                        };
+                        if filtered.is_empty() {
+                            continue;
+                        }
+                        let collapsed = self.collapsed_groups.contains(group_name) && query_norm.is_empty();
                         let header = format!(
                             "{} {} ({})",
                             if collapsed { "\u{25B6}" } else { "\u{25BC}" },
                             group_name,
-                            items.len()
+                            filtered.len()
                         );
                         let header_resp = ui.selectable_label(false,
                             egui::RichText::new(&header).strong()
                         );
-                        if header_resp.clicked() {
-                            if collapsed {
+                        if header_resp.clicked() && query_norm.is_empty() {
+                            if self.collapsed_groups.contains(group_name) {
                                 self.collapsed_groups.remove(group_name);
                             } else {
                                 self.collapsed_groups.insert(group_name.clone());
                             }
                         }
                         if !collapsed {
-                            for cl in items {
+                            for cl in &filtered {
                                 let selected = cl.index == cur;
                                 let resp = ui.selectable_label(selected, &cl.label);
                                 if let Some(c) = cl.color {
@@ -594,7 +644,7 @@ impl eframe::App for App {
                 ui.strong(&case.name);
                 ui.separator();
                 let mode_label = match self.view_mode {
-                    ViewMode::SideBySide => "[S]ide-by-side",
+                    ViewMode::SideBySide => "[1] Side-by-side",
                     ViewMode::Reference => "[R]eference",
                     ViewMode::Generated => "[G]enerated",
                     ViewMode::Overlay => "[O]verlay",
@@ -621,7 +671,7 @@ impl eframe::App for App {
                     ui.label(format!("Grid: {:.0}px (+/-)", self.grid_spacing));
                 }
                 ui.separator();
-                ui.label("[L]ines  [F]refresh  [A]nnot  [N]otes");
+                ui.label("[S]earch  [L]ines  [F]refresh  [A]nnot  [N]otes");
                 if self.refresh_flash > 0.0 {
                     let alpha = (self.refresh_flash * 255.0) as u8;
                     ui.label(
