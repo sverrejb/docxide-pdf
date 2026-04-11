@@ -309,6 +309,11 @@
     "ssim": 0.8807,
     "text_boundary": 0.0
   },
+  "cases/case61": {
+    "jaccard": 0.2652,
+    "ssim": 0.7599,
+    "text_boundary": 1.0
+  },
   "cases/case7": {
     "jaccard": 0.7397,
     "ssim": 0.9078,
