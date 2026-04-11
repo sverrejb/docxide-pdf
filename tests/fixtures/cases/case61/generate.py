@@ -53,6 +53,17 @@ def strip_gridspan(row_elem):
     for gs in row_elem.findall('.//w:gridSpan', ns):
         gs.getparent().remove(gs)
 
+def set_tbl_width(tbl_elem, width_twips):
+    """Set tblW to a declared dxa width (not auto)."""
+    tbl_pr = tbl_elem.find('w:tblPr', ns)
+    if tbl_pr is None:
+        return
+    tbl_w = tbl_pr.find('w:tblW', ns)
+    if tbl_w is None:
+        tbl_w = etree.SubElement(tbl_pr, f'{{{NS}}}tblW')
+    tbl_w.set(f'{{{NS}}}w', str(width_twips))
+    tbl_w.set(f'{{{NS}}}type', 'dxa')
+
 doc = Document()
 style = doc.styles['Normal']
 style.font.name = 'Arial'
@@ -137,10 +148,11 @@ with zipfile.ZipFile(tmp_path, 'r') as zin:
                 if len(tables) > 0:
                     set_grid(tables[0], [1728, 1728, 1728, 1728, 1728])
 
-                # Table 2: narrow column trap
+                # Table 2: narrow column trap (declared width)
                 if len(tables) > 1:
                     tbl = tables[1]
                     set_grid(tbl, [2000, 2000, 200, 2000, 2000])
+                    set_tbl_width(tbl, 8200)
                     rows = tbl.findall('w:tr', ns)
                     # Row 0: 5 cells with individual widths
                     set_cell_widths(rows[0], [2000, 2000, 200, 2000, 2000])
@@ -151,21 +163,23 @@ with zipfile.ZipFile(tmp_path, 'r') as zin:
                     set_cell_widths(rows[2], [4000, 2200, 2000])
                     strip_gridspan(rows[2])
 
-                # Table 3: multiple narrow columns
+                # Table 3: multiple narrow columns (declared width)
                 if len(tables) > 2:
                     tbl = tables[2]
                     set_grid(tbl, [3000, 150, 150, 150, 3000])
+                    set_tbl_width(tbl, 6450)
                     rows = tbl.findall('w:tr', ns)
                     set_cell_widths(rows[0], [3000, 150, 150, 150, 3000])
                     # Row 1: [3000][3450] — strip gridSpan
                     set_cell_widths(rows[1], [3000, 3450])
                     strip_gridspan(rows[1])
 
-                # Table 4: asymmetric (like japanese form)
+                # Table 4: asymmetric (like japanese form, declared width)
                 if len(tables) > 3:
                     tbl = tables[3]
                     grid = [600, 1400, 550, 2550, 210, 2340, 3400]
                     set_grid(tbl, grid)
+                    set_tbl_width(tbl, sum(grid))
                     rows = tbl.findall('w:tr', ns)
                     # Row 0: 7 individual cells
                     set_cell_widths(rows[0], grid)

@@ -174,6 +174,16 @@ pub(super) fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>
     let total: f32 = table.col_widths.iter().sum();
     let mut widths = table.col_widths.clone();
 
+    // For tables with a declared width (not auto), don't expand columns
+    // beyond their grid width. Word respects grid widths as authoritative
+    // for declared-width tables; content wraps or overflows.
+    // Auto-width tables (tblW type="auto") can expand freely.
+    if !table.auto_width {
+        for i in 0..ncols {
+            min_widths[i] = min_widths[i].min(widths[i]);
+        }
+    }
+
     let mut extra_needed: f32 = 0.0;
     let mut shrinkable: f32 = 0.0;
     for i in 0..ncols {

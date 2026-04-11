@@ -122,6 +122,7 @@ pub struct Table {
     pub position: Option<TablePosition>,
     pub alignment: TableAlignment,
     pub fixed_layout: bool,
+    pub auto_width: bool,
 }
 
 pub struct TableRow {

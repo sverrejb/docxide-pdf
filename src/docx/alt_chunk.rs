@@ -709,5 +709,6 @@ fn convert_table(
         position: None,
         alignment: TableAlignment::default(),
         fixed_layout: false,
+        auto_width: true,
     })
 }

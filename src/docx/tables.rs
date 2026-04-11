@@ -123,6 +123,13 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
         .and_then(|n| n.attribute((WML_NS, "type")))
         .is_some_and(|v| v == "fixed");
 
+    let auto_width = tbl_pr
+        .and_then(|pr| wml(pr, "tblW"))
+        .is_none_or(|n| {
+            n.attribute((WML_NS, "type")).is_none_or(|t| t == "auto")
+                || twips_attr(n, "w").is_none_or(|w| w <= 0.0)
+        });
+
     let cell_margins = tbl_pr
         .and_then(|pr| wml(pr, "tblCellMar"))
         .map(|mar| CellMargins {
@@ -661,6 +668,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
         position: table_position,
         alignment,
         fixed_layout,
+        auto_width,
     }
 }
 
