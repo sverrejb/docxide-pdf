@@ -2554,9 +2554,13 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         sect_idx,
                         state.prev_space_after,
                         override_pos,
+                        &doc.footnotes,
+                        &mut state.effective_margin_bottom,
                     );
                     state.prev_space_after = 0.0;
 
+                    // Update styleref tracking (footnotes are already tracked
+                    // inside render_table incrementally per row).
                     for row in &table.rows {
                         for cell in &row.cells {
                             for p in cell.all_paragraphs() {
@@ -2566,14 +2570,6 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                     p,
                                     &doc.style_id_to_name,
                                 );
-                                // Track footnotes referenced in table cells
-                                for run in p.runs.iter() {
-                                    if let Some(id) = run.footnote_id {
-                                        if state.pb.footnote_ids_set.insert(id) {
-                                            state.pb.footnote_ids.push(id);
-                                        }
-                                    }
-                                }
                             }
                         }
                     }

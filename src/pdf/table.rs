@@ -643,9 +643,9 @@ fn render_table_row(
                 shading,
                 &cell.borders,
                 cell_x,
-                row_bottom,
+                row_top - effective_h,
                 col_w,
-                row_h,
+                effective_h,
             );
         }
 
@@ -962,6 +962,8 @@ pub(super) fn render_table(
     sect_idx: usize,
     prev_space_after: f32,
     override_pos: Option<super::FloatingTablePos>,
+    footnotes: &std::collections::HashMap<u32, crate::model::Footnote>,
+    effective_margin_bottom: &mut f32,
 ) {
     let col_widths = if table.fixed_layout {
         table.col_widths.clone()
@@ -1012,10 +1014,30 @@ pub(super) fn render_table(
     // only contiguous header rows starting from row 0 are repeated).
     let header_count = table.rows.iter().take_while(|r| r.is_header).count();
 
-    let flush_and_render_headers = |pb: &mut super::PageBuilder, ri: usize| {
+    // Pre-scan each row for footnote references so we can reserve space as
+    // rows containing footnotes are rendered.
+    let row_footnote_ids: Vec<Vec<u32>> = table.rows.iter().map(|row| {
+        let mut ids = Vec::new();
+        for cell in &row.cells {
+            for p in cell.all_paragraphs() {
+                for run in &p.runs {
+                    if let Some(id) = run.footnote_id {
+                        ids.push(id);
+                    }
+                }
+            }
+        }
+        ids
+    }).collect();
+
+    // Text width for footnote height computation (same as paragraph layout uses).
+    let fn_text_width = sp.page_width - sp.margin_left - sp.margin_right;
+
+    let flush_and_render_headers = |pb: &mut super::PageBuilder, ri: usize, emb: &mut f32| {
         pb.flush_page(sect_idx);
         pb.is_first_page_of_section = false;
         pb.slot_top = effective_slot_top(sp, false, ctx);
+        *emb = compute_effective_margin_bottom(sp, false, ctx);
         if header_count > 0 && ri >= header_count {
             render_header_rows(
                 table,
@@ -1039,13 +1061,14 @@ pub(super) fn render_table(
                                    layout: &RowLayout,
                                    pb: &mut super::PageBuilder,
                                    ri: usize,
-                                   did_flush: &mut bool| {
+                                   did_flush: &mut bool,
+                                   emb: &mut f32| {
         let ncells = layout.cells.len();
         let mut starts = vec![0usize; ncells];
         let mut is_first_chunk = true;
 
         loop {
-            let avail = pb.slot_top - compute_effective_margin_bottom(sp, pb.is_first_page_of_section, ctx);
+            let avail = pb.slot_top - *emb;
             let mut ends = Vec::with_capacity(ncells);
             let mut all_done = true;
 
@@ -1071,11 +1094,27 @@ pub(super) fn render_table(
             if is_floating {
                 *did_flush = true;
             }
-            flush_and_render_headers(pb, ri);
+            flush_and_render_headers(pb, ri, emb);
         }
     };
 
     for (ri, (row, layout)) in table.rows.iter().zip(row_layouts.iter()).enumerate() {
+        // Pre-compute extra footnote space this row introduces, so the
+        // page-break check below accounts for it before rendering.
+        let mut row_fn_extra = 0.0f32;
+        for &fn_id in &row_footnote_ids[ri] {
+            if !pb.footnote_ids_set.contains(&fn_id) {
+                if let Some(footnote) = footnotes.get(&fn_id) {
+                    row_fn_extra += super::footnotes::compute_footnote_height(
+                        footnote, ctx, fn_text_width,
+                    );
+                }
+            }
+        }
+        if row_fn_extra > 0.0 && pb.footnote_ids.is_empty() {
+            row_fn_extra += 12.0; // separator gap for first footnote on page
+        }
+
         let row_h = layout.height;
         log::debug!(
             "TABLE row={} row_h={:.2} cells={} slot_top={:.2}",
@@ -1085,28 +1124,28 @@ pub(super) fn render_table(
             pb.slot_top
         );
         let eff_top = effective_slot_top(sp, pb.is_first_page_of_section, ctx);
-        let eff_bottom = compute_effective_margin_bottom(sp, pb.is_first_page_of_section, ctx);
+        let eff_bottom = *effective_margin_bottom + row_fn_extra;
         let at_page_top = (pb.slot_top - eff_top).abs() < 1.0;
         let available_h = pb.slot_top - eff_bottom;
         let page_content_h = eff_top - eff_bottom;
 
         if row_h > available_h && (row_h > page_content_h || is_floating) {
-            split_row_across_pages(row, layout, pb, ri, &mut did_flush_while_floating);
+            split_row_across_pages(row, layout, pb, ri, &mut did_flush_while_floating, effective_margin_bottom);
         } else if !at_page_top && row_h > available_h {
             if is_floating {
                 did_flush_while_floating = true;
             }
-            flush_and_render_headers(pb, ri);
+            flush_and_render_headers(pb, ri, effective_margin_bottom);
             // After flushing + rendering header rows, re-check if the row
             // fits on the fresh page.  If repeating headers consumed enough
             // space that the row no longer fits, split it across pages
             // instead of rendering blindly (which would overflow the footer).
             let new_eff_top = effective_slot_top(sp, pb.is_first_page_of_section, ctx);
-            let new_eff_bot = compute_effective_margin_bottom(sp, pb.is_first_page_of_section, ctx);
+            let new_eff_bot = *effective_margin_bottom;
             let new_available = pb.slot_top - new_eff_bot;
             let new_page_h = new_eff_top - new_eff_bot;
             if row_h > new_available && (row_h > new_page_h || is_floating) {
-                split_row_across_pages(row, layout, pb, ri, &mut did_flush_while_floating);
+                split_row_across_pages(row, layout, pb, ri, &mut did_flush_while_floating, effective_margin_bottom);
             } else {
                 render_table_row(
                     row, layout, &col_widths, cm, table_left,
@@ -1126,11 +1165,25 @@ pub(super) fn render_table(
                 &merge_spans,
             );
         }
-        let eff_bot = compute_effective_margin_bottom(sp, pb.is_first_page_of_section, ctx);
-        if pb.slot_top < eff_bot - 1.0 {
+
+        // Register footnotes from this row and reserve space for them.
+        for &fn_id in &row_footnote_ids[ri] {
+            if pb.footnote_ids_set.insert(fn_id) {
+                pb.footnote_ids.push(fn_id);
+                if let Some(footnote) = footnotes.get(&fn_id) {
+                    let fn_h = super::footnotes::compute_footnote_height(
+                        footnote, ctx, fn_text_width,
+                    );
+                    let sep = if pb.footnote_ids.len() == 1 { 12.0 } else { 0.0 };
+                    *effective_margin_bottom += sep + fn_h;
+                }
+            }
+        }
+
+        if pb.slot_top < *effective_margin_bottom - 1.0 {
             log::warn!(
                 "Table overflow: row={} slot_top={:.2} < eff_margin_bottom={:.2} row_h={:.2} page={}",
-                ri, pb.slot_top, eff_bot, row_h, pb.all_contents.len(),
+                ri, pb.slot_top, *effective_margin_bottom, row_h, pb.all_contents.len(),
             );
         }
     }
