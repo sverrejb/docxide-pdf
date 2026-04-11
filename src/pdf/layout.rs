@@ -332,7 +332,6 @@ fn count_script_boundaries(text: &str) -> usize {
     count
 }
 
-#[allow(dead_code)]
 fn is_cjk_punctuation(ch: char) -> bool {
     matches!(ch as u32,
         0x3000..=0x303F  // CJK Symbols and Punctuation (includes ，。、)
@@ -379,6 +378,7 @@ pub(super) fn build_paragraph_lines(
     width_after_line: Option<(usize, f32)>,
     per_line_widths: Option<&[f32]>,
     per_line_dual: Option<&[DualRegion]>,
+    auto_space: bool,
 ) -> Vec<TextLine> {
     let mut lines: Vec<TextLine> = Vec::new();
     let mut current_chunks: Vec<WordChunk> = Vec::new();
@@ -389,6 +389,8 @@ pub(super) fn build_paragraph_lines(
     let mut in_right_region = false;
     // Info for the right region of the current line being built
     let mut cur_right_info: Option<(usize, f32, f32)> = None; // (first_chunk_idx, region_x, region_w)
+    // Track last non-space character for CJK auto-spacing (autoSpaceDE/DN)
+    let mut prev_last_char: Option<char> = None;
 
     let left_max = |line_count: usize| -> f32 {
         if let Some(dual) = per_line_dual {
@@ -448,6 +450,7 @@ pub(super) fn build_paragraph_lines(
             lines.push(line);
             current_x = 0.0;
             pending_space_w = 0.0;
+            prev_last_char = None;
             continue;
         }
 
@@ -524,6 +527,25 @@ pub(super) fn build_paragraph_lines(
         for (space_count, word) in split_preserving_spaces(&text) {
             pending_space_w += space_count as f32 * space_w_cs;
 
+            // CJK auto-spacing (autoSpaceDE/DN): add ~0.25em gap at
+            // script boundaries between East Asian and Latin/digit text
+            // when there is no explicit whitespace.
+            if auto_space {
+                if let Some(prev_ch) = prev_last_char {
+                    if let Some(first_ch) = word.chars().next() {
+                        if pending_space_w == 0.0 && space_count == 0 {
+                            let prev_ea = crate::docx::is_east_asian_char(prev_ch)
+                                || is_cjk_punctuation(prev_ch);
+                            let cur_ea = crate::docx::is_east_asian_char(first_ch)
+                                || is_cjk_punctuation(first_ch);
+                            if prev_ea != cur_ea {
+                                pending_space_w += eff_fs * 0.25;
+                            }
+                        }
+                    }
+                }
+            }
+
             // A word continues the previous word across a run boundary when
             // there is no whitespace between runs and no leading spaces.
             let is_continuation = is_first_word_in_run
@@ -535,6 +557,7 @@ pub(super) fn build_paragraph_lines(
             let char_count = word.chars().count();
             let kern = run.kern_threshold.is_some_and(|t| eff_fs >= t);
             let ww = entry.word_width(word, eff_fs, kern) * ts + cs * char_count as f32;
+            prev_last_char = word.chars().last();
 
             let need_space = !current_chunks.is_empty() && pending_space_w > 0.0;
 

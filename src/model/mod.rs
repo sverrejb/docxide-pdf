@@ -271,6 +271,8 @@ pub struct Paragraph {
     pub outline_level: Option<u8>,
     pub paragraph_mark_vanish: bool,
     pub snap_to_grid: bool,
+    pub auto_space_de: bool,
+    pub auto_space_dn: bool,
     #[allow(dead_code)]
     pub suppress_auto_hyphens: bool,
     pub frame_props: Option<FrameProperties>,

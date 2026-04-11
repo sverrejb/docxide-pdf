@@ -112,6 +112,16 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         .or_else(|| para_style.and_then(|s| s.snap_to_grid))
         .unwrap_or(true);
 
+    let auto_space_de = ppr
+        .and_then(|ppr| wml_bool(ppr, "autoSpaceDE"))
+        .or_else(|| para_style.and_then(|s| s.auto_space_de))
+        .unwrap_or(true);
+
+    let auto_space_dn = ppr
+        .and_then(|ppr| wml_bool(ppr, "autoSpaceDN"))
+        .or_else(|| para_style.and_then(|s| s.auto_space_dn))
+        .unwrap_or(true);
+
     let suppress_auto_hyphens = ppr
         .and_then(|ppr| wml_bool(ppr, "suppressAutoHyphens"))
         .or_else(|| para_style.and_then(|s| s.suppress_auto_hyphens))
@@ -365,6 +375,8 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         outline_level,
         paragraph_mark_vanish,
         snap_to_grid,
+        auto_space_de,
+        auto_space_dn,
         suppress_auto_hyphens,
         frame_props: ppr.and_then(parse_frame_props),
     }

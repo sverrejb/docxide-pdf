@@ -447,6 +447,7 @@ pub(super) fn compute_row_layouts(
                                             None,
                                             None,
                                             None,
+                                            para.auto_space_de || para.auto_space_dn,
                                         )
                                     };
                                     if is_rotated {

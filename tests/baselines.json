@@ -453,9 +453,9 @@
     "text_boundary": 0.2571
   },
   "new/taiwanese_educat..": {
-    "jaccard": 0.1021,
-    "ssim": 0.1996,
-    "text_boundary": 0.0625
+    "jaccard": 0.1183,
+    "ssim": 0.2121,
+    "text_boundary": 0.1875
   },
   "new/who_prescribing_..": {
     "jaccard": 0.1225,

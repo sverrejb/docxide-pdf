@@ -699,6 +699,7 @@ fn compute_bookmark_positions(
                         build_paragraph_lines(
                             &para.runs, ctx.fonts, para_w, hanging, &empty_imgs,
                             &empty_fx, None, None, None,
+                            para.auto_space_de || para.auto_space_dn,
                         )
                     };
                     let num_lines = lines.len().max(1);
@@ -868,7 +869,7 @@ fn render_paragraph_block(
         tallest_run_metrics(&para.runs, ctx.fonts);
     let effective_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
     let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
-    let line_h = if para.snap_to_grid
+    let grid_snapped = para.snap_to_grid
         && matches!(
             sp.grid_type,
             DocGridType::Lines
@@ -876,8 +877,8 @@ fn render_paragraph_block(
                 | DocGridType::SnapToChars
         )
         && !matches!(effective_ls, LineSpacing::Exact(_))
-        && sp.line_pitch > 0.0
-    {
+        && sp.line_pitch > 0.0;
+    let line_h = if grid_snapped {
         (line_h / sp.line_pitch).ceil() * sp.line_pitch
     } else {
         line_h
@@ -1254,11 +1255,13 @@ fn render_paragraph_block(
             })
         } else { None };
 
+        let auto_space = para.auto_space_de || para.auto_space_dn;
         let (lines, final_width_change) = if let Some(fi) = lookahead_fi {
             // Two-pass: build at full width, then narrow bottom lines
             let full_lines = build_paragraph_lines(
                 &effective_runs, ctx.fonts, para_text_width,
                 text_hanging, &block_inline_images, &block_effect_inlines, None, None, None,
+                auto_space,
             );
             let num_lines = full_lines.len();
             let _content_h_est = num_lines as f32 * line_h;
@@ -1296,6 +1299,7 @@ fn render_paragraph_block(
                     &effective_runs, ctx.fonts, para_text_width,
                     text_hanging, &block_inline_images, &block_effect_inlines,
                     Some((lines_above, narrow_w)), None, None,
+                    auto_space,
                 );
                 (rebuilt, Some((lines_above, narrow_w)))
             } else {
@@ -1309,6 +1313,7 @@ fn render_paragraph_block(
                 &effective_runs, ctx.fonts, para_text_width,
                 text_hanging, &block_inline_images, &block_effect_inlines, None,
                 plw, poly_dual_geom.as_deref(),
+                auto_space,
             );
             (built, None)
         };
@@ -1594,7 +1599,12 @@ fn render_paragraph_block(
             let first_part = &lines[..lines_that_fit];
             state.pb.slot_top -= inter_gap;
             let ascender_ratio = tallest_ar.unwrap_or(0.75);
-            let baseline_y = state.pb.slot_top - font_size * ascender_ratio;
+            let baseline_offset = if grid_snapped {
+                sp.line_pitch
+            } else {
+                font_size * ascender_ratio
+            };
+            let baseline_y = state.pb.slot_top - baseline_offset;
 
             render_list_label(
                 &mut state.pb.content,
@@ -1632,7 +1642,12 @@ fn render_paragraph_block(
 
             let rest = &lines[lines_that_fit..];
             let rest_content_h = rest.len() as f32 * line_h;
-            let baseline_y2 = state.pb.slot_top - font_size * ascender_ratio;
+            let baseline_offset2 = if grid_snapped {
+                sp.line_pitch
+            } else {
+                font_size * ascender_ratio
+            };
+            let baseline_y2 = state.pb.slot_top - baseline_offset2;
 
             let (rest_col_x, rest_col_w) = col_geometry[state.current_col];
             let rest_text_x = rest_col_x + para.indent_left;
@@ -2028,7 +2043,15 @@ fn render_paragraph_block(
         }
     } else if !lines.is_empty() {
         let ascender_ratio = tallest_ar.unwrap_or(0.75);
-        let baseline_y = state.pb.slot_top - bdr_top_pad - font_size * ascender_ratio;
+        // When the document grid snaps line heights, align the first
+        // baseline one linePitch below the slot top so text sits on
+        // the grid rather than at a font-metric-dependent offset.
+        let baseline_offset = if grid_snapped {
+            sp.line_pitch
+        } else {
+            font_size * ascender_ratio
+        };
+        let baseline_y = state.pb.slot_top - bdr_top_pad - baseline_offset;
 
         render_list_label(
             &mut state.pb.content,

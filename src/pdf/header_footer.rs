@@ -262,7 +262,7 @@ fn build_lines_with_float(
     if has_tabs {
         build_tabbed_line(runs, fonts, tab_stops, indent_left, text_width, text_hanging, inline_images, &empty_fx, default_tab_stop)
     } else {
-        build_paragraph_lines(runs, fonts, text_width, text_hanging, inline_images, &empty_fx, None, per_line_widths, None)
+        build_paragraph_lines(runs, fonts, text_width, text_hanging, inline_images, &empty_fx, None, per_line_widths, None, true)
     }
 }
 

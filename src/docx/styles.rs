@@ -130,6 +130,8 @@ pub(super) struct ParagraphStyle {
     pub(super) num_ilvl: Option<u8>,
     pub(super) outline_level: Option<u8>,
     pub(super) snap_to_grid: Option<bool>,
+    pub(super) auto_space_de: Option<bool>,
+    pub(super) auto_space_dn: Option<bool>,
     pub(super) suppress_auto_hyphens: Option<bool>,
 }
 
@@ -640,6 +642,8 @@ pub(super) fn parse_styles<R: Read + Seek>(
                     .filter(|&lvl| lvl <= 8);
 
                 let snap_to_grid = ppr.and_then(|ppr| wml_bool(ppr, "snapToGrid"));
+                let auto_space_de = ppr.and_then(|ppr| wml_bool(ppr, "autoSpaceDE"));
+                let auto_space_dn = ppr.and_then(|ppr| wml_bool(ppr, "autoSpaceDN"));
                 let suppress_auto_hyphens =
                     ppr.and_then(|ppr| wml_bool(ppr, "suppressAutoHyphens"));
 
@@ -688,6 +692,8 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         num_ilvl,
                         outline_level,
                         snap_to_grid,
+                        auto_space_de,
+                        auto_space_dn,
                         suppress_auto_hyphens,
                     },
                 );
@@ -884,6 +890,8 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     num_ilvl,
                     outline_level,
                     snap_to_grid,
+                    auto_space_de,
+                    auto_space_dn,
                     suppress_auto_hyphens,
                     shading,
                 );
@@ -939,6 +947,8 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             s.num_ilvl = s.num_ilvl.or(inh.num_ilvl);
             s.outline_level = s.outline_level.or(inh.outline_level);
             s.snap_to_grid = s.snap_to_grid.or(inh.snap_to_grid);
+            s.auto_space_de = s.auto_space_de.or(inh.auto_space_de);
+            s.auto_space_dn = s.auto_space_dn.or(inh.auto_space_dn);
             s.suppress_auto_hyphens = s.suppress_auto_hyphens.or(inh.suppress_auto_hyphens);
             s.shading = s.shading.or(inh.shading);
             s.tab_stops = inh.tab_stops;
