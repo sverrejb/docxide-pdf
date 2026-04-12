@@ -171,65 +171,47 @@ pub(super) fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>
         return widths;
     }
 
-    // When a column's longest word already overflows the grid width, the
-    // column will be expanded. Use the full natural paragraph width (not
-    // just the longest word) as the expansion target so content doesn't
-    // wrap excessively. This only affects columns that already need
-    // expansion, so well-fitting tables are unchanged.
-    let needs_expansion = (0..ncols).any(|i| min_widths[i] > table.col_widths[i]);
-    if needs_expansion {
-        let mut natural_widths = vec![0.0f32; ncols];
-        for row in &table.rows {
-            let mut grid_col = 0usize;
-            for cell in &row.cells {
-                let span = cell.grid_span.max(1) as usize;
-                if grid_col >= ncols || span > 1 {
-                    grid_col += span;
-                    continue;
-                }
-                if cell.text_direction != TextDirection::LrTb
-                    || min_widths[grid_col] <= table.col_widths.get(grid_col).copied().unwrap_or(f32::MAX)
-                {
-                    grid_col += span;
-                    continue;
-                }
-                let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
-                let h_pad = ecm.left + ecm.right;
-                let mut key_buf = String::new();
-                for para in cell.all_paragraphs() {
-                    let mut para_w = 0.0f32;
-                    for run in &para.runs {
-                        let key = font_key_buf(run, &mut key_buf);
-                        let Some(entry) = fonts.get(key) else { continue };
-                        let fs = if run.small_caps {
-                            (run.font_size - 2.0).max(1.0)
-                        } else {
-                            run.font_size
-                        };
-                        let text = if run.caps || run.small_caps {
-                            std::borrow::Cow::Owned(run.text.to_uppercase())
-                        } else {
-                            std::borrow::Cow::Borrowed(&run.text)
-                        };
-                        let kern = run.kern_threshold.is_some_and(|t| fs >= t);
-                        para_w += entry.word_width(&text, fs, kern);
+    // Per OOXML §17.18.87: the fixed-width base (used by auto-fit too)
+    // sets each grid column to the maximum preferred width (tcW) from
+    // all cells at that column, then scales proportionally if the total
+    // exceeds the table width.
+    let total: f32 = table.col_widths.iter().sum();
+    let mut preferred = table.col_widths.clone();
+    for row in &table.rows {
+        let mut grid_col = 0usize;
+        for cell in &row.cells {
+            let span = cell.grid_span.max(1) as usize;
+            if grid_col >= ncols {
+                break;
+            }
+            if span == 1 {
+                preferred[grid_col] = preferred[grid_col].max(cell.width);
+            } else {
+                // Distribute multi-span cell width proportionally across
+                // the spanned grid columns.
+                let grid_sum: f32 = table.col_widths[grid_col..ncols.min(grid_col + span)]
+                    .iter()
+                    .sum();
+                if grid_sum > 0.0 && cell.width > grid_sum {
+                    for g in grid_col..ncols.min(grid_col + span) {
+                        let share = cell.width * (table.col_widths[g] / grid_sum);
+                        preferred[g] = preferred[g].max(share);
                     }
-                    natural_widths[grid_col] =
-                        natural_widths[grid_col].max(para_w + h_pad);
                 }
-                grid_col += span;
             }
-        }
-        for i in 0..ncols {
-            if min_widths[i] > table.col_widths[i] {
-                min_widths[i] = min_widths[i].max(natural_widths[i]);
-            }
+            grid_col += span;
         }
     }
+    let pref_total: f32 = preferred.iter().sum();
+    let mut widths = if pref_total > total && total > 0.0 {
+        let scale = total / pref_total;
+        preferred.iter().map(|&w| w * scale).collect::<Vec<_>>()
+    } else {
+        preferred
+    };
 
-    let total: f32 = table.col_widths.iter().sum();
-    let mut widths = table.col_widths.clone();
-
+    // Apply content minimums: ensure each column fits its longest word.
+    // If any column needed boosting, shrink others proportionally.
     let mut extra_needed: f32 = 0.0;
     let mut shrinkable: f32 = 0.0;
     for i in 0..ncols {
@@ -240,7 +222,6 @@ pub(super) fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>
             shrinkable += widths[i] - min_widths[i];
         }
     }
-
     if extra_needed > 0.0 && shrinkable > 0.0 {
         let factor = extra_needed.min(shrinkable) / shrinkable;
         for i in 0..ncols {
