@@ -17,14 +17,13 @@ If you have a `.docx` file that produces ugly, broken, or just plain wrong outpu
 
 A Rust library and CLI tool for converting DOCX files to PDF, with the goal of matching Microsoft Word's PDF export as closely as possible.<sup>*</sup>
 
-*<sub>Reference PDFs are generated using Microsoft Word for Mac (16.106.1) with the "Best for electronic distribution and accessibility (uses Microsoft online service)" export option.</sub>
-
-
 **Accurate:** Given a `.docx` file, produce a `.pdf` that is visually identical to what Word would export.
 
 **Fast:** Typical conversions complete in under 100ms.
 
 **Small files:** Output PDFs should be the same size or smaller than Word's export.
+
+*<sub>Reference PDFs are generated using Microsoft Word for Mac (16.106.1) with the "Best for electronic distribution and accessibility (uses Microsoft online service)" export option.</sub>
 
 ## AI usage disclaimer 🤖
 

@@ -296,33 +296,14 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                 .and_then(|w| twips_attr(w, "w"))
                 .unwrap_or_else(|| col_widths.get(ci).copied().unwrap_or(72.0));
 
+            // Per OOXML §17.4.17, absent gridSpan defaults to 1.
+            // Word strictly honours this — it never infers larger spans
+            // from tcW. Rows with fewer cells than grid columns simply
+            // leave the trailing columns empty.
             let grid_span = tc_pr
                 .and_then(|pr| wml_attr(pr, "gridSpan"))
                 .and_then(|v| v.parse::<u16>().ok())
-                .unwrap_or_else(|| {
-                    // Per OOXML §17.4.17, absent gridSpan defaults to 1.
-                    // Only infer span > 1 when tcW closely matches the
-                    // cumulative width of multiple grid columns. Prefer the
-                    // smallest span whose cumulative width is closest to tcW,
-                    // with a tighter tolerance (5% or 50 twips, whichever is
-                    // larger) to avoid false matches from narrow columns.
-                    if ci < num_cols {
-                        let mut best_span = 1u16;
-                        let mut best_diff = (col_widths.get(ci).copied().unwrap_or(0.0) - cell_width).abs();
-                        let mut cumulative = col_widths.get(ci).copied().unwrap_or(0.0);
-                        for s in 2..=(num_cols - ci) as u16 {
-                            cumulative += col_widths.get(ci + s as usize - 1).copied().unwrap_or(0.0);
-                            let diff = (cumulative - cell_width).abs();
-                            if diff < best_diff {
-                                best_diff = diff;
-                                best_span = s;
-                            }
-                        }
-                        best_span
-                    } else {
-                        1
-                    }
-                });
+                .unwrap_or(1);
 
             let v_merge = tc_pr
                 .and_then(|pr| wml(pr, "vMerge"))

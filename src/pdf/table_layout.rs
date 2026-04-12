@@ -171,18 +171,64 @@ pub(super) fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>
         return widths;
     }
 
-    let total: f32 = table.col_widths.iter().sum();
-    let mut widths = table.col_widths.clone();
-
-    // For tables with a declared width (not auto), don't expand columns
-    // beyond their grid width. Word respects grid widths as authoritative
-    // for declared-width tables; content wraps or overflows.
-    // Auto-width tables (tblW type="auto") can expand freely.
-    if !table.auto_width {
+    // When a column's longest word already overflows the grid width, the
+    // column will be expanded. Use the full natural paragraph width (not
+    // just the longest word) as the expansion target so content doesn't
+    // wrap excessively. This only affects columns that already need
+    // expansion, so well-fitting tables are unchanged.
+    let needs_expansion = (0..ncols).any(|i| min_widths[i] > table.col_widths[i]);
+    if needs_expansion {
+        let mut natural_widths = vec![0.0f32; ncols];
+        for row in &table.rows {
+            let mut grid_col = 0usize;
+            for cell in &row.cells {
+                let span = cell.grid_span.max(1) as usize;
+                if grid_col >= ncols || span > 1 {
+                    grid_col += span;
+                    continue;
+                }
+                if cell.text_direction != TextDirection::LrTb
+                    || min_widths[grid_col] <= table.col_widths.get(grid_col).copied().unwrap_or(f32::MAX)
+                {
+                    grid_col += span;
+                    continue;
+                }
+                let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
+                let h_pad = ecm.left + ecm.right;
+                let mut key_buf = String::new();
+                for para in cell.all_paragraphs() {
+                    let mut para_w = 0.0f32;
+                    for run in &para.runs {
+                        let key = font_key_buf(run, &mut key_buf);
+                        let Some(entry) = fonts.get(key) else { continue };
+                        let fs = if run.small_caps {
+                            (run.font_size - 2.0).max(1.0)
+                        } else {
+                            run.font_size
+                        };
+                        let text = if run.caps || run.small_caps {
+                            std::borrow::Cow::Owned(run.text.to_uppercase())
+                        } else {
+                            std::borrow::Cow::Borrowed(&run.text)
+                        };
+                        let kern = run.kern_threshold.is_some_and(|t| fs >= t);
+                        para_w += entry.word_width(&text, fs, kern);
+                    }
+                    natural_widths[grid_col] =
+                        natural_widths[grid_col].max(para_w + h_pad);
+                }
+                grid_col += span;
+            }
+        }
         for i in 0..ncols {
-            min_widths[i] = min_widths[i].min(widths[i]);
+            if min_widths[i] > table.col_widths[i] {
+                min_widths[i] = min_widths[i].max(natural_widths[i]);
+            }
         }
     }
+
+    let total: f32 = table.col_widths.iter().sum();
+    let mut widths = table.col_widths.clone();
 
     let mut extra_needed: f32 = 0.0;
     let mut shrinkable: f32 = 0.0;
