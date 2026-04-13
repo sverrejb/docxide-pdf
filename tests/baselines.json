@@ -305,8 +305,8 @@
     "convert_ms": 15.3
   },
   "cases/case60": {
-    "jaccard": 0.7508,
-    "ssim": 0.8807,
+    "jaccard": 0.7522,
+    "ssim": 0.8833,
     "text_boundary": 0.0
   },
   "cases/case61": {
@@ -413,8 +413,8 @@
     "text_boundary": 0.6508
   },
   "new/english_town_cou..": {
-    "jaccard": 0.2664,
-    "ssim": 0.3968,
+    "jaccard": 0.2665,
+    "ssim": 0.3967,
     "text_boundary": 0.7895
   },
   "new/environmental_la..": {
@@ -425,7 +425,7 @@
   "new/irish_school_enr..": {
     "jaccard": 0.3356,
     "ssim": 0.5297,
-    "text_boundary": 0.6964
+    "text_boundary": 0.7054
   },
   "new/lithuanian_publi..": {
     "jaccard": 0.3197,
@@ -443,9 +443,9 @@
     "text_boundary": 0.8043
   },
   "new/russian_voluntee..": {
-    "jaccard": 0.262,
-    "ssim": 0.3745,
-    "text_boundary": 0.1411
+    "jaccard": 0.2469,
+    "ssim": 0.3572,
+    "text_boundary": 0.1174
   },
   "new/slovak_electoral..": {
     "jaccard": 0.3662,
@@ -479,8 +479,8 @@
     "convert_ms": 18.3
   },
   "samples/samtale": {
-    "jaccard": 0.2851,
-    "ssim": 0.4352,
+    "jaccard": 0.2841,
+    "ssim": 0.4341,
     "text_boundary": 0.2857,
     "convert_ms": 11.0
   },
@@ -497,14 +497,14 @@
     "convert_ms": 744.0
   },
   "scraped/bush_fires_act_c..": {
-    "jaccard": 0.5848,
-    "ssim": 0.7933,
+    "jaccard": 0.5849,
+    "ssim": 0.7935,
     "text_boundary": 0.0564,
     "convert_ms": 248.6
   },
   "scraped/centrifugal_wate..": {
-    "jaccard": 0.8118,
-    "ssim": 0.9489,
+    "jaccard": 0.8147,
+    "ssim": 0.9521,
     "text_boundary": 1.0,
     "convert_ms": 40.9
   },
@@ -515,9 +515,9 @@
     "convert_ms": 59.6
   },
   "scraped/croatian_grant_g..": {
-    "jaccard": 0.0718,
-    "ssim": 0.185,
-    "text_boundary": 0.0132,
+    "jaccard": 0.0727,
+    "ssim": 0.1865,
+    "text_boundary": 0.0126,
     "convert_ms": 270.5
   },
   "scraped/croatian_regulat..": {
@@ -602,8 +602,8 @@
     "convert_ms": 70.6
   },
   "scraped/indonesian_bench..": {
-    "jaccard": 0.4053,
-    "ssim": 0.5467,
+    "jaccard": 0.4038,
+    "ssim": 0.5468,
     "text_boundary": 0.4685,
     "convert_ms": 170.5
   },
@@ -739,8 +739,8 @@
     "convert_ms": 13.2
   },
   "scraped/spanish_constitu..": {
-    "jaccard": 0.5903,
-    "ssim": 0.8093,
+    "jaccard": 0.5928,
+    "ssim": 0.8118,
     "text_boundary": 1.0
   },
   "scraped/stem_partnership..": {
@@ -756,9 +756,9 @@
     "convert_ms": 22.0
   },
   "scraped/transition_to_wo..": {
-    "jaccard": 0.2816,
-    "ssim": 0.3964,
-    "text_boundary": 0.2552,
+    "jaccard": 0.3212,
+    "ssim": 0.4349,
+    "text_boundary": 0.3029,
     "convert_ms": 493.0
   },
   "scraped/turkish_ancient_..": {
@@ -775,7 +775,7 @@
   },
   "scraped/uk_commercial_le..": {
     "jaccard": 0.2066,
-    "ssim": 0.3613,
+    "ssim": 0.361,
     "text_boundary": 0.2361,
     "convert_ms": 326.3
   },

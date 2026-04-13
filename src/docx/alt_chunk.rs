@@ -689,6 +689,7 @@ fn convert_table(
                 v_align,
                 text_direction: TextDirection::default(),
                 cell_margins: None,
+                hide_mark: false,
             });
         }
 
@@ -697,6 +698,7 @@ fn convert_table(
             height: None,
             height_exact: false,
             is_header: false,
+            cant_split: false,
         });
     }
 

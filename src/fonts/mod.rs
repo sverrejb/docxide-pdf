@@ -208,6 +208,7 @@ fn family_fallback(family: FontFamily) -> Option<&'static str> {
         FontFamily::Roman => Some("Times New Roman"),
         FontFamily::Swiss => Some("Arial"),
         FontFamily::Modern => Some("Courier New"),
+        FontFamily::Script | FontFamily::Decorative => Some("Times New Roman"),
         _ => None,
     }
 }

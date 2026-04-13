@@ -725,14 +725,15 @@ fn segment_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 
         let entry = seen_fonts.get(key).expect("font registered");
         let eff_fs = effective_font_size(run);
         let ts = run.text_scale / 100.0;
-        let space_w = entry.space_width(eff_fs) * ts;
+        let cs = run.char_spacing;
+        let space_w = entry.space_width(eff_fs) * ts + cs;
         let text = effective_text(run);
         for (i, word) in text.split_whitespace().enumerate() {
             if !first || i > 0 {
                 w += space_w;
             }
             let kern = run.kern_threshold.is_some_and(|t| eff_fs >= t);
-            w += entry.word_width(word, eff_fs, kern) * ts;
+            w += entry.word_width(word, eff_fs, kern) * ts + cs * word.chars().count() as f32;
             first = false;
         }
     }
@@ -754,6 +755,8 @@ fn decimal_before_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) 
         let key = font_key_buf(run, &mut key_buf);
         let entry = seen_fonts.get(key).expect("font registered");
         let eff_fs = effective_font_size(run);
+        let ts = run.text_scale / 100.0;
+        let cs = run.char_spacing;
         let text_to_measure = if text.len() <= chars_remaining {
             chars_remaining -= text.len();
             text.as_ref()
@@ -763,7 +766,8 @@ fn decimal_before_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) 
             s
         };
         let kern = run.kern_threshold.is_some_and(|t| eff_fs >= t);
-        w += entry.word_width(text_to_measure, eff_fs, kern);
+        w += entry.word_width(text_to_measure, eff_fs, kern) * ts
+            + cs * text_to_measure.chars().count() as f32;
         if chars_remaining == 0 {
             break;
         }

@@ -659,8 +659,18 @@ fn compute_bookmark_positions(
                     if para.is_section_break && is_text_empty(&para.runs) {
                         continue;
                     }
-                    let (font_size, tallest_lhr, _) =
+                    let (mut font_size, mut tallest_lhr, _) =
                         tallest_run_metrics(&para.runs, ctx.fonts);
+                    if tallest_lhr.is_none() {
+                        if let Some(mark_fs) = para.paragraph_mark_font_size {
+                            font_size = mark_fs;
+                        }
+                        if let Some(ref mark_fn) = para.paragraph_mark_font_name {
+                            if let Some(entry) = ctx.fonts.get(mark_fn.as_str()) {
+                                tallest_lhr = entry.line_h_ratio;
+                            }
+                        }
+                    }
                     let effective_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
                     let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
                     let line_h = if para.snap_to_grid
@@ -865,8 +875,24 @@ fn render_paragraph_block(
 
     let mut inter_gap = f32::max(state.prev_space_after, effective_space_before);
 
-    let (font_size, tallest_lhr, tallest_ar) =
+    let (mut font_size, mut tallest_lhr, tallest_ar) =
         tallest_run_metrics(&para.runs, ctx.fonts);
+    // When runs are empty, use the paragraph mark's font metrics instead
+    // of the 12pt / 1.2x fallback that tallest_run_metrics returns.
+    if tallest_lhr.is_none() {
+        if let Some(mark_fs) = para.paragraph_mark_font_size {
+            font_size = mark_fs;
+        }
+        let mark_font_name = para
+            .paragraph_mark_font_name
+            .as_deref()
+            .unwrap_or(&para.runs.first().map(|r| r.font_name.as_str()).unwrap_or(""));
+        if !mark_font_name.is_empty() {
+            if let Some(entry) = ctx.fonts.get(mark_font_name) {
+                tallest_lhr = entry.line_h_ratio;
+            }
+        }
+    }
     let effective_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
     let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
     let grid_snapped = para.snap_to_grid

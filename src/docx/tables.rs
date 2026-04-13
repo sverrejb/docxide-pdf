@@ -13,7 +13,7 @@ use super::styles::{TableBordersDef, parse_alignment};
 use super::{
     ParseContext, WML_NS, collect_block_nodes, extract_indents, parse_cell_border,
     parse_cell_border_left, parse_cell_border_right, parse_hex_color, parse_paragraph_spacing,
-    twips_attr, twips_to_pts, wml, wml_attr,
+    twips_attr, twips_to_pts, wml, wml_attr, wml_bool,
 };
 
 fn is_wml(node: &roxmltree::Node, name: &str) -> bool {
@@ -256,6 +256,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
             })
             .unwrap_or((None, false));
         let is_header = tr_pr.and_then(|pr| wml(pr, "tblHeader")).is_some();
+        let cant_split = tr_pr.and_then(|pr| wml_bool(pr, "cantSplit")).unwrap_or(false);
 
         // Per-row table property exceptions (§17.4.60): merge with base table
         // borders — specified exception borders override, unspecified inherit.
@@ -325,6 +326,8 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                 Some("btLr" | "lr" | "lrV" | "lrTbV") => TextDirection::BtLr,
                 _ => TextDirection::LrTb,
             };
+            let hide_mark =
+                tc_pr.and_then(|pr| wml_bool(pr, "hideMark")).unwrap_or(false);
 
             let span_end = ci + grid_span as usize;
 
@@ -670,6 +673,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                 v_align,
                 cell_margins: per_cell_margins,
                 text_direction,
+                hide_mark,
             });
             grid_col += grid_span as usize;
         }
@@ -678,6 +682,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
             height: row_height,
             height_exact,
             is_header,
+            cant_split,
         });
     }
     resolve_h_border_conflicts(&mut rows);

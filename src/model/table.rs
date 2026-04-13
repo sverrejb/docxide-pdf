@@ -130,6 +130,7 @@ pub struct TableRow {
     pub height: Option<f32>,
     pub height_exact: bool,
     pub is_header: bool,
+    pub cant_split: bool,
 }
 
 pub struct TableCell {
@@ -142,6 +143,7 @@ pub struct TableCell {
     pub v_align: CellVAlign,
     pub text_direction: TextDirection,
     pub cell_margins: Option<CellMargins>,
+    pub hide_mark: bool,
 }
 
 impl TableCell {

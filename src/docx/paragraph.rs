@@ -52,10 +52,21 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
 ) -> Paragraph {
     let ppr = wml(node, "pPr");
 
-    let paragraph_mark_vanish = ppr
-        .and_then(|ppr| wml(ppr, "rPr"))
+    let ppr_rpr = ppr.and_then(|ppr| wml(ppr, "rPr"));
+    let paragraph_mark_vanish = ppr_rpr
         .and_then(|rpr| wml_bool(rpr, "vanish"))
         .unwrap_or(false);
+    let paragraph_mark_font_size = ppr_rpr
+        .and_then(|rpr| wml_attr(rpr, "sz"))
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(|hp| hp / 2.0);
+    let paragraph_mark_font_name = ppr_rpr
+        .and_then(|rpr| wml(rpr, "rFonts"))
+        .and_then(|rf| {
+            rf.attribute((WML_NS, "ascii"))
+                .or_else(|| rf.attribute((WML_NS, "hAnsi")))
+        })
+        .map(|s| s.to_string());
 
     let para_style_id = ppr
         .and_then(|ppr| wml_attr(ppr, "pStyle"))
@@ -158,7 +169,19 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         .unwrap_or(ctx.styles.defaults.font_size);
     let (left, right, hanging, first) =
         if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
-            extract_indents(ind, Some(char_width_fs / 2.0))
+            let (l, r, h, f) = extract_indents(ind, Some(char_width_fs / 2.0));
+            // Merge: inline w:ind attributes override style, but missing
+            // attributes fall back to the paragraph style values.
+            if let Some(s) = para_style {
+                (
+                    l.or(s.indent_left),
+                    r.or(s.indent_right),
+                    h.or(s.indent_hanging),
+                    f.or(s.indent_first_line),
+                )
+            } else {
+                (l, r, h, f)
+            }
         } else if list_label.is_empty()
             && let Some(s) = para_style
         {
@@ -379,6 +402,8 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         bookmarks,
         outline_level,
         paragraph_mark_vanish,
+        paragraph_mark_font_size,
+        paragraph_mark_font_name,
         snap_to_grid,
         auto_space_de,
         auto_space_dn,

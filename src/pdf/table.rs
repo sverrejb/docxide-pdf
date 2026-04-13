@@ -1129,7 +1129,7 @@ pub(super) fn render_table(
         let available_h = pb.slot_top - eff_bottom;
         let page_content_h = eff_top - eff_bottom;
 
-        if row_h > available_h && (row_h > page_content_h || is_floating) {
+        if row_h > available_h && (row_h > page_content_h || is_floating) && !row.cant_split {
             split_row_across_pages(row, layout, pb, ri, &mut did_flush_while_floating, effective_margin_bottom);
         } else if !at_page_top && row_h > available_h {
             if is_floating {
@@ -1144,7 +1144,7 @@ pub(super) fn render_table(
             let new_eff_bot = *effective_margin_bottom;
             let new_available = pb.slot_top - new_eff_bot;
             let new_page_h = new_eff_top - new_eff_bot;
-            if row_h > new_available && (row_h > new_page_h || is_floating) {
+            if row_h > new_available && (row_h > new_page_h || is_floating) && !row.cant_split {
                 split_row_across_pages(row, layout, pb, ri, &mut did_flush_while_floating, effective_margin_bottom);
             } else {
                 render_table_row(

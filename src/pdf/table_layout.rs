@@ -375,7 +375,8 @@ pub(super) fn compute_row_layouts(
                     let mut para_idx = 0usize;
                     let mut prev_was_nested_table = false;
 
-                    for block in &cell.content {
+                    let block_count = cell.content.len();
+                    for (block_idx, block) in cell.content.iter().enumerate() {
                         match block {
                             Block::Paragraph(para) => {
                                 let substituted;
@@ -498,6 +499,11 @@ pub(super) fn compute_row_layouts(
                                 } else {
                                     if para.paragraph_mark_vanish {
                                         // vanished paragraph mark: zero height
+                                    } else if cell.hide_mark
+                                        && block_idx == block_count - 1
+                                    {
+                                        // hideMark: last empty paragraph in cell
+                                        // contributes no height
                                     } else if prev_was_nested_table && para_idx == 1 {
                                         // Cell = [nested table, empty ¶]: the mark
                                         // glyph height is covered by the +0.5pt
