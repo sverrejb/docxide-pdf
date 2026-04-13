@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
 
 use super::{WML_NS, parse_hex_color, twips_attr, wml, wml_attr, wml_bool};
@@ -275,6 +275,7 @@ pub(super) fn parse_list_info(
     numbering: &NumberingInfo,
     counters: &mut HashMap<(u32, u8), u32>,
     last_seen_level: &mut HashMap<u32, u8>,
+    applied_overrides: &mut HashSet<(u32, u8)>,
 ) -> ListLabelInfo {
     let (num_id, ilvl) = if let Some(np) = num_pr {
         let nid = wml_attr(np, "numId");
@@ -303,25 +304,37 @@ pub(super) fn parse_list_info(
         return ListLabelInfo::default();
     };
 
-    let num_key: u32 = num_id_str.parse().unwrap_or(0);
+    // Key counters by abstractNumId so all numIds sharing the same
+    // abstract definition share a single counter stream.
+    let abs_key: u32 = abs_id.parse().unwrap_or(0);
 
     // Reset deeper-level counters when returning to a higher level
-    if let Some(&prev) = last_seen_level.get(&num_key) {
+    if let Some(&prev) = last_seen_level.get(&abs_key) {
         for deeper in (ilvl + 1)..=prev {
-            counters.remove(&(num_key, deeper));
+            counters.remove(&(abs_key, deeper));
         }
     }
-    last_seen_level.insert(num_key, ilvl);
+    last_seen_level.insert(abs_key, ilvl);
 
-    // Increment or initialize counter using the level's start value
-    let start = numbering
+    // Apply startOverride: when a numId carries a restart directive,
+    // force-reset the shared counter on first encounter.
+    let override_start = numbering
         .start_overrides
         .get(num_id_str)
         .and_then(|m| m.get(&ilvl))
-        .copied()
-        .unwrap_or(def.start);
+        .copied();
+    let num_key_original: u32 = num_id_str.parse().unwrap_or(0);
+    if let Some(restart) = override_start {
+        if applied_overrides.insert((num_key_original, ilvl)) {
+            // First time seeing this numId+ilvl override — reset the
+            // shared counter so the next increment produces restart.
+            counters.insert((abs_key, ilvl), restart - 1);
+        }
+    }
+
+    let start = override_start.unwrap_or(def.start);
     let current_counter = *counters
-        .entry((num_key, ilvl))
+        .entry((abs_key, ilvl))
         .and_modify(|c| *c += 1)
         .or_insert(start);
 
@@ -352,7 +365,7 @@ pub(super) fn parse_list_info(
                     current_counter
                 } else {
                     counters
-                        .get(&(num_key, lvl_idx))
+                        .get(&(abs_key, lvl_idx))
                         .copied()
                         .unwrap_or(levels.get(&lvl_idx).map(|d| d.start).unwrap_or(1))
                 };

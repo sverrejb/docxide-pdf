@@ -212,6 +212,14 @@ fn family_fallback(family: FontFamily) -> Option<&'static str> {
     }
 }
 
+fn known_font_alias(name: &str) -> Option<&'static str> {
+    match name {
+        "Palatino Linotype" => Some("Palatino"),
+        "標楷體" | "DFKai-SB" => Some("BiauKai"),
+        _ => None,
+    }
+}
+
 fn has_cjk_chars(chars: &HashSet<char>) -> bool {
     chars.iter().any(|&c| crate::docx::is_east_asian_char(c))
 }
@@ -316,6 +324,12 @@ pub(crate) fn register_font(
                 .split(';')
                 .map(|s| s.trim())
                 .find_map(|c| try_candidate(c))
+        })
+        .or_else(|| {
+            let alias = known_font_alias(primary)?;
+            let m = try_candidate(alias)?;
+            log::info!("Font substitution: {primary} → alias \"{alias}\"");
+            Some(m)
         })
         .or_else(|| {
             let entry = table_entry?;
@@ -465,6 +479,8 @@ mod tests {
             footnote_id: None,
             is_footnote_ref_mark: false,
             kern_threshold: None,
+            font_size_from_default: false,
+            font_name_from_default: false,
         }
     }
 

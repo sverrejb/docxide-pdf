@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
 
 use crate::model::{Alignment, Block, Footnote, HeaderFooter, LineSpacing, Paragraph};
@@ -37,6 +37,7 @@ pub(super) fn parse_header_footer_xml<R: Read + Seek>(
 
     let mut counters = HashMap::new();
     let mut last_seen_level = HashMap::new();
+    let mut applied_overrides = HashSet::new();
 
     for node in top_nodes {
         if node.tag_name().namespace() != Some(WML_NS) {
@@ -49,12 +50,14 @@ pub(super) fn parse_header_footer_xml<R: Read + Seek>(
                     ctx,
                     &mut counters,
                     &mut last_seen_level,
+                    &mut applied_overrides,
                 );
                 blocks.push(Block::Table(table));
             }
             "p" => {
                 let para = super::paragraph::build_paragraph(
                     node, ctx, &mut counters, &mut last_seen_level,
+                    &mut applied_overrides,
                     &super::paragraph::ParagraphOptions::default(),
                 );
                 blocks.push(Block::Paragraph(para));

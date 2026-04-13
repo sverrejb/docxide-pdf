@@ -165,12 +165,19 @@ pub(super) struct TableConditionalFormat {
     pub(super) borders: Option<TableBordersDef>,
     pub(super) shading: Option<[u8; 3]>,
     pub(super) bold: Option<bool>,
+    pub(super) italic: Option<bool>,
     pub(super) color: Option<[u8; 3]>,
+    pub(super) font_size: Option<f32>,
+    pub(super) font_name: Option<String>,
 }
 
 /// Full table style definition including conditional overrides.
 pub(super) struct TableStyleDef {
     pub(super) base_borders: Option<TableBordersDef>,
+    pub(super) base_font_size: Option<f32>,
+    pub(super) base_font_name: Option<String>,
+    pub(super) base_bold: Option<bool>,
+    pub(super) base_italic: Option<bool>,
     /// Conditional overrides keyed by type: "firstRow", "lastRow", "firstCol",
     /// "lastCol", "band1Horz", "band2Horz", "band1Vert", "band2Vert",
     /// "nwCell", "neCell", "swCell", "seCell"
@@ -514,7 +521,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
             }
         }
         if let Some(ind) = default_ppr.and_then(|n| wml(n, "ind")) {
-            let (left, right, hanging, first) = extract_indents(ind);
+            let (left, right, hanging, first) = extract_indents(ind, None);
             if let Some(v) = left {
                 defaults.indent_left = v;
             }
@@ -621,7 +628,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
 
                 let (indent_left, indent_right, indent_hanging, indent_first_line) = ppr
                     .and_then(|n| wml(n, "ind"))
-                    .map(extract_indents)
+                    .map(|ind| extract_indents(ind, None))
                     .unwrap_or_default();
 
                 let (tab_stops, clear_tab_positions) = ppr
@@ -757,6 +764,19 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         inside_v: parse_cell_border(tbl_borders, "insideV"),
                     });
 
+                // Parse base rPr from the table style
+                let base_rpr = wml(style_node, "rPr");
+                let base_font_size = base_rpr.and_then(parse_font_size);
+                let base_font_name = base_rpr
+                    .and_then(|rpr| wml(rpr, "rFonts"))
+                    .and_then(|rf| {
+                        rf.attribute((WML_NS, "ascii"))
+                            .or_else(|| rf.attribute((WML_NS, "hAnsi")))
+                    })
+                    .map(|s| s.to_string());
+                let base_bold = base_rpr.and_then(|rpr| wml_bool(rpr, "b"));
+                let base_italic = base_rpr.and_then(|rpr| wml_bool(rpr, "i"));
+
                 let mut conditionals = HashMap::new();
                 for child in style_node.children() {
                     if !child.has_tag_name((WML_NS, "tblStylePr")) {
@@ -781,27 +801,53 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         .and_then(parse_hex_color);
                     let cond_rpr = wml(child, "rPr");
                     let cond_bold = cond_rpr.and_then(|rpr| wml_bool(rpr, "b"));
+                    let cond_italic = cond_rpr.and_then(|rpr| wml_bool(rpr, "i"));
                     let cond_color = cond_rpr
                         .and_then(|rpr| wml_attr(rpr, "color"))
                         .and_then(parse_text_color);
+                    let cond_font_size = cond_rpr.and_then(|rpr| parse_font_size(rpr));
+                    let cond_font_name = cond_rpr
+                        .and_then(|rpr| wml(rpr, "rFonts"))
+                        .and_then(|rf| {
+                            rf.attribute((WML_NS, "ascii"))
+                                .or_else(|| rf.attribute((WML_NS, "hAnsi")))
+                        })
+                        .map(|s| s.to_string());
                     if cond_borders.is_some()
                         || cond_shading.is_some()
                         || cond_bold.is_some()
                         || cond_color.is_some()
+                        || cond_font_size.is_some()
+                        || cond_font_name.is_some()
+                        || cond_italic.is_some()
                     {
                         conditionals.insert(cond_type.to_string(), TableConditionalFormat {
                             borders: cond_borders,
                             shading: cond_shading,
                             bold: cond_bold,
+                            italic: cond_italic,
                             color: cond_color,
+                            font_size: cond_font_size,
+                            font_name: cond_font_name,
                         });
                     }
                 }
 
-                if base_borders.is_some() || !conditionals.is_empty() {
+                if base_borders.is_some()
+                    || !conditionals.is_empty()
+                    || base_font_size.is_some()
+                    || base_font_name.is_some()
+                {
                     table_styles.insert(
                         style_id.to_string(),
-                        TableStyleDef { base_borders, conditionals },
+                        TableStyleDef {
+                            base_borders,
+                            base_font_size,
+                            base_font_name,
+                            base_bold,
+                            base_italic,
+                            conditionals,
+                        },
                     );
                 }
             }

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 
 use crate::geometry::{FormulaOp, PathFill};
@@ -53,13 +53,14 @@ pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
     let mut paragraphs = Vec::new();
     let mut counters: HashMap<(u32, u8), u32> = HashMap::new();
     let mut last_seen_level: HashMap<u32, u8> = HashMap::new();
+    let mut applied_overrides: HashSet<(u32, u8)> = HashSet::new();
     let opts = super::paragraph::ParagraphOptions::default();
     for p in txbx_content
         .children()
         .filter(|n| n.tag_name().name() == "p" && n.tag_name().namespace() == Some(WML_NS))
     {
         paragraphs.push(super::paragraph::build_paragraph(
-            p, ctx, &mut counters, &mut last_seen_level, &opts,
+            p, ctx, &mut counters, &mut last_seen_level, &mut applied_overrides, &opts,
         ));
     }
     paragraphs

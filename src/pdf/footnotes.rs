@@ -59,15 +59,33 @@ pub(super) fn compute_footnote_height(
     ctx: &RenderContext,
     text_width: f32,
 ) -> f32 {
-    footnote
-        .paragraphs
-        .iter()
-        .filter_map(|para| {
-            let ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
-            layout_paragraph(&para.runs, ls, ctx, text_width)
-        })
-        .map(|layout| layout.lines.len().max(1) as f32 * layout.line_height)
-        .sum()
+    let mut total = 0.0f32;
+    let mut prev_space_after = 0.0f32;
+    let mut prev_contextual = false;
+    for (i, para) in footnote.paragraphs.iter().enumerate() {
+        let ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
+        let Some(layout) = layout_paragraph(&para.runs, ls, ctx, text_width) else {
+            continue;
+        };
+        if i > 0 {
+            let effective_sb = if para.contextual_spacing && prev_contextual {
+                0.0
+            } else {
+                para.space_before
+            };
+            total += f32::max(prev_space_after, effective_sb);
+        }
+        total += layout.lines.len().max(1) as f32 * layout.line_height;
+        prev_space_after = if para.contextual_spacing
+            && footnote.paragraphs.get(i + 1).is_some_and(|p| p.contextual_spacing)
+        {
+            0.0
+        } else {
+            para.space_after
+        };
+        prev_contextual = para.contextual_spacing;
+    }
+    total
 }
 
 pub(super) fn render_page_footnotes(
@@ -111,13 +129,25 @@ pub(super) fn render_page_footnotes(
         };
         let display_num = footnote_display_order.get(fn_id).copied().unwrap_or(1);
 
-        for para in &footnote.paragraphs {
+        let mut prev_space_after = 0.0f32;
+        let mut prev_contextual = false;
+        for (pi, para) in footnote.paragraphs.iter().enumerate() {
             let runs = substitute_ref_marks(&para.runs, display_num);
-            let ls = para.line_spacing.unwrap_or(LineSpacing::Auto(1.0));
+            let ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
 
             let Some(layout) = layout_paragraph(&runs, ls, ctx, text_width) else {
                 continue;
             };
+
+            // Inter-paragraph spacing within the footnote
+            if pi > 0 {
+                let effective_sb = if para.contextual_spacing && prev_contextual {
+                    0.0
+                } else {
+                    para.space_before
+                };
+                fn_y -= f32::max(prev_space_after, effective_sb);
+            }
 
             let baseline_y = fn_y - layout.font_size * layout.ascender_ratio;
             let line_count = layout.lines.len();
@@ -139,6 +169,14 @@ pub(super) fn render_page_footnotes(
             );
 
             fn_y -= line_count as f32 * layout.line_height;
+            prev_space_after = if para.contextual_spacing
+                && footnote.paragraphs.get(pi + 1).is_some_and(|p| p.contextual_spacing)
+            {
+                0.0
+            } else {
+                para.space_after
+            };
+            prev_contextual = para.contextual_spacing;
         }
     }
 }

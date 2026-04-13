@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::model::{Paragraph, Run, TabAlignment, TabStop};
 
@@ -47,6 +47,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     ctx: &mut ParseContext<'_, R>,
     counters: &mut HashMap<(u32, u8), u32>,
     last_seen_level: &mut HashMap<u32, u8>,
+    applied_overrides: &mut HashSet<(u32, u8)>,
     opts: &ParagraphOptions,
 ) -> Paragraph {
     let ppr = wml(node, "pPr");
@@ -147,13 +148,17 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         ctx.numbering,
         counters,
         last_seen_level,
+        applied_overrides,
     );
 
     let mut indent_first_line = ctx.styles.defaults.indent_first_line;
     let mut indent_right = ctx.styles.defaults.indent_right;
+    let char_width_fs = para_style
+        .and_then(|s| s.font_size)
+        .unwrap_or(ctx.styles.defaults.font_size);
     let (left, right, hanging, first) =
         if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
-            extract_indents(ind)
+            extract_indents(ind, Some(char_width_fs / 2.0))
         } else if list_label.is_empty()
             && let Some(s) = para_style
         {

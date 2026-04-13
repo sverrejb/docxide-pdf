@@ -435,7 +435,7 @@
   "new/master_thesis_le..": {
     "jaccard": 0.0897,
     "ssim": 0.1998,
-    "text_boundary": 0.2312
+    "text_boundary": 0.2717
   },
   "new/russian_municipa..": {
     "jaccard": 0.4836,
@@ -458,9 +458,9 @@
     "text_boundary": 0.2571
   },
   "new/taiwanese_educat..": {
-    "jaccard": 0.1183,
-    "ssim": 0.2121,
-    "text_boundary": 0.1875
+    "jaccard": 0.1034,
+    "ssim": 0.1857,
+    "text_boundary": 0.1333
   },
   "new/who_prescribing_..": {
     "jaccard": 0.1225,
@@ -566,8 +566,8 @@
     "text_boundary": 1.0
   },
   "scraped/east_asia_confer..": {
-    "jaccard": 0.0926,
-    "ssim": 0.2207,
+    "jaccard": 0.0909,
+    "ssim": 0.217,
     "text_boundary": 0.619,
     "convert_ms": 22.0
   },
@@ -626,8 +626,8 @@
     "convert_ms": 4.5
   },
   "scraped/korean_japanese_..": {
-    "jaccard": 0.1055,
-    "ssim": 0.1922,
+    "jaccard": 0.1032,
+    "ssim": 0.1898,
     "text_boundary": 0.8571,
     "convert_ms": 18.4
   },
@@ -756,9 +756,9 @@
     "convert_ms": 22.0
   },
   "scraped/transition_to_wo..": {
-    "jaccard": 0.28,
-    "ssim": 0.3957,
-    "text_boundary": 0.2066,
+    "jaccard": 0.2816,
+    "ssim": 0.3964,
+    "text_boundary": 0.2552,
     "convert_ms": 493.0
   },
   "scraped/turkish_ancient_..": {
@@ -774,9 +774,9 @@
     "convert_ms": 2.4
   },
   "scraped/uk_commercial_le..": {
-    "jaccard": 0.2064,
-    "ssim": 0.361,
-    "text_boundary": 0.2149,
+    "jaccard": 0.2066,
+    "ssim": 0.3613,
+    "text_boundary": 0.2361,
     "convert_ms": 326.3
   },
   "scraped/ukraine_humanita..": {

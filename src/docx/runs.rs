@@ -95,6 +95,11 @@ struct RunFormat {
     text_shadow: Option<TextShadow>,
     text_glow: Option<TextGlow>,
     lang: Option<String>,
+    /// True when font_size came only from ParagraphRunDefaults (doc defaults / para style),
+    /// not from inline rPr or character style.
+    font_size_from_default: bool,
+    /// True when font_name came only from ParagraphRunDefaults.
+    font_name_from_default: bool,
 }
 
 impl RunFormat {
@@ -125,6 +130,8 @@ impl RunFormat {
             text_shadow: self.text_shadow.clone(),
             text_glow: self.text_glow.clone(),
             lang: self.lang.clone(),
+            font_size_from_default: self.font_size_from_default,
+            font_name_from_default: self.font_name_from_default,
             hyperlink_url,
             ..Run::default()
         }
@@ -164,6 +171,10 @@ impl RunFormat {
 struct ParagraphRunDefaults {
     font_size: f32,
     font_name: String,
+    /// True when font_size came from doc defaults, not from the paragraph style
+    font_size_is_doc_default: bool,
+    /// True when font_name came from doc defaults, not from the paragraph style
+    font_name_is_doc_default: bool,
     bold: bool,
     italic: bool,
     caps: bool,
@@ -180,14 +191,13 @@ struct ParagraphRunDefaults {
 
 impl ParagraphRunDefaults {
     fn from_style(para_style: Option<&ParagraphStyle>, defaults: &StyleDefaults) -> Self {
+        let para_font_size = para_style.and_then(|s| s.font_size);
+        let para_font_name = para_style.and_then(|s| s.font_name.as_deref());
         Self {
-            font_size: para_style
-                .and_then(|s| s.font_size)
-                .unwrap_or(defaults.font_size),
-            font_name: para_style
-                .and_then(|s| s.font_name.as_deref())
-                .unwrap_or(&defaults.font_name)
-                .to_string(),
+            font_size: para_font_size.unwrap_or(defaults.font_size),
+            font_name: para_font_name.unwrap_or(&defaults.font_name).to_string(),
+            font_size_is_doc_default: para_font_size.is_none(),
+            font_name_is_doc_default: para_font_name.is_none(),
             bold: para_style
                 .and_then(|s| s.bold)
                 .unwrap_or(defaults.bold),
@@ -233,16 +243,28 @@ impl ParagraphRunDefaults {
         theme: &ThemeFonts,
     ) -> RunFormat {
         let rfonts_node = rpr.and_then(|n| wml(n, "rFonts"));
+        let explicit_font_size = rpr
+            .and_then(|n| wml_attr(n, "sz"))
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(|hp| hp / 2.0);
+        let char_style_font_size = char_style.and_then(|cs| cs.font_size);
+        let explicit_font_name = rfonts_node
+            .map(|rfonts| resolve_font_from_node(rfonts, theme, &self.font_name));
+        let char_style_font_name = char_style.and_then(|cs| cs.font_name.clone());
+        // True only when font_size/name came from doc defaults — not from inline rPr,
+        // character style, OR paragraph style.  Table style overrides apply only here.
+        let font_size_from_default = explicit_font_size.is_none()
+            && char_style_font_size.is_none()
+            && self.font_size_is_doc_default;
+        let font_name_from_default = explicit_font_name.is_none()
+            && char_style_font_name.is_none()
+            && self.font_name_is_doc_default;
         RunFormat {
-            font_size: rpr
-                .and_then(|n| wml_attr(n, "sz"))
-                .and_then(|v| v.parse::<f32>().ok())
-                .map(|hp| hp / 2.0)
-                .or_else(|| char_style.and_then(|cs| cs.font_size))
+            font_size: explicit_font_size
+                .or(char_style_font_size)
                 .unwrap_or(self.font_size),
-            font_name: rfonts_node
-                .map(|rfonts| resolve_font_from_node(rfonts, theme, &self.font_name))
-                .or_else(|| char_style.and_then(|cs| cs.font_name.clone()))
+            font_name: explicit_font_name
+                .or(char_style_font_name)
                 .unwrap_or_else(|| self.font_name.clone()),
             east_asia_font_name: rfonts_node
                 .and_then(|rfonts| resolve_east_asia_font_from_node(rfonts, theme))
@@ -331,6 +353,8 @@ impl ParagraphRunDefaults {
                 .and_then(|n| wml(n, "lang"))
                 .and_then(|n| n.attribute((WML_NS, "val")))
                 .map(|s| s.to_string()),
+            font_size_from_default,
+            font_name_from_default,
         }
     }
 }

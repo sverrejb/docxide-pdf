@@ -15,7 +15,7 @@ mod tables;
 mod textbox;
 mod wordart;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 
 use crate::error::Error;
@@ -467,14 +467,31 @@ pub(in crate::docx) fn parse_paragraph_spacing(
     (space_before, space_after, line_spacing)
 }
 
+/// Convert a character-unit indent attribute (hundredths of character width) to points.
+fn chars_to_pts(ind: roxmltree::Node, attr: &str, char_width: f32) -> Option<f32> {
+    ind.attribute((WML_NS, attr))
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(|hundredths| hundredths / 100.0 * char_width)
+}
+
 pub(super) fn extract_indents(
     ind: roxmltree::Node,
+    char_width: Option<f32>,
 ) -> (Option<f32>, Option<f32>, Option<f32>, Option<f32>) {
+    // Per OOXML spec, *Chars attributes take priority over twip-based values.
+    let cw = char_width.unwrap_or(0.0);
+    let has_cw = char_width.is_some();
     (
-        twips_attr(ind, "start").or_else(|| twips_attr(ind, "left")),
-        twips_attr(ind, "end").or_else(|| twips_attr(ind, "right")),
-        twips_attr(ind, "hanging"),
-        twips_attr(ind, "firstLine"),
+        has_cw.then(|| chars_to_pts(ind, "leftChars", cw)).flatten()
+            .or_else(|| twips_attr(ind, "start"))
+            .or_else(|| twips_attr(ind, "left")),
+        has_cw.then(|| chars_to_pts(ind, "rightChars", cw)).flatten()
+            .or_else(|| twips_attr(ind, "end"))
+            .or_else(|| twips_attr(ind, "right")),
+        has_cw.then(|| chars_to_pts(ind, "hangingChars", cw)).flatten()
+            .or_else(|| twips_attr(ind, "hanging")),
+        has_cw.then(|| chars_to_pts(ind, "firstLineChars", cw)).flatten()
+            .or_else(|| twips_attr(ind, "firstLine")),
     )
 }
 
@@ -663,6 +680,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
     let mut blocks = Vec::new();
     let mut counters: HashMap<(u32, u8), u32> = HashMap::new();
     let mut last_seen_level: HashMap<u32, u8> = HashMap::new();
+    let mut applied_overrides: HashSet<(u32, u8)> = HashSet::new();
 
     for node in collect_block_nodes(body) {
         if node.tag_name().namespace() != Some(WML_NS) {
@@ -675,6 +693,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     &mut ctx,
                     &mut counters,
                     &mut last_seen_level,
+                    &mut applied_overrides,
                 );
                 blocks.push(Block::Table(table));
             }
@@ -694,7 +713,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     style_num_ilvl: para_style.and_then(|s| s.num_ilvl),
                 };
                 let para = paragraph::build_paragraph(
-                    node, &mut ctx, &mut counters, &mut last_seen_level, &opts,
+                    node, &mut ctx, &mut counters, &mut last_seen_level, &mut applied_overrides, &opts,
                 );
 
                 blocks.push(Block::Paragraph(para));
@@ -962,7 +981,7 @@ mod tests {
         );
         let doc = roxmltree::Document::parse(&xml).unwrap();
         let node = doc.root_element();
-        let (left, right, hanging, first_line) = extract_indents(node);
+        let (left, right, hanging, first_line) = extract_indents(node, None);
         assert_eq!(left, Some(36.0)); // 720/20
         assert_eq!(right, Some(18.0)); // 360/20
         assert_eq!(hanging, Some(18.0)); // 360/20
@@ -978,11 +997,27 @@ mod tests {
         );
         let doc = roxmltree::Document::parse(&xml).unwrap();
         let node = doc.root_element();
-        let (left, right, hanging, first_line) = extract_indents(node);
+        let (left, right, hanging, first_line) = extract_indents(node, None);
         assert_eq!(left, Some(72.0)); // 1440/20
         assert_eq!(right, Some(36.0)); // 720/20
         assert_eq!(hanging, None);
         assert_eq!(first_line, None);
+    }
+
+    #[test]
+    fn test_extract_indents_left_chars() {
+        // leftChars=200 with char_width=5.5pt → 200/100 * 5.5 = 11.0pt
+        let xml = format!(
+            r#"<w:ind xmlns:w="{}" w:leftChars="200" w:left="480"/>"#,
+            WML_NS
+        );
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        let node = doc.root_element();
+        let (left, _right, _hanging, _first_line) = extract_indents(node, Some(5.5));
+        assert_eq!(left, Some(11.0)); // leftChars takes priority
+        // Without char_width, fall back to twips
+        let (left2, _, _, _) = extract_indents(node, None);
+        assert_eq!(left2, Some(24.0)); // 480/20
     }
 
     // --- Theme color key resolution ---
