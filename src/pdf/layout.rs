@@ -1123,9 +1123,10 @@ pub(super) fn render_paragraph_lines(
             .iter()
             .any(|c| c.text.chars().any(crate::docx::is_east_asian_char));
 
+        // Soft line breaks (w:br) should still be justified — only the
+        // paragraph's true last line suppresses justification.
         let can_justify = *alignment == Alignment::Justify
-            && global_line_idx != last_line_idx
-            && !line.ends_with_break;
+            && global_line_idx != last_line_idx;
 
         let is_cjk_justified = can_justify && has_cjk_content && left_char_count > 1;
         let is_justified = is_cjk_justified

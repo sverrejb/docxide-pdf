@@ -42,16 +42,6 @@
       "fixed": false
     },
     {
-      "id": 77,
-      "case": "scraped/polish_municipal_letter",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 113.41303,
-      "y_pt": 278.53522,
-      "note": "Text here should be justified or something like that. See reference.",
-      "fixed": false
-    },
-    {
       "id": 82,
       "case": "scraped/czech_municipal_grant_form",
       "page": 1,
