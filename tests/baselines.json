@@ -294,8 +294,8 @@
     "text_boundary": 1.0
   },
   "cases/case59": {
-    "jaccard": 0.9167,
-    "ssim": 0.8965,
+    "jaccard": 0.9183,
+    "ssim": 0.908,
     "text_boundary": 1.0
   },
   "cases/case6": {
@@ -305,8 +305,8 @@
     "convert_ms": 15.3
   },
   "cases/case60": {
-    "jaccard": 0.7434,
-    "ssim": 0.8889,
+    "jaccard": 0.7539,
+    "ssim": 0.9149,
     "text_boundary": 1.0
   },
   "cases/case61": {
@@ -792,9 +792,9 @@
     "convert_ms": 38.6
   },
   "scraped/vaccines_history..": {
-    "jaccard": 0.4275,
-    "ssim": 0.5532,
-    "text_boundary": 0.1293,
+    "jaccard": 0.4278,
+    "ssim": 0.5548,
+    "text_boundary": 0.1379,
     "convert_ms": 23.3
   },
   "scraped/waste_management..": {

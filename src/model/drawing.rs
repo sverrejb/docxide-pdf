@@ -203,6 +203,8 @@ pub struct SmartArtPara {
     pub runs: Vec<SmartArtRun>,
     pub bullet: Option<String>,
     pub align: SmartArtTextAlign,
+    /// Line spacing as a multiplier (e.g. 0.9 for 90%). 0.0 = use default 1.2.
+    pub line_spacing_pct: f32,
 }
 
 pub struct SmartArtShape {
@@ -220,8 +222,8 @@ pub struct SmartArtShape {
     pub paragraphs: Vec<SmartArtPara>,
     /// Separate text rectangle from dsp:txXfrm (x, y, w, h in pts)
     pub text_rect: Option<(f32, f32, f32, f32)>,
-    /// Left inset from a:bodyPr lIns (pts)
-    pub text_inset_left: f32,
+    /// Body insets from a:bodyPr (top, right, bottom, left) in pts
+    pub text_insets: (f32, f32, f32, f32),
     pub text_anchor: SmartArtTextAnchor,
 }
 

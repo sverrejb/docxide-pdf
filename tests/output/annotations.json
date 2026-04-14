@@ -1,5 +1,5 @@
 {
-  "next_id": 131,
+  "next_id": 133,
   "annotations": [
     {
       "id": 8,
@@ -99,16 +99,6 @@
       "x_pt": 226.61615,
       "y_pt": 637.20514,
       "note": "We wrap this image. Word does not.",
-      "fixed": false
-    },
-    {
-      "id": 112,
-      "case": "new/master_thesis_learning_agreement",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 74.381256,
-      "y_pt": 144.82404,
-      "note": "We overflow into the footer here.",
       "fixed": false
     },
     {
@@ -212,16 +202,6 @@
       "fixed": false
     },
     {
-      "id": 127,
-      "case": "new/master_thesis_learning_agreement",
-      "page": 3,
-      "source": "Generated",
-      "x_pt": 525.98883,
-      "y_pt": 609.20374,
-      "note": "Missing line under \"Signature\". Also Signature and Date is too much to the right.",
-      "fixed": false
-    },
-    {
       "id": 129,
       "case": "new/master_thesis_learning_agreement",
       "page": 0,
@@ -229,6 +209,26 @@
       "x_pt": 85.421844,
       "y_pt": 751.51,
       "note": "Header text is too large",
+      "fixed": false
+    },
+    {
+      "id": 131,
+      "case": "new/czech_works_contract_proposal",
+      "page": 2,
+      "source": "Generated",
+      "x_pt": 335.516,
+      "y_pt": 724.9268,
+      "note": "tabs or spaces  before \".....\" seem to collapse here at a 1.) and a 2.)",
+      "fixed": false
+    },
+    {
+      "id": 132,
+      "case": "new/czech_works_contract_proposal",
+      "page": 4,
+      "source": "Generated",
+      "x_pt": 95.37916,
+      "y_pt": 273.9615,
+      "note": "List item 5.  is indented here for some reason",
       "fixed": false
     }
   ]

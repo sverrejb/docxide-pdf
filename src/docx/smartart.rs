@@ -237,7 +237,7 @@ fn parse_dsp_shape<R: Read + Seek>(
         stroke_width,
         paragraphs,
         text_rect,
-        text_inset_left: tp.left_inset,
+        text_insets: tp.insets,
         text_anchor: tp.anchor,
     })
 }
@@ -246,7 +246,8 @@ use crate::model::{SmartArtPara, SmartArtRun, SmartArtTextAnchor, SmartArtTextAl
 
 struct DspTextProps {
     paragraphs: Vec<SmartArtPara>,
-    left_inset: f32,
+    /// (top, right, bottom, left) insets in pts
+    insets: (f32, f32, f32, f32),
     anchor: SmartArtTextAnchor,
 }
 
@@ -254,15 +255,19 @@ fn parse_dsp_text(sp: roxmltree::Node, theme: &ThemeFonts) -> DspTextProps {
     let Some(body) = dsp(sp, "txBody") else {
         return DspTextProps {
             paragraphs: Vec::new(),
-            left_inset: 0.0, anchor: SmartArtTextAnchor::Top,
+            insets: (0.0, 0.0, 0.0, 0.0), anchor: SmartArtTextAnchor::Top,
         };
     };
     let body_pr = dml(body, "bodyPr");
-    let left_inset = body_pr
-        .and_then(|bp| bp.attribute("lIns"))
-        .and_then(|v| v.parse::<f32>().ok())
-        .map(super::emu_to_pts)
-        .unwrap_or(0.0);
+    let emu_attr = |bp: roxmltree::Node, attr: &str| -> f32 {
+        bp.attribute(attr)
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(super::emu_to_pts)
+            .unwrap_or(0.0)
+    };
+    let insets = body_pr
+        .map(|bp| (emu_attr(bp, "tIns"), emu_attr(bp, "rIns"), emu_attr(bp, "bIns"), emu_attr(bp, "lIns")))
+        .unwrap_or((0.0, 0.0, 0.0, 0.0));
     let anchor = match body_pr.and_then(|bp| bp.attribute("anchor")) {
         Some("ctr") => SmartArtTextAnchor::Center,
         Some("b") => SmartArtTextAnchor::Bottom,
@@ -354,10 +359,18 @@ fn parse_dsp_text(sp: roxmltree::Node, theme: &ThemeFonts) -> DspTextProps {
             });
         }
 
+        let line_spacing_pct = ppr
+            .and_then(|pp| dml(pp, "lnSpc"))
+            .and_then(|ls| dml(ls, "spcPct"))
+            .and_then(|sp| sp.attribute("val"))
+            .and_then(|v| v.parse::<f32>().ok())
+            .map(|v| v / 100_000.0)
+            .unwrap_or(0.0);
+
         if !runs.is_empty() {
-            paragraphs.push(SmartArtPara { runs, bullet, align });
+            paragraphs.push(SmartArtPara { runs, bullet, align, line_spacing_pct });
         }
     }
 
-    DspTextProps { paragraphs, left_inset, anchor }
+    DspTextProps { paragraphs, insets, anchor }
 }
