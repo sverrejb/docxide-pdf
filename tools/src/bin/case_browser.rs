@@ -208,6 +208,47 @@ fn load_baselines(output_dir: &Path) -> HashMap<String, BaselineScores> {
         .unwrap_or_default()
 }
 
+fn load_hashes(path: &Path) -> HashMap<String, Vec<String>> {
+    std::fs::read_to_string(path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn compute_changed_cases(
+    committed: &HashMap<String, Vec<String>>,
+    latest: &HashMap<String, Vec<String>>,
+) -> HashSet<String> {
+    latest
+        .iter()
+        .filter(|(name, hashes)| committed.get(*name) != Some(hashes))
+        .map(|(name, _)| name.clone())
+        .collect()
+}
+
+/// Copy generated page PNGs to acknowledged/ as a snapshot of the current output.
+fn snapshot_acknowledged(case_dir: &Path) {
+    let gen_dir = case_dir.join("generated");
+    let ack_dir = case_dir.join("acknowledged");
+    let Ok(entries) = std::fs::read_dir(&gen_dir) else {
+        return;
+    };
+    let _ = std::fs::create_dir_all(&ack_dir);
+    // Remove old acknowledged files first
+    if let Ok(old) = std::fs::read_dir(&ack_dir) {
+        for e in old.flatten() {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("png")) {
+            let dest = ack_dir.join(path.file_name().unwrap());
+            let _ = std::fs::copy(&path, &dest);
+        }
+    }
+}
+
 fn score_color(value: f64, threshold: f64) -> egui::Color32 {
     if value >= threshold {
         egui::Color32::from_rgb(0, 180, 0)
@@ -281,6 +322,7 @@ enum ViewMode {
     Reference,
     Generated,
     Overlay,
+    Delta,
 }
 
 struct App {
@@ -291,6 +333,7 @@ struct App {
     view_mode: ViewMode,
     texture_cache: HashMap<PathBuf, Option<egui::TextureHandle>>,
     overlay_cache: HashMap<(usize, usize), Option<egui::TextureHandle>>,
+    delta_cache: HashMap<(usize, usize), Option<egui::TextureHandle>>,
     scroll_to_current: bool,
     show_grid: bool,
     grid_spacing: f32,
@@ -300,6 +343,9 @@ struct App {
     show_annotations: bool,
     show_notes_panel: bool,
     baselines: HashMap<String, BaselineScores>,
+    visual_hashes: HashMap<String, Vec<String>>,
+    latest_hashes: HashMap<String, Vec<String>>,
+    changed_cases: HashSet<String>,
     collapsed_groups: HashSet<String>,
     search_query: String,
     search_active: bool,
@@ -309,6 +355,10 @@ impl App {
     fn new(cases: Vec<CaseInfo>, output_dir: PathBuf) -> Self {
         let annotations = load_annotations(&output_dir);
         let baselines = load_baselines(&output_dir);
+        let tests_dir = output_dir.parent().unwrap_or(&output_dir);
+        let visual_hashes = load_hashes(&tests_dir.join("visual_hashes.json"));
+        let latest_hashes = load_hashes(&output_dir.join("latest_hashes.json"));
+        let changed_cases = compute_changed_cases(&visual_hashes, &latest_hashes);
         Self {
             cases,
             output_dir,
@@ -317,6 +367,7 @@ impl App {
             view_mode: ViewMode::SideBySide,
             texture_cache: HashMap::new(),
             overlay_cache: HashMap::new(),
+            delta_cache: HashMap::new(),
             scroll_to_current: true,
             show_grid: false,
             grid_spacing: 18.0,
@@ -326,6 +377,9 @@ impl App {
             show_annotations: true,
             show_notes_panel: true,
             baselines,
+            visual_hashes,
+            latest_hashes,
+            changed_cases,
             collapsed_groups: HashSet::new(),
             search_query: String::new(),
             search_active: false,
@@ -343,6 +397,7 @@ impl App {
             self.scroll_to_current = true;
             self.texture_cache.clear();
             self.overlay_cache.clear();
+            self.delta_cache.clear();
             self.pending_annotation = None;
         }
     }
@@ -356,6 +411,10 @@ impl App {
         self.cases = discover_cases(&self.output_dir);
         self.baselines = load_baselines(&self.output_dir);
         self.annotations = load_annotations(&self.output_dir);
+        let tests_dir = self.output_dir.parent().unwrap_or(&self.output_dir);
+        self.visual_hashes = load_hashes(&tests_dir.join("visual_hashes.json"));
+        self.latest_hashes = load_hashes(&self.output_dir.join("latest_hashes.json"));
+        self.changed_cases = compute_changed_cases(&self.visual_hashes, &self.latest_hashes);
         // Try to stay on the same case after refresh
         self.current_case = self
             .cases
@@ -370,6 +429,7 @@ impl App {
         }
         self.texture_cache.clear();
         self.overlay_cache.clear();
+        self.delta_cache.clear();
         self.refresh_flash = 1.0;
         self.scroll_to_current = true;
     }
@@ -466,6 +526,9 @@ impl eframe::App for App {
             if i.key_pressed(egui::Key::Num4) || i.key_pressed(egui::Key::O) {
                 self.view_mode = ViewMode::Overlay;
             }
+            if i.key_pressed(egui::Key::Num5) || i.key_pressed(egui::Key::D) {
+                self.view_mode = ViewMode::Delta;
+            }
             if i.key_pressed(egui::Key::S) {
                 self.search_active = true;
             }
@@ -505,6 +568,7 @@ impl eframe::App for App {
             label: String,
             index: usize,
             color: Option<egui::Color32>,
+            hash_changed: bool,
         }
         let case_labels: Vec<CaseLabel> = self
             .cases
@@ -523,15 +587,17 @@ impl eframe::App for App {
                     Some(_) => Some(egui::Color32::from_rgb(220, 40, 40)),
                     None => None,
                 };
+                let hash_changed = self.changed_cases.contains(&key);
                 let pad = if color.is_some() { "     " } else { "" };
+                let prefix = if hash_changed { "\u{26A0} " } else { "" };
                 let label = if let Some(b) = self.baselines.get(&key) {
                     let j = b.jaccard.map(|v| format!("{:.0}", v * 100.0)).unwrap_or_else(|| "-".into());
                     let s = b.ssim.map(|v| format!("{:.0}", v * 100.0)).unwrap_or_else(|| "-".into());
-                    format!("{} ({}p) {}/{}{}", display_name, c.page_count, j, s, pad)
+                    format!("{}{} ({}p) {}/{}{}", prefix, display_name, c.page_count, j, s, pad)
                 } else {
-                    format!("{} ({}p){}", display_name, c.page_count, pad)
+                    format!("{}{} ({}p){}", prefix, display_name, c.page_count, pad)
                 };
-                CaseLabel { group, label, index: i, color }
+                CaseLabel { group, label, index: i, color, hash_changed }
             })
             .collect();
 
@@ -611,10 +677,15 @@ impl eframe::App for App {
                         if !collapsed {
                             for cl in &filtered {
                                 let selected = cl.index == cur;
-                                let resp = ui.selectable_label(selected, &cl.label);
+                                let label_text = if cl.hash_changed {
+                                    egui::RichText::new(&cl.label)
+                                        .color(egui::Color32::from_rgb(220, 40, 40))
+                                } else {
+                                    egui::RichText::new(&cl.label)
+                                };
+                                let resp = ui.selectable_label(selected, label_text);
                                 if let Some(c) = cl.color {
-                                    let rect = resp.rect;
-                                    let center = egui::pos2(rect.right() - 6.0, rect.center().y);
+                                    let center = egui::pos2(resp.rect.right() - 6.0, resp.rect.center().y);
                                     ui.painter().circle_filled(center, 4.0, c);
                                 }
                                 if resp.clicked() {
@@ -638,6 +709,7 @@ impl eframe::App for App {
         }
 
         // Top bar: case name and view mode
+        let mut acknowledge_current = false;
         egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 let case = &self.cases[self.current_case];
@@ -648,6 +720,7 @@ impl eframe::App for App {
                     ViewMode::Reference => "[R]eference",
                     ViewMode::Generated => "[G]enerated",
                     ViewMode::Overlay => "[O]verlay",
+                    ViewMode::Delta => "[D]elta",
                 };
                 ui.label(format!("View: {}", mode_label));
                 let key = baseline_key(&case.name);
@@ -666,12 +739,22 @@ impl eframe::App for App {
                         );
                     }
                 }
+                if self.changed_cases.contains(&key) {
+                    ui.separator();
+                    ui.colored_label(
+                        egui::Color32::from_rgb(220, 40, 40),
+                        "Visual change",
+                    );
+                    if ui.button("Acknowledge").clicked() {
+                        acknowledge_current = true;
+                    }
+                }
                 ui.separator();
                 if self.show_grid {
                     ui.label(format!("Grid: {:.0}px (+/-)", self.grid_spacing));
                 }
                 ui.separator();
-                ui.label("[S]earch  [L]ines  [F]refresh  [A]nnot  [N]otes");
+                ui.label("[S]earch  [D]elta  [L]ines  [F]refresh  [A]nnot  [N]otes");
                 if self.refresh_flash > 0.0 {
                     let alpha = (self.refresh_flash * 255.0) as u8;
                     ui.label(
@@ -681,6 +764,25 @@ impl eframe::App for App {
                 }
             });
         });
+
+        if acknowledge_current {
+            let key = baseline_key(&self.cases[self.current_case].name);
+            if let Some(hashes) = self.latest_hashes.get(&key).cloned() {
+                self.visual_hashes.insert(key.clone(), hashes);
+                self.changed_cases.remove(&key);
+                // Write updated visual_hashes.json
+                let tests_dir = self.output_dir.parent().unwrap_or(&self.output_dir);
+                let path = tests_dir.join("visual_hashes.json");
+                let sorted: std::collections::BTreeMap<_, _> =
+                    self.visual_hashes.iter().collect();
+                if let Ok(json) = serde_json::to_string_pretty(&sorted) {
+                    let _ = std::fs::write(path, json + "\n");
+                }
+                // Snapshot current generated PNGs as the acknowledged baseline
+                snapshot_acknowledged(&self.cases[self.current_case].dir);
+                self.delta_cache.clear();
+            }
+        }
 
         if self.refresh_flash > 0.0 {
             self.refresh_flash = (self.refresh_flash - 0.05).max(0.0);
@@ -863,6 +965,9 @@ impl eframe::App for App {
                 }
                 ViewMode::Overlay => {
                     show_overlay(self, ctx, ui, page);
+                }
+                ViewMode::Delta => {
+                    show_delta(self, ctx, ui, page);
                 }
             }
         });
@@ -1191,5 +1296,73 @@ fn show_overlay(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: usi
         }
     } else {
         ui.label("Could not load reference and/or generated images");
+    }
+}
+
+fn show_delta(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: usize) {
+    let ack_path = app.page_path("acknowledged", page);
+    if !ack_path.exists() {
+        ui.centered_and_justified(|ui| {
+            ui.label("No acknowledged snapshot — acknowledge a visual change first");
+        });
+        return;
+    }
+
+    let key = (app.current_case, page);
+    if !app.delta_cache.contains_key(&key) {
+        let gen_path = app.page_path("generated", page);
+        let tex = build_overlay_texture(ctx, &ack_path, &gen_path, key);
+        app.delta_cache.insert(key, tex);
+    }
+
+    ui.horizontal(|ui| {
+        ui.label("Delta (acknowledged vs generated)");
+        ui.colored_label(egui::Color32::from_rgb(0, 80, 220), "Blue=removed");
+        ui.colored_label(egui::Color32::from_rgb(220, 40, 40), "Red=added");
+        ui.label("Gray=unchanged");
+    });
+
+    let available = ui.available_size();
+    if let Some(Some(tex)) = app.delta_cache.get(&key) {
+        let tex = tex.clone();
+        let tex_size = [tex.size()[0], tex.size()[1]];
+        let show_grid = app.show_grid;
+        let grid_spacing = app.grid_spacing;
+        let click = egui::ScrollArea::both()
+            .show(ui, |ui| {
+                let size = fit_size(&tex, available.x, available.y - 20.0);
+                let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+                ui.painter().image(
+                    tex.id(),
+                    rect,
+                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                    egui::Color32::WHITE,
+                );
+                if show_grid {
+                    draw_grid_overlay(ui.ctx(), rect, grid_spacing);
+                }
+                if resp.clicked() {
+                    resp.interact_pointer_pos().map(|pos| ImageClick {
+                        screen_pos: pos,
+                        image_rect: rect,
+                        tex_size,
+                    })
+                } else {
+                    None
+                }
+            })
+            .inner;
+        if let Some(click) = click {
+            let (x_pt, y_pt) = screen_to_pdf_pts(&click);
+            app.pending_annotation = Some(PendingAnnotation {
+                page,
+                source: ImageSource::Generated,
+                x_pt,
+                y_pt,
+                text_buf: String::new(),
+            });
+        }
+    } else {
+        ui.label("Could not load acknowledged and/or generated images");
     }
 }

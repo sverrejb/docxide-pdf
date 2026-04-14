@@ -456,6 +456,7 @@ dependencies = [
  "roxmltree",
  "serde",
  "serde_json",
+ "sha2",
  "subsetter",
  "ttf-parser",
  "unicode-linebreak",

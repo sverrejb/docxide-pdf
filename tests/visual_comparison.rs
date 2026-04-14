@@ -605,6 +605,17 @@ fn visual_comparison() {
     }
     common::write_latest_scores(&baseline_updates);
 
+    // Compute SHA-256 hashes of generated page PNGs for visual change detection
+    let mut hash_updates: std::collections::BTreeMap<String, Vec<String>> =
+        std::collections::BTreeMap::new();
+    for fixture in fixtures.iter() {
+        let hashes = common::compute_page_hashes(&fixture.gen_pages);
+        if !hashes.is_empty() {
+            hash_updates.insert(fixture.name.clone(), hashes);
+        }
+    }
+    common::write_latest_hashes(&hash_updates);
+
     let jaccard_rows: Vec<(String, f64, bool)> = results
         .iter()
         .map(|r| (r.name.clone(), r.jaccard, r.jaccard >= SIMILARITY_THRESHOLD))

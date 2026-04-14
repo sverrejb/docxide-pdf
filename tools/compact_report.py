@@ -100,6 +100,26 @@ def main():
             print(f"  {short_name(name):<{name_w}}  {', '.join(parts)}")
         print()
 
+    # Visual hash change detection
+    visual_hashes_path = Path("tests/visual_hashes.json")
+    latest_hashes_path = Path("tests/output/latest_hashes.json")
+    hash_changed = []
+    committed_h = {}
+    if latest_hashes_path.exists():
+        latest_h = json.loads(latest_hashes_path.read_text())
+        if visual_hashes_path.exists():
+            committed_h = json.loads(visual_hashes_path.read_text())
+        for name, hashes in sorted(latest_h.items()):
+            if name not in committed_h or committed_h[name] != hashes:
+                hash_changed.append(name)
+
+    if hash_changed:
+        print(f"Visual changes ({len(hash_changed)}):")
+        for name in hash_changed:
+            status = "new" if name not in committed_h else "changed"
+            print(f"  {short_name(name):<{name_w}}  {status}")
+        print()
+
     changed = len(set(e[0] for e in regressions + improvements)) + len(new_fixtures)
     reg_count = len(set(e[0] for e in regressions))
     imp_count = len(set(e[0] for e in improvements))
@@ -112,6 +132,8 @@ def main():
         summary += f", {imp_count} improved"
     if new_fixtures:
         summary += f", {len(new_fixtures)} new"
+    if hash_changed:
+        summary += f", {len(hash_changed)} visual changes"
     print(summary)
 
     sys.exit(1 if regressions else 0)

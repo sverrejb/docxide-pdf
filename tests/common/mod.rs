@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -252,4 +253,27 @@ pub fn delta_str(current: f64, previous: Option<f64>) -> String {
         }
         None => String::new(),
     }
+}
+
+/// SHA-256 hash of decoded RGBA pixel data for each generated page PNG.
+/// Hashing pixel data (not file bytes) ensures stability across mutool versions.
+pub fn compute_page_hashes(gen_pages: &[PathBuf]) -> Vec<String> {
+    gen_pages
+        .iter()
+        .filter_map(|p| {
+            let img = image::open(p).ok()?.to_rgba8();
+            let mut hasher = Sha256::new();
+            hasher.update(img.as_raw());
+            Some(format!("{:x}", hasher.finalize()))
+        })
+        .collect()
+}
+
+/// Write per-case page hashes to tests/output/latest_hashes.json.
+/// Simple overwrite (only visual_comparison writes hashes).
+pub fn write_latest_hashes(hashes: &BTreeMap<String, Vec<String>>) {
+    fs::create_dir_all("tests/output").ok();
+    let path = Path::new("tests/output/latest_hashes.json");
+    let json = serde_json::to_string_pretty(hashes).expect("Failed to serialize latest hashes");
+    fs::write(path, json + "\n").expect("Failed to write latest_hashes.json");
 }

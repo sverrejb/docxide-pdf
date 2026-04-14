@@ -43,8 +43,9 @@ if [[ "$VERBOSE" -eq 1 ]]; then
     exit $?
 fi
 
-# Clean slate for scores
+# Clean slate for scores and hashes
 rm -f tests/output/latest_scores.json
+rm -f tests/output/latest_hashes.json
 
 # Run tests, capture output
 TMPFILE=$(mktemp)
