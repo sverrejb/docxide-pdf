@@ -146,6 +146,20 @@ impl RunFormat {
         }
     }
 
+    /// Build a tab run that retains underline + color so a `<w:tab/>` with
+    /// `<w:u w:val="single"/>` renders an underlined span across the tab gap —
+    /// Word uses this to draw horizontal rules in signature lines etc.
+    fn tab_run(&self) -> Run {
+        Run {
+            is_tab: true,
+            font_size: self.font_size,
+            font_name: self.font_name.clone(),
+            underline: self.underline,
+            color: self.color,
+            ..Run::default()
+        }
+    }
+
     fn styled_run(&self) -> Run {
         Run {
             font_size: self.font_size,
@@ -742,10 +756,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                     || (in_field_result && !is_dynamic_field(&field_instr)) =>
                 {
                     flush_pending(&mut pending_text, &mut runs);
-                    runs.push(Run {
-                        is_tab: true,
-                        ..fmt.minimal_run()
-                    });
+                    runs.push(fmt.tab_run());
                 }
                 "br" if !in_field => match child.attribute((WML_NS, "type")) {
                     Some("page") => {

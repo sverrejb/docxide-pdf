@@ -4,6 +4,25 @@ This file tracks annotation findings that were investigated but **not fixed** �
 
 ---
 
+## Annotation #107 — Missing HRs on page (learning_cultures_dissertation) — 2026-04-17 (FIXED)
+
+**Problem**: Page 3 (committee signature page) of the dissertation was missing the three horizontal rules above "Sharon Rallis, Chair", "Kathryn A. McDermott, Member", and "Raymond Sharick, Member". The reference PDF has thin grey lines; our output had just blank space.
+
+**Analysis**: Each HR comes from a paragraph containing a single `<w:tab/>` run whose `rPr` sets `<w:u w:val="single"/>`, with a paragraph-level right tab stop at `<w:tab w:val="right" w:pos="8460"/>`. Word renders the underline decoration across the tab whitespace, producing a horizontal line from the left indent to the tab position.
+
+In our pipeline, tab runs were built via `fmt.minimal_run()` in `src/docx/runs.rs`, which only copies font identity — the `underline` flag was discarded. Even if the tab run had carried `underline`, `build_tabbed_line` in `src/pdf/layout.rs` threw away the tab run itself (keeping only a placeholder `TabStop`), so the segment-advance code had no way to know whether to draw the leader line. Consequently no underline chunk was ever emitted for the tab gap, and the decoration-collection pass saw nothing to render.
+
+**Fix**: Three small changes:
+1. Added a dedicated `RunFormat::tab_run()` in `src/docx/runs.rs` that mirrors `minimal_run()` but also retains `underline` and `color`, used at the `<w:tab/>` parse site. Keeps image/break/field-code runs untouched.
+2. Extended the `segments` tuple in `build_tabbed_line` with a fourth element `Option<&Run>` holding the tab run itself. When a segment advance is driven by a tab whose run has `underline: true`, emit a decoration-only `WordChunk::tab_underline` spanning from the pre-tab `current_x` to the resolved `seg_start`.
+3. Relaxed `has_text_chunks` to also include empty-text underlined chunks so the existing text-block pass runs, collects decorations, and the final rect-drawing loop renders the underline.
+
+**Result**: All three HRs render correctly at the signature lines. Jaccard -0.2pp (33.5→33.4), SSIM +0.2pp (46.0→46.3). The visual improvement on page 3 is much larger than the aggregate score change (143 pages total). No regressions on any other fixture.
+
+---
+
+---
+
 ## Annotation #93 — Phone number split across lines (czech_works_contract_proposal) — 2026-04-17 (investigated, not fixed)
 
 **Problem**: Line "p. Marek Pustelník, vrchní mistr střediska vrchní stavba, tel.: 59 740 2251, email: ..." wraps between "59 740" and "2251," in generated; reference fits "59 740 2251," on the same line. The annotator guessed this was "just a result of word difference."

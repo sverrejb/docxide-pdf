@@ -632,8 +632,8 @@
     "convert_ms": 18.4
   },
   "scraped/learning_culture..": {
-    "jaccard": 0.3353,
-    "ssim": 0.4604,
+    "jaccard": 0.3336,
+    "ssim": 0.4626,
     "text_boundary": 0.4058,
     "convert_ms": 1027.5
   },

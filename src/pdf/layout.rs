@@ -245,6 +245,43 @@ impl WordChunk {
             text_fill: None,
         }
     }
+
+    /// Decoration-only chunk: no glyphs, but the underline decoration pass
+    /// draws a line spanning the chunk's width. Used for underlined tab gaps.
+    fn tab_underline(
+        entry: &FontEntry,
+        font_size: f32,
+        color: Option<[u8; 3]>,
+        x_offset: f32,
+        width: f32,
+    ) -> Self {
+        Self {
+            pdf_font: entry.pdf_name.clone(),
+            text: String::new(),
+            font_size,
+            color,
+            highlight: None,
+            x_offset,
+            width,
+            underline: true,
+            strikethrough: false,
+            dstrike: false,
+            char_spacing: 0.0,
+            text_scale: 100.0,
+            y_offset: 0.0,
+            hyperlink_url: None,
+            inline_image_name: None,
+            inline_image_height: 0.0,
+            inline_image_stroke_color: None,
+            inline_image_stroke_width: 0.0,
+            inline_image_shadow: None,
+            inline_image_glow: None,
+            inline_image_effect_xobjs: None,
+            synthetic_bold: false,
+            text_outline: None,
+            text_fill: None,
+        }
+    }
 }
 
 pub(crate) struct LinkAnnotation {
@@ -788,11 +825,15 @@ pub(super) fn build_tabbed_line(
     effect_inline_names: &HashMap<usize, super::images::EffectXObjs>,
     default_tab_stop: f32,
 ) -> Vec<TextLine> {
-    // Split runs into segments at tab markers, tracking original run indices
-    let mut segments: Vec<(Vec<&Run>, Vec<usize>, Option<TabStop>)> = Vec::new();
+    // Split runs into segments at tab markers, tracking original run indices.
+    // The fourth tuple element is the `<w:tab/>` run itself (when present) so the
+    // segment can see its underline/color formatting and render a decoration line
+    // across the tab gap — the Word pattern for underlined signature/HR lines.
+    let mut segments: Vec<(Vec<&Run>, Vec<usize>, Option<TabStop>, Option<&Run>)> = Vec::new();
     let mut current_seg: Vec<&Run> = Vec::new();
     let mut current_indices: Vec<usize> = Vec::new();
     let mut pending_tab: Option<TabStop> = None;
+    let mut pending_tab_run: Option<&Run> = None;
 
     for (global_idx, run) in runs.iter().enumerate() {
         if run.vanish {
@@ -803,12 +844,14 @@ pub(super) fn build_tabbed_line(
                 std::mem::take(&mut current_seg),
                 std::mem::take(&mut current_indices),
                 pending_tab.take(),
+                pending_tab_run.take(),
             ));
             pending_tab = Some(TabStop {
                 position: 0.0, // placeholder, resolved below
                 alignment: TabAlignment::Left,
                 leader: None,
             });
+            pending_tab_run = Some(run);
         } else {
             current_seg.push(run);
             current_indices.push(global_idx);
@@ -818,6 +861,7 @@ pub(super) fn build_tabbed_line(
         std::mem::take(&mut current_seg),
         std::mem::take(&mut current_indices),
         pending_tab.take(),
+        pending_tab_run.take(),
     ));
 
     let mut result_lines: Vec<TextLine> = Vec::new();
@@ -826,7 +870,7 @@ pub(super) fn build_tabbed_line(
     let mut key_buf = String::new();
     let mut is_first_line = true;
 
-    for (seg_idx, (seg_runs, seg_indices, tab_before)) in segments.iter().enumerate() {
+    for (seg_idx, (seg_runs, seg_indices, tab_before, tab_run_before)) in segments.iter().enumerate() {
         let line_max = if is_first_line {
             max_width + first_line_hanging
         } else {
@@ -864,12 +908,36 @@ pub(super) fn build_tabbed_line(
             if tab_before.is_some() {
                 let leader = resolved_leader;
 
+                // Tab runs with `<w:u>` render the tab gap as an underlined line
+                // (Word pattern for signature/HR lines). Emit a decoration-only
+                // chunk so the underline decoration pass picks it up.
+                if let Some(tab_run) = tab_run_before
+                    && tab_run.underline
+                    && seg_start > current_x + 0.01
+                {
+                    let font_run: &Run = seg_runs
+                        .first()
+                        .copied()
+                        .or_else(|| runs.iter().find(|r| !r.font_name.is_empty()))
+                        .unwrap_or(tab_run);
+                    let key = font_key_buf(font_run, &mut key_buf);
+                    let entry = seen_fonts.get(key).expect("font registered");
+                    let eff_fs = effective_font_size(tab_run).max(font_run.font_size);
+                    all_chunks.push(WordChunk::tab_underline(
+                        entry,
+                        eff_fs,
+                        tab_run.color,
+                        current_x,
+                        seg_start - current_x,
+                    ));
+                }
+
                 if let Some(leader_char) = leader {
                     let font_run: Option<&Run> = seg_runs.first().copied().or_else(|| {
                         segments[..seg_idx]
                             .iter()
                             .rev()
-                            .flat_map(|(r, _, _)| r.last().copied())
+                            .flat_map(|(r, _, _, _)| r.last().copied())
                             .next()
                     }).or_else(|| {
                         // Tab-only paragraphs: fall back to any run (including tab runs)
@@ -1241,10 +1309,11 @@ pub(super) fn render_paragraph_lines(
             }
         }
 
-        let has_text_chunks = line
-            .chunks
-            .iter()
-            .any(|c| c.inline_image_name.is_none() && !c.text.is_empty());
+        // Decoration-only chunks (empty text with underline) also need the text-block
+        // pass so their underline geometry is collected into `decorations`.
+        let has_text_chunks = line.chunks.iter().any(|c| {
+            c.inline_image_name.is_none() && (!c.text.is_empty() || c.underline)
+        });
 
         if has_text_chunks {
             content.begin_text();
