@@ -743,3 +743,19 @@ Note: Only `wrapSquare` triggers push-below — `wrapTight`/`wrapThrough` use po
 **Fix**: Removed the +2.0 padding from the skip calculation in `src/pdf/charts.rs`. Labels are centered in their expanded slot, so text_width advance ≈ visible width; rounding up via ceil is sufficient to guarantee no overlap. Other chart cases verified unaffected (all had max_label_w < threshold, giving skip=1).
 
 **Result**: case53 Jaccard +0.1pp (56.0→56.1), SSIM +0.4pp (54.5→54.9). irish_school_enrollment text boundary +0.9pp. No regressions on any fixture.
+
+---
+
+## Annotation #8 — "신청자(申請者):" should come on page 2 (east_asia_conference_form) — 2026-04-17 (PARTIAL — SYSTEMIC)
+
+**Problem**: In generated page 1 everything fits on one page: table + "2024年 月 日" + "신청자(申請者):". In reference, "2024年 月 日" is on page 1 (right-aligned near bottom), "신청자(申請者):" is on page 2 at top.
+
+**Analysis**: Two independent issues were causing the visual difference:
+1. **`firstLine`/`firstLineChars` indent wrong for CJK text** — The "2024年 月 日" paragraph has `w:firstLine="6760"` twips (338pt) AND `w:firstLineChars="2600"` (26 chars). Per OOXML spec, `*Chars` attributes take priority; our code used `char_width = font_size / 2` (Latin half-em) giving ~169pt for 13pt CJK text (half of Word's actual 338pt). This made "2024年 月 日" render on the LEFT instead of the right side of the page.
+2. **Cumulative vertical drift from CJK font metrics** — Each row's content height is shorter in our render than in Word's (Korean fonts like Malgun Gothic, HY헤드라인M, 바탕 fall back to system substitutes with shorter line heights). This cascades over title + 6 table rows producing ~30-50pt of vertical space that Word uses, so our content fits entirely on page 1 while Word's overflows to page 2.
+
+**Fix applied (partial)**: In `src/docx/mod.rs::extract_indents`, inverted priority — prefer twip-based `w:firstLine`/`w:left`/`w:right`/`w:hanging` over `*Chars` variants when both are present. Word always writes both consistently, and the twip value is the pre-resolved measurement that's correct for both Latin and CJK. Only use `*Chars` values as fallback when twips are absent.
+
+**Result**: "2024年 月 日" now correctly right-aligned below the table (matching Word). Improvements across all CJK fixtures: east_asia Jaccard +0.2pp / SSIM +0.4pp, korean_japanese Jaccard +0.2pp / SSIM +0.2pp, taiwanese_education Jaccard +1.5pp / SSIM +2.6pp / text_boundary +5.4pp. No regressions.
+
+**Systemic remaining**: The page 2 break for "신청자(申請者):" remains unsolved — driven by cumulative CJK font metric differences, not a specific bug. Deferred per the "systemic vertical text spacing" exception. Marking annotation as unfixed (partial improvement only).

@@ -425,7 +425,7 @@
   "new/irish_school_enr..": {
     "jaccard": 0.3356,
     "ssim": 0.5297,
-    "text_boundary": 0.7054
+    "text_boundary": 0.6964
   },
   "new/lithuanian_publi..": {
     "jaccard": 0.3197,
@@ -458,9 +458,9 @@
     "text_boundary": 0.2571
   },
   "new/taiwanese_educat..": {
-    "jaccard": 0.1034,
-    "ssim": 0.1857,
-    "text_boundary": 0.1333
+    "jaccard": 0.1183,
+    "ssim": 0.2121,
+    "text_boundary": 0.1875
   },
   "new/who_prescribing_..": {
     "jaccard": 0.1225,
@@ -566,8 +566,8 @@
     "text_boundary": 1.0
   },
   "scraped/east_asia_confer..": {
-    "jaccard": 0.0909,
-    "ssim": 0.217,
+    "jaccard": 0.0926,
+    "ssim": 0.2207,
     "text_boundary": 0.619,
     "convert_ms": 22.0
   },
@@ -626,8 +626,8 @@
     "convert_ms": 4.5
   },
   "scraped/korean_japanese_..": {
-    "jaccard": 0.1032,
-    "ssim": 0.1898,
+    "jaccard": 0.1055,
+    "ssim": 0.1922,
     "text_boundary": 0.8571,
     "convert_ms": 18.4
   },
