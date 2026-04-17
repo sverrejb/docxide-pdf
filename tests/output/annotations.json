@@ -69,7 +69,7 @@
       "x_pt": 132.55759,
       "y_pt": 445.7109,
       "note": "I think the word version omits some of the labels or something? We are printing them overlaping, and that does not work.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 107,

@@ -925,7 +925,7 @@ pub(super) fn render_chart(
                 // Word is tolerant of slight overflow for wrapped labels
                 let threshold = if can_wrap { slot_w * 1.5 } else { slot_w };
                 if max_wrapped_line_w > threshold {
-                    ((max_wrapped_line_w + 2.0) / slot_w).ceil() as usize
+                    (max_wrapped_line_w / slot_w).ceil() as usize
                 } else {
                     1
                 }

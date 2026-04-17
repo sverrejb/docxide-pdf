@@ -4,6 +4,21 @@ This file tracks annotation findings that were investigated but **not fixed** �
 
 ---
 
+## Annotation #93 — Phone number split across lines (czech_works_contract_proposal) — 2026-04-17 (investigated, not fixed)
+
+**Problem**: Line "p. Marek Pustelník, vrchní mistr střediska vrchní stavba, tel.: 59 740 2251, email: ..." wraps between "59 740" and "2251," in generated; reference fits "59 740 2251," on the same line. The annotator guessed this was "just a result of word difference."
+
+**Analysis**: Measured character positions in both outputs.
+- Text area: 322.15pt (left margin 70.9 + paragraph ind.left 159.75 → right margin 42.55).
+- Reference line 1: "p. Marek Pustelník... 59 740 2251," fits from x=230.85 to x=552.974 = 322.12pt. All 11 inter-word spaces measure **2.0pt each** (narrower than natural 2.75pt).
+- Generated line 1: same text minus "2251," fills x=230.65 to x=552.80 (322.15pt). Individual character widths identical to reference (e.g., "5"/"9"/"0" each 5.5pt, "M" 9.78pt), but spaces measure **5.075pt each** (expanded).
+
+**Root cause**: Word compresses inter-word spaces in justified text when natural width slightly exceeds the text area. Natural width of the full text is ≈ 298.9 + 11×2.75 ≈ 330.4pt, which exceeds 322.15pt by 8.2pt. Word saves 8.25pt by narrowing each of 11 spaces from 2.75pt to 2.0pt. Our justification algorithm only expands (`extra_per_gap = max(0, (eff_w - content)/gaps)` in `src/pdf/layout.rs:1155`), never compresses. Because "2251," doesn't fit, we wrap it, leaving line 1 short, which then gets expanded.
+
+Implementing compressed justification is a significant algorithmic change affecting every justified paragraph in every fixture, with unknown regression risk. Deferred as systemic line-length/text-width behavior — matches the instructions' exception for systemic line-length issues.
+
+---
+
 ## Annotation #5 — Page break positioning (croatian_grant_guidelines)
 
 **Problem**: TOC starts too high on page 2 — content that should overflow from page 1 stays on page 1 because our page 1 consumes ~17pt less vertical space than Word's.
@@ -697,3 +712,15 @@ In our code, the self-wrapping section only handled narrow wrapping images (<50%
 Note: Only `wrapSquare` triggers push-below — `wrapTight`/`wrapThrough` use polygon contours that allow text to flow around the image at varying widths.
 
 **Result**: "Fonte: ALARCOM, (2019)." now correctly appears below the Figura 4 image. SSIM +0.1pp (29.3%→29.4%), Jaccard -0.3pp (16.9%→16.6%, pagination cascading). No regressions on any fixture.
+
+---
+
+## Annotation #94 — Chart category labels skip interval too aggressive (case53) — 2026-04-17 (FIXED)
+
+**Problem**: Chart 1 (50-category US state bar chart) rendered with label skip=3 (showing AL, AR, CT, GA, IL, KS, ME, MI, MO, NV, NM, ND, OR, SC, TX, VA, WI — 17 labels), while Word's reference used skip=2 (showing 25 labels: AL AZ CA CT FL HI IL IA KY ME MA MN MO NE NH NM NC OH OR RI SD TX VT WA WI).
+
+**Analysis**: In `pdf/charts.rs`, the auto-skip formula was `ceil((max_label_w + 2.0) / slot_w)`. For chart 1: slot_w=8.57pt, max_label_w=15.44pt (Cambria "NM"). Computed: ceil((15.44+2)/8.57) = ceil(2.034) = 3 — just over the skip=2 threshold because of the +2.0 safety buffer. Without the buffer: ceil(15.44/8.57) = ceil(1.80) = 2, matching Word. The +2pt padding was making the algorithm too conservative for tightly-packed 2-letter labels, padding pushed us over the slot_w × 2 boundary even when labels physically fit at skip=2.
+
+**Fix**: Removed the +2.0 padding from the skip calculation in `src/pdf/charts.rs`. Labels are centered in their expanded slot, so text_width advance ≈ visible width; rounding up via ceil is sufficient to guarantee no overlap. Other chart cases verified unaffected (all had max_label_w < threshold, giving skip=1).
+
+**Result**: case53 Jaccard +0.1pp (56.0→56.1), SSIM +0.4pp (54.5→54.9). irish_school_enrollment text boundary +0.9pp. No regressions on any fixture.
