@@ -1129,7 +1129,21 @@ pub(super) fn render_table(
         let available_h = pb.slot_top - eff_bottom;
         let page_content_h = eff_top - eff_bottom;
 
+        // Word splits a row across pages rather than pushing it whole when
+        // keeping it together would waste most of the current page. We only
+        // do this for oversized rows (taller than half a page) so short rows
+        // still migrate cleanly; the cell also must have multiple breakable
+        // items for the split to produce anything useful.
+        let any_cell_multi_item = layout.cells.iter().any(|c| c.items.len() > 1);
+        let can_meaningfully_split = !row.cant_split
+            && any_cell_multi_item
+            && !at_page_top
+            && row_h > page_content_h * 0.5
+            && available_h > page_content_h * 0.25;
+
         if row_h > available_h && (row_h > page_content_h || is_floating) && !row.cant_split {
+            split_row_across_pages(row, layout, pb, ri, &mut did_flush_while_floating, effective_margin_bottom);
+        } else if row_h > available_h && can_meaningfully_split {
             split_row_across_pages(row, layout, pb, ri, &mut did_flush_while_floating, effective_margin_bottom);
         } else if !at_page_top && row_h > available_h {
             if is_floating {

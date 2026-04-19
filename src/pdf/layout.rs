@@ -1531,11 +1531,19 @@ pub(super) fn render_paragraph_lines(
             content.end_text();
         }
 
-        // Draw inline images outside text block
+        // Draw inline images outside text block.
+        // Word bottom-aligns inline images of differing heights on the same line
+        // (anchored to the common baseline slot). Compute the tallest image so
+        // shorter ones sit on the same bottom rather than top-aligning.
+        let line_max_img_h = line
+            .chunks
+            .iter()
+            .map(|c| c.inline_image_height)
+            .fold(0.0f32, f32::max);
         for (chunk_idx, chunk) in line.chunks.iter().enumerate() {
             if let Some(ref img_name) = chunk.inline_image_name {
                 let x = chunk_abs_x(chunk_idx, chunk);
-                let img_bottom = y - (chunk.inline_image_height - chunk.font_size);
+                let img_bottom = y + chunk.font_size - line_max_img_h;
 
                 // Pre-image effects: shadow, glow (rendered before image so they appear behind)
                 let chunk_fx = chunk.inline_image_effect_xobjs.as_ref();

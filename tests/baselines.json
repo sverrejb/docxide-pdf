@@ -453,8 +453,8 @@
     "text_boundary": 0.3861
   },
   "new/slovak_eu_direct..": {
-    "jaccard": 0.1139,
-    "ssim": 0.1604,
+    "jaccard": 0.1217,
+    "ssim": 0.158,
     "text_boundary": 0.2571
   },
   "new/taiwanese_educat..": {
@@ -515,8 +515,8 @@
     "convert_ms": 59.6
   },
   "scraped/croatian_grant_g..": {
-    "jaccard": 0.0727,
-    "ssim": 0.1865,
+    "jaccard": 0.0759,
+    "ssim": 0.1939,
     "text_boundary": 0.0126,
     "convert_ms": 270.5
   },
