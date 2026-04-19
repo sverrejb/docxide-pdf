@@ -4,6 +4,12 @@ This file tracks annotation findings that were investigated but **not fixed** �
 
 ---
 
+## SELECTED: Annotation #48 — Green box breakpoint (croatian_grant_guidelines) — 2026-04-17 (IN PROGRESS)
+
+**Problem**: Breakpoint of the green box (table?) should be in the fourth paragraph. Not where we break it. There is still a lot of space below the box. Page 3 generated.
+
+---
+
 ## Annotation #107 — Missing HRs on page (learning_cultures_dissertation) — 2026-04-17 (FIXED)
 
 **Problem**: Page 3 (committee signature page) of the dissertation was missing the three horizontal rules above "Sharon Rallis, Chair", "Kathryn A. McDermott, Member", and "Raymond Sharick, Member". The reference PDF has thin grey lines; our output had just blank space.

@@ -62,26 +62,6 @@
       "fixed": false
     },
     {
-      "id": 94,
-      "case": "case53",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 132.55759,
-      "y_pt": 445.7109,
-      "note": "I think the word version omits some of the labels or something? We are printing them overlaping, and that does not work.",
-      "fixed": true
-    },
-    {
-      "id": 107,
-      "case": "scraped/learning_cultures_dissertation",
-      "page": 2,
-      "source": "Generated",
-      "x_pt": 154.92354,
-      "y_pt": 343.73575,
-      "note": "We are missing HR's on this page",
-      "fixed": true
-    },
-    {
       "id": 108,
       "case": "scraped/croatian_grant_guidelines",
       "page": 0,
