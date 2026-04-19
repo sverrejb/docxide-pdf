@@ -151,25 +151,19 @@ fn render_cell_inline_image(
         );
     }
 
-    content.save_state();
-    content.transform([
-        para.image_width,
-        0.0,
-        0.0,
-        para.image_height,
-        img_x,
-        img_y,
-    ]);
-    content.x_object(Name(img_name.as_bytes()));
-    content.restore_state();
+    super::smartart::render_image_with_clip(
+        content, img_name, img_x, img_y,
+        para.image_width, para.image_height,
+        para.image_clip.as_ref(),
+    );
 
     if let Some(sc) = para.image_stroke_color {
-        content.save_state();
-        stroke_rgb(content, sc);
-        content.set_line_width(para.image_stroke_width);
-        content.rect(img_x, img_y, para.image_width, para.image_height);
-        content.stroke();
-        content.restore_state();
+        super::smartart::stroke_image_border(
+            content, img_x, img_y,
+            para.image_width, para.image_height,
+            sc, para.image_stroke_width,
+            para.image_clip.as_ref(),
+        );
     }
 
     para.image_height

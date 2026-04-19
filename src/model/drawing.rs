@@ -34,6 +34,8 @@ pub struct EmbeddedImage {
     pub glow: Option<ImageGlow>,
     pub inner_shadow: Option<InnerShadow>,
     pub reflection: Option<ImageReflection>,
+    /// Non-rectangular clip shape (e.g. "ellipse"). None means standard rect (no clipping).
+    pub clip_geometry: Option<ShapeGeometry>,
 }
 
 #[derive(Clone, Debug)]

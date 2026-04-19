@@ -277,6 +277,7 @@ pub(super) fn read_image_from_zip_extra<R: Read + Seek>(
         glow: None,
         inner_shadow: None,
         reflection: None,
+        clip_geometry: None,
     })
 }
 
@@ -486,6 +487,9 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                     img.glow = effects.glow;
                     img.inner_shadow = effects.inner_shadow;
                     img.reflection = effects.reflection;
+                    img.clip_geometry = sp_pr
+                        .map(super::textbox::parse_shape_geometry)
+                        .filter(|g| g.preset.as_deref() != Some("rect") || g.custom.is_some());
                     let (h_position, h_relative, v_position, v_relative) =
                         parse_anchor_position(container);
                     let (wrap_type, wrap_text, wrap_polygon) = parse_wrap_type(container);
@@ -565,6 +569,9 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                 img.glow = effects.glow;
                 img.inner_shadow = effects.inner_shadow;
                 img.reflection = effects.reflection;
+                img.clip_geometry = sp_pr
+                    .map(super::textbox::parse_shape_geometry)
+                    .filter(|g| g.preset.as_deref() != Some("rect") || g.custom.is_some());
                 return Some(RunDrawingResult::Inline(img));
             }
         }
@@ -646,6 +653,9 @@ pub(super) fn compute_drawing_info<R: Read + Seek>(
                     img.glow = effects.glow;
                     img.inner_shadow = effects.inner_shadow;
                     img.reflection = effects.reflection;
+                    img.clip_geometry = sp_pr
+                        .map(super::textbox::parse_shape_geometry)
+                        .filter(|g| g.preset.as_deref() != Some("rect") || g.custom.is_some());
                     }
                 }
             }

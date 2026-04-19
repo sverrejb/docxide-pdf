@@ -74,6 +74,48 @@ fn emit_evaluated_paths(content: &mut Content, x: f32, y: f32, shape: &geometry:
     }
 }
 
+pub(super) fn render_image_with_clip(
+    content: &mut Content,
+    pdf_name: &str,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    clip: Option<&ShapeGeometry>,
+) {
+    content.save_state();
+    if let Some(geom) = clip {
+        draw_shape_path(content, x, y, w, h, geom);
+        content.clip_nonzero();
+        content.end_path();
+    }
+    content.transform([w, 0.0, 0.0, h, x, y]);
+    content.x_object(pdf_writer::Name(pdf_name.as_bytes()));
+    content.restore_state();
+}
+
+pub(super) fn stroke_image_border(
+    content: &mut Content,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    stroke_color: [u8; 3],
+    stroke_width: f32,
+    clip: Option<&ShapeGeometry>,
+) {
+    content.save_state();
+    color::stroke_rgb(content, stroke_color);
+    content.set_line_width(stroke_width);
+    if let Some(geom) = clip {
+        draw_shape_path(content, x, y, w, h, geom);
+    } else {
+        content.rect(x, y, w, h);
+    }
+    content.stroke();
+    content.restore_state();
+}
+
 pub(super) fn render_smartart(
     content: &mut Content,
     diagram: &SmartArtDiagram,

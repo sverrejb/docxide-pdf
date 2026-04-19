@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use pdf_writer::{Content, Name};
+use pdf_writer::Content;
 
 use crate::model::{
     Alignment, Block, Document, FieldCode, HeaderFooter, Paragraph, Run, SectionProperties,
@@ -217,20 +217,6 @@ fn resolve_tb_y_top(
         }
         VRelativeFrom::Paragraph => slot_top - v_offset_pt,
     }
-}
-
-fn emit_image_xobject(
-    content: &mut Content,
-    pdf_name: &str,
-    x: f32,
-    y_bottom: f32,
-    w: f32,
-    h: f32,
-) {
-    content.save_state();
-    content.transform([w, 0.0, 0.0, h, x, y_bottom]);
-    content.x_object(Name(pdf_name.as_bytes()));
-    content.restore_state();
 }
 
 fn build_lines(
@@ -485,13 +471,14 @@ pub(super) fn render_header_footer(
                             text_width,
                         );
                         let fi_y_top = super::resolve_fi_y_top(fi, sp, slot_top);
-                        emit_image_xobject(
+                        super::smartart::render_image_with_clip(
                             content,
                             pdf_name,
                             fi_x,
                             fi_y_top - img.display_height,
                             img.display_width,
                             img.display_height,
+                            img.clip_geometry.as_ref(),
                         );
                         // Register float zone for wrapping images
                         if matches!(
@@ -537,21 +524,22 @@ pub(super) fn render_header_footer(
                                 hf_fx.and_then(|fx| fx.glow.as_deref()),
                             );
                         }
-                        emit_image_xobject(
+                        super::smartart::render_image_with_clip(
                             content,
                             pdf_name,
                             x,
                             y_bottom,
                             img.display_width,
                             img.display_height,
+                            img.clip_geometry.as_ref(),
                         );
                         if let Some(sc) = img.stroke_color {
-                            content.save_state();
-                            super::color::stroke_rgb(content, sc);
-                            content.set_line_width(img.stroke_width);
-                            content.rect(x, y_bottom, img.display_width, img.display_height);
-                            content.stroke();
-                            content.restore_state();
+                            super::smartart::stroke_image_border(
+                                content, x, y_bottom,
+                                img.display_width, img.display_height,
+                                sc, img.stroke_width,
+                                img.clip_geometry.as_ref(),
+                            );
                         }
                     }
                     cursor_y -= line_h;

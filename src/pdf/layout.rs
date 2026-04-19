@@ -7,7 +7,7 @@ use pdf_writer::{Content, Name, Rect, Str};
 use crate::fonts::{FontEntry, encode_as_gids, font_key, font_key_buf, to_winansi_bytes};
 use crate::model::{Alignment, Run, TabAlignment, TabStop, TextFill, TextOutline, VertAlign};
 
-use super::color::{fill_color_or_black, stroke_color_or_black, stroke_rgb};
+use super::color::{fill_color_or_black, stroke_color_or_black};
 
 /// Resolve aligned segment start position given a tab stop, segment runs, and minimum x.
 fn resolve_tab_aligned_start(
@@ -126,6 +126,7 @@ pub(super) struct WordChunk {
     pub(super) inline_image_shadow: Option<crate::model::ImageShadow>,
     pub(super) inline_image_glow: Option<crate::model::ImageGlow>,
     pub(super) inline_image_effect_xobjs: Option<super::images::EffectXObjs>,
+    pub(super) inline_image_clip: Option<crate::model::ShapeGeometry>,
     pub(super) synthetic_bold: bool,
     pub(super) text_outline: Option<TextOutline>,
     pub(super) text_fill: Option<TextFill>,
@@ -164,6 +165,7 @@ impl WordChunk {
             inline_image_shadow: None,
             inline_image_glow: None,
             inline_image_effect_xobjs: None,
+            inline_image_clip: None,
             synthetic_bold: entry.synthetic_bold,
             text_outline: run.text_outline.clone(),
             text_fill: run.text_fill.clone(),
@@ -181,6 +183,7 @@ impl WordChunk {
         shadow: Option<crate::model::ImageShadow>,
         glow: Option<crate::model::ImageGlow>,
         effect_xobjs: Option<super::images::EffectXObjs>,
+        clip: Option<crate::model::ShapeGeometry>,
     ) -> Self {
         Self {
             pdf_font: String::new(),
@@ -204,6 +207,7 @@ impl WordChunk {
             inline_image_shadow: shadow,
             inline_image_glow: glow,
             inline_image_effect_xobjs: effect_xobjs,
+            inline_image_clip: clip,
             synthetic_bold: false,
             text_outline: None,
             text_fill: None,
@@ -240,6 +244,7 @@ impl WordChunk {
             inline_image_shadow: None,
             inline_image_glow: None,
             inline_image_effect_xobjs: None,
+            inline_image_clip: None,
             synthetic_bold: false,
             text_outline: None,
             text_fill: None,
@@ -277,6 +282,7 @@ impl WordChunk {
             inline_image_shadow: None,
             inline_image_glow: None,
             inline_image_effect_xobjs: None,
+            inline_image_clip: None,
             synthetic_bold: false,
             text_outline: None,
             text_fill: None,
@@ -526,6 +532,7 @@ pub(super) fn build_paragraph_lines(
                                     pdf_name, run.font_size, proposed_x2, img_w, img.display_height,
                                     img.stroke_color, img.stroke_width, img.shadow.clone(),
                                     img.glow.clone(), effect_inline_names.get(&run_idx).cloned(),
+                                    img.clip_geometry.clone(),
                                 ));
                                 current_x = img_w;
                                 continue;
@@ -543,6 +550,7 @@ pub(super) fn build_paragraph_lines(
                     pdf_name, run.font_size, current_x, img_w, img.display_height,
                     img.stroke_color, img.stroke_width, img.shadow.clone(),
                     img.glow.clone(), effect_inline_names.get(&run_idx).cloned(),
+                    img.clip_geometry.clone(),
                 ));
                 current_x += img_w;
             }
@@ -999,6 +1007,7 @@ pub(super) fn build_tabbed_line(
                         img.shadow.clone(),
                         img.glow.clone(),
                         effect_inline_names.get(&seg_indices[local_idx]).cloned(),
+                        img.clip_geometry.clone(),
                     ));
                     current_x += img.display_width;
                 }
@@ -1562,25 +1571,19 @@ pub(super) fn render_paragraph_lines(
                     );
                 }
 
-                content.save_state();
-                content.transform([
-                    chunk.width,
-                    0.0,
-                    0.0,
-                    chunk.inline_image_height,
-                    x,
-                    img_bottom,
-                ]);
-                content.x_object(Name(img_name.as_bytes()));
-                content.restore_state();
+                super::smartart::render_image_with_clip(
+                    content, img_name, x, img_bottom,
+                    chunk.width, chunk.inline_image_height,
+                    chunk.inline_image_clip.as_ref(),
+                );
 
                 if let Some(sc) = chunk.inline_image_stroke_color {
-                    content.save_state();
-                    stroke_rgb(content, sc);
-                    content.set_line_width(chunk.inline_image_stroke_width);
-                    content.rect(x, img_bottom, chunk.width, chunk.inline_image_height);
-                    content.stroke();
-                    content.restore_state();
+                    super::smartart::stroke_image_border(
+                        content, x, img_bottom,
+                        chunk.width, chunk.inline_image_height,
+                        sc, chunk.inline_image_stroke_width,
+                        chunk.inline_image_clip.as_ref(),
+                    );
                 }
             }
         }

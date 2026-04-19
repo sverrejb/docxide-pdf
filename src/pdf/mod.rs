@@ -2034,17 +2034,19 @@ fn render_paragraph_block(
                     img_fx.and_then(|fx| fx.glow.as_deref()),
                 );
             }
-            state.pb.content.save_state();
-            state.pb.content.transform([
-                img.display_width,
-                0.0,
-                0.0,
-                img.display_height,
-                x,
-                y_bottom,
-            ]);
-            state.pb.content.x_object(Name(pdf_name.as_bytes()));
-            state.pb.content.restore_state();
+            smartart::render_image_with_clip(
+                &mut state.pb.content, pdf_name, x, y_bottom,
+                img.display_width, img.display_height,
+                img.clip_geometry.as_ref(),
+            );
+            if let Some(sc) = img.stroke_color {
+                smartart::stroke_image_border(
+                    &mut state.pb.content, x, y_bottom,
+                    img.display_width, img.display_height,
+                    sc, img.stroke_width,
+                    img.clip_geometry.as_ref(),
+                );
+            }
             // Post-image effects: inner shadow, reflection (drawn on top / below)
             if let Some(ref inner) = img.inner_shadow {
                 color::draw_inner_shadow(
