@@ -151,21 +151,39 @@ pub(super) fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>
         // below the full natural paragraph width. Scale down by 0.9 to
         // approximate Word's sizing, ensuring text wraps where Word wraps it.
         let min_cell = cm.left + cm.right;
-        let mut widths: Vec<f32> = (0..ncols)
-            .map(|i| {
-                let mw = min_widths[i].max(min_cell);
-                let nw = natural_widths[i].max(mw);
-                let fitted = (nw * 0.9).max(mw);
-                fitted.min(table.col_widths.get(i).copied().unwrap_or(f32::MAX))
-            })
-            .collect();
-        if let Some(avail) = available_width {
-            let total: f32 = widths.iter().sum();
-            if total > avail && avail > 0.0 {
-                let scale = avail / total;
-                for w in &mut widths {
-                    *w *= scale;
-                }
+        let avail = available_width.unwrap_or(0.0);
+        let preferred_total: f32 = table.col_widths.iter().sum();
+        // When the nested table has an explicit tblInd and the gridCol
+        // preferred widths fit inside the parent cell, Word uses those
+        // preferred widths rather than shrinking to content. An explicit
+        // tblInd signals the author deliberately sized and positioned the
+        // nested table, so its column hints should be honored.
+        let mut widths: Vec<f32> = if table.table_indent_explicit
+            && preferred_total > 0.0
+            && preferred_total <= avail
+        {
+            (0..ncols)
+                .map(|i| {
+                    let pref = table.col_widths.get(i).copied().unwrap_or(0.0);
+                    let mw = min_widths[i].max(min_cell);
+                    pref.max(mw)
+                })
+                .collect()
+        } else {
+            (0..ncols)
+                .map(|i| {
+                    let mw = min_widths[i].max(min_cell);
+                    let nw = natural_widths[i].max(mw);
+                    let fitted = (nw * 0.9).max(mw);
+                    fitted.min(table.col_widths.get(i).copied().unwrap_or(f32::MAX))
+                })
+                .collect()
+        };
+        let total: f32 = widths.iter().sum();
+        if total > avail && avail > 0.0 {
+            let scale = avail / total;
+            for w in &mut widths {
+                *w *= scale;
             }
         }
         return widths;
