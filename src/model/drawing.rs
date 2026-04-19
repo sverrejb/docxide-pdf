@@ -75,6 +75,8 @@ pub struct ImageReflection {
     pub distance: f32,    // points (gap between image and reflection)
     #[allow(dead_code)]
     pub blur_radius: f32, // points
+    /// Fraction of image height visible in the reflection (0.0–1.0). 1.0 = full image.
+    pub end_pos: f32,
 }
 
 #[derive(Clone)]

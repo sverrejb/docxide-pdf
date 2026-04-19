@@ -410,13 +410,26 @@ fn embed_reflection(
     alloc: &mut impl FnMut() -> Ref,
 ) -> Option<String> {
     // Generate vertical gradient mask: 1 pixel wide, image pixel height tall.
-    // Gradient goes from start_alpha at top (= bottom of original image) to end_alpha at bottom.
+    // The rendering flips the image vertically, so image row 0 (top of original)
+    // becomes the bottom of the reflection (far from image), and the last row
+    // (bottom of original) becomes the top of the reflection (near image).
+    // Only the bottom `end_pos` fraction of the image rows are visible; the rest
+    // are transparent. Within the visible band, alpha goes from endA at the cutoff
+    // edge to stA at the last row (which appears nearest the original image).
     let grad_h = img.pixel_height.max(1);
+    let visible_start = ((1.0 - refl.end_pos) * grad_h as f32).round() as u32;
+    let visible_span = (grad_h - visible_start).max(1);
     let mut grad_data = Vec::with_capacity(grad_h as usize);
     for y in 0..grad_h {
-        let t = y as f32 / (grad_h - 1).max(1) as f32;
-        let a = refl.start_alpha * (1.0 - t) + refl.end_alpha * t;
-        grad_data.push((a * 255.0).round().min(255.0) as u8);
+        if y < visible_start {
+            grad_data.push(0);
+        } else {
+            let t = (y - visible_start) as f32 / (visible_span - 1).max(1) as f32;
+            // t=0 at cutoff edge (far from image after flip) → endA
+            // t=1 at last row (near image after flip) → stA
+            let a = refl.end_alpha * (1.0 - t) + refl.start_alpha * t;
+            grad_data.push((a * 255.0).round().min(255.0) as u8);
+        }
     }
     let compressed_grad = miniz_oxide::deflate::compress_to_vec_zlib(&grad_data, 6);
     let grad_ref = alloc();

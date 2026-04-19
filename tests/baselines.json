@@ -289,8 +289,8 @@
     "text_boundary": 1.0
   },
   "cases/case57": {
-    "jaccard": 0.7756,
-    "ssim": 0.7992,
+    "jaccard": 0.842,
+    "ssim": 0.8072,
     "text_boundary": 1.0
   },
   "cases/case59": {

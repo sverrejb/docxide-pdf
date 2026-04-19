@@ -224,7 +224,9 @@ fn parse_pic_effects(sp_pr: Option<roxmltree::Node>) -> PicEffects {
                     .and_then(|v| v.parse::<f32>().ok()).map(emu_to_pts).unwrap_or(0.0);
                 let blur_radius = child.attribute("blurRad")
                     .and_then(|v| v.parse::<f32>().ok()).map(emu_to_pts).unwrap_or(0.0);
-                fx.reflection = Some(ImageReflection { start_alpha, end_alpha, distance, blur_radius });
+                let end_pos = child.attribute("endPos")
+                    .and_then(|v| v.parse::<f32>().ok()).map(|v| v / 100000.0).unwrap_or(1.0);
+                fx.reflection = Some(ImageReflection { start_alpha, end_alpha, distance, blur_radius, end_pos });
             }
             _ => {}
         }

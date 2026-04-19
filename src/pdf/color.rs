@@ -315,8 +315,8 @@ pub(super) fn draw_reflection(
 
     if let Some(name) = reflection_xobj_name {
         content.save_state();
-        // Position: below the image by `distance`, flipped vertically (negative height)
         let refl_y = y_bottom - reflection.distance;
+        // Render full flipped image — the SMask gradient handles the fade-out
         content.transform([width, 0.0, 0.0, -height, x, refl_y]);
         content.x_object(Name(name.as_bytes()));
         content.restore_state();
