@@ -5,6 +5,7 @@ Usage:
     python3 run-agents.py case42 case43 case44       # specific cases
     python3 run-agents.py --worst 3                  # auto-pick 3 worst from new/
     python3 run-agents.py --worst 6 --workers 3      # 6 cases across 3 workers
+    python3 run-agents.py --annotations 4            # auto-pick 4 random annotated cases
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import subprocess
 import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -90,6 +92,38 @@ def pick_worst_cases(n: int) -> list[str]:
 
     scored.sort()
     return [name for _, name in scored[:n]]
+
+
+def pick_annotated_cases(n: int) -> list[str]:
+    """Select N random unique cases that have unfixed annotations."""
+    ann_path = REPO_ROOT / "tests" / "output" / "annotations.json"
+    if not ann_path.exists():
+        print("Error: tests/output/annotations.json does not exist", file=sys.stderr)
+        sys.exit(1)
+
+    with open(ann_path) as f:
+        data = json.load(f)
+
+    annotations = data.get("annotations", data) if isinstance(data, dict) else data
+    unfixed = [a for a in annotations if not a.get("fixed", False)]
+    if not unfixed:
+        print("Error: no unfixed annotations found", file=sys.stderr)
+        sys.exit(1)
+
+    # Extract unique case names (strip group prefix — resolve_case_path will re-resolve)
+    cases = set()
+    for a in unfixed:
+        case = a.get("case", "")
+        # Annotation case field may be "group/name" or bare "name"
+        name = case.split("/")[-1] if "/" in case else case
+        if name:
+            cases.add(name)
+
+    cases = sorted(cases)
+    if n >= len(cases):
+        return cases
+
+    return sorted(random.sample(cases, n))
 
 
 def resolve_case_path(name: str) -> str:
@@ -624,6 +658,7 @@ def main():
     parser = argparse.ArgumentParser(description="Launch parallel Claude agents to improve test cases")
     parser.add_argument("cases", nargs="*", help="Case names to work on")
     parser.add_argument("--worst", type=int, default=0, help="Auto-select N worst-scoring cases from new/")
+    parser.add_argument("--annotations", type=int, default=0, help="Auto-select N random cases with unfixed annotations")
     parser.add_argument("--model", default="opus", help="Claude model (default: opus)")
     parser.add_argument("--max-turns", type=int, default=None, help="Max conversation turns per agent")
     parser.add_argument("--permission", default="auto", help="Permission mode (default: auto)")
@@ -634,9 +669,13 @@ def main():
         worst = pick_worst_cases(args.worst)
         cases.extend(worst)
         print(f"Auto-selected worst {args.worst} cases: {' '.join(worst)}")
+    if args.annotations > 0:
+        annotated = pick_annotated_cases(args.annotations)
+        cases.extend(annotated)
+        print(f"Auto-selected {len(annotated)} annotated cases: {' '.join(annotated)}")
 
     if not cases:
-        parser.error("No cases specified. Use --worst N or pass case names.")
+        parser.error("No cases specified. Use --worst N, --annotations N, or pass case names.")
 
     # Resolve to group/case paths
     case_paths = {name: resolve_case_path(name) for name in cases}
