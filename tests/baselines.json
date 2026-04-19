@@ -453,8 +453,8 @@
     "text_boundary": 0.3861
   },
   "new/slovak_eu_direct..": {
-    "jaccard": 0.1217,
-    "ssim": 0.158,
+    "jaccard": 0.1218,
+    "ssim": 0.1578,
     "text_boundary": 0.2571
   },
   "new/taiwanese_educat..": {
