@@ -10,7 +10,7 @@ use super::images::{RunDrawingResult, parse_run_drawing};
 use super::is_east_asian_char;
 use super::styles::{
     CharacterStyle, ParagraphStyle, StyleDefaults, ThemeFonts,
-    resolve_east_asia_font_from_node, resolve_font_from_node,
+    resolve_east_asia_font_from_node, resolve_font_from_node, resolve_font_from_node_opt,
 };
 use super::textbox::parse_textbox_from_vml;
 use super::wordart::{parse_text_fill, parse_text_glow, parse_text_outline, parse_text_shadow};
@@ -262,8 +262,8 @@ impl ParagraphRunDefaults {
             .and_then(|v| v.parse::<f32>().ok())
             .map(|hp| hp / 2.0);
         let char_style_font_size = char_style.and_then(|cs| cs.font_size);
-        let explicit_font_name = rfonts_node
-            .map(|rfonts| resolve_font_from_node(rfonts, theme, &self.font_name));
+        let explicit_font_name =
+            rfonts_node.and_then(|rfonts| resolve_font_from_node_opt(rfonts, theme));
         let char_style_font_name = char_style.and_then(|cs| cs.font_name.clone());
         // True only when font_size/name came from doc defaults — not from inline rPr,
         // character style, OR paragraph style.  Table style overrides apply only here.

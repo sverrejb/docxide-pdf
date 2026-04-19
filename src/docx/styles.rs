@@ -378,18 +378,27 @@ pub(super) fn resolve_font_from_node(
     theme: &ThemeFonts,
     default_font: &str,
 ) -> String {
+    resolve_font_from_node_opt(rfonts, theme).unwrap_or_else(|| default_font.to_string())
+}
+
+/// Returns Some only when rFonts actually specifies an ascii/hAnsi font or theme.
+/// When only cstheme/eastAsia variants are set (e.g. Heading1 with `<w:rFonts w:cstheme="minorHAnsi"/>`),
+/// returns None so that parent-style font inheritance applies instead of falling back to docDefaults.
+pub(super) fn resolve_font_from_node_opt(
+    rfonts: roxmltree::Node,
+    theme: &ThemeFonts,
+) -> Option<String> {
     let ascii = rfonts.attribute((WML_NS, "ascii"));
     let ascii_theme = rfonts.attribute((WML_NS, "asciiTheme"));
     if ascii.is_some() || ascii_theme.is_some() {
-        return resolve_font(ascii, ascii_theme, theme, default_font);
+        return Some(resolve_font(ascii, ascii_theme, theme, ""));
     }
-    // Fall back to hAnsi/hAnsiTheme when ascii variants are absent
-    resolve_font(
-        rfonts.attribute((WML_NS, "hAnsi")),
-        rfonts.attribute((WML_NS, "hAnsiTheme")),
-        theme,
-        default_font,
-    )
+    let hansi = rfonts.attribute((WML_NS, "hAnsi"));
+    let hansi_theme = rfonts.attribute((WML_NS, "hAnsiTheme"));
+    if hansi.is_some() || hansi_theme.is_some() {
+        return Some(resolve_font(hansi, hansi_theme, theme, ""));
+    }
+    None
 }
 
 pub(super) fn resolve_east_asia_font(
@@ -584,8 +593,8 @@ pub(super) fn parse_styles<R: Read + Seek>(
 
                 let font_size = rpr.and_then(parse_font_size);
                 let rfonts_node = rpr.and_then(|n| wml(n, "rFonts"));
-                let font_name = rfonts_node
-                    .map(|rfonts| resolve_font_from_node(rfonts, theme, &defaults.font_name));
+                let font_name =
+                    rfonts_node.and_then(|rfonts| resolve_font_from_node_opt(rfonts, theme));
                 let east_asia_font =
                     rfonts_node.and_then(|rfonts| resolve_east_asia_font_from_node(rfonts, theme));
 
@@ -711,8 +720,8 @@ pub(super) fn parse_styles<R: Read + Seek>(
                 };
                 let font_size = parse_font_size(rpr);
                 let rfonts_node = wml(rpr, "rFonts");
-                let font_name = rfonts_node
-                    .map(|rfonts| resolve_font_from_node(rfonts, theme, &defaults.font_name));
+                let font_name =
+                    rfonts_node.and_then(|rfonts| resolve_font_from_node_opt(rfonts, theme));
                 let east_asia_font =
                     rfonts_node.and_then(|rfonts| resolve_east_asia_font_from_node(rfonts, theme));
                 let bold = wml_bool(rpr, "b");
