@@ -830,6 +830,7 @@ fn render_partial_row(
     ends: &[usize],
     is_first: bool,
     is_last: bool,
+    fill_to_bottom_y: Option<f32>,
 ) {
     let mut max_h: f32 = cm.top + cm.bottom;
     for (ci, cell_layout) in layout.cells.iter().enumerate() {
@@ -849,8 +850,14 @@ fn render_partial_row(
         max_h = max_h.max(h);
     }
 
-    let row_h = max_h;
     let row_top = pb.slot_top;
+    // For non-final chunks, extend the cell shading/borders to the page's
+    // content-bottom so the table visually spans the full page height — Word
+    // does this when splitting rows across pages.
+    let fill_h = fill_to_bottom_y
+        .map(|y_bot| (row_top - y_bot).max(max_h))
+        .unwrap_or(max_h);
+    let row_h = fill_h;
     let row_bottom = row_top - row_h;
 
     let mut grid_col = 0usize;
@@ -1080,9 +1087,11 @@ pub(super) fn render_table(
                 ends.push(end);
             }
 
+            let fill_to_bottom_y = if all_done { None } else { Some(*emb) };
             render_partial_row(
                 row, layout, &col_widths, cm, table_left,
                 pb, ctx, &starts, &ends, is_first_chunk, all_done,
+                fill_to_bottom_y,
             );
 
             if all_done {
