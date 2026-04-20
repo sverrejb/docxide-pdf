@@ -3,8 +3,11 @@
 ## ~~1. Table conditional formatting (`w:tblLook` + `w:tblStylePr`)~~ — ALREADY DONE
 Already fully implemented: all 13 condition types parsed, `w:tblLook` (named attrs + hex bitmask), priority-ordered application. Verified working on `stem_partnerships_guide` — purple header rows, banding, styled text all render correctly. Low scores on those fixtures are from text drift, not missing table styling.
 
-## 2. Floating tables (`w:tblpPr`) — 6 fixtures, 3 failing
-Floating tables appear in 6 fixtures, 3 of which are among the lowest-scoring in the corpus (croatian_grant_guidelines 7.9%, east_asia_conference_form 8.7%, korean_japanese_conference_form 10.1%). Currently we render floating tables as regular block-flow tables, completely ignoring their absolute position. Implementing `w:tblpPr` positioning (tblpX/tblpY offsets relative to margin/page/column) would likely produce dramatic score jumps on these cases.
+## ~~2. Floating tables (`w:tblpPr`)~~ — ALREADY IMPLEMENTED
+Already fully implemented: `w:tblpPr` parsing (all attributes), position computation (page/margin/column/text anchors, tblpX/tblpY/tblpXSpec offsets), float zone registration, and text wrapping (narrow paragraphs beside or push below). Verified working on case32/40/45/46 handcrafted test cases. The 3 lowest-scoring fixtures remain low due to unrelated issues:
+- **croatian_grant_guidelines (7.9%)**: Text layout height inflation — our single-row floating table computes at 558pt vs Word's ~350pt, causing it to span pages and cascade 68 vs 65 page drift. Root cause is general text layout accuracy (line breaking, font metrics), not floating table code.
+- **east_asia_conference_form (8.7%)**: CJK font substitution — Korean/Japanese fonts (HY헤드라인M, 맑은 고딕, etc.) unavailable on test system.
+- **korean_japanese_conference_form (10.1%)**: Same CJK font issue as east_asia.
 
 ## 3. Run-level shading (`w:rPr/w:shd`) — not yet audited but referenced in roadmap
 Run-level background shading (distinct from `w:highlight`) supports arbitrary hex colors and patterns. We handle paragraph and cell shading but skip run-level. Several scraped fixtures with forms and structured documents use colored text backgrounds for emphasis that we currently miss entirely.

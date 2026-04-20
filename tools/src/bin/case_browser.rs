@@ -332,8 +332,8 @@ struct App {
     current_page: usize,
     view_mode: ViewMode,
     texture_cache: HashMap<PathBuf, Option<egui::TextureHandle>>,
-    overlay_cache: HashMap<(usize, usize), Option<egui::TextureHandle>>,
-    delta_cache: HashMap<(usize, usize), Option<egui::TextureHandle>>,
+    overlay_cache: HashMap<(usize, usize), Option<OverlayResult>>,
+    delta_cache: HashMap<(usize, usize), Option<OverlayResult>>,
     scroll_to_current: bool,
     show_grid: bool,
     grid_spacing: f32,
@@ -1176,16 +1176,26 @@ fn show_side_by_side(
     }
 }
 
+struct OverlayResult {
+    texture: egui::TextureHandle,
+    change_rects: Vec<[u32; 4]>,
+}
+
 fn build_overlay_texture(
     ctx: &egui::Context,
     ref_path: &Path,
     gen_path: &Path,
     key: (usize, usize),
-) -> Option<egui::TextureHandle> {
+) -> Option<OverlayResult> {
     let ref_img = image::open(ref_path).ok()?.to_rgba8();
     let gen_img = image::open(gen_path).ok()?.to_rgba8();
     let w = ref_img.width().min(gen_img.width());
     let h = ref_img.height().min(gen_img.height());
+
+    let cell = 32u32;
+    let gw = (w + cell - 1) / cell;
+    let gh = (h + cell - 1) / cell;
+    let mut grid = vec![false; (gw * gh) as usize];
 
     let mut pixels = vec![0u8; (w * h * 4) as usize];
     for y in 0..h as usize {
@@ -1200,14 +1210,85 @@ fn build_overlay_texture(
                 (false, true) => [220, 40, 40, 255],
                 (false, false) => [255, 255, 255, 255],
             };
+            if ref_ink != gen_ink {
+                let gx = x as u32 / cell;
+                let gy = y as u32 / cell;
+                grid[(gy * gw + gx) as usize] = true;
+            }
             let i = (y * w as usize + x) * 4;
             pixels[i..i + 4].copy_from_slice(&c);
         }
     }
 
+    let change_rects = find_change_rects(&grid, gw, gh, cell, w, h);
+
     let image = egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], &pixels);
     let name = format!("overlay_{}_{}", key.0, key.1);
-    Some(ctx.load_texture(name, image, egui::TextureOptions::LINEAR))
+    Some(OverlayResult {
+        texture: ctx.load_texture(name, image, egui::TextureOptions::LINEAR),
+        change_rects,
+    })
+}
+
+/// Find bounding rectangles around clusters of changed pixels using a grid-based
+/// connected-component approach. Returns `[x, y, width, height]` in pixel coords.
+fn find_change_rects(
+    grid: &[bool],
+    gw: u32,
+    gh: u32,
+    cell: u32,
+    img_w: u32,
+    img_h: u32,
+) -> Vec<[u32; 4]> {
+    let mut visited = vec![false; grid.len()];
+    let mut rects = Vec::new();
+
+    for gy in 0..gh {
+        for gx in 0..gw {
+            let idx = (gy * gw + gx) as usize;
+            if !grid[idx] || visited[idx] {
+                continue;
+            }
+            // Flood fill (8-connected) to find connected component
+            let mut min_x = gx;
+            let mut min_y = gy;
+            let mut max_x = gx;
+            let mut max_y = gy;
+            let mut stack = vec![(gx, gy)];
+            while let Some((cx, cy)) = stack.pop() {
+                let ci = (cy * gw + cx) as usize;
+                if visited[ci] || !grid[ci] {
+                    continue;
+                }
+                visited[ci] = true;
+                min_x = min_x.min(cx);
+                min_y = min_y.min(cy);
+                max_x = max_x.max(cx);
+                max_y = max_y.max(cy);
+                // 8-connected neighbors
+                for dy in -1i32..=1 {
+                    for dx in -1i32..=1 {
+                        if dx == 0 && dy == 0 {
+                            continue;
+                        }
+                        let nx = cx as i32 + dx;
+                        let ny = cy as i32 + dy;
+                        if nx >= 0 && (nx as u32) < gw && ny >= 0 && (ny as u32) < gh {
+                            stack.push((nx as u32, ny as u32));
+                        }
+                    }
+                }
+            }
+            let pad = 8u32;
+            let x0 = (min_x * cell).saturating_sub(pad);
+            let y0 = (min_y * cell).saturating_sub(pad);
+            let x1 = ((max_x + 1) * cell + pad).min(img_w);
+            let y1 = ((max_y + 1) * cell + pad).min(img_h);
+            rects.push([x0, y0, x1 - x0, y1 - y0]);
+        }
+    }
+
+    rects
 }
 
 fn luma(r: u8, g: u8, b: u8) -> u8 {
@@ -1232,8 +1313,8 @@ fn show_overlay(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: usi
     if !app.overlay_cache.contains_key(&key) {
         let ref_path = app.page_path("reference", page);
         let gen_path = app.page_path("generated", page);
-        let tex = build_overlay_texture(ctx, &ref_path, &gen_path, key);
-        app.overlay_cache.insert(key, tex);
+        let result = build_overlay_texture(ctx, &ref_path, &gen_path, key);
+        app.overlay_cache.insert(key, result);
     }
 
     ui.horizontal(|ui| {
@@ -1244,8 +1325,8 @@ fn show_overlay(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: usi
     });
 
     let available = ui.available_size();
-    if let Some(Some(tex)) = app.overlay_cache.get(&key) {
-        let tex = tex.clone();
+    if let Some(Some(result)) = app.overlay_cache.get(&key) {
+        let tex = result.texture.clone();
         let tex_size = [tex.size()[0], tex.size()[1]];
         let show_grid = app.show_grid;
         let grid_spacing = app.grid_spacing;
@@ -1311,8 +1392,8 @@ fn show_delta(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: usize
     let key = (app.current_case, page);
     if !app.delta_cache.contains_key(&key) {
         let gen_path = app.page_path("generated", page);
-        let tex = build_overlay_texture(ctx, &ack_path, &gen_path, key);
-        app.delta_cache.insert(key, tex);
+        let result = build_overlay_texture(ctx, &ack_path, &gen_path, key);
+        app.delta_cache.insert(key, result);
     }
 
     ui.horizontal(|ui| {
@@ -1323,9 +1404,10 @@ fn show_delta(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: usize
     });
 
     let available = ui.available_size();
-    if let Some(Some(tex)) = app.delta_cache.get(&key) {
-        let tex = tex.clone();
+    if let Some(Some(result)) = app.delta_cache.get(&key) {
+        let tex = result.texture.clone();
         let tex_size = [tex.size()[0], tex.size()[1]];
+        let change_rects = result.change_rects.clone();
         let show_grid = app.show_grid;
         let grid_spacing = app.grid_spacing;
         let click = egui::ScrollArea::both()
@@ -1340,6 +1422,24 @@ fn show_delta(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: usize
                 );
                 if show_grid {
                     draw_grid_overlay(ui.ctx(), rect, grid_spacing);
+                }
+                // Draw red outlines around change regions
+                let scale_x = rect.width() / tex_size[0] as f32;
+                let scale_y = rect.height() / tex_size[1] as f32;
+                for &[rx, ry, rw, rh] in &change_rects {
+                    let outline = egui::Rect::from_min_size(
+                        egui::pos2(
+                            rect.min.x + rx as f32 * scale_x,
+                            rect.min.y + ry as f32 * scale_y,
+                        ),
+                        egui::vec2(rw as f32 * scale_x, rh as f32 * scale_y),
+                    );
+                    ui.painter().rect_stroke(
+                        outline,
+                        0.0,
+                        egui::Stroke::new(2.0, egui::Color32::from_rgb(255, 0, 0)),
+                        egui::StrokeKind::Outside,
+                    );
                 }
                 if resp.clicked() {
                     resp.interact_pointer_pos().map(|pos| ImageClick {
