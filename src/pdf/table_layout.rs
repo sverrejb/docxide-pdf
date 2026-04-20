@@ -85,19 +85,22 @@ pub(super) fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>
                     let Some(entry) = fonts.get(key) else {
                         continue;
                     };
-                    let text = if run.caps || run.small_caps {
+                    let text = if run.caps {
                         std::borrow::Cow::Owned(run.text.to_uppercase())
                     } else {
                         std::borrow::Cow::Borrowed(&run.text)
                     };
-                    let fs = if run.small_caps {
-                        (run.font_size - 2.0).max(1.0)
-                    } else {
-                        run.font_size
-                    };
+                    let fs = run.font_size;
                     for word in text.split_whitespace() {
-                        let kern = run.kern_threshold.is_some_and(|t| fs >= t);
-                        let ww = entry.word_width(word, fs, kern) + h_pad;
+                        let ww = if run.small_caps {
+                            super::layout::smallcaps_segments(word, fs).iter().map(|(seg, seg_fs)| {
+                                let kern = run.kern_threshold.is_some_and(|t| *seg_fs >= t);
+                                entry.word_width(seg, *seg_fs, kern)
+                            }).sum::<f32>() + h_pad
+                        } else {
+                            let kern = run.kern_threshold.is_some_and(|t| fs >= t);
+                            entry.word_width(word, fs, kern) + h_pad
+                        };
                         min_widths[grid_col] = min_widths[grid_col].max(ww);
                     }
                 }
@@ -128,18 +131,21 @@ pub(super) fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>
                     for run in &para.runs {
                         let key = font_key_buf(run, &mut key_buf);
                         let Some(entry) = fonts.get(key) else { continue };
-                        let fs = if run.small_caps {
-                            (run.font_size - 2.0).max(1.0)
-                        } else {
-                            run.font_size
-                        };
-                        let text = if run.caps || run.small_caps {
+                        let fs = run.font_size;
+                        let text = if run.caps {
                             std::borrow::Cow::Owned(run.text.to_uppercase())
                         } else {
                             std::borrow::Cow::Borrowed(&run.text)
                         };
-                        let kern = run.kern_threshold.is_some_and(|t| fs >= t);
-                        para_w += entry.word_width(&text, fs, kern);
+                        if run.small_caps {
+                            para_w += super::layout::smallcaps_segments(&text, fs).iter().map(|(seg, seg_fs)| {
+                                let kern = run.kern_threshold.is_some_and(|t| *seg_fs >= t);
+                                entry.word_width(seg, *seg_fs, kern)
+                            }).sum::<f32>();
+                        } else {
+                            let kern = run.kern_threshold.is_some_and(|t| fs >= t);
+                            para_w += entry.word_width(&text, fs, kern);
+                        }
                     }
                     natural_widths[grid_col] =
                         natural_widths[grid_col].max(para_w + h_pad);

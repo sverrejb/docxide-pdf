@@ -327,23 +327,88 @@ pub(super) fn is_text_empty(runs: &[Run]) -> bool {
 }
 
 fn effective_font_size(run: &Run) -> f32 {
-    let base = match run.vertical_align {
+    match run.vertical_align {
         VertAlign::Superscript | VertAlign::Subscript => run.font_size * 0.58,
         VertAlign::Baseline => run.font_size,
-    };
-    if run.small_caps {
-        (base - 2.0).max(1.0)
-    } else {
-        base
     }
+    // Note: smallCaps sizing is handled per-segment via smallcaps_segments()
 }
 
-/// Returns the text to use for layout/rendering, applying caps/smallCaps transforms.
 fn effective_text(run: &Run) -> Cow<'_, str> {
-    if run.caps || run.small_caps {
+    if run.caps {
         Cow::Owned(run.text.to_uppercase())
     } else {
         Cow::Borrowed(&run.text)
+    }
+    // Note: smallCaps uppercasing is handled per-segment via smallcaps_segments()
+}
+
+/// Split a word into (text, font_size) segments for smallCaps rendering.
+/// Lowercase chars are uppercased and rendered at base_fs - 2pt;
+/// uppercase chars and non-letters stay at base_fs.
+pub(super) fn smallcaps_segments(word: &str, base_fs: f32) -> Vec<(String, f32)> {
+    let reduced = (base_fs - 2.0).max(1.0);
+    let mut segments: Vec<(String, f32)> = Vec::new();
+    for ch in word.chars() {
+        let is_lower = ch.is_lowercase();
+        let fs = if is_lower { reduced } else { base_fs };
+        let display: String = if is_lower {
+            ch.to_uppercase().collect()
+        } else {
+            ch.to_string()
+        };
+        if let Some(last) = segments.last_mut() {
+            if (last.1 - fs).abs() < 0.001 {
+                last.0.push_str(&display);
+                continue;
+            }
+        }
+        segments.push((display, fs));
+    }
+    segments
+}
+
+/// Compute the width of a word, handling smallCaps per-segment sizing.
+fn word_width_for_run(
+    entry: &FontEntry, run: &Run, word: &str,
+    eff_fs: f32, kern: bool, cs: f32, ts: f32,
+) -> f32 {
+    if run.small_caps {
+        smallcaps_segments(word, eff_fs).iter().map(|(seg, fs)| {
+            let seg_kern = run.kern_threshold.is_some_and(|t| *fs >= t);
+            entry.word_width(seg, *fs, seg_kern) * ts + cs * seg.chars().count() as f32
+        }).sum()
+    } else {
+        let char_count = word.chars().count();
+        entry.word_width(word, eff_fs, kern) * ts + cs * char_count as f32
+    }
+}
+
+/// Push WordChunks for a word, splitting into per-segment chunks for smallCaps.
+fn push_word_chunks(
+    chunks: &mut Vec<WordChunk>,
+    entry: &FontEntry,
+    run: &Run,
+    word: &str,
+    eff_fs: f32,
+    cs: f32,
+    y_off: f32,
+    x_start: f32,
+    total_ww: f32,
+) {
+    if run.small_caps {
+        let segs = smallcaps_segments(word, eff_fs);
+        let mut seg_x = x_start;
+        for (seg_text, seg_fs) in &segs {
+            let seg_kern = run.kern_threshold.is_some_and(|t| *seg_fs >= t);
+            let ts = run.text_scale / 100.0;
+            let seg_w = entry.word_width(seg_text, *seg_fs, seg_kern) * ts
+                + cs * seg_text.chars().count() as f32;
+            chunks.push(WordChunk::text(entry, run, seg_text, *seg_fs, cs, y_off, seg_x, seg_w));
+            seg_x += seg_w;
+        }
+    } else {
+        chunks.push(WordChunk::text(entry, run, word, eff_fs, cs, y_off, x_start, total_ww));
     }
 }
 
@@ -604,9 +669,8 @@ pub(super) fn build_paragraph_lines(
                 && !current_chunks.is_empty();
             is_first_word_in_run = false;
 
-            let char_count = word.chars().count();
             let kern = run.kern_threshold.is_some_and(|t| eff_fs >= t);
-            let ww = entry.word_width(word, eff_fs, kern) * ts + cs * char_count as f32;
+            let ww = word_width_for_run(entry, run, word, eff_fs, kern, cs, ts);
             prev_last_char = word.chars().last();
 
             let need_space = !current_chunks.is_empty() && pending_space_w > 0.0;
@@ -642,9 +706,7 @@ pub(super) fn build_paragraph_lines(
             if current_chunks.is_empty() && overflows && pending_space_w > 0.0 && !in_right_region {
                 lines.push(finish_dual_line(&mut current_chunks, &mut in_right_region, &mut cur_right_info));
                 pending_space_w = 0.0;
-                current_chunks.push(WordChunk::text(
-                    entry, run, word, eff_fs, cs, y_off, 0.0, ww,
-                ));
+                push_word_chunks(&mut current_chunks, entry, run, word, eff_fs, cs, y_off, 0.0, ww);
                 current_x = ww;
                 continue;
             }
@@ -666,9 +728,7 @@ pub(super) fn build_paragraph_lines(
                         in_right_region = true;
                         pending_space_w = 0.0;
                         // Place this word at the start of the right region
-                        current_chunks.push(WordChunk::text(
-                            entry, run, word, eff_fs, cs, y_off, 0.0, ww,
-                        ));
+                        push_word_chunks(&mut current_chunks, entry, run, word, eff_fs, cs, y_off, 0.0, ww);
                         current_x = ww;
                         continue;
                     }
@@ -685,9 +745,7 @@ pub(super) fn build_paragraph_lines(
                         cur_right_info = Some((0, rx, rw));
                         in_right_region = true;
                         pending_space_w = 0.0;
-                        current_chunks.push(WordChunk::text(
-                            entry, run, word, eff_fs, cs, y_off, 0.0, ww,
-                        ));
+                        push_word_chunks(&mut current_chunks, entry, run, word, eff_fs, cs, y_off, 0.0, ww);
                         current_x = ww;
                         continue;
                     }
@@ -697,9 +755,7 @@ pub(super) fn build_paragraph_lines(
             }
             pending_space_w = 0.0;
 
-            current_chunks.push(WordChunk::text(
-                entry, run, word, eff_fs, cs, y_off, current_x, ww,
-            ));
+            push_word_chunks(&mut current_chunks, entry, run, word, eff_fs, cs, y_off, current_x, ww);
             current_x += ww;
         }
 
@@ -1030,9 +1086,8 @@ pub(super) fn build_tabbed_line(
             let ts = run.text_scale / 100.0;
             let segments = split_preserving_spaces(&text);
             for (seg_idx, &(space_count, word)) in segments.iter().enumerate() {
-                let char_count = word.chars().count();
                 let kern = run.kern_threshold.is_some_and(|t| eff_fs >= t);
-                let ww = entry.word_width(word, eff_fs, kern) * ts + cs * char_count as f32;
+                let ww = word_width_for_run(entry, run, word, eff_fs, kern, cs, ts);
                 let space_before_count = if space_count > 0 {
                     space_count
                 } else if seg_idx == 0 && (prev_ws || text.starts_with(is_break_space)) {
@@ -1056,9 +1111,7 @@ pub(super) fn build_tabbed_line(
                     current_x = 0.0;
                     is_first_line = false;
                 }
-                all_chunks.push(WordChunk::text(
-                    entry, run, word, eff_fs, cs, y_off, current_x, ww,
-                ));
+                push_word_chunks(&mut all_chunks, entry, run, word, eff_fs, cs, y_off, current_x, ww);
                 current_x += ww;
             }
             prev_ws = text.ends_with(is_break_space);
@@ -1739,15 +1792,41 @@ mod tests {
     }
 
     #[test]
-    fn test_effective_font_size_small_caps() {
+    fn test_effective_font_size_ignores_small_caps() {
+        // smallCaps sizing is per-segment, not per-run — effective_font_size returns base size
         let run = make_run(12.0, VertAlign::Baseline, true);
-        assert_eq!(effective_font_size(&run), 10.0); // 12 - 2
+        assert_eq!(effective_font_size(&run), 12.0);
     }
 
     #[test]
-    fn test_effective_font_size_small_caps_minimum() {
-        let run = make_run(2.0, VertAlign::Baseline, true);
-        assert_eq!(effective_font_size(&run), 1.0); // max(2-2, 1) = 1
+    fn test_smallcaps_segments_mixed() {
+        let segs = smallcaps_segments("Hello", 12.0);
+        assert_eq!(segs.len(), 2);
+        assert_eq!(segs[0], ("H".to_string(), 12.0));     // uppercase stays at 12pt
+        assert_eq!(segs[1], ("ELLO".to_string(), 10.0));   // lowercase → uppercase at 10pt
+    }
+
+    #[test]
+    fn test_smallcaps_segments_all_upper() {
+        let segs = smallcaps_segments("ABC", 12.0);
+        assert_eq!(segs.len(), 1);
+        assert_eq!(segs[0], ("ABC".to_string(), 12.0));
+    }
+
+    #[test]
+    fn test_smallcaps_segments_all_lower() {
+        let segs = smallcaps_segments("abc", 12.0);
+        assert_eq!(segs.len(), 1);
+        assert_eq!(segs[0], ("ABC".to_string(), 10.0));
+    }
+
+    #[test]
+    fn test_smallcaps_segments_with_nonletters() {
+        // Non-letter chars (digits, punctuation) stay at base size, grouped with adjacent same-size
+        let segs = smallcaps_segments("A1b", 12.0);
+        assert_eq!(segs.len(), 2);
+        assert_eq!(segs[0], ("A1".to_string(), 12.0));  // uppercase + digit both at base size
+        assert_eq!(segs[1], ("B".to_string(), 10.0));    // lowercase → uppercase at reduced size
     }
 
     #[test]

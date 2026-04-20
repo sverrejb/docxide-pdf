@@ -448,7 +448,7 @@
     "text_boundary": 0.1174
   },
   "new/slovak_electoral..": {
-    "jaccard": 0.3662,
+    "jaccard": 0.3661,
     "ssim": 0.5268,
     "text_boundary": 0.3861
   },
@@ -614,8 +614,8 @@
     "convert_ms": 115.1
   },
   "scraped/italian_project_..": {
-    "jaccard": 0.262,
-    "ssim": 0.5749,
+    "jaccard": 0.258,
+    "ssim": 0.5738,
     "text_boundary": 0.25,
     "convert_ms": 2.4
   },
@@ -656,8 +656,8 @@
     "convert_ms": 43.3
   },
   "scraped/mongolian_human_..": {
-    "jaccard": 0.1407,
-    "ssim": 0.2179,
+    "jaccard": 0.1408,
+    "ssim": 0.218,
     "text_boundary": 0.1949,
     "convert_ms": 32.0
   },
@@ -775,7 +775,7 @@
   },
   "scraped/uk_commercial_le..": {
     "jaccard": 0.2066,
-    "ssim": 0.361,
+    "ssim": 0.3609,
     "text_boundary": 0.2361,
     "convert_ms": 326.3
   },
