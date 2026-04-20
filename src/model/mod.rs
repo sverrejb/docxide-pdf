@@ -306,6 +306,9 @@ pub struct Run {
     pub vanish: bool,
     pub color: Option<[u8; 3]>, // None = DOCX "automatic" (typically black)
     pub highlight: Option<[u8; 3]>,
+    /// Background shading from `w:rPr/w:shd`. Distinct from `highlight`
+    /// (which is `w:highlight` — predefined named colors). Both can coexist.
+    pub shading: Option<[u8; 3]>,
     pub is_tab: bool,
     pub is_line_break: bool,
     pub vertical_align: VertAlign,
@@ -376,6 +379,7 @@ impl Default for Run {
             vanish: false,
             color: None,
             highlight: None,
+            shading: None,
             is_tab: false,
             is_line_break: false,
             vertical_align: VertAlign::Baseline,

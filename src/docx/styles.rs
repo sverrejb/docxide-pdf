@@ -7,8 +7,8 @@ pub(super) use super::color::{ColorTransforms, parse_color_transforms};
 use super::{
     DML_NS, WML_NS, dml, extract_indents, highlight_color, parse_cell_border,
     parse_cell_border_left, parse_cell_border_right, parse_hex_color, parse_paragraph_borders,
-    parse_tab_stops_with_clears, parse_text_color, read_zip_text, twips_attr, twips_to_pts, wml,
-    wml_attr, wml_bool,
+    parse_run_shd, parse_tab_stops_with_clears, parse_text_color, read_zip_text, twips_attr,
+    twips_to_pts, wml, wml_attr, wml_bool,
 };
 
 fn dml_typeface<'a>(node: roxmltree::Node<'a, 'a>, element: &str) -> Option<&'a str> {
@@ -148,6 +148,11 @@ pub(super) struct CharacterStyle {
     pub(super) vanish: Option<bool>,
     pub(super) color: Option<[u8; 3]>,
     pub(super) highlight: Option<[u8; 3]>,
+    /// Tri-state run-level shading from `w:rPr/w:shd`:
+    /// - `None` = not specified here (inherit from basedOn)
+    /// - `Some(None)` = explicitly cleared (`w:val="nil"` or `@fill="auto"`)
+    /// - `Some(Some(rgb))` = explicit fill color
+    pub(super) shading: Option<Option<[u8; 3]>>,
     pub(super) kern_threshold: Option<f32>,
 }
 
@@ -732,14 +737,8 @@ pub(super) fn parse_styles<R: Read + Seek>(
                 let small_caps = wml_bool(rpr, "smallCaps");
                 let vanish = wml_bool(rpr, "vanish");
                 let color = wml_attr(rpr, "color").and_then(parse_text_color);
-                let highlight = wml_attr(rpr, "highlight")
-                    .and_then(highlight_color)
-                    .or_else(|| {
-                        wml(rpr, "shd")
-                            .and_then(|shd| shd.attribute((WML_NS, "fill")))
-                            .filter(|f| *f != "none" && *f != "auto")
-                            .and_then(parse_hex_color)
-                    });
+                let highlight = wml_attr(rpr, "highlight").and_then(highlight_color);
+                let shading = parse_run_shd(rpr);
                 let kern_threshold = parse_kern(rpr);
 
                 character_styles.insert(
@@ -757,6 +756,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         vanish,
                         color,
                         highlight,
+                        shading,
                         kern_threshold,
                     },
                 );

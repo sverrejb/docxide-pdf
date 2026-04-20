@@ -110,6 +110,7 @@ pub(super) struct WordChunk {
     pub(super) font_size: f32,
     pub(super) color: Option<[u8; 3]>,
     pub(super) highlight: Option<[u8; 3]>,
+    pub(super) shading: Option<[u8; 3]>,
     pub(super) x_offset: f32, // x relative to line start
     pub(super) width: f32,
     pub(super) underline: bool,
@@ -149,6 +150,7 @@ impl WordChunk {
             font_size: eff_fs,
             color: run.color,
             highlight: run.highlight,
+            shading: run.shading,
             x_offset,
             width,
             underline: run.underline,
@@ -191,6 +193,7 @@ impl WordChunk {
             font_size,
             color: None,
             highlight: None,
+            shading: None,
             x_offset,
             width: display_width,
             underline: false,
@@ -228,6 +231,7 @@ impl WordChunk {
             font_size,
             color,
             highlight: None,
+            shading: None,
             x_offset,
             width,
             underline: false,
@@ -266,6 +270,7 @@ impl WordChunk {
             font_size,
             color,
             highlight: None,
+            shading: None,
             x_offset,
             width,
             underline: true,
@@ -1276,47 +1281,58 @@ pub(super) fn render_paragraph_lines(
 
         let mut decorations: Vec<(f32, f32, f32, f32, Option<[u8; 3]>)> = Vec::new();
 
-        // Draw run highlights as merged spans (contiguous same-color highlights)
-        {
-            let mut hl_start_x = 0.0f32;
-            let mut hl_color: Option<[u8; 3]> = None;
-            let mut hl_end_x = 0.0f32;
-            let mut hl_fs = 0.0f32;
+        // Draw run shading first (bottom layer), then run highlights on top.
+        // Both use the same rectangle geometry; when a run sets both, highlight
+        // visually occludes shading — matching Word.
+        let draw_run_backgrounds =
+            |content: &mut Content, accessor: fn(&WordChunk) -> Option<[u8; 3]>| {
+                let mut bg_start_x = 0.0f32;
+                let mut bg_color: Option<[u8; 3]> = None;
+                let mut bg_end_x = 0.0f32;
+                let mut bg_fs = 0.0f32;
 
-            let flush_hl =
-                |content: &mut Content, color: [u8; 3], sx: f32, ex: f32, fs: f32, y: f32| {
-                    let hl_bottom = y - fs * 0.2;
-                    let hl_height = fs * 1.15;
+                let flush = |content: &mut Content,
+                             color: [u8; 3],
+                             sx: f32,
+                             ex: f32,
+                             fs: f32,
+                             y: f32| {
+                    let bg_bottom = y - fs * 0.2;
+                    let bg_height = fs * 1.15;
                     content.save_state();
                     fill_color_or_black(content, Some(color));
-                    content.rect(sx, hl_bottom, ex - sx, hl_height);
+                    content.rect(sx, bg_bottom, ex - sx, bg_height);
                     content.fill_nonzero();
                     content.restore_state();
                 };
 
-            for (chunk_idx, chunk) in line.chunks.iter().enumerate() {
-                let x = chunk_abs_x(chunk_idx, chunk);
-                if chunk.highlight == hl_color && hl_color.is_some() {
-                    hl_end_x = x + chunk.width;
-                    hl_fs = hl_fs.max(chunk.font_size);
-                } else {
-                    if let Some(c) = hl_color {
-                        flush_hl(content, c, hl_start_x, hl_end_x, hl_fs, y);
-                    }
-                    if let Some(c) = chunk.highlight {
-                        hl_start_x = x;
-                        hl_end_x = x + chunk.width;
-                        hl_fs = chunk.font_size;
-                        hl_color = Some(c);
+                for (chunk_idx, chunk) in line.chunks.iter().enumerate() {
+                    let x = chunk_abs_x(chunk_idx, chunk);
+                    let chunk_color = accessor(chunk);
+                    if chunk_color == bg_color && bg_color.is_some() {
+                        bg_end_x = x + chunk.width;
+                        bg_fs = bg_fs.max(chunk.font_size);
                     } else {
-                        hl_color = None;
+                        if let Some(c) = bg_color {
+                            flush(content, c, bg_start_x, bg_end_x, bg_fs, y);
+                        }
+                        if let Some(c) = chunk_color {
+                            bg_start_x = x;
+                            bg_end_x = x + chunk.width;
+                            bg_fs = chunk.font_size;
+                            bg_color = Some(c);
+                        } else {
+                            bg_color = None;
+                        }
                     }
                 }
-            }
-            if let Some(c) = hl_color {
-                flush_hl(content, c, hl_start_x, hl_end_x, hl_fs, y);
-            }
-        }
+                if let Some(c) = bg_color {
+                    flush(content, c, bg_start_x, bg_end_x, bg_fs, y);
+                }
+            };
+
+        draw_run_backgrounds(content, |c| c.shading);
+        draw_run_backgrounds(content, |c| c.highlight);
 
         // Decoration-only chunks (empty text with underline) also need the text-block
         // pass so their underline geometry is collected into `decorations`.
@@ -1675,6 +1691,7 @@ mod tests {
             dstrike: false,
             color: None,
             highlight: None,
+            shading: None,
             vertical_align: valign,
             text_shadow: None,
             text_glow: None,

@@ -16,7 +16,7 @@ use super::textbox::parse_textbox_from_vml;
 use super::wordart::{parse_text_fill, parse_text_glow, parse_text_outline, parse_text_shadow};
 use super::{
     MC_NS_TOP, ParseContext, REL_NS, VML_NS, WML_NS, highlight_color, parse_hex_color,
-    parse_text_color, twips_to_pts, wml, wml_attr, wml_bool,
+    parse_run_shd, parse_text_color, twips_to_pts, wml, wml_attr, wml_bool,
 };
 
 fn is_dynamic_field(instr: &str) -> bool {
@@ -88,6 +88,7 @@ struct RunFormat {
     color: Option<[u8; 3]>,
     vertical_align: VertAlign,
     highlight: Option<[u8; 3]>,
+    shading: Option<[u8; 3]>,
     kern_threshold: Option<f32>,
     char_style_id: Option<String>,
     text_outline: Option<TextOutline>,
@@ -123,6 +124,7 @@ impl RunFormat {
             color: self.color,
             vertical_align: self.vertical_align,
             highlight: self.highlight,
+            shading: self.shading,
             kern_threshold: self.kern_threshold,
             char_style_id: self.char_style_id.clone(),
             text_outline: self.text_outline.clone(),
@@ -345,13 +347,11 @@ impl ParagraphRunDefaults {
             highlight: rpr
                 .and_then(|n| wml_attr(n, "highlight"))
                 .and_then(highlight_color)
-                .or_else(|| {
-                    rpr.and_then(|n| wml(n, "shd"))
-                        .and_then(|shd| shd.attribute((WML_NS, "fill")))
-                        .filter(|f| *f != "none" && *f != "auto")
-                        .and_then(parse_hex_color)
-                })
                 .or_else(|| char_style.and_then(|cs| cs.highlight)),
+            shading: match rpr.and_then(parse_run_shd) {
+                Some(explicit) => explicit,
+                None => char_style.and_then(|cs| cs.shading).flatten(),
+            },
             kern_threshold: rpr
                 .and_then(|n| wml_attr(n, "kern"))
                 .and_then(|v| v.parse::<f32>().ok())

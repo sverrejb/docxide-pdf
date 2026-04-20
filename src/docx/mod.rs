@@ -180,6 +180,29 @@ pub(super) fn parse_text_color(val: &str) -> Option<[u8; 3]> {
     parse_hex_color(val)
 }
 
+/// Parse a `w:shd` child element on a `w:rPr` (or similar) node into a tri-state:
+/// - `None` — no `w:shd` child present; caller should inherit.
+/// - `Some(None)` — `w:shd` is present but explicitly has no color
+///   (`w:val="nil"`, or `w:fill="auto"`/missing with no `w:themeFill`).
+///   This should *override* any inherited shading with "no shading".
+/// - `Some(Some(rgb))` — explicit fill color.
+///
+/// Pattern values other than `nil`/`clear`/`solid` (e.g. `pct25`, `diagStripe`)
+/// are approximated by returning the `w:fill` color as a solid — TODO: real
+/// pattern rendering. `w:themeFill` resolution is also TODO.
+pub(super) fn parse_run_shd(parent: roxmltree::Node) -> Option<Option<[u8; 3]>> {
+    let shd = wml(parent, "shd")?;
+    let val = shd.attribute((WML_NS, "val"));
+    if val == Some("nil") {
+        return Some(None);
+    }
+    let fill = shd.attribute((WML_NS, "fill"));
+    match fill {
+        Some(f) if f != "auto" && f != "none" => Some(parse_hex_color(f)),
+        _ => Some(None),
+    }
+}
+
 pub(super) fn highlight_color(name: &str) -> Option<[u8; 3]> {
     match name {
         "yellow" => Some([255, 255, 0]),
@@ -839,6 +862,50 @@ mod tests {
         assert_eq!(parse_text_color("auto"), Some([0, 0, 0])); // auto → black
         assert_eq!(parse_text_color("FF0000"), Some([255, 0, 0]));
         assert_eq!(parse_text_color("invalid"), None);
+    }
+
+    #[test]
+    fn test_parse_run_shd() {
+        let ns = WML_NS;
+
+        // No w:shd child → None (inherit)
+        let xml = format!(r#"<w:rPr xmlns:w="{ns}"><w:b/></w:rPr>"#);
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        assert_eq!(parse_run_shd(doc.root_element()), None);
+
+        // val="clear" fill="FFFF00" → Some(Some(yellow))
+        let xml = format!(
+            r#"<w:rPr xmlns:w="{ns}"><w:shd w:val="clear" w:color="auto" w:fill="FFFF00"/></w:rPr>"#
+        );
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        assert_eq!(
+            parse_run_shd(doc.root_element()),
+            Some(Some([0xFF, 0xFF, 0x00]))
+        );
+
+        // val="nil" → Some(None) (explicit clear)
+        let xml = format!(r#"<w:rPr xmlns:w="{ns}"><w:shd w:val="nil"/></w:rPr>"#);
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        assert_eq!(parse_run_shd(doc.root_element()), Some(None));
+
+        // fill="auto" → Some(None)
+        let xml = format!(r#"<w:rPr xmlns:w="{ns}"><w:shd w:val="clear" w:fill="auto"/></w:rPr>"#);
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        assert_eq!(parse_run_shd(doc.root_element()), Some(None));
+
+        // Missing fill → Some(None)
+        let xml = format!(r#"<w:rPr xmlns:w="{ns}"><w:shd w:val="clear"/></w:rPr>"#);
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        assert_eq!(parse_run_shd(doc.root_element()), Some(None));
+
+        // Pattern value (pct25) with fill → approximated as solid fill
+        let xml =
+            format!(r#"<w:rPr xmlns:w="{ns}"><w:shd w:val="pct25" w:fill="CCCCCC"/></w:rPr>"#);
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        assert_eq!(
+            parse_run_shd(doc.root_element()),
+            Some(Some([0xCC, 0xCC, 0xCC]))
+        );
     }
 
     #[test]

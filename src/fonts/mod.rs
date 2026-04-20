@@ -459,6 +459,7 @@ mod tests {
             dstrike: false,
             color: None,
             highlight: None,
+            shading: None,
             vertical_align: VertAlign::Baseline,
             text_shadow: None,
             text_glow: None,
