@@ -148,11 +148,10 @@ pub(super) struct CharacterStyle {
     pub(super) vanish: Option<bool>,
     pub(super) color: Option<[u8; 3]>,
     pub(super) highlight: Option<[u8; 3]>,
-    /// Tri-state run-level shading from `w:rPr/w:shd`:
-    /// - `None` = not specified here (inherit from basedOn)
-    /// - `Some(None)` = explicitly cleared (`w:val="nil"` or `@fill="auto"`)
-    /// - `Some(Some(rgb))` = explicit fill color
-    pub(super) shading: Option<Option<[u8; 3]>>,
+    /// Run-level shading from `w:rPr/w:shd`. `None` means "no explicit color
+    /// here"; callers inherit from basedOn. Word treats `w:val="nil"` and
+    /// `w:fill="auto"` as "no color," not as a clearing override.
+    pub(super) shading: Option<[u8; 3]>,
     pub(super) kern_threshold: Option<f32>,
 }
 

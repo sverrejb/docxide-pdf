@@ -1,5 +1,5 @@
 {
-  "next_id": 133,
+  "next_id": 134,
   "annotations": [
     {
       "id": 8,
@@ -162,16 +162,6 @@
       "fixed": false
     },
     {
-      "id": 123,
-      "case": "case60",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 327.21265,
-      "y_pt": 172.58423,
-      "note": "Sit Amet should fall on two lines",
-      "fixed": false
-    },
-    {
       "id": 124,
       "case": "new/english_town_council_report",
       "page": 2,
@@ -179,16 +169,6 @@
       "x_pt": 75.68638,
       "y_pt": 794.8483,
       "note": "We start higher up here than reference for some reason.",
-      "fixed": false
-    },
-    {
-      "id": 129,
-      "case": "new/master_thesis_learning_agreement",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 85.421844,
-      "y_pt": 751.51,
-      "note": "Header text is too large",
       "fixed": false
     },
     {
@@ -209,6 +189,16 @@
       "x_pt": 95.37916,
       "y_pt": 273.9615,
       "note": "List item 5.  is indented here for some reason",
+      "fixed": false
+    },
+    {
+      "id": 133,
+      "case": "new/master_thesis_learning_agreement",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 121.24737,
+      "y_pt": 216.53723,
+      "note": "Empty space here. The Framed text \"(Arrangements regarding ...\" should start here on this page.",
       "fixed": false
     }
   ]

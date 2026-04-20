@@ -348,10 +348,9 @@ impl ParagraphRunDefaults {
                 .and_then(|n| wml_attr(n, "highlight"))
                 .and_then(highlight_color)
                 .or_else(|| char_style.and_then(|cs| cs.highlight)),
-            shading: match rpr.and_then(parse_run_shd) {
-                Some(explicit) => explicit,
-                None => char_style.and_then(|cs| cs.shading).flatten(),
-            },
+            shading: rpr
+                .and_then(parse_run_shd)
+                .or_else(|| char_style.and_then(|cs| cs.shading)),
             kern_threshold: rpr
                 .and_then(|n| wml_attr(n, "kern"))
                 .and_then(|v| v.parse::<f32>().ok())
@@ -583,6 +582,7 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
                 && prev.vanish == run.vanish
                 && prev.color == run.color
                 && prev.highlight == run.highlight
+                && prev.shading == run.shading
                 && prev.vertical_align == run.vertical_align
                 && prev.kern_threshold == run.kern_threshold
                 && prev.hyperlink_url == run.hyperlink_url
@@ -921,4 +921,50 @@ fn parse_vml_horizontal_rule(pict_node: roxmltree::Node) -> Option<HorizontalRul
         width_pct,
         is_standard,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn run(text: &str, shading: Option<[u8; 3]>, highlight: Option<[u8; 3]>) -> Run {
+        Run {
+            text: text.to_string(),
+            font_name: "Arial".into(),
+            font_size: 11.0,
+            shading,
+            highlight,
+            ..Run::default()
+        }
+    }
+
+    #[test]
+    fn merge_compatible_runs_preserves_shading_boundary() {
+        // Runs with different shading must NOT merge, or the later run's
+        // shading silently disappears into the former's formatting.
+        let runs = vec![
+            run("before ", None, None),
+            run("shaded", Some([255, 244, 163]), None),
+            run(" after", None, None),
+        ];
+        let merged = merge_compatible_runs(runs);
+        assert_eq!(merged.len(), 3, "runs differing in shading must not merge");
+        assert_eq!(merged[1].shading, Some([255, 244, 163]));
+    }
+
+    #[test]
+    fn merge_compatible_runs_merges_same_shading() {
+        // Adjacent runs with identical shading SHOULD merge (the common case
+        // of a single shaded word split across multiple w:r by revision
+        // tracking).
+        let c = Some([200, 250, 204]);
+        let runs = vec![
+            run("green ", c, None),
+            run("continues", c, None),
+        ];
+        let merged = merge_compatible_runs(runs);
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].text, "green continues");
+        assert_eq!(merged[0].shading, c);
+    }
 }

@@ -180,27 +180,25 @@ pub(super) fn parse_text_color(val: &str) -> Option<[u8; 3]> {
     parse_hex_color(val)
 }
 
-/// Parse a `w:shd` child element on a `w:rPr` (or similar) node into a tri-state:
-/// - `None` — no `w:shd` child present; caller should inherit.
-/// - `Some(None)` — `w:shd` is present but explicitly has no color
-///   (`w:val="nil"`, or `w:fill="auto"`/missing with no `w:themeFill`).
-///   This should *override* any inherited shading with "no shading".
-/// - `Some(Some(rgb))` — explicit fill color.
+/// Parse a `w:shd` child element on a `w:rPr` (or similar) node.
+/// Returns `Some(rgb)` when an explicit color is present, else `None`
+/// (caller should inherit from style/basedOn). In Word, `w:val="nil"` and
+/// `w:fill="auto"` are *not* treated as overrides that clear inherited
+/// shading — they simply mean "no color specified here."
 ///
 /// Pattern values other than `nil`/`clear`/`solid` (e.g. `pct25`, `diagStripe`)
 /// are approximated by returning the `w:fill` color as a solid — TODO: real
 /// pattern rendering. `w:themeFill` resolution is also TODO.
-pub(super) fn parse_run_shd(parent: roxmltree::Node) -> Option<Option<[u8; 3]>> {
+pub(super) fn parse_run_shd(parent: roxmltree::Node) -> Option<[u8; 3]> {
     let shd = wml(parent, "shd")?;
-    let val = shd.attribute((WML_NS, "val"));
-    if val == Some("nil") {
-        return Some(None);
+    if shd.attribute((WML_NS, "val")) == Some("nil") {
+        return None;
     }
-    let fill = shd.attribute((WML_NS, "fill"));
-    match fill {
-        Some(f) if f != "auto" && f != "none" => Some(parse_hex_color(f)),
-        _ => Some(None),
+    let fill = shd.attribute((WML_NS, "fill"))?;
+    if fill == "auto" || fill == "none" {
+        return None;
     }
+    parse_hex_color(fill)
 }
 
 pub(super) fn highlight_color(name: &str) -> Option<[u8; 3]> {
@@ -873,39 +871,33 @@ mod tests {
         let doc = roxmltree::Document::parse(&xml).unwrap();
         assert_eq!(parse_run_shd(doc.root_element()), None);
 
-        // val="clear" fill="FFFF00" → Some(Some(yellow))
+        // val="clear" fill="FFFF00" → Some(yellow)
         let xml = format!(
             r#"<w:rPr xmlns:w="{ns}"><w:shd w:val="clear" w:color="auto" w:fill="FFFF00"/></w:rPr>"#
         );
         let doc = roxmltree::Document::parse(&xml).unwrap();
-        assert_eq!(
-            parse_run_shd(doc.root_element()),
-            Some(Some([0xFF, 0xFF, 0x00]))
-        );
+        assert_eq!(parse_run_shd(doc.root_element()), Some([0xFF, 0xFF, 0x00]));
 
-        // val="nil" → Some(None) (explicit clear)
+        // val="nil" → None (not an override: inherit from style)
         let xml = format!(r#"<w:rPr xmlns:w="{ns}"><w:shd w:val="nil"/></w:rPr>"#);
         let doc = roxmltree::Document::parse(&xml).unwrap();
-        assert_eq!(parse_run_shd(doc.root_element()), Some(None));
+        assert_eq!(parse_run_shd(doc.root_element()), None);
 
-        // fill="auto" → Some(None)
+        // fill="auto" → None (inherit)
         let xml = format!(r#"<w:rPr xmlns:w="{ns}"><w:shd w:val="clear" w:fill="auto"/></w:rPr>"#);
         let doc = roxmltree::Document::parse(&xml).unwrap();
-        assert_eq!(parse_run_shd(doc.root_element()), Some(None));
+        assert_eq!(parse_run_shd(doc.root_element()), None);
 
-        // Missing fill → Some(None)
+        // Missing fill → None (inherit)
         let xml = format!(r#"<w:rPr xmlns:w="{ns}"><w:shd w:val="clear"/></w:rPr>"#);
         let doc = roxmltree::Document::parse(&xml).unwrap();
-        assert_eq!(parse_run_shd(doc.root_element()), Some(None));
+        assert_eq!(parse_run_shd(doc.root_element()), None);
 
         // Pattern value (pct25) with fill → approximated as solid fill
         let xml =
             format!(r#"<w:rPr xmlns:w="{ns}"><w:shd w:val="pct25" w:fill="CCCCCC"/></w:rPr>"#);
         let doc = roxmltree::Document::parse(&xml).unwrap();
-        assert_eq!(
-            parse_run_shd(doc.root_element()),
-            Some(Some([0xCC, 0xCC, 0xCC]))
-        );
+        assert_eq!(parse_run_shd(doc.root_element()), Some([0xCC, 0xCC, 0xCC]));
     }
 
     #[test]
