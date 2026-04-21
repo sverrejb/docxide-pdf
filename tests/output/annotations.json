@@ -1,5 +1,5 @@
 {
-  "next_id": 134,
+  "next_id": 137,
   "annotations": [
     {
       "id": 8,
@@ -172,16 +172,6 @@
       "fixed": false
     },
     {
-      "id": 131,
-      "case": "new/czech_works_contract_proposal",
-      "page": 2,
-      "source": "Generated",
-      "x_pt": 335.516,
-      "y_pt": 724.9268,
-      "note": "tabs or spaces  before \".....\" seem to collapse here at a 1.) and a 2.)",
-      "fixed": false
-    },
-    {
       "id": 132,
       "case": "new/czech_works_contract_proposal",
       "page": 4,
@@ -199,6 +189,16 @@
       "x_pt": 121.24737,
       "y_pt": 216.53723,
       "note": "Empty space here. The Framed text \"(Arrangements regarding ...\" should start here on this page.",
+      "fixed": false
+    },
+    {
+      "id": 136,
+      "case": "scraped/bush_fires_act_comparison",
+      "page": 15,
+      "source": "Generated",
+      "x_pt": 125.16714,
+      "y_pt": 774.348,
+      "note": "Line shift at \"Part\" and III here.  Should not be here.",
       "fixed": false
     }
   ]

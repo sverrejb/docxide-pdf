@@ -936,6 +936,7 @@ pub(super) fn build_tabbed_line(
     let mut result_lines: Vec<TextLine> = Vec::new();
     let mut all_chunks: Vec<WordChunk> = Vec::new();
     let mut current_x: f32 = 0.0;
+    let mut pending_space_w: f32 = 0.0;
     let mut key_buf = String::new();
     let mut is_first_line = true;
 
@@ -955,6 +956,21 @@ pub(super) fn build_tabbed_line(
         let mut tab_stop_pos: Option<f32> = None;
 
         if seg_idx > 0 {
+            // Trailing-space handling before a tab depends on whether an
+            // explicit tab stop applies:
+            // - An explicit stop AFTER current_x consumes the trailing spaces
+            //   (header/footer center+right pattern — the tab must snap to that
+            //   stop regardless of how wide the preceding whitespace is).
+            // - Otherwise we fall through to default tab stops; trailing spaces
+            //   advance the cursor so the tab can snap past them. This matters
+            //   for list paragraphs with long dot-leader trailing-space runs.
+            let abs_x_no_spaces = current_x + line_indent;
+            let has_explicit_after =
+                tab_stops.iter().any(|s| s.position > abs_x_no_spaces + 0.5);
+            if !has_explicit_after {
+                current_x += pending_space_w;
+            }
+            pending_space_w = 0.0;
             let stop = find_next_tab_stop(current_x, tab_stops, line_indent, default_tab_stop);
             let mut effective_tab_target = stop.position - line_indent;
             let mut seg_start =
@@ -1044,13 +1060,12 @@ pub(super) fn build_tabbed_line(
         }
 
         // Layout text in this segment from current_x
-        let mut prev_ws = false;
         for (local_idx, run) in seg_runs.iter().enumerate() {
             if run.is_line_break {
                 result_lines.push(finish_line_with_break(&mut all_chunks));
                 current_x = 0.0;
                 is_first_line = false;
-                prev_ws = false;
+                pending_space_w = 0.0;
                 continue;
             }
 
@@ -1084,22 +1099,20 @@ pub(super) fn build_tabbed_line(
 
             let cs = run.char_spacing;
             let ts = run.text_scale / 100.0;
+            let space_w_cs = space_w * ts + cs;
             let segments = split_preserving_spaces(&text);
             for (seg_idx, &(space_count, word)) in segments.iter().enumerate() {
                 let kern = run.kern_threshold.is_some_and(|t| eff_fs >= t);
                 let ww = word_width_for_run(entry, run, word, eff_fs, kern, cs, ts);
-                let space_before_count = if space_count > 0 {
-                    space_count
-                } else if seg_idx == 0 && (prev_ws || text.starts_with(is_break_space)) {
-                    1
-                } else {
-                    0
-                };
-                if space_before_count > 0 && (!all_chunks.is_empty() || space_count > 0) {
-                    current_x += space_before_count as f32 * (space_w * ts + cs);
+                pending_space_w += space_count as f32 * space_w_cs;
+                let applied_space = pending_space_w > 0.0
+                    && (!all_chunks.is_empty() || space_count > 0);
+                if applied_space {
+                    current_x += pending_space_w;
+                    pending_space_w = 0.0;
                 }
                 // Word continues previous word across run boundary (no whitespace between)
-                let is_continuation = seg_idx == 0 && space_before_count == 0 && !all_chunks.is_empty();
+                let is_continuation = seg_idx == 0 && !applied_space && !all_chunks.is_empty();
                 let cur_line_max = if is_first_line {
                     max_width + first_line_hanging
                 } else {
@@ -1114,7 +1127,9 @@ pub(super) fn build_tabbed_line(
                 push_word_chunks(&mut all_chunks, entry, run, word, eff_fs, cs, y_off, current_x, ww);
                 current_x += ww;
             }
-            prev_ws = text.ends_with(is_break_space);
+            // Accumulate trailing whitespace for the next run (or the next tab stop)
+            let trailing_spaces = text.chars().rev().take_while(|c| is_break_space(*c)).count();
+            pending_space_w += trailing_spaces as f32 * space_w_cs;
         }
 
         // For decimal/right/center tabs, text may end before the tab stop position.
