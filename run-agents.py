@@ -1011,8 +1011,10 @@ def try_merge(case_name: str, wt_path: str) -> tuple[bool, str]:
     return True, f"Merged {ahead} commit(s) from {branch}"
 
 
-def process_results(results: list[dict], logs_dir: Path):
+def process_results(results: list[dict], logs_dir: Path, discovery_cases: set[str] | None = None):
     """Process agent results: auto-merge or flag for review."""
+    if discovery_cases is None:
+        discovery_cases = set()
     print("\n" + "=" * 60)
     print("Processing outcomes...")
     print("=" * 60 + "\n")
@@ -1083,9 +1085,14 @@ def process_results(results: list[dict], logs_dir: Path):
             flagged.append((case_name, "regressions"))
             print(f"  Worktree: {wt_path}")
             print(f"  Review:   cd {wt_path} && git log --oneline main..HEAD")
+            if case_name in discovery_cases:
+                print(f"  (fixture already committed to main — only code changes need review)")
 
         else:
-            print(f"  No meaningful improvement")
+            if case_name in discovery_cases:
+                print(f"  No meaningful code improvement (fixture already committed to main)")
+            else:
+                print(f"  No meaningful improvement")
             flagged.append((case_name, "no improvement"))
             print(f"  Worktree: {wt_path}")
 
@@ -1211,7 +1218,7 @@ def main():
     order = {name: i for i, name in enumerate(cases)}
     results.sort(key=lambda r: order.get(r["case"], 999))
 
-    process_results(results, logs_dir)
+    process_results(results, logs_dir, discovery_cases=discovery_cases)
 
 
 if __name__ == "__main__":
