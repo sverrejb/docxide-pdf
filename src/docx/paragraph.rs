@@ -145,7 +145,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     let ListLabelInfo {
         mut indent_left,
         mut indent_hanging,
-        tab_stop: num_tab_stop,
+        tab_stop: mut num_tab_stop,
         label: mut list_label,
         font: mut list_label_font,
         font_size: mut list_label_font_size,
@@ -161,6 +161,21 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         last_seen_level,
         applied_overrides,
     );
+    // Paragraph-level `<w:tab val="num" pos="..."/>` overrides the numbering
+    // level's num tab (paired with a `clear` of the inherited value when
+    // Word-authored). `pos="0"` is a Word sentinel meaning "disable the num
+    // tab for this paragraph" — ignore it so we don't collapse text onto the
+    // label.
+    if let Some(tabs) = ppr.and_then(|ppr| wml(ppr, "tabs")) {
+        for t in tabs.children().filter(|n| n.has_tag_name((WML_NS, "tab"))) {
+            if t.attribute((WML_NS, "val")) == Some("num")
+                && let Some(pos) = super::twips_attr(t, "pos")
+                && pos > 0.0
+            {
+                num_tab_stop = Some(pos);
+            }
+        }
+    }
 
     let mut indent_first_line = ctx.styles.defaults.indent_first_line;
     let mut indent_right = ctx.styles.defaults.indent_right;
@@ -195,12 +210,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
             (None, None, None, None)
         };
     if let Some(v) = left {
-        if !list_label.is_empty() {
-            let style_indent = para_style.and_then(|s| s.indent_left).unwrap_or(0.0);
-            indent_left = v.max(style_indent);
-        } else {
-            indent_left = v;
-        }
+        indent_left = v;
     } else if indent_left == 0.0 {
         indent_left = ctx.styles.defaults.indent_left;
     }

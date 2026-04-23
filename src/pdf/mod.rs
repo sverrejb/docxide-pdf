@@ -571,18 +571,34 @@ pub(super) struct LayoutState {
 }
 
 /// Compute effective first-line hanging indent for a paragraph.
-fn compute_text_hanging(para: &Paragraph) -> f32 {
+fn compute_text_hanging(para: &Paragraph, default_tab_stop: f32) -> f32 {
     if !para.list_label.is_empty() {
         if let Some(nts) = para.num_level_tab_stop {
             if nts < para.indent_left
                 && (para.indent_left - para.indent_hanging).abs() < 0.5
             {
                 (para.indent_left - nts).max(0.0)
+            } else if nts > para.indent_left
+                && para.indent_hanging == 0.0
+                && para.indent_first_line == 0.0
+            {
+                -(nts - para.indent_left)
             } else if para.indent_first_line > 0.0 && para.indent_hanging == 0.0 {
                 -para.indent_first_line
             } else {
                 0.0
             }
+        } else if para.indent_hanging == 0.0
+            && para.indent_first_line == 0.0
+            && default_tab_stop > 0.0
+        {
+            // No num tab stop defined: Word renders label at indent_left, then a
+            // tab advances text to the next default tab stop *position* (not by
+            // that amount). Target the next multiple of default_tab_stop that
+            // is strictly greater than indent_left.
+            let next_tab =
+                ((para.indent_left / default_tab_stop).floor() + 1.0) * default_tab_stop;
+            -(next_tab - para.indent_left)
         } else if para.indent_first_line > 0.0 && para.indent_hanging == 0.0 {
             -para.indent_first_line
         } else {
@@ -689,7 +705,7 @@ fn compute_bookmark_positions(
                     };
                     let para_w =
                         (text_width - para.indent_left - para.indent_right).max(1.0);
-                    let hanging = compute_text_hanging(para);
+                    let hanging = compute_text_hanging(para, ctx.default_tab_stop);
                     let has_tabs = para.runs.iter().any(|r| r.is_tab);
                     let lines = if is_text_empty(&para.runs) {
                         vec![]
@@ -970,7 +986,7 @@ fn render_paragraph_block(
         }
     }
 
-    let text_hanging = compute_text_hanging(para);
+    let text_hanging = compute_text_hanging(para, ctx.default_tab_stop);
 
     // Substitute footnote refs and resolve PAGEREF fields
     let has_footnote_refs = para.runs.iter().any(|r| r.footnote_id.is_some());

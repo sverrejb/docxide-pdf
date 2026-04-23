@@ -413,8 +413,8 @@
     "text_boundary": 0.9492
   },
   "new/czech_works_cont..": {
-    "jaccard": 0.4639,
-    "ssim": 0.6297,
+    "jaccard": 0.4663,
+    "ssim": 0.632,
     "text_boundary": 0.6508
   },
   "new/english_town_cou..": {
@@ -443,8 +443,8 @@
     "text_boundary": 0.5756
   },
   "new/russian_municipa..": {
-    "jaccard": 0.4836,
-    "ssim": 0.8039,
+    "jaccard": 0.4837,
+    "ssim": 0.8044,
     "text_boundary": 0.8043
   },
   "new/russian_voluntee..": {
@@ -502,14 +502,14 @@
     "convert_ms": 744.0
   },
   "scraped/bush_fires_act_c..": {
-    "jaccard": 0.5849,
+    "jaccard": 0.585,
     "ssim": 0.7935,
     "text_boundary": 0.0564,
     "convert_ms": 248.6
   },
   "scraped/centrifugal_wate..": {
-    "jaccard": 0.8147,
-    "ssim": 0.9521,
+    "jaccard": 0.8145,
+    "ssim": 0.9519,
     "text_boundary": 1.0,
     "convert_ms": 40.9
   },
@@ -521,7 +521,7 @@
   },
   "scraped/croatian_grant_g..": {
     "jaccard": 0.079,
-    "ssim": 0.1965,
+    "ssim": 0.1964,
     "text_boundary": 0.0086,
     "convert_ms": 270.5
   },
@@ -614,7 +614,7 @@
   },
   "scraped/italian_evaluati..": {
     "jaccard": 0.34,
-    "ssim": 0.4373,
+    "ssim": 0.4377,
     "text_boundary": 0.5768,
     "convert_ms": 115.1
   },
@@ -792,8 +792,8 @@
   },
   "scraped/usep_handbook": {
     "jaccard": 0.5447,
-    "ssim": 0.7391,
-    "text_boundary": 0.6216,
+    "ssim": 0.7393,
+    "text_boundary": 0.6171,
     "convert_ms": 38.6
   },
   "scraped/vaccines_history..": {
