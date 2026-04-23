@@ -499,6 +499,10 @@
     "ssim": 0.2121,
     "text_boundary": 0.1875
   },
+  "new/tokyo_welfare_in..": {
+    "jaccard": 0.1429,
+    "ssim": 0.4085
+  },
   "new/turkish_journal_..": {
     "jaccard": 0.6044,
     "ssim": 0.8297

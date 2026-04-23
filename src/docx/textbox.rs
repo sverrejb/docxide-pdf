@@ -412,7 +412,7 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
         .map(|tc| parse_txbx_content_paragraphs(tc, ctx))
         .unwrap_or_default();
 
-    if paragraphs.is_empty() && (has_no_fill || fill.is_none()) {
+    if paragraphs.is_empty() && (has_no_fill || fill.is_none()) && stroke_color.is_none() {
         return None;
     }
 
