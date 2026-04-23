@@ -411,6 +411,10 @@
     "jaccard": 0.0778,
     "ssim": 0.2398
   },
+  "new/chinese_student_..": {
+    "jaccard": 0.0832,
+    "ssim": 0.3364
+  },
   "new/covid_insomnia_m..": {
     "jaccard": 0.2114,
     "ssim": 0.4309

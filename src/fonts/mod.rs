@@ -225,26 +225,120 @@ fn has_cjk_chars(chars: &HashSet<char>) -> bool {
     chars.iter().any(|&c| crate::docx::is_east_asian_char(c))
 }
 
-pub(crate) fn cjk_fallback_fonts() -> &'static [&'static str] {
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub(crate) enum CjkScript {
+    Unknown,
+    SimplifiedChinese,
+    TraditionalChinese,
+    Japanese,
+    Korean,
+}
+
+/// Guess the script from the primary font name so we can order the CJK
+/// fallback list to favor a font with matching metrics.
+pub(crate) fn classify_cjk_script(primary: &str) -> CjkScript {
+    // Simplified-Chinese family names (宋体/仿宋/黑体/楷体 + 华文 variants).
+    const SC_HINTS: &[&str] = &[
+        "宋体", "仿宋", "黑体", "楷体", "华文", "微软雅黑", "方正",
+        "SimSun", "SimHei", "FangSong", "KaiTi", "Microsoft YaHei",
+        "STSong", "STFangsong", "STKaiti", "STHeiti", "STZhongsong",
+    ];
+    // Traditional-Chinese hints.
+    const TC_HINTS: &[&str] = &[
+        "細明體", "新細明體", "標楷體", "微軟正黑體", "華康",
+        "PMingLiU", "MingLiU", "DFKai-SB", "Microsoft JhengHei",
+    ];
+    // Japanese hints (kanji/kana forms + common font names).
+    const JA_HINTS: &[&str] = &[
+        "明朝", "ゴシック", "メイリオ", "游明朝", "游ゴシック",
+        "ＭＳ明朝", "ＭＳ ゴシック", "ＭＳ Ｐ明朝", "ＭＳ Ｐゴシック",
+        "MS Mincho", "MS Gothic", "MS PMincho", "MS PGothic",
+        "Meiryo", "Yu Mincho", "Yu Gothic", "Hiragino",
+    ];
+    // Korean hints.
+    const KO_HINTS: &[&str] = &[
+        "바탕", "돋움", "굴림", "궁서", "맑은 고딕", "나눔",
+        "Batang", "Dotum", "Gulim", "Gungsuh", "Malgun Gothic", "Nanum",
+    ];
+
+    for h in SC_HINTS {
+        if primary.contains(h) {
+            return CjkScript::SimplifiedChinese;
+        }
+    }
+    for h in TC_HINTS {
+        if primary.contains(h) {
+            return CjkScript::TraditionalChinese;
+        }
+    }
+    for h in JA_HINTS {
+        if primary.contains(h) {
+            return CjkScript::Japanese;
+        }
+    }
+    for h in KO_HINTS {
+        if primary.contains(h) {
+            return CjkScript::Korean;
+        }
+    }
+    CjkScript::Unknown
+}
+
+pub(crate) fn cjk_fallback_fonts_for_script(script: CjkScript) -> &'static [&'static str] {
     #[cfg(target_os = "macos")]
     {
-        &[
-            "Malgun Gothic",
-            "Hiragino Sans GB",
-            "Hiragino Sans GB W3",
-            "PMingLiU",
-            "MingLiU",
-            "Songti TC",
-            "AppleSD Gothic Neo",
-            "Apple SD Gothic Neo",
-            "Hiragino Sans W3",
-            "Hiragino Kaku Gothic ProN W3",
-            "Arial Unicode MS",
-            "PingFang SC",
-        ]
+        match script {
+            CjkScript::SimplifiedChinese => &[
+                "Hiragino Sans GB",
+                "Hiragino Sans GB W3",
+                "PingFang SC",
+                "Songti SC",
+                "Malgun Gothic",
+                "PMingLiU",
+                "Arial Unicode MS",
+            ],
+            CjkScript::TraditionalChinese => &[
+                "PMingLiU",
+                "MingLiU",
+                "Songti TC",
+                "Malgun Gothic",
+                "Hiragino Sans GB",
+                "Arial Unicode MS",
+            ],
+            CjkScript::Japanese => &[
+                "Hiragino Kaku Gothic ProN W3",
+                "Hiragino Sans W3",
+                "Yu Gothic",
+                "Malgun Gothic",
+                "Arial Unicode MS",
+                "Hiragino Sans GB",
+            ],
+            CjkScript::Korean => &[
+                "Malgun Gothic",
+                "AppleSD Gothic Neo",
+                "Apple SD Gothic Neo",
+                "Hiragino Sans GB",
+                "Arial Unicode MS",
+            ],
+            CjkScript::Unknown => &[
+                "Malgun Gothic",
+                "Hiragino Sans GB",
+                "Hiragino Sans GB W3",
+                "PMingLiU",
+                "MingLiU",
+                "Songti TC",
+                "AppleSD Gothic Neo",
+                "Apple SD Gothic Neo",
+                "Hiragino Sans W3",
+                "Hiragino Kaku Gothic ProN W3",
+                "Arial Unicode MS",
+                "PingFang SC",
+            ],
+        }
     }
     #[cfg(target_os = "linux")]
     {
+        let _ = script;
         &[
             "Noto Sans CJK SC",
             "Noto Sans CJK KR",
@@ -253,6 +347,7 @@ pub(crate) fn cjk_fallback_fonts() -> &'static [&'static str] {
     }
     #[cfg(target_os = "windows")]
     {
+        let _ = script;
         &[
             "Malgun Gothic",
             "Yu Gothic",
@@ -261,6 +356,7 @@ pub(crate) fn cjk_fallback_fonts() -> &'static [&'static str] {
     }
     #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
     {
+        let _ = script;
         &[]
     }
 }
@@ -301,8 +397,9 @@ pub(crate) fn register_font(
     let needs_cjk = has_cjk_chars(used_chars);
     let table_entry = lookup_font_table(font_table, primary);
 
+    let script = classify_cjk_script(primary);
     let try_cjk_fallback = |tc: &mut dyn FnMut(&str) -> Option<ResolvedFont>| {
-        cjk_fallback_fonts().iter().find_map(|cjk_font| {
+        cjk_fallback_fonts_for_script(script).iter().find_map(|cjk_font| {
             log::debug!("Trying CJK fallback \"{cjk_font}\" for \"{primary}\"");
             let m = tc(cjk_font)?;
             log::info!("Font substitution: {primary} → CJK fallback \"{cjk_font}\"");
