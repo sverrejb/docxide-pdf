@@ -441,6 +441,11 @@ pub(super) struct PageBuilder {
 
     // Layout position state
     pub(super) slot_top: f32,
+    /// Y-position at which the current column on this page begins. For a
+    /// continuous 2-column section that starts mid-page, both the left and
+    /// right columns share this top-y so advancing from left to right returns
+    /// to where the section started rather than the top of the page.
+    pub(super) column_top_y: f32,
     pub(super) is_first_page_of_section: bool,
     /// Section that owns the current page for header/footer purposes.
     /// For continuous section breaks, this stays as the section that started
@@ -476,6 +481,7 @@ impl PageBuilder {
             styleref_running: HashMap::new(),
             styleref_page_first: HashMap::new(),
             slot_top,
+            column_top_y: slot_top,
             is_first_page_of_section: true,
             page_hf_section: 0,
             float_zone: None,
@@ -548,11 +554,12 @@ impl PageBuilder {
     ) {
         if *current_col + 1 < col_count {
             *current_col += 1;
-            self.slot_top = effective_slot_top(sp, false, ctx);
+            self.slot_top = self.column_top_y;
         } else {
             *current_col = 0;
             self.flush_page(sect_idx);
             self.slot_top = effective_slot_top(sp, false, ctx);
+            self.column_top_y = self.slot_top;
             *effective_margin_bottom = compute_effective_margin_bottom(sp, false, ctx);
             self.is_first_page_of_section = false;
         }
@@ -843,6 +850,7 @@ fn render_paragraph_block(
         if !at_top {
             state.pb.flush_page(sect_idx);
             state.pb.slot_top = effective_slot_top(sp, false, &ctx);
+            state.pb.column_top_y = state.pb.slot_top;
             state.effective_margin_bottom =
                 compute_effective_margin_bottom(sp, false, &ctx);
             state.pb.is_first_page_of_section = false;
@@ -2291,6 +2299,7 @@ fn render_paragraph_block(
     if para.page_break_after {
         state.pb.flush_page(sect_idx);
         state.pb.slot_top = effective_slot_top(sp, false, &ctx);
+        state.pb.column_top_y = state.pb.slot_top;
         state.effective_margin_bottom =
             compute_effective_margin_bottom(sp, false, &ctx);
         state.pb.is_first_page_of_section = false;
@@ -2428,6 +2437,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     }
 
                     state.pb.slot_top = effective_slot_top(sp, true, &ctx);
+                    state.pb.column_top_y = state.pb.slot_top;
                     state.effective_margin_bottom = compute_effective_margin_bottom(sp, true, &ctx);
                     state.pb.page_hf_section = sect_idx;
                     state.pb.is_first_page_of_section = true;
@@ -2460,6 +2470,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             vec![(sp.margin_left, text_width)]
         };
         state.current_col = 0;
+        // Record the starting y for this section's columns on the current
+        // page. For a mid-page continuous section, both columns begin at the
+        // same y rather than at the top of the page.
+        state.pb.column_top_y = state.pb.slot_top;
 
         for (block_idx, block) in section.blocks.iter().enumerate() {
             // If a float zone is active, decide whether to wrap text beside
@@ -2592,6 +2606,11 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             right_from_text: pos.right_from_text,
                         }
                     });
+                    let col_bounds = if col_count > 1 {
+                        Some(col_geometry[state.current_col])
+                    } else {
+                        None
+                    };
                     render_table(
                         table,
                         sp,
@@ -2602,6 +2621,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         override_pos,
                         &doc.footnotes,
                         &mut state.effective_margin_bottom,
+                        col_bounds,
                     );
                     state.prev_space_after = 0.0;
 

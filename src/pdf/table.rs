@@ -965,11 +965,13 @@ pub(super) fn render_table(
     override_pos: Option<super::FloatingTablePos>,
     footnotes: &std::collections::HashMap<u32, crate::model::Footnote>,
     effective_margin_bottom: &mut f32,
+    column_bounds: Option<(f32, f32)>,
 ) {
+    let available_w = column_bounds.map(|(_, w)| w);
     let col_widths = if table.fixed_layout {
         table.col_widths.clone()
     } else {
-        auto_fit_columns(table, ctx.fonts, None)
+        auto_fit_columns(table, ctx.fonts, available_w)
     };
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     let merge_spans = compute_merge_spans(table, &row_layouts);
@@ -983,11 +985,12 @@ pub(super) fn render_table(
             (fp.x, saved, (fp.top_from_text, fp.bottom_from_text))
         } else {
         use crate::model::TableAlignment;
-        let text_width = sp.page_width - sp.margin_left - sp.margin_right;
+        let (area_left, area_width) = column_bounds
+            .unwrap_or((sp.margin_left, sp.page_width - sp.margin_left - sp.margin_right));
         let table_total_w: f32 = col_widths.iter().sum();
         let left = match table.alignment {
-            TableAlignment::Center => sp.margin_left + (text_width - table_total_w) / 2.0,
-            TableAlignment::Right => sp.margin_left + text_width - table_total_w,
+            TableAlignment::Center => area_left + (area_width - table_total_w) / 2.0,
+            TableAlignment::Right => area_left + area_width - table_total_w,
             // When tblInd is explicitly set AND significantly different
             // from the cell margin, it positions the table edge directly.
             // When absent, or when tblInd ≈ cm.left (common in
@@ -998,9 +1001,9 @@ pub(super) fn render_table(
                 let explicit_real_indent = table.table_indent_explicit
                     && (ind - cm.left).abs() > 1.0;
                 if explicit_real_indent {
-                    sp.margin_left + ind
+                    area_left + ind
                 } else {
-                    sp.margin_left + ind - cm.left
+                    area_left + ind - cm.left
                 }
             }
         };
@@ -1038,6 +1041,7 @@ pub(super) fn render_table(
         pb.flush_page(sect_idx);
         pb.is_first_page_of_section = false;
         pb.slot_top = effective_slot_top(sp, false, ctx);
+        pb.column_top_y = pb.slot_top;
         *emb = compute_effective_margin_bottom(sp, false, ctx);
         if header_count > 0 && ri >= header_count {
             render_header_rows(

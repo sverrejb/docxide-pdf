@@ -411,6 +411,10 @@
     "jaccard": 0.0778,
     "ssim": 0.2398
   },
+  "new/covid_insomnia_m..": {
+    "jaccard": 0.2114,
+    "ssim": 0.4309
+  },
   "new/croatian_militar..": {
     "jaccard": 0.3578,
     "ssim": 0.8546,
@@ -439,10 +443,18 @@
     "ssim": 0.1845,
     "text_boundary": 0.0351
   },
+  "new/international_te..": {
+    "jaccard": 0.081,
+    "ssim": 0.197
+  },
   "new/irish_school_enr..": {
     "jaccard": 0.3356,
     "ssim": 0.5297,
     "text_boundary": 0.7054
+  },
+  "new/lenten_prayer_un..": {
+    "jaccard": 0.6265,
+    "ssim": 0.6338
   },
   "new/lithuanian_publi..": {
     "jaccard": 0.3197,
@@ -468,6 +480,10 @@
     "ssim": 0.3572,
     "text_boundary": 0.1174
   },
+  "new/school_meal_assi..": {
+    "jaccard": 0.0641,
+    "ssim": 0.1721
+  },
   "new/slovak_electoral..": {
     "jaccard": 0.3662,
     "ssim": 0.5268,
@@ -486,6 +502,10 @@
   "new/turkish_journal_..": {
     "jaccard": 0.6044,
     "ssim": 0.8297
+  },
+  "new/victorian_univer..": {
+    "jaccard": 0.1666,
+    "ssim": 0.346
   },
   "new/western_australi..": {
     "jaccard": 0.3237,
@@ -785,8 +805,8 @@
     "convert_ms": 22.0
   },
   "scraped/transition_to_wo..": {
-    "jaccard": 0.3212,
-    "ssim": 0.4349,
+    "jaccard": 0.3213,
+    "ssim": 0.435,
     "text_boundary": 0.3029,
     "convert_ms": 493.0
   },
