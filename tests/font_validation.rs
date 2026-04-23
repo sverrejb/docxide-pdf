@@ -265,10 +265,7 @@ fn parse_theme_fonts(archive: &mut zip::ZipArchive<fs::File>) -> (Option<String>
 
 /// Check if any w:r element lacks an explicit w:rFonts AND its parent paragraph's
 /// style doesn't provide a font (i.e., the run truly relies on the document default font).
-fn has_runs_without_font(
-    doc: &roxmltree::Document,
-    style_fonts: &HashMap<String, String>,
-) -> bool {
+fn has_runs_without_font(doc: &roxmltree::Document, style_fonts: &HashMap<String, String>) -> bool {
     let w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
     for node in doc.descendants() {
         if node.tag_name().name() == "r"
@@ -377,9 +374,8 @@ fn collect_used_styles(doc: &roxmltree::Document, styles: &mut BTreeSet<String>)
                 continue;
             }
             let rpr = run.children().find(|c| c.tag_name().name() == "rPr");
-            let has_explicit_font = rpr.is_some_and(|rpr| {
-                rpr.children().any(|n| n.tag_name().name() == "rFonts")
-            });
+            let has_explicit_font =
+                rpr.is_some_and(|rpr| rpr.children().any(|n| n.tag_name().name() == "rFonts"));
             if !has_explicit_font {
                 if let Some(rpr) = rpr {
                     for n in rpr.children() {
@@ -606,7 +602,10 @@ fn analyze_fixture(fixture_dir: &Path) -> Option<FixtureResult> {
         .collect();
 
     let pass = missing.is_empty() && unexpected_fallbacks.is_empty()
-        || (!missing.is_empty() && unexpected_fallbacks.iter().all(|f| FALLBACK_FONTS.contains(&f.as_str())));
+        || (!missing.is_empty()
+            && unexpected_fallbacks
+                .iter()
+                .all(|f| FALLBACK_FONTS.contains(&f.as_str())));
 
     let group = common::group_name(fixture_dir);
 

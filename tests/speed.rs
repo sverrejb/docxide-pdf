@@ -64,7 +64,10 @@ fn conversion_speed() {
     let mut total_previous_ms = 0.0;
     let mut has_previous_total = true;
 
-    println!("\n{:<40} {:>10} {:>10} {:>8}", "Fixture", "Time(ms)", "Prev(ms)", "Delta");
+    println!(
+        "\n{:<40} {:>10} {:>10} {:>8}",
+        "Fixture", "Time(ms)", "Prev(ms)", "Delta"
+    );
     println!("{}", "-".repeat(72));
 
     for r in &results {
@@ -112,10 +115,7 @@ fn conversion_speed() {
     } else {
         "-".to_string()
     };
-    println!(
-        "{:<40} {:>10.1} {:>10}",
-        "TOTAL", total_ms, total_prev_str
-    );
+    println!("{:<40} {:>10.1} {:>10}", "TOTAL", total_ms, total_prev_str);
 
     if has_previous_total && total_previous_ms > 0.0 {
         let total_ratio = total_ms / total_previous_ms;

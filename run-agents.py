@@ -6,26 +6,39 @@ Usage:
     python3 run-agents.py --worst 3                  # auto-pick 3 worst from new/
     python3 run-agents.py --worst 6 --workers 3      # 6 cases across 3 workers
     python3 run-agents.py --annotations 4            # auto-pick 4 random annotated cases
+    python3 run-agents.py --discover 3               # download 3 new DOCX, name, convert, then work on them
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import random
+import shutil
 import subprocess
 import sys
+import threading
+import time
+import uuid
+import zipfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 from textwrap import dedent
+from xml.etree import ElementTree as ET
 
 REPO_ROOT = Path(__file__).resolve().parent
 FIXTURES_DIR = REPO_ROOT / "tests" / "fixtures"
 BASELINES_PATH = REPO_ROOT / "tests" / "baselines.json"
 SKIPLIST_PATH = FIXTURES_DIR / "SKIPLIST"
 CASE_HISTORY_DIR = REPO_ROOT / "logs" / "case-history"
+DOWNLOAD_DIR = REPO_ROOT / "downloads"
+MANIFEST_PATH = REPO_ROOT.parent / "docx-corpus" / "manifest.txt"
+NEW_DIR = FIXTURES_DIR / "new"
+
+WML_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 
 # Gitignored dirs to symlink into worktrees (shared, read-heavy)
 SYMLINK_DIRS = [
@@ -196,6 +209,305 @@ def history_file_for(case_name: str) -> Path:
     """Return the path to the persistent history file for a case."""
     CASE_HISTORY_DIR.mkdir(parents=True, exist_ok=True)
     return CASE_HISTORY_DIR / f"{case_name}.md"
+
+
+# ── Discovery helpers ──────────────────────────────────────────────────────
+
+
+def collect_existing_content_hashes() -> set[str]:
+    """SHA-256 hash every input.docx across all fixture groups."""
+    hashes: set[str] = set()
+    for group_dir in FIXTURES_DIR.iterdir():
+        if group_dir.is_dir():
+            for case_dir in group_dir.iterdir():
+                docx = case_dir / "input.docx"
+                if docx.exists():
+                    hashes.add(hashlib.sha256(docx.read_bytes()).hexdigest())
+    return hashes
+
+
+def collect_existing_names() -> set[str]:
+    """All directory names across all fixture groups."""
+    names: set[str] = set()
+    for group_dir in FIXTURES_DIR.iterdir():
+        if group_dir.is_dir():
+            for case_dir in group_dir.iterdir():
+                if case_dir.is_dir():
+                    names.add(case_dir.name)
+    return names
+
+
+def extract_text_snippet(docx_path: Path, max_chars: int = 500) -> str:
+    """Extract raw text from a DOCX for naming purposes."""
+    try:
+        with zipfile.ZipFile(docx_path) as zf:
+            if "word/document.xml" not in zf.namelist():
+                return ""
+            xml = zf.read("word/document.xml")
+        root = ET.fromstring(xml)
+        texts = []
+        for t in root.iter(f"{{{WML_NS}}}t"):
+            if t.text:
+                texts.append(t.text)
+            if sum(len(s) for s in texts) > max_chars:
+                break
+        return " ".join(texts)[:max_chars]
+    except Exception:
+        return ""
+
+
+def name_files_with_claude(file_snippets: dict[str, str], existing_names: set[str]) -> dict[str, str]:
+    """Call claude -p once to name all files. Returns {hash: name}."""
+    existing_list = ", ".join(sorted(existing_names)) if existing_names else "(none)"
+
+    entries = []
+    for h, text in file_snippets.items():
+        preview = text[:300].replace("\n", " ").strip()
+        entries.append(f"- **{h}**: {preview}")
+    file_list = "\n".join(entries)
+
+    prompt = f"""\
+I have {len(file_snippets)} DOCX files that need descriptive English snake_case names.
+The names should describe what the document is about (e.g. "czech_health_statement_form", "russian_volunteerism_essay", "who_prescribing_patterns_table").
+
+Rules:
+- English snake_case, 3-5 words, max 40 chars
+- Describe the document's topic/purpose, not its language
+- If the text is in a non-English language, translate the topic to English
+- Each name must be unique and not collide with existing names
+- No generic names like "document_1" or "test_file"
+
+Existing names (avoid these): {existing_list}
+
+Files to name (hash: text preview):
+{file_list}
+
+Respond with ONLY a JSON object mapping hash to name, nothing else. Example:
+{{"abc123": "italian_budget_report", "def456": "korean_school_schedule"}}"""
+
+    print("Asking Claude to name files...")
+    result = subprocess.run(
+        ["claude", "-p", "--model", "haiku", "--output-format", "json", prompt],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"Error: Claude naming failed: {result.stderr}", file=sys.stderr)
+        return {}
+
+    try:
+        response = json.loads(result.stdout)
+        if "result" in response and isinstance(response["result"], str):
+            inner = response["result"]
+            start = inner.find("{")
+            end = inner.rfind("}") + 1
+            if start >= 0 and end > start:
+                return json.loads(inner[start:end])
+        elif all(isinstance(v, str) for v in response.values()):
+            return response
+    except (json.JSONDecodeError, AttributeError):
+        try:
+            text = result.stdout
+            start = text.find("{")
+            end = text.rfind("}") + 1
+            if start >= 0 and end > start:
+                return json.loads(text[start:end])
+        except json.JSONDecodeError:
+            pass
+
+    print(f"Error: could not parse Claude naming response: {result.stdout[:500]}", file=sys.stderr)
+    return {}
+
+
+DISMISS_SCRIPT = """
+    tell application "System Events"
+        tell process "Microsoft Word"
+            if exists (button "Yes" of window 1) then
+                click button "Yes" of window 1
+            else if exists (button "OK" of window 1) then
+                click button "OK" of window 1
+            end if
+        end tell
+    end tell
+"""
+
+
+def _dialog_watcher(stop_event: threading.Event) -> None:
+    while not stop_event.is_set():
+        subprocess.run(["osascript", "-e", DISMISS_SCRIPT], capture_output=True)
+        time.sleep(0.5)
+
+
+def convert_docx_to_reference_pdf(docx_path: Path, pdf_path: Path) -> bool:
+    """Convert a DOCX to reference PDF via MS Word. Returns True on success."""
+    staging = Path.home() / "Documents" / f"_docx_convert_{uuid.uuid4().hex}"
+    staging.mkdir()
+    try:
+        tmp_docx = staging / "input.docx"
+        tmp_pdf = staging / "input.pdf"
+        shutil.copy2(docx_path, tmp_docx)
+        subprocess.run(["xattr", "-d", "com.apple.quarantine", str(tmp_docx)], capture_output=True)
+
+        script = f"""
+            tell application "Microsoft Word"
+                set display alerts to -2
+                open POSIX file "{tmp_docx.resolve()}"
+                delay 2
+                set theDoc to document 1
+                save as theDoc file name "{tmp_pdf.resolve()}" file format format PDF
+                close theDoc saving no
+                set display alerts to 0
+            end tell
+        """
+        stop_event = threading.Event()
+        watcher = threading.Thread(target=_dialog_watcher, args=(stop_event,), daemon=True)
+        watcher.start()
+        result = subprocess.run(["osascript", "-e", script], capture_output=True, text=True)
+        stop_event.set()
+
+        if result.returncode != 0:
+            print(f"  Word conversion failed: {result.stderr.strip()}", file=sys.stderr)
+            return False
+        if not tmp_pdf.exists():
+            print("  Word conversion produced no PDF", file=sys.stderr)
+            return False
+
+        shutil.move(str(tmp_pdf), pdf_path)
+        return True
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+
+
+def discover_new_cases(
+    count: int,
+    min_size: int = 10_000,
+    max_size: int = 500_000,
+) -> list[str]:
+    """Download, deduplicate, name, and convert new DOCX files. Returns list of case names."""
+    if not MANIFEST_PATH.exists():
+        print(f"Error: manifest not found at {MANIFEST_PATH}", file=sys.stderr)
+        sys.exit(1)
+
+    all_hashes = [h.strip() for h in MANIFEST_PATH.read_text().splitlines() if h.strip()]
+    existing_content_hashes = collect_existing_content_hashes()
+    existing_names = collect_existing_names()
+
+    # Skip manifest hashes we've already downloaded
+    existing_manifest_hashes: set[str] = set()
+    if DOWNLOAD_DIR.exists():
+        for f in DOWNLOAD_DIR.glob("*.docx"):
+            existing_manifest_hashes.add(f.stem)
+
+    available = [h for h in all_hashes if h not in existing_manifest_hashes]
+    random.shuffle(available)
+    print(f"Manifest: {len(all_hashes)} total, {len(existing_content_hashes)} existing fixtures, {len(available)} available")
+
+    DOWNLOAD_DIR.mkdir(exist_ok=True)
+    NEW_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Phase 1: Download candidates (over-fetch to account for filtering)
+    candidates: list[tuple[str, Path]] = []
+    target = count * 3
+
+    for h in available:
+        if len(candidates) >= target:
+            break
+
+        dest = DOWNLOAD_DIR / f"{h}.docx"
+        if not dest.exists():
+            print(f"  Downloading {h[:16]}...")
+            result = subprocess.run(
+                ["curl", "-sf", "-o", str(dest), f"https://docxcorp.us/documents/{h}.docx"],
+                capture_output=True,
+            )
+            if result.returncode != 0:
+                continue
+
+        size = dest.stat().st_size
+        if size < min_size or size > max_size:
+            continue
+        if not zipfile.is_zipfile(dest):
+            continue
+
+        content_hash = hashlib.sha256(dest.read_bytes()).hexdigest()
+        if content_hash in existing_content_hashes:
+            print(f"  {h[:16]}: duplicate content, skipping")
+            continue
+        existing_content_hashes.add(content_hash)
+
+        text = extract_text_snippet(dest)
+        if len(text.strip()) < 30:
+            continue
+
+        candidates.append((h, dest))
+
+    print(f"Downloaded {len(candidates)} valid candidates for {count} slots")
+    candidates = candidates[:count]
+
+    if not candidates:
+        print("Error: no valid candidates found", file=sys.stderr)
+        sys.exit(1)
+
+    # Phase 2: Name with Claude
+    snippets = {h: extract_text_snippet(path) for h, path in candidates}
+    names = name_files_with_claude(snippets, existing_names)
+    if not names:
+        print("Error: Claude naming returned no names", file=sys.stderr)
+        sys.exit(1)
+
+    used_names: set[str] = set(existing_names)
+    hash_to_name: dict[str, str] = {}
+    for h, _ in candidates:
+        name = names.get(h)
+        if not name or name in used_names:
+            print(f"  Warning: no valid name for {h[:16]} (got {name!r}), skipping")
+            continue
+        name = name.strip().lower().replace(" ", "_").replace("-", "_")
+        name = "".join(c for c in name if c.isalnum() or c == "_").strip("_")
+        if not name or name in used_names:
+            continue
+        hash_to_name[h] = name
+        used_names.add(name)
+
+    print(f"Named {len(hash_to_name)} files:")
+    for h, name in hash_to_name.items():
+        print(f"  {h[:16]} -> {name}")
+
+    # Phase 3: Create fixtures and convert to PDF
+    created: list[str] = []
+    for h, docx_path in candidates:
+        name = hash_to_name.get(h)
+        if not name:
+            continue
+
+        case_dir = NEW_DIR / name
+        case_dir.mkdir(exist_ok=True)
+        shutil.copy2(docx_path, case_dir / "input.docx")
+
+        print(f"  Converting {name} to PDF via Word...")
+        if convert_docx_to_reference_pdf(case_dir / "input.docx", case_dir / "reference.pdf"):
+            print(f"  {name} — OK")
+            created.append(name)
+        else:
+            print(f"  {name} — PDF conversion failed, removing fixture")
+            shutil.rmtree(case_dir)
+
+    print(f"Created {len(created)} new fixtures in {NEW_DIR}")
+
+    # Commit new fixtures to main so worktrees (branched from HEAD) include them
+    if created:
+        for name in created:
+            subprocess.run(
+                ["git", "-C", str(REPO_ROOT), "add", str(NEW_DIR / name)],
+                capture_output=True, check=False,
+            )
+        names_str = ", ".join(created)
+        subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "commit", "-m", f"Add discovered fixtures: {names_str}"],
+            capture_output=True, check=False,
+        )
+        print(f"Committed {len(created)} new fixtures to main")
+
+    return created
 
 
 # ── Worktree management ─────────────────────────────────────────────────────
@@ -391,6 +703,155 @@ def build_prompt(case_name: str, case_path: str, progress_file: Path, logs_dir: 
     """)
 
 
+def build_discovery_prompt(case_name: str, case_path: str, progress_file: Path, logs_dir: Path) -> str:
+    """Prompt for newly discovered fixtures — emphasizes feature analysis over score chasing."""
+    history = get_case_history(case_name)
+    history_path = history_file_for(case_name)
+
+    history_section = ""
+    if history:
+        history_section = (
+            "\n        ## History from previous runs\n"
+            "        The following is a log from previous agent runs on this case. Read it carefully —"
+            " it documents what was tried, what worked, what failed, and what was learned."
+            " Do NOT repeat failed approaches.\n\n"
+            f"        ```\n{history}\n        ```\n"
+        )
+
+    return dedent(f"""\
+        You are working on the docxside-pdf project — a Rust library that converts DOCX files to PDF.
+        This is a **newly discovered** test fixture: **{case_name}** (path: tests/fixtures/{case_path}/).
+        It has never been tested before. Your job is to analyze it thoroughly and fix any rendering issues that are caused by
+        unhandled features, missing implementations, or bugs in our code.
+        {history_section}
+        ## Your goal
+        1. Run the test and establish a baseline score
+        2. Thoroughly analyze what DOCX features this document uses
+        3. Identify which features we handle poorly or not at all
+        4. Fix the most impactful issues — prioritizing missing/broken features over spacing precision
+        5. If the score is low ONLY because of systemic text rendering issues (spacing, kerning, line height, drift), log that finding and stop early
+
+        ## EARLY TERMINATION RULE
+        After your initial investigation (steps 1-3 below), you must make a judgment call:
+
+        If the diff images show that our output has the **right structure** (correct elements rendered, borders present, images placed, etc.)
+        and the remaining differences are ONLY:
+        - Word/character spacing or kerning precision
+        - Line height or line spacing drift
+        - Vertical or horizontal positional drift/accumulation
+        - Font metric differences (slightly different glyph widths)
+        - Page break position differences caused by accumulated spacing drift
+
+        Then this fixture has **no actionable issues for you**. Log your analysis and write the outcome file with
+        `"improved": false` and a summary explaining that the remaining gap is systemic text rendering.
+        Do NOT spend time trying to micro-adjust spacing — that work is tracked separately.
+
+        However, if you see ANY of these, those ARE actionable and you should fix them:
+        - Missing borders, backgrounds, shading, or fills
+        - Missing or broken images, shapes, or drawings
+        - Missing text effects (bold, italic, underline, strikethrough, smallcaps, allcaps, etc.)
+        - Entirely missing content blocks (paragraphs, table rows, sections)
+        - Wrong colors or wrong fonts being selected
+        - Tables with missing cells, wrong column widths, or missing gridlines
+        - Headers/footers not rendered
+        - List numbering or bullet issues
+        - Any DOCX feature that we simply don't handle at all
+        - Anything that looks like a bug (wrong rendering) vs. imprecision (slightly off rendering)
+
+        ## Progress logging
+        After each significant action, append a timestamped entry to your progress file:
+          echo "$(date '+%H:%M:%S') — <what you did and what happened>" >> "{progress_file}"
+
+        ## Workflow
+        1. **Run the initial test** to establish a baseline:
+           ./tools/run-tests.sh --case {case_name} --test visual_comparison
+           Log the starting scores.
+
+        2. **Inspect the fixture thoroughly.** Use `./tools/target/debug/docx-inspect tests/fixtures/{case_path}/input.docx` to list ZIP entries.
+           Then examine key XML files:
+           - `word/document.xml` — what elements and features are used?
+           - `word/styles.xml` — any unusual styles?
+           - Check for: tables, images, charts, shapes, textboxes, headers/footers, numbering, etc.
+
+        3. **Analyze the diff images.** Look at tests/output/{case_path}/diff/ — blue = reference only, red = generated only.
+           Categorize what you see:
+           - **Structural issues** (missing elements, wrong layout) → these are fixable
+           - **Spacing/drift issues** (content present but shifted) → these are systemic, skip them
+           Write your analysis to the progress file.
+
+        4. **If only systemic issues remain:** Skip to the Finalization section. Log your findings.
+
+        5. **If actionable issues exist:** Make targeted fixes in the Rust source code. After each change, run:
+           ./tools/run-tests.sh --case {case_name} --test visual_comparison
+
+        6. **Check for regressions** before finalizing:
+           ./tools/run-tests.sh --test visual_comparison
+
+        7. **Accept baselines** for all changed scores:
+           ./tools/target/debug/accept-baselines
+
+        ## Token efficiency — IMPORTANT
+        - ALWAYS use `./tools/run-tests.sh` instead of raw `cargo test`
+        - Use `./tools/run-tests.sh --verbose` ONLY if you need full output for debugging
+        - Read only specific line ranges, not entire files
+        - When inspecting DOCX XML, dump only the specific internal file you need
+        - Keep bash command output short — use head/tail/grep to filter
+
+        ## Finalization — MANDATORY
+
+        **Step 1: Update the case history log.** Append a summary to `{history_path}`. Include:
+        - Date and starting/ending scores
+        - Full feature analysis: what DOCX features this document uses
+        - What you investigated and found
+        - What you tried and whether it worked
+        - What remains to be done
+        - Classification: "systemic-only" if no actionable issues, or list of specific feature gaps
+
+        **Step 2: Write the outcome file.**
+        Write this file as your very last action to: `{logs_dir / (case_name + ".outcome.json")}`
+
+        ```json
+        {{
+          "case": "{case_name}",
+          "case_path": "{case_path}",
+          "improved": true,
+          "target_before": {{"jaccard": 0.0, "ssim": 0.0}},
+          "target_after": {{"jaccard": 0.0, "ssim": 0.0}},
+          "regressions": [],
+          "discovery_analysis": {{
+            "features_found": ["list", "of", "DOCX", "features", "used"],
+            "unhandled_features": ["features", "we", "dont", "support"],
+            "systemic_only": false,
+            "classification": "actionable|systemic-only|mixed"
+          }},
+          "summary": "Description of what you found and changed"
+        }}
+        ```
+
+        Rules for the outcome:
+        - **"improved": true** only if Jaccard OR SSIM increased by at least 0.5% (0.005)
+        - **"regressions"** lists ANY other case where Jaccard or SSIM dropped by more than 2% (0.02)
+        - **"discovery_analysis"** is specific to discovery mode — document what features the fixture uses
+        - If `systemic_only` is true, set `improved` to false
+        - **Commit your changes** (code + baselines.json) before writing the outcome file. End every commit message with:
+          Automated-by: run-agents.py ({case_name})
+
+        ## Important rules
+        - Do NOT modify test fixtures or reference PDFs
+        - Do NOT modify the test harness or scoring thresholds
+        - Keep changes minimal and focused
+        - If the case fails due to missing fonts, log that and move on to other issues
+        - The DOCX spec can be queried via the local RAG tool (mcp__local-rag__query_documents)
+
+        ## Key environment
+        - Run tests (compact): ./tools/run-tests.sh --case {case_name} --test visual_comparison
+        - Run tests (verbose): ./tools/run-tests.sh --case {case_name} --test visual_comparison --verbose
+        - Run full suite: ./tools/run-tests.sh
+        - Inspect DOCX: ./tools/target/debug/docx-inspect tests/fixtures/{case_path}/input.docx [path]
+        - Analysis: ./tools/target/debug/analyze-fixtures --grep "pattern"
+    """)
+
+
 # ── Agent launcher ───────────────────────────────────────────────────────────
 
 
@@ -401,6 +862,7 @@ def launch_agent(
     model: str,
     max_turns: int | None,
     permission_mode: str,
+    discovery: bool = False,
 ) -> dict:
     """Run a single agent in a worktree. Called in a subprocess via ProcessPoolExecutor."""
     progress_file = logs_dir / f"{case_name}.log"
@@ -415,7 +877,10 @@ def launch_agent(
         progress_file.write_text(f"{timestamp} — Failed to setup worktree: {e}\n")
         return {"case": case_name, "error": f"worktree setup failed: {e}"}
 
-    prompt = build_prompt(case_name, case_path, progress_file, logs_dir)
+    if discovery:
+        prompt = build_discovery_prompt(case_name, case_path, progress_file, logs_dir)
+    else:
+        prompt = build_prompt(case_name, case_path, progress_file, logs_dir)
 
     cmd = [
         "claude", "-p",
@@ -492,12 +957,16 @@ def parse_outcome(outcome_file: str) -> dict | None:
         before = _extract_dict(data, "target_before", "before", "score_before")
         after = _extract_dict(data, "target_after", "after", "score_after")
 
+        # Discovery analysis (optional, only in discover mode)
+        discovery = data.get("discovery_analysis")
+
         return {
             "improved": bool(improved),
             "regressions": reg if isinstance(reg, list) else [],
             "summary": summary,
             "target_before": before,
             "target_after": after,
+            "discovery_analysis": discovery,
         }
     except Exception as e:
         return {"error": str(e)}
@@ -588,6 +1057,14 @@ def process_results(results: list[dict], logs_dir: Path):
         print(f"  Jaccard: {before.get('jaccard', '?')} -> {after.get('jaccard', '?')}")
         print(f"  SSIM:    {before.get('ssim', '?')} -> {after.get('ssim', '?')}")
 
+        discovery = outcome.get("discovery_analysis")
+        if discovery and isinstance(discovery, dict):
+            classification = discovery.get("classification", "?")
+            print(f"  Discovery: {classification}")
+            unhandled = discovery.get("unhandled_features", [])
+            if unhandled:
+                print(f"  Unhandled features: {', '.join(unhandled)}")
+
         if outcome["improved"] and len(regs) == 0:
             print(f"  Improved with no regressions — auto-merging into main")
             ok, msg = try_merge(case_name, wt_path)
@@ -659,12 +1136,25 @@ def main():
     parser.add_argument("cases", nargs="*", help="Case names to work on")
     parser.add_argument("--worst", type=int, default=0, help="Auto-select N worst-scoring cases from new/")
     parser.add_argument("--annotations", type=int, default=0, help="Auto-select N random cases with unfixed annotations")
+    parser.add_argument("--discover", type=int, default=0,
+                        help="Download N new DOCX files, name them, convert to PDF, and launch discovery agents")
     parser.add_argument("--model", default="opus", help="Claude model (default: opus)")
     parser.add_argument("--max-turns", type=int, default=None, help="Max conversation turns per agent")
     parser.add_argument("--permission", default="auto", help="Permission mode (default: auto)")
     args = parser.parse_args()
 
+    discovery_cases: set[str] = set()
     cases = list(args.cases)
+
+    if args.discover > 0:
+        print(f"\n{'=' * 60}")
+        print(f"Discovery mode: downloading and preparing {args.discover} new fixtures...")
+        print(f"{'=' * 60}\n")
+        discovered = discover_new_cases(args.discover)
+        cases.extend(discovered)
+        discovery_cases.update(discovered)
+        print(f"\nDiscovered {len(discovered)} new cases: {' '.join(discovered)}\n")
+
     if args.worst > 0:
         worst = pick_worst_cases(args.worst)
         cases.extend(worst)
@@ -675,7 +1165,7 @@ def main():
         print(f"Auto-selected {len(annotated)} annotated cases: {' '.join(annotated)}")
 
     if not cases:
-        parser.error("No cases specified. Use --worst N, --annotations N, or pass case names.")
+        parser.error("No cases specified. Use --worst N, --annotations N, --discover N, or pass case names.")
 
     # Resolve to group/case paths
     case_paths = {name: resolve_case_path(name) for name in cases}
@@ -688,6 +1178,8 @@ def main():
 
     print(f"\nLaunching {len(cases)} agents (one per case)...")
     print(f"Cases: {' '.join(cases)}")
+    if discovery_cases:
+        print(f"Discovery mode: {' '.join(discovery_cases)}")
     print(f"\nMonitor progress:")
     print(f"  tail -f {logs_dir}/*.log\n")
 
@@ -703,6 +1195,7 @@ def main():
                 args.model,
                 args.max_turns,
                 args.permission,
+                discovery=name in discovery_cases,
             ): name
             for name in cases
         }
