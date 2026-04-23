@@ -889,6 +889,7 @@ pub(super) fn build_tabbed_line(
     tab_stops: &[TabStop],
     indent_left: f32,
     max_width: f32,
+    indent_right: f32,
     first_line_hanging: f32,
     inline_image_names: &HashMap<usize, String>,
     effect_inline_names: &HashMap<usize, super::images::EffectXObjs>,
@@ -977,7 +978,13 @@ pub(super) fn build_tabbed_line(
                 resolve_tab_aligned_start(&stop, effective_tab_target, seg_runs, seen_fonts, current_x);
             let mut resolved_leader = stop.leader;
 
-            if seg_start > line_max && !all_chunks.is_empty() {
+            // Explicit tab stops may legitimately target positions beyond the
+            // paragraph's right indent — TOC entries are a common case where a
+            // right-aligned page-number tab sits near the content edge. Allow
+            // segments to extend up to the physical content edge (indent_right
+            // beyond max_width) before forcing a wrap.
+            let wrap_limit = line_max + indent_right;
+            if seg_start > wrap_limit && !all_chunks.is_empty() {
                 result_lines.push(finish_line(&mut all_chunks));
                 current_x = 0.0;
                 is_first_line = false;

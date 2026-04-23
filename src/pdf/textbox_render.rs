@@ -72,7 +72,7 @@ pub(super) fn render_single_textbox(
             let lines = if tp.runs.iter().any(|r| r.is_tab) {
                 build_tabbed_line(
                     &tp.runs, ctx.fonts, &tp.tab_stops, tp.indent_left,
-                    tw, hang, &empty_imgs, &empty_fx, ctx.default_tab_stop,
+                    tw, tp.indent_right, hang, &empty_imgs, &empty_fx, ctx.default_tab_stop,
                 )
             } else {
                 build_paragraph_lines(
@@ -183,7 +183,7 @@ pub(super) fn render_single_textbox(
                 let lines = if has_tabs {
                     build_tabbed_line(
                         &tp.runs, ctx.fonts, &tp.tab_stops, tp.indent_left,
-                        tp_text_w, text_hanging, &empty_inline_imgs_pre,
+                        tp_text_w, tp.indent_right, text_hanging, &empty_inline_imgs_pre,
                         &empty_fx_pre, ctx.default_tab_stop,
                     )
                 } else {
@@ -313,7 +313,7 @@ pub(super) fn render_textbox_paragraphs(
         let tb_lines = if tp.runs.iter().any(|r| r.is_tab) {
             build_tabbed_line(
                 &tp.runs, ctx.fonts, &tp.tab_stops, tp.indent_left,
-                tp_text_w, text_hanging, &empty_imgs, &empty_fx, ctx.default_tab_stop,
+                tp_text_w, tp.indent_right, text_hanging, &empty_imgs, &empty_fx, ctx.default_tab_stop,
             )
         } else {
             build_paragraph_lines(

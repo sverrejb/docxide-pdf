@@ -494,6 +494,7 @@ pub(super) fn compute_row_layouts(
                                             &para.tab_stops,
                                             para.indent_left,
                                             para_text_w,
+                                            para.indent_right,
                                             hanging,
                                             &EMPTY_INLINE_IMAGE_MAP,
                                             &EMPTY_EFFECT_MAP,

@@ -407,6 +407,10 @@
     "ssim": 0.8253,
     "text_boundary": 0.9667
   },
+  "new/carbon_farming_i..": {
+    "jaccard": 0.0778,
+    "ssim": 0.2398
+  },
   "new/croatian_militar..": {
     "jaccard": 0.3578,
     "ssim": 0.8546,
@@ -416,6 +420,14 @@
     "jaccard": 0.4663,
     "ssim": 0.632,
     "text_boundary": 0.6508
+  },
+  "new/dental_amalgam_r..": {
+    "jaccard": 0.2017,
+    "ssim": 0.7795
+  },
+  "new/dutch_government..": {
+    "jaccard": 0.1648,
+    "ssim": 0.9269
   },
   "new/english_town_cou..": {
     "jaccard": 0.2662,
@@ -442,6 +454,10 @@
     "ssim": 0.2785,
     "text_boundary": 0.5756
   },
+  "new/polish_procureme..": {
+    "jaccard": 0.2749,
+    "ssim": 0.5632
+  },
   "new/russian_municipa..": {
     "jaccard": 0.4837,
     "ssim": 0.8044,
@@ -466,6 +482,14 @@
     "jaccard": 0.1183,
     "ssim": 0.2121,
     "text_boundary": 0.1875
+  },
+  "new/turkish_journal_..": {
+    "jaccard": 0.6044,
+    "ssim": 0.8297
+  },
+  "new/western_australi..": {
+    "jaccard": 0.3237,
+    "ssim": 0.5369
   },
   "new/who_prescribing_..": {
     "jaccard": 0.1225,
