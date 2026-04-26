@@ -7,6 +7,8 @@
 
 Usage:
     uv run tools/convert_fixtures_to_pdf.py tests/fixtures/new
+    uv run tools/convert_fixtures_to_pdf.py --file tests/fixtures/cases/case1
+    uv run tools/convert_fixtures_to_pdf.py --file path/to/some.docx
 """
 
 import argparse
@@ -67,55 +69,84 @@ def convert_to_pdf(tmp_docx: Path, tmp_pdf: Path) -> None:
         raise RuntimeError(result.stderr.strip())
 
 
+def _convert_one(staging: Path, name: str, input_docx: Path, output_pdf: Path) -> bool:
+    tmp_docx = staging / f"{name}.docx"
+    tmp_pdf = staging / f"{name}.pdf"
+    shutil.copy2(input_docx, tmp_docx)
+    subprocess.run(["xattr", "-d", "com.apple.quarantine", str(tmp_docx)], capture_output=True)
+
+    try:
+        convert_to_pdf(tmp_docx.resolve(), tmp_pdf.resolve())
+    except Exception as e:
+        log.error("FAIL %s — %s", name, e)
+        return False
+
+    if not tmp_pdf.exists():
+        log.warning("FAIL %s — PDF not created", name)
+        return False
+
+    shutil.move(str(tmp_pdf), output_pdf)
+    log.info("OK   %s", name)
+    return True
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Convert input.docx to reference.pdf for fixture dirs missing a reference."
     )
-    parser.add_argument("fixture_root", type=Path, help="Root folder containing fixture subdirectories")
+    parser.add_argument("fixture_root", type=Path, nargs="?",
+                        help="Root folder containing fixture subdirectories")
+    parser.add_argument("--file", dest="single", type=Path,
+                        help="Convert a single fixture dir (containing input.docx) or .docx file")
     parser.add_argument("--force", action="store_true", help="Re-convert even if reference.pdf exists")
     args = parser.parse_args()
 
-    if not args.fixture_root.is_dir():
-        raise SystemExit(f"Not a directory: {args.fixture_root}")
-
-    dirs = sorted(
-        d for d in args.fixture_root.iterdir()
-        if d.is_dir() and (d / "input.docx").exists()
-    )
-
-    to_convert = [
-        d for d in dirs
-        if args.force or not (d / "reference.pdf").exists()
-    ]
-
-    log.info("Found %d fixture dirs, %d need conversion", len(dirs), len(to_convert))
-    if not to_convert:
-        log.info("Nothing to do.")
-        return
+    if bool(args.fixture_root) == bool(args.single):
+        parser.error("Provide either a fixture_root positional or --file, not both.")
 
     staging = Path.home() / "Documents" / f"_docx_convert_{uuid.uuid4().hex}"
     staging.mkdir()
 
     try:
+        if args.single:
+            target = args.single
+            if target.is_dir():
+                input_docx = target / "input.docx"
+                output_pdf = target / "reference.pdf"
+                name = target.name
+            elif target.is_file() and target.suffix.lower() == ".docx":
+                input_docx = target
+                output_pdf = target.with_name("reference.pdf")
+                name = target.stem
+            else:
+                raise SystemExit(f"--file must be a fixture dir or .docx file: {target}")
+
+            if not input_docx.exists():
+                raise SystemExit(f"Missing input: {input_docx}")
+
+            _convert_one(staging, name, input_docx, output_pdf)
+            return
+
+        if not args.fixture_root.is_dir():
+            raise SystemExit(f"Not a directory: {args.fixture_root}")
+
+        dirs = sorted(
+            d for d in args.fixture_root.iterdir()
+            if d.is_dir() and (d / "input.docx").exists()
+        )
+        to_convert = [
+            d for d in dirs
+            if args.force or not (d / "reference.pdf").exists()
+        ]
+
+        log.info("Found %d fixture dirs, %d need conversion", len(dirs), len(to_convert))
+        if not to_convert:
+            log.info("Nothing to do.")
+            return
+
         for fixture_dir in to_convert:
-            name = fixture_dir.name
-            input_docx = fixture_dir / "input.docx"
-            log.info("Converting %s", name)
-
-            tmp_docx = staging / f"{name}.docx"
-            tmp_pdf = staging / f"{name}.pdf"
-            shutil.copy2(input_docx, tmp_docx)
-            subprocess.run(["xattr", "-d", "com.apple.quarantine", str(tmp_docx)], capture_output=True)
-
-            try:
-                convert_to_pdf(tmp_docx.resolve(), tmp_pdf.resolve())
-                if tmp_pdf.exists():
-                    shutil.move(str(tmp_pdf), fixture_dir / "reference.pdf")
-                    log.info("OK   %s", name)
-                else:
-                    log.warning("FAIL %s — PDF not created", name)
-            except Exception as e:
-                log.error("FAIL %s — %s", name, e)
+            log.info("Converting %s", fixture_dir.name)
+            _convert_one(staging, fixture_dir.name, fixture_dir / "input.docx", fixture_dir / "reference.pdf")
     finally:
         shutil.rmtree(staging)
 

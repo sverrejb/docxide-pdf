@@ -679,7 +679,9 @@ def build_prompt(case_name: str, case_path: str, progress_file: Path, logs_dir: 
         Rules for the outcome:
         - **"improved": true** only if Jaccard OR SSIM increased by at least 0.5% (0.005) on the target case
         - **"regressions"** lists ANY other case where Jaccard or SSIM dropped by more than 2% (0.02) compared to the committed baselines.json. Each entry: {{"case": "name", "metric": "jaccard|ssim", "before": 0.0, "after": 0.0}}. Leave as empty array [] if no regressions.
-        - If you made no code changes (e.g. the issue is font-related and unfixable), set improved to false and explain in summary.
+        - **"summary"** MUST describe what you actually did:
+          - If you changed code: list each change briefly (e.g. "Implemented fldSimple PAGE/NUMPAGES fields in header_footer.rs; added WMF fallback rendering in images.rs")
+          - If you made NO code changes: explicitly state "NO CODE CHANGES" and explain why (e.g. "NO CODE CHANGES — all remaining differences are systemic text spacing drift")
         - **Commit your changes** (code + updated baselines.json) before writing the outcome file. Use a descriptive commit message. End every commit message with this trailer on its own line:
           Automated-by: run-agents.py ({case_name})
 
@@ -728,35 +730,35 @@ def build_discovery_prompt(case_name: str, case_path: str, progress_file: Path, 
         1. Run the test and establish a baseline score
         2. Thoroughly analyze what DOCX features this document uses
         3. Identify which features we handle poorly or not at all
-        4. Fix the most impactful issues — prioritizing missing/broken features over spacing precision
-        5. If the score is low ONLY because of systemic text rendering issues (spacing, kerning, line height, drift), log that finding and stop early
+        4. **Fix everything you can.** Implement missing features, fix bugs, handle edge cases. Nothing is "out of scope" except the systemic issues listed below.
+        5. Only terminate early if the score gap is ENTIRELY caused by systemic text rendering issues (spacing, kerning, line height, drift) — meaning there is literally nothing else wrong.
 
-        ## EARLY TERMINATION RULE
-        After your initial investigation (steps 1-3 below), you must make a judgment call:
+        ## WHAT TO FIX — everything except systemic text rendering
+        You must attempt to fix ANY issue that is not in the narrow systemic exclusion list below. This includes but is not limited to:
+        - Missing borders, backgrounds, shading, or fills
+        - Missing or broken images, shapes, or drawings (including WMF/EMF — implement basic support if needed)
+        - Missing text effects (bold, italic, underline, strikethrough, smallcaps, allcaps, etc.)
+        - Entirely missing content blocks (paragraphs, table rows, sections)
+        - Wrong colors or wrong fonts being selected
+        - Tables with missing cells, wrong column widths, or missing gridlines
+        - Headers/footers not rendered or rendered incorrectly
+        - Field codes (fldSimple, SECTIONPAGES, NUMPAGES, DOCPROPERTY, PAGE, etc.) — implement them
+        - List numbering or bullet issues
+        - Any DOCX feature that we simply don't handle at all — implement it
+        - Anything that looks like a bug (wrong rendering) vs. imprecision (slightly off rendering)
+        - Even "small pixel impact" issues — fix them. Every improvement counts.
 
-        If the diff images show that our output has the **right structure** (correct elements rendered, borders present, images placed, etc.)
-        and the remaining differences are ONLY:
+        **Do NOT dismiss issues as "out of scope" or "too small to matter".** If you can see a difference in the diff that isn't systemic spacing, you should try to fix it. Implement new features if needed. The whole point of this project is to get closer to Word's output.
+
+        ## EARLY TERMINATION — only for truly systemic-only cases
+        You may ONLY terminate early if, after investigation, the diff images show that our output has the **right structure** and the ONLY remaining differences are ALL of these systemic types:
         - Word/character spacing or kerning precision
         - Line height or line spacing drift
         - Vertical or horizontal positional drift/accumulation
         - Font metric differences (slightly different glyph widths)
         - Page break position differences caused by accumulated spacing drift
 
-        Then this fixture has **no actionable issues for you**. Log your analysis and write the outcome file with
-        `"improved": false` and a summary explaining that the remaining gap is systemic text rendering.
-        Do NOT spend time trying to micro-adjust spacing — that work is tracked separately.
-
-        However, if you see ANY of these, those ARE actionable and you should fix them:
-        - Missing borders, backgrounds, shading, or fills
-        - Missing or broken images, shapes, or drawings
-        - Missing text effects (bold, italic, underline, strikethrough, smallcaps, allcaps, etc.)
-        - Entirely missing content blocks (paragraphs, table rows, sections)
-        - Wrong colors or wrong fonts being selected
-        - Tables with missing cells, wrong column widths, or missing gridlines
-        - Headers/footers not rendered
-        - List numbering or bullet issues
-        - Any DOCX feature that we simply don't handle at all
-        - Anything that looks like a bug (wrong rendering) vs. imprecision (slightly off rendering)
+        If there is ANYTHING else wrong — even one missing field code, one unsupported image format, one missing border — you must attempt to fix it before terminating.
 
         ## Progress logging
         After each significant action, append a timestamped entry to your progress file:
@@ -774,14 +776,14 @@ def build_discovery_prompt(case_name: str, case_path: str, progress_file: Path, 
            - Check for: tables, images, charts, shapes, textboxes, headers/footers, numbering, etc.
 
         3. **Analyze the diff images.** Look at tests/output/{case_path}/diff/ — blue = reference only, red = generated only.
-           Categorize what you see:
-           - **Structural issues** (missing elements, wrong layout) → these are fixable
-           - **Spacing/drift issues** (content present but shifted) → these are systemic, skip them
-           Write your analysis to the progress file.
+           Be thorough — look at EVERY page. Categorize what you see:
+           - **Fixable issues** (missing elements, wrong rendering, unsupported features, missing field codes, unsupported image formats, wrong colors, missing effects) → FIX THESE
+           - **Spacing/drift issues** (content present and correct but shifted by a few pixels) → these are systemic, skip them
+           Write your analysis to the progress file. When in doubt, it's fixable.
 
-        4. **If only systemic issues remain:** Skip to the Finalization section. Log your findings.
+        4. **If ALL issues are truly systemic spacing/drift with zero fixable issues:** Skip to Finalization. This should be rare.
 
-        5. **If actionable issues exist:** Make targeted fixes in the Rust source code. After each change, run:
+        5. **Fix everything you can.** Implement missing features, fix bugs, add support for new formats. After each change, run:
            ./tools/run-tests.sh --case {case_name} --test visual_comparison
 
         6. **Check for regressions** before finalizing:
@@ -833,15 +835,19 @@ def build_discovery_prompt(case_name: str, case_path: str, progress_file: Path, 
         - **"regressions"** lists ANY other case where Jaccard or SSIM dropped by more than 2% (0.02)
         - **"discovery_analysis"** is specific to discovery mode — document what features the fixture uses
         - If `systemic_only` is true, set `improved` to false
+        - **"summary"** MUST describe what you actually did:
+          - If you changed code: list each change briefly (e.g. "Implemented fldSimple PAGE/NUMPAGES fields in header_footer.rs; added WMF fallback rendering in images.rs")
+          - If you made NO code changes: explicitly state "NO CODE CHANGES" and explain why (e.g. "NO CODE CHANGES — all remaining differences are systemic text spacing drift")
         - **Commit your changes** (code + baselines.json) before writing the outcome file. End every commit message with:
           Automated-by: run-agents.py ({case_name})
 
         ## Important rules
         - Do NOT modify test fixtures or reference PDFs
         - Do NOT modify the test harness or scoring thresholds
-        - Keep changes minimal and focused
-        - If the case fails due to missing fonts, log that and move on to other issues
+        - Keep changes focused but DO implement new features when needed — adding a WMF renderer, implementing fldSimple fields, handling a new XML element are all in scope
+        - If the case fails due to missing fonts, log that and move on to other issues you CAN fix
         - The DOCX spec can be queried via the local RAG tool (mcp__local-rag__query_documents)
+        - **Nothing is "out of scope" except systemic text spacing.** If a feature is missing, implement it. If a format is unsupported, add support. That is the job.
 
         ## Key environment
         - Run tests (compact): ./tools/run-tests.sh --case {case_name} --test visual_comparison
@@ -972,7 +978,75 @@ def parse_outcome(outcome_file: str) -> dict | None:
         return {"error": str(e)}
 
 
-def try_merge(case_name: str, wt_path: str) -> tuple[bool, str]:
+def resolve_merge_conflict(case_name: str, branch: str, permission_mode: str, logs_dir: Path) -> bool:
+    """Launch a Claude agent to resolve merge conflicts in REPO_ROOT. Returns True on success."""
+    # Find conflicted files
+    result = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "diff", "--name-only", "--diff-filter=U"],
+        capture_output=True, text=True, check=False,
+    )
+    conflicted = result.stdout.strip()
+    if not conflicted:
+        return False
+
+    log_file = logs_dir / f"{case_name}.merge-resolve.log"
+
+    prompt = dedent(f"""\
+        You are resolving a git merge conflict in the docxside-pdf project.
+        Branch `{branch}` is being merged into `main`. The merge has already been started but has conflicts.
+
+        Conflicted files:
+        {conflicted}
+
+        ## Your task
+        1. Read each conflicted file and understand both sides of the conflict.
+        2. The branch side ({branch}) contains work by an agent that improved rendering for {case_name}.
+           The main side contains changes from other agents that were merged first.
+        3. Resolve each conflict by keeping BOTH sides' changes — they are almost certainly in different
+           parts of the code (different functions, different match arms, different modules). If both sides
+           changed the same lines, use your judgment to combine them correctly.
+        4. For `baselines.json` or `visual_hashes.json` conflicts: keep ALL score/hash entries from both sides.
+        5. After resolving, stage the files with `git add` and complete the merge with `git commit --no-edit`.
+        6. Verify the result compiles: `cargo check`
+        7. If cargo check fails, fix the compilation errors and amend the merge commit.
+
+        ## Important
+        - Do NOT abort the merge.
+        - Do NOT drop either side's changes — combine them.
+        - If you truly cannot resolve a conflict, leave the file conflicted and exit — the orchestrator will abort.
+    """)
+
+    cmd = [
+        "claude", "-p",
+        "--model", "sonnet",
+        "--max-turns", "20",
+        "--permission-mode", permission_mode,
+        prompt,
+    ]
+
+    print(f"  [{case_name}] Launching merge conflict resolver...")
+    with open(log_file, "w") as log:
+        result = subprocess.run(
+            cmd,
+            cwd=str(REPO_ROOT),
+            stdout=log,
+            stderr=subprocess.STDOUT,
+        )
+
+    # Check if conflicts are resolved (no more unmerged files)
+    check = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "diff", "--name-only", "--diff-filter=U"],
+        capture_output=True, text=True, check=False,
+    )
+    if check.stdout.strip():
+        print(f"  [{case_name}] Merge resolver failed — conflicts remain")
+        return False
+
+    print(f"  [{case_name}] Merge conflicts resolved")
+    return True
+
+
+def try_merge(case_name: str, wt_path: str, permission_mode: str, logs_dir: Path) -> tuple[bool, str]:
     """Attempt to merge the agent branch into main. Returns (success, message)."""
     branch = f"agent/agent-{case_name}"
 
@@ -991,12 +1065,16 @@ def try_merge(case_name: str, wt_path: str) -> tuple[bool, str]:
         capture_output=True, text=True, check=False,
     )
     if result.returncode != 0:
-        # Abort failed merge
-        subprocess.run(
-            ["git", "-C", str(REPO_ROOT), "merge", "--abort"],
-            capture_output=True, check=False,
-        )
-        return False, f"Merge conflict:\n{result.stdout}\n{result.stderr}"
+        # Merge conflict — try to resolve automatically
+        if resolve_merge_conflict(case_name, branch, permission_mode, logs_dir):
+            pass  # conflict resolved, fall through to cleanup
+        else:
+            # Resolution failed — abort
+            subprocess.run(
+                ["git", "-C", str(REPO_ROOT), "merge", "--abort"],
+                capture_output=True, check=False,
+            )
+            return False, f"Merge conflict (auto-resolve failed):\n{result.stdout}\n{result.stderr}"
 
     # Cleanup worktree and branch
     subprocess.run(
@@ -1011,7 +1089,12 @@ def try_merge(case_name: str, wt_path: str) -> tuple[bool, str]:
     return True, f"Merged {ahead} commit(s) from {branch}"
 
 
-def process_results(results: list[dict], logs_dir: Path, discovery_cases: set[str] | None = None):
+def process_results(
+    results: list[dict],
+    logs_dir: Path,
+    discovery_cases: set[str] | None = None,
+    permission_mode: str = "auto",
+):
     """Process agent results: auto-merge or flag for review."""
     if discovery_cases is None:
         discovery_cases = set()
@@ -1069,7 +1152,7 @@ def process_results(results: list[dict], logs_dir: Path, discovery_cases: set[st
 
         if outcome["improved"] and len(regs) == 0:
             print(f"  Improved with no regressions — auto-merging into main")
-            ok, msg = try_merge(case_name, wt_path)
+            ok, msg = try_merge(case_name, wt_path, permission_mode, logs_dir)
             if ok:
                 merged.append(case_name)
                 print(f"  Merged: {msg}")
@@ -1218,7 +1301,7 @@ def main():
     order = {name: i for i, name in enumerate(cases)}
     results.sort(key=lambda r: order.get(r["case"], 999))
 
-    process_results(results, logs_dir, discovery_cases=discovery_cases)
+    process_results(results, logs_dir, discovery_cases=discovery_cases, permission_mode=args.permission)
 
 
 if __name__ == "__main__":
