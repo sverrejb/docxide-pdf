@@ -407,6 +407,10 @@
     "ssim": 0.8253,
     "text_boundary": 0.9667
   },
+  "new/alfies_arc_adult..": {
+    "jaccard": 0.4843,
+    "ssim": 0.7006
+  },
   "new/carbon_farming_i..": {
     "jaccard": 0.0778,
     "ssim": 0.2398

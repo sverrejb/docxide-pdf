@@ -663,9 +663,68 @@ pub(super) fn compute_drawing_info<R: Read + Seek>(
             }
         }
     }
+    let object_height = compute_object_height(para_node);
     DrawingInfo {
-        height: max_height,
+        height: max_height.max(object_height),
         image,
         floating_images: Vec::new(),
     }
+}
+
+/// Reserve space for `<w:object>` legacy OLE embeddings (we don't render the
+/// content, but the following paragraphs need to land at the right position).
+pub(super) fn compute_object_height(para_node: roxmltree::Node) -> f32 {
+    let mut max_height: f32 = 0.0;
+    for r in para_node.children().filter(|n| {
+        n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "r"
+    }) {
+        for obj in r.children().filter(|n| {
+            n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "object"
+        }) {
+            if let Some((_w, h)) = object_dimensions(obj) {
+                max_height = max_height.max(h);
+            }
+        }
+    }
+    max_height
+}
+
+fn object_dimensions(obj: roxmltree::Node) -> Option<(f32, f32)> {
+    const VML_NS_LOCAL: &str = "urn:schemas-microsoft-com:vml";
+    let rect = obj.children().find(|n| {
+        n.tag_name().namespace() == Some(VML_NS_LOCAL)
+            && matches!(n.tag_name().name(), "rect" | "shape" | "oval" | "roundrect")
+    });
+    if let Some(rect) = rect {
+        if let Some(style) = rect.attribute("style") {
+            let mut w_pt: Option<f32> = None;
+            let mut h_pt: Option<f32> = None;
+            for part in style.split(';') {
+                if let Some((key, val)) = part.trim().split_once(':') {
+                    let key = key.trim();
+                    let val = val.trim().trim_end_matches("pt");
+                    if let Ok(v) = val.parse::<f32>() {
+                        match key {
+                            "width" => w_pt = Some(v),
+                            "height" => h_pt = Some(v),
+                            _ => {}
+                        }
+                    }
+                }
+            }
+            if let (Some(w), Some(h)) = (w_pt, h_pt) {
+                return Some((w, h));
+            }
+        }
+    }
+    let dxa = obj.attribute((WML_NS, "dxaOrig"))
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(|v| v / 20.0);
+    let dya = obj.attribute((WML_NS, "dyaOrig"))
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(|v| v / 20.0);
+    if let (Some(w), Some(h)) = (dxa, dya) {
+        return Some((w, h));
+    }
+    None
 }
