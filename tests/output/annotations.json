@@ -1,5 +1,5 @@
 {
-  "next_id": 139,
+  "next_id": 146,
   "annotations": [
     {
       "id": 8,
@@ -199,6 +199,76 @@
       "x_pt": 125.16714,
       "y_pt": 774.348,
       "note": "Line shift at \"Part\" and III here.  Should not be here.",
+      "fixed": false
+    },
+    {
+      "id": 139,
+      "case": "new/auditor_regulatory_report_template",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 79.27513,
+      "y_pt": 795.54395,
+      "note": "Missing logo in header",
+      "fixed": false
+    },
+    {
+      "id": 140,
+      "case": "new/bahamas_sustainable_development_hosting",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 524.7449,
+      "y_pt": 734.6624,
+      "note": "Missing CIDI-logo",
+      "fixed": false
+    },
+    {
+      "id": 141,
+      "case": "new/bahamas_sustainable_development_hosting",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 328.6976,
+      "y_pt": 571.66675,
+      "note": "Page 2 renders as almost blank for some reason",
+      "fixed": false
+    },
+    {
+      "id": 142,
+      "case": "new/bahamas_sustainable_development_hosting",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 324.62228,
+      "y_pt": 722.0301,
+      "note": "Page number on page 2 is not supposed to be there.",
+      "fixed": false
+    },
+    {
+      "id": 143,
+      "case": "new/belgian_youth_program_certificate",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 105.58911,
+      "y_pt": 779.3755,
+      "note": "Missing KSA logo",
+      "fixed": false
+    },
+    {
+      "id": 144,
+      "case": "new/belgian_youth_program_certificate",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 9.817643,
+      "y_pt": 34.921265,
+      "note": "Text in footer should be indented",
+      "fixed": false
+    },
+    {
+      "id": 145,
+      "case": "new/belgian_youth_program_certificate",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 402.78082,
+      "y_pt": 96.17511,
+      "note": "Date should be aligned with \"datum\" above it.",
       "fixed": false
     }
   ]

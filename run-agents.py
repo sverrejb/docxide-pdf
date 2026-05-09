@@ -473,6 +473,15 @@ def discover_new_cases(
         print(f"  {h[:16]} -> {name}")
 
     # Phase 3: Create fixtures and convert to PDF
+    pending = [(h, p) for h, p in candidates if hash_to_name.get(h)]
+    print(f"\nReady to convert {len(pending)} file(s) to PDF via MS Word.")
+    print("Word will open and may show dialogs that need to be dismissed.")
+    try:
+        input("Press Enter when you're ready to start (Ctrl+C to abort)... ")
+    except (KeyboardInterrupt, EOFError):
+        print("\nAborted before PDF conversion.", file=sys.stderr)
+        sys.exit(1)
+
     created: list[str] = []
     for h, docx_path in candidates:
         name = hash_to_name.get(h)
@@ -523,10 +532,15 @@ def run_git(*args, check=True, **kwargs) -> subprocess.CompletedProcess:
     )
 
 
-def setup_worktree(case_name: str) -> Path:
+def setup_worktree(case_name: str, resume: bool = False) -> Path:
     wt_name = f"agent-{case_name}"
     wt_path = REPO_ROOT / ".worktrees" / wt_name
     branch = f"agent/{wt_name}"
+
+    if resume:
+        if not wt_path.is_dir():
+            raise RuntimeError(f"resume requested but worktree not found: {wt_path}")
+        return wt_path
 
     # Try creating; if branch/worktree already exists, clean up and retry
     result = run_git("worktree", "add", "-b", branch, str(wt_path), "HEAD", check=False)
@@ -861,6 +875,53 @@ def build_discovery_prompt(case_name: str, case_path: str, progress_file: Path, 
 # ── Agent launcher ───────────────────────────────────────────────────────────
 
 
+def meta_file_for(logs_dir: Path, case_name: str) -> Path:
+    return logs_dir / f"{case_name}.meta.json"
+
+
+def save_agent_meta(logs_dir: Path, case_name: str, case_path: str, discovery: bool) -> None:
+    meta_file_for(logs_dir, case_name).write_text(json.dumps({
+        "case": case_name,
+        "case_path": case_path,
+        "discovery": discovery,
+    }))
+
+
+def load_agent_meta(logs_dir: Path, case_name: str) -> dict | None:
+    path = meta_file_for(logs_dir, case_name)
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text())
+    except Exception:
+        return None
+
+
+def build_resume_prompt(case_name: str, case_path: str, progress_file: Path, logs_dir: Path, discovery: bool) -> str:
+    """Wrap the original prompt with a resume preamble pointing at prior work."""
+    base = build_discovery_prompt(case_name, case_path, progress_file, logs_dir) if discovery \
+        else build_prompt(case_name, case_path, progress_file, logs_dir)
+
+    preamble = dedent(f"""\
+        ## RESUMING INTERRUPTED WORK
+        You were previously launched on this case but the run did not finish (no outcome file was written).
+        Your worktree is intact and your prior progress log is at `{progress_file}`. Before doing anything else:
+
+        1. Read the progress log to see what you already investigated, tried, and concluded.
+        2. Run `git status` and `git diff main...HEAD` in the current directory to see uncommitted/committed work.
+        3. Read the case history file (path mentioned below in the original prompt) for context from earlier runs.
+        4. Continue from where you left off — do NOT redo investigation that's already in the log.
+        5. The end goal is unchanged: improve scores for this case and write the outcome file as your last action.
+
+        Append a fresh entry to the progress log noting that you've resumed and summarizing what you found
+        in the existing log/diff before continuing.
+
+        --- ORIGINAL TASK BRIEF (still applies) ---
+
+    """)
+    return preamble + base
+
+
 def launch_agent(
     case_name: str,
     case_path: str,
@@ -869,21 +930,32 @@ def launch_agent(
     max_turns: int | None,
     permission_mode: str,
     discovery: bool = False,
+    resume: bool = False,
 ) -> dict:
     """Run a single agent in a worktree. Called in a subprocess via ProcessPoolExecutor."""
     progress_file = logs_dir / f"{case_name}.log"
     outcome_file = logs_dir / f"{case_name}.outcome.json"
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    progress_file.write_text(f"{timestamp} — Agent started for {case_name} ({case_path})\n")
+    if resume:
+        with open(progress_file, "a") as f:
+            f.write(f"\n{timestamp} — Agent RESUMED for {case_name} ({case_path})\n")
+    else:
+        progress_file.write_text(f"{timestamp} — Agent started for {case_name} ({case_path})\n")
 
     try:
-        wt_path = setup_worktree(case_name)
+        wt_path = setup_worktree(case_name, resume=resume)
     except Exception as e:
-        progress_file.write_text(f"{timestamp} — Failed to setup worktree: {e}\n")
+        with open(progress_file, "a") as f:
+            f.write(f"{timestamp} — Failed to setup worktree: {e}\n")
         return {"case": case_name, "error": f"worktree setup failed: {e}"}
 
-    if discovery:
+    if not resume:
+        save_agent_meta(logs_dir, case_name, case_path, discovery)
+
+    if resume:
+        prompt = build_resume_prompt(case_name, case_path, progress_file, logs_dir, discovery)
+    elif discovery:
         prompt = build_discovery_prompt(case_name, case_path, progress_file, logs_dir)
     else:
         prompt = build_prompt(case_name, case_path, progress_file, logs_dir)
@@ -1221,6 +1293,200 @@ def process_results(
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 
+def find_resumable_globally(limit: int) -> list[tuple[Path, str, dict]]:
+    """Resumable cases across all logs/agents-* dirs.
+
+    For each unique case, picks the most recent logs dir that has a resumable record.
+    Returns up to `limit` entries sorted by worktree mtime descending.
+    """
+    parent = REPO_ROOT / "logs"
+    if not parent.is_dir():
+        return []
+    all_dirs = sorted((p for p in parent.glob("agents-*") if p.is_dir()), reverse=True)
+    seen: set[str] = set()
+    found: list[tuple[float, Path, str, dict]] = []
+    for logs_dir in all_dirs:
+        for case_name, meta in find_resumable_cases(logs_dir):
+            if case_name in seen:
+                continue
+            seen.add(case_name)
+            wt_path = REPO_ROOT / ".worktrees" / f"agent-{case_name}"
+            mtime = wt_path.stat().st_mtime if wt_path.is_dir() else 0
+            found.append((mtime, logs_dir, case_name, meta))
+    found.sort(key=lambda x: x[0], reverse=True)
+    return [(d, n, m) for _, d, n, m in found[:limit]]
+
+
+def run_resume(args) -> None:
+    """Re-launch agents for cases that have a worktree but no outcome file.
+
+    --resume        → all resumable in the latest logs/agents-* dir
+    --resume PATH   → all resumable in the given logs dir
+    --resume N      → N most recent resumable worktrees across all logs dirs
+    """
+    triples: list[tuple[Path, str, dict]]
+    raw = args.resume
+
+    if raw and raw.isdigit():
+        limit = int(raw)
+        if limit <= 0:
+            print("Error: --resume N must be a positive integer", file=sys.stderr)
+            sys.exit(1)
+        triples = find_resumable_globally(limit)
+        if not triples:
+            print("Nothing to resume — no worktrees with unfinished outcomes found.")
+            return
+        print(f"Resuming {len(triples)} most recent worktree(s) across all logs dirs.")
+    elif raw:
+        logs_dir = Path(raw).expanduser().resolve()
+        if not logs_dir.is_dir():
+            print(f"Error: --resume path is not a directory: {logs_dir}", file=sys.stderr)
+            sys.exit(1)
+        triples = [(logs_dir, n, m) for n, m in find_resumable_cases(logs_dir)]
+    else:
+        latest = find_latest_logs_dir()
+        if latest is None:
+            print("Error: no logs/agents-* directories found", file=sys.stderr)
+            sys.exit(1)
+        print(f"Resuming from latest logs dir: {latest}")
+        triples = [(latest, n, m) for n, m in find_resumable_cases(latest)]
+
+    if args.cases:
+        wanted = set(args.cases)
+        triples = [(d, n, m) for d, n, m in triples if n in wanted]
+        missing = wanted - {n for _, n, _ in triples}
+        if missing:
+            print(f"Warning: not resumable (no meta/worktree, or outcome already exists): {', '.join(sorted(missing))}",
+                  file=sys.stderr)
+
+    if not triples:
+        print("Nothing to resume — no matching cases.")
+        return
+
+    print(f"\nResuming {len(triples)} agent(s):")
+    for logs_dir, name, meta in triples:
+        mode = "discovery" if meta.get("discovery") else "regular"
+        print(f"  - {name} ({mode}) — logs: {logs_dir}")
+    print(f"\nMonitor progress:")
+    for logs_dir in sorted({d for d, _, _ in triples}):
+        print(f"  tail -f {logs_dir}/*.log")
+    print()
+
+    discovery_cases = {n for _, n, m in triples if m.get("discovery")}
+
+    results: list[dict] = []
+    if args.sequential:
+        print("Sequential mode: resuming one case at a time\n")
+        for logs_dir, name, meta in triples:
+            try:
+                r = launch_agent(
+                    name,
+                    meta["case_path"],
+                    logs_dir,
+                    args.model,
+                    args.max_turns,
+                    args.permission,
+                    discovery=name in discovery_cases,
+                    resume=True,
+                )
+            except Exception as e:
+                print(f"  [{name}] Exception: {e}")
+                r = {"case": name, "error": str(e)}
+            r["_logs_dir"] = str(logs_dir)
+            results.append(r)
+    else:
+        with ProcessPoolExecutor(max_workers=len(triples)) as pool:
+            futures = {
+                pool.submit(
+                    launch_agent,
+                    name,
+                    meta["case_path"],
+                    logs_dir,
+                    args.model,
+                    args.max_turns,
+                    args.permission,
+                    discovery=name in discovery_cases,
+                    resume=True,
+                ): (logs_dir, name)
+                for logs_dir, name, meta in triples
+            }
+            for future in as_completed(futures):
+                logs_dir, name = futures[future]
+                try:
+                    r = future.result()
+                except Exception as e:
+                    print(f"  [{name}] Exception: {e}")
+                    r = {"case": name, "error": str(e)}
+                r["_logs_dir"] = str(logs_dir)
+                results.append(r)
+
+    # Group by logs dir so process_results prints log paths correctly.
+    order = {n: i for i, (_, n, _) in enumerate(triples)}
+    by_dir: dict[str, list[dict]] = {}
+    for r in results:
+        by_dir.setdefault(r.pop("_logs_dir"), []).append(r)
+    for logs_dir_str, group in by_dir.items():
+        group.sort(key=lambda r: order.get(r["case"], 999))
+        process_results(group, Path(logs_dir_str), discovery_cases=discovery_cases,
+                        permission_mode=args.permission)
+
+
+def find_latest_logs_dir() -> Path | None:
+    parent = REPO_ROOT / "logs"
+    if not parent.is_dir():
+        return None
+    candidates = sorted(p for p in parent.glob("agents-*") if p.is_dir())
+    return candidates[-1] if candidates else None
+
+
+def find_resumable_cases(logs_dir: Path) -> list[tuple[str, dict]]:
+    """Cases in logs_dir that have a worktree but no outcome file.
+
+    Prefers a .meta.json next to the .log; falls back to reconstructing meta
+    from the .log filename (legacy runs that predate the meta file).
+    """
+    resumable: list[tuple[str, dict]] = []
+    seen: set[str] = set()
+
+    candidates: list[str] = []
+    for log_path in sorted(logs_dir.glob("*.log")):
+        # Skip helper logs like "<case>.merge-resolve.log"
+        if log_path.name.count(".") != 1:
+            continue
+        candidates.append(log_path.stem)
+
+    for case_name in candidates:
+        if case_name in seen:
+            continue
+        seen.add(case_name)
+        if (logs_dir / f"{case_name}.outcome.json").exists():
+            continue
+        wt_path = REPO_ROOT / ".worktrees" / f"agent-{case_name}"
+        if not wt_path.is_dir():
+            continue
+
+        meta_path = meta_file_for(logs_dir, case_name)
+        meta: dict | None = None
+        if meta_path.exists():
+            try:
+                meta = json.loads(meta_path.read_text())
+            except Exception:
+                meta = None
+        if meta is None:
+            # Legacy run with no meta — reconstruct it.
+            case_path = None
+            for group_dir in sorted(FIXTURES_DIR.iterdir()):
+                if group_dir.is_dir() and (group_dir / case_name).is_dir():
+                    case_path = f"{group_dir.name}/{case_name}"
+                    break
+            if case_path is None:
+                continue
+            meta = {"case": case_name, "case_path": case_path, "discovery": False}
+
+        resumable.append((case_name, meta))
+    return resumable
+
+
 def main():
     parser = argparse.ArgumentParser(description="Launch parallel Claude agents to improve test cases")
     parser.add_argument("cases", nargs="*", help="Case names to work on")
@@ -1228,10 +1494,21 @@ def main():
     parser.add_argument("--annotations", type=int, default=0, help="Auto-select N random cases with unfixed annotations")
     parser.add_argument("--discover", type=int, default=0,
                         help="Download N new DOCX files, name them, convert to PDF, and launch discovery agents")
+    parser.add_argument("--resume", nargs="?", const="", default=None, metavar="N_OR_PATH",
+                        help="Resume unfinished agents in their existing worktrees. "
+                             "No arg: latest logs/agents-* dir. "
+                             "Integer N: N most recent resumable worktrees across all logs dirs. "
+                             "Path: a specific logs dir.")
     parser.add_argument("--model", default="opus", help="Claude model (default: opus)")
     parser.add_argument("--max-turns", type=int, default=None, help="Max conversation turns per agent")
     parser.add_argument("--permission", default="auto", help="Permission mode (default: auto)")
+    parser.add_argument("--sequential", action="store_true",
+                        help="Run agents one at a time instead of in parallel")
     args = parser.parse_args()
+
+    if args.resume is not None:
+        run_resume(args)
+        return
 
     discovery_cases: set[str] = set()
     cases = list(args.cases)
@@ -1273,29 +1550,46 @@ def main():
     print(f"\nMonitor progress:")
     print(f"  tail -f {logs_dir}/*.log\n")
 
-    # Launch one agent per case, all in parallel
+    # Launch one agent per case, all in parallel (or sequentially if --sequential)
     results = []
-    with ProcessPoolExecutor(max_workers=len(cases)) as pool:
-        futures = {
-            pool.submit(
-                launch_agent,
-                name,
-                case_paths[name],
-                logs_dir,
-                args.model,
-                args.max_turns,
-                args.permission,
-                discovery=name in discovery_cases,
-            ): name
-            for name in cases
-        }
-        for future in as_completed(futures):
-            name = futures[future]
+    if args.sequential:
+        print("Sequential mode: running one case at a time\n")
+        for name in cases:
             try:
-                results.append(future.result())
+                results.append(launch_agent(
+                    name,
+                    case_paths[name],
+                    logs_dir,
+                    args.model,
+                    args.max_turns,
+                    args.permission,
+                    discovery=name in discovery_cases,
+                ))
             except Exception as e:
                 print(f"  [{name}] Exception: {e}")
                 results.append({"case": name, "error": str(e)})
+    else:
+        with ProcessPoolExecutor(max_workers=len(cases)) as pool:
+            futures = {
+                pool.submit(
+                    launch_agent,
+                    name,
+                    case_paths[name],
+                    logs_dir,
+                    args.model,
+                    args.max_turns,
+                    args.permission,
+                    discovery=name in discovery_cases,
+                ): name
+                for name in cases
+            }
+            for future in as_completed(futures):
+                name = futures[future]
+                try:
+                    results.append(future.result())
+                except Exception as e:
+                    print(f"  [{name}] Exception: {e}")
+                    results.append({"case": name, "error": str(e)})
 
     # Sort results back to original case order
     order = {name: i for i, name in enumerate(cases)}
