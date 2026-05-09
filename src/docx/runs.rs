@@ -591,6 +591,7 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
                 && prev.text_shadow == run.text_shadow
                 && prev.text_glow == run.text_glow
                 && prev.lang == run.lang
+                && prev.char_style_id == run.char_style_id
         });
         if can_merge {
             result.last_mut().unwrap().text.push_str(&run.text);
