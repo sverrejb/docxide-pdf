@@ -319,6 +319,10 @@
     "ssim": 0.934,
     "text_boundary": 1.0
   },
+  "cases/case63": {
+    "jaccard": 0.0127,
+    "ssim": 0.0885
+  },
   "cases/case7": {
     "jaccard": 0.7397,
     "ssim": 0.9078,
@@ -422,6 +426,10 @@
     "ssim": 0.207,
     "text_boundary": 0.9259
   },
+  "new/arizona_physical..": {
+    "jaccard": 0.7174,
+    "ssim": 0.8889
+  },
   "new/auditor_regulato..": {
     "jaccard": 0.3523,
     "ssim": 0.5678,
@@ -466,6 +474,10 @@
     "jaccard": 0.3578,
     "ssim": 0.8546,
     "text_boundary": 0.9492
+  },
+  "new/czech_census_202..": {
+    "jaccard": 0.5958,
+    "ssim": 0.7709
   },
   "new/czech_crisis_mea..": {
     "jaccard": 0.3748,
@@ -547,6 +559,10 @@
     "ssim": 0.5408,
     "text_boundary": 0.6694
   },
+  "new/japanese_land_de..": {
+    "jaccard": 0.1043,
+    "ssim": 0.2949
+  },
   "new/k4_regulations_s..": {
     "jaccard": 0.439,
     "ssim": 0.7355,
@@ -596,6 +612,10 @@
     "jaccard": 0.2749,
     "ssim": 0.5632,
     "text_boundary": 0.48
+  },
+  "new/romanian_quality..": {
+    "jaccard": 0.3215,
+    "ssim": 0.5129
   },
   "new/russian_chess_pa..": {
     "jaccard": 0.5805,
@@ -666,6 +686,10 @@
     "jaccard": 0.1429,
     "ssim": 0.4085,
     "text_boundary": 0.5455
+  },
+  "new/turkish_chemistr..": {
+    "jaccard": 0.1819,
+    "ssim": 0.7826
   },
   "new/turkish_journal_..": {
     "jaccard": 0.6044,

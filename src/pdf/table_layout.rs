@@ -320,6 +320,8 @@ pub(super) struct CellParagraphLayout {
     pub(super) paragraph_mark_vanish: bool,
     pub(super) floating_images: Vec<CellFloatingImageLayout>,
     pub(super) space_after: f32,
+    pub(super) has_textboxes: bool,
+    pub(super) has_connectors: bool,
 }
 
 pub(super) enum CellContentItem {
@@ -631,6 +633,8 @@ pub(super) fn compute_row_layouts(
                                     paragraph_mark_vanish: para.paragraph_mark_vanish,
                                     floating_images: cell_floats,
                                     space_after: para.space_after,
+                                    has_textboxes: !para.textboxes.is_empty(),
+                                    has_connectors: !para.connectors.is_empty(),
                                 }));
 
                                 prev_space_after = para.space_after;

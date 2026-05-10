@@ -5,7 +5,7 @@ use pdf_writer::{Content, Name, Str};
 use crate::fonts::{FontEntry, encode_as_gids, to_winansi_bytes};
 use crate::model::{
     Alignment, Block, BorderStyle, CellBorder, CellMargins, CellVAlign,
-    SectionProperties, Table, TableAlignment, TableRow, TextDirection, VMerge,
+    Paragraph, SectionProperties, Table, TableAlignment, TableRow, TextDirection, VMerge,
 };
 
 use super::color::{fill_rgb, stroke_rgb};
@@ -182,6 +182,8 @@ fn para_has_visible_content(para: &CellParagraphLayout) -> bool {
         || (!para.lines.is_empty() && para.lines.iter().any(|l| !l.chunks.is_empty()))
         || !para.floating_images.is_empty()
         || para.image_name.is_some()
+        || para.has_textboxes
+        || para.has_connectors
 }
 
 /// Total content height including trailing space_after, matching Word's vAlign calculation.
@@ -225,15 +227,21 @@ fn render_cell_content(
         match item {
             CellContentItem::Paragraph(para) => {
                 // Advance block_idx past the corresponding Block::Paragraph
+                let mut source_para: Option<&Paragraph> = None;
                 while block_idx < blocks.len() {
-                    if matches!(&blocks[block_idx], Block::Paragraph(_)) {
+                    if let Block::Paragraph(p) = &blocks[block_idx] {
+                        source_para = Some(p);
                         block_idx += 1;
                         break;
                     }
                     block_idx += 1;
                 }
 
-                if !para_has_visible_content(para) {
+                let para_top = cursor_y;
+                if !para_has_visible_content(para)
+                    && !para.has_textboxes
+                    && !para.has_connectors
+                {
                     cursor_y -= para.space_before + para_block_height(para);
                     continue;
                 }
@@ -303,6 +311,10 @@ fn render_cell_content(
                 );
 
                 cursor_y -= para.lines.len() as f32 * para.line_h;
+
+                if let Some(src) = source_para {
+                    render_cell_floating_shapes(content, src, cell_x, col_w, para_top, ctx);
+                }
             }
             CellContentItem::NestedTable { height } => {
                 // Find the corresponding Block::Table
@@ -323,6 +335,113 @@ fn render_cell_content(
                 }
             }
         }
+    }
+}
+
+/// Render floating textboxes and connectors anchored to a cell paragraph.
+fn render_cell_floating_shapes(
+    content: &mut Content,
+    para: &Paragraph,
+    cell_x: f32,
+    col_w: f32,
+    para_top: f32,
+    ctx: &RenderContext,
+) {
+    use crate::model::{HorizontalPosition, VerticalPosition};
+    use super::positioning::render_connector;
+
+    for conn in &para.connectors {
+        let conn_x = match conn.connector_type {
+            _ => conn.x,
+        };
+        let mut conn_clone = conn.clone();
+        // Position relative to cell column origin and paragraph top
+        conn_clone.x = conn_x;
+        render_connector(&conn_clone, content, cell_x, para_top);
+    }
+
+    for tb in &para.textboxes {
+        let h_off = match tb.h_position {
+            HorizontalPosition::Offset(o) => o,
+            HorizontalPosition::AlignCenter => (col_w - tb.width_pt) / 2.0,
+            HorizontalPosition::AlignRight => col_w - tb.width_pt,
+            HorizontalPosition::AlignLeft => 0.0,
+        };
+        let tb_x = cell_x + h_off;
+        let tb_y_top = para_top - tb.v_offset_pt;
+        render_simple_textbox(content, tb, tb_x, tb_y_top, ctx);
+    }
+}
+
+/// Minimal textbox rendering for cell contexts: stroke/fill the shape and
+/// render text content. Doesn't support all features that body textboxes do.
+fn render_simple_textbox(
+    content: &mut Content,
+    tb: &crate::model::Textbox,
+    tb_x: f32,
+    tb_y_top: f32,
+    ctx: &RenderContext,
+) {
+    use crate::model::ShapeFill;
+    use super::layout::{build_paragraph_lines, render_paragraph_lines, tallest_run_metrics};
+    use super::resolve_line_h;
+    use super::smartart::draw_shape_path;
+
+    let tb_width = tb.width_pt;
+    let tb_height = tb.height_pt;
+
+    // Fill
+    if let Some(ShapeFill::Solid(color)) = &tb.fill {
+        content.save_state();
+        fill_rgb(content, *color);
+        draw_shape_path(content, tb_x, tb_y_top - tb_height, tb_width, tb_height, &tb.shape_type);
+        content.fill_nonzero();
+        content.restore_state();
+    }
+
+    // Stroke
+    if let Some(stroke) = tb.stroke_color {
+        if tb.stroke_width > 0.0 {
+            content.save_state();
+            content.set_line_width(tb.stroke_width);
+            stroke_rgb(content, stroke);
+            draw_shape_path(content, tb_x, tb_y_top - tb_height, tb_width, tb_height, &tb.shape_type);
+            content.stroke();
+            content.restore_state();
+        }
+    }
+
+    // Render text paragraphs (basic, no clipping/anchoring complexity)
+    let content_x = tb_x + tb.margin_left;
+    let content_w = (tb_width - tb.margin_left - tb.margin_right).max(0.0);
+    let mut text_y = tb_y_top - tb.margin_top;
+    let empty: HashMap<usize, String> = HashMap::new();
+    let empty_fx: HashMap<usize, super::images::EffectXObjs> = HashMap::new();
+
+    for tp in &tb.paragraphs {
+        let lines = build_paragraph_lines(
+            &tp.runs, ctx.fonts, content_w, 0.0, &empty, &empty_fx, None, None, None, true,
+        );
+        let (fs, lhr, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
+        let lh = resolve_line_h(tp.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr);
+        text_y -= tp.space_before;
+        let baseline_y = text_y - fs;
+        render_paragraph_lines(
+            content,
+            &lines,
+            &tp.alignment,
+            content_x,
+            content_w,
+            baseline_y,
+            lh,
+            lines.len(),
+            0,
+            &mut Vec::new(),
+            0.0,
+            ctx.fonts,
+            None,
+        );
+        text_y -= lines.len().max(1) as f32 * lh + tp.space_after;
     }
 }
 

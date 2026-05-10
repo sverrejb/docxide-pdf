@@ -3,7 +3,7 @@ use std::io::Read;
 
 use crate::geometry::{FormulaOp, PathFill};
 use crate::model::{
-    AutoFit, ConnectorShape, ConnectorType, CustomGeometry, CustomGuideDef,
+    ArrowEnd, AutoFit, ConnectorShape, ConnectorType, CustomGeometry, CustomGuideDef,
     CustomPathCommand, CustomPathDef, HRelativeFrom, HorizontalPosition, Paragraph, ShapeFill,
     ShapeGeometry, TextAnchor, TextWarp, Textbox, VRelativeFrom, VerticalPosition, WrapType,
 };
@@ -449,7 +449,7 @@ pub(super) fn parse_connector_from_wsp(
     let xfrm = find_dml(sp_pr, "xfrm");
 
     let connector_type = match prst {
-        "line" => {
+        "line" | "straightConnector1" => {
             let flip_h = xfrm
                 .and_then(|x| x.attribute("flipH"))
                 .is_some_and(|v| v == "1");
@@ -493,8 +493,29 @@ pub(super) fn parse_connector_from_wsp(
         _ => return None,
     };
 
-    let stroke_color = parse_style_stroke(wsp, theme).unwrap_or([0, 0, 0]);
-    let stroke_width = parse_style_stroke_width(wsp);
+    let ln_node = find_dml(sp_pr, "ln");
+    let stroke_color = parse_style_stroke(wsp, theme)
+        .or_else(|| ln_node.and_then(|ln| parse_solid_fill(ln, theme)))
+        .unwrap_or([0, 0, 0]);
+    let stroke_width = ln_node
+        .and_then(|ln| ln.attribute("w"))
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(super::emu_to_pts)
+        .unwrap_or_else(|| parse_style_stroke_width(wsp));
+
+    let (head_end, tail_end) = ln_node
+        .map(|ln| {
+            let head = find_dml(ln, "headEnd")
+                .and_then(|n| n.attribute("type"))
+                .map(ArrowEnd::from_attr)
+                .unwrap_or_default();
+            let tail = find_dml(ln, "tailEnd")
+                .and_then(|n| n.attribute("type"))
+                .map(ArrowEnd::from_attr)
+                .unwrap_or_default();
+            (head, tail)
+        })
+        .unwrap_or_default();
 
     let (h_position, _, v_pos, _) = parse_anchor_position(anchor);
     let (display_w, display_h) = extent_dimensions(anchor);
@@ -516,6 +537,8 @@ pub(super) fn parse_connector_from_wsp(
         stroke_color,
         stroke_width,
         connector_type,
+        head_end,
+        tail_end,
     })
 }
 

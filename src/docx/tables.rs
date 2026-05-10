@@ -654,6 +654,8 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         content_height,
                         snap_to_grid: true,
                         floating_images: parsed.floating_images,
+                        textboxes: parsed.textboxes,
+                        connectors: parsed.connectors,
                         ..Paragraph::default()
                     }));
                 } else if is_wml(n, "tbl") {

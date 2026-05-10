@@ -3,11 +3,11 @@ use std::collections::HashMap;
 use pdf_writer::Content;
 
 use crate::model::{
-    ConnectorShape, ConnectorType, FloatingImage, HRelativeFrom, HorizontalPosition,
+    ArrowEnd, ConnectorShape, ConnectorType, FloatingImage, HRelativeFrom, HorizontalPosition,
     SectionProperties, VRelativeFrom, VerticalPosition,
 };
 
-use super::color::stroke_rgb;
+use super::color::{fill_rgb, stroke_rgb};
 
 pub(crate) fn resolve_h_position(
     h_relative_from: HRelativeFrom,
@@ -177,6 +177,12 @@ pub(super) fn render_connector(
             content.move_to(x0, y0);
             content.line_to(x1, y1);
             content.stroke();
+            if conn.head_end != ArrowEnd::None {
+                draw_arrow_head(content, x0, y0, x1, y1, conn.head_end, conn.stroke_color, conn.stroke_width);
+            }
+            if conn.tail_end != ArrowEnd::None {
+                draw_arrow_head(content, x1, y1, x0, y0, conn.tail_end, conn.stroke_color, conn.stroke_width);
+            }
         }
         ConnectorType::Arc {
             start_angle,
@@ -196,6 +202,94 @@ pub(super) fn render_connector(
         }
     }
 
+    content.restore_state();
+}
+
+fn draw_arrow_head(
+    content: &mut Content,
+    tip_x: f32,
+    tip_y: f32,
+    other_x: f32,
+    other_y: f32,
+    end_type: ArrowEnd,
+    color: [u8; 3],
+    stroke_width: f32,
+) {
+    let dx = tip_x - other_x;
+    let dy = tip_y - other_y;
+    let len = (dx * dx + dy * dy).sqrt();
+    if len < 0.001 {
+        return;
+    }
+    let ux = dx / len;
+    let uy = dy / len;
+    // Word's "med" arrow: width ~4.5x stroke, length ~4.5x stroke (heuristic)
+    let arrow_len = (stroke_width * 4.5).max(3.0);
+    let arrow_half = (stroke_width * 2.5).max(1.5);
+
+    // Base point: along the line, behind the tip
+    let bx = tip_x - ux * arrow_len;
+    let by = tip_y - uy * arrow_len;
+    // Perpendicular
+    let px = -uy;
+    let py = ux;
+
+    let p1x = bx + px * arrow_half;
+    let p1y = by + py * arrow_half;
+    let p2x = bx - px * arrow_half;
+    let p2y = by - py * arrow_half;
+
+    content.save_state();
+    match end_type {
+        ArrowEnd::Arrow => {
+            // Open arrow: two strokes from tip
+            content.move_to(p1x, p1y);
+            content.line_to(tip_x, tip_y);
+            content.line_to(p2x, p2y);
+            content.stroke();
+        }
+        ArrowEnd::Triangle | ArrowEnd::Stealth => {
+            fill_rgb(content, color);
+            content.move_to(tip_x, tip_y);
+            content.line_to(p1x, p1y);
+            if matches!(end_type, ArrowEnd::Stealth) {
+                let mid_x = bx + ux * (arrow_len * 0.35);
+                let mid_y = by + uy * (arrow_len * 0.35);
+                content.line_to(mid_x, mid_y);
+            }
+            content.line_to(p2x, p2y);
+            content.close_path();
+            content.fill_nonzero();
+        }
+        ArrowEnd::Diamond => {
+            fill_rgb(content, color);
+            let mid_x = tip_x - ux * (arrow_len * 0.5);
+            let mid_y = tip_y - uy * (arrow_len * 0.5);
+            let back_x = tip_x - ux * arrow_len;
+            let back_y = tip_y - uy * arrow_len;
+            content.move_to(tip_x, tip_y);
+            content.line_to(mid_x + px * arrow_half, mid_y + py * arrow_half);
+            content.line_to(back_x, back_y);
+            content.line_to(mid_x - px * arrow_half, mid_y - py * arrow_half);
+            content.close_path();
+            content.fill_nonzero();
+        }
+        ArrowEnd::Oval => {
+            fill_rgb(content, color);
+            let cx = tip_x - ux * (arrow_len * 0.5);
+            let cy = tip_y - uy * (arrow_len * 0.5);
+            let r = arrow_half;
+            let k = 0.5522847498 * r;
+            content.move_to(cx + r, cy);
+            content.cubic_to(cx + r, cy + k, cx + k, cy + r, cx, cy + r);
+            content.cubic_to(cx - k, cy + r, cx - r, cy + k, cx - r, cy);
+            content.cubic_to(cx - r, cy - k, cx - k, cy - r, cx, cy - r);
+            content.cubic_to(cx + k, cy - r, cx + r, cy - k, cx + r, cy);
+            content.close_path();
+            content.fill_nonzero();
+        }
+        ArrowEnd::None => {}
+    }
     content.restore_state();
 }
 

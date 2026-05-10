@@ -239,6 +239,7 @@ pub struct SmartArtDiagram {
     pub shapes: Vec<SmartArtShape>,
 }
 
+#[derive(Clone)]
 pub enum ConnectorType {
     Line {
         flip_h: bool,
@@ -251,6 +252,31 @@ pub enum ConnectorType {
     },
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ArrowEnd {
+    #[default]
+    None,
+    Arrow,
+    Triangle,
+    Stealth,
+    Diamond,
+    Oval,
+}
+
+impl ArrowEnd {
+    pub fn from_attr(s: &str) -> Self {
+        match s {
+            "triangle" => Self::Triangle,
+            "stealth" => Self::Stealth,
+            "diamond" => Self::Diamond,
+            "oval" => Self::Oval,
+            "arrow" => Self::Arrow,
+            _ => Self::None,
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct ConnectorShape {
     pub x: f32,
     pub y: f32,
@@ -259,6 +285,8 @@ pub struct ConnectorShape {
     pub stroke_color: [u8; 3],
     pub stroke_width: f32,
     pub connector_type: ConnectorType,
+    pub head_end: ArrowEnd,
+    pub tail_end: ArrowEnd,
 }
 
 #[derive(Clone, Copy, Default)]
