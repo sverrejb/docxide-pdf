@@ -329,7 +329,15 @@ pub struct Textbox {
     pub height_pt: f32,
     pub h_position: HorizontalPosition,
     pub h_relative_from: HRelativeFrom,
+    /// Resolved offset for paths that need a single f32 (content-height
+    /// reservation, paragraph-relative tb_y_top). For `AlignTop/Center/Bottom`
+    /// this is 0 — the alignment is preserved in `v_position`, which the
+    /// y_top resolver consults when it has the section dimensions.
     pub v_offset_pt: f32,
+    /// Full vertical anchoring intent. `Offset(o)` matches `v_offset_pt = o`;
+    /// the `AlignTop`/`AlignCenter`/`AlignBottom` variants need section
+    /// geometry to compute their final y, which the renderer does.
+    pub v_position: VerticalPosition,
     pub v_relative_from: VRelativeFrom,
     pub fill: Option<ShapeFill>,
     pub shape_type: ShapeGeometry,

@@ -154,9 +154,11 @@ Vertical alignment of runs within a line (top/center/baseline/bottom/auto). Only
 
 Table conditional formatting (firstRow, lastRow, firstCol, lastCol, banded rows/cols). The table style is resolved for default borders but conditional formatting overrides (bold headers, alternating row shading, etc.) are not applied.
 
-### Table auto-fit vs `tblW` (TODO — MEDIUM IMPACT)
+### Table auto-fit vs `tblW` (NO IMPACT — corpus check 2026-05)
 
 Our `auto_fit_columns` uses `gridCol` widths from `tblGrid`, ignoring the specified `tblW` when `type="dxa"`. Word treats `tblW` as the authoritative total width and scales/caps columns to fit. This causes tables to render at full page width when python-docx (or other generators) emit oversized `gridCol` values alongside a smaller `tblW`.
+
+**Verified empty in current corpus**: a sweep of all `tests/fixtures/scraped/*` and `tests/fixtures/new/*` documents found zero tables where `gridCol` total exceeds the `tblW` value (tolerance 100 twips). The bug is real per OOXML, but no fixture triggers it — implementing this clamp moves zero scores. Park until a real-world fixture exhibits the mismatch.
 
 ## Unimplemented Document Features
 
@@ -174,9 +176,9 @@ Floating images (`wp:anchor`) with large `posOffset` values can render off-page.
 
 Additionally, truncated/corrupt PNG images in DOCX files cause the `image` crate to fail with "unexpected end of file". Currently falls back to a 1x1 placeholder via `decode_png_raw` (using the `png` crate directly). Word renders these partially — investigate partial PNG decoding to match. Observed in `learning_cultures_dissertation` image1.png (216KB file, 2205 bytes short of complete IDAT data, no IEND chunk).
 
-## `w:smallCaps` Rendering Accuracy (TODO — LOW IMPACT)
+## `w:smallCaps` Rendering Accuracy (DONE — verified 2026-05)
 
-The spec says: lowercase letters display as capitals at font_size - 2pt; uppercase letters stay at original font_size. Our implementation converts ALL text to uppercase and shrinks ALL text by 2pt. Fix: only apply the size reduction to originally-lowercase characters, render uppercase characters at the original size. Affects 68 XML hits across 10 fixtures (6 failing).
+`smallcaps_segments()` in `src/pdf/layout.rs:349` already applies the per-character rule correctly: only originally-lowercase characters are uppercased and rendered at `font_size - 2pt`; originally-uppercase characters render at full size. Unit tests at `src/pdf/layout.rs:1824+` cover mixed/upper/lower/non-letter cases.
 
 ## SmartArt Remaining Work
 

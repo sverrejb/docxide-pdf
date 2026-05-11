@@ -204,18 +204,29 @@ pub(super) fn hf_paragraphs(hf: &HeaderFooter) -> Vec<&Paragraph> {
         .collect()
 }
 
-fn resolve_tb_y_top(
+pub(super) fn resolve_tb_y_top(
     v_relative_from: VRelativeFrom,
-    v_offset_pt: f32,
+    v_position: &crate::model::VerticalPosition,
+    tb_height: f32,
     sp: &SectionProperties,
     slot_top: f32,
 ) -> f32 {
-    match v_relative_from {
-        VRelativeFrom::Page => sp.page_height - v_offset_pt,
-        VRelativeFrom::Margin | VRelativeFrom::TopMargin => {
-            sp.page_height - sp.margin_top - v_offset_pt
+    use crate::model::VerticalPosition;
+    let (region_top, region_bottom) = match v_relative_from {
+        VRelativeFrom::Page => (sp.page_height, 0.0),
+        VRelativeFrom::Margin | VRelativeFrom::TopMargin => (
+            sp.page_height - sp.margin_top,
+            sp.margin_bottom,
+        ),
+        VRelativeFrom::Paragraph => (slot_top, slot_top - tb_height),
+    };
+    match v_position {
+        VerticalPosition::Offset(o) => region_top - o,
+        VerticalPosition::AlignTop => region_top,
+        VerticalPosition::AlignBottom => region_bottom + tb_height,
+        VerticalPosition::AlignCenter => {
+            region_top - ((region_top - region_bottom) - tb_height) / 2.0
         }
-        VRelativeFrom::Paragraph => slot_top - v_offset_pt,
     }
 }
 
@@ -377,8 +388,13 @@ pub(super) fn render_header_footer(
                         text_width,
                         text_width,
                     );
-                    let tb_y_top =
-                        resolve_tb_y_top(tb.v_relative_from, tb.v_offset_pt, sp, slot_top);
+                    let tb_y_top = resolve_tb_y_top(
+                        tb.v_relative_from,
+                        &tb.v_position,
+                        tb.height_pt,
+                        sp,
+                        slot_top,
+                    );
 
                     if let Some(ref fill) = tb.fill {
                         super::render_shape_fill(

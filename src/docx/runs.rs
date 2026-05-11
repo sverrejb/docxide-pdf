@@ -516,6 +516,12 @@ fn collect_run_nodes<'a>(
             if let Some(content) = wml(child, "sdtContent") {
                 collect_run_nodes(content, rels, out);
             }
+        } else if is_wml && name == "fldSimple" {
+            // Simple field: <w:fldSimple w:instr="..."><w:r>cached</w:r></w:fldSimple>.
+            // Emit the cached display runs. Dynamic field codes (PAGE/NUMPAGES/etc.)
+            // are not rewritten here — the cached text matches Word's online converter
+            // output for the static-PDF case.
+            collect_run_nodes(child, rels, out);
         } else if ns == Some(MC_NS_TOP) && name == "AlternateContent" {
             if let Some(branch) = mc_choice_or_fallback(child) {
                 collect_run_nodes(branch, rels, out);
@@ -951,6 +957,31 @@ mod tests {
         let merged = merge_compatible_runs(runs);
         assert_eq!(merged.len(), 3, "runs differing in shading must not merge");
         assert_eq!(merged[1].shading, Some([255, 244, 163]));
+    }
+
+    #[test]
+    fn collect_run_nodes_unwraps_fldsimple() {
+        // w:fldSimple wraps cached display runs (e.g. for FILLIN fields). The
+        // run inside must be reachable so its text reaches the output.
+        let ns = WML_NS;
+        let xml = format!(
+            r#"<w:p xmlns:w="{ns}">
+              <w:fldSimple w:instr=" FILLIN &quot;x&quot; \d OFFICIAL ">
+                <w:r><w:t>OFFICIAL</w:t></w:r>
+              </w:fldSimple>
+            </w:p>"#
+        );
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        let rels = HashMap::new();
+        let mut out = Vec::new();
+        collect_run_nodes(doc.root_element(), &rels, &mut out);
+        assert_eq!(out.len(), 1, "fldSimple's inner w:r must be collected");
+        let t_text = out[0]
+            .0
+            .children()
+            .find(|n| n.tag_name().name() == "t" && n.tag_name().namespace() == Some(WML_NS))
+            .and_then(|n| n.text());
+        assert_eq!(t_text, Some("OFFICIAL"));
     }
 
     #[test]

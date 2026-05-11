@@ -1,5 +1,5 @@
 {
-  "next_id": 146,
+  "next_id": 149,
   "annotations": [
     {
       "id": 8,
@@ -269,6 +269,36 @@
       "x_pt": 402.78082,
       "y_pt": 96.17511,
       "note": "Date should be aligned with \"datum\" above it.",
+      "fixed": false
+    },
+    {
+      "id": 146,
+      "case": "new/victorian_universal_design_policy",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 87.10946,
+      "y_pt": 503.22177,
+      "note": "\"OFFICIAL\" missing here.",
+      "fixed": true
+    },
+    {
+      "id": 147,
+      "case": "new/victorian_universal_design_policy",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 315.5753,
+      "y_pt": 19.981384,
+      "note": "\"OFFICIAL\" missing here too.",
+      "fixed": true
+    },
+    {
+      "id": 148,
+      "case": "new/victorian_universal_design_policy",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 218.20477,
+      "y_pt": 588.341,
+      "note": "Empty page missing before \"Whole of Victorian ....\"  causing page shift",
       "fixed": false
     }
   ]

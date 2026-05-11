@@ -2,9 +2,10 @@ use std::collections::HashMap;
 
 use pdf_writer::Content;
 
-use crate::model::{Paragraph, SectionProperties, TextAnchor, Textbox, VRelativeFrom};
+use crate::model::{Paragraph, SectionProperties, TextAnchor, Textbox};
 
 use super::color::{fill_rgb, stroke_rgb};
+use super::header_footer::resolve_tb_y_top;
 use super::layout::{
     LinkAnnotation, build_paragraph_lines, build_tabbed_line, render_paragraph_lines,
     tallest_run_metrics,
@@ -36,13 +37,13 @@ pub(super) fn render_single_textbox(
         col_w,
         text_width,
     );
-    let tb_y_top = match tb.v_relative_from {
-        VRelativeFrom::Page => sp.page_height - tb.v_offset_pt,
-        VRelativeFrom::Margin | VRelativeFrom::TopMargin => {
-            sp.page_height - sp.margin_top - tb.v_offset_pt
-        }
-        VRelativeFrom::Paragraph => slot_top - tb.v_offset_pt,
-    };
+    let tb_y_top = resolve_tb_y_top(
+        tb.v_relative_from,
+        &tb.v_position,
+        tb.height_pt,
+        sp,
+        slot_top,
+    );
 
 
     // For AutoFit::Shape, compute height from content instead of using tb.height_pt

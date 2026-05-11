@@ -1,6 +1,6 @@
 use crate::model::{
     Alignment, AutoFit, HRelativeFrom, HorizontalPosition, Paragraph, Run, TextFill, TextGlow,
-    TextOutline, TextShadow, TextWarp, Textbox, VRelativeFrom, WrapType,
+    TextOutline, TextShadow, TextWarp, Textbox, VRelativeFrom, VerticalPosition, WrapType,
 };
 
 use super::styles::{StylesInfo, ThemeFonts};
@@ -203,6 +203,7 @@ pub(super) fn parse_vml_wordart(
         h_position: HorizontalPosition::Offset(0.0),
         h_relative_from: HRelativeFrom::Column,
         v_offset_pt: 0.0,
+        v_position: VerticalPosition::Offset(0.0),
         v_relative_from: VRelativeFrom::Paragraph,
         fill: None,
         shape_type: Default::default(),
