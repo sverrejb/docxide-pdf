@@ -737,9 +737,13 @@ fn compute_bookmark_positions(
                         )
                     };
                     let num_lines = lines.len().max(1);
+                    let para_has_inline_img =
+                        para.runs.iter().any(|r| r.inline_image.is_some());
                     let content_h = if para.image.is_some() || para.inline_chart.is_some()
                     {
                         para.content_height
+                    } else if para_has_inline_img && para.content_height > 0.0 {
+                        para.content_height.max(num_lines as f32 * line_h)
                     } else {
                         num_lines as f32 * line_h
                     };
@@ -1276,7 +1280,8 @@ fn render_paragraph_block(
     let mut float_width_change: Option<(usize, f32)> = None;
     // For look-ahead: (narrow_x, narrow_w) for lines after the split
     let mut lookahead_narrow: Option<(f32, f32)> = None;
-    let lines = if para.image.is_some() || text_empty {
+    let has_inline_image_runs = effective_runs.iter().any(|r| r.inline_image.is_some());
+    let lines = if para.image.is_some() || (text_empty && !has_inline_image_runs) {
         vec![]
     } else if has_tabs {
         build_tabbed_line(
@@ -1389,14 +1394,6 @@ fn render_paragraph_block(
         para.content_height
     } else if para.image.is_some() {
         para.content_height
-    } else if text_empty {
-        if para.paragraph_mark_vanish {
-            0.0
-        } else if para.content_height > 0.0 {
-            para.content_height
-        } else {
-            line_h
-        }
     } else if max_inline_img_h > 0.0 {
         let mut h = 0.0f32;
         for line in &lines {
@@ -1408,6 +1405,14 @@ fn render_paragraph_block(
             h += if img_h > line_h { img_h } else { line_h };
         }
         h
+    } else if text_empty {
+        if para.paragraph_mark_vanish {
+            0.0
+        } else if para.content_height > 0.0 {
+            para.content_height
+        } else {
+            line_h
+        }
     } else {
         let num_lines = lines.len();
         // List label font size doesn't boost line height — labels
@@ -2040,7 +2045,7 @@ fn render_paragraph_block(
             .rect(rule_x, rule_y, rule_w, draw_h);
         state.pb.content.fill_nonzero();
         state.pb.content.restore_state();
-    } else if (para.image.is_some() || text_empty) && para.content_height > 0.0 {
+    } else if para.image.is_some() && para.content_height > 0.0 {
         if let Some(pdf_name) = image_pdf_names.get(&state.global_block_idx) {
             let img = para.image.as_ref().unwrap();
             let y_bottom = state.pb.slot_top - img.layout_extra_top - img.display_height;
