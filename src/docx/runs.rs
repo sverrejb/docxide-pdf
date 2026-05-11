@@ -60,6 +60,11 @@ fn mc_choice_or_fallback<'a>(node: roxmltree::Node<'a, 'a>) -> Option<roxmltree:
 pub(super) struct ParsedRuns {
     pub(super) runs: Vec<Run>,
     pub(super) has_page_break_before: bool,
+    /// True only when the break came from `<w:br w:type="page"/>` at the
+    /// start of the paragraph, not from the `<w:pageBreakBefore/>` style
+    /// property. The renderer treats these differently — see
+    /// `Paragraph.page_break_before_explicit`.
+    pub(super) has_explicit_page_break_before: bool,
     pub(super) has_page_break_after: bool,
     pub(super) has_column_break: bool,
     pub(super) floating_images: Vec<FloatingImage>,
@@ -868,6 +873,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
     ParsedRuns {
         runs,
         has_page_break_before,
+        has_explicit_page_break_before: page_break_before_content,
         has_page_break_after,
         has_column_break,
         floating_images,

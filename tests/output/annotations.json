@@ -299,7 +299,7 @@
       "x_pt": 218.20477,
       "y_pt": 588.341,
       "note": "Empty page missing before \"Whole of Victorian ....\"  causing page shift",
-      "fixed": false
+      "fixed": true
     }
   ]
 }

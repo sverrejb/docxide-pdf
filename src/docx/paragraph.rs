@@ -399,6 +399,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         shading: para_shading,
         page_break_before: parsed.has_page_break_before
             || para_style.is_some_and(|s| s.page_break_before),
+        page_break_before_explicit: parsed.has_explicit_page_break_before,
         page_break_after: parsed.has_page_break_after,
         column_break_before: parsed.has_column_break,
         tab_stops,

@@ -257,6 +257,12 @@ pub struct Paragraph {
     pub borders: ParagraphBorders,
     pub shading: Option<[u8; 3]>,
     pub page_break_before: bool,
+    /// True when `page_break_before` originated from an explicit
+    /// `<w:br w:type="page"/>` at the start of the paragraph (as opposed to
+    /// the `<w:pageBreakBefore/>` style property). An explicit break must
+    /// advance the page even if we're already at the top of one — Word
+    /// emits a blank page in that case; the style property is idempotent.
+    pub page_break_before_explicit: bool,
     pub page_break_after: bool,
     pub column_break_before: bool,
     pub tab_stops: Vec<TabStop>,

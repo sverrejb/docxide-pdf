@@ -844,10 +844,15 @@ fn render_paragraph_block(
         return true;
     }
 
-    // Handle explicit page breaks
+    // Handle explicit page breaks.
+    // `<w:br w:type="page"/>` (page_break_before_explicit) advances
+    // unconditionally — even at the top of a page, Word emits a blank
+    // page when the explicit break follows a section break. The
+    // `<w:pageBreakBefore/>` style property is idempotent and skipped
+    // when already at the top.
     if para.page_break_before {
         let at_top = state.pb.is_at_page_top(sp);
-        if !at_top {
+        if !at_top || para.page_break_before_explicit {
             state.pb.flush_page(sect_idx);
             state.pb.slot_top = effective_slot_top(sp, false, &ctx);
             state.pb.column_top_y = state.pb.slot_top;
