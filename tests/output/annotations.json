@@ -1,5 +1,5 @@
 {
-  "next_id": 149,
+  "next_id": 150,
   "annotations": [
     {
       "id": 8,
@@ -272,34 +272,14 @@
       "fixed": false
     },
     {
-      "id": 146,
-      "case": "new/victorian_universal_design_policy",
-      "page": 0,
+      "id": 149,
+      "case": "new/western_australia_owner_drivers_act",
+      "page": 11,
       "source": "Generated",
-      "x_pt": 87.10946,
-      "y_pt": 503.22177,
-      "note": "\"OFFICIAL\" missing here.",
-      "fixed": true
-    },
-    {
-      "id": 147,
-      "case": "new/victorian_universal_design_policy",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 315.5753,
-      "y_pt": 19.981384,
-      "note": "\"OFFICIAL\" missing here too.",
-      "fixed": true
-    },
-    {
-      "id": 148,
-      "case": "new/victorian_universal_design_policy",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 218.20477,
-      "y_pt": 588.341,
-      "note": "Empty page missing before \"Whole of Victorian ....\"  causing page shift",
-      "fixed": true
+      "x_pt": 146.76491,
+      "y_pt": 181.302,
+      "note": "Roman numerals, when reference uses arabic here.",
+      "fixed": false
     }
   ]
 }
