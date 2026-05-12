@@ -350,6 +350,23 @@ fn embed_single_image(
             };
             write_image_xobject(pdf, xobj_ref, &data, filter, w, h, smask_ref);
         }
+        ImageFormat::Emf => {
+            // Translate EMF records into a PDF Form XObject. The xobj_ref we
+            // already allocated is unused — emf_to_form_xobject allocates its
+            // own — so map the slot to the Form XObject ref instead.
+            if let Some(form_ref) =
+                super::emf::emf_to_form_xobject(&img.data, pdf, alloc)
+            {
+                image_xobjects.push((pdf_name.clone(), form_ref));
+                return pdf_name;
+            }
+            // Conversion failed — register the wasted ref so it still maps to
+            // something (an empty form XObject) and the page content stream
+            // referencing it won't crash.
+            let mut empty = pdf.form_xobject(xobj_ref, b"");
+            empty.bbox(pdf_writer::Rect::new(0.0, 0.0, 1.0, 1.0));
+            drop(empty);
+        }
     }
 
     image_xobjects.push((pdf_name.clone(), xobj_ref));
@@ -462,6 +479,7 @@ fn embed_reflection(
             xobj.interpolate(true);
             xobj.s_mask(grad_ref);
         }
+        ImageFormat::Emf => return None,
         ImageFormat::Png | ImageFormat::Bmp => {
             // Decode and re-encode as RGB (strip any existing alpha — the gradient replaces it)
             let img_fmt = match img.format {

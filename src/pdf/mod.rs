@@ -2,6 +2,7 @@ mod assembly;
 mod chart_legend;
 mod charts;
 mod charts_radial;
+mod emf;
 pub(crate) mod color;
 mod fonts;
 mod footnotes;

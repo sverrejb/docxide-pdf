@@ -1,5 +1,5 @@
 {
-  "next_id": 183,
+  "next_id": 184,
   "annotations": [
     {
       "id": 8,
@@ -202,16 +202,6 @@
       "fixed": false
     },
     {
-      "id": 139,
-      "case": "new/auditor_regulatory_report_template",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 79.27513,
-      "y_pt": 795.54395,
-      "note": "Missing logo in header",
-      "fixed": false
-    },
-    {
       "id": 140,
       "case": "new/bahamas_sustainable_development_hosting",
       "page": 0,
@@ -330,16 +320,6 @@
       "y_pt": 567.99884,
       "note": "We are not rendering sticky notes at all.",
       "fixed": false
-    },
-    {
-      "id": 155,
-      "case": "new/alfies_arc_adult_safeguarding_policy",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 233.09885,
-      "y_pt": 653.34827,
-      "note": "Missing logos in the header here.",
-      "fixed": true
     },
     {
       "id": 156,
@@ -589,6 +569,16 @@
       "x_pt": 148.81929,
       "y_pt": 716.53296,
       "note": "Emblem rendered wrong here. Overflows bounding box, wrong aspect ratio.",
+      "fixed": false
+    },
+    {
+      "id": 183,
+      "case": "new/pendulum_mechanics_oscillation_lab",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 281.9151,
+      "y_pt": 749.23706,
+      "note": "Heading should be centered",
       "fixed": false
     }
   ]

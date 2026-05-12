@@ -12,6 +12,9 @@ pub enum ImageFormat {
     Jpeg,
     Png,
     Bmp,
+    /// Enhanced Metafile — a vector graphics format. Embedded as a PDF Form
+    /// XObject (PDF drawing operators) rather than a raster Image XObject.
+    Emf,
 }
 
 #[derive(Clone)]

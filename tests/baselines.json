@@ -433,8 +433,8 @@
     "text_boundary": 0.9064
   },
   "new/auditor_regulato..": {
-    "jaccard": 0.3523,
-    "ssim": 0.5678,
+    "jaccard": 0.3632,
+    "ssim": 0.5781,
     "text_boundary": 0.5942
   },
   "new/bahamas_sustaina..": {
@@ -555,7 +555,7 @@
   "new/irish_school_enr..": {
     "jaccard": 0.3356,
     "ssim": 0.5297,
-    "text_boundary": 0.7054
+    "text_boundary": 0.6964
   },
   "new/isla_language_le..": {
     "jaccard": 0.3525,
@@ -678,8 +678,8 @@
     "text_boundary": 1.0
   },
   "new/slovak_pedagogic..": {
-    "jaccard": 0.0568,
-    "ssim": 0.1509,
+    "jaccard": 0.0473,
+    "ssim": 0.1435,
     "text_boundary": 0.0
   },
   "new/taiwanese_educat..": {
@@ -863,8 +863,8 @@
     "convert_ms": 170.5
   },
   "scraped/italian_evaluati..": {
-    "jaccard": 0.34,
-    "ssim": 0.4377,
+    "jaccard": 0.3401,
+    "ssim": 0.4383,
     "text_boundary": 0.5768,
     "convert_ms": 115.1
   },

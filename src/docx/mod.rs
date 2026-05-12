@@ -12,6 +12,7 @@ mod settings;
 pub(crate) mod smartart;
 mod styles;
 mod tables;
+pub(crate) mod emf;
 mod textbox;
 mod wmf;
 mod wordart;

@@ -68,6 +68,16 @@ pub(super) fn image_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat, u8
         return Some((width, height, ImageFormat::Bmp, 3));
     }
 
+    if super::emf::is_emf(data) {
+        let (bw, bh) = super::emf::parse_header(data)?.bounds_size();
+        // Pixel dimensions don't strictly apply to vector EMFs — use the
+        // bounds-rect logical size so downstream code that expects them gets
+        // a sensible aspect ratio.
+        let pw = bw.max(1) as u32;
+        let ph = bh.max(1) as u32;
+        return Some((pw, ph, ImageFormat::Emf, 0));
+    }
+
     None
 }
 
