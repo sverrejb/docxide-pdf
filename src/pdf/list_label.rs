@@ -24,21 +24,71 @@ pub(super) fn label_font_key(para: &Paragraph) -> Option<String> {
     }
 }
 
+/// Symbol-font PUA bullet codepoints map to Unicode equivalents that any
+/// general-purpose font can render. When the labeled font is missing or
+/// can't encode the PUA char, fall back to these.
+pub(super) fn symbol_pua_to_unicode(c: char) -> Option<char> {
+    match c {
+        '\u{F0B7}' => Some('\u{2022}'), // •  Symbol bullet
+        '\u{F0A7}' => Some('\u{25AA}'), // ▪  Symbol filled square
+        '\u{F0D8}' => Some('\u{2192}'), // →  Symbol right arrow
+        '\u{F0FC}' => Some('\u{2713}'), // ✓  Symbol checkmark
+        _ => None,
+    }
+}
+
+fn map_symbol_pua(text: &str) -> Option<String> {
+    if !text.chars().any(|c| symbol_pua_to_unicode(c).is_some()) {
+        return None;
+    }
+    Some(
+        text.chars()
+            .map(|c| symbol_pua_to_unicode(c).unwrap_or(c))
+            .collect(),
+    )
+}
+
+fn encode_against(entry: &FontEntry, text: &str) -> Vec<u8> {
+    match &entry.char_to_gid {
+        Some(map) => encode_as_gids(text, map),
+        None => to_winansi_bytes(text),
+    }
+}
+
 pub(super) fn label_for_paragraph<'a>(
     para: &Paragraph,
     seen_fonts: &'a HashMap<String, FontEntry>,
 ) -> (&'a str, Vec<u8>) {
-    let Some(key) = label_font_key(para) else {
-        return ("", vec![]);
-    };
-    let Some(entry) = seen_fonts.get(&key) else {
-        return ("", vec![]);
-    };
-    let bytes = match &entry.char_to_gid {
-        Some(map) => encode_as_gids(&para.list_label, map),
-        None => to_winansi_bytes(&para.list_label),
-    };
-    (entry.pdf_name.as_str(), bytes)
+    let key = label_font_key(para);
+    let entry = key.as_deref().and_then(|k| seen_fonts.get(k));
+
+    if let Some(entry) = entry {
+        let bytes = encode_against(entry, &para.list_label);
+        if !is_all_notdef(&bytes) {
+            return (entry.pdf_name.as_str(), bytes);
+        }
+    }
+
+    // Either the labeled font is missing, or it produced only .notdef
+    // glyphs (typical for Symbol-PUA chars when the font's cmap can't
+    // round-trip them). Fall back to the surrounding body-run font with
+    // Symbol-PUA chars mapped to their Unicode equivalents.
+    if let Some(mapped) = map_symbol_pua(&para.list_label)
+        && let Some(run) = para.runs.first()
+        && let Some(body_entry) = seen_fonts.get(&font_key(run))
+    {
+        let bytes = encode_against(body_entry, &mapped);
+        return (body_entry.pdf_name.as_str(), bytes);
+    }
+
+    ("", vec![])
+}
+
+/// `encode_as_gids` writes the .notdef glyph (gid 0) for any char missing
+/// from the map. A run of pure-zero output means the font couldn't render
+/// anything — treat that as a miss and fall through to substitution.
+fn is_all_notdef(bytes: &[u8]) -> bool {
+    !bytes.is_empty() && bytes.chunks_exact(2).all(|c| c == [0, 0])
 }
 
 pub(super) fn render_list_label(

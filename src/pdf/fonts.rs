@@ -32,6 +32,12 @@ pub(super) fn collect_all_runs(doc: &Document) -> Vec<&Run> {
         .flat_map(|fn_| fn_.paragraphs.iter())
         .flat_map(|p| para_runs_with_textboxes(p));
 
+    let endnote_runs = doc
+        .endnotes
+        .values()
+        .flat_map(|en| en.paragraphs.iter())
+        .flat_map(|p| para_runs_with_textboxes(p));
+
     doc.sections
         .iter()
         .flat_map(|s| s.blocks.iter())
@@ -49,6 +55,7 @@ pub(super) fn collect_all_runs(doc: &Document) -> Vec<&Run> {
         })
         .chain(hf_runs)
         .chain(footnote_runs)
+        .chain(endnote_runs)
         .collect()
 }
 
@@ -72,12 +79,16 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
                 FieldCode::StyleRef(_) => {}
             }
         }
-        if run.footnote_id.is_some() || run.is_footnote_ref_mark {
+        if run.footnote_id.is_some()
+            || run.is_footnote_ref_mark
+            || run.endnote_id.is_some()
+            || run.is_endnote_ref_mark
+        {
             chars.extend('0'..='9');
         }
     }
 
-    let all_paras: Vec<&Paragraph> = doc
+    let mut all_paras: Vec<&Paragraph> = doc
         .sections
         .iter()
         .flat_map(|s| s.blocks.iter())
@@ -94,6 +105,11 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
             }
         })
         .collect();
+    for note in doc.footnotes.values().chain(doc.endnotes.values()) {
+        for p in &note.paragraphs {
+            all_paras.extend(collect_paras(p));
+        }
+    }
 
     for para in &all_paras {
         if !para.list_label.is_empty() {
@@ -101,6 +117,18 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
                 used.entry(key)
                     .or_default()
                     .extend(para.list_label.chars());
+            }
+            // The label may fall back to the surrounding body font when the
+            // labeled font (e.g. Symbol) can't render a PUA bullet char. Make
+            // sure the body font's subset includes the Unicode substitute.
+            if let Some(run) = para.runs.first() {
+                let body_key = font_key_buf(run, &mut key_buf).to_string();
+                let entry = used.entry(body_key).or_default();
+                for c in para.list_label.chars() {
+                    if let Some(sub) = super::list_label::symbol_pua_to_unicode(c) {
+                        entry.insert(sub);
+                    }
+                }
             }
         }
         for stop in &para.tab_stops {

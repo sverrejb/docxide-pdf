@@ -39,6 +39,35 @@ fn is_break_space(c: char) -> bool {
     c.is_whitespace() && c != '\u{00a0}' && c != '\u{3000}'
 }
 
+/// Insert extra UAX #14 break positions inside URL-like tokens. UAX #14 is
+/// conservative around `://` and percent-encoded runs, so a long URL ends up
+/// as a single unbreakable word that overflows the right margin. Break
+/// opportunities after `/`, `?`, `#`, `&`, `=`, `;` (skipping the `://`) let
+/// the line breaker wrap URLs the way Word does.
+fn augment_url_breaks(text: &str, breaks: &mut Vec<usize>) {
+    let bytes = text.as_bytes();
+    let mut search_from = 0;
+    while let Some(rel) = text[search_from..].find("://") {
+        let scheme_end = search_from + rel + 3;
+        // Break after each URL-structure char, but stop at the next whitespace
+        // — that terminates the URL token.
+        let mut i = scheme_end;
+        while i < bytes.len() {
+            let b = bytes[i];
+            if b.is_ascii_whitespace() {
+                break;
+            }
+            if matches!(b, b'/' | b'?' | b'#' | b'&' | b'=' | b';') {
+                breaks.push(i + 1);
+            }
+            i += 1;
+        }
+        search_from = i;
+    }
+    breaks.sort_unstable();
+    breaks.dedup();
+}
+
 /// Split text into (preceding_space_count, word) segments using UAX #14 line break rules.
 /// Handles CJK character boundaries, hyphens, and punctuation break opportunities
 /// in addition to whitespace. Non-breaking spaces (U+00A0) and ideographic spaces
@@ -53,9 +82,10 @@ fn split_preserving_spaces(text: &str) -> Vec<(usize, &str)> {
     let mut pending_spaces: usize = 0;
 
     // Collect UAX #14 break positions (byte offsets where breaks are allowed/mandatory)
-    let breaks: Vec<usize> = unicode_linebreak::linebreaks(text)
+    let mut breaks: Vec<usize> = unicode_linebreak::linebreaks(text)
         .map(|(pos, _)| pos)
         .collect();
+    augment_url_breaks(text, &mut breaks);
 
     let mut prev = 0;
     for &brk in &breaks {
@@ -1739,6 +1769,21 @@ pub(super) fn tallest_run_metrics(
 mod tests {
     use super::*;
     use crate::model::VertAlign;
+
+    #[test]
+    fn test_url_breaks_split_into_chunks() {
+        let words: Vec<&str> = split_preserving_spaces(
+            "see https://example.com/foo/bar?x=1&y=2#frag after",
+        )
+        .into_iter()
+        .map(|(_, w)| w)
+        .collect();
+        // The URL must be broken at /, ?, #, &, = so the line wrapper
+        // can split it across lines if needed.
+        assert!(words.iter().any(|w| w.ends_with('/')), "no break after /: {:?}", words);
+        assert!(words.iter().any(|w| w.ends_with('?')), "no break after ?: {:?}", words);
+        assert!(words.iter().any(|w| w.ends_with('#')), "no break after #: {:?}", words);
+    }
 
     #[test]
     fn test_is_break_space() {
