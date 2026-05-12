@@ -6,7 +6,7 @@ use crate::model::{
     TextFill, TextGlow, TextOutline, TextShadow, Textbox, VertAlign,
 };
 
-use super::images::{RunDrawingResult, parse_run_drawing};
+use super::images::{RunDrawingResult, parse_object_inline_image, parse_run_drawing};
 use super::is_east_asian_char;
 use super::styles::{
     CharacterStyle, ParagraphStyle, StyleDefaults, ThemeFonts,
@@ -809,6 +809,15 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         parse_textbox_from_vml(child, ctx)
                     {
                         textboxes.push(tb);
+                    }
+                }
+                "object" if !in_field => {
+                    flush_pending(&mut pending_text, &mut runs);
+                    if let Some(img) = parse_object_inline_image(child, ctx) {
+                        runs.push(Run {
+                            inline_image: Some(img),
+                            ..fmt.minimal_run()
+                        });
                     }
                 }
                 "footnoteReference" if !in_field => {

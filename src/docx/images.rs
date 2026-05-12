@@ -261,6 +261,9 @@ pub(super) fn read_image_from_zip_extra<R: Read + Seek>(
     let mut entry = zip.by_name(&zip_path).ok()?;
     let mut data = Vec::new();
     entry.read_to_end(&mut data).ok()?;
+    if super::wmf::is_wmf(&data) {
+        data = super::wmf::wmf_to_bmp(&data)?;
+    }
     let (pw, ph, fmt, components) = image_dimensions(&data)?;
     Some(EmbeddedImage {
         data: std::sync::Arc::new(data),
@@ -671,6 +674,27 @@ pub(super) fn compute_drawing_info<R: Read + Seek>(
         image,
         floating_images: Vec::new(),
     }
+}
+
+/// Extract an inline image from a `<w:object>` VML fallback.
+///
+/// Word's OLE static-metafile embeddings use a `<v:imagedata r:id="..."/>`
+/// child to point at a WMF/EMF/raster fallback. For WMFs whose content is a
+/// single DIB-bearing record we can convert that to BMP in `wmf::wmf_to_bmp`
+/// and render normally; this function finds the imagedata reference and
+/// pulls the image with the display dimensions declared on the surrounding
+/// VML shape (or on the `<w:object>` itself as a fallback).
+pub(super) fn parse_object_inline_image<R: Read + Seek>(
+    obj: roxmltree::Node,
+    ctx: &mut ParseContext<'_, R>,
+) -> Option<EmbeddedImage> {
+    const VML_NS_LOCAL: &str = "urn:schemas-microsoft-com:vml";
+    let imagedata = obj.descendants().find(|n| {
+        n.tag_name().namespace() == Some(VML_NS_LOCAL) && n.tag_name().name() == "imagedata"
+    })?;
+    let embed_id = imagedata.attribute((REL_NS, "id"))?;
+    let (w, h) = object_dimensions(obj)?;
+    read_image_from_zip(embed_id, ctx.rels, ctx.zip, w, h)
 }
 
 /// Reserve space for `<w:object>` legacy OLE embeddings (we don't render the

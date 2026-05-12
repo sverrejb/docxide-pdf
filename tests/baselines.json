@@ -413,8 +413,8 @@
     "text_boundary": 0.9667
   },
   "new/alfies_arc_adult..": {
-    "jaccard": 0.4843,
-    "ssim": 0.7006,
+    "jaccard": 0.5121,
+    "ssim": 0.7277,
     "text_boundary": 0.9405
   },
   "new/alpharetta_schoo..": {
@@ -443,8 +443,8 @@
     "text_boundary": 1.0
   },
   "new/belgian_youth_pr..": {
-    "jaccard": 0.204,
-    "ssim": 0.5132,
+    "jaccard": 0.2109,
+    "ssim": 0.5183,
     "text_boundary": 1.0
   },
   "new/biochemistry_pen..": {
@@ -458,8 +458,8 @@
     "text_boundary": 0.0053
   },
   "new/carbon_farming_i..": {
-    "jaccard": 0.0808,
-    "ssim": 0.2575,
+    "jaccard": 0.0812,
+    "ssim": 0.2577,
     "text_boundary": 0.0616
   },
   "new/chinese_student_..": {
@@ -598,13 +598,13 @@
     "text_boundary": 0.5756
   },
   "new/old_blue_truck_g..": {
-    "jaccard": 0.7371,
-    "ssim": 0.9147,
+    "jaccard": 0.7475,
+    "ssim": 0.9378,
     "text_boundary": 1.0
   },
   "new/pendulum_mechani..": {
-    "jaccard": 0.128,
-    "ssim": 0.2424,
+    "jaccard": 0.1279,
+    "ssim": 0.2423,
     "text_boundary": 0.1333
   },
   "new/polish_municipal..": {

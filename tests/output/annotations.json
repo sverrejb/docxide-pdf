@@ -1,5 +1,5 @@
 {
-  "next_id": 182,
+  "next_id": 183,
   "annotations": [
     {
       "id": 8,
@@ -148,7 +148,7 @@
       "source": "Generated",
       "x_pt": 449.4558,
       "y_pt": 379.37347,
-      "note": "All text from \"Slik gjør du\" and on is shifted too low,",
+      "note": "All text from \"Slik gj\u00f8r du\" and on is shifted too low,",
       "fixed": false
     },
     {
@@ -339,7 +339,7 @@
       "x_pt": 233.09885,
       "y_pt": 653.34827,
       "note": "Missing logos in the header here.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 156,
@@ -369,16 +369,6 @@
       "x_pt": 74.63493,
       "y_pt": 284.4301,
       "note": "Generally the \"Las Vegas, NV ...\" text looks different,",
-      "fixed": false
-    },
-    {
-      "id": 159,
-      "case": "new/carbon_farming_initiative_rule",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 100.825264,
-      "y_pt": 706.09204,
-      "note": "Missing emblem/symbol image",
       "fixed": false
     },
     {
@@ -589,6 +579,16 @@
       "x_pt": 299.12448,
       "y_pt": 30.43573,
       "note": "\"OFFICIAL\" in bottom or footer is slightly too high up compared to referance",
+      "fixed": false
+    },
+    {
+      "id": 182,
+      "case": "new/carbon_farming_initiative_rule",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 148.81929,
+      "y_pt": 716.53296,
+      "note": "Emblem rendered wrong here. Overflows bounding box, wrong aspect ratio.",
       "fixed": false
     }
   ]

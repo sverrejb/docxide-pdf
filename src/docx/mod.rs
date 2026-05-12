@@ -13,6 +13,7 @@ pub(crate) mod smartart;
 mod styles;
 mod tables;
 mod textbox;
+mod wmf;
 mod wordart;
 
 use std::collections::{HashMap, HashSet};
