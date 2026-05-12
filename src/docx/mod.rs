@@ -30,7 +30,7 @@ use crate::model::{
 use styles::{ParagraphStyle, parse_line_spacing, parse_styles, parse_theme};
 
 use embedded_fonts::parse_font_table;
-use headers_footers::parse_footnotes;
+use headers_footers::{parse_endnotes, parse_footnotes};
 use numbering::parse_numbering;
 use relationships::parse_relationships;
 use sections::parse_section_properties;
@@ -679,7 +679,8 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
     let rels = parse_relationships(zip);
     let ft = parse_font_table(zip);
     let (embedded_fonts, font_table) = (ft.embedded_fonts, ft.font_table);
-    let footnotes = parse_footnotes(zip, &styles, &theme);
+    let footnotes = parse_footnotes(zip, &styles, &theme, &numbering);
+    let endnotes = parse_endnotes(zip, &styles, &theme, &numbering);
     let (title, author, subject, keywords) = parse_core_props(zip);
 
     let mut xml_content = String::new();
@@ -808,6 +809,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         line_spacing: styles.defaults.line_spacing,
         embedded_fonts,
         footnotes,
+        endnotes,
         font_table,
         even_and_odd_headers: settings.even_and_odd_headers,
         default_tab_stop: settings.default_tab_stop,

@@ -576,6 +576,10 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
                 && run.footnote_id.is_none()
                 && !prev.is_footnote_ref_mark
                 && !run.is_footnote_ref_mark
+                && prev.endnote_id.is_none()
+                && run.endnote_id.is_none()
+                && !prev.is_endnote_ref_mark
+                && !run.is_endnote_ref_mark
                 && prev.field_code.is_none()
                 && run.field_code.is_none()
                 && prev.font_name == run.font_name
@@ -836,6 +840,25 @@ pub(super) fn parse_runs<R: Read + Seek>(
                     flush_pending(&mut pending_text, &mut runs);
                     runs.push(Run {
                         is_footnote_ref_mark: true,
+                        ..fmt.superscript_run()
+                    });
+                }
+                "endnoteReference" if !in_field => {
+                    flush_pending(&mut pending_text, &mut runs);
+                    if let Some(id) = child
+                        .attribute((WML_NS, "id"))
+                        .and_then(|v| v.parse::<u32>().ok())
+                    {
+                        runs.push(Run {
+                            endnote_id: Some(id),
+                            ..fmt.superscript_run()
+                        });
+                    }
+                }
+                "endnoteRef" if !in_field => {
+                    flush_pending(&mut pending_text, &mut runs);
+                    runs.push(Run {
+                        is_endnote_ref_mark: true,
                         ..fmt.superscript_run()
                     });
                 }

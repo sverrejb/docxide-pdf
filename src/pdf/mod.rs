@@ -436,6 +436,11 @@ pub(super) struct PageBuilder {
     pub(super) links: Vec<LinkAnnotation>,
     pub(super) footnote_ids: Vec<u32>,
     footnote_ids_set: HashSet<u32>,
+    /// Endnote IDs encountered across the whole document, in encounter order.
+    /// Endnotes default to `pos=docEnd`, so they all render on the final page
+    /// rather than on the page where the reference appears.
+    pub(super) endnote_ids: Vec<u32>,
+    endnote_ids_set: HashSet<u32>,
     pub(super) alpha_states: HashSet<u8>,
     pub(super) gradient_specs: Vec<GradientSpec>,
 
@@ -480,6 +485,8 @@ impl PageBuilder {
             links: Vec::new(),
             footnote_ids: Vec::new(),
             footnote_ids_set: HashSet::new(),
+            endnote_ids: Vec::new(),
+            endnote_ids_set: HashSet::new(),
             alpha_states: HashSet::new(),
             gradient_specs: Vec::new(),
             styleref_running: HashMap::new(),
@@ -827,6 +834,7 @@ fn render_paragraph_block(
     effect_floating_names: &HashMap<(usize, usize), EffectXObjs>,
     effect_inline_names: &HashMap<(usize, usize), EffectXObjs>,
     footnote_display_order: &HashMap<u32, u32>,
+    endnote_display_order: &HashMap<u32, u32>,
     doc: &Document,
     smartart_font_key: &str,
     smartart_image_names: &HashMap<usize, String>,
@@ -1010,16 +1018,22 @@ fn render_paragraph_block(
 
     let text_hanging = compute_text_hanging(para, ctx.default_tab_stop);
 
-    // Substitute footnote refs and resolve PAGEREF fields
+    // Substitute footnote/endnote refs and resolve PAGEREF fields
     let has_footnote_refs = para.runs.iter().any(|r| r.footnote_id.is_some());
+    let has_endnote_refs = para.runs.iter().any(|r| r.endnote_id.is_some());
     let has_pageref = para.runs.iter().any(|r| matches!(&r.field_code, Some(FieldCode::PageRef(_))));
-    let effective_runs: std::borrow::Cow<'_, Vec<Run>> = if has_footnote_refs || has_pageref {
+    let effective_runs: std::borrow::Cow<'_, Vec<Run>> = if has_footnote_refs || has_endnote_refs || has_pageref {
         let substituted: Vec<Run> = para
             .runs
             .iter()
             .map(|run| {
                 if let Some(id) = run.footnote_id {
                     let num = footnote_display_order.get(&id).copied().unwrap_or(0);
+                    let mut r = run.clone();
+                    r.text = num.to_string();
+                    r
+                } else if let Some(id) = run.endnote_id {
+                    let num = endnote_display_order.get(&id).copied().unwrap_or(0);
                     let mut r = run.clone();
                     r.text = num.to_string();
                     r
@@ -1756,6 +1770,11 @@ fn render_paragraph_block(
                         }
                     }
                 }
+                if let Some(id) = run.endnote_id {
+                    if state.pb.endnote_ids_set.insert(id) {
+                        state.pb.endnote_ids.push(id);
+                    }
+                }
             }
 
             state.global_block_idx += 1;
@@ -2301,6 +2320,13 @@ fn render_paragraph_block(
                 }
             }
         }
+        // Endnotes render at end of document; just collect IDs in encounter
+        // order — they're flushed to the last page in Phase 2c.
+        if let Some(id) = run.endnote_id {
+            if state.pb.endnote_ids_set.insert(id) {
+                state.pb.endnote_ids.push(id);
+            }
+        }
     }
 
     update_styleref_from_para(
@@ -2376,10 +2402,13 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
     let t_images = t0.elapsed();
 
-    // Pre-compute footnote display order: scan body runs for footnote_id, assign sequential numbers
+    // Pre-compute footnote and endnote display order: scan body runs for
+    // footnote_id / endnote_id, assign sequential numbers in encounter order.
     let mut footnote_display_order: HashMap<u32, u32> = HashMap::new();
+    let mut endnote_display_order: HashMap<u32, u32> = HashMap::new();
     {
         let mut next_fn_num = 1u32;
+        let mut next_en_num = 1u32;
         for section in &doc.sections {
             for block in &section.blocks {
                 let runs: Box<dyn Iterator<Item = &Run>> = match block {
@@ -2397,6 +2426,12 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         if !footnote_display_order.contains_key(&id) {
                             footnote_display_order.insert(id, next_fn_num);
                             next_fn_num += 1;
+                        }
+                    }
+                    if let Some(id) = run.endnote_id {
+                        if !endnote_display_order.contains_key(&id) {
+                            endnote_display_order.insert(id, next_en_num);
+                            next_en_num += 1;
                         }
                     }
                 }
@@ -2567,6 +2602,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         &effect_floating_names,
                         &effect_inline_names,
                         &footnote_display_order,
+                        &endnote_display_order,
                         doc,
                         smartart_font_key,
                         &smartart_image_names,
@@ -2698,13 +2734,17 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         }
     }
 
-    // Phase 2c: render footnotes at page bottom (above footer)
+    // Phase 2c: render footnotes at page bottom (above footer). Endnotes
+    // (default pos=docEnd) render once on the final page, stacked above any
+    // footnotes on that page.
+    let last_page_idx = state.pb.all_contents.len().saturating_sub(1);
     for (page_idx, content) in state.pb.all_contents.iter_mut().enumerate() {
         let (hf_si, is_first, si) = state.pb.page_section_indices[page_idx];
         let sp = &doc.sections[hf_si].properties;
         let eff_bottom = compute_effective_margin_bottom(sp, is_first, &ctx);
         let content_sp = &doc.sections[si].properties;
         let text_width = content_sp.page_width - content_sp.margin_left - content_sp.margin_right;
+        let mut bottom = eff_bottom;
         render_page_footnotes(
             content,
             &state.pb.all_footnote_ids[page_idx],
@@ -2712,9 +2752,30 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             &footnote_display_order,
             &ctx,
             content_sp.margin_left,
-            eff_bottom,
+            bottom,
             text_width,
         );
+        if page_idx == last_page_idx && !state.pb.endnote_ids.is_empty() {
+            // Stack endnotes above any footnotes on the final page.
+            let fn_height: f32 = state.pb.all_footnote_ids[page_idx]
+                .iter()
+                .filter_map(|id| doc.footnotes.get(id))
+                .map(|fn_note| compute_footnote_height(fn_note, &ctx, text_width))
+                .sum();
+            if fn_height > 0.0 {
+                bottom += fn_height + 12.0;
+            }
+            render_page_footnotes(
+                content,
+                &state.pb.endnote_ids,
+                &doc.endnotes,
+                &endnote_display_order,
+                &ctx,
+                content_sp.margin_left,
+                bottom,
+                text_width,
+            );
+        }
     }
 
     let t_headers = t0.elapsed();

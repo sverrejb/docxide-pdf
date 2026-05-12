@@ -577,6 +577,8 @@ mod tests {
             inline_image: None,
             footnote_id: None,
             is_footnote_ref_mark: false,
+            endnote_id: None,
+            is_endnote_ref_mark: false,
             kern_threshold: None,
             font_size_from_default: false,
             font_name_from_default: false,

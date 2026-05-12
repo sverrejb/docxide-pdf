@@ -8,12 +8,13 @@ use super::RenderContext;
 use super::layout::{
     TextLine, build_paragraph_lines, is_text_empty, render_paragraph_lines, tallest_run_metrics,
 };
+use super::list_label::render_list_label;
 use super::resolve_line_h;
 
 fn substitute_ref_marks(runs: &[Run], display_num: u32) -> Vec<Run> {
     runs.iter()
         .map(|run| {
-            if run.is_footnote_ref_mark {
+            if run.is_footnote_ref_mark || run.is_endnote_ref_mark {
                 let mut r = run.clone();
                 r.text = display_num.to_string();
                 r
@@ -64,7 +65,9 @@ pub(super) fn compute_footnote_height(
     let mut prev_contextual = false;
     for (i, para) in footnote.paragraphs.iter().enumerate() {
         let ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
-        let Some(layout) = layout_paragraph(&para.runs, ls, ctx, text_width) else {
+        let para_text_width =
+            (text_width - para.indent_left - para.indent_right).max(1.0);
+        let Some(layout) = layout_paragraph(&para.runs, ls, ctx, para_text_width) else {
             continue;
         };
         if i > 0 {
@@ -135,7 +138,11 @@ pub(super) fn render_page_footnotes(
             let runs = substitute_ref_marks(&para.runs, display_num);
             let ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
 
-            let Some(layout) = layout_paragraph(&runs, ls, ctx, text_width) else {
+            let para_text_x = margin_left + para.indent_left;
+            let para_text_width =
+                (text_width - para.indent_left - para.indent_right).max(1.0);
+
+            let Some(layout) = layout_paragraph(&runs, ls, ctx, para_text_width) else {
                 continue;
             };
 
@@ -152,12 +159,21 @@ pub(super) fn render_page_footnotes(
             let baseline_y = fn_y - layout.font_size * layout.ascender_ratio;
             let line_count = layout.lines.len();
 
+            render_list_label(
+                content,
+                para,
+                ctx.fonts,
+                para_text_x - para.indent_hanging,
+                baseline_y,
+                layout.font_size,
+            );
+
             render_paragraph_lines(
                 content,
                 &layout.lines,
                 &para.alignment,
-                margin_left,
-                text_width,
+                para_text_x,
+                para_text_width,
                 baseline_y,
                 layout.line_height,
                 line_count,

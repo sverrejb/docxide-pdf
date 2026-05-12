@@ -1137,14 +1137,27 @@ pub(super) fn render_table(
     // only contiguous header rows starting from row 0 are repeated).
     let header_count = table.rows.iter().take_while(|r| r.is_header).count();
 
-    // Pre-scan each row for footnote references so we can reserve space as
-    // rows containing footnotes are rendered.
+    // Pre-scan each row for footnote and endnote references so we can reserve
+    // space as rows containing notes are rendered.
     let row_footnote_ids: Vec<Vec<u32>> = table.rows.iter().map(|row| {
         let mut ids = Vec::new();
         for cell in &row.cells {
             for p in cell.all_paragraphs() {
                 for run in &p.runs {
                     if let Some(id) = run.footnote_id {
+                        ids.push(id);
+                    }
+                }
+            }
+        }
+        ids
+    }).collect();
+    let row_endnote_ids: Vec<Vec<u32>> = table.rows.iter().map(|row| {
+        let mut ids = Vec::new();
+        for cell in &row.cells {
+            for p in cell.all_paragraphs() {
+                for run in &p.runs {
+                    if let Some(id) = run.endnote_id {
                         ids.push(id);
                     }
                 }
@@ -1317,6 +1330,14 @@ pub(super) fn render_table(
                     let sep = if pb.footnote_ids.len() == 1 { 12.0 } else { 0.0 };
                     *effective_margin_bottom += sep + fn_h;
                 }
+            }
+        }
+
+        // Register endnotes from this row; they render at end of document
+        // (last page), so just collect IDs in encounter order.
+        for &en_id in &row_endnote_ids[ri] {
+            if pb.endnote_ids_set.insert(en_id) {
+                pb.endnote_ids.push(en_id);
             }
         }
 
