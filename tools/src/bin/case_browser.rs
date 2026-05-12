@@ -323,6 +323,7 @@ enum ViewMode {
     Generated,
     Overlay,
     Delta,
+    Compare,
 }
 
 struct App {
@@ -529,6 +530,9 @@ impl eframe::App for App {
             if i.key_pressed(egui::Key::Num5) || i.key_pressed(egui::Key::D) {
                 self.view_mode = ViewMode::Delta;
             }
+            if i.key_pressed(egui::Key::Num6) || i.key_pressed(egui::Key::C) {
+                self.view_mode = ViewMode::Compare;
+            }
             if i.key_pressed(egui::Key::S) {
                 self.search_active = true;
             }
@@ -721,6 +725,7 @@ impl eframe::App for App {
                     ViewMode::Generated => "[G]enerated",
                     ViewMode::Overlay => "[O]verlay",
                     ViewMode::Delta => "[D]elta",
+                    ViewMode::Compare => "[C]ompare (Ref | Ours | LO)",
                 };
                 ui.label(format!("View: {}", mode_label));
                 let key = baseline_key(&case.name);
@@ -754,7 +759,7 @@ impl eframe::App for App {
                     ui.label(format!("Grid: {:.0}px (+/-)", self.grid_spacing));
                 }
                 ui.separator();
-                ui.label("[S]earch  [D]elta  [L]ines  [F]refresh  [A]nnot  [N]otes");
+                ui.label("[S]earch  [D]elta  [C]ompare  [L]ines  [F]refresh  [A]nnot  [N]otes");
                 if self.refresh_flash > 0.0 {
                     let alpha = (self.refresh_flash * 255.0) as u8;
                     ui.label(
@@ -968,6 +973,9 @@ impl eframe::App for App {
                 }
                 ViewMode::Delta => {
                     show_delta(self, ctx, ui, page);
+                }
+                ViewMode::Compare => {
+                    show_compare(self, ctx, ui, page);
                 }
             }
         });
@@ -1377,6 +1385,106 @@ fn show_overlay(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: usi
         }
     } else {
         ui.label("Could not load reference and/or generated images");
+    }
+}
+
+fn show_compare(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: usize) {
+    let ref_path = app.page_path("reference", page);
+    let gen_path = app.page_path("generated", page);
+    let lo_path = app.page_path("libreoffice", page);
+
+    let ref_age = file_age(&ref_path).unwrap_or_default();
+    let gen_age = file_age(&gen_path).unwrap_or_default();
+    let lo_age = file_age(&lo_path).unwrap_or_default();
+
+    let available = ui.available_size();
+    let third_w = (available.x - 20.0) / 3.0;
+    let max_h = available.y - 30.0;
+
+    let mut ref_click = None;
+    let mut gen_click = None;
+
+    ui.horizontal_top(|ui| {
+        ui.vertical(|ui| {
+            ui.horizontal(|ui| {
+                ui.label("Reference (Word)");
+                ui.label(egui::RichText::new(&ref_age).weak());
+            });
+            ref_click = show_image_clickable(
+                app, ctx, ui, &ref_path, third_w, max_h, ImageSource::Reference, page,
+            );
+        });
+
+        ui.separator();
+
+        ui.vertical(|ui| {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("docxside-pdf").strong());
+                ui.label(egui::RichText::new(&gen_age).weak());
+            });
+            gen_click = show_image_clickable(
+                app, ctx, ui, &gen_path, third_w, max_h, ImageSource::Generated, page,
+            );
+        });
+
+        ui.separator();
+
+        ui.vertical(|ui| {
+            ui.horizontal(|ui| {
+                ui.label("LibreOffice");
+                if lo_path.exists() {
+                    ui.label(egui::RichText::new(&lo_age).weak());
+                }
+            });
+            show_image_static(app, ctx, ui, &lo_path, third_w, max_h);
+        });
+    });
+
+    let click_info = ref_click
+        .map(|c| (c, ImageSource::Reference))
+        .or_else(|| gen_click.map(|c| (c, ImageSource::Generated)));
+    if let Some((click, source)) = click_info {
+        let (x_pt, y_pt) = screen_to_pdf_pts(&click);
+        app.pending_annotation = Some(PendingAnnotation {
+            page,
+            source,
+            x_pt,
+            y_pt,
+            text_buf: String::new(),
+        });
+    }
+}
+
+fn show_image_static(
+    app: &mut App,
+    ctx: &egui::Context,
+    ui: &mut egui::Ui,
+    path: &PathBuf,
+    max_w: f32,
+    max_h: f32,
+) {
+    if !path.exists() {
+        ui.allocate_ui(egui::vec2(max_w, max_h), |ui| {
+            ui.centered_and_justified(|ui| {
+                ui.weak("Not rendered.\nRun: cargo test --test libreoffice_comparison");
+            });
+        });
+        return;
+    }
+    if let Some(tex) = app.load_texture(ctx, path) {
+        let size = fit_size(&tex, max_w, max_h);
+        let (rect, _) = ui.allocate_exact_size(size, egui::Sense::hover());
+        ui.painter().image(
+            tex.id(),
+            rect,
+            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+            egui::Color32::WHITE,
+        );
+        if app.show_grid {
+            draw_grid_overlay(ctx, rect, app.grid_spacing);
+        }
+    } else {
+        ui.label("(failed to load)");
     }
 }
 

@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use pdf_writer::{Filter, Pdf, Ref};
 
 use crate::model::{
-    Block, Document, EmbeddedImage, HeaderFooter, ImageFormat, ImageShadow, SectionProperties,
-    Table,
+    Block, Document, EmbeddedImage, HeaderFooter, ImageFormat, ImageShadow, Paragraph,
+    SectionProperties, Table, Textbox,
 };
 
 /// Per-image effect XObject names (shadow, glow, inner shadow, reflection).
@@ -34,6 +34,8 @@ pub(super) struct EmbeddedImages {
     pub(super) hf_floating_image_names: HashMap<(usize, u8, usize, usize), String>,
     /// Images in table cell paragraphs, keyed by Arc data pointer address.
     pub(super) table_cell_image_names: HashMap<usize, String>,
+    /// Images in textbox paragraphs (any depth), keyed by Arc data pointer address.
+    pub(super) textbox_image_names: HashMap<usize, String>,
     /// SmartArt image fills, keyed by Arc data pointer address.
     pub(super) smartart_image_names: HashMap<usize, String>,
     // Effect XObject names (parallel to image name maps)
@@ -45,6 +47,7 @@ pub(super) struct EmbeddedImages {
     pub(super) effect_hf_inline_names: HashMap<(usize, u8, usize, usize), EffectXObjs>,
     pub(super) effect_hf_floating_names: HashMap<(usize, u8, usize, usize), EffectXObjs>,
     pub(super) effect_table_names: HashMap<usize, EffectXObjs>,
+    pub(super) effect_textbox_names: HashMap<usize, EffectXObjs>,
 }
 
 const DOWNSAMPLE_DPI_THRESHOLD: f32 = 200.0;
@@ -726,6 +729,44 @@ pub(super) fn embed_all_images(
         }
     }
 
+    let mut textbox_image_names: HashMap<usize, String> = HashMap::new();
+    let mut effect_textbox_names: HashMap<usize, EffectXObjs> = HashMap::new();
+    {
+        let mut all_textboxes: Vec<&Textbox> = Vec::new();
+        for section in &doc.sections {
+            for block in &section.blocks {
+                push_block_textboxes(block, &mut all_textboxes);
+            }
+            let hf_list: [Option<&HeaderFooter>; 6] = [
+                section.properties.header_default.as_ref(),
+                section.properties.header_first.as_ref(),
+                section.properties.footer_default.as_ref(),
+                section.properties.footer_first.as_ref(),
+                section.properties.header_even.as_ref(),
+                section.properties.footer_even.as_ref(),
+            ];
+            for hf_opt in hf_list {
+                if let Some(hf) = hf_opt {
+                    for block in &hf.blocks {
+                        push_block_textboxes(block, &mut all_textboxes);
+                    }
+                }
+            }
+        }
+
+        for tb in all_textboxes {
+            embed_textbox_images(
+                tb,
+                &mut textbox_image_names,
+                &mut effect_textbox_names,
+                &mut image_xobjects,
+                &mut effect_counter,
+                pdf,
+                alloc,
+            );
+        }
+    }
+
     let mut smartart_image_names: HashMap<usize, String> = HashMap::new();
     for section in &doc.sections {
         for block in &section.blocks {
@@ -754,6 +795,7 @@ pub(super) fn embed_all_images(
         hf_inline_image_names,
         hf_floating_image_names,
         table_cell_image_names,
+        textbox_image_names,
         smartart_image_names,
         effect_names,
         effect_floating_names,
@@ -762,5 +804,84 @@ pub(super) fn embed_all_images(
         effect_hf_inline_names,
         effect_hf_floating_names,
         effect_table_names,
+        effect_textbox_names,
+    }
+}
+
+fn push_block_textboxes<'a>(block: &'a Block, out: &mut Vec<&'a Textbox>) {
+    match block {
+        Block::Paragraph(para) => {
+            for tb in &para.textboxes {
+                out.push(tb);
+            }
+        }
+        Block::Table(table) => {
+            for row in &table.rows {
+                for cell in &row.cells {
+                    for para in cell.all_paragraphs() {
+                        for tb in &para.textboxes {
+                            out.push(tb);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn embed_keyed_image(
+    img: &EmbeddedImage,
+    image_names: &mut HashMap<usize, String>,
+    effect_names: &mut HashMap<usize, EffectXObjs>,
+    image_xobjects: &mut Vec<(String, Ref)>,
+    effect_counter: &mut usize,
+    pdf: &mut Pdf,
+    alloc: &mut impl FnMut() -> Ref,
+) {
+    let key = std::sync::Arc::as_ptr(&img.data) as usize;
+    if image_names.contains_key(&key) {
+        return;
+    }
+    let name = embed_single_image(img, image_xobjects, pdf, alloc);
+    image_names.insert(key, name);
+    let fx = embed_image_effects(img, image_xobjects, effect_counter, pdf, alloc);
+    if fx.has_any() {
+        effect_names.insert(key, fx);
+    }
+}
+
+fn embed_textbox_images(
+    tb: &Textbox,
+    image_names: &mut HashMap<usize, String>,
+    effect_names: &mut HashMap<usize, EffectXObjs>,
+    image_xobjects: &mut Vec<(String, Ref)>,
+    effect_counter: &mut usize,
+    pdf: &mut Pdf,
+    alloc: &mut impl FnMut() -> Ref,
+) {
+    let mut stack: Vec<&[Paragraph]> = vec![&tb.paragraphs];
+    while let Some(paras) = stack.pop() {
+        for para in paras {
+            if let Some(img) = &para.image {
+                embed_keyed_image(
+                    img, image_names, effect_names, image_xobjects, effect_counter, pdf, alloc,
+                );
+            }
+            for run in &para.runs {
+                if let Some(img) = &run.inline_image {
+                    embed_keyed_image(
+                        img, image_names, effect_names, image_xobjects, effect_counter, pdf, alloc,
+                    );
+                }
+            }
+            for fi in &para.floating_images {
+                embed_keyed_image(
+                    &fi.image, image_names, effect_names, image_xobjects, effect_counter, pdf, alloc,
+                );
+            }
+            for nested in &para.textboxes {
+                stack.push(&nested.paragraphs);
+            }
+        }
     }
 }

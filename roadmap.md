@@ -248,6 +248,14 @@ The `render()` function in `pdf/mod.rs` is ~2400 lines with many closures and sh
 - `pdf/images.rs` — `embed_image` closure -> free fn (~140 lines)
 - `pdf/list_labels.rs` — `label_for_run`, `label_for_paragraph` (~30 lines)
 
+### Image-embedding cleanups (LOW IMPACT — deferred from textbox-image work)
+
+Small consistency / efficiency wins in `pdf/images.rs` that were considered but skipped to avoid scope creep when adding textbox-internal image rendering:
+
+- **Global Arc→pdf-name registry to dedupe XObjects across maps.** Same image data used in body + textbox (or table cell + textbox) is currently embedded as two separate PDF XObjects because each map (`inline_image_pdf_names`, `table_cell_image_names`, `textbox_image_names`, …) keys independently by `Arc::as_ptr`. A single global registry would let the second site reuse the first XObject. Wasteful in theory, accepted limitation in practice.
+- **`build_paragraph_lines` / `build_tabbed_line` should accept `&HashMap<usize, &str>`.** The current `&HashMap<usize, String>` signature forces every caller (body, header/footer, table cell, textbox) to `.clone()` pdf names into a fresh per-paragraph map. Borrowing would eliminate the clones, but ripples through `pdf/layout.rs` and every caller.
+- **Pair `image_names` + `effect_names` into a struct.** Every embedder (`hf_*`, `table_*`, `textbox_*`) threads the two maps as separate `&mut HashMap<…>` parameters. Pairing them would shrink signatures throughout `pdf/images.rs` and `pdf/textbox_render.rs`, but only worth doing alongside the dedup registry above (otherwise diverges from the established style without enough payoff).
+
 ## Performance
 
 ### Known Bottlenecks

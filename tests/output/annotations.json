@@ -1,5 +1,5 @@
 {
-  "next_id": 150,
+  "next_id": 182,
   "annotations": [
     {
       "id": 8,
@@ -279,6 +279,316 @@
       "x_pt": 146.76491,
       "y_pt": 181.302,
       "note": "Roman numerals, when reference uses arabic here.",
+      "fixed": false
+    },
+    {
+      "id": 150,
+      "case": "case35",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 427.76154,
+      "y_pt": 108.506714,
+      "note": "This text is placed wrong",
+      "fixed": false
+    },
+    {
+      "id": 151,
+      "case": "case35",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 423.84604,
+      "y_pt": 561.2633,
+      "note": "On arrow 2 is placed wrong",
+      "fixed": false
+    },
+    {
+      "id": 152,
+      "case": "case41",
+      "page": 2,
+      "source": "Generated",
+      "x_pt": 310.00967,
+      "y_pt": 691.51483,
+      "note": "Text on the paragraph above the rectangle should also wrap around it.",
+      "fixed": false
+    },
+    {
+      "id": 153,
+      "case": "case51",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 218.2456,
+      "y_pt": 599.62244,
+      "note": "First outer column is too wide",
+      "fixed": false
+    },
+    {
+      "id": 154,
+      "case": "case63",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 524.6136,
+      "y_pt": 567.99884,
+      "note": "We are not rendering sticky notes at all.",
+      "fixed": false
+    },
+    {
+      "id": 155,
+      "case": "new/alfies_arc_adult_safeguarding_policy",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 233.09885,
+      "y_pt": 653.34827,
+      "note": "Missing logos in the header here.",
+      "fixed": false
+    },
+    {
+      "id": 156,
+      "case": "new/alpharetta_school_governance_council",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 351.3771,
+      "y_pt": 696.6842,
+      "note": "Missing some sort of text effect on top heading",
+      "fixed": false
+    },
+    {
+      "id": 157,
+      "case": "new/bosch_software_ai_announcement",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 75.588745,
+      "y_pt": 746.851,
+      "note": "Bosh gebruikt software ... text is too large and not bolded.",
+      "fixed": false
+    },
+    {
+      "id": 158,
+      "case": "new/bosch_software_ai_announcement",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 74.63493,
+      "y_pt": 284.4301,
+      "note": "Generally the \"Las Vegas, NV ...\" text looks different,",
+      "fixed": false
+    },
+    {
+      "id": 159,
+      "case": "new/carbon_farming_initiative_rule",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 100.825264,
+      "y_pt": 706.09204,
+      "note": "Missing emblem/symbol image",
+      "fixed": false
+    },
+    {
+      "id": 160,
+      "case": "new/covid_insomnia_mental_health",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 314.82956,
+      "y_pt": 51.074585,
+      "note": "footer is wrong, xxxxx stuff should float left, the copyright part should float right",
+      "fixed": false
+    },
+    {
+      "id": 161,
+      "case": "new/dutch_government_budget_letter",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 478.99393,
+      "y_pt": 32.31488,
+      "note": "Page number(?) should not be here? Compare with reference.",
+      "fixed": false
+    },
+    {
+      "id": 162,
+      "case": "new/dutch_government_budget_letter",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 306.64508,
+      "y_pt": 793.95026,
+      "note": "For some reason we render this logo here, it should not be here compared to reference.",
+      "fixed": false
+    },
+    {
+      "id": 163,
+      "case": "new/erasmus_plus_staff_mobility_agreement",
+      "page": 2,
+      "source": "Generated",
+      "x_pt": 228.11992,
+      "y_pt": 319.31403,
+      "note": "We are missing footnotes or something here.",
+      "fixed": false
+    },
+    {
+      "id": 164,
+      "case": "new/isla_language_lesson_plan",
+      "page": 4,
+      "source": "Generated",
+      "x_pt": 193.03232,
+      "y_pt": 489.7058,
+      "note": "We are not rendering the venn diagram correctly at all, we show a blue circle?",
+      "fixed": false
+    },
+    {
+      "id": 165,
+      "case": "new/isla_language_lesson_plan",
+      "page": 6,
+      "source": "Generated",
+      "x_pt": 282.28873,
+      "y_pt": 338.57156,
+      "note": "Content missing in this box with rounded corners.",
+      "fixed": false
+    },
+    {
+      "id": 166,
+      "case": "new/isla_language_lesson_plan",
+      "page": 6,
+      "source": "Generated",
+      "x_pt": 170.92575,
+      "y_pt": 570.0058,
+      "note": "520 L box way too large, and also the content next to it is not showing?",
+      "fixed": false
+    },
+    {
+      "id": 167,
+      "case": "new/japanese_land_development_sign_form",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 191.0586,
+      "y_pt": 297.4336,
+      "note": "Arrows and labels not correct. The arrows should be touching the grey line and the table above.",
+      "fixed": false
+    },
+    {
+      "id": 168,
+      "case": "new/japanese_land_development_sign_form",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 39.21885,
+      "y_pt": 375.34235,
+      "note": "\"70 .. \" text should be rotated 90 degs, and also the arrow is placed wrong.",
+      "fixed": false
+    },
+    {
+      "id": 169,
+      "case": "new/japanese_land_development_sign_form",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 353.71103,
+      "y_pt": 245.25708,
+      "note": "This line should be thick and grey",
+      "fixed": false
+    },
+    {
+      "id": 170,
+      "case": "new/lenten_prayer_unity",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 259.10846,
+      "y_pt": 45.147644,
+      "note": "Text in purple rectangle is missing.",
+      "fixed": false
+    },
+    {
+      "id": 172,
+      "case": "new/pendulum_mechanics_oscillation_lab",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 327.48737,
+      "y_pt": 107.774536,
+      "note": "We render a broken table from page 2 over page 1 here. It is both emopty and overlaps point 10.",
+      "fixed": false
+    },
+    {
+      "id": 173,
+      "case": "new/pendulum_mechanics_oscillation_lab",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 455.56506,
+      "y_pt": 650.57404,
+      "note": "Missing vector and pendulum illustration here.",
+      "fixed": false
+    },
+    {
+      "id": 174,
+      "case": "new/pendulum_mechanics_oscillation_lab",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 190.57544,
+      "y_pt": 314.63147,
+      "note": "Missing blue \"{\" wrapping the paragraphs here.",
+      "fixed": false
+    },
+    {
+      "id": 175,
+      "case": "new/pendulum_mechanics_oscillation_lab",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 550.9007,
+      "y_pt": 560.66974,
+      "note": "Missing red border around the \"Nota Bene\"",
+      "fixed": false
+    },
+    {
+      "id": 176,
+      "case": "new/scottish_fundraising_awards_campaign",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 347.52167,
+      "y_pt": 759.1381,
+      "note": "\"Scottish Fundraising ...\" header overrlaps images",
+      "fixed": false
+    },
+    {
+      "id": 177,
+      "case": "new/scottish_fundraising_awards_campaign",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 347.52167,
+      "y_pt": 759.1381,
+      "note": "Table overlaps images",
+      "fixed": false
+    },
+    {
+      "id": 178,
+      "case": "new/slovak_pedagogical_practice_agreement",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 88.413185,
+      "y_pt": 691.5464,
+      "note": "Large empty space here.",
+      "fixed": false
+    },
+    {
+      "id": 179,
+      "case": "new/slovak_pedagogical_practice_agreement",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 374.44922,
+      "y_pt": 762.72015,
+      "note": "Header missing horizontal line under",
+      "fixed": false
+    },
+    {
+      "id": 180,
+      "case": "new/turkish_chemistry_course_plan",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 101.89777,
+      "y_pt": 521.58185,
+      "note": "Some cell borders are too thin. But only some. I see no pattern.",
+      "fixed": false
+    },
+    {
+      "id": 181,
+      "case": "new/victorian_universal_design_policy",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 299.12448,
+      "y_pt": 30.43573,
+      "note": "\"OFFICIAL\" in bottom or footer is slightly too high up compared to referance",
       "fixed": false
     }
   ]

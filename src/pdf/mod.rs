@@ -60,6 +60,9 @@ pub(super) struct RenderContext<'a> {
     /// Image names for inline images in table cells, keyed by Arc data pointer address.
     pub(super) table_cell_image_names: &'a HashMap<usize, String>,
     pub(super) effect_table_names: &'a HashMap<usize, EffectXObjs>,
+    /// Image names for images inside textbox paragraphs, keyed by Arc data pointer address.
+    pub(super) textbox_image_names: &'a HashMap<usize, String>,
+    pub(super) effect_textbox_names: &'a HashMap<usize, EffectXObjs>,
     pub(super) chart_font_name: &'a str,
 }
 
@@ -2347,6 +2350,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         hf_inline_image_names,
         hf_floating_image_names,
         table_cell_image_names,
+        textbox_image_names,
         smartart_image_names,
         effect_names,
         effect_floating_names,
@@ -2355,6 +2359,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         effect_hf_inline_names: _,
         effect_hf_floating_names,
         effect_table_names,
+        effect_textbox_names,
     } = embed_all_images(doc, &mut pdf, &mut alloc);
 
     let ctx = RenderContext {
@@ -2363,6 +2368,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         default_tab_stop: doc.default_tab_stop,
         table_cell_image_names: &table_cell_image_names,
         effect_table_names: &effect_table_names,
+        textbox_image_names: &textbox_image_names,
+        effect_textbox_names: &effect_textbox_names,
         chart_font_name: &doc.chart_font_name,
     };
 
