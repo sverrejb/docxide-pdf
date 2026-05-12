@@ -20,9 +20,10 @@ use super::{GradientSpec, RenderContext, render_shape_fill, resolve_line_h};
 /// Textbox paragraphs are parsed with `resolve_drawings: false`, so the
 /// `inline_image_count == 1 && !has_text` promotion in `docx::paragraph`
 /// doesn't fire — `tp.image` stays `None` and the image lives on a run.
-/// This helper re-derives the block image at render time so vertical
-/// anchoring can size the paragraph as image-height (not text-line-height).
-fn textbox_para_block_image(tp: &Paragraph) -> Option<&EmbeddedImage> {
+/// This helper re-derives the block image at render time so callers can
+/// size the paragraph as image-height (not text-line-height) and emit the
+/// image directly instead of going through line layout.
+pub(super) fn textbox_para_block_image(tp: &Paragraph) -> Option<&EmbeddedImage> {
     if let Some(img) = &tp.image {
         return Some(img);
     }

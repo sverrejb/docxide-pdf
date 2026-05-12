@@ -412,7 +412,6 @@ pub(super) fn render_header_footer(
                     let content_x = tb_x + tb.margin_left;
                     let content_w = (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0);
                     let mut tb_cursor = tb_y_top - tb.margin_top;
-                    let empty_inline_imgs: HashMap<usize, String> = HashMap::new();
                     for tp in &tb.paragraphs {
                         let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
                         let tp_text_w = (content_w - tp.indent_left - tp.indent_right).max(1.0);
@@ -427,12 +426,61 @@ pub(super) fn render_header_footer(
                         } else {
                             -tp.indent_first_line
                         };
+
+                        if let Some(img) = super::textbox_render::textbox_para_block_image(tp) {
+                            let key = std::sync::Arc::as_ptr(&img.data) as usize;
+                            if let Some(pdf_name) = ctx.textbox_image_names.get(&key) {
+                                let img_x = content_x
+                                    + tp.indent_left
+                                    + match tp.alignment {
+                                        Alignment::Center => {
+                                            (tp_text_w - img.display_width).max(0.0) / 2.0
+                                        }
+                                        Alignment::Right => {
+                                            (tp_text_w - img.display_width).max(0.0)
+                                        }
+                                        _ => 0.0,
+                                    };
+                                let img_y = tb_cursor - tp.space_before - img.display_height;
+                                super::smartart::render_image_with_clip(
+                                    content,
+                                    pdf_name,
+                                    img_x,
+                                    img_y,
+                                    img.display_width,
+                                    img.display_height,
+                                    img.clip_geometry.as_ref(),
+                                );
+                            }
+                            tb_cursor -= tp.space_before
+                                + img.display_height
+                                + img.layout_extra_height
+                                + tp.space_after;
+                            continue;
+                        }
+
+                        let inline_imgs: HashMap<usize, String> =
+                            if tp.runs.iter().any(|r| r.inline_image.is_some()) {
+                                tp.runs
+                                    .iter()
+                                    .enumerate()
+                                    .filter_map(|(ri, run)| {
+                                        let img = run.inline_image.as_ref()?;
+                                        let key = std::sync::Arc::as_ptr(&img.data) as usize;
+                                        ctx.textbox_image_names
+                                            .get(&key)
+                                            .map(|name| (ri, name.clone()))
+                                    })
+                                    .collect()
+                            } else {
+                                HashMap::new()
+                            };
                         let tb_lines = build_lines(
                             &tp.runs,
                             ctx.fonts,
                             &tp.tab_stops,
                             tp_text_w,
-                            &empty_inline_imgs,
+                            &inline_imgs,
                             ctx.default_tab_stop,
                             tp.indent_left,
                             tp.indent_right,

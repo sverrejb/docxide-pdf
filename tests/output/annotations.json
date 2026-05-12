@@ -1,5 +1,5 @@
 {
-  "next_id": 184,
+  "next_id": 187,
   "annotations": [
     {
       "id": 8,
@@ -148,7 +148,7 @@
       "source": "Generated",
       "x_pt": 449.4558,
       "y_pt": 379.37347,
-      "note": "All text from \"Slik gj\u00f8r du\" and on is shifted too low,",
+      "note": "All text from \"Slik gjør du\" and on is shifted too low,",
       "fixed": false
     },
     {
@@ -199,16 +199,6 @@
       "x_pt": 125.16714,
       "y_pt": 774.348,
       "note": "Line shift at \"Part\" and III here.  Should not be here.",
-      "fixed": false
-    },
-    {
-      "id": 140,
-      "case": "new/bahamas_sustainable_development_hosting",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 524.7449,
-      "y_pt": 734.6624,
-      "note": "Missing CIDI-logo",
       "fixed": false
     },
     {
@@ -379,16 +369,6 @@
       "x_pt": 306.64508,
       "y_pt": 793.95026,
       "note": "For some reason we render this logo here, it should not be here compared to reference.",
-      "fixed": false
-    },
-    {
-      "id": 163,
-      "case": "new/erasmus_plus_staff_mobility_agreement",
-      "page": 2,
-      "source": "Generated",
-      "x_pt": 228.11992,
-      "y_pt": 319.31403,
-      "note": "We are missing footnotes or something here.",
       "fixed": false
     },
     {
@@ -579,6 +559,36 @@
       "x_pt": 281.9151,
       "y_pt": 749.23706,
       "note": "Heading should be centered",
+      "fixed": false
+    },
+    {
+      "id": 184,
+      "case": "new/handels_messiah_biblical_analysis",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 167.75107,
+      "y_pt": 257.32568,
+      "note": "Wrong font.",
+      "fixed": false
+    },
+    {
+      "id": 185,
+      "case": "new/erasmus_plus_staff_mobility_agreement",
+      "page": 2,
+      "source": "Generated",
+      "x_pt": 189.81116,
+      "y_pt": 224.97614,
+      "note": "This is not accurate yet, but close.",
+      "fixed": false
+    },
+    {
+      "id": 186,
+      "case": "new/alfies_arc_adult_safeguarding_policy",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 462.30698,
+      "y_pt": 535.6599,
+      "note": "all our text starts a little too high",
       "fixed": false
     }
   ]

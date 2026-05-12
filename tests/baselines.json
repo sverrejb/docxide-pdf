@@ -413,8 +413,8 @@
     "text_boundary": 0.9667
   },
   "new/alfies_arc_adult..": {
-    "jaccard": 0.5121,
-    "ssim": 0.7277,
+    "jaccard": 0.512,
+    "ssim": 0.7276,
     "text_boundary": 0.9405
   },
   "new/alpharetta_schoo..": {
@@ -438,8 +438,8 @@
     "text_boundary": 0.5942
   },
   "new/bahamas_sustaina..": {
-    "jaccard": 0.3123,
-    "ssim": 0.4302,
+    "jaccard": 0.3549,
+    "ssim": 0.4617,
     "text_boundary": 1.0
   },
   "new/belgian_youth_pr..": {
@@ -468,7 +468,7 @@
     "text_boundary": 0.8033
   },
   "new/covid_insomnia_m..": {
-    "jaccard": 0.2114,
+    "jaccard": 0.2113,
     "ssim": 0.4309,
     "text_boundary": 0.1331
   },
@@ -528,9 +528,9 @@
     "text_boundary": 0.0351
   },
   "new/erasmus_plus_sta..": {
-    "jaccard": 0.1818,
-    "ssim": 0.4491,
-    "text_boundary": 0.2857
+    "jaccard": 0.1915,
+    "ssim": 0.5035,
+    "text_boundary": 0.3043
   },
   "new/family_kinship_l..": {
     "jaccard": 0.2139,
@@ -887,9 +887,9 @@
     "convert_ms": 18.4
   },
   "scraped/learning_culture..": {
-    "jaccard": 0.3336,
-    "ssim": 0.4626,
-    "text_boundary": 0.4058,
+    "jaccard": 0.3334,
+    "ssim": 0.4624,
+    "text_boundary": 0.4061,
     "convert_ms": 1027.5
   },
   "scraped/lithuanian_ethic..": {
