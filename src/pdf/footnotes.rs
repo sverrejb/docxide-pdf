@@ -100,6 +100,7 @@ pub(super) fn render_page_footnotes(
     margin_left: f32,
     margin_bottom: f32,
     text_width: f32,
+    gradient_specs: &mut Vec<super::GradientSpec>,
 ) {
     if fn_ids.is_empty() {
         return;
@@ -182,6 +183,7 @@ pub(super) fn render_page_footnotes(
                 0.0,
                 ctx.fonts,
                 None,
+                gradient_specs,
             );
 
             fn_y -= line_count as f32 * layout.line_height;

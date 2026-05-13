@@ -418,8 +418,8 @@
     "text_boundary": 0.9405
   },
   "new/alpharetta_schoo..": {
-    "jaccard": 0.2091,
-    "ssim": 0.697,
+    "jaccard": 0.2108,
+    "ssim": 0.7115,
     "text_boundary": 0.0
   },
   "new/americas_counter..": {
@@ -555,7 +555,7 @@
   "new/irish_school_enr..": {
     "jaccard": 0.3356,
     "ssim": 0.5297,
-    "text_boundary": 0.6964
+    "text_boundary": 0.7143
   },
   "new/isla_language_le..": {
     "jaccard": 0.3525,

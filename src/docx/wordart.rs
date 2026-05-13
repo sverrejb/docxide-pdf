@@ -3,9 +3,12 @@ use crate::model::{
     TextOutline, TextShadow, TextWarp, Textbox, VRelativeFrom, VerticalPosition, WrapType,
 };
 
+use super::color::{apply_color_transforms, parse_color_transforms};
 use super::styles::{StylesInfo, ThemeFonts};
 use super::textbox::parse_avlst;
-use super::{DML_NS, W14_NS, dml as find_dml, find_child, parse_hex_color};
+use super::{
+    DML_NS, W14_NS, dml as find_dml, find_child, parse_hex_color, resolve_theme_color_key,
+};
 
 fn find_w14<'a>(
     parent: roxmltree::Node<'a, 'a>,
@@ -63,7 +66,10 @@ pub(super) fn parse_wordart_body_pr(body_pr: roxmltree::Node) -> WordArtBodyProp
 }
 
 /// Parse w14:textOutline from a w:rPr node.
-pub(super) fn parse_text_outline(rpr: roxmltree::Node) -> Option<TextOutline> {
+pub(super) fn parse_text_outline(
+    rpr: roxmltree::Node,
+    theme: &ThemeFonts,
+) -> Option<TextOutline> {
     let outline = find_w14(rpr, "textOutline")?;
 
     let width_pt = outline
@@ -72,34 +78,36 @@ pub(super) fn parse_text_outline(rpr: roxmltree::Node) -> Option<TextOutline> {
         .map(super::emu_to_pts)
         .unwrap_or(0.75);
 
-    let color = find_w14_solid_fill_color(outline)?;
+    let color = find_w14_solid_fill_color(outline, theme)?;
     Some(TextOutline { width_pt, color })
 }
 
 /// Parse w14:textFill from a w:rPr node.
-pub(super) fn parse_text_fill(rpr: roxmltree::Node) -> Option<TextFill> {
+pub(super) fn parse_text_fill(rpr: roxmltree::Node, theme: &ThemeFonts) -> Option<TextFill> {
     let text_fill = find_w14(rpr, "textFill")?;
 
     if find_w14(text_fill, "noFill").is_some() {
         return Some(TextFill::NoFill);
     }
 
-    if let Some(color) = find_w14(text_fill, "solidFill").and_then(resolve_w14_color) {
+    if let Some(color) =
+        find_w14(text_fill, "solidFill").and_then(|n| resolve_w14_color(n, theme))
+    {
         return Some(TextFill::Solid(color));
     }
 
     if let Some(grad) = find_w14(text_fill, "gradFill") {
-        return parse_w14_gradient(grad);
+        return parse_w14_gradient(grad, theme);
     }
 
     None
 }
 
 /// Parse w14:shadow from a w:rPr node.
-pub(super) fn parse_text_shadow(rpr: roxmltree::Node) -> Option<TextShadow> {
+pub(super) fn parse_text_shadow(rpr: roxmltree::Node, theme: &ThemeFonts) -> Option<TextShadow> {
     let shadow = find_w14(rpr, "shadow")?;
 
-    let color = find_w14_solid_fill_color(shadow).unwrap_or([128, 128, 128]);
+    let color = find_w14_solid_fill_color(shadow, theme).unwrap_or([128, 128, 128]);
 
     let blur_rad = shadow
         .attribute((W14_NS, "blurRad"))
@@ -141,7 +149,7 @@ pub(super) fn parse_text_shadow(rpr: roxmltree::Node) -> Option<TextShadow> {
 }
 
 /// Parse w14:glow from a w:rPr node.
-pub(super) fn parse_text_glow(rpr: roxmltree::Node) -> Option<TextGlow> {
+pub(super) fn parse_text_glow(rpr: roxmltree::Node, theme: &ThemeFonts) -> Option<TextGlow> {
     let glow = find_w14(rpr, "glow")?;
 
     let radius_pt = glow
@@ -154,7 +162,7 @@ pub(super) fn parse_text_glow(rpr: roxmltree::Node) -> Option<TextGlow> {
         return None;
     }
 
-    let color = resolve_w14_color(glow).unwrap_or([255, 255, 0]);
+    let color = resolve_w14_color(glow, theme).unwrap_or([255, 255, 0]);
 
     Some(TextGlow { color, radius_pt })
 }
@@ -225,23 +233,41 @@ pub(super) fn parse_vml_wordart(
     })
 }
 
-fn resolve_w14_color(fill_node: roxmltree::Node) -> Option<[u8; 3]> {
+/// Resolve a `w14:srgbClr` or `w14:schemeClr` child of `fill_node`.
+/// Theme colors are looked up in `theme.colors` and modified by any
+/// `w14:lumMod`/`lumOff`/`tint`/`shade` transforms on the schemeClr node.
+fn resolve_w14_color(fill_node: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]> {
     if let Some(srgb) = find_w14(fill_node, "srgbClr") {
         return srgb.attribute((W14_NS, "val")).and_then(parse_hex_color);
     }
+    if let Some(scheme) = find_w14(fill_node, "schemeClr") {
+        let val = scheme.attribute((W14_NS, "val"))?;
+        let theme_key = resolve_theme_color_key(val);
+        let base = *theme.colors.get(theme_key)?;
+        let transforms = parse_color_transforms(scheme);
+        return Some(apply_color_transforms(base, &transforms));
+    }
+    // DML fallback (theme colors here are rare but cheap to support).
     if let Some(srgb) = find_child(fill_node, "srgbClr", DML_NS) {
         return srgb.attribute("val").and_then(parse_hex_color);
+    }
+    if let Some(scheme) = find_child(fill_node, "schemeClr", DML_NS) {
+        let val = scheme.attribute("val")?;
+        let theme_key = resolve_theme_color_key(val);
+        let base = *theme.colors.get(theme_key)?;
+        let transforms = parse_color_transforms(scheme);
+        return Some(apply_color_transforms(base, &transforms));
     }
     None
 }
 
-fn find_w14_solid_fill_color(parent: roxmltree::Node) -> Option<[u8; 3]> {
+fn find_w14_solid_fill_color(parent: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]> {
     find_w14(parent, "solidFill")
-        .and_then(resolve_w14_color)
-        .or_else(|| find_dml(parent, "solidFill").and_then(resolve_w14_color))
+        .and_then(|n| resolve_w14_color(n, theme))
+        .or_else(|| find_dml(parent, "solidFill").and_then(|n| resolve_w14_color(n, theme)))
 }
 
-fn parse_w14_gradient(grad: roxmltree::Node) -> Option<TextFill> {
+fn parse_w14_gradient(grad: roxmltree::Node, theme: &ThemeFonts) -> Option<TextFill> {
     let gs_lst = find_w14(grad, "gsLst")?;
 
     let mut stops = Vec::new();
@@ -254,7 +280,7 @@ fn parse_w14_gradient(grad: roxmltree::Node) -> Option<TextFill> {
             .and_then(|v| v.parse::<f32>().ok())
             .map(|v| v / 100_000.0)
             .unwrap_or(0.0);
-        if let Some(color) = resolve_w14_color(gs) {
+        if let Some(color) = resolve_w14_color(gs, theme) {
             stops.push((color, pos));
         }
     }

@@ -256,6 +256,7 @@ pub(super) fn render_single_textbox(
             &tb.paragraphs, content, content_x, content_w, align_w,
             tb_y_top - tb.margin_top - anchor_offset,
             0.0, 0.0, None, false, &mut discard_links, ctx, clip_bottom,
+            gradient_specs,
         );
         content.restore_state();
     }
@@ -275,6 +276,7 @@ pub(super) fn render_single_textbox(
             tb_y_top - tb.margin_top - anchor_offset,
             shadow.offset_x, shadow.offset_y, Some(shadow_color),
             false, &mut discard_links, ctx, clip_bottom,
+            gradient_specs,
         );
         content.restore_state();
     }
@@ -283,6 +285,7 @@ pub(super) fn render_single_textbox(
         &tb.paragraphs, content, content_x, content_w, align_w,
         tb_y_top - tb.margin_top - anchor_offset,
         0.0, 0.0, None, true, page_links, ctx, clip_bottom,
+        gradient_specs,
     );
 
     if needs_clip {
@@ -307,6 +310,7 @@ pub(super) fn render_textbox_paragraphs(
     links: &mut Vec<LinkAnnotation>,
     ctx: &RenderContext,
     clip_bottom: Option<f32>,
+    gradient_specs: &mut Vec<GradientSpec>,
 ) {
     use crate::model::Alignment;
     let mut cursor_y = start_y;
@@ -422,6 +426,7 @@ pub(super) fn render_textbox_paragraphs(
             content, &tb_lines, &tp.alignment, tp_text_x, tp_align_w,
             tb_baseline, tb_line_h, tb_lines.len(), 0,
             links, 0.0, ctx.fonts, None,
+            gradient_specs,
         );
         cursor_y -= inter_gap + (tb_lines.len() as f32) * tb_line_h;
         prev_space_after = tp.space_after;

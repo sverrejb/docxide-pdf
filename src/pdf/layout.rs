@@ -1236,8 +1236,10 @@ pub(super) fn render_paragraph_lines(
     first_line_hanging: f32,
     seen_fonts: &HashMap<String, FontEntry>,
     line_geometry: Option<&[(f32, f32)]>,
+    gradient_specs: &mut Vec<super::GradientSpec>,
 ) {
     let mut current_color: Option<[u8; 3]> = None;
+    let mut pattern_fill_active = false;
     let mut cur_font_name = String::new();
     let mut cur_font_size: f32 = -1.0;
     let mut cur_char_spacing: f32 = 0.0;
@@ -1458,14 +1460,42 @@ pub(super) fn render_paragraph_lines(
                 let x = chunk_abs_x(chunk_idx, chunk);
                 let cy = y + chunk.y_offset;
 
-                // w14:textFill solid color overrides w:color
+                // w14:textFill gradient → register an axial-shading pattern spanning
+                // the glyph extent and use it as the fill color for this chunk.
+                // Solid fill overrides w:color; NoFill falls through to w:color (the
+                // outline path zeroes the fill via text rendering mode = Stroke).
+                let mut chunk_uses_gradient = false;
+                if let Some(TextFill::Gradient { ref stops, angle_deg }) = chunk.text_fill {
+                    let pat_name = format!("Grd{}", gradient_specs.len());
+                    let y_bottom = cy - chunk.font_size * 0.2;
+                    gradient_specs.push(super::GradientSpec {
+                        pattern_name: pat_name.clone(),
+                        stops: stops.clone(),
+                        angle_deg,
+                        x,
+                        y: y_bottom,
+                        w: chunk.width.max(1.0),
+                        h: chunk.font_size,
+                    });
+                    content.set_fill_color_space(
+                        pdf_writer::types::ColorSpaceOperand::Pattern,
+                    );
+                    content.set_fill_pattern([], Name(pat_name.as_bytes()));
+                    pattern_fill_active = true;
+                    current_color = None;
+                    chunk_uses_gradient = true;
+                }
+
                 let effective_color = match chunk.text_fill {
                     Some(TextFill::Solid(c)) => Some(c),
                     _ => chunk.color,
                 };
-                if effective_color != current_color {
+                if !chunk_uses_gradient
+                    && (pattern_fill_active || effective_color != current_color)
+                {
                     fill_color_or_black(content, effective_color);
                     current_color = effective_color;
+                    pattern_fill_active = false;
                 }
 
                 // Text outline takes priority over synthetic bold
@@ -1650,6 +1680,13 @@ pub(super) fn render_paragraph_lines(
                 content.set_text_rendering_mode(TextRenderingMode::Fill);
                 cur_synthetic_bold = false;
             }
+            // Text rendering mode persists across BT/ET, so a paragraph that
+            // ends in an outlined chunk must reset to Fill before ET — otherwise
+            // subsequent paragraphs inherit the stroke and look outlined too.
+            if has_text_outline {
+                super::wordart::reset_text_outline(content);
+                has_text_outline = false;
+            }
             if cur_char_spacing != 0.0 {
                 content.set_char_spacing(0.0);
                 cur_char_spacing = 0.0;
@@ -1659,6 +1696,14 @@ pub(super) fn render_paragraph_lines(
                 cur_text_scale = 100.0;
             }
             content.end_text();
+            // Pattern fill from a gradient chunk leaves the fill colorspace
+            // set to Pattern; switch back to DeviceRGB before drawing
+            // decorations or proceeding to the next line.
+            if pattern_fill_active {
+                fill_color_or_black(content, None);
+                current_color = Some([0, 0, 0]);
+                pattern_fill_active = false;
+            }
         }
 
         // Draw inline images outside text block.

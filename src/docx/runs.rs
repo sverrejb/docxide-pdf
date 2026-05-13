@@ -208,6 +208,10 @@ struct ParagraphRunDefaults {
     char_spacing: f32,
     kern_threshold: Option<f32>,
     east_asia_font: Option<String>,
+    text_outline: Option<TextOutline>,
+    text_fill: Option<TextFill>,
+    text_shadow: Option<TextShadow>,
+    text_glow: Option<TextGlow>,
 }
 
 impl ParagraphRunDefaults {
@@ -253,6 +257,10 @@ impl ParagraphRunDefaults {
             east_asia_font: para_style
                 .and_then(|s| s.east_asia_font.clone())
                 .or_else(|| defaults.east_asia_font.clone()),
+            text_outline: para_style.and_then(|s| s.text_outline.clone()),
+            text_fill: para_style.and_then(|s| s.text_fill.clone()),
+            text_shadow: para_style.and_then(|s| s.text_shadow.clone()),
+            text_glow: para_style.and_then(|s| s.text_glow.clone()),
         }
     }
 
@@ -363,10 +371,22 @@ impl ParagraphRunDefaults {
                 .or_else(|| char_style.and_then(|cs| cs.kern_threshold))
                 .or(self.kern_threshold),
             char_style_id: char_style_id_str.map(|s| s.to_string()),
-            text_outline: rpr.and_then(parse_text_outline),
-            text_fill: rpr.and_then(parse_text_fill),
-            text_shadow: rpr.and_then(parse_text_shadow),
-            text_glow: rpr.and_then(parse_text_glow),
+            text_outline: rpr
+                .and_then(|n| parse_text_outline(n, theme))
+                .or_else(|| char_style.and_then(|cs| cs.text_outline.clone()))
+                .or_else(|| self.text_outline.clone()),
+            text_fill: rpr
+                .and_then(|n| parse_text_fill(n, theme))
+                .or_else(|| char_style.and_then(|cs| cs.text_fill.clone()))
+                .or_else(|| self.text_fill.clone()),
+            text_shadow: rpr
+                .and_then(|n| parse_text_shadow(n, theme))
+                .or_else(|| char_style.and_then(|cs| cs.text_shadow.clone()))
+                .or_else(|| self.text_shadow.clone()),
+            text_glow: rpr
+                .and_then(|n| parse_text_glow(n, theme))
+                .or_else(|| char_style.and_then(|cs| cs.text_glow.clone()))
+                .or_else(|| self.text_glow.clone()),
             lang: rpr
                 .and_then(|n| wml(n, "lang"))
                 .and_then(|n| n.attribute((WML_NS, "val")))

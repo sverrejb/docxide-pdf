@@ -1,5 +1,5 @@
 use super::styles::ThemeFonts;
-use super::{DML_NS, dml as find_dml, parse_hex_color, resolve_theme_color_key};
+use super::{DML_NS, W14_NS, dml as find_dml, parse_hex_color, resolve_theme_color_key};
 
 #[derive(Clone, Default)]
 pub(super) struct ColorTransforms {
@@ -16,10 +16,9 @@ pub(super) struct ColorTransforms {
 
 pub(super) fn parse_color_transforms(scheme_clr: roxmltree::Node) -> ColorTransforms {
     let mut t = ColorTransforms::default();
-    for child in scheme_clr
-        .children()
-        .filter(|n| n.tag_name().namespace() == Some(DML_NS))
-    {
+    for child in scheme_clr.children().filter(|n| {
+        matches!(n.tag_name().namespace(), Some(DML_NS) | Some(W14_NS))
+    }) {
         let val = child
             .attribute("val")
             .and_then(|v| v.parse::<f32>().ok())

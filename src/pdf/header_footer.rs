@@ -320,6 +320,7 @@ pub(super) fn render_header_footer(
                     total_pages,
                     styleref_values,
                     page_num_format,
+                    gradient_specs,
                 );
                 prev_space_after = 0.0;
             }
@@ -354,6 +355,7 @@ pub(super) fn render_header_footer(
                     frame_x, content_width, frame_baseline,
                     font_size, lines.len(), 0,
                     &mut Vec::new(), 0.0, ctx.fonts, None,
+                    gradient_specs,
                 );
                 // Frame paragraphs are out-of-flow: do not advance cursor_y
                 pi += 1;
@@ -518,6 +520,7 @@ pub(super) fn render_header_footer(
                             0.0,
                             ctx.fonts,
                             None,
+                            gradient_specs,
                         );
                         tb_cursor -=
                             tp.space_before + (tb_lines.len() as f32) * tb_line_h + tp.space_after;
@@ -821,6 +824,7 @@ pub(super) fn render_header_footer(
                     text_hanging,
                     ctx.fonts,
                     hdr_line_geom.as_deref(),
+                    gradient_specs,
                 );
 
                 let max_img_h = lines

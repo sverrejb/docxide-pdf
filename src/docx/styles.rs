@@ -1,9 +1,13 @@
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
 
-use crate::model::{Alignment, CellBorder, LineSpacing, ParagraphBorders, TabStop};
+use crate::model::{
+    Alignment, CellBorder, LineSpacing, ParagraphBorders, TabStop, TextFill, TextGlow,
+    TextOutline, TextShadow,
+};
 
 pub(super) use super::color::{ColorTransforms, parse_color_transforms};
+use super::wordart::{parse_text_fill, parse_text_glow, parse_text_outline, parse_text_shadow};
 use super::{
     DML_NS, WML_NS, dml, extract_indents, highlight_color, parse_cell_border,
     parse_cell_border_left, parse_cell_border_right, parse_hex_color, parse_paragraph_borders,
@@ -133,6 +137,10 @@ pub(super) struct ParagraphStyle {
     pub(super) auto_space_de: Option<bool>,
     pub(super) auto_space_dn: Option<bool>,
     pub(super) suppress_auto_hyphens: Option<bool>,
+    pub(super) text_outline: Option<TextOutline>,
+    pub(super) text_fill: Option<TextFill>,
+    pub(super) text_shadow: Option<TextShadow>,
+    pub(super) text_glow: Option<TextGlow>,
 }
 
 pub(super) struct CharacterStyle {
@@ -153,6 +161,10 @@ pub(super) struct CharacterStyle {
     /// `w:fill="auto"` as "no color," not as a clearing override.
     pub(super) shading: Option<[u8; 3]>,
     pub(super) kern_threshold: Option<f32>,
+    pub(super) text_outline: Option<TextOutline>,
+    pub(super) text_fill: Option<TextFill>,
+    pub(super) text_shadow: Option<TextShadow>,
+    pub(super) text_glow: Option<TextGlow>,
 }
 
 pub(super) struct TableBordersDef {
@@ -671,6 +683,11 @@ pub(super) fn parse_styles<R: Read + Seek>(
                     .and_then(|n| n.attribute((WML_NS, "val")))
                     .map(|s| s.to_string());
 
+                let text_outline = rpr.and_then(|n| parse_text_outline(n, theme));
+                let text_fill = rpr.and_then(|n| parse_text_fill(n, theme));
+                let text_shadow = rpr.and_then(|n| parse_text_shadow(n, theme));
+                let text_glow = rpr.and_then(|n| parse_text_glow(n, theme));
+
                 paragraph_styles.insert(
                     style_id.to_string(),
                     ParagraphStyle {
@@ -715,6 +732,10 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         auto_space_de,
                         auto_space_dn,
                         suppress_auto_hyphens,
+                        text_outline,
+                        text_fill,
+                        text_shadow,
+                        text_glow,
                     },
                 );
             }
@@ -739,6 +760,10 @@ pub(super) fn parse_styles<R: Read + Seek>(
                 let highlight = wml_attr(rpr, "highlight").and_then(highlight_color);
                 let shading = parse_run_shd(rpr);
                 let kern_threshold = parse_kern(rpr);
+                let text_outline = parse_text_outline(rpr, theme);
+                let text_fill = parse_text_fill(rpr, theme);
+                let text_shadow = parse_text_shadow(rpr, theme);
+                let text_glow = parse_text_glow(rpr, theme);
 
                 character_styles.insert(
                     style_id.to_string(),
@@ -757,6 +782,10 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         highlight,
                         shading,
                         kern_threshold,
+                        text_outline,
+                        text_fill,
+                        text_shadow,
+                        text_glow,
                     },
                 );
             }
@@ -948,6 +977,10 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     auto_space_dn,
                     suppress_auto_hyphens,
                     shading,
+                    text_outline,
+                    text_fill,
+                    text_shadow,
+                    text_glow,
                 );
                 // Tab stops are additive: accumulate from ancestors, child overrides at same pos
                 // Clear tabs remove inherited tabs at matching positions
@@ -1005,6 +1038,10 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             s.auto_space_dn = s.auto_space_dn.or(inh.auto_space_dn);
             s.suppress_auto_hyphens = s.suppress_auto_hyphens.or(inh.suppress_auto_hyphens);
             s.shading = s.shading.or(inh.shading);
+            s.text_outline = s.text_outline.take().or(inh.text_outline);
+            s.text_fill = s.text_fill.take().or(inh.text_fill);
+            s.text_shadow = s.text_shadow.take().or(inh.text_shadow);
+            s.text_glow = s.text_glow.take().or(inh.text_glow);
             s.tab_stops = inh.tab_stops;
         }
     }

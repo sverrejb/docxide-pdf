@@ -219,6 +219,7 @@ fn render_cell_content(
     cursor_y_start: f32,
     cm: &CellMargins,
     ctx: &RenderContext,
+    gradient_specs: &mut Vec<super::GradientSpec>,
 ) {
     let mut cursor_y = cursor_y_start;
     let mut block_idx = 0;
@@ -308,12 +309,15 @@ fn render_cell_content(
                     first_line_hanging,
                     ctx.fonts,
                     None,
+                    gradient_specs,
                 );
 
                 cursor_y -= para.lines.len() as f32 * para.line_h;
 
                 if let Some(src) = source_para {
-                    render_cell_floating_shapes(content, src, cell_x, col_w, para_top, ctx);
+                    render_cell_floating_shapes(
+                        content, src, cell_x, col_w, para_top, ctx, gradient_specs,
+                    );
                 }
             }
             CellContentItem::NestedTable { height } => {
@@ -329,7 +333,15 @@ fn render_cell_content(
                     block_idx += 1;
                 };
                 if let Some(table) = table {
-                    render_nested_table(table, content, cell_x + cm.left, col_w - cm.left - cm.right, &mut cursor_y, ctx);
+                    render_nested_table(
+                        table,
+                        content,
+                        cell_x + cm.left,
+                        col_w - cm.left - cm.right,
+                        &mut cursor_y,
+                        ctx,
+                        gradient_specs,
+                    );
                 } else {
                     cursor_y -= height;
                 }
@@ -346,6 +358,7 @@ fn render_cell_floating_shapes(
     col_w: f32,
     para_top: f32,
     ctx: &RenderContext,
+    gradient_specs: &mut Vec<super::GradientSpec>,
 ) {
     use crate::model::{HorizontalPosition, VerticalPosition};
     use super::positioning::render_connector;
@@ -369,7 +382,7 @@ fn render_cell_floating_shapes(
         };
         let tb_x = cell_x + h_off;
         let tb_y_top = para_top - tb.v_offset_pt;
-        render_simple_textbox(content, tb, tb_x, tb_y_top, ctx);
+        render_simple_textbox(content, tb, tb_x, tb_y_top, ctx, gradient_specs);
     }
 }
 
@@ -381,6 +394,7 @@ fn render_simple_textbox(
     tb_x: f32,
     tb_y_top: f32,
     ctx: &RenderContext,
+    gradient_specs: &mut Vec<super::GradientSpec>,
 ) {
     use crate::model::ShapeFill;
     use super::layout::{build_paragraph_lines, render_paragraph_lines, tallest_run_metrics};
@@ -440,6 +454,7 @@ fn render_simple_textbox(
             0.0,
             ctx.fonts,
             None,
+            gradient_specs,
         );
         text_y -= lines.len().max(1) as f32 * lh + tp.space_after;
     }
@@ -453,6 +468,7 @@ fn render_nested_table(
     available_w: f32,
     cursor_y: &mut f32,
     ctx: &RenderContext,
+    gradient_specs: &mut Vec<super::GradientSpec>,
 ) {
     let col_widths = auto_fit_columns(table, ctx.fonts, Some(available_w));
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
@@ -514,6 +530,7 @@ fn render_nested_table(
                     cell_cursor_y,
                     ecm,
                     ctx,
+                    gradient_specs,
                 );
             }
         }
@@ -563,6 +580,7 @@ fn render_partial_cell_content(
     cursor_y_start: f32,
     cm: &CellMargins,
     ctx: &RenderContext,
+    gradient_specs: &mut Vec<super::GradientSpec>,
 ) {
     let mut cursor_y = cursor_y_start;
     // Build a mapping from item index to block index
@@ -661,6 +679,7 @@ fn render_partial_cell_content(
                     first_line_hanging,
                     ctx.fonts,
                     None,
+                    gradient_specs,
                 );
 
                 cursor_y -= para.lines.len() as f32 * para.line_h;
@@ -670,7 +689,7 @@ fn render_partial_cell_content(
                 if let Some(Block::Table(table)) = blocks.get(bi) {
                     render_nested_table(
                         table, content, cell_x + cm.left, col_w - cm.left - cm.right,
-                        &mut cursor_y, ctx,
+                        &mut cursor_y, ctx, gradient_specs,
                     );
                 } else {
                     cursor_y -= height;
@@ -793,6 +812,7 @@ fn render_table_row(
                 cursor_y,
                 ecm,
                 ctx,
+                &mut pb.gradient_specs,
             );
         }
     }
@@ -1016,6 +1036,7 @@ fn render_partial_row(
                 row_top - cm.top,
                 cm,
                 ctx,
+                &mut pb.gradient_specs,
             );
         }
     }
@@ -1406,6 +1427,7 @@ pub(super) fn render_header_footer_table(
     total_pages: usize,
     styleref_values: &HashMap<String, String>,
     page_num_format: Option<&str>,
+    gradient_specs: &mut Vec<super::GradientSpec>,
 ) {
     let col_widths = auto_fit_columns(table, ctx.fonts, None);
     let hf_sub = HfSubstitution {
@@ -1477,6 +1499,7 @@ pub(super) fn render_header_footer_table(
                     cell_cursor_y,
                     ecm,
                     ctx,
+                    gradient_specs,
                 );
             }
         }

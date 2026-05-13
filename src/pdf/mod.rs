@@ -68,13 +68,13 @@ pub(super) struct RenderContext<'a> {
 }
 
 pub(super) struct GradientSpec {
-    pattern_name: String,
-    stops: Vec<([u8; 3], f32)>,
-    angle_deg: f32,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
+    pub(super) pattern_name: String,
+    pub(super) stops: Vec<([u8; 3], f32)>,
+    pub(super) angle_deg: f32,
+    pub(super) x: f32,
+    pub(super) y: f32,
+    pub(super) w: f32,
+    pub(super) h: f32,
 }
 
 pub(super) fn render_shape_fill(
@@ -1709,6 +1709,7 @@ fn render_paragraph_block(
                 text_hanging,
                 ctx.fonts,
                 poly_line_geom.as_deref(),
+                &mut state.pb.gradient_specs,
             );
 
             state.pb.advance_column_or_page(
@@ -1748,6 +1749,7 @@ fn render_paragraph_block(
                 text_hanging,
                 ctx.fonts,
                 None,
+                &mut state.pb.gradient_specs,
             );
 
             state.pb.slot_top -= rest_content_h;
@@ -2166,6 +2168,7 @@ fn render_paragraph_block(
                     text_hanging,
                     ctx.fonts,
                     poly_line_geom.as_deref(),
+                    &mut state.pb.gradient_specs,
                 );
                 // float_width_change only comes from the lookahead path,
                 // which always sets lookahead_narrow in the same branch.
@@ -2186,6 +2189,7 @@ fn render_paragraph_block(
                     text_hanging,
                     ctx.fonts,
                     poly_line_geom.as_deref(),
+                    &mut state.pb.gradient_specs,
                 );
             } else {
                 // Split point beyond paragraph — render all at once
@@ -2203,6 +2207,7 @@ fn render_paragraph_block(
                     text_hanging,
                     ctx.fonts,
                     poly_line_geom.as_deref(),
+                    &mut state.pb.gradient_specs,
                 );
             }
         } else {
@@ -2220,6 +2225,7 @@ fn render_paragraph_block(
                 text_hanging,
                 ctx.fonts,
                 poly_line_geom.as_deref(),
+                &mut state.pb.gradient_specs,
             );
         }
     }
@@ -2754,6 +2760,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             content_sp.margin_left,
             bottom,
             text_width,
+            &mut state.pb.all_gradient_specs[page_idx],
         );
         if page_idx == last_page_idx && !state.pb.endnote_ids.is_empty() {
             // Stack endnotes above any footnotes on the final page.
@@ -2774,6 +2781,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 content_sp.margin_left,
                 bottom,
                 text_width,
+                &mut state.pb.all_gradient_specs[page_idx],
             );
         }
     }
