@@ -139,6 +139,31 @@ convert_docx_to_pdf(
 )?;
 ```
 
+## Works well with `docxide-template`
+
+[`docxide-template`](https://github.com/sverrejb/docxide-template) is a sibling crate for type-safe MS Word templates. It scans a folder of `.docx` files at compile time and generates a Rust struct per template, with `{Placeholder}` patterns turned into snake_case fields. Pair it with `docxide-pdf` to go from template → filled DOCX → PDF in a single, fully in-memory pipeline:
+
+```rust
+use docxide_pdf::convert_docx_bytes_to_pdf;
+use docxide_template::generate_templates;
+use std::path::Path;
+
+generate_templates!("templates");
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let doc = HelloWorld {
+        first_name: "Alice".into(),
+        company: "Acme Corp".into(),
+    };
+
+    let docx_bytes = doc.to_bytes()?;
+    convert_docx_bytes_to_pdf(&docx_bytes, Path::new("output/greeting.pdf"))?;
+    Ok(())
+}
+```
+
+100% Rust, end to end — no temporary files, and no Word or LibreOffice install required on the host. Fill the template in memory, hand the bytes to `convert_docx_bytes_to_pdf`, and write the PDF. Combined with `docxide-template`'s `embed` feature, you get a single self-contained binary that turns structured data into a polished PDF.
+
 ## Configuration
 
 ### Environment Variables
