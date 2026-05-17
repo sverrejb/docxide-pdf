@@ -2,6 +2,7 @@ mod assembly;
 mod chart_legend;
 mod charts;
 mod charts_radial;
+mod comments;
 mod emf;
 pub(crate) mod color;
 mod fonts;
@@ -434,6 +435,10 @@ pub(super) struct PageBuilder {
     // Current page state
     pub(super) content: Content,
     pub(super) links: Vec<LinkAnnotation>,
+    /// (comment_id, anchor_x, anchor_y) — anchor is the end of the last chunk
+    /// covered by that comment on this page. Used by the comment-pane renderer
+    /// to draw the connector line from highlighted phrase to callout.
+    pub(super) comment_anchors: Vec<(u32, f32, f32)>,
     pub(super) footnote_ids: Vec<u32>,
     footnote_ids_set: HashSet<u32>,
     /// Endnote IDs encountered across the whole document, in encounter order.
@@ -467,6 +472,7 @@ pub(super) struct PageBuilder {
     // Accumulated pages
     all_contents: Vec<Content>,
     all_links: Vec<Vec<LinkAnnotation>>,
+    pub(super) all_comment_anchors: Vec<Vec<(u32, f32, f32)>>,
     all_footnote_ids: Vec<Vec<u32>>,
     all_alpha_states: Vec<HashSet<u8>>,
     all_gradient_specs: Vec<Vec<GradientSpec>>,
@@ -483,6 +489,7 @@ impl PageBuilder {
         PageBuilder {
             content: Content::new(),
             links: Vec::new(),
+            comment_anchors: Vec::new(),
             footnote_ids: Vec::new(),
             footnote_ids_set: HashSet::new(),
             endnote_ids: Vec::new(),
@@ -498,6 +505,7 @@ impl PageBuilder {
             float_zone: None,
             all_contents: Vec::new(),
             all_links: Vec::new(),
+            all_comment_anchors: Vec::new(),
             all_footnote_ids: Vec::new(),
             all_alpha_states: Vec::new(),
             all_gradient_specs: Vec::new(),
@@ -511,6 +519,8 @@ impl PageBuilder {
         self.all_contents
             .push(std::mem::replace(&mut self.content, Content::new()));
         self.all_links.push(std::mem::take(&mut self.links));
+        self.all_comment_anchors
+            .push(std::mem::take(&mut self.comment_anchors));
         self.all_footnote_ids
             .push(std::mem::take(&mut self.footnote_ids));
         self.footnote_ids_set.clear();
@@ -534,6 +544,7 @@ impl PageBuilder {
     fn push_blank_page(&mut self, sect_idx: usize) {
         self.all_contents.push(Content::new());
         self.all_links.push(Vec::new());
+        self.all_comment_anchors.push(Vec::new());
         self.all_footnote_ids.push(Vec::new());
         self.all_alpha_states.push(HashSet::new());
         self.all_gradient_specs.push(Vec::new());
@@ -1710,6 +1721,7 @@ fn render_paragraph_block(
                 ctx.fonts,
                 poly_line_geom.as_deref(),
                 &mut state.pb.gradient_specs,
+                Some(&mut state.pb.comment_anchors),
             );
 
             state.pb.advance_column_or_page(
@@ -1750,6 +1762,7 @@ fn render_paragraph_block(
                 ctx.fonts,
                 None,
                 &mut state.pb.gradient_specs,
+                Some(&mut state.pb.comment_anchors),
             );
 
             state.pb.slot_top -= rest_content_h;
@@ -2169,6 +2182,7 @@ fn render_paragraph_block(
                     ctx.fonts,
                     poly_line_geom.as_deref(),
                     &mut state.pb.gradient_specs,
+                    Some(&mut state.pb.comment_anchors),
                 );
                 // float_width_change only comes from the lookahead path,
                 // which always sets lookahead_narrow in the same branch.
@@ -2190,6 +2204,7 @@ fn render_paragraph_block(
                     ctx.fonts,
                     poly_line_geom.as_deref(),
                     &mut state.pb.gradient_specs,
+                    Some(&mut state.pb.comment_anchors),
                 );
             } else {
                 // Split point beyond paragraph — render all at once
@@ -2208,6 +2223,7 @@ fn render_paragraph_block(
                     ctx.fonts,
                     poly_line_geom.as_deref(),
                     &mut state.pb.gradient_specs,
+                    Some(&mut state.pb.comment_anchors),
                 );
             }
         } else {
@@ -2226,6 +2242,7 @@ fn render_paragraph_block(
                 ctx.fonts,
                 poly_line_geom.as_deref(),
                 &mut state.pb.gradient_specs,
+                Some(&mut state.pb.comment_anchors),
             );
         }
     }
@@ -2938,6 +2955,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         state.pb.all_contents,
         &mut all_hf_contents,
         &state.pb.all_links,
+        &state.pb.all_comment_anchors,
         &state.pb.all_alpha_states,
         &state.pb.all_gradient_specs,
         &state.pb.page_section_indices,

@@ -1,5 +1,5 @@
 {
-  "next_id": 187,
+  "next_id": 188,
   "annotations": [
     {
       "id": 8,
@@ -309,17 +309,7 @@
       "x_pt": 524.6136,
       "y_pt": 567.99884,
       "note": "We are not rendering sticky notes at all.",
-      "fixed": false
-    },
-    {
-      "id": 156,
-      "case": "new/alpharetta_school_governance_council",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 351.3771,
-      "y_pt": 696.6842,
-      "note": "Missing some sort of text effect on top heading",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 157,
@@ -589,6 +579,16 @@
       "x_pt": 462.30698,
       "y_pt": 535.6599,
       "note": "all our text starts a little too high",
+      "fixed": false
+    },
+    {
+      "id": 187,
+      "case": "case59",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 296.58273,
+      "y_pt": 260.5495,
+      "note": "Numbers are not vertically centered in the squares on the tree structure",
       "fixed": false
     }
   ]

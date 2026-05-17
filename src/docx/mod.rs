@@ -1,6 +1,7 @@
 mod alt_chunk;
 mod charts;
 mod color;
+mod comments;
 mod embedded_fonts;
 mod headers_footers;
 mod images;
@@ -681,6 +682,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
     let (embedded_fonts, font_table) = (ft.embedded_fonts, ft.font_table);
     let footnotes = parse_footnotes(zip, &styles, &theme, &numbering);
     let endnotes = parse_endnotes(zip, &styles, &theme, &numbering);
+    let comments = comments::parse_comments(zip);
     let (title, author, subject, keywords) = parse_core_props(zip);
 
     let mut xml_content = String::new();
@@ -804,12 +806,24 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         blocks,
     });
 
+    // When the document has comments, narrow the body text region on every
+    // section so the right margin leaves room for the comment pane Word draws
+    // inside the page bounds. Mirrors Word's PDF-export behavior: pane shows
+    // on every page, body wraps narrower across the whole document.
+    if !comments.is_empty() {
+        const COMMENT_PANE_RESERVE: f32 = 220.0;
+        for s in &mut sections {
+            s.properties.margin_right += COMMENT_PANE_RESERVE;
+        }
+    }
+
     Ok(Document {
         sections,
         line_spacing: styles.defaults.line_spacing,
         embedded_fonts,
         footnotes,
         endnotes,
+        comments,
         font_table,
         even_and_odd_headers: settings.even_and_odd_headers,
         default_tab_stop: settings.default_tab_stop,

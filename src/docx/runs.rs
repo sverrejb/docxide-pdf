@@ -504,17 +504,47 @@ fn split_run_by_script(run: Run) -> Vec<Run> {
     }
 }
 
+fn is_comment_reference_run(node: roxmltree::Node) -> bool {
+    node.children().any(|c| {
+        c.tag_name().namespace() == Some(WML_NS) && c.tag_name().name() == "commentReference"
+    })
+}
+
 fn collect_run_nodes<'a>(
     parent: roxmltree::Node<'a, 'a>,
     rels: &HashMap<String, String>,
-    out: &mut Vec<(roxmltree::Node<'a, 'a>, Option<String>, bool)>,
+    out: &mut Vec<(roxmltree::Node<'a, 'a>, Option<String>, bool, Vec<u32>)>,
+    active_comments: &mut Vec<u32>,
 ) {
     for child in parent.children() {
         let name = child.tag_name().name();
         let ns = child.tag_name().namespace();
         let is_wml = ns == Some(WML_NS);
+        if is_wml && name == "commentRangeStart" {
+            if let Some(id) = child
+                .attribute((WML_NS, "id"))
+                .and_then(|v| v.parse::<u32>().ok())
+            {
+                active_comments.push(id);
+            }
+            continue;
+        }
+        if is_wml && name == "commentRangeEnd" {
+            if let Some(id) = child
+                .attribute((WML_NS, "id"))
+                .and_then(|v| v.parse::<u32>().ok())
+            {
+                if let Some(pos) = active_comments.iter().rposition(|x| *x == id) {
+                    active_comments.remove(pos);
+                }
+            }
+            continue;
+        }
         if is_wml && name == "r" {
-            out.push((child, None, false));
+            if is_comment_reference_run(child) {
+                continue;
+            }
+            out.push((child, None, false, active_comments.clone()));
         } else if is_wml && name == "hyperlink" {
             let has_rid = child.attribute((REL_NS, "id")).is_some();
             let has_anchor = child.attribute((WML_NS, "anchor")).is_some();
@@ -531,25 +561,28 @@ fn collect_run_nodes<'a>(
                 .children()
                 .filter(|n| n.tag_name().name() == "r" && n.tag_name().namespace() == Some(WML_NS))
             {
-                out.push((n, url.clone(), is_anchor_only));
+                if is_comment_reference_run(n) {
+                    continue;
+                }
+                out.push((n, url.clone(), is_anchor_only, active_comments.clone()));
             }
         } else if is_wml && matches!(name, "ins" | "smartTag") {
-            collect_run_nodes(child, rels, out);
+            collect_run_nodes(child, rels, out, active_comments);
         } else if is_wml && name == "del" {
             // Final mode: skip deleted content entirely
         } else if is_wml && name == "sdt" {
             if let Some(content) = wml(child, "sdtContent") {
-                collect_run_nodes(content, rels, out);
+                collect_run_nodes(content, rels, out, active_comments);
             }
         } else if is_wml && name == "fldSimple" {
             // Simple field: <w:fldSimple w:instr="..."><w:r>cached</w:r></w:fldSimple>.
             // Emit the cached display runs. Dynamic field codes (PAGE/NUMPAGES/etc.)
             // are not rewritten here — the cached text matches Word's online converter
             // output for the static-PDF case.
-            collect_run_nodes(child, rels, out);
+            collect_run_nodes(child, rels, out, active_comments);
         } else if ns == Some(MC_NS_TOP) && name == "AlternateContent" {
             if let Some(branch) = mc_choice_or_fallback(child) {
-                collect_run_nodes(branch, rels, out);
+                collect_run_nodes(branch, rels, out, active_comments);
             }
         }
     }
@@ -627,6 +660,7 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
                 && prev.text_glow == run.text_glow
                 && prev.lang == run.lang
                 && prev.char_style_id == run.char_style_id
+                && prev.comment_ids == run.comment_ids
         });
         if can_merge {
             result.last_mut().unwrap().text.push_str(&run.text);
@@ -648,8 +682,9 @@ pub(super) fn parse_runs<R: Read + Seek>(
     let para_style = ctx.styles.paragraph_styles.get(para_style_id);
     let defaults = ParagraphRunDefaults::from_style(para_style, &ctx.styles.defaults);
 
-    let mut run_nodes: Vec<(roxmltree::Node, Option<String>, bool)> = Vec::new();
-    collect_run_nodes(para_node, ctx.rels, &mut run_nodes);
+    let mut run_nodes: Vec<(roxmltree::Node, Option<String>, bool, Vec<u32>)> = Vec::new();
+    let mut active_comments: Vec<u32> = Vec::new();
+    collect_run_nodes(para_node, ctx.rels, &mut run_nodes, &mut active_comments);
 
     let mut runs = Vec::new();
     let mut floating_images: Vec<FloatingImage> = Vec::new();
@@ -666,7 +701,8 @@ pub(super) fn parse_runs<R: Read + Seek>(
     let mut field_instr = String::new();
     let mut field_result_text = String::new();
 
-    for (run_node, hyperlink_url, is_anchor_hyperlink) in run_nodes {
+    for (run_node, hyperlink_url, is_anchor_hyperlink, comment_ids) in run_nodes {
+        let runs_before = runs.len();
         let rpr = wml(run_node, "rPr");
 
         let char_style_id_str = rpr.and_then(|n| wml_attr(n, "rStyle"));
@@ -911,6 +947,11 @@ pub(super) fn parse_runs<R: Read + Seek>(
             let run = fmt.text_run(pending_text, hyperlink_url.clone());
             runs.extend(split_run_by_script(run));
         }
+        if !comment_ids.is_empty() {
+            for r in &mut runs[runs_before..] {
+                r.comment_ids = comment_ids.clone();
+            }
+        }
     }
 
     let has_page_break_before = ppr
@@ -1032,7 +1073,8 @@ mod tests {
         let doc = roxmltree::Document::parse(&xml).unwrap();
         let rels = HashMap::new();
         let mut out = Vec::new();
-        collect_run_nodes(doc.root_element(), &rels, &mut out);
+        let mut active = Vec::new();
+        collect_run_nodes(doc.root_element(), &rels, &mut out, &mut active);
         assert_eq!(out.len(), 1, "fldSimple's inner w:r must be collected");
         let t_text = out[0]
             .0

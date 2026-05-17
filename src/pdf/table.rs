@@ -310,6 +310,7 @@ fn render_cell_content(
                     ctx.fonts,
                     None,
                     gradient_specs,
+                    None,
                 );
 
                 cursor_y -= para.lines.len() as f32 * para.line_h;
@@ -455,6 +456,7 @@ fn render_simple_textbox(
             ctx.fonts,
             None,
             gradient_specs,
+            None,
         );
         text_y -= lines.len().max(1) as f32 * lh + tp.space_after;
     }
@@ -680,6 +682,7 @@ fn render_partial_cell_content(
                     ctx.fonts,
                     None,
                     gradient_specs,
+                    None,
                 );
 
                 cursor_y -= para.lines.len() as f32 * para.line_h;

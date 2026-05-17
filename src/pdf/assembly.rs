@@ -5,6 +5,7 @@ use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str, TextStr};
 use crate::fonts::FontEntry;
 use crate::model::Document;
 
+use super::comments::render_comment_pane;
 use super::layout::LinkAnnotation;
 use super::GradientSpec;
 
@@ -40,6 +41,7 @@ pub(super) fn assemble_pdf_pages(
     all_contents: Vec<Content>,
     all_hf_contents: &mut Vec<Option<Content>>,
     all_page_links: &[Vec<LinkAnnotation>],
+    all_page_comment_anchors: &[Vec<(u32, f32, f32)>],
     all_page_alpha_states: &[HashSet<u8>],
     all_page_gradient_specs: &[Vec<GradientSpec>],
     page_section_indices: &[(usize, bool, usize)],
@@ -53,6 +55,9 @@ pub(super) fn assemble_pdf_pages(
     let n = all_contents.len();
     let page_ids: Vec<Ref> = (0..n).map(|_| alloc()).collect();
     let content_ids: Vec<Ref> = (0..n).map(|_| alloc()).collect();
+
+    let has_any_comments = !doc.comments.is_empty()
+        && all_page_comment_anchors.iter().any(|p| !p.is_empty());
 
     let page_annot_refs: Vec<Vec<Ref>> = all_page_links
         .iter()
@@ -198,7 +203,20 @@ pub(super) fn assemble_pdf_pages(
         })
         .collect();
 
-    for (i, c) in all_contents.into_iter().enumerate() {
+    for (i, mut c) in all_contents.into_iter().enumerate() {
+        if has_any_comments {
+            let (.., si) = page_section_indices[i];
+            let sp = &doc.sections[si].properties;
+            let anchors = &all_page_comment_anchors[i];
+            render_comment_pane(
+                &mut c,
+                &doc.comments,
+                anchors,
+                sp.page_width,
+                sp.page_height,
+                seen_fonts,
+            );
+        }
         let body_raw = c.finish();
         if let Some(hf) = all_hf_contents[i].take() {
             let hf_raw = hf.finish();

@@ -582,6 +582,7 @@ mod tests {
             kern_threshold: None,
             font_size_from_default: false,
             font_name_from_default: false,
+            comment_ids: Vec::new(),
         }
     }
 

@@ -164,6 +164,31 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
         }
     }
 
+    // Comments rendered in the right-side pane use the body font for the
+    // comment text and the body font's bold variant for the "Commented [Rn]:"
+    // label. Register both so the bold face gets embedded even when no body
+    // run is bold (otherwise the label falls back to the regular face).
+    if !doc.comments.is_empty() {
+        if let Some(first_run) = all_runs.first() {
+            let body_key = font_key_buf(first_run, &mut key_buf).to_string();
+            let mut bold_run = (*first_run).clone();
+            bold_run.bold = true;
+            let bold_key = font_key_buf(&bold_run, &mut key_buf).to_string();
+
+            let regular = used.entry(body_key).or_default();
+            for comment in doc.comments.values() {
+                regular.extend(comment.text.chars());
+            }
+
+            let bold = used.entry(bold_key).or_default();
+            for comment in doc.comments.values() {
+                bold.extend("Commented []: ".chars());
+                bold.extend(comment.initials.chars());
+                bold.extend(comment.display_index.to_string().chars());
+            }
+        }
+    }
+
     // Collect characters that may appear in STYLEREF values by scanning
     // body paragraph text (paragraph styles) and run text (character styles).
     let mut styleref_chars: HashSet<char> = HashSet::new();

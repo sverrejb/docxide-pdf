@@ -48,6 +48,17 @@ pub struct Footnote {
     pub paragraphs: Vec<Paragraph>,
 }
 
+#[derive(Clone, Debug)]
+pub struct Comment {
+    pub id: u32,
+    pub author: String,
+    pub initials: String,
+    pub text: String,
+    /// 1-based ordinal in document encounter order. Word renumbers densely
+    /// for display ("[R1]", "[R2]", …) regardless of the raw `w:id`.
+    pub display_index: u32,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub enum LineSpacing {
     Auto(f32),    // multiplier (e.g. 1.0 = single, 1.15 = default)
@@ -139,6 +150,7 @@ pub struct Document {
     pub embedded_fonts: HashMap<(String, bool, bool), Vec<u8>>,
     pub footnotes: HashMap<u32, Footnote>,
     pub endnotes: HashMap<u32, Footnote>,
+    pub comments: HashMap<u32, Comment>,
     pub font_table: FontTable,
     pub even_and_odd_headers: bool,
     pub default_tab_stop: f32,
@@ -337,6 +349,9 @@ pub struct Run {
     pub font_size_from_default: bool,
     /// True when font_name was inherited from defaults, not set by inline rPr or char style.
     pub font_name_from_default: bool,
+    /// Active comment IDs covering this run (empty for the common no-comments case).
+    /// Multiple IDs when comment ranges overlap.
+    pub comment_ids: Vec<u32>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -408,6 +423,7 @@ impl Default for Run {
             lang: None,
             font_size_from_default: false,
             font_name_from_default: false,
+            comment_ids: Vec::new(),
         }
     }
 }

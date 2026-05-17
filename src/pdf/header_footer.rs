@@ -356,6 +356,7 @@ pub(super) fn render_header_footer(
                     font_size, lines.len(), 0,
                     &mut Vec::new(), 0.0, ctx.fonts, None,
                     gradient_specs,
+                    None,
                 );
                 // Frame paragraphs are out-of-flow: do not advance cursor_y
                 pi += 1;
@@ -521,6 +522,7 @@ pub(super) fn render_header_footer(
                             ctx.fonts,
                             None,
                             gradient_specs,
+                            None,
                         );
                         tb_cursor -=
                             tp.space_before + (tb_lines.len() as f32) * tb_line_h + tp.space_after;
@@ -825,6 +827,7 @@ pub(super) fn render_header_footer(
                     ctx.fonts,
                     hdr_line_geom.as_deref(),
                     gradient_specs,
+                    None,
                 );
 
                 let max_img_h = lines

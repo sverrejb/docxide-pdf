@@ -161,7 +161,11 @@ pub(super) struct WordChunk {
     pub(super) synthetic_bold: bool,
     pub(super) text_outline: Option<TextOutline>,
     pub(super) text_fill: Option<TextFill>,
+    pub(super) comment_ids: Vec<u32>,
 }
+
+/// Pale-pink highlight color Word uses for comment-anchored text spans.
+pub(super) const COMMENT_HIGHLIGHT_RGB: [u8; 3] = [251, 220, 217];
 
 impl WordChunk {
     fn text(
@@ -180,7 +184,11 @@ impl WordChunk {
             font_size: eff_fs,
             color: run.color,
             highlight: run.highlight,
-            shading: run.shading,
+            shading: if run.shading.is_none() && !run.comment_ids.is_empty() {
+                Some(COMMENT_HIGHLIGHT_RGB)
+            } else {
+                run.shading
+            },
             x_offset,
             width,
             underline: run.underline,
@@ -201,6 +209,7 @@ impl WordChunk {
             synthetic_bold: entry.synthetic_bold,
             text_outline: run.text_outline.clone(),
             text_fill: run.text_fill.clone(),
+            comment_ids: run.comment_ids.clone(),
         }
     }
 
@@ -244,6 +253,7 @@ impl WordChunk {
             synthetic_bold: false,
             text_outline: None,
             text_fill: None,
+            comment_ids: Vec::new(),
         }
     }
 
@@ -282,6 +292,7 @@ impl WordChunk {
             synthetic_bold: false,
             text_outline: None,
             text_fill: None,
+            comment_ids: Vec::new(),
         }
     }
 
@@ -321,6 +332,7 @@ impl WordChunk {
             synthetic_bold: false,
             text_outline: None,
             text_fill: None,
+            comment_ids: Vec::new(),
         }
     }
 }
@@ -1237,6 +1249,7 @@ pub(super) fn render_paragraph_lines(
     seen_fonts: &HashMap<String, FontEntry>,
     line_geometry: Option<&[(f32, f32)]>,
     gradient_specs: &mut Vec<super::GradientSpec>,
+    mut comment_anchors: Option<&mut Vec<(u32, f32, f32)>>,
 ) {
     let mut current_color: Option<[u8; 3]> = None;
     let mut pattern_fill_active = false;
@@ -1440,6 +1453,26 @@ pub(super) fn render_paragraph_lines(
 
         draw_run_backgrounds(content, |c| c.shading);
         draw_run_backgrounds(content, |c| c.highlight);
+
+        if let Some(ref mut anchors) = comment_anchors {
+            for (chunk_idx, chunk) in line.chunks.iter().enumerate() {
+                if chunk.comment_ids.is_empty() {
+                    continue;
+                }
+                let end_x = chunk_abs_x(chunk_idx, chunk) + chunk.width;
+                // Anchor at the bottom of the highlight rectangle, matching the
+                // `bg_bottom = y - fs * 0.2` geometry used to paint the shading.
+                let anchor_y = y - chunk.font_size * 0.2;
+                for &cid in &chunk.comment_ids {
+                    if let Some(entry) = anchors.iter_mut().find(|(id, _, _)| *id == cid) {
+                        entry.1 = end_x;
+                        entry.2 = anchor_y;
+                    } else {
+                        anchors.push((cid, end_x, anchor_y));
+                    }
+                }
+            }
+        }
 
         // Decoration-only chunks (empty text with underline) also need the text-block
         // pass so their underline geometry is collected into `decorations`.
@@ -1882,6 +1915,7 @@ mod tests {
             kern_threshold: None,
             font_size_from_default: false,
             font_name_from_default: false,
+            comment_ids: Vec::new(),
         }
     }
 
