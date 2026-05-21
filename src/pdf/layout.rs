@@ -1256,7 +1256,7 @@ pub(super) fn render_paragraph_lines(
     seen_fonts: &HashMap<String, FontEntry>,
     line_geometry: Option<&[(f32, f32)]>,
     gradient_specs: &mut Vec<super::GradientSpec>,
-    mut comment_anchors: Option<&mut Vec<(u32, f32, f32)>>,
+    mut comment_anchors: Option<&mut Vec<(u32, f32, f32, f32)>>,
 ) {
     let mut current_color: Option<[u8; 3]> = None;
     let mut pattern_fill_active = false;
@@ -1516,15 +1516,19 @@ pub(super) fn render_paragraph_lines(
                     continue;
                 }
                 let end_x = chunk_abs_x(chunk_idx, chunk) + chunk.width;
-                // Anchor at the bottom of the highlight rectangle, matching the
-                // `bg_bottom = y - fs * 0.2` geometry used to paint the shading.
-                let anchor_y = y - chunk.font_size * 0.2;
+                // Anchor at the TOP of the highlight rectangle so the matching
+                // callout's top edge can align with the highlight's top edge
+                // (matches Word's pane layout). The pane renderer computes the
+                // connector origin (highlight bottom) using the font_size we
+                // store alongside, matching `bg_bottom = y - fs * 0.2`.
+                let anchor_y = y - chunk.font_size * 0.2 + chunk.font_size * 1.15;
                 for &cid in &chunk.comment_ids {
-                    if let Some(entry) = anchors.iter_mut().find(|(id, _, _)| *id == cid) {
+                    if let Some(entry) = anchors.iter_mut().find(|(id, _, _, _)| *id == cid) {
                         entry.1 = end_x;
                         entry.2 = anchor_y;
+                        entry.3 = chunk.font_size;
                     } else {
-                        anchors.push((cid, end_x, anchor_y));
+                        anchors.push((cid, end_x, anchor_y, chunk.font_size));
                     }
                 }
             }

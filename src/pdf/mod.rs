@@ -438,7 +438,7 @@ pub(super) struct PageBuilder {
     /// (comment_id, anchor_x, anchor_y) — anchor is the end of the last chunk
     /// covered by that comment on this page. Used by the comment-pane renderer
     /// to draw the connector line from highlighted phrase to callout.
-    pub(super) comment_anchors: Vec<(u32, f32, f32)>,
+    pub(super) comment_anchors: Vec<(u32, f32, f32, f32)>,
     pub(super) footnote_ids: Vec<u32>,
     footnote_ids_set: HashSet<u32>,
     /// Endnote IDs encountered across the whole document, in encounter order.
@@ -472,7 +472,7 @@ pub(super) struct PageBuilder {
     // Accumulated pages
     all_contents: Vec<Content>,
     all_links: Vec<Vec<LinkAnnotation>>,
-    pub(super) all_comment_anchors: Vec<Vec<(u32, f32, f32)>>,
+    pub(super) all_comment_anchors: Vec<Vec<(u32, f32, f32, f32)>>,
     all_footnote_ids: Vec<Vec<u32>>,
     all_alpha_states: Vec<HashSet<u8>>,
     all_gradient_specs: Vec<Vec<GradientSpec>>,

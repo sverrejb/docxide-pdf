@@ -41,7 +41,7 @@ pub(super) fn assemble_pdf_pages(
     all_contents: Vec<Content>,
     all_hf_contents: &mut Vec<Option<Content>>,
     all_page_links: &[Vec<LinkAnnotation>],
-    all_page_comment_anchors: &[Vec<(u32, f32, f32)>],
+    all_page_comment_anchors: &[Vec<(u32, f32, f32, f32)>],
     all_page_alpha_states: &[HashSet<u8>],
     all_page_gradient_specs: &[Vec<GradientSpec>],
     page_section_indices: &[(usize, bool, usize)],
@@ -225,9 +225,16 @@ pub(super) fn assemble_pdf_pages(
         if has_any_comments {
             let (.., si) = page_section_indices[i];
             let sp = &doc.sections[si].properties;
-            let transformed: Vec<(u32, f32, f32)> = all_page_comment_anchors[i]
+            let transformed: Vec<(u32, f32, f32, f32)> = all_page_comment_anchors[i]
                 .iter()
-                .map(|(id, x, y)| (*id, BODY_TX + BODY_SCALE * x, BODY_TY + BODY_SCALE * y))
+                .map(|(id, x, y, fs)| {
+                    (
+                        *id,
+                        BODY_TX + BODY_SCALE * x,
+                        BODY_TY + BODY_SCALE * y,
+                        BODY_SCALE * fs,
+                    )
+                })
                 .collect();
             let mut pane_content = Content::new();
             render_comment_pane(

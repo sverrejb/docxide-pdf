@@ -14,13 +14,10 @@ const PANE_VPAD: f32 = 94.0;
 
 /// Body content scale factor Word applies when comments are present (9.16pt /
 /// 12pt). Combined with the BODY_TX/BODY_TY translations below in a single
-/// `q s 0 0 s tx ty cm` operator that wraps the body content stream.
+/// `q s 0 0 s tx ty cm` operator that wraps the body content stream. Matches
+/// the CTM Word uses in its own PDF export for documents with comments.
 pub(super) const BODY_SCALE: f32 = 0.7633;
-/// Horizontal translation paired with BODY_SCALE; keeps the scaled left margin
-/// aligned with the docx margin_left.
-pub(super) const BODY_TX: f32 = 14.7;
-/// Vertical translation paired with BODY_SCALE; shifts the scaled first baseline
-/// down to roughly the pane top (matches the y origin Word uses in its cm).
+pub(super) const BODY_TX: f32 = 0.96;
 pub(super) const BODY_TY: f32 = 94.4;
 
 const PANE_BG: [u8; 3] = [240, 240, 240];
@@ -30,18 +27,21 @@ const CONNECTOR_RGB: [u8; 3] = [209, 52, 56];
 const LABEL_RGB: [u8; 3] = [80, 30, 30];
 const BODY_RGB: [u8; 3] = [50, 30, 30];
 
-const CALLOUT_PAD_X: f32 = 6.0;
-const CALLOUT_PAD_Y: f32 = 4.0;
+const CALLOUT_PAD_X: f32 = 5.0;
+const CALLOUT_PAD_Y: f32 = 3.0;
 const CALLOUT_GAP: f32 = 0.0;
 const CALLOUT_RADIUS: f32 = 4.0;
-const CALLOUT_FONT_SIZE: f32 = 8.5;
-const CALLOUT_LINE_H: f32 = 11.0;
+const CALLOUT_FONT_SIZE: f32 = 7.0;
+const CALLOUT_LINE_H: f32 = 8.5;
 const PANE_LEFT_PAD: f32 = 8.0;
 
+/// Anchor tuple: (comment_id, end_x, highlight_top_y, font_size). The highlight
+/// top is what callouts align to; the connector originates from
+/// `highlight_top_y - 1.15 * font_size` (i.e. the highlight bottom).
 pub(super) fn render_comment_pane(
     content: &mut Content,
     comments: &HashMap<u32, Comment>,
-    anchors: &[(u32, f32, f32)],
+    anchors: &[(u32, f32, f32, f32)],
     page_width: f32,
     page_height: f32,
     seen_fonts: &HashMap<String, FontEntry>,
@@ -78,7 +78,7 @@ pub(super) fn render_comment_pane(
     // box so there's no whitespace between them (Word's behavior).
     let mut next_top: f32 = pane_top - CALLOUT_PAD_Y;
     let mut first = true;
-    for &(cid, _anchor_x, anchor_y) in anchors {
+    for &(cid, _anchor_x, anchor_y, _fs) in anchors {
         let Some(comment) = comments.get(&cid) else {
             continue;
         };
@@ -168,14 +168,17 @@ pub(super) fn render_comment_pane(
     stroke_rgb(content, CONNECTOR_RGB);
     content.set_line_width(0.55);
     content.set_dash_pattern([0.55, 0.55], 0.0);
-    for (i, &(_cid, anchor_x, anchor_y)) in anchors.iter().enumerate() {
+    for (i, &(_cid, anchor_x, anchor_y, fs)) in anchors.iter().enumerate() {
         if let Some((_, top, _, _)) = placements.get(i) {
-            // Two-segment connector: horizontal from highlighted phrase to the
-            // gray-pane edge, then a short diagonal/vertical leg into the
-            // callout's left side. Matches Word's PDF export style.
+            // Two-segment connector: horizontal from the BOTTOM of the
+            // highlighted phrase to the gray-pane edge, then a short diagonal
+            // leg into the callout's left side. anchor_y is the highlight top;
+            // subtract the full highlight height (1.15 * fs) to get the
+            // bottom edge where the connector originates.
+            let connector_origin_y = anchor_y - 1.15 * fs;
             let callout_attach_y = *top - CALLOUT_LINE_H * 0.4;
-            content.move_to(anchor_x, anchor_y);
-            content.line_to(pane_x, anchor_y);
+            content.move_to(anchor_x, connector_origin_y);
+            content.line_to(pane_x, connector_origin_y);
             content.line_to(inner_x, callout_attach_y);
             content.stroke();
         }
