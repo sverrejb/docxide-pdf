@@ -5,7 +5,7 @@ use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str, TextStr};
 use crate::fonts::FontEntry;
 use crate::model::Document;
 
-use super::comments::render_comment_pane;
+use super::comments::{BODY_SCALE, BODY_TX, BODY_TY, render_comment_pane};
 use super::layout::LinkAnnotation;
 use super::GradientSpec;
 
@@ -203,35 +203,60 @@ pub(super) fn assemble_pdf_pages(
         })
         .collect();
 
-    for (i, mut c) in all_contents.into_iter().enumerate() {
+    for (i, c) in all_contents.into_iter().enumerate() {
+        let body_raw = c.finish();
+
+        // When the document has comments, Word's PDF export renders body
+        // content scaled (so glyphs become 9.16pt from 12pt) and shifted down
+        // so the first line sits at roughly the pane's top. We replicate that
+        // by wrapping the body content stream in a `q s 0 0 s tx ty cm ... Q`
+        // transform. The comment pane and connectors stay in unscaled PDF
+        // coordinates and are rendered into a separate stream appended after.
+        let (scale_prefix, scale_suffix) = if has_any_comments {
+            (
+                format!("q {BODY_SCALE} 0 0 {BODY_SCALE} {BODY_TX} {BODY_TY} cm\n").into_bytes(),
+                b"\nQ\n".to_vec(),
+            )
+        } else {
+            (Vec::new(), Vec::new())
+        };
+
+        let mut pane_raw = Vec::new();
         if has_any_comments {
             let (.., si) = page_section_indices[i];
             let sp = &doc.sections[si].properties;
-            let anchors = &all_page_comment_anchors[i];
+            let transformed: Vec<(u32, f32, f32)> = all_page_comment_anchors[i]
+                .iter()
+                .map(|(id, x, y)| (*id, BODY_TX + BODY_SCALE * x, BODY_TY + BODY_SCALE * y))
+                .collect();
+            let mut pane_content = Content::new();
             render_comment_pane(
-                &mut c,
+                &mut pane_content,
                 &doc.comments,
-                anchors,
+                &transformed,
                 sp.page_width,
                 sp.page_height,
                 seen_fonts,
             );
+            pane_raw = pane_content.finish().to_vec();
         }
-        let body_raw = c.finish();
+
+        let mut combined: Vec<u8> = Vec::new();
         if let Some(hf) = all_hf_contents[i].take() {
             let hf_raw = hf.finish();
-            let mut combined = Vec::with_capacity(hf_raw.len() + 1 + body_raw.len());
             combined.extend_from_slice(hf_raw.as_slice());
             combined.push(b'\n');
-            combined.extend_from_slice(body_raw.as_slice());
-            let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&combined, 6);
-            pdf.stream(content_ids[i], &compressed)
-                .filter(Filter::FlateDecode);
-        } else {
-            let compressed = miniz_oxide::deflate::compress_to_vec_zlib(body_raw.as_slice(), 6);
-            pdf.stream(content_ids[i], &compressed)
-                .filter(Filter::FlateDecode);
         }
+        combined.extend_from_slice(&scale_prefix);
+        combined.extend_from_slice(body_raw.as_slice());
+        combined.extend_from_slice(&scale_suffix);
+        if !pane_raw.is_empty() {
+            combined.push(b'\n');
+            combined.extend_from_slice(&pane_raw);
+        }
+        let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&combined, 6);
+        pdf.stream(content_ids[i], &compressed)
+            .filter(Filter::FlateDecode);
     }
 
     // Build PDF outline (bookmarks panel) from heading entries

@@ -6,11 +6,22 @@ use crate::fonts::{FontEntry, encode_as_gids, to_winansi_bytes};
 use crate::model::Comment;
 
 /// Width of the right-side pane drawn inside the page when the document has comments.
-const PANE_WIDTH: f32 = 200.0;
+const PANE_WIDTH: f32 = 197.0;
 /// Distance from the right page edge to the right edge of the pane.
 const PANE_RIGHT_MARGIN: f32 = 10.0;
 /// Whitespace above and below the gray pane band.
-const PANE_VPAD: f32 = 90.0;
+const PANE_VPAD: f32 = 94.0;
+
+/// Body content scale factor Word applies when comments are present (9.16pt /
+/// 12pt). Combined with the BODY_TX/BODY_TY translations below in a single
+/// `q s 0 0 s tx ty cm` operator that wraps the body content stream.
+pub(super) const BODY_SCALE: f32 = 0.7633;
+/// Horizontal translation paired with BODY_SCALE; keeps the scaled left margin
+/// aligned with the docx margin_left.
+pub(super) const BODY_TX: f32 = 14.7;
+/// Vertical translation paired with BODY_SCALE; shifts the scaled first baseline
+/// down to roughly the pane top (matches the y origin Word uses in its cm).
+pub(super) const BODY_TY: f32 = 94.4;
 
 const PANE_BG: [u8; 3] = [240, 240, 240];
 const CALLOUT_FILL: [u8; 3] = [251, 220, 217];

@@ -806,14 +806,19 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         blocks,
     });
 
-    // When the document has comments, narrow the body text region on every
-    // section so the right margin leaves room for the comment pane Word draws
-    // inside the page bounds. Mirrors Word's PDF-export behavior: pane shows
-    // on every page, body wraps narrower across the whole document.
+    // When the document has comments, Word's PDF export scales the body
+    // content via a wrapping `cm` operator so glyphs render at ~76% (9.16pt
+    // from 12pt) and a column of room opens up on the right for the comment
+    // pane. We apply the same scaling at content-stream assembly time, so the
+    // body can keep its natural layout here and the right margin is reduced
+    // visually by the scale rather than by widening the docx margin.
+    //
+    // We still nudge the right margin a touch so the rightmost body lines
+    // don't bleed into the pane area after scaling.
     if !comments.is_empty() {
-        const COMMENT_PANE_RESERVE: f32 = 220.0;
+        const COMMENT_RIGHT_PADDING: f32 = 40.0;
         for s in &mut sections {
-            s.properties.margin_right += COMMENT_PANE_RESERVE;
+            s.properties.margin_right += COMMENT_RIGHT_PADDING;
         }
     }
 
