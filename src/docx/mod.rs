@@ -251,7 +251,7 @@ pub(super) fn twips_attr(node: roxmltree::Node, attr: &str) -> Option<f32> {
         .map(twips_to_pts)
 }
 
-fn parse_one_border(node: roxmltree::Node) -> Option<ParagraphBorder> {
+pub(super) fn parse_one_border(node: roxmltree::Node) -> Option<ParagraphBorder> {
     let val = node.attribute((WML_NS, "val")).unwrap_or("none");
     if val == "none" || val == "nil" {
         return None;

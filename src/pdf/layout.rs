@@ -5,7 +5,9 @@ use pdf_writer::types::TextRenderingMode;
 use pdf_writer::{Content, Name, Rect, Str};
 
 use crate::fonts::{FontEntry, encode_as_gids, font_key, font_key_buf, to_winansi_bytes};
-use crate::model::{Alignment, Run, TabAlignment, TabStop, TextFill, TextOutline, VertAlign};
+use crate::model::{
+    Alignment, ParagraphBorder, Run, TabAlignment, TabStop, TextFill, TextOutline, VertAlign,
+};
 
 use super::color::{fill_color_or_black, stroke_color_or_black};
 
@@ -141,6 +143,7 @@ pub(super) struct WordChunk {
     pub(super) color: Option<[u8; 3]>,
     pub(super) highlight: Option<[u8; 3]>,
     pub(super) shading: Option<[u8; 3]>,
+    pub(super) border: Option<ParagraphBorder>,
     pub(super) x_offset: f32, // x relative to line start
     pub(super) width: f32,
     pub(super) underline: bool,
@@ -189,6 +192,7 @@ impl WordChunk {
             } else {
                 run.shading
             },
+            border: run.border.clone(),
             x_offset,
             width,
             underline: run.underline,
@@ -233,6 +237,7 @@ impl WordChunk {
             color: None,
             highlight: None,
             shading: None,
+            border: None,
             x_offset,
             width: display_width,
             underline: false,
@@ -272,6 +277,7 @@ impl WordChunk {
             color,
             highlight: None,
             shading: None,
+            border: None,
             x_offset,
             width,
             underline: false,
@@ -312,6 +318,7 @@ impl WordChunk {
             color,
             highlight: None,
             shading: None,
+            border: None,
             x_offset,
             width,
             underline: true,
@@ -1453,6 +1460,55 @@ pub(super) fn render_paragraph_lines(
 
         draw_run_backgrounds(content, |c| c.shading);
         draw_run_backgrounds(content, |c| c.highlight);
+
+        let mut border_start_x = 0.0f32;
+        let mut border_end_x = 0.0f32;
+        let mut border_fs = 0.0f32;
+        let mut active_border: Option<ParagraphBorder> = None;
+        let flush_border = |content: &mut Content,
+                            border: &ParagraphBorder,
+                            sx: f32,
+                            ex: f32,
+                            fs: f32,
+                            y: f32| {
+            let pad = border.space_pt;
+            let bottom = y - fs * 0.2 - pad;
+            let height = fs * 1.15 + pad * 2.0;
+            content.save_state();
+            content.set_line_width(border.width_pt.max(0.1));
+            stroke_color_or_black(content, Some(border.color));
+            content.rect(sx - pad, bottom, (ex - sx) + pad * 2.0, height);
+            content.stroke();
+            content.restore_state();
+        };
+        for (chunk_idx, chunk) in line.chunks.iter().enumerate() {
+            let x = chunk_abs_x(chunk_idx, chunk);
+            match (&active_border, &chunk.border) {
+                (Some(active), Some(next)) if active == next => {
+                    border_end_x = x + chunk.width;
+                    border_fs = border_fs.max(chunk.font_size);
+                }
+                (Some(active), next) => {
+                    flush_border(content, active, border_start_x, border_end_x, border_fs, y);
+                    active_border = next.clone();
+                    if chunk.border.is_some() {
+                        border_start_x = x;
+                        border_end_x = x + chunk.width;
+                        border_fs = chunk.font_size;
+                    }
+                }
+                (None, Some(next)) => {
+                    active_border = Some(next.clone());
+                    border_start_x = x;
+                    border_end_x = x + chunk.width;
+                    border_fs = chunk.font_size;
+                }
+                (None, None) => {}
+            }
+        }
+        if let Some(active) = &active_border {
+            flush_border(content, active, border_start_x, border_end_x, border_fs, y);
+        }
 
         if let Some(ref mut anchors) = comment_anchors {
             for (chunk_idx, chunk) in line.chunks.iter().enumerate() {

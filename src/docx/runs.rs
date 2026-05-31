@@ -16,7 +16,7 @@ use super::textbox::parse_textbox_from_vml;
 use super::wordart::{parse_text_fill, parse_text_glow, parse_text_outline, parse_text_shadow};
 use super::{
     MC_NS_TOP, ParseContext, REL_NS, VML_NS, WML_NS, highlight_color, parse_hex_color,
-    parse_run_shd, parse_text_color, twips_to_pts, wml, wml_attr, wml_bool,
+    parse_one_border, parse_run_shd, parse_text_color, twips_to_pts, wml, wml_attr, wml_bool,
 };
 
 fn is_dynamic_field(instr: &str) -> bool {
@@ -94,6 +94,7 @@ struct RunFormat {
     vertical_align: VertAlign,
     highlight: Option<[u8; 3]>,
     shading: Option<[u8; 3]>,
+    border: Option<crate::model::ParagraphBorder>,
     kern_threshold: Option<f32>,
     char_style_id: Option<String>,
     text_outline: Option<TextOutline>,
@@ -130,6 +131,7 @@ impl RunFormat {
             vertical_align: self.vertical_align,
             highlight: self.highlight,
             shading: self.shading,
+            border: self.border.clone(),
             kern_threshold: self.kern_threshold,
             char_style_id: self.char_style_id.clone(),
             text_outline: self.text_outline.clone(),
@@ -364,6 +366,10 @@ impl ParagraphRunDefaults {
             shading: rpr
                 .and_then(parse_run_shd)
                 .or_else(|| char_style.and_then(|cs| cs.shading)),
+            border: rpr
+                .and_then(|n| wml(n, "bdr"))
+                .and_then(parse_one_border)
+                .or_else(|| char_style.and_then(|cs| cs.border.clone())),
             kern_threshold: rpr
                 .and_then(|n| wml_attr(n, "kern"))
                 .and_then(|v| v.parse::<f32>().ok())
@@ -651,6 +657,7 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
                 && prev.color == run.color
                 && prev.highlight == run.highlight
                 && prev.shading == run.shading
+                && prev.border == run.border
                 && prev.vertical_align == run.vertical_align
                 && prev.kern_threshold == run.kern_threshold
                 && prev.hyperlink_url == run.hyperlink_url
