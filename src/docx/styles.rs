@@ -10,9 +10,9 @@ pub(super) use super::color::{ColorTransforms, parse_color_transforms};
 use super::wordart::{parse_text_fill, parse_text_glow, parse_text_outline, parse_text_shadow};
 use super::{
     DML_NS, WML_NS, dml, extract_indents, highlight_color, parse_cell_border,
-    parse_cell_border_left, parse_cell_border_right, parse_hex_color, parse_paragraph_borders,
-    parse_run_shd, parse_tab_stops_with_clears, parse_text_color, read_zip_text, twips_attr,
-    twips_to_pts, wml, wml_attr, wml_bool,
+    parse_cell_border_left, parse_cell_border_right, parse_hex_color, parse_one_border,
+    parse_paragraph_borders, parse_run_shd, parse_tab_stops_with_clears, parse_text_color,
+    read_zip_text, twips_attr, twips_to_pts, wml, wml_attr, wml_bool,
 };
 
 fn dml_typeface<'a>(node: roxmltree::Node<'a, 'a>, element: &str) -> Option<&'a str> {
@@ -160,6 +160,7 @@ pub(super) struct CharacterStyle {
     /// here"; callers inherit from basedOn. Word treats `w:val="nil"` and
     /// `w:fill="auto"` as "no color," not as a clearing override.
     pub(super) shading: Option<[u8; 3]>,
+    pub(super) border: Option<crate::model::ParagraphBorder>,
     pub(super) kern_threshold: Option<f32>,
     pub(super) text_outline: Option<TextOutline>,
     pub(super) text_fill: Option<TextFill>,
@@ -759,6 +760,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                 let color = wml_attr(rpr, "color").and_then(parse_text_color);
                 let highlight = wml_attr(rpr, "highlight").and_then(highlight_color);
                 let shading = parse_run_shd(rpr);
+                let border = wml(rpr, "bdr").and_then(parse_one_border);
                 let kern_threshold = parse_kern(rpr);
                 let text_outline = parse_text_outline(rpr, theme);
                 let text_fill = parse_text_fill(rpr, theme);
@@ -781,6 +783,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         color,
                         highlight,
                         shading,
+                        border,
                         kern_threshold,
                         text_outline,
                         text_fill,

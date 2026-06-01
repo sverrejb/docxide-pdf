@@ -226,7 +226,7 @@ pub struct FrameProperties {
     pub y_offset: f32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ParagraphBorder {
     pub width_pt: f32,
     pub space_pt: f32,
@@ -328,6 +328,7 @@ pub struct Run {
     /// Background shading from `w:rPr/w:shd`. Distinct from `highlight`
     /// (which is `w:highlight` — predefined named colors). Both can coexist.
     pub shading: Option<[u8; 3]>,
+    pub border: Option<ParagraphBorder>,
     pub is_tab: bool,
     pub is_line_break: bool,
     pub vertical_align: VertAlign,
@@ -404,6 +405,7 @@ impl Default for Run {
             color: None,
             highlight: None,
             shading: None,
+            border: None,
             is_tab: false,
             is_line_break: false,
             vertical_align: VertAlign::Baseline,
