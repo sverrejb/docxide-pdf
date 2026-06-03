@@ -84,6 +84,7 @@ pub(super) struct StyleDefaults {
     pub(super) strikethrough: bool,
     pub(super) dstrike: bool,
     pub(super) underline: bool,
+    pub(super) double_underline: bool,
     pub(super) color: Option<[u8; 3]>,
     pub(super) char_spacing: f32,
     pub(super) widow_control: bool,
@@ -105,6 +106,7 @@ pub(super) struct ParagraphStyle {
     pub(super) small_caps: Option<bool>,
     pub(super) vanish: Option<bool>,
     pub(super) underline: Option<bool>,
+    pub(super) double_underline: Option<bool>,
     pub(super) strikethrough: Option<bool>,
     pub(super) dstrike: Option<bool>,
     pub(super) color: Option<[u8; 3]>,
@@ -150,6 +152,7 @@ pub(super) struct CharacterStyle {
     pub(super) bold: Option<bool>,
     pub(super) italic: Option<bool>,
     pub(super) underline: Option<bool>,
+    pub(super) double_underline: Option<bool>,
     pub(super) strikethrough: Option<bool>,
     pub(super) caps: Option<bool>,
     pub(super) small_caps: Option<bool>,
@@ -235,9 +238,11 @@ fn parse_kern(rpr: roxmltree::Node) -> Option<f32> {
 }
 
 fn parse_underline(rpr: roxmltree::Node) -> Option<bool> {
-    wml(rpr, "u")
-        .and_then(|u| u.attribute((WML_NS, "val")))
-        .map(|v| v != "none")
+    wml(rpr, "u").map(|u| u.attribute((WML_NS, "val")) != Some("none"))
+}
+
+fn parse_double_underline(rpr: roxmltree::Node) -> Option<bool> {
+    wml(rpr, "u").map(|u| u.attribute((WML_NS, "val")) == Some("double"))
 }
 
 fn parse_char_spacing(rpr: roxmltree::Node) -> Option<f32> {
@@ -472,6 +477,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
         strikethrough: false,
         dstrike: false,
         underline: false,
+        double_underline: false,
         color: None,
         char_spacing: 0.0,
         widow_control: true,
@@ -527,6 +533,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
             defaults.strikethrough = wml_bool(rpr, "strike").unwrap_or(false);
             defaults.dstrike = wml_bool(rpr, "dstrike").unwrap_or(false);
             defaults.underline = parse_underline(rpr).unwrap_or(false);
+            defaults.double_underline = parse_double_underline(rpr).unwrap_or(false);
             defaults.color = wml_attr(rpr, "color").and_then(parse_text_color);
             defaults.char_spacing = parse_char_spacing(rpr).unwrap_or(0.0);
         }
@@ -621,6 +628,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                 let small_caps = rpr.and_then(|n| wml_bool(n, "smallCaps"));
                 let vanish = rpr.and_then(|n| wml_bool(n, "vanish"));
                 let underline = rpr.and_then(parse_underline);
+                let double_underline = rpr.and_then(parse_double_underline);
                 let strikethrough = rpr.and_then(|n| wml_bool(n, "strike"));
                 let dstrike = rpr.and_then(|n| wml_bool(n, "dstrike"));
                 let char_spacing = rpr.and_then(parse_char_spacing);
@@ -701,6 +709,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         small_caps,
                         vanish,
                         underline,
+                        double_underline,
                         strikethrough,
                         dstrike,
                         color,
@@ -753,6 +762,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                 let bold = wml_bool(rpr, "b");
                 let italic = wml_bool(rpr, "i");
                 let underline = parse_underline(rpr);
+                let double_underline = parse_double_underline(rpr);
                 let strikethrough = wml_bool(rpr, "strike");
                 let caps = wml_bool(rpr, "caps");
                 let small_caps = wml_bool(rpr, "smallCaps");
@@ -776,6 +786,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         bold,
                         italic,
                         underline,
+                        double_underline,
                         strikethrough,
                         caps,
                         small_caps,
@@ -956,6 +967,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     small_caps,
                     vanish,
                     underline,
+                    double_underline,
                     strikethrough,
                     dstrike,
                     color,
@@ -1017,6 +1029,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             s.small_caps = s.small_caps.or(inh.small_caps);
             s.vanish = s.vanish.or(inh.vanish);
             s.underline = s.underline.or(inh.underline);
+            s.double_underline = s.double_underline.or(inh.double_underline);
             s.strikethrough = s.strikethrough.or(inh.strikethrough);
             s.dstrike = s.dstrike.or(inh.dstrike);
             s.color = s.color.or(inh.color);

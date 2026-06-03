@@ -147,6 +147,7 @@ pub(super) struct WordChunk {
     pub(super) x_offset: f32, // x relative to line start
     pub(super) width: f32,
     pub(super) underline: bool,
+    pub(super) double_underline: bool,
     pub(super) strikethrough: bool,
     pub(super) dstrike: bool,
     pub(super) char_spacing: f32,
@@ -169,6 +170,24 @@ pub(super) struct WordChunk {
 
 /// Pale-pink highlight color Word uses for comment-anchored text spans.
 pub(super) const COMMENT_HIGHLIGHT_RGB: [u8; 3] = [251, 220, 217];
+
+fn push_decoration(
+    decorations: &mut Vec<(f32, f32, f32, f32, Option<[u8; 3]>)>,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    color: Option<[u8; 3]>,
+) {
+    let merged = decorations.last_mut().filter(|(_, dy, _, dh, dc)| {
+        (*dy - y).abs() < 0.01 && (*dh - height).abs() < 0.01 && *dc == color
+    });
+    if let Some(prev) = merged {
+        prev.2 = (x + width) - prev.0;
+    } else {
+        decorations.push((x, y, width, height, color));
+    }
+}
 
 impl WordChunk {
     fn text(
@@ -196,6 +215,7 @@ impl WordChunk {
             x_offset,
             width,
             underline: run.underline,
+            double_underline: run.double_underline,
             strikethrough: run.strikethrough,
             dstrike: run.dstrike,
             char_spacing,
@@ -241,6 +261,7 @@ impl WordChunk {
             x_offset,
             width: display_width,
             underline: false,
+            double_underline: false,
             strikethrough: false,
             dstrike: false,
             char_spacing: 0.0,
@@ -281,6 +302,7 @@ impl WordChunk {
             x_offset,
             width,
             underline: false,
+            double_underline: false,
             strikethrough: false,
             dstrike: false,
             char_spacing: 0.0,
@@ -308,6 +330,7 @@ impl WordChunk {
         entry: &FontEntry,
         font_size: f32,
         color: Option<[u8; 3]>,
+        double_underline: bool,
         x_offset: f32,
         width: f32,
     ) -> Self {
@@ -322,6 +345,7 @@ impl WordChunk {
             x_offset,
             width,
             underline: true,
+            double_underline,
             strikethrough: false,
             dstrike: false,
             char_spacing: 0.0,
@@ -802,6 +826,16 @@ pub(super) fn build_paragraph_lines(
             } else {
                 current_x = proposed_x;
             }
+            if run.underline && !current_chunks.is_empty() && pending_space_w > 0.0 {
+                current_chunks.push(WordChunk::tab_underline(
+                    entry,
+                    eff_fs,
+                    run.color,
+                    run.double_underline,
+                    current_x - pending_space_w,
+                    pending_space_w,
+                ));
+            }
             pending_space_w = 0.0;
 
             push_word_chunks(&mut current_chunks, entry, run, word, eff_fs, cs, y_off, current_x, ww);
@@ -1068,6 +1102,7 @@ pub(super) fn build_tabbed_line(
                         entry,
                         eff_fs,
                         tab_run.color,
+                        tab_run.double_underline,
                         current_x,
                         seg_start - current_x,
                     ));
@@ -1164,6 +1199,16 @@ pub(super) fn build_tabbed_line(
                 let applied_space = pending_space_w > 0.0
                     && (!all_chunks.is_empty() || space_count > 0);
                 if applied_space {
+                    if run.underline && pending_space_w > 0.0 {
+                        all_chunks.push(WordChunk::tab_underline(
+                            entry,
+                            eff_fs,
+                            run.color,
+                            run.double_underline,
+                            current_x,
+                            pending_space_w,
+                        ));
+                    }
                     current_x += pending_space_w;
                     pending_space_w = 0.0;
                 }
@@ -1728,16 +1773,17 @@ pub(super) fn render_paragraph_lines(
                         y - chunk.font_size * 0.12
                     };
                     let ul_top = ul_y - thick;
-                    // Merge with previous underline decoration if same y and color
-                    let merged = decorations.last_mut().filter(|(_, dy, _, dh, dc)| {
-                        (*dy - ul_top).abs() < 0.01
-                            && (*dh - thick).abs() < 0.01
-                            && *dc == chunk.color
-                    });
-                    if let Some(prev) = merged {
-                        prev.2 = (x + chunk.width) - prev.0;
-                    } else {
-                        decorations.push((x, ul_top, chunk.width, thick, chunk.color));
+                    push_decoration(&mut decorations, x, ul_top, chunk.width, thick, chunk.color);
+                    if chunk.double_underline {
+                        let gap = (thick * 1.5).max(1.0);
+                        push_decoration(
+                            &mut decorations,
+                            x,
+                            ul_top - thick - gap,
+                            chunk.width,
+                            thick,
+                            chunk.color,
+                        );
                     }
                 }
                 if chunk.strikethrough {
@@ -1945,11 +1991,13 @@ mod tests {
             bold: false,
             italic: false,
             underline: false,
+            double_underline: false,
             strikethrough: false,
             dstrike: false,
             color: None,
             highlight: None,
             shading: None,
+            border: None,
             vertical_align: valign,
             text_shadow: None,
             text_glow: None,
