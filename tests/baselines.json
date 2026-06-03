@@ -320,9 +320,9 @@
     "text_boundary": 1.0
   },
   "cases/case63": {
-    "jaccard": 0.0252,
-    "ssim": 0.2213,
-    "text_boundary": 0.0
+    "jaccard": 0.3559,
+    "ssim": 0.6563,
+    "text_boundary": 0.5556
   },
   "cases/case7": {
     "jaccard": 0.7397,
@@ -555,7 +555,7 @@
   "new/irish_school_enr..": {
     "jaccard": 0.3356,
     "ssim": 0.5297,
-    "text_boundary": 0.7143
+    "text_boundary": 0.7054
   },
   "new/isla_language_le..": {
     "jaccard": 0.3525,

@@ -166,16 +166,26 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
 
     // Comments rendered in the right-side pane use the body font for the
     // comment text and the body font's bold variant for the "Commented [Rn]:"
-    // label. Register both so the bold face gets embedded even when no body
-    // run is bold (otherwise the label falls back to the regular face).
+    // label. Pick the body font from the first NON-bold, NON-italic run we can
+    // find (headings are typically bold and would otherwise point us at the
+    // wrong face); fall back to the first run if nothing else matches.
     if !doc.comments.is_empty() {
-        if let Some(first_run) = all_runs.first() {
-            let body_key = font_key_buf(first_run, &mut key_buf).to_string();
-            let mut bold_run = (*first_run).clone();
-            bold_run.bold = true;
-            let bold_key = font_key_buf(&bold_run, &mut key_buf).to_string();
+        let body_run = all_runs
+            .iter()
+            .find(|r| !r.bold && !r.italic)
+            .or_else(|| all_runs.first())
+            .copied();
+        if let Some(body_run) = body_run {
+            let mut reg = (*body_run).clone();
+            reg.bold = false;
+            reg.italic = false;
+            let reg_key = font_key_buf(&reg, &mut key_buf).to_string();
+            let mut bold = (*body_run).clone();
+            bold.bold = true;
+            bold.italic = false;
+            let bold_key = font_key_buf(&bold, &mut key_buf).to_string();
 
-            let regular = used.entry(body_key).or_default();
+            let regular = used.entry(reg_key).or_default();
             for comment in doc.comments.values() {
                 regular.extend(comment.text.chars());
             }
