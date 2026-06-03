@@ -83,6 +83,7 @@ struct RunFormat {
     bold: bool,
     italic: bool,
     underline: bool,
+    double_underline: bool,
     strikethrough: bool,
     dstrike: bool,
     char_spacing: f32,
@@ -120,6 +121,7 @@ impl RunFormat {
             bold: self.bold,
             italic: self.italic,
             underline: self.underline,
+            double_underline: self.double_underline,
             strikethrough: self.strikethrough,
             dstrike: self.dstrike,
             char_spacing: self.char_spacing,
@@ -164,6 +166,7 @@ impl RunFormat {
             font_size: self.font_size,
             font_name: self.font_name.clone(),
             underline: self.underline,
+            double_underline: self.double_underline,
             color: self.color,
             ..Run::default()
         }
@@ -204,6 +207,7 @@ struct ParagraphRunDefaults {
     small_caps: bool,
     vanish: bool,
     underline: bool,
+    double_underline: bool,
     strikethrough: bool,
     dstrike: bool,
     color: Option<[u8; 3]>,
@@ -243,6 +247,9 @@ impl ParagraphRunDefaults {
             underline: para_style
                 .and_then(|s| s.underline)
                 .unwrap_or(defaults.underline),
+            double_underline: para_style
+                .and_then(|s| s.double_underline)
+                .unwrap_or(defaults.double_underline),
             strikethrough: para_style
                 .and_then(|s| s.strikethrough)
                 .unwrap_or(defaults.strikethrough),
@@ -290,6 +297,8 @@ impl ParagraphRunDefaults {
         let font_name_from_default = explicit_font_name.is_none()
             && char_style_font_name.is_none()
             && self.font_name_is_doc_default;
+        let underline_node = rpr.and_then(|n| wml(n, "u"));
+        let underline_val = underline_node.and_then(|u| u.attribute((WML_NS, "val")));
         RunFormat {
             font_size: explicit_font_size
                 .or(char_style_font_size)
@@ -309,14 +318,14 @@ impl ParagraphRunDefaults {
                 .and_then(|n| wml_bool(n, "i"))
                 .or_else(|| char_style.and_then(|cs| cs.italic))
                 .unwrap_or(self.italic),
-            underline: rpr
-                .and_then(|n| {
-                    wml(n, "u")
-                        .and_then(|u| u.attribute((WML_NS, "val")))
-                        .map(|v| v != "none")
-                })
+            underline: underline_node
+                .map(|_| underline_val != Some("none"))
                 .or_else(|| char_style.and_then(|cs| cs.underline))
                 .unwrap_or(self.underline),
+            double_underline: underline_node
+                .map(|_| underline_val == Some("double"))
+                .or_else(|| char_style.and_then(|cs| cs.double_underline))
+                .unwrap_or(self.double_underline),
             strikethrough: rpr
                 .and_then(|n| wml_bool(n, "strike"))
                 .or_else(|| char_style.and_then(|cs| cs.strikethrough))
