@@ -826,16 +826,6 @@ pub(super) fn build_paragraph_lines(
             } else {
                 current_x = proposed_x;
             }
-            if run.underline && !current_chunks.is_empty() && pending_space_w > 0.0 {
-                current_chunks.push(WordChunk::tab_underline(
-                    entry,
-                    eff_fs,
-                    run.color,
-                    run.double_underline,
-                    current_x - pending_space_w,
-                    pending_space_w,
-                ));
-            }
             pending_space_w = 0.0;
 
             push_word_chunks(&mut current_chunks, entry, run, word, eff_fs, cs, y_off, current_x, ww);
@@ -1199,16 +1189,6 @@ pub(super) fn build_tabbed_line(
                 let applied_space = pending_space_w > 0.0
                     && (!all_chunks.is_empty() || space_count > 0);
                 if applied_space {
-                    if run.underline && pending_space_w > 0.0 {
-                        all_chunks.push(WordChunk::tab_underline(
-                            entry,
-                            eff_fs,
-                            run.color,
-                            run.double_underline,
-                            current_x,
-                            pending_space_w,
-                        ));
-                    }
                     current_x += pending_space_w;
                     pending_space_w = 0.0;
                 }

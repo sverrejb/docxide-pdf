@@ -237,12 +237,19 @@ fn parse_kern(rpr: roxmltree::Node) -> Option<f32> {
         .map(|hp| hp / 2.0)
 }
 
+// Underline state comes from the w:val attribute, not the presence of <w:u>.
+// A bare <w:u> with no val is "no underline applied" in Word (inherit), so
+// returning None lets basedOn/defaults resolve it instead of forcing it on.
 fn parse_underline(rpr: roxmltree::Node) -> Option<bool> {
-    wml(rpr, "u").map(|u| u.attribute((WML_NS, "val")) != Some("none"))
+    wml(rpr, "u")
+        .and_then(|u| u.attribute((WML_NS, "val")))
+        .map(|v| v != "none")
 }
 
 fn parse_double_underline(rpr: roxmltree::Node) -> Option<bool> {
-    wml(rpr, "u").map(|u| u.attribute((WML_NS, "val")) == Some("double"))
+    wml(rpr, "u")
+        .and_then(|u| u.attribute((WML_NS, "val")))
+        .map(|v| v == "double")
 }
 
 fn parse_char_spacing(rpr: roxmltree::Node) -> Option<f32> {

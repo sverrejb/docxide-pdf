@@ -318,12 +318,16 @@ impl ParagraphRunDefaults {
                 .and_then(|n| wml_bool(n, "i"))
                 .or_else(|| char_style.and_then(|cs| cs.italic))
                 .unwrap_or(self.italic),
-            underline: underline_node
-                .map(|_| underline_val != Some("none"))
+            // Decide underline from the w:val attribute, not the mere presence
+            // of <w:u>. Word treats a bare <w:u> with no val (e.g.
+            // <w:u w:color="000000"/>) as "no underline applied" and inherits,
+            // so keying off presence wrongly underlines such runs.
+            underline: underline_val
+                .map(|v| v != "none")
                 .or_else(|| char_style.and_then(|cs| cs.underline))
                 .unwrap_or(self.underline),
-            double_underline: underline_node
-                .map(|_| underline_val == Some("double"))
+            double_underline: underline_val
+                .map(|v| v == "double")
                 .or_else(|| char_style.and_then(|cs| cs.double_underline))
                 .unwrap_or(self.double_underline),
             strikethrough: rpr
