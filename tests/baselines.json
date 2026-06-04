@@ -736,8 +736,8 @@
     "ssim": 0.7705
   },
   "samples/run-borders": {
-    "jaccard": 0.3636,
-    "ssim": 0.5035
+    "jaccard": 0.363,
+    "ssim": 0.5044
   },
   "samples/sample500kB": {
     "jaccard": 0.3338,

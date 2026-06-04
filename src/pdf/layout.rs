@@ -331,6 +331,7 @@ impl WordChunk {
         font_size: f32,
         color: Option<[u8; 3]>,
         double_underline: bool,
+        border: Option<ParagraphBorder>,
         x_offset: f32,
         width: f32,
     ) -> Self {
@@ -341,7 +342,9 @@ impl WordChunk {
             color,
             highlight: None,
             shading: None,
-            border: None,
+            // Carry the run's border so a bridged space keeps the border span
+            // contiguous (otherwise a None-border space chunk splits the box).
+            border,
             x_offset,
             width,
             underline: true,
@@ -577,6 +580,7 @@ pub(super) fn build_paragraph_lines(
     let mut pending_space_underline = false;
     let mut pending_space_double = false;
     let mut pending_space_color: Option<[u8; 3]> = None;
+    let mut pending_space_border: Option<ParagraphBorder> = None;
     let mut key_buf = String::new();
     // Track whether we're filling the right region on the current line
     let mut in_right_region = false;
@@ -725,6 +729,7 @@ pub(super) fn build_paragraph_lines(
                 pending_space_underline = run.underline;
                 pending_space_double = run.double_underline;
                 pending_space_color = run.color;
+                pending_space_border = run.border.clone();
             }
 
             // CJK auto-spacing (autoSpaceDE/DN): add ~0.25em gap at
@@ -847,6 +852,7 @@ pub(super) fn build_paragraph_lines(
                     eff_fs,
                     pending_space_color,
                     pending_space_double,
+                    pending_space_border.clone(),
                     current_x - pending_space_w,
                     pending_space_w,
                 ));
@@ -864,6 +870,7 @@ pub(super) fn build_paragraph_lines(
             pending_space_underline = run.underline;
             pending_space_double = run.double_underline;
             pending_space_color = run.color;
+            pending_space_border = run.border.clone();
         }
     }
 
@@ -1046,6 +1053,7 @@ pub(super) fn build_tabbed_line(
     let mut pending_space_underline = false;
     let mut pending_space_double = false;
     let mut pending_space_color: Option<[u8; 3]> = None;
+    let mut pending_space_border: Option<ParagraphBorder> = None;
     let mut key_buf = String::new();
     let mut is_first_line = true;
 
@@ -1128,6 +1136,7 @@ pub(super) fn build_tabbed_line(
                         eff_fs,
                         tab_run.color,
                         tab_run.double_underline,
+                        tab_run.border.clone(),
                         current_x,
                         seg_start - current_x,
                     ));
@@ -1225,6 +1234,7 @@ pub(super) fn build_tabbed_line(
                     pending_space_underline = run.underline;
                     pending_space_double = run.double_underline;
                     pending_space_color = run.color;
+                    pending_space_border = run.border.clone();
                 }
                 let applied_space = pending_space_w > 0.0
                     && (!all_chunks.is_empty() || space_count > 0);
@@ -1235,6 +1245,7 @@ pub(super) fn build_tabbed_line(
                             eff_fs,
                             pending_space_color,
                             pending_space_double,
+                            pending_space_border.clone(),
                             current_x,
                             pending_space_w,
                         ));
@@ -1265,6 +1276,7 @@ pub(super) fn build_tabbed_line(
                 pending_space_underline = run.underline;
                 pending_space_double = run.double_underline;
                 pending_space_color = run.color;
+                pending_space_border = run.border.clone();
             }
         }
 
