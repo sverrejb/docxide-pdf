@@ -570,6 +570,13 @@ pub(super) fn build_paragraph_lines(
     let mut current_chunks: Vec<WordChunk> = Vec::new();
     let mut current_x: f32 = 0.0;
     let mut pending_space_w: f32 = 0.0;
+    // Underline state of the run that emitted the pending whitespace. A space
+    // is underlined when its *own* run is underlined (Word draws underline
+    // continuously across spaces inside an underlined run, but not across a
+    // space that belongs to a neighbouring non-underlined run).
+    let mut pending_space_underline = false;
+    let mut pending_space_double = false;
+    let mut pending_space_color: Option<[u8; 3]> = None;
     let mut key_buf = String::new();
     // Track whether we're filling the right region on the current line
     let mut in_right_region = false;
@@ -714,6 +721,11 @@ pub(super) fn build_paragraph_lines(
         let mut is_first_word_in_run = true;
         for (space_count, word) in split_preserving_spaces(&text) {
             pending_space_w += space_count as f32 * space_w_cs;
+            if space_count > 0 {
+                pending_space_underline = run.underline;
+                pending_space_double = run.double_underline;
+                pending_space_color = run.color;
+            }
 
             // CJK auto-spacing (autoSpaceDE/DN): add ~0.25em gap at
             // script boundaries between East Asian and Latin/digit text
@@ -826,6 +838,19 @@ pub(super) fn build_paragraph_lines(
             } else {
                 current_x = proposed_x;
             }
+            // Bridge the underline across the space preceding this word when the
+            // space's own run is underlined, so a continuously-underlined run
+            // renders as one unbroken line rather than per-word segments.
+            if pending_space_underline && !current_chunks.is_empty() && pending_space_w > 0.0 {
+                current_chunks.push(WordChunk::tab_underline(
+                    entry,
+                    eff_fs,
+                    pending_space_color,
+                    pending_space_double,
+                    current_x - pending_space_w,
+                    pending_space_w,
+                ));
+            }
             pending_space_w = 0.0;
 
             push_word_chunks(&mut current_chunks, entry, run, word, eff_fs, cs, y_off, current_x, ww);
@@ -834,7 +859,12 @@ pub(super) fn build_paragraph_lines(
 
         // Accumulate trailing whitespace for the next run
         let trailing_spaces = text.chars().rev().take_while(|c| is_break_space(*c)).count();
-        pending_space_w += trailing_spaces as f32 * space_w_cs;
+        if trailing_spaces > 0 {
+            pending_space_w += trailing_spaces as f32 * space_w_cs;
+            pending_space_underline = run.underline;
+            pending_space_double = run.double_underline;
+            pending_space_color = run.color;
+        }
     }
 
     if !current_chunks.is_empty() {
@@ -1011,6 +1041,11 @@ pub(super) fn build_tabbed_line(
     let mut all_chunks: Vec<WordChunk> = Vec::new();
     let mut current_x: f32 = 0.0;
     let mut pending_space_w: f32 = 0.0;
+    // Underline state of the run that emitted the pending whitespace, so an
+    // underline bridges spaces inside an underlined run (see build_paragraph_lines).
+    let mut pending_space_underline = false;
+    let mut pending_space_double = false;
+    let mut pending_space_color: Option<[u8; 3]> = None;
     let mut key_buf = String::new();
     let mut is_first_line = true;
 
@@ -1186,9 +1221,24 @@ pub(super) fn build_tabbed_line(
                 let kern = run.kern_threshold.is_some_and(|t| eff_fs >= t);
                 let ww = word_width_for_run(entry, run, word, eff_fs, kern, cs, ts);
                 pending_space_w += space_count as f32 * space_w_cs;
+                if space_count > 0 {
+                    pending_space_underline = run.underline;
+                    pending_space_double = run.double_underline;
+                    pending_space_color = run.color;
+                }
                 let applied_space = pending_space_w > 0.0
                     && (!all_chunks.is_empty() || space_count > 0);
                 if applied_space {
+                    if pending_space_underline && !all_chunks.is_empty() {
+                        all_chunks.push(WordChunk::tab_underline(
+                            entry,
+                            eff_fs,
+                            pending_space_color,
+                            pending_space_double,
+                            current_x,
+                            pending_space_w,
+                        ));
+                    }
                     current_x += pending_space_w;
                     pending_space_w = 0.0;
                 }
@@ -1210,7 +1260,12 @@ pub(super) fn build_tabbed_line(
             }
             // Accumulate trailing whitespace for the next run (or the next tab stop)
             let trailing_spaces = text.chars().rev().take_while(|c| is_break_space(*c)).count();
-            pending_space_w += trailing_spaces as f32 * space_w_cs;
+            if trailing_spaces > 0 {
+                pending_space_w += trailing_spaces as f32 * space_w_cs;
+                pending_space_underline = run.underline;
+                pending_space_double = run.double_underline;
+                pending_space_color = run.color;
+            }
         }
 
         // For decimal/right/center tabs, text may end before the tab stop position.
