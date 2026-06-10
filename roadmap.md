@@ -160,6 +160,10 @@ Our `auto_fit_columns` uses `gridCol` widths from `tblGrid`, ignoring the specif
 
 **Verified empty in current corpus**: a sweep of all `tests/fixtures/scraped/*` and `tests/fixtures/new/*` documents found zero tables where `gridCol` total exceeds the `tblW` value (tolerance 100 twips). The bug is real per OOXML, but no fixture triggers it — implementing this clamp moves zero scores. Park until a real-world fixture exhibits the mismatch.
 
+### Percent-based widths: `tcW`/`tblW` `type="pct"` (TODO — affects construction_bathroom_accessories_spec)
+
+`twips_attr` reads `w:w` as twips regardless of the `w:type` attribute. For `type="pct"` the value is in fiftieths of a percent (5000 = 100%), so a 33% cell (`w="1650"`) parses as 82.5pt. Tables with pct widths render proportionally correct but far too narrow. Found in `new/construction_bathroom_accessories_spec` (SpecLink-generated footer/body tables, scores Jaccard 5.5%). Fix: parse the `type` attribute and resolve pct against the available content width at layout time. Same fixture also exercised the missing-`tblGrid` path (grid now inferred from row cell widths, 2026-06).
+
 ## Unimplemented Document Features
 
 ### Endnotes (TODO — MEDIUM IMPACT)
@@ -285,6 +289,19 @@ Small consistency / efficiency wins in `pdf/images.rs` that were considered but 
 - **structured doc tags**: 2 fixtures (SDT content is extracted but wrapping may cause layout shifts)
 
 Run `./tools/target/debug/analyze-fixtures --failing` for current breakdown.
+
+## Test Harness: Surface Conversion Panics Loudly (TODO — HIGH PRIORITY, found 2026-06)
+
+A library panic went unnoticed for an unknown number of runs: `new/construction_bathroom_accessories_spec` panicked in `cell_span_width` on every conversion, but the suite still reported "134 passed" with exit code 0. Three gaps compounded:
+
+1. `tests/visual_comparison.rs` catches per-case panics and emits `[SKIP] <case>: conversion panicked` — visible only in `--verbose` output; the case silently gets no score, so the compact report's "N scored, N unchanged" looks green.
+2. `run-tests.sh` greps `thread.*panicked` into a "Panics:" section, but the exit code stays 0 — nothing fails.
+3. Conversion worker threads are unnamed, so panic messages show `thread '<unnamed>' panicked at src/...` with no case attribution — diagnosing required a separate verbose run.
+
+Fixes:
+- `run-tests.sh`: exit non-zero when the Panics section is non-empty.
+- Harness/compact report: count panicked cases as failures and list them by name (`PANIC: new/construction_bat..`) in the compact output.
+- Name conversion threads after the case (`std::thread::Builder::new().name(case.clone())`) so panic messages self-identify.
 
 ## Test Corpus Expansion
 

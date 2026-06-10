@@ -326,7 +326,8 @@
   },
   "cases/case64": {
     "jaccard": 0.7539,
-    "ssim": 0.8917
+    "ssim": 0.8917,
+    "text_boundary": 0.5625
   },
   "cases/case7": {
     "jaccard": 0.7397,
@@ -471,6 +472,11 @@
     "ssim": 0.3364,
     "text_boundary": 0.8033
   },
+  "new/construction_bat..": {
+    "jaccard": 0.0552,
+    "ssim": 0.1395,
+    "text_boundary": 0.0217
+  },
   "new/covid_insomnia_m..": {
     "jaccard": 0.2113,
     "ssim": 0.4309,
@@ -559,7 +565,7 @@
   "new/irish_school_enr..": {
     "jaccard": 0.3364,
     "ssim": 0.5307,
-    "text_boundary": 0.7054
+    "text_boundary": 0.6964
   },
   "new/isla_language_le..": {
     "jaccard": 0.3525,
@@ -733,11 +739,13 @@
   },
   "samples/double-underline": {
     "jaccard": 0.5881,
-    "ssim": 0.7705
+    "ssim": 0.7705,
+    "text_boundary": 1.0
   },
   "samples/run-borders": {
     "jaccard": 0.363,
-    "ssim": 0.5044
+    "ssim": 0.5044,
+    "text_boundary": 0.1752
   },
   "samples/sample500kB": {
     "jaccard": 0.3338,

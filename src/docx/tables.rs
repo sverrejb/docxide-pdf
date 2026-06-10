@@ -81,7 +81,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     last_seen_level: &mut HashMap<u32, u8>,
     applied_overrides: &mut HashSet<(u32, u8)>,
 ) -> Table {
-    let col_widths: Vec<f32> = wml(node, "tblGrid")
+    let mut col_widths: Vec<f32> = wml(node, "tblGrid")
         .into_iter()
         .flat_map(|grid| grid.children())
         .filter(|n| is_wml(n, "gridCol"))
@@ -241,6 +241,37 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
         .into_iter()
         .filter(|n| is_wml(n, "tr"))
         .collect();
+
+    // OOXML §17.4.48 requires tblGrid, but some generators (e.g. SpecLink)
+    // omit it. Infer the grid from the widest row's cell widths so layout
+    // has real columns to work with, splitting spanned cells evenly.
+    if col_widths.is_empty() {
+        for tr in &tbl_rows {
+            let mut row_widths: Vec<f32> = Vec::new();
+            for tc in collect_block_nodes(*tr)
+                .into_iter()
+                .filter(|n| is_wml(n, "tc"))
+            {
+                let tc_pr = wml(tc, "tcPr");
+                let w = tc_pr
+                    .and_then(|pr| wml(pr, "tcW"))
+                    .and_then(|n| twips_attr(n, "w"))
+                    .unwrap_or(72.0);
+                let span = tc_pr
+                    .and_then(|pr| wml_attr(pr, "gridSpan"))
+                    .and_then(|v| v.parse::<u16>().ok())
+                    .unwrap_or(1)
+                    .max(1) as usize;
+                for _ in 0..span {
+                    row_widths.push(w / span as f32);
+                }
+            }
+            if row_widths.len() > col_widths.len() {
+                col_widths = row_widths;
+            }
+        }
+    }
+
     let num_rows = tbl_rows.len();
     let num_cols = col_widths.len();
 

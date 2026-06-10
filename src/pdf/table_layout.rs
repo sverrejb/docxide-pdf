@@ -18,7 +18,10 @@ use super::layout::{TextLine, build_paragraph_lines, build_tabbed_line, font_met
 use super::resolve_line_h;
 
 pub(super) fn cell_span_width(col_widths: &[f32], grid_col: usize, span: usize) -> f32 {
-    col_widths[grid_col..col_widths.len().min(grid_col + span)]
+    // Clamp the start too: malformed tables (missing tblGrid, gridSpan
+    // overrun) can push grid_col past the grid — yield 0 instead of panicking.
+    let start = grid_col.min(col_widths.len());
+    col_widths[start..col_widths.len().min(grid_col + span)]
         .iter()
         .sum()
 }
@@ -787,6 +790,14 @@ mod tests {
         let widths = vec![100.0, 200.0];
         // span=5 but only 2 columns from index 0
         assert_eq!(cell_span_width(&widths, 0, 5), 300.0);
+    }
+
+    #[test]
+    fn test_cell_span_width_start_past_end() {
+        // Missing tblGrid (empty widths) or gridSpan overrun must not panic.
+        assert_eq!(cell_span_width(&[], 1, 1), 0.0);
+        let widths = vec![100.0, 200.0];
+        assert_eq!(cell_span_width(&widths, 5, 2), 0.0);
     }
 
     #[test]
