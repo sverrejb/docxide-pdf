@@ -361,4 +361,7 @@ pub struct Textbox {
     pub is_wordart: bool,
     pub text_warp: Option<TextWarp>,
     pub auto_fit: AutoFit,
+    /// wp:anchor relativeHeight — stacking order among overlapping anchored
+    /// shapes within a paragraph (higher draws on top). 0 when unspecified.
+    pub z_index: u32,
 }

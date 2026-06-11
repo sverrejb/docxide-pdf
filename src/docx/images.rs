@@ -430,6 +430,8 @@ pub(super) enum RunDrawingResult {
     Connector(ConnectorShape),
     Chart(InlineChart),
     SmartArt(SmartArtDiagram),
+    /// Flattened canvas/group drawing: multiple leaf shapes from one w:drawing
+    Group(Vec<RunDrawingResult>),
 }
 
 fn is_wpd_drawing(node: roxmltree::Node, expected: &str) -> bool {
@@ -449,6 +451,12 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
 
         let (display_w, display_h) = extent_dimensions(container);
 
+        // Canvas/group drawings hold multiple shapes; flatten them before the
+        // single-shape paths below grab just the first wsp descendant.
+        if let Some(items) = super::group::parse_canvas_or_group(container, is_anchor, ctx) {
+            return Some(RunDrawingResult::Group(items));
+        }
+
         if is_anchor {
             if let Some(wsp) =
                 parse_textbox_from_wsp(container, ctx)
@@ -460,6 +468,10 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                 };
                 let (wrap_type, _, _) = parse_wrap_type(container);
                 let behind_doc = container.attribute("behindDoc") == Some("1");
+                let z_index = container
+                    .attribute("relativeHeight")
+                    .and_then(|v| v.parse::<u32>().ok())
+                    .unwrap_or(0);
                 return Some(RunDrawingResult::TextBox(Textbox {
                     paragraphs: wsp.paragraphs,
                     width_pt: display_w,
@@ -486,6 +498,7 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                     is_wordart: wsp.is_wordart,
                     text_warp: wsp.text_warp,
                     auto_fit: wsp.auto_fit,
+                    z_index,
                 }));
             }
             if let Some(conn) = parse_connector_from_wsp(container, ctx.theme) {
@@ -568,6 +581,7 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                 is_wordart: wsp.is_wordart,
                 text_warp: wsp.text_warp,
                 auto_fit: wsp.auto_fit,
+                z_index: 0,
             }));
         }
 

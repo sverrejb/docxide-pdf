@@ -30,7 +30,7 @@ fn collect_dml_points(parent: roxmltree::Node) -> Vec<(String, String)> {
         .collect()
 }
 
-fn find_sp_pr<'a>(wsp: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
+pub(super) fn find_sp_pr<'a>(wsp: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
     wsp.children().find(|n| {
         n.tag_name().name() == "spPr"
             && (n.tag_name().namespace() == Some(WPS_NS)
@@ -343,32 +343,49 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
     let wsp = anchor
         .descendants()
         .find(|n| n.tag_name().name() == "wsp" && n.tag_name().namespace() == Some(WPS_NS))?;
+    parse_wsp_shape(wsp, ctx)
+}
 
+/// Parse a single `wps:wsp` node into a shape result. Used both for the
+/// single-shape drawing path and for children of canvases/groups.
+pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
+    wsp: roxmltree::Node,
+    ctx: &mut ParseContext<'_, R>,
+) -> Option<WspResult> {
     let sp_pr = find_sp_pr(wsp);
-    let fill: Option<ShapeFill> = sp_pr
-        .and_then(|sp| {
-            parse_solid_fill(sp, ctx.theme)
-                .map(ShapeFill::Solid)
-                .or_else(|| parse_gradient_fill(sp, ctx.theme))
-        })
-        .or_else(|| parse_style_fill(wsp, ctx.theme));
     let has_no_fill = sp_pr.is_some_and(|sp| find_dml(sp, "noFill").is_some());
+    // Explicit a:noFill overrides any style-ref (fillRef) fill
+    let fill: Option<ShapeFill> = if has_no_fill {
+        None
+    } else {
+        sp_pr
+            .and_then(|sp| {
+                parse_solid_fill(sp, ctx.theme)
+                    .map(ShapeFill::Solid)
+                    .or_else(|| parse_gradient_fill(sp, ctx.theme))
+            })
+            .or_else(|| parse_style_fill(wsp, ctx.theme))
+    };
 
-    let (stroke_color, stroke_width) = sp_pr
-        .and_then(|sp| find_dml(sp, "ln"))
-        .and_then(|ln| {
-            if find_dml(ln, "noFill").is_some() {
-                return None;
-            }
-            let color = parse_solid_fill(ln, ctx.theme)?;
-            let width = ln
-                .attribute("w")
-                .and_then(|v| v.parse::<f32>().ok())
-                .map(super::emu_to_pts)
-                .unwrap_or(0.75);
-            Some((color, width))
-        })
-        .map_or((None, 0.0), |(c, w)| (Some(c), w));
+    let ln_node = sp_pr.and_then(|sp| find_dml(sp, "ln"));
+    let ln_no_fill = ln_node.is_some_and(|ln| find_dml(ln, "noFill").is_some());
+    let explicit_ln_width = ln_node
+        .and_then(|ln| ln.attribute("w"))
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(super::emu_to_pts);
+    let (stroke_color, stroke_width) = if ln_no_fill {
+        (None, 0.0)
+    } else if let Some(color) = ln_node.and_then(|ln| parse_solid_fill(ln, ctx.theme)) {
+        (Some(color), explicit_ln_width.unwrap_or(0.75))
+    } else if let Some(color) = parse_style_stroke(wsp, ctx.theme) {
+        // No explicit line color: fall back to the shape style's lnRef stroke
+        (
+            Some(color),
+            explicit_ln_width.unwrap_or_else(|| parse_style_stroke_width(wsp)),
+        )
+    } else {
+        (None, 0.0)
+    };
 
     let shape_type = sp_pr.map(parse_shape_geometry).unwrap_or_default();
 
@@ -442,6 +459,31 @@ pub(super) fn parse_connector_from_wsp(
         .descendants()
         .find(|n| n.tag_name().name() == "wsp" && n.tag_name().namespace() == Some(WPS_NS))?;
 
+    let (h_position, _, v_pos, _) = parse_anchor_position(anchor);
+    let (display_w, display_h) = extent_dimensions(anchor);
+    let v_offset = match v_pos {
+        VerticalPosition::Offset(o) => o,
+        _ => 0.0,
+    };
+    let x = match h_position {
+        HorizontalPosition::Offset(v) => v,
+        _ => 0.0,
+    };
+
+    let mut conn = parse_connector_shape_node(wsp, theme)?;
+    conn.x = x;
+    conn.y = v_offset;
+    conn.width = display_w;
+    conn.height = display_h;
+    Some(conn)
+}
+
+/// Parse a `wps:wsp` connector node (line/arc preset) into a ConnectorShape
+/// with zeroed position/size — the caller supplies the placement.
+pub(super) fn parse_connector_shape_node(
+    wsp: roxmltree::Node,
+    theme: &ThemeFonts,
+) -> Option<ConnectorShape> {
     let sp_pr = find_sp_pr(wsp)?;
     let prst_geom = find_dml(sp_pr, "prstGeom")?;
     let prst = prst_geom.attribute("prst")?;
@@ -517,23 +559,11 @@ pub(super) fn parse_connector_from_wsp(
         })
         .unwrap_or_default();
 
-    let (h_position, _, v_pos, _) = parse_anchor_position(anchor);
-    let (display_w, display_h) = extent_dimensions(anchor);
-    let v_offset = match v_pos {
-        VerticalPosition::Offset(o) => o,
-        _ => 0.0,
-    };
-
-    let x = match h_position {
-        HorizontalPosition::Offset(v) => v,
-        _ => 0.0,
-    };
-
     Some(ConnectorShape {
-        x,
-        y: v_offset,
-        width: display_w,
-        height: display_h,
+        x: 0.0,
+        y: 0.0,
+        width: 0.0,
+        height: 0.0,
         stroke_color,
         stroke_width,
         connector_type,
@@ -657,6 +687,7 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         is_wordart: false,
         text_warp: None,
         auto_fit: AutoFit::None,
+        z_index: 0,
     })
 }
 
@@ -725,6 +756,10 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                                 is_wordart: wsp.is_wordart,
                                 text_warp: wsp.text_warp,
                                 auto_fit: wsp.auto_fit,
+                                z_index: container
+                                    .attribute("relativeHeight")
+                                    .and_then(|v| v.parse::<u32>().ok())
+                                    .unwrap_or(0),
                             });
                         }
                     }

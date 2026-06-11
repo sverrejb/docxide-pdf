@@ -55,6 +55,14 @@ use smartart::draw_shape_path;
 use table::render_table;
 use textbox_render::render_single_textbox;
 
+/// Word stacks overlapping anchored shapes by wp:anchor relativeHeight, not
+/// document order. Stable sort keeps document order for equal values.
+fn sorted_by_z<'a>(iter: impl Iterator<Item = &'a crate::model::Textbox>) -> Vec<&'a crate::model::Textbox> {
+    let mut v: Vec<&crate::model::Textbox> = iter.collect();
+    v.sort_by_key(|t| t.z_index);
+    v
+}
+
 pub(super) struct RenderContext<'a> {
     pub(super) fonts: &'a HashMap<String, FontEntry>,
     pub(super) doc_line_spacing: LineSpacing,
@@ -468,9 +476,14 @@ pub(super) struct PageBuilder {
     /// Floating table exclusion zone on this page; paragraph layout
     /// uses horizontal bounds to decide wrap-beside vs push-below.
     pub(super) float_zone: Option<FloatZone>,
+    /// Anchored shapes for this page, painted above the text layer sorted by
+    /// relativeHeight: Word stacks floating shapes in z order regardless of
+    /// which paragraph anchors them.
+    pub(super) deferred_shapes: Vec<(u32, Content)>,
 
     // Accumulated pages
     all_contents: Vec<Content>,
+    pub(super) all_deferred_shapes: Vec<Vec<(u32, Content)>>,
     all_links: Vec<Vec<LinkAnnotation>>,
     pub(super) all_comment_anchors: Vec<Vec<(u32, f32, f32, f32)>>,
     all_footnote_ids: Vec<Vec<u32>>,
@@ -503,7 +516,9 @@ impl PageBuilder {
             is_first_page_of_section: true,
             page_hf_section: 0,
             float_zone: None,
+            deferred_shapes: Vec::new(),
             all_contents: Vec::new(),
+            all_deferred_shapes: Vec::new(),
             all_links: Vec::new(),
             all_comment_anchors: Vec::new(),
             all_footnote_ids: Vec::new(),
@@ -518,6 +533,10 @@ impl PageBuilder {
     pub(super) fn flush_page(&mut self, sect_idx: usize) {
         self.all_contents
             .push(std::mem::replace(&mut self.content, Content::new()));
+        // Stable sort: equal relativeHeight keeps document order
+        self.deferred_shapes.sort_by_key(|(z, _)| *z);
+        self.all_deferred_shapes
+            .push(std::mem::take(&mut self.deferred_shapes));
         self.all_links.push(std::mem::take(&mut self.links));
         self.all_comment_anchors
             .push(std::mem::take(&mut self.comment_anchors));
@@ -543,6 +562,7 @@ impl PageBuilder {
 
     fn push_blank_page(&mut self, sect_idx: usize) {
         self.all_contents.push(Content::new());
+        self.all_deferred_shapes.push(Vec::new());
         self.all_links.push(Vec::new());
         self.all_comment_anchors.push(Vec::new());
         self.all_footnote_ids.push(Vec::new());
@@ -1908,7 +1928,7 @@ fn render_paragraph_block(
         state.pb.slot_top,
         &mut state.pb.content,
     );
-    for tb in para.textboxes.iter().filter(|t| t.behind_doc) {
+    for tb in sorted_by_z(para.textboxes.iter().filter(|t| t.behind_doc)) {
         render_single_textbox(
             tb,
             sp,
@@ -2015,6 +2035,10 @@ fn render_paragraph_block(
     }
 
     for tb in para.textboxes.iter().filter(|t| !t.behind_doc) {
+        // Render into a per-shape buffer; flush_page paints these above the
+        // page's text layer sorted by relativeHeight (Word's z-order for
+        // floating shapes spans paragraphs).
+        let mut shape_content = Content::new();
         render_single_textbox(
             tb,
             sp,
@@ -2022,11 +2046,12 @@ fn render_paragraph_block(
             col_w,
             text_width,
             state.pb.slot_top,
-            &mut state.pb.content,
+            &mut shape_content,
             &mut state.pb.gradient_specs,
             &ctx,
             &mut state.pb.links,
         );
+        state.pb.deferred_shapes.push((tb.z_index, shape_content));
     }
 
     for conn in &para.connectors {
@@ -2953,6 +2978,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         catalog_id,
         pages_id,
         state.pb.all_contents,
+        state.pb.all_deferred_shapes,
         &mut all_hf_contents,
         &state.pb.all_links,
         &state.pb.all_comment_anchors,

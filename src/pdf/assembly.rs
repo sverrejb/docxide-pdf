@@ -39,6 +39,7 @@ pub(super) fn assemble_pdf_pages(
     catalog_id: Ref,
     pages_id: Ref,
     all_contents: Vec<Content>,
+    all_deferred_shapes: Vec<Vec<(u32, Content)>>,
     all_hf_contents: &mut Vec<Option<Content>>,
     all_page_links: &[Vec<LinkAnnotation>],
     all_page_comment_anchors: &[Vec<(u32, f32, f32, f32)>],
@@ -203,8 +204,15 @@ pub(super) fn assemble_pdf_pages(
         })
         .collect();
 
+    let mut all_deferred_shapes = all_deferred_shapes.into_iter();
     for (i, c) in all_contents.into_iter().enumerate() {
-        let body_raw = c.finish();
+        let mut body_raw = c.finish().to_vec();
+        // Anchored shapes paint above the page's text layer, pre-sorted by
+        // relativeHeight at flush time
+        for (_, shape) in all_deferred_shapes.next().into_iter().flatten() {
+            body_raw.push(b'\n');
+            body_raw.extend_from_slice(shape.finish().as_slice());
+        }
 
         // When the document has comments, Word's PDF export renders body
         // content scaled (so glyphs become 9.16pt from 12pt) and shifted down

@@ -3,6 +3,7 @@ mod charts;
 mod color;
 mod comments;
 mod embedded_fonts;
+mod group;
 mod headers_footers;
 mod images;
 pub(crate) mod numbering;

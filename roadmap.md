@@ -174,6 +174,36 @@ Our `auto_fit_columns` uses `gridCol` widths from `tblGrid`, ignoring the specif
 
 Only PAGE, NUMPAGES, STYLEREF, and PAGEREF field codes are supported. Others (DATE, TIME, AUTHOR, FILENAME, IF, MERGEFIELD, SEQ, etc.) are silently dropped — only the cached display text is used. For static PDF export this is usually acceptable since Word pre-computes the display text, but dynamic fields (DATE, PAGE in headers) may show stale values.
 
+## Anchored Shapes: Canvas/Group + Z-Order (PARTIALLY DONE — 2026-06)
+
+**Done (2026-06):**
+- **Drawing canvas (`wpc:wpc`) and shape groups (`wpg:wgp`/`wpg:grpSp`)** — flattened at parse
+  time in `src/docx/group.rs`: composes `off/ext/chOff/chExt` child-space transforms recursively,
+  emits leaf `wps:wsp` (textbox or connector), and `pic:pic` as independently positioned shapes.
+  Fixes isla_language_lesson_plan venn diagram + grouped boxes (+2.6pp Jaccard). Fixtures with
+  groups: isla, arizona_physical_education_standards (header), ukrainian_municipal_heating_resolution.
+- **`a:noFill` overrides style-ref fill** — explicit noFill no longer falls through to the
+  `fillRef` theme fill (was rendering noFill ellipses as solid accent-color shapes).
+- **Style `lnRef` strokes on textbox shapes** — shapes without explicit `a:ln` color now get the
+  shape-style stroke (previously only connectors did).
+- **Z-order via `relativeHeight`** — `Textbox.z_index` parsed from `wp:anchor`; non-behindDoc
+  textboxes render into per-shape buffers deferred to page flush, painted above the page text
+  layer sorted by z (Word stacks floating shapes across paragraphs). Fixes lenten_prayer_unity
+  white link on purple band.
+
+**Remaining:**
+- **Floating images + connectors don't participate in z-order** — they still paint inline at
+  their anchor paragraph; e.g. lenten's white bird icon is covered by the purple band (icon
+  z=251658243 > band 251658241). Same deferral treatment as textboxes would fix it.
+- **behindDoc shapes from later paragraphs** can still paint over earlier paragraphs' text
+  (needs pre-pass/paginator).
+- **Group flips/rotation** — group-level flipH/flipV and rot are ignored (rare); leaf connector
+  flips work.
+- **Canvas/group inside paragraph-level mc:AlternateContent** — only the run-level path
+  flattens groups; `collect_textboxes_from_paragraph` still grabs the first wsp.
+- **Text in preset shapes placement** (case35 annotations) — text inside rightArrow etc. is
+  positioned with plain rect insets, not the shape's text rectangle.
+
 ## Floating Image Positioning (TODO — MEDIUM IMPACT)
 
 Floating images (`wp:anchor`) with large `posOffset` values can render off-page. Word appears to clamp or reflow these positions, but we render at the raw coordinates. Observed in `learning_cultures_dissertation` (rId14: column-relative offset 4702029 EMU = 370pt, placing a 334pt-wide image past the 612pt page edge). A naive right-edge clamp was tested but regressed `stem_partnerships_guide` — a more nuanced approach is needed (possibly only clamping when the image would be entirely off-page, or respecting wrap constraints).

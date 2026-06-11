@@ -622,6 +622,25 @@ macro_rules! handle_drawing_result {
             Some(RunDrawingResult::Chart(ic)) => $inline_chart = Some(ic),
             Some(RunDrawingResult::SmartArt(diagram)) => $smartart.push(diagram),
             Some(RunDrawingResult::Connector(c)) => $connectors.push(c),
+            Some(RunDrawingResult::Group(items)) => {
+                // Flattened groups contain only leaf shapes, never nested Groups
+                for item in items {
+                    match item {
+                        RunDrawingResult::Inline(img) => {
+                            $runs.push(Run {
+                                inline_image: Some(img),
+                                ..$fmt.minimal_run()
+                            });
+                        }
+                        RunDrawingResult::Floating(fi) => $floating_images.push(fi),
+                        RunDrawingResult::TextBox(tb) => $textboxes.push(tb),
+                        RunDrawingResult::Chart(ic) => $inline_chart = Some(ic),
+                        RunDrawingResult::SmartArt(diagram) => $smartart.push(diagram),
+                        RunDrawingResult::Connector(c) => $connectors.push(c),
+                        RunDrawingResult::Group(_) => {}
+                    }
+                }
+            }
             None => {}
         }
     };
