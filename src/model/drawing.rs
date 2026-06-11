@@ -290,6 +290,9 @@ pub struct ConnectorShape {
     pub connector_type: ConnectorType,
     pub head_end: ArrowEnd,
     pub tail_end: ArrowEnd,
+    /// wp:anchor relativeHeight — stacking order among overlapping anchored
+    /// shapes within a page (higher draws on top). 0 when unspecified.
+    pub z_index: u32,
 }
 
 #[derive(Clone, Copy, Default)]

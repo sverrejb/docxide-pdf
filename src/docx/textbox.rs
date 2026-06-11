@@ -353,6 +353,17 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
     ctx: &mut ParseContext<'_, R>,
 ) -> Option<WspResult> {
     let sp_pr = find_sp_pr(wsp);
+
+    // Line/arc presets without text are connectors — decline so the caller
+    // falls through to the connector parser, which renders flipH/flipV and
+    // arc sweep angles that the preset-geometry textbox path doesn't.
+    let prst = sp_pr
+        .and_then(|sp| find_dml(sp, "prstGeom"))
+        .and_then(|g| g.attribute("prst"));
+    if matches!(prst, Some("line" | "straightConnector1" | "arc")) && find_wps(wsp, "txbx").is_none()
+    {
+        return None;
+    }
     let has_no_fill = sp_pr.is_some_and(|sp| find_dml(sp, "noFill").is_some());
     // Explicit a:noFill overrides any style-ref (fillRef) fill
     let fill: Option<ShapeFill> = if has_no_fill {
@@ -475,6 +486,10 @@ pub(super) fn parse_connector_from_wsp(
     conn.y = v_offset;
     conn.width = display_w;
     conn.height = display_h;
+    conn.z_index = anchor
+        .attribute("relativeHeight")
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(0);
     Some(conn)
 }
 
@@ -569,6 +584,7 @@ pub(super) fn parse_connector_shape_node(
         connector_type,
         head_end,
         tail_end,
+        z_index: 0,
     })
 }
 

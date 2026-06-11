@@ -260,6 +260,7 @@ fn emit_wsp<R: Read + Seek>(
             conn.y = base.y + y;
             conn.width = w;
             conn.height = h;
+            conn.z_index = base.z_index;
             out.push(RunDrawingResult::Connector(conn));
         }
         return;

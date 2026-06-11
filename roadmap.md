@@ -186,15 +186,21 @@ Only PAGE, NUMPAGES, STYLEREF, and PAGEREF field codes are supported. Others (DA
   `fillRef` theme fill (was rendering noFill ellipses as solid accent-color shapes).
 - **Style `lnRef` strokes on textbox shapes** — shapes without explicit `a:ln` color now get the
   shape-style stroke (previously only connectors did).
-- **Z-order via `relativeHeight`** — `Textbox.z_index` parsed from `wp:anchor`; non-behindDoc
-  textboxes render into per-shape buffers deferred to page flush, painted above the page text
-  layer sorted by z (Word stacks floating shapes across paragraphs). Fixes lenten_prayer_unity
-  white link on purple band.
+- **Z-order via `relativeHeight`** — `Textbox.z_index`/`ConnectorShape.z_index` parsed from
+  `wp:anchor`; non-behindDoc textboxes and connectors render into per-shape buffers deferred to
+  page flush, painted above the page text layer sorted by z (Word stacks floating shapes across
+  paragraphs). Fixes lenten_prayer_unity white link on purple band; connectors must interleave
+  with shapes by z or letter strokes drawn over gradient circles disappear
+  (vaccines_history_chapter T/Y/B).
+- **Connector presets stay connectors** — `parse_wsp_shape` declines line/straightConnector1/arc
+  presets without text so they reach the connector parser (preset-geometry path loses
+  flipH/flipV and arc sweeps; regressed vaccines_history letters when lnRef strokes made the
+  textbox parse succeed).
 
 **Remaining:**
-- **Floating images + connectors don't participate in z-order** — they still paint inline at
-  their anchor paragraph; e.g. lenten's white bird icon is covered by the purple band (icon
-  z=251658243 > band 251658241). Same deferral treatment as textboxes would fix it.
+- **Floating images don't participate in z-order** — they still paint inline at their anchor
+  paragraph; e.g. lenten's white bird icon is covered by the purple band (icon z=251658243 >
+  band 251658241). Same deferral treatment as textboxes/connectors would fix it.
 - **behindDoc shapes from later paragraphs** can still paint over earlier paragraphs' text
   (needs pre-pass/paginator).
 - **Group flips/rotation** — group-level flipH/flipV and rot are ignored (rare); leaf connector

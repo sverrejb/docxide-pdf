@@ -2055,7 +2055,12 @@ fn render_paragraph_block(
     }
 
     for conn in &para.connectors {
-        render_connector(conn, &mut state.pb.content, col_x, state.pb.slot_top);
+        // Same page-level z-stack as textboxes — anchored connectors must
+        // interleave with shapes by relativeHeight (e.g. letter strokes
+        // drawn over gradient circles)
+        let mut shape_content = Content::new();
+        render_connector(conn, &mut shape_content, col_x, state.pb.slot_top);
+        state.pb.deferred_shapes.push((conn.z_index, shape_content));
     }
 
     if let Some(ref ic) = para.inline_chart {
