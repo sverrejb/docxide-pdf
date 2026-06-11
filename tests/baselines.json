@@ -473,9 +473,9 @@
     "text_boundary": 0.8033
   },
   "new/construction_bat..": {
-    "jaccard": 0.0552,
-    "ssim": 0.1395,
-    "text_boundary": 0.0217
+    "jaccard": 0.6607,
+    "ssim": 0.8625,
+    "text_boundary": 0.9355
   },
   "new/covid_insomnia_m..": {
     "jaccard": 0.2113,
@@ -1031,9 +1031,9 @@
     "convert_ms": 22.0
   },
   "scraped/transition_to_wo..": {
-    "jaccard": 0.3213,
-    "ssim": 0.435,
-    "text_boundary": 0.3031,
+    "jaccard": 0.4014,
+    "ssim": 0.512,
+    "text_boundary": 0.397,
     "convert_ms": 493.0
   },
   "scraped/turkish_ancient_..": {

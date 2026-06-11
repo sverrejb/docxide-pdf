@@ -123,6 +123,12 @@ pub struct Table {
     pub alignment: TableAlignment,
     pub fixed_layout: bool,
     pub auto_width: bool,
+    /// `w:tblW w:type="pct"`: table width as a fraction of the available
+    /// content width (5000ths in the XML; 1.0 = full width).
+    pub width_pct: Option<f32>,
+    /// True when the required `w:tblGrid` was missing and col_widths were
+    /// synthesized from row cell widths.
+    pub grid_inferred: bool,
 }
 
 pub struct TableRow {

@@ -37,6 +37,75 @@ pub(super) struct NumberingInfo {
     pub(super) abstract_nums: HashMap<String, HashMap<u8, LevelDef>>,
     pub(super) num_to_abstract: HashMap<String, String>,
     pub(super) start_overrides: HashMap<String, HashMap<u8, u32>>,
+    /// Full per-level redefinitions from w:num/w:lvlOverride/w:lvl (§17.9.5),
+    /// keyed by numId. These replace the abstract level entirely.
+    pub(super) level_overrides: HashMap<String, HashMap<u8, LevelDef>>,
+}
+
+fn parse_level_def(lvl: roxmltree::Node) -> Option<(u8, LevelDef)> {
+    let ilvl = lvl
+        .attribute((WML_NS, "ilvl"))
+        .and_then(|v| v.parse::<u8>().ok())?;
+    let lvl_text = wml_attr(lvl, "lvlText").unwrap_or("").to_string();
+    // §17.9.17: an omitted numFmt means decimal. Keep the bullet fallback
+    // only for symbol-style lvlText without %N placeholders, where decimal
+    // would drop the bullet glyph's symbol font.
+    let num_fmt = wml_attr(lvl, "numFmt")
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| {
+            let has_placeholder = lvl_text.as_bytes().windows(2).any(|w| {
+                w[0] == b'%' && w[1].is_ascii_digit()
+            });
+            if has_placeholder { "decimal" } else { "bullet" }.to_string()
+        });
+    let start = wml_attr(lvl, "start")
+        .and_then(|v| v.parse::<u32>().ok())
+        .unwrap_or(1);
+    let ppr = wml(lvl, "pPr");
+    let ind = ppr.and_then(|p| wml(p, "ind"));
+    let indent_left = ind
+        .and_then(|n| twips_attr(n, "start").or_else(|| twips_attr(n, "left")))
+        .unwrap_or(0.0);
+    let indent_hanging = ind.and_then(|n| twips_attr(n, "hanging")).unwrap_or(0.0);
+    let tab_stop = ppr.and_then(|p| wml(p, "tabs")).and_then(|tabs| {
+        tabs.children()
+            .filter(|n| n.has_tag_name((WML_NS, "tab")))
+            .find_map(|t| twips_attr(t, "pos"))
+    });
+    let rpr = wml(lvl, "rPr");
+    let rpr_font = rpr
+        .and_then(|r| wml(r, "rFonts"))
+        .and_then(|rf| {
+            rf.attribute((WML_NS, "ascii"))
+                .or_else(|| rf.attribute((WML_NS, "hAnsi")))
+        })
+        .map(|s| s.to_string());
+    let label_font_size = rpr
+        .and_then(|r| wml_attr(r, "sz"))
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(|hp| hp / 2.0);
+    let label_bold = rpr.and_then(|r| wml_bool(r, "b")).unwrap_or(false);
+    let label_color = rpr
+        .and_then(|r| wml_attr(r, "color"))
+        .and_then(parse_hex_color);
+    let suff = wml_attr(lvl, "suff").unwrap_or("tab").to_string();
+    Some((
+        ilvl,
+        LevelDef {
+            num_fmt,
+            lvl_text,
+            indent_left,
+            indent_hanging,
+            tab_stop,
+            start,
+            bullet_font: rpr_font.clone(),
+            label_font_size,
+            label_bold,
+            label_color,
+            suff,
+            label_font: rpr_font,
+        },
+    ))
 }
 
 pub(super) fn parse_numbering<R: Read + Seek>(
@@ -54,6 +123,7 @@ pub(super) fn parse_numbering<R: Read + Seek>(
     let mut num_style_link = HashMap::new();
     let mut style_link_target = HashMap::new();
     let mut start_overrides = HashMap::new();
+    let mut level_overrides = HashMap::new();
 
     let root = xml.root_element();
 
@@ -66,67 +136,11 @@ pub(super) fn parse_numbering<R: Read + Seek>(
                 let Some(abs_id) = node.attribute((WML_NS, "abstractNumId")) else {
                     continue;
                 };
-                let mut levels = HashMap::new();
-                for lvl in node.children().filter(|n| n.has_tag_name((WML_NS, "lvl"))) {
-                    let Some(ilvl) = lvl
-                        .attribute((WML_NS, "ilvl"))
-                        .and_then(|v| v.parse::<u8>().ok())
-                    else {
-                        continue;
-                    };
-                    let num_fmt = wml_attr(lvl, "numFmt").unwrap_or("bullet").to_string();
-                    let lvl_text = wml_attr(lvl, "lvlText").unwrap_or("").to_string();
-                    let start = wml_attr(lvl, "start")
-                        .and_then(|v| v.parse::<u32>().ok())
-                        .unwrap_or(1);
-                    let ppr = wml(lvl, "pPr");
-                    let ind = ppr.and_then(|p| wml(p, "ind"));
-                    let indent_left = ind
-                        .and_then(|n| twips_attr(n, "start").or_else(|| twips_attr(n, "left")))
-                        .unwrap_or(0.0);
-                    let indent_hanging = ind.and_then(|n| twips_attr(n, "hanging")).unwrap_or(0.0);
-                    let tab_stop = ppr
-                        .and_then(|p| wml(p, "tabs"))
-                        .and_then(|tabs| {
-                            tabs.children()
-                                .filter(|n| n.has_tag_name((WML_NS, "tab")))
-                                .find_map(|t| twips_attr(t, "pos"))
-                        });
-                    let rpr = wml(lvl, "rPr");
-                    let rpr_font = rpr
-                        .and_then(|r| wml(r, "rFonts"))
-                        .and_then(|rf| {
-                            rf.attribute((WML_NS, "ascii"))
-                                .or_else(|| rf.attribute((WML_NS, "hAnsi")))
-                        })
-                        .map(|s| s.to_string());
-                    let label_font_size = rpr
-                        .and_then(|r| wml_attr(r, "sz"))
-                        .and_then(|v| v.parse::<f32>().ok())
-                        .map(|hp| hp / 2.0);
-                    let label_bold = rpr.and_then(|r| wml_bool(r, "b")).unwrap_or(false);
-                    let label_color = rpr
-                        .and_then(|r| wml_attr(r, "color"))
-                        .and_then(parse_hex_color);
-                    let suff = wml_attr(lvl, "suff").unwrap_or("tab").to_string();
-                    levels.insert(
-                        ilvl,
-                        LevelDef {
-                            num_fmt,
-                            lvl_text,
-                            indent_left,
-                            indent_hanging,
-                            tab_stop,
-                            start,
-                            bullet_font: rpr_font.clone(),
-                            label_font_size,
-                            label_bold,
-                            label_color,
-                            suff,
-                            label_font: rpr_font,
-                        },
-                    );
-                }
+                let levels: HashMap<u8, LevelDef> = node
+                    .children()
+                    .filter(|n| n.has_tag_name((WML_NS, "lvl")))
+                    .filter_map(parse_level_def)
+                    .collect();
                 abstract_nums.insert(abs_id.to_string(), levels);
                 if let Some(link) = wml_attr(node, "numStyleLink") {
                     num_style_link.insert(abs_id.to_string(), link.to_string());
@@ -143,20 +157,34 @@ pub(super) fn parse_numbering<R: Read + Seek>(
                     continue;
                 };
                 num_to_abstract.insert(num_id.to_string(), abs_id.to_string());
-                let overrides: HashMap<u8, u32> = node
+                let mut starts: HashMap<u8, u32> = HashMap::new();
+                let mut lvl_defs: HashMap<u8, LevelDef> = HashMap::new();
+                for ovr in node
                     .children()
                     .filter(|n| n.has_tag_name((WML_NS, "lvlOverride")))
-                    .filter_map(|ovr| {
-                        let ilvl = ovr
-                            .attribute((WML_NS, "ilvl"))
-                            .and_then(|v| v.parse::<u8>().ok())?;
-                        let val =
-                            wml_attr(ovr, "startOverride").and_then(|v| v.parse::<u32>().ok())?;
-                        Some((ilvl, val))
-                    })
-                    .collect();
-                if !overrides.is_empty() {
-                    start_overrides.insert(num_id.to_string(), overrides);
+                {
+                    let ovr_ilvl = ovr
+                        .attribute((WML_NS, "ilvl"))
+                        .and_then(|v| v.parse::<u8>().ok());
+                    if let (Some(ilvl), Some(val)) = (
+                        ovr_ilvl,
+                        wml_attr(ovr, "startOverride").and_then(|v| v.parse::<u32>().ok()),
+                    ) {
+                        starts.insert(ilvl, val);
+                    }
+                    // Full level redefinition (§17.9.5) — replaces the
+                    // abstract level entirely.
+                    if let Some((ilvl, def)) =
+                        wml(ovr, "lvl").and_then(parse_level_def)
+                    {
+                        lvl_defs.insert(ilvl, def);
+                    }
+                }
+                if !starts.is_empty() {
+                    start_overrides.insert(num_id.to_string(), starts);
+                }
+                if !lvl_defs.is_empty() {
+                    level_overrides.insert(num_id.to_string(), lvl_defs);
                 }
             }
             _ => {}
@@ -184,6 +212,7 @@ pub(super) fn parse_numbering<R: Read + Seek>(
         abstract_nums,
         num_to_abstract,
         start_overrides,
+        level_overrides,
     }
 }
 
@@ -300,7 +329,14 @@ pub(super) fn parse_list_info(
     let Some(levels) = numbering.abstract_nums.get(abs_id.as_str()) else {
         return ListLabelInfo::default();
     };
-    let Some(def) = levels.get(&ilvl) else {
+    // lvlOverride level redefinitions on the numId replace abstract levels.
+    let num_lvl_overrides = numbering.level_overrides.get(num_id_str);
+    let lookup_level = |lvl: u8| -> Option<&LevelDef> {
+        num_lvl_overrides
+            .and_then(|m| m.get(&lvl))
+            .or_else(|| levels.get(&lvl))
+    };
+    let Some(def) = lookup_level(ilvl) else {
         return ListLabelInfo::default();
     };
 
@@ -361,18 +397,16 @@ pub(super) fn parse_list_info(
         for lvl_idx in 0..9u8 {
             let placeholder = format!("%{}", lvl_idx + 1);
             if label.contains(&placeholder) {
+                let ref_def = lookup_level(lvl_idx);
                 let lvl_counter = if lvl_idx == ilvl {
                     current_counter
                 } else {
                     counters
                         .get(&(abs_key, lvl_idx))
                         .copied()
-                        .unwrap_or(levels.get(&lvl_idx).map(|d| d.start).unwrap_or(1))
+                        .unwrap_or(ref_def.map(|d| d.start).unwrap_or(1))
                 };
-                let lvl_fmt = levels
-                    .get(&lvl_idx)
-                    .map(|d| d.num_fmt.as_str())
-                    .unwrap_or("decimal");
+                let lvl_fmt = ref_def.map(|d| d.num_fmt.as_str()).unwrap_or("decimal");
                 label = label.replace(&placeholder, &format_number(lvl_counter, lvl_fmt));
             }
         }
@@ -483,5 +517,78 @@ mod tests {
     fn test_to_roman_large() {
         assert_eq!(to_roman(2024), "mmxxiv");
         assert_eq!(to_roman(3999), "mmmcmxcix");
+    }
+
+    // --- Level parsing ---
+
+    fn parse_lvl(xml: &str) -> (u8, LevelDef) {
+        let doc = roxmltree::Document::parse(xml).unwrap();
+        parse_level_def(doc.root_element()).unwrap()
+    }
+
+    #[test]
+    fn test_missing_numfmt_with_placeholder_defaults_to_decimal() {
+        let (ilvl, def) = parse_lvl(
+            r#"<w:lvl xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:ilvl="0"><w:lvlText w:val="%1."/></w:lvl>"#,
+        );
+        assert_eq!(ilvl, 0);
+        assert_eq!(def.num_fmt, "decimal");
+    }
+
+    #[test]
+    fn test_missing_numfmt_without_placeholder_stays_bullet() {
+        let (_, def) = parse_lvl(
+            r#"<w:lvl xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:ilvl="0"><w:lvlText w:val="&#xF0B7;"/></w:lvl>"#,
+        );
+        assert_eq!(def.num_fmt, "bullet");
+    }
+
+    #[test]
+    fn test_lvl_override_replaces_abstract_level() {
+        let mut numbering = NumberingInfo::default();
+        let abstract_def = LevelDef {
+            num_fmt: "decimal".into(),
+            lvl_text: "%1.".into(),
+            indent_left: 36.0,
+            indent_hanging: 18.0,
+            tab_stop: None,
+            start: 1,
+            bullet_font: None,
+            label_font_size: None,
+            label_bold: false,
+            label_color: None,
+            suff: "tab".into(),
+            label_font: None,
+        };
+        let override_def = LevelDef {
+            num_fmt: "upperLetter".into(),
+            lvl_text: "%1)".into(),
+            indent_left: 10.0,
+            indent_hanging: 5.0,
+            ..abstract_def.clone()
+        };
+        numbering
+            .abstract_nums
+            .insert("0".into(), HashMap::from([(0u8, abstract_def)]));
+        numbering.num_to_abstract.insert("5".into(), "0".into());
+        numbering
+            .level_overrides
+            .insert("5".into(), HashMap::from([(0u8, override_def)]));
+
+        let mut counters = HashMap::new();
+        let mut last_seen = HashMap::new();
+        let mut applied = HashSet::new();
+        let info = parse_list_info(
+            None,
+            Some("5"),
+            Some(0),
+            &numbering,
+            &mut counters,
+            &mut last_seen,
+            &mut applied,
+        );
+        assert_eq!(info.label, "A)");
+        assert_eq!(info.indent_left, 10.0);
+        assert_eq!(info.indent_hanging, 5.0);
     }
 }

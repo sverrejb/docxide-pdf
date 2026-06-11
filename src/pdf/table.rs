@@ -17,7 +17,7 @@ use super::layout::{
 };
 use super::table_layout::{
     CellContentItem, CellLayout, CellParagraphLayout, HfSubstitution,
-    RowLayout, auto_fit_columns, cell_span_width, cell_x_offset, compute_merge_spans,
+    RowLayout, apply_pct_width, auto_fit_columns, cell_span_width, cell_x_offset, compute_merge_spans,
     compute_row_layouts, find_cell_split, para_block_height,
 };
 
@@ -472,7 +472,8 @@ fn render_nested_table(
     ctx: &RenderContext,
     gradient_specs: &mut Vec<super::GradientSpec>,
 ) {
-    let col_widths = auto_fit_columns(table, ctx.fonts, Some(available_w));
+    let mut col_widths = auto_fit_columns(table, ctx.fonts, Some(available_w));
+    apply_pct_width(table, &mut col_widths, available_w);
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     let cm = &table.cell_margins;
     let table_total_w: f32 = col_widths.iter().sum();
@@ -1111,11 +1112,16 @@ pub(super) fn render_table(
     column_bounds: Option<(f32, f32)>,
 ) {
     let available_w = column_bounds.map(|(_, w)| w);
-    let col_widths = if table.fixed_layout {
+    let mut col_widths = if table.fixed_layout {
         table.col_widths.clone()
     } else {
         auto_fit_columns(table, ctx.fonts, available_w)
     };
+    apply_pct_width(
+        table,
+        &mut col_widths,
+        available_w.unwrap_or(sp.page_width - sp.margin_left - sp.margin_right),
+    );
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     let merge_spans = compute_merge_spans(table, &row_layouts);
     let cm = &table.cell_margins;
@@ -1414,8 +1420,9 @@ pub(super) fn render_table(
     }
 }
 
-pub(super) fn compute_hf_table_height(table: &Table, ctx: &RenderContext) -> f32 {
-    let col_widths = auto_fit_columns(table, ctx.fonts, None);
+pub(super) fn compute_hf_table_height(table: &Table, ctx: &RenderContext, content_w: f32) -> f32 {
+    let mut col_widths = auto_fit_columns(table, ctx.fonts, None);
+    apply_pct_width(table, &mut col_widths, content_w);
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     row_layouts.iter().map(|r| r.height).sum()
 }
@@ -1432,7 +1439,12 @@ pub(super) fn render_header_footer_table(
     page_num_format: Option<&str>,
     gradient_specs: &mut Vec<super::GradientSpec>,
 ) {
-    let col_widths = auto_fit_columns(table, ctx.fonts, None);
+    let mut col_widths = auto_fit_columns(table, ctx.fonts, None);
+    apply_pct_width(
+        table,
+        &mut col_widths,
+        sp.page_width - sp.margin_left - sp.margin_right,
+    );
     let hf_sub = HfSubstitution {
         page_num,
         total_pages,

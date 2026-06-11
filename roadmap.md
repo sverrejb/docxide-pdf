@@ -160,9 +160,9 @@ Our `auto_fit_columns` uses `gridCol` widths from `tblGrid`, ignoring the specif
 
 **Verified empty in current corpus**: a sweep of all `tests/fixtures/scraped/*` and `tests/fixtures/new/*` documents found zero tables where `gridCol` total exceeds the `tblW` value (tolerance 100 twips). The bug is real per OOXML, but no fixture triggers it — implementing this clamp moves zero scores. Park until a real-world fixture exhibits the mismatch.
 
-### Percent-based widths: `tcW`/`tblW` `type="pct"` (TODO — affects construction_bathroom_accessories_spec)
+### Percent-based widths: `tcW`/`tblW` `type="pct"` (PARTIALLY DONE 2026-06)
 
-`twips_attr` reads `w:w` as twips regardless of the `w:type` attribute. For `type="pct"` the value is in fiftieths of a percent (5000 = 100%), so a 33% cell (`w="1650"`) parses as 82.5pt. Tables with pct widths render proportionally correct but far too narrow. Found in `new/construction_bathroom_accessories_spec` (SpecLink-generated footer/body tables, scores Jaccard 5.5%). Fix: parse the `type` attribute and resolve pct against the available content width at layout time. Same fixture also exercised the missing-`tblGrid` path (grid now inferred from row cell widths, 2026-06).
+`twips_attr` reads `w:w` as twips regardless of the `w:type` attribute. For `type="pct"` the value is in fiftieths of a percent (5000 = 100%). **Implemented**: `Table.width_pct` is parsed from `tblW type="pct"` and `apply_pct_width` scales columns to pct × content width — but ONLY for tables whose `tblGrid` is missing (grid inferred from row `tcW` values, which preserves pct proportions). When a real tblGrid exists, Word renders the grid widths as-is even when the pct width disagrees (observed: arizona 115%, zimbabwe 100% vs grid at 102% of content — scaling them regressed scores). **Remaining**: `tcW type="pct"` is still mis-read as twips for per-cell preferred widths; harmless today because grid widths dominate, but would matter for Word's full preferred-width algorithm (§17.18.87).
 
 ## Unimplemented Document Features
 

@@ -26,6 +26,28 @@ pub(super) fn cell_span_width(col_widths: &[f32], grid_col: usize, span: usize) 
         .sum()
 }
 
+/// Scale column widths so the table occupies its `w:tblW type="pct"` share
+/// of the available content width. tcW pct values are mis-read as twips at
+/// parse time, but their proportions survive — only the total needs fixing.
+/// Only applies to inferred grids: when a real tblGrid exists, Word renders
+/// its widths as-is even when the pct preferred width disagrees (observed
+/// with pct values of 100.4–115% alongside grids matching the content width).
+pub(super) fn apply_pct_width(table: &Table, widths: &mut [f32], available_w: f32) {
+    if !table.grid_inferred {
+        return;
+    }
+    let Some(pct) = table.width_pct else { return };
+    // Word caps a table's width at the text column width.
+    let target = available_w * pct.min(1.0);
+    let total: f32 = widths.iter().sum();
+    if total > 0.0 && target > 0.0 {
+        let scale = target / total;
+        for w in widths {
+            *w *= scale;
+        }
+    }
+}
+
 pub(super) fn cell_x_offset(col_widths: &[f32], table_left: f32, grid_col: usize) -> f32 {
     table_left
         + col_widths[..grid_col.min(col_widths.len())]

@@ -131,6 +131,21 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                 || twips_attr(n, "w").is_none_or(|w| w <= 0.0)
         });
 
+    // ST_MeasurementOrPercent: pct values are in 5000ths ("5000" = 100%),
+    // or the literal "NN%" text form.
+    let width_pct = tbl_pr
+        .and_then(|pr| wml(pr, "tblW"))
+        .filter(|n| n.attribute((WML_NS, "type")) == Some("pct"))
+        .and_then(|n| n.attribute((WML_NS, "w")))
+        .and_then(|raw| {
+            if let Some(stripped) = raw.strip_suffix('%') {
+                stripped.trim().parse::<f32>().ok().map(|p| p / 100.0)
+            } else {
+                raw.parse::<f32>().ok().map(|v| v / 5000.0)
+            }
+        })
+        .filter(|p| *p > 0.0);
+
     let cell_margins = tbl_pr
         .and_then(|pr| wml(pr, "tblCellMar"))
         .map(|mar| CellMargins {
@@ -245,6 +260,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     // OOXML §17.4.48 requires tblGrid, but some generators (e.g. SpecLink)
     // omit it. Infer the grid from the widest row's cell widths so layout
     // has real columns to work with, splitting spanned cells evenly.
+    let grid_inferred = col_widths.is_empty() && !tbl_rows.is_empty();
     if col_widths.is_empty() {
         for tr in &tbl_rows {
             let mut row_widths: Vec<f32> = Vec::new();
@@ -731,6 +747,8 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
         alignment,
         fixed_layout,
         auto_width,
+        width_pct,
+        grid_inferred,
     }
 }
 

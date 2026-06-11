@@ -712,5 +712,7 @@ fn convert_table(
         alignment: TableAlignment::default(),
         fixed_layout: false,
         auto_width: true,
+        width_pct: None,
+        grid_inferred: false,
     })
 }

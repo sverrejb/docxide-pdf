@@ -128,7 +128,8 @@ pub(super) fn compute_header_height(
                 prev_space_after = para.space_after;
             }
             Block::Table(table) => {
-                height += table::compute_hf_table_height(table, ctx);
+                let content_w = sp.page_width - sp.margin_left - sp.margin_right;
+                height += table::compute_hf_table_height(table, ctx, content_w);
                 prev_space_after = 0.0;
             }
         }
