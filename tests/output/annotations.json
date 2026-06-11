@@ -1,5 +1,5 @@
 {
-  "next_id": 188,
+  "next_id": 192,
   "annotations": [
     {
       "id": 8,
@@ -148,7 +148,7 @@
       "source": "Generated",
       "x_pt": 449.4558,
       "y_pt": 379.37347,
-      "note": "All text from \"Slik gjør du\" and on is shifted too low,",
+      "note": "All text from \"Slik gj\u00f8r du\" and on is shifted too low,",
       "fixed": false
     },
     {
@@ -239,7 +239,7 @@
       "x_pt": 9.817643,
       "y_pt": 34.921265,
       "note": "Text in footer should be indented",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 145,
@@ -259,7 +259,7 @@
       "x_pt": 146.76491,
       "y_pt": 181.302,
       "note": "Roman numerals, when reference uses arabic here.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 150,
@@ -300,16 +300,6 @@
       "y_pt": 599.62244,
       "note": "First outer column is too wide",
       "fixed": false
-    },
-    {
-      "id": 154,
-      "case": "case63",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 524.6136,
-      "y_pt": 567.99884,
-      "note": "We are not rendering sticky notes at all.",
-      "fixed": true
     },
     {
       "id": 157,
@@ -362,16 +352,6 @@
       "fixed": false
     },
     {
-      "id": 164,
-      "case": "new/isla_language_lesson_plan",
-      "page": 4,
-      "source": "Generated",
-      "x_pt": 193.03232,
-      "y_pt": 489.7058,
-      "note": "We are not rendering the venn diagram correctly at all, we show a blue circle?",
-      "fixed": false
-    },
-    {
       "id": 165,
       "case": "new/isla_language_lesson_plan",
       "page": 6,
@@ -419,16 +399,6 @@
       "x_pt": 353.71103,
       "y_pt": 245.25708,
       "note": "This line should be thick and grey",
-      "fixed": false
-    },
-    {
-      "id": 170,
-      "case": "new/lenten_prayer_unity",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 259.10846,
-      "y_pt": 45.147644,
-      "note": "Text in purple rectangle is missing.",
       "fixed": false
     },
     {
@@ -549,7 +519,7 @@
       "x_pt": 281.9151,
       "y_pt": 749.23706,
       "note": "Heading should be centered",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 184,
@@ -589,6 +559,46 @@
       "x_pt": 296.58273,
       "y_pt": 260.5495,
       "note": "Numbers are not vertically centered in the squares on the tree structure",
+      "fixed": false
+    },
+    {
+      "id": 188,
+      "case": "new/isla_language_lesson_plan",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 312.74405,
+      "y_pt": 726.31396,
+      "note": "Missing a spanning HR line here",
+      "fixed": false
+    },
+    {
+      "id": 189,
+      "case": "new/isla_language_lesson_plan",
+      "page": 4,
+      "source": "Generated",
+      "x_pt": 266.16696,
+      "y_pt": 607.47797,
+      "note": "missing boxes around \"Isla\" and \"Abuela\"",
+      "fixed": false
+    },
+    {
+      "id": 190,
+      "case": "new/isla_language_lesson_plan",
+      "page": 4,
+      "source": "Generated",
+      "x_pt": 141.18594,
+      "y_pt": 220.92401,
+      "note": "Row two of this table should be broken across this page and the next",
+      "fixed": false
+    },
+    {
+      "id": 191,
+      "case": "new/lenten_prayer_unity",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 104.58445,
+      "y_pt": 50.39734,
+      "note": "Missing mouse cursor icon here that is present in the reference",
       "fixed": false
     }
   ]

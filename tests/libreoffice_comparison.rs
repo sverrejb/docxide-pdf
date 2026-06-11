@@ -19,6 +19,16 @@ struct Row {
 fn libreoffice_comparison() {
     let _ = env_logger::try_init();
 
+    // Opt-in only: spawns one soffice process per fixture, which is expensive
+    // and irrelevant to the usual change-verification loop.
+    if std::env::var_os("DOCXSIDE_LO_COMPARE").is_none() {
+        println!(
+            "libreoffice_comparison skipped — opt in with DOCXSIDE_LO_COMPARE=1 \
+             or ./tools/run-tests.sh --libreoffice"
+        );
+        return;
+    }
+
     let Some(soffice) = common::find_libreoffice() else {
         eprintln!(
             "LibreOffice not found — skipping libreoffice_comparison.\n\

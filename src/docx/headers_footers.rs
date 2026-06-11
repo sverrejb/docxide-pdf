@@ -9,7 +9,8 @@ use super::relationships::parse_part_relationships;
 use super::runs::parse_runs;
 use super::styles::{ParagraphStyle, StylesInfo, ThemeFonts, parse_alignment};
 use super::{
-    ParseContext, WML_NS, collect_block_nodes, parse_paragraph_spacing, wml, wml_attr,
+    ParseContext, WML_NS, collect_block_nodes, extract_indents, parse_paragraph_spacing, wml,
+    wml_attr,
 };
 
 fn is_wml_element(node: roxmltree::Node, name: &str) -> bool {
@@ -91,8 +92,8 @@ pub(super) fn parse_endnotes<R: Read + Seek>(
     parse_notes_rich(zip, styles, theme, numbering, "word/endnotes.xml", "endnote")
 }
 
-/// Simple parsing: paragraph runs only, no list-numbering, no per-paragraph
-/// indents from styles. Matches the original footnote rendering behavior.
+/// Simple parsing: paragraph runs and indents only, no list-numbering.
+/// Matches the original footnote rendering behavior.
 fn parse_notes_simple<R: Read + Seek>(
     zip: &mut zip::ZipArchive<R>,
     styles: &StylesInfo,
@@ -146,6 +147,36 @@ fn parse_notes_simple<R: Read + Seek>(
             let parsed = parse_runs(p, &mut fn_ctx);
             let (sp_before, sp_after, ls) = parse_paragraph_spacing(ppr, para_style, None);
 
+            // Indents: inline w:ind overrides the style, missing attributes
+            // fall back to the (basedOn-resolved) style — same merge as body
+            // paragraphs, minus list-numbering interplay.
+            let char_fs = para_style
+                .and_then(|s| s.font_size)
+                .unwrap_or(styles.defaults.font_size);
+            let (left, right, hanging, first) =
+                if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
+                    let (l, r, h, f) = extract_indents(ind, Some(char_fs / 2.0));
+                    if let Some(s) = para_style {
+                        (
+                            l.or(s.indent_left),
+                            r.or(s.indent_right),
+                            h.or(s.indent_hanging),
+                            f.or(s.indent_first_line),
+                        )
+                    } else {
+                        (l, r, h, f)
+                    }
+                } else if let Some(s) = para_style {
+                    (
+                        s.indent_left,
+                        s.indent_right,
+                        s.indent_hanging,
+                        s.indent_first_line,
+                    )
+                } else {
+                    (None, None, None, None)
+                };
+
             paragraphs.push(Paragraph {
                 runs: parsed.runs,
                 space_before: sp_before.unwrap_or(0.0),
@@ -153,6 +184,10 @@ fn parse_notes_simple<R: Read + Seek>(
                 alignment,
                 line_spacing: ls.or(Some(LineSpacing::Auto(1.0))),
                 snap_to_grid: true,
+                indent_left: left.unwrap_or(0.0),
+                indent_right: right.unwrap_or(0.0),
+                indent_hanging: hanging.unwrap_or(0.0),
+                indent_first_line: first.unwrap_or(0.0),
                 ..Paragraph::default()
             });
         }

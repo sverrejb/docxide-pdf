@@ -37,13 +37,14 @@ fn layout_paragraph(
     line_spacing: LineSpacing,
     ctx: &RenderContext,
     text_width: f32,
+    first_line_hanging: f32,
 ) -> Option<ParagraphLayout> {
     if is_text_empty(runs) {
         return None;
     }
     let (fs, tallest_lhr, tallest_ar) = tallest_run_metrics(runs, ctx.fonts);
     let lh = resolve_line_h(line_spacing, fs, tallest_lhr);
-    let lines = build_paragraph_lines(runs, ctx.fonts, text_width, 0.0, &HashMap::new(), &HashMap::new(), None, None, None, true);
+    let lines = build_paragraph_lines(runs, ctx.fonts, text_width, first_line_hanging, &HashMap::new(), &HashMap::new(), None, None, None, true);
     if lines.is_empty() {
         return None;
     }
@@ -67,7 +68,8 @@ pub(super) fn compute_footnote_height(
         let ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
         let para_text_width =
             (text_width - para.indent_left - para.indent_right).max(1.0);
-        let Some(layout) = layout_paragraph(&para.runs, ls, ctx, para_text_width) else {
+        let hanging = super::compute_text_hanging(para, 0.0);
+        let Some(layout) = layout_paragraph(&para.runs, ls, ctx, para_text_width, hanging) else {
             continue;
         };
         if i > 0 {
@@ -143,7 +145,8 @@ pub(super) fn render_page_footnotes(
             let para_text_width =
                 (text_width - para.indent_left - para.indent_right).max(1.0);
 
-            let Some(layout) = layout_paragraph(&runs, ls, ctx, para_text_width) else {
+            let hanging = super::compute_text_hanging(para, 0.0);
+            let Some(layout) = layout_paragraph(&runs, ls, ctx, para_text_width, hanging) else {
                 continue;
             };
 
@@ -180,7 +183,7 @@ pub(super) fn render_page_footnotes(
                 line_count,
                 0,
                 &mut Vec::new(),
-                0.0,
+                hanging,
                 ctx.fonts,
                 None,
                 gradient_specs,

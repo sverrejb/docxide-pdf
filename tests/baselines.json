@@ -448,8 +448,8 @@
     "text_boundary": 1.0
   },
   "new/belgian_youth_pr..": {
-    "jaccard": 0.2109,
-    "ssim": 0.5183,
+    "jaccard": 0.2121,
+    "ssim": 0.5187,
     "text_boundary": 1.0
   },
   "new/biochemistry_pen..": {
@@ -565,7 +565,7 @@
   "new/irish_school_enr..": {
     "jaccard": 0.3364,
     "ssim": 0.5307,
-    "text_boundary": 0.7143
+    "text_boundary": 0.6964
   },
   "new/isla_language_le..": {
     "jaccard": 0.3785,
@@ -573,8 +573,8 @@
     "text_boundary": 0.7161
   },
   "new/japanese_land_de..": {
-    "jaccard": 0.104,
-    "ssim": 0.2984,
+    "jaccard": 0.1047,
+    "ssim": 0.2952,
     "text_boundary": 0.1111
   },
   "new/k4_regulations_s..": {
@@ -613,8 +613,8 @@
     "text_boundary": 1.0
   },
   "new/pendulum_mechani..": {
-    "jaccard": 0.1279,
-    "ssim": 0.2423,
+    "jaccard": 0.1372,
+    "ssim": 0.2528,
     "text_boundary": 0.1333
   },
   "new/polish_municipal..": {
@@ -718,9 +718,9 @@
     "text_boundary": 0.7304
   },
   "new/western_australi..": {
-    "jaccard": 0.3485,
-    "ssim": 0.5822,
-    "text_boundary": 0.4751
+    "jaccard": 0.3508,
+    "ssim": 0.5845,
+    "text_boundary": 0.4826
   },
   "new/who_prescribing_..": {
     "jaccard": 0.1225,
@@ -1031,8 +1031,8 @@
     "convert_ms": 22.0
   },
   "scraped/transition_to_wo..": {
-    "jaccard": 0.4015,
-    "ssim": 0.5121,
+    "jaccard": 0.4014,
+    "ssim": 0.512,
     "text_boundary": 0.397,
     "convert_ms": 493.0
   },
@@ -1049,9 +1049,9 @@
     "convert_ms": 2.4
   },
   "scraped/uk_commercial_le..": {
-    "jaccard": 0.2066,
-    "ssim": 0.3609,
-    "text_boundary": 0.2361,
+    "jaccard": 0.093,
+    "ssim": 0.2313,
+    "text_boundary": 0.0783,
     "convert_ms": 326.3
   },
   "scraped/ukraine_humanita..": {
@@ -1068,7 +1068,7 @@
   },
   "scraped/vaccines_history..": {
     "jaccard": 0.428,
-    "ssim": 0.5544,
+    "ssim": 0.555,
     "text_boundary": 0.1379,
     "convert_ms": 23.3
   },

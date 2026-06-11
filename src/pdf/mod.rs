@@ -1196,11 +1196,131 @@ fn render_paragraph_block(
         }
     }
 
+    // Additional wrapping floats anchored to this same paragraph beyond the
+    // first (which became `float_zone` above). The single-zone geometry below
+    // can't model e.g. a logo on each side of a centered title, so when these
+    // exist we compute per-line free intervals across all zones instead.
+    let extra_float_zones: Vec<FloatZone> = if !text_empty {
+        para.floating_images
+            .iter()
+            .filter(|fi| {
+                matches!(
+                    fi.wrap_type,
+                    WrapType::Square | WrapType::Tight | WrapType::Through
+                )
+            })
+            .skip(1)
+            .map(|fi| {
+                let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
+                let fi_y_top = resolve_fi_y_top(fi, sp, state.pb.slot_top);
+                let fi_y_bottom = fi_y_top - fi.image.display_height;
+                let polygon_pts = fi.wrap_polygon.as_ref().map(|verts| {
+                    convert_polygon_to_page_coords(
+                        verts,
+                        fi_x,
+                        fi_y_top,
+                        fi.image.display_width,
+                        fi.image.display_height,
+                    )
+                });
+                FloatZone {
+                    top_y: fi_y_top + fi.dist_top,
+                    bottom_y: fi_y_bottom - fi.dist_bottom,
+                    obj_left: fi_x,
+                    obj_right: fi_x + fi.image.display_width,
+                    left_from_text: fi.dist_left,
+                    right_from_text: fi.dist_right,
+                    polygon_pts,
+                    wrap_text: fi.wrap_text,
+                    para_relative: fi.v_relative_from == VRelativeFrom::Paragraph,
+                }
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+
     // Build per-line geometry and dual-region geometry
     let (poly_line_geom, poly_dual_geom): (Option<Vec<(f32, f32)>>, Option<Vec<DualRegion>>) =
         if let Some(fz) = state.pb.float_zone.as_ref() {
             let eff_top = state.pb.slot_top - inter_gap;
-            if eff_top <= fz.bottom_y {
+            if !extra_float_zones.is_empty() {
+                // Multiple wrapping floats on one paragraph: subtract every
+                // float's exclusion span per line and lay the text in the
+                // widest remaining gap (Word places the line between the
+                // floats). Dual regions only model a single float, so they
+                // are skipped here.
+                let zones: Vec<&FloatZone> =
+                    std::iter::once(fz).chain(extra_float_zones.iter()).collect();
+                if zones.iter().all(|z| eff_top <= z.bottom_y) {
+                    (None, None)
+                } else {
+                    let full_w =
+                        (col_w - para.indent_left - para.indent_right).max(1.0);
+                    let col_right = col_x + col_w;
+                    let lowest_bottom = zones
+                        .iter()
+                        .map(|z| z.bottom_y)
+                        .fold(f32::INFINITY, f32::min);
+                    let max_lines =
+                        ((((eff_top - lowest_bottom) / line_h).ceil() as usize) + 5)
+                            .max(50);
+                    let mut geom = Vec::with_capacity(max_lines);
+                    for i in 0..max_lines {
+                        let line_top = eff_top - i as f32 * line_h;
+                        let line_bottom = line_top - line_h;
+                        let mut intervals: Vec<(f32, f32)> =
+                            vec![(col_x, col_right)];
+                        for z in &zones {
+                            let partial_overlap =
+                                z.para_relative || z.polygon_pts.is_some();
+                            let in_zone = if partial_overlap {
+                                line_bottom < z.top_y
+                            } else {
+                                line_top <= z.top_y
+                            };
+                            if !(in_zone && line_top > z.bottom_y + line_h * 0.2) {
+                                continue;
+                            }
+                            let query_y = line_top.min(z.top_y);
+                            let (ex_left, ex_right) = z.exclusion_at_y(query_y);
+                            let sl = ex_left - z.left_from_text;
+                            let sr = ex_right + z.right_from_text;
+                            let mut next = Vec::with_capacity(intervals.len() + 1);
+                            for &(a, b) in &intervals {
+                                if sr <= a || sl >= b {
+                                    next.push((a, b));
+                                    continue;
+                                }
+                                if sl > a {
+                                    next.push((a, sl));
+                                }
+                                if sr < b {
+                                    next.push((sr, b));
+                                }
+                            }
+                            intervals = next;
+                        }
+                        let best = intervals
+                            .into_iter()
+                            .max_by(|x, y| (x.1 - x.0).total_cmp(&(y.1 - y.0)));
+                        match best {
+                            Some((a, b))
+                                if b - a
+                                    > para.indent_left + para.indent_right + 1.0 =>
+                            {
+                                geom.push((
+                                    a + para.indent_left,
+                                    (b - a - para.indent_left - para.indent_right)
+                                        .max(1.0),
+                                ));
+                            }
+                            _ => geom.push((col_x + para.indent_left, full_w)),
+                        }
+                    }
+                    (Some(geom), None)
+                }
+            } else if eff_top <= fz.bottom_y {
                 (None, None)
             } else {
                 let is_both_sides =
@@ -2865,8 +2985,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     }
     let empty_hf_maps: HfMaps = Default::default();
 
-    // Pre-compute page numbers and formats: sections without w:pgNumType
-    // continue numbering/format from the previous section (OOXML §17.6.12)
+    // Pre-compute page numbers and formats: sections without w:pgNumType @start
+    // continue numbering from the previous section, but the format never
+    // inherits — fmt applies only to its own section and an omitted fmt means
+    // decimal (OOXML §17.6.12; Word renders arabic after roman front matter)
     let mut page_numbers: Vec<usize> = Vec::with_capacity(total_pages);
     // Track which section's format applies to each page (None = decimal default).
     // Uses a section index to avoid cloning the format string for every page.
@@ -2880,17 +3002,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             let csp = &doc.sections[content_si].properties;
             if prev_content_si != Some(content_si) {
                 // New section boundary
+                running_format_si = if csp.page_num_format.is_some() {
+                    Some(content_si)
+                } else {
+                    None
+                };
                 if let Some(start) = csp.page_num_start {
                     running_num = start as usize;
-                    // Section explicitly sets pgNumType: use its format,
-                    // or default to decimal if fmt is absent
-                    running_format_si = if csp.page_num_format.is_some() {
-                        Some(content_si)
-                    } else {
-                        None
-                    };
                 } else {
-                    // No pgNumType at all: inherit both number and format
                     running_num += 1;
                 }
             } else {

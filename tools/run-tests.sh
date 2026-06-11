@@ -6,6 +6,7 @@
 #   ./tools/run-tests.sh                        # run all tests
 #   ./tools/run-tests.sh --test visual_comparison  # one test suite
 #   ./tools/run-tests.sh --case case5           # one fixture
+#   ./tools/run-tests.sh --libreoffice          # include LibreOffice comparison (opt-in)
 #   ./tools/run-tests.sh --verbose              # show full cargo output
 
 set -euo pipefail
@@ -15,6 +16,7 @@ VERBOSE=0
 TEST_NAME=""
 CASE_FILTER=""
 GROUP_FILTER=""
+LO_COMPARE=0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -22,6 +24,7 @@ while [[ $# -gt 0 ]]; do
         --test) TEST_NAME="$2"; shift 2 ;;
         --case) CASE_FILTER="$2"; shift 2 ;;
         --group) GROUP_FILTER="$2"; shift 2 ;;
+        --libreoffice|--lo) LO_COMPARE=1; shift ;;
         *) echo "Unknown arg: $1"; exit 1 ;;
     esac
 done
@@ -36,6 +39,7 @@ CARGO_ARGS+=("--" "--nocapture")
 # Set env filters
 [[ -n "$CASE_FILTER" ]] && export DOCXIDE_CASE="$CASE_FILTER"
 [[ -n "$GROUP_FILTER" ]] && export DOCXSIDE_GROUP="$GROUP_FILTER"
+[[ "$LO_COMPARE" -eq 1 ]] && export DOCXSIDE_LO_COMPARE=1
 
 # Verbose mode: just pass through
 if [[ "$VERBOSE" -eq 1 ]]; then
