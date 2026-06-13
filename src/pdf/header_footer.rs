@@ -646,6 +646,26 @@ pub(super) fn render_header_footer(
                     }
                 }
 
+                // VML horizontal rules (o:hr) are carried on otherwise-empty
+                // paragraphs, so draw them before the text_empty skip below —
+                // mirrors the body render path in pdf::mod.
+                if let Some(ref hr) = para.horizontal_rule {
+                    let rule_w = text_width * hr.width_pct / 100.0;
+                    let rule_x = sp.margin_left
+                        + match para.alignment {
+                            Alignment::Center => (text_width - rule_w) / 2.0,
+                            Alignment::Right => text_width - rule_w,
+                            _ => 0.0,
+                        };
+                    let draw_h = if hr.is_standard { 0.5 } else { hr.height_pt };
+                    let rule_y = cursor_y - (line_h - draw_h) / 2.0 - draw_h;
+                    content.save_state();
+                    super::color::fill_rgb(content, hr.fill_color);
+                    content.rect(rule_x, rule_y, rule_w, draw_h);
+                    content.fill_nonzero();
+                    content.restore_state();
+                }
+
                 if text_empty {
                     let mut advance = line_h;
                     // TopAndBottom textboxes push content below them

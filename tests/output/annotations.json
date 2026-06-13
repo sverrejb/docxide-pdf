@@ -1,5 +1,5 @@
 {
-  "next_id": 192,
+  "next_id": 193,
   "annotations": [
     {
       "id": 8,
@@ -148,7 +148,7 @@
       "source": "Generated",
       "x_pt": 449.4558,
       "y_pt": 379.37347,
-      "note": "All text from \"Slik gj\u00f8r du\" and on is shifted too low,",
+      "note": "All text from \"Slik gjør du\" and on is shifted too low,",
       "fixed": false
     },
     {
@@ -222,26 +222,6 @@
       "fixed": false
     },
     {
-      "id": 143,
-      "case": "new/belgian_youth_program_certificate",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 105.58911,
-      "y_pt": 779.3755,
-      "note": "Missing KSA logo",
-      "fixed": false
-    },
-    {
-      "id": 144,
-      "case": "new/belgian_youth_program_certificate",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 9.817643,
-      "y_pt": 34.921265,
-      "note": "Text in footer should be indented",
-      "fixed": true
-    },
-    {
       "id": 145,
       "case": "new/belgian_youth_program_certificate",
       "page": 0,
@@ -250,16 +230,6 @@
       "y_pt": 96.17511,
       "note": "Date should be aligned with \"datum\" above it.",
       "fixed": false
-    },
-    {
-      "id": 149,
-      "case": "new/western_australia_owner_drivers_act",
-      "page": 11,
-      "source": "Generated",
-      "x_pt": 146.76491,
-      "y_pt": 181.302,
-      "note": "Roman numerals, when reference uses arabic here.",
-      "fixed": true
     },
     {
       "id": 150,
@@ -472,16 +442,6 @@
       "fixed": false
     },
     {
-      "id": 179,
-      "case": "new/slovak_pedagogical_practice_agreement",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 374.44922,
-      "y_pt": 762.72015,
-      "note": "Header missing horizontal line under",
-      "fixed": false
-    },
-    {
       "id": 180,
       "case": "new/turkish_chemistry_course_plan",
       "page": 0,
@@ -510,16 +470,6 @@
       "y_pt": 716.53296,
       "note": "Emblem rendered wrong here. Overflows bounding box, wrong aspect ratio.",
       "fixed": false
-    },
-    {
-      "id": 183,
-      "case": "new/pendulum_mechanics_oscillation_lab",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 281.9151,
-      "y_pt": 749.23706,
-      "note": "Heading should be centered",
-      "fixed": true
     },
     {
       "id": 184,
@@ -552,26 +502,6 @@
       "fixed": false
     },
     {
-      "id": 187,
-      "case": "case59",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 296.58273,
-      "y_pt": 260.5495,
-      "note": "Numbers are not vertically centered in the squares on the tree structure",
-      "fixed": false
-    },
-    {
-      "id": 188,
-      "case": "new/isla_language_lesson_plan",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 312.74405,
-      "y_pt": 726.31396,
-      "note": "Missing a spanning HR line here",
-      "fixed": false
-    },
-    {
       "id": 189,
       "case": "new/isla_language_lesson_plan",
       "page": 4,
@@ -599,6 +529,16 @@
       "x_pt": 104.58445,
       "y_pt": 50.39734,
       "note": "Missing mouse cursor icon here that is present in the reference",
+      "fixed": false
+    },
+    {
+      "id": 192,
+      "case": "new/slovak_pedagogical_practice_agreement",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 352.86774,
+      "y_pt": 786.76215,
+      "note": "Owl should be on the right, with the \"Univerzita ...\" heading between the logos, not under the \"Filozofica ...\" logo",
       "fixed": false
     }
   ]

@@ -355,6 +355,25 @@ pub(super) fn render_smartart(
             SmartArtTextAnchor::Bottom => diag_y - txt_y - ins_top - (content_h - total_text_h),
         };
 
+        // Distance from the text block's top to the first baseline. The baseline
+        // sits at the font's ascent within the line box, which is a fraction
+        // (ascender/line-height) of the line height — not the full em. Using the
+        // full em (base_fs) drops every line ~0.15em too low, leaving centered
+        // text noticeably below center. Derive the fraction from the first line's
+        // resolved font metrics, defaulting to a typical ascent ratio.
+        let first_ascent = {
+            let fl = all_lines.first();
+            let frac = fl
+                .and_then(|l| l.pieces.first())
+                .and_then(|p| p.fe)
+                .and_then(|e| match (e.ascender_ratio, e.line_h_ratio) {
+                    (Some(a), Some(lh)) if lh > 0.0 => Some(a / lh),
+                    _ => None,
+                })
+                .unwrap_or(0.85);
+            fl.map(|l| l.line_h * frac).unwrap_or(base_fs)
+        };
+
         // Render each wrapped line
         let mut y_cursor = 0.0_f32;
         for line in &all_lines {
@@ -363,7 +382,7 @@ pub(super) fn render_smartart(
                 SmartArtTextAlign::Center => (avail_w - line.total_w) / 2.0,
                 SmartArtTextAlign::Right => avail_w - line.total_w,
             };
-            let line_y = text_top_y - base_fs - y_cursor;
+            let line_y = text_top_y - first_ascent - y_cursor;
 
             content.save_state();
             let mut cx = line_x;

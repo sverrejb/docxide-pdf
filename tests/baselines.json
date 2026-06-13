@@ -294,8 +294,8 @@
     "text_boundary": 1.0
   },
   "cases/case59": {
-    "jaccard": 0.9183,
-    "ssim": 0.908,
+    "jaccard": 0.9315,
+    "ssim": 0.9241,
     "text_boundary": 1.0
   },
   "cases/case6": {
@@ -305,8 +305,8 @@
     "convert_ms": 15.3
   },
   "cases/case60": {
-    "jaccard": 0.7539,
-    "ssim": 0.9149,
+    "jaccard": 0.7518,
+    "ssim": 0.9152,
     "text_boundary": 1.0
   },
   "cases/case61": {
@@ -565,10 +565,10 @@
   "new/irish_school_enr..": {
     "jaccard": 0.3364,
     "ssim": 0.5307,
-    "text_boundary": 0.6964
+    "text_boundary": 0.7054
   },
   "new/isla_language_le..": {
-    "jaccard": 0.3785,
+    "jaccard": 0.3742,
     "ssim": 0.5654,
     "text_boundary": 0.7161
   },
@@ -825,8 +825,8 @@
     "convert_ms": 34.9
   },
   "scraped/czech_tree_cutti..": {
-    "jaccard": 0.7868,
-    "ssim": 0.9663,
+    "jaccard": 0.7771,
+    "ssim": 0.9251,
     "text_boundary": 1.0,
     "convert_ms": 4.8
   },
@@ -1067,8 +1067,8 @@
     "convert_ms": 38.6
   },
   "scraped/vaccines_history..": {
-    "jaccard": 0.428,
-    "ssim": 0.555,
+    "jaccard": 0.4285,
+    "ssim": 0.5549,
     "text_boundary": 0.1379,
     "convert_ms": 23.3
   },
