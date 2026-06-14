@@ -7,6 +7,11 @@ use std::time::SystemTime;
 const RENDER_DPI: f32 = 150.0;
 const PIXELS_PER_POINT: f32 = RENDER_DPI / 72.0;
 
+/// The full [0,0]–[1,1] UV rectangle for drawing a texture untransformed.
+/// (egui's `Rect::EVERYTHING` is the *infinite* rect, not this unit rect.)
+const FULL_UV: egui::Rect =
+    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0));
+
 fn main() -> eframe::Result<()> {
     let output_dir = find_output_dir();
     let cases = discover_cases(&output_dir);
@@ -183,6 +188,11 @@ struct BaselineScores {
     ssim: Option<f64>,
 }
 
+/// Canonical form for case-insensitive, space-tolerant substring matching.
+fn normalize_name(s: &str) -> String {
+    s.to_lowercase().replace(' ', "_")
+}
+
 fn baseline_key(name: &str) -> String {
     let (group, case_name) = if let Some(idx) = name.find('/') {
         (&name[..idx], &name[idx + 1..])
@@ -257,6 +267,16 @@ fn score_color(value: f64, threshold: f64) -> egui::Color32 {
     }
 }
 
+/// Marker/label color for an annotation by its image source (orange for
+/// reference, green for generated). Fixed annotations are greyed out by the
+/// caller instead.
+fn source_color(source: ImageSource) -> egui::Color32 {
+    match source {
+        ImageSource::Reference => egui::Color32::from_rgb(255, 165, 0),
+        ImageSource::Generated => egui::Color32::from_rgb(0, 180, 80),
+    }
+}
+
 struct PendingAnnotation {
     page: usize,
     source: ImageSource,
@@ -280,6 +300,19 @@ fn screen_to_pdf_pts(click: &ImageClick) -> (f32, f32) {
     let y_from_top = (rel_y * scale) / PIXELS_PER_POINT;
     let y_pt = page_height_pt - y_from_top;
     (x_pt, y_pt)
+}
+
+/// Build a pending annotation from an image click, converting screen coords to
+/// PDF points. Shared by every view that lets you click to drop a note.
+fn pending_from_click(click: &ImageClick, page: usize, source: ImageSource) -> PendingAnnotation {
+    let (x_pt, y_pt) = screen_to_pdf_pts(click);
+    PendingAnnotation {
+        page,
+        source,
+        x_pt,
+        y_pt,
+        text_buf: String::new(),
+    }
 }
 
 fn pdf_pts_to_screen(
@@ -317,6 +350,7 @@ fn count_pngs(dir: &Path) -> usize {
         .count()
 }
 
+#[derive(Clone, Copy)]
 enum ViewMode {
     SideBySide,
     Reference,
@@ -325,6 +359,22 @@ enum ViewMode {
     Delta,
     Compare,
 }
+
+/// Keyboard shortcuts that select a view mode. Several modes have two keys
+/// (a number and a mnemonic letter), so duplicate targets are expected.
+const VIEW_MODE_KEYS: &[(egui::Key, ViewMode)] = &[
+    (egui::Key::Num1, ViewMode::SideBySide),
+    (egui::Key::Num2, ViewMode::Reference),
+    (egui::Key::R, ViewMode::Reference),
+    (egui::Key::Num3, ViewMode::Generated),
+    (egui::Key::G, ViewMode::Generated),
+    (egui::Key::Num4, ViewMode::Overlay),
+    (egui::Key::O, ViewMode::Overlay),
+    (egui::Key::Num5, ViewMode::Delta),
+    (egui::Key::D, ViewMode::Delta),
+    (egui::Key::Num6, ViewMode::Compare),
+    (egui::Key::C, ViewMode::Compare),
+];
 
 struct App {
     cases: Vec<CaseInfo>,
@@ -350,6 +400,8 @@ struct App {
     collapsed_groups: HashSet<String>,
     search_query: String,
     search_active: bool,
+    filter_annotated: bool,
+    filter_changed: bool,
 }
 
 impl App {
@@ -384,6 +436,8 @@ impl App {
             collapsed_groups: HashSet::new(),
             search_query: String::new(),
             search_active: false,
+            filter_annotated: false,
+            filter_changed: false,
         }
     }
 
@@ -487,13 +541,14 @@ impl eframe::App for App {
                 }
             }
             if self.search_active && i.key_pressed(egui::Key::Enter) {
-                let q = self.search_query.to_lowercase().replace(' ', "_");
-                if !q.is_empty() {
-                    if let Some(idx) = self.cases.iter().position(|c| {
-                        c.name.to_lowercase().replace(' ', "_").contains(&q)
-                    }) {
-                        self.set_case(idx);
-                    }
+                let q = normalize_name(&self.search_query);
+                if !q.is_empty()
+                    && let Some(idx) = self
+                        .cases
+                        .iter()
+                        .position(|c| normalize_name(&c.name).contains(&q))
+                {
+                    self.set_case(idx);
                 }
                 self.search_active = false;
                 self.search_query.clear();
@@ -515,23 +570,10 @@ impl eframe::App for App {
             if i.key_pressed(egui::Key::ArrowUp) {
                 self.current_page = self.current_page.saturating_sub(1);
             }
-            if i.key_pressed(egui::Key::Num1) {
-                self.view_mode = ViewMode::SideBySide;
-            }
-            if i.key_pressed(egui::Key::Num2) || i.key_pressed(egui::Key::R) {
-                self.view_mode = ViewMode::Reference;
-            }
-            if i.key_pressed(egui::Key::Num3) || i.key_pressed(egui::Key::G) {
-                self.view_mode = ViewMode::Generated;
-            }
-            if i.key_pressed(egui::Key::Num4) || i.key_pressed(egui::Key::O) {
-                self.view_mode = ViewMode::Overlay;
-            }
-            if i.key_pressed(egui::Key::Num5) || i.key_pressed(egui::Key::D) {
-                self.view_mode = ViewMode::Delta;
-            }
-            if i.key_pressed(egui::Key::Num6) || i.key_pressed(egui::Key::C) {
-                self.view_mode = ViewMode::Compare;
+            for &(key, mode) in VIEW_MODE_KEYS {
+                if i.key_pressed(key) {
+                    self.view_mode = mode;
+                }
             }
             if i.key_pressed(egui::Key::S) {
                 self.search_active = true;
@@ -573,6 +615,7 @@ impl eframe::App for App {
             index: usize,
             color: Option<egui::Color32>,
             hash_changed: bool,
+            has_annotations: bool,
         }
         let case_labels: Vec<CaseLabel> = self
             .cases
@@ -592,6 +635,7 @@ impl eframe::App for App {
                     None => None,
                 };
                 let hash_changed = self.changed_cases.contains(&key);
+                let has_annotations = annotation_counts.contains_key(c.name.as_str());
                 let pad = if color.is_some() { "     " } else { "" };
                 let prefix = if hash_changed { "\u{26A0} " } else { "" };
                 let label = if let Some(b) = self.baselines.get(&key) {
@@ -601,7 +645,7 @@ impl eframe::App for App {
                 } else {
                     format!("{}{} ({}p){}", prefix, display_name, c.page_count, pad)
                 };
-                CaseLabel { group, label, index: i, color, hash_changed }
+                CaseLabel { group, label, index: i, color, hash_changed, has_annotations }
             })
             .collect();
 
@@ -629,7 +673,7 @@ impl eframe::App for App {
         let mut did_scroll = false;
 
         // Normalize query for substring matching (lowercase, spaces→underscores)
-        let query_norm: String = self.search_query.to_lowercase().replace(' ', "_");
+        let query_norm: String = normalize_name(&self.search_query);
         let search_active = self.search_active;
 
         egui::SidePanel::right("case_list")
@@ -641,37 +685,58 @@ impl eframe::App for App {
                     if self.search_active {
                         resp.request_focus();
                     }
-                } else {
-                    ui.separator();
                 }
+                ui.horizontal(|ui| {
+                    ui.checkbox(&mut self.filter_annotated, "Annotated")
+                        .on_hover_text("Only show cases that have annotations");
+                    ui.checkbox(&mut self.filter_changed, "Changed")
+                        .on_hover_text("Only show cases with unacknowledged visual changes");
+                });
+                ui.separator();
+
+                // Read filter state after the checkboxes so toggles apply this frame.
+                let filter_annotated = self.filter_annotated;
+                let filter_changed = self.filter_changed;
+                // Any active filter force-expands groups (mirrors search behaviour).
+                let any_filter = !query_norm.is_empty() || filter_annotated || filter_changed;
+
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     for (group_name, items) in &groups {
-                        // Filter items by search query
-                        let filtered: Vec<&&CaseLabel> = if query_norm.is_empty() {
-                            items.iter().collect()
-                        } else {
-                            items
-                                .iter()
-                                .filter(|cl| {
-                                    let name_norm = cl.label.to_lowercase().replace(' ', "_");
-                                    name_norm.contains(&query_norm)
-                                })
-                                .collect()
-                        };
+                        let filtered: Vec<&&CaseLabel> = items
+                            .iter()
+                            .filter(|cl| {
+                                if filter_annotated && !cl.has_annotations {
+                                    return false;
+                                }
+                                if filter_changed && !cl.hash_changed {
+                                    return false;
+                                }
+                                if !query_norm.is_empty()
+                                    && !normalize_name(&cl.label).contains(&query_norm)
+                                {
+                                    return false;
+                                }
+                                true
+                            })
+                            .collect();
                         if filtered.is_empty() {
                             continue;
                         }
-                        let collapsed = self.collapsed_groups.contains(group_name) && query_norm.is_empty();
-                        let header = format!(
-                            "{} {} ({})",
-                            if collapsed { "\u{25B6}" } else { "\u{25BC}" },
-                            group_name,
-                            filtered.len()
-                        );
+                        let collapsed = self.collapsed_groups.contains(group_name) && !any_filter;
+                        // Leading spaces reserve room for the painted disclosure triangle.
+                        let header = format!("   {} ({})", group_name, filtered.len());
                         let header_resp = ui.selectable_label(false,
                             egui::RichText::new(&header).strong()
                         );
-                        if header_resp.clicked() && query_norm.is_empty() {
+                        let tri_center =
+                            egui::pos2(header_resp.rect.left() + 7.0, header_resp.rect.center().y);
+                        paint_disclosure(
+                            ui.painter(),
+                            tri_center,
+                            collapsed,
+                            ui.visuals().strong_text_color(),
+                        );
+                        if header_resp.clicked() && !any_filter {
                             if self.collapsed_groups.contains(group_name) {
                                 self.collapsed_groups.remove(group_name);
                             } else {
@@ -836,10 +901,7 @@ impl eframe::App for App {
                             let color = if ann.fixed {
                                 egui::Color32::from_gray(140)
                             } else {
-                                match ann.source {
-                                    ImageSource::Reference => egui::Color32::from_rgb(255, 165, 0),
-                                    ImageSource::Generated => egui::Color32::from_rgb(0, 180, 80),
-                                }
+                                source_color(ann.source)
                             };
                             let src = match ann.source {
                                 ImageSource::Reference => "Ref",
@@ -992,6 +1054,30 @@ fn fit_size(tex: &egui::TextureHandle, max_w: f32, max_h: f32) -> egui::Vec2 {
     }
 }
 
+/// Paint a group disclosure triangle as a filled shape.
+///
+/// Drawn rather than rendered from a font glyph: the right-pointing triangle
+/// `\u{25B6}` has an emoji presentation and is absent from egui's monochrome
+/// text font, so it showed as a tofu box while the down triangle `\u{25BC}`
+/// rendered fine. A painted polygon sidesteps font glyph coverage entirely.
+fn paint_disclosure(painter: &egui::Painter, center: egui::Pos2, collapsed: bool, color: egui::Color32) {
+    let r = 4.0;
+    let points = if collapsed {
+        vec![
+            egui::pos2(center.x - r * 0.6, center.y - r),
+            egui::pos2(center.x - r * 0.6, center.y + r),
+            egui::pos2(center.x + r * 0.8, center.y),
+        ]
+    } else {
+        vec![
+            egui::pos2(center.x - r, center.y - r * 0.6),
+            egui::pos2(center.x + r, center.y - r * 0.6),
+            egui::pos2(center.x, center.y + r * 0.8),
+        ]
+    };
+    painter.add(egui::Shape::convex_polygon(points, color, egui::Stroke::NONE));
+}
+
 fn draw_grid_overlay(ctx: &egui::Context, rect: egui::Rect, spacing: f32) {
     let mut painter = ctx.layer_painter(egui::LayerId::new(
         egui::Order::Foreground,
@@ -1028,7 +1114,7 @@ fn show_image_clickable(
         let tex_size = [tex.size()[0], tex.size()[1]];
         let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::click());
         ui.painter()
-            .image(tex.id(), rect, egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), egui::Color32::WHITE);
+            .image(tex.id(), rect, FULL_UV, egui::Color32::WHITE);
         if app.show_grid {
             draw_grid_overlay(ctx, rect, app.grid_spacing);
         }
@@ -1073,10 +1159,7 @@ fn draw_annotation_markers(
         let color = if ann.fixed {
             egui::Color32::from_gray(160)
         } else {
-            match ann.source {
-                ImageSource::Reference => egui::Color32::from_rgb(255, 165, 0),
-                ImageSource::Generated => egui::Color32::from_rgb(0, 180, 80),
-            }
+            source_color(ann.source)
         };
         painter.circle_filled(center, 10.0, color);
         painter.text(
@@ -1116,14 +1199,7 @@ fn show_single(
         })
         .inner;
     if let Some(click) = click {
-        let (x_pt, y_pt) = screen_to_pdf_pts(&click);
-        app.pending_annotation = Some(PendingAnnotation {
-            page,
-            source,
-            x_pt,
-            y_pt,
-            text_buf: String::new(),
-        });
+        app.pending_annotation = Some(pending_from_click(&click, page, source));
     }
 }
 
@@ -1173,14 +1249,7 @@ fn show_side_by_side(
         .map(|c| (c, ImageSource::Reference))
         .or_else(|| gen_click.map(|c| (c, ImageSource::Generated)));
     if let Some((click, source)) = click_info {
-        let (x_pt, y_pt) = screen_to_pdf_pts(&click);
-        app.pending_annotation = Some(PendingAnnotation {
-            page,
-            source,
-            x_pt,
-            y_pt,
-            text_buf: String::new(),
-        });
+        app.pending_annotation = Some(pending_from_click(&click, page, source));
     }
 }
 
@@ -1348,7 +1417,7 @@ fn show_overlay(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: usi
                 ui.painter().image(
                     tex.id(),
                     rect,
-                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                    FULL_UV,
                     egui::Color32::WHITE,
                 );
                 if show_grid {
@@ -1374,14 +1443,8 @@ fn show_overlay(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: usi
             })
             .inner;
         if let Some(click) = click {
-            let (x_pt, y_pt) = screen_to_pdf_pts(&click);
-            app.pending_annotation = Some(PendingAnnotation {
-                page,
-                source: ImageSource::Generated,
-                x_pt,
-                y_pt,
-                text_buf: String::new(),
-            });
+            app.pending_annotation =
+                Some(pending_from_click(&click, page, ImageSource::Generated));
         }
     } else {
         ui.label("Could not load reference and/or generated images");
@@ -1444,14 +1507,7 @@ fn show_compare(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: usi
         .map(|c| (c, ImageSource::Reference))
         .or_else(|| gen_click.map(|c| (c, ImageSource::Generated)));
     if let Some((click, source)) = click_info {
-        let (x_pt, y_pt) = screen_to_pdf_pts(&click);
-        app.pending_annotation = Some(PendingAnnotation {
-            page,
-            source,
-            x_pt,
-            y_pt,
-            text_buf: String::new(),
-        });
+        app.pending_annotation = Some(pending_from_click(&click, page, source));
     }
 }
 
@@ -1477,7 +1533,7 @@ fn show_image_static(
         ui.painter().image(
             tex.id(),
             rect,
-            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+            FULL_UV,
             egui::Color32::WHITE,
         );
         if app.show_grid {
@@ -1525,7 +1581,7 @@ fn show_delta(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: usize
                 ui.painter().image(
                     tex.id(),
                     rect,
-                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                    FULL_UV,
                     egui::Color32::WHITE,
                 );
                 if show_grid {
@@ -1561,14 +1617,8 @@ fn show_delta(app: &mut App, ctx: &egui::Context, ui: &mut egui::Ui, page: usize
             })
             .inner;
         if let Some(click) = click {
-            let (x_pt, y_pt) = screen_to_pdf_pts(&click);
-            app.pending_annotation = Some(PendingAnnotation {
-                page,
-                source: ImageSource::Generated,
-                x_pt,
-                y_pt,
-                text_buf: String::new(),
-            });
+            app.pending_annotation =
+                Some(pending_from_click(&click, page, ImageSource::Generated));
         }
     } else {
         ui.label("Could not load acknowledged and/or generated images");
