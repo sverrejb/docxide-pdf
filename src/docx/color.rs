@@ -102,7 +102,47 @@ pub(super) fn resolve_dml_color(parent: roxmltree::Node, theme: &ThemeFonts) -> 
         let transforms = parse_color_transforms(scheme);
         return Some(apply_color_transforms(base, &transforms));
     }
+    if let Some(prst) = find_dml(parent, "prstClr") {
+        let base = preset_color_rgb(prst.attribute("val")?)?;
+        let transforms = parse_color_transforms(prst);
+        return Some(apply_color_transforms(base, &transforms));
+    }
     None
+}
+
+/// Map an OOXML `ST_PresetColorVal` name to an RGB triple. Covers the common
+/// presets (Word emits `prstClr` for shape outlines/fills — e.g. `black` for the
+/// boxes in the isla Venn diagram). Unknown names return None so the caller can
+/// fall back rather than guess.
+fn preset_color_rgb(name: &str) -> Option<[u8; 3]> {
+    Some(match name {
+        "black" => [0, 0, 0],
+        "white" => [255, 255, 255],
+        "red" => [255, 0, 0],
+        "green" => [0, 128, 0],
+        "blue" => [0, 0, 255],
+        "yellow" => [255, 255, 0],
+        "cyan" | "aqua" => [0, 255, 255],
+        "magenta" | "fuchsia" => [255, 0, 255],
+        "gray" | "grey" => [128, 128, 128],
+        "ltGray" | "lightGray" | "lightGrey" => [211, 211, 211],
+        "dkGray" | "darkGray" | "darkGrey" => [169, 169, 169],
+        "silver" => [192, 192, 192],
+        "orange" => [255, 165, 0],
+        "purple" => [128, 0, 128],
+        "brown" => [165, 42, 42],
+        "pink" => [255, 192, 203],
+        "gold" => [255, 215, 0],
+        "navy" => [0, 0, 128],
+        "teal" => [0, 128, 128],
+        "lime" => [0, 255, 0],
+        "maroon" => [128, 0, 0],
+        "olive" => [128, 128, 0],
+        "darkRed" => [139, 0, 0],
+        "darkGreen" => [0, 100, 0],
+        "darkBlue" => [0, 0, 139],
+        _ => return None,
+    })
 }
 
 /// Extract solid fill color from a shape/text properties node.

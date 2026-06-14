@@ -156,14 +156,14 @@
     "convert_ms": 7.2
   },
   "cases/case34": {
-    "jaccard": 0.9889,
-    "ssim": 0.9687,
-    "text_boundary": 0.0,
+    "jaccard": 0.9903,
+    "ssim": 0.9855,
+    "text_boundary": 0.75,
     "convert_ms": 6.4
   },
   "cases/case35": {
-    "jaccard": 0.9931,
-    "ssim": 0.9762,
+    "jaccard": 0.9954,
+    "ssim": 0.9925,
     "text_boundary": 1.0,
     "convert_ms": 6.6
   },
@@ -463,8 +463,8 @@
     "text_boundary": 0.0065
   },
   "new/carbon_farming_i..": {
-    "jaccard": 0.0812,
-    "ssim": 0.2577,
+    "jaccard": 0.0824,
+    "ssim": 0.2585,
     "text_boundary": 0.0616
   },
   "new/chinese_student_..": {
@@ -568,8 +568,8 @@
     "text_boundary": 0.7054
   },
   "new/isla_language_le..": {
-    "jaccard": 0.3742,
-    "ssim": 0.5654,
+    "jaccard": 0.3748,
+    "ssim": 0.5668,
     "text_boundary": 0.7161
   },
   "new/japanese_land_de..": {
@@ -613,8 +613,8 @@
     "text_boundary": 1.0
   },
   "new/pendulum_mechani..": {
-    "jaccard": 0.1372,
-    "ssim": 0.2528,
+    "jaccard": 0.1395,
+    "ssim": 0.2584,
     "text_boundary": 0.1333
   },
   "new/polish_municipal..": {
@@ -703,8 +703,8 @@
     "text_boundary": 0.5455
   },
   "new/turkish_chemistr..": {
-    "jaccard": 0.1718,
-    "ssim": 0.8597,
+    "jaccard": 0.1889,
+    "ssim": 0.8583,
     "text_boundary": 1.0
   },
   "new/turkish_journal_..": {
@@ -962,7 +962,7 @@
   },
   "scraped/polish_municipal..": {
     "jaccard": 0.3961,
-    "ssim": 0.7566,
+    "ssim": 0.7604,
     "text_boundary": 0.9259,
     "convert_ms": 11.8
   },
@@ -1037,8 +1037,8 @@
     "convert_ms": 493.0
   },
   "scraped/turkish_ancient_..": {
-    "jaccard": 0.2082,
-    "ssim": 0.6006,
+    "jaccard": 0.2253,
+    "ssim": 0.6084,
     "text_boundary": 1.0,
     "convert_ms": 4.2
   },

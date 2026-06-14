@@ -54,10 +54,14 @@ fn draw_border(content: &mut Content, border: &CellBorder, x1: f32, y1: f32, x2:
             );
         }
         BorderStyle::Double => {
-            // Word renders each line of a double border at the full
-            // specified width, separated by a gap equal to the width.
+            // Word renders each line of a double border at the full specified
+            // width, separated by a clear gap of the same width. The gap here is
+            // the center-to-center distance, so it must be 2×width: each line's
+            // stroke spans ±width/2, and 2×width centers leave a width-wide gap
+            // between their edges. (gap == width made the edges touch, so
+            // antialiasing merged the pair into one thick line.)
             let thin = w.max(0.25);
-            let gap = thin;
+            let gap = thin * 2.0;
             content.set_line_width(thin);
             content.move_to(x1, y1);
             content.line_to(x2, y2);

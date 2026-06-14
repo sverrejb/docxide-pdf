@@ -272,7 +272,7 @@ pub(super) fn read_image_from_zip_extra<R: Read + Seek>(
     let mut data = Vec::new();
     entry.read_to_end(&mut data).ok()?;
     if super::wmf::is_wmf(&data) {
-        data = super::wmf::wmf_to_bmp(&data)?;
+        data = super::wmf::wmf_to_raster(&data)?;
     }
     let (pw, ph, fmt, components) = image_dimensions(&data)?;
     Some(EmbeddedImage {
@@ -712,8 +712,8 @@ pub(super) fn compute_drawing_info<R: Read + Seek>(
 /// Extract an inline image from a `<w:object>` VML fallback.
 ///
 /// Word's OLE static-metafile embeddings use a `<v:imagedata r:id="..."/>`
-/// child to point at a WMF/EMF/raster fallback. For WMFs whose content is a
-/// single DIB-bearing record we can convert that to BMP in `wmf::wmf_to_bmp`
+/// child to point at a WMF/EMF/raster fallback. For WMFs whose content is one
+/// or more DIB-bearing records we can rasterize them in `wmf::wmf_to_raster`
 /// and render normally; this function finds the imagedata reference and
 /// pulls the image with the display dimensions declared on the surrounding
 /// VML shape (or on the `<w:object>` itself as a fallback).

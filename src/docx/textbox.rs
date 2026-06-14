@@ -614,6 +614,39 @@ fn parse_style_stroke_width(wsp: roxmltree::Node) -> f32 {
     }
 }
 
+/// Parse a VML color value: `#RRGGBB`, a named color, or a theme token like
+/// `white [3212]` (the `[idx]` suffix is the resolved theme color we ignore in
+/// favor of the spelled-out name). Returns None for unrecognized values so the
+/// caller can fall back to a default.
+fn parse_vml_color(val: &str) -> Option<[u8; 3]> {
+    let val = val.trim().split('[').next().unwrap_or("").trim();
+    if let Some(hex) = val.strip_prefix('#') {
+        if hex.len() == 6 {
+            return super::parse_hex_color(hex);
+        }
+        if hex.len() == 3 {
+            let expand = |c: &str| u8::from_str_radix(&c.repeat(2), 16).ok();
+            return Some([
+                expand(&hex[0..1])?,
+                expand(&hex[1..2])?,
+                expand(&hex[2..3])?,
+            ]);
+        }
+        return None;
+    }
+    match val.to_ascii_lowercase().as_str() {
+        "black" => Some([0, 0, 0]),
+        "white" => Some([255, 255, 255]),
+        "red" => Some([255, 0, 0]),
+        "green" => Some([0, 128, 0]),
+        "blue" => Some([0, 0, 255]),
+        "yellow" => Some([255, 255, 0]),
+        "gray" | "grey" => Some([128, 128, 128]),
+        "silver" => Some([192, 192, 192]),
+        _ => None,
+    }
+}
+
 pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
     pict_node: roxmltree::Node,
     ctx: &mut ParseContext<'_, R>,
@@ -645,6 +678,26 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
     let mut v_relative = VRelativeFrom::Paragraph;
 
     let parse_pt = |s: &str| -> f32 { s.trim_end_matches("pt").parse::<f32>().unwrap_or(0.0) };
+
+    // VML shapes are stroked by default (black, 0.75pt) unless stroked="f".
+    // Word renders this border, so honor it — previously every VML textbox was
+    // forced borderless, dropping e.g. the "Nota Bene" box outline.
+    let stroked = !matches!(shape.attribute("stroked"), Some("f") | Some("false"));
+    let (stroke_color, stroke_width) = if stroked {
+        let w = shape
+            .attribute("strokeweight")
+            .map(parse_pt)
+            .filter(|w| *w > 0.0)
+            .unwrap_or(0.75);
+        let c = shape
+            .attribute("strokecolor")
+            .and_then(parse_vml_color)
+            .unwrap_or([0, 0, 0]);
+        (Some(c), w)
+    } else {
+        (None, 0.0)
+    };
+
     for part in style_str.split(';') {
         if let Some((key, val)) = part.trim().split_once(':') {
             let val = val.trim();
@@ -688,8 +741,8 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         v_relative_from: v_relative,
         fill: None,
         shape_type: ShapeGeometry::default(),
-        stroke_color: None,
-        stroke_width: 0.0,
+        stroke_color,
+        stroke_width,
         text_anchor: TextAnchor::Top,
         margin_left: 7.2,
         margin_right: 7.2,

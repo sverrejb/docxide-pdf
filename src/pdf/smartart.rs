@@ -25,6 +25,17 @@ pub(super) fn draw_shape_path(
     }
 }
 
+/// Evaluate a preset shape's text rectangle — the region Word lays text out
+/// within, which for shapes like arrows, triangles, and pentagons is smaller
+/// than the bounding box (e.g. an arrow's text sits in its rectangular body,
+/// not over the arrowhead). Returns `(x_from_left, y_from_bottom, w, h)` in
+/// points, or None for custom geometry / shapes without a defined text rect.
+pub(super) fn shape_text_rect(shape: &ShapeGeometry, w: f32, h: f32) -> Option<(f32, f32, f32, f32)> {
+    let eval = evaluate_shape_geometry(shape, w as f64, h as f64)?;
+    let (l, b, rw, rh) = eval.text_rect?;
+    Some((l as f32, b as f32, rw as f32, rh as f32))
+}
+
 fn evaluate_shape_geometry(
     shape: &ShapeGeometry,
     w: f64,

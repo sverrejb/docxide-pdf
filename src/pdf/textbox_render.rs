@@ -146,8 +146,16 @@ pub(super) fn render_single_textbox(
         }
     }
 
-    let content_x = tb_x + tb.margin_left;
-    let natural_w = (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0);
+    // Lay text out within the shape's text rectangle (e.g. an arrow's body,
+    // not its head). For plain rectangles this is the full box, so non-shape
+    // textboxes are unaffected. Body-margin insets apply within the text rect.
+    let (txt_l, txt_b, txt_w, txt_h) =
+        super::smartart::shape_text_rect(&tb.shape_type, tb.width_pt, tb_height)
+            .unwrap_or((0.0, 0.0, tb.width_pt, tb_height));
+    let text_top = tb_y_top - tb_height + txt_b + txt_h;
+
+    let content_x = tb_x + txt_l + tb.margin_left;
+    let natural_w = (txt_w - tb.margin_left - tb.margin_right).max(0.0);
     // no_text_wrap uses a huge width for line-breaking to prevent wrapping,
     // but alignment still uses the natural textbox width
     let content_w = if tb.no_text_wrap { 10000.0 } else { natural_w };
@@ -227,7 +235,7 @@ pub(super) fn render_single_textbox(
                 let n = lines.len().max(1) as f32;
                 total_h += tp.space_before + n * lh + tp.space_after;
             }
-            let available = tb_height - tb.margin_top - tb.margin_bottom;
+            let available = txt_h - tb.margin_top - tb.margin_bottom;
             let gap = (available - total_h).max(0.0);
             match tb.text_anchor {
                 TextAnchor::Middle => gap / 2.0,
@@ -254,7 +262,7 @@ pub(super) fn render_single_textbox(
         let mut discard_links: Vec<LinkAnnotation> = Vec::new();
         render_textbox_paragraphs(
             &tb.paragraphs, content, content_x, content_w, align_w,
-            tb_y_top - tb.margin_top - anchor_offset,
+            text_top - tb.margin_top - anchor_offset,
             0.0, 0.0, None, false, &mut discard_links, ctx, clip_bottom,
             gradient_specs,
         );
@@ -273,7 +281,7 @@ pub(super) fn render_single_textbox(
         let mut discard_links: Vec<LinkAnnotation> = Vec::new();
         render_textbox_paragraphs(
             &tb.paragraphs, content, content_x, content_w, align_w,
-            tb_y_top - tb.margin_top - anchor_offset,
+            text_top - tb.margin_top - anchor_offset,
             shadow.offset_x, shadow.offset_y, Some(shadow_color),
             false, &mut discard_links, ctx, clip_bottom,
             gradient_specs,
@@ -283,7 +291,7 @@ pub(super) fn render_single_textbox(
 
     render_textbox_paragraphs(
         &tb.paragraphs, content, content_x, content_w, align_w,
-        tb_y_top - tb.margin_top - anchor_offset,
+        text_top - tb.margin_top - anchor_offset,
         0.0, 0.0, None, true, page_links, ctx, clip_bottom,
         gradient_specs,
     );
