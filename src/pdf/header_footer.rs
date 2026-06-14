@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use pdf_writer::Content;
 
 use crate::model::{
-    Alignment, Block, Document, FieldCode, HeaderFooter, Paragraph, Run, SectionProperties,
-    TextAnchor, VRelativeFrom, VerticalPosition, WrapType,
+    Alignment, Block, Document, FieldCode, HRelativeFrom, HeaderFooter, HorizontalPosition,
+    Paragraph, Run, SectionProperties, TextAnchor, VRelativeFrom, VerticalPosition, WrapType,
 };
 
 use super::layout::{
@@ -345,11 +345,43 @@ pub(super) fn render_header_footer(
                     .map(|l| l.total_width)
                     .fold(0.0f32, f32::max);
 
-                let frame_x = resolve_h_position(
-                    fp.h_relative_from, &fp.h_position, content_width,
-                    sp, sp.margin_left, text_width, text_width,
-                );
-                let frame_baseline = cursor_y - font_size * ascender_ratio;
+                // A framePr with an explicit width (w:w) positions a fixed-width
+                // frame box within the anchor area; text then flows from the
+                // frame's left edge. Without a width we fall back to aligning the
+                // text itself (legacy behaviour).
+                let frame_x = if fp.width > 0.0 {
+                    let (origin, area_width) = match fp.h_relative_from {
+                        HRelativeFrom::Page => (0.0, sp.page_width),
+                        HRelativeFrom::Margin | HRelativeFrom::Column => {
+                            (sp.margin_left, text_width)
+                        }
+                    };
+                    let frame_left = match fp.h_position {
+                        HorizontalPosition::AlignRight => origin + area_width - fp.width,
+                        HorizontalPosition::AlignCenter => {
+                            origin + (area_width - fp.width) / 2.0
+                        }
+                        HorizontalPosition::AlignLeft => origin,
+                        HorizontalPosition::Offset(o) => origin + o,
+                    };
+                    frame_left + para.indent_left
+                } else {
+                    resolve_h_position(
+                        fp.h_relative_from, &fp.h_position, content_width,
+                        sp, sp.margin_left, text_width, text_width,
+                    )
+                };
+                // vAnchor + w:y pin the frame top to the page/margin, independent
+                // of the flowing header/footer cursor. Paragraph-anchored frames
+                // keep the in-flow position.
+                let frame_top = match fp.v_relative_from {
+                    VRelativeFrom::Page => sp.page_height - fp.y_offset,
+                    VRelativeFrom::Margin | VRelativeFrom::TopMargin => {
+                        sp.page_height - sp.margin_top - fp.y_offset
+                    }
+                    VRelativeFrom::Paragraph => cursor_y,
+                };
+                let frame_baseline = frame_top - font_size * ascender_ratio;
 
                 render_paragraph_lines(
                     content, &lines, &Alignment::Left,

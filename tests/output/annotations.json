@@ -1,5 +1,5 @@
 {
-  "next_id": 197,
+  "next_id": 198,
   "annotations": [
     {
       "id": 8,
@@ -69,7 +69,7 @@
       "x_pt": 366.7227,
       "y_pt": 747.4167,
       "note": "The European logo is too high compared to the other image. They should be aligned at the top just about.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 111,
@@ -99,7 +99,7 @@
       "x_pt": 516.4139,
       "y_pt": 127.313354,
       "note": "Text outside table here.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 117,
@@ -169,7 +169,7 @@
       "x_pt": 95.37916,
       "y_pt": 273.9615,
       "note": "List item 5.  is indented here for some reason",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 133,
@@ -189,7 +189,7 @@
       "x_pt": 125.16714,
       "y_pt": 774.348,
       "note": "Line shift at \"Part\" and III here.  Should not be here.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 145,
@@ -252,16 +252,6 @@
       "fixed": false
     },
     {
-      "id": 162,
-      "case": "new/dutch_government_budget_letter",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 306.64508,
-      "y_pt": 793.95026,
-      "note": "For some reason we render this logo here, it should not be here compared to reference.",
-      "fixed": false
-    },
-    {
       "id": 165,
       "case": "new/isla_language_lesson_plan",
       "page": 6,
@@ -299,16 +289,6 @@
       "x_pt": 39.21885,
       "y_pt": 375.34235,
       "note": "\"70 .. \" text should be rotated 90 degs, and also the arrow is placed wrong.",
-      "fixed": false
-    },
-    {
-      "id": 169,
-      "case": "new/japanese_land_development_sign_form",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 353.71103,
-      "y_pt": 245.25708,
-      "note": "This line should be thick and grey",
       "fixed": false
     },
     {
@@ -482,16 +462,6 @@
       "fixed": false
     },
     {
-      "id": 194,
-      "case": "new/bosch_software_ai_announcement",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 558.0616,
-      "y_pt": 10.348145,
-      "note": "Page number goes outside page. Also placed too low.",
-      "fixed": false
-    },
-    {
       "id": 195,
       "case": "new/bosch_software_ai_announcement",
       "page": 0,
@@ -502,13 +472,13 @@
       "fixed": false
     },
     {
-      "id": 196,
-      "case": "new/bosch_software_ai_announcement",
+      "id": 197,
+      "case": "new/japanese_land_development_sign_form",
       "page": 0,
       "source": "Generated",
-      "x_pt": 534.17786,
-      "y_pt": 835.53284,
-      "note": "6 januari text placed wrong.",
+      "x_pt": 172.9404,
+      "y_pt": 238.3891,
+      "note": "This grey line should be dithered or something. Compare with reference",
       "fixed": false
     }
   ]

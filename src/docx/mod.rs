@@ -371,11 +371,16 @@ pub(super) fn parse_frame_props(ppr: roxmltree::Node) -> Option<FrameProperties>
         .and_then(|v| v.parse::<f32>().ok())
         .unwrap_or(0.0)
         / 20.0;
+    let width = attr("w")
+        .and_then(|v| v.parse::<f32>().ok())
+        .unwrap_or(0.0)
+        / 20.0;
     Some(FrameProperties {
         h_relative_from: h_anchor,
         h_position,
         v_relative_from: v_anchor,
         y_offset: y_pts,
+        width,
     })
 }
 

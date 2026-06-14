@@ -449,6 +449,15 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
             continue;
         }
 
+        // Word does not print drawings flagged hidden="1" on wp:docPr (e.g.
+        // template logos or document-management metadata shapes); skip them.
+        if wpd(container, "docPr")
+            .and_then(|n| n.attribute("hidden"))
+            .is_some_and(|v| v == "1" || v == "true")
+        {
+            continue;
+        }
+
         let (display_w, display_h) = extent_dimensions(container);
 
         // Canvas/group drawings hold multiple shapes; flatten them before the

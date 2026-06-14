@@ -310,9 +310,9 @@
     "text_boundary": 1.0
   },
   "cases/case61": {
-    "jaccard": 0.2626,
-    "ssim": 0.7216,
-    "text_boundary": 0.6471
+    "jaccard": 0.2997,
+    "ssim": 0.8449,
+    "text_boundary": 1.0
   },
   "cases/case62": {
     "jaccard": 0.8119,
@@ -458,9 +458,9 @@
     "text_boundary": 0.9846
   },
   "new/bosch_software_a..": {
-    "jaccard": 0.0217,
-    "ssim": 0.1306,
-    "text_boundary": 0.0053
+    "jaccard": 0.0225,
+    "ssim": 0.132,
+    "text_boundary": 0.0065
   },
   "new/carbon_farming_i..": {
     "jaccard": 0.0812,
@@ -518,7 +518,7 @@
     "text_boundary": 1.0
   },
   "new/dutch_government..": {
-    "jaccard": 0.1649,
+    "jaccard": 0.1945,
     "ssim": 0.9269,
     "text_boundary": 0.9091
   },
@@ -535,7 +535,7 @@
   "new/environmental_la..": {
     "jaccard": 0.0851,
     "ssim": 0.1845,
-    "text_boundary": 0.0351
+    "text_boundary": 0.0334
   },
   "new/erasmus_plus_sta..": {
     "jaccard": 0.1915,
@@ -573,8 +573,8 @@
     "text_boundary": 0.7161
   },
   "new/japanese_land_de..": {
-    "jaccard": 0.1047,
-    "ssim": 0.2952,
+    "jaccard": 0.1025,
+    "ssim": 0.2937,
     "text_boundary": 0.1111
   },
   "new/k4_regulations_s..": {
@@ -603,9 +603,9 @@
     "text_boundary": 1.0
   },
   "new/master_thesis_le..": {
-    "jaccard": 0.1555,
-    "ssim": 0.2785,
-    "text_boundary": 0.5756
+    "jaccard": 0.1566,
+    "ssim": 0.2793,
+    "text_boundary": 0.593
   },
   "new/old_blue_truck_g..": {
     "jaccard": 0.7475,
@@ -855,7 +855,7 @@
   "scraped/federal_procurem..": {
     "jaccard": 0.5505,
     "ssim": 0.7845,
-    "text_boundary": 0.8504,
+    "text_boundary": 0.8827,
     "convert_ms": 57.1
   },
   "scraped/feminist_voice_d..": {
@@ -1019,8 +1019,8 @@
     "text_boundary": 1.0
   },
   "scraped/stem_partnership..": {
-    "jaccard": 0.2442,
-    "ssim": 0.3086,
+    "jaccard": 0.257,
+    "ssim": 0.3111,
     "text_boundary": 0.2199,
     "convert_ms": 32.2
   },
@@ -1049,9 +1049,9 @@
     "convert_ms": 2.4
   },
   "scraped/uk_commercial_le..": {
-    "jaccard": 0.093,
-    "ssim": 0.2313,
-    "text_boundary": 0.0783,
+    "jaccard": 0.0945,
+    "ssim": 0.2332,
+    "text_boundary": 0.0911,
     "convert_ms": 326.3
   },
   "scraped/ukraine_humanita..": {

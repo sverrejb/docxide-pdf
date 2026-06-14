@@ -220,10 +220,10 @@ pub enum WrapText {
 pub struct FrameProperties {
     pub h_relative_from: HRelativeFrom,
     pub h_position: HorizontalPosition,
-    #[allow(dead_code)]
     pub v_relative_from: VRelativeFrom,
-    #[allow(dead_code)]
     pub y_offset: f32,
+    /// Frame width `w:w` in points (0 = auto/unspecified).
+    pub width: f32,
 }
 
 #[derive(Clone, Debug, PartialEq)]

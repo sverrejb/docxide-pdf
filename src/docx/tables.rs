@@ -16,6 +16,31 @@ use super::{
     twips_attr, twips_to_pts, wml, wml_attr, wml_bool,
 };
 
+/// Approximate a `w:shd` pattern fill (stripes/cross/pctNN) as a solid color,
+/// since the renderer only does solid cell fills. The pattern ink (`w:color`)
+/// defaults to black and the background to white when `auto`; `pctNN` blends by
+/// its percentage, named patterns by an estimated coverage. Returns `None` for
+/// `clear`/`solid`/`nil` (no pattern tint to approximate).
+fn approx_pattern_shade(val: &str, color: Option<[u8; 3]>) -> Option<[u8; 3]> {
+    let coverage = if let Some(rest) = val.strip_prefix("pct") {
+        (rest.parse::<f32>().ok()? / 100.0).clamp(0.0, 1.0)
+    } else {
+        match val {
+            "thinHorzStripe" | "thinVertStripe" | "thinDiagStripe"
+            | "thinReverseDiagStripe" => 0.30,
+            "horzStripe" | "vertStripe" | "diagStripe" | "reverseDiagStripe" => 0.45,
+            "thinHorzCross" | "thinDiagCross" => 0.40,
+            "horzCross" | "diagCross" => 0.55,
+            _ => return None,
+        }
+    };
+    let fg = color.unwrap_or([0, 0, 0]);
+    let blend = |bg: u8, ink: u8| {
+        (bg as f32 * (1.0 - coverage) + ink as f32 * coverage).round() as u8
+    };
+    Some([blend(255, fg[0]), blend(255, fg[1]), blend(255, fg[2])])
+}
+
 fn is_wml(node: &roxmltree::Node, name: &str) -> bool {
     node.tag_name().name() == name && node.tag_name().namespace() == Some(WML_NS)
 }
@@ -538,12 +563,25 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                 })
                 .unwrap_or(cond_borders);
 
-            // Inline shading overrides conditional shading
+            // Inline shading overrides conditional shading. An explicit fill
+            // color wins; otherwise a pattern fill (stripes/cross/pctNN) with an
+            // auto fill is approximated as a solid tint, since the renderer only
+            // supports solid cell fills.
             let shading = tc_pr
                 .and_then(|pr| wml(pr, "shd"))
-                .and_then(|shd| shd.attribute((WML_NS, "fill")))
-                .filter(|f| *f != "none")
-                .and_then(parse_hex_color)
+                .and_then(|shd| {
+                    let val = shd.attribute((WML_NS, "val")).unwrap_or("clear");
+                    let fill = shd.attribute((WML_NS, "fill")).unwrap_or("auto");
+                    if fill != "none" && fill != "auto" {
+                        if let Some(c) = parse_hex_color(fill) {
+                            return Some(c);
+                        }
+                    }
+                    let color = shd
+                        .attribute((WML_NS, "color"))
+                        .and_then(parse_hex_color);
+                    approx_pattern_shade(val, color)
+                })
                 .or(cond_shading);
 
             let per_cell_margins = tc_pr

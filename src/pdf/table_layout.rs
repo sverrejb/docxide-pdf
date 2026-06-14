@@ -394,14 +394,16 @@ pub(super) fn compute_row_layouts(
                 .map(|cell| {
                     let span = cell.grid_span.max(1) as usize;
                     let span_w = cell_span_width(col_widths, grid_col, span);
-                    // When content-based column widths are narrower than the
-                    // cell's preferred width (nested auto-fit tables), respect
-                    // the computed widths instead of overriding with cell.width.
-                    let grid_w = cell_span_width(&table.col_widths, grid_col, span);
-                    let col_w = if span_w < grid_w * 0.9 {
-                        span_w
-                    } else {
+                    // For auto-fit tables the resolved grid width is what the
+                    // renderer draws borders and content at, so the layout must
+                    // use the same width — a larger tcW preference otherwise wraps
+                    // text past the drawn cell border (#115). Fixed-layout tables
+                    // keep honoring the cell's preferred width (their gridCol can
+                    // be narrower than Word's effective column).
+                    let col_w = if table.fixed_layout {
                         span_w.max(cell.width)
+                    } else {
+                        span_w
                     };
                     grid_col += span;
 
