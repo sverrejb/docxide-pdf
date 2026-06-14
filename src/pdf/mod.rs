@@ -1680,6 +1680,23 @@ fn render_paragraph_block(
     let next_borders_match = next_para
         .is_some_and(|np| borders_match(&para.borders, &np.borders));
 
+    // Per ISO/IEC 29500 §17.3.1.5/.7, identical adjoining paragraphs share a
+    // single `between` rule (or none, if unspecified) instead of individual
+    // bottom/top borders. Word follows this — collapsing the divider — when a
+    // `between` border is defined, when a competing top border meets this
+    // bottom border, or when either paragraph is *empty* (e.g. blank spacer
+    // paragraphs in a consent form, where the whole run collapses to one rule
+    // at the group's outer edge). The exception is two *non-empty* identical
+    // paragraphs separated only by a bottom rule — e.g. survey rows — where
+    // Word keeps each rule, so the divider between them must still be drawn.
+    let next_has_top = next_para.is_some_and(|np| np.borders.top.is_some());
+    let next_is_empty = next_para.is_some_and(|np| is_text_empty(&np.runs));
+    let bottom_collapses = next_borders_match
+        && (next_has_top
+            || para.borders.between.is_some()
+            || text_empty
+            || next_is_empty);
+
     let bdr_top_pad = if prev_borders_match {
         0.0
     } else {
@@ -1689,7 +1706,7 @@ fn render_paragraph_block(
             .map(|b| b.space_pt + b.width_pt / 2.0)
             .unwrap_or(0.0)
     };
-    let bdr_bottom_pad = if next_borders_match {
+    let bdr_bottom_pad = if bottom_collapses {
         0.0
     } else {
         para.borders
@@ -1699,7 +1716,7 @@ fn render_paragraph_block(
             .unwrap_or(0.0)
     };
     // Full extent of bottom border below content (to border bottom edge)
-    let bdr_bottom_extent = if next_borders_match {
+    let bdr_bottom_extent = if bottom_collapses {
         0.0
     } else {
         para.borders
@@ -2450,7 +2467,7 @@ fn render_paragraph_block(
                 draw_h_border(&mut state.pb.content, b, box_top);
             }
         }
-        if next_borders_match {
+        if bottom_collapses {
             if let Some(b) = &bdr.between {
                 draw_h_border(&mut state.pb.content, b, box_bottom);
             }

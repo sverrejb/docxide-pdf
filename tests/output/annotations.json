@@ -1,5 +1,5 @@
 {
-  "next_id": 193,
+  "next_id": 194,
   "annotations": [
     {
       "id": 8,
@@ -152,16 +152,6 @@
       "fixed": false
     },
     {
-      "id": 122,
-      "case": "samples/samtale",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 501.98163,
-      "y_pt": 250.85443,
-      "note": "Missing grey line between 12. and 13. here",
-      "fixed": false
-    },
-    {
       "id": 124,
       "case": "new/english_town_council_report",
       "page": 2,
@@ -299,16 +289,6 @@
       "x_pt": 314.82956,
       "y_pt": 51.074585,
       "note": "footer is wrong, xxxxx stuff should float left, the copyright part should float right",
-      "fixed": false
-    },
-    {
-      "id": 161,
-      "case": "new/dutch_government_budget_letter",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 478.99393,
-      "y_pt": 32.31488,
-      "note": "Page number(?) should not be here? Compare with reference.",
       "fixed": false
     },
     {
@@ -539,6 +519,16 @@
       "x_pt": 352.86774,
       "y_pt": 786.76215,
       "note": "Owl should be on the right, with the \"Univerzita ...\" heading between the logos, not under the \"Filozofica ...\" logo",
+      "fixed": false
+    },
+    {
+      "id": 193,
+      "case": "samples/samtale",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 517.35547,
+      "y_pt": 228.43283,
+      "note": "Too little white space in the \"13\" box, HR goes through 13-",
       "fixed": false
     }
   ]

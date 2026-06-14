@@ -27,6 +27,20 @@ fn is_dynamic_field(instr: &str) -> bool {
         || keyword.eq_ignore_ascii_case("PAGEREF")
 }
 
+/// One open complex field while parsing runs. Word fields nest: a field that
+/// begins inside another field's *instruction* region (before its `separate`)
+/// is an argument to the parent (e.g. a `PAGE` field used inside an `IF`
+/// expression) and must never display on its own — Word substitutes the
+/// parent's evaluated result. A field that begins inside a parent's *result*
+/// region (after `separate`, e.g. a `PAGEREF` inside a `TOC` result) is visible
+/// content and is processed normally. `visible` records which case applies.
+struct FieldFrame {
+    seen_sep: bool,
+    visible: bool,
+    instr: String,
+    result: String,
+}
+
 fn parse_styleref_arg(instr: &str) -> Option<String> {
     let trimmed = instr.trim();
     let kw = trimmed.split_whitespace().next()?;
@@ -735,10 +749,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
     let mut has_page_break_after = false;
     let mut page_break_before_content = false;
     let mut has_column_break = false;
-    let mut in_field = false;
-    let mut in_field_result = false;
-    let mut field_instr = String::new();
-    let mut field_result_text = String::new();
+    let mut field_stack: Vec<FieldFrame> = Vec::new();
 
     for (run_node, hyperlink_url, is_anchor_hyperlink, comment_ids) in run_nodes {
         let runs_before = runs.len();
@@ -805,71 +816,98 @@ pub(super) fn parse_runs<R: Read + Seek>(
             match child.tag_name().name() {
                 "fldChar" => match child.attribute((WML_NS, "fldCharType")) {
                     Some("begin") => {
-                        flush_pending(&mut pending_text, &mut runs);
-                        in_field = true;
-                        in_field_result = false;
-                        field_instr.clear();
-                        field_result_text.clear();
+                        // A field is visible content unless the innermost open
+                        // field is still in its instruction region — in which
+                        // case this is a field argument and never displays.
+                        let parent_visible =
+                            field_stack.last().map_or(true, |f| f.seen_sep);
+                        if field_stack.is_empty() {
+                            flush_pending(&mut pending_text, &mut runs);
+                        }
+                        field_stack.push(FieldFrame {
+                            seen_sep: false,
+                            visible: parent_visible,
+                            instr: String::new(),
+                            result: String::new(),
+                        });
                     }
                     Some("separate") => {
-                        in_field_result = true;
+                        if let Some(f) = field_stack.last_mut() {
+                            f.seen_sep = true;
+                        }
                     }
                     Some("end") => {
-                        if in_field {
-                            let keyword = field_instr.split_whitespace().next().unwrap_or("");
-                            let fc = if keyword.eq_ignore_ascii_case("PAGE") {
-                                Some(FieldCode::Page)
-                            } else if keyword.eq_ignore_ascii_case("NUMPAGES") {
-                                Some(FieldCode::NumPages)
-                            } else if keyword.eq_ignore_ascii_case("STYLEREF") {
-                                parse_styleref_arg(&field_instr).map(FieldCode::StyleRef)
-                            } else if keyword.eq_ignore_ascii_case("PAGEREF") {
-                                field_instr.split_whitespace().nth(1)
-                                    .map(|s| FieldCode::PageRef(s.to_string()))
-                            } else {
-                                None
-                            };
-                            if let Some(code) = fc {
-                                let text = std::mem::take(&mut field_result_text);
-                                runs.push(Run {
-                                    text,
-                                    field_code: Some(code),
-                                    hyperlink_url: hyperlink_url.clone(),
-                                    ..fmt.styled_run()
-                                });
+                        if let Some(f) = field_stack.pop() {
+                            if f.visible {
+                                let keyword =
+                                    f.instr.split_whitespace().next().unwrap_or("");
+                                let fc = if keyword.eq_ignore_ascii_case("PAGE") {
+                                    Some(FieldCode::Page)
+                                } else if keyword.eq_ignore_ascii_case("NUMPAGES") {
+                                    Some(FieldCode::NumPages)
+                                } else if keyword.eq_ignore_ascii_case("STYLEREF") {
+                                    parse_styleref_arg(&f.instr).map(FieldCode::StyleRef)
+                                } else if keyword.eq_ignore_ascii_case("PAGEREF") {
+                                    f.instr.split_whitespace().nth(1)
+                                        .map(|s| FieldCode::PageRef(s.to_string()))
+                                } else {
+                                    None
+                                };
+                                if let Some(code) = fc {
+                                    runs.push(Run {
+                                        text: f.result,
+                                        field_code: Some(code),
+                                        hyperlink_url: hyperlink_url.clone(),
+                                        ..fmt.styled_run()
+                                    });
+                                }
                             }
-                            in_field = false;
-                            in_field_result = false;
-                            field_instr.clear();
                         }
                     }
                     _ => {}
                 },
-                "instrText" if in_field && !in_field_result => {
-                    if let Some(t) = child.text() {
-                        field_instr.push_str(t);
+                "instrText" => {
+                    // Instruction text belongs to the innermost open field that
+                    // has not yet reached its separator.
+                    if let Some(f) = field_stack.last_mut() {
+                        if !f.seen_sep {
+                            if let Some(t) = child.text() {
+                                f.instr.push_str(t);
+                            }
+                        }
                     }
                 }
-                "t" if !in_field || (in_field_result && !is_dynamic_field(&field_instr)) => {
-                    if let Some(t) = child.text() {
-                        pending_text.push_str(&t.replace('\n', " "));
-                    }
-                }
-                "t" if in_field_result && is_dynamic_field(&field_instr) => {
-                    if let Some(t) = child.text() {
-                        field_result_text.push_str(t);
+                "t" => {
+                    let visible = field_stack.last().map_or(true, |f| f.seen_sep);
+                    let dyn_result = field_stack
+                        .last()
+                        .is_some_and(|f| f.seen_sep && is_dynamic_field(&f.instr));
+                    if dyn_result {
+                        // Cached result of a dynamic field — keep it as the
+                        // field run's placeholder text (re-evaluated at render).
+                        if let Some(t) = child.text() {
+                            field_stack.last_mut().unwrap().result.push_str(t);
+                        }
+                    } else if visible {
+                        if let Some(t) = child.text() {
+                            pending_text.push_str(&t.replace('\n', " "));
+                        }
                     }
                 }
                 "noBreakHyphen" => {
                     pending_text.push('-');
                 }
-                "tab" if !in_field
-                    || (in_field_result && !is_dynamic_field(&field_instr)) =>
-                {
-                    flush_pending(&mut pending_text, &mut runs);
-                    runs.push(fmt.tab_run());
+                "tab" => {
+                    let visible = field_stack.last().map_or(true, |f| f.seen_sep);
+                    let dyn_result = field_stack
+                        .last()
+                        .is_some_and(|f| f.seen_sep && is_dynamic_field(&f.instr));
+                    if visible && !dyn_result {
+                        flush_pending(&mut pending_text, &mut runs);
+                        runs.push(fmt.tab_run());
+                    }
                 }
-                "br" if !in_field => match child.attribute((WML_NS, "type")) {
+                "br" if field_stack.is_empty() => match child.attribute((WML_NS, "type")) {
                     Some("page") => {
                         if runs.is_empty() && pending_text.is_empty() {
                             page_break_before_content = true;
@@ -886,7 +924,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         });
                     }
                 },
-                "drawing" if in_field => {}
+                "drawing" if !field_stack.is_empty() => {}
                 "drawing" => {
                     flush_pending(&mut pending_text, &mut runs);
                     let result = parse_run_drawing(child, ctx);
@@ -901,7 +939,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         connectors
                     );
                 }
-                "pict" if !in_field => {
+                "pict" if field_stack.is_empty() => {
                     if let Some(hr) = parse_vml_horizontal_rule(child) {
                         horizontal_rule = Some(hr);
                     } else if let Some(tb) =
@@ -910,7 +948,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         textboxes.push(tb);
                     }
                 }
-                "object" if !in_field => {
+                "object" if field_stack.is_empty() => {
                     flush_pending(&mut pending_text, &mut runs);
                     if let Some(img) = parse_object_inline_image(child, ctx) {
                         runs.push(Run {
@@ -919,7 +957,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         });
                     }
                 }
-                "footnoteReference" if !in_field => {
+                "footnoteReference" if field_stack.is_empty() => {
                     flush_pending(&mut pending_text, &mut runs);
                     if let Some(id) = child
                         .attribute((WML_NS, "id"))
@@ -931,14 +969,14 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         });
                     }
                 }
-                "footnoteRef" if !in_field => {
+                "footnoteRef" if field_stack.is_empty() => {
                     flush_pending(&mut pending_text, &mut runs);
                     runs.push(Run {
                         is_footnote_ref_mark: true,
                         ..fmt.superscript_run()
                     });
                 }
-                "endnoteReference" if !in_field => {
+                "endnoteReference" if field_stack.is_empty() => {
                     flush_pending(&mut pending_text, &mut runs);
                     if let Some(id) = child
                         .attribute((WML_NS, "id"))
@@ -950,14 +988,14 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         });
                     }
                 }
-                "endnoteRef" if !in_field => {
+                "endnoteRef" if field_stack.is_empty() => {
                     flush_pending(&mut pending_text, &mut runs);
                     runs.push(Run {
                         is_endnote_ref_mark: true,
                         ..fmt.superscript_run()
                     });
                 }
-                "sym" if !in_field => {
+                "sym" if field_stack.is_empty() => {
                     flush_pending(&mut pending_text, &mut runs);
                     let sym_font = child.attribute((WML_NS, "font")).unwrap_or(&fmt.font_name);
                     if let Some(ch) = child

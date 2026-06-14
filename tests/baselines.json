@@ -518,7 +518,7 @@
     "text_boundary": 1.0
   },
   "new/dutch_government..": {
-    "jaccard": 0.1648,
+    "jaccard": 0.1649,
     "ssim": 0.9269,
     "text_boundary": 0.9091
   },
@@ -565,7 +565,7 @@
   "new/irish_school_enr..": {
     "jaccard": 0.3364,
     "ssim": 0.5307,
-    "text_boundary": 0.7054
+    "text_boundary": 0.6964
   },
   "new/isla_language_le..": {
     "jaccard": 0.3742,
@@ -718,9 +718,9 @@
     "text_boundary": 0.7304
   },
   "new/western_australi..": {
-    "jaccard": 0.3508,
-    "ssim": 0.5845,
-    "text_boundary": 0.4826
+    "jaccard": 0.3519,
+    "ssim": 0.5888,
+    "text_boundary": 0.524
   },
   "new/who_prescribing_..": {
     "jaccard": 0.1225,
@@ -754,8 +754,8 @@
     "convert_ms": 18.3
   },
   "samples/samtale": {
-    "jaccard": 0.2841,
-    "ssim": 0.4341,
+    "jaccard": 0.2799,
+    "ssim": 0.4423,
     "text_boundary": 0.2857,
     "convert_ms": 11.0
   },
