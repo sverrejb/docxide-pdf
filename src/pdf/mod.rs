@@ -1620,9 +1620,25 @@ fn render_paragraph_block(
     for fi in &para.floating_images {
         let reserve = match fi.wrap_type {
             WrapType::TopAndBottom => true,
-            // Square/Tight/Through use float zones for vertical
-            // extent — don't block content_h, even for wide images.
-            WrapType::Square | WrapType::Tight | WrapType::Through => false,
+            // A wrapSquare/Tight image only blocks the following content when
+            // NEITHER side leaves a usable text column — then Word flows that
+            // content below the image (effectively topAndBottom). When a usable
+            // column remains on either side, text wraps beside it via the float
+            // zone, so don't reserve height. Measured by the actual side gaps,
+            // not image width: a wide *centered* image (case41, ~65pt columns)
+            // still wraps, while a near-full-width image whose edge overruns the
+            // column (brazilian, ~33pt max gap) flows below.
+            WrapType::Square | WrapType::Tight => {
+                let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
+                let left_gap = (fi_x - fi.dist_left) - col_x;
+                let right_gap =
+                    (col_x + col_w) - (fi_x + fi.image.display_width + fi.dist_right);
+                // ~2/3 inch: narrower than this and Word drops to full-width
+                // text below rather than wrapping a sliver column.
+                const MIN_WRAP_COLUMN: f32 = 48.0;
+                left_gap.max(right_gap) < MIN_WRAP_COLUMN
+            }
+            WrapType::Through => false,
             WrapType::None => false,
         };
         let fi_h = match fi.v_position {

@@ -264,6 +264,28 @@ Basic drop shadow rendering is implemented (`a:effectLst/a:outerShdw`): offset, 
 - **No real gaussian blur** — approximated with 10 stepped layers, visible banding at close zoom
 - **Fallback paths lack alpha** — inline images in text lines, floating images, table/header images use pre-blended solid color instead of PDF ExtGState transparency (only body-level paragraph images get proper alpha)
 
+## Bullet Line-Height Drift on macOS (TODO — font-metric blocked, found 2026-06)
+
+case33 annotation #66: bulleted list paragraphs drift ~0.5pt LOWER per bullet vs the
+Word reference (text above the list aligns perfectly; drift starts at the first bullet
+and accumulates). Root cause precisely identified:
+
+`label_boosted_line_h()` (`src/pdf/mod.rs`) boosts a bullet paragraph's line height to
+`max(text_line_h, label_line_h)`, where `label_line_h` uses the bullet label font's
+`line_h_ratio` (commit 8691a0d — Word includes the numbering label font in the
+tallest-font-on-the-line calc; this fixed under-spacing, +1.5pp case33 / +11.8pp
+polish_archery). The bullet font is **Symbol** (`w:numFmt="bullet"`, `w:rFonts ascii="Symbol"`).
+On macOS we resolve `/System/Library/Fonts/Symbol.ttf`, whose `usWinAscent=1694`,
+`usWinDescent=612` (upm 2048) give `line_h_ratio = 1.126` — anomalously tall (the win
+descent is ~0.30em). The Windows Symbol font Word actually used yields ~1.08, so we
+over-boost by ~0.046×fs ≈ 0.5pt per bullet.
+
+This is the same class as the bundled-fonts gap: a precise fix needs authentic Windows
+Symbol metrics, not the divergent macOS substitute. A hardcoded canonical ratio was
+considered but rejected — it overfits and risks regressing `polish_archery_range`
+(near threshold at 29.85% Jaccard), and the boost is a deliberately-tuned tradeoff.
+Revisit alongside bundled fallback fonts (ship metric-stable Symbol metrics).
+
 ## Partially Implemented
 
 - **Line spacing** — Auto and Exact work. AtLeast parsed but may not enforce minimum correctly.

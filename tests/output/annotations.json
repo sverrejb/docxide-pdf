@@ -62,16 +62,6 @@
       "fixed": false
     },
     {
-      "id": 108,
-      "case": "scraped/croatian_grant_guidelines",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 366.7227,
-      "y_pt": 747.4167,
-      "note": "The European logo is too high compared to the other image. They should be aligned at the top just about.",
-      "fixed": true
-    },
-    {
       "id": 111,
       "case": "scraped/indonesian_benchmarking_guide",
       "page": 6,
@@ -119,16 +109,6 @@
       "x_pt": 133.59695,
       "y_pt": 403.7632,
       "note": "Space above \"Fonte: \" is to small.",
-      "fixed": false
-    },
-    {
-      "id": 119,
-      "case": "scraped/brazilian_logistics_study",
-      "page": 9,
-      "source": "Generated",
-      "x_pt": 105.284004,
-      "y_pt": 637.62964,
-      "note": "Fonte: ALARCOM overlaps the image here. Should come after.",
       "fixed": false
     },
     {
@@ -180,16 +160,6 @@
       "y_pt": 216.53723,
       "note": "Empty space here. The Framed text \"(Arrangements regarding ...\" should start here on this page.",
       "fixed": false
-    },
-    {
-      "id": 136,
-      "case": "scraped/bush_fires_act_comparison",
-      "page": 15,
-      "source": "Generated",
-      "x_pt": 125.16714,
-      "y_pt": 774.348,
-      "note": "Line shift at \"Part\" and III here.  Should not be here.",
-      "fixed": true
     },
     {
       "id": 145,

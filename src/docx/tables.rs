@@ -2,9 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
 
 use crate::model::{
-    Alignment, Block, CellBorder, CellBorders, CellMargins, CellVAlign, HorizontalPosition,
-    LineSpacing, Paragraph, Table, TableAlignment, TableCell, TablePosition, TableRow,
-    TextDirection, VMerge,
+    Alignment, Block, BorderStyle, CellBorder, CellBorders, CellMargins, CellVAlign,
+    HorizontalPosition, LineSpacing, Paragraph, Table, TableAlignment, TableCell, TablePosition,
+    TableRow, TextDirection, VMerge,
 };
 
 use super::numbering::{ListLabelInfo, parse_list_info};
@@ -73,6 +73,24 @@ fn border_or_fallback(inline: CellBorder, fallback: CellBorder) -> CellBorder {
     }
 }
 
+/// Border style precedence for the §17.4.66 conflict tiebreaker: when two
+/// borders have equal weight (same width, same source level), the more
+/// prominent style wins. Lower number = wins. Double is ranked above Single
+/// because our `width` field carries only the nominal stroke width and does
+/// not encode the double rule's extra visual weight; everything beats the
+/// dotted/dashed family, which is what makes Word collapse a `single`+`dotted`
+/// edge to a solid line.
+fn border_style_precedence(style: BorderStyle) -> u8 {
+    match style {
+        BorderStyle::Double => 0,
+        BorderStyle::Single => 1,
+        BorderStyle::Dotted => 2,
+        BorderStyle::Dashed | BorderStyle::DashSmallGap => 3,
+        BorderStyle::DashDot => 4,
+        BorderStyle::DashDotDot => 5,
+    }
+}
+
 fn resolve_h_border(upper_bottom: CellBorder, lower_top: CellBorder) -> CellBorder {
     if !upper_bottom.present {
         return lower_top;
@@ -94,7 +112,11 @@ fn resolve_h_border(upper_bottom: CellBorder, lower_top: CellBorder) -> CellBord
     if lower_top.width > upper_bottom.width + 0.01 {
         return lower_top;
     }
-    // Same width, same level: prefer upper (first drawn)
+    // Same width, same level: more prominent style wins (§17.4.66).
+    if border_style_precedence(lower_top.style) < border_style_precedence(upper_bottom.style) {
+        return lower_top;
+    }
+    // Equal precedence: prefer upper (first in reading order).
     upper_bottom
 }
 
@@ -870,5 +892,53 @@ fn propagate_vmerge_borders(rows: &mut [TableRow]) {
             }
             grid_col += span;
         }
+    }
+}
+
+#[cfg(test)]
+mod border_conflict_tests {
+    use super::*;
+
+    fn border(style: BorderStyle, is_override: bool) -> CellBorder {
+        CellBorder {
+            present: true,
+            color: None,
+            width: 0.5,
+            style,
+            is_override,
+        }
+    }
+
+    #[test]
+    fn single_beats_dotted_at_equal_width() {
+        // Word collapses a dotted+single shared edge to solid (§17.4.66 precedence).
+        let upper = border(BorderStyle::Dotted, true);
+        let lower = border(BorderStyle::Single, true);
+        assert_eq!(resolve_h_border(upper, lower).style, BorderStyle::Single);
+        // Order-independent.
+        assert_eq!(resolve_h_border(lower, upper).style, BorderStyle::Single);
+    }
+
+    #[test]
+    fn double_beats_single_at_equal_width() {
+        let upper = border(BorderStyle::Single, true);
+        let lower = border(BorderStyle::Double, true);
+        assert_eq!(resolve_h_border(upper, lower).style, BorderStyle::Double);
+    }
+
+    #[test]
+    fn wider_border_still_wins_over_precedence() {
+        let mut upper = border(BorderStyle::Dotted, true);
+        upper.width = 2.0;
+        let lower = border(BorderStyle::Single, true);
+        assert_eq!(resolve_h_border(upper, lower).style, BorderStyle::Dotted);
+    }
+
+    #[test]
+    fn equal_style_prefers_upper() {
+        let upper = border(BorderStyle::Single, true);
+        let lower = border(BorderStyle::Single, true);
+        // Same everything: upper (first in reading order) is kept.
+        assert!(resolve_h_border(upper, lower).present);
     }
 }
