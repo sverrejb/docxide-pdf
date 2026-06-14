@@ -2672,9 +2672,28 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         _ => false,
                     };
                     if need_odd || need_even {
-                        let next_phys = state.pb.page_count() + 1;
-                        let next_is_odd = next_phys % 2 == 1;
-                        if (need_odd && !next_is_odd) || (need_even && next_is_odd) {
+                        // For an explicit OddPage/EvenPage section break, parity refers to the
+                        // new section's LOGICAL page number (pgNumType w:start): a restarted
+                        // section already begins at that number, so a filler page is only
+                        // needed when its parity is wrong (without a restart, numbering
+                        // continues and the physical index is the right proxy).
+                        //
+                        // The evenAndOddHeaders alignment heuristic also sets need_odd/need_even
+                        // (on a NextPage break, from page_num_start parity) but there the goal
+                        // is to land the section on the correct PHYSICAL sheet for even/odd
+                        // header selection — so it must keep using the physical index.
+                        let explicit_parity_break = matches!(
+                            sp.break_type,
+                            SectionBreakType::OddPage | SectionBreakType::EvenPage
+                        );
+                        let parity_ref = if explicit_parity_break {
+                            sp.page_num_start
+                                .map(|s| s as usize)
+                                .unwrap_or_else(|| state.pb.page_count() + 1)
+                        } else {
+                            state.pb.page_count() + 1
+                        };
+                        if (need_odd && parity_ref % 2 == 0) || (need_even && parity_ref % 2 == 1) {
                             state.pb.push_blank_page(sect_idx - 1);
                         }
                     }

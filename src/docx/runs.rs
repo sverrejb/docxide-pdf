@@ -3,7 +3,7 @@ use std::io::{Read, Seek};
 
 use crate::model::{
     ConnectorShape, FieldCode, FloatingImage, HorizontalRule, InlineChart, Run, SmartArtDiagram,
-    TextFill, TextGlow, TextOutline, TextShadow, Textbox, VertAlign,
+    TabAlignment, TextFill, TextGlow, TextOutline, TextShadow, Textbox, VertAlign,
 };
 
 use super::images::{RunDrawingResult, parse_object_inline_image, parse_run_drawing};
@@ -181,6 +181,19 @@ impl RunFormat {
             font_name: self.font_name.clone(),
             underline: self.underline,
             double_underline: self.double_underline,
+            color: self.color,
+            ..Run::default()
+        }
+    }
+
+    /// Build a positional-tab run (`w:ptab`). It is a tab (splits segments) that
+    /// carries its own alignment, resolved against the margin box in layout.
+    fn ptab_run(&self, alignment: TabAlignment) -> Run {
+        Run {
+            is_tab: true,
+            ptab_alignment: Some(alignment),
+            font_size: self.font_size,
+            font_name: self.font_name.clone(),
             color: self.color,
             ..Run::default()
         }
@@ -905,6 +918,23 @@ pub(super) fn parse_runs<R: Read + Seek>(
                     if visible && !dyn_result {
                         flush_pending(&mut pending_text, &mut runs);
                         runs.push(fmt.tab_run());
+                    }
+                }
+                "ptab" => {
+                    // Positional tab: alignment positions the FOLLOWING text against the
+                    // margin box (left/center/right), independent of paragraph tab stops.
+                    let visible = field_stack.last().map_or(true, |f| f.seen_sep);
+                    let dyn_result = field_stack
+                        .last()
+                        .is_some_and(|f| f.seen_sep && is_dynamic_field(&f.instr));
+                    if visible && !dyn_result {
+                        let alignment = match child.attribute((WML_NS, "alignment")) {
+                            Some("center") => TabAlignment::Center,
+                            Some("right") => TabAlignment::Right,
+                            _ => TabAlignment::Left,
+                        };
+                        flush_pending(&mut pending_text, &mut runs);
+                        runs.push(fmt.ptab_run(alignment));
                     }
                 }
                 "br" if field_stack.is_empty() => match child.attribute((WML_NS, "type")) {

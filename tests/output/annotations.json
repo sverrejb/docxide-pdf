@@ -1,5 +1,5 @@
 {
-  "next_id": 194,
+  "next_id": 197,
   "annotations": [
     {
       "id": 8,
@@ -192,26 +192,6 @@
       "fixed": false
     },
     {
-      "id": 141,
-      "case": "new/bahamas_sustainable_development_hosting",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 328.6976,
-      "y_pt": 571.66675,
-      "note": "Page 2 renders as almost blank for some reason",
-      "fixed": false
-    },
-    {
-      "id": 142,
-      "case": "new/bahamas_sustainable_development_hosting",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 324.62228,
-      "y_pt": 722.0301,
-      "note": "Page number on page 2 is not supposed to be there.",
-      "fixed": false
-    },
-    {
       "id": 145,
       "case": "new/belgian_youth_program_certificate",
       "page": 0,
@@ -262,16 +242,6 @@
       "fixed": false
     },
     {
-      "id": 157,
-      "case": "new/bosch_software_ai_announcement",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 75.588745,
-      "y_pt": 746.851,
-      "note": "Bosh gebruikt software ... text is too large and not bolded.",
-      "fixed": false
-    },
-    {
       "id": 158,
       "case": "new/bosch_software_ai_announcement",
       "page": 0,
@@ -279,16 +249,6 @@
       "x_pt": 74.63493,
       "y_pt": 284.4301,
       "note": "Generally the \"Las Vegas, NV ...\" text looks different,",
-      "fixed": false
-    },
-    {
-      "id": 160,
-      "case": "new/covid_insomnia_mental_health",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 314.82956,
-      "y_pt": 51.074585,
-      "note": "footer is wrong, xxxxx stuff should float left, the copyright part should float right",
       "fixed": false
     },
     {
@@ -432,16 +392,6 @@
       "fixed": false
     },
     {
-      "id": 181,
-      "case": "new/victorian_universal_design_policy",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 299.12448,
-      "y_pt": 30.43573,
-      "note": "\"OFFICIAL\" in bottom or footer is slightly too high up compared to referance",
-      "fixed": false
-    },
-    {
       "id": 182,
       "case": "new/carbon_farming_initiative_rule",
       "page": 0,
@@ -529,6 +479,36 @@
       "x_pt": 517.35547,
       "y_pt": 228.43283,
       "note": "Too little white space in the \"13\" box, HR goes through 13-",
+      "fixed": false
+    },
+    {
+      "id": 194,
+      "case": "new/bosch_software_ai_announcement",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 558.0616,
+      "y_pt": 10.348145,
+      "note": "Page number goes outside page. Also placed too low.",
+      "fixed": false
+    },
+    {
+      "id": 195,
+      "case": "new/bosch_software_ai_announcement",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 70.719734,
+      "y_pt": 752.8874,
+      "note": "\"Bosch gebruikt\" -text looks too large? Also too high up.",
+      "fixed": false
+    },
+    {
+      "id": 196,
+      "case": "new/bosch_software_ai_announcement",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 534.17786,
+      "y_pt": 835.53284,
+      "note": "6 januari text placed wrong.",
       "fixed": false
     }
   ]

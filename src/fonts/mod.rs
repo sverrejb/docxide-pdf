@@ -488,9 +488,21 @@ pub(crate) fn register_font(
             face_index: r.face_index,
         },
         None => {
-            log::warn!("Font not found: {font_name} bold={bold} italic={italic} — using Helvetica");
+            // Pick the matching standard-14 Helvetica variant so a bold/italic run of an
+            // unresolved font still renders bold/italic. Previously this always emitted plain
+            // Helvetica, dropping the weight for every unresolved font across the corpus.
+            let base_font: &[u8] = match (bold, italic) {
+                (true, true) => b"Helvetica-BoldOblique",
+                (true, false) => b"Helvetica-Bold",
+                (false, true) => b"Helvetica-Oblique",
+                (false, false) => b"Helvetica",
+            };
+            log::warn!(
+                "Font not found: {font_name} bold={bold} italic={italic} — using {}",
+                String::from_utf8_lossy(base_font)
+            );
             pdf.type1_font(font_ref)
-                .base_font(Name(b"Helvetica"))
+                .base_font(Name(base_font))
                 .encoding_predefined(Name(b"WinAnsiEncoding"));
             FontEntry {
                 pdf_name,
@@ -573,6 +585,7 @@ mod tests {
             text_scale: 100.0,
             east_asia_font_name: None,
             is_tab: false,
+            ptab_alignment: None,
             is_line_break: false,
             field_code: None,
             hyperlink_url: None,

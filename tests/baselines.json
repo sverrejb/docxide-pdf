@@ -443,9 +443,9 @@
     "text_boundary": 0.5942
   },
   "new/bahamas_sustaina..": {
-    "jaccard": 0.3549,
-    "ssim": 0.4617,
-    "text_boundary": 1.0
+    "jaccard": 0.6021,
+    "ssim": 0.7885,
+    "text_boundary": 0.6857
   },
   "new/belgian_youth_pr..": {
     "jaccard": 0.2121,
@@ -459,7 +459,7 @@
   },
   "new/bosch_software_a..": {
     "jaccard": 0.0217,
-    "ssim": 0.1277,
+    "ssim": 0.1306,
     "text_boundary": 0.0053
   },
   "new/carbon_farming_i..": {
@@ -478,8 +478,8 @@
     "text_boundary": 0.9355
   },
   "new/covid_insomnia_m..": {
-    "jaccard": 0.2113,
-    "ssim": 0.4309,
+    "jaccard": 0.2148,
+    "ssim": 0.4353,
     "text_boundary": 0.1331
   },
   "new/croatian_militar..": {
@@ -713,9 +713,9 @@
     "text_boundary": 0.9231
   },
   "new/victorian_univer..": {
-    "jaccard": 0.3525,
-    "ssim": 0.6903,
-    "text_boundary": 0.7304
+    "jaccard": 0.3896,
+    "ssim": 0.7138,
+    "text_boundary": 0.7645
   },
   "new/western_australi..": {
     "jaccard": 0.3519,
@@ -841,14 +841,14 @@
     "text_boundary": 1.0
   },
   "scraped/east_asia_confer..": {
-    "jaccard": 0.0873,
-    "ssim": 0.2106,
+    "jaccard": 0.0871,
+    "ssim": 0.2107,
     "text_boundary": 0.619,
     "convert_ms": 22.0
   },
   "scraped/education_consul..": {
-    "jaccard": 0.1342,
-    "ssim": 0.2888,
+    "jaccard": 0.1343,
+    "ssim": 0.2889,
     "text_boundary": 0.2416,
     "convert_ms": 47.1
   },
@@ -901,7 +901,7 @@
     "convert_ms": 4.5
   },
   "scraped/korean_japanese_..": {
-    "jaccard": 0.1005,
+    "jaccard": 0.1002,
     "ssim": 0.1846,
     "text_boundary": 0.8571,
     "convert_ms": 18.4

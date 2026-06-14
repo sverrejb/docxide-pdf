@@ -1088,8 +1088,30 @@ pub(super) fn build_tabbed_line(
                 current_x += pending_space_w;
             }
             pending_space_w = 0.0;
-            let stop = find_next_tab_stop(current_x, tab_stops, line_indent, default_tab_stop);
-            let mut effective_tab_target = stop.position - line_indent;
+            // A positional tab (w:ptab) resolves against the margin box with its own
+            // alignment, bypassing the paragraph's tab stops. Left→box left, Center→box
+            // center, Right→box right edge. This is what produces Word's left/center/right
+            // footer layout that ordinary tab stops can't express here.
+            let ptab_align = tab_run_before.and_then(|r| r.ptab_alignment);
+            let (stop, mut effective_tab_target) = if let Some(palign) = ptab_align {
+                let target = match palign {
+                    TabAlignment::Center => max_width / 2.0,
+                    TabAlignment::Right => max_width,
+                    _ => 0.0,
+                };
+                (
+                    TabStop {
+                        position: target + line_indent,
+                        alignment: palign,
+                        leader: None,
+                    },
+                    target,
+                )
+            } else {
+                let s = find_next_tab_stop(current_x, tab_stops, line_indent, default_tab_stop);
+                let t = s.position - line_indent;
+                (s, t)
+            };
             let mut seg_start =
                 resolve_tab_aligned_start(&stop, effective_tab_target, seg_runs, seen_fonts, current_x);
             let mut resolved_leader = stop.leader;
@@ -2059,6 +2081,7 @@ mod tests {
             text_scale: 100.0,
             east_asia_font_name: None,
             is_tab: false,
+            ptab_alignment: None,
             is_line_break: false,
             field_code: None,
             hyperlink_url: None,

@@ -331,6 +331,10 @@ pub struct Run {
     pub shading: Option<[u8; 3]>,
     pub border: Option<ParagraphBorder>,
     pub is_tab: bool,
+    /// `Some(alignment)` marks this tab as a positional tab (`w:ptab`): it is
+    /// resolved against the margin box with its own alignment rather than the
+    /// paragraph's tab stops. `is_tab` is also true so it splits line segments.
+    pub ptab_alignment: Option<TabAlignment>,
     pub is_line_break: bool,
     pub vertical_align: VertAlign,
     pub field_code: Option<FieldCode>,
@@ -409,6 +413,7 @@ impl Default for Run {
             shading: None,
             border: None,
             is_tab: false,
+            ptab_alignment: None,
             is_line_break: false,
             vertical_align: VertAlign::Baseline,
             field_code: None,

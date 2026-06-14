@@ -4,7 +4,7 @@ use pdf_writer::Content;
 
 use crate::model::{
     Alignment, Block, Document, FieldCode, HeaderFooter, Paragraph, Run, SectionProperties,
-    VRelativeFrom, VerticalPosition, WrapType,
+    TextAnchor, VRelativeFrom, VerticalPosition, WrapType,
 };
 
 use super::layout::{
@@ -415,7 +415,90 @@ pub(super) fn render_header_footer(
 
                     let content_x = tb_x + tb.margin_left;
                     let content_w = (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0);
-                    let mut tb_cursor = tb_y_top - tb.margin_top;
+
+                    // Word vertically anchors textbox content per bodyPr anchor (ctr/b).
+                    // The body textbox path (textbox_render::render_single_textbox) applies this,
+                    // but the header/footer loop is a separate renderer that historically
+                    // top-anchored everything. Mirror the body math here. The per-paragraph
+                    // height calc must match the rendering advances below (block image / empty /
+                    // text), so keep the two in sync.
+                    let anchor_offset = match tb.text_anchor {
+                        TextAnchor::Top => 0.0,
+                        TextAnchor::Middle | TextAnchor::Bottom => {
+                            let tp_height = |tp: &Paragraph| -> f32 {
+                                let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
+                                let tp_text_w =
+                                    (content_w - tp.indent_left - tp.indent_right).max(1.0);
+                                let tp_hanging = if !tp.list_label.is_empty() {
+                                    if tp.indent_first_line > 0.0 && tp.indent_hanging == 0.0 {
+                                        -tp.indent_first_line
+                                    } else {
+                                        0.0
+                                    }
+                                } else if tp.indent_hanging > 0.0 {
+                                    tp.indent_hanging
+                                } else {
+                                    -tp.indent_first_line
+                                };
+                                if let Some(img) =
+                                    super::textbox_render::textbox_para_block_image(tp)
+                                {
+                                    return tp.space_before
+                                        + img.display_height
+                                        + img.layout_extra_height
+                                        + tp.space_after;
+                                }
+                                let inline_imgs: HashMap<usize, String> =
+                                    if tp.runs.iter().any(|r| r.inline_image.is_some()) {
+                                        tp.runs
+                                            .iter()
+                                            .enumerate()
+                                            .filter_map(|(ri, run)| {
+                                                let img = run.inline_image.as_ref()?;
+                                                let key =
+                                                    std::sync::Arc::as_ptr(&img.data) as usize;
+                                                ctx.textbox_image_names
+                                                    .get(&key)
+                                                    .map(|name| (ri, name.clone()))
+                                            })
+                                            .collect()
+                                    } else {
+                                        HashMap::new()
+                                    };
+                                let tb_lines = build_lines(
+                                    &tp.runs,
+                                    ctx.fonts,
+                                    &tp.tab_stops,
+                                    tp_text_w,
+                                    &inline_imgs,
+                                    ctx.default_tab_stop,
+                                    tp.indent_left,
+                                    tp.indent_right,
+                                    tp_hanging,
+                                );
+                                if tb_lines.is_empty() {
+                                    let (fs, _, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
+                                    let lh = resolve_line_h(tp_ls, fs, None);
+                                    return tp.space_before + lh + tp.space_after;
+                                }
+                                let (tb_fs, _, tb_ar) = tallest_run_metrics(&tp.runs, ctx.fonts);
+                                let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_ar);
+                                tp.space_before
+                                    + (tb_lines.len() as f32) * tb_line_h
+                                    + tp.space_after
+                            };
+                            let total_h: f32 = tb.paragraphs.iter().map(tp_height).sum();
+                            let available =
+                                (tb.height_pt - tb.margin_top - tb.margin_bottom).max(0.0);
+                            let gap = (available - total_h).max(0.0);
+                            match tb.text_anchor {
+                                TextAnchor::Middle => gap / 2.0,
+                                TextAnchor::Bottom => gap,
+                                TextAnchor::Top => 0.0,
+                            }
+                        }
+                    };
+                    let mut tb_cursor = tb_y_top - tb.margin_top - anchor_offset;
                     for tp in &tb.paragraphs {
                         let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
                         let tp_text_w = (content_w - tp.indent_left - tp.indent_right).max(1.0);
