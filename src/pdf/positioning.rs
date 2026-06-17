@@ -98,59 +98,116 @@ pub(super) fn render_floating_images(
         if fi.behind_doc != behind_doc {
             continue;
         }
-        if let Some(pdf_name) = pdf_names.get(&(global_block_idx, fi_idx)) {
-            let img = &fi.image;
-            let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
-            let fi_y_top = resolve_fi_y_top(fi, sp, slot_top);
-            let fi_y_bottom = fi_y_top - img.display_height;
+        render_one_floating_image(
+            fi, fi_idx, global_block_idx, pdf_names, effect_pdf_names, sp, col_x, col_w,
+            text_width, slot_top, content,
+        );
+    }
+}
 
-            let fi_fx = effect_pdf_names.get(&(global_block_idx, fi_idx));
-            if let Some(ref shadow) = img.shadow {
-                super::color::draw_image_shadow(
-                    content, shadow, fi_x, fi_y_bottom,
-                    img.display_width, img.display_height,
-                    fi_fx.and_then(|fx| fx.shadow.as_deref()),
-                );
-            }
-            if let Some(ref glow) = img.glow {
-                super::color::draw_image_glow(
-                    content, glow, fi_x, fi_y_bottom,
-                    img.display_width, img.display_height,
-                    fi_fx.and_then(|fx| fx.glow.as_deref()),
-                );
-            }
-
-            super::smartart::render_image_with_clip(
-                content, pdf_name, fi_x, fi_y_bottom,
-                img.display_width, img.display_height,
-                img.clip_geometry.as_ref(),
-            );
-
-            if let Some(ref inner) = img.inner_shadow {
-                super::color::draw_inner_shadow(
-                    content, inner, fi_x, fi_y_bottom,
-                    img.display_width, img.display_height,
-                    fi_fx.and_then(|fx| fx.inner_shadow.as_deref()),
-                );
-            }
-            if let Some(ref refl) = img.reflection {
-                super::color::draw_reflection(
-                    content, refl, fi_x, fi_y_bottom,
-                    img.display_width, img.display_height,
-                    fi_fx.and_then(|fx| fx.reflection.as_deref()),
-                );
-            }
-
-            if let Some(sc) = img.stroke_color {
-                super::smartart::stroke_image_border(
-                    content, fi_x, fi_y_bottom,
-                    img.display_width, img.display_height,
-                    sc, img.stroke_width,
-                    img.clip_geometry.as_ref(),
-                );
-            }
+/// Render foreground (non-behind-doc) floating images into per-image content
+/// buffers pushed onto the page's deferred z-stack, tagged with their
+/// relativeHeight. Matches how foreground textboxes/connectors are deferred so
+/// that a floating image with a higher relativeHeight paints above a shape with
+/// a lower one (annotation #191 — a cursor icon was hidden behind a bar shape
+/// because images painted into the page content stream, always below deferred
+/// shapes).
+pub(super) fn render_foreground_floating_images_deferred(
+    floating_images: &[FloatingImage],
+    global_block_idx: usize,
+    pdf_names: &HashMap<(usize, usize), String>,
+    effect_pdf_names: &HashMap<(usize, usize), super::images::EffectXObjs>,
+    sp: &SectionProperties,
+    col_x: f32,
+    col_w: f32,
+    text_width: f32,
+    slot_top: f32,
+    deferred: &mut Vec<(u32, Content)>,
+) {
+    for (fi_idx, fi) in floating_images.iter().enumerate() {
+        if fi.behind_doc {
+            continue;
+        }
+        let mut buf = Content::new();
+        if render_one_floating_image(
+            fi, fi_idx, global_block_idx, pdf_names, effect_pdf_names, sp, col_x, col_w,
+            text_width, slot_top, &mut buf,
+        ) {
+            deferred.push((fi.z_index, buf));
         }
     }
+}
+
+/// Render a single floating image (with shadow/glow/clip/border effects) into
+/// `content`. Returns true if an image was actually emitted (i.e. it had a
+/// registered XObject name).
+fn render_one_floating_image(
+    fi: &FloatingImage,
+    fi_idx: usize,
+    global_block_idx: usize,
+    pdf_names: &HashMap<(usize, usize), String>,
+    effect_pdf_names: &HashMap<(usize, usize), super::images::EffectXObjs>,
+    sp: &SectionProperties,
+    col_x: f32,
+    col_w: f32,
+    text_width: f32,
+    slot_top: f32,
+    content: &mut Content,
+) -> bool {
+    let Some(pdf_name) = pdf_names.get(&(global_block_idx, fi_idx)) else {
+        return false;
+    };
+    let img = &fi.image;
+    let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
+    let fi_y_top = resolve_fi_y_top(fi, sp, slot_top);
+    let fi_y_bottom = fi_y_top - img.display_height;
+
+    let fi_fx = effect_pdf_names.get(&(global_block_idx, fi_idx));
+    if let Some(ref shadow) = img.shadow {
+        super::color::draw_image_shadow(
+            content, shadow, fi_x, fi_y_bottom,
+            img.display_width, img.display_height,
+            fi_fx.and_then(|fx| fx.shadow.as_deref()),
+        );
+    }
+    if let Some(ref glow) = img.glow {
+        super::color::draw_image_glow(
+            content, glow, fi_x, fi_y_bottom,
+            img.display_width, img.display_height,
+            fi_fx.and_then(|fx| fx.glow.as_deref()),
+        );
+    }
+
+    super::smartart::render_image_with_clip(
+        content, pdf_name, fi_x, fi_y_bottom,
+        img.display_width, img.display_height,
+        img.clip_geometry.as_ref(),
+    );
+
+    if let Some(ref inner) = img.inner_shadow {
+        super::color::draw_inner_shadow(
+            content, inner, fi_x, fi_y_bottom,
+            img.display_width, img.display_height,
+            fi_fx.and_then(|fx| fx.inner_shadow.as_deref()),
+        );
+    }
+    if let Some(ref refl) = img.reflection {
+        super::color::draw_reflection(
+            content, refl, fi_x, fi_y_bottom,
+            img.display_width, img.display_height,
+            fi_fx.and_then(|fx| fx.reflection.as_deref()),
+        );
+    }
+
+    if let Some(sc) = img.stroke_color {
+        super::smartart::stroke_image_border(
+            content, fi_x, fi_y_bottom,
+            img.display_width, img.display_height,
+            sc, img.stroke_width,
+            img.clip_geometry.as_ref(),
+        );
+    }
+    true
 }
 
 pub(super) fn render_connector(

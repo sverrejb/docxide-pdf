@@ -112,16 +112,6 @@
       "fixed": false
     },
     {
-      "id": 120,
-      "case": "scraped/brazilian_logistics_study",
-      "page": 13,
-      "source": "Generated",
-      "x_pt": 527.7137,
-      "y_pt": 229.10999,
-      "note": "This caption \"Grafico 2 - \" is rendered completely wrong.",
-      "fixed": false
-    },
-    {
       "id": 121,
       "case": "samples/samtale",
       "page": 0,
@@ -222,16 +212,6 @@
       "fixed": false
     },
     {
-      "id": 165,
-      "case": "new/isla_language_lesson_plan",
-      "page": 6,
-      "source": "Generated",
-      "x_pt": 282.28873,
-      "y_pt": 338.57156,
-      "note": "Content missing in this box with rounded corners.",
-      "fixed": false
-    },
-    {
       "id": 166,
       "case": "new/isla_language_lesson_plan",
       "page": 6,
@@ -279,16 +259,6 @@
       "x_pt": 455.56506,
       "y_pt": 650.57404,
       "note": "Missing vector and pendulum illustration here.",
-      "fixed": false
-    },
-    {
-      "id": 174,
-      "case": "new/pendulum_mechanics_oscillation_lab",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 190.57544,
-      "y_pt": 314.63147,
-      "note": "Missing blue \"{\" wrapping the paragraphs here.",
       "fixed": false
     },
     {
@@ -382,16 +352,6 @@
       "fixed": false
     },
     {
-      "id": 189,
-      "case": "new/isla_language_lesson_plan",
-      "page": 4,
-      "source": "Generated",
-      "x_pt": 266.16696,
-      "y_pt": 607.47797,
-      "note": "missing boxes around \"Isla\" and \"Abuela\"",
-      "fixed": false
-    },
-    {
       "id": 190,
       "case": "new/isla_language_lesson_plan",
       "page": 4,
@@ -399,16 +359,6 @@
       "x_pt": 141.18594,
       "y_pt": 220.92401,
       "note": "Row two of this table should be broken across this page and the next",
-      "fixed": false
-    },
-    {
-      "id": 191,
-      "case": "new/lenten_prayer_unity",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 104.58445,
-      "y_pt": 50.39734,
-      "note": "Missing mouse cursor icon here that is present in the reference",
       "fixed": false
     },
     {
@@ -449,7 +399,7 @@
       "x_pt": 172.9404,
       "y_pt": 238.3891,
       "note": "This grey line should be dithered or something. Compare with reference",
-      "fixed": false
+      "fixed": true
     }
   ]
 }

@@ -102,9 +102,86 @@ fn draw_cell_borders(
     draw_border(content, &borders.right, bx + col_w, top, bx + col_w, bottom);
 }
 
+/// Paint a cell background: hatching when a line/cross pattern is present,
+/// otherwise a solid fill. No-op when both are absent.
+fn paint_cell_background(
+    content: &mut Content,
+    shading: Option<[u8; 3]>,
+    hatch: Option<crate::model::HatchPattern>,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+) {
+    if let Some(hp) = hatch {
+        draw_hatch(content, &hp, x, y, w, h);
+    } else if let Some(s) = shading {
+        content.save_state();
+        fill_rgb(content, s);
+        content.rect(x, y, w, h);
+        content.fill_nonzero();
+        content.restore_state();
+    }
+}
+
+/// Draw a `w:shd` line/cross pattern as real hatching: a background fill plus
+/// thin stroked lines clipped to the cell rect.
+fn draw_hatch(content: &mut Content, hp: &crate::model::HatchPattern, x: f32, y: f32, w: f32, h: f32) {
+    use crate::model::HatchKind::*;
+    if w <= 0.0 || h <= 0.0 {
+        return;
+    }
+    content.save_state();
+    fill_rgb(content, hp.bg);
+    content.rect(x, y, w, h);
+    content.fill_nonzero();
+    // Clip subsequent strokes to the cell so the diagonal lines don't bleed out.
+    content.rect(x, y, w, h);
+    content.clip_nonzero();
+    content.end_path();
+    stroke_rgb(content, hp.fg);
+    content.set_line_width(0.5);
+    let s = 4.0_f32;
+    if matches!(hp.kind, Horz | CrossHorzVert) {
+        let mut yy = y + s;
+        while yy < y + h {
+            content.move_to(x, yy);
+            content.line_to(x + w, yy);
+            yy += s;
+        }
+    }
+    if matches!(hp.kind, Vert | CrossHorzVert) {
+        let mut xx = x + s;
+        while xx < x + w {
+            content.move_to(xx, y);
+            content.line_to(xx, y + h);
+            xx += s;
+        }
+    }
+    if matches!(hp.kind, DiagFwd | CrossDiag) {
+        let mut off = 0.0;
+        while off <= w + h {
+            content.move_to(x + off - h, y);
+            content.line_to(x + off, y + h);
+            off += s;
+        }
+    }
+    if matches!(hp.kind, DiagBack | CrossDiag) {
+        let mut off = 0.0;
+        while off <= w + h {
+            content.move_to(x + off - h, y + h);
+            content.line_to(x + off, y);
+            off += s;
+        }
+    }
+    content.stroke();
+    content.restore_state();
+}
+
 fn draw_cell_shading(
     content: &mut Content,
-    shading: [u8; 3],
+    shading: Option<[u8; 3]>,
+    hatch: Option<crate::model::HatchPattern>,
     borders: &crate::model::CellBorders,
     x: f32,
     y: f32,
@@ -113,11 +190,15 @@ fn draw_cell_shading(
 ) {
     let bw = |b: &crate::model::CellBorder| if b.present { b.width } else { 0.0 };
     let inset = (bw(&borders.top) + bw(&borders.bottom) + bw(&borders.left) + bw(&borders.right)) / 8.0;
-    content.save_state();
-    fill_rgb(content, shading);
-    content.rect(x + inset, y + inset, w - 2.0 * inset, h - 2.0 * inset);
-    content.fill_nonzero();
-    content.restore_state();
+    paint_cell_background(
+        content,
+        shading,
+        hatch,
+        x + inset,
+        y + inset,
+        w - 2.0 * inset,
+        h - 2.0 * inset,
+    );
 }
 
 /// Render an inline image within a table cell paragraph, handling alignment,
@@ -512,13 +593,7 @@ fn render_nested_table(
                 .unwrap_or(0.0);
             let effective_h = row_h + merge_extra;
 
-            if let Some(shading) = cell.shading {
-                content.save_state();
-                fill_rgb(content, shading);
-                content.rect(cx, row_bottom, col_w, row_h);
-                content.fill_nonzero();
-                content.restore_state();
-            }
+            paint_cell_background(content, cell.shading, cell.hatch, cx, row_bottom, col_w, row_h);
 
             if cell_has_visible_content(&cell_layout.items) {
                 let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
@@ -777,17 +852,16 @@ fn render_table_row(
             .unwrap_or(0.0);
         let effective_h = row_h + merge_extra;
 
-        if let Some(shading) = cell.shading {
-            draw_cell_shading(
-                &mut pb.content,
-                shading,
-                &cell.borders,
-                cell_x,
-                row_top - effective_h,
-                col_w,
-                effective_h,
-            );
-        }
+        draw_cell_shading(
+            &mut pb.content,
+            cell.shading,
+            cell.hatch,
+            &cell.borders,
+            cell_x,
+            row_top - effective_h,
+            col_w,
+            effective_h,
+        );
 
         let has_content = cell_has_visible_content(&cell_layout.items);
         let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
@@ -1015,17 +1089,16 @@ fn render_partial_row(
         let start = starts[ci];
         let end = ends[ci];
 
-        if let Some(shading) = cell.shading {
-            draw_cell_shading(
-                &mut pb.content,
-                shading,
-                &cell.borders,
-                cell_x,
-                row_bottom,
-                col_w,
-                row_h,
-            );
-        }
+        draw_cell_shading(
+            &mut pb.content,
+            cell.shading,
+            cell.hatch,
+            &cell.borders,
+            cell_x,
+            row_bottom,
+            col_w,
+            row_h,
+        );
 
         let has_content = (start..end).any(|pi| match &cell_layout.items[pi] {
             CellContentItem::Paragraph(p) => para_has_visible_content(p),
@@ -1493,13 +1566,7 @@ pub(super) fn render_header_footer_table(
                 .unwrap_or(0.0);
             let effective_h = row_h + merge_extra;
 
-            if let Some(shading) = cell.shading {
-                content.save_state();
-                fill_rgb(content, shading);
-                content.rect(cell_x, row_bottom, col_w, row_h);
-                content.fill_nonzero();
-                content.restore_state();
-            }
+            paint_cell_background(content, cell.shading, cell.hatch, cell_x, row_bottom, col_w, row_h);
 
             if cell_has_visible_content(&cell_layout.items) {
                 let ecm = cell.cell_margins.as_ref().unwrap_or(cm);

@@ -41,7 +41,10 @@ use header_footer::{
 };
 pub(super) use helpers::resolve_line_h;
 use helpers::borders_match;
-use positioning::{render_connector, render_floating_images, resolve_fi_x};
+use positioning::{
+    render_connector, render_floating_images, render_foreground_floating_images_deferred,
+    resolve_fi_x,
+};
 pub(super) use positioning::{resolve_h_position, resolve_fi_y_top};
 use images::{EffectXObjs, EmbeddedImages, embed_all_images};
 use layout::{
@@ -1274,8 +1277,14 @@ fn render_paragraph_block(
                         for z in &zones {
                             let partial_overlap =
                                 z.para_relative || z.polygon_pts.is_some();
+                            // Require the line to dip >20% of its height below
+                            // the zone top before counting as in-zone, matching
+                            // the symmetric bottom_threshold. Without this, a
+                            // caption line directly above a float offset down by
+                            // ~a line height got flagged in-zone and wrapped to
+                            // one word per line (annotation #120).
                             let in_zone = if partial_overlap {
-                                line_bottom < z.top_y
+                                line_bottom < z.top_y - line_h * 0.2
                             } else {
                                 line_top <= z.top_y
                             };
@@ -1356,8 +1365,12 @@ fn render_paragraph_block(
                 for i in 0..max_lines {
                     let line_top = eff_top - i as f32 * line_h;
                     let line_bottom = line_top - line_h;
+                    // See annotation #120: require >20% line-height overlap
+                    // (symmetric with bottom_threshold) so a caption line
+                    // directly above a downward-offset float is not wrongly
+                    // squeezed into the float's side margin.
                     let in_zone = if partial_overlap {
-                        line_bottom < fz.top_y
+                        line_bottom < fz.top_y - line_h * 0.2
                     } else {
                         line_top <= fz.top_y
                     };
@@ -2128,10 +2141,12 @@ fn render_paragraph_block(
         state.pb.content.restore_state();
     }
 
-    // Render foreground layer: floating images + textboxes
-    render_floating_images(
+    // Render foreground layer: floating images + textboxes. Foreground images
+    // are deferred into the page z-stack (sorted by relativeHeight in
+    // flush_page) so they interleave with foreground shapes/textboxes by
+    // z-order rather than always painting beneath them (annotation #191).
+    render_foreground_floating_images_deferred(
         &para.floating_images,
-        false,
         state.global_block_idx,
         &floating_image_pdf_names,
         &effect_floating_names,
@@ -2140,7 +2155,7 @@ fn render_paragraph_block(
         col_w,
         text_width,
         state.pb.slot_top,
-        &mut state.pb.content,
+        &mut state.pb.deferred_shapes,
     );
 
     // Set FloatZone for wrapping floating images

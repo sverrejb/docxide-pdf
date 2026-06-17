@@ -98,6 +98,10 @@ pub struct FloatingImage {
     pub dist_bottom: f32,
     pub dist_left: f32,
     pub dist_right: f32,
+    /// OOXML wp:anchor @relativeHeight — the z-order among foreground floating
+    /// objects. Higher draws on top. Used to composite foreground floating
+    /// images into the same z-stack as textboxes/connectors.
+    pub z_index: u32,
 }
 
 /// Covers all 187 OOXML preset shapes and arbitrary custom geometry (a:custGeom).

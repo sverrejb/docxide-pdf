@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
 
 use crate::model::{
-    Alignment, Block, BorderStyle, CellBorder, CellBorders, CellMargins, CellVAlign,
+    Alignment, Block, BorderStyle, CellBorder, CellBorders, CellMargins, CellVAlign, HatchPattern,
     HorizontalPosition, LineSpacing, Paragraph, Table, TableAlignment, TableCell, TablePosition,
     TableRow, TextDirection, VMerge,
 };
@@ -39,6 +39,22 @@ fn approx_pattern_shade(val: &str, color: Option<[u8; 3]>) -> Option<[u8; 3]> {
         (bg as f32 * (1.0 - coverage) + ink as f32 * coverage).round() as u8
     };
     Some([blend(255, fg[0]), blend(255, fg[1]), blend(255, fg[2])])
+}
+
+/// Map a `w:shd` line/cross pattern value to a `HatchKind`. Returns `None` for
+/// `pctNN`, `clear`, `solid`, `nil`, etc. — only the geometric stripe/cross
+/// patterns are drawn as hatching.
+fn hatch_kind(val: &str) -> Option<crate::model::HatchKind> {
+    use crate::model::HatchKind::*;
+    Some(match val {
+        "thinHorzStripe" | "horzStripe" => Horz,
+        "thinVertStripe" | "vertStripe" => Vert,
+        "thinDiagStripe" | "diagStripe" => DiagFwd,
+        "thinReverseDiagStripe" | "reverseDiagStripe" => DiagBack,
+        "thinHorzCross" | "horzCross" => CrossHorzVert,
+        "thinDiagCross" | "diagCross" => CrossDiag,
+        _ => return None,
+    })
 }
 
 fn is_wml(node: &roxmltree::Node, name: &str) -> bool {
@@ -589,22 +605,33 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
             // color wins; otherwise a pattern fill (stripes/cross/pctNN) with an
             // auto fill is approximated as a solid tint, since the renderer only
             // supports solid cell fills.
-            let shading = tc_pr
-                .and_then(|pr| wml(pr, "shd"))
-                .and_then(|shd| {
-                    let val = shd.attribute((WML_NS, "val")).unwrap_or("clear");
-                    let fill = shd.attribute((WML_NS, "fill")).unwrap_or("auto");
-                    if fill != "none" && fill != "auto" {
-                        if let Some(c) = parse_hex_color(fill) {
-                            return Some(c);
-                        }
-                    }
-                    let color = shd
-                        .attribute((WML_NS, "color"))
-                        .and_then(parse_hex_color);
-                    approx_pattern_shade(val, color)
-                })
-                .or(cond_shading);
+            let mut cell_hatch: Option<HatchPattern> = None;
+            let mut pattern_shading: Option<[u8; 3]> = None;
+            if let Some(shd) = tc_pr.and_then(|pr| wml(pr, "shd")) {
+                let val = shd.attribute((WML_NS, "val")).unwrap_or("clear");
+                let fill = shd.attribute((WML_NS, "fill")).unwrap_or("auto");
+                let bg = if fill != "none" && fill != "auto" {
+                    parse_hex_color(fill)
+                } else {
+                    None
+                };
+                let ink = shd.attribute((WML_NS, "color")).and_then(parse_hex_color);
+                if let Some(kind) = hatch_kind(val) {
+                    cell_hatch = Some(HatchPattern {
+                        kind,
+                        fg: ink.unwrap_or([0, 0, 0]),
+                        bg: bg.unwrap_or([255, 255, 255]),
+                    });
+                    // Solid fallback for any render path that doesn't hatch.
+                    pattern_shading = approx_pattern_shade(val, ink).or(bg);
+                } else if let Some(c) = bg {
+                    pattern_shading = Some(c);
+                } else {
+                    pattern_shading = approx_pattern_shade(val, ink);
+                }
+            }
+            let shading = pattern_shading.or(cond_shading);
+            let hatch = cell_hatch;
 
             let per_cell_margins = tc_pr
                 .and_then(|pr| wml(pr, "tcMar"))
@@ -777,6 +804,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                 content: cell_blocks,
                 borders,
                 shading,
+                hatch,
                 grid_span,
                 v_merge,
                 v_align,

@@ -684,6 +684,7 @@ fn convert_table(
                 content: cell_paras.into_iter().map(Block::Paragraph).collect(),
                 borders,
                 shading: None,
+                hatch: None,
                 grid_span: colspan as u16,
                 v_merge: VMerge::None,
                 v_align,

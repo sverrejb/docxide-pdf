@@ -532,6 +532,10 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                         parse_anchor_position(container);
                     let (wrap_type, wrap_text, wrap_polygon) = parse_wrap_type(container);
                     let behind_doc = container.attribute("behindDoc") == Some("1");
+                    let z_index = container
+                        .attribute("relativeHeight")
+                        .and_then(|v| v.parse::<u32>().ok())
+                        .unwrap_or(0);
                     return Some(RunDrawingResult::Floating(FloatingImage {
                         image: img,
                         h_position,
@@ -546,6 +550,7 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                         dist_bottom: emu_attr(container, "distB"),
                         dist_left: emu_attr(container, "distL"),
                         dist_right: emu_attr(container, "distR"),
+                        z_index,
                     }));
                 }
             }

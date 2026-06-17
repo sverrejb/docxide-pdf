@@ -223,7 +223,12 @@ fn walk_group<R: Read + Seek>(
     for child in node.children() {
         let tn = child.tag_name();
         match (tn.namespace(), tn.name()) {
-            (Some(WPG_NS), "grpSp") => {
+            // Both grpSp (nested group) and wgp (a wordprocessingGroup root
+            // nested inside a canvas) carry a grpSpPr transform and child
+            // shapes. Recursing only into grpSp dropped entire wgp subtrees
+            // (e.g. the roundRect border + divider lines in a 4-quadrant
+            // canvas — annotation #165).
+            (Some(WPG_NS), "grpSp" | "wgp") => {
                 let t2 = find_group_xfrm(child)
                     .map(|x| compose(t, &x))
                     .unwrap_or(t);
@@ -332,6 +337,7 @@ fn emit_pic<R: Read + Seek>(
             dist_bottom: 0.0,
             dist_left: 0.0,
             dist_right: 0.0,
+            z_index: base.z_index,
         }));
     }
 }

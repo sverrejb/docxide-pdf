@@ -139,11 +139,34 @@ pub struct TableRow {
     pub cant_split: bool,
 }
 
+/// A `w:shd` line/cross pattern fill (e.g. `thinDiagStripe`). Rendered as real
+/// hatching rather than collapsed into a solid tint, so diagonal-stripe cells
+/// (e.g. ground/earth symbols) look "dithered" like Word's output.
+#[derive(Clone, Copy, Debug)]
+pub enum HatchKind {
+    Horz,
+    Vert,
+    DiagFwd,
+    DiagBack,
+    CrossHorzVert,
+    CrossDiag,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct HatchPattern {
+    pub kind: HatchKind,
+    pub fg: [u8; 3],
+    pub bg: [u8; 3],
+}
+
 pub struct TableCell {
     pub width: f32,
     pub content: Vec<Block>,
     pub borders: CellBorders,
     pub shading: Option<[u8; 3]>,
+    /// Line/cross pattern fill. When present, the renderer draws hatching
+    /// instead of `shading`'s solid approximation.
+    pub hatch: Option<HatchPattern>,
     pub grid_span: u16,
     pub v_merge: VMerge,
     pub v_align: CellVAlign,

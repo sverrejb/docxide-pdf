@@ -647,6 +647,128 @@ fn parse_vml_color(val: &str) -> Option<[u8; 3]> {
     }
 }
 
+/// Map a VML shape type code (`o:spt`, also encoded as the `t<N>` suffix of a
+/// shapetype id like `#_x0000_t87`) to a DrawingML preset geometry name for the
+/// stroke-only shapes we can render. Only the brace/bracket family is mapped —
+/// these are the common stroke-only VML presets that carry no textbox.
+fn vml_spt_to_preset(spt: u32) -> Option<&'static str> {
+    match spt {
+        85 => Some("leftBracket"),
+        86 => Some("rightBracket"),
+        87 => Some("leftBrace"),
+        88 => Some("rightBrace"),
+        _ => None,
+    }
+}
+
+/// Resolve a VML shape's preset geometry from its `o:spt` attribute or its
+/// `type="#_x0000_t<N>"` reference.
+fn vml_shape_preset(shape: roxmltree::Node) -> Option<&'static str> {
+    const OFFICE_NS: &str = "urn:schemas-microsoft-com:office:office";
+    let spt = shape
+        .attribute((OFFICE_NS, "spt"))
+        .and_then(|v| v.trim().parse::<f64>().ok().map(|f| f as u32))
+        .or_else(|| {
+            shape
+                .attribute("type")
+                .and_then(|t| t.rsplit_once('t'))
+                .and_then(|(_, n)| n.parse::<u32>().ok())
+        })?;
+    vml_spt_to_preset(spt)
+}
+
+/// Build a paragraph-less stroked textbox for a VML preset shape that has no
+/// textbox/textpath (e.g. a curly brace). Returns None for unrecognized presets
+/// so such shapes remain dropped rather than rendered as a stray rectangle.
+fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
+    let preset = vml_shape_preset(shape)?;
+
+    let stroked = !matches!(shape.attribute("stroked"), Some("f") | Some("false"));
+    if !stroked {
+        return None;
+    }
+    let parse_pt = |s: &str| -> f32 { s.trim_end_matches("pt").parse::<f32>().unwrap_or(0.0) };
+    let stroke_width = shape
+        .attribute("strokeweight")
+        .map(parse_pt)
+        .filter(|w| *w > 0.0)
+        .unwrap_or(0.75);
+    let stroke_color = shape
+        .attribute("strokecolor")
+        .and_then(parse_vml_color)
+        .unwrap_or([0, 0, 0]);
+
+    let style_str = shape.attribute("style").unwrap_or("");
+    let mut width = 0.0_f32;
+    let mut height = 0.0_f32;
+    let mut margin_left = 0.0_f32;
+    let mut margin_top = 0.0_f32;
+    let mut h_relative = HRelativeFrom::Column;
+    let mut v_relative = VRelativeFrom::Paragraph;
+    for part in style_str.split(';') {
+        if let Some((key, val)) = part.trim().split_once(':') {
+            let val = val.trim();
+            match key.trim() {
+                "width" => width = parse_pt(val),
+                "height" => height = parse_pt(val),
+                "margin-left" => margin_left = parse_pt(val),
+                "margin-top" => margin_top = parse_pt(val),
+                "mso-position-horizontal-relative" => {
+                    h_relative = match val {
+                        "page" => HRelativeFrom::Page,
+                        "margin" => HRelativeFrom::Margin,
+                        _ => HRelativeFrom::Column,
+                    };
+                }
+                "mso-position-vertical-relative" => {
+                    v_relative = match val {
+                        "page" => VRelativeFrom::Page,
+                        "margin" => VRelativeFrom::Margin,
+                        _ => VRelativeFrom::Paragraph,
+                    };
+                }
+                _ => {}
+            }
+        }
+    }
+    if width <= 0.0 || height <= 0.0 {
+        return None;
+    }
+
+    Some(Textbox {
+        paragraphs: Vec::new(),
+        width_pt: width,
+        height_pt: height,
+        h_position: HorizontalPosition::Offset(margin_left),
+        h_relative_from: h_relative,
+        v_offset_pt: margin_top,
+        v_position: VerticalPosition::Offset(margin_top),
+        v_relative_from: v_relative,
+        fill: None,
+        shape_type: ShapeGeometry {
+            preset: Some(preset.to_string()),
+            adjustments: Vec::new(),
+            custom: None,
+        },
+        stroke_color: Some(stroke_color),
+        stroke_width,
+        text_anchor: TextAnchor::Top,
+        margin_left: 0.0,
+        margin_right: 0.0,
+        margin_top: 0.0,
+        margin_bottom: 0.0,
+        wrap_type: WrapType::None,
+        dist_top: 0.0,
+        dist_bottom: 0.0,
+        behind_doc: false,
+        no_text_wrap: true,
+        is_wordart: false,
+        text_warp: None,
+        auto_fit: AutoFit::None,
+        z_index: 0,
+    })
+}
+
 pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
     pict_node: roxmltree::Node,
     ctx: &mut ParseContext<'_, R>,
@@ -660,10 +782,16 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         .children()
         .find(|n| n.tag_name().name() == "textbox" && n.tag_name().namespace() == Some(VML_NS))
     else {
-        let tp = shape.children().find(|n| {
+        if let Some(tp) = shape.children().find(|n| {
             n.tag_name().name() == "textpath" && n.tag_name().namespace() == Some(VML_NS)
-        });
-        return tp.and_then(|tp| super::wordart::parse_vml_wordart(shape, tp, ctx.styles, ctx.theme));
+        }) {
+            return super::wordart::parse_vml_wordart(shape, tp, ctx.styles, ctx.theme);
+        }
+        // Stroke-only VML preset shapes (e.g. a curly brace, o:spt 87) have
+        // neither a textbox nor a textpath. They were previously dropped
+        // entirely (annotation #174 — the blue "{" wrapping the paragraphs).
+        // Build a paragraph-less stroked shape from the preset geometry.
+        return parse_vml_geometry_shape(shape);
     };
     let txbx_content = textbox_node.children().find(|n| {
         n.tag_name().name() == "txbxContent" && n.tag_name().namespace() == Some(WML_NS)
