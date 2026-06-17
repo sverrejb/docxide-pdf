@@ -1298,6 +1298,18 @@ pub(super) fn render_table(
     };
 
     let mut did_flush_while_floating = false;
+    // Set to the fresh page's body top when a floating table is pushed whole
+    // onto it. The table's anchor paragraph flows from here even though the
+    // cursor is left below the table, so its paragraph-relative shapes anchor
+    // correctly. `None` while the table stays on its original page.
+    let mut flushed_page_top: Option<f32> = None;
+    // tblpY to apply to the render start of a vertAnchor="text" table (0 for
+    // page/margin anchors). Raised before rendering, restored after, so the
+    // table sits where Word puts it without shifting the following flow.
+    let text_anchor_offset = override_pos
+        .as_ref()
+        .filter(|fp| fp.v_anchor_text)
+        .map_or(0.0, |fp| fp.v_offset_pt);
 
     // Split an oversized row across pages, rendering partial rows and
     // flushing pages between chunks until every cell is fully emitted.
@@ -1372,6 +1384,14 @@ pub(super) fn render_table(
             pb.column_top_y = pb.slot_top;
             *effective_margin_bottom = compute_effective_margin_bottom(sp, false, ctx);
             did_flush_while_floating = true;
+            // The body top is where the anchor paragraph flows (and where its
+            // paragraph-relative shapes anchor). The table itself, however,
+            // honors tblpY relative to that anchor — for vertAnchor="text" a
+            // negative tblpY lifts it above the top margin. Render the table from
+            // the offset position; the flow cursor is restored to the un-offset
+            // bottom afterwards so following content is unaffected.
+            flushed_page_top = Some(pb.slot_top);
+            pb.slot_top -= text_anchor_offset;
         }
     }
 
@@ -1491,6 +1511,23 @@ pub(super) fn render_table(
         if did_flush_while_floating {
             // Table spanned multiple pages — cursor is already on the new page,
             // don't restore to the pre-table position or register a float zone.
+            // The cursor stays below the table so following text flows below it
+            // (not behind it). But the table's anchor paragraph — the next block,
+            // which carries vertAnchor="text" shapes — must anchor its
+            // paragraph-relative shapes from the top of the page body where the
+            // anchor naturally flows, not from the cursor below the table. Hand
+            // that top down as a one-shot override (pendulum graph + pendulum
+            // illustrations were dropping by the table's height). Only the
+            // whole-table-to-next-page path sets flushed_page_top; the per-row
+            // split path (taller-than-page tables) leaves it None, so the
+            // override is skipped there rather than anchoring shapes off-page.
+            if let Some(top) = flushed_page_top {
+                pb.pending_float_anchor = Some(top);
+                // Undo the tblpY offset applied to the render start so the flow
+                // cursor sits at the un-offset table bottom — following content
+                // (which is correctly placed) must not shift with the table.
+                pb.slot_top += text_anchor_offset;
+            }
         } else {
         let table_total_w: f32 = col_widths.iter().sum();
         let (top_margin, bottom_margin) = text_margins;

@@ -440,6 +440,14 @@ pub(super) struct FloatingTablePos {
     pub bottom_from_text: f32,
     pub left_from_text: f32,
     pub right_from_text: f32,
+    /// Raw `tblpY` offset in points (positive = down from the anchor). Needed by
+    /// the flushed-to-next-page path, which re-anchors a `vertAnchor="text"`
+    /// table to the new page body top and must re-apply this offset so the table
+    /// sits where Word puts it (often above the top margin for negative tblpY).
+    pub v_offset_pt: f32,
+    /// True when `vertAnchor="text"` — the offset is relative to the anchor
+    /// paragraph (re-applicable on a fresh page), not the page/margin.
+    pub v_anchor_text: bool,
 }
 
 pub(super) struct PageBuilder {
@@ -479,6 +487,13 @@ pub(super) struct PageBuilder {
     /// Floating table exclusion zone on this page; paragraph layout
     /// uses horizontal bounds to decide wrap-beside vs push-below.
     pub(super) float_zone: Option<FloatZone>,
+    /// One-shot anchor override for the paragraph that follows a floating table
+    /// which was pushed whole onto a fresh page. That paragraph (the table's
+    /// vertAnchor="text" anchor) must position its paragraph-relative shapes
+    /// from the top of the page body — where the anchor naturally flows — even
+    /// though the flow cursor stays below the table so following text doesn't
+    /// overlap it. Without this the shapes drop by the table's height.
+    pub(super) pending_float_anchor: Option<f32>,
     /// Anchored shapes for this page, painted above the text layer sorted by
     /// relativeHeight: Word stacks floating shapes in z order regardless of
     /// which paragraph anchors them.
@@ -519,6 +534,7 @@ impl PageBuilder {
             is_first_page_of_section: true,
             page_hf_section: 0,
             float_zone: None,
+            pending_float_anchor: None,
             deferred_shapes: Vec::new(),
             all_contents: Vec::new(),
             all_deferred_shapes: Vec::new(),
@@ -2080,6 +2096,15 @@ fn render_paragraph_block(
         }
     }
 
+    // A floating table pushed onto a fresh page hands its anchor paragraph the
+    // page-body top so paragraph-relative shapes anchor there (the flow cursor
+    // stays below the table). One-shot: consumed by this, the next, paragraph.
+    let float_anchor_top = state
+        .pb
+        .pending_float_anchor
+        .take()
+        .unwrap_or(state.pb.slot_top);
+
     // Render behind-doc layer: floating images + textboxes
     render_floating_images(
         &para.floating_images,
@@ -2091,7 +2116,7 @@ fn render_paragraph_block(
         col_x,
         col_w,
         text_width,
-        state.pb.slot_top,
+        float_anchor_top,
         &mut state.pb.content,
     );
     for tb in sorted_by_z(para.textboxes.iter().filter(|t| t.behind_doc)) {
@@ -2101,7 +2126,7 @@ fn render_paragraph_block(
             col_x,
             col_w,
             text_width,
-            state.pb.slot_top,
+            float_anchor_top,
             &mut state.pb.content,
             &mut state.pb.gradient_specs,
             &ctx,
@@ -2154,7 +2179,7 @@ fn render_paragraph_block(
         col_x,
         col_w,
         text_width,
-        state.pb.slot_top,
+        float_anchor_top,
         &mut state.pb.deferred_shapes,
     );
 
@@ -2167,7 +2192,7 @@ fn render_paragraph_block(
                 let fi_x =
                     resolve_fi_x(fi, sp, col_x, col_w, text_width);
                 let fi_y_top =
-                    resolve_fi_y_top(fi, sp, state.pb.slot_top);
+                    resolve_fi_y_top(fi, sp, float_anchor_top);
                 let fi_y_bottom =
                     fi_y_top - fi.image.display_height;
                 let polygon_pts =
@@ -2213,7 +2238,7 @@ fn render_paragraph_block(
             col_x,
             col_w,
             text_width,
-            state.pb.slot_top,
+            float_anchor_top,
             &mut shape_content,
             &mut state.pb.gradient_specs,
             &ctx,
@@ -2898,6 +2923,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             bottom_from_text: pos.bottom_from_text,
                             left_from_text: pos.left_from_text,
                             right_from_text: pos.right_from_text,
+                            v_offset_pt: pos.v_offset_pt,
+                            v_anchor_text: pos.v_anchor == "text",
                         }
                     });
                     let col_bounds = if col_count > 1 {

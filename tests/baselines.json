@@ -613,8 +613,8 @@
     "text_boundary": 1.0
   },
   "new/pendulum_mechani..": {
-    "jaccard": 0.1402,
-    "ssim": 0.3101,
+    "jaccard": 0.155,
+    "ssim": 0.3465,
     "text_boundary": 0.3043
   },
   "new/polish_municipal..": {
@@ -790,8 +790,8 @@
     "convert_ms": 59.6
   },
   "scraped/croatian_grant_g..": {
-    "jaccard": 0.075,
-    "ssim": 0.1923,
+    "jaccard": 0.0763,
+    "ssim": 0.1932,
     "text_boundary": 0.0112,
     "convert_ms": 270.5
   },
