@@ -358,6 +358,10 @@ pub struct Run {
     /// Active comment IDs covering this run (empty for the common no-comments case).
     /// Multiple IDs when comment ranges overlap.
     pub comment_ids: Vec<u32>,
+    /// True for runs synthesized from Office Math (OMML). The math font (e.g.
+    /// Cambria Math) has very tall metrics for big operators; such runs must not
+    /// inflate the surrounding text line height.
+    pub is_math: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -433,6 +437,7 @@ impl Default for Run {
             font_size_from_default: false,
             font_name_from_default: false,
             comment_ids: Vec::new(),
+            is_math: false,
         }
     }
 }

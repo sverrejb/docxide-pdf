@@ -1,5 +1,5 @@
 {
-  "next_id": 198,
+  "next_id": 202,
   "annotations": [
     {
       "id": 8,
@@ -9,16 +9,6 @@
       "x_pt": 322.27734,
       "y_pt": 164.30786,
       "note": "This text should come on page 2.",
-      "fixed": false
-    },
-    {
-      "id": 48,
-      "case": "scraped/croatian_grant_guidelines",
-      "page": 3,
-      "source": "Generated",
-      "x_pt": 233.24855,
-      "y_pt": 248.89056,
-      "note": "Breakpoint of the green box (table?) should be in the fourth paragraph. Not where we break it. There is still a lot of space below the box.",
       "fixed": false
     },
     {
@@ -242,36 +232,6 @@
       "fixed": false
     },
     {
-      "id": 172,
-      "case": "new/pendulum_mechanics_oscillation_lab",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 327.48737,
-      "y_pt": 107.774536,
-      "note": "We render a broken table from page 2 over page 1 here. It is both emopty and overlaps point 10.",
-      "fixed": false
-    },
-    {
-      "id": 173,
-      "case": "new/pendulum_mechanics_oscillation_lab",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 455.56506,
-      "y_pt": 650.57404,
-      "note": "Missing vector and pendulum illustration here.",
-      "fixed": false
-    },
-    {
-      "id": 175,
-      "case": "new/pendulum_mechanics_oscillation_lab",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 550.9007,
-      "y_pt": 560.66974,
-      "note": "Missing red border around the \"Nota Bene\"",
-      "fixed": false
-    },
-    {
       "id": 176,
       "case": "new/scottish_fundraising_awards_campaign",
       "page": 0,
@@ -400,6 +360,36 @@
       "y_pt": 238.3891,
       "note": "This grey line should be dithered or something. Compare with reference",
       "fixed": true
+    },
+    {
+      "id": 199,
+      "case": "new/pendulum_mechanics_oscillation_lab",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 267.91858,
+      "y_pt": 494.00278,
+      "note": "Vector and pendulum illustrations are placed wrong, overlaps the content below",
+      "fixed": false
+    },
+    {
+      "id": 200,
+      "case": "scraped/croatian_grant_guidelines",
+      "page": 3,
+      "source": "Generated",
+      "x_pt": 189.17963,
+      "y_pt": 391.03726,
+      "note": "Green text box should be broken across two pages here, not pushed to the next.",
+      "fixed": false
+    },
+    {
+      "id": 201,
+      "case": "new/pendulum_mechanics_oscillation_lab",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 502.55814,
+      "y_pt": 760.0786,
+      "note": "\"g\" is placed too high here. Should be lower. Compare with reference.",
+      "fixed": false
     }
   ]
 }

@@ -605,6 +605,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
             // color wins; otherwise a pattern fill (stripes/cross/pctNN) with an
             // auto fill is approximated as a solid tint, since the renderer only
             // supports solid cell fills.
+            let has_explicit_shd = tc_pr.and_then(|pr| wml(pr, "shd")).is_some();
             let mut cell_hatch: Option<HatchPattern> = None;
             let mut pattern_shading: Option<[u8; 3]> = None;
             if let Some(shd) = tc_pr.and_then(|pr| wml(pr, "shd")) {
@@ -630,7 +631,17 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     pattern_shading = approx_pattern_shade(val, ink);
                 }
             }
-            let shading = pattern_shading.or(cond_shading);
+            // A direct cell <w:shd> overrides table-style conditional banding —
+            // even fill="auto" (explicit no-fill) suppresses a band1Horz/Vert
+            // tint. Only fall back to the conditional shading when the cell has
+            // no explicit shd at all. (Pendulum data table: every cell is
+            // shd fill="auto", so Word renders it white despite PlainTable1's
+            // grey row banding.)
+            let shading = if has_explicit_shd {
+                pattern_shading
+            } else {
+                cond_shading
+            };
             let hatch = cell_hatch;
 
             let per_cell_margins = tc_pr
@@ -716,6 +727,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     let alignment = ppr
                         .and_then(|ppr| wml_attr(ppr, "jc"))
                         .map(parse_alignment)
+                        .or_else(|| super::runs::display_math_alignment(p))
                         .or_else(|| para_style.and_then(|s| s.alignment))
                         .unwrap_or(Alignment::Left);
                     let (sp_before, sp_after, ls) = parse_paragraph_spacing(ppr, para_style, None);

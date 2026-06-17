@@ -99,6 +99,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     let alignment = ppr
         .and_then(|ppr| wml_attr(ppr, "jc"))
         .map(parse_alignment)
+        .or_else(|| super::runs::display_math_alignment(node))
         .or_else(|| para_style.and_then(|s| s.alignment))
         .unwrap_or(ctx.styles.defaults.alignment);
 

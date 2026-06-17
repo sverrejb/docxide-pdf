@@ -2006,13 +2006,26 @@ pub(super) fn tallest_run_metrics(
         }
         let key = font_key_buf(run, &mut key_buf);
         let entry = seen_fonts.get(key);
-        let ar = entry.and_then(|e| e.ascender_ratio).unwrap_or(0.75);
+        // Math runs use a math font (e.g. Cambria Math) whose ascent/descent are
+        // very tall to accommodate big operators. Inline math should sit within
+        // the surrounding text line height (as Word lays it out), so clamp math
+        // runs to a normal ratio and don't let them contribute a line-height
+        // ratio — otherwise every line containing math balloons vertically.
+        let (ar, lhr, ascender_ratio) = if run.is_math {
+            (0.75f32, None, None)
+        } else {
+            (
+                entry.and_then(|e| e.ascender_ratio).unwrap_or(0.75),
+                entry.and_then(|e| e.line_h_ratio),
+                entry.and_then(|e| e.ascender_ratio),
+            )
+        };
         let ascent = run.font_size * ar;
         if ascent > best_ascent {
             best_ascent = ascent;
             best_font_size = run.font_size;
-            best_ascender_ratio = entry.and_then(|e| e.ascender_ratio);
-            best_line_h_ratio = entry.and_then(|e| e.line_h_ratio);
+            best_ascender_ratio = ascender_ratio;
+            best_line_h_ratio = lhr;
         }
     }
     (best_font_size, best_line_h_ratio, best_ascender_ratio)
@@ -2094,6 +2107,7 @@ mod tests {
             font_size_from_default: false,
             font_name_from_default: false,
             comment_ids: Vec::new(),
+            is_math: false,
         }
     }
 

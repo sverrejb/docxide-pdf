@@ -449,8 +449,16 @@ pub(super) fn compute_row_layouts(
                                 let font_size = runs.first().map_or(12.0, |r| r.font_size);
                                 let effective_ls =
                                     para.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                                let tallest_lhr =
-                                    font_metric(runs, ctx.fonts, |e| e.line_h_ratio);
+                                // A math run uses a math font (e.g. Cambria Math)
+                                // whose tall ascent/descent must not set the cell
+                                // line height (mirrors the is_math clamp in
+                                // tallest_run_metrics) — otherwise a header cell
+                                // whose first run is math balloons the row.
+                                let tallest_lhr = if runs.first().is_some_and(|r| r.is_math) {
+                                    None
+                                } else {
+                                    font_metric(runs, ctx.fonts, |e| e.line_h_ratio)
+                                };
                                 let line_h =
                                     resolve_line_h(effective_ls, font_size, tallest_lhr);
 

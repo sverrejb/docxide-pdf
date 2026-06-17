@@ -1344,6 +1344,37 @@ pub(super) fn render_table(
         }
     };
 
+    // A floating table whose first row doesn't fit in the space left on the
+    // current page is pushed whole to the next page rather than overlapping the
+    // bottom content. vertAnchor="text" tables flow with their anchor text, so
+    // Word starts them on the next page; the per-row split path below can't
+    // rescue this when the first row's cells aren't splittable (e.g. headers
+    // that are OMML math). Re-anchor to the top of the fresh page. Setting
+    // did_flush_while_floating leaves the cursor on the new page so the
+    // following content flows below the table instead of behind it.
+    // (Pendulum #172/#173: the data table was landing on page 1 over list
+    // item 10, which also pushed the following illustration off-page.)
+    if is_floating && !row_layouts.is_empty() {
+        let eff_top = effective_slot_top(sp, pb.is_first_page_of_section, ctx);
+        let at_page_top = (pb.slot_top - eff_top).abs() < 1.0;
+        let available = pb.slot_top - *effective_margin_bottom;
+        let total_h: f32 = row_layouts.iter().map(|r| r.height).sum();
+        let page_content_h = eff_top - *effective_margin_bottom;
+        // Keep the floating table together: when it doesn't fit in the space
+        // left here but would fit on a fresh page, move the whole table to the
+        // next page (re-anchoring to the top). Using the full height (not just
+        // the first row) is robust to short header rows. Tables taller than a
+        // full page fall through to the per-row split path below.
+        if !at_page_top && total_h > available && total_h <= page_content_h {
+            pb.flush_page(sect_idx);
+            pb.is_first_page_of_section = false;
+            pb.slot_top = effective_slot_top(sp, false, ctx);
+            pb.column_top_y = pb.slot_top;
+            *effective_margin_bottom = compute_effective_margin_bottom(sp, false, ctx);
+            did_flush_while_floating = true;
+        }
+    }
+
     for (ri, (row, layout)) in table.rows.iter().zip(row_layouts.iter()).enumerate() {
         // Pre-compute extra footnote space this row introduces, so the
         // page-break check below accounts for it before rendering.

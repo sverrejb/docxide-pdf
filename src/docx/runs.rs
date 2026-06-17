@@ -630,6 +630,15 @@ fn collect_run_nodes<'a>(
             if let Some(branch) = mc_choice_or_fallback(child) {
                 collect_run_nodes(branch, rels, out, active_comments);
             }
+        } else if ns == Some(MATH_NS) && name == "oMathPara" {
+            // A math paragraph wraps one or more m:oMath; emit each in order.
+            for om in child.children().filter(|n| {
+                n.tag_name().namespace() == Some(MATH_NS) && n.tag_name().name() == "oMath"
+            }) {
+                out.push((om, None, false, active_comments.clone()));
+            }
+        } else if ns == Some(MATH_NS) && name == "oMath" {
+            out.push((child, None, false, active_comments.clone()));
         }
     }
 }
@@ -737,6 +746,162 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
     result
 }
 
+pub(super) const MATH_NS: &str = "http://schemas.openxmlformats.org/officeDocument/2006/math";
+
+/// First math-namespace child element with the given local name.
+fn math_child<'a>(parent: roxmltree::Node<'a, 'a>, name: &str) -> Option<roxmltree::Node<'a, 'a>> {
+    parent
+        .children()
+        .find(|n| n.tag_name().namespace() == Some(MATH_NS) && n.tag_name().name() == name)
+}
+
+/// Default alignment for a paragraph that contains a display-math block
+/// (`m:oMathPara`). OOXML centers display math by default (`m:oMathParaPr/m:jc`,
+/// default `centerGroup`), which is why e.g. table-header equation cells appear
+/// centered even with no paragraph `w:jc`. Returns `None` for paragraphs with no
+/// `m:oMathPara` (inline `m:oMath` flows with the surrounding text and is not
+/// treated as display math).
+pub(super) fn display_math_alignment(para: roxmltree::Node) -> Option<crate::model::Alignment> {
+    use crate::model::Alignment;
+    let omp = para
+        .children()
+        .find(|n| n.tag_name().namespace() == Some(MATH_NS) && n.tag_name().name() == "oMathPara")?;
+    let jc = math_child(omp, "oMathParaPr")
+        .and_then(|pr| math_child(pr, "jc"))
+        .and_then(|j| j.attribute((MATH_NS, "val")));
+    Some(match jc {
+        Some("left") => Alignment::Left,
+        Some("right") => Alignment::Right,
+        // center / centerGroup / absent
+        _ => Alignment::Center,
+    })
+}
+
+/// Linearize an Office Math (OMML `m:oMath`) tree into ordinary text runs,
+/// reusing the normal run pipeline (fonts, sub/superscript). Stacked constructs
+/// are approximated inline — fractions as `num/den`, radicals as `√(radicand)`,
+/// delimiters as `(…)` — rather than laid out two-dimensionally. This is not
+/// full equation layout, but it renders the symbols and sub/superscripts that
+/// were previously dropped entirely (e.g. table headers `T₁₀±∆T₁₀` and inline
+/// formulas), since the run parser never descended into the math namespace.
+fn omath_to_runs(
+    node: roxmltree::Node,
+    defaults: &ParagraphRunDefaults,
+    theme: &ThemeFonts,
+    vert: VertAlign,
+    out: &mut Vec<Run>,
+) {
+    let push_lit = |out: &mut Vec<Run>, s: &str| {
+        let fmt = defaults.resolve_run_format(None, None, None, theme);
+        let mut r = fmt.text_run(s.to_string(), None);
+        r.vertical_align = vert;
+        r.is_math = true;
+        out.push(r);
+    };
+    for child in node.children() {
+        if child.tag_name().namespace() != Some(MATH_NS) {
+            continue;
+        }
+        match child.tag_name().name() {
+            "r" => {
+                let text: String = child
+                    .children()
+                    .filter(|n| {
+                        n.tag_name().namespace() == Some(MATH_NS) && n.tag_name().name() == "t"
+                    })
+                    .filter_map(|t| t.text())
+                    .collect();
+                if !text.is_empty() {
+                    // Math runs carry a w:rPr (fonts/size); m:rPr math styling is ignored.
+                    let fmt = defaults.resolve_run_format(wml(child, "rPr"), None, None, theme);
+                    let mut r = fmt.text_run(text, None);
+                    // In math, sub/superscript is conveyed by the structure
+                    // (m:sSub/m:sSup), not the run's w:vertAlign. Word ignores a
+                    // run-level vertAlign here, so always apply the structural
+                    // position — otherwise a cell whose runs all carry a spurious
+                    // w:vertAlign="subscript" renders entirely shrunken.
+                    r.vertical_align = vert;
+                    r.is_math = true;
+                    out.extend(split_run_by_script(r).into_iter().map(|mut sr| {
+                        sr.is_math = true;
+                        sr
+                    }));
+                }
+            }
+            "sSub" => {
+                if let Some(e) = math_child(child, "e") {
+                    omath_to_runs(e, defaults, theme, vert, out);
+                }
+                if let Some(s) = math_child(child, "sub") {
+                    omath_to_runs(s, defaults, theme, VertAlign::Subscript, out);
+                }
+            }
+            "sSup" => {
+                if let Some(e) = math_child(child, "e") {
+                    omath_to_runs(e, defaults, theme, vert, out);
+                }
+                if let Some(s) = math_child(child, "sup") {
+                    omath_to_runs(s, defaults, theme, VertAlign::Superscript, out);
+                }
+            }
+            "sSubSup" => {
+                if let Some(e) = math_child(child, "e") {
+                    omath_to_runs(e, defaults, theme, vert, out);
+                }
+                if let Some(s) = math_child(child, "sub") {
+                    omath_to_runs(s, defaults, theme, VertAlign::Subscript, out);
+                }
+                if let Some(s) = math_child(child, "sup") {
+                    omath_to_runs(s, defaults, theme, VertAlign::Superscript, out);
+                }
+            }
+            "f" => {
+                if let Some(n) = math_child(child, "num") {
+                    omath_to_runs(n, defaults, theme, vert, out);
+                }
+                push_lit(out, "/");
+                if let Some(d) = math_child(child, "den") {
+                    omath_to_runs(d, defaults, theme, vert, out);
+                }
+            }
+            "rad" => {
+                push_lit(out, "√");
+                if let Some(e) = math_child(child, "e") {
+                    push_lit(out, "(");
+                    omath_to_runs(e, defaults, theme, vert, out);
+                    push_lit(out, ")");
+                }
+            }
+            "d" => {
+                push_lit(out, "(");
+                if let Some(e) = math_child(child, "e") {
+                    omath_to_runs(e, defaults, theme, vert, out);
+                }
+                push_lit(out, ")");
+            }
+            "nary" => {
+                let chr = math_child(child, "naryPr")
+                    .and_then(|p| math_child(p, "chr"))
+                    .and_then(|c| c.attribute((MATH_NS, "val")))
+                    .unwrap_or("∫");
+                push_lit(out, chr);
+                if let Some(s) = math_child(child, "sub") {
+                    omath_to_runs(s, defaults, theme, VertAlign::Subscript, out);
+                }
+                if let Some(s) = math_child(child, "sup") {
+                    omath_to_runs(s, defaults, theme, VertAlign::Superscript, out);
+                }
+                if let Some(e) = math_child(child, "e") {
+                    omath_to_runs(e, defaults, theme, vert, out);
+                }
+            }
+            // Structural containers reached directly (e.g. m:e, m:func, m:limLow,
+            // m:groupChr) — recurse to collect their text in document order.
+            _ => omath_to_runs(child, defaults, theme, vert, out),
+        }
+    }
+}
+
 pub(super) fn parse_runs<R: Read + Seek>(
     para_node: roxmltree::Node,
     ctx: &mut ParseContext<'_, R>,
@@ -765,6 +930,12 @@ pub(super) fn parse_runs<R: Read + Seek>(
     let mut field_stack: Vec<FieldFrame> = Vec::new();
 
     for (run_node, hyperlink_url, is_anchor_hyperlink, comment_ids) in run_nodes {
+        if run_node.tag_name().namespace() == Some(MATH_NS)
+            && run_node.tag_name().name() == "oMath"
+        {
+            omath_to_runs(run_node, &defaults, ctx.theme, VertAlign::Baseline, &mut runs);
+            continue;
+        }
         let runs_before = runs.len();
         let rpr = wml(run_node, "rPr");
 

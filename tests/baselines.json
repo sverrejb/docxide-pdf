@@ -565,16 +565,16 @@
   "new/irish_school_enr..": {
     "jaccard": 0.3364,
     "ssim": 0.5307,
-    "text_boundary": 0.7054
+    "text_boundary": 0.7143
   },
   "new/isla_language_le..": {
-    "jaccard": 0.3748,
-    "ssim": 0.5668,
+    "jaccard": 0.3781,
+    "ssim": 0.5741,
     "text_boundary": 0.7161
   },
   "new/japanese_land_de..": {
-    "jaccard": 0.1025,
-    "ssim": 0.2937,
+    "jaccard": 0.1007,
+    "ssim": 0.3046,
     "text_boundary": 0.1111
   },
   "new/k4_regulations_s..": {
@@ -583,8 +583,8 @@
     "text_boundary": 0.9892
   },
   "new/lenten_prayer_un..": {
-    "jaccard": 0.6257,
-    "ssim": 0.6553,
+    "jaccard": 0.6275,
+    "ssim": 0.6582,
     "text_boundary": 1.0
   },
   "new/lithuanian_excis..": {
@@ -613,9 +613,9 @@
     "text_boundary": 1.0
   },
   "new/pendulum_mechani..": {
-    "jaccard": 0.1395,
-    "ssim": 0.2584,
-    "text_boundary": 0.1333
+    "jaccard": 0.1402,
+    "ssim": 0.3101,
+    "text_boundary": 0.3043
   },
   "new/polish_municipal..": {
     "jaccard": 0.6704,
@@ -767,8 +767,8 @@
   },
   "scraped/brazilian_logist..": {
     "jaccard": 0.1683,
-    "ssim": 0.2871,
-    "text_boundary": 0.1719,
+    "ssim": 0.2863,
+    "text_boundary": 0.1717,
     "convert_ms": 744.0
   },
   "scraped/bush_fires_act_c..": {
@@ -790,9 +790,9 @@
     "convert_ms": 59.6
   },
   "scraped/croatian_grant_g..": {
-    "jaccard": 0.079,
-    "ssim": 0.1964,
-    "text_boundary": 0.0086,
+    "jaccard": 0.075,
+    "ssim": 0.1923,
+    "text_boundary": 0.0112,
     "convert_ms": 270.5
   },
   "scraped/croatian_regulat..": {
