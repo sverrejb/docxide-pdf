@@ -12,7 +12,6 @@ use super::layout::{
 };
 use super::list_label::render_list_label;
 use super::positioning::resolve_h_position;
-use super::smartart::draw_shape_path;
 use super::wordart;
 use super::{GradientSpec, RenderContext, render_shape_fill, resolve_line_h};
 
@@ -133,7 +132,7 @@ pub(super) fn render_single_textbox(
             content.save_state();
             content.set_line_width(tb.stroke_width);
             stroke_rgb(content, stroke);
-            draw_shape_path(
+            super::smartart::draw_shape_stroke_path(
                 content,
                 tb_x,
                 tb_y_top - tb_height,

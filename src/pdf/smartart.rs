@@ -50,37 +50,72 @@ fn evaluate_shape_geometry(
     }
 }
 
+fn emit_path_commands(content: &mut Content, x: f32, y: f32, path: &geometry::EvaluatedPath) {
+    for cmd in &path.commands {
+        match *cmd {
+            ResolvedCommand::MoveTo(px, py) => {
+                content.move_to(x + px as f32, y + py as f32);
+            }
+            ResolvedCommand::LineTo(px, py) => {
+                content.line_to(x + px as f32, y + py as f32);
+            }
+            ResolvedCommand::CubicTo {
+                x1,
+                y1,
+                x2,
+                y2,
+                x: px,
+                y: py,
+            } => {
+                content.cubic_to(
+                    x + x1 as f32,
+                    y + y1 as f32,
+                    x + x2 as f32,
+                    y + y2 as f32,
+                    x + px as f32,
+                    y + py as f32,
+                );
+            }
+            ResolvedCommand::Close => {
+                content.close_path();
+            }
+        }
+    }
+}
+
 fn emit_evaluated_paths(content: &mut Content, x: f32, y: f32, shape: &geometry::EvaluatedShape) {
     for path in &shape.paths {
-        for cmd in &path.commands {
-            match *cmd {
-                ResolvedCommand::MoveTo(px, py) => {
-                    content.move_to(x + px as f32, y + py as f32);
+        emit_path_commands(content, x, y, path);
+    }
+}
+
+/// Emit a shape's path for STROKING, honoring each subpath's OOXML `stroke`
+/// flag. Shapes such as braces, brackets, arcs and callouts define a closed
+/// fill-only subpath plus an open stroke-only subpath; stroking the fill
+/// subpath too would draw a spurious closing segment (e.g. a vertical line
+/// across the open side of a "{" brace). When no subpath is explicitly
+/// strokable, all subpaths are emitted, preserving behavior for single-path
+/// shapes whose definitions don't set the flag.
+pub(super) fn draw_shape_stroke_path(
+    content: &mut Content,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    shape: &ShapeGeometry,
+) {
+    match evaluate_shape_geometry(shape, w as f64, h as f64) {
+        Some(eval) => {
+            let any_strokable = eval.paths.iter().any(|p| p.stroke);
+            for path in &eval.paths {
+                if any_strokable && !path.stroke {
+                    continue;
                 }
-                ResolvedCommand::LineTo(px, py) => {
-                    content.line_to(x + px as f32, y + py as f32);
-                }
-                ResolvedCommand::CubicTo {
-                    x1,
-                    y1,
-                    x2,
-                    y2,
-                    x: px,
-                    y: py,
-                } => {
-                    content.cubic_to(
-                        x + x1 as f32,
-                        y + y1 as f32,
-                        x + x2 as f32,
-                        y + y2 as f32,
-                        x + px as f32,
-                        y + py as f32,
-                    );
-                }
-                ResolvedCommand::Close => {
-                    content.close_path();
-                }
+                emit_path_commands(content, x, y, path);
             }
+        }
+        None => {
+            content.rect(x, y, w, h);
         }
     }
 }
@@ -214,7 +249,7 @@ pub(super) fn render_smartart(
             content.set_line_width(shape.stroke_width);
             color::stroke_rgb(content, stroke);
         }
-        draw_shape_path(content, sx, sy, shape.width, shape.height, &shape.shape_type);
+        draw_shape_stroke_path(content, sx, sy, shape.width, shape.height, &shape.shape_type);
         content.stroke();
         content.restore_state();
 

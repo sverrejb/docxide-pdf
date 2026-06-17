@@ -13,7 +13,6 @@ pub struct EvaluatedPath {
     pub commands: Vec<ResolvedCommand>,
     #[allow(dead_code)]
     pub fill: PathFill,
-    #[allow(dead_code)]
     pub stroke: bool,
 }
 
