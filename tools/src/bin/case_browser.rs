@@ -2,6 +2,7 @@ use eframe::egui;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::process::{Child, Command};
 use std::time::SystemTime;
 
 const RENDER_DPI: f32 = 150.0;
@@ -402,6 +403,7 @@ struct App {
     search_active: bool,
     filter_annotated: bool,
     filter_changed: bool,
+    regen: Option<Child>,
 }
 
 impl App {
@@ -438,6 +440,42 @@ impl App {
             search_active: false,
             filter_annotated: false,
             filter_changed: false,
+            regen: None,
+        }
+    }
+
+    /// Re-run the visual_comparison test rig for the current case only, in the
+    /// background. Refreshes scores, hashes and screenshots when it finishes.
+    fn start_regen(&mut self) {
+        if self.regen.is_some() {
+            return;
+        }
+        let case_info = &self.cases[self.current_case];
+        let (group, case) = match case_info.name.find('/') {
+            Some(i) => (
+                case_info.name[..i].to_string(),
+                case_info.name[i + 1..].to_string(),
+            ),
+            None => ("cases".to_string(), case_info.name.clone()),
+        };
+        // Force a fresh conversion — ensure_generated_pdf otherwise skips on mtime.
+        let _ = std::fs::remove_file(case_info.dir.join("generated.pdf"));
+        // cargo test must run from the project root: output_dir is <root>/tests/output.
+        let root = self
+            .output_dir
+            .canonicalize()
+            .ok()
+            .and_then(|p| p.parent().and_then(Path::parent).map(Path::to_path_buf));
+        let mut cmd = Command::new("cargo");
+        cmd.args(["test", "--test", "visual_comparison", "--", "--nocapture"])
+            .env("DOCXIDE_CASE", &case)
+            .env("DOCXSIDE_GROUP", &group);
+        if let Some(root) = root {
+            cmd.current_dir(root);
+        }
+        match cmd.spawn() {
+            Ok(child) => self.regen = Some(child),
+            Err(e) => eprintln!("re-generate failed to start: {e}"),
         }
     }
 
@@ -597,6 +635,18 @@ impl eframe::App for App {
                 self.show_notes_panel = !self.show_notes_panel;
             }
         });
+
+        // Poll an in-flight re-generate; refresh once the test rig exits.
+        if let Some(child) = self.regen.as_mut() {
+            match child.try_wait() {
+                Ok(Some(_)) => {
+                    self.regen = None;
+                    self.refresh();
+                }
+                Ok(None) => ctx.request_repaint(),
+                Err(_) => self.regen = None,
+            }
+        }
 
         // Right panel: case list
         // Build per-case annotation status: (total, fixed)
@@ -779,10 +829,17 @@ impl eframe::App for App {
 
         // Top bar: case name and view mode
         let mut acknowledge_current = false;
+        let mut start_regen = false;
         egui::TopBottomPanel::top("top_bar").show(ctx, |ui| {
             ui.horizontal(|ui| {
                 let case = &self.cases[self.current_case];
                 ui.strong(&case.name);
+                ui.separator();
+                if self.regen.is_some() {
+                    ui.colored_label(egui::Color32::from_rgb(220, 180, 0), "Regenerating…");
+                } else if ui.button("Re-generate").clicked() {
+                    start_regen = true;
+                }
                 ui.separator();
                 let mode_label = match self.view_mode {
                     ViewMode::SideBySide => "[1] Side-by-side",
@@ -834,6 +891,10 @@ impl eframe::App for App {
                 }
             });
         });
+
+        if start_regen {
+            self.start_regen();
+        }
 
         if acknowledge_current {
             let key = baseline_key(&self.cases[self.current_case].name);

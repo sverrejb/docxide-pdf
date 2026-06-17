@@ -273,11 +273,18 @@ pub fn compute_page_hashes(gen_pages: &[PathBuf]) -> Vec<String> {
 }
 
 /// Write per-case page hashes to tests/output/latest_hashes.json.
-/// Simple overwrite (only visual_comparison writes hashes).
+/// Merges by case so a single-case run (the case browser's re-generate button)
+/// updates that case without dropping every other case from the change-detection
+/// set. A full run still replaces every entry; run-tests.sh rm's the file first.
 pub fn write_latest_hashes(hashes: &BTreeMap<String, Vec<String>>) {
     fs::create_dir_all("tests/output").ok();
     let path = Path::new("tests/output/latest_hashes.json");
-    let json = serde_json::to_string_pretty(hashes).expect("Failed to serialize latest hashes");
+    let mut merged: BTreeMap<String, Vec<String>> = fs::read_to_string(path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default();
+    merged.extend(hashes.iter().map(|(k, v)| (k.clone(), v.clone())));
+    let json = serde_json::to_string_pretty(&merged).expect("Failed to serialize latest hashes");
     fs::write(path, json + "\n").expect("Failed to write latest_hashes.json");
 }
 

@@ -362,16 +362,6 @@
       "fixed": true
     },
     {
-      "id": 199,
-      "case": "new/pendulum_mechanics_oscillation_lab",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 267.91858,
-      "y_pt": 494.00278,
-      "note": "Vector and pendulum illustrations are placed wrong, overlaps the content below",
-      "fixed": false
-    },
-    {
       "id": 200,
       "case": "scraped/croatian_grant_guidelines",
       "page": 3,
