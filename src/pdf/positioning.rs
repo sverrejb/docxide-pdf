@@ -162,6 +162,25 @@ fn render_one_floating_image(
     let fi_y_top = resolve_fi_y_top(fi, sp, slot_top);
     let fi_y_bottom = fi_y_top - img.display_height;
 
+    // OOXML rotates a floating image about the center of its (unrotated) box, with
+    // the anchor offset and effectExtent already accounting for the turn. Rotate
+    // about that center so the image's center stays put — matching Word. The sign
+    // is negated because OOXML rotation is clockwise while PDF's is counterclockwise.
+    let rotated = fi.rotation_deg.abs() > 0.01;
+    if rotated {
+        content.save_state();
+        let cx = fi_x + img.display_width / 2.0;
+        let cy = fi_y_bottom + img.display_height / 2.0;
+        let rad = -fi.rotation_deg.to_radians();
+        let cos = rad.cos();
+        let sin = rad.sin();
+        content.transform([
+            cos, sin, -sin, cos,
+            cx - cos * cx + sin * cy,
+            cy - sin * cx - cos * cy,
+        ]);
+    }
+
     let fi_fx = effect_pdf_names.get(&(global_block_idx, fi_idx));
     if let Some(ref shadow) = img.shadow {
         super::color::draw_image_shadow(
@@ -206,6 +225,9 @@ fn render_one_floating_image(
             sc, img.stroke_width,
             img.clip_geometry.as_ref(),
         );
+    }
+    if rotated {
+        content.restore_state();
     }
     true
 }

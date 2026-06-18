@@ -11,7 +11,7 @@ use crate::model::{
 use super::charts::parse_chart_from_zip;
 use super::smartart::{has_diagram_ref, parse_smartart_drawing};
 use super::textbox::{parse_connector_from_wsp, parse_textbox_from_wsp};
-use super::{DML_NS, ParseContext, REL_NS, WML_NS, WPD_NS, emu_attr, emu_to_pts, parse_hex_color, wml, wpd};
+use super::{DML_NS, ParseContext, REL_NS, WML_NS, WPD_NS, dml, emu_attr, emu_to_pts, parse_hex_color, wml, wpd};
 
 const CHART_URI: &str = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 const PIC_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/picture";
@@ -111,6 +111,30 @@ fn find_pic_sp_pr<'a>(container: roxmltree::Node<'a, 'a>) -> Option<roxmltree::N
             p.children()
                 .find(|c| c.tag_name().name() == "spPr" && c.tag_name().namespace() == Some(PIC_NS))
         })
+}
+
+/// Read in-plane rotation (clockwise degrees) for a floating picture. Prefers the
+/// normal `a:xfrm @rot`; some files instead encode the turn via a 3D scene camera
+/// `a:scene3d/a:camera/a:rot @rev` (e.g. a vertical label rotated 90°). Both are in
+/// 60000ths of a degree.
+fn parse_image_rotation(sp_pr: Option<roxmltree::Node>) -> f32 {
+    let Some(sp_pr) = sp_pr else {
+        return 0.0;
+    };
+    if let Some(rot) = dml(sp_pr, "xfrm")
+        .and_then(|x| x.attribute("rot"))
+        .and_then(|v| v.parse::<f32>().ok())
+        && rot.abs() > f32::EPSILON
+    {
+        return rot / 60000.0;
+    }
+    dml(sp_pr, "scene3d")
+        .and_then(|s| dml(s, "camera"))
+        .and_then(|c| dml(c, "rot"))
+        .and_then(|r| r.attribute("rev"))
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(|rev| rev / 60000.0)
+        .unwrap_or(0.0)
 }
 
 /// Parse outline stroke from `pic:spPr/a:ln`.
@@ -528,6 +552,7 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                     img.clip_geometry = sp_pr
                         .map(super::textbox::parse_shape_geometry)
                         .filter(|g| g.preset.as_deref() != Some("rect") || g.custom.is_some());
+                    let rotation_deg = parse_image_rotation(sp_pr);
                     let (h_position, h_relative, v_position, v_relative) =
                         parse_anchor_position(container);
                     let (wrap_type, wrap_text, wrap_polygon) = parse_wrap_type(container);
@@ -551,6 +576,7 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                         dist_left: emu_attr(container, "distL"),
                         dist_right: emu_attr(container, "distR"),
                         z_index,
+                        rotation_deg,
                     }));
                 }
             }

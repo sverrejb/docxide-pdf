@@ -102,6 +102,10 @@ pub struct FloatingImage {
     /// objects. Higher draws on top. Used to composite foreground floating
     /// images into the same z-stack as textboxes/connectors.
     pub z_index: u32,
+    /// In-plane rotation in degrees, clockwise (OOXML convention). Sourced from
+    /// `a:xfrm @rot` or a 3D scene camera `a:scene3d/a:camera/a:rot @rev`.
+    /// Applied as a rotation about the image's center at render time.
+    pub rotation_deg: f32,
 }
 
 /// Covers all 187 OOXML preset shapes and arbitrary custom geometry (a:custGeom).

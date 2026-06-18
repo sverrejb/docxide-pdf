@@ -262,16 +262,6 @@
       "fixed": false
     },
     {
-      "id": 180,
-      "case": "new/turkish_chemistry_course_plan",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 101.89777,
-      "y_pt": 521.58185,
-      "note": "Some cell borders are too thin. But only some. I see no pattern.",
-      "fixed": false
-    },
-    {
       "id": 182,
       "case": "new/carbon_farming_initiative_rule",
       "page": 0,
@@ -289,7 +279,7 @@
       "x_pt": 167.75107,
       "y_pt": 257.32568,
       "note": "Wrong font.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 185,

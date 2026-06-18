@@ -114,25 +114,33 @@ fn resolve_h_border(upper_bottom: CellBorder, lower_top: CellBorder) -> CellBord
     if !lower_top.present {
         return upper_bottom;
     }
-    // Cell-level override beats table-level default
-    if upper_bottom.is_override && !lower_top.is_override {
-        return upper_bottom;
-    }
-    if lower_top.is_override && !upper_bottom.is_override {
-        return lower_top;
-    }
-    // Both same level: wider wins
+    // §17.4.66 weight ranking comes first: wider wins.
     if upper_bottom.width > lower_top.width + 0.01 {
         return upper_bottom;
     }
     if lower_top.width > upper_bottom.width + 0.01 {
         return lower_top;
     }
-    // Same width, same level: more prominent style wins (§17.4.66).
+    // Equal width: the more prominent style wins (single beats dotted, etc.).
+    // Word applies this even when one side is a cell-level override and the other
+    // is the inherited table border (e.g. a cell with an explicit `dotted` bottom
+    // meeting a neighbor that inherits `insideH single` collapses to solid), so
+    // style precedence must be checked BEFORE the cell-vs-table tiebreaker below —
+    // otherwise a cell's weaker explicit style would win and render too faint.
+    if border_style_precedence(upper_bottom.style) < border_style_precedence(lower_top.style) {
+        return upper_bottom;
+    }
     if border_style_precedence(lower_top.style) < border_style_precedence(upper_bottom.style) {
         return lower_top;
     }
-    // Equal precedence: prefer upper (first in reading order).
+    // Equal width and style: a cell-level override beats a table-level default.
+    if upper_bottom.is_override && !lower_top.is_override {
+        return upper_bottom;
+    }
+    if lower_top.is_override && !upper_bottom.is_override {
+        return lower_top;
+    }
+    // Equal in every respect: prefer upper (first in reading order).
     upper_bottom
 }
 
@@ -972,6 +980,18 @@ mod border_conflict_tests {
         upper.width = 2.0;
         let lower = border(BorderStyle::Single, true);
         assert_eq!(resolve_h_border(upper, lower).style, BorderStyle::Dotted);
+    }
+
+    #[test]
+    fn override_dotted_loses_to_inherited_single() {
+        // The real corpus case (turkish_chemistry): a cell with an explicit dotted
+        // bottom (override) meets a neighbor that inherits `insideH single` (not an
+        // override). Word renders this solid — style precedence must beat the
+        // cell-vs-table override rule at equal width.
+        let upper = border(BorderStyle::Dotted, true);
+        let lower = border(BorderStyle::Single, false);
+        assert_eq!(resolve_h_border(upper, lower).style, BorderStyle::Single);
+        assert_eq!(resolve_h_border(lower, upper).style, BorderStyle::Single);
     }
 
     #[test]

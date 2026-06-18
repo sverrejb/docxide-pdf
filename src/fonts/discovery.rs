@@ -234,11 +234,22 @@ pub(super) fn find_font_file(
     if let Some((path, face_index)) = index.get(&(key.clone(), bold, italic)) {
         return Some((path.clone(), *face_index, true));
     }
-    if bold || italic {
-        index
-            .get(&(key, false, false))
-            .map(|(path, face_index)| (path.clone(), *face_index, false))
-    } else {
-        None
+    // A plain regular request that misses falls through to a generic family
+    // fallback rather than borrowing this family's bold/italic face, which would
+    // render unexpectedly heavy/slanted.
+    if !bold && !italic {
+        return None;
     }
+    // A styled variant was requested but the exact (bold, italic) face is absent.
+    // Relax the style axes and accept any same-family face: keeping the family's
+    // real glyphs beats dropping to a different family, and synthetic bold/oblique
+    // covers the style gap (we report exact_match=false). Some families ship only a
+    // single styled face — e.g. Vivaldi is an italic-flagged script with no upright
+    // or bold variant, so "Vivaldi bold" only resolves once we try (regular,italic).
+    for (b, i) in [(bold, !italic), (!bold, italic), (!bold, !italic)] {
+        if let Some((path, face_index)) = index.get(&(key.clone(), b, i)) {
+            return Some((path.clone(), *face_index, false));
+        }
+    }
+    None
 }
