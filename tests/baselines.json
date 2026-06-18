@@ -458,9 +458,9 @@
     "text_boundary": 0.9846
   },
   "new/bosch_software_a..": {
-    "jaccard": 0.0225,
-    "ssim": 0.132,
-    "text_boundary": 0.0065
+    "jaccard": 0.0517,
+    "ssim": 0.1837,
+    "text_boundary": 0.0201
   },
   "new/carbon_farming_i..": {
     "jaccard": 0.0824,
@@ -553,8 +553,8 @@
     "text_boundary": 0.82
   },
   "new/handels_messiah_..": {
-    "jaccard": 0.671,
-    "ssim": 0.8457,
+    "jaccard": 0.7402,
+    "ssim": 0.9013,
     "text_boundary": 1.0
   },
   "new/international_te..": {
@@ -565,7 +565,7 @@
   "new/irish_school_enr..": {
     "jaccard": 0.3364,
     "ssim": 0.5307,
-    "text_boundary": 0.7143
+    "text_boundary": 0.6964
   },
   "new/isla_language_le..": {
     "jaccard": 0.3781,
@@ -703,8 +703,8 @@
     "text_boundary": 0.5455
   },
   "new/turkish_chemistr..": {
-    "jaccard": 0.1889,
-    "ssim": 0.8583,
+    "jaccard": 0.1886,
+    "ssim": 0.86,
     "text_boundary": 1.0
   },
   "new/turkish_journal_..": {
@@ -865,8 +865,8 @@
     "convert_ms": 305.8
   },
   "scraped/german_mezzo_sop..": {
-    "jaccard": 0.5003,
-    "ssim": 0.5334,
+    "jaccard": 0.5362,
+    "ssim": 0.6688,
     "text_boundary": 0.8276,
     "convert_ms": 33.4
   },
@@ -1037,8 +1037,8 @@
     "convert_ms": 493.0
   },
   "scraped/turkish_ancient_..": {
-    "jaccard": 0.2253,
-    "ssim": 0.6084,
+    "jaccard": 0.2242,
+    "ssim": 0.6148,
     "text_boundary": 1.0,
     "convert_ms": 4.2
   },

@@ -209,7 +209,14 @@ fn family_fallback(family: FontFamily) -> Option<&'static str> {
         FontFamily::Swiss => Some("Arial"),
         FontFamily::Modern => Some("Courier New"),
         FontFamily::Script | FontFamily::Decorative => Some("Times New Roman"),
-        _ => None,
+        // `w:family="auto"` (unspecified) — substitute a real vendored sans
+        // instead of dropping to the base-14 Helvetica last resort, which matches
+        // Word's output poorly. INTERIM choice: Arial. NOTE: for the known case
+        // (Bosch Office Sans missing) Word's own PDF export actually substitutes
+        // Calibri, not Arial — so Calibri may be the better universal default, or
+        // the right rule may be panose/theme-based. Left as Arial pending a survey
+        // of what Word substitutes across multiple missing-font fixtures.
+        FontFamily::Auto => Some("Arial"),
     }
 }
 
