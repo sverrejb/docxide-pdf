@@ -44,27 +44,32 @@ fn read_font_style(data: &[u8], face_index: u32) -> Option<(Vec<String>, bool, b
 fn font_directories() -> Vec<PathBuf> {
     let mut dirs = Vec::new();
 
-    // Platform-specific system font directories (added first = lower priority in LIFO stack)
+    // DOCXSIDE_FONTS added first = LOWEST priority (LIFO stack pops these last; the
+    // first-scanned entry wins). This holds the vendored Word/Office fonts as a
+    // fallback for families the OS lacks (Calibri, Cambria, Aptos…) and must sit
+    // BELOW system fonts: for overlapping families (e.g. Times New Roman) the system
+    // build matches our reference PDFs (Word's online converter), while the locally
+    // bundled Word build has a different hhea lineGap — which would drift line height.
+    if let Ok(val) = env::var("DOCXSIDE_FONTS") {
+        let sep = if cfg!(windows) { ';' } else { ':' };
+        for part in val.split(sep) {
+            let trimmed = part.trim();
+            if !trimmed.is_empty() {
+                dirs.push(PathBuf::from(trimmed));
+            }
+        }
+    }
+
+    // Platform-specific system font directories (added after = higher priority)
     #[cfg(target_os = "macos")]
     {
         dirs.extend([
-            "/Applications/Microsoft Word.app/Contents/Resources/DFonts".into(),
             "/Library/Fonts".into(),
-            "/Library/Fonts/Microsoft".into(),
             "/System/Library/Fonts".into(),
             "/System/Library/Fonts/Supplemental".into(),
         ]);
         if let Ok(home) = env::var("HOME") {
             dirs.push(PathBuf::from(&home).join("Library/Fonts"));
-            let cloud = PathBuf::from(&home)
-                .join("Library/Group Containers/UBF8T346G9.Office/FontCache/4/CloudFonts");
-            if let Ok(families) = fs::read_dir(&cloud) {
-                for entry in families.flatten() {
-                    if entry.path().is_dir() {
-                        dirs.push(entry.path());
-                    }
-                }
-            }
         }
     }
 
@@ -82,18 +87,6 @@ fn font_directories() -> Vec<PathBuf> {
             dirs.push(PathBuf::from(windir).join("Fonts"));
         } else {
             dirs.push("C:\\Windows\\Fonts".into());
-        }
-    }
-
-    // DOCXSIDE_FONTS added last = highest priority (LIFO stack pops these first,
-    // and or_insert means first-scanned entries win)
-    if let Ok(val) = env::var("DOCXSIDE_FONTS") {
-        let sep = if cfg!(windows) { ';' } else { ':' };
-        for part in val.split(sep) {
-            let trimmed = part.trim();
-            if !trimmed.is_empty() {
-                dirs.push(PathBuf::from(trimmed));
-            }
         }
     }
 

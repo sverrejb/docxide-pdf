@@ -748,23 +748,12 @@ fn font_directories() -> Vec<PathBuf> {
     #[cfg(target_os = "macos")]
     {
         dirs.extend([
-            "/Applications/Microsoft Word.app/Contents/Resources/DFonts".into(),
             "/Library/Fonts".into(),
-            "/Library/Fonts/Microsoft".into(),
             "/System/Library/Fonts".into(),
             "/System/Library/Fonts/Supplemental".into(),
         ]);
         if let Ok(home) = std::env::var("HOME") {
             dirs.push(PathBuf::from(&home).join("Library/Fonts"));
-            let cloud = PathBuf::from(&home)
-                .join("Library/Group Containers/UBF8T346G9.Office/FontCache/4/CloudFonts");
-            if let Ok(families) = std::fs::read_dir(&cloud) {
-                for entry in families.flatten() {
-                    if entry.path().is_dir() {
-                        dirs.push(entry.path());
-                    }
-                }
-            }
         }
     }
 
