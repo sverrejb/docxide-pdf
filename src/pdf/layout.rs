@@ -6,7 +6,8 @@ use pdf_writer::{Content, Name, Rect, Str};
 
 use crate::fonts::{FontEntry, encode_as_gids, font_key, font_key_buf, to_winansi_bytes};
 use crate::model::{
-    Alignment, ParagraphBorder, Run, TabAlignment, TabStop, TextFill, TextOutline, VertAlign,
+    Alignment, ParagraphBorder, Run, TabAlignment, TabStop, TextFill, TextOutline, TextShadow,
+    VertAlign,
 };
 
 use super::color::{fill_color_or_black, stroke_color_or_black};
@@ -165,6 +166,9 @@ pub(super) struct WordChunk {
     pub(super) synthetic_bold: bool,
     pub(super) text_outline: Option<TextOutline>,
     pub(super) text_fill: Option<TextFill>,
+    /// Legacy w:shadow/emboss/imprint drop-shadow: drawn as an offset gray copy
+    /// of the glyphs behind the main text.
+    pub(super) text_shadow: Option<TextShadow>,
     pub(super) comment_ids: Vec<u32>,
 }
 
@@ -233,6 +237,7 @@ impl WordChunk {
             synthetic_bold: entry.synthetic_bold,
             text_outline: run.text_outline.clone(),
             text_fill: run.text_fill.clone(),
+            text_shadow: run.text_shadow.clone(),
             comment_ids: run.comment_ids.clone(),
         }
     }
@@ -279,6 +284,7 @@ impl WordChunk {
             synthetic_bold: false,
             text_outline: None,
             text_fill: None,
+            text_shadow: None,
             comment_ids: Vec::new(),
         }
     }
@@ -320,6 +326,7 @@ impl WordChunk {
             synthetic_bold: false,
             text_outline: None,
             text_fill: None,
+            text_shadow: None,
             comment_ids: Vec::new(),
         }
     }
@@ -366,6 +373,7 @@ impl WordChunk {
             synthetic_bold: false,
             text_outline: None,
             text_fill: None,
+            text_shadow: None,
             comment_ids: Vec::new(),
         }
     }
@@ -1750,6 +1758,23 @@ pub(super) fn render_paragraph_lines(
                     content.set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size);
                     cur_font_name.clone_from(&chunk.pdf_font);
                     cur_font_size = chunk.font_size;
+                }
+
+                // Legacy w:shadow/emboss/imprint: draw an offset gray copy of the
+                // glyphs behind the main text, then fall through to draw the real
+                // glyphs on top. ponytail: single offset, no highlight pass, and
+                // CJK-fallback chars use the primary font in the shadow copy.
+                if let Some(ref sh) = chunk.text_shadow {
+                    let sx = x + sh.offset_x;
+                    let sy = cy + sh.offset_y;
+                    content.next_line(sx - td_x, sy - td_y);
+                    td_x = sx;
+                    td_y = sy;
+                    fill_color_or_black(content, Some(sh.color));
+                    let bytes =
+                        encode_text_for_pdf(&chunk.text, &chunk.pdf_font, &pdf_name_to_entry);
+                    content.show(Str(&bytes));
+                    fill_color_or_black(content, current_color);
                 }
 
                 content.next_line(x - td_x, cy - td_y);

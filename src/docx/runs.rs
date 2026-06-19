@@ -326,6 +326,25 @@ impl ParagraphRunDefaults {
             && self.font_name_is_doc_default;
         let underline_node = rpr.and_then(|n| wml(n, "u"));
         let underline_val = underline_node.and_then(|u| u.attribute((WML_NS, "val")));
+
+        // Legacy Word-97 run text-effect toggles (§17.3.2.23/.31/.13/.18). These
+        // are independent of the modern w14 DrawingML effects parsed below: a
+        // plain <w:outline/>/<w:shadow/>/<w:emboss/>/<w:imprint/> draws as hollow
+        // / dropshadowed / raised / engraved text. `w:effect` (animated shimmer)
+        // has no print form, so we deliberately don't read it — base text only.
+        let resolved_font_size = explicit_font_size
+            .or(char_style_font_size)
+            .unwrap_or(self.font_size);
+        let resolved_color = rpr
+            .and_then(|n| wml_attr(n, "color"))
+            .and_then(parse_text_color)
+            .or_else(|| char_style.and_then(|cs| cs.color))
+            .or(self.color);
+        let legacy_outline = rpr.and_then(|n| wml_bool(n, "outline")).unwrap_or(false);
+        let legacy_shadow = rpr.and_then(|n| wml_bool(n, "shadow")).unwrap_or(false);
+        let legacy_emboss = rpr.and_then(|n| wml_bool(n, "emboss")).unwrap_or(false);
+        let legacy_imprint = rpr.and_then(|n| wml_bool(n, "imprint")).unwrap_or(false);
+
         RunFormat {
             font_size: explicit_font_size
                 .or(char_style_font_size)
@@ -419,14 +438,32 @@ impl ParagraphRunDefaults {
             char_style_id: char_style_id_str.map(|s| s.to_string()),
             text_outline: rpr
                 .and_then(|n| parse_text_outline(n, theme))
+                .or_else(|| {
+                    legacy_outline.then(|| TextOutline {
+                        // Thin hairline: Word's outline antialiases to light gray,
+                        // which only happens with a sub-pixel stroke width.
+                        width_pt: (resolved_font_size * 0.014).max(0.3),
+                        color: resolved_color.unwrap_or([0, 0, 0]),
+                    })
+                })
                 .or_else(|| char_style.and_then(|cs| cs.text_outline.clone()))
                 .or_else(|| self.text_outline.clone()),
             text_fill: rpr
                 .and_then(|n| parse_text_fill(n, theme))
+                // <w:outline/> hollows the glyphs: stroke only, no fill.
+                .or_else(|| legacy_outline.then_some(TextFill::NoFill))
                 .or_else(|| char_style.and_then(|cs| cs.text_fill.clone()))
                 .or_else(|| self.text_fill.clone()),
             text_shadow: rpr
                 .and_then(|n| parse_text_shadow(n, theme))
+                .or_else(|| {
+                    legacy_text_shadow(
+                        legacy_shadow,
+                        legacy_emboss,
+                        legacy_imprint,
+                        resolved_font_size,
+                    )
+                })
                 .or_else(|| char_style.and_then(|cs| cs.text_shadow.clone()))
                 .or_else(|| self.text_shadow.clone()),
             text_glow: rpr
@@ -440,6 +477,32 @@ impl ParagraphRunDefaults {
             font_size_from_default,
             font_name_from_default,
         }
+    }
+}
+
+/// Map the legacy Word-97 run toggles (mutually exclusive per spec) to a
+/// drop-shadow approximation. Word's PDF export renders all three as a
+/// down-right gray drop shadow behind the (still-colored) glyph face;
+/// emboss/imprint use a slightly smaller offset than plain shadow.
+fn legacy_text_shadow(
+    shadow: bool,
+    emboss: bool,
+    imprint: bool,
+    font_size: f32,
+) -> Option<TextShadow> {
+    let d = (font_size * 0.035).max(0.4);
+    if shadow {
+        // Drop shadow: cast down-right.
+        Some(TextShadow { color: [128, 128, 128], offset_x: d, offset_y: -d, alpha: 1.0 })
+    } else if emboss || imprint {
+        // Word renders both emboss (raised) and imprint (engraved) on a white
+        // page as a prominent down-right gray drop shadow behind the glyph face,
+        // with the white background showing between as the raised/engraved ridge.
+        // ponytail: a single offset gray copy — Word's exact multi-pass face/
+        // highlight/shadow antialiasing isn't replicated (a rare legacy effect).
+        Some(TextShadow { color: [128, 128, 128], offset_x: d * 0.7, offset_y: -d * 0.7, alpha: 1.0 })
+    } else {
+        None
     }
 }
 
