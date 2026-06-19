@@ -675,7 +675,8 @@ fn collect_run_nodes<'a>(
                 }
                 out.push((n, url.clone(), is_anchor_only, active_comments.clone()));
             }
-        } else if is_wml && matches!(name, "ins" | "smartTag") {
+        } else if is_wml && matches!(name, "ins" | "smartTag" | "customXml") {
+            // w:customXml inline-wraps runs transparently, like w:smartTag.
             collect_run_nodes(child, rels, out, active_comments);
         } else if is_wml && name == "del" {
             // Final mode: skip deleted content entirely

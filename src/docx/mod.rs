@@ -537,6 +537,12 @@ pub(super) fn collect_block_nodes<'a>(
             if let Some(content) = wml(child, "sdtContent") {
                 nodes.extend(collect_block_nodes(content));
             }
+        } else if child.tag_name().name() == "customXml"
+            && child.tag_name().namespace() == Some(WML_NS)
+        {
+            // w:customXml is a transparent wrapper (block/row/cell): its children
+            // ARE the content. Same descent drives tbl→tr and tr→tc unwrapping.
+            nodes.extend(collect_block_nodes(child));
         } else if child.tag_name().namespace() == Some(MC_NS_TOP)
             && child.tag_name().name() == "AlternateContent"
         {
