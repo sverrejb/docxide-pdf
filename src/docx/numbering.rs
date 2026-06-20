@@ -17,6 +17,13 @@ pub(super) struct LevelDef {
     pub(super) label_color: Option<[u8; 3]>,
     pub(super) suff: String,
     pub(super) label_font: Option<String>,
+    /// §17.9.4 isLgl: render every %N reference in this level's lvlText as
+    /// decimal regardless of the referenced level's own numFmt.
+    pub(super) is_lgl: bool,
+    /// §17.9.10 lvlRestart: 1-based level whose use restarts this level (that
+    /// level "or any earlier"). `Some(0)` = never restart; `None` = default
+    /// (restart on any earlier level).
+    pub(super) lvl_restart: Option<u32>,
 }
 
 #[derive(Default)]
@@ -89,6 +96,8 @@ fn parse_level_def(lvl: roxmltree::Node) -> Option<(u8, LevelDef)> {
         .and_then(|r| wml_attr(r, "color"))
         .and_then(parse_hex_color);
     let suff = wml_attr(lvl, "suff").unwrap_or("tab").to_string();
+    let is_lgl = wml_bool(lvl, "isLgl").unwrap_or(false);
+    let lvl_restart = wml_attr(lvl, "lvlRestart").and_then(|v| v.parse::<u32>().ok());
     Some((
         ilvl,
         LevelDef {
@@ -104,6 +113,8 @@ fn parse_level_def(lvl: roxmltree::Node) -> Option<(u8, LevelDef)> {
             label_color,
             suff,
             label_font: rpr_font,
+            is_lgl,
+            lvl_restart,
         },
     ))
 }
@@ -344,10 +355,22 @@ pub(super) fn parse_list_info(
     // abstract definition share a single counter stream.
     let abs_key: u32 = abs_id.parse().unwrap_or(0);
 
-    // Reset deeper-level counters when returning to a higher level
+    // Reset deeper-level counters when returning to a higher level, honoring
+    // each deeper level's §17.9.10 lvlRestart. The trigger is the level we just
+    // moved to (`ilvl`). Default (None) restarts on any earlier level; Some(0)
+    // never restarts; Some(k) restarts only when the trigger level is `k` "or
+    // any earlier" (0-based ilvl < k), and is ignored when k names a level
+    // deeper than the deeper level itself (k > deeper+1) → default restart.
     if let Some(&prev) = last_seen_level.get(&abs_key) {
         for deeper in (ilvl + 1)..=prev {
-            counters.remove(&(abs_key, deeper));
+            let restarts = match lookup_level(deeper).and_then(|d| d.lvl_restart) {
+                Some(0) => false,
+                Some(k) if k <= (deeper as u32) + 1 => (ilvl as u32) < k,
+                _ => true,
+            };
+            if restarts {
+                counters.remove(&(abs_key, deeper));
+            }
         }
     }
     last_seen_level.insert(abs_key, ilvl);
@@ -406,7 +429,12 @@ pub(super) fn parse_list_info(
                         .copied()
                         .unwrap_or(ref_def.map(|d| d.start).unwrap_or(1))
                 };
-                let lvl_fmt = ref_def.map(|d| d.num_fmt.as_str()).unwrap_or("decimal");
+                // §17.9.4: isLgl forces every referenced level to decimal.
+                let lvl_fmt = if def.is_lgl {
+                    "decimal"
+                } else {
+                    ref_def.map(|d| d.num_fmt.as_str()).unwrap_or("decimal")
+                };
                 label = label.replace(&placeholder, &format_number(lvl_counter, lvl_fmt));
             }
         }
@@ -559,6 +587,8 @@ mod tests {
             label_color: None,
             suff: "tab".into(),
             label_font: None,
+            is_lgl: false,
+            lvl_restart: None,
         };
         let override_def = LevelDef {
             num_fmt: "upperLetter".into(),
@@ -590,5 +620,77 @@ mod tests {
         assert_eq!(info.label, "A)");
         assert_eq!(info.indent_left, 10.0);
         assert_eq!(info.indent_hanging, 5.0);
+    }
+
+    #[test]
+    fn test_islgl_forces_referenced_levels_decimal() {
+        // §17.9.4: lvl0 upperRoman, lvl1 decimal+isLgl with lvlText "%1.%2.".
+        // isLgl must force the %1 (upperRoman) reference to decimal → "1.1.".
+        let ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        let (_, lvl0) = parse_lvl(&format!(
+            r#"<w:lvl xmlns:w="{ns}" w:ilvl="0"><w:numFmt w:val="upperRoman"/><w:lvlText w:val="%1."/></w:lvl>"#
+        ));
+        let (_, lvl1) = parse_lvl(&format!(
+            r#"<w:lvl xmlns:w="{ns}" w:ilvl="1"><w:numFmt w:val="decimal"/><w:isLgl/><w:lvlText w:val="%1.%2."/></w:lvl>"#
+        ));
+        assert!(lvl1.is_lgl);
+
+        let mut numbering = NumberingInfo::default();
+        numbering
+            .abstract_nums
+            .insert("0".into(), HashMap::from([(0u8, lvl0), (1u8, lvl1)]));
+        numbering.num_to_abstract.insert("100".into(), "0".into());
+
+        let mut counters = HashMap::new();
+        let mut last_seen = HashMap::new();
+        let mut applied = HashSet::new();
+        let lvl0_info = parse_list_info(
+            None, Some("100"), Some(0),
+            &numbering, &mut counters, &mut last_seen, &mut applied,
+        );
+        assert_eq!(lvl0_info.label, "I.");
+        let lvl1_info = parse_list_info(
+            None, Some("100"), Some(1),
+            &numbering, &mut counters, &mut last_seen, &mut applied,
+        );
+        // Without isLgl this would be "I.1."; isLgl forces %1 to decimal.
+        assert_eq!(lvl1_info.label, "1.1.");
+    }
+
+    #[test]
+    fn test_lvlrestart_zero_keeps_continuous_numbering() {
+        // §17.9.10: lvl1 carries lvlRestart=0, so its counter must NOT reset
+        // when lvl0 advances — sub-items run (1)(2)(3)(4) across the headings.
+        let ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        let (_, lvl0) = parse_lvl(&format!(
+            r#"<w:lvl xmlns:w="{ns}" w:ilvl="0"><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/></w:lvl>"#
+        ));
+        let (_, lvl1) = parse_lvl(&format!(
+            r#"<w:lvl xmlns:w="{ns}" w:ilvl="1"><w:numFmt w:val="decimal"/><w:lvlRestart w:val="0"/><w:lvlText w:val="(%2)"/></w:lvl>"#
+        ));
+        assert_eq!(lvl1.lvl_restart, Some(0));
+
+        let mut numbering = NumberingInfo::default();
+        numbering
+            .abstract_nums
+            .insert("0".into(), HashMap::from([(0u8, lvl0), (1u8, lvl1)]));
+        numbering.num_to_abstract.insert("100".into(), "0".into());
+
+        let mut counters = HashMap::new();
+        let mut last_seen = HashMap::new();
+        let mut applied = HashSet::new();
+        let mut label = |ilvl: u8| {
+            parse_list_info(
+                None, Some("100"), Some(ilvl),
+                &numbering, &mut counters, &mut last_seen, &mut applied,
+            )
+            .label
+        };
+        assert_eq!(label(0), "1."); // First section
+        assert_eq!(label(1), "(1)");
+        assert_eq!(label(1), "(2)");
+        assert_eq!(label(0), "2."); // Second section — lvl1 must NOT reset
+        assert_eq!(label(1), "(3)");
+        assert_eq!(label(1), "(4)");
     }
 }
