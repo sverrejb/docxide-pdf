@@ -376,27 +376,11 @@ impl SampledBoundary {
         y0 + t * (y1 - y0)
     }
 
-    #[allow(dead_code)]
-    fn min_y(&self) -> f64 {
-        self.points
-            .iter()
-            .map(|p| p.1)
-            .fold(f64::INFINITY, f64::min)
-    }
-
     fn max_y(&self) -> f64 {
         self.points
             .iter()
             .map(|p| p.1)
             .fold(f64::NEG_INFINITY, f64::max)
-    }
-
-    #[allow(dead_code)]
-    fn x_range(&self) -> f64 {
-        if self.points.len() < 2 {
-            return 0.0;
-        }
-        self.points.last().unwrap().0 - self.points.first().unwrap().0
     }
 }
 

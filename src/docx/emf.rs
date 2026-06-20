@@ -123,12 +123,6 @@ fn decode(rec_type: u32, payload: &[u8]) -> EmfRecord {
             .get(off..off + 4)
             .map(|s| u32::from_le_bytes(s.try_into().unwrap()))
     };
-    let color_at = |off: usize| -> Option<[u8; 3]> {
-        // COLORREF: 0x00BBGGRR
-        let v = u32_at(off)?;
-        Some([(v & 0xFF) as u8, ((v >> 8) & 0xFF) as u8, ((v >> 16) & 0xFF) as u8])
-    };
-
     match rec_type {
         1 => Header,
         14 => Eof,
@@ -201,18 +195,18 @@ fn decode_polybezier16(payload: &[u8]) -> Option<Vec<(i16, i16)>> {
     Some(pts)
 }
 
+/// EMF COLORREF packs color as 0x00BBGGRR.
+fn colorref(v: u32) -> [u8; 3] {
+    [(v & 0xFF) as u8, ((v >> 8) & 0xFF) as u8, ((v >> 16) & 0xFF) as u8]
+}
+
 fn decode_brush(payload: &[u8]) -> Option<EmfRecord> {
     // EMR_CREATEBRUSHINDIRECT: ihBrush u32, LogBrush32 { style u32, color COLORREF, hatch u32 }
     if payload.len() < 16 {
         return None;
     }
     let handle = u32::from_le_bytes(payload[0..4].try_into().unwrap());
-    let color_raw = u32::from_le_bytes(payload[8..12].try_into().unwrap());
-    let color = [
-        (color_raw & 0xFF) as u8,
-        ((color_raw >> 8) & 0xFF) as u8,
-        ((color_raw >> 16) & 0xFF) as u8,
-    ];
+    let color = colorref(u32::from_le_bytes(payload[8..12].try_into().unwrap()));
     Some(EmfRecord::CreateBrushIndirect { handle, color })
 }
 
@@ -225,12 +219,7 @@ fn decode_extcreatepen(payload: &[u8]) -> Option<EmfRecord> {
     }
     let handle = u32::from_le_bytes(payload[0..4].try_into().unwrap());
     let width = u32::from_le_bytes(payload[24..28].try_into().unwrap()) as i32;
-    let color_raw = u32::from_le_bytes(payload[32..36].try_into().unwrap());
-    let color = [
-        (color_raw & 0xFF) as u8,
-        ((color_raw >> 8) & 0xFF) as u8,
-        ((color_raw >> 16) & 0xFF) as u8,
-    ];
+    let color = colorref(u32::from_le_bytes(payload[32..36].try_into().unwrap()));
     Some(EmfRecord::ExtCreatePen { handle, width, color })
 }
 

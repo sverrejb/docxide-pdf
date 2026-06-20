@@ -65,6 +65,11 @@ pub(super) fn emu_attr(node: roxmltree::Node, attr: &str) -> f32 {
         / 12700.0
 }
 
+/// ST_OnOff truthiness (§17.17.4): "1", "true", and "on" all mean on.
+pub(super) fn parse_on_off(v: &str) -> bool {
+    matches!(v, "1" | "true" | "on")
+}
+
 /// Find a child element by name and namespace.
 pub(super) fn find_child<'a>(
     node: roxmltree::Node<'a, 'a>,
@@ -384,12 +389,6 @@ pub(super) fn parse_frame_props(ppr: roxmltree::Node) -> Option<FrameProperties>
     })
 }
 
-#[allow(dead_code)]
-pub(super) fn parse_tab_stops(ppr: roxmltree::Node) -> Vec<TabStop> {
-    let (stops, _) = parse_tab_stops_with_clears(ppr);
-    stops
-}
-
 pub(super) fn parse_tab_stops_with_clears(ppr: roxmltree::Node) -> (Vec<TabStop>, Vec<f32>) {
     let Some(tabs) = wml(ppr, "tabs") else {
         return (vec![], vec![]);
@@ -452,11 +451,11 @@ pub(in crate::docx) fn parse_paragraph_spacing(
         // Auto-spacing (beforeAutospacing/afterAutospacing="1"): when set, Word
         // uses the font's em-size (≈ font_size) as spacing. Inline "0" disables.
         let before_auto = inline_spacing
-            .and_then(|n| n.attribute((WML_NS, "beforeAutospacing")).map(|v| v == "1" || v == "true"))
+            .and_then(|n| n.attribute((WML_NS, "beforeAutospacing")).map(parse_on_off))
             .or_else(|| para_style.and_then(|s| s.space_before_autospacing))
             .unwrap_or(false);
         let after_auto = inline_spacing
-            .and_then(|n| n.attribute((WML_NS, "afterAutospacing")).map(|v| v == "1" || v == "true"))
+            .and_then(|n| n.attribute((WML_NS, "afterAutospacing")).map(parse_on_off))
             .or_else(|| para_style.and_then(|s| s.space_after_autospacing))
             .unwrap_or(false);
 
@@ -1029,7 +1028,7 @@ mod tests {
         );
         let doc = roxmltree::Document::parse(&xml).unwrap();
         let node = doc.root_element();
-        let stops = parse_tab_stops(node);
+        let stops = parse_tab_stops_with_clears(node).0;
         assert_eq!(stops.len(), 3);
         // Sorted by position
         assert_eq!(stops[0].position, 72.0); // 1440/20

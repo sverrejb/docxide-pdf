@@ -7,7 +7,8 @@ use super::color::{apply_color_transforms, parse_color_transforms};
 use super::styles::{StylesInfo, ThemeFonts};
 use super::textbox::parse_avlst;
 use super::{
-    DML_NS, W14_NS, dml as find_dml, find_child, parse_hex_color, resolve_theme_color_key,
+    DML_NS, W14_NS, dml as find_dml, find_child, parse_hex_color, parse_on_off,
+    resolve_theme_color_key,
 };
 
 fn find_w14<'a>(
@@ -26,9 +27,7 @@ pub(super) struct WordArtBodyProps {
 
 /// Parse WordArt-related attributes from a wps:bodyPr node.
 pub(super) fn parse_wordart_body_pr(body_pr: roxmltree::Node) -> WordArtBodyProps {
-    let is_wordart = body_pr
-        .attribute("fromWordArt")
-        .is_some_and(|v| v == "1" || v == "true");
+    let is_wordart = body_pr.attribute("fromWordArt").is_some_and(parse_on_off);
 
     let text_warp = find_dml(body_pr, "prstTxWarp").and_then(|prst| {
         let preset = prst.attribute("prst")?.to_string();

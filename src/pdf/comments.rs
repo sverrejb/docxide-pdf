@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use pdf_writer::{Content, Name, Str};
 
-use crate::fonts::{FontEntry, encode_as_gids, to_winansi_bytes};
+use super::color::{fill_rgb, stroke_rgb};
+use crate::fonts::FontEntry;
 use crate::model::Comment;
 
 /// Width of the right-side pane drawn inside the page when the document has comments.
@@ -129,18 +130,18 @@ pub(super) fn render_comment_pane(
                 let label = format_label_from_text(line_text);
                 let label_only = &line_text[..label.len()];
                 let body_part = &line_text[label.len()..];
-                let label_bytes = encode_for(label_entry.1, label_only);
+                let label_bytes = label_entry.1.encode(label_only);
                 content.begin_text();
-                fill_rgb_in_text(content, LABEL_RGB);
+                fill_rgb(content, LABEL_RGB);
                 content.set_font(Name(label_entry.1.pdf_name.as_bytes()), CALLOUT_FONT_SIZE);
                 content.set_text_matrix([1.0, 0.0, 0.0, 1.0, inner_x + CALLOUT_PAD_X, text_y]);
                 content.show(Str(&label_bytes));
                 content.end_text();
                 if !body_part.is_empty() {
                     let label_w = label_entry.1.word_width(label_only, CALLOUT_FONT_SIZE, false);
-                    let body_bytes = encode_for(body_entry, body_part);
+                    let body_bytes = body_entry.encode(body_part);
                     content.begin_text();
-                    fill_rgb_in_text(content, BODY_RGB);
+                    fill_rgb(content, BODY_RGB);
                     content.set_font(Name(body_entry.pdf_name.as_bytes()), CALLOUT_FONT_SIZE);
                     content.set_text_matrix([
                         1.0, 0.0, 0.0, 1.0,
@@ -151,9 +152,9 @@ pub(super) fn render_comment_pane(
                     content.end_text();
                 }
             } else {
-                let body_bytes = encode_for(body_entry, line_text);
+                let body_bytes = body_entry.encode(line_text);
                 content.begin_text();
-                fill_rgb_in_text(content, BODY_RGB);
+                fill_rgb(content, BODY_RGB);
                 content.set_font(Name(body_entry.pdf_name.as_bytes()), CALLOUT_FONT_SIZE);
                 content.set_text_matrix([1.0, 0.0, 0.0, 1.0, inner_x + CALLOUT_PAD_X, text_y]);
                 content.show(Str(&body_bytes));
@@ -270,37 +271,6 @@ fn pick_font<'a>(
         }
     }
     seen.iter().next().map(|(k, v)| (k.clone(), v))
-}
-
-fn encode_for(entry: &FontEntry, text: &str) -> Vec<u8> {
-    match entry.char_to_gid.as_ref() {
-        Some(map) => encode_as_gids(text, map),
-        None => to_winansi_bytes(text),
-    }
-}
-
-fn fill_rgb(content: &mut Content, rgb: [u8; 3]) {
-    content.set_fill_rgb(
-        rgb[0] as f32 / 255.0,
-        rgb[1] as f32 / 255.0,
-        rgb[2] as f32 / 255.0,
-    );
-}
-
-fn fill_rgb_in_text(content: &mut Content, rgb: [u8; 3]) {
-    content.set_fill_rgb(
-        rgb[0] as f32 / 255.0,
-        rgb[1] as f32 / 255.0,
-        rgb[2] as f32 / 255.0,
-    );
-}
-
-fn stroke_rgb(content: &mut Content, rgb: [u8; 3]) {
-    content.set_stroke_rgb(
-        rgb[0] as f32 / 255.0,
-        rgb[1] as f32 / 255.0,
-        rgb[2] as f32 / 255.0,
-    );
 }
 
 fn draw_rounded_rect(content: &mut Content, x: f32, y: f32, w: f32, h: f32, r: f32) {

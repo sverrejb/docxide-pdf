@@ -259,12 +259,6 @@ fn parse_dsp_text(sp: roxmltree::Node, theme: &ThemeFonts) -> DspTextProps {
         };
     };
     let body_pr = dml(body, "bodyPr");
-    let emu_attr = |bp: roxmltree::Node, attr: &str| -> f32 {
-        bp.attribute(attr)
-            .and_then(|v| v.parse::<f32>().ok())
-            .map(super::emu_to_pts)
-            .unwrap_or(0.0)
-    };
     let insets = body_pr
         .map(|bp| (emu_attr(bp, "tIns"), emu_attr(bp, "rIns"), emu_attr(bp, "bIns"), emu_attr(bp, "lIns")))
         .unwrap_or((0.0, 0.0, 0.0, 0.0));

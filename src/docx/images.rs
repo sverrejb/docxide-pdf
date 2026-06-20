@@ -11,7 +11,7 @@ use crate::model::{
 use super::charts::parse_chart_from_zip;
 use super::smartart::{has_diagram_ref, parse_smartart_drawing};
 use super::textbox::{parse_connector_from_wsp, parse_textbox_from_wsp};
-use super::{DML_NS, ParseContext, REL_NS, WML_NS, WPD_NS, dml, emu_attr, emu_to_pts, parse_hex_color, wml, wpd};
+use super::{DML_NS, ParseContext, REL_NS, WML_NS, WPD_NS, dml, emu_attr, emu_to_pts, parse_hex_color, parse_on_off, twips_attr, wml, wpd};
 
 const CHART_URI: &str = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 const PIC_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/picture";
@@ -477,7 +477,7 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
         // template logos or document-management metadata shapes); skip them.
         if wpd(container, "docPr")
             .and_then(|n| n.attribute("hidden"))
-            .is_some_and(|v| v == "1" || v == "true")
+            .is_some_and(parse_on_off)
         {
             continue;
         }
@@ -807,12 +807,8 @@ fn object_dimensions(obj: roxmltree::Node) -> Option<(f32, f32)> {
             }
         }
     }
-    let dxa = obj.attribute((WML_NS, "dxaOrig"))
-        .and_then(|v| v.parse::<f32>().ok())
-        .map(|v| v / 20.0);
-    let dya = obj.attribute((WML_NS, "dyaOrig"))
-        .and_then(|v| v.parse::<f32>().ok())
-        .map(|v| v / 20.0);
+    let dxa = twips_attr(obj, "dxaOrig");
+    let dya = twips_attr(obj, "dyaOrig");
     if let (Some(w), Some(h)) = (dxa, dya) {
         return Some((w, h));
     }

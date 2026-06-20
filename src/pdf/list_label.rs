@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use pdf_writer::{Content, Name, Str};
 
-use crate::fonts::{FontEntry, encode_as_gids, font_key, to_winansi_bytes};
+use crate::fonts::{FontEntry, font_key};
 use crate::model::{Paragraph, Run};
 
 use super::color::fill_rgb;
@@ -48,13 +48,6 @@ fn map_symbol_pua(text: &str) -> Option<String> {
     )
 }
 
-fn encode_against(entry: &FontEntry, text: &str) -> Vec<u8> {
-    match &entry.char_to_gid {
-        Some(map) => encode_as_gids(text, map),
-        None => to_winansi_bytes(text),
-    }
-}
-
 pub(super) fn label_for_paragraph<'a>(
     para: &Paragraph,
     seen_fonts: &'a HashMap<String, FontEntry>,
@@ -63,7 +56,7 @@ pub(super) fn label_for_paragraph<'a>(
     let entry = key.as_deref().and_then(|k| seen_fonts.get(k));
 
     if let Some(entry) = entry {
-        let bytes = encode_against(entry, &para.list_label);
+        let bytes = entry.encode(&para.list_label);
         if !is_all_notdef(&bytes) {
             return (entry.pdf_name.as_str(), bytes);
         }
@@ -77,7 +70,7 @@ pub(super) fn label_for_paragraph<'a>(
         && let Some(run) = para.runs.first()
         && let Some(body_entry) = seen_fonts.get(&font_key(run))
     {
-        let bytes = encode_against(body_entry, &mapped);
+        let bytes = body_entry.encode(&mapped);
         return (body_entry.pdf_name.as_str(), bytes);
     }
 

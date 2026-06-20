@@ -11,8 +11,8 @@ use super::wordart::{parse_text_fill, parse_text_glow, parse_text_outline, parse
 use super::{
     DML_NS, WML_NS, dml, extract_indents, highlight_color, parse_cell_border,
     parse_cell_border_left, parse_cell_border_right, parse_hex_color, parse_one_border,
-    parse_paragraph_borders, parse_run_shd, parse_tab_stops_with_clears, parse_text_color,
-    read_zip_text, twips_attr, twips_to_pts, wml, wml_attr, wml_bool,
+    parse_on_off, parse_paragraph_borders, parse_run_shd, parse_tab_stops_with_clears,
+    parse_text_color, read_zip_text, twips_attr, twips_to_pts, wml, wml_attr, wml_bool,
 };
 
 fn dml_typeface<'a>(node: roxmltree::Node<'a, 'a>, element: &str) -> Option<&'a str> {
@@ -225,7 +225,7 @@ pub(super) fn parse_alignment(val: &str) -> Alignment {
     }
 }
 
-fn parse_font_size(rpr: roxmltree::Node) -> Option<f32> {
+pub(super) fn parse_font_size(rpr: roxmltree::Node) -> Option<f32> {
     wml_attr(rpr, "sz")
         .and_then(|v| v.parse::<f32>().ok())
         .map(|hp| hp / 2.0)
@@ -241,20 +241,15 @@ fn parse_kern(rpr: roxmltree::Node) -> Option<f32> {
 // A bare <w:u> with no val is "no underline applied" in Word (inherit), so
 // returning None lets basedOn/defaults resolve it instead of forcing it on.
 fn parse_underline(rpr: roxmltree::Node) -> Option<bool> {
-    wml(rpr, "u")
-        .and_then(|u| u.attribute((WML_NS, "val")))
-        .map(|v| v != "none")
+    wml_attr(rpr, "u").map(|v| v != "none")
 }
 
 fn parse_double_underline(rpr: roxmltree::Node) -> Option<bool> {
-    wml(rpr, "u")
-        .and_then(|u| u.attribute((WML_NS, "val")))
-        .map(|v| v == "double")
+    wml_attr(rpr, "u").map(|v| v == "double")
 }
 
-fn parse_char_spacing(rpr: roxmltree::Node) -> Option<f32> {
-    wml(rpr, "spacing")
-        .and_then(|n| n.attribute((WML_NS, "val")))
+pub(super) fn parse_char_spacing(rpr: roxmltree::Node) -> Option<f32> {
+    wml_attr(rpr, "spacing")
         .and_then(|v| v.parse::<f32>().ok())
         .map(twips_to_pts)
 }
@@ -591,7 +586,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
 
         // Collect style ID -> display name for all style types (used by STYLEREF)
         if let Some(id) = style_node.attribute((WML_NS, "styleId"))
-            && let Some(name) = wml(style_node, "name").and_then(|n| n.attribute((WML_NS, "val")))
+            && let Some(name) = wml_attr(style_node, "name")
         {
             style_id_to_name.insert(id.to_string(), name.to_string());
         }
@@ -611,9 +606,9 @@ pub(super) fn parse_styles<R: Read + Seek>(
                 let space_before = spacing.and_then(|n| twips_attr(n, "before"));
                 let space_after = spacing.and_then(|n| twips_attr(n, "after"));
                 let space_before_autospacing = spacing
-                    .and_then(|n| n.attribute((WML_NS, "beforeAutospacing")).map(|v| v == "1" || v == "true"));
+                    .and_then(|n| n.attribute((WML_NS, "beforeAutospacing")).map(parse_on_off));
                 let space_after_autospacing = spacing
-                    .and_then(|n| n.attribute((WML_NS, "afterAutospacing")).map(|v| v == "1" || v == "true"));
+                    .and_then(|n| n.attribute((WML_NS, "afterAutospacing")).map(parse_on_off));
                 let borders = ppr.and_then(parse_paragraph_borders).unwrap_or_default();
                 let shading = ppr
                     .and_then(|n| wml(n, "shd"))
@@ -695,9 +690,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                 let suppress_auto_hyphens =
                     ppr.and_then(|ppr| wml_bool(ppr, "suppressAutoHyphens"));
 
-                let based_on = wml(style_node, "basedOn")
-                    .and_then(|n| n.attribute((WML_NS, "val")))
-                    .map(|s| s.to_string());
+                let based_on = wml_attr(style_node, "basedOn").map(|s| s.to_string());
 
                 let text_outline = rpr.and_then(|n| parse_text_outline(n, theme));
                 let text_fill = rpr.and_then(|n| parse_text_fill(n, theme));

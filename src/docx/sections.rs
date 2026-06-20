@@ -8,8 +8,8 @@ use crate::model::{
 use super::headers_footers::parse_header_footer_xml;
 use super::relationships::parse_part_relationships;
 use super::{
-    ParseContext, REL_NS, WML_NS, parse_one_border, read_zip_text, twips_attr, twips_to_pts, wml,
-    wml_attr, wml_bool,
+    ParseContext, REL_NS, WML_NS, parse_on_off, parse_one_border, read_zip_text, twips_attr,
+    twips_to_pts, wml, wml_attr, wml_bool,
 };
 
 pub(super) fn parse_section_properties<R: Read + Seek>(
@@ -65,8 +65,7 @@ pub(super) fn parse_section_properties<R: Read + Seek>(
         .and_then(|n| n.attribute((WML_NS, "fmt")))
         .map(|v| v.to_string());
 
-    let break_type = wml(sect_node, "type")
-        .and_then(|n| n.attribute((WML_NS, "val")))
+    let break_type = wml_attr(sect_node, "type")
         .map(|v| match v {
             "continuous" => SectionBreakType::Continuous,
             "oddPage" => SectionBreakType::OddPage,
@@ -83,11 +82,11 @@ pub(super) fn parse_section_properties<R: Read + Seek>(
             .unwrap_or(1);
         let equal_width = cols_node
             .attribute((WML_NS, "equalWidth"))
-            .map(|v| v == "1" || v == "true")
+            .map(parse_on_off)
             .unwrap_or(true);
         let sep = cols_node
             .attribute((WML_NS, "sep"))
-            .map(|v| v == "1" || v == "true")
+            .map(parse_on_off)
             .unwrap_or(false);
 
         let child_cols: Vec<_> = cols_node

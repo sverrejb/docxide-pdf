@@ -9,6 +9,7 @@ use std::collections::HashMap;
 
 use pdf_writer::{Content, Pdf, Rect, Ref};
 
+use super::color::{fill_rgb, stroke_rgb};
 use crate::docx::emf::{EmfRecord, FillRule, for_each_record, parse_header};
 
 #[derive(Clone, Copy)]
@@ -178,8 +179,7 @@ fn translate_record(
         }
         FillPath => {
             if let Some(c) = state.selected_brush {
-                let rgb = rgb_op(c);
-                content.set_fill_rgb(rgb.0, rgb.1, rgb.2);
+                fill_rgb(content, c);
             }
             match state.fill_rule {
                 FillRule::Alternate => {
@@ -192,8 +192,7 @@ fn translate_record(
         }
         StrokePath => {
             if let Some((c, w)) = state.selected_pen {
-                let rgb = rgb_op(c);
-                content.set_stroke_rgb(rgb.0, rgb.1, rgb.2);
+                stroke_rgb(content, c);
                 if w > 0 {
                     content.set_line_width(stroke_width_in_form(state, mapper, w));
                 }
@@ -202,12 +201,10 @@ fn translate_record(
         }
         StrokeAndFillPath => {
             if let Some(c) = state.selected_brush {
-                let rgb = rgb_op(c);
-                content.set_fill_rgb(rgb.0, rgb.1, rgb.2);
+                fill_rgb(content, c);
             }
             if let Some((c, w)) = state.selected_pen {
-                let rgb = rgb_op(c);
-                content.set_stroke_rgb(rgb.0, rgb.1, rgb.2);
+                stroke_rgb(content, c);
                 if w > 0 {
                     content.set_line_width(stroke_width_in_form(state, mapper, w));
                 }
@@ -222,10 +219,6 @@ fn translate_record(
             }
         }
     }
-}
-
-fn rgb_op(c: [u8; 3]) -> (f32, f32, f32) {
-    (c[0] as f32 / 255.0, c[1] as f32 / 255.0, c[2] as f32 / 255.0)
 }
 
 /// EMF pen widths are in logical units. The form XObject is 1×1 unit; the

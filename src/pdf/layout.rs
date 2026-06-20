@@ -1352,11 +1352,8 @@ pub(super) fn encode_text_for_pdf(
     pdf_font: &str,
     pdf_name_to_entry: &HashMap<&str, &FontEntry>,
 ) -> Vec<u8> {
-    match pdf_name_to_entry
-        .get(pdf_font)
-        .and_then(|e| e.char_to_gid.as_ref())
-    {
-        Some(map) => encode_as_gids(text, map),
+    match pdf_name_to_entry.get(pdf_font) {
+        Some(e) => e.encode(text),
         None => to_winansi_bytes(text),
     }
 }

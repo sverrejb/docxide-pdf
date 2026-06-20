@@ -64,21 +64,13 @@ impl FontEntry {
         }
     }
 
-    /// Width with CJK fallback: if this font is missing a CJK char, use the
-    /// fallback font's width instead.
-    #[allow(dead_code)]
-    pub(crate) fn char_width_1000_with_fallback(
-        &self,
-        ch: char,
-        fallback: Option<&FontEntry>,
-    ) -> f32 {
-        let w = self.char_width_1000(ch);
-        if w > 0.0 || !self.missing_cjk_chars.contains(&ch) {
-            return w;
+    /// Encode text for a PDF show operator: glyph IDs when this font carries a
+    /// char→gid map (embedded subset), else WinAnsi bytes (standard font).
+    pub(crate) fn encode(&self, text: &str) -> Vec<u8> {
+        match &self.char_to_gid {
+            Some(map) => encoding::encode_as_gids(text, map),
+            None => encoding::to_winansi_bytes(text),
         }
-        fallback
-            .and_then(|fb| fb.char_widths_1000.as_ref()?.get(&ch).copied())
-            .unwrap_or(0.0)
     }
 
     pub(crate) fn word_width(&self, word: &str, font_size: f32, kern: bool) -> f32 {

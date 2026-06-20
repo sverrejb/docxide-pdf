@@ -9,14 +9,14 @@ use crate::model::{
 use super::images::{RunDrawingResult, parse_object_inline_image, parse_run_drawing};
 use super::is_east_asian_char;
 use super::styles::{
-    CharacterStyle, ParagraphStyle, StyleDefaults, ThemeFonts,
+    CharacterStyle, ParagraphStyle, StyleDefaults, ThemeFonts, parse_char_spacing, parse_font_size,
     resolve_east_asia_font_from_node, resolve_font_from_node, resolve_font_from_node_opt,
 };
 use super::textbox::parse_textbox_from_vml;
 use super::wordart::{parse_text_fill, parse_text_glow, parse_text_outline, parse_text_shadow};
 use super::{
     MC_NS_TOP, ParseContext, REL_NS, VML_NS, WML_NS, highlight_color, parse_hex_color,
-    parse_one_border, parse_run_shd, parse_text_color, twips_to_pts, wml, wml_attr, wml_bool,
+    parse_one_border, parse_run_shd, parse_text_color, wml, wml_attr, wml_bool,
 };
 
 fn is_dynamic_field(instr: &str) -> bool {
@@ -308,10 +308,7 @@ impl ParagraphRunDefaults {
         theme: &ThemeFonts,
     ) -> RunFormat {
         let rfonts_node = rpr.and_then(|n| wml(n, "rFonts"));
-        let explicit_font_size = rpr
-            .and_then(|n| wml_attr(n, "sz"))
-            .and_then(|v| v.parse::<f32>().ok())
-            .map(|hp| hp / 2.0);
+        let explicit_font_size = rpr.and_then(parse_font_size);
         let char_style_font_size = char_style.and_then(|cs| cs.font_size);
         let explicit_font_name =
             rfonts_node.and_then(|rfonts| resolve_font_from_node_opt(rfonts, theme));
@@ -384,10 +381,7 @@ impl ParagraphRunDefaults {
                 .and_then(|n| wml_bool(n, "dstrike"))
                 .unwrap_or(self.dstrike),
             char_spacing: rpr
-                .and_then(|n| wml(n, "spacing"))
-                .and_then(|n| n.attribute((WML_NS, "val")))
-                .and_then(|v| v.parse::<f32>().ok())
-                .map(twips_to_pts)
+                .and_then(parse_char_spacing)
                 .unwrap_or(self.char_spacing),
             text_scale: rpr
                 .and_then(|n| wml_attr(n, "w"))
@@ -521,10 +515,7 @@ fn ensure_nonempty_paragraph(
         return;
     }
     let mark_rpr = ppr.and_then(|ppr| wml(ppr, "rPr"));
-    let mark_font_size = mark_rpr
-        .and_then(|n| wml_attr(n, "sz"))
-        .and_then(|v| v.parse::<f32>().ok())
-        .map(|hp| hp / 2.0);
+    let mark_font_size = mark_rpr.and_then(parse_font_size);
     if let Some(mark_font_size) = mark_font_size {
         let mark_font_name = mark_rpr
             .and_then(|n| wml(n, "rFonts"))

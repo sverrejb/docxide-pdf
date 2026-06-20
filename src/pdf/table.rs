@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use pdf_writer::{Content, Name, Str};
 
-use crate::fonts::{FontEntry, encode_as_gids, to_winansi_bytes};
+use crate::fonts::FontEntry;
 use crate::model::{
     Alignment, Block, BorderStyle, CellBorder, CellMargins, CellVAlign,
     Paragraph, SectionProperties, Table, TableAlignment, TableRow, TextDirection, VMerge,
@@ -785,13 +785,6 @@ fn render_partial_cell_content(
     }
 }
 
-fn encode_label(label: &str, entry: &FontEntry) -> Vec<u8> {
-    match &entry.char_to_gid {
-        Some(map) => encode_as_gids(label, map),
-        None => to_winansi_bytes(label),
-    }
-}
-
 fn draw_cell_label(
     content: &mut Content,
     para: &CellParagraphLayout,
@@ -806,7 +799,7 @@ fn draw_cell_label(
     let Some(entry) = fonts.get(font_key) else {
         return;
     };
-    let bytes = encode_label(&para.list_label, entry);
+    let bytes = entry.encode(&para.list_label);
 
     if let Some(c) = para.label_color {
         fill_rgb(content, c);

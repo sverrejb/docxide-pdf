@@ -305,17 +305,11 @@ fn parse_wordart_body_margins(wsp: roxmltree::Node) -> (f32, f32, f32, f32) {
     let Some(bp) = find_wps(wsp, "bodyPr") else {
         return (0.0, 0.0, 0.0, 0.0);
     };
-    let emu_to_pt = |attr: &str| -> f32 {
-        bp.attribute(attr)
-            .and_then(|v| v.parse::<f32>().ok())
-            .map(super::emu_to_pts)
-            .unwrap_or(0.0)
-    };
     (
-        emu_to_pt("tIns"),
-        emu_to_pt("lIns"),
-        emu_to_pt("bIns"),
-        emu_to_pt("rIns"),
+        emu_attr(bp, "tIns"),
+        emu_attr(bp, "lIns"),
+        emu_attr(bp, "bIns"),
+        emu_attr(bp, "rIns"),
     )
 }
 

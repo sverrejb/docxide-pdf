@@ -4,7 +4,7 @@ use std::io::{Read, Seek};
 use crate::model::{FontFamily, FontTable, FontTableEntry};
 
 use super::relationships::parse_part_relationships;
-use super::{REL_NS, WML_NS, read_zip_text, wml};
+use super::{REL_NS, WML_NS, read_zip_text, wml, wml_attr};
 
 const EMBED_VARIANTS: &[(&str, bool, bool)] = &[
     ("embedRegular", false, false),
@@ -95,15 +95,11 @@ pub(super) fn parse_font_table<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> 
                 continue;
             };
 
-            let alt_name = wml(font_node, "altName")
-                .and_then(|n| n.attribute((WML_NS, "val")))
-                .map(|s| s.to_string());
-            let family = wml(font_node, "family")
-                .and_then(|n| n.attribute((WML_NS, "val")))
+            let alt_name = wml_attr(font_node, "altName").map(|s| s.to_string());
+            let family = wml_attr(font_node, "family")
                 .map(parse_font_family)
                 .unwrap_or(FontFamily::Auto);
-            let pitch_fixed = wml(font_node, "pitch")
-                .and_then(|n| n.attribute((WML_NS, "val")))
+            let pitch_fixed = wml_attr(font_node, "pitch")
                 .is_some_and(|v| v.eq_ignore_ascii_case("fixed"));
             font_table.insert(font_name.to_string(), FontTableEntry { alt_name, family, pitch_fixed });
 

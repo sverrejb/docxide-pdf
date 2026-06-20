@@ -12,8 +12,8 @@ use super::runs::parse_runs;
 use super::styles::{TableBordersDef, parse_alignment};
 use super::{
     ParseContext, WML_NS, collect_block_nodes, extract_indents, parse_cell_border,
-    parse_cell_border_left, parse_cell_border_right, parse_hex_color, parse_paragraph_spacing,
-    twips_attr, twips_to_pts, wml, wml_attr, wml_bool,
+    parse_cell_border_left, parse_cell_border_right, parse_hex_color, parse_on_off,
+    parse_paragraph_spacing, twips_attr, twips_to_pts, wml, wml_attr, wml_bool,
 };
 
 /// Approximate a `w:shd` pattern fill (stripes/cross/pctNN) as a solid color,
@@ -308,7 +308,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     let look_flag = |attr: &str, bit: u32| -> bool {
         tbl_look_node
             .and_then(|n| n.attribute((WML_NS, attr)))
-            .map(|v| v == "1" || v == "true")
+            .map(parse_on_off)
             .unwrap_or_else(|| {
                 tbl_look_node
                     .and_then(|n| n.attribute((WML_NS, "val")))

@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 
 use pdf_writer::{Content, Name, Str};
 
-use crate::fonts::{FontEntry, encode_as_gids, to_winansi_bytes};
+use crate::fonts::{FontEntry, to_winansi_bytes};
 use crate::model::{BarGrouping, ChartType, InlineChart, LegendPosition, MarkerSymbol};
 
 use super::chart_legend::{LegendItem, LegendPlacement, SwatchStyle, render_chart_legend};
@@ -288,8 +288,8 @@ pub(super) fn show_text_encoded(
     text: &str,
     font_entry: Option<&FontEntry>,
 ) {
-    let bytes = match font_entry.and_then(|e| e.char_to_gid.as_ref()) {
-        Some(map) => encode_as_gids(text, map),
+    let bytes = match font_entry {
+        Some(e) => e.encode(text),
         None => to_winansi_bytes(text),
     };
     content
