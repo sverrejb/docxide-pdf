@@ -4,7 +4,7 @@ use std::io::{Read, Seek};
 use crate::model::{EmbeddedImage, SmartArtDiagram, SmartArtShape};
 
 use super::styles::ThemeFonts;
-use super::color::parse_solid_fill;
+use super::color::{parse_line_stroke, parse_solid_fill};
 use super::images::{find_blip_embed, read_image_from_zip};
 use super::textbox::parse_shape_geometry;
 use super::{DML_NS, DSP_NS, dml, dsp, emu_attr, read_zip_text};
@@ -168,18 +168,7 @@ fn parse_dsp_shape<R: Read + Seek>(
     });
 
     let (stroke_color, stroke_width) = dml(sp_pr, "ln")
-        .and_then(|ln| {
-            if has_dml(ln, "noFill") {
-                return None;
-            }
-            let color = parse_solid_fill(ln, theme)?;
-            let width = ln
-                .attribute("w")
-                .and_then(|v| v.parse::<f32>().ok())
-                .map(super::emu_to_pts)
-                .unwrap_or(0.75);
-            Some((color, width))
-        })
+        .and_then(|ln| parse_line_stroke(ln, theme))
         .map_or((None, 0.0), |(c, w)| (Some(c), w));
 
     let tp = parse_dsp_text(sp, theme);

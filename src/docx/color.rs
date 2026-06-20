@@ -151,6 +151,21 @@ pub(super) fn parse_solid_fill(sp_pr: roxmltree::Node, theme: &ThemeFonts) -> Op
     resolve_dml_color(fill, theme)
 }
 
+/// Parse an `a:ln` stroke node into (color, width-in-points). `a:noFill` → None;
+/// width defaults to 0.75pt when the `w` attribute is absent.
+pub(super) fn parse_line_stroke(ln: roxmltree::Node, theme: &ThemeFonts) -> Option<([u8; 3], f32)> {
+    if find_dml(ln, "noFill").is_some() {
+        return None;
+    }
+    let color = parse_solid_fill(ln, theme)?;
+    let width = ln
+        .attribute("w")
+        .and_then(|v| v.parse::<f32>().ok())
+        .map(super::emu_to_pts)
+        .unwrap_or(0.75);
+    Some((color, width))
+}
+
 fn rgb_to_hsl(c: [u8; 3]) -> (f32, f32, f32) {
     let r = c[0] as f32 / 255.0;
     let g = c[1] as f32 / 255.0;

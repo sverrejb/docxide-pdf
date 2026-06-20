@@ -9,7 +9,7 @@ use crate::model::{
 };
 
 use super::images::{extent_dimensions, parse_anchor_position};
-use super::color::{apply_color_transforms, parse_solid_fill, resolve_dml_color};
+use super::color::{apply_color_transforms, parse_line_stroke, parse_solid_fill, resolve_dml_color};
 use super::styles::{
     ThemeFillStyle, ThemeFonts,
 };
@@ -380,8 +380,8 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
         .map(super::emu_to_pts);
     let (stroke_color, stroke_width) = if ln_no_fill {
         (None, 0.0)
-    } else if let Some(color) = ln_node.and_then(|ln| parse_solid_fill(ln, ctx.theme)) {
-        (Some(color), explicit_ln_width.unwrap_or(0.75))
+    } else if let Some((color, width)) = ln_node.and_then(|ln| parse_line_stroke(ln, ctx.theme)) {
+        (Some(color), width)
     } else if let Some(color) = parse_style_stroke(wsp, ctx.theme) {
         // No explicit line color: fall back to the shape style's lnRef stroke
         (

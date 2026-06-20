@@ -3,12 +3,11 @@ use crate::model::{
     TextOutline, TextShadow, TextWarp, Textbox, VRelativeFrom, VerticalPosition, WrapType,
 };
 
-use super::color::{apply_color_transforms, parse_color_transforms};
+use super::color::{apply_color_transforms, parse_color_transforms, resolve_dml_color};
 use super::styles::{StylesInfo, ThemeFonts};
 use super::textbox::parse_avlst;
 use super::{
-    DML_NS, W14_NS, dml as find_dml, find_child, parse_hex_color, parse_on_off,
-    resolve_theme_color_key,
+    W14_NS, dml as find_dml, find_child, parse_hex_color, parse_on_off, resolve_theme_color_key,
 };
 
 fn find_w14<'a>(
@@ -247,18 +246,8 @@ fn resolve_w14_color(fill_node: roxmltree::Node, theme: &ThemeFonts) -> Option<[
         let transforms = parse_color_transforms(scheme);
         return Some(apply_color_transforms(base, &transforms));
     }
-    // DML fallback (theme colors here are rare but cheap to support).
-    if let Some(srgb) = find_child(fill_node, "srgbClr", DML_NS) {
-        return srgb.attribute("val").and_then(parse_hex_color);
-    }
-    if let Some(scheme) = find_child(fill_node, "schemeClr", DML_NS) {
-        let val = scheme.attribute("val")?;
-        let theme_key = resolve_theme_color_key(val);
-        let base = *theme.colors.get(theme_key)?;
-        let transforms = parse_color_transforms(scheme);
-        return Some(apply_color_transforms(base, &transforms));
-    }
-    None
+    // DML fallback (rare; resolve_dml_color also covers prstClr).
+    resolve_dml_color(fill_node, theme)
 }
 
 fn find_w14_solid_fill_color(parent: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]> {
