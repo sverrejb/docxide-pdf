@@ -27,7 +27,7 @@ use crate::error::Error;
 use crate::fonts::FontEntry;
 use crate::model::{
     Alignment, Block, DocGridType, Document, FieldCode,
-    HorizontalPosition, LineSpacing, Paragraph, ParagraphBorder,
+    HorizontalPosition, LineSpacing, PageVerticalAlign, Paragraph, ParagraphBorder,
     Run, SectionBreakType, SectionProperties, ShapeFill, ShapeGeometry,
     VRelativeFrom, VerticalPosition, WrapText, WrapType,
 };
@@ -501,6 +501,9 @@ pub(super) struct PageBuilder {
 
     // Accumulated pages
     all_contents: Vec<Content>,
+    /// Per-page y of the cursor at flush time (bottom of the last body block).
+    /// Used to compute the §17.6.23 `w:vAlign` center/bottom offset.
+    all_content_bottom: Vec<f32>,
     pub(super) all_deferred_shapes: Vec<Vec<(u32, Content)>>,
     all_links: Vec<Vec<LinkAnnotation>>,
     pub(super) all_comment_anchors: Vec<Vec<(u32, f32, f32, f32)>>,
@@ -537,6 +540,7 @@ impl PageBuilder {
             pending_float_anchor: None,
             deferred_shapes: Vec::new(),
             all_contents: Vec::new(),
+            all_content_bottom: Vec::new(),
             all_deferred_shapes: Vec::new(),
             all_links: Vec::new(),
             all_comment_anchors: Vec::new(),
@@ -552,6 +556,7 @@ impl PageBuilder {
     pub(super) fn flush_page(&mut self, sect_idx: usize) {
         self.all_contents
             .push(std::mem::replace(&mut self.content, Content::new()));
+        self.all_content_bottom.push(self.slot_top);
         // Stable sort: equal relativeHeight keeps document order
         self.deferred_shapes.sort_by_key(|(z, _)| *z);
         self.all_deferred_shapes
@@ -581,6 +586,8 @@ impl PageBuilder {
 
     fn push_blank_page(&mut self, sect_idx: usize) {
         self.all_contents.push(Content::new());
+        // Blank page has no body content; record top so vAlign yields no shift.
+        self.all_content_bottom.push(self.slot_top);
         self.all_deferred_shapes.push(Vec::new());
         self.all_links.push(Vec::new());
         self.all_comment_anchors.push(Vec::new());
@@ -2973,6 +2980,13 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         }
     }
     state.pb.flush_page(doc.sections.len() - 1);
+    // For §17.6.23 vAlign centering, Word's content box includes the trailing
+    // space_after of the last paragraph, which `slot_top` (and thus the recorded
+    // content bottom) excludes. Extend the last page's content bottom by it so
+    // the centered block matches Word's vertical position.
+    if let Some(last) = state.pb.all_content_bottom.last_mut() {
+        *last -= state.prev_space_after;
+    }
 
     let t_layout = t0.elapsed();
 
@@ -3190,11 +3204,31 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         }
     }
 
+    // §17.6.23 w:vAlign — shift each page's body block down so it is centered
+    // (or bottom-aligned) in the text region. `slack` is the empty space between
+    // the content bottom and the bottom margin; center splits it, bottom takes
+    // it all. `both` (justify) and `top` leave content where it flowed.
+    let valign_offsets: Vec<f32> = (0..total_pages)
+        .map(|page_idx| {
+            let (_, is_first, content_si) = state.pb.page_section_indices[page_idx];
+            let sp = &doc.sections[content_si].properties;
+            let frac = match sp.vertical_align {
+                PageVerticalAlign::Center => 0.5,
+                PageVerticalAlign::Bottom => 1.0,
+                _ => return 0.0,
+            };
+            let region_bottom = compute_effective_margin_bottom(sp, is_first, &ctx);
+            let slack = state.pb.all_content_bottom[page_idx] - region_bottom;
+            if slack > 0.0 { slack * frac } else { 0.0 }
+        })
+        .collect();
+
     assemble_pdf_pages(
         &mut pdf,
         &mut alloc,
         catalog_id,
         pages_id,
+        valign_offsets,
         state.pb.all_contents,
         state.pb.all_deferred_shapes,
         &mut all_hf_contents,

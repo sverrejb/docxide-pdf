@@ -1,10 +1,16 @@
 use std::io::{Read, Seek};
 
-use crate::model::{ColumnDef, ColumnsConfig, DocGridType, HeaderFooter, SectionBreakType, SectionProperties};
+use crate::model::{
+    ColumnDef, ColumnsConfig, DocGridType, HeaderFooter, PageBorderDisplay, PageBorders,
+    PageVerticalAlign, SectionBreakType, SectionProperties,
+};
 
 use super::headers_footers::parse_header_footer_xml;
 use super::relationships::parse_part_relationships;
-use super::{ParseContext, REL_NS, WML_NS, read_zip_text, twips_attr, twips_to_pts, wml, wml_bool};
+use super::{
+    ParseContext, REL_NS, WML_NS, parse_one_border, read_zip_text, twips_attr, twips_to_pts, wml,
+    wml_attr, wml_bool,
+};
 
 pub(super) fn parse_section_properties<R: Read + Seek>(
     sect_node: roxmltree::Node,
@@ -120,6 +126,28 @@ pub(super) fn parse_section_properties<R: Read + Seek>(
         })
     });
 
+    let page_borders = wml(sect_node, "pgBorders").map(|n| PageBorders {
+        top: wml(n, "top").and_then(parse_one_border),
+        bottom: wml(n, "bottom").and_then(parse_one_border),
+        left: wml(n, "left").and_then(parse_one_border),
+        right: wml(n, "right").and_then(parse_one_border),
+        offset_from_page: n.attribute((WML_NS, "offsetFrom")) == Some("page"),
+        display: match n.attribute((WML_NS, "display")) {
+            Some("firstPage") => PageBorderDisplay::FirstPage,
+            Some("notFirstPage") => PageBorderDisplay::NotFirstPage,
+            _ => PageBorderDisplay::AllPages,
+        },
+    });
+
+    let vertical_align = wml_attr(sect_node, "vAlign")
+        .map(|v| match v {
+            "center" => PageVerticalAlign::Center,
+            "both" => PageVerticalAlign::Both,
+            "bottom" => PageVerticalAlign::Bottom,
+            _ => PageVerticalAlign::Top,
+        })
+        .unwrap_or_default();
+
     let header_default = resolve_hf(sect_node, "headerReference", "default", ctx);
     let header_first = resolve_hf(sect_node, "headerReference", "first", ctx);
     let header_even = resolve_hf(sect_node, "headerReference", "even", ctx);
@@ -149,6 +177,8 @@ pub(super) fn parse_section_properties<R: Read + Seek>(
         columns,
         page_num_start,
         page_num_format,
+        page_borders,
+        vertical_align,
     }
 }
 

@@ -115,6 +115,44 @@ pub struct SectionProperties {
     pub columns: Option<ColumnsConfig>,
     pub page_num_start: Option<u32>,
     pub page_num_format: Option<String>,
+    pub page_borders: Option<PageBorders>,
+    /// §17.6.23 `w:vAlign` — vertical alignment of body text between the top and
+    /// bottom margins on each page of the section.
+    pub vertical_align: PageVerticalAlign,
+}
+
+/// §17.6.23 ST_VerticalJc — how the section's body content is positioned
+/// vertically within the text region of each page.
+#[derive(Clone, Copy, Default, PartialEq)]
+pub enum PageVerticalAlign {
+    #[default]
+    Top,
+    Center,
+    /// `both` (vertical justify) — falls back to Top; true inter-paragraph
+    /// distribution is not implemented (unexercised in the corpus).
+    Both,
+    Bottom,
+}
+
+#[derive(Clone, Copy, Default, PartialEq)]
+pub enum PageBorderDisplay {
+    #[default]
+    AllPages,
+    FirstPage,
+    NotFirstPage,
+}
+
+#[derive(Clone, Default)]
+pub struct PageBorders {
+    pub top: Option<ParagraphBorder>,
+    pub bottom: Option<ParagraphBorder>,
+    pub left: Option<ParagraphBorder>,
+    pub right: Option<ParagraphBorder>,
+    /// `@offsetFrom="page"` → each edge's `space` is the distance from the page
+    /// edge to the border; `"text"` (the default) → distance outward from the
+    /// text margins (§17.6.10 / ST_PageBorderOffset §17.18.63).
+    pub offset_from_page: bool,
+    pub display: PageBorderDisplay,
 }
 
 pub struct Section {

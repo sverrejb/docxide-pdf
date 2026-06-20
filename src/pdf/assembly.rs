@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref, Str, TextStr};
 
 use crate::fonts::FontEntry;
-use crate::model::Document;
+use crate::model::{Document, PageBorderDisplay, PageBorders, ParagraphBorder, SectionProperties};
 
 use super::comments::{BODY_SCALE, BODY_TX, BODY_TY, render_comment_pane};
 use super::layout::LinkAnnotation;
@@ -14,6 +14,67 @@ pub(crate) struct HeadingEntry {
     pub(super) level: u8,
     pub(super) page_idx: usize,
     pub(super) y_position: f32,
+}
+
+/// Draw a `w:pgBorders` box for one page into its own content stream (page
+/// coordinates, unscaled). Each edge is stroked independently so asymmetric
+/// borders work; horizontal edges overrun by the adjacent vertical edge's
+/// half-width to close the butt-capped corners.
+fn render_page_borders(pb: &PageBorders, sp: &SectionProperties) -> Content {
+    let mut content = Content::new();
+    // For offsetFrom="page", @space is the gap from the page edge to the border;
+    // the stroke is centered on (space + width/2) inward. For "text", @space is
+    // measured outward from the text margins.
+    let edge_pos = |b: &ParagraphBorder, margin: f32| {
+        let inset = b.space_pt + b.width_pt / 2.0;
+        if pb.offset_from_page {
+            inset
+        } else {
+            margin - inset
+        }
+    };
+    let left_x = pb.left.as_ref().map(|b| edge_pos(b, sp.margin_left));
+    let right_x = pb
+        .right
+        .as_ref()
+        .map(|b| sp.page_width - edge_pos(b, sp.margin_right));
+    let top_y = pb
+        .top
+        .as_ref()
+        .map(|b| sp.page_height - edge_pos(b, sp.margin_top));
+    let bottom_y = pb.bottom.as_ref().map(|b| edge_pos(b, sp.margin_bottom));
+
+    // Fall back to the opposite/adjacent edge's coordinate so a line still spans
+    // the full box when only some edges are present.
+    let lx = left_x.unwrap_or(0.0);
+    let rx = right_x.unwrap_or(sp.page_width);
+    let ty = top_y.unwrap_or(sp.page_height);
+    let by = bottom_y.unwrap_or(0.0);
+    let l_ext = pb.left.as_ref().map(|b| b.width_pt / 2.0).unwrap_or(0.0);
+    let r_ext = pb.right.as_ref().map(|b| b.width_pt / 2.0).unwrap_or(0.0);
+
+    let mut draw = |b: &ParagraphBorder, x0: f32, y0: f32, x1: f32, y1: f32| {
+        content.save_state();
+        content.set_line_width(b.width_pt);
+        super::color::stroke_rgb(&mut content, b.color);
+        content.move_to(x0, y0);
+        content.line_to(x1, y1);
+        content.stroke();
+        content.restore_state();
+    };
+    if let (Some(b), Some(y)) = (&pb.top, top_y) {
+        draw(b, lx - l_ext, y, rx + r_ext, y);
+    }
+    if let (Some(b), Some(y)) = (&pb.bottom, bottom_y) {
+        draw(b, lx - l_ext, y, rx + r_ext, y);
+    }
+    if let (Some(b), Some(x)) = (&pb.left, left_x) {
+        draw(b, x, ty, x, by);
+    }
+    if let (Some(b), Some(x)) = (&pb.right, right_x) {
+        draw(b, x, ty, x, by);
+    }
+    content
 }
 
 fn srgb_to_linear(s: f32) -> f32 {
@@ -38,6 +99,9 @@ pub(super) fn assemble_pdf_pages(
     alloc: &mut impl FnMut() -> Ref,
     catalog_id: Ref,
     pages_id: Ref,
+    // Per-page §17.6.23 vertical-align offset: shift the body block down by this
+    // many points (0 = top-aligned, the default).
+    valign_offsets: Vec<f32>,
     all_contents: Vec<Content>,
     all_deferred_shapes: Vec<Vec<(u32, Content)>>,
     all_hf_contents: &mut Vec<Option<Content>>,
@@ -229,6 +293,19 @@ pub(super) fn assemble_pdf_pages(
             (Vec::new(), Vec::new())
         };
 
+        // §17.6.23 vAlign: translate the body block down by the precomputed
+        // offset. Wraps the body (and the comment-scale wrapper) but not the
+        // header/footer or page-border streams, which stay page-fixed.
+        let valign_off = valign_offsets.get(i).copied().unwrap_or(0.0);
+        let (valign_prefix, valign_suffix) = if valign_off > 0.01 {
+            (
+                format!("q 1 0 0 1 0 {:.3} cm\n", -valign_off).into_bytes(),
+                b"\nQ\n".to_vec(),
+            )
+        } else {
+            (Vec::new(), Vec::new())
+        };
+
         let mut pane_raw = Vec::new();
         if has_any_comments {
             let (.., si) = page_section_indices[i];
@@ -262,9 +339,29 @@ pub(super) fn assemble_pdf_pages(
             combined.extend_from_slice(hf_raw.as_slice());
             combined.push(b'\n');
         }
+        // Page border box (page coords, unscaled — outside the comment-scale
+        // wrapper). @display gates which pages get it; is_first = first page of
+        // its section, matching ST_PageBorderDisplay firstPage/notFirstPage.
+        {
+            let (_, is_first, content_si) = page_section_indices[i];
+            let sp = &doc.sections[content_si].properties;
+            if let Some(pb) = &sp.page_borders {
+                let show = match pb.display {
+                    PageBorderDisplay::AllPages => true,
+                    PageBorderDisplay::FirstPage => is_first,
+                    PageBorderDisplay::NotFirstPage => !is_first,
+                };
+                if show {
+                    combined.extend_from_slice(render_page_borders(pb, sp).finish().as_slice());
+                    combined.push(b'\n');
+                }
+            }
+        }
+        combined.extend_from_slice(&valign_prefix);
         combined.extend_from_slice(&scale_prefix);
         combined.extend_from_slice(body_raw.as_slice());
         combined.extend_from_slice(&scale_suffix);
+        combined.extend_from_slice(&valign_suffix);
         if !pane_raw.is_empty() {
             combined.push(b'\n');
             combined.extend_from_slice(&pane_raw);
