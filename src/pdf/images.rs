@@ -157,6 +157,33 @@ fn write_image_xobject(
     }
 }
 
+/// Embed a baseline JPEG (`DctDecode`) image XObject, picking the color space
+/// from the component count (1=gray, 4=cmyk, else rgb).
+fn write_jpeg_xobject(
+    pdf: &mut Pdf,
+    xobj_ref: Ref,
+    data: &[u8],
+    w: u32,
+    h: u32,
+    components: u8,
+    smask: Option<Ref>,
+) {
+    let mut xobj = pdf.image_xobject(xobj_ref, data);
+    xobj.filter(Filter::DctDecode);
+    xobj.width(w as i32);
+    xobj.height(h as i32);
+    match components {
+        1 => xobj.color_space().device_gray(),
+        4 => xobj.color_space().device_cmyk(),
+        _ => xobj.color_space().device_rgb(),
+    };
+    xobj.bits_per_component(8);
+    xobj.interpolate(true);
+    if let Some(mask_ref) = smask {
+        xobj.s_mask(mask_ref);
+    }
+}
+
 fn embed_single_image(
     img: &EmbeddedImage,
     image_xobjects: &mut Vec<(String, Ref)>,
@@ -223,20 +250,15 @@ fn embed_single_image(
             }
             // Passthrough: embed original JPEG bytes directly
             let se_mask = make_soft_edge_smask(img.pixel_width, img.pixel_height, pdf, alloc);
-            let mut xobj = pdf.image_xobject(xobj_ref, &*img.data);
-            xobj.filter(Filter::DctDecode);
-            xobj.width(img.pixel_width as i32);
-            xobj.height(img.pixel_height as i32);
-            match img.jpeg_components {
-                1 => xobj.color_space().device_gray(),
-                4 => xobj.color_space().device_cmyk(),
-                _ => xobj.color_space().device_rgb(),
-            };
-            xobj.bits_per_component(8);
-            xobj.interpolate(true);
-            if let Some(mask_ref) = se_mask {
-                xobj.s_mask(mask_ref);
-            }
+            write_jpeg_xobject(
+                pdf,
+                xobj_ref,
+                &img.data,
+                img.pixel_width,
+                img.pixel_height,
+                img.jpeg_components,
+                se_mask,
+            );
         }
         ImageFormat::Png | ImageFormat::Bmp => {
             let img_fmt = match img.format {
@@ -466,18 +488,15 @@ fn embed_reflection(
     let refl_ref = alloc();
     match img.format {
         ImageFormat::Jpeg => {
-            let mut xobj = pdf.image_xobject(refl_ref, &*img.data);
-            xobj.filter(Filter::DctDecode);
-            xobj.width(img.pixel_width as i32);
-            xobj.height(img.pixel_height as i32);
-            match img.jpeg_components {
-                1 => xobj.color_space().device_gray(),
-                4 => xobj.color_space().device_cmyk(),
-                _ => xobj.color_space().device_rgb(),
-            };
-            xobj.bits_per_component(8);
-            xobj.interpolate(true);
-            xobj.s_mask(grad_ref);
+            write_jpeg_xobject(
+                pdf,
+                refl_ref,
+                &img.data,
+                img.pixel_width,
+                img.pixel_height,
+                img.jpeg_components,
+                Some(grad_ref),
+            );
         }
         ImageFormat::Emf => return None,
         ImageFormat::Png | ImageFormat::Bmp => {
@@ -500,14 +519,7 @@ fn embed_reflection(
                 &image::RgbImage::from_raw(w, h, rgb_data.clone())
                     .expect("RGB data size matches"),
             ) {
-                let mut xobj = pdf.image_xobject(refl_ref, &jpeg_buf);
-                xobj.filter(Filter::DctDecode);
-                xobj.width(w as i32);
-                xobj.height(h as i32);
-                xobj.color_space().device_rgb();
-                xobj.bits_per_component(8);
-                xobj.interpolate(true);
-                xobj.s_mask(grad_ref);
+                write_jpeg_xobject(pdf, refl_ref, &jpeg_buf, w, h, 3, Some(grad_ref));
             } else {
                 let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&rgb_data, 6);
                 write_image_xobject(pdf, refl_ref, &compressed, Filter::FlateDecode, w, h, Some(grad_ref));

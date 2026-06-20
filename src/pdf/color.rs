@@ -71,59 +71,62 @@ pub(super) fn generate_shadow_mask(
 
     // 3-pass box blur approximates Gaussian blur
     let box_r = ((blur_radius * SHADOW_SCALE) / 3.0).ceil().max(0.0) as usize;
-    if box_r > 0 {
-        let w = px_w as usize;
-        let h = px_h as usize;
-        let mut tmp = vec![0u8; w * h];
-        for _pass in 0..3 {
-            // Horizontal pass: buf -> tmp
-            for y in 0..h {
-                let mut acc: u32 = 0;
-                // Seed accumulator with first (box_r+1) pixels
-                for x in 0..=box_r.min(w - 1) {
-                    acc += buf[y * w + x] as u32;
+    box_blur_3pass(&mut buf, px_w, px_h, box_r);
+
+    (buf, px_w, px_h)
+}
+
+/// In-place 3-pass box blur of a grayscale `buf` (approximates a Gaussian).
+/// No-op when `box_r` is 0.
+fn box_blur_3pass(buf: &mut [u8], px_w: u32, px_h: u32, box_r: usize) {
+    if box_r == 0 {
+        return;
+    }
+    let w = px_w as usize;
+    let h = px_h as usize;
+    let mut tmp = vec![0u8; w * h];
+    for _pass in 0..3 {
+        // Horizontal pass: buf -> tmp
+        for y in 0..h {
+            let mut acc: u32 = 0;
+            for x in 0..=box_r.min(w - 1) {
+                acc += buf[y * w + x] as u32;
+            }
+            for x in 0..w {
+                let right = x + box_r;
+                if right < w && x > 0 {
+                    acc += buf[y * w + right] as u32;
                 }
-                for x in 0..w {
-                    // Add entering pixel on the right
-                    let right = x + box_r;
-                    if right < w && x > 0 {
-                        acc += buf[y * w + right] as u32;
-                    }
-                    // Compute divisor: number of pixels actually in the window
-                    let left_edge = if x > box_r { x - box_r } else { 0 };
-                    let right_edge = right.min(w - 1);
-                    let count = (right_edge - left_edge + 1) as u32;
-                    tmp[y * w + x] = (acc / count).min(255) as u8;
-                    // Remove leaving pixel on the left
-                    if x >= box_r {
-                        acc -= buf[y * w + (x - box_r)] as u32;
-                    }
+                let left_edge = if x > box_r { x - box_r } else { 0 };
+                let right_edge = right.min(w - 1);
+                let count = (right_edge - left_edge + 1) as u32;
+                tmp[y * w + x] = (acc / count).min(255) as u8;
+                if x >= box_r {
+                    acc -= buf[y * w + (x - box_r)] as u32;
                 }
             }
-            // Vertical pass: tmp -> buf
-            for x in 0..w {
-                let mut acc: u32 = 0;
-                for y in 0..=box_r.min(h - 1) {
-                    acc += tmp[y * w + x] as u32;
+        }
+        // Vertical pass: tmp -> buf
+        for x in 0..w {
+            let mut acc: u32 = 0;
+            for y in 0..=box_r.min(h - 1) {
+                acc += tmp[y * w + x] as u32;
+            }
+            for y in 0..h {
+                let bottom = y + box_r;
+                if bottom < h && y > 0 {
+                    acc += tmp[bottom * w + x] as u32;
                 }
-                for y in 0..h {
-                    let bottom = y + box_r;
-                    if bottom < h && y > 0 {
-                        acc += tmp[bottom * w + x] as u32;
-                    }
-                    let top_edge = if y > box_r { y - box_r } else { 0 };
-                    let bottom_edge = bottom.min(h - 1);
-                    let count = (bottom_edge - top_edge + 1) as u32;
-                    buf[y * w + x] = (acc / count).min(255) as u8;
-                    if y >= box_r {
-                        acc -= tmp[(y - box_r) * w + x] as u32;
-                    }
+                let top_edge = if y > box_r { y - box_r } else { 0 };
+                let bottom_edge = bottom.min(h - 1);
+                let count = (bottom_edge - top_edge + 1) as u32;
+                buf[y * w + x] = (acc / count).min(255) as u8;
+                if y >= box_r {
+                    acc -= tmp[(y - box_r) * w + x] as u32;
                 }
             }
         }
     }
-
-    (buf, px_w, px_h)
 }
 
 /// Draw an image drop shadow by referencing a pre-embedded shadow XObject.
@@ -223,51 +226,7 @@ pub(super) fn generate_inner_shadow_mask(
 
     // 3-pass box blur to soften the edge inward
     let box_r = ((blur_radius * SHADOW_SCALE) / 3.0).ceil().max(0.0) as usize;
-    if box_r > 0 {
-        let w = px_w as usize;
-        let h = px_h as usize;
-        let mut tmp = vec![0u8; w * h];
-        for _pass in 0..3 {
-            for y in 0..h {
-                let mut acc: u32 = 0;
-                for x2 in 0..=box_r.min(w - 1) {
-                    acc += buf[y * w + x2] as u32;
-                }
-                for x in 0..w {
-                    let right = x + box_r;
-                    if right < w && x > 0 {
-                        acc += buf[y * w + right] as u32;
-                    }
-                    let left_edge = if x > box_r { x - box_r } else { 0 };
-                    let right_edge = right.min(w - 1);
-                    let count = (right_edge - left_edge + 1) as u32;
-                    tmp[y * w + x] = (acc / count).min(255) as u8;
-                    if x >= box_r {
-                        acc -= buf[y * w + (x - box_r)] as u32;
-                    }
-                }
-            }
-            for x in 0..w {
-                let mut acc: u32 = 0;
-                for y2 in 0..=box_r.min(h - 1) {
-                    acc += tmp[y2 * w + x] as u32;
-                }
-                for y in 0..h {
-                    let bottom = y + box_r;
-                    if bottom < h && y > 0 {
-                        acc += tmp[bottom * w + x] as u32;
-                    }
-                    let top_edge = if y > box_r { y - box_r } else { 0 };
-                    let bottom_edge = bottom.min(h - 1);
-                    let count = (bottom_edge - top_edge + 1) as u32;
-                    buf[y * w + x] = (acc / count).min(255) as u8;
-                    if y >= box_r {
-                        acc -= tmp[(y - box_r) * w + x] as u32;
-                    }
-                }
-            }
-        }
-    }
+    box_blur_3pass(&mut buf, px_w, px_h, box_r);
 
     (buf, px_w, px_h)
 }
