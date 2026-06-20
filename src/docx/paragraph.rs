@@ -9,7 +9,8 @@ use super::styles::{parse_alignment, parse_font_size, rfonts_ascii_name};
 use super::textbox::collect_textboxes_from_paragraph;
 use super::{
     ParseContext, WML_NS, extract_indents, parse_frame_props, parse_hex_color,
-    parse_paragraph_borders, parse_paragraph_spacing, parse_tab_stops_with_clears, wml, wml_attr,
+    merge_tab_stops, parse_paragraph_borders, parse_paragraph_spacing, parse_tab_stops_with_clears,
+    wml, wml_attr,
     wml_bool,
 };
 
@@ -262,19 +263,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         .map(parse_tab_stops_with_clears)
         .unwrap_or_default();
     if !para_tabs.is_empty() || !para_clears.is_empty() {
-        for &clear_pos in &para_clears {
-            tab_stops.retain(|t| (t.position - clear_pos).abs() >= 0.5);
-        }
-        for ts in para_tabs {
-            if let Some(existing) = tab_stops
-                .iter_mut()
-                .find(|t| (t.position - ts.position).abs() < 0.5)
-            {
-                *existing = ts;
-            } else {
-                tab_stops.push(ts);
-            }
-        }
+        merge_tab_stops(&mut tab_stops, &para_clears, para_tabs);
         tab_stops.sort_by(|a, b| a.position.total_cmp(&b.position));
     }
     // Add the numbering level's explicit tab stop so the label-text

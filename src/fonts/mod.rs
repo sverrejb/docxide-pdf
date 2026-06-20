@@ -531,7 +531,6 @@ pub(crate) fn register_font(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::VertAlign;
 
     #[test]
     fn test_primary_font_name_simple() {
@@ -557,47 +556,12 @@ mod tests {
 
     fn make_run(font: &str, bold: bool, italic: bool) -> Run {
         Run {
-            text: String::new(),
             font_name: font.to_string(),
             font_size: 12.0,
             bold,
             italic,
-            underline: false,
-            double_underline: false,
-            strikethrough: false,
-            dstrike: false,
-            color: None,
-            highlight: None,
-            shading: None,
-            border: None,
-            vertical_align: VertAlign::Baseline,
-            text_shadow: None,
-            text_glow: None,
-            text_outline: None,
-            text_fill: None,
-            vanish: false,
-            small_caps: false,
-            caps: false,
-            char_style_id: None,
-            lang: None,
-            char_spacing: 0.0,
             text_scale: 100.0,
-            east_asia_font_name: None,
-            is_tab: false,
-            ptab_alignment: None,
-            is_line_break: false,
-            field_code: None,
-            hyperlink_url: None,
-            inline_image: None,
-            footnote_id: None,
-            is_footnote_ref_mark: false,
-            endnote_id: None,
-            is_endnote_ref_mark: false,
-            kern_threshold: None,
-            font_size_from_default: false,
-            font_name_from_default: false,
-            comment_ids: Vec::new(),
-            is_math: false,
+            ..Run::default()
         }
     }
 

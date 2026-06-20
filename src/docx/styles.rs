@@ -11,8 +11,9 @@ use super::wordart::{parse_text_fill, parse_text_glow, parse_text_outline, parse
 use super::{
     DML_NS, WML_NS, dml, extract_indents, highlight_color, parse_cell_border,
     parse_cell_border_left, parse_cell_border_right, parse_hex_color, parse_one_border,
-    parse_on_off, parse_paragraph_borders, parse_run_shd, parse_tab_stops_with_clears,
-    parse_text_color, read_zip_text, twips_attr, twips_to_pts, wml, wml_attr, wml_bool,
+    merge_tab_stops, parse_on_off, parse_paragraph_borders, parse_run_shd,
+    parse_tab_stops_with_clears, parse_text_color, read_zip_text, twips_attr, twips_to_pts, wml,
+    wml_attr, wml_bool,
 };
 
 fn dml_typeface<'a>(node: roxmltree::Node<'a, 'a>, element: &str) -> Option<&'a str> {
@@ -998,21 +999,11 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                 );
                 // Tab stops are additive: accumulate from ancestors, child overrides at same pos
                 // Clear tabs remove inherited tabs at matching positions
-                for &clear_pos in &s.clear_tab_positions {
-                    inh.tab_stops
-                        .retain(|t| (t.position - clear_pos).abs() >= 0.5);
-                }
-                for ts in &s.tab_stops {
-                    if let Some(existing) = inh
-                        .tab_stops
-                        .iter_mut()
-                        .find(|t| (t.position - ts.position).abs() < 0.5)
-                    {
-                        *existing = ts.clone();
-                    } else {
-                        inh.tab_stops.push(ts.clone());
-                    }
-                }
+                merge_tab_stops(
+                    &mut inh.tab_stops,
+                    &s.clear_tab_positions,
+                    s.tab_stops.clone(),
+                );
             }
         }
         inh.tab_stops

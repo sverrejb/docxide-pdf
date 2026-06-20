@@ -388,6 +388,25 @@ pub(super) fn parse_frame_props(ppr: roxmltree::Node) -> Option<FrameProperties>
     })
 }
 
+/// Merge `incoming` tab stops into `dst`: clear positions remove matching stops
+/// (0.5pt tolerance), then each incoming stop overrides one at the same position
+/// or is appended. Caller is responsible for sorting.
+pub(super) fn merge_tab_stops(dst: &mut Vec<TabStop>, clears: &[f32], incoming: Vec<TabStop>) {
+    for &clear_pos in clears {
+        dst.retain(|t| (t.position - clear_pos).abs() >= 0.5);
+    }
+    for ts in incoming {
+        if let Some(existing) = dst
+            .iter_mut()
+            .find(|t| (t.position - ts.position).abs() < 0.5)
+        {
+            *existing = ts;
+        } else {
+            dst.push(ts);
+        }
+    }
+}
+
 pub(super) fn parse_tab_stops_with_clears(ppr: roxmltree::Node) -> (Vec<TabStop>, Vec<f32>) {
     let Some(tabs) = wml(ppr, "tabs") else {
         return (vec![], vec![]);
