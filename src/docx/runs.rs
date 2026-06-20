@@ -498,9 +498,11 @@ fn legacy_text_shadow(
         // Word renders both emboss (raised) and imprint (engraved) on a white
         // page as a prominent down-right gray drop shadow behind the glyph face,
         // with the white background showing between as the raised/engraved ridge.
+        // Empirically the relief reads about as heavy as the plain-shadow line in
+        // Word's PDF export, so use the same offset (not a reduced one).
         // ponytail: a single offset gray copy — Word's exact multi-pass face/
         // highlight/shadow antialiasing isn't replicated (a rare legacy effect).
-        Some(TextShadow { color: [128, 128, 128], offset_x: d * 0.7, offset_y: -d * 0.7, alpha: 1.0 })
+        Some(TextShadow { color: [128, 128, 128], offset_x: d, offset_y: -d, alpha: 1.0 })
     } else {
         None
     }

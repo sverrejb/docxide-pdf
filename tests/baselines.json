@@ -329,11 +329,66 @@
     "ssim": 0.8917,
     "text_boundary": 0.5625
   },
+  "cases/case66": {
+    "jaccard": 0.7492,
+    "ssim": 0.7111,
+    "text_boundary": 0.0
+  },
+  "cases/case67": {
+    "jaccard": 0.7175,
+    "ssim": 0.9131,
+    "text_boundary": 1.0
+  },
+  "cases/case68": {
+    "jaccard": 0.9189,
+    "ssim": 0.9459,
+    "text_boundary": 1.0
+  },
+  "cases/case69": {
+    "jaccard": 0.8808,
+    "ssim": 0.9618,
+    "text_boundary": 1.0
+  },
   "cases/case7": {
     "jaccard": 0.7397,
     "ssim": 0.9078,
     "text_boundary": 1.0,
     "convert_ms": 8.1
+  },
+  "cases/case70": {
+    "jaccard": 0.7628,
+    "ssim": 0.9412,
+    "text_boundary": 1.0
+  },
+  "cases/case71": {
+    "jaccard": 0.8736,
+    "ssim": 0.966,
+    "text_boundary": 1.0
+  },
+  "cases/case72": {
+    "jaccard": 0.8416,
+    "ssim": 0.9596,
+    "text_boundary": 1.0
+  },
+  "cases/case73": {
+    "jaccard": 0.9031,
+    "ssim": 0.9559,
+    "text_boundary": 1.0
+  },
+  "cases/case74": {
+    "jaccard": 0.663,
+    "ssim": 0.8362,
+    "text_boundary": 1.0
+  },
+  "cases/case75": {
+    "jaccard": 0.6606,
+    "ssim": 0.8361,
+    "text_boundary": 1.0
+  },
+  "cases/case76": {
+    "jaccard": 0.7767,
+    "ssim": 0.9429,
+    "text_boundary": 1.0
   },
   "cases/case8": {
     "jaccard": 0.481,
@@ -565,7 +620,7 @@
   "new/irish_school_enr..": {
     "jaccard": 0.3364,
     "ssim": 0.5307,
-    "text_boundary": 0.6964
+    "text_boundary": 0.7054
   },
   "new/isla_language_le..": {
     "jaccard": 0.3781,
@@ -1049,8 +1104,8 @@
     "convert_ms": 2.4
   },
   "scraped/uk_commercial_le..": {
-    "jaccard": 0.0945,
-    "ssim": 0.2332,
+    "jaccard": 0.0943,
+    "ssim": 0.2328,
     "text_boundary": 0.0911,
     "convert_ms": 326.3
   },

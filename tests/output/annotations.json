@@ -1,5 +1,5 @@
 {
-  "next_id": 202,
+  "next_id": 208,
   "annotations": [
     {
       "id": 8,
@@ -369,6 +369,46 @@
       "x_pt": 502.55814,
       "y_pt": 760.0786,
       "note": "\"g\" is placed too high here. Should be lower. Compare with reference.",
+      "fixed": false
+    },
+    {
+      "id": 202,
+      "case": "case74",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 107.82415,
+      "y_pt": 138.70154,
+      "note": "Endnote is placed wrong. Compare with reference.",
+      "fixed": false
+    },
+    {
+      "id": 203,
+      "case": "scraped/uk_commercial_lease_template",
+      "page": 39,
+      "source": "Generated",
+      "x_pt": 167.2435,
+      "y_pt": 115.545654,
+      "note": "missing yellow highlights on footnotes",
+      "fixed": false
+    },
+    {
+      "id": 206,
+      "case": "scraped/uk_commercial_lease_template",
+      "page": 39,
+      "source": "Generated",
+      "x_pt": 89.82675,
+      "y_pt": 746.73785,
+      "note": "6.1.22 Here should be 6.7.1 per the reference",
+      "fixed": false
+    },
+    {
+      "id": 207,
+      "case": "scraped/uk_commercial_lease_template",
+      "page": 39,
+      "source": "Generated",
+      "x_pt": 49.280823,
+      "y_pt": 536.67883,
+      "note": "Missing numbering on \"Energy Performance Certificates\" and other headings. This one should be 6.8",
       "fixed": false
     }
   ]

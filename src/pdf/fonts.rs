@@ -63,6 +63,22 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
     let mut used: HashMap<String, HashSet<char>> = HashMap::new();
     let mut key_buf = String::new();
 
+    // §17.11.18/.17 mark numbering formats — must mirror the render pre-pass
+    // (src/pdf/mod.rs) so the subset embeds the glyphs the marks actually use.
+    // Without this, a non-decimal format (e.g. upperRoman "I"/"II", lowerLetter
+    // "b") whose letters never appear in body text gets dropped from the subset
+    // and renders as a missing glyph.
+    let fn_mark_fmt = doc
+        .sections
+        .iter()
+        .find_map(|s| s.properties.footnote_num_fmt.as_deref())
+        .unwrap_or("decimal");
+    let en_mark_fmt = doc
+        .sections
+        .iter()
+        .find_map(|s| s.properties.endnote_num_fmt.as_deref())
+        .unwrap_or("lowerRoman");
+
     for run in all_runs {
         let key = font_key_buf(run, &mut key_buf);
         let chars = used.entry(key.to_string()).or_default();
@@ -79,12 +95,13 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
                 FieldCode::StyleRef(_) => {}
             }
         }
-        if run.footnote_id.is_some()
-            || run.is_footnote_ref_mark
-            || run.endnote_id.is_some()
-            || run.is_endnote_ref_mark
-        {
+        if run.footnote_id.is_some() || run.is_footnote_ref_mark {
             chars.extend('0'..='9');
+            extend_chars_for_num_format(chars, fn_mark_fmt);
+        }
+        if run.endnote_id.is_some() || run.is_endnote_ref_mark {
+            chars.extend('0'..='9');
+            extend_chars_for_num_format(chars, en_mark_fmt);
         }
     }
 
