@@ -435,6 +435,7 @@ pub(super) fn render_textbox_paragraphs(
             links, 0.0, ctx.fonts, None,
             gradient_specs,
             None,
+            None,
         );
         cursor_y -= inter_gap + (tb_lines.len() as f32) * tb_line_h;
         prev_space_after = tp.space_after;

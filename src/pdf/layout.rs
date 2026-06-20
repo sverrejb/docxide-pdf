@@ -1361,6 +1361,20 @@ pub(super) fn encode_text_for_pdf(
     }
 }
 
+/// §17.6.8 line numbering for a body paragraph's rendered lines. The counter is
+/// shared (continuous) across paragraphs so it survives between calls.
+pub(super) struct LineNumberArg<'a> {
+    /// Body lines counted so far = 0-based index of the next line to number.
+    pub counter: &'a mut u32,
+    pub start: i32,
+    pub count_by: u32,
+    /// Word continues a `continuous`-restart section from `start` as if it were
+    /// the previous section's last line, so the first line shows `start + 1`.
+    pub continuous_offset: u32,
+    /// Page-coordinate x of the right edge the (right-aligned) numbers end at.
+    pub right_x: f32,
+}
+
 /// Render pre-built lines applying the paragraph alignment.
 /// `total_line_count` is the full paragraph line count (for justify: last line stays left-aligned).
 pub(super) fn render_paragraph_lines(
@@ -1379,6 +1393,7 @@ pub(super) fn render_paragraph_lines(
     line_geometry: Option<&[(f32, f32)]>,
     gradient_specs: &mut Vec<super::GradientSpec>,
     mut comment_anchors: Option<&mut Vec<(u32, f32, f32, f32)>>,
+    mut line_numbering: Option<LineNumberArg<'_>>,
 ) {
     let mut current_color: Option<[u8; 3]> = None;
     let mut pattern_fill_active = false;
@@ -1433,6 +1448,41 @@ pub(super) fn render_paragraph_lines(
         } else {
             (base_margin, base_width)
         };
+
+        // §17.6.8 margin line number: every counted body line advances the
+        // shared counter; numbers are right-aligned in the page margin at the
+        // line's own baseline, in that line's font/size (matching Word).
+        if let Some(ln) = line_numbering.as_mut() {
+            let idx = *ln.counter;
+            *ln.counter = idx + 1;
+            let value = ln.start + ln.continuous_offset as i32 + idx as i32;
+            let show = value >= 1 && (ln.count_by <= 1 || value % ln.count_by as i32 == 0);
+            if show {
+                if let Some((font, fs)) = line
+                    .chunks
+                    .iter()
+                    .find(|c| c.inline_image_name.is_none() && !c.text.is_empty())
+                    .map(|c| (c.pdf_font.clone(), c.font_size))
+                {
+                    let s = value.to_string();
+                    let w = pdf_name_to_entry
+                        .get(font.as_str())
+                        .map(|e| e.word_width(&s, fs, false))
+                        .unwrap_or(fs * 0.5 * s.chars().count() as f32);
+                    let bytes = encode_text_for_pdf(&s, &font, &pdf_name_to_entry);
+                    content.save_state();
+                    content.set_char_spacing(0.0);
+                    content.set_horizontal_scaling(100.0);
+                    fill_color_or_black(content, None);
+                    content.begin_text();
+                    content.set_font(Name(font.as_bytes()), fs);
+                    content.next_line(ln.right_x - w, y);
+                    content.show(Str(&bytes));
+                    content.end_text();
+                    content.restore_state();
+                }
+            }
+        }
 
         // Compute left-region content width (for alignment/justify)
         let left_content_width = if let Some(ref rr) = line.right_region {

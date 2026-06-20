@@ -188,6 +188,7 @@ pub(super) fn render_page_footnotes(
                 None,
                 gradient_specs,
                 None,
+                None,
             );
 
             fn_y -= line_count as f32 * layout.line_height;

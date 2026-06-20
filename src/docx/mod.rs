@@ -813,6 +813,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
             page_num_format: None,
             page_borders: None,
             vertical_align: crate::model::PageVerticalAlign::Top,
+            line_numbering: None,
         }
     };
     sections.push(Section {

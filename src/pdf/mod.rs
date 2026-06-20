@@ -48,8 +48,8 @@ use positioning::{
 pub(super) use positioning::{resolve_h_position, resolve_fi_y_top};
 use images::{EffectXObjs, EmbeddedImages, embed_all_images};
 use layout::{
-    DualRegion, LinkAnnotation, build_paragraph_lines, build_tabbed_line, is_text_empty,
-    render_paragraph_lines, tallest_run_metrics,
+    DualRegion, LineNumberArg, LinkAnnotation, build_paragraph_lines, build_tabbed_line,
+    is_text_empty, render_paragraph_lines, tallest_run_metrics,
 };
 use crate::fonts::font_key;
 use color::{fill_rgb, stroke_rgb};
@@ -643,6 +643,10 @@ pub(super) struct LayoutState {
     pub(super) global_block_idx: usize,
     pub(super) heading_entries: Vec<HeadingEntry>,
     pub(super) bookmark_positions: HashMap<String, (usize, f32)>,
+    /// §17.6.8 continuous body line-number counter (0-based count of lines seen).
+    /// ponytail: never reset — only `continuous` restart is exercised; newPage/
+    /// newSection resets aren't implemented.
+    pub(super) line_number_counter: u32,
 }
 
 /// Compute effective first-line hanging indent for a paragraph.
@@ -897,6 +901,18 @@ fn render_paragraph_block(
     smartart_image_names: &HashMap<usize, String>,
     debug_wrap: bool,
 ) -> bool {
+    // §17.6.8: per-section line-number config (None if disabled). Holds no borrow
+    // of `state`, so each render call can freshly borrow the shared counter.
+    let ln_cfg: Option<(i32, u32, u32, f32)> = sp.line_numbering.as_ref().map(|ln| {
+        let continuous_offset =
+            (ln.restart == crate::model::LineNumberRestart::Continuous) as u32;
+        (
+            ln.start,
+            ln.count_by,
+            continuous_offset,
+            sp.margin_left - ln.distance.unwrap_or(18.0),
+        )
+    });
     let adjacent_para = |idx: usize| -> Option<&Paragraph> {
         match section_blocks.get(idx)? {
             Block::Paragraph(p) => Some(p),
@@ -1931,6 +1947,13 @@ fn render_paragraph_block(
                 poly_line_geom.as_deref(),
                 &mut state.pb.gradient_specs,
                 Some(&mut state.pb.comment_anchors),
+                ln_cfg.map(|(start, count_by, continuous_offset, right_x)| LineNumberArg {
+                    counter: &mut state.line_number_counter,
+                    start,
+                    count_by,
+                    continuous_offset,
+                    right_x,
+                }),
             );
 
             state.pb.advance_column_or_page(
@@ -1972,6 +1995,13 @@ fn render_paragraph_block(
                 None,
                 &mut state.pb.gradient_specs,
                 Some(&mut state.pb.comment_anchors),
+                ln_cfg.map(|(start, count_by, continuous_offset, right_x)| LineNumberArg {
+                    counter: &mut state.line_number_counter,
+                    start,
+                    count_by,
+                    continuous_offset,
+                    right_x,
+                }),
             );
 
             state.pb.slot_top -= rest_content_h;
@@ -2413,6 +2443,13 @@ fn render_paragraph_block(
                     poly_line_geom.as_deref(),
                     &mut state.pb.gradient_specs,
                     Some(&mut state.pb.comment_anchors),
+                    ln_cfg.map(|(start, count_by, continuous_offset, right_x)| LineNumberArg {
+                        counter: &mut state.line_number_counter,
+                        start,
+                        count_by,
+                        continuous_offset,
+                        right_x,
+                    }),
                 );
                 // float_width_change only comes from the lookahead path,
                 // which always sets lookahead_narrow in the same branch.
@@ -2435,6 +2472,13 @@ fn render_paragraph_block(
                     poly_line_geom.as_deref(),
                     &mut state.pb.gradient_specs,
                     Some(&mut state.pb.comment_anchors),
+                    ln_cfg.map(|(start, count_by, continuous_offset, right_x)| LineNumberArg {
+                        counter: &mut state.line_number_counter,
+                        start,
+                        count_by,
+                        continuous_offset,
+                        right_x,
+                    }),
                 );
             } else {
                 // Split point beyond paragraph — render all at once
@@ -2454,6 +2498,13 @@ fn render_paragraph_block(
                     poly_line_geom.as_deref(),
                     &mut state.pb.gradient_specs,
                     Some(&mut state.pb.comment_anchors),
+                    ln_cfg.map(|(start, count_by, continuous_offset, right_x)| LineNumberArg {
+                        counter: &mut state.line_number_counter,
+                        start,
+                        count_by,
+                        continuous_offset,
+                        right_x,
+                    }),
                 );
             }
         } else {
@@ -2473,6 +2524,13 @@ fn render_paragraph_block(
                 poly_line_geom.as_deref(),
                 &mut state.pb.gradient_specs,
                 Some(&mut state.pb.comment_anchors),
+                ln_cfg.map(|(start, count_by, continuous_offset, right_x)| LineNumberArg {
+                    counter: &mut state.line_number_counter,
+                    start,
+                    count_by,
+                    continuous_offset,
+                    right_x,
+                }),
             );
         }
     }
@@ -2706,6 +2764,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         global_block_idx: 0,
         heading_entries: Vec::new(),
         bookmark_positions,
+        line_number_counter: 0,
     };
 
     for (sect_idx, section) in doc.sections.iter().enumerate() {

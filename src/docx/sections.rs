@@ -1,8 +1,8 @@
 use std::io::{Read, Seek};
 
 use crate::model::{
-    ColumnDef, ColumnsConfig, DocGridType, HeaderFooter, PageBorderDisplay, PageBorders,
-    PageVerticalAlign, SectionBreakType, SectionProperties,
+    ColumnDef, ColumnsConfig, DocGridType, HeaderFooter, LineNumberRestart, LineNumbering,
+    PageBorderDisplay, PageBorders, PageVerticalAlign, SectionBreakType, SectionProperties,
 };
 
 use super::headers_footers::parse_header_footer_xml;
@@ -139,6 +139,24 @@ pub(super) fn parse_section_properties<R: Read + Seek>(
         },
     });
 
+    let line_numbering = wml(sect_node, "lnNumType").map(|n| LineNumbering {
+        count_by: n
+            .attribute((WML_NS, "countBy"))
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1)
+            .max(1),
+        start: n
+            .attribute((WML_NS, "start"))
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(1),
+        distance: twips_attr(n, "distance"),
+        restart: match n.attribute((WML_NS, "restart")) {
+            Some("continuous") => LineNumberRestart::Continuous,
+            Some("newSection") => LineNumberRestart::NewSection,
+            _ => LineNumberRestart::NewPage,
+        },
+    });
+
     let vertical_align = wml_attr(sect_node, "vAlign")
         .map(|v| match v {
             "center" => PageVerticalAlign::Center,
@@ -179,6 +197,7 @@ pub(super) fn parse_section_properties<R: Read + Seek>(
         page_num_format,
         page_borders,
         vertical_align,
+        line_numbering,
     }
 }
 

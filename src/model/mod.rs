@@ -119,6 +119,30 @@ pub struct SectionProperties {
     /// §17.6.23 `w:vAlign` — vertical alignment of body text between the top and
     /// bottom margins on each page of the section.
     pub vertical_align: PageVerticalAlign,
+    /// §17.6.8 `w:lnNumType` — margin line numbering for this section.
+    pub line_numbering: Option<LineNumbering>,
+}
+
+/// §17.6.8 `w:lnNumType` — line numbers shown in the margin (legal/contract docs).
+#[derive(Clone, Copy)]
+pub struct LineNumbering {
+    /// `@countBy` — show a number on every Nth line (default 1 = every line).
+    pub count_by: u32,
+    /// `@start` — starting line-number value (default 1).
+    pub start: i32,
+    /// `@distance` (points) from the text margin to the numbers; `None` = Word's
+    /// auto default of 0.25".
+    pub distance: Option<f32>,
+    /// `@restart` — when the counter resets (ST_LineNumberRestart §17.18.47).
+    pub restart: LineNumberRestart,
+}
+
+#[derive(Clone, Copy, Default, PartialEq)]
+pub enum LineNumberRestart {
+    #[default]
+    NewPage,
+    NewSection,
+    Continuous,
 }
 
 /// §17.6.23 ST_VerticalJc — how the section's body content is positioned
