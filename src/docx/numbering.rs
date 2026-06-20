@@ -24,6 +24,9 @@ pub(super) struct LevelDef {
     /// level "or any earlier"). `Some(0)` = never restart; `None` = default
     /// (restart on any earlier level).
     pub(super) lvl_restart: Option<u32>,
+    /// §17.9.23 pStyle: styleId this level is associated with. A paragraph using
+    /// that style picks THIS level regardless of the style's numPr ilvl.
+    pub(super) pstyle: Option<String>,
 }
 
 #[derive(Default)]
@@ -98,6 +101,7 @@ fn parse_level_def(lvl: roxmltree::Node) -> Option<(u8, LevelDef)> {
     let suff = wml_attr(lvl, "suff").unwrap_or("tab").to_string();
     let is_lgl = wml_bool(lvl, "isLgl").unwrap_or(false);
     let lvl_restart = wml_attr(lvl, "lvlRestart").and_then(|v| v.parse::<u32>().ok());
+    let pstyle = wml_attr(lvl, "pStyle").map(|s| s.to_string());
     Some((
         ilvl,
         LevelDef {
@@ -115,6 +119,7 @@ fn parse_level_def(lvl: roxmltree::Node) -> Option<(u8, LevelDef)> {
             label_font: rpr_font,
             is_lgl,
             lvl_restart,
+            pstyle,
         },
     ))
 }
@@ -312,6 +317,7 @@ pub(super) fn parse_list_info(
     num_pr: Option<roxmltree::Node>,
     style_num_id: Option<&str>,
     style_num_ilvl: Option<u8>,
+    effective_style_id: Option<&str>,
     numbering: &NumberingInfo,
     counters: &mut HashMap<(u32, u8), u32>,
     last_seen_level: &mut HashMap<u32, u8>,
@@ -350,6 +356,24 @@ pub(super) fn parse_list_info(
     let Some(def) = lookup_level(ilvl) else {
         return ListLabelInfo::default();
     };
+
+    // §17.9.23: a level's pStyle names the single paragraph style that
+    // auto-numbers at that level. When numbering is inherited from a style (no
+    // direct paragraph numPr) and the resolved level is owned by a DIFFERENT
+    // style, Word suppresses the number — the paragraph keeps the list indent
+    // and sits at the hanging position, with no label and no counter advance.
+    // ponytail: matches the level's named style directly, not styles basedOn it.
+    if num_pr.is_none()
+        && let Some(owner) = def.pstyle.as_deref()
+        && effective_style_id != Some(owner)
+    {
+        return ListLabelInfo {
+            indent_left: def.indent_left,
+            indent_hanging: def.indent_hanging,
+            tab_stop: def.tab_stop,
+            ..ListLabelInfo::default()
+        };
+    }
 
     // Key counters by abstractNumId so all numIds sharing the same
     // abstract definition share a single counter stream.
@@ -589,6 +613,7 @@ mod tests {
             label_font: None,
             is_lgl: false,
             lvl_restart: None,
+            pstyle: None,
         };
         let override_def = LevelDef {
             num_fmt: "upperLetter".into(),
@@ -612,6 +637,7 @@ mod tests {
             None,
             Some("5"),
             Some(0),
+            None,
             &numbering,
             &mut counters,
             &mut last_seen,
@@ -645,12 +671,12 @@ mod tests {
         let mut last_seen = HashMap::new();
         let mut applied = HashSet::new();
         let lvl0_info = parse_list_info(
-            None, Some("100"), Some(0),
+            None, Some("100"), Some(0), None,
             &numbering, &mut counters, &mut last_seen, &mut applied,
         );
         assert_eq!(lvl0_info.label, "I.");
         let lvl1_info = parse_list_info(
-            None, Some("100"), Some(1),
+            None, Some("100"), Some(1), None,
             &numbering, &mut counters, &mut last_seen, &mut applied,
         );
         // Without isLgl this would be "I.1."; isLgl forces %1 to decimal.
@@ -681,7 +707,7 @@ mod tests {
         let mut applied = HashSet::new();
         let mut label = |ilvl: u8| {
             parse_list_info(
-                None, Some("100"), Some(ilvl),
+                None, Some("100"), Some(ilvl), None,
                 &numbering, &mut counters, &mut last_seen, &mut applied,
             )
             .label
@@ -692,5 +718,42 @@ mod tests {
         assert_eq!(label(0), "2."); // Second section — lvl1 must NOT reset
         assert_eq!(label(1), "(3)");
         assert_eq!(label(1), "(4)");
+    }
+
+    #[test]
+    fn test_pstyle_gates_number_to_owning_style() {
+        // §17.9.23: lvl0 is owned (pStyle) by "PHeadingA". A paragraph whose
+        // effective style is "PHeadingA" auto-numbers ("I."); a "PHeadingB"
+        // paragraph resolving to the same lvl0 (its style numPr has no ilvl)
+        // gets the lvl0 indent but NO number, and must not advance the counter.
+        let ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        let lvl0_xml = format!(
+            r#"<w:lvl xmlns:w="{ns}" w:ilvl="0"><w:numFmt w:val="upperRoman"/><w:pStyle w:val="PHeadingA"/><w:lvlText w:val="%1."/><w:pPr><w:ind w:left="720" w:hanging="432"/></w:pPr></w:lvl>"#
+        );
+        let mut numbering = NumberingInfo::default();
+        numbering.abstract_nums.insert(
+            "100".into(),
+            HashMap::from([(0u8, parse_lvl(&lvl0_xml).1)]),
+        );
+        numbering.num_to_abstract.insert("100".into(), "100".into());
+
+        let mut counters = HashMap::new();
+        let mut last_seen = HashMap::new();
+        let mut applied = HashSet::new();
+        let mut label = |style: &str| {
+            parse_list_info(
+                None, Some("100"), None, Some(style),
+                &numbering, &mut counters, &mut last_seen, &mut applied,
+            )
+        };
+        // Owning style numbers.
+        assert_eq!(label("PHeadingA").label, "I.");
+        // Non-owning style: indent kept, no label, counter not advanced.
+        let gated = label("PHeadingB");
+        assert_eq!(gated.label, "");
+        assert_eq!(gated.indent_left, 36.0);
+        assert_eq!(gated.indent_hanging, 21.6);
+        // Next owning paragraph is "II.", proving the gated one didn't increment.
+        assert_eq!(label("PHeadingA").label, "II.");
     }
 }

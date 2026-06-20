@@ -758,6 +758,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         num_pr,
                         style_num,
                         style_ilvl,
+                        Some(para_style_id),
                         ctx.numbering,
                         counters,
                         last_seen_level,
