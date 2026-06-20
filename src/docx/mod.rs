@@ -814,6 +814,8 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
             page_borders: None,
             vertical_align: crate::model::PageVerticalAlign::Top,
             line_numbering: None,
+            footnote_num_fmt: None,
+            endnote_num_fmt: None,
         }
     };
     sections.push(Section {

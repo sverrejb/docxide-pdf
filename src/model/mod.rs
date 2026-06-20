@@ -121,6 +121,12 @@ pub struct SectionProperties {
     pub vertical_align: PageVerticalAlign,
     /// §17.6.8 `w:lnNumType` — margin line numbering for this section.
     pub line_numbering: Option<LineNumbering>,
+    /// §17.11.11/.5 `w:sectPr/w:footnotePr|w:endnotePr` `w:numFmt @val` — section-wide
+    /// footnote/endnote mark numbering format. None → built-in default (footnote
+    /// decimal, endnote lowerRoman). Word reads the format here, NOT from the
+    /// doc-wide settings.xml bag.
+    pub footnote_num_fmt: Option<String>,
+    pub endnote_num_fmt: Option<String>,
 }
 
 /// §17.6.8 `w:lnNumType` — line numbers shown in the margin (legal/contract docs).

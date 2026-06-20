@@ -11,7 +11,7 @@ use super::layout::{
 use super::list_label::render_list_label;
 use super::resolve_line_h;
 
-fn substitute_ref_marks(runs: &[Run], display_num: u32) -> Vec<Run> {
+fn substitute_ref_marks(runs: &[Run], display_num: &str) -> Vec<Run> {
     runs.iter()
         .map(|run| {
             if run.is_footnote_ref_mark || run.is_endnote_ref_mark {
@@ -97,7 +97,7 @@ pub(super) fn render_page_footnotes(
     content: &mut Content,
     fn_ids: &[u32],
     footnotes: &HashMap<u32, Footnote>,
-    footnote_display_order: &HashMap<u32, u32>,
+    footnote_display_order: &HashMap<u32, String>,
     ctx: &RenderContext,
     margin_left: f32,
     margin_bottom: f32,
@@ -133,12 +133,15 @@ pub(super) fn render_page_footnotes(
         let Some(footnote) = footnotes.get(fn_id) else {
             continue;
         };
-        let display_num = footnote_display_order.get(fn_id).copied().unwrap_or(1);
+        let display_num = footnote_display_order
+            .get(fn_id)
+            .cloned()
+            .unwrap_or_else(|| "1".to_string());
 
         let mut prev_space_after = 0.0f32;
         let mut prev_contextual = false;
         for (pi, para) in footnote.paragraphs.iter().enumerate() {
-            let runs = substitute_ref_marks(&para.runs, display_num);
+            let runs = substitute_ref_marks(&para.runs, &display_num);
             let ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
 
             let para_text_x = margin_left + para.indent_left;

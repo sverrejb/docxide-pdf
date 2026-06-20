@@ -166,6 +166,17 @@ pub(super) fn parse_section_properties<R: Read + Seek>(
         })
         .unwrap_or_default();
 
+    // §17.11.11/.5 — section-wide footnote/endnote mark numbering format lives in
+    // the sectPr bag; Word reads it here, not from the doc-wide settings.xml bag.
+    let note_num_fmt = |bag: &str| -> Option<String> {
+        wml(sect_node, bag)
+            .and_then(|b| wml(b, "numFmt"))
+            .and_then(|n| n.attribute((WML_NS, "val")))
+            .map(|s| s.to_string())
+    };
+    let footnote_num_fmt = note_num_fmt("footnotePr");
+    let endnote_num_fmt = note_num_fmt("endnotePr");
+
     let header_default = resolve_hf(sect_node, "headerReference", "default", ctx);
     let header_first = resolve_hf(sect_node, "headerReference", "first", ctx);
     let header_even = resolve_hf(sect_node, "headerReference", "even", ctx);
@@ -198,6 +209,8 @@ pub(super) fn parse_section_properties<R: Read + Seek>(
         page_borders,
         vertical_align,
         line_numbering,
+        footnote_num_fmt,
+        endnote_num_fmt,
     }
 }
 

@@ -894,8 +894,8 @@ fn render_paragraph_block(
     effect_names: &HashMap<usize, EffectXObjs>,
     effect_floating_names: &HashMap<(usize, usize), EffectXObjs>,
     effect_inline_names: &HashMap<(usize, usize), EffectXObjs>,
-    footnote_display_order: &HashMap<u32, u32>,
-    endnote_display_order: &HashMap<u32, u32>,
+    footnote_display_order: &HashMap<u32, String>,
+    endnote_display_order: &HashMap<u32, String>,
     doc: &Document,
     smartart_font_key: &str,
     smartart_image_names: &HashMap<usize, String>,
@@ -1101,14 +1101,12 @@ fn render_paragraph_block(
             .iter()
             .map(|run| {
                 if let Some(id) = run.footnote_id {
-                    let num = footnote_display_order.get(&id).copied().unwrap_or(0);
                     let mut r = run.clone();
-                    r.text = num.to_string();
+                    r.text = footnote_display_order.get(&id).cloned().unwrap_or_default();
                     r
                 } else if let Some(id) = run.endnote_id {
-                    let num = endnote_display_order.get(&id).copied().unwrap_or(0);
                     let mut r = run.clone();
-                    r.text = num.to_string();
+                    r.text = endnote_display_order.get(&id).cloned().unwrap_or_default();
                     r
                 } else if let Some(FieldCode::PageRef(ref bookmark)) = run.field_code {
                     let mut r = run.clone();
@@ -2715,9 +2713,25 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
     // Pre-compute footnote and endnote display order: scan body runs for
     // footnote_id / endnote_id, assign sequential numbers in encounter order.
-    let mut footnote_display_order: HashMap<u32, u32> = HashMap::new();
-    let mut endnote_display_order: HashMap<u32, u32> = HashMap::new();
+    let mut footnote_display_order: HashMap<u32, String> = HashMap::new();
+    let mut endnote_display_order: HashMap<u32, String> = HashMap::new();
     {
+        // §17.11.18/.17 mark numbering format. Word reads it from the SECTION's
+        // sectPr footnotePr/endnotePr (NOT the doc-wide settings.xml bag — case74
+        // declares upperRoman/lowerLetter there yet renders the defaults 1,2,3 / i,ii).
+        // Built-in defaults: footnote decimal, endnote lowerRoman. ponytail: notes are
+        // numbered doc-wide, so we take the first section that names a format; per-section
+        // formats in multi-section docs are unexercised.
+        let fn_fmt = doc
+            .sections
+            .iter()
+            .find_map(|s| s.properties.footnote_num_fmt.as_deref())
+            .unwrap_or("decimal");
+        let en_fmt = doc
+            .sections
+            .iter()
+            .find_map(|s| s.properties.endnote_num_fmt.as_deref())
+            .unwrap_or("lowerRoman");
         let mut next_fn_num = 1u32;
         let mut next_en_num = 1u32;
         for section in &doc.sections {
@@ -2735,13 +2749,19 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 for run in runs {
                     if let Some(id) = run.footnote_id {
                         if !footnote_display_order.contains_key(&id) {
-                            footnote_display_order.insert(id, next_fn_num);
+                            footnote_display_order.insert(
+                                id,
+                                crate::docx::numbering::format_number(next_fn_num, fn_fmt),
+                            );
                             next_fn_num += 1;
                         }
                     }
                     if let Some(id) = run.endnote_id {
                         if !endnote_display_order.contains_key(&id) {
-                            endnote_display_order.insert(id, next_en_num);
+                            endnote_display_order.insert(
+                                id,
+                                crate::docx::numbering::format_number(next_en_num, en_fmt),
+                            );
                             next_en_num += 1;
                         }
                     }
