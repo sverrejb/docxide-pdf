@@ -237,6 +237,17 @@ fn parse_kern(rpr: roxmltree::Node) -> Option<f32> {
         .map(|hp| hp / 2.0)
 }
 
+/// rFonts ascii (falling back to hAnsi) typeface name. Deliberately ignores
+/// theme fonts — callers needing theme resolution use resolve_font_from_node.
+pub(super) fn rfonts_ascii_name(rpr: roxmltree::Node) -> Option<String> {
+    wml(rpr, "rFonts")
+        .and_then(|rf| {
+            rf.attribute((WML_NS, "ascii"))
+                .or_else(|| rf.attribute((WML_NS, "hAnsi")))
+        })
+        .map(|s| s.to_string())
+}
+
 // Underline state comes from the w:val attribute, not the presence of <w:u>.
 // A bare <w:u> with no val is "no underline applied" in Word (inherit), so
 // returning None lets basedOn/defaults resolve it instead of forcing it on.
@@ -454,8 +465,8 @@ pub(super) fn resolve_east_asia_font_from_node(
 
 pub(super) fn parse_line_spacing(spacing_node: roxmltree::Node, line_val: f32) -> LineSpacing {
     match spacing_node.attribute((WML_NS, "lineRule")) {
-        Some("exact") => LineSpacing::Exact(line_val / 20.0),
-        Some("atLeast") => LineSpacing::AtLeast(line_val / 20.0),
+        Some("exact") => LineSpacing::Exact(twips_to_pts(line_val)),
+        Some("atLeast") => LineSpacing::AtLeast(twips_to_pts(line_val)),
         _ => LineSpacing::Auto(line_val / 240.0),
     }
 }
@@ -818,13 +829,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                 // Parse base rPr from the table style
                 let base_rpr = wml(style_node, "rPr");
                 let base_font_size = base_rpr.and_then(parse_font_size);
-                let base_font_name = base_rpr
-                    .and_then(|rpr| wml(rpr, "rFonts"))
-                    .and_then(|rf| {
-                        rf.attribute((WML_NS, "ascii"))
-                            .or_else(|| rf.attribute((WML_NS, "hAnsi")))
-                    })
-                    .map(|s| s.to_string());
+                let base_font_name = base_rpr.and_then(rfonts_ascii_name);
                 let base_bold = base_rpr.and_then(|rpr| wml_bool(rpr, "b"));
                 let base_italic = base_rpr.and_then(|rpr| wml_bool(rpr, "i"));
 
@@ -857,13 +862,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         .and_then(|rpr| wml_attr(rpr, "color"))
                         .and_then(parse_text_color);
                     let cond_font_size = cond_rpr.and_then(|rpr| parse_font_size(rpr));
-                    let cond_font_name = cond_rpr
-                        .and_then(|rpr| wml(rpr, "rFonts"))
-                        .and_then(|rf| {
-                            rf.attribute((WML_NS, "ascii"))
-                                .or_else(|| rf.attribute((WML_NS, "hAnsi")))
-                        })
-                        .map(|s| s.to_string());
+                    let cond_font_name = cond_rpr.and_then(rfonts_ascii_name);
                     if cond_borders.is_some()
                         || cond_shading.is_some()
                         || cond_bold.is_some()

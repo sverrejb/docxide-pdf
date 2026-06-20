@@ -7,6 +7,7 @@ use crate::model::{BarGrouping, ChartType, InlineChart, LegendPosition, MarkerSy
 
 use super::chart_legend::{LegendItem, LegendPlacement, SwatchStyle, render_chart_legend};
 use super::charts_radial;
+use super::helpers::draw_circle;
 
 fn ceil_nice(val: f32) -> f32 {
     if val <= 0.0 {
@@ -234,17 +235,6 @@ pub(super) fn draw_marker(content: &mut Content, symbol: MarkerSymbol, x: f32, y
             content.fill_nonzero();
         }
     }
-}
-
-fn draw_circle(content: &mut Content, cx: f32, cy: f32, r: f32) {
-    // Approximate circle with 4 cubic Bezier curves
-    let k = r * 0.5522848;
-    content.move_to(cx + r, cy);
-    content.cubic_to(cx + r, cy + k, cx + k, cy + r, cx, cy + r);
-    content.cubic_to(cx - k, cy + r, cx - r, cy + k, cx - r, cy);
-    content.cubic_to(cx - r, cy - k, cx - k, cy - r, cx, cy - r);
-    content.cubic_to(cx + k, cy - r, cx + r, cy - k, cx + r, cy);
-    content.close_path();
 }
 
 // Pie chart colors when series data points don't have individual colors

@@ -9,13 +9,9 @@ use super::relationships::parse_part_relationships;
 use super::runs::parse_runs;
 use super::styles::{ParagraphStyle, StylesInfo, ThemeFonts, parse_alignment};
 use super::{
-    ParseContext, WML_NS, collect_block_nodes, extract_indents, parse_paragraph_spacing, wml,
-    wml_attr,
+    ParseContext, WML_NS, collect_block_nodes, extract_indents, is_wml, parse_paragraph_spacing,
+    wml, wml_attr,
 };
-
-fn is_wml_element(node: roxmltree::Node, name: &str) -> bool {
-    node.tag_name().namespace() == Some(WML_NS) && node.tag_name().name() == name
-}
 
 fn resolve_alignment(
     ppr: Option<roxmltree::Node>,
@@ -122,7 +118,7 @@ fn parse_notes_simple<R: Read + Seek>(
     };
 
     for node in root.children() {
-        if !is_wml_element(node, element_name) {
+        if !is_wml(node, element_name) {
             continue;
         }
         if node.attribute((WML_NS, "type")).is_some() {
@@ -136,7 +132,7 @@ fn parse_notes_simple<R: Read + Seek>(
         };
 
         let mut paragraphs = Vec::new();
-        for p in node.children().filter(|n| is_wml_element(*n, "p")) {
+        for p in node.children().filter(|n| is_wml(*n, "p")) {
             let ppr = wml(p, "pPr");
             let para_style_id = ppr
                 .and_then(|ppr| wml_attr(ppr, "pStyle"))
@@ -234,7 +230,7 @@ fn parse_notes_rich<R: Read + Seek>(
     let mut applied_overrides = HashSet::new();
 
     for node in root.children() {
-        if !is_wml_element(node, element_name) {
+        if !is_wml(node, element_name) {
             continue;
         }
         if node.attribute((WML_NS, "type")).is_some() {
@@ -248,7 +244,7 @@ fn parse_notes_rich<R: Read + Seek>(
         };
 
         let mut paragraphs = Vec::new();
-        for p in node.children().filter(|n| is_wml_element(*n, "p")) {
+        for p in node.children().filter(|n| is_wml(*n, "p")) {
             let mut para = super::paragraph::build_paragraph(
                 p,
                 &mut fn_ctx,

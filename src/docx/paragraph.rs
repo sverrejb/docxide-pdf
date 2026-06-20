@@ -5,7 +5,7 @@ use crate::model::{Paragraph, Run, TabAlignment, TabStop};
 use super::images::compute_drawing_info;
 use super::numbering::{ListLabelInfo, parse_list_info};
 use super::runs::parse_runs;
-use super::styles::{parse_alignment, parse_font_size};
+use super::styles::{parse_alignment, parse_font_size, rfonts_ascii_name};
 use super::textbox::collect_textboxes_from_paragraph;
 use super::{
     ParseContext, WML_NS, extract_indents, parse_frame_props, parse_hex_color,
@@ -57,13 +57,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         .and_then(|rpr| wml_bool(rpr, "vanish"))
         .unwrap_or(false);
     let paragraph_mark_font_size = ppr_rpr.and_then(parse_font_size);
-    let paragraph_mark_font_name = ppr_rpr
-        .and_then(|rpr| wml(rpr, "rFonts"))
-        .and_then(|rf| {
-            rf.attribute((WML_NS, "ascii"))
-                .or_else(|| rf.attribute((WML_NS, "hAnsi")))
-        })
-        .map(|s| s.to_string());
+    let paragraph_mark_font_name = ppr_rpr.and_then(rfonts_ascii_name);
 
     let para_style_id = ppr
         .and_then(|ppr| wml_attr(ppr, "pStyle"))

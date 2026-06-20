@@ -8,6 +8,7 @@ use crate::model::{
 };
 
 use super::color::{fill_rgb, stroke_rgb};
+use super::helpers::draw_circle;
 
 pub(crate) fn resolve_h_position(
     h_relative_from: HRelativeFrom,
@@ -357,14 +358,7 @@ fn draw_arrow_head(
             fill_rgb(content, color);
             let cx = tip_x - ux * (arrow_len * 0.5);
             let cy = tip_y - uy * (arrow_len * 0.5);
-            let r = arrow_half;
-            let k = 0.5522847498 * r;
-            content.move_to(cx + r, cy);
-            content.cubic_to(cx + r, cy + k, cx + k, cy + r, cx, cy + r);
-            content.cubic_to(cx - k, cy + r, cx - r, cy + k, cx - r, cy);
-            content.cubic_to(cx - r, cy - k, cx - k, cy - r, cx, cy - r);
-            content.cubic_to(cx + k, cy - r, cx + r, cy - k, cx + r, cy);
-            content.close_path();
+            draw_circle(content, cx, cy, arrow_half);
             content.fill_nonzero();
         }
         ArrowEnd::None => {}

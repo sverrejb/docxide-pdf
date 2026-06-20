@@ -251,6 +251,11 @@ pub(super) fn wml_attr<'a>(node: roxmltree::Node<'a, 'a>, child: &str) -> Option
     wml(node, child).and_then(|n| n.attribute((WML_NS, "val")))
 }
 
+/// True when `node` is the WordprocessingML element `name`.
+pub(super) fn is_wml(node: roxmltree::Node, name: &str) -> bool {
+    node.tag_name().name() == name && node.tag_name().namespace() == Some(WML_NS)
+}
+
 pub(super) fn twips_attr(node: roxmltree::Node, attr: &str) -> Option<f32> {
     node.attribute((WML_NS, attr))
         .and_then(|v| v.parse::<f32>().ok())
@@ -365,21 +370,15 @@ pub(super) fn parse_frame_props(ppr: roxmltree::Node) -> Option<FrameProperties>
         let x_twips: f32 = attr("x")
             .and_then(|v| v.parse().ok())
             .unwrap_or(0.0);
-        HorizontalPosition::Offset(x_twips / 20.0)
+        HorizontalPosition::Offset(twips_to_pts(x_twips))
     };
     let v_anchor = match attr("vAnchor").unwrap_or("text") {
         "margin" => VRelativeFrom::Margin,
         "page" => VRelativeFrom::Page,
         _ => VRelativeFrom::Paragraph,
     };
-    let y_pts = attr("y")
-        .and_then(|v| v.parse::<f32>().ok())
-        .unwrap_or(0.0)
-        / 20.0;
-    let width = attr("w")
-        .and_then(|v| v.parse::<f32>().ok())
-        .unwrap_or(0.0)
-        / 20.0;
+    let y_pts = twips_to_pts(attr("y").and_then(|v| v.parse::<f32>().ok()).unwrap_or(0.0));
+    let width = twips_to_pts(attr("w").and_then(|v| v.parse::<f32>().ok()).unwrap_or(0.0));
     Some(FrameProperties {
         h_relative_from: h_anchor,
         h_position,

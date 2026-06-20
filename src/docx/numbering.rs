@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
 
-use super::styles::parse_font_size;
+use super::styles::{parse_font_size, rfonts_ascii_name};
 use super::{WML_NS, parse_hex_color, twips_attr, wml, wml_attr, wml_bool};
 
 #[derive(Clone)]
@@ -84,13 +84,7 @@ fn parse_level_def(lvl: roxmltree::Node) -> Option<(u8, LevelDef)> {
             .find_map(|t| twips_attr(t, "pos"))
     });
     let rpr = wml(lvl, "rPr");
-    let rpr_font = rpr
-        .and_then(|r| wml(r, "rFonts"))
-        .and_then(|rf| {
-            rf.attribute((WML_NS, "ascii"))
-                .or_else(|| rf.attribute((WML_NS, "hAnsi")))
-        })
-        .map(|s| s.to_string());
+    let rpr_font = rpr.and_then(rfonts_ascii_name);
     let label_font_size = rpr.and_then(parse_font_size);
     let label_bold = rpr.and_then(|r| wml_bool(r, "b")).unwrap_or(false);
     let label_color = rpr
