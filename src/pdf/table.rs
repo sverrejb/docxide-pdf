@@ -638,7 +638,7 @@ fn render_nested_table(
     ctx: &RenderContext,
     gradient_specs: &mut Vec<super::GradientSpec>,
 ) {
-    let mut col_widths = auto_fit_columns(table, ctx.fonts, Some(available_w));
+    let mut col_widths = auto_fit_columns(table, ctx.fonts, Some(available_w), None);
     apply_pct_width(table, &mut col_widths, available_w);
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     let table_total_w: f32 = col_widths.iter().sum();
@@ -1195,10 +1195,15 @@ pub(super) fn render_table(
     column_bounds: Option<(f32, f32)>,
 ) {
     let available_w = column_bounds.map(|(_, w)| w);
+    // Top-level table: an AutoFit-to-Window table fills the available width
+    // (page text column or newspaper column), so feed the content width even
+    // when no column bound is set. Passed as the dedicated fill target so it
+    // only steers the window-fill path, not the nested-table shrink path.
+    let fit_w = available_w.unwrap_or(sp.page_width - sp.margin_left - sp.margin_right);
     let mut col_widths = if table.fixed_layout {
         table.col_widths.clone()
     } else {
-        auto_fit_columns(table, ctx.fonts, available_w)
+        auto_fit_columns(table, ctx.fonts, available_w, Some(fit_w))
     };
     apply_pct_width(
         table,
@@ -1572,7 +1577,7 @@ pub(super) fn render_table(
 }
 
 pub(super) fn compute_hf_table_height(table: &Table, ctx: &RenderContext, content_w: f32) -> f32 {
-    let mut col_widths = auto_fit_columns(table, ctx.fonts, None);
+    let mut col_widths = auto_fit_columns(table, ctx.fonts, None, None);
     apply_pct_width(table, &mut col_widths, content_w);
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     row_layouts.iter().map(|r| r.height).sum()
@@ -1590,7 +1595,7 @@ pub(super) fn render_header_footer_table(
     page_num_format: Option<&str>,
     gradient_specs: &mut Vec<super::GradientSpec>,
 ) {
-    let mut col_widths = auto_fit_columns(table, ctx.fonts, None);
+    let mut col_widths = auto_fit_columns(table, ctx.fonts, None, None);
     apply_pct_width(
         table,
         &mut col_widths,

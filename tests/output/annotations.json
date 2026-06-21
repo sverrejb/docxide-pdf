@@ -199,7 +199,7 @@
       "x_pt": 218.2456,
       "y_pt": 599.62244,
       "note": "First outer column is too wide",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 158,
