@@ -484,9 +484,8 @@ fn render_simple_textbox(
     gradient_specs: &mut Vec<super::GradientSpec>,
 ) {
     use crate::model::ShapeFill;
-    use super::layout::{build_paragraph_lines, render_paragraph_lines, tallest_run_metrics};
-    use super::resolve_line_h;
     use super::smartart::draw_shape_path;
+    use super::textbox_render::render_textbox_paragraphs;
 
     let tb_width = tb.width_pt;
     let tb_height = tb.height_pt;
@@ -512,41 +511,26 @@ fn render_simple_textbox(
         }
     }
 
-    // Render text paragraphs (basic, no clipping/anchoring complexity)
+    // Text: route through the shared textbox renderer (same path as body
+    // textboxes). Cell context has no link sink, so hyperlinks are discarded.
     let content_x = tb_x + tb.margin_left;
     let content_w = (tb_width - tb.margin_left - tb.margin_right).max(0.0);
-    let mut text_y = tb_y_top - tb.margin_top;
-    let empty: HashMap<usize, String> = HashMap::new();
-    let empty_fx: HashMap<usize, super::images::EffectXObjs> = HashMap::new();
-
-    for tp in &tb.paragraphs {
-        let lines = build_paragraph_lines(
-            &tp.runs, ctx.fonts, content_w, 0.0, &empty, &empty_fx, None, None, None, true,
-        );
-        let (fs, lhr, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
-        let lh = resolve_line_h(tp.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr);
-        text_y -= tp.space_before;
-        let baseline_y = text_y - fs;
-        render_paragraph_lines(
-            content,
-            &lines,
-            &tp.alignment,
-            content_x,
-            content_w,
-            baseline_y,
-            lh,
-            lines.len(),
-            0,
-            &mut Vec::new(),
-            0.0,
-            ctx.fonts,
-            None,
-            gradient_specs,
-            None,
-            None,
-        );
-        text_y -= lines.len().max(1) as f32 * lh + tp.space_after;
-    }
+    render_textbox_paragraphs(
+        &tb.paragraphs,
+        content,
+        content_x,
+        content_w,
+        content_w,
+        tb_y_top - tb.margin_top,
+        0.0,
+        0.0,
+        None,
+        true,
+        &mut Vec::new(),
+        ctx,
+        None,
+        gradient_specs,
+    );
 }
 
 /// Render a nested table inline within a parent cell at the given cursor position.
