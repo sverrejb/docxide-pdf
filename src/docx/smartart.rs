@@ -4,7 +4,7 @@ use std::io::{Read, Seek};
 use crate::model::{EmbeddedImage, SmartArtDiagram, SmartArtShape};
 
 use super::styles::ThemeFonts;
-use super::color::{parse_line_stroke, parse_solid_fill};
+use super::color::{parse_line_stroke, parse_solid_fill, resolve_dml_color};
 use super::images::{find_blip_embed, read_image_from_zip};
 use super::textbox::parse_shape_geometry;
 use super::{DML_NS, DSP_NS, dml, dsp, emu_attr, read_zip_text};
@@ -173,19 +173,12 @@ fn parse_dsp_shape<R: Read + Seek>(
 
     let tp = parse_dsp_text(sp, theme);
 
-    // Resolve default text color from dsp:style/a:fontRef
+    // Resolve default text color from dsp:style/a:fontRef. resolve_dml_color
+    // applies any tint/shade/lumMod on the schemeClr (the old inline fallback
+    // dropped them).
     let default_text_color = dsp(sp, "style")
         .and_then(|style| dml(style, "fontRef"))
-        .and_then(|fr| parse_solid_fill(fr, theme)
-            .or_else(|| {
-                fr.children()
-                    .find(|n| n.tag_name().name() == "schemeClr" && n.tag_name().namespace() == Some(DML_NS))
-                    .and_then(|sc| {
-                        let val = sc.attribute("val")?;
-                        let key = super::resolve_theme_color_key(val);
-                        theme.colors.get(key).copied()
-                    })
-            }));
+        .and_then(|fr| parse_solid_fill(fr, theme).or_else(|| resolve_dml_color(fr, theme)));
 
     let paragraphs: Vec<SmartArtPara> = tp.paragraphs.into_iter().map(|mut para| {
         for run in &mut para.runs {
