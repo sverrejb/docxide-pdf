@@ -1,6 +1,16 @@
 {
-  "next_id": 208,
+  "next_id": 209,
   "annotations": [
+    {
+      "id": 208,
+      "case": "new/irish_school_enrollment_form",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 50.0,
+      "y_pt": 750.0,
+      "note": "REMINDER: text_boundary regressed 70.5->69.6 during the 2026-06-21 dedup sweep (accepted into baselines). Cause unverified - this fixture has no textboxes/VML/charts/SmartArt, so none of the behavior-changing commits (A13/A15/C5/B1) should obviously touch it; likely pre-existing drift or nondeterminism rather than the refactor. Investigation deferred per request. Revisit.",
+      "fixed": false
+    },
     {
       "id": 8,
       "case": "scraped/east_asia_conference_form",
