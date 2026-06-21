@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use pdf_writer::{Content, Name, Str};
 
 use crate::fonts::{FontEntry, to_winansi_bytes};
-use crate::model::{BarGrouping, ChartType, InlineChart, LegendPosition, MarkerSymbol};
+use crate::model::{BarGrouping, Chart, ChartType, InlineChart, LegendPosition, MarkerSymbol};
 
 use super::chart_legend::{LegendItem, LegendPlacement, SwatchStyle, render_chart_legend};
 use super::charts_radial;
@@ -299,6 +299,296 @@ fn compute_axis_range(max_val: f32, target_ticks: usize, headroom_threshold: f32
     (ts, am)
 }
 
+struct PlotRect {
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+}
+
+/// Render a chart's data series (bars/line/area/scatter/bubble) into the plot
+/// rectangle. Pie/doughnut/radar use dedicated renderers and never reach here.
+/// Split out of render_chart, which keeps axis/gridline/legend orchestration.
+fn draw_chart_series(
+    c: &Chart,
+    content: &mut Content,
+    rect: PlotRect,
+    num_categories: usize,
+    num_series: usize,
+    axis_max: f32,
+    x_axis_max: f32,
+    is_percent_stacked: bool,
+    alpha_states: &mut HashSet<u8>,
+) {
+    let PlotRect {
+        x: plot_x,
+        y: plot_y,
+        w: plot_w,
+        h: plot_h,
+    } = rect;
+    match c.chart_type {
+        ChartType::Bar {
+            horizontal: false,
+            grouping: BarGrouping::Clustered,
+        } => {
+            let gap_ratio = c.gap_width_pct / 100.0;
+            let group_w = plot_w / num_categories as f32;
+            let bar_w = group_w / (num_series as f32 + gap_ratio);
+            let gap = gap_ratio * bar_w;
+
+            for ci in 0..num_categories {
+                let group_x = plot_x + ci as f32 * group_w + gap / 2.0;
+                for (si, series) in c.series.iter().enumerate() {
+                    let val = series.values.get(ci).copied().unwrap_or(0.0);
+                    let bar_h = (val / axis_max) * plot_h;
+                    let bx = group_x + si as f32 * bar_w;
+                    set_color(content, series.color);
+                    content.rect(bx, plot_y, bar_w, bar_h);
+                    content.fill_nonzero();
+                }
+            }
+        }
+        ChartType::Bar {
+            horizontal: false,
+            grouping: BarGrouping::Stacked | BarGrouping::PercentStacked,
+        } => {
+            let gap_ratio = c.gap_width_pct / 100.0;
+            let group_w = plot_w / num_categories as f32;
+            let bar_w = group_w / (1.0 + gap_ratio);
+            let gap = gap_ratio * bar_w;
+
+            for ci in 0..num_categories {
+                let bx = plot_x + ci as f32 * group_w + gap / 2.0;
+                let cat_total = if is_percent_stacked {
+                    c.series
+                        .iter()
+                        .map(|s| s.values.get(ci).copied().unwrap_or(0.0))
+                        .sum::<f32>()
+                } else {
+                    0.0
+                };
+                let mut cumulative_h = 0.0;
+                for series in c.series.iter() {
+                    let raw = series.values.get(ci).copied().unwrap_or(0.0);
+                    let val = if is_percent_stacked && cat_total > 0.0 {
+                        (raw / cat_total) * 100.0
+                    } else {
+                        raw
+                    };
+                    let bar_h = (val / axis_max) * plot_h;
+                    set_color(content, series.color);
+                    content.rect(bx, plot_y + cumulative_h, bar_w, bar_h);
+                    content.fill_nonzero();
+                    cumulative_h += bar_h;
+                }
+            }
+        }
+        ChartType::Bar {
+            horizontal: true,
+            grouping: BarGrouping::Clustered,
+        } => {
+            let gap_ratio = c.gap_width_pct / 100.0;
+            let group_h = plot_h / num_categories as f32;
+            let bar_h = group_h / (num_series as f32 + gap_ratio);
+            let gap = gap_ratio * bar_h;
+
+            for ci in 0..num_categories {
+                let group_y = plot_y + ci as f32 * group_h + gap / 2.0;
+                for (si, series) in c.series.iter().enumerate() {
+                    let val = series.values.get(ci).copied().unwrap_or(0.0);
+                    let bw = (val / axis_max) * plot_w;
+                    let by = group_y + si as f32 * bar_h;
+                    set_color(content, series.color);
+                    content.rect(plot_x, by, bw, bar_h);
+                    content.fill_nonzero();
+                }
+            }
+        }
+        ChartType::Bar {
+            horizontal: true,
+            grouping: BarGrouping::Stacked | BarGrouping::PercentStacked,
+        } => {
+            let gap_ratio = c.gap_width_pct / 100.0;
+            let group_h = plot_h / num_categories as f32;
+            let bar_h = group_h / (1.0 + gap_ratio);
+            let gap = gap_ratio * bar_h;
+
+            for ci in 0..num_categories {
+                let by = plot_y + ci as f32 * group_h + gap / 2.0;
+                let cat_total = if is_percent_stacked {
+                    c.series
+                        .iter()
+                        .map(|s| s.values.get(ci).copied().unwrap_or(0.0))
+                        .sum::<f32>()
+                } else {
+                    0.0
+                };
+                let mut cumulative_w = 0.0;
+                for series in c.series.iter() {
+                    let raw = series.values.get(ci).copied().unwrap_or(0.0);
+                    let val = if is_percent_stacked && cat_total > 0.0 {
+                        (raw / cat_total) * 100.0
+                    } else {
+                        raw
+                    };
+                    let bw = (val / axis_max) * plot_w;
+                    set_color(content, series.color);
+                    content.rect(plot_x + cumulative_w, by, bw, bar_h);
+                    content.fill_nonzero();
+                    cumulative_w += bw;
+                }
+            }
+        }
+        ChartType::Line => {
+            content.set_line_width(2.0);
+            let group_w = plot_w / num_categories as f32;
+            for (si, series) in c.series.iter().enumerate() {
+                set_stroke_color(content, series.color);
+                let pts: Vec<(f32, f32)> = series
+                    .values
+                    .iter()
+                    .enumerate()
+                    .map(|(ci, &val)| {
+                        (
+                            plot_x + (ci as f32 + 0.5) * group_w,
+                            plot_y + (val / axis_max) * plot_h,
+                        )
+                    })
+                    .collect();
+                if let Some(&(x0, y0)) = pts.first() {
+                    content.move_to(x0, y0);
+                    if pts.len() >= 2 {
+                        for i in 0..pts.len() - 1 {
+                            let prev = if i > 0 {
+                                pts[i - 1]
+                            } else {
+                                (2.0 * pts[0].0 - pts[1].0, 2.0 * pts[0].1 - pts[1].1)
+                            };
+                            let next = if i + 2 < pts.len() {
+                                pts[i + 2]
+                            } else {
+                                let n = pts.len() - 1;
+                                (2.0 * pts[n].0 - pts[n - 1].0, 2.0 * pts[n].1 - pts[n - 1].1)
+                            };
+                            let cp1x = pts[i].0 + (pts[i + 1].0 - prev.0) / 6.0;
+                            let cp1y = pts[i].1 + (pts[i + 1].1 - prev.1) / 6.0;
+                            let cp2x = pts[i + 1].0 - (next.0 - pts[i].0) / 6.0;
+                            let cp2y = pts[i + 1].1 - (next.1 - pts[i].1) / 6.0;
+                            content.cubic_to(cp1x, cp1y, cp2x, cp2y, pts[i + 1].0, pts[i + 1].1);
+                        }
+                    }
+                }
+                content.stroke();
+
+                set_color(content, series.color);
+                let marker_r = 3.5;
+                let sym = resolve_marker(series.marker, si);
+                for (ci, &val) in series.values.iter().enumerate() {
+                    let lx = plot_x + (ci as f32 + 0.5) * group_w;
+                    let ly = plot_y + (val / axis_max) * plot_h;
+                    draw_marker(content, sym, lx, ly, marker_r);
+                }
+            }
+        }
+        ChartType::Area => {
+            let cat_w = plot_w / (num_categories - 1).max(1) as f32;
+            for series in &c.series {
+                let pts: Vec<(f32, f32)> = series
+                    .values
+                    .iter()
+                    .enumerate()
+                    .map(|(ci, &val)| {
+                        (
+                            plot_x + ci as f32 * cat_w,
+                            plot_y + (val / axis_max) * plot_h,
+                        )
+                    })
+                    .collect();
+
+                set_color(content, series.color);
+                content.move_to(plot_x, plot_y);
+                for &(lx, ly) in &pts {
+                    content.line_to(lx, ly);
+                }
+                if let Some(&(last_x, _)) = pts.last() {
+                    content.line_to(last_x, plot_y);
+                }
+                content.close_path();
+                content.fill_nonzero();
+
+                set_stroke_color(content, series.color);
+                content.set_line_width(1.5);
+                for (i, &(lx, ly)) in pts.iter().enumerate() {
+                    if i == 0 {
+                        content.move_to(lx, ly);
+                    } else {
+                        content.line_to(lx, ly);
+                    }
+                }
+                content.stroke();
+            }
+        }
+        ChartType::Scatter => {
+            for (si, series) in c.series.iter().enumerate() {
+                set_color(content, series.color);
+                let marker_r = 4.0;
+                let sym = resolve_marker(series.marker, si);
+                if let Some(ref x_vals) = series.x_values {
+                    for (&xv, &yv) in x_vals.iter().zip(series.values.iter()) {
+                        let px = plot_x + (xv / x_axis_max) * plot_w;
+                        let py = plot_y + (yv / axis_max) * plot_h;
+                        draw_marker(content, sym, px, py, marker_r);
+                    }
+                }
+            }
+        }
+        ChartType::Bubble => {
+            let max_size = c
+                .series
+                .iter()
+                .filter_map(|s| s.bubble_sizes.as_ref())
+                .flat_map(|bs| bs.iter().copied())
+                .fold(0.0f32, f32::max);
+            let min_r = 4.0;
+            let max_r = 22.0;
+
+            for series in &c.series {
+                set_color(content, series.color);
+                if let Some(alpha) = series.fill_alpha {
+                    let pct = (alpha * 100.0).round() as u8;
+                    let gs_name = format!("GSa{pct}");
+                    content.set_parameters(Name(gs_name.as_bytes()));
+                    alpha_states.insert(pct);
+                }
+                if let Some(color) = series.color {
+                    stroke_rgb(content, color);
+                }
+                content.set_line_width(1.0);
+                if let (Some(x_vals), Some(bsizes)) = (&series.x_values, &series.bubble_sizes) {
+                    for ((&xv, &yv), &bs) in
+                        x_vals.iter().zip(series.values.iter()).zip(bsizes.iter())
+                    {
+                        let px = plot_x + (xv / x_axis_max) * plot_w;
+                        let py = plot_y + (yv / axis_max) * plot_h;
+                        let r = if max_size > 0.0 {
+                            min_r + (bs / max_size).sqrt() * (max_r - min_r)
+                        } else {
+                            min_r
+                        };
+                        draw_circle(content, px, py, r);
+                        content.fill_nonzero_and_stroke();
+                    }
+                }
+                if series.fill_alpha.is_some() {
+                    content.set_parameters(Name(b"GSa100"));
+                    alpha_states.insert(100);
+                }
+            }
+        }
+        ChartType::Pie | ChartType::Doughnut { .. } | ChartType::Radar => unreachable!(),
+    }
+}
+
 pub(super) fn render_chart(
     chart: &InlineChart,
     content: &mut Content,
@@ -575,267 +865,22 @@ pub(super) fn render_chart(
     }
 
     // Data rendering
-    match c.chart_type {
-        ChartType::Bar {
-            horizontal: false,
-            grouping: BarGrouping::Clustered,
-        } => {
-            let gap_ratio = c.gap_width_pct / 100.0;
-            let group_w = plot_w / num_categories as f32;
-            let bar_w = group_w / (num_series as f32 + gap_ratio);
-            let gap = gap_ratio * bar_w;
-
-            for ci in 0..num_categories {
-                let group_x = plot_x + ci as f32 * group_w + gap / 2.0;
-                for (si, series) in c.series.iter().enumerate() {
-                    let val = series.values.get(ci).copied().unwrap_or(0.0);
-                    let bar_h = (val / axis_max) * plot_h;
-                    let bx = group_x + si as f32 * bar_w;
-                    set_color(content, series.color);
-                    content.rect(bx, plot_y, bar_w, bar_h);
-                    content.fill_nonzero();
-                }
-            }
-        }
-        ChartType::Bar {
-            horizontal: false,
-            grouping: BarGrouping::Stacked | BarGrouping::PercentStacked,
-        } => {
-            let gap_ratio = c.gap_width_pct / 100.0;
-            let group_w = plot_w / num_categories as f32;
-            let bar_w = group_w / (1.0 + gap_ratio);
-            let gap = gap_ratio * bar_w;
-
-            for ci in 0..num_categories {
-                let bx = plot_x + ci as f32 * group_w + gap / 2.0;
-                let cat_total = if is_percent_stacked {
-                    c.series
-                        .iter()
-                        .map(|s| s.values.get(ci).copied().unwrap_or(0.0))
-                        .sum::<f32>()
-                } else {
-                    0.0
-                };
-                let mut cumulative_h = 0.0;
-                for series in c.series.iter() {
-                    let raw = series.values.get(ci).copied().unwrap_or(0.0);
-                    let val = if is_percent_stacked && cat_total > 0.0 {
-                        (raw / cat_total) * 100.0
-                    } else {
-                        raw
-                    };
-                    let bar_h = (val / axis_max) * plot_h;
-                    set_color(content, series.color);
-                    content.rect(bx, plot_y + cumulative_h, bar_w, bar_h);
-                    content.fill_nonzero();
-                    cumulative_h += bar_h;
-                }
-            }
-        }
-        ChartType::Bar {
-            horizontal: true,
-            grouping: BarGrouping::Clustered,
-        } => {
-            let gap_ratio = c.gap_width_pct / 100.0;
-            let group_h = plot_h / num_categories as f32;
-            let bar_h = group_h / (num_series as f32 + gap_ratio);
-            let gap = gap_ratio * bar_h;
-
-            for ci in 0..num_categories {
-                let group_y = plot_y + ci as f32 * group_h + gap / 2.0;
-                for (si, series) in c.series.iter().enumerate() {
-                    let val = series.values.get(ci).copied().unwrap_or(0.0);
-                    let bw = (val / axis_max) * plot_w;
-                    let by = group_y + si as f32 * bar_h;
-                    set_color(content, series.color);
-                    content.rect(plot_x, by, bw, bar_h);
-                    content.fill_nonzero();
-                }
-            }
-        }
-        ChartType::Bar {
-            horizontal: true,
-            grouping: BarGrouping::Stacked | BarGrouping::PercentStacked,
-        } => {
-            let gap_ratio = c.gap_width_pct / 100.0;
-            let group_h = plot_h / num_categories as f32;
-            let bar_h = group_h / (1.0 + gap_ratio);
-            let gap = gap_ratio * bar_h;
-
-            for ci in 0..num_categories {
-                let by = plot_y + ci as f32 * group_h + gap / 2.0;
-                let cat_total = if is_percent_stacked {
-                    c.series
-                        .iter()
-                        .map(|s| s.values.get(ci).copied().unwrap_or(0.0))
-                        .sum::<f32>()
-                } else {
-                    0.0
-                };
-                let mut cumulative_w = 0.0;
-                for series in c.series.iter() {
-                    let raw = series.values.get(ci).copied().unwrap_or(0.0);
-                    let val = if is_percent_stacked && cat_total > 0.0 {
-                        (raw / cat_total) * 100.0
-                    } else {
-                        raw
-                    };
-                    let bw = (val / axis_max) * plot_w;
-                    set_color(content, series.color);
-                    content.rect(plot_x + cumulative_w, by, bw, bar_h);
-                    content.fill_nonzero();
-                    cumulative_w += bw;
-                }
-            }
-        }
-        ChartType::Line => {
-            content.set_line_width(2.0);
-            let group_w = plot_w / num_categories as f32;
-            for (si, series) in c.series.iter().enumerate() {
-                set_stroke_color(content, series.color);
-                let pts: Vec<(f32, f32)> = series
-                    .values
-                    .iter()
-                    .enumerate()
-                    .map(|(ci, &val)| {
-                        (
-                            plot_x + (ci as f32 + 0.5) * group_w,
-                            plot_y + (val / axis_max) * plot_h,
-                        )
-                    })
-                    .collect();
-                if let Some(&(x0, y0)) = pts.first() {
-                    content.move_to(x0, y0);
-                    if pts.len() >= 2 {
-                        for i in 0..pts.len() - 1 {
-                            let prev = if i > 0 {
-                                pts[i - 1]
-                            } else {
-                                (2.0 * pts[0].0 - pts[1].0, 2.0 * pts[0].1 - pts[1].1)
-                            };
-                            let next = if i + 2 < pts.len() {
-                                pts[i + 2]
-                            } else {
-                                let n = pts.len() - 1;
-                                (2.0 * pts[n].0 - pts[n - 1].0, 2.0 * pts[n].1 - pts[n - 1].1)
-                            };
-                            let cp1x = pts[i].0 + (pts[i + 1].0 - prev.0) / 6.0;
-                            let cp1y = pts[i].1 + (pts[i + 1].1 - prev.1) / 6.0;
-                            let cp2x = pts[i + 1].0 - (next.0 - pts[i].0) / 6.0;
-                            let cp2y = pts[i + 1].1 - (next.1 - pts[i].1) / 6.0;
-                            content.cubic_to(cp1x, cp1y, cp2x, cp2y, pts[i + 1].0, pts[i + 1].1);
-                        }
-                    }
-                }
-                content.stroke();
-
-                set_color(content, series.color);
-                let marker_r = 3.5;
-                let sym = resolve_marker(series.marker, si);
-                for (ci, &val) in series.values.iter().enumerate() {
-                    let lx = plot_x + (ci as f32 + 0.5) * group_w;
-                    let ly = plot_y + (val / axis_max) * plot_h;
-                    draw_marker(content, sym, lx, ly, marker_r);
-                }
-            }
-        }
-        ChartType::Area => {
-            let cat_w = plot_w / (num_categories - 1).max(1) as f32;
-            for series in &c.series {
-                let pts: Vec<(f32, f32)> = series
-                    .values
-                    .iter()
-                    .enumerate()
-                    .map(|(ci, &val)| {
-                        (
-                            plot_x + ci as f32 * cat_w,
-                            plot_y + (val / axis_max) * plot_h,
-                        )
-                    })
-                    .collect();
-
-                set_color(content, series.color);
-                content.move_to(plot_x, plot_y);
-                for &(lx, ly) in &pts {
-                    content.line_to(lx, ly);
-                }
-                if let Some(&(last_x, _)) = pts.last() {
-                    content.line_to(last_x, plot_y);
-                }
-                content.close_path();
-                content.fill_nonzero();
-
-                set_stroke_color(content, series.color);
-                content.set_line_width(1.5);
-                for (i, &(lx, ly)) in pts.iter().enumerate() {
-                    if i == 0 {
-                        content.move_to(lx, ly);
-                    } else {
-                        content.line_to(lx, ly);
-                    }
-                }
-                content.stroke();
-            }
-        }
-        ChartType::Scatter => {
-            for (si, series) in c.series.iter().enumerate() {
-                set_color(content, series.color);
-                let marker_r = 4.0;
-                let sym = resolve_marker(series.marker, si);
-                if let Some(ref x_vals) = series.x_values {
-                    for (&xv, &yv) in x_vals.iter().zip(series.values.iter()) {
-                        let px = plot_x + (xv / x_axis_max) * plot_w;
-                        let py = plot_y + (yv / axis_max) * plot_h;
-                        draw_marker(content, sym, px, py, marker_r);
-                    }
-                }
-            }
-        }
-        ChartType::Bubble => {
-            let max_size = c
-                .series
-                .iter()
-                .filter_map(|s| s.bubble_sizes.as_ref())
-                .flat_map(|bs| bs.iter().copied())
-                .fold(0.0f32, f32::max);
-            let min_r = 4.0;
-            let max_r = 22.0;
-
-            for series in &c.series {
-                set_color(content, series.color);
-                if let Some(alpha) = series.fill_alpha {
-                    let pct = (alpha * 100.0).round() as u8;
-                    let gs_name = format!("GSa{pct}");
-                    content.set_parameters(Name(gs_name.as_bytes()));
-                    alpha_states.insert(pct);
-                }
-                if let Some(color) = series.color {
-                    stroke_rgb(content, color);
-                }
-                content.set_line_width(1.0);
-                if let (Some(x_vals), Some(bsizes)) = (&series.x_values, &series.bubble_sizes) {
-                    for ((&xv, &yv), &bs) in
-                        x_vals.iter().zip(series.values.iter()).zip(bsizes.iter())
-                    {
-                        let px = plot_x + (xv / x_axis_max) * plot_w;
-                        let py = plot_y + (yv / axis_max) * plot_h;
-                        let r = if max_size > 0.0 {
-                            min_r + (bs / max_size).sqrt() * (max_r - min_r)
-                        } else {
-                            min_r
-                        };
-                        draw_circle(content, px, py, r);
-                        content.fill_nonzero_and_stroke();
-                    }
-                }
-                if series.fill_alpha.is_some() {
-                    content.set_parameters(Name(b"GSa100"));
-                    alpha_states.insert(100);
-                }
-            }
-        }
-        ChartType::Pie | ChartType::Doughnut { .. } | ChartType::Radar => unreachable!(),
-    }
+    draw_chart_series(
+        c,
+        content,
+        PlotRect {
+            x: plot_x,
+            y: plot_y,
+            w: plot_w,
+            h: plot_h,
+        },
+        num_categories,
+        num_series,
+        axis_max,
+        x_axis_max,
+        is_percent_stacked,
+        alpha_states,
+    );
 
     // Plot area border
     content.set_line_width(0.75);
