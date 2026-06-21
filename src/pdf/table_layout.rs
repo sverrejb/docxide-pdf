@@ -403,6 +403,10 @@ pub(super) struct CellFloatingImageLayout {
     pub(super) display_height: f32,
     pub(super) h_offset: f32,
     pub(super) v_offset: f32,
+    /// In-plane rotation in degrees (OOXML clockwise). Cell-anchored floats must
+    /// carry this just like body floats, else e.g. a 90°-rotated vertical label
+    /// renders horizontally.
+    pub(super) rotation_deg: f32,
     #[allow(dead_code)]
     pub(super) behind_doc: bool,
 }
@@ -730,6 +734,7 @@ pub(super) fn compute_row_layouts(
                                             display_height: fi.image.display_height,
                                             h_offset,
                                             v_offset,
+                                            rotation_deg: fi.rotation_deg,
                                             behind_doc: fi.behind_doc,
                                         })
                                     })

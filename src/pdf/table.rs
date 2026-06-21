@@ -340,6 +340,10 @@ fn render_cell_content(
                     let fi_y_top = cursor_y - fi.v_offset;
                     let fi_y_bottom = fi_y_top - fi.display_height;
                     content.save_state();
+                    push_center_rotation(
+                        content, fi_x, fi_y_bottom, fi.display_width, fi.display_height,
+                        fi.rotation_deg,
+                    );
                     content.transform([
                         fi.display_width,
                         0.0,
@@ -435,6 +439,24 @@ fn render_cell_content(
             }
         }
     }
+}
+
+/// Emit a CTM rotation about the center of a placed image box, matching the
+/// body float path (OOXML clockwise → negated for PDF's CCW). Must be pushed
+/// before the box's scale/translate transform so the box rotates about its center.
+fn push_center_rotation(content: &mut Content, x: f32, y_bottom: f32, w: f32, h: f32, deg: f32) {
+    if deg.abs() <= 0.01 {
+        return;
+    }
+    let cx = x + w / 2.0;
+    let cy = y_bottom + h / 2.0;
+    let rad = -deg.to_radians();
+    let (sin, cos) = rad.sin_cos();
+    content.transform([
+        cos, sin, -sin, cos,
+        cx - cos * cx + sin * cy,
+        cy - sin * cx - cos * cy,
+    ]);
 }
 
 /// Render floating textboxes and connectors anchored to a cell paragraph.
@@ -721,6 +743,10 @@ fn render_partial_cell_content(
                     let fi_y_top = cursor_y - fi.v_offset;
                     let fi_y_bottom = fi_y_top - fi.display_height;
                     content.save_state();
+                    push_center_rotation(
+                        content, fi_x, fi_y_bottom, fi.display_width, fi.display_height,
+                        fi.rotation_deg,
+                    );
                     content.transform([
                         fi.display_width,
                         0.0,

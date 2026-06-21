@@ -189,7 +189,7 @@
       "x_pt": 39.21885,
       "y_pt": 375.34235,
       "note": "\"70 .. \" text should be rotated 90 degs, and also the arrow is placed wrong.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 176,

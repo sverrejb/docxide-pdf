@@ -249,3 +249,38 @@ took the style matrix lnRef FIRST, falling back to the explicit a:ln only second
 precedence (and from the non-connector path at line 432 which does explicit-ln-first). The 50cm arrow
 has a:ln/solidFill=tx1 (black) but wps:style/lnRef=accent1 (blue); Word draws black. FIX: swap so the
 explicit a:ln solidFill wins over the lnRef style ref.
+
+## 2026-06-22 — SELECTED annotation #18 / id 168 (new/japanese_land_development_sign_form p0)
+Note: '"70 .. " text should be rotated 90 degs, and also the arrow is placed wrong.'
+Skipped #0-#16 (systemic vertical text-spacing / pagination / line-length / word-wrap / vague = the
+exception, or already fixed). Skipped #17/id167 ("arrows should be touching the grey line/table"):
+analysis below shows that one IS the vertical-shift exception. #18's PRIMARY complaint (rotate the
+"70cm" label 90°) is a discrete rendering bug → in scope.
+
+### 2026-06-22 — #18 FIXED (cell-anchored floating image rotation). Committed.
+The whole form is ONE big w:tbl; every arrow/brace/textbox/image is a float anchored to a paragraph
+inside a table cell. The "70センチメートル以上" label is NOT text — it is image1.png, a 116.8×18pt PNG
+carrying a 90° turn via `pic:spPr/a:scene3d/a:camera/a:rot @rev="5400000"`. parse_image_rotation()
+already reads that rev into FloatingImage.rotation_deg, and the BODY float path (positioning.rs)
+rotates about the box center — but the CELL float path dropped it: CellFloatingImageLayout had no
+rotation field, so the label rendered horizontal.
+FIX (3 spots): add `rotation_deg` to CellFloatingImageLayout (table_layout.rs), populate from
+fi.rotation_deg, and apply it at BOTH cell-float render sites (table.rs) via a new push_center_rotation()
+helper mirroring positioning.rs's center-rotation CTM. Surgical: the helper no-ops unless
+deg.abs()>0.01, so unrotated cell floats are byte-identical.
+VERIFIED: fresh CLI render — the label is now vertical, matching reference orientation. Tests: 149
+passed, 208 scored, 0 regressions; the ONLY change attributable to this fix is the japanese
+visual-hash change (case51 TxtBnd+17.3/SSIM+5.2 and isla SSIM+2.3 are pre-existing unaccepted
+baselines, not mine). japanese SCORE is flat (jac 0.101→0.1005, ssim 0.3027→0.3025) — the page is
+dominated by the vertical-shift exception below, which swamps a tiny 18pt-wide label; the fix is a
+verified rendering-correctness win regardless.
+
+RESIDUAL (the vertical-shift EXCEPTION, NOT fixed — covers #17/id167 + #18's "arrow placed wrong"):
+the rotated label and all three connector arrows (90/70/50cm) render with correct length, arrowheads,
+and black color (color was fixed earlier in textbox.rs) but land at wrong VERTICAL positions because
+their anchor paragraphs sit in cells whose row heights differ from Word (90cm arrow ≈correct;
+70cm float ~160pt too low; 50cm arrow ~30pt too low). That is table-internal vertical layout drift =
+the systemic vertical-shift exception → deferred. Did NOT mark #17/id167 fixed.
+LEARNING: rotation was already parsed AND rendered for body floats; the bug was the cell-float layout
+struct silently dropping it. When a feature "works" for body content but not in tables, check the
+parallel cell-layout/render path — they don't share the same struct.
