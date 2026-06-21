@@ -16,8 +16,57 @@ use super::styles::{
 use super::{
     DML_NS, MC_NS_TOP, ParseContext, VML_NS, WML_NS, WPD_NS, WPS_NS,
     dml as find_dml, dml_children as find_dml_all, wps as find_wps,
-    emu_attr,
+    emu_attr, parse_pt,
 };
+
+struct VmlBoxStyle {
+    width: f32,
+    height: f32,
+    margin_left: f32,
+    margin_top: f32,
+    h_relative: HRelativeFrom,
+    v_relative: VRelativeFrom,
+}
+
+/// Parse a VML shape `style` attribute (semicolon-separated `key:val`) into box
+/// geometry: dimensions/margins in points and the position-relative anchors.
+fn parse_vml_box_style(style_str: &str) -> VmlBoxStyle {
+    let mut s = VmlBoxStyle {
+        width: 0.0,
+        height: 0.0,
+        margin_left: 0.0,
+        margin_top: 0.0,
+        h_relative: HRelativeFrom::Column,
+        v_relative: VRelativeFrom::Paragraph,
+    };
+    for part in style_str.split(';') {
+        if let Some((key, val)) = part.trim().split_once(':') {
+            let val = val.trim();
+            match key.trim() {
+                "width" => s.width = parse_pt(val).unwrap_or(0.0),
+                "height" => s.height = parse_pt(val).unwrap_or(0.0),
+                "margin-left" => s.margin_left = parse_pt(val).unwrap_or(0.0),
+                "margin-top" => s.margin_top = parse_pt(val).unwrap_or(0.0),
+                "mso-position-horizontal-relative" => {
+                    s.h_relative = match val {
+                        "page" => HRelativeFrom::Page,
+                        "margin" => HRelativeFrom::Margin,
+                        _ => HRelativeFrom::Column,
+                    };
+                }
+                "mso-position-vertical-relative" => {
+                    s.v_relative = match val {
+                        "page" => VRelativeFrom::Page,
+                        "margin" => VRelativeFrom::Margin,
+                        _ => VRelativeFrom::Paragraph,
+                    };
+                }
+                _ => {}
+            }
+        }
+    }
+    s
+}
 
 fn collect_dml_points(parent: roxmltree::Node) -> Vec<(String, String)> {
     find_dml_all(parent, "pt")
@@ -681,10 +730,9 @@ fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
     if !stroked {
         return None;
     }
-    let parse_pt = |s: &str| -> f32 { s.trim_end_matches("pt").parse::<f32>().unwrap_or(0.0) };
     let stroke_width = shape
         .attribute("strokeweight")
-        .map(parse_pt)
+        .and_then(parse_pt)
         .filter(|w| *w > 0.0)
         .unwrap_or(0.75);
     let stroke_color = shape
@@ -693,38 +741,14 @@ fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
         .unwrap_or([0, 0, 0]);
 
     let style_str = shape.attribute("style").unwrap_or("");
-    let mut width = 0.0_f32;
-    let mut height = 0.0_f32;
-    let mut margin_left = 0.0_f32;
-    let mut margin_top = 0.0_f32;
-    let mut h_relative = HRelativeFrom::Column;
-    let mut v_relative = VRelativeFrom::Paragraph;
-    for part in style_str.split(';') {
-        if let Some((key, val)) = part.trim().split_once(':') {
-            let val = val.trim();
-            match key.trim() {
-                "width" => width = parse_pt(val),
-                "height" => height = parse_pt(val),
-                "margin-left" => margin_left = parse_pt(val),
-                "margin-top" => margin_top = parse_pt(val),
-                "mso-position-horizontal-relative" => {
-                    h_relative = match val {
-                        "page" => HRelativeFrom::Page,
-                        "margin" => HRelativeFrom::Margin,
-                        _ => HRelativeFrom::Column,
-                    };
-                }
-                "mso-position-vertical-relative" => {
-                    v_relative = match val {
-                        "page" => VRelativeFrom::Page,
-                        "margin" => VRelativeFrom::Margin,
-                        _ => VRelativeFrom::Paragraph,
-                    };
-                }
-                _ => {}
-            }
-        }
-    }
+    let VmlBoxStyle {
+        width,
+        height,
+        margin_left,
+        margin_top,
+        h_relative,
+        v_relative,
+    } = parse_vml_box_style(style_str);
     if width <= 0.0 || height <= 0.0 {
         return None;
     }
@@ -792,14 +816,14 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
     })?;
 
     let style_str = shape.attribute("style").unwrap_or("");
-    let mut width = 0.0_f32;
-    let mut height = 0.0_f32;
-    let mut margin_left = 0.0_f32;
-    let mut margin_top = 0.0_f32;
-    let mut h_relative = HRelativeFrom::Column;
-    let mut v_relative = VRelativeFrom::Paragraph;
-
-    let parse_pt = |s: &str| -> f32 { s.trim_end_matches("pt").parse::<f32>().unwrap_or(0.0) };
+    let VmlBoxStyle {
+        width,
+        height,
+        margin_left,
+        margin_top,
+        h_relative,
+        v_relative,
+    } = parse_vml_box_style(style_str);
 
     // VML shapes are stroked by default (black, 0.75pt) unless stroked="f".
     // Word renders this border, so honor it — previously every VML textbox was
@@ -808,7 +832,7 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
     let (stroke_color, stroke_width) = if stroked {
         let w = shape
             .attribute("strokeweight")
-            .map(parse_pt)
+            .and_then(parse_pt)
             .filter(|w| *w > 0.0)
             .unwrap_or(0.75);
         let c = shape
@@ -819,33 +843,6 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
     } else {
         (None, 0.0)
     };
-
-    for part in style_str.split(';') {
-        if let Some((key, val)) = part.trim().split_once(':') {
-            let val = val.trim();
-            match key.trim() {
-                "width" => width = parse_pt(val),
-                "height" => height = parse_pt(val),
-                "margin-left" => margin_left = parse_pt(val),
-                "margin-top" => margin_top = parse_pt(val),
-                "mso-position-horizontal-relative" => {
-                    h_relative = match val {
-                        "page" => HRelativeFrom::Page,
-                        "margin" => HRelativeFrom::Margin,
-                        _ => HRelativeFrom::Column,
-                    };
-                }
-                "mso-position-vertical-relative" => {
-                    v_relative = match val {
-                        "page" => VRelativeFrom::Page,
-                        "margin" => VRelativeFrom::Margin,
-                        _ => VRelativeFrom::Paragraph,
-                    };
-                }
-                _ => {}
-            }
-        }
-    }
 
     let paragraphs =
         parse_txbx_content_paragraphs(txbx_content, ctx);

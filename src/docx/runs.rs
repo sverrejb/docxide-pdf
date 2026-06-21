@@ -15,7 +15,7 @@ use super::styles::{
 use super::textbox::parse_textbox_from_vml;
 use super::wordart::{parse_text_fill, parse_text_glow, parse_text_outline, parse_text_shadow};
 use super::{
-    MC_NS_TOP, ParseContext, REL_NS, VML_NS, WML_NS, highlight_color, parse_hex_color,
+    MC_NS_TOP, ParseContext, REL_NS, VML_NS, WML_NS, highlight_color, parse_hex_color, parse_pt,
     parse_one_border, parse_run_shd, parse_text_color, wml, wml_attr, wml_bool,
 };
 
@@ -1333,7 +1333,7 @@ fn parse_vml_horizontal_rule(pict_node: roxmltree::Node) -> Option<HorizontalRul
     for part in style_str.split(';') {
         if let Some((key, val)) = part.trim().split_once(':') {
             if key.trim() == "height" {
-                height_pt = val.trim().trim_end_matches("pt").parse().unwrap_or(1.5);
+                height_pt = parse_pt(val).unwrap_or(1.5);
             }
         }
     }

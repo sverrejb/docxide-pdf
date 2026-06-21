@@ -11,7 +11,7 @@ use crate::model::{
 use super::charts::parse_chart_from_zip;
 use super::smartart::{has_diagram_ref, parse_smartart_drawing};
 use super::textbox::{parse_connector_from_wsp, parse_textbox_from_wsp};
-use super::{DML_NS, ParseContext, REL_NS, WML_NS, WPD_NS, dml, emu_attr, emu_to_pts, parse_hex_color, parse_on_off, twips_attr, wml, wpd};
+use super::{DML_NS, ParseContext, REL_NS, WML_NS, WPD_NS, dml, emu_attr, emu_to_pts, parse_hex_color, parse_on_off, parse_pt, twips_attr, wml, wpd};
 
 const CHART_URI: &str = "http://schemas.openxmlformats.org/drawingml/2006/chart";
 const PIC_NS: &str = "http://schemas.openxmlformats.org/drawingml/2006/picture";
@@ -792,8 +792,7 @@ fn object_dimensions(obj: roxmltree::Node) -> Option<(f32, f32)> {
             for part in style.split(';') {
                 if let Some((key, val)) = part.trim().split_once(':') {
                     let key = key.trim();
-                    let val = val.trim().trim_end_matches("pt");
-                    if let Ok(v) = val.parse::<f32>() {
+                    if let Some(v) = parse_pt(val) {
                         match key {
                             "width" => w_pt = Some(v),
                             "height" => h_pt = Some(v),

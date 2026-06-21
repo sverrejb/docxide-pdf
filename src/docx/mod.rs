@@ -70,6 +70,12 @@ pub(super) fn parse_on_off(v: &str) -> bool {
     matches!(v, "1" | "true" | "on")
 }
 
+/// Parse a VML/CSS length like "12.5pt" — the "pt" suffix and surrounding
+/// whitespace are optional.
+pub(super) fn parse_pt(s: &str) -> Option<f32> {
+    s.trim().trim_end_matches("pt").trim().parse::<f32>().ok()
+}
+
 /// Find a child element by name and namespace.
 pub(super) fn find_child<'a>(
     node: roxmltree::Node<'a, 'a>,

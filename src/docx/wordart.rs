@@ -7,7 +7,8 @@ use super::color::{apply_color_transforms, parse_color_transforms, resolve_dml_c
 use super::styles::{StylesInfo, ThemeFonts};
 use super::textbox::parse_avlst;
 use super::{
-    W14_NS, dml as find_dml, find_child, parse_hex_color, parse_on_off, resolve_theme_color_key,
+    W14_NS, dml as find_dml, find_child, parse_hex_color, parse_on_off, parse_pt,
+    resolve_theme_color_key,
 };
 
 fn find_w14<'a>(
@@ -297,7 +298,7 @@ fn parse_vml_font_style(style: &str) -> (Option<String>, Option<f32>) {
             match key.trim() {
                 "font-family" => font_name = Some(val.to_string()),
                 "font-size" => {
-                    font_size = val.trim_end_matches("pt").trim().parse::<f32>().ok();
+                    font_size = parse_pt(val);
                 }
                 _ => {}
             }
@@ -310,14 +311,11 @@ fn parse_vml_font_style(style: &str) -> (Option<String>, Option<f32>) {
 fn parse_vml_dimensions(style: &str) -> (f32, f32) {
     let mut width = 0.0_f32;
     let mut height = 0.0_f32;
-    let parse_pt =
-        |s: &str| -> f32 { s.trim_end_matches("pt").trim().parse::<f32>().unwrap_or(0.0) };
-
     for part in style.split(';') {
         if let Some((key, val)) = part.trim().split_once(':') {
             match key.trim() {
-                "width" => width = parse_pt(val.trim()),
-                "height" => height = parse_pt(val.trim()),
+                "width" => width = parse_pt(val.trim()).unwrap_or(0.0),
+                "height" => height = parse_pt(val.trim()).unwrap_or(0.0),
                 _ => {}
             }
         }
