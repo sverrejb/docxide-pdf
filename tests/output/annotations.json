@@ -219,7 +219,7 @@
       "x_pt": 148.81929,
       "y_pt": 716.53296,
       "note": "Emblem rendered wrong here. Overflows bounding box, wrong aspect ratio.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 185,

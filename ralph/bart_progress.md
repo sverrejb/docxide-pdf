@@ -382,3 +382,23 @@ deltas are PRE-EXISTING unaccepted baselines from earlier sessions, not this cha
 LEARNING: `<w:object>` OLE embeddings aren't always inline — Word uses them for absolutely-positioned
 logos via the VML fallback shape's `position:absolute` style. Same body-vs-special-path divergence
 theme as #18/#176.
+
+## 2026-06-22 — SELECTED annotation #182 (new/carbon_farming_initiative_rule p0)
+Note: "Emblem rendered wrong here. Overflows bounding box, wrong aspect ratio." (x≈148.8, y≈716.5).
+Skipped #208/#8/#59/#66/#82/#93/#118/#121/#124/#133 (systemic vertical/pagination/line-length/framed =
+the exception), #111 (deferred image-wrap), #114/#152 (line-length wrap), #158/#167 (font/vertical-shift).
+#182 = discrete image (WMF emblem) rendering bug → in scope. The #192 session noted #182 looked already
+correct (stale) — re-rendered to verify.
+
+### 2026-06-22 — #182 RESOLVED (verified, prior multi-DIB WMF work fixed it). Marked fixed=true. Staged.
+The emblem is the Commonwealth Coat of Arms embedded as `word/media/image1.wmf` — a multi-band metafile
+(three stacked monochrome DIB bands) inline at extent 1419225×1104900 EMU (111.75×87pt). Fresh CLI render
+(target_dbg) of carbon page 1 vs reference.pdf, 150dpi + top-region crops + tight ink-bbox measure:
+- GEN emblem bbox 711×495px, aspect 1.436, ink 25570px.
+- REF emblem bbox 711×495px, aspect 1.436, ink 25598px (Δ0.1%).
+Byte-for-byte the same size, aspect, and position — kangaroo/emu/shield/AUSTRALIA banner all correct, no
+overflow. The annotation no longer reproduces. Root cause was the old single-DIB path stretching only the
+first band to fill the box (wrong aspect/overflow); `wmf.rs::composite_blits` now composites all DIB bands
+onto one canvas at their destination rectangles, preserving the true aspect. No code change needed for #182.
+Tests: 149 passed, 0 regressions. LEARNING (confirms pattern): re-render before trusting — #182 was already
+resolved by the multi-DIB WMF compositing work; its fixed flag was simply never set.
