@@ -550,28 +550,20 @@ fn render_simple_textbox(
 }
 
 /// Render a nested table inline within a parent cell at the given cursor position.
-fn render_nested_table(
+/// Render every row of `table` — cell backgrounds and content, then borders —
+/// advancing `cursor_y`. Shared by nested and header/footer table rendering.
+fn render_table_rows(
     table: &Table,
+    row_layouts: &[RowLayout],
+    col_widths: &[f32],
+    table_left: f32,
+    merge_spans: &HashMap<(usize, usize), f32>,
     content: &mut Content,
-    available_x: f32,
-    available_w: f32,
     cursor_y: &mut f32,
     ctx: &RenderContext,
     gradient_specs: &mut Vec<super::GradientSpec>,
 ) {
-    let mut col_widths = auto_fit_columns(table, ctx.fonts, Some(available_w));
-    apply_pct_width(table, &mut col_widths, available_w);
-    let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     let cm = &table.cell_margins;
-    let table_total_w: f32 = col_widths.iter().sum();
-    let table_left = match table.alignment {
-        TableAlignment::Center => available_x + (available_w - table_total_w) / 2.0,
-        TableAlignment::Right => available_x + available_w - table_total_w,
-        TableAlignment::Left => available_x + table.table_indent,
-    };
-
-    let merge_spans = compute_merge_spans(table, &row_layouts);
-
     for (ri, (row, layout)) in table.rows.iter().zip(row_layouts.iter()).enumerate() {
         let row_h = layout.height;
         let row_top = *cursor_y;
@@ -580,8 +572,8 @@ fn render_nested_table(
         let mut grid_col = 0usize;
         for (cell, cell_layout) in row.cells.iter().zip(layout.cells.iter()) {
             let span = cell.grid_span.max(1) as usize;
-            let col_w = cell_span_width(&col_widths, grid_col, span);
-            let cx = cell_x_offset(&col_widths, table_left, grid_col);
+            let col_w = cell_span_width(col_widths, grid_col, span);
+            let cx = cell_x_offset(col_widths, table_left, grid_col);
             let cell_grid_col = grid_col;
             grid_col += span;
 
@@ -622,8 +614,8 @@ fn render_nested_table(
         let mut grid_col = 0usize;
         for cell in &row.cells {
             let span = cell.grid_span.max(1) as usize;
-            let col_w = cell_span_width(&col_widths, grid_col, span);
-            let bx = cell_x_offset(&col_widths, table_left, grid_col);
+            let col_w = cell_span_width(col_widths, grid_col, span);
+            let bx = cell_x_offset(col_widths, table_left, grid_col);
             let cell_grid_col = grid_col;
             grid_col += span;
 
@@ -651,6 +643,40 @@ fn render_nested_table(
 
         *cursor_y = row_bottom;
     }
+}
+
+fn render_nested_table(
+    table: &Table,
+    content: &mut Content,
+    available_x: f32,
+    available_w: f32,
+    cursor_y: &mut f32,
+    ctx: &RenderContext,
+    gradient_specs: &mut Vec<super::GradientSpec>,
+) {
+    let mut col_widths = auto_fit_columns(table, ctx.fonts, Some(available_w));
+    apply_pct_width(table, &mut col_widths, available_w);
+    let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
+    let table_total_w: f32 = col_widths.iter().sum();
+    let table_left = match table.alignment {
+        TableAlignment::Center => available_x + (available_w - table_total_w) / 2.0,
+        TableAlignment::Right => available_x + available_w - table_total_w,
+        TableAlignment::Left => available_x + table.table_indent,
+    };
+
+    let merge_spans = compute_merge_spans(table, &row_layouts);
+
+    render_table_rows(
+        table,
+        &row_layouts,
+        &col_widths,
+        table_left,
+        &merge_spans,
+        content,
+        cursor_y,
+        ctx,
+        gradient_specs,
+    );
 }
 
 fn render_partial_cell_content(
@@ -1607,83 +1633,15 @@ pub(super) fn render_header_footer_table(
 
     let merge_spans = compute_merge_spans(table, &row_layouts);
 
-    for (ri, (row, layout)) in table.rows.iter().zip(row_layouts.iter()).enumerate() {
-        let row_h = layout.height;
-        let row_top = *cursor_y;
-        let row_bottom = row_top - row_h;
-
-        let mut grid_col = 0usize;
-        for (cell, cell_layout) in row.cells.iter().zip(layout.cells.iter()) {
-            let span = cell.grid_span.max(1) as usize;
-            let col_w = cell_span_width(&col_widths, grid_col, span);
-            let cell_x = cell_x_offset(&col_widths, table_left, grid_col);
-            let cell_grid_col = grid_col;
-            grid_col += span;
-
-            if cell.v_merge == VMerge::Continue {
-                continue;
-            }
-
-            let merge_extra = merge_spans
-                .get(&(ri, cell_grid_col))
-                .copied()
-                .unwrap_or(0.0);
-            let effective_h = row_h + merge_extra;
-
-            paint_cell_background(content, cell.shading, cell.hatch, cell_x, row_bottom, col_w, row_h);
-
-            if cell_has_visible_content(&cell_layout.items) {
-                let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
-                let content_h = cell_content_h_for_valign(&cell_layout.items);
-
-                let avail = effective_h - ecm.top - ecm.bottom;
-                let v_offset = valign_offset(cell.v_align, avail, content_h);
-                let cell_cursor_y = row_top - ecm.top - v_offset;
-
-                render_cell_content(
-                    content,
-                    &cell_layout.items,
-                    &cell.content,
-                    cell_x,
-                    col_w,
-                    cell_cursor_y,
-                    ecm,
-                    ctx,
-                    gradient_specs,
-                );
-            }
-        }
-
-        let mut grid_col = 0usize;
-        for cell in &row.cells {
-            let span = cell.grid_span.max(1) as usize;
-            let col_w = cell_span_width(&col_widths, grid_col, span);
-            let bx = cell_x_offset(&col_widths, table_left, grid_col);
-            let cell_grid_col = grid_col;
-            grid_col += span;
-
-            if cell.v_merge == VMerge::Continue {
-                continue;
-            }
-
-            let merge_extra = merge_spans
-                .get(&(ri, cell_grid_col))
-                .copied()
-                .unwrap_or(0.0);
-            let effective_bottom = row_bottom - merge_extra;
-
-            draw_cell_borders(
-                content,
-                &cell.borders,
-                bx,
-                row_top,
-                effective_bottom,
-                col_w,
-                ri == 0,
-                true,
-            );
-        }
-
-        *cursor_y = row_bottom;
-    }
+    render_table_rows(
+        table,
+        &row_layouts,
+        &col_widths,
+        table_left,
+        &merge_spans,
+        content,
+        cursor_y,
+        ctx,
+        gradient_specs,
+    );
 }
