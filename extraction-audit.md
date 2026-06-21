@@ -4,6 +4,13 @@
 
 # docxside-pdf Extraction/Refactor Audit
 
+> **Status: ALL 30 survivors applied (2026-06-21), 11 commits on `main`.** No
+> rendering regressions — 208/208 scores unchanged throughout. Two behavior
+> changes landed: A13 (SmartArt fontRef tint/shade — latent, no fixture exercises
+> it) and C5 (cell textboxes use the shared renderer — only `japanese_land`'s
+> pixels shifted, by noise; its visual hash is intentionally left unaccepted).
+> The "leave alone" list at the bottom was not touched, by design.
+
 Verified 71 candidates. **Dropped 41** where `real:false`, `net_simplification:false`, or score ≤2 — these were either non-duplications (different ST_ enums, parse/render mirrors), already-DRY code (text-width via `FontEntry::word_width`, ResolvedCommand emission), giant functions whose "clean seams" actually straddle pervasive `&mut` state (`render_paragraph_block`, `parse_table_node`, three table row loops), or cosmetic file-splits/renames with no logic removed. The 30 survivors below are real, net-negative-LOC, and low-coupling.
 
 After dedup, several agents reported the same issues under different source tags (color helpers in comments.rs reported twice; `resolve_w14_color`/scheme-color reported three times; EMF COLORREF + emf.rs color helpers; `v=="1"||"true"` reported twice). Merged into single entries citing all locations.

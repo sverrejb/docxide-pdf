@@ -304,12 +304,33 @@ Revisit alongside bundled fallback fonts (ship metric-stable Symbol metrics).
 
 ## Code Structure
 
+### Duplication & extraction sweep (DONE — 2026-06-21)
+
+Whole-repo over-engineering/duplication audit applied — see `extraction-audit.md`
+for the full findings. All 30 verified survivors landed across 11 commits with
+zero rendering regressions (208/208 scores unchanged). Highlights:
+
+- **Shared parse helpers** in `docx/mod.rs`: `parse_on_off` (ST_OnOff), `parse_pt`
+  (VML/CSS lengths), `is_wml` (namespace predicate), `merge_tab_stops`; plus
+  `styles::{parse_font_size, parse_char_spacing, rfonts_ascii_name}` and
+  `color::{resolve_dml_color reuse, parse_line_stroke}` now shared instead of
+  re-inlined across runs/styles/paragraph/numbering/sections/tables/wordart/etc.
+- **`FontEntry::encode`** replaces 5 copies of the char→gid/WinAnsi dispatch.
+- **PDF emission helpers** in `pdf/`: `color::box_blur_3pass`, `helpers::draw_circle`,
+  `images::{write_jpeg_xobject, write_gray_mask_xobject, write_solid_color_with_gray_mask}`,
+  `table::render_table_rows` (nested + header/footer shared the same loop).
+- **`render_chart` split** (`pdf/charts.rs`): 714→470 lines; the data-rendering
+  match moved verbatim into `draw_chart_series(PlotRect, …)`.
+- Dead code removed (`parse_tab_stops`, `FontEntry::char_width_1000_with_fallback`,
+  EMF `color_at`, two `SampledBoundary` methods).
+
+Deliberately NOT touched (see audit "leave alone"): the long-but-cohesive
+god-functions (`render_paragraph_block`, `parse_table_node`, `render()`), the
+generated geometry data tables, and the 3 intentionally-distinct path-command enums.
+
 ### Refactor `pdf/mod.rs` `render()` (see "Paginator Extraction")
 
-The `render()` function in `pdf/mod.rs` is ~2400 lines with many closures and shared mutable state. The right fix is the paginator extraction described above. In the meantime, smaller extractions are possible:
-
-- `pdf/images.rs` — `embed_image` closure -> free fn (~140 lines)
-- `pdf/list_labels.rs` — `label_for_run`, `label_for_paragraph` (~30 lines)
+The `render()` function in `pdf/mod.rs` is ~2400 lines with many closures and shared mutable state. The right fix is the paginator extraction described above. (Smaller in-file extractions are already done: `embed_single_image` is a free fn in `pdf/images.rs`; `label_for_paragraph` lives in `pdf/list_label.rs`.)
 
 ### Image-embedding cleanups (LOW IMPACT — deferred from textbox-image work)
 

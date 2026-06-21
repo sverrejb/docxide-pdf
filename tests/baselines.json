@@ -620,7 +620,7 @@
   "new/irish_school_enr..": {
     "jaccard": 0.3364,
     "ssim": 0.5307,
-    "text_boundary": 0.7054
+    "text_boundary": 0.6964
   },
   "new/isla_language_le..": {
     "jaccard": 0.3781,
@@ -628,8 +628,8 @@
     "text_boundary": 0.7161
   },
   "new/japanese_land_de..": {
-    "jaccard": 0.1007,
-    "ssim": 0.3046,
+    "jaccard": 0.101,
+    "ssim": 0.3027,
     "text_boundary": 0.1111
   },
   "new/k4_regulations_s..": {
