@@ -6,7 +6,9 @@ use crate::model::{
     TabAlignment, TextFill, TextGlow, TextOutline, TextShadow, Textbox, VertAlign,
 };
 
-use super::images::{RunDrawingResult, parse_object_inline_image, parse_run_drawing};
+use super::images::{
+    RunDrawingResult, parse_object_floating_image, parse_object_inline_image, parse_run_drawing,
+};
 use super::is_east_asian_char;
 use super::styles::{
     CharacterStyle, ParagraphStyle, StyleDefaults, ThemeFonts, parse_char_spacing, parse_font_size,
@@ -1208,7 +1210,9 @@ pub(super) fn parse_runs<R: Read + Seek>(
                 }
                 "object" if field_stack.is_empty() => {
                     flush_pending(&mut pending_text, &mut runs);
-                    if let Some(img) = parse_object_inline_image(child, ctx) {
+                    if let Some(fi) = parse_object_floating_image(child, ctx) {
+                        floating_images.push(fi);
+                    } else if let Some(img) = parse_object_inline_image(child, ctx) {
                         runs.push(Run {
                             inline_image: Some(img),
                             ..fmt.minimal_run()

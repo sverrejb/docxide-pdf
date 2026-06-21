@@ -1,5 +1,5 @@
 {
-  "next_id": 210,
+  "next_id": 212,
   "annotations": [
     {
       "id": 208,
@@ -182,16 +182,6 @@
       "fixed": false
     },
     {
-      "id": 168,
-      "case": "new/japanese_land_development_sign_form",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 39.21885,
-      "y_pt": 375.34235,
-      "note": "\"70 .. \" text should be rotated 90 degs, and also the arrow is placed wrong.",
-      "fixed": true
-    },
-    {
       "id": 176,
       "case": "new/scottish_fundraising_awards_campaign",
       "page": 0,
@@ -199,7 +189,7 @@
       "x_pt": 347.52167,
       "y_pt": 759.1381,
       "note": "\"Scottish Fundraising ...\" header overrlaps images",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 177,
@@ -269,7 +259,7 @@
       "x_pt": 352.86774,
       "y_pt": 786.76215,
       "note": "Owl should be on the right, with the \"Univerzita ...\" heading between the logos, not under the \"Filozofica ...\" logo",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 193,
@@ -359,6 +349,26 @@
       "x_pt": 142.6032,
       "y_pt": 434.91977,
       "note": "First column on table 2 should be wider. Compare with reference. Red1-Red6 should be able to fall on one line. If Outer cell width is actually pixel equal, report that.",
+      "fixed": false
+    },
+    {
+      "id": 210,
+      "case": "new/japanese_land_development_sign_form",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 55.50664,
+      "y_pt": 374.0828,
+      "note": "Text is rotated 90 degrees the wrong way, it is 180 off.",
+      "fixed": false
+    },
+    {
+      "id": 211,
+      "case": "new/japanese_land_development_sign_form",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 247.92374,
+      "y_pt": 717.41974,
+      "note": "Horizontal lines connecting the brackets at the top and bottom should not be here.",
       "fixed": false
     }
   ]

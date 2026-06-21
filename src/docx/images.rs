@@ -763,6 +763,81 @@ pub(super) fn parse_object_inline_image<R: Read + Seek>(
     read_image_from_zip(embed_id, ctx.rels, ctx.zip, w, h)
 }
 
+/// Extract a *floating* image from a `<w:object>` whose VML shape is absolutely
+/// positioned (`style="position:absolute;margin-left:..;margin-top:.."`). Word
+/// uses this for OLE-embedded logos placed at a fixed page location (e.g. a
+/// right-anchored faculty emblem). Without this they fall to the inline path and
+/// get dumped into the centered header paragraph, pushing the heading down.
+/// Returns None for inline objects (no `position:absolute`), which keep the
+/// existing inline behavior.
+pub(super) fn parse_object_floating_image<R: Read + Seek>(
+    obj: roxmltree::Node,
+    ctx: &mut ParseContext<'_, R>,
+) -> Option<FloatingImage> {
+    const VML_NS_LOCAL: &str = "urn:schemas-microsoft-com:vml";
+    let shape = obj.children().find(|n| {
+        n.tag_name().namespace() == Some(VML_NS_LOCAL)
+            && matches!(n.tag_name().name(), "rect" | "shape" | "oval" | "roundrect")
+    })?;
+    let style = shape.attribute("style")?;
+    if !style.contains("position:absolute") {
+        return None;
+    }
+    let mut margin_left = 0.0_f32;
+    let mut margin_top = 0.0_f32;
+    let mut h_relative = HRelativeFrom::Column;
+    let mut v_relative = VRelativeFrom::Paragraph;
+    for part in style.split(';') {
+        if let Some((key, val)) = part.trim().split_once(':') {
+            let val = val.trim();
+            match key.trim() {
+                "margin-left" => margin_left = parse_pt(val).unwrap_or(0.0),
+                "margin-top" => margin_top = parse_pt(val).unwrap_or(0.0),
+                "mso-position-horizontal-relative" => {
+                    h_relative = match val {
+                        "page" => HRelativeFrom::Page,
+                        "margin" => HRelativeFrom::Margin,
+                        _ => HRelativeFrom::Column,
+                    };
+                }
+                "mso-position-vertical-relative" => {
+                    v_relative = match val {
+                        "page" => VRelativeFrom::Page,
+                        "margin" => VRelativeFrom::Margin,
+                        _ => VRelativeFrom::Paragraph,
+                    };
+                }
+                _ => {}
+            }
+        }
+    }
+    let imagedata = obj.descendants().find(|n| {
+        n.tag_name().namespace() == Some(VML_NS_LOCAL) && n.tag_name().name() == "imagedata"
+    })?;
+    let embed_id = imagedata.attribute((REL_NS, "id"))?;
+    let (w, h) = object_dimensions(obj)?;
+    let image = read_image_from_zip(embed_id, ctx.rels, ctx.zip, w, h)?;
+    Some(FloatingImage {
+        image,
+        h_position: HorizontalPosition::Offset(margin_left),
+        h_relative_from: h_relative,
+        v_position: VerticalPosition::Offset(margin_top),
+        v_relative_from: v_relative,
+        // VML OLE logos sit over/beside flowing text without reflowing it; None
+        // wrap keeps the (centered) header text full-width, matching Word.
+        wrap_type: WrapType::None,
+        wrap_text: WrapText::BothSides,
+        wrap_polygon: None,
+        behind_doc: false,
+        dist_top: 0.0,
+        dist_bottom: 0.0,
+        dist_left: 0.0,
+        dist_right: 0.0,
+        z_index: 0,
+        rotation_deg: 0.0,
+    })
+}
+
 /// Reserve space for `<w:object>` legacy OLE embeddings (we don't render the
 /// content, but the following paragraphs need to land at the right position).
 pub(super) fn compute_object_height(para_node: roxmltree::Node) -> f32 {
@@ -773,12 +848,28 @@ pub(super) fn compute_object_height(para_node: roxmltree::Node) -> f32 {
         for obj in r.children().filter(|n| {
             n.tag_name().namespace() == Some(WML_NS) && n.tag_name().name() == "object"
         }) {
+            // Absolutely-positioned objects float (see parse_object_floating_image)
+            // and must not reserve inline line height.
+            if object_is_absolute(obj) {
+                continue;
+            }
             if let Some((_w, h)) = object_dimensions(obj) {
                 max_height = max_height.max(h);
             }
         }
     }
     max_height
+}
+
+fn object_is_absolute(obj: roxmltree::Node) -> bool {
+    const VML_NS_LOCAL: &str = "urn:schemas-microsoft-com:vml";
+    obj.children()
+        .find(|n| {
+            n.tag_name().namespace() == Some(VML_NS_LOCAL)
+                && matches!(n.tag_name().name(), "rect" | "shape" | "oval" | "roundrect")
+        })
+        .and_then(|s| s.attribute("style"))
+        .is_some_and(|style| style.contains("position:absolute"))
 }
 
 fn object_dimensions(obj: roxmltree::Node) -> Option<(f32, f32)> {

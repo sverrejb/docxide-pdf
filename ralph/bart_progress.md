@@ -284,3 +284,60 @@ the systemic vertical-shift exception → deferred. Did NOT mark #17/id167 fixed
 LEARNING: rotation was already parsed AND rendered for body floats; the bug was the cell-float layout
 struct silently dropping it. When a feature "works" for body content but not in tables, check the
 parallel cell-layout/render path — they don't share the same struct.
+
+## 2026-06-22 — SELECTED annotation #176 (new/scottish_fundraising_awards_campaign p0)
+Note: '"Scottish Fundraising ..." header overlaps images' (x≈347.5, y≈759.1, Generated).
+Skipped #208/#8/#59/#66/#82/#93/#118/#121/#124 (systemic vertical/pagination/line-length = the
+exception), #111 (deferred image-wrap), #114/#152 (line-length wrap), #133 (framed-text vertical),
+#158/#167 (font/vertical-shift). #176 = discrete header-height-vs-body-overlap → in scope.
+
+### 2026-06-22 — #176 FIXED (header logo height now pushes body down). Marked fixed=true. Staged.
+The header is a w:tbl whose first cell holds an inline logo PNG (335×68.5pt) followed by a w:br.
+effective_slot_top() already grows the top margin to fit header content via compute_header_height
+→ compute_hf_table_height → compute_row_layouts. BUG: the cell-height code only added the image's
+content_height in the is_text_empty() branch, but the trailing w:br makes the paragraph NOT
+text-empty, so it fell to the text-line branch and reserved only ~one line — the 68.5pt logo height
+was dropped. Header height came out ~15pt instead of ~95pt, so the body (orange "Scottish
+Fundraising Awards 2025" title) started at the top margin, overlapping the logos.
+FIX (table_layout.rs, 2 spots): (1) treat an inline-image paragraph whose only runs are the image +
+line breaks as `image_only` so it routes through the content_height branch; (2) in that branch also
+add br_count*line_h (mirrors the non-table header path in header_footer.rs which counts w:br lines).
+VERIFIED (fresh CLI render via target_dbg — the default target/debug bin was STALE, Jun 21 10:15):
+title top moved 78.4pt → 133.2pt from page top; reference is 134.1pt (Δ0.8pt). Page-1 render now
+matches reference (logos on top, title below).
+TESTS: 149 passed, 0 regressions. scottish TxtBnd 29.4→76.1 (+46.7pp), SSIM 19.6→53.0 (+33.4pp),
+Jaccard 12.7→25.3 (+12.7pp). (case51 +17.3/+5.2 and isla SSIM+2.3 are PRE-EXISTING unaccepted
+baselines from earlier sessions, not this change.)
+LEARNING: is_text_empty() returns false for a lone w:br, which quietly diverts image-only cell
+paragraphs off the content_height path. Same body-vs-table-path divergence pattern as #18.
+STAGING NOTE: `git add` is blocked this session (sandbox denies .git writes; sandbox-disabled
+git add returns "Run outside of the sandbox"). Changes are complete on disk (.gitignore,
+table_layout.rs, annotations.json #176=true, this file) and .bart_commit_msg is written — the
+loop shell's own `git add -A`/commit will pick them up. target_dbg/ build dir gitignored.
+
+## 2026-06-22 — SELECTED annotation #192 (new/slovak_pedagogical_practice_agreement p0)
+Note: "Owl should be on the right, with the 'Univerzita ...' heading between the logos, not under
+the 'Filozofica ...' logo". Skipped #208/#8/#59/#66/#82/#93/#114/#118/#121/#124/#133 (systemic
+vertical/pagination/line-length/framed-text = the exception), #111 (deferred image-wrap), #152
+(wrap-around-rect), #158/#167 (font/vertical-shift). Verified #177 (scottish table overlap) and
+#182 (carbon emblem aspect ratio) already render correctly in current output (stale, resolved by
+prior work) — did NOT mark them, worked only #192. #192 = discrete horizontal float position → in scope.
+
+### 2026-06-22 — #192 FIXED (absolutely-positioned `<w:object>` VML logo now floats). Marked fixed=true. Staged.
+The slovak header has two logos: umb (left, DrawingML wp:anchor — rendered fine) and the owl
+(image2.emf inside a `<w:object>` whose VML `<v:shape>` is `position:absolute;margin-left:423pt;
+margin-top:12.15pt;mso-position-*-relative:text`). We treated EVERY `<w:object>` as INLINE
+(parse_object_inline_image → inline Run), so the owl landed in the centered header paragraph,
+stacked ABOVE the heading and pushed it down (also caused #178's empty space).
+FIX (images.rs + runs.rs): added parse_object_floating_image() — when the inner VML shape style
+has `position:absolute`, parse margin-left/top + mso-position relatives and build a FloatingImage
+(WrapType::None so the centered heading stays full-width). runs.rs "object" handler tries the
+floating path first, falls back to inline. Also added object_is_absolute() so compute_object_height
+skips absolute objects (no phantom inline line reserved). Inline objects unchanged (None → inline).
+VERIFIED (fresh CLI render via target_dbg): owl now top-RIGHT, heading centered in the middle,
+matching reference; no empty space. TESTS: 149 passed, 0 regressions. slovak SSIM 14.3→18.4
+(+4.1pp), Jaccard 4.7→7.8 (+3.1pp); only slovak visual-hash change is mine. (scottish/case51/isla
+deltas are PRE-EXISTING unaccepted baselines from earlier sessions, not this change.)
+LEARNING: `<w:object>` OLE embeddings aren't always inline — Word uses them for absolutely-positioned
+logos via the VML fallback shape's `position:absolute` style. Same body-vs-special-path divergence
+theme as #18/#176.

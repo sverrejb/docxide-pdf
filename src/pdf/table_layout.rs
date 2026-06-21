@@ -602,7 +602,15 @@ pub(super) fn compute_row_layouts(
                                     })
                                     .fold(0.0f32, f32::max);
 
-                                let lines = if !is_text_empty(runs) {
+                                // An inline-image paragraph whose only other run
+                                // is a trailing line break (Word's logo-in-cell
+                                // idiom) is NOT text-empty, but its row height must
+                                // come from the image's content_height, not a stray
+                                // text line — otherwise the cell collapses and a
+                                // tall header logo fails to push the body down.
+                                let image_only = para.content_height > 0.0
+                                    && runs.iter().all(|r| r.text.is_empty() && !r.is_tab);
+                                let lines = if !is_text_empty(runs) && !image_only {
                                     let para_text_w = (cell_text_w
                                         - para.indent_left
                                         - para.indent_right
@@ -674,7 +682,15 @@ pub(super) fn compute_row_layouts(
                                         // row addition; space_after is suppressed
                                         // in the trailing-space block below.
                                     } else if para.content_height > 0.0 {
-                                        total_h += para.content_height;
+                                        // Image paragraph: the image is line 1; each
+                                        // trailing w:br adds a further blank line
+                                        // (matches the non-table header height path).
+                                        let br_count = runs
+                                            .iter()
+                                            .filter(|r| r.is_line_break)
+                                            .count();
+                                        total_h += para.content_height
+                                            + br_count as f32 * line_h;
                                     } else {
                                         total_h += line_h;
                                     }
