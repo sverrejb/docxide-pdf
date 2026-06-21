@@ -99,7 +99,7 @@
       "x_pt": 134.04297,
       "y_pt": 507.33594,
       "note": "Figure 3.1 is rendered wrong. The arrows are wonky and the large text should be white.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 118,
@@ -159,7 +159,7 @@
       "x_pt": 402.78082,
       "y_pt": 96.17511,
       "note": "Date should be aligned with \"datum\" above it.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 150,

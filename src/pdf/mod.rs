@@ -800,6 +800,7 @@ fn compute_bookmark_positions(
                             &empty_imgs,
                             &empty_fx,
                             doc.default_tab_stop,
+                            &[],
                         )
                     } else {
                         build_paragraph_lines(
@@ -1500,6 +1501,34 @@ fn render_paragraph_block(
     // For look-ahead: (narrow_x, narrow_w) for lines after the split
     let mut lookahead_narrow: Option<(f32, f32)> = None;
     let has_inline_image_runs = effective_runs.iter().any(|r| r.inline_image.is_some());
+    // Word advances a left tab past any floating image whose body sits on the
+    // line, snapping to the first stop clear of the image's right edge. Collect
+    // the horizontal spans (in from-text-margin coords) of wrapping images that
+    // overlap this paragraph's first line so build_tabbed_line can skip them.
+    let tab_exclusions: Vec<(f32, f32)> = if has_tabs && !text_empty {
+        let slot_top = state.pb.slot_top;
+        para.floating_images
+            .iter()
+            .filter(|fi| {
+                matches!(
+                    fi.wrap_type,
+                    WrapType::Square | WrapType::Tight | WrapType::Through
+                )
+            })
+            .filter_map(|fi| {
+                let fi_y_top = resolve_fi_y_top(fi, sp, slot_top);
+                let fi_y_bottom = fi_y_top - fi.image.display_height;
+                // Only images vertically overlapping the first line band.
+                if fi_y_bottom > slot_top + 2.0 || fi_y_top < slot_top - 40.0 {
+                    return None;
+                }
+                let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
+                Some((fi_x - col_x, fi_x + fi.image.display_width - col_x))
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
     let lines = if para.image.is_some() || (text_empty && !has_inline_image_runs) {
         vec![]
     } else if has_tabs {
@@ -1514,6 +1543,7 @@ fn render_paragraph_block(
             &block_inline_images,
             &block_effect_inlines,
             doc.default_tab_stop,
+            &tab_exclusions,
         )
     } else {
         // Look-ahead: if next block is an image-only paragraph

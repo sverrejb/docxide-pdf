@@ -536,6 +536,7 @@ pub(super) fn compute_row_layouts(
                                             &EMPTY_INLINE_IMAGE_MAP,
                                             &EMPTY_EFFECT_MAP,
                                             ctx.default_tab_stop,
+                                            &[],
                                         )
                                     } else {
                                         build_paragraph_lines(

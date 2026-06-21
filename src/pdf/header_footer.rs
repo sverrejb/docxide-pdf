@@ -260,7 +260,7 @@ fn build_lines_with_float(
     let empty_fx: HashMap<usize, super::images::EffectXObjs> = HashMap::new();
     let has_tabs = runs.iter().any(|r| r.is_tab);
     if has_tabs {
-        build_tabbed_line(runs, fonts, tab_stops, indent_left, text_width, indent_right, text_hanging, inline_images, &empty_fx, default_tab_stop)
+        build_tabbed_line(runs, fonts, tab_stops, indent_left, text_width, indent_right, text_hanging, inline_images, &empty_fx, default_tab_stop, &[])
     } else {
         build_paragraph_lines(runs, fonts, text_width, text_hanging, inline_images, &empty_fx, None, per_line_widths, None, true)
     }

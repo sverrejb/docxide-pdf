@@ -1012,6 +1012,7 @@ pub(super) fn build_tabbed_line(
     inline_image_names: &HashMap<usize, String>,
     effect_inline_names: &HashMap<usize, super::images::EffectXObjs>,
     default_tab_stop: f32,
+    tab_exclusions: &[(f32, f32)],
 ) -> Vec<TextLine> {
     // Split runs into segments at tab markers, tracking original run indices.
     // The fourth tuple element is the `<w:tab/>` run itself (when present) so the
@@ -1116,7 +1117,22 @@ pub(super) fn build_tabbed_line(
                     target,
                 )
             } else {
-                let s = find_next_tab_stop(current_x, tab_stops, line_indent, default_tab_stop);
+                let mut s = find_next_tab_stop(current_x, tab_stops, line_indent, default_tab_stop);
+                // Word advances a left tab past any floating image whose body
+                // occludes the stop, snapping to the first stop clear of the
+                // image's right edge. `tab_exclusions` are (left, right) spans
+                // in the same from-text-margin space as `s.position`.
+                loop {
+                    let bumped = tab_exclusions.iter().find(|&&(ex_l, ex_r)| {
+                        s.position > ex_l + 0.5 && s.position < ex_r - 0.5
+                    });
+                    match bumped {
+                        Some(&(_, ex_r)) => {
+                            s = find_next_tab_stop(ex_r - line_indent, tab_stops, line_indent, default_tab_stop);
+                        }
+                        None => break,
+                    }
+                }
                 let t = s.position - line_indent;
                 (s, t)
             };
