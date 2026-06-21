@@ -118,7 +118,7 @@
       "source": "Generated",
       "x_pt": 449.4558,
       "y_pt": 379.37347,
-      "note": "All text from \"Slik gjør du\" and on is shifted too low,",
+      "note": "All text from \"Slik gj\u00f8r du\" and on is shifted too low,",
       "fixed": false
     },
     {
@@ -169,7 +169,7 @@
       "x_pt": 427.76154,
       "y_pt": 108.506714,
       "note": "This text is placed wrong",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 151,
@@ -179,7 +179,7 @@
       "x_pt": 423.84604,
       "y_pt": 561.2633,
       "note": "On arrow 2 is placed wrong",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 152,
