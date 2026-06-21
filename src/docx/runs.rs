@@ -209,6 +209,7 @@ impl RunFormat {
             italic: self.italic,
             color: self.color,
             highlight: self.highlight,
+            shading: self.shading,
             ..Run::default()
         }
     }

@@ -118,7 +118,7 @@
       "source": "Generated",
       "x_pt": 449.4558,
       "y_pt": 379.37347,
-      "note": "All text from \"Slik gj\u00f8r du\" and on is shifted too low,",
+      "note": "All text from \"Slik gjør du\" and on is shifted too low,",
       "fixed": false
     },
     {
@@ -319,7 +319,7 @@
       "x_pt": 167.2435,
       "y_pt": 115.545654,
       "note": "missing yellow highlights on footnotes",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 206,

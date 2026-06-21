@@ -1,1 +1,1 @@
-endnotes: flow inline after last body block (pos=docEnd), not pinned to page bottom (#202)
+footnotes: footnote/endnote ref marks honor run shd shading (yellow highlight on markers) (#203)
