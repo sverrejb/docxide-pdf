@@ -184,6 +184,49 @@ fn write_jpeg_xobject(
     }
 }
 
+/// Embed a DeviceGray SMask image XObject from deflate-compressed pixel data.
+/// Caller allocates `mask_ref`. `interpolate` is per-caller: the alpha-channel
+/// mask leaves it off (interpolating it measurably lowers fidelity on case12).
+fn write_gray_mask_xobject(
+    pdf: &mut Pdf,
+    mask_ref: Ref,
+    compressed: &[u8],
+    w: u32,
+    h: u32,
+    interpolate: bool,
+) {
+    let mut mask = pdf.image_xobject(mask_ref, compressed);
+    mask.filter(Filter::FlateDecode);
+    mask.width(w as i32);
+    mask.height(h as i32);
+    mask.color_space().device_gray();
+    mask.bits_per_component(8);
+    if interpolate {
+        mask.interpolate(true);
+    }
+}
+
+/// Embed a 1×1 solid-color RGB image XObject masked by a DeviceGray SMask (both
+/// built here, mask first). Caller allocates both refs.
+fn write_solid_color_with_gray_mask(
+    pdf: &mut Pdf,
+    color_ref: Ref,
+    mask_ref: Ref,
+    color: [u8; 3],
+    compressed_mask: &[u8],
+    mask_w: u32,
+    mask_h: u32,
+) {
+    write_gray_mask_xobject(pdf, mask_ref, compressed_mask, mask_w, mask_h, true);
+    let mut color_img = pdf.image_xobject(color_ref, &color);
+    color_img.width(1);
+    color_img.height(1);
+    color_img.color_space().device_rgb();
+    color_img.bits_per_component(8);
+    color_img.interpolate(true);
+    color_img.s_mask(mask_ref);
+}
+
 fn embed_single_image(
     img: &EmbeddedImage,
     image_xobjects: &mut Vec<(String, Ref)>,
@@ -206,13 +249,7 @@ fn embed_single_image(
         let mask_data = super::color::generate_soft_edge_mask(w, h, radius_px);
         let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&mask_data, 6);
         let mask_ref = alloc();
-        let mut mask = pdf.image_xobject(mask_ref, &compressed);
-        mask.filter(Filter::FlateDecode);
-        mask.width(w as i32);
-        mask.height(h as i32);
-        mask.color_space().device_gray();
-        mask.bits_per_component(8);
-        mask.interpolate(true);
+        write_gray_mask_xobject(pdf, mask_ref, &compressed, w, h, true);
         Some(mask_ref)
     };
 
@@ -343,12 +380,8 @@ fn embed_single_image(
             let smask_ref = if has_alpha {
                 let compressed_alpha = miniz_oxide::deflate::compress_to_vec_zlib(&alpha_data, 6);
                 let mask_ref = alloc();
-                let mut mask = pdf.image_xobject(mask_ref, &compressed_alpha);
-                mask.filter(Filter::FlateDecode);
-                mask.width(w as i32);
-                mask.height(h as i32);
-                mask.color_space().device_gray();
-                mask.bits_per_component(8);
+                // Alpha mask: no interpolate (matches Word's output on case12).
+                write_gray_mask_xobject(pdf, mask_ref, &compressed_alpha, w, h, false);
                 Some(mask_ref)
             } else {
                 None
@@ -412,28 +445,12 @@ fn embed_shadow(
     // Compress the grayscale mask
     let compressed_mask = miniz_oxide::deflate::compress_to_vec_zlib(&mask_pixels, 6);
 
-    // Create the grayscale mask Image XObject
+    // Grayscale mask + 1x1 solid color = the shadow image.
     let mask_ref = alloc();
-    let mut mask = pdf.image_xobject(mask_ref, &compressed_mask);
-    mask.filter(Filter::FlateDecode);
-    mask.width(mask_w as i32);
-    mask.height(mask_h as i32);
-    mask.color_space().device_gray();
-    mask.bits_per_component(8);
-    mask.interpolate(true);
-    drop(mask);
-
-    // Create a 1x1 solid-color RGB image with the mask as SMask
-    let color_data = [shadow.color[0], shadow.color[1], shadow.color[2]];
     let color_ref = alloc();
-    let mut color_img = pdf.image_xobject(color_ref, &color_data);
-    color_img.width(1);
-    color_img.height(1);
-    color_img.color_space().device_rgb();
-    color_img.bits_per_component(8);
-    color_img.interpolate(true);
-    color_img.s_mask(mask_ref);
-    drop(color_img);
+    write_solid_color_with_gray_mask(
+        pdf, color_ref, mask_ref, shadow.color, &compressed_mask, mask_w, mask_h,
+    );
 
     *shadow_counter += 1;
     let name = format!("Sh{}", *shadow_counter);
@@ -475,14 +492,7 @@ fn embed_reflection(
     }
     let compressed_grad = miniz_oxide::deflate::compress_to_vec_zlib(&grad_data, 6);
     let grad_ref = alloc();
-    let mut grad = pdf.image_xobject(grad_ref, &compressed_grad);
-    grad.filter(Filter::FlateDecode);
-    grad.width(1);
-    grad.height(grad_h as i32);
-    grad.color_space().device_gray();
-    grad.bits_per_component(8);
-    grad.interpolate(true);
-    drop(grad);
+    write_gray_mask_xobject(pdf, grad_ref, &compressed_grad, 1, grad_h, true);
 
     // Re-embed the same image data as a new XObject with the gradient as SMask.
     let refl_ref = alloc();
@@ -570,25 +580,10 @@ fn embed_image_effects(
         );
         let compressed_mask = miniz_oxide::deflate::compress_to_vec_zlib(&mask_pixels, 6);
         let mask_ref = alloc();
-        let mut mask = pdf.image_xobject(mask_ref, &compressed_mask);
-        mask.filter(Filter::FlateDecode);
-        mask.width(mask_w as i32);
-        mask.height(mask_h as i32);
-        mask.color_space().device_gray();
-        mask.bits_per_component(8);
-        mask.interpolate(true);
-        drop(mask);
-
-        let color_data = [inner.color[0], inner.color[1], inner.color[2]];
         let color_ref = alloc();
-        let mut color_img = pdf.image_xobject(color_ref, &color_data);
-        color_img.width(1);
-        color_img.height(1);
-        color_img.color_space().device_rgb();
-        color_img.bits_per_component(8);
-        color_img.interpolate(true);
-        color_img.s_mask(mask_ref);
-        drop(color_img);
+        write_solid_color_with_gray_mask(
+            pdf, color_ref, mask_ref, inner.color, &compressed_mask, mask_w, mask_h,
+        );
 
         *effect_counter += 1;
         let name = format!("Sh{}", *effect_counter);
