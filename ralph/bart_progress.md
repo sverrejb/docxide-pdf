@@ -315,6 +315,47 @@ git add returns "Run outside of the sandbox"). Changes are complete on disk (.gi
 table_layout.rs, annotations.json #176=true, this file) and .bart_commit_msg is written — the
 loop shell's own `git add -A`/commit will pick them up. target_dbg/ build dir gitignored.
 
+## 2026-06-22 — SELECTED annotation #177 (new/scottish_fundraising_awards_campaign p1)
+Note: "Table overlaps images" (x≈347.5, y≈759.1, Generated, page index 1). Skipped #208/#8/#59/
+#66/#82/#93/#114/#118/#121/#124/#133 (systemic vertical/pagination/line-length/framed-text = the
+exception), #111 (deferred image-wrap), #152 (wrap-around-rect), #158/#167 (font/vertical-shift).
+#176 fixed. #177 = discrete table-vs-image overlap → in scope. (Prior #192 session noted #177 may
+already render correctly — re-rendering to verify before trusting.)
+
+### 2026-06-22 — #177 RESOLVED (verified, prior #176 header-height fix covers it). Marked fixed=true.
+Fresh CLI render of scottish page 2 (0-based p1) vs reference.pdf p2, 120dpi + top-region crops:
+the three header logos (Chartered Institute / think Consulting / Scottish Fundraising Awards) sit
+clearly ABOVE the body table in both gen and ref — no overlap. The annotation ("Table overlaps
+images") no longer reproduces. Root cause is identical to #176: compute_header_height now reserves
+the inline logo height for the header w:tbl, and that runs on every page, so page 2's table starts
+below the logos just like page 1. No code change needed for #177.
+Tests: 149 passed, 0 regressions (204 unchanged). The scottish improvements (TxtBnd 29.4→76.1,
+SSIM 19.6→53.0, Jaccard 12.7→25.3) are the pre-existing #176 baseline delta (unaccepted per user
+pref); case51/slovak/isla deltas are likewise pre-existing unaccepted baselines from earlier sessions.
+LEARNING (confirms pattern): re-render before trusting — #177 was already resolved by the #176 commit
+on the same case; a page-level header fix naturally covers every page, not just the annotated one.
+
+## 2026-06-22 — SELECTED annotation #178 (new/slovak_pedagogical_practice_agreement p0)
+Note: "Large empty space here." (x≈88.4, y≈691.5, Generated, page 0). Skipped #208/#8/#59/#66/#82/
+#93/#114/#118/#121/#124/#133 (systemic vertical/pagination/line-length/framed-text = the exception),
+#111 (deferred image-wrap), #152 (wrap-around-rect), #158/#167 (font/vertical-shift). #178 = discrete
+empty-space-from-misplaced-logo bug → in scope. The #192 fix note says it "also caused #178's empty
+space" — re-rendering to verify before trusting.
+
+### 2026-06-22 — #178 RESOLVED (verified, prior #192 owl-float fix covers it). Marked fixed=true. Staged.
+Fresh CLI render of slovak page 0 (target_dbg bin) vs reference.pdf, 120dpi + top-region crops:
+the umb logo (left), centered "Univerzita Mateja Bela…" heading, owl (right), horizontal rule, and
+body "Vážená pani riaditeľka," all sit at the SAME positions as the reference — no large empty space
+at the annotated spot (x≈88, y≈691.5 ≈150pt from top). Root cause was the #192 bug: the absolutely-
+positioned `<w:object>` owl was treated as inline and stacked inside the centered heading paragraph,
+pushing the heading down and leaving the gap. Commit 947a354 (parse_object_floating_image) floats the
+owl top-right, so the heading reclaims its slot and the gap closes. No code change needed for #178.
+Tests: 149 passed, 0 regressions (204 unchanged). The slovak SSIM 14.3→18.4 / Jaccard 4.7→7.8 deltas
+are the pre-existing #192 baseline (unaccepted per user pref); scottish/case51/isla are likewise
+pre-existing unaccepted baselines from earlier sessions. LEARNING (confirms pattern): re-render before
+trusting — #178 was already resolved by the #192 commit on the same case; the empty space and the owl
+misplacement were two symptoms of one root cause.
+
 ## 2026-06-22 — SELECTED annotation #192 (new/slovak_pedagogical_practice_agreement p0)
 Note: "Owl should be on the right, with the 'Univerzita ...' heading between the logos, not under
 the 'Filozofica ...' logo". Skipped #208/#8/#59/#66/#82/#93/#114/#118/#121/#124/#133 (systemic

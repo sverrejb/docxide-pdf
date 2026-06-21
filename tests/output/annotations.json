@@ -199,7 +199,7 @@
       "x_pt": 347.52167,
       "y_pt": 759.1381,
       "note": "Table overlaps images",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 178,
@@ -209,7 +209,7 @@
       "x_pt": 88.413185,
       "y_pt": 691.5464,
       "note": "Large empty space here.",
-      "fixed": false
+      "fixed": true
     },
     {
       "id": 182,
