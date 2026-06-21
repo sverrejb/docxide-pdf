@@ -119,6 +119,24 @@ pub(super) fn render_page_footnotes(
 
     // Draw separator line: 0.5pt black, ~1/3 page width
     let sep_y = block_top - 3.0;
+    draw_note_separator(content, margin_left, sep_y, text_width);
+
+    let fn_y = sep_y - 9.0;
+    render_notes_downward(
+        content,
+        fn_y,
+        fn_ids,
+        footnotes,
+        footnote_display_order,
+        ctx,
+        margin_left,
+        text_width,
+        gradient_specs,
+    );
+}
+
+fn draw_note_separator(content: &mut Content, margin_left: f32, sep_y: f32, text_width: f32) {
+    // 0.5pt black rule, ~1/3 page width — matches Word's footnote/endnote separator
     let sep_width = 144.0f32.min(text_width);
     content.save_state();
     content.set_line_width(0.5);
@@ -126,9 +144,55 @@ pub(super) fn render_page_footnotes(
     content.line_to(margin_left + sep_width, sep_y);
     content.stroke();
     content.restore_state();
+}
 
-    let mut fn_y = sep_y - 9.0;
+/// Endnotes default to `pos=docEnd`: Word flows them in the normal content
+/// stream right after the last body block (NOT pinned to the page bottom like
+/// footnotes). `top_y` is the body cursor below the last block.
+/// ponytail: single-page flow only — endnotes that overflow the bottom margin
+/// are not paginated to a new page; add when a fixture needs it.
+pub(super) fn render_endnotes_inline(
+    content: &mut Content,
+    top_y: f32,
+    en_ids: &[u32],
+    endnotes: &HashMap<u32, Footnote>,
+    endnote_display_order: &HashMap<u32, String>,
+    ctx: &RenderContext,
+    margin_left: f32,
+    text_width: f32,
+    gradient_specs: &mut Vec<super::GradientSpec>,
+) {
+    if en_ids.is_empty() {
+        return;
+    }
+    let sep_y = top_y;
+    draw_note_separator(content, margin_left, sep_y, text_width);
+    let fn_y = sep_y - 9.0;
+    render_notes_downward(
+        content,
+        fn_y,
+        en_ids,
+        endnotes,
+        endnote_display_order,
+        ctx,
+        margin_left,
+        text_width,
+        gradient_specs,
+    );
+}
 
+#[allow(clippy::too_many_arguments)]
+fn render_notes_downward(
+    content: &mut Content,
+    mut fn_y: f32,
+    fn_ids: &[u32],
+    footnotes: &HashMap<u32, Footnote>,
+    footnote_display_order: &HashMap<u32, String>,
+    ctx: &RenderContext,
+    margin_left: f32,
+    text_width: f32,
+    gradient_specs: &mut Vec<super::GradientSpec>,
+) {
     for fn_id in fn_ids {
         let Some(footnote) = footnotes.get(fn_id) else {
             continue;

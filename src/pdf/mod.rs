@@ -34,7 +34,7 @@ use crate::model::{
 
 use assembly::{HeadingEntry, assemble_pdf_pages};
 use fonts::collect_and_register_fonts;
-use footnotes::{compute_footnote_height, render_page_footnotes};
+use footnotes::{compute_footnote_height, render_endnotes_inline, render_page_footnotes};
 use header_footer::{
     HfPageContext, compute_effective_margin_bottom, effective_slot_top, render_header_footer,
     resolve_footer_for_page, resolve_header_for_page,
@@ -3135,16 +3135,20 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     }
 
     // Phase 2c: render footnotes at page bottom (above footer). Endnotes
-    // (default pos=docEnd) render once on the final page, stacked above any
-    // footnotes on that page.
+    // (default pos=docEnd) flow inline after the last body block on the final
+    // page (see render_endnotes_inline), NOT pinned to the bottom.
     let last_page_idx = state.pb.all_contents.len().saturating_sub(1);
+    // Endnotes (pos=docEnd) flow inline right after the last body block on the
+    // final page; capture that cursor (below the last paragraph + its space_after,
+    // then the same 12pt separator gap Word leaves above the note separator).
+    let endnote_top_y = state.pb.slot_top - state.prev_space_after - 12.0;
     for (page_idx, content) in state.pb.all_contents.iter_mut().enumerate() {
         let (hf_si, is_first, si) = state.pb.page_section_indices[page_idx];
         let sp = &doc.sections[hf_si].properties;
         let eff_bottom = compute_effective_margin_bottom(sp, is_first, &ctx);
         let content_sp = &doc.sections[si].properties;
         let text_width = content_sp.page_width - content_sp.margin_left - content_sp.margin_right;
-        let mut bottom = eff_bottom;
+        let bottom = eff_bottom;
         render_page_footnotes(
             content,
             &state.pb.all_footnote_ids[page_idx],
@@ -3157,23 +3161,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
             &mut state.pb.all_gradient_specs[page_idx],
         );
         if page_idx == last_page_idx && !state.pb.endnote_ids.is_empty() {
-            // Stack endnotes above any footnotes on the final page.
-            let fn_height: f32 = state.pb.all_footnote_ids[page_idx]
-                .iter()
-                .filter_map(|id| doc.footnotes.get(id))
-                .map(|fn_note| compute_footnote_height(fn_note, &ctx, text_width))
-                .sum();
-            if fn_height > 0.0 {
-                bottom += fn_height + 12.0;
-            }
-            render_page_footnotes(
+            render_endnotes_inline(
                 content,
+                endnote_top_y,
                 &state.pb.endnote_ids,
                 &doc.endnotes,
                 &endnote_display_order,
                 &ctx,
                 content_sp.margin_left,
-                bottom,
                 text_width,
                 &mut state.pb.all_gradient_specs[page_idx],
             );

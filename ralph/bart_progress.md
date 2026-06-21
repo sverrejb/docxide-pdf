@@ -402,3 +402,35 @@ first band to fill the box (wrong aspect/overflow); `wmf.rs::composite_blits` no
 onto one canvas at their destination rectangles, preserving the true aspect. No code change needed for #182.
 Tests: 149 passed, 0 regressions. LEARNING (confirms pattern): re-render before trusting — #182 was already
 resolved by the multi-DIB WMF compositing work; its fixed flag was simply never set.
+
+## 2026-06-22 — SELECTED annotation #202 (case74 p0) "Endnote is placed wrong"
+Skipped from the top: #208/#8/#59/#66/#82/#93/#114/#118/#121/#124/#133 (systemic vertical/pagination/
+line-length/framed = the exception), #111 (deferred image-wrap), #152 (wrap-around-rect), #158 (font/vague),
+#167 (vertical-shift). Examined & skipped #193 (samtale "HR through 13" — ref shows rows 10/11 where gen
+shows 12/13 at same y = accumulated table row-height drift = the vertical exception) and #201 (pendulum "g
+too high" — header row content 7pt high but body rows diverge the OTHER way = systemic table row-height
+divergence = the exception). #202 = discrete endnote PLACEMENT bug → in scope.
+
+### 2026-06-22 — #202 FIXED (endnotes flow inline at doc end, not pinned to page bottom). Marked fixed=true. Staged.
+Root cause: endnotes (default pos=docEnd) were rendered by reusing render_page_footnotes pinned to the
+final-page bottom, STACKED above the footnotes (src/pdf/mod.rs Phase 2c). Word instead flows endnotes in
+the normal content stream right after the LAST body block (footnotes stay pinned to page bottom). So gen
+showed both note groups jammed at the bottom; ref shows endnotes just below the body text, footnotes at
+the bottom.
+FIX (footnotes.rs + mod.rs):
+- Refactored render_page_footnotes: extracted the separator-draw into draw_note_separator() and the note
+  loop into render_notes_downward(start_fn_y, ...). render_page_footnotes still anchors from the bottom.
+- Added render_endnotes_inline(top_y, ...): draws the separator at top_y and flows notes downward from the
+  body cursor. ponytail-noted: single-page flow only (no overflow-to-next-page pagination yet).
+- mod.rs: captured endnote_top_y = pb.slot_top - prev_space_after - 12 (last body cursor + the para's
+  space_after + the 12pt separator gap Word leaves), and call render_endnotes_inline on the last page.
+VERIFIED (fresh CLI render via target_dbg + mutool stext, all three endnote fixtures):
+- case74: endnote "First endnote text" now at top-coord ~212 (ref ~221), footnotes still at bottom ~691.
+- case75 (section-wide bag): endnotes ~224 (ref ~221), footnotes bottom.
+- erasmus (3-page real doc): the long "Adaptations of this template" endnote now at p3 y≈419 vs ref ≈427
+  (was pinned to bottom before) — matches reference mid-page placement.
+TESTS: 149 passed, 0 regressions. case74 SSIM 83.6→85.8 (+2.2pp), case75 SSIM 83.6→85.6 (+2.0pp),
+erasmus SSIM 50.4→54.5 (+4.1pp). (scottish/case51/slovak/isla/japanese deltas are PRE-EXISTING unaccepted
+baselines from earlier sessions, not this change.) Did NOT run accept-baselines (user pref).
+LEARNING: endnotes are not footnotes — pos=docEnd means inline-at-end of the content flow, which also
+naturally handles multi-page docs (erasmus endnote lands mid-page-3 like Word, not at the page floor).
