@@ -532,6 +532,7 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                     text_warp: wsp.text_warp,
                     auto_fit: wsp.auto_fit,
                     z_index,
+                    indent_relative: false,
                 }));
             }
             if let Some(conn) = parse_connector_from_wsp(container, ctx.theme) {
@@ -622,6 +623,7 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                 text_warp: wsp.text_warp,
                 auto_fit: wsp.auto_fit,
                 z_index: 0,
+                indent_relative: false,
             }));
         }
 

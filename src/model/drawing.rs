@@ -375,4 +375,8 @@ pub struct Textbox {
     /// wp:anchor relativeHeight — stacking order among overlapping anchored
     /// shapes within a paragraph (higher draws on top). 0 when unspecified.
     pub z_index: u32,
+    /// Children flattened from an *inline* drawing canvas flow at the
+    /// paragraph's text-start, so their Column-relative x must include the
+    /// paragraph's left indent. Genuine anchored floats ignore the indent.
+    pub indent_relative: bool,
 }

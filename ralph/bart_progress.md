@@ -200,3 +200,52 @@ unchanged, 0 regressions (149 passed). belgian = visual-hash-only change (carrie
 LEARNING: when a regression survives a trigger-narrowing, the damage is in a
 DIFFERENT code path — here the call-site arg change silently activated the
 shrink branch; the fix was separating the two width inputs, not just the gate.
+
+## 2026-06-21 — SELECTED annotation #21 (new/isla_language_lesson_plan p6)
+Note: "520 L box way too large, and also the content next to it is not showing?"
+Skipped #0/#2/#3/#4/#10/#11/#12/#14/#26/#30 (systemic vertical text-spacing / pagination /
+framed-text = the exception), #1/#7 (pagination/line-length), #5 (word-wrap), #6 (#111 deferred
+image-wrap), #18 (text-wrap-around-rectangle = line-length family), #20 (vague "looks different").
+#21 = discrete horizontal placement bug -> in scope.
+
+### Analysis
+The "520 L" box is an INLINE wpc drawing canvas (two wps textboxes: the bordered "520 L"
+box + the unbordered explanation text). Canvas sits in a ListParagraph (left indent 720tw=36pt;
+page left margin also 720tw=36pt). Measured rendered box (300dpi): width identical gen vs ref
+(~82pt), content shows fine -- but the whole canvas is shifted ~36pt LEFT in gen: box left edge
+gen~=50pt vs ref~=86pt (=36 margin + 36 list-indent). Root cause: group.rs flattens inline-canvas
+children into floating textboxes anchored to Column with the child's a:off as offset, dropping
+the paragraph's left indent that inline text flow would apply.
+FIX: added `indent_relative` flag on Textbox (true for inline-canvas children, via BaseAnchor),
+render adds para.indent_left to col_x for those. Pic-in-inline-canvas left unhandled (ponytail note).
+
+### 2026-06-21 — #21 FIXED (verified). fixed=true set + staged. COMMIT BLOCKED by env.
+Box left edge moved 49.4pt -> 85.4pt = exact reference match (right 132.5 -> 168.5pt). Box width was
+already correct (~82pt) and content was already showing, so the residual was purely the 36pt left shift.
+Tests: 149 passed, 208 scored, 206 unchanged, 0 regressions; isla SSIM 57.4->59.7 (+2.3pp).
+(case51 +17.3/+5.2 and belgian visual-hash are PRE-EXISTING deltas from earlier commits whose baselines
+were never accepted per user pref — not caused by this change.)
+GOTCHA (memory's stale-binary): `cargo build --features cli` into the default target/ left target/debug/
+docxide-pdf STALE (grep of the binary for my new eprintln = 0 hits). Had to build with
+`CARGO_TARGET_DIR=target_dbg cargo build --features cli` and run ./target_dbg/debug/docxide-pdf to see the
+fix. The cargo TEST harness (run-tests.sh) DID pick up the lib change (isla improved), so only the CLI bin
+is pinned. Always verify CLI renders via target_dbg in this env.
+COMMIT BLOCKED: every `git commit` (sandbox-disabled and in-sandbox) returns "Run outside of the sandbox"
+this session (same as the #145 session's block). Changes are STAGED and ready. Operator can finish with:
+  git commit -F .tmp_isla/msg.txt   # 8 files: 6 src + tests/output/annotations.json + ralph/bart_progress.md
+annotations.json fixed=true for #21 is set on disk regardless.
+
+## 2026-06-21 — SELECTED annotation #167 (new/japanese_land_development_sign_form p0)
+Note: "Arrows and labels not correct. The arrows should be touching the grey line and the table above."
+Skipped #208/#8/#59/#66/#82/#93/#118/#121/#124/#133 (systemic vertical text-spacing / pagination /
+line-length / framed-text = the exception), #111 (deferred image-wrap), #114/#152 (line-length wrap),
+#158 (vague "text looks different" = font, not a discrete geometry bug). #167 = discrete connector
+arrow rendering → in scope.
+
+### Analysis
+The form has three straightConnector1 arrows (90cm top double-arrow, 50cm vertical, 70cm). All render
+BLUE in gen but BLACK in reference. Root cause in parse_connector_shape_node (textbox.rs): stroke color
+took the style matrix lnRef FIRST, falling back to the explicit a:ln only second — backwards from OOXML
+precedence (and from the non-connector path at line 432 which does explicit-ln-first). The 50cm arrow
+has a:ln/solidFill=tx1 (black) but wps:style/lnRef=accent1 (blue); Word draws black. FIX: swap so the
+explicit a:ln solidFill wins over the lnRef style ref.

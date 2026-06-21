@@ -594,8 +594,12 @@ pub(super) fn parse_connector_shape_node(
     };
 
     let ln_node = find_dml(sp_pr, "ln");
-    let stroke_color = parse_style_stroke(wsp, theme)
-        .or_else(|| ln_node.and_then(|ln| parse_solid_fill(ln, theme)))
+    // Explicit a:ln formatting overrides the style matrix lnRef (OOXML precedence).
+    // The 50cm connector sets a:ln/solidFill=tx1 (black) but lnRef=accent1 (blue);
+    // Word draws it black, so the direct fill must win over the style ref.
+    let stroke_color = ln_node
+        .and_then(|ln| parse_solid_fill(ln, theme))
+        .or_else(|| parse_style_stroke(wsp, theme))
         .unwrap_or([0, 0, 0]);
     let stroke_width = ln_node
         .and_then(|ln| ln.attribute("w"))
@@ -784,6 +788,7 @@ fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
         text_warp: None,
         auto_fit: AutoFit::None,
         z_index: 0,
+        indent_relative: false,
     })
 }
 
@@ -876,6 +881,7 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         text_warp: None,
         auto_fit: AutoFit::None,
         z_index: 0,
+        indent_relative: false,
     })
 }
 
@@ -948,6 +954,7 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                                     .attribute("relativeHeight")
                                     .and_then(|v| v.parse::<u32>().ok())
                                     .unwrap_or(0),
+                                indent_relative: false,
                             });
                         }
                     }

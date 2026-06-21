@@ -1,5 +1,5 @@
 {
-  "next_id": 209,
+  "next_id": 210,
   "annotations": [
     {
       "id": 208,
@@ -118,7 +118,7 @@
       "source": "Generated",
       "x_pt": 449.4558,
       "y_pt": 379.37347,
-      "note": "All text from \"Slik gj\u00f8r du\" and on is shifted too low,",
+      "note": "All text from \"Slik gjør du\" and on is shifted too low,",
       "fixed": false
     },
     {
@@ -152,36 +152,6 @@
       "fixed": false
     },
     {
-      "id": 145,
-      "case": "new/belgian_youth_program_certificate",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 402.78082,
-      "y_pt": 96.17511,
-      "note": "Date should be aligned with \"datum\" above it.",
-      "fixed": true
-    },
-    {
-      "id": 150,
-      "case": "case35",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 427.76154,
-      "y_pt": 108.506714,
-      "note": "This text is placed wrong",
-      "fixed": true
-    },
-    {
-      "id": 151,
-      "case": "case35",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 423.84604,
-      "y_pt": 561.2633,
-      "note": "On arrow 2 is placed wrong",
-      "fixed": true
-    },
-    {
       "id": 152,
       "case": "case41",
       "page": 2,
@@ -192,16 +162,6 @@
       "fixed": false
     },
     {
-      "id": 153,
-      "case": "case51",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 218.2456,
-      "y_pt": 599.62244,
-      "note": "First outer column is too wide",
-      "fixed": true
-    },
-    {
       "id": 158,
       "case": "new/bosch_software_ai_announcement",
       "page": 0,
@@ -209,16 +169,6 @@
       "x_pt": 74.63493,
       "y_pt": 284.4301,
       "note": "Generally the \"Las Vegas, NV ...\" text looks different,",
-      "fixed": false
-    },
-    {
-      "id": 166,
-      "case": "new/isla_language_lesson_plan",
-      "page": 6,
-      "source": "Generated",
-      "x_pt": 170.92575,
-      "y_pt": 570.0058,
-      "note": "520 L box way too large, and also the content next to it is not showing?",
       "fixed": false
     },
     {
@@ -282,16 +232,6 @@
       "fixed": false
     },
     {
-      "id": 184,
-      "case": "new/handels_messiah_biblical_analysis",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 167.75107,
-      "y_pt": 257.32568,
-      "note": "Wrong font.",
-      "fixed": true
-    },
-    {
       "id": 185,
       "case": "new/erasmus_plus_staff_mobility_agreement",
       "page": 2,
@@ -352,16 +292,6 @@
       "fixed": false
     },
     {
-      "id": 197,
-      "case": "new/japanese_land_development_sign_form",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 172.9404,
-      "y_pt": 238.3891,
-      "note": "This grey line should be dithered or something. Compare with reference",
-      "fixed": true
-    },
-    {
       "id": 200,
       "case": "scraped/croatian_grant_guidelines",
       "page": 3,
@@ -419,6 +349,16 @@
       "x_pt": 49.280823,
       "y_pt": 536.67883,
       "note": "Missing numbering on \"Energy Performance Certificates\" and other headings. This one should be 6.8",
+      "fixed": false
+    },
+    {
+      "id": 209,
+      "case": "case51",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 142.6032,
+      "y_pt": 434.91977,
+      "note": "First column on table 2 should be wider. Compare with reference. Red1-Red6 should be able to fall on one line. If Outer cell width is actually pixel equal, report that.",
       "fixed": false
     }
   ]

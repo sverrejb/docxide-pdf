@@ -105,6 +105,9 @@ struct BaseAnchor {
     v_rel: VRelativeFrom,
     behind_doc: bool,
     z_index: u32,
+    /// True for inline canvases — their flattened children flow at the
+    /// paragraph text-start and so must pick up the paragraph's left indent.
+    indent_relative: bool,
 }
 
 /// Detect and flatten a canvas/group drawing. Returns None when the container
@@ -140,6 +143,7 @@ pub(super) fn parse_canvas_or_group<R: Read + Seek>(
                 .attribute("relativeHeight")
                 .and_then(|v| v.parse::<u32>().ok())
                 .unwrap_or(0),
+            indent_relative: false,
         }
     } else {
         BaseAnchor {
@@ -149,6 +153,7 @@ pub(super) fn parse_canvas_or_group<R: Read + Seek>(
             v_rel: VRelativeFrom::Paragraph,
             behind_doc: false,
             z_index: 0,
+            indent_relative: true,
         }
     };
 
@@ -200,6 +205,7 @@ pub(super) fn parse_canvas_or_group<R: Read + Seek>(
             text_warp: None,
             auto_fit: AutoFit::None,
             z_index: 0,
+            indent_relative: true,
         }));
     }
     out.extend(shapes);
@@ -299,6 +305,7 @@ fn emit_wsp<R: Read + Seek>(
             text_warp: shape.text_warp,
             auto_fit: shape.auto_fit,
             z_index: base.z_index,
+            indent_relative: base.indent_relative,
         }));
     }
 }
@@ -323,6 +330,10 @@ fn emit_pic<R: Read + Seek>(
         return;
     };
     if let Some(img) = read_image_from_zip(embed_id, ctx.rels, ctx.zip, w, h) {
+        // ponytail: pics flattened from an *inline* canvas don't pick up the
+        // paragraph's left indent (no indent_relative on FloatingImage yet).
+        // Add it the way Textbox does if a fixture ever needs an indented
+        // inline canvas with picture children.
         out.push(RunDrawingResult::Floating(FloatingImage {
             image: img,
             h_position: HorizontalPosition::Offset(base.x + x),

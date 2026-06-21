@@ -2185,10 +2185,15 @@ fn render_paragraph_block(
         &mut state.pb.content,
     );
     for tb in sorted_by_z(para.textboxes.iter().filter(|t| t.behind_doc)) {
+        let tb_col_x = if tb.indent_relative {
+            col_x + para.indent_left
+        } else {
+            col_x
+        };
         render_single_textbox(
             tb,
             sp,
-            col_x,
+            tb_col_x,
             col_w,
             text_width,
             float_anchor_top,
@@ -2296,11 +2301,16 @@ fn render_paragraph_block(
         // Render into a per-shape buffer; flush_page paints these above the
         // page's text layer sorted by relativeHeight (Word's z-order for
         // floating shapes spans paragraphs).
+        let tb_col_x = if tb.indent_relative {
+            col_x + para.indent_left
+        } else {
+            col_x
+        };
         let mut shape_content = Content::new();
         render_single_textbox(
             tb,
             sp,
-            col_x,
+            tb_col_x,
             col_w,
             text_width,
             float_anchor_top,

@@ -230,6 +230,7 @@ pub(super) fn parse_vml_wordart(
         text_warp: None,
         auto_fit: AutoFit::Shape,
         z_index: 0,
+        indent_relative: false,
     })
 }
 
