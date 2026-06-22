@@ -434,3 +434,35 @@ erasmus SSIM 50.4→54.5 (+4.1pp). (scottish/case51/slovak/isla/japanese deltas 
 baselines from earlier sessions, not this change.) Did NOT run accept-baselines (user pref).
 LEARNING: endnotes are not footnotes — pos=docEnd means inline-at-end of the content flow, which also
 naturally handles multi-page docs (erasmus endnote lands mid-page-3 like Word, not at the page floor).
+
+## 2026-06-22 — SELECTED annotation #203 (scraped/uk_commercial_lease_template p39)
+Note: "missing yellow highlights on footnotes". Skipped from the top #208/#8/#59/#66/#82/#93 (systemic
+vertical/pagination/line-length/word-wrap = the exception), #111 (deferred image-wrap), #114 (line-wrap),
+#118/#121/#124 (vertical), #133 (framed vertical), #152 (wrap-around-rect), #158 (vague/font), #167
+(vertical-shift), #185 (vague), #186 (vertical), #190 (pagination), #193/#201 (table row-height vertical),
+#195 (font/vertical), #200 (pagination). #203 = discrete run-shading rendering bug → in scope.
+
+### 2026-06-22 — #203 FIXED (footnote ref marks now honor run w:shd shading). Marked fixed=true. Staged.
+The yellow on the footnote numbers is NOT w:highlight (grep found zero highlight elements) — it's run
+shading: the FootnoteReference character style carries `<w:shd w:val="clear" w:fill="FFFF00"/>`. parse_run_shd
++ char-style resolution already populate Run.shading for it, and render_paragraph_lines already draws run
+shading backgrounds. BUG: the footnoteRef/endnoteRef marks are built via superscript_run() → styled_run(),
+which copied `highlight` but DROPPED `shading`, so the parsed yellow was thrown away before render.
+FIX (1 line, runs.rs styled_run): add `shading: self.shading,` alongside the existing `highlight` copy.
+This carries shd into both the inline reference superscript and the footnote-definition ref mark.
+VERIFIED (fresh CLI render via target_dbg, mutool p40 @300dpi): footnote markers 89/90 and the inline body
+marker all render with the yellow background, matching reference.pdf p40. TESTS: 149 passed, 0 regressions;
+uk_commercial_lease is a visual-hash change (the new highlight); 7 "improved"/other visual changes are
+PRE-EXISTING unaccepted baselines from earlier sessions (scottish/case51/slovak/erasmus/isla/case74/75/
+japanese), not this change. Did NOT run accept-baselines (user pref).
+LEARNING: "highlight" in the eye ≠ w:highlight in the XML — Word's FootnoteReference style uses w:shd. The
+abbreviated run constructors (styled_run/superscript_run) are a recurring leak point: they hand-copy a
+subset of fields, so any property added to the full path (here shading) must also be added there.
+
+## 2026-06-22 — SELECTED annotation #206 (scraped/uk_commercial_lease_template p39)
+Note: "6.1.22 Here should be 6.7.1 per the reference" (x≈89.8, y≈746.7, Generated).
+Skipped from the top: #208 (text_boundary drift reminder), #8/#200/#190 (pagination/table-split),
+#59/#82/#118/#121/#124/#186/#201 (systemic vertical text spacing), #66 (bullet vertical drift),
+#93/#114/#152 (line-length/word-wrap), #111 (deferred image-wrap), #133 (framed-text vertical),
+#158/#195 (font/vague), #167 (vertical-shift), #185 (vague), #193 (table row-height vertical).
+#206 = discrete list-numbering bug (wrong counter value on a heading) → in scope.

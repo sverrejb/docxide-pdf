@@ -259,9 +259,9 @@
     "text_boundary": 0.8919
   },
   "cases/case51": {
-    "jaccard": 0.0548,
-    "ssim": 0.651,
-    "text_boundary": 0.2333
+    "jaccard": 0.0669,
+    "ssim": 0.7035,
+    "text_boundary": 0.4063
   },
   "cases/case52": {
     "jaccard": 0.7064,
@@ -376,13 +376,13 @@
     "text_boundary": 1.0
   },
   "cases/case74": {
-    "jaccard": 0.663,
-    "ssim": 0.8362,
+    "jaccard": 0.6643,
+    "ssim": 0.8578,
     "text_boundary": 1.0
   },
   "cases/case75": {
-    "jaccard": 0.6606,
-    "ssim": 0.8361,
+    "jaccard": 0.6619,
+    "ssim": 0.8564,
     "text_boundary": 1.0
   },
   "cases/case76": {
@@ -503,8 +503,8 @@
     "text_boundary": 0.6857
   },
   "new/belgian_youth_pr..": {
-    "jaccard": 0.2121,
-    "ssim": 0.5187,
+    "jaccard": 0.2124,
+    "ssim": 0.5195,
     "text_boundary": 1.0
   },
   "new/biochemistry_pen..": {
@@ -593,8 +593,8 @@
     "text_boundary": 0.0334
   },
   "new/erasmus_plus_sta..": {
-    "jaccard": 0.1915,
-    "ssim": 0.5037,
+    "jaccard": 0.201,
+    "ssim": 0.5452,
     "text_boundary": 0.3043
   },
   "new/family_kinship_l..": {
@@ -623,13 +623,13 @@
     "text_boundary": 0.6964
   },
   "new/isla_language_le..": {
-    "jaccard": 0.3781,
-    "ssim": 0.5741,
+    "jaccard": 0.3964,
+    "ssim": 0.5971,
     "text_boundary": 0.7161
   },
   "new/japanese_land_de..": {
-    "jaccard": 0.101,
-    "ssim": 0.3027,
+    "jaccard": 0.1005,
+    "ssim": 0.3025,
     "text_boundary": 0.1111
   },
   "new/k4_regulations_s..": {
@@ -718,9 +718,9 @@
     "text_boundary": 0.3465
   },
   "new/scottish_fundrai..": {
-    "jaccard": 0.1265,
-    "ssim": 0.1956,
-    "text_boundary": 0.2941
+    "jaccard": 0.2534,
+    "ssim": 0.5299,
+    "text_boundary": 0.7612
   },
   "new/slovak_constitut..": {
     "jaccard": 0.4406,
@@ -743,8 +743,8 @@
     "text_boundary": 1.0
   },
   "new/slovak_pedagogic..": {
-    "jaccard": 0.0473,
-    "ssim": 0.1435,
+    "jaccard": 0.0779,
+    "ssim": 0.1841,
     "text_boundary": 0.0
   },
   "new/taiwanese_educat..": {
@@ -1104,8 +1104,8 @@
     "convert_ms": 2.4
   },
   "scraped/uk_commercial_le..": {
-    "jaccard": 0.0943,
-    "ssim": 0.2328,
+    "jaccard": 0.0945,
+    "ssim": 0.2333,
     "text_boundary": 0.0911,
     "convert_ms": 326.3
   },

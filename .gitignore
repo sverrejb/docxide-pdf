@@ -19,3 +19,4 @@ tools/three_way_compare.py
 # Office lock/owner files left next to fixture docx files
 ~$*
 /target_dbg
+.bart_commit_msg
