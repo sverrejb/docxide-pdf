@@ -150,6 +150,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         style_num,
         style_ilvl,
         Some(para_style_id),
+        &ctx.styles.paragraph_styles,
         ctx.numbering,
         counters,
         last_seen_level,

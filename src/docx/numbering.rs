@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
 
-use super::styles::{parse_font_size, rfonts_ascii_name};
+use super::styles::{ParagraphStyle, parse_font_size, rfonts_ascii_name};
 use super::{WML_NS, parse_hex_color, twips_attr, wml, wml_attr, wml_bool};
 
 #[derive(Clone)]
@@ -305,11 +305,32 @@ fn symbol_pua_to_unicode(cp: u32) -> Option<char> {
     Some(mapped)
 }
 
+/// §17.9.23: true if `style_id` is `owner` or transitively basedOn `owner`.
+/// The level's pStyle link covers derived styles (e.g. a "(2nd Style)" heading
+/// basedOn the base heading), which Word auto-numbers at the level.
+fn style_matches_owner(
+    style_id: Option<&str>,
+    owner: &str,
+    styles: &HashMap<String, ParagraphStyle>,
+) -> bool {
+    let mut cur = style_id;
+    // bounded to avoid spinning on a malformed basedOn cycle
+    for _ in 0..32 {
+        match cur {
+            Some(id) if id == owner => return true,
+            Some(id) => cur = styles.get(id).and_then(|s| s.based_on.as_deref()),
+            None => return false,
+        }
+    }
+    false
+}
+
 pub(super) fn parse_list_info(
     num_pr: Option<roxmltree::Node>,
     style_num_id: Option<&str>,
     style_num_ilvl: Option<u8>,
     effective_style_id: Option<&str>,
+    paragraph_styles: &HashMap<String, ParagraphStyle>,
     numbering: &NumberingInfo,
     counters: &mut HashMap<(u32, u8), u32>,
     last_seen_level: &mut HashMap<u32, u8>,
@@ -354,10 +375,13 @@ pub(super) fn parse_list_info(
     // direct paragraph numPr) and the resolved level is owned by a DIFFERENT
     // style, Word suppresses the number — the paragraph keeps the list indent
     // and sits at the hanging position, with no label and no counter advance.
-    // ponytail: matches the level's named style directly, not styles basedOn it.
+    // The link applies to derived styles too: "SH Heading 2 (2nd Style)"
+    // (basedOn "SH Heading 2") inherits the level's numbering and Word numbers
+    // it like its base, so walk the basedOn chain rather than matching the
+    // named style only.
     if num_pr.is_none()
         && let Some(owner) = def.pstyle.as_deref()
-        && effective_style_id != Some(owner)
+        && !style_matches_owner(effective_style_id, owner, paragraph_styles)
     {
         return ListLabelInfo {
             indent_left: def.indent_left,
@@ -630,6 +654,7 @@ mod tests {
             Some("5"),
             Some(0),
             None,
+            &HashMap::new(),
             &numbering,
             &mut counters,
             &mut last_seen,
@@ -663,12 +688,12 @@ mod tests {
         let mut last_seen = HashMap::new();
         let mut applied = HashSet::new();
         let lvl0_info = parse_list_info(
-            None, Some("100"), Some(0), None,
+            None, Some("100"), Some(0), None, &HashMap::new(),
             &numbering, &mut counters, &mut last_seen, &mut applied,
         );
         assert_eq!(lvl0_info.label, "I.");
         let lvl1_info = parse_list_info(
-            None, Some("100"), Some(1), None,
+            None, Some("100"), Some(1), None, &HashMap::new(),
             &numbering, &mut counters, &mut last_seen, &mut applied,
         );
         // Without isLgl this would be "I.1."; isLgl forces %1 to decimal.
@@ -699,7 +724,7 @@ mod tests {
         let mut applied = HashSet::new();
         let mut label = |ilvl: u8| {
             parse_list_info(
-                None, Some("100"), Some(ilvl), None,
+                None, Some("100"), Some(ilvl), None, &HashMap::new(),
                 &numbering, &mut counters, &mut last_seen, &mut applied,
             )
             .label
@@ -734,7 +759,7 @@ mod tests {
         let mut applied = HashSet::new();
         let mut label = |style: &str| {
             parse_list_info(
-                None, Some("100"), None, Some(style),
+                None, Some("100"), None, Some(style), &HashMap::new(),
                 &numbering, &mut counters, &mut last_seen, &mut applied,
             )
         };
@@ -747,5 +772,41 @@ mod tests {
         assert_eq!(gated.indent_hanging, 21.6);
         // Next owning paragraph is "II.", proving the gated one didn't increment.
         assert_eq!(label("PHeadingA").label, "II.");
+    }
+
+    #[test]
+    fn test_pstyle_link_covers_derived_styles() {
+        // A style basedOn the level's owner inherits the numbering and Word
+        // numbers it like its base (e.g. "SH Heading 2 (2nd Style)"). The
+        // owner gate must walk the basedOn chain, not match the name only.
+        let ns = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+        let lvl0_xml = format!(
+            r#"<w:lvl xmlns:w="{ns}" w:ilvl="0"><w:numFmt w:val="decimal"/><w:pStyle w:val="HeadBase"/><w:lvlText w:val="%1."/></w:lvl>"#
+        );
+        let mut numbering = NumberingInfo::default();
+        numbering
+            .abstract_nums
+            .insert("0".into(), HashMap::from([(0u8, parse_lvl(&lvl0_xml).1)]));
+        numbering.num_to_abstract.insert("1".into(), "0".into());
+
+        let mut styles: HashMap<String, ParagraphStyle> = HashMap::new();
+        let mut derived = ParagraphStyle::default();
+        derived.based_on = Some("HeadBase".into());
+        styles.insert("HeadDerived".into(), derived);
+
+        let mut counters = HashMap::new();
+        let mut last_seen = HashMap::new();
+        let mut applied = HashSet::new();
+        // Derived style numbers like its base, advancing the shared counter.
+        let d1 = parse_list_info(
+            None, Some("1"), Some(0), Some("HeadDerived"), &styles,
+            &numbering, &mut counters, &mut last_seen, &mut applied,
+        );
+        assert_eq!(d1.label, "1.");
+        let b2 = parse_list_info(
+            None, Some("1"), Some(0), Some("HeadBase"), &styles,
+            &numbering, &mut counters, &mut last_seen, &mut applied,
+        );
+        assert_eq!(b2.label, "2.");
     }
 }
