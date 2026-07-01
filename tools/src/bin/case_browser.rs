@@ -154,6 +154,10 @@ struct Annotation {
     note: String,
     #[serde(default)]
     fixed: bool,
+    // Cleared annotations stay in the JSON (kept as a record) but are hidden
+    // from the UI. Clearing replaces deletion as the "resolved" signal.
+    #[serde(default)]
+    cleared: bool,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -652,6 +656,9 @@ impl eframe::App for App {
         // Build per-case annotation status: (total, fixed)
         let mut annotation_counts: HashMap<&str, (usize, usize)> = HashMap::new();
         for a in &self.annotations.annotations {
+            if a.cleared {
+                continue;
+            }
             let entry = annotation_counts.entry(a.case.as_str()).or_insert((0, 0));
             entry.0 += 1;
             if a.fixed {
@@ -943,10 +950,10 @@ impl eframe::App for App {
                 .annotations
                 .annotations
                 .iter()
-                .filter(|a| a.case == case_name && a.page == page)
+                .filter(|a| a.case == case_name && a.page == page && !a.cleared)
                 .map(|a| a.id)
                 .collect();
-            let mut delete_id = None;
+            let mut clear_id = None;
             let mut toggle_fixed_id = None;
             egui::SidePanel::left("notes_panel")
                 .default_width(220.0)
@@ -977,12 +984,13 @@ impl eframe::App for App {
                                     "{} ({:.0}, {:.0})",
                                     src, ann.x_pt, ann.y_pt
                                 ));
+                                ui.weak(format!("id {}", ann.id));
                                 if ui
                                     .small_button("X")
-                                    .on_hover_text("Delete this note")
+                                    .on_hover_text("Clear this note (hidden, kept in file)")
                                     .clicked()
                                 {
-                                    delete_id = Some(*ann_id);
+                                    clear_id = Some(*ann_id);
                                 }
                             });
                             if ann.fixed {
@@ -998,8 +1006,10 @@ impl eframe::App for App {
                         }
                     });
                 });
-            if let Some(id) = delete_id {
-                self.annotations.annotations.retain(|a| a.id != id);
+            if let Some(id) = clear_id {
+                if let Some(ann) = self.annotations.annotations.iter_mut().find(|a| a.id == id) {
+                    ann.cleared = true;
+                }
                 self.save_annotations();
             }
             if let Some(id) = toggle_fixed_id {
@@ -1065,6 +1075,7 @@ impl eframe::App for App {
                         y_pt: pending.y_pt,
                         note: pending.text_buf.trim().to_string(),
                         fixed: false,
+                        cleared: false,
                     });
                     self.save_annotations();
                 }
@@ -1210,7 +1221,7 @@ fn draw_annotation_markers(
     let painter = ui.painter();
     let filtered: Vec<&Annotation> = annotations
         .iter()
-        .filter(|a| a.case == case_name && a.page == page && a.source == source)
+        .filter(|a| a.case == case_name && a.page == page && a.source == source && !a.cleared)
         .collect();
     for (i, ann) in filtered.iter().enumerate() {
         let center = pdf_pts_to_screen(ann.x_pt, ann.y_pt, &image_rect, tex_size);
