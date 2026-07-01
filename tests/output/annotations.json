@@ -1,5 +1,5 @@
 {
-  "next_id": 212,
+  "next_id": 218,
   "annotations": [
     {
       "id": 208,
@@ -9,7 +9,8 @@
       "x_pt": 50.0,
       "y_pt": 750.0,
       "note": "REMINDER: text_boundary regressed 70.5->69.6 during the 2026-06-21 dedup sweep (accepted into baselines). Cause unverified - this fixture has no textboxes/VML/charts/SmartArt, so none of the behavior-changing commits (A13/A15/C5/B1) should obviously touch it; likely pre-existing drift or nondeterminism rather than the refactor. Investigation deferred per request. Revisit.",
-      "fixed": false
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 8,
@@ -19,7 +20,8 @@
       "x_pt": 322.27734,
       "y_pt": 164.30786,
       "note": "This text should come on page 2.",
-      "fixed": false
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 59,
@@ -29,7 +31,8 @@
       "x_pt": 167.81552,
       "y_pt": 677.6182,
       "note": "Too much white space above image.",
-      "fixed": false
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 66,
@@ -39,7 +42,8 @@
       "x_pt": 119.409325,
       "y_pt": 572.0255,
       "note": "Looks like each bullet point causes a slightly larger vertical drift from the reference. This acumulates. Do not brush this off or defer it. Do a thorough examination and compare to reference.",
-      "fixed": false
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 82,
@@ -49,7 +53,8 @@
       "x_pt": 81.04862,
       "y_pt": 744.497,
       "note": "Too much space below \"header\" with image and text and above numbered list.",
-      "fixed": false
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 93,
@@ -59,7 +64,8 @@
       "x_pt": 539.4887,
       "y_pt": 410.5048,
       "note": "is this a line break we are adding, or just word wrapping?  Splitting in the middle of a phone number is unfortunate, but it migjt just be a result of  word with difference.",
-      "fixed": false
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 111,
@@ -69,7 +75,8 @@
       "x_pt": 226.61615,
       "y_pt": 637.20514,
       "note": "We wrap this image. Word does not.",
-      "fixed": false
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 114,
@@ -79,27 +86,8 @@
       "x_pt": 449.4605,
       "y_pt": 348.35162,
       "note": "\"Preparation....\" should be on the next line",
-      "fixed": false
-    },
-    {
-      "id": 115,
-      "case": "new/english_town_council_report",
-      "page": 6,
-      "source": "Generated",
-      "x_pt": 516.4139,
-      "y_pt": 127.313354,
-      "note": "Text outside table here.",
-      "fixed": true
-    },
-    {
-      "id": 117,
-      "case": "scraped/learning_cultures_dissertation",
-      "page": 62,
-      "source": "Generated",
-      "x_pt": 134.04297,
-      "y_pt": 507.33594,
-      "note": "Figure 3.1 is rendered wrong. The arrows are wonky and the large text should be white.",
-      "fixed": true
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 118,
@@ -109,7 +97,8 @@
       "x_pt": 133.59695,
       "y_pt": 403.7632,
       "note": "Space above \"Fonte: \" is to small.",
-      "fixed": false
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 121,
@@ -119,7 +108,8 @@
       "x_pt": 449.4558,
       "y_pt": 379.37347,
       "note": "All text from \"Slik gjør du\" and on is shifted too low,",
-      "fixed": false
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 124,
@@ -129,17 +119,8 @@
       "x_pt": 75.68638,
       "y_pt": 794.8483,
       "note": "We start higher up here than reference for some reason.",
-      "fixed": false
-    },
-    {
-      "id": 132,
-      "case": "new/czech_works_contract_proposal",
-      "page": 4,
-      "source": "Generated",
-      "x_pt": 95.37916,
-      "y_pt": 273.9615,
-      "note": "List item 5.  is indented here for some reason",
-      "fixed": true
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 133,
@@ -149,7 +130,8 @@
       "x_pt": 121.24737,
       "y_pt": 216.53723,
       "note": "Empty space here. The Framed text \"(Arrangements regarding ...\" should start here on this page.",
-      "fixed": false
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 152,
@@ -159,7 +141,8 @@
       "x_pt": 310.00967,
       "y_pt": 691.51483,
       "note": "Text on the paragraph above the rectangle should also wrap around it.",
-      "fixed": false
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 158,
@@ -169,7 +152,8 @@
       "x_pt": 74.63493,
       "y_pt": 284.4301,
       "note": "Generally the \"Las Vegas, NV ...\" text looks different,",
-      "fixed": false
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 167,
@@ -179,47 +163,8 @@
       "x_pt": 191.0586,
       "y_pt": 297.4336,
       "note": "Arrows and labels not correct. The arrows should be touching the grey line and the table above.",
-      "fixed": false
-    },
-    {
-      "id": 176,
-      "case": "new/scottish_fundraising_awards_campaign",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 347.52167,
-      "y_pt": 759.1381,
-      "note": "\"Scottish Fundraising ...\" header overrlaps images",
-      "fixed": true
-    },
-    {
-      "id": 177,
-      "case": "new/scottish_fundraising_awards_campaign",
-      "page": 1,
-      "source": "Generated",
-      "x_pt": 347.52167,
-      "y_pt": 759.1381,
-      "note": "Table overlaps images",
-      "fixed": true
-    },
-    {
-      "id": 178,
-      "case": "new/slovak_pedagogical_practice_agreement",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 88.413185,
-      "y_pt": 691.5464,
-      "note": "Large empty space here.",
-      "fixed": true
-    },
-    {
-      "id": 182,
-      "case": "new/carbon_farming_initiative_rule",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 148.81929,
-      "y_pt": 716.53296,
-      "note": "Emblem rendered wrong here. Overflows bounding box, wrong aspect ratio.",
-      "fixed": true
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 185,
@@ -229,7 +174,8 @@
       "x_pt": 189.81116,
       "y_pt": 224.97614,
       "note": "This is not accurate yet, but close.",
-      "fixed": false
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 186,
@@ -239,7 +185,8 @@
       "x_pt": 462.30698,
       "y_pt": 535.6599,
       "note": "all our text starts a little too high",
-      "fixed": false
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 190,
@@ -249,17 +196,8 @@
       "x_pt": 141.18594,
       "y_pt": 220.92401,
       "note": "Row two of this table should be broken across this page and the next",
-      "fixed": false
-    },
-    {
-      "id": 192,
-      "case": "new/slovak_pedagogical_practice_agreement",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 352.86774,
-      "y_pt": 786.76215,
-      "note": "Owl should be on the right, with the \"Univerzita ...\" heading between the logos, not under the \"Filozofica ...\" logo",
-      "fixed": true
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 193,
@@ -269,7 +207,8 @@
       "x_pt": 517.35547,
       "y_pt": 228.43283,
       "note": "Too little white space in the \"13\" box, HR goes through 13-",
-      "fixed": false
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 195,
@@ -279,7 +218,8 @@
       "x_pt": 70.719734,
       "y_pt": 752.8874,
       "note": "\"Bosch gebruikt\" -text looks too large? Also too high up.",
-      "fixed": false
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 200,
@@ -289,7 +229,8 @@
       "x_pt": 189.17963,
       "y_pt": 391.03726,
       "note": "Green text box should be broken across two pages here, not pushed to the next.",
-      "fixed": false
+      "fixed": false,
+      "cleared": false
     },
     {
       "id": 201,
@@ -299,27 +240,8 @@
       "x_pt": 502.55814,
       "y_pt": 760.0786,
       "note": "\"g\" is placed too high here. Should be lower. Compare with reference.",
-      "fixed": false
-    },
-    {
-      "id": 202,
-      "case": "case74",
-      "page": 0,
-      "source": "Generated",
-      "x_pt": 107.82415,
-      "y_pt": 138.70154,
-      "note": "Endnote is placed wrong. Compare with reference.",
-      "fixed": true
-    },
-    {
-      "id": 203,
-      "case": "scraped/uk_commercial_lease_template",
-      "page": 39,
-      "source": "Generated",
-      "x_pt": 167.2435,
-      "y_pt": 115.545654,
-      "note": "missing yellow highlights on footnotes",
-      "fixed": true
+      "fixed": true,
+      "cleared": true
     },
     {
       "id": 206,
@@ -329,7 +251,8 @@
       "x_pt": 89.82675,
       "y_pt": 746.73785,
       "note": "6.1.22 Here should be 6.7.1 per the reference",
-      "fixed": false
+      "fixed": true,
+      "cleared": false
     },
     {
       "id": 207,
@@ -339,7 +262,8 @@
       "x_pt": 49.280823,
       "y_pt": 536.67883,
       "note": "Missing numbering on \"Energy Performance Certificates\" and other headings. This one should be 6.8",
-      "fixed": false
+      "fixed": true,
+      "cleared": false
     },
     {
       "id": 209,
@@ -349,7 +273,8 @@
       "x_pt": 142.6032,
       "y_pt": 434.91977,
       "note": "First column on table 2 should be wider. Compare with reference. Red1-Red6 should be able to fall on one line. If Outer cell width is actually pixel equal, report that.",
-      "fixed": false
+      "fixed": true,
+      "cleared": true
     },
     {
       "id": 210,
@@ -359,7 +284,8 @@
       "x_pt": 55.50664,
       "y_pt": 374.0828,
       "note": "Text is rotated 90 degrees the wrong way, it is 180 off.",
-      "fixed": false
+      "fixed": true,
+      "cleared": true
     },
     {
       "id": 211,
@@ -369,7 +295,74 @@
       "x_pt": 247.92374,
       "y_pt": 717.41974,
       "note": "Horizontal lines connecting the brackets at the top and bottom should not be here.",
-      "fixed": false
+      "fixed": true,
+      "cleared": true
+    },
+    {
+      "id": 212,
+      "case": "new/slovak_pedagogical_practice_agreement",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 321.85455,
+      "y_pt": 773.76965,
+      "note": "\"Letterhead\" placed too far to the right, overlaps owl logo.",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 213,
+      "case": "new/slovak_pedagogical_practice_agreement",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 152.18144,
+      "y_pt": 636.2449,
+      "note": "Too much vertical space below HR line before body text.",
+      "fixed": true,
+      "cleared": true
+    },
+    {
+      "id": 214,
+      "case": "new/chinese_student_union_nomination_form",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 380.15063,
+      "y_pt": 169.75696,
+      "note": "text does not appear vertically centered within table cells",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 215,
+      "case": "new/romanian_quality_evaluation_strategy",
+      "page": 10,
+      "source": "Generated",
+      "x_pt": 324.3827,
+      "y_pt": 599.897,
+      "note": "Our text in the table cell goes too close to the right border of the cell.",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 216,
+      "case": "new/romanian_quality_evaluation_strategy",
+      "page": 10,
+      "source": "Generated",
+      "x_pt": 261.07718,
+      "y_pt": 509.94336,
+      "note": "foo",
+      "fixed": false,
+      "cleared": true
+    },
+    {
+      "id": 217,
+      "case": "new/romanian_quality_evaluation_strategy",
+      "page": 9,
+      "source": "Generated",
+      "x_pt": 249.64117,
+      "y_pt": 619.96594,
+      "note": "Cell row headings are not horizontally centered.",
+      "fixed": false,
+      "cleared": false
     }
   ]
 }

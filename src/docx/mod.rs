@@ -808,6 +808,13 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         }
     }
 
+    // Word always lays out an implicit final paragraph mark after a
+    // document-ending table; when it doesn't fit below the table it spills
+    // onto a fresh (blank) page. Model it as a real empty paragraph.
+    if matches!(blocks.last(), Some(Block::Table(_))) {
+        blocks.push(Block::Paragraph(crate::model::Paragraph::default()));
+    }
+
     // Final section: body-level sectPr
     let final_props = if let Some(sect_node) = wml(body, "sectPr") {
         parse_section_properties(sect_node, &mut ctx, default_line_pitch, settings.gutter_at_top)

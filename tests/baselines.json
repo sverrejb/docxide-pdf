@@ -259,9 +259,9 @@
     "text_boundary": 0.8919
   },
   "cases/case51": {
-    "jaccard": 0.0669,
-    "ssim": 0.7035,
-    "text_boundary": 0.4063
+    "jaccard": 0.1573,
+    "ssim": 0.4806,
+    "text_boundary": 0.8286
   },
   "cases/case52": {
     "jaccard": 0.7064,
@@ -524,7 +524,7 @@
   },
   "new/chinese_student_..": {
     "jaccard": 0.0832,
-    "ssim": 0.3364,
+    "ssim": 0.3366,
     "text_boundary": 0.8033
   },
   "new/construction_bat..": {
@@ -618,7 +618,7 @@
     "text_boundary": 0.1661
   },
   "new/irish_school_enr..": {
-    "jaccard": 0.3364,
+    "jaccard": 0.3376,
     "ssim": 0.5307,
     "text_boundary": 0.6964
   },
@@ -628,8 +628,8 @@
     "text_boundary": 0.7161
   },
   "new/japanese_land_de..": {
-    "jaccard": 0.1005,
-    "ssim": 0.3025,
+    "jaccard": 0.0988,
+    "ssim": 0.2968,
     "text_boundary": 0.1111
   },
   "new/k4_regulations_s..": {
@@ -668,7 +668,7 @@
     "text_boundary": 1.0
   },
   "new/pendulum_mechani..": {
-    "jaccard": 0.155,
+    "jaccard": 0.1552,
     "ssim": 0.3465,
     "text_boundary": 0.3043
   },
@@ -683,9 +683,9 @@
     "text_boundary": 0.48
   },
   "new/romanian_quality..": {
-    "jaccard": 0.3215,
-    "ssim": 0.5129,
-    "text_boundary": 0.4869
+    "jaccard": 0.3188,
+    "ssim": 0.5055,
+    "text_boundary": 0.4859
   },
   "new/russian_chess_pa..": {
     "jaccard": 0.5805,
@@ -743,9 +743,9 @@
     "text_boundary": 1.0
   },
   "new/slovak_pedagogic..": {
-    "jaccard": 0.0779,
-    "ssim": 0.1841,
-    "text_boundary": 0.0
+    "jaccard": 0.1289,
+    "ssim": 0.3707,
+    "text_boundary": 0.1379
   },
   "new/taiwanese_educat..": {
     "jaccard": 0.1138,

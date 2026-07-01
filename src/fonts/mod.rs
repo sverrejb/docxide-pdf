@@ -409,9 +409,15 @@ pub(crate) fn register_font(
     // If the fontTable provides an altName, try it first — it's the document's
     // explicit mapping and more reliable than the system font index (which may
     // resolve a localized name like "바탕" to a different font than "Batang").
+    // Math fonts are excluded: an altName like "Cambria Math" (seen for
+    // "Korinna BT") has enormous win ascent/descent metrics that balloon every
+    // line; Word substitutes body text with a normal family fallback instead.
     let result = table_entry
         .and_then(|entry| {
             let alt = entry.alt_name.as_ref()?;
+            if alt.contains("Math") {
+                return None;
+            }
             let m = try_candidate(alt)?;
             log::info!("Font substitution: {primary} → altName \"{alt}\"");
             Some(m)

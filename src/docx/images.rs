@@ -116,7 +116,8 @@ fn find_pic_sp_pr<'a>(container: roxmltree::Node<'a, 'a>) -> Option<roxmltree::N
 /// Read in-plane rotation (clockwise degrees) for a floating picture. Prefers the
 /// normal `a:xfrm @rot`; some files instead encode the turn via a 3D scene camera
 /// `a:scene3d/a:camera/a:rot @rev` (e.g. a vertical label rotated 90°). Both are in
-/// 60000ths of a degree.
+/// 60000ths of a degree, but @rev revolves the *camera*, so the object appears
+/// rotated the opposite way — negate it to get the object rotation.
 fn parse_image_rotation(sp_pr: Option<roxmltree::Node>) -> f32 {
     let Some(sp_pr) = sp_pr else {
         return 0.0;
@@ -133,7 +134,7 @@ fn parse_image_rotation(sp_pr: Option<roxmltree::Node>) -> f32 {
         .and_then(|c| dml(c, "rot"))
         .and_then(|r| r.attribute("rev"))
         .and_then(|v| v.parse::<f32>().ok())
-        .map(|rev| rev / 60000.0)
+        .map(|rev| -rev / 60000.0)
         .unwrap_or(0.0)
 }
 

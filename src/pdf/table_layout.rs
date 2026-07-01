@@ -14,7 +14,7 @@ use crate::model::{
 
 use super::RenderContext;
 use super::header_footer::substitute_hf_runs;
-use super::layout::{TextLine, build_paragraph_lines, build_tabbed_line, font_metric, is_text_empty};
+use super::layout::{TextLine, build_paragraph_lines, build_tabbed_line, is_text_empty, tallest_run_metrics};
 use super::resolve_line_h;
 
 pub(super) fn cell_span_width(col_widths: &[f32], grid_col: usize, span: usize) -> f32 {
@@ -123,6 +123,42 @@ fn natural_widths(table: &Table, fonts: &HashMap<String, FontEntry>, cm: &crate:
         }
     }
     natural
+}
+
+/// Raise each column's natural width to fit any directly nested table at its
+/// own content-fitted width (plus the host cell's h-padding). The flattened
+/// paragraph widths from `natural_widths` can't see the nested grid: three
+/// side-by-side nested columns need their *sum*, not the widest paragraph.
+fn raise_natural_for_nested_tables(
+    table: &Table,
+    fonts: &HashMap<String, FontEntry>,
+    cm: &CellMargins,
+    natural: &mut [f32],
+) {
+    let ncols = natural.len();
+    for row in &table.rows {
+        let mut grid_col = 0usize;
+        for cell in &row.cells {
+            let span = cell.grid_span.max(1) as usize;
+            if grid_col >= ncols || span > 1 {
+                grid_col += span;
+                continue;
+            }
+            let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
+            let h_pad = ecm.left + ecm.right;
+            for block in &cell.content {
+                if let Block::Table(nt) = block {
+                    let ncm = &nt.cell_margins;
+                    let mut nat = natural_widths(nt, fonts, ncm);
+                    raise_natural_for_nested_tables(nt, fonts, ncm, &mut nat);
+                    let min_cell = ncm.left + ncm.right;
+                    let w: f32 = nat.iter().map(|&x| x.max(min_cell)).sum();
+                    natural[grid_col] = natural[grid_col].max(w + h_pad);
+                }
+            }
+            grid_col += span;
+        }
+    }
 }
 
 /// Distribute `avail` across columns proportionally to their natural ("max")
@@ -258,11 +294,18 @@ pub(super) fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>
     });
     if table.auto_width && !table.fixed_layout && grid_uniform && has_nested_table {
         if let Some(avail) = fill_width.filter(|a| *a > 0.0) {
-            let natural = natural_widths(table, fonts, cm);
+            let mut natural = natural_widths(table, fonts, cm);
+            raise_natural_for_nested_tables(table, fonts, cm, &mut natural);
             let min_cell = cm.left + cm.right;
             let maxw: Vec<f32> = (0..ncols)
                 .map(|i| natural[i].max(min_widths[i]).max(min_cell))
                 .collect();
+            // AutoFit to Contents: when every column fits at max-content
+            // width, Word leaves the table narrower than the window rather
+            // than stretching it to fill.
+            if maxw.iter().sum::<f32>() <= avail {
+                return maxw;
+            }
             let minw: Vec<f32> = (0..ncols).map(|i| min_widths[i].max(min_cell)).collect();
             return distribute_autofit(&minw, &maxw, avail);
         }
@@ -297,14 +340,26 @@ pub(super) fn auto_fit_columns(table: &Table, fonts: &HashMap<String, FontEntry>
                 })
                 .collect()
         } else {
-            (0..ncols)
-                .map(|i| {
-                    let mw = min_widths[i].max(min_cell);
-                    let nw = natural_widths[i].max(mw);
-                    let fitted = (nw * 0.9).max(mw);
-                    fitted.min(table.col_widths.get(i).copied().unwrap_or(f32::MAX))
-                })
-                .collect()
+            // At full natural width the table fits the parent cell → Word
+            // keeps the content-fitted widths (AutoFit to Contents), ignoring
+            // the stored gridCol hints (§17.18.87 derives purely from cell
+            // content). Only when it overflows does Word squeeze below
+            // natural width; the 0.9 factor approximates that squeeze.
+            let full: Vec<f32> = (0..ncols)
+                .map(|i| natural_widths[i].max(min_widths[i].max(min_cell)))
+                .collect();
+            if full.iter().sum::<f32>() <= avail {
+                full
+            } else {
+                (0..ncols)
+                    .map(|i| {
+                        let mw = min_widths[i].max(min_cell);
+                        let nw = natural_widths[i].max(mw);
+                        let fitted = (nw * 0.9).max(mw);
+                        fitted.min(table.col_widths.get(i).copied().unwrap_or(f32::MAX))
+                    })
+                    .collect()
+            }
         };
         let total: f32 = widths.iter().sum();
         if total > avail && avail > 0.0 {
@@ -546,19 +601,39 @@ pub(super) fn compute_row_layouts(
                                 } else {
                                     &para.runs
                                 };
-                                let font_size = runs.first().map_or(12.0, |r| r.font_size);
-                                let effective_ls =
-                                    para.line_spacing.unwrap_or(ctx.doc_line_spacing);
+                                // Size the cell line from the tallest run, not the
+                                // first — a small leading run (e.g. padding spaces)
+                                // must not pull the baseline up. Math runs are
+                                // clamped inside tallest_run_metrics so a header
+                                // cell leading with math doesn't balloon the row.
+                                // Cell metrics come from the first run carrying
+                                // real text — a leading padding-spaces run must
+                                // not set the baseline (Word sizes the line from
+                                // the content run; observed in header cells like
+                                // "                g" where g is larger).
+                                let metric_run = runs
+                                    .iter()
+                                    .find(|r| {
+                                        r.is_tab
+                                            || r.text.is_empty()
+                                            || !r.text.trim().is_empty()
+                                    })
+                                    .or(runs.first());
+                                let font_size = metric_run.map_or(12.0, |r| r.font_size);
                                 // A math run uses a math font (e.g. Cambria Math)
                                 // whose tall ascent/descent must not set the cell
                                 // line height (mirrors the is_math clamp in
                                 // tallest_run_metrics) — otherwise a header cell
-                                // whose first run is math balloons the row.
-                                let tallest_lhr = if runs.first().is_some_and(|r| r.is_math) {
-                                    None
-                                } else {
-                                    font_metric(runs, ctx.fonts, |e| e.line_h_ratio)
-                                };
+                                // whose metric run is math balloons the row.
+                                let mut kb0 = String::new();
+                                let metric_font = metric_run
+                                    .filter(|r| !r.is_math)
+                                    .map(|r| font_key_buf(r, &mut kb0).to_owned())
+                                    .and_then(|k| ctx.fonts.get(&k));
+                                let tallest_lhr = metric_font.and_then(|e| e.line_h_ratio);
+                                let tallest_ar = metric_font.and_then(|e| e.ascender_ratio);
+                                let effective_ls =
+                                    para.line_spacing.unwrap_or(ctx.doc_line_spacing);
                                 let line_h =
                                     resolve_line_h(effective_ls, font_size, tallest_lhr);
 
@@ -569,13 +644,7 @@ pub(super) fn compute_row_layouts(
                                 };
                                 total_h += space_before;
 
-                                let mut kb = String::new();
-                                let ascender_ratio = runs
-                                    .first()
-                                    .map(|r| font_key_buf(r, &mut kb))
-                                    .and_then(|k| ctx.fonts.get(k))
-                                    .and_then(|e| e.ascender_ratio)
-                                    .unwrap_or(0.75);
+                                let ascender_ratio = tallest_ar.unwrap_or(0.75);
 
                                 // Compute extra left indent from left-aligned
                                 // wrapSquare/Tight floating images so text wraps
@@ -676,11 +745,15 @@ pub(super) fn compute_row_layouts(
                                     {
                                         // hideMark: last empty paragraph in cell
                                         // contributes no height
-                                    } else if prev_was_nested_table && para_idx == 1 {
-                                        // Cell = [nested table, empty ¶]: the mark
-                                        // glyph height is covered by the +0.5pt
-                                        // row addition; space_after is suppressed
-                                        // in the trailing-space block below.
+                                    } else if prev_was_nested_table
+                                        && block_idx == block_count - 1
+                                        && para.content_height == 0.0
+                                    {
+                                        // End-of-cell mark directly after a nested
+                                        // table: Word hides it. The mark glyph
+                                        // height is covered by the +0.5pt row
+                                        // addition; space_after is suppressed in
+                                        // the trailing-space block below.
                                     } else if para.content_height > 0.0 {
                                         // Image paragraph: the image is line 1; each
                                         // trailing w:br adds a further blank line
@@ -809,15 +882,15 @@ pub(super) fn compute_row_layouts(
                         }
                     }
 
-                    // When a cell contains only a nested table plus the
-                    // mandatory end-of-cell paragraph mark (empty, no text),
-                    // Word does not count the trailing paragraph's space_after
-                    // toward the row height — the mark glyph height and
-                    // line_h are already suppressed above via prev_was_nested_table.
-                    let sole_table_plus_mark = items.len() == 2
-                        && matches!(items.first(), Some(CellContentItem::NestedTable { .. }))
+                    // When a cell ends with a nested table plus the mandatory
+                    // end-of-cell paragraph mark (empty, no text), Word does
+                    // not count the trailing paragraph's space_after toward
+                    // the row height — the mark glyph height and line_h are
+                    // already suppressed above via prev_was_nested_table.
+                    let trailing_mark_after_table = items.len() >= 2
+                        && matches!(items.get(items.len() - 2), Some(CellContentItem::NestedTable { .. }))
                         && matches!(items.last(), Some(CellContentItem::Paragraph(p)) if p.lines.is_empty() && p.image_name.is_none() && p.floating_images.is_empty());
-                    if !sole_table_plus_mark {
+                    if !trailing_mark_after_table {
                         total_h += prev_space_after;
                     }
                     if is_rotated {

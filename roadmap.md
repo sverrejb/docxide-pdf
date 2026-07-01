@@ -99,6 +99,28 @@ Same pipeline for bigrams. Input space is `glyphs²` but only ~500 common pairs 
 - **Interim safe win:** ship per-font factor (Calibri/TNR=0.99985, Arial=0.9999, others=1.0) for 3 clean improvements while data pipeline is built
 - **Analysis tooling:** `tools/experiments/width_analysis.py` extracts per-char signed width errors from reference PDFs
 
+## Table Row Height Deficit (TODO — MEDIUM IMPACT, discovered 2026-07)
+
+Our table rows run ~0.5–0.9pt shorter than Word's, compounding down a page of
+stacked tables (case51: −6.5pt accumulated over 3 tables, measured via stext
+anchor diffing). Consequence: content that Word pushes to the next page can
+stay on ours. case51's reference has a blank page 2 (Word's implicit final
+paragraph mark spills after the doc-ending table at 710.9pt); ours ends 8.2pt
+higher so the mark fits and no page 2 is emitted — this alone costs case51
+~22pp SSIM (missing page scores 0). The implicit final-¶ model and the
+end-of-cell-mark suppression after nested tables are already in (2026-07);
+only the per-row height accounting remains.
+
+## Header Multi-Float Wrap (TODO — annotation #212, slovak_pedagogical_practice_agreement)
+
+Header wrap machinery supports a single float zone (`hdr_fz`,
+header_footer.rs) — a letterhead centered between TWO logos (left PNG anchor +
+right VML `w:object`) needs per-line [left-float-edge, right-float-edge]
+segments. Also: `parse_object_floating_image` hard-codes `WrapType::None`,
+ignoring `w10:wrap type="square"`; fixing that alone makes it worse (owl
+replaces UMB zone). Full diagnosis in 2026-07-02 session notes / annotation
+#212. HR `o:hrpct` width should also use the indent-adjusted paragraph box.
+
 ## Unimplemented Run Properties
 
 ### `w:emboss` / `w:imprint` / `w:shadow` (TODO — MEDIUM IMPACT)

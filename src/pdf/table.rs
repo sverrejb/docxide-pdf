@@ -506,7 +506,7 @@ fn render_simple_textbox(
     gradient_specs: &mut Vec<super::GradientSpec>,
 ) {
     use crate::model::ShapeFill;
-    use super::smartart::draw_shape_path;
+    use super::smartart::{draw_shape_path, draw_shape_stroke_path};
     use super::textbox_render::render_textbox_paragraphs;
 
     let tb_width = tb.width_pt;
@@ -527,7 +527,9 @@ fn render_simple_textbox(
             content.save_state();
             content.set_line_width(tb.stroke_width);
             stroke_rgb(content, stroke);
-            draw_shape_path(content, tb_x, tb_y_top - tb_height, tb_width, tb_height, &tb.shape_type);
+            // Honor per-subpath stroke flags (brace/bracket pairs have a
+            // fill-only outline subpath), same as body-anchored textboxes.
+            draw_shape_stroke_path(content, tb_x, tb_y_top - tb_height, tb_width, tb_height, &tb.shape_type);
             content.stroke();
             content.restore_state();
         }
