@@ -229,6 +229,12 @@ fn update_styleref_from_para(
     }
 }
 
+/// Minimum side-strip width for a line box to sit beside a wrapping float.
+/// Empirical: brazilian_logistics_study absorbs empty paragraphs beside a
+/// float with ~42pt strips; sample500kB (image width == column width, 0pt
+/// strips) stacks them below.
+const MIN_EMPTY_STRIP: f32 = 18.0;
+
 pub(super) struct FloatZone {
     pub top_y: f32,
     pub bottom_y: f32,
@@ -1698,13 +1704,24 @@ fn render_paragraph_block(
     let mut float_overflow_h = 0.0f32;
 
     for fi in &para.floating_images {
-        // Only topAndBottom reserves the image height in the anchor paragraph.
-        // wrapSquare/Tight images that leave no usable text column do flow the
-        // following content below — but via the float-zone displacement in the
-        // block loop, NOT by reserving height here: empty spacer paragraphs
-        // must still advance through the image's vertical span (Word overlays
-        // them with the float), or the image height gets counted twice.
-        let reserve = matches!(fi.wrap_type, WrapType::TopAndBottom);
+        let reserve = match fi.wrap_type {
+            WrapType::TopAndBottom => true,
+            // wrapSquare/Tight with a usable side strip: content (even empty
+            // spacer paragraphs) flows beside via the float zone — reserving
+            // here would double-count the image height (brazilian, ~42pt
+            // strips). With no usable strip (sample500kB: image width ==
+            // column width) Word stacks everything below the float, which
+            // reserving the image height in the anchor reproduces.
+            WrapType::Square | WrapType::Tight => {
+                let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
+                let left_gap = (fi_x - fi.dist_left) - col_x;
+                let right_gap =
+                    (col_x + col_w) - (fi_x + fi.image.display_width + fi.dist_right);
+                left_gap.max(right_gap) < MIN_EMPTY_STRIP
+            }
+            WrapType::Through => false,
+            WrapType::None => false,
+        };
         let fi_h = match fi.v_position {
             VerticalPosition::Offset(o) => {
                 o + fi.dist_top + fi.image.display_height + fi.dist_bottom
@@ -2936,9 +2953,17 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     };
                     if !enough_space {
                         // Empty paragraphs can be absorbed within a wide
-                        // image's vertical extent without needing wrap space.
+                        // image's vertical extent without needing wrap space —
+                        // but only when a usable side strip exists for their
+                        // line boxes. When the float spans the full column
+                        // (sample500kB: image width == text width) Word stacks
+                        // even empty paragraphs below it; with a real strip
+                        // (brazilian: ~42pt) they sit beside. 18pt threshold
+                        // splits the two observed cases.
                         // Include paragraphs with only line breaks (w:br)
                         // as "empty" — they have no visible text content.
+                        let has_side_strip =
+                            space_right.max(space_left) >= MIN_EMPTY_STRIP;
                         let is_empty_para = matches!(block,
                             Block::Paragraph(p) if p.runs.iter().all(|r|
                                 r.vanish || r.is_line_break
@@ -2948,7 +2973,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 && p.inline_chart.is_none()
                                 && p.smartart.is_empty()
                         );
-                        if !is_empty_para {
+                        if !is_empty_para || !has_side_strip {
                             state.pb.slot_top = fz.bottom_y;
                             state.pb.float_zone = None;
                         }
