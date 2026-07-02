@@ -684,7 +684,7 @@
   },
   "new/romanian_quality..": {
     "jaccard": 0.3188,
-    "ssim": 0.5055,
+    "ssim": 0.5059,
     "text_boundary": 0.4859
   },
   "new/russian_chess_pa..": {
@@ -743,8 +743,8 @@
     "text_boundary": 1.0
   },
   "new/slovak_pedagogic..": {
-    "jaccard": 0.1289,
-    "ssim": 0.3707,
+    "jaccard": 0.136,
+    "ssim": 0.3784,
     "text_boundary": 0.1379
   },
   "new/taiwanese_educat..": {
@@ -758,8 +758,8 @@
     "text_boundary": 0.5455
   },
   "new/turkish_chemistr..": {
-    "jaccard": 0.1886,
-    "ssim": 0.86,
+    "jaccard": 0.1895,
+    "ssim": 0.8634,
     "text_boundary": 1.0
   },
   "new/turkish_journal_..": {
@@ -773,8 +773,8 @@
     "text_boundary": 0.7645
   },
   "new/western_australi..": {
-    "jaccard": 0.3519,
-    "ssim": 0.5888,
+    "jaccard": 0.3595,
+    "ssim": 0.5991,
     "text_boundary": 0.524
   },
   "new/who_prescribing_..": {
@@ -821,14 +821,14 @@
     "convert_ms": 12.0
   },
   "scraped/brazilian_logist..": {
-    "jaccard": 0.1683,
-    "ssim": 0.2863,
-    "text_boundary": 0.1717,
+    "jaccard": 0.1699,
+    "ssim": 0.2959,
+    "text_boundary": 0.1624,
     "convert_ms": 744.0
   },
   "scraped/bush_fires_act_c..": {
-    "jaccard": 0.6064,
-    "ssim": 0.8283,
+    "jaccard": 0.6098,
+    "ssim": 0.8332,
     "text_boundary": 0.8734,
     "convert_ms": 248.6
   },
@@ -932,9 +932,9 @@
     "convert_ms": 70.6
   },
   "scraped/indonesian_bench..": {
-    "jaccard": 0.4038,
-    "ssim": 0.5468,
-    "text_boundary": 0.4685,
+    "jaccard": 0.4266,
+    "ssim": 0.567,
+    "text_boundary": 0.4372,
     "convert_ms": 170.5
   },
   "scraped/italian_evaluati..": {
@@ -992,8 +992,8 @@
     "convert_ms": 32.0
   },
   "scraped/parish_housing_d..": {
-    "jaccard": 0.3512,
-    "ssim": 0.6438,
+    "jaccard": 0.3524,
+    "ssim": 0.648,
     "text_boundary": 0.9059,
     "convert_ms": 97.8
   },
@@ -1080,8 +1080,8 @@
     "convert_ms": 32.2
   },
   "scraped/traditional_skil..": {
-    "jaccard": 0.1549,
-    "ssim": 0.4776,
+    "jaccard": 0.1551,
+    "ssim": 0.4784,
     "text_boundary": 0.7614,
     "convert_ms": 22.0
   },
@@ -1092,8 +1092,8 @@
     "convert_ms": 493.0
   },
   "scraped/turkish_ancient_..": {
-    "jaccard": 0.2242,
-    "ssim": 0.6148,
+    "jaccard": 0.2254,
+    "ssim": 0.6197,
     "text_boundary": 1.0,
     "convert_ms": 4.2
   },
