@@ -818,15 +818,29 @@ pub(super) fn parse_object_floating_image<R: Read + Seek>(
     let embed_id = imagedata.attribute((REL_NS, "id"))?;
     let (w, h) = object_dimensions(obj)?;
     let image = read_image_from_zip(embed_id, ctx.rels, ctx.zip, w, h)?;
+    // An explicit <w10:wrap type="square"/> means the object reflows text
+    // (Word wraps centered header text between such logos); without it the
+    // logo sits over/beside the text and None keeps the text full-width.
+    const W10_NS: &str = "urn:schemas-microsoft-com:office:word";
+    let wrap_type = shape
+        .children()
+        .find(|n| n.tag_name().namespace() == Some(W10_NS) && n.tag_name().name() == "wrap")
+        .and_then(|n| n.attribute("type"))
+        .map(|t| match t {
+            "square" => WrapType::Square,
+            "tight" => WrapType::Tight,
+            "through" => WrapType::Through,
+            "topAndBottom" => WrapType::TopAndBottom,
+            _ => WrapType::None,
+        })
+        .unwrap_or(WrapType::None);
     Some(FloatingImage {
         image,
         h_position: HorizontalPosition::Offset(margin_left),
         h_relative_from: h_relative,
         v_position: VerticalPosition::Offset(margin_top),
         v_relative_from: v_relative,
-        // VML OLE logos sit over/beside flowing text without reflowing it; None
-        // wrap keeps the (centered) header text full-width, matching Word.
-        wrap_type: WrapType::None,
+        wrap_type,
         wrap_text: WrapText::BothSides,
         wrap_polygon: None,
         behind_doc: false,

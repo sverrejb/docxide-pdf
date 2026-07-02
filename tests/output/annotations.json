@@ -1,5 +1,5 @@
 {
-  "next_id": 218,
+  "next_id": 219,
   "annotations": [
     {
       "id": 208,
@@ -75,8 +75,8 @@
       "x_pt": 226.61615,
       "y_pt": 637.20514,
       "note": "We wrap this image. Word does not.",
-      "fixed": false,
-      "cleared": false
+      "fixed": true,
+      "cleared": true
     },
     {
       "id": 114,
@@ -306,8 +306,8 @@
       "x_pt": 321.85455,
       "y_pt": 773.76965,
       "note": "\"Letterhead\" placed too far to the right, overlaps owl logo.",
-      "fixed": false,
-      "cleared": false
+      "fixed": true,
+      "cleared": true
     },
     {
       "id": 213,
@@ -339,7 +339,7 @@
       "x_pt": 324.3827,
       "y_pt": 599.897,
       "note": "Our text in the table cell goes too close to the right border of the cell.",
-      "fixed": false,
+      "fixed": true,
       "cleared": false
     },
     {
@@ -361,6 +361,17 @@
       "x_pt": 249.64117,
       "y_pt": 619.96594,
       "note": "Cell row headings are not horizontally centered.",
+      "fixed": true,
+      "cleared": true
+    },
+    {
+      "id": 218,
+      "case": "scraped/indonesian_benchmarking_guide",
+      "page": 6,
+      "source": "Generated",
+      "x_pt": 221.75067,
+      "y_pt": 392.58328,
+      "note": "The gap between image and caption (3. Metode) is too small",
       "fixed": false,
       "cleared": false
     }

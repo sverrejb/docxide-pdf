@@ -1698,29 +1698,13 @@ fn render_paragraph_block(
     let mut float_overflow_h = 0.0f32;
 
     for fi in &para.floating_images {
-        let reserve = match fi.wrap_type {
-            WrapType::TopAndBottom => true,
-            // A wrapSquare/Tight image only blocks the following content when
-            // NEITHER side leaves a usable text column — then Word flows that
-            // content below the image (effectively topAndBottom). When a usable
-            // column remains on either side, text wraps beside it via the float
-            // zone, so don't reserve height. Measured by the actual side gaps,
-            // not image width: a wide *centered* image (case41, ~65pt columns)
-            // still wraps, while a near-full-width image whose edge overruns the
-            // column (brazilian, ~33pt max gap) flows below.
-            WrapType::Square | WrapType::Tight => {
-                let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
-                let left_gap = (fi_x - fi.dist_left) - col_x;
-                let right_gap =
-                    (col_x + col_w) - (fi_x + fi.image.display_width + fi.dist_right);
-                // ~2/3 inch: narrower than this and Word drops to full-width
-                // text below rather than wrapping a sliver column.
-                const MIN_WRAP_COLUMN: f32 = 48.0;
-                left_gap.max(right_gap) < MIN_WRAP_COLUMN
-            }
-            WrapType::Through => false,
-            WrapType::None => false,
-        };
+        // Only topAndBottom reserves the image height in the anchor paragraph.
+        // wrapSquare/Tight images that leave no usable text column do flow the
+        // following content below — but via the float-zone displacement in the
+        // block loop, NOT by reserving height here: empty spacer paragraphs
+        // must still advance through the image's vertical span (Word overlays
+        // them with the float), or the image height gets counted twice.
+        let reserve = matches!(fi.wrap_type, WrapType::TopAndBottom);
         let fi_h = match fi.v_position {
             VerticalPosition::Offset(o) => {
                 o + fi.dist_top + fi.image.display_height + fi.dist_bottom
@@ -3085,6 +3069,18 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 );
                             }
                         }
+                    }
+                }
+            }
+            // §17.3.3.1 br clear="all": content after this paragraph restarts
+            // below any floating objects.
+            if let Block::Paragraph(p) = block {
+                if p.clears_floats {
+                    if let Some(ref fz) = state.pb.float_zone {
+                        if state.pb.slot_top > fz.bottom_y {
+                            state.pb.slot_top = fz.bottom_y;
+                        }
+                        state.pb.float_zone = None;
                     }
                 }
             }

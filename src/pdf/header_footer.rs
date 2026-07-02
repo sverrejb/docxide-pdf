@@ -306,8 +306,10 @@ pub(super) fn render_header_footer(
 
     let mut pi = 0usize;
     let mut prev_space_after = 0.0f32;
-    // Float zone: (fi_x, fi_y_top, fi_y_bottom, obj_right, dist_left, dist_right)
-    let mut hdr_fz: Option<(f32, f32, f32, f32, f32, f32)> = None;
+    // Float zones: (fi_x, fi_y_top, fi_y_bottom, obj_right, dist_left, dist_right).
+    // A header can hold several wrapping floats (e.g. a logo on each side of a
+    // centered letterhead) — all of them constrain the text bounds together.
+    let mut hdr_fz: Vec<(f32, f32, f32, f32, f32, f32)> = Vec::new();
     for block in &hf.blocks {
         match block {
             Block::Table(table) => {
@@ -675,7 +677,7 @@ pub(super) fn render_header_footer(
                             fi.wrap_type,
                             WrapType::Square | WrapType::Tight | WrapType::Through
                         ) {
-                            hdr_fz = Some((
+                            hdr_fz.push((
                                 fi_x,
                                 fi_y_top,
                                 fi_y_top - img.display_height,
@@ -834,72 +836,91 @@ pub(super) fn render_header_footer(
                     -para.indent_first_line
                 };
 
-                // Narrow text width when a wrapping floating image overlaps this paragraph
-                // Check both same-paragraph floats and cross-paragraph float zone
+                // Narrow text width when wrapping floating images overlap this paragraph.
+                // Combine same-paragraph floats and cross-paragraph float zones so a
+                // logo on each side of a centered letterhead constrains both edges.
                 let mut hdr_line_geom: Option<Vec<(f32, f32)>> = None;
-                let fz_params: Option<(f32, f32, f32, f32, f32, f32)> =
-                    para.floating_images
-                        .iter()
-                        .find(|fi| {
-                            matches!(
-                                fi.wrap_type,
-                                WrapType::Square | WrapType::Tight | WrapType::Through
-                            )
-                        })
-                        .map(|fi| {
-                            let img = &fi.image;
-                            let fi_x = super::resolve_h_position(
-                                fi.h_relative_from,
-                                &fi.h_position,
-                                img.display_width,
-                                sp,
-                                sp.margin_left,
-                                text_width,
-                                text_width,
-                            );
-                            let fi_y_top = super::resolve_fi_y_top(fi, sp, slot_top);
-                            (
-                                fi_x,
-                                fi_y_top,
-                                fi_y_top - img.display_height,
-                                fi_x + img.display_width,
-                                fi.dist_left,
-                                fi.dist_right,
-                            )
-                        })
-                        .or(hdr_fz);
+                let mut zones: Vec<(f32, f32, f32, f32, f32, f32)> = para
+                    .floating_images
+                    .iter()
+                    .filter(|fi| {
+                        matches!(
+                            fi.wrap_type,
+                            WrapType::Square | WrapType::Tight | WrapType::Through
+                        )
+                    })
+                    .map(|fi| {
+                        let img = &fi.image;
+                        let fi_x = super::resolve_h_position(
+                            fi.h_relative_from,
+                            &fi.h_position,
+                            img.display_width,
+                            sp,
+                            sp.margin_left,
+                            text_width,
+                            text_width,
+                        );
+                        let fi_y_top = super::resolve_fi_y_top(fi, sp, slot_top);
+                        (
+                            fi_x,
+                            fi_y_top,
+                            fi_y_top - img.display_height,
+                            fi_x + img.display_width,
+                            fi.dist_left,
+                            fi.dist_right,
+                        )
+                    })
+                    .collect();
+                zones.extend(hdr_fz.iter().copied());
 
-                if let Some((fi_x, fi_y_top, fi_y_bottom, obj_right, dist_left, dist_right)) =
-                    fz_params
                 {
                     let col_x = sp.margin_left;
                     let col_right = sp.margin_left + text_width;
 
-                    // Check if paragraph overlaps the float vertically
-                    if slot_top > fi_y_bottom && baseline_y < fi_y_top {
-                        let space_right =
-                            col_right - (obj_right + dist_right);
-                        let space_left = (fi_x - dist_left) - col_x;
-
-                        if space_right >= space_left && space_right >= 36.0 {
-                            let new_left = obj_right + dist_right;
-                            para_text_width =
-                                (col_right - new_left - para.indent_right).max(1.0);
-                            para_text_x = new_left + para.indent_left;
-                        } else if space_left >= 36.0 {
-                            let avail_right = fi_x - dist_left;
-                            para_text_width = (avail_right - col_x
-                                - para.indent_left
-                                - para.indent_right)
-                                .max(1.0);
+                    // Combined text bounds over [y_lo, y_hi]: a float with more room
+                    // on its right raises the left bound, otherwise it lowers the
+                    // right bound. Returns None when no zone overlaps.
+                    let bounds_at = |y_hi: f32, y_lo: f32| -> Option<(f32, f32)> {
+                        let mut left = col_x;
+                        let mut right = col_right;
+                        let mut hit = false;
+                        for &(fi_x, fi_y_top, fi_y_bottom, obj_right, dist_left, dist_right) in
+                            &zones
+                        {
+                            if y_hi > fi_y_bottom && y_lo < fi_y_top {
+                                hit = true;
+                                let space_right = col_right - (obj_right + dist_right);
+                                let space_left = (fi_x - dist_left) - col_x;
+                                if space_right >= space_left && space_right >= 36.0 {
+                                    left = left.max(obj_right + dist_right);
+                                } else if space_left >= 36.0 {
+                                    right = right.min(fi_x - dist_left);
+                                }
+                            }
                         }
+                        hit.then_some((left, right))
+                    };
+
+                    // Word measures paragraph indents from the column edge and lets
+                    // float bounds clip the region — indents are NOT added on top of
+                    // the float edges.
+                    let indented = |lb: f32, rb: f32| -> (f32, f32) {
+                        let tx = (col_x + para.indent_left).max(lb);
+                        let tr = (col_right - para.indent_right).min(rb);
+                        (tx, (tr - tx).max(1.0))
+                    };
+
+                    if let Some((lb, rb)) = bounds_at(slot_top, baseline_y) {
+                        (para_text_x, para_text_width) = indented(lb, rb);
 
                         // Build per-line geometry for multi-line paragraphs that may
-                        // span above and through the float zone
+                        // span above and through the float zones
                         let ascender_ratio_e = tallest_ar.unwrap_or(0.75);
                         let full_w =
                             (text_width - para.indent_left - para.indent_right).max(1.0);
-                        let max_lines = ((slot_top - fi_y_bottom) / line_h)
+                        let deepest_bottom =
+                            zones.iter().map(|z| z.2).fold(f32::INFINITY, f32::min);
+                        let max_lines = ((slot_top - deepest_bottom) / line_h)
                             .ceil() as usize
                             + 10;
                         let max_lines = max_lines.max(20);
@@ -908,26 +929,9 @@ pub(super) fn render_header_footer(
                             let y = slot_top
                                 - font_size * ascender_ratio_e
                                 - i as f32 * line_h;
-                            if y <= fi_y_top && y > fi_y_bottom {
-                                let sr = col_right - (obj_right + dist_right);
-                                let sl = (fi_x - dist_left) - col_x;
-                                if sr >= sl && sr >= 36.0 {
-                                    let nl = obj_right + dist_right;
-                                    let w = (col_right - nl - para.indent_right)
-                                        .max(1.0);
-                                    geom.push((nl + para.indent_left, w));
-                                } else if sl >= 36.0 {
-                                    let ar = fi_x - dist_left;
-                                    let w = (ar - col_x
-                                        - para.indent_left
-                                        - para.indent_right)
-                                        .max(1.0);
-                                    geom.push((col_x + para.indent_left, w));
-                                } else {
-                                    geom.push((col_x + para.indent_left, full_w));
-                                }
-                            } else {
-                                geom.push((col_x + para.indent_left, full_w));
+                            match bounds_at(y, y) {
+                                Some((lb, rb)) => geom.push(indented(lb, rb)),
+                                None => geom.push((col_x + para.indent_left, full_w)),
                             }
                         }
                         hdr_line_geom = Some(geom);

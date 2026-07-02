@@ -399,6 +399,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         page_break_before_explicit: parsed.has_explicit_page_break_before,
         page_break_after: parsed.has_page_break_after,
         column_break_before: parsed.has_column_break,
+        clears_floats: parsed.has_clear_break,
         tab_stops,
         floating_images,
         textboxes,

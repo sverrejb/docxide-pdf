@@ -83,6 +83,7 @@ pub(super) struct ParsedRuns {
     pub(super) has_explicit_page_break_before: bool,
     pub(super) has_page_break_after: bool,
     pub(super) has_column_break: bool,
+    pub(super) has_clear_break: bool,
     pub(super) floating_images: Vec<FloatingImage>,
     pub(super) textboxes: Vec<Textbox>,
     pub(super) connectors: Vec<ConnectorShape>,
@@ -987,6 +988,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
     let mut has_page_break_after = false;
     let mut page_break_before_content = false;
     let mut has_column_break = false;
+    let mut has_clear_break = false;
     let mut field_stack: Vec<FieldFrame> = Vec::new();
 
     for (run_node, hyperlink_url, is_anchor_hyperlink, comment_ids) in run_nodes {
@@ -1178,6 +1180,9 @@ pub(super) fn parse_runs<R: Read + Seek>(
                     }
                     Some("column") => has_column_break = true,
                     _ => {
+                        if child.attribute((WML_NS, "clear")) == Some("all") {
+                            has_clear_break = true;
+                        }
                         flush_pending(&mut pending_text, &mut runs);
                         runs.push(Run {
                             is_line_break: true,
@@ -1309,6 +1314,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
         has_explicit_page_break_before: page_break_before_content,
         has_page_break_after,
         has_column_break,
+        has_clear_break,
         floating_images,
         textboxes,
         connectors,

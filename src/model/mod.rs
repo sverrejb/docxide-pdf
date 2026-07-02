@@ -346,6 +346,9 @@ pub struct Paragraph {
     pub page_break_before_explicit: bool,
     pub page_break_after: bool,
     pub column_break_before: bool,
+    /// §17.3.3.1 `w:br w:type="textWrapping" w:clear="all"` — content after
+    /// this paragraph restarts below any floating objects.
+    pub clears_floats: bool,
     pub tab_stops: Vec<TabStop>,
     pub floating_images: Vec<FloatingImage>,
     pub textboxes: Vec<Textbox>,

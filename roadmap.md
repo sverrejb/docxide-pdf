@@ -111,15 +111,14 @@ higher so the mark fits and no page 2 is emitted — this alone costs case51
 end-of-cell-mark suppression after nested tables are already in (2026-07);
 only the per-row height accounting remains.
 
-## Header Multi-Float Wrap (TODO — annotation #212, slovak_pedagogical_practice_agreement)
+## Header Multi-Float Wrap (DONE — 2026-07-02, annotation #212)
 
-Header wrap machinery supports a single float zone (`hdr_fz`,
-header_footer.rs) — a letterhead centered between TWO logos (left PNG anchor +
-right VML `w:object`) needs per-line [left-float-edge, right-float-edge]
-segments. Also: `parse_object_floating_image` hard-codes `WrapType::None`,
-ignoring `w10:wrap type="square"`; fixing that alone makes it worse (owl
-replaces UMB zone). Full diagnosis in 2026-07-02 session notes / annotation
-#212. HR `o:hrpct` width should also use the indent-adjusted paragraph box.
+`hdr_fz` is now a Vec of zones; all wrapping floats (same-paragraph + earlier
+paragraphs) constrain the text bounds together, and paragraph indents are
+measured from the column edge with float bounds clipping (Word semantics).
+`parse_object_floating_image` honors `w10:wrap type="square|tight|through|
+topAndBottom"`. Letterhead center now within ~5pt of reference. Remaining:
+HR `o:hrpct` width should use the indent-adjusted paragraph box.
 
 ## Unimplemented Run Properties
 
@@ -171,6 +170,21 @@ Vertical alignment of runs within a line (top/center/baseline/bottom/auto). Only
 `w:bidi` (paragraph-level) and `w:rtl` (run-level) right-to-left support is completely absent. Requires implementing the Unicode BiDi algorithm (UAX #9) for correct visual reordering. Architecturally complex — affects line building, text rendering, and alignment.
 
 ## Unimplemented Table Features
+
+### Cell paragraph `indent_right` in render pass (DONE — 2026-07-02, annotations #215/#217)
+
+`table.rs` computed the render-time `text_w` without subtracting `para.indent_right`
+while the wrap width in `table_layout.rs` did — centered cell text shifted right by
+`indent_right/2` and justified text overshot the cell border. Both spots now match
+the layout width (romanian_quality_evaluation_strategy SWOT headings).
+
+### `w:vAlign="center"` text sits ~3pt high (TODO — annotation #214, chinese_student_union_nomination_form)
+
+Row heights match Word, but ink in vAlign=center cells is ~3pt above the cell
+center (reference is dead-on). Residual is the baseline placement inside the
+line box (`baseline_y = cursor_y - para.font_size` in table.rs) interacting
+with `cell_content_h_for_valign`. Changing it shifts text in every table cell —
+needs a measured fix against multiple fixtures, not a one-case tweak.
 
 ### `w:tblLook` / `w:tblStylePr` (TODO — MEDIUM IMPACT)
 
@@ -316,6 +330,8 @@ Revisit alongside bundled fallback fonts (ship metric-stable Symbol metrics).
 
 ## Floating Image Wrapping — Remaining
 
+- **Anchor paragraph no longer reserves wrapSquare height (DONE — 2026-07-02)**: the narrow-gap reserve in `render_paragraph_block` double-counted the image height when empty spacer paragraphs followed the anchor (brazilian_logistics_study Figura pattern: 8 empty ¶s sized to the image, then "Fonte:"). Empty paragraphs absorb through the float's span; the next real paragraph is displaced to `fz.bottom_y` by the block-loop check. Improved 7 fixtures, cost sample500kB ~0.6pp SSIM.
+- **`w:br type="textWrapping" clear="all"` (DONE — 2026-07-02, annotation #111)**: parsed into `Paragraph.clears_floats`; block loop drops the cursor to the float-zone bottom after such a paragraph. Approximation: clear applies after the whole paragraph, not mid-paragraph (fine when the break is alone in its ¶, the common Word idiom). indonesian_benchmarking_guide +2.3pp Jaccard, −3.1pp TxtBnd (downstream reflow).
 - **Multiple floats per paragraph (PARTIALLY DONE — 2026-06)**: When one paragraph anchors 2+ wrapping floats (e.g. a logo on each side of a centered title, `pendulum_mechanics_oscillation_lab`), per-line geometry now subtracts every float's exclusion span and places text in the widest gap. Limitation: the page-level `float_zone` for *subsequent* paragraphs still tracks only the first float, so a following paragraph that overlaps only the second float won't wrap around it.
 - **Remaining y-shift (page 2 only)**: Word places page 2's image (180x144pt) 14.8pt higher than all other images, despite identical `posOffset=0`. Pages 1,3,4,5,7 match perfectly (delta <0.02pt). Pages 2 and 6 (both cy=1828800/144pt) are the outliers. Likely Word snapping to grid/text boundaries based on image dimensions.
 - **Look-back wrapping (TODO — MEDIUM IMPACT)**: Paragraphs BEFORE the image anchor cannot wrap beside the image because the float zone isn't set until the anchor paragraph renders. In Word, text from preceding paragraphs also wraps (e.g. case41 page 3 — the first paragraph's lower lines should wrap beside the centered image). Requires either a paginator or a two-pass layout with look-back.

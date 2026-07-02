@@ -366,9 +366,15 @@ fn render_cell_content(
                 }
 
                 let text_x = cell_x + cm.left + para.indent_left + para.float_indent_left;
-                let text_w =
-                    (col_w - cm.left - cm.right - para.indent_left - para.float_indent_left)
-                        .max(0.0);
+                // Must match the wrap width in table_layout.rs (incl. indent_right),
+                // or centered text shifts right and justify overshoots the border.
+                let text_w = (col_w
+                    - cm.left
+                    - cm.right
+                    - para.indent_left
+                    - para.indent_right
+                    - para.float_indent_left)
+                    .max(0.0);
                 // Word positions first baseline at cell_top - font_size (full em)
                 let baseline_y = cursor_y - para.font_size;
 
@@ -769,9 +775,15 @@ fn render_partial_cell_content(
                 }
 
                 let text_x = cell_x + cm.left + para.indent_left + para.float_indent_left;
-                let text_w =
-                    (col_w - cm.left - cm.right - para.indent_left - para.float_indent_left)
-                        .max(0.0);
+                // Must match the wrap width in table_layout.rs (incl. indent_right),
+                // or centered text shifts right and justify overshoots the border.
+                let text_w = (col_w
+                    - cm.left
+                    - cm.right
+                    - para.indent_left
+                    - para.indent_right
+                    - para.float_indent_left)
+                    .max(0.0);
                 // Word positions first baseline at cell_top - font_size (full em)
                 let baseline_y = cursor_y - para.font_size;
 
