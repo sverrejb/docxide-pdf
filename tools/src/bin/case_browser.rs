@@ -1344,7 +1344,9 @@ fn build_overlay_texture(
     let cell = 32u32;
     let gw = (w + cell - 1) / cell;
     let gh = (h + cell - 1) / cell;
-    let mut grid = vec![false; (gw * gh) as usize];
+    // Count changed pixels per cell (not a bool) so isolated antialiasing flips
+    // near the luma-200 ink threshold don't trip a whole cell — see find_change_rects.
+    let mut grid = vec![0u32; (gw * gh) as usize];
 
     let mut pixels = vec![0u8; (w * h * 4) as usize];
     for y in 0..h as usize {
@@ -1362,7 +1364,7 @@ fn build_overlay_texture(
             if ref_ink != gen_ink {
                 let gx = x as u32 / cell;
                 let gy = y as u32 / cell;
-                grid[(gy * gw + gx) as usize] = true;
+                grid[(gy * gw + gx) as usize] += 1;
             }
             let i = (y * w as usize + x) * 4;
             pixels[i..i + 4].copy_from_slice(&c);
@@ -1381,21 +1383,28 @@ fn build_overlay_texture(
 
 /// Find bounding rectangles around clusters of changed pixels using a grid-based
 /// connected-component approach. Returns `[x, y, width, height]` in pixel coords.
+///
+/// `grid` holds the count of differing pixels per 32×32 cell. Two thresholds keep
+/// the boxes off invisible noise: a cell only counts as changed with `CELL_MIN`+
+/// differing pixels (one stray antialiased edge pixel isn't a change), and a whole
+/// cluster is dropped unless it holds `CLUSTER_MIN`+ differing pixels total.
 fn find_change_rects(
-    grid: &[bool],
+    grid: &[u32],
     gw: u32,
     gh: u32,
     cell: u32,
     img_w: u32,
     img_h: u32,
 ) -> Vec<[u32; 4]> {
+    const CELL_MIN: u32 = 8;
+    const CLUSTER_MIN: u32 = 40;
     let mut visited = vec![false; grid.len()];
     let mut rects = Vec::new();
 
     for gy in 0..gh {
         for gx in 0..gw {
             let idx = (gy * gw + gx) as usize;
-            if !grid[idx] || visited[idx] {
+            if grid[idx] < CELL_MIN || visited[idx] {
                 continue;
             }
             // Flood fill (8-connected) to find connected component
@@ -1403,13 +1412,15 @@ fn find_change_rects(
             let mut min_y = gy;
             let mut max_x = gx;
             let mut max_y = gy;
+            let mut total = 0u32;
             let mut stack = vec![(gx, gy)];
             while let Some((cx, cy)) = stack.pop() {
                 let ci = (cy * gw + cx) as usize;
-                if visited[ci] || !grid[ci] {
+                if visited[ci] || grid[ci] < CELL_MIN {
                     continue;
                 }
                 visited[ci] = true;
+                total += grid[ci];
                 min_x = min_x.min(cx);
                 min_y = min_y.min(cy);
                 max_x = max_x.max(cx);
@@ -1427,6 +1438,9 @@ fn find_change_rects(
                         }
                     }
                 }
+            }
+            if total < CLUSTER_MIN {
+                continue;
             }
             let pad = 8u32;
             let x0 = (min_x * cell).saturating_sub(pad);

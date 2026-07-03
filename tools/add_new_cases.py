@@ -290,6 +290,15 @@ def main() -> None:
     for h, name in hash_to_name.items():
         log.info("  %s -> %s", h[:16], name)
 
+    # ── Ready gate: user triggers the Word automation when they choose ───
+    if not args.skip_convert:
+        try:
+            input(f"\n{len(hash_to_name)} cases downloaded and ready. "
+                  "Press Enter to start Word PDF conversion (Ctrl-C to skip)... ")
+        except (EOFError, KeyboardInterrupt):
+            args.skip_convert = True
+            log.info("\nSkipping conversion — cases saved without reference.pdf")
+
     # ── Phase 3: Create fixtures and convert to PDF ──────────────────────
     staging = Path.home() / "Documents" / f"_docx_convert_{uuid.uuid4().hex}"
     if not args.skip_convert:
