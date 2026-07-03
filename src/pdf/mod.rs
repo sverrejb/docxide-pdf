@@ -49,6 +49,7 @@ pub(super) use positioning::{resolve_h_position, resolve_fi_y_top};
 use images::{EffectXObjs, EmbeddedImages, embed_all_images};
 use layout::{
     DualRegion, LineNumberArg, LinkAnnotation, build_paragraph_lines, build_tabbed_line,
+    grid_snapped_line_h,
     is_text_empty, render_paragraph_lines, tallest_run_metrics,
 };
 use crate::fonts::font_key;
@@ -801,7 +802,7 @@ fn compute_bookmark_positions(
                         && !matches!(effective_ls, LineSpacing::Exact(_))
                         && sp.line_pitch > 0.0
                     {
-                        (line_h / sp.line_pitch).ceil() * sp.line_pitch
+                        grid_snapped_line_h(&para.runs, ctx.fonts, effective_ls, line_h, sp.line_pitch)
                     } else {
                         line_h
                     };
@@ -1048,7 +1049,7 @@ fn render_paragraph_block(
         && !matches!(effective_ls, LineSpacing::Exact(_))
         && sp.line_pitch > 0.0;
     let line_h = if grid_snapped {
-        (line_h / sp.line_pitch).ceil() * sp.line_pitch
+        grid_snapped_line_h(&para.runs, ctx.fonts, effective_ls, line_h, sp.line_pitch)
     } else {
         line_h
     };
@@ -1221,7 +1222,11 @@ fn render_paragraph_block(
             matches!(
                 fi.wrap_type,
                 WrapType::Square | WrapType::Tight | WrapType::Through
-            )
+            ) && {
+                let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
+                fi_x + fi.image.display_width + fi.dist_right > col_x
+                    && fi_x - fi.dist_left < col_x + col_w
+            }
         }) {
             let fi_x =
                 resolve_fi_x(fi, sp, col_x, col_w, text_width);
@@ -2355,6 +2360,15 @@ fn render_paragraph_block(
             WrapType::Square | WrapType::Tight | WrapType::Through => {
                 let fi_x =
                     resolve_fi_x(fi, sp, col_x, col_w, text_width);
+                // A float entirely outside the text column (e.g. a QR code in
+                // the left margin) never narrows text — installing its zone
+                // would only clobber a still-active in-column zone from an
+                // earlier paragraph's float.
+                if fi_x + fi.image.display_width + fi.dist_right <= col_x
+                    || fi_x - fi.dist_left >= col_x + col_w
+                {
+                    continue;
+                }
                 let fi_y_top =
                     resolve_fi_y_top(fi, sp, float_anchor_top);
                 let fi_y_bottom =

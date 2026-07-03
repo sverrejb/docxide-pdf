@@ -19,6 +19,8 @@ pub(crate) struct FontMetrics {
     pub(crate) widths_1000: Vec<f32>,
     pub(crate) line_h_ratio: f32,
     pub(crate) ascender_ratio: f32,
+    /// sTypo-based line ratio — Word's basis for docGrid cell counting.
+    pub(crate) typo_line_ratio: Option<f32>,
     pub(crate) char_to_gid: HashMap<char, u16>,
     pub(crate) char_widths_1000: HashMap<char, f32>,
     pub(crate) kern_pairs: HashMap<(u16, u16), f32>,
@@ -38,6 +40,8 @@ pub(crate) struct FontEntry {
     pub(crate) widths_1000: Vec<f32>,
     pub(crate) line_h_ratio: Option<f32>,
     pub(crate) ascender_ratio: Option<f32>,
+    /// sTypo-based line ratio — Word's basis for docGrid cell counting.
+    pub(crate) typo_line_ratio: Option<f32>,
     pub(crate) char_to_gid: Option<HashMap<char, u16>>,
     pub(crate) char_widths_1000: Option<HashMap<char, f32>>,
     pub(crate) kern_pairs: Option<HashMap<(u16, u16), f32>>,
@@ -213,6 +217,22 @@ fn family_fallback(family: FontFamily) -> Option<&'static str> {
         // of what Word substitutes across multiple missing-font fixtures.
         FontFamily::Auto => Some("Arial"),
     }
+}
+
+/// True if the face declares itself a script/handwriting design
+/// (OS/2 sFamilyClass class 10, or PANOSE family kind 3 "Latin Script").
+fn face_is_script_design(path: &std::path::Path, face_index: u32) -> bool {
+    let Ok(data) = std::fs::read(path) else {
+        return false;
+    };
+    let Ok(face) = ttf_parser::Face::parse(&data, face_index) else {
+        return false;
+    };
+    let Some(os2) = face.raw_face().table(ttf_parser::Tag::from_bytes(b"OS/2")) else {
+        return false;
+    };
+    // sFamilyClass high byte at offset 30, PANOSE bFamilyType at offset 32
+    os2.get(30) == Some(&10) || os2.get(32) == Some(&3)
 }
 
 fn known_font_alias(name: &str) -> Option<&'static str> {
@@ -420,10 +440,25 @@ pub(crate) fn register_font(
     let result = table_entry
         .and_then(|entry| {
             let alt = entry.alt_name.as_ref()?;
-            if alt.contains("Math") {
+            // "SignPainter-HouseScript": Word-for-Mac writes this cursive face as
+            // altName for fonts missing on the authoring machine (e.g. Merriweather);
+            // it never reflects what the reference render used.
+            if alt.contains("Math") || alt == "SignPainter-HouseScript" {
                 return None;
             }
             let m = try_candidate(alt)?;
+            // Reject a script/handwriting altName for a non-script family: Word on
+            // macOS records whatever it substituted on screen (e.g. Merriweather →
+            // SignPainter-HouseScript), but the reference machine had the real font.
+            // A cursive body face is always worse than the family fallback.
+            if entry.family != crate::model::FontFamily::Script
+                && m.font_path
+                    .as_deref()
+                    .is_some_and(|p| face_is_script_design(p, m.face_index))
+            {
+                log::info!("Rejecting script-classified altName \"{alt}\" for {primary}");
+                return None;
+            }
             log::info!("Font substitution: {primary} → altName \"{alt}\"");
             Some(m)
         })
@@ -486,6 +521,7 @@ pub(crate) fn register_font(
             widths_1000: r.metrics.widths_1000,
             line_h_ratio: Some(r.metrics.line_h_ratio),
             ascender_ratio: Some(r.metrics.ascender_ratio),
+            typo_line_ratio: r.metrics.typo_line_ratio,
             char_to_gid: Some(r.metrics.char_to_gid),
             char_widths_1000: Some(r.metrics.char_widths_1000),
             kern_pairs: if r.metrics.kern_pairs.is_empty() {
@@ -522,6 +558,7 @@ pub(crate) fn register_font(
                 widths_1000: encoding::helvetica_widths(),
                 line_h_ratio: None,
                 ascender_ratio: None,
+                typo_line_ratio: None,
                 char_to_gid: None,
                 char_widths_1000: None,
                 kern_pairs: None,

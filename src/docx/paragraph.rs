@@ -177,18 +177,25 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     let char_width_fs = para_style
         .and_then(|s| s.font_size)
         .unwrap_or(ctx.styles.defaults.font_size);
+    // Numbering-level ind (already in indent_left/indent_hanging) outranks
+    // style ind (§17.9.27); only directly-specified attributes override it.
+    let numbering_ind = indent_left != 0.0 || indent_hanging != 0.0;
     let (left, right, hanging, first) =
         if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
             let (l, r, h, f) = extract_indents(ind, Some(char_width_fs / 2.0));
             // Merge: inline w:ind attributes override style, but missing
             // attributes fall back to the paragraph style values.
             if let Some(s) = para_style {
-                (
-                    l.or(s.indent_left),
-                    r.or(s.indent_right),
-                    h.or(s.indent_hanging),
-                    f.or(s.indent_first_line),
-                )
+                if numbering_ind {
+                    (l, r.or(s.indent_right), h, f.or(s.indent_first_line))
+                } else {
+                    (
+                        l.or(s.indent_left),
+                        r.or(s.indent_right),
+                        h.or(s.indent_hanging),
+                        f.or(s.indent_first_line),
+                    )
+                }
             } else {
                 (l, r, h, f)
             }

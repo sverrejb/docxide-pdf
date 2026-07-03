@@ -274,6 +274,30 @@ pub(crate) fn format_number(value: u32, num_fmt: &str) -> String {
         "upperLetter" => to_letter(value, b'A'),
         "lowerRoman" => to_roman(value),
         "upperRoman" => to_roman(value).to_uppercase(),
+        "decimalEnclosedCircle" => match value {
+            // ①-⑳, ㉑-㉟, ㊱-㊿; Word falls back to decimal past 50
+            1..=20 => char::from_u32(0x2460 + value - 1).unwrap().to_string(),
+            21..=35 => char::from_u32(0x3251 + value - 21).unwrap().to_string(),
+            36..=50 => char::from_u32(0x32B1 + value - 36).unwrap().to_string(),
+            _ => value.to_string(),
+        },
+        "decimalFullWidth" => value
+            .to_string()
+            .chars()
+            .map(|c| char::from_u32(0xFF10 + c as u32 - '0' as u32).unwrap())
+            .collect(),
+        "aiueoFullWidth" => {
+            const AIUEO: [char; 46] = [
+                'ア', 'イ', 'ウ', 'エ', 'オ', 'カ', 'キ', 'ク', 'ケ', 'コ', 'サ', 'シ', 'ス',
+                'セ', 'ソ', 'タ', 'チ', 'ツ', 'テ', 'ト', 'ナ', 'ニ', 'ヌ', 'ネ', 'ノ', 'ハ',
+                'ヒ', 'フ', 'ヘ', 'ホ', 'マ', 'ミ', 'ム', 'メ', 'モ', 'ヤ', 'ユ', 'ヨ', 'ラ',
+                'リ', 'ル', 'レ', 'ロ', 'ワ', 'ヲ', 'ン',
+            ];
+            match value {
+                1..=46 => AIUEO[value as usize - 1].to_string(),
+                _ => value.to_string(),
+            }
+        }
         "none" => String::new(),
         _ => value.to_string(),
     }
@@ -520,6 +544,19 @@ mod tests {
         assert_eq!(format_number(9, "decimalZero"), "09");
         assert_eq!(format_number(10, "decimalZero"), "10");
         assert_eq!(format_number(99, "decimalZero"), "99");
+    }
+
+    #[test]
+    fn test_format_number_cjk_formats() {
+        assert_eq!(format_number(1, "decimalEnclosedCircle"), "①");
+        assert_eq!(format_number(20, "decimalEnclosedCircle"), "⑳");
+        assert_eq!(format_number(21, "decimalEnclosedCircle"), "㉑");
+        assert_eq!(format_number(50, "decimalEnclosedCircle"), "㊿");
+        assert_eq!(format_number(51, "decimalEnclosedCircle"), "51");
+        assert_eq!(format_number(12, "decimalFullWidth"), "１２");
+        assert_eq!(format_number(1, "aiueoFullWidth"), "ア");
+        assert_eq!(format_number(46, "aiueoFullWidth"), "ン");
+        assert_eq!(format_number(47, "aiueoFullWidth"), "47");
     }
 
     // --- Letters ---

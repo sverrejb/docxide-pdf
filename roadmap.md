@@ -1,5 +1,18 @@
 # Roadmap
 
+## New-Case Triage 2026-07-03 (10 fixtures added; fixes applied 2026-07-04)
+
+Passing: streamnet_steering (J 54%), zimbabwe_broadcasting (J 53%). Fix round results (zero regressions across 218 cases):
+
+1. **japanese_medical (J 2.8% → 4.3%, TB 5% → 46%)** — FIXED (a) CJK numbering formats `decimalEnclosedCircle` ①②③, `decimalFullWidth`, `aiueoFullWidth` in `format_number()`; (b) docGrid cell counting now uses sTypo metrics (`grid_snapped_line_h` in `pdf/layout.rs`) — win+lineGap (Yu Mincho 1.787) overshot the 18pt pitch and doubled every grid line (4 pages → 3, page 1 now matches ref). Remaining: sub-line drift through table rows (tables don't grid-snap; cell line heights slightly exceed Word's), one line still spills page 1 → 2.
+2. **croatian_thesis (J 18.8% flat, SSIM 50.8% → 41.8%)** — FIXED the font bug: fontTable altName `SignPainter-HouseScript` (Word-for-Mac artifact for fonts missing on the authoring machine) is now rejected; falls to family fallback (Arial). Reference embeds real Merriweather — install it (Google font) or wait for Bundled Fallback Fonts for the rest. SSIM dip = more ink slightly misaligned; structure now correct. Ref page 2 is blank (trailing paragraph) — we emit 1 page.
+3. **indigenous_innovation (J 12.2%, TB 0.7% — flat)** — FIXED indent precedence: numbering-level `w:ind` now outranks style ind when only some attrs are direct (§17.9.27, `docx/paragraph.rs`); recital numbers/text now align with ref. Score flat: 20 pages of justified-Arial wrap drift dominates.
+4. **french_sexual_health (TB 75% → 82.7%)** — FIXED zone clobbering: a wrap float entirely outside the text column (margin QR code) no longer replaces an active in-column float zone (`pdf/mod.rs`). Body now wraps beside the top-right image. Remaining: ~2-line vertical offset (drift class).
+5. **stiavnicke_bane (J 15.8% → 76.3%, SSIM 93%, TB 100%)** — FIXED: leading spaces on a line whose left region is blocked by a float now carry into the right region as an indent instead of triggering blank-line + x=0 (`pdf/layout.rs` build_lines).
+6. **ut_koer (J 13.7% — open)** — tab-stop two-column contact header interleaved with a wrapTight header image: needs per-line segment layout with tab stops spanning the float's excluded band (`build_tabbed_line` has no float-zone awareness). Right column currently gets left-column content.
+7. **physical_therapy (J 12.6%, TB 91.7% — open)** — no missing feature; constant small dx/dy glyph offset. Vertical Drift Investigation class.
+8. **candidate_reference (J 21.3% — open, passing)** — minor table row-height drift (Table Row Height Deficit class).
+
 ## Hyphenation (PARKED — Word's online converter doesn't hyphenate)
 
 `w:autoHyphenation` and `w:suppressAutoHyphens` are parsed from DOCX. `w:lang` is parsed on runs. However, **Word's online PDF converter does not perform syllable-break hyphenation** for any language, even when `autoHyphenation` is set. Every line-ending hyphen in reference PDFs comes from pre-existing hyphens in compound words (verified across 8 language-specific fixtures and all scraped fixtures).

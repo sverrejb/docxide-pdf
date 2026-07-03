@@ -153,12 +153,13 @@ pub(super) fn embed_truetype(
         .descendant_font(cid_font_ref)
         .to_unicode(tounicode_ref);
 
-    let (line_h_ratio, ascender_ratio) = compute_line_metrics(&face, units);
+    let (line_h_ratio, ascender_ratio, typo_line_ratio) = compute_line_metrics(&face, units);
 
     Some(FontMetrics {
         widths_1000,
         line_h_ratio,
         ascender_ratio,
+        typo_line_ratio,
         char_to_gid,
         char_widths_1000,
         kern_pairs,
@@ -279,13 +280,18 @@ fn extract_gpos_pairs(
     }
 }
 
-fn compute_line_metrics(face: &Face, units: f32) -> (f32, f32) {
+/// Returns (line_h_ratio, ascender_ratio, typo_line_ratio). The sTypo-based
+/// ratio is what Word compares against the docGrid pitch when counting grid
+/// cells — win metrics + hhea lineGap overshoot the pitch for CJK fonts
+/// (Yu Mincho: 1.787 vs typo 1.5) and would double every grid line.
+fn compute_line_metrics(face: &Face, units: f32) -> (f32, f32, Option<f32>) {
     if let Some(os2) = face.tables().os2 {
+        let t_asc = os2.typographic_ascender() as f32;
+        let t_desc = os2.typographic_descender() as f32;
+        let t_gap = os2.typographic_line_gap() as f32;
+        let typo_ratio = Some((t_asc - t_desc + t_gap) / units);
         if os2.use_typographic_metrics() {
-            let asc = os2.typographic_ascender() as f32;
-            let desc = os2.typographic_descender() as f32;
-            let gap = os2.typographic_line_gap() as f32;
-            return ((asc - desc + gap) / units, asc / units);
+            return ((t_asc - t_desc + t_gap) / units, t_asc / units, typo_ratio);
         }
         let win_asc = os2.windows_ascender() as f32;
         let win_desc = os2.windows_descender() as f32;
@@ -293,12 +299,17 @@ fn compute_line_metrics(face: &Face, units: f32) -> (f32, f32) {
         // provides external leading that Word includes in both line spacing
         // and baseline positioning (ascender offset from slot top)
         let gap = face.line_gap() as f32;
-        return ((win_asc - win_desc + gap) / units, (win_asc + gap) / units);
+        return (
+            (win_asc - win_desc + gap) / units,
+            (win_asc + gap) / units,
+            typo_ratio,
+        );
     }
 
     let line_gap = face.line_gap() as f32;
     (
         (face.ascender() as f32 - face.descender() as f32 + line_gap) / units,
         face.ascender() as f32 / units,
+        None,
     )
 }

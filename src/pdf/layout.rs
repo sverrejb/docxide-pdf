@@ -807,8 +807,14 @@ pub(super) fn build_paragraph_lines(
             // When leading spaces push the first word past the line width,
             // emit a blank line for the spaces and start the word at x=0.
             // Word absorbs the spaces onto the current line and wraps the
-            // word to the next line.
-            if current_chunks.is_empty() && overflows && pending_space_w > 0.0 && !in_right_region {
+            // word to the next line. (Skipped when a right region exists —
+            // the spill below carries the space indent past the float.)
+            if current_chunks.is_empty()
+                && overflows
+                && pending_space_w > 0.0
+                && !in_right_region
+                && right_region_for(lines.len()).is_none()
+            {
                 lines.push(finish_dual_line(&mut current_chunks, &mut in_right_region, &mut cur_right_info));
                 pending_space_w = 0.0;
                 push_word_chunks(&mut current_chunks, entry, run, word, eff_fs, cs, y_off, 0.0, ww);
@@ -821,7 +827,7 @@ pub(super) fn build_paragraph_lines(
             // the right region for e.g. left-aligned images).
             let first_word_overflow = current_chunks.is_empty()
                 && !in_right_region
-                && cur_max <= 0.0
+                && (cur_max <= 0.0 || overflows)
                 && right_region_for(lines.len()).is_some();
 
             if (!current_chunks.is_empty() && overflows && !is_continuation) || first_word_overflow {
@@ -831,10 +837,19 @@ pub(super) fn build_paragraph_lines(
                     if let Some((rx, rw, _)) = right_region_for(lines.len()) {
                         cur_right_info = Some((current_chunks.len(), rx, rw));
                         in_right_region = true;
+                        // Leading spaces on a line that starts in the right
+                        // region indent the first word (Word keeps them).
+                        let start_x = if current_chunks.is_empty()
+                            && pending_space_w > 0.0
+                            && pending_space_w + ww <= rw
+                        {
+                            pending_space_w
+                        } else {
+                            0.0
+                        };
                         pending_space_w = 0.0;
-                        // Place this word at the start of the right region
-                        push_word_chunks(&mut current_chunks, entry, run, word, eff_fs, cs, y_off, 0.0, ww);
-                        current_x = ww;
+                        push_word_chunks(&mut current_chunks, entry, run, word, eff_fs, cs, y_off, start_x, ww);
+                        current_x = start_x + ww;
                         continue;
                     }
                 }
@@ -2124,6 +2139,39 @@ pub(super) fn tallest_run_metrics(
         }
     }
     (best_font_size, best_line_h_ratio, best_ascender_ratio)
+}
+
+/// Grid-snapped line height: Word counts docGrid cells against sTypo metrics,
+/// not win metrics + hhea lineGap (Yu Mincho: typo 1.5 vs win+gap 1.787 —
+/// the latter would put every 12pt line in an 18pt grid into 2 cells).
+/// Falls back to `line_h` when no run provides a typo ratio.
+pub(super) fn grid_snapped_line_h(
+    runs: &[Run],
+    seen_fonts: &HashMap<String, FontEntry>,
+    effective_ls: crate::model::LineSpacing,
+    line_h: f32,
+    pitch: f32,
+) -> f32 {
+    let mut typo_h = 0.0f32;
+    let mut key_buf = String::new();
+    for run in runs {
+        if run.is_line_break || run.is_math {
+            continue;
+        }
+        if let Some(t) = seen_fonts
+            .get(font_key_buf(run, &mut key_buf))
+            .and_then(|e| e.typo_line_ratio)
+        {
+            typo_h = typo_h.max(effective_font_size(run) * t);
+        }
+    }
+    let basis = match effective_ls {
+        crate::model::LineSpacing::Auto(m) if typo_h > 0.0 => typo_h * m,
+        _ => line_h,
+    };
+    // Tolerance so an exact fit (12pt × 1.5 = 18pt pitch) stays one cell
+    // despite f32 error.
+    ((basis / pitch) - 0.02).ceil().max(1.0) * pitch
 }
 
 #[cfg(test)]
