@@ -284,6 +284,21 @@ fn cell_content_h_for_valign(items: &[CellContentItem]) -> f32 {
     // used for vertical alignment, so bottom/center-aligned cells position correctly.
     if let Some(CellContentItem::Paragraph(last_para)) = items.last() {
         h += last_para.space_after;
+        // Baselines sit at a fixed font_size below each line's top, so a font
+        // whose line height exceeds font_size + descent leaves its extra
+        // leading dangling below the ink of the last line. Only compensate
+        // when the font is a metric-changing fallback (e.g. a CJK substitute
+        // with a large lineGap): there the dangling leading is our artifact,
+        // whereas with the document's real font the full line box matches
+        // Word's own centering.
+        if last_para.font_substituted
+            && (!last_para.lines.is_empty()
+                || (last_para.content_height <= 0.0 && !last_para.paragraph_mark_vanish))
+        {
+            let ink_bottom =
+                last_para.font_size * (1.0 + last_para.descender_ratio);
+            h -= (last_para.line_h - ink_bottom).max(0.0);
+        }
     }
     h
 }
@@ -302,6 +317,10 @@ fn render_cell_content(
     cell_x: f32,
     col_w: f32,
     cursor_y_start: f32,
+    // vAlign centering shift already folded into cursor_y_start. Word anchors
+    // paragraph-relative floats to the cell's content top, unaffected by the
+    // vAlign redistribution, so float anchors add this back.
+    valign_off: f32,
     cm: &CellMargins,
     ctx: &RenderContext,
     gradient_specs: &mut Vec<super::GradientSpec>,
@@ -337,7 +356,7 @@ fn render_cell_content(
                 // Render floating images positioned relative to this paragraph
                 for fi in &para.floating_images {
                     let fi_x = cell_x + fi.h_offset;
-                    let fi_y_top = cursor_y - fi.v_offset;
+                    let fi_y_top = cursor_y + valign_off - fi.v_offset;
                     let fi_y_bottom = fi_y_top - fi.display_height;
                     content.save_state();
                     push_center_rotation(
@@ -413,7 +432,8 @@ fn render_cell_content(
 
                 if let Some(src) = source_para {
                     render_cell_floating_shapes(
-                        content, src, cell_x, col_w, para_top, ctx, gradient_specs,
+                        content, src, cell_x, col_w, para_top + valign_off, ctx,
+                        gradient_specs,
                     );
                 }
             }
@@ -618,6 +638,7 @@ fn render_table_rows(
                     cx,
                     col_w,
                     cell_cursor_y,
+                    v_offset,
                     ecm,
                     ctx,
                     gradient_specs,
@@ -938,6 +959,7 @@ fn render_table_row(
                 cell_x,
                 col_w,
                 cursor_y,
+                v_offset,
                 ecm,
                 ctx,
                 &mut pb.gradient_specs,
@@ -1477,17 +1499,37 @@ pub(super) fn render_table(
         let available_h = pb.slot_top - eff_bottom;
         let page_content_h = eff_top - eff_bottom;
 
-        // Word splits a row across pages rather than pushing it whole when
-        // keeping it together would waste most of the current page. We only
-        // do this for oversized rows (taller than half a page) so short rows
-        // still migrate cleanly; the cell also must have multiple breakable
-        // items for the split to produce anything useful.
+        // Word splits any non-cantSplit row that overflows the page remainder,
+        // filling the current page before continuing on the next — there is no
+        // minimum row height for splitting. But a row with an explicit
+        // trHeight (exact or atLeast) never breaks in Word; it migrates whole
+        // (arizona_physical / traditional_skills vs isla / master_thesis).
+        // The cell must have multiple breakable items for the split to
+        // produce anything, and every cell's first chunk must genuinely fit
+        // in the remaining space (otherwise find_cell_split's force-included
+        // first item would overflow the footer and the row migrates whole
+        // instead).
         let any_cell_multi_item = layout.cells.iter().any(|c| c.items.len() > 1);
+        let first_chunk_fits = layout.cells.iter().all(|c| {
+            c.items.first().is_none_or(|it| {
+                let item_h = match it {
+                    CellContentItem::Paragraph(p) => para_block_height(p),
+                    CellContentItem::NestedTable { height } => *height,
+                };
+                cm.top + cm.bottom + item_h <= available_h
+            })
+        });
+        // ponytail: 50pt (~4 lines) sliver guard. Word splits with even one
+        // line of room, but our line heights run a few pt short of Word's, so
+        // near-boundary rows see phantom space Word doesn't have (victorian
+        // p8: ours 43pt vs Word's 6pt). Lower toward one line height once
+        // line-height fidelity improves.
         let can_meaningfully_split = !row.cant_split
+            && row.height.is_none()
             && any_cell_multi_item
             && !at_page_top
-            && row_h > page_content_h * 0.5
-            && available_h > page_content_h * 0.25;
+            && available_h > 50.0
+            && first_chunk_fits;
 
         if row_h > available_h && (row_h > page_content_h || is_floating) && !row.cant_split {
             split_row_across_pages(row, layout, pb, ri, &mut did_flush_while_floating, effective_margin_bottom);

@@ -120,6 +120,59 @@ measured from the column edge with float bounds clipping (Word semantics).
 topAndBottom"`. Letterhead center now within ~5pt of reference. Remaining:
 HR `o:hrpct` width should use the indent-adjusted paragraph box.
 
+## Annotation Fixes 2026-07-03 round 2 (#121 #133 #167 #190 #219 — DONE)
+
+- **#133 / #190 table row splitting**: the `row_h > page_content_h * 0.5` gate in
+  `table.rs` blocked Word-style row splits. Word splits any non-cantSplit row that
+  overflows the page remainder — EXCEPT rows with an explicit `trHeight` (exact or
+  atLeast), which always migrate whole (verified: arizona/traditional all-trHeight
+  tables never split in Word; isla/master_thesis no-trHeight rows do). New gate:
+  no trHeight + multi-item cells + first chunk fits + `available_h > 50pt` sliver
+  guard (our lines run a few pt short of Word's, so near-boundary rows see phantom
+  space — victorian p8 had 43pt where Word had 6pt; lower once line-height
+  fidelity improves). isla +5.8pp TxtBnd, master_thesis +24.1pp TxtBnd; collateral:
+  carbon_farming +38pp TxtBnd, stem_partnership +9pp, english_town_council +7.2pp.
+- **#167 floats in vAlign-centered cells**: the cell's vAlign centering offset was
+  baked into the anchor base handed to `render_cell_floating_shapes` /
+  cell floating images. Word anchors paragraph-relative floats to the cell content
+  top. `render_cell_content` now takes `valign_off` and adds it back for float
+  anchors only. The 50cm arrow in japanese_land_development_sign_form now spans
+  table-bottom → ground-hatch exactly (scores flat — tiny ink area).
+- **#219 exact line-rule baseline**: baselines were placed `font_size *
+  ascender_ratio` below slot top; `ascender_ratio` folds in hhea lineGap, so a
+  big-lineGap CJK substitute (Hiragino for 方正小标宋简体) pushed descenders out of
+  the fixed `lineRule="exact"` box into the table border below. Word bottom-aligns
+  the exact box: baseline = box bottom − winDescent (identity: `line_h_ratio −
+  ascender_ratio`). `exact_baseline_base` in `render_paragraph_block` (both
+  baseline sites). chinese_student_union +4.4pp SSIM/+2.3 Jaccard; polish_archery
+  +8pp, auditor_regulatory +5.9pp Jaccard.
+- **#121 trailing-break mark line**: the empty line a trailing `<w:br/>` leaves
+  was sized with the break run's font (samtale: 26pt br), but it holds only the
+  paragraph mark — Word sizes it by the mark's rPr (12pt here). Per-line loop in
+  `render_paragraph_block` now uses `paragraph_mark_font_size` for the final
+  break-created empty line when known (break char still sizes the line it
+  terminates; intermediate br-created lines keep the break size). samtale +57.7pp
+  TxtBnd / +10.9pp SSIM / +6.5pp Jaccard, german_mezzo_soprano +2.2pp.
+
+## Annotation Fixes 2026-07-03 (#114 #118 #193 #214 #218 — DONE)
+
+- **#114 ellipsis line breaks**: UAX #14 allows a break after U+2024/25/26 before
+  digits, splitting TOC dot-leader tokens like `Preparation………45`. Word keeps
+  them unbreakable; `split_preserving_spaces` now filters those break positions
+  unless followed by whitespace (unit test in layout.rs).
+- **#118 leading after tall inline image**: Word lays the line following a tall
+  inline image one full line height below the image bottom (leading above the
+  text). `after_image_boost` in `render_paragraph_block` extends the following
+  paragraph's first baseline offset and block height by the missing leading
+  (skipped for empty/grid-snapped/image paragraphs). brazilian_logistics p4 gap
+  1.9pt → ~9pt (Word: 9.2pt).
+- **#193 oversized list labels**: the ±1pt guard in `label_boosted_line_h` is
+  gone (the "handled separately" path it referenced never existed) and the new
+  `label_boosted_baseline_offset` drops the first baseline to the label's
+  ascent — a 20pt number label on 10pt text now sizes the first line like Word.
+  samtale +2.9pp SSIM, +40pp text-boundary; case16 +6.5pp, family_kinship +5.5pp SSIM.
+- **#214 / #218**: see their sections (vAlign center, clear="all").
+
 ## Unimplemented Run Properties
 
 ### `w:emboss` / `w:imprint` / `w:shadow` (TODO — MEDIUM IMPACT)
@@ -178,13 +231,16 @@ while the wrap width in `table_layout.rs` did — centered cell text shifted rig
 `indent_right/2` and justified text overshot the cell border. Both spots now match
 the layout width (romanian_quality_evaluation_strategy SWOT headings).
 
-### `w:vAlign="center"` text sits ~3pt high (TODO — annotation #214, chinese_student_union_nomination_form)
+### `w:vAlign="center"` text sits ~3pt high (DONE — 2026-07-03, annotation #214)
 
-Row heights match Word, but ink in vAlign=center cells is ~3pt above the cell
-center (reference is dead-on). Residual is the baseline placement inside the
-line box (`baseline_y = cursor_y - para.font_size` in table.rs) interacting
-with `cell_content_h_for_valign`. Changing it shifts text in every table cell —
-needs a measured fix against multiple fixtures, not a one-case tweak.
+Root cause: baselines sit `font_size` below each line top, so a fallback font
+with big leading (Hiragino Sans GB for 仿宋_GB2312: lineGap 0.5em) dangles that
+leading below the ink of the last line, and centering the full block rode the
+ink high. `cell_content_h_for_valign` now drops the last line's unused bottom
+leading — but only when the font is a metric-changing substitution
+(`FontEntry.is_substituted`): with the document's real font (Yu Mincho in
+japanese_land_development_sign_form) the full-line-box centering already
+matches Word, and subtracting regressed it −2.9pp. chinese_student_union +2.6pp SSIM.
 
 ### `w:tblLook` / `w:tblStylePr` (TODO — MEDIUM IMPACT)
 
@@ -331,7 +387,7 @@ Revisit alongside bundled fallback fonts (ship metric-stable Symbol metrics).
 ## Floating Image Wrapping — Remaining
 
 - **wrapSquare height reserve gated on side-strip width (DONE — 2026-07-02)**: the anchor-paragraph reserve in `render_paragraph_block` now fires only when no usable side strip remains (`MIN_EMPTY_STRIP` = 18pt). With a real strip (brazilian_logistics_study, ~42pt) empty spacer paragraphs absorb through the float's span and the next real paragraph is displaced to `fz.bottom_y` — the old 48pt threshold double-counted the image height there. With no strip (sample500kB, image width == column width) Word stacks everything below, which the reserve reproduces. Note Word actually puts the anchor's own line box below the float too (ref gap 67.7pt vs our 51.8pt on sample500kB p4) — a first displacement attempt lost inter-paragraph gaps; revisit with the paginator.
-- **`w:br type="textWrapping" clear="all"` (DONE — 2026-07-02, annotation #111)**: parsed into `Paragraph.clears_floats`; block loop drops the cursor to the float-zone bottom after such a paragraph. Approximation: clear applies after the whole paragraph, not mid-paragraph (fine when the break is alone in its ¶, the common Word idiom). indonesian_benchmarking_guide +2.3pp Jaccard, −3.1pp TxtBnd (downstream reflow).
+- **`w:br type="textWrapping" clear="all"` (DONE — 2026-07-02, annotation #111; refined 2026-07-03, annotation #218)**: parsed into `Paragraph.clears_floats`; block loop drops the cursor to the float-zone bottom after such a paragraph. 2026-07-03: the cursor now drops one line height *below* the float bottom — the line following the break (the break paragraph's mark line) still occupies its full line height there, matching Word's ~16pt gap on indonesian_benchmarking_guide p7. Approximation: clear applies after the whole paragraph, not mid-paragraph (fine when the break is alone in its ¶, the common Word idiom).
 - **Multiple floats per paragraph (PARTIALLY DONE — 2026-06)**: When one paragraph anchors 2+ wrapping floats (e.g. a logo on each side of a centered title, `pendulum_mechanics_oscillation_lab`), per-line geometry now subtracts every float's exclusion span and places text in the widest gap. Limitation: the page-level `float_zone` for *subsequent* paragraphs still tracks only the first float, so a following paragraph that overlaps only the second float won't wrap around it.
 - **Remaining y-shift (page 2 only)**: Word places page 2's image (180x144pt) 14.8pt higher than all other images, despite identical `posOffset=0`. Pages 1,3,4,5,7 match perfectly (delta <0.02pt). Pages 2 and 6 (both cy=1828800/144pt) are the outliers. Likely Word snapping to grid/text boundaries based on image dimensions.
 - **Look-back wrapping (TODO — MEDIUM IMPACT)**: Paragraphs BEFORE the image anchor cannot wrap beside the image because the float zone isn't set until the anchor paragraph renders. In Word, text from preceding paragraphs also wraps (e.g. case41 page 3 — the first paragraph's lower lines should wrap beside the centered image). Requires either a paginator or a two-pass layout with look-back.

@@ -1,5 +1,5 @@
 {
-  "next_id": 219,
+  "next_id": 227,
   "annotations": [
     {
       "id": 208,
@@ -86,8 +86,8 @@
       "x_pt": 449.4605,
       "y_pt": 348.35162,
       "note": "\"Preparation....\" should be on the next line",
-      "fixed": false,
-      "cleared": false
+      "fixed": true,
+      "cleared": true
     },
     {
       "id": 118,
@@ -97,8 +97,8 @@
       "x_pt": 133.59695,
       "y_pt": 403.7632,
       "note": "Space above \"Fonte: \" is to small.",
-      "fixed": false,
-      "cleared": false
+      "fixed": true,
+      "cleared": true
     },
     {
       "id": 121,
@@ -108,8 +108,8 @@
       "x_pt": 449.4558,
       "y_pt": 379.37347,
       "note": "All text from \"Slik gjør du\" and on is shifted too low,",
-      "fixed": false,
-      "cleared": false
+      "fixed": true,
+      "cleared": true
     },
     {
       "id": 124,
@@ -130,8 +130,8 @@
       "x_pt": 121.24737,
       "y_pt": 216.53723,
       "note": "Empty space here. The Framed text \"(Arrangements regarding ...\" should start here on this page.",
-      "fixed": false,
-      "cleared": false
+      "fixed": true,
+      "cleared": true
     },
     {
       "id": 152,
@@ -163,8 +163,8 @@
       "x_pt": 191.0586,
       "y_pt": 297.4336,
       "note": "Arrows and labels not correct. The arrows should be touching the grey line and the table above.",
-      "fixed": false,
-      "cleared": false
+      "fixed": true,
+      "cleared": true
     },
     {
       "id": 185,
@@ -196,8 +196,8 @@
       "x_pt": 141.18594,
       "y_pt": 220.92401,
       "note": "Row two of this table should be broken across this page and the next",
-      "fixed": false,
-      "cleared": false
+      "fixed": true,
+      "cleared": true
     },
     {
       "id": 193,
@@ -207,8 +207,8 @@
       "x_pt": 517.35547,
       "y_pt": 228.43283,
       "note": "Too little white space in the \"13\" box, HR goes through 13-",
-      "fixed": false,
-      "cleared": false
+      "fixed": true,
+      "cleared": true
     },
     {
       "id": 195,
@@ -328,8 +328,8 @@
       "x_pt": 380.15063,
       "y_pt": 169.75696,
       "note": "text does not appear vertically centered within table cells",
-      "fixed": false,
-      "cleared": false
+      "fixed": true,
+      "cleared": true
     },
     {
       "id": 215,
@@ -340,7 +340,7 @@
       "y_pt": 599.897,
       "note": "Our text in the table cell goes too close to the right border of the cell.",
       "fixed": true,
-      "cleared": false
+      "cleared": true
     },
     {
       "id": 216,
@@ -372,6 +372,94 @@
       "x_pt": 221.75067,
       "y_pt": 392.58328,
       "note": "The gap between image and caption (3. Metode) is too small",
+      "fixed": true,
+      "cleared": true
+    },
+    {
+      "id": 219,
+      "case": "new/chinese_student_union_nomination_form",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 286.34097,
+      "y_pt": 630.1513,
+      "note": "Second row of heading overlaps table border",
+      "fixed": true,
+      "cleared": true
+    },
+    {
+      "id": 220,
+      "case": "new/english_town_council_report",
+      "page": 5,
+      "source": "Generated",
+      "x_pt": 193.96237,
+      "y_pt": 205.5987,
+      "note": "We split the table at the wrong place here, compared to reference. Q3 should be on page 6.",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 221,
+      "case": "new/environmental_law_clinic_china",
+      "page": 2,
+      "source": "Generated",
+      "x_pt": 138.96144,
+      "y_pt": 170.67145,
+      "note": "Footnotes fall on the wrong page, this page should have 4, 5, 6 too",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 222,
+      "case": "new/isla_language_lesson_plan",
+      "page": 4,
+      "source": "Generated",
+      "x_pt": 77.64451,
+      "y_pt": 41.34906,
+      "note": "Table cells that are broken should render with the bottom border. At least this one. Confirm if this is always the case.",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 223,
+      "case": "new/japanese_land_development_sign_form",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 225.17592,
+      "y_pt": 264.42816,
+      "note": "Missing arrow below the \"50\" here",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 224,
+      "case": "samples/samtale",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 573.86115,
+      "y_pt": 222.80783,
+      "note": "Spurious grey line rendered above \"Medarbeiderens\" here.",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 225,
+      "case": "new/master_thesis_learning_agreement",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 516.39966,
+      "y_pt": 180.95215,
+      "note": "Broklen textbox should still have bottom border here",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 226,
+      "case": "new/master_thesis_learning_agreement",
+      "page": 2,
+      "source": "Generated",
+      "x_pt": 455.50012,
+      "y_pt": 778.27716,
+      "note": "Broken text box should have top border here",
       "fixed": false,
       "cleared": false
     }

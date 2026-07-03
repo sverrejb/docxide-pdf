@@ -42,6 +42,9 @@ pub(crate) struct FontEntry {
     pub(crate) char_widths_1000: Option<HashMap<char, f32>>,
     pub(crate) kern_pairs: Option<HashMap<(u16, u16), f32>>,
     pub(crate) synthetic_bold: bool,
+    /// True when the requested font was missing and a metric-changing fallback
+    /// (CJK/family/standard-14) was used — altName/alias mappings don't count.
+    pub(crate) is_substituted: bool,
     /// CJK chars requested but not present in this font (need fallback rendering).
     pub(crate) missing_cjk_chars: HashSet<char>,
     /// Font file path for glyph outline extraction (text warping).
@@ -397,11 +400,13 @@ pub(crate) fn register_font(
     let table_entry = lookup_font_table(font_table, primary);
 
     let script = classify_cjk_script(primary);
+    let substituted = std::cell::Cell::new(false);
     let try_cjk_fallback = |tc: &mut dyn FnMut(&str) -> Option<ResolvedFont>| {
         cjk_fallback_fonts_for_script(script).iter().find_map(|cjk_font| {
             log::debug!("Trying CJK fallback \"{cjk_font}\" for \"{primary}\"");
             let m = tc(cjk_font)?;
             log::info!("Font substitution: {primary} → CJK fallback \"{cjk_font}\"");
+            substituted.set(true);
             Some(m)
         })
     };
@@ -449,6 +454,7 @@ pub(crate) fn register_font(
                 "Font substitution: {primary} → family {:?} fallback \"{fallback}\"",
                 entry.family
             );
+            substituted.set(true);
             Some(m)
         })
         .or_else(|| {
@@ -488,6 +494,7 @@ pub(crate) fn register_font(
                 Some(r.metrics.kern_pairs)
             },
             synthetic_bold: r.synthetic_bold,
+            is_substituted: substituted.get(),
             missing_cjk_chars: missing_cjk,
             font_path: r.font_path,
             face_index: r.face_index,
@@ -519,6 +526,7 @@ pub(crate) fn register_font(
                 char_widths_1000: None,
                 kern_pairs: None,
                 synthetic_bold: false,
+                is_substituted: true,
                 missing_cjk_chars: missing_cjk,
                 font_path: None,
                 face_index: 0,

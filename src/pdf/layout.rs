@@ -89,6 +89,13 @@ fn split_preserving_spaces(text: &str) -> Vec<(usize, &str)> {
         .map(|(pos, _)| pos)
         .collect();
     augment_url_breaks(text, &mut breaks);
+    // UAX #14 class IN allows a break after ellipses before digits, but Word
+    // keeps tokens like TOC dot-leaders typed as "…………45" unbreakable.
+    breaks.retain(|&b| {
+        b >= text.len()
+            || !text[..b].ends_with(['\u{2024}', '\u{2025}', '\u{2026}'])
+            || text[b..].starts_with(|c: char| c.is_whitespace())
+    });
 
     let mut prev = 0;
     for &brk in &breaks {
@@ -2137,6 +2144,23 @@ mod tests {
         assert!(words.iter().any(|w| w.ends_with('/')), "no break after /: {:?}", words);
         assert!(words.iter().any(|w| w.ends_with('?')), "no break after ?: {:?}", words);
         assert!(words.iter().any(|w| w.ends_with('#')), "no break after #: {:?}", words);
+    }
+
+    #[test]
+    fn test_no_break_after_ellipsis_inside_token() {
+        // TOC dot-leaders typed as ellipses: "Preparation………45" is one
+        // unbreakable token in Word, but UAX #14 allows IN→NU breaks.
+        let words: Vec<&str> = split_preserving_spaces("Preparation………45 done")
+            .into_iter()
+            .map(|(_, w)| w)
+            .collect();
+        assert_eq!(words, vec!["Preparation………45", "done"]);
+        // A break after ellipsis before whitespace is still fine.
+        let words: Vec<&str> = split_preserving_spaces("wait… go")
+            .into_iter()
+            .map(|(_, w)| w)
+            .collect();
+        assert_eq!(words, vec!["wait…", "go"]);
     }
 
     #[test]

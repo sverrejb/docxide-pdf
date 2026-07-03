@@ -472,6 +472,8 @@ pub(super) struct CellParagraphLayout {
     pub(super) font_size: f32,
     #[allow(dead_code)]
     pub(super) ascender_ratio: f32,
+    pub(super) descender_ratio: f32,
+    pub(super) font_substituted: bool,
     pub(super) alignment: Alignment,
     pub(super) space_before: f32,
     pub(super) indent_left: f32,
@@ -645,6 +647,16 @@ pub(super) fn compute_row_layouts(
                                 total_h += space_before;
 
                                 let ascender_ratio = tallest_ar.unwrap_or(0.75);
+                                // Win-path metrics identity: line_h_ratio −
+                                // ascender_ratio = usWinDescent/units. Fallback
+                                // 0.2 pairs with the 1.2 default line ratio so
+                                // standard fonts get zero trailing leading.
+                                let descender_ratio = tallest_lhr
+                                    .zip(tallest_ar)
+                                    .map(|(lh, ar)| (lh - ar).max(0.0))
+                                    .unwrap_or(0.2);
+                                let font_substituted =
+                                    metric_font.is_some_and(|e| e.is_substituted);
 
                                 // Compute extra left indent from left-aligned
                                 // wrapSquare/Tight floating images so text wraps
@@ -834,6 +846,8 @@ pub(super) fn compute_row_layouts(
                                     line_h,
                                     font_size,
                                     ascender_ratio,
+                                    descender_ratio,
+                                    font_substituted,
                                     alignment: para.alignment,
                                     space_before,
                                     indent_left: para.indent_left,

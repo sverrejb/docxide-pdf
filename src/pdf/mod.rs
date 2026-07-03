@@ -133,10 +133,9 @@ pub(super) fn render_shape_fill(
 
 /// Compute line height from the list label font if it exceeds the text-run line height.
 /// Word includes the numbering label character's font metrics in the tallest-font
-/// calculation, so a bullet from Symbol font can make the line taller than text-only Calibri.
-/// Only applied when label and text use the same font size (the common bullet case);
-/// when the label has a dramatically different size it's a special numbering style
-/// handled separately via the existing label_fs > font_size path.
+/// calculation, so a bullet from Symbol font can make the line taller than text-only
+/// Calibri, and an oversized label (e.g. 20pt number on 10pt text) makes the first
+/// line taller outright.
 fn label_boosted_line_h(
     para: &Paragraph,
     fonts: &HashMap<String, FontEntry>,
@@ -148,11 +147,6 @@ fn label_boosted_line_h(
         return text_line_h;
     }
     let label_fs = para.list_label_font_size.unwrap_or(text_font_size);
-    // Only boost when the label font size matches the text font size (common bullet case).
-    // Large label sizes (e.g. 20pt label on 10pt text) are handled separately.
-    if (label_fs - text_font_size).abs() > 1.0 {
-        return text_line_h;
-    }
     let Some(key) = label_font_key(para) else {
         return text_line_h;
     };
@@ -161,6 +155,29 @@ fn label_boosted_line_h(
     };
     let label_lh = resolve_line_h(effective_ls, label_fs, entry.line_h_ratio);
     text_line_h.max(label_lh)
+}
+
+/// First-baseline offset including the list label's ascent. The label is a run
+/// on the first line, so an oversized numbering label pushes the first baseline
+/// down to its own ascent (a same-size label leaves it unchanged).
+fn label_boosted_baseline_offset(
+    para: &Paragraph,
+    fonts: &HashMap<String, FontEntry>,
+    text_offset: f32,
+    text_font_size: f32,
+) -> f32 {
+    if para.list_label.is_empty() {
+        return text_offset;
+    }
+    let label_fs = para.list_label_font_size.unwrap_or(text_font_size);
+    if label_fs <= text_font_size {
+        return text_offset;
+    }
+    let label_ar = label_font_key(para)
+        .and_then(|k| fonts.get(&k))
+        .and_then(|e| e.ascender_ratio)
+        .unwrap_or(0.75);
+    text_offset.max(label_fs * label_ar)
 }
 
 /// Look up the line_h_ratio for a break run's font, matching by font_size.
@@ -1036,6 +1053,19 @@ fn render_paragraph_block(
         line_h
     };
 
+    // Word bottom-aligns text within an exact-height line box: the baseline
+    // sits winDescent above the box bottom (identity: line_h_ratio −
+    // ascender_ratio = winDescent/upm), however large the font's ascent is.
+    // Placing the baseline at font_size * ascender_ratio instead pushes a
+    // large-lineGap CJK substitute's descenders out of the fixed box and
+    // into whatever follows (annotation #219: heading into table border).
+    let exact_baseline_base = match (effective_ls, tallest_lhr, tallest_ar) {
+        (LineSpacing::Exact(_), Some(lhr), Some(ar)) if lhr > ar => {
+            Some(line_h - font_size * (lhr - ar))
+        }
+        _ => None,
+    };
+
     let (col_x, col_w) = col_geometry[state.current_col];
     let mut para_text_x = col_x + para.indent_left;
     let mut para_text_width =
@@ -1132,6 +1162,43 @@ fn render_paragraph_block(
     };
 
     let text_empty = is_text_empty(&effective_runs);
+    // Word lays the line following a tall inline image one full line height
+    // below the image bottom (leading above the text). Our baseline
+    // convention (ascent below slot top) omits that leading, so a paragraph
+    // directly after an image-dominated line gets both its first baseline and
+    // its block height extended by the missing leading.
+    let after_image_boost = if text_empty
+        || grid_snapped
+        || para.image.is_some()
+        || para.inline_chart.is_some()
+        || block_idx == 0
+    {
+        0.0
+    } else {
+        adjacent_para(block_idx - 1).map_or(0.0, |prev| {
+            let img_h = prev
+                .runs
+                .iter()
+                .filter_map(|r| r.inline_image.as_ref())
+                .map(|i| i.display_height)
+                .fold(0.0f32, f32::max)
+                .max(if prev.image.is_some() { prev.content_height } else { 0.0 });
+            if img_h <= 0.0 {
+                return 0.0;
+            }
+            let (pfs, plhr, _) = tallest_run_metrics(&prev.runs, ctx.fonts);
+            let prev_ls = prev.line_spacing.unwrap_or(ctx.doc_line_spacing);
+            if img_h <= resolve_line_h(prev_ls, pfs, plhr) {
+                return 0.0;
+            }
+            let ar = tallest_ar.unwrap_or(0.75);
+            let dr = tallest_lhr
+                .zip(tallest_ar)
+                .map(|(l, a)| (l - a).max(0.0))
+                .unwrap_or(0.2);
+            (line_h - font_size * (ar + dr)).max(0.0)
+        })
+    };
     let has_tabs = effective_runs.iter().any(|r| r.is_tab);
     let block_inline_images: HashMap<usize, String> = inline_image_pdf_names
         .iter()
@@ -1670,9 +1737,8 @@ fn render_paragraph_block(
         }
     } else {
         let num_lines = lines.len();
-        // List label font size doesn't boost line height — labels
-        // sit in the margin and Word uses the text font for line
-        // height, not the numbering run's font.
+        // The numbering label is a run on the first line, so its font
+        // metrics participate in that line's height.
         let first_line_h = label_boosted_line_h(para, ctx.fonts, line_h, effective_ls, font_size);
         if num_lines <= 1 {
             // If the single line was created by a break, use its font size
@@ -1686,10 +1752,29 @@ fn render_paragraph_block(
             // Per-line height: break-created lines use the break
             // run's font metrics instead of the paragraph's text metrics.
             let mut h = first_line_h;
-            for line in lines.iter().skip(1) {
+            let last = lines.len() - 1;
+            for (i, line) in lines.iter().enumerate().skip(1) {
                 if let Some(bfs) = line.break_font_size {
-                    let blhr = break_run_lhr(&effective_runs, bfs, ctx.fonts);
-                    h += resolve_line_h(effective_ls, bfs, blhr);
+                    // The empty line a trailing break leaves holds only the
+                    // paragraph mark, whose rPr sizes it — the break char
+                    // sizes the line it terminates, not this one (samtale:
+                    // 26pt br before a 12pt mark, annotation #121).
+                    let mark_fs = (i == last && line.chunks.is_empty())
+                        .then_some(para.paragraph_mark_font_size)
+                        .flatten();
+                    if let Some(mfs) = mark_fs {
+                        let mlhr = para
+                            .paragraph_mark_font_name
+                            .as_deref()
+                            .and_then(|n| ctx.fonts.get(n))
+                            .and_then(|e| e.line_h_ratio)
+                            .or(tallest_lhr);
+                        h += resolve_line_h(effective_ls, mfs, mlhr);
+                    } else {
+                        let blhr =
+                            break_run_lhr(&effective_runs, bfs, ctx.fonts);
+                        h += resolve_line_h(effective_ls, bfs, blhr);
+                    }
                 } else {
                     h += line_h;
                 }
@@ -1697,6 +1782,8 @@ fn render_paragraph_block(
             h
         }
     };
+
+    content_h += after_image_boost;
 
     // Extra height from floating images that extends beyond
     // the text content — used only for page-break decisions,
@@ -1947,7 +2034,13 @@ fn render_paragraph_block(
             let baseline_offset = if grid_snapped {
                 sp.line_pitch
             } else {
-                font_size * ascender_ratio
+                label_boosted_baseline_offset(
+                    para,
+                    ctx.fonts,
+                    exact_baseline_base
+                        .unwrap_or(font_size * ascender_ratio),
+                    font_size,
+                ) + after_image_boost
             };
             let baseline_y = state.pb.slot_top - baseline_offset;
 
@@ -2450,7 +2543,12 @@ fn render_paragraph_block(
         let baseline_offset = if grid_snapped {
             sp.line_pitch
         } else {
-            font_size * ascender_ratio
+            label_boosted_baseline_offset(
+                para,
+                ctx.fonts,
+                exact_baseline_base.unwrap_or(font_size * ascender_ratio),
+                font_size,
+            ) + after_image_boost
         };
         let baseline_y = state.pb.slot_top - bdr_top_pad - baseline_offset;
 
@@ -3103,7 +3201,15 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                 if p.clears_floats {
                     if let Some(ref fz) = state.pb.float_zone {
                         if state.pb.slot_top > fz.bottom_y {
-                            state.pb.slot_top = fz.bottom_y;
+                            // The line following the break resumes below the
+                            // float and still occupies its full line height
+                            // there (the break paragraph's mark line).
+                            let (fs, lhr, _) =
+                                tallest_run_metrics(&p.runs, ctx.fonts);
+                            let ls =
+                                p.line_spacing.unwrap_or(ctx.doc_line_spacing);
+                            state.pb.slot_top =
+                                fz.bottom_y - resolve_line_h(ls, fs, lhr);
                         }
                         state.pb.float_zone = None;
                     }
