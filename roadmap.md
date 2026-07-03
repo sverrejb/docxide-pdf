@@ -25,6 +25,13 @@ Core CJK support is implemented: CIDFont/Identity-H/ToUnicode encoding, platform
 
 1. **`w:firstLineChars`** (MEDIUM) — character-based indent (e.g. `firstLineChars="100"` = 1 character width). Not parsed; we only handle `w:firstLine` (twip-based). In practice, twip fallback is always present alongside firstLineChars.
 2. **Vertical text centering** — `render_vertical_cjk_cell` uses a simplistic height calculation (chars x font_size) that doesn't account for paragraph spacing, causing vertical misalignment in merged cells.
+3. **Fallback line-height fidelity** (MEDIUM, annotation #8) — Korean fonts
+   (함초롬바탕, HY헤드라인M, 굴림) route to a fallback whose line ratio is ~1.27
+   vs ~1.73 for the fonts Word used in the reference. Every `lineRule="auto"`
+   line and every `atLeast` table row comes out short (east_asia_conference_form:
+   ~116pt lost over one table, flipping a page break). Fix alongside Bundled
+   Fallback Fonts: pick/ship CJK fallbacks with matching vertical metrics, or
+   apply a per-script line-height compensation.
 
 ## Bundled Fallback Fonts (TODO — MEDIUM IMPACT)
 
@@ -98,6 +105,26 @@ Same pipeline for bigrams. Input space is `glyphs²` but only ~500 common pairs 
 - Create more diagnostic fixtures with different fonts/sizes — still valid, needed for Phase 1 data collection
 - **Interim safe win:** ship per-font factor (Calibri/TNR=0.99985, Arial=0.9999, others=1.0) for 3 clean improvements while data pipeline is built
 - **Analysis tooling:** `tools/experiments/width_analysis.py` extracts per-char signed width errors from reference PDFs
+
+**Blocked annotations (triage 2026-07-03):** four open annotations diagnosed as
+this drift class flipping a soft page break — no targeted per-case fix exists;
+they should clear when width/height fidelity improves (matching triage notes
+appended in `annotations.json`):
+- **#59 brazilian_logistics_study p9** — pure width-drift: extra wrapped lines
+  by page 8 spill ~4 blank spacer paragraphs above the Figura 2 caption (~82pt).
+- **#82 czech_municipal_grant_form p2** — page-1 line/row heights ~28pt short;
+  the intro paragraph Word overflows to page 2 (`lastRenderedPageBreak` on it)
+  fits our page 1, so page-2 content sits ~26pt high. Row-height deficit class
+  (see next section) as much as width drift.
+- **#124 english_town_council_report p3** — 11pt TOC rows ~1.4pt/row short; the
+  16-empty-paragraph stack straddling pages 2–3 fits our page 2 entirely, so the
+  page-3 bordered box starts flush at the top margin (~25pt high, ~10pt of it
+  from page-top space_before suppression once the box lands there).
+- **#8 east_asia_conference_form p1** — different sub-class: the Korean fonts'
+  CJK fallback has line ratio ~1.27 vs ~1.73 in the reference, so every
+  `atLeast` row collapses to its trHeight while Word grows them (~116pt lost
+  across one table). Belongs with Bundled Fallback Fonts / CJK metrics, not
+  Latin width correction.
 
 ## Table Row Height Deficit (TODO — MEDIUM IMPACT, discovered 2026-07)
 

@@ -19,7 +19,7 @@
       "source": "Generated",
       "x_pt": 322.27734,
       "y_pt": 164.30786,
-      "note": "This text should come on page 2.",
+      "note": "This text should come on page 2.\n\nSYSTEMIC (triage 2026-07-03): CJK fallback line height, not pagination. The Korean fonts route to a fallback with line ratio ~1.27 vs ~1.73 in the reference, so every atLeast row collapses to its trHeight while Word grows them — ~116pt lost across the table and the trailing text fits page 1. Needs CJK fallback vertical-metric fidelity (bundle/select metric-compatible fallback or CJK line-height compensation).",
       "fixed": false,
       "cleared": false
     },
@@ -30,7 +30,7 @@
       "source": "Generated",
       "x_pt": 167.81552,
       "y_pt": 677.6182,
-      "note": "Too much white space above image.",
+      "note": "Too much white space above image.\n\nSYSTEMIC (triage 2026-07-03): cumulative text-width/wrap drift, not image spacing. Our glyph advances measure slightly wide, wrapping a few extra lines by page 8, so ~4 of the 7 blank spacer paragraphs before the Figura 2 caption spill onto page 9 (~82pt of the gap). after_image_boost is unrelated (floating anchor, not inline). Fix belongs to text-shaping/width accuracy.",
       "fixed": false,
       "cleared": false
     },
@@ -52,7 +52,7 @@
       "source": "Generated",
       "x_pt": 81.04862,
       "y_pt": 744.497,
-      "note": "Too much space below \"header\" with image and text and above numbered list.",
+      "note": "Too much space below \"header\" with image and text and above numbered list.\n\nSYSTEMIC (triage 2026-07-03): page-1 line/row heights accumulate ~28pt short, so the 2-line intro paragraph Word pushes to page 2 (it carries lastRenderedPageBreak) fits on our page 1 — page-2 content then sits ~26pt high. No page-2 spacing knob; boundary-sensitive pagination flip from line-height fidelity.",
       "fixed": false,
       "cleared": false
     },
@@ -118,7 +118,7 @@
       "source": "Generated",
       "x_pt": 75.68638,
       "y_pt": 794.8483,
-      "note": "We start higher up here than reference for some reason.",
+      "note": "We start higher up here than reference for some reason.\n\nSYSTEMIC (triage 2026-07-03): 11pt TOC rows lay out ~1.4pt/row short, so the 16-empty-paragraph stack straddling pages 2-3 fits entirely on page 2 for us and the bordered box starts flush at page-3 top margin (~25pt high; ~10pt of that is page-top space_before suppression once the box lands there). Same cumulative line-height drift class. Row-split fix improved TxtBnd +7.2pp but the page-3 start remains.",
       "fixed": false,
       "cleared": false
     },
@@ -252,7 +252,7 @@
       "y_pt": 746.73785,
       "note": "6.1.22 Here should be 6.7.1 per the reference",
       "fixed": true,
-      "cleared": false
+      "cleared": true
     },
     {
       "id": 207,
@@ -263,7 +263,7 @@
       "y_pt": 536.67883,
       "note": "Missing numbering on \"Energy Performance Certificates\" and other headings. This one should be 6.8",
       "fixed": true,
-      "cleared": false
+      "cleared": true
     },
     {
       "id": 209,
