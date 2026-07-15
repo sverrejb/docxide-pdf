@@ -11,9 +11,10 @@ use super::numbering::{ListLabelInfo, parse_list_info};
 use super::runs::parse_runs;
 use super::styles::{TableBordersDef, parse_alignment};
 use super::{
-    ParseContext, WML_NS, collect_block_nodes, extract_indents, is_wml, parse_cell_border,
-    parse_cell_border_left, parse_cell_border_right, parse_hex_color, parse_on_off,
-    parse_paragraph_spacing, twips_attr, twips_to_pts, wml, wml_attr, wml_bool,
+    ParseContext, WML_NS, collect_block_nodes, extract_indents, is_wml, merge_tab_stops,
+    parse_cell_border, parse_cell_border_left, parse_cell_border_right, parse_hex_color,
+    parse_on_off, parse_paragraph_spacing, parse_tab_stops_with_clears, twips_attr, twips_to_pts,
+    wml, wml_attr, wml_bool,
 };
 
 /// Approximate a `w:shd` pattern fill (stripes/cross/pctNN) as a solid color,
@@ -787,6 +788,16 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     } else {
                         ctx.styles.defaults.space_after
                     });
+                    let mut tab_stops: Vec<crate::model::TabStop> = para_style
+                        .map(|s| s.tab_stops.clone())
+                        .unwrap_or_default();
+                    let (para_tabs, para_clears) = ppr
+                        .map(parse_tab_stops_with_clears)
+                        .unwrap_or_default();
+                    if !para_tabs.is_empty() || !para_clears.is_empty() {
+                        merge_tab_stops(&mut tab_stops, &para_clears, para_tabs);
+                        tab_stops.sort_by(|a, b| a.position.total_cmp(&b.position));
+                    }
                     cell_blocks.push(Block::Paragraph(Paragraph {
                         runs,
                         alignment,
@@ -808,6 +819,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         floating_images: parsed.floating_images,
                         textboxes: parsed.textboxes,
                         connectors: parsed.connectors,
+                        tab_stops,
                         ..Paragraph::default()
                     }));
                 } else if is_wml(*n,"tbl") {
