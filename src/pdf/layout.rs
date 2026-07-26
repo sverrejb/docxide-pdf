@@ -12,6 +12,32 @@ use crate::model::{
 
 use super::color::{fill_color_or_black, stroke_color_or_black};
 
+/// How many gaps a stretched line's slack spreads across when the slack goes
+/// between *characters* (applied as PDF `Tc`) rather than between word gaps.
+/// `None` means the line falls back to word-gap justification.
+///
+/// Two callers want char-level spreading: CJK (Word treats inter-character gaps
+/// like word gaps) and `w:jc="distribute"` ("Distribute All Characters Equally",
+/// §17.18.44). They differ at the right edge — CJK justify keeps the trailing
+/// cell gap of the grid, so its slack divides by the character count, while
+/// `distribute` ends flush at both margins (Japanese 均等割り付け behaves the
+/// same way), so it divides by one gap fewer.
+fn char_justify_gaps(
+    alignment: Alignment,
+    can_justify: bool,
+    has_cjk: bool,
+    char_count: usize,
+) -> Option<usize> {
+    if !can_justify || char_count < 2 {
+        return None;
+    }
+    match (alignment, has_cjk) {
+        (Alignment::Distribute, _) => Some(char_count - 1),
+        (_, true) => Some(char_count),
+        _ => None,
+    }
+}
+
 /// Resolve aligned segment start position given a tab stop, segment runs, and minimum x.
 fn resolve_tab_aligned_start(
     stop: &TabStop,
@@ -1544,31 +1570,34 @@ pub(super) fn render_paragraph_lines(
             .any(|c| c.text.chars().any(crate::docx::is_east_asian_char));
 
         // Soft line breaks (w:br) should still be justified — only the
-        // paragraph's true last line suppresses justification.
-        let can_justify = *alignment == Alignment::Justify
-            && global_line_idx != last_line_idx;
+        // paragraph's true last line suppresses justification. `distribute`
+        // stretches every line, last one included (§17.18.44).
+        let can_justify = match *alignment {
+            Alignment::Justify => global_line_idx != last_line_idx,
+            Alignment::Distribute => true,
+            _ => false,
+        };
 
-        let is_cjk_justified = can_justify && has_cjk_content && left_char_count > 1;
-        let is_justified = is_cjk_justified
+        let char_justify_gaps =
+            char_justify_gaps(*alignment, can_justify, has_cjk_content, left_char_count);
+        let is_char_justified = char_justify_gaps.is_some();
+        let is_justified = is_char_justified
             || (can_justify && left_chunk_count > 1);
 
         let line_start_x = match alignment {
             Alignment::Center => eff_margin + (eff_width - left_content_width) / 2.0,
             Alignment::Right => eff_margin + eff_width - left_content_width,
-            Alignment::Left | Alignment::Justify => eff_margin,
+            Alignment::Left | Alignment::Justify | Alignment::Distribute => eff_margin,
         };
 
-        // For CJK justify, distribute via Tc (char spacing) across all characters.
-        // Tc adds space after each char including the last, so:
-        //   content_width + total_chars * Tc = eff_width
-        //   Tc = (eff_width - content_width) / total_chars
-        let justify_tc = if is_cjk_justified {
-            (eff_width - left_content_width) / left_char_count as f32
-        } else {
-            0.0
+        // Char-level distribution via Tc (char spacing): see char_justify_gaps
+        // for how many gaps the slack divides across.
+        let justify_tc = match char_justify_gaps {
+            Some(gaps) => (eff_width - left_content_width) / gaps as f32,
+            None => 0.0,
         };
 
-        let extra_per_gap = if is_justified && !is_cjk_justified {
+        let extra_per_gap = if is_justified && !is_char_justified {
             ((eff_width - left_content_width) / (left_chunk_count - 1).max(1) as f32).max(0.0)
         } else {
             0.0
@@ -1580,7 +1609,7 @@ pub(super) fn render_paragraph_lines(
             let rx = match alignment {
                 Alignment::Center => rr.region_x + (rr.region_width - rr.content_width) / 2.0,
                 Alignment::Right => rr.region_x + rr.region_width - rr.content_width,
-                Alignment::Left | Alignment::Justify => rr.region_x,
+                Alignment::Left | Alignment::Justify | Alignment::Distribute => rr.region_x,
             };
             let rgap = if is_justified && right_chunks > 1 {
                 ((rr.region_width - rr.content_width) / (right_chunks - 1) as f32).max(0.0)
@@ -1600,7 +1629,7 @@ pub(super) fn render_paragraph_lines(
                     return right_start_x + chunk.x_offset + local_idx as f32 * right_extra_per_gap;
                 }
             }
-            if is_cjk_justified {
+            if is_char_justified {
                 // Tc adds extra space after each character; shift chunk start
                 // by the cumulative Tc of all chars in preceding chunks.
                 let chars_before: usize = line.chunks[..chunk_idx]
@@ -2178,6 +2207,35 @@ pub(super) fn grid_snapped_line_h(
 mod tests {
     use super::*;
     use crate::model::VertAlign;
+
+    #[test]
+    fn test_char_justify_gaps() {
+        // Latin justify spreads word gaps, not characters.
+        assert_eq!(char_justify_gaps(Alignment::Justify, true, false, 10), None);
+        // CJK justify keeps the grid's trailing cell gap: divide by char count.
+        assert_eq!(
+            char_justify_gaps(Alignment::Justify, true, true, 10),
+            Some(10)
+        );
+        // distribute ends flush at the right margin: one gap fewer.
+        assert_eq!(
+            char_justify_gaps(Alignment::Distribute, true, false, 10),
+            Some(9)
+        );
+        // distribute ends flush at both margins whatever the script.
+        assert_eq!(
+            char_justify_gaps(Alignment::Distribute, true, true, 10),
+            Some(9)
+        );
+        // A single character has no gap to spread into (guards a 0 divisor).
+        assert_eq!(
+            char_justify_gaps(Alignment::Distribute, true, false, 1),
+            None
+        );
+        // Last line of a justified paragraph, and non-stretching alignments.
+        assert_eq!(char_justify_gaps(Alignment::Justify, false, true, 10), None);
+        assert_eq!(char_justify_gaps(Alignment::Left, false, true, 10), None);
+    }
 
     #[test]
     fn test_url_breaks_split_into_chunks() {

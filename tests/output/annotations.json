@@ -1,5 +1,5 @@
 {
-  "next_id": 227,
+  "next_id": 228,
   "annotations": [
     {
       "id": 208,
@@ -460,6 +460,17 @@
       "x_pt": 455.50012,
       "y_pt": 778.27716,
       "note": "Broken text box should have top border here",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 227,
+      "case": "new/croatian_thesis_topic_approval_form",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 420.9978,
+      "y_pt": 148.77155,
+      "note": "(datum) is not centered under the line above.",
       "fixed": false,
       "cleared": false
     }

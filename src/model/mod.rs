@@ -15,6 +15,10 @@ pub enum Alignment {
     Center,
     Right,
     Justify,
+    /// `w:jc val="distribute"` — "Distribute All Characters Equally"
+    /// (§17.18.44). Like Justify, but the last line is stretched too and the
+    /// slack is spread between characters rather than only between words.
+    Distribute,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

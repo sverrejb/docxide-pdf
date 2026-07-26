@@ -221,7 +221,10 @@ pub(super) fn parse_alignment(val: &str) -> Alignment {
     match val {
         "center" => Alignment::Center,
         "right" | "end" => Alignment::Right,
-        "both" => Alignment::Justify,
+        // Kashida variants are Arabic justification flavors: without shaping we
+        // can't elongate glyphs, but plain justify beats falling back to left.
+        "both" | "mediumKashida" | "highKashida" | "lowKashida" => Alignment::Justify,
+        "distribute" | "thaiDistribute" => Alignment::Distribute,
         _ => Alignment::Left,
     }
 }
@@ -1063,6 +1066,13 @@ mod tests {
         assert_eq!(parse_alignment("right"), Alignment::Right);
         assert_eq!(parse_alignment("end"), Alignment::Right);
         assert_eq!(parse_alignment("both"), Alignment::Justify);
+        assert_eq!(parse_alignment("distribute"), Alignment::Distribute);
+        assert_eq!(parse_alignment("thaiDistribute"), Alignment::Distribute);
+        // Kashida elongation needs shaping we don't have; justify is the
+        // closest renderable behavior.
+        assert_eq!(parse_alignment("mediumKashida"), Alignment::Justify);
+        assert_eq!(parse_alignment("highKashida"), Alignment::Justify);
+        assert_eq!(parse_alignment("lowKashida"), Alignment::Justify);
         assert_eq!(parse_alignment("left"), Alignment::Left);
         assert_eq!(parse_alignment("start"), Alignment::Left); // unknown → Left
         assert_eq!(parse_alignment(""), Alignment::Left);

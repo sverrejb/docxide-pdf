@@ -1,5 +1,25 @@
 # Roadmap
 
+## Distributed Alignment (DONE — 2026-07-27)
+
+`w:jc="distribute"` / `"thaiDistribute"` used to fall through `parse_alignment`'s
+`_ => Left` arm, so distributed paragraphs rendered left-aligned. Added
+`Alignment::Distribute`: it stretches *every* line including the last, and
+spreads the slack between characters via `Tc` ("Distribute All Characters
+Equally", §17.18.44) rather than between word gaps. The Tc divisor differs from
+CJK justify by one gap: CJK justify keeps the grid's trailing cell gap (divide
+by the char count), while `distribute` ends flush at both margins whatever the
+script — Japanese 均等割り付け behaves the same way — so it divides by one gap
+fewer (`char_justify_gaps` in `pdf/layout.rs`, unit-tested). Getting this wrong
+left case77's CJK line 31pt short of the right margin.
+
+Kashida variants (`mediumKashida`/`highKashida`/`lowKashida`) now map to plain
+Justify instead of Left; true glyph elongation needs Arabic shaping we don't have.
+
+Zero corpus fixtures exercise either value (verified across all 129 DOCX, all XML
+parts), so scores are flat — this is correctness-only. No handcrafted fixture
+yet: would need a Word-generated reference PDF.
+
 ## New-Case Triage 2026-07-03 (10 fixtures added; fixes applied 2026-07-04)
 
 Passing: streamnet_steering (J 54%), zimbabwe_broadcasting (J 53%). Fix round results (zero regressions across 218 cases):

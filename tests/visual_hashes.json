@@ -550,7 +550,7 @@
     "48d239888ebda5879723b758f9f8b1cd01156a6ff917f0b54addcb820840f0be"
   ],
   "new/croatian_thesis_..": [
-    "c92fd7cbed79d831646571a337b45eb0f3db88c6752bb71b08c1f1a7ece77b27"
+    "5219ac4a592b75832974fa13b645d2162cd646729e2830ae08495bf916f450be"
   ],
   "new/czech_census_202..": [
     "4b53fa6e479e3ab85fd83db5a75ae6b8a55ca5551112f0c93ce3bdaafa990311"
@@ -641,7 +641,7 @@
   "new/erasmus_plus_sta..": [
     "c4e256e93770b9033f35525d89e2ff977418c7b06566b47e1eef3fabdc341955",
     "01e192216df433ed61b9b13fef8e7eacde20a23dd3a9ebd758a87f736981b03c",
-    "1f8e28142115add532fb747f0ca12e1711cd7a15db998a0a4885c52e4c0f4b1b"
+    "a0a3f88fe27178d7d9f2c500ab75ad683a4444c81baf29b5638e19b28b497cfb"
   ],
   "new/family_kinship_l..": [
     "d8a88daa7600adefc35bdb94afb2583f69f16e47c612dc03b7044f4c4a6a12ea",
@@ -1076,6 +1076,9 @@
     "a3aa53edcfb78e942d8dc504ba49b4db211aba3f07463c45b4d4db49db6ff0e9",
     "48582bc39eda0e76016afd5a9eb17fd66a5b690c992bdfc977b7fc90f3fe1fa0",
     "27e39d0dcfc6c8fa6c8dd02b0a98b73a96da490e0dcb1e3eaa2466d3e77f4466"
+  ],
+  "samples/CV": [
+    "6e4c574b1cf84b2f50d0c9a428f244435093b3220da22515f7e1f9bfdbce76f5"
   ],
   "samples/double-underline": [
     "fa18157fb739a47d069216030eb298a39914e170b159a01a73400a133d744630"
