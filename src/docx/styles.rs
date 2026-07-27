@@ -223,8 +223,16 @@ pub(super) fn parse_alignment(val: &str) -> Alignment {
         "right" | "end" => Alignment::Right,
         // Kashida variants are Arabic justification flavors: without shaping we
         // can't elongate glyphs, but plain justify beats falling back to left.
-        "both" | "mediumKashida" | "highKashida" | "lowKashida" => Alignment::Justify,
-        "distribute" | "thaiDistribute" => Alignment::Distribute,
+        //
+        // thaiDistribute is Thai-specific: case77's reference shows Word leaving
+        // a Latin thaiDistribute line at its natural width while stretching a
+        // plain `distribute` line of the same shape, so it behaves as ordinary
+        // justify here. Whether Thai script triggers real distribution is
+        // untested — no Thai fixture yet.
+        "both" | "mediumKashida" | "highKashida" | "lowKashida" | "thaiDistribute" => {
+            Alignment::Justify
+        }
+        "distribute" => Alignment::Distribute,
         _ => Alignment::Left,
     }
 }
@@ -1067,7 +1075,8 @@ mod tests {
         assert_eq!(parse_alignment("end"), Alignment::Right);
         assert_eq!(parse_alignment("both"), Alignment::Justify);
         assert_eq!(parse_alignment("distribute"), Alignment::Distribute);
-        assert_eq!(parse_alignment("thaiDistribute"), Alignment::Distribute);
+        // Word leaves Latin thaiDistribute at natural width (case77 reference).
+        assert_eq!(parse_alignment("thaiDistribute"), Alignment::Justify);
         // Kashida elongation needs shaping we don't have; justify is the
         // closest renderable behavior.
         assert_eq!(parse_alignment("mediumKashida"), Alignment::Justify);

@@ -22,6 +22,14 @@ use super::color::{fill_color_or_black, stroke_color_or_black};
 /// cell gap of the grid, so its slack divides by the character count, while
 /// `distribute` ends flush at both margins (Japanese 均等割り付け behaves the
 /// same way), so it divides by one gap fewer.
+///
+/// ponytail: the count excludes inter-word spaces, so a distributed Latin line
+/// with spaces spreads across one gap too few — case77 sample 3 sits up to 34pt
+/// off Word's interior letter positions, though both margins still land flush.
+/// Word counts spaces as distributable characters. Fixing it means carrying a
+/// per-chunk space count out of the line-breaking loop (`pending_space_w` keeps
+/// only the width, across 5 push sites and ~8 reset points), which is a poor
+/// trade while no corpus fixture distributes text containing spaces.
 fn char_justify_gaps(
     alignment: Alignment,
     can_justify: bool,

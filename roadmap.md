@@ -2,7 +2,7 @@
 
 ## Distributed Alignment (DONE — 2026-07-27)
 
-`w:jc="distribute"` / `"thaiDistribute"` used to fall through `parse_alignment`'s
+`w:jc="distribute"` used to fall through `parse_alignment`'s
 `_ => Left` arm, so distributed paragraphs rendered left-aligned. Added
 `Alignment::Distribute`: it stretches *every* line including the last, and
 spreads the slack between characters via `Tc` ("Distribute All Characters
@@ -16,9 +16,38 @@ left case77's CJK line 31pt short of the right margin.
 Kashida variants (`mediumKashida`/`highKashida`/`lowKashida`) now map to plain
 Justify instead of Left; true glyph elongation needs Arabic shaping we don't have.
 
-Zero corpus fixtures exercise either value (verified across all 129 DOCX, all XML
-parts), so scores are flat — this is correctness-only. No handcrafted fixture
-yet: would need a Word-generated reference PDF.
+Zero corpus fixtures exercise any of these values (verified across all 129 DOCX,
+all XML parts), so corpus scores are flat — this is correctness-only.
+
+### What case77's reference settled (2026-07-28)
+
+case77 now has a Word reference. It confirmed three assumptions and killed one:
+
+- distribute stretches every line including the last — our last line lands
+  within 0.3pt of Word's.
+- CJK distribute ends flush at both margins — validates the one-gap-fewer
+  divisor; all 10 glyphs within 0.4pt of Word.
+- `mediumKashida` on Latin text renders as ordinary justify.
+- **`thaiDistribute` is NOT distribute.** Word leaves a Latin thaiDistribute
+  line at its natural width while stretching a `distribute` line of the same
+  shape, so it now maps to Justify. Whether Thai script triggers real
+  distribution is untested — no Thai fixture exists.
+
+case77 scores J 51.5% / SSIM 70.5% / TxtBnd 84.2%. The remaining gap is two
+things, neither about distribute's core geometry:
+
+1. **Distributed Latin lines with spaces** spread across one gap too few (Word
+   counts spaces as distributable characters; we don't). Interior letters up to
+   34pt off, margins still flush. See the `ponytail:` note on
+   `char_justify_gaps` for why this wasn't chased.
+2. **Kashida changes Word's line breaking.** With identical text, Word's
+   `mediumKashida` paragraph breaks earlier than its `both` paragraph
+   ("…industrious" vs "…industrious beaver"), displacing a whole line. We
+   reproduce `both` breaking. Needs real kashida metrics, i.e. Arabic shaping.
+
+Also note case77's own on-page label for sample 4 claims thaiDistribute gets the
+"same treatment as distribute" — baked into input.docx before the reference
+disproved it. Correcting it means regenerating the DOCX and the reference.
 
 ## New-Case Triage 2026-07-03 (10 fixtures added; fixes applied 2026-07-04)
 
