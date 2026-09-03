@@ -72,6 +72,23 @@ The `hyphenation` crate (Knuth-Liang algorithm) was tested with 8 languages but 
 
 Test fixtures in `tests/fixtures/hyphenation/` (8 languages with Wikipedia text, `autoHyphenation` enabled) are ready for comparison when desktop-Word references become available.
 
+## Image Cropping `a:srcRect` (TODO — LOW-MEDIUM IMPACT, found 2026-09-04, planned)
+
+Not parsed. Cropped pictures render the full source squeezed into the frame, so both the
+visible region and aspect ratio are wrong. Only 1 of 129 corpus fixtures has real crop
+values: brazilian_logistics_study (J 17.3%), 3 anchored PNGs cropped 4.5–26.6% top/bottom.
+12 other fixtures carry an empty `<a:srcRect/>`, which must stay a no-op.
+
+Plan: parse l/t/r/b (1/100000 fractions) onto `EmbeddedImage.src_rect`; in
+`embed_single_image` wrap the image XObject in a Form XObject with BBox `[0 0 1 1]` whose
+content draws the inner image with `cm = [1/(1-l-r), 0, 0, 1/(1-t-b), -l/(1-l-r), -b/(1-t-b)]`.
+The bbox clips, so negative crops (blank padding) work for free and every draw site
+(inline, floating, table, header/footer, textbox) is untouched. Verify with unit tests on
+the parser and matrix, a handcrafted case (needs Word reference), and an unchanged
+`latest_hashes.json` for every fixture except brazilian_logistics_study. Found while
+reviewing MiniPdf — see `minipdf.md` for that and the other items it has that we lack (TOC
+generation, sdt data binding, `lastRenderedPageBreak` hint, score-gated fix loop).
+
 ## Picture Effects (PARTIALLY DONE)
 
 **Done:** Smooth outer shadow (rasterized Gaussian blur mask via SMask), soft edge (edge-fade SMask on image), glow (centered blur), inner shadow (inverted blur mask), reflection (flipped image with gradient SMask). All use the same rasterized mask + SMask XObject infrastructure. Test fixtures: case56 (shadow variations), case57 (2D effects), case58 (3D effects — deferred).

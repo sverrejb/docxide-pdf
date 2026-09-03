@@ -17,13 +17,14 @@ fn jaccard(a: &Path, b: &Path) -> Result<f64, String> {
     let img_a = image::open(a).map_err(|e| format!("open {}: {e}", a.display()))?;
     let img_b = image::open(b).map_err(|e| format!("open {}: {e}", b.display()))?;
 
-    let (w, h) = img_a.dimensions();
-    if img_b.dimensions() != (w, h) {
-        return Err(format!(
-            "size mismatch: {}×{} vs {}×{}",
-            w, h, img_b.dimensions().0, img_b.dimensions().1
-        ));
+    let (wa, ha) = img_a.dimensions();
+    let (wb, hb) = img_b.dimensions();
+    // A4 at 150 DPI rounds to 1754 or 1755 rows depending on the producer's exact
+    // page height, so compare the overlapping region when the difference is tiny.
+    if wa.abs_diff(wb) > 2 || ha.abs_diff(hb) > 2 {
+        return Err(format!("size mismatch: {wa}×{ha} vs {wb}×{hb}"));
     }
+    let (w, h) = (wa.min(wb), ha.min(hb));
 
     let (mut intersection, mut union) = (0u64, 0u64);
     for y in 0..h {
