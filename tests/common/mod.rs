@@ -10,6 +10,8 @@ use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fs, io};
 
+pub mod text_boundary;
+
 pub const REGRESSION_SLACK: f64 = 0.02;
 
 #[derive(Clone, Default, Serialize, Deserialize)]

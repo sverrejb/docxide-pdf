@@ -1,175 +1,13 @@
 mod common;
 
+use common::text_boundary::TextBoundary;
 use rayon::prelude::*;
 use std::collections::HashMap;
 use std::path::Path;
-use std::process::Command;
-
-fn pdf_page_count(pdf: &Path) -> usize {
-    let output = Command::new("mutool")
-        .args(["info", pdf.to_str().unwrap()])
-        .output()
-        .expect("Failed to run mutool info");
-    let text = String::from_utf8_lossy(&output.stdout);
-    for line in text.lines() {
-        if let Some(rest) = line.strip_prefix("Pages:") {
-            if let Ok(n) = rest.trim().parse::<usize>() {
-                return n;
-            }
-        }
-    }
-    0
-}
-
-fn extract_page_words(pdf: &Path, page: usize) -> Vec<String> {
-    let output = Command::new("mutool")
-        .args([
-            "draw",
-            "-F",
-            "text",
-            pdf.to_str().unwrap(),
-            &page.to_string(),
-        ])
-        .output()
-        .expect("Failed to run mutool draw");
-    String::from_utf8_lossy(&output.stdout)
-        .split_whitespace()
-        .map(String::from)
-        .collect()
-}
-
-fn extract_page_lines(pdf: &Path, page: usize) -> Vec<String> {
-    let output = Command::new("mutool")
-        .args([
-            "draw",
-            "-F",
-            "stext",
-            pdf.to_str().unwrap(),
-            &page.to_string(),
-        ])
-        .output()
-        .expect("Failed to run mutool draw -F stext");
-    let xml = String::from_utf8_lossy(&output.stdout);
-    let mut lines: Vec<(f64, f64, String)> = Vec::new(); // (x_left, y_top, text)
-    for xml_line in xml.lines() {
-        let trimmed = xml_line.trim();
-        if let Some(rest) = trimmed.strip_prefix("<line ") {
-            let bbox_vals: Option<(f64, f64)> = rest.strip_prefix("bbox=\"").and_then(|b| {
-                let mut parts = b.split_whitespace();
-                let x = parts.next()?.parse::<f64>().ok()?;
-                let y = parts.next()?.parse::<f64>().ok()?;
-                Some((x, y))
-            });
-            let (x_left, y_top) = bbox_vals.unwrap_or((0.0, 0.0));
-            if let Some(start) = rest.find("text=\"") {
-                let after_quote = &rest[start + 6..];
-                if let Some(end) = after_quote.find('"') {
-                    let text = &after_quote[..end];
-                    let text = text.trim();
-                    if !text.is_empty() {
-                        lines.push((x_left, y_top, text.to_string()));
-                    }
-                }
-            }
-        }
-    }
-    // Sort by y, cluster lines within 8pt y-tolerance, then sort each
-    // cluster by x so super/subscript fragments recombine left-to-right
-    // (e.g. "xi" + "2 + yj" + "3 = zk").
-    lines.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-    let mut clusters: Vec<Vec<(f64, f64, String)>> = Vec::new();
-    for item in lines {
-        if let Some(last) = clusters.last_mut() {
-            if (item.1 - last[0].1).abs() < 8.0 {
-                last.push(item);
-                continue;
-            }
-        }
-        clusters.push(vec![item]);
-    }
-    clusters
-        .into_iter()
-        .map(|mut cluster| {
-            cluster.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
-            cluster
-                .into_iter()
-                .map(|(_, _, t)| t)
-                .collect::<Vec<_>>()
-                .join(" ")
-        })
-        .collect()
-}
-
-fn extract_all_pages(pdf: &Path) -> Vec<Vec<String>> {
-    let n = pdf_page_count(pdf);
-    (1..=n).map(|p| extract_page_words(pdf, p)).collect()
-}
-
-fn break_positions(pages: &[Vec<String>]) -> Vec<usize> {
-    let mut pos = Vec::with_capacity(pages.len());
-    let mut cumulative = 0;
-    for page in pages {
-        cumulative += page.len();
-        pos.push(cumulative);
-    }
-    pos
-}
-
-/// Replace tab-leader dots (runs of 3+) with a space so comparison focuses on text content.
-fn normalize_leaders(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let mut dots = 0usize;
-    for c in s.chars() {
-        if c == '.' {
-            dots += 1;
-        } else {
-            if dots >= 3 {
-                out.push(' ');
-            } else {
-                for _ in 0..dots {
-                    out.push('.');
-                }
-            }
-            dots = 0;
-            out.push(c);
-        }
-    }
-    if dots > 0 && dots < 3 {
-        for _ in 0..dots {
-            out.push('.');
-        }
-    }
-    out
-}
-
-fn first_word(s: &str) -> String {
-    let n = normalize_leaders(s);
-    n.split_whitespace().next().unwrap_or_default().to_string()
-}
-
-fn last_word(s: &str) -> String {
-    let n = normalize_leaders(s);
-    n.split_whitespace().last().unwrap_or_default().to_string()
-}
 
 struct CaseResult {
     name: String,
-    ref_pages: usize,
-    gen_pages: usize,
-    max_break_drift: i64,
-    total_words: usize,
-    total_lines: usize,
-    matching_lines: usize,
-}
-
-impl CaseResult {
-    fn line_match_pct(&self) -> f64 {
-        if self.total_lines > 0 {
-            self.matching_lines as f64 / self.total_lines as f64
-        } else {
-            0.0
-        }
-    }
+    tb: TextBoundary,
 }
 
 fn analyze_fixture(fixture_dir: &Path) -> Option<CaseResult> {
@@ -186,54 +24,10 @@ fn analyze_fixture(fixture_dir: &Path) -> Option<CaseResult> {
             return None;
         }
     };
-
-    let ref_word_pages = extract_all_pages(&reference_pdf);
-    let gen_word_pages = extract_all_pages(&generated_pdf);
-    let common_pages = ref_word_pages.len().min(gen_word_pages.len());
-
-    let ref_breaks = break_positions(&ref_word_pages);
-    let gen_breaks = break_positions(&gen_word_pages);
-    let total_words = ref_breaks.last().copied().unwrap_or(0);
-    let break_count = (ref_breaks.len().saturating_sub(1)).min(gen_breaks.len().saturating_sub(1));
-    let max_break_drift = (0..break_count)
-        .map(|i| gen_breaks[i] as i64 - ref_breaks[i] as i64)
-        .max_by_key(|d| d.unsigned_abs())
-        .unwrap_or(0);
-
-    let mut total_lines = 0;
-    let mut matching_lines = 0;
-    for p in 1..=common_pages {
-        let ref_lines = extract_page_lines(&reference_pdf, p);
-        let gen_lines = extract_page_lines(&generated_pdf, p);
-
-        let max_count = ref_lines.len().max(gen_lines.len());
-        let min_count = ref_lines.len().min(gen_lines.len());
-        if max_count > 0 && (max_count - min_count) as f64 / max_count as f64 > 0.15 {
-            continue;
-        }
-
-        for l in 0..min_count {
-            total_lines += 1;
-            if first_word(&ref_lines[l]) == first_word(&gen_lines[l])
-                && last_word(&ref_lines[l]) == last_word(&gen_lines[l])
-            {
-                matching_lines += 1;
-            }
-        }
-    }
-
-    Some(CaseResult {
-        name,
-        ref_pages: ref_word_pages.len(),
-        gen_pages: gen_word_pages.len(),
-        max_break_drift,
-        total_words,
-        total_lines,
-        matching_lines,
-    })
+    let tb = common::text_boundary::analyze(&reference_pdf, &generated_pdf);
+    Some(CaseResult { name, tb })
 }
 
-#[test]
 fn text_boundaries_match() {
     let _ = env_logger::try_init();
     let fixtures = common::discover_fixtures().expect("Failed to read tests/fixtures");
@@ -265,32 +59,32 @@ fn text_boundaries_match() {
     );
 
     for r in &results {
-        let pages_str = if r.ref_pages == r.gen_pages {
-            format!("{}", r.ref_pages)
+        let pages_str = if r.tb.ref_pages == r.tb.gen_pages {
+            format!("{}", r.tb.ref_pages)
         } else {
-            format!("{}/{}", r.ref_pages, r.gen_pages)
+            format!("{}/{}", r.tb.ref_pages, r.tb.gen_pages)
         };
 
-        let breaks_str = if r.ref_pages <= 1 {
+        let breaks_str = if r.tb.ref_pages <= 1 {
             "-".to_string()
-        } else if r.max_break_drift == 0 {
+        } else if r.tb.max_break_drift == 0 {
             "OK".to_string()
         } else {
             "MISS".to_string()
         };
 
-        let drift_str = if r.ref_pages <= 1 {
+        let drift_str = if r.tb.ref_pages <= 1 {
             "-".to_string()
-        } else if r.max_break_drift == 0 {
+        } else if r.tb.max_break_drift == 0 {
             "0".to_string()
         } else {
-            let abs = r.max_break_drift.unsigned_abs();
-            let pct = abs as f64 / r.total_words.max(1) as f64 * 100.0;
+            let abs = r.tb.max_break_drift.unsigned_abs();
+            let pct = abs as f64 / r.tb.total_words.max(1) as f64 * 100.0;
             format!("{abs}w ({pct:.1}%)")
         };
 
-        let line_pct = r.line_match_pct();
-        let line_pct_str = if r.total_lines > 0 {
+        let line_pct = r.tb.line_match_pct();
+        let line_pct_str = if r.tb.total_lines > 0 {
             format!("{:.0}%", line_pct * 100.0)
         } else {
             "-".to_string()
@@ -300,7 +94,7 @@ fn text_boundaries_match() {
 
         println!(
             "  {:<name_w$}  {:>5}  {:>6}  {:>12}  {:>5}  {:>5}  {:<9}",
-            r.name, pages_str, breaks_str, drift_str, r.total_lines, line_pct_str, delta
+            r.name, pages_str, breaks_str, drift_str, r.tb.total_lines, line_pct_str, delta
         );
 
         common::log_csv(
@@ -310,9 +104,9 @@ fn text_boundaries_match() {
                 "{},{},{},{},{},{:.4}",
                 common::timestamp(),
                 r.name,
-                r.ref_pages,
-                r.gen_pages,
-                r.max_break_drift,
+                r.tb.ref_pages,
+                r.tb.gen_pages,
+                r.tb.max_break_drift,
                 line_pct
             ),
         );
@@ -325,7 +119,7 @@ fn text_boundaries_match() {
             common::Baselines {
                 jaccard: None,
                 ssim: None,
-                text_boundary: Some(r.line_match_pct()),
+                text_boundary: Some(r.tb.line_match_pct()),
                 convert_ms: None,
             },
         );
@@ -337,7 +131,7 @@ fn text_boundaries_match() {
         .filter(|r| {
             prev_scores
                 .get(&r.name)
-                .is_some_and(|&p| r.line_match_pct() < p - common::REGRESSION_SLACK)
+                .is_some_and(|&p| r.tb.line_match_pct() < p - common::REGRESSION_SLACK)
         })
         .map(|r| r.name.as_str())
         .collect();
@@ -347,8 +141,8 @@ fn text_boundaries_match() {
 
     let page_mismatches: Vec<String> = results
         .iter()
-        .filter(|r| r.ref_pages != r.gen_pages)
-        .map(|r| format!("{} (ref={}, gen={})", r.name, r.ref_pages, r.gen_pages))
+        .filter(|r| r.tb.ref_pages != r.tb.gen_pages)
+        .map(|r| format!("{} (ref={}, gen={})", r.name, r.tb.ref_pages, r.tb.gen_pages))
         .collect();
     if !page_mismatches.is_empty() {
         println!("  PAGE COUNT MISMATCH: {}", page_mismatches.join(", "));

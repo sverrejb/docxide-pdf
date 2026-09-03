@@ -89,6 +89,28 @@ the parser and matrix, a handcrafted case (needs Word reference), and an unchang
 reviewing MiniPdf — see `minipdf.md` for that and the other items it has that we lack (TOC
 generation, sdt data binding, `lastRenderedPageBreak` hint, score-gated fix loop).
 
+## Engine Comparison Findings (2026-09-04, `tools/engine_compare.py`)
+
+Across 207 fixtures vs the Word reference we lead LibreOffice on mean Jaccard
+(48.2 vs 39.5) and roughly tie on SSIM and text-boundary; MiniPdf is far behind
+on all three. But LibreOffice beats us by 45+ points averaged over J/SSIM/TB on
+a cluster of cases, i.e. we get the *structure* wrong, not just glyph placement:
+
+| Case | ours J/S/TB | LibreOffice J/S/TB |
+|---|---|---|
+| cases/case13 (205 pp) | 8/21/1 | 46/90/100 |
+| scraped/brazilian_logistics_study | 17/30/16 | 54/81/93 |
+| scraped/russian_sports_ranking_decree | 10/20/42 | 43/89/100 |
+| new/candidate_reference_check_form | 21/48/23 | 81/96/62 |
+| new/family_kinship_lesson_plan | 23/39/32 | 58/87/94 |
+| new/slovak_pedagogical_practice_agreement | 14/38/14 | 24/86/100 |
+| new/school_meal_assistance_faq | 6/17/35 | 19/83/100 |
+
+TB near 0 with LO at 100 means our line breaks or pagination diverge from page
+one onward. These are the highest-value targets in the corpus; open
+`competitor/compare.html`, pick the case, and use the overlay to see where the
+flow first departs.
+
 ## Picture Effects (PARTIALLY DONE)
 
 **Done:** Smooth outer shadow (rasterized Gaussian blur mask via SMask), soft edge (edge-fade SMask on image), glow (centered blur), inner shadow (inverted blur mask), reflection (flipped image with gradient SMask). All use the same rasterized mask + SMask XObject infrastructure. Test fixtures: case56 (shadow variations), case57 (2D effects), case58 (3D effects — deferred).
