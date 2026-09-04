@@ -43,11 +43,11 @@ cd tools && cargo build && cd ..
 ./tools/target/debug/analyze-fixtures --audit      # feature audit: which XML features appear in failing vs passing
 ./tools/target/debug/analyze-fixtures --grep "w:caps"  # search for specific XML pattern across all fixtures
 
-# Side-by-side engine viewer: Word reference | ours | LibreOffice | MiniPdf | rdocx → competitor/compare.html
-python3 tools/engine_compare.py --open                 # all fixtures (reuses tests/output PNGs, converts the rest)
+# Side-by-side engine viewer: Word reference | ours | LibreOffice | MiniPdf | rdocx → comparison/index.html (static site, gitignored)
+python3 tools/engine_compare.py --open                 # all fixtures (reuses tests/output PNGs, caches the rest in comparison/work/)
 python3 tools/engine_compare.py --case case41 --case 'case2*'   # exact name or glob
-python3 tools/engine_compare.py --html-only            # re-render the viewer from competitor/compare.json (no re-scoring)
-python3 tools/engine_compare.py --html-only --dist     # self-contained static site in comparison-dist/ (gitignored, lossless webp via cwebp)
+python3 tools/engine_compare.py --html-only            # rebuild index.html from comparison/work/manifest.json (no re-scoring)
+tools/deploy_comparison.sh [remote] [branch]           # publish comparison/ (work/ excluded) as an orphan gh-pages commit (DRY_RUN=1 to preview)
 # MiniPdf = the Rust crate's CLI (`cargo install minipdf-cli`), never the .NET engine; rdocx via `cargo install rdocx`; LibreOffice via soffice
 ```
 

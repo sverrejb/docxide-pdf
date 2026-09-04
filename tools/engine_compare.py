@@ -2,16 +2,17 @@
 """Side-by-side engine comparison: Word reference | docxide-pdf | LibreOffice | MiniPdf | rdocx.
 
 Reuses PNGs the test harness already produced under tests/output/<group>/<case>/
-(reference/, generated/, libreoffice/) and only converts what is missing. MiniPdf
-output always lands under competitor/<group>/<case>/. Writes a single interactive
-HTML viewer to competitor/compare.html.
+(reference/, generated/, libreoffice/) and only converts what is missing. Conversions and
+screenshots are cached in comparison/work/. The viewer is a self-contained static site:
+comparison/index.html plus lossless WebP page images, deployable as-is with
+tools/deploy_comparison.sh (work/ is excluded by comparison/.gitignore).
 
 Usage:
     python3 tools/engine_compare.py                 # every fixture with a reference.pdf
     python3 tools/engine_compare.py --case case41 --case 'case2*'   # exact or glob, repeatable
     python3 tools/engine_compare.py --group cases --open
     python3 tools/engine_compare.py --skip-libreoffice --no-scores
-    python3 tools/engine_compare.py --html-only --dist   # deployable comparison-dist/ (lossless webp)
+    python3 tools/engine_compare.py --html-only     # rebuild index.html from the cached manifest, no re-scoring
 
 rdocx: `rdocx` on PATH (cargo install rdocx) or RDOCX_BIN.
 MiniPdf: the Rust crate's CLI, `minipdf` on PATH (cargo install minipdf-cli) or MINIPDF_BIN.
@@ -35,8 +36,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = ROOT / "tests" / "fixtures"
 TEST_OUTPUT = ROOT / "tests" / "output"
-COMPETITOR = ROOT / "competitor"
-DIST = ROOT / "comparison-dist"
+SITE = ROOT / "comparison"   # deployable: index.html + <group>/<case>/<engine>/page_NNN.webp
+WORK = SITE / "work"         # cache: converted PDFs, PNG screenshots, LibreOffice profiles
+MANIFEST = WORK / "manifest.json"
 OURS_BIN = ROOT / "target" / "release" / "docxide-pdf"
 METRICS_BIN = ROOT / "tools" / "target" / "release" / "page-metrics"
 METRICS = ["jaccard", "ssim", "text_boundary"]
@@ -157,6 +159,43 @@ def convert_rdocx(rdocx: Path, docx: Path, pdf: Path) -> bool:
     return pdf.exists()
 
 
+def run_out(cmd: list[str]) -> str:
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=30).stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        return ""
+
+
+# Word does not write its version into the PDF (Creator is just "Microsoft Word"), so this is
+# recorded by hand. Keep in sync with the "Reference PDFs are generated using ..." note in README.md.
+WORD_VERSION = "Word for Mac 16.106.1, online export"
+
+
+def engine_versions(tools: dict) -> dict[str, str]:
+    """Version string per engine, captured at run time so the site says what produced its images."""
+    v: dict[str, str] = {"reference": WORD_VERSION}
+    m = re.search(r'^version\s*=\s*"([^"]+)"', (ROOT / "Cargo.toml").read_text(), re.M)
+    sha = run_out(["git", "-C", str(ROOT), "rev-parse", "--short", "HEAD"])
+    dirty = "+dirty" if run_out(["git", "-C", str(ROOT), "status", "--porcelain", "--", "src", "Cargo.toml"]) else ""
+    v["generated"] = f"{m.group(1) if m else '?'} @{sha}{dirty}"
+    if tools.get("soffice"):
+        v["libreoffice"] = " ".join(run_out([str(tools["soffice"]), "--version"]).split()[:2])  # drop the build hash
+    for key in ("minipdf", "rdocx"):
+        if tools.get(key):
+            v[key] = run_out([str(tools[key]), "--version"]).split()[-1]
+    return v
+
+
+def pdf_creator(pdf: Path) -> str:
+    """Creator (or Producer) from the PDF Info dict; Word writes 'Microsoft Word' with no version."""
+    info = run_out(["mutool", "info", str(pdf)])
+    for tag in ("Creator", "Producer"):
+        m = re.search(r"/" + tag + r"\(([^)]*)\)", info)
+        if m:
+            return m.group(1)
+    return ""
+
+
 def engine_metrics(ref_pdf: Path, other_pdf: Path, ref_dir: Path, other_dir: Path) -> dict:
     """Jaccard, SSIM and text-boundary in percent, computed by tools/page-metrics with the harness's own code."""
     if not METRICS_BIN.is_file():
@@ -177,7 +216,7 @@ def process_fixture(fixture: Path, group: str, tools: dict, opts) -> dict | None
         return None
     case = fixture.name
     harness = TEST_OUTPUT / group / case
-    mine = COMPETITOR / group / case
+    mine = WORK / group / case
     pages: dict[str, list[Path]] = {}
     pdfs: dict[str, Path] = {}
 
@@ -215,12 +254,13 @@ def process_fixture(fixture: Path, group: str, tools: dict, opts) -> dict | None
                 if m:
                     scores[key] = m
 
-    rel = lambda p: os.path.relpath(p, COMPETITOR)  # noqa: E731
+    rel = lambda p: os.path.relpath(p, WORK)  # noqa: E731
     return {
         "group": group,
         "case": case,
         "pages": {k: [rel(p) for p in v] for k, v in pages.items()},
         "scores": scores,
+        "reference_app": pdf_creator(ref_pdf),
     }
 
 
@@ -240,16 +280,14 @@ body { margin:0; font:13px/1.4 -apple-system, Helvetica, Arial, sans-serif; back
 #bar button, #bar select, #bar input[type=text] { background:#333; color:var(--fg); border:1px solid #555; border-radius:3px; padding:2px 8px; font:inherit; }
 #bar button:hover { background:#444; }
 kbd { background:#333; border:1px solid #555; border-radius:3px; padding:0 4px; font-size:11px; color:var(--muted); }
+.ver { color:var(--muted); font-weight:400; font-size:11px; }
 #side { overflow:auto; background:var(--panel); border-right:1px solid var(--border); }
 #side input { width:100%; padding:6px 8px; background:#333; color:var(--fg); border:0; border-bottom:1px solid var(--border); font:inherit; position:sticky; top:0; }
-#side .case { padding:5px 8px; cursor:pointer; border-bottom:1px solid #2e2e2e; display:grid; grid-template-columns:1fr auto; gap:2px 8px; }
+#side .case { padding:4px 8px; cursor:pointer; border-bottom:1px solid #2e2e2e; display:grid; grid-template-columns:1fr auto; gap:0 8px; align-items:baseline; }
 #side .case:hover { background:#2c2c2c; }
 #side .case.sel { background:#094771; }
 #side .name { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #side .grp { color:var(--muted); font-size:11px; }
-#side .sc { font-size:11px; color:var(--muted); grid-column:1/3; display:grid; grid-template-columns:auto repeat(3, 1fr); gap:0 6px; }
-#side .sc b { color:var(--fg); font-weight:500; text-align:right; }
-#side .sc .h { text-align:right; }
 #main { overflow:auto; padding:10px; }
 #grid { display:grid; gap:10px; align-items:start; }
 .col { min-width:0; }
@@ -286,13 +324,13 @@ kbd { background:#333; border:1px solid #555; border-radius:3px; padding:0 4px; 
 const DATA = __DATA__;
 const ENGINES = __ENGINES__;
 const METRICS = __METRICS__;
+const VERSIONS = __VERSIONS__;
 const METRIC_LABEL = { jaccard: 'J', ssim: 'SSIM', text_boundary: 'TB' };
 const METRIC_INFO = {
   jaccard: 'Jaccard on ink pixels: both pages rendered at 150 DPI, a pixel is ink when its luma is below 200, score = ink in both ÷ ink in either. Exact placement matters: a one-line vertical shift sends it toward zero.',
   ssim: 'Structural similarity on 8×8 luma windows, each window allowed to search ±8 px vertically for its best match, so small vertical drift is forgiven. Only windows that contain ink count. Measures shape and texture rather than exact position.',
   text_boundary: 'Text boundary: share of text lines (mutool extraction) whose first and last word match the reference line at the same position. Pages whose line counts differ by more than 15% are skipped. Measures line breaking and pagination, independent of fonts and pixels.',
 };
-const SHORT = { generated: 'docxide-pdf', libreoffice: 'LibreOffice', minipdf: 'MiniPdf (Rust)', rdocx: 'rdocx' };
 const PAGE_STEP = 10;
 const $ = s => document.querySelector(s);
 const store = k => { try { return JSON.parse(localStorage.getItem('ec.'+k)); } catch { return null; } };
@@ -307,7 +345,7 @@ for (const [k] of ENGINES) if (state.on[k] == null) state.on[k] = true;
 // engine toggles
 ENGINES.forEach(([key,label],i) => {
   const l = document.createElement('label');
-  l.innerHTML = `<input type="checkbox" data-e="${key}"> ${label} <kbd>${i+1}</kbd>`;
+  l.innerHTML = `<input type="checkbox" data-e="${key}"> ${label}${VERSIONS[key] ? ` <small class="ver">${VERSIONS[key]}</small>` : ''} <kbd>${i+1}</kbd>`;
   $('#engines').appendChild(l);
   ['#ovlA','#ovlB'].forEach(s => { const o = document.createElement('option'); o.value = key; o.textContent = label; $(s).appendChild(o); });
 });
@@ -324,10 +362,7 @@ function renderList() {
   for (const [c,i] of visibleCases()) {
     const d = document.createElement('div');
     d.className = 'case' + (i === state.sel ? ' sel' : '');
-    const rows = Object.keys(SHORT).filter(k => c.scores[k])
-      .map(k => `<span>${SHORT[k]}</span>` + METRICS.map(m => `<b>${fmt(c.scores[k][m])}</b>`).join('')).join('');
-    d.innerHTML = `<span class="name" title="${c.case}">${c.case}</span><span class="grp">${c.group}</span>
-      <span class="sc"><span></span>${METRICS.map(m => `<span class="h" title="${METRIC_INFO[m]}">${METRIC_LABEL[m]}</span>`).join('')}${rows}</span>`;
+    d.innerHTML = `<span class="name" title="${c.case}">${c.case}</span><span class="grp">${c.group}</span>`;
     d.onclick = () => { state.sel = i; state.shown = PAGE_STEP; render(); };
     list.appendChild(d);
   }
@@ -368,7 +403,10 @@ function render() {
     const col = document.createElement('div'); col.className = 'col';
     const s = c.scores[key] || {}; const n = (c.pages[key]||[]).length;
     const sc = METRICS.filter(m => s[m] != null).map(m => ` · <span title="${METRIC_INFO[m]}">${METRIC_LABEL[m]} ${fmt(s[m])}</span>`).join('');
-    col.innerHTML = `<h3><b>${label}</b> · ${n} p${sc}</h3>`;
+    // Reference PDFs printed via macOS (Producer "Quartz PDFContext") differ from Word's own export; flag them.
+    const odd = key === 'reference' && c.reference_app && c.reference_app !== 'Microsoft Word' ? ` (${c.reference_app})` : '';
+    const ver = (VERSIONS[key] || '') + odd;
+    col.innerHTML = `<h3><b>${label}</b>${ver ? ` <span class="ver">${ver}</span>` : ''} · ${n} p${sc}</h3>`;
     for (const p of pageIdx) {
       const src = (c.pages[key]||[])[p];
       const d = document.createElement('div'); d.className = 'page';
@@ -412,15 +450,15 @@ def natural_key(s: str) -> list:
     return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", s)]
 
 
-def build_dist(results: list[dict], dist: Path, fmt: str, jobs: int) -> None:
-    """Self-contained static site: index.html + every page image copied under dist/<group>/<case>/<engine>/.
+def build_site(results: list[dict], versions: dict, fmt: str, jobs: int) -> None:
+    """Deployable static site at comparison/: index.html + every page image under <group>/<case>/<engine>/.
 
-    Images are copied (not linked) so the folder is a snapshot that survives later test runs.
-    fmt="webp" re-encodes losslessly with cwebp: pixel-identical and ~3.5x smaller than the
-    mutool PNGs. (JPEG and lossy WebP were measured *larger* than PNG on these mostly-white pages.)
+    Images are re-encoded (not linked) so the site is a snapshot that survives later test runs.
+    fmt="webp" is lossless via cwebp: pixel-identical and ~3.5x smaller than the mutool PNGs.
+    (JPEG and lossy WebP were measured *larger* than PNG on these mostly-white pages.)
     """
     if fmt == "webp" and not shutil.which("cwebp"):
-        sys.exit("--dist-format webp needs cwebp (brew install webp); or use --dist-format png")
+        sys.exit("--format webp needs cwebp (brew install webp); or use --format png")
     jobs_list: list[tuple[Path, Path]] = []
     rewritten: list[dict] = []
     for c in results:
@@ -428,9 +466,9 @@ def build_dist(results: list[dict], dist: Path, fmt: str, jobs: int) -> None:
         for eng, files in c["pages"].items():
             new = []
             for rel in files:
-                src = (COMPETITOR / rel).resolve()
-                dst = dist / c["group"] / c["case"] / eng / (Path(rel).stem + "." + fmt)
-                new.append(dst.relative_to(dist).as_posix())
+                src = (WORK / rel).resolve()
+                dst = SITE / c["group"] / c["case"] / eng / (Path(rel).stem + "." + fmt)
+                new.append(dst.relative_to(SITE).as_posix())
                 if not dst.exists() or dst.stat().st_mtime < src.stat().st_mtime:
                     jobs_list.append((src, dst))
             pages[eng] = new
@@ -445,23 +483,24 @@ def build_dist(results: list[dict], dist: Path, fmt: str, jobs: int) -> None:
             subprocess.run(["cwebp", "-quiet", "-lossless", str(src), "-o", str(dst)],
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
 
-    print(f"dist: {len(jobs_list)} images to write into {dist}")
+    print(f"site: {len(jobs_list)} images to encode into {SITE}")
     with ThreadPoolExecutor(max_workers=jobs) as pool:
         list(pool.map(transfer, jobs_list))
-    write_html(rewritten, dist / "index.html")
-    total = sum(f.stat().st_size for f in dist.rglob("*") if f.is_file())
-    print(f"dist ready: {dist} ({total / 1e6:.0f} MB)")
+    write_html(rewritten, versions, SITE / "index.html")
+    (SITE / ".nojekyll").touch()  # GitHub Pages: serve as-is, no Jekyll pass over 9k files
+    (SITE / ".gitignore").write_text("/work/\n")  # deploy_comparison.sh commits this folder; keep the cache out
+    total = sum(f.stat().st_size for f in SITE.rglob("*") if f.is_file() and WORK not in f.parents)
+    print(f"site ready: {SITE / 'index.html'} ({total / 1e6:.0f} MB)")
 
 
-def write_html(results: list[dict], out: Path) -> None:
+def write_html(results: list[dict], versions: dict, out: Path) -> None:
     results.sort(key=lambda r: (GROUPS.index(r["group"]), natural_key(r["case"])))
     out.parent.mkdir(parents=True, exist_ok=True)
-    # Manifest lets --html-only rebuild the page after template edits without re-scoring.
-    out.with_suffix(".json").write_text(json.dumps(results))
     page = (HTML_TEMPLATE
             .replace("__DATA__", json.dumps(results))
             .replace("__ENGINES__", json.dumps(ENGINES))
-            .replace("__METRICS__", json.dumps(METRICS)))
+            .replace("__METRICS__", json.dumps(METRICS))
+            .replace("__VERSIONS__", json.dumps(versions)))
     out.write_text(page)
 
 
@@ -475,25 +514,34 @@ def main() -> None:
     ap.add_argument("--no-scores", action="store_true", help="skip Jaccard scoring")
     ap.add_argument("--jobs", type=int, default=os.cpu_count() or 4)
     ap.add_argument("--open", action="store_true", help="open the HTML when done")
-    ap.add_argument("--html-only", action="store_true", help="rebuild compare.html from the last run's manifest")
-    ap.add_argument("--dist", nargs="?", const=str(DIST), metavar="DIR",
-                    help=f"also write a self-contained static site (index.html + images) to DIR (default {DIST.name}/)")
-    ap.add_argument("--dist-format", choices=["webp", "png"], default="webp",
-                    help="image format inside --dist; webp is lossless and ~3.5x smaller than png (needs cwebp)")
+    ap.add_argument("--html-only", action="store_true",
+                    help="rebuild comparison/index.html from comparison/work/manifest.json (no conversion or scoring)")
+    ap.add_argument("--format", choices=["webp", "png"], default="webp",
+                    help="site image format; webp is lossless and ~3.5x smaller than png (needs cwebp)")
     opts = ap.parse_args()
 
-    out = COMPETITOR / "compare.html"
+    def load_manifest() -> dict:
+        m = json.loads(MANIFEST.read_text()) if MANIFEST.exists() else {}
+        return {"versions": {}, "cases": m} if isinstance(m, list) else m  # pre-versions manifests were a bare list
 
-    def finish(results: list[dict]) -> None:
-        write_html(results, out)
-        print(f"wrote {out} ({len(results)} cases)")
-        if opts.dist:
-            build_dist(results, Path(opts.dist), opts.dist_format, opts.jobs)
+    def finish(results: list[dict], versions: dict) -> None:
+        # A filtered run (--case/--group) updates just those entries; the site keeps every other case.
+        if opts.case or opts.group:
+            old = load_manifest()
+            done = {(c["group"], c["case"]) for c in results}
+            results = [c for c in old["cases"] if (c["group"], c["case"]) not in done] + results
+            versions = {**old["versions"], **versions}
+        results.sort(key=lambda r: (GROUPS.index(r["group"]), natural_key(r["case"])))
+        WORK.mkdir(parents=True, exist_ok=True)
+        MANIFEST.write_text(json.dumps({"versions": versions, "cases": results}))  # --html-only rebuilds from this
+        print(f"{len(results)} cases; engines: " + ", ".join(f"{k} {v}" for k, v in versions.items()))
+        build_site(results, versions, opts.format, opts.jobs)
         if opts.open:
-            webbrowser.open((Path(opts.dist) / "index.html" if opts.dist else out).as_uri())
+            webbrowser.open((SITE / "index.html").as_uri())
 
     if opts.html_only:
-        finish(json.loads(out.with_suffix(".json").read_text()))
+        m = load_manifest()
+        finish(m["cases"], m["versions"])
         return
 
     if not shutil.which("mutool"):
@@ -541,7 +589,7 @@ def main() -> None:
                 print(f"  [{i}/{len(futures)}] {g}/{name}  {sc}")
 
     print()
-    finish(results)
+    finish(results, engine_versions(tools))
 
 
 if __name__ == "__main__":

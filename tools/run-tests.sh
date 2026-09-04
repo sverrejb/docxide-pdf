@@ -62,7 +62,7 @@ cargo "${CARGO_ARGS[@]}" > "$TMPFILE" 2>&1 || CARGO_EXIT=$?
 COMPILE_ERRORS=$(grep -E '^\s*error(\[E[0-9]+\]|:)' "$TMPFILE" 2>/dev/null || true)
 
 # Extract test result lines (skip trivial "0 passed; 0 failed" and doc tests)
-TEST_RESULTS=$(grep '^test result:' "$TMPFILE" 2>/dev/null | grep -v '0 passed; 0 failed; 0 ignored' || true)
+TEST_RESULTS=$(grep '^test result:' "$TMPFILE" 2>/dev/null | grep -v '[^0-9]0 passed; 0 failed; 0 ignored' || true)
 
 # Extract panic messages
 PANICS=$(grep 'thread.*panicked' "$TMPFILE" 2>/dev/null || true)

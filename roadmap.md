@@ -72,22 +72,38 @@ The `hyphenation` crate (Knuth-Liang algorithm) was tested with 8 languages but 
 
 Test fixtures in `tests/fixtures/hyphenation/` (8 languages with Wikipedia text, `autoHyphenation` enabled) are ready for comparison when desktop-Word references become available.
 
-## Image Cropping `a:srcRect` (TODO — LOW-MEDIUM IMPACT, found 2026-09-04, planned)
+## Image Cropping `a:srcRect` (DONE — 2026-09-04)
 
-Not parsed. Cropped pictures render the full source squeezed into the frame, so both the
-visible region and aspect ratio are wrong. Only 1 of 129 corpus fixtures has real crop
-values: brazilian_logistics_study (J 17.3%), 3 anchored PNGs cropped 4.5–26.6% top/bottom.
-12 other fixtures carry an empty `<a:srcRect/>`, which must stay a no-op.
+Cropped pictures used to render the full source squeezed into the frame. Now
+`parse_src_rect` (`docx/images.rs`) reads l/t/r/b as 1/100000 fractions onto
+`EmbeddedImage.src_rect` (None for absent, empty, all-zero or nothing-visible crops;
+negative outward crops kept). It is applied through `apply_pic_props`, the one shared
+step for outline, effects, clip geometry and crop that replaced three copy-pasted blocks
+at the inline, anchored and paragraph-image parse sites. `embed_single_image`
+(`pdf/images.rs`) wraps a cropped image in a Form XObject with BBox `[0 0 1 1]` drawing
+the source through `crop_matrix` = `[1/(1-l-r), 0, 0, 1/(1-t-b), -l·sx, -b·sy]`; the inner
+image lives only in the form's resources, not on the pages. The bbox clips, so negative
+crops become blank padding for free and none of the eight draw sites changed; EMF forms
+nest as-is. Downscaling and soft-edge radii see the effective source extent
+(frame / visible fraction), so a heavily cropped photo keeps its resolution.
 
-Plan: parse l/t/r/b (1/100000 fractions) onto `EmbeddedImage.src_rect`; in
-`embed_single_image` wrap the image XObject in a Form XObject with BBox `[0 0 1 1]` whose
-content draws the inner image with `cm = [1/(1-l-r), 0, 0, 1/(1-t-b), -l/(1-l-r), -b/(1-t-b)]`.
-The bbox clips, so negative crops (blank padding) work for free and every draw site
-(inline, floating, table, header/footer, textbox) is untouched. Verify with unit tests on
-the parser and matrix, a handcrafted case (needs Word reference), and an unchanged
-`latest_hashes.json` for every fixture except brazilian_logistics_study. Found while
-reviewing MiniPdf — see `minipdf.md` for that and the other items it has that we lack (TOC
-generation, sdt data binding, `lastRenderedPageBreak` hint, score-gated fix loop).
+Verification: 9 unit tests (parser on the four real corpus elements plus edge cases,
+matrix on identity/quarter/half/negative). Full suite: 220 fixtures, hashes changed only
+on brazilian_logistics_study pages 9–10 and italian_evaluation_minutes page 7 — exactly
+the pages holding the 4 real crops in the corpus (11 other fixtures have an empty
+`<a:srcRect/>`, unaffected). All three pages match the reference crop visually. Scores
+moved within noise (brazilian J 17.29 → 17.17, italian SSIM 43.83 → 43.82): the images
+sit at drifted y positions, so the old squeezed image overlapped reference ink by accident.
+`cases/case78` (generate.py + input.docx, grid PNG cropped four ways incl. negative) has
+its Word reference and scores J 99.6% / SSIM 99.4%. It settled the open question: Word
+renders a negative `a:srcRect` as blank padding inside the frame, exactly what the
+unit-bbox form gives us for free.
+
+Known ceilings (`ponytail:` note in `embed_single_image`): soft-edge and reflection masks
+are still built on the uncropped source; SmartArt pictures use their own draw path. Also
+seen while verifying: italian page 7's third signature is a bitmap EMF (`image3.emf`) that
+`docx/emf.rs` renders as nothing — an EMF gap, not a crop issue. See `minipdf.md` §1.2 and
+§4.1 for the MiniPdf comparison and their corpus scan.
 
 ## Engine Comparison Findings (2026-09-04, `tools/engine_compare.py`)
 
@@ -108,7 +124,7 @@ a cluster of cases, i.e. we get the *structure* wrong, not just glyph placement:
 
 TB near 0 with LO at 100 means our line breaks or pagination diverge from page
 one onward. These are the highest-value targets in the corpus; open
-`competitor/compare.html`, pick the case, and use the overlay to see where the
+`comparison/index.html`, pick the case, and use the overlay to see where the
 flow first departs.
 
 ## Picture Effects (PARTIALLY DONE)
