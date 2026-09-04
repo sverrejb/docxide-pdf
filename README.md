@@ -26,7 +26,7 @@ suite uses:
 | **TB** (text boundary) | Share of lines whose first and last word match the reference. Measures line breaking and pagination, independent of fonts. |
 
 
-### Got a weird DOCX?
+## Got a weird DOCX?
 
 If you have a `.docx` file that produces ugly, broken, or just plain wrong output, send it to me! Real-world documents with surprising formatting are the best way to improve. Open an issue or PR with the file included and I will try to make it work.
 
