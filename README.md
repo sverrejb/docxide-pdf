@@ -10,11 +10,16 @@ This crate **might** work for your production case, do give it a try! The API, o
 
 ## Comparison with other converters
 
-**[Live comparison → sverrejb.github.io/docxide-pdf](https://sverrejb.github.io/docxide-pdf/)**
+[Side-by-side comparison](https://sverrejb.github.io/docxide-pdf/)
 
-Every fixture in the test corpus rendered side by side by Word (the reference),
-docxide-pdf, LibreOffice, [MiniPdf](https://github.com/mini-software/MiniPdf)'s Rust crate,
-and [rdocx](https://crates.io/crates/rdocx).
+[scoree table](https://sverrejb.github.io/docxide-pdf/#scores)
+
+Every fixture in the test corpus rendered side by side by Word (the reference) and 
+
+* docxide-pdf (duh)
+* LibreOffice
+* [MiniPdf](https://github.com/mini-software/MiniPdf)'s Rust crate
+* [rdocx](https://crates.io/crates/rdocx).
 
 Each engine is scored against the Word reference with the same three metrics the test
 suite uses:

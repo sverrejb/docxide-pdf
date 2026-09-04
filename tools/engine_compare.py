@@ -299,6 +299,19 @@ kbd { background:#333; border:1px solid #555; border-radius:3px; padding:0 4px; 
 #overlay { position:relative; }
 #overlay img { width:100%; display:block; }
 #overlay img.top { position:absolute; inset:0; }
+#scores table { border-collapse:collapse; font-size:12px; white-space:nowrap; }
+#scores th, #scores td { padding:3px 9px; border-bottom:1px solid #2e2e2e; text-align:left; }
+#scores th { color:var(--muted); font-weight:600; cursor:pointer; user-select:none; background:var(--panel); }
+#scores th.eng { text-align:center; border-left:1px solid var(--border); cursor:default; }
+#scores th.sorted { color:var(--fg); }
+#scores td.num, #scores th.num { text-align:right; font-variant-numeric:tabular-nums; }
+#scores td.first { border-left:1px solid var(--border); }
+#scores td.best { color:#7ee787; }
+#scores tr.mean td { color:var(--fg); font-weight:600; background:#2a2a2a; }
+#scores tbody tr { cursor:pointer; }
+#scores tbody tr:hover { background:#2c2c2c; }
+#scores tbody tr.sel { background:#094771; }
+#scores .note { color:var(--muted); font-size:11px; margin:8px 0 14px; }
 .hidden { display:none !important; }
 #more { display:block; margin:4px 0 24px; padding:8px 18px; background:#333; color:var(--fg); border:1px solid #555; border-radius:4px; font:inherit; cursor:pointer; }
 #more:hover { background:#444; }
@@ -315,11 +328,12 @@ kbd { background:#333; border:1px solid #555; border-radius:3px; padding:0 4px; 
     <select id="blend"><option value="normal">opacity</option><option value="difference">difference</option><option value="multiply">multiply</option></select>
     <input type="range" id="alpha" min="0" max="100" value="50">
   </span>
-  <span style="color:var(--muted)"><kbd>1</kbd>-<kbd>5</kbd> engines &nbsp;<kbd>&uarr;</kbd><kbd>&darr;</kbd> cases &nbsp;<kbd>o</kbd> overlay &nbsp;<kbd>m</kbd> more pages</span>
+  <span class="grp"><button id="viewToggle">Scores table</button></span>
+  <span style="color:var(--muted)"><kbd>1</kbd>-<kbd>5</kbd> engines &nbsp;<kbd>&uarr;</kbd><kbd>&darr;</kbd> cases &nbsp;<kbd>o</kbd> overlay &nbsp;<kbd>m</kbd> more pages &nbsp;<kbd>t</kbd> scores table</span>
 </div>
 <div id="legend"></div>
 <div id="side"><input id="filter" placeholder="filter cases (name, group)…"><div id="list"></div></div>
-<div id="main"><div id="grid"></div><div id="overlay" class="hidden"></div><button id="more" class="hidden">more pages</button></div>
+<div id="main"><div id="grid"></div><div id="overlay" class="hidden"></div><button id="more" class="hidden">more pages</button><div id="scores" class="hidden"></div></div>
 <script>
 const DATA = __DATA__;
 const ENGINES = __ENGINES__;
@@ -337,10 +351,22 @@ const store = k => { try { return JSON.parse(localStorage.getItem('ec.'+k)); } c
 const save = (k,v) => { try { localStorage.setItem('ec.'+k, JSON.stringify(v)); } catch {} };
 
 let state = Object.assign({ on: {},
-  shown: PAGE_STEP, zoom: 600, ovl: false, ovlA: 'reference', ovlB: 'generated', blend: 'normal', alpha: 50, sel: 0, filter: '' },
+  shown: PAGE_STEP, zoom: 600, ovl: false, ovlA: 'reference', ovlB: 'generated', blend: 'normal', alpha: 50, sel: 0, filter: '',
+  view: 'viewer', sort: { col: 0, dir: 1 } },
   store('state') || {});
 // Engines added after a viewer state was saved default to visible.
 for (const [k] of ENGINES) if (state.on[k] == null) state.on[k] = true;
+
+// Deep links: #scores opens the table, #<group>/<case> opens that case in the viewer.
+function applyHash() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  if (h === 'scores') { state.view = 'scores'; return true; }
+  const i = DATA.findIndex(c => c.group + '/' + c.case === h);
+  if (i >= 0) { state.sel = i; state.view = 'viewer'; state.shown = PAGE_STEP; return true; }
+  return false;
+}
+applyHash();
+window.onhashchange = () => { if (applyHash()) render(); };
 
 // engine toggles
 ENGINES.forEach(([key,label],i) => {
@@ -363,9 +389,49 @@ function renderList() {
     const d = document.createElement('div');
     d.className = 'case' + (i === state.sel ? ' sel' : '');
     d.innerHTML = `<span class="name" title="${c.case}">${c.case}</span><span class="grp">${c.group}</span>`;
-    d.onclick = () => { state.sel = i; state.shown = PAGE_STEP; render(); };
+    d.onclick = () => { state.sel = i; state.shown = PAGE_STEP; state.view = 'viewer'; render(); };
     list.appendChild(d);
   }
+}
+
+function renderScores() {
+  const engines = ENGINES.filter(([k]) => k !== 'reference');
+  // Sort columns: 0 case (manifest order), 1 group, 2 reference pages, then one per engine×metric.
+  const cols = [
+    { get: r => r.i, show: r => r.c.case },
+    { get: r => r.c.group, show: r => r.c.group },
+    { get: r => (r.c.pages.reference || []).length, show: r => (r.c.pages.reference || []).length, num: true },
+  ];
+  for (const [k] of engines) for (const m of METRICS)
+    cols.push({ k, m, num: true, get: r => r.c.scores[k]?.[m] ?? null, show: r => fmt(r.c.scores[k]?.[m]) });
+
+  const rows = visibleCases().map(([c, i]) => ({ c, i }));
+  const { col: sc, dir } = state.sort; const sortCol = cols[sc] || cols[0];
+  rows.sort((a, b) => {
+    const x = sortCol.get(a), y = sortCol.get(b);
+    if (x == null) return 1; if (y == null) return -1;
+    return dir * (typeof x === 'string' ? x.localeCompare(y) : x - y);
+  });
+  const mean = cl => { const v = rows.map(cl.get).filter(x => typeof x === 'number'); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+  const th = (j, label, cls = '') => `<th data-c="${j}" class="${cls}${j === sc ? ' sorted' : ''}">${label}${j === sc ? (dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
+
+  let html = `<div class="note">${rows.length} cases · click a column to sort, a row to open it · green = best engine for that metric</div><table><thead>`;
+  html += `<tr>${th(0, 'case')}${th(1, 'group')}${th(2, 'pages', 'num')}` +
+    engines.map(([, label]) => `<th class="eng" colspan="${METRICS.length}">${label}${VERSIONS[engines.find(e => e[1] === label)[0]] ? ` <span class="ver">${VERSIONS[engines.find(e => e[1] === label)[0]]}</span>` : ''}</th>`).join('') + '</tr>';
+  html += '<tr><th></th><th></th><th></th>' + cols.slice(3).map((cl, j) => th(j + 3, `<span title="${METRIC_INFO[cl.m]}">${METRIC_LABEL[cl.m]}</span>`, 'num' + (cl.m === METRICS[0] ? ' first' : ''))).join('') + '</tr>';
+  html += '<tr class="mean"><td>mean</td><td></td><td></td>' + cols.slice(3).map(cl => `<td class="num${cl.m === METRICS[0] ? ' first' : ''}">${fmt(mean(cl))}</td>`).join('') + '</tr></thead><tbody>';
+  for (const r of rows) {
+    // Highest value per metric across engines; ties all count as best.
+    const best = {};
+    for (const m of METRICS) best[m] = Math.max(...engines.map(([k]) => r.c.scores[k]?.[m] ?? -1));
+    html += `<tr data-i="${r.i}"${r.i === state.sel ? ' class="sel"' : ''}>` + cols.map((cl, j) =>
+      `<td class="${cl.num ? 'num' : ''}${j >= 3 && cl.m === METRICS[0] ? ' first' : ''}${j >= 3 && cl.get(r) != null && cl.get(r) === best[cl.m] ? ' best' : ''}">${cl.show(r)}</td>`).join('') + '</tr>';
+  }
+  const el = $('#scores'); el.innerHTML = html + '</tbody></table>';
+  el.querySelectorAll('th[data-c]').forEach(h => h.onclick = () => {
+    const j = +h.dataset.c; state.sort = { col: j, dir: j === state.sort.col ? -state.sort.dir : (j >= 3 ? -1 : 1) }; render();
+  });
+  el.querySelectorAll('tbody tr').forEach(tr => tr.onclick = () => { state.sel = +tr.dataset.i; state.shown = PAGE_STEP; state.view = 'viewer'; render(); });
 }
 
 function render() {
@@ -375,6 +441,16 @@ function render() {
   $('#ovlA').value = state.ovlA; $('#ovlB').value = state.ovlB; $('#blend').value = state.blend; $('#alpha').value = state.alpha;
   renderList();
   const c = DATA[state.sel]; if (!c) return;
+  const table = state.view === 'scores';
+  $('#viewToggle').textContent = table ? 'Viewer' : 'Scores table';
+  history.replaceState(null, '', '#' + (table ? 'scores' : c.group + '/' + c.case));
+  $('#scores').classList.toggle('hidden', !table);
+  if (table) {
+    for (const id of ['#grid', '#overlay', '#more']) $(id).classList.add('hidden');
+    $('#pageinfo').textContent = '';
+    renderScores();
+    return;
+  }
   const maxPages = Math.max(1, ...Object.values(c.pages).map(p => p.length));
   state.shown = Math.min(Math.max(PAGE_STEP, state.shown), maxPages);
   const pageIdx = [...Array(state.shown).keys()];
@@ -424,6 +500,7 @@ function render() {
 }
 
 $('#more').onclick = () => { state.shown += PAGE_STEP; render(); };
+$('#viewToggle').onclick = () => { state.view = state.view === 'scores' ? 'viewer' : 'scores'; render(); };
 $('#zoom').oninput = e => { state.zoom = +e.target.value; render(); };
 $('#ovl').onchange = e => { state.ovl = e.target.checked; render(); };
 $('#ovlA').onchange = e => { state.ovlA = e.target.value; render(); };
@@ -441,6 +518,7 @@ document.onkeydown = e => {
   else if (e.key === 'ArrowUp') { state.sel = vis[Math.max(at-1, 0)] ?? state.sel; state.shown = PAGE_STEP; }
   else if (e.key === 'o') state.ovl = !state.ovl;
   else if (e.key === 'm') state.shown += PAGE_STEP;
+  else if (e.key === 't') state.view = state.view === 'scores' ? 'viewer' : 'scores';
   else if (/^[1-9]$/.test(e.key) && ENGINES[+e.key-1]) { const k = ENGINES[+e.key-1][0]; state.on[k] = !state.on[k]; }
   else return;
   e.preventDefault(); render();
