@@ -12,7 +12,7 @@ This crate **might** work for your production case, do give it a try! The API, o
 
 [Side-by-side comparison](https://sverrejb.github.io/docxide-pdf/)
 
-[scoree table](https://sverrejb.github.io/docxide-pdf/#scores)
+[Score table](https://sverrejb.github.io/docxide-pdf/#scores)
 
 Every fixture in the test corpus rendered side by side by Word (the reference) and 
 
@@ -50,7 +50,7 @@ A Rust library and CLI tool for converting DOCX files to PDF, with the goal of m
 
 ## AI usage disclaimer 🤖
 
-While the idea, architecture, testing strategy and validation of output are all human, the vast majority of the code as of now is written by Claude Opus 4.6 with access to the PDF specification (ISO-32000) and the Office Open XML File Formats specification (ECMA-376). This project was done as an exercise to get experience with the usage of coding agents.
+While the idea, architecture, testing strategy and validation of output are all human, the vast majority of the code as of now is written by various Claude models with access to the PDF specification (ISO-32000) and the Office Open XML File Formats specification (ECMA-376). This project was done as an exercise to get experience with the usage of coding agents.
 
 ## Supported features
 
