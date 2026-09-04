@@ -289,10 +289,10 @@ kbd { background:#333; border:1px solid #555; border-radius:3px; padding:0 4px; 
 #side .name { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 #side .grp { color:var(--muted); font-size:11px; }
 #main { overflow:auto; padding:10px; }
-#grid { display:grid; gap:10px; align-items:start; }
+#grid { display:grid; gap:4px 10px; align-items:start; }
 .col { min-width:0; }
-.col h3 { margin:0 0 4px; font-size:12px; font-weight:600; color:var(--muted); position:sticky; top:0; background:var(--bg); padding:2px 0; }
-.col h3 b { color:var(--fg); }
+.colhead { margin:0; min-width:0; font-size:12px; font-weight:600; color:var(--muted); position:sticky; top:0; background:var(--bg); padding:2px 0; z-index:1; }
+.colhead b { color:var(--fg); }
 .page { margin-bottom:8px; }
 .page img { width:100%; display:block; background:#fff; box-shadow:0 0 0 1px #000; }
 .missing { width:100%; aspect-ratio:8.5/11; display:flex; align-items:center; justify-content:center; color:var(--muted); background:#2a2a2a; border:1px dashed #444; }
@@ -399,22 +399,28 @@ function render() {
   const on = ENGINES.filter(([k]) => state.on[k]);
   grid.style.gridTemplateColumns = `repeat(${on.length}, ${state.zoom}px)`;
   grid.innerHTML = '';
+  // Headers occupy their own grid row so a header that wraps to two lines in one column
+  // does not push that column's pages down relative to the others.
+  const cols = [];
   for (const [key,label] of on) {
-    const col = document.createElement('div'); col.className = 'col';
     const s = c.scores[key] || {}; const n = (c.pages[key]||[]).length;
     const sc = METRICS.filter(m => s[m] != null).map(m => ` · <span title="${METRIC_INFO[m]}">${METRIC_LABEL[m]} ${fmt(s[m])}</span>`).join('');
     // Reference PDFs printed via macOS (Producer "Quartz PDFContext") differ from Word's own export; flag them.
     const odd = key === 'reference' && c.reference_app && c.reference_app !== 'Microsoft Word' ? ` (${c.reference_app})` : '';
     const ver = (VERSIONS[key] || '') + odd;
-    col.innerHTML = `<h3><b>${label}</b>${ver ? ` <span class="ver">${ver}</span>` : ''} · ${n} p${sc}</h3>`;
+    const h = document.createElement('h3'); h.className = 'colhead';
+    h.innerHTML = `<b>${label}</b>${ver ? ` <span class="ver">${ver}</span>` : ''} · ${n} p${sc}`;
+    grid.appendChild(h);
+    const col = document.createElement('div'); col.className = 'col';
     for (const p of pageIdx) {
       const src = (c.pages[key]||[])[p];
       const d = document.createElement('div'); d.className = 'page';
       d.innerHTML = src ? `<img src="${src}" loading="lazy">` : `<div class="missing">no page ${p+1}</div>`;
       col.appendChild(d);
     }
-    grid.appendChild(col);
+    cols.push(col);
   }
+  cols.forEach(col => grid.appendChild(col));
 }
 
 $('#more').onclick = () => { state.shown += PAGE_STEP; render(); };
