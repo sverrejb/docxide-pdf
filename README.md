@@ -8,6 +8,24 @@ Library and CLI for converting DOCX files to PDF, matching Microsoft Word's outp
 
 This crate **might** work for your production case, do give it a try! The API, output quality, and supported features are all actively changing.
 
+## Comparison with other converters
+
+**[Live comparison → sverrejb.github.io/docxide-pdf](https://sverrejb.github.io/docxide-pdf/)**
+
+Every fixture in the test corpus rendered side by side by Word (the reference),
+docxide-pdf, LibreOffice, [MiniPdf](https://github.com/mini-software/MiniPdf)'s Rust crate,
+and [rdocx](https://crates.io/crates/rdocx).
+
+Each engine is scored against the Word reference with the same three metrics the test
+suite uses:
+
+| Metric | What it measures |
+|---|---|
+| **J** (Jaccard) | Overlap of ink pixels at 150 DPI. Strict: a one-line vertical shift sends it toward zero. |
+| **SSIM** | Structural similarity on 8×8 windows with ±8 px vertical tolerance, so small drift is forgiven. |
+| **TB** (text boundary) | Share of lines whose first and last word match the reference. Measures line breaking and pagination, independent of fonts. |
+
+
 ### Got a weird DOCX?
 
 If you have a `.docx` file that produces ugly, broken, or just plain wrong output, send it to me! Real-world documents with surprising formatting are the best way to improve. Open an issue or PR with the file included and I will try to make it work.
@@ -104,26 +122,6 @@ See more examples in the [showcase](https://github.com/sverrejb/docxide-pdf/tree
   </tr>
 </table>
 <!-- showcase-end -->
-
-## Comparison with other converters
-
-**[Live comparison → sverrejb.github.io/docxide-pdf](https://sverrejb.github.io/docxide-pdf/)**
-
-Every fixture in the test corpus rendered side by side by Word (the reference),
-docxide-pdf, LibreOffice, [MiniPdf](https://github.com/mini-software/MiniPdf)'s Rust crate,
-and [rdocx](https://crates.io/crates/rdocx). Toggle engines on and off, stack pages, or
-overlay any two renderings with opacity or difference blending to see exactly where they
-diverge.
-
-Each engine is scored against the Word reference with the same three metrics the test
-suite uses:
-
-| Metric | What it measures |
-|---|---|
-| **J** (Jaccard) | Overlap of ink pixels at 150 DPI. Strict: a one-line vertical shift sends it toward zero. |
-| **SSIM** | Structural similarity on 8×8 windows with ±8 px vertical tolerance, so small drift is forgiven. |
-| **TB** (text boundary) | Share of lines whose first and last word match the reference. Measures line breaking and pagination, independent of fonts. |
-
 
 ## Installation
 
