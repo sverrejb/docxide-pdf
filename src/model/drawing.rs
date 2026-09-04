@@ -39,6 +39,9 @@ pub struct EmbeddedImage {
     pub reflection: Option<ImageReflection>,
     /// Non-rectangular clip shape (e.g. "ellipse"). None means standard rect (no clipping).
     pub clip_geometry: Option<ShapeGeometry>,
+    /// `a:srcRect` crop as (left, top, right, bottom) fractions of the source image.
+    /// None when the picture is uncropped. Negative values pad the frame with blank space.
+    pub src_rect: Option<[f32; 4]>,
 }
 
 #[derive(Clone, Debug)]

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use pdf_writer::{Filter, Pdf, Ref};
+use pdf_writer::{Content, Filter, Name, Pdf, Rect, Ref};
 
 use crate::model::{
     Block, Document, EmbeddedImage, HeaderFooter, ImageFormat, ImageShadow, Paragraph,
@@ -227,25 +227,80 @@ fn write_solid_color_with_gray_mask(
     color_img.s_mask(mask_ref);
 }
 
+/// Matrix mapping the visible crop window of a unit-square image onto the unit square.
+/// `src_rect` is (l, t, r, b) as fractions of the source. Image space is y-up, so the
+/// bottom crop is the vertical offset.
+fn crop_matrix([l, t, r, b]: [f32; 4]) -> [f32; 6] {
+    let sx = 1.0 / (1.0 - l - r);
+    let sy = 1.0 / (1.0 - t - b);
+    [sx, 0.0, 0.0, sy, -l * sx, -b * sy]
+}
+
+/// Register a written XObject under the next `Im{n}` page-resource name.
+fn register_xobject(image_xobjects: &mut Vec<(String, Ref)>, xobj_ref: Ref) -> String {
+    let pdf_name = format!("Im{}", image_xobjects.len() + 1);
+    image_xobjects.push((pdf_name.clone(), xobj_ref));
+    pdf_name
+}
+
+/// Embed one image and return its XObject name. A cropped picture (`a:srcRect`) is
+/// wrapped in a Form XObject whose unit-square BBox clips the scaled and offset source,
+/// so every draw site keeps its plain `w 0 0 h x y cm /Im Do` and EMF forms nest as-is.
 fn embed_single_image(
     img: &EmbeddedImage,
     image_xobjects: &mut Vec<(String, Ref)>,
     pdf: &mut Pdf,
     alloc: &mut impl FnMut() -> Ref,
 ) -> String {
+    let Some(src_rect) = img.src_rect else {
+        let xobj_ref =
+            embed_image_xobject(img, (img.display_width, img.display_height), pdf, alloc);
+        return register_xobject(image_xobjects, xobj_ref);
+    };
+    // The frame shows only the crop window, so the whole source is drawn at
+    // frame / visible fraction; downscaling and soft-edge radii must see that extent.
+    let [l, t, r, b] = src_rect;
+    let source_extent = (
+        img.display_width / (1.0 - l - r),
+        img.display_height / (1.0 - t - b),
+    );
+    // ponytail: the reflection re-decodes the uncropped source and the soft-edge mask
+    // rings the source's edges; crop those too if a fixture ever combines them.
+    let inner_ref = embed_image_xobject(img, source_extent, pdf, alloc);
+    // The inner image is reachable only through this form, so it is not registered on
+    // the pages.
+    let mut content = Content::new();
+    content.transform(crop_matrix(src_rect));
+    content.x_object(Name(b"Src"));
+    let form_ref = alloc();
+    let bytes = content.finish();
+    let mut form = pdf.form_xobject(form_ref, &bytes);
+    form.bbox(Rect::new(0.0, 0.0, 1.0, 1.0));
+    form.resources().x_objects().pair(Name(b"Src"), inner_ref);
+    drop(form);
+    register_xobject(image_xobjects, form_ref)
+}
+
+/// Write the image (or EMF form) XObject and return its ref. `display` is the extent in
+/// points the whole source is drawn at; it drives downscaling and soft-edge radii.
+fn embed_image_xobject(
+    img: &EmbeddedImage,
+    (display_width, display_height): (f32, f32),
+    pdf: &mut Pdf,
+    alloc: &mut impl FnMut() -> Ref,
+) -> Ref {
     let xobj_ref = alloc();
-    let pdf_name = format!("Im{}", image_xobjects.len() + 1);
     let target = downscale_target(
         img.pixel_width,
         img.pixel_height,
-        img.display_width,
-        img.display_height,
+        display_width,
+        display_height,
     );
 
     // Helper: create soft-edge SMask for a given pixel size
     let make_soft_edge_smask = |w: u32, h: u32, pdf: &mut Pdf, alloc: &mut dyn FnMut() -> Ref| -> Option<Ref> {
         let se = img.soft_edge.as_ref()?;
-        let radius_px = se.radius * w as f32 / img.display_width;
+        let radius_px = se.radius * w as f32 / display_width;
         let mask_data = super::color::generate_soft_edge_mask(w, h, radius_px);
         let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&mask_data, 6);
         let mask_ref = alloc();
@@ -279,8 +334,7 @@ fn embed_single_image(
                         write_image_xobject(
                             pdf, xobj_ref, &jpeg_buf, Filter::DctDecode, tw, th, se_mask,
                         );
-                        image_xobjects.push((pdf_name.clone(), xobj_ref));
-                        return pdf_name;
+                        return xobj_ref;
                     }
                 }
                 // Fall through to raw embed on failure
@@ -324,8 +378,7 @@ fn embed_single_image(
                             xobj.height(1);
                             xobj.color_space().device_rgb();
                             xobj.bits_per_component(8);
-                            image_xobjects.push((pdf_name.clone(), xobj_ref));
-                            return pdf_name;
+                            return xobj_ref;
                         }
                     }
                 }
@@ -365,7 +418,7 @@ fn embed_single_image(
 
             // Apply soft-edge mask: multiply with existing alpha or create new alpha
             if let Some(se) = img.soft_edge.as_ref() {
-                let radius_px = se.radius * w as f32 / img.display_width;
+                let radius_px = se.radius * w as f32 / display_width;
                 let se_mask = super::color::generate_soft_edge_mask(w, h, radius_px);
                 if has_alpha {
                     for (a, &se) in alpha_data.iter_mut().zip(se_mask.iter()) {
@@ -412,8 +465,7 @@ fn embed_single_image(
             if let Some(form_ref) =
                 super::emf::emf_to_form_xobject(&img.data, pdf, alloc)
             {
-                image_xobjects.push((pdf_name.clone(), form_ref));
-                return pdf_name;
+                return form_ref;
             }
             // Conversion failed — register the wasted ref so it still maps to
             // something (an empty form XObject) and the page content stream
@@ -424,8 +476,7 @@ fn embed_single_image(
         }
     }
 
-    image_xobjects.push((pdf_name.clone(), xobj_ref));
-    pdf_name
+    xobj_ref
 }
 
 /// Embed a shadow as a 1x1 solid-color Image XObject whose SMask is a
@@ -906,6 +957,29 @@ fn embed_textbox_images(
             }
             for nested in &para.textboxes {
                 stack.push(&nested.paragraphs);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::crop_matrix;
+
+    #[test]
+    fn crop_matrix_maps_visible_window_onto_unit_square() {
+        // Image space is y-up: a top crop needs no offset, a bottom crop shifts the
+        // source down. A negative crop enlarges the window past the source (blank pad).
+        let cases = [
+            ([0.25, 0.0, 0.25, 0.0], [2.0, 0.0, 0.0, 1.0, -0.5, 0.0]),
+            ([0.0, 0.5, 0.0, 0.0], [1.0, 0.0, 0.0, 2.0, 0.0, 0.0]),
+            ([0.0, 0.0, 0.0, 0.5], [1.0, 0.0, 0.0, 2.0, 0.0, -1.0]),
+            ([-0.2, 0.0, 0.0, 0.0], [1.0 / 1.2, 0.0, 0.0, 1.0, 0.2 / 1.2, 0.0]),
+        ];
+        for (rect, want) in cases {
+            let got = crop_matrix(rect);
+            for (g, w) in got.iter().zip(want) {
+                assert!((g - w).abs() < 1e-5, "{rect:?}: {got:?} != {want:?}");
             }
         }
     }

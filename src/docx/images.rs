@@ -113,6 +113,50 @@ fn find_pic_sp_pr<'a>(container: roxmltree::Node<'a, 'a>) -> Option<roxmltree::N
         })
 }
 
+/// Crop fractions (l, t, r, b) from the `a:srcRect` beside the picture's `a:blip`, each
+/// stored as 1/100000 of the source dimension. None when absent, all zero, or when the
+/// crop would leave nothing visible. Negative values are Word's outward crop and are
+/// kept: they pad the frame with blank space.
+fn parse_src_rect(container: roxmltree::Node) -> Option<[f32; 4]> {
+    let rect = dml(find_blip(container)?.parent()?, "srcRect")?;
+    let frac = |name: &str| {
+        rect.attribute(name)
+            .and_then(|v| v.parse::<f32>().ok())
+            .map_or(0.0, |v| v / 100_000.0)
+    };
+    let r = [frac("l"), frac("t"), frac("r"), frac("b")];
+    let visible_w = 1.0 - r[0] - r[2];
+    let visible_h = 1.0 - r[1] - r[3];
+    if r == [0.0; 4] || visible_w <= 0.0 || visible_h <= 0.0 {
+        return None;
+    }
+    Some(r)
+}
+
+/// Apply the picture properties shared by inline and anchored pictures: outline,
+/// effects, non-rectangular clip and `a:srcRect` crop. Returns the `pic:spPr` node for
+/// callers that need more from it (anchored pictures also read the rotation).
+fn apply_pic_props<'a>(
+    img: &mut EmbeddedImage,
+    container: roxmltree::Node<'a, 'a>,
+) -> Option<roxmltree::Node<'a, 'a>> {
+    let sp_pr = find_pic_sp_pr(container);
+    let (stroke_color, stroke_width) = parse_pic_outline(sp_pr);
+    img.stroke_color = stroke_color;
+    img.stroke_width = stroke_width;
+    let effects = parse_pic_effects(sp_pr);
+    img.shadow = effects.shadow;
+    img.soft_edge = effects.soft_edge;
+    img.glow = effects.glow;
+    img.inner_shadow = effects.inner_shadow;
+    img.reflection = effects.reflection;
+    img.clip_geometry = sp_pr
+        .map(super::textbox::parse_shape_geometry)
+        .filter(|g| g.preset.as_deref() != Some("rect") || g.custom.is_some());
+    img.src_rect = parse_src_rect(container);
+    sp_pr
+}
+
 /// Read in-plane rotation (clockwise degrees) for a floating picture. Prefers the
 /// normal `a:xfrm @rot`; some files instead encode the turn via a 3D scene camera
 /// `a:scene3d/a:camera/a:rot @rev` (e.g. a vertical label rotated 90°). Both are in
@@ -318,14 +362,18 @@ pub(super) fn read_image_from_zip_extra<R: Read + Seek>(
         inner_shadow: None,
         reflection: None,
         clip_geometry: None,
+        src_rect: None,
     })
 }
 
-pub(super) fn find_blip_embed<'a>(container: roxmltree::Node<'a, 'a>) -> Option<&'a str> {
+fn find_blip<'a>(container: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
     container
         .descendants()
         .find(|n| n.tag_name().name() == "blip" && n.tag_name().namespace() == Some(DML_NS))
-        .and_then(|n| n.attribute((REL_NS, "embed")))
+}
+
+pub(super) fn find_blip_embed<'a>(container: roxmltree::Node<'a, 'a>) -> Option<&'a str> {
+    find_blip(container)?.attribute((REL_NS, "embed"))
 }
 
 pub(super) struct DrawingInfo {
@@ -541,19 +589,7 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
             }
             if let Some(embed_id) = find_blip_embed(container) {
                 if let Some(mut img) = read_image_from_zip(embed_id, ctx.rels, ctx.zip, display_w, display_h) {
-                    let sp_pr = find_pic_sp_pr(container);
-                    let (stroke_color, stroke_width) = parse_pic_outline(sp_pr);
-                    img.stroke_color = stroke_color;
-                    img.stroke_width = stroke_width;
-                    let effects = parse_pic_effects(sp_pr);
-                    img.shadow = effects.shadow;
-                    img.soft_edge = effects.soft_edge;
-                    img.glow = effects.glow;
-                    img.inner_shadow = effects.inner_shadow;
-                    img.reflection = effects.reflection;
-                    img.clip_geometry = sp_pr
-                        .map(super::textbox::parse_shape_geometry)
-                        .filter(|g| g.preset.as_deref() != Some("rect") || g.custom.is_some());
+                    let sp_pr = apply_pic_props(&mut img, container);
                     let rotation_deg = parse_image_rotation(sp_pr);
                     let (h_position, h_relative, v_position, v_relative) =
                         parse_anchor_position(container);
@@ -633,19 +669,7 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
             if let Some(mut img) =
                 read_image_from_zip_extra(embed_id, ctx.rels, ctx.zip, display_w, display_h, extra_h, extra_top)
             {
-                let sp_pr = find_pic_sp_pr(container);
-                let (stroke_color, stroke_width) = parse_pic_outline(sp_pr);
-                img.stroke_color = stroke_color;
-                img.stroke_width = stroke_width;
-                let effects = parse_pic_effects(sp_pr);
-                img.shadow = effects.shadow;
-                img.soft_edge = effects.soft_edge;
-                img.glow = effects.glow;
-                img.inner_shadow = effects.inner_shadow;
-                img.reflection = effects.reflection;
-                img.clip_geometry = sp_pr
-                    .map(super::textbox::parse_shape_geometry)
-                    .filter(|g| g.preset.as_deref() != Some("rect") || g.custom.is_some());
+                apply_pic_props(&mut img, container);
                 return Some(RunDrawingResult::Inline(img));
             }
         }
@@ -717,19 +741,7 @@ pub(super) fn compute_drawing_info<R: Read + Seek>(
                     image =
                         read_image_from_zip_extra(embed_id, rels, zip, display_w, display_h, extra_h, extra_top);
                     if let Some(ref mut img) = image {
-                        let sp_pr = find_pic_sp_pr(container);
-                        let (stroke_color, stroke_width) = parse_pic_outline(sp_pr);
-                        img.stroke_color = stroke_color;
-                        img.stroke_width = stroke_width;
-                        let effects = parse_pic_effects(sp_pr);
-                    img.shadow = effects.shadow;
-                    img.soft_edge = effects.soft_edge;
-                    img.glow = effects.glow;
-                    img.inner_shadow = effects.inner_shadow;
-                    img.reflection = effects.reflection;
-                    img.clip_geometry = sp_pr
-                        .map(super::textbox::parse_shape_geometry)
-                        .filter(|g| g.preset.as_deref() != Some("rect") || g.custom.is_some());
+                        apply_pic_props(img, container);
                     }
                 }
             }
@@ -920,4 +932,54 @@ fn object_dimensions(obj: roxmltree::Node) -> Option<(f32, f32)> {
         return Some((w, h));
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn src_rect_of(elem: &str) -> Option<[f32; 4]> {
+        let xml = format!(
+            r#"<root xmlns:a="{DML_NS}" xmlns:r="{REL_NS}"><a:blipFill><a:blip r:embed="rId1"/>{elem}<a:stretch><a:fillRect/></a:stretch></a:blipFill></root>"#
+        );
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        parse_src_rect(doc.root_element())
+    }
+
+    fn assert_close(got: [f32; 4], want: [f32; 4]) {
+        for (g, w) in got.iter().zip(want) {
+            assert!((g - w).abs() < 1e-6, "{got:?} != {want:?}");
+        }
+    }
+
+    #[test]
+    fn src_rect_absent_empty_or_zero_is_none() {
+        assert_eq!(src_rect_of(""), None);
+        assert_eq!(src_rect_of("<a:srcRect/>"), None);
+        assert_eq!(src_rect_of(r#"<a:srcRect l="0" t="0" r="0" b="0"/>"#), None);
+    }
+
+    #[test]
+    fn src_rect_values_are_fractions_of_100000() {
+        // Real crops from brazilian_logistics_study; missing attributes read as zero.
+        assert_close(
+            src_rect_of(r#"<a:srcRect t="4604" r="1295" b="6879"/>"#).unwrap(),
+            [0.0, 0.04604, 0.01295, 0.06879],
+        );
+        assert_close(
+            src_rect_of(r#"<a:srcRect t="4505" b="26576"/>"#).unwrap(),
+            [0.0, 0.04505, 0.0, 0.26576],
+        );
+    }
+
+    #[test]
+    fn src_rect_negative_outward_crop_is_kept() {
+        assert_close(src_rect_of(r#"<a:srcRect l="-20000"/>"#).unwrap(), [-0.2, 0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn src_rect_leaving_nothing_visible_is_none() {
+        assert_eq!(src_rect_of(r#"<a:srcRect l="60000" r="50000"/>"#), None);
+        assert_eq!(src_rect_of(r#"<a:srcRect t="100000"/>"#), None);
+    }
 }

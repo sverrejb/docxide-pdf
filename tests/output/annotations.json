@@ -1,5 +1,5 @@
 {
-  "next_id": 228,
+  "next_id": 231,
   "annotations": [
     {
       "id": 208,
@@ -471,6 +471,39 @@
       "x_pt": 420.9978,
       "y_pt": 148.77155,
       "note": "(datum) is not centered under the line above.",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 228,
+      "case": "scraped/italian_evaluation_minutes",
+      "page": 6,
+      "source": "Generated",
+      "x_pt": 253.92429,
+      "y_pt": 528.43207,
+      "note": "Signature missing here.",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 229,
+      "case": "scraped/italian_evaluation_minutes",
+      "page": 6,
+      "source": "Generated",
+      "x_pt": 318.89697,
+      "y_pt": 654.1157,
+      "note": "Weird stamp thing that shows up here.",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 230,
+      "case": "scraped/italian_evaluation_minutes",
+      "page": 6,
+      "source": "Generated",
+      "x_pt": 71.04342,
+      "y_pt": 593.27167,
+      "note": "Vertical spacing between names and signatures is off.",
       "fixed": false,
       "cleared": false
     }
