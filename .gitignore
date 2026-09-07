@@ -9,9 +9,6 @@
 /models
 tests/output/
 # Real-world docx corpora: kept locally, not tracked. Synthetic cases/ stays tracked.
-tests/fixtures/scraped/
-tests/fixtures/new/
-tests/fixtures/samples/
 .claude/projects
 .claude/worktrees
 .worktrees/
