@@ -23,3 +23,5 @@ tools/three_way_compare.py
 ~$*
 /target_dbg
 .bart_commit_msg
+
+minipdf.md
