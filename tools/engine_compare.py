@@ -4,8 +4,7 @@
 Reuses PNGs the test harness already produced under tests/output/<group>/<case>/
 (reference/, generated/, libreoffice/) and only converts what is missing. Conversions and
 screenshots are cached in comparison/work/. Every engine is additionally timed by converting
-into comparison/work/ once (seconds cached in a .time file beside the PDF), so the first run
-after this feature pays one LibreOffice pass over all fixtures. The viewer is a self-contained static site:
+into comparison/work/ once (seconds cached in a .time file beside the PDF). The viewer is a self-contained static site:
 comparison/index.html plus lossless WebP page images, deployable as-is with
 tools/deploy_comparison.sh (work/ is excluded by comparison/.gitignore).
 

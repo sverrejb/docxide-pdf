@@ -15,8 +15,6 @@
 # engine_compare.py skips work whose output is newer than its input, so `git restore-mtime` gives
 # checked-out files their commit times and only changed fixtures are reconverted. Our binary is rebuilt
 # every run and always reconverted; a competitor version or font change is in the cache key and starts cold.
-# ponytail: comparison/ is ~3 GB per cache entry against a 10 GB repo cap; if it grows, drop work/*/*/lo_profile
-# from the path or stop caching the site WebPs.
 name: Engine comparison
 on:
   push:
@@ -28,7 +26,9 @@ concurrency:
   group: engine-comparison   # deploy is a force-push; a queued run starts warm from the cache the running one saves
 jobs:
   compare:
-    runs-on: ubuntu-latest
+    # 26.04's archive has mupdf 1.27 and LibreOffice 26.2; 24.04's mupdf 1.23 lacks the stext `text=`
+    # attribute the text-boundary metric parses.
+    runs-on: ubuntu-26.04
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v7
@@ -42,12 +42,8 @@ jobs:
           fetch-depth: 0
       - name: Install LibreOffice, mutool, cwebp, git-restore-mtime
         run: |
-          sudo add-apt-repository -y ppa:libreoffice/ppa   # current LibreOffice; Ubuntu 24.04's own package is 24.2
           sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends webp libreoffice-writer git-restore-mtime
-          # Same mupdf as the Mac dev setup so renders and scores match local ones. Ubuntu's own 1.23
-          # also lacks the stext `text=` attribute the text-boundary metric parses (it scored 0 everywhere).
-          brew install mupdf-tools
+          sudo apt-get install -y -q --no-install-recommends mupdf-tools webp libreoffice-writer git-restore-mtime
       - name: Link private assets
         run: |
           ln -s "$PWD/assets/fonts" fonts
