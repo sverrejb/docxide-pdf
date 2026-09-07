@@ -117,12 +117,23 @@ def screenshot(pdf: Path, out_dir: Path) -> list[Path]:
     return sorted(out_dir.glob("page_*.png"))
 
 
+def converted(r: subprocess.CompletedProcess, pdf: Path) -> bool:
+    """Engines fail quietly on some documents; print the tail of their output so a CI log says why."""
+    if pdf.exists():
+        return True
+    why = " | ".join(((r.stderr or "") + (r.stdout or "")).strip().splitlines()[-3:])[-300:]
+    print(f"  {Path(r.args[0]).name} failed on {pdf.parent.name} (exit {r.returncode}): {why}")
+    return False
+
+
 def convert_ours(docx: Path, pdf: Path) -> bool:
     if is_fresh(pdf, docx) and is_fresh(pdf, OURS_BIN):  # a rebuilt binary must be re-timed
         return True
     pdf.parent.mkdir(parents=True, exist_ok=True)
     r = subprocess.run([str(OURS_BIN), str(docx), str(pdf)], capture_output=True, text=True)
-    return r.returncode == 0 and pdf.exists()
+    if r.returncode != 0:
+        pdf.unlink(missing_ok=True)  # a partial file would otherwise count as fresh next run
+    return converted(r, pdf)
 
 
 def convert_libreoffice(soffice: Path, docx: Path, pdf: Path) -> bool:
@@ -133,33 +144,33 @@ def convert_libreoffice(soffice: Path, docx: Path, pdf: Path) -> bool:
     # Per-case profile dir sidesteps LibreOffice's single-instance lock (same trick as the harness).
     profile = (out / "lo_profile").resolve()
     profile.mkdir(exist_ok=True)
-    subprocess.run(
+    r = subprocess.run(
         [str(soffice), f"-env:UserInstallation=file://{profile}", "--headless",
          "--convert-to", "pdf", "--outdir", str(out), str(docx)],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300, check=False,
+        capture_output=True, text=True, timeout=300, check=False,
     )
     produced = out / (docx.stem + ".pdf")
     if produced.exists() and produced != pdf:
         produced.replace(pdf)
-    return pdf.exists()
+    return converted(r, pdf)
 
 
 def convert_minipdf(minipdf: Path, docx: Path, pdf: Path) -> bool:
     if is_fresh(pdf, docx):
         return True
     pdf.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run([str(minipdf), "convert", str(docx), "-o", str(pdf)],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300, check=False)
-    return pdf.exists()
+    r = subprocess.run([str(minipdf), "convert", str(docx), "-o", str(pdf)],
+                       capture_output=True, text=True, timeout=300, check=False)
+    return converted(r, pdf)
 
 
 def convert_rdocx(rdocx: Path, docx: Path, pdf: Path) -> bool:
     if is_fresh(pdf, docx):
         return True
     pdf.parent.mkdir(parents=True, exist_ok=True)
-    subprocess.run([str(rdocx), "convert", "--to", "pdf", "--output", str(pdf), str(docx)],
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300, check=False)
-    return pdf.exists()
+    r = subprocess.run([str(rdocx), "convert", "--to", "pdf", "--output", str(pdf), str(docx)],
+                       capture_output=True, text=True, timeout=300, check=False)
+    return converted(r, pdf)
 
 
 def timed(convert, *args) -> tuple[bool, float | None]:
