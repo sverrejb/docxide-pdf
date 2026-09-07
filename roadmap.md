@@ -127,6 +127,14 @@ one onward. These are the highest-value targets in the corpus; open
 `comparison/index.html`, pick the case, and use the overlay to see where the
 flow first departs.
 
+**Page-count term in the compact report (DONE — 2026-09-05).** `run-tests.sh` now ends
+its summary with `N/M page counts match`; per-case `ref_pages`/`gen_pages` sit in
+`tests/output/latest_scores.json`. The visual test scores only the common pages, so a
+generated PDF short of pages used to look fine. Not baselined (see `minipdf.md` §3.2).
+Found while doing it: `tests/text_boundary.rs` has had no `#[test]` since fb9373b
+(2026-09-03), so the TxtBnd values in `tests/baselines.json` are frozen; whether that
+was intended is unverified.
+
 ## Picture Effects (PARTIALLY DONE)
 
 **Done:** Smooth outer shadow (rasterized Gaussian blur mask via SMask), soft edge (edge-fade SMask on image), glow (centered blur), inner shadow (inverted blur mask), reflection (flipped image with gradient SMask). All use the same rasterized mask + SMask XObject infrastructure. Test fixtures: case56 (shadow variations), case57 (2D effects), case58 (3D effects — deferred).

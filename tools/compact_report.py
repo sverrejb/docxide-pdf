@@ -125,6 +125,12 @@ def main():
     imp_count = len(set(e[0] for e in improvements))
     unchanged = scored - changed
 
+    paged = [
+        s for s in latest.values()
+        if s.get("ref_pages") is not None and s.get("gen_pages") is not None
+    ]
+    pages_ok = sum(1 for s in paged if s["ref_pages"] == s["gen_pages"])
+
     summary = f"{scored} scored, {unchanged} unchanged"
     if reg_count:
         summary += f", {reg_count} regressed"
@@ -134,6 +140,8 @@ def main():
         summary += f", {len(new_fixtures)} new"
     if hash_changed:
         summary += f", {len(hash_changed)} visual changes"
+    if paged:
+        summary += f", {pages_ok}/{len(paged)} page counts match"
     print(summary)
 
     sys.exit(1 if regressions else 0)

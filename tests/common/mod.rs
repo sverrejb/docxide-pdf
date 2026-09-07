@@ -24,6 +24,10 @@ pub struct Baselines {
     pub text_boundary: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub convert_ms: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ref_pages: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gen_pages: Option<usize>,
 }
 
 fn load_skiplist() -> HashSet<String> {
@@ -176,6 +180,12 @@ pub fn write_latest_scores(updates: &HashMap<String, Baselines>) {
         }
         if let Some(v) = new.convert_ms {
             entry.convert_ms = Some(round4(v));
+        }
+        if let Some(v) = new.ref_pages {
+            entry.ref_pages = Some(v);
+        }
+        if let Some(v) = new.gen_pages {
+            entry.gen_pages = Some(v);
         }
     }
     let json = serde_json::to_string_pretty(&scores).expect("Failed to serialize latest scores");

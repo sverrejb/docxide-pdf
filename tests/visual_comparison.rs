@@ -317,6 +317,8 @@ struct FixtureResult {
     jaccard: f64,
     ssim: f64,
     page_count: usize,
+    ref_pages: usize,
+    gen_pages: usize,
     jaccard_ms: u64,
     ssim_ms: u64,
     diff_save_ms: u64,
@@ -412,6 +414,8 @@ fn score_fixture(fixture: &FixturePages) -> Option<FixtureResult> {
         jaccard: avg_jaccard,
         ssim: avg_ssim,
         page_count: page_timings.len(),
+        ref_pages: fixture.ref_pages.len(),
+        gen_pages: fixture.gen_pages.len(),
         jaccard_ms,
         ssim_ms,
         diff_save_ms,
@@ -493,6 +497,8 @@ fn visual_comparison() {
                 ssim: Some(r.ssim),
                 text_boundary: None,
                 convert_ms: None,
+                ref_pages: Some(r.ref_pages),
+                gen_pages: Some(r.gen_pages),
             },
         );
     }

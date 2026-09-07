@@ -121,6 +121,8 @@ fn text_boundaries_match() {
                 ssim: None,
                 text_boundary: Some(r.tb.line_match_pct()),
                 convert_ms: None,
+                ref_pages: None,
+                gen_pages: None,
             },
         );
     }
