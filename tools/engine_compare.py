@@ -186,7 +186,11 @@ def timed(convert, *args) -> tuple[bool, float | None]:
         pdf.unlink()
     before = pdf.stat().st_mtime if pdf.exists() else None
     t = time.perf_counter()
-    ok = convert(*args)
+    try:
+        ok = convert(*args)
+    except subprocess.TimeoutExpired as e:  # one hung engine must not drop the whole case
+        print(f"  {convert.__name__.removeprefix('convert_')} timed out after {e.timeout:.0f} s on {pdf.parent.name}")
+        return False, None
     if ok and pdf.stat().st_mtime != before:
         stamp.write_text(f"{time.perf_counter() - t:.3f}")
     return ok, float(stamp.read_text()) if ok and stamp.exists() else None
