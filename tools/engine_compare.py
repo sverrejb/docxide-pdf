@@ -3,7 +3,9 @@
 
 Reuses PNGs the test harness already produced under tests/output/<group>/<case>/
 (reference/, generated/, libreoffice/) and only converts what is missing. Conversions and
-screenshots are cached in comparison/work/. The viewer is a self-contained static site:
+screenshots are cached in comparison/work/. Every engine is additionally timed by converting
+into comparison/work/ once (seconds cached in a .time file beside the PDF), so the first run
+after this feature pays one LibreOffice pass over all fixtures. The viewer is a self-contained static site:
 comparison/index.html plus lossless WebP page images, deployable as-is with
 tools/deploy_comparison.sh (work/ is excluded by comparison/.gitignore).
 
@@ -28,6 +30,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import webbrowser
 from concurrent.futures import ThreadPoolExecutor
 from fnmatch import fnmatch
@@ -115,7 +118,7 @@ def screenshot(pdf: Path, out_dir: Path) -> list[Path]:
 
 
 def convert_ours(docx: Path, pdf: Path) -> bool:
-    if is_fresh(pdf, docx):
+    if is_fresh(pdf, docx) and is_fresh(pdf, OURS_BIN):  # a rebuilt binary must be re-timed
         return True
     pdf.parent.mkdir(parents=True, exist_ok=True)
     r = subprocess.run([str(OURS_BIN), str(docx), str(pdf)], capture_output=True, text=True)
@@ -157,6 +160,23 @@ def convert_rdocx(rdocx: Path, docx: Path, pdf: Path) -> bool:
     subprocess.run([str(rdocx), "convert", "--to", "pdf", "--output", str(pdf), str(docx)],
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300, check=False)
     return pdf.exists()
+
+
+def timed(convert, *args) -> tuple[bool, float | None]:
+    """Run a convert_* and return (ok, wall-clock seconds). Seconds are stored beside the PDF so a
+    cached conversion keeps its measured time; a cached PDF without one is converted again.
+    # ponytail: measured under --jobs parallel conversions; use --jobs 1 for clean absolute numbers.
+    """
+    pdf: Path = args[-1]
+    stamp = pdf.with_suffix(".time")
+    if pdf.exists() and not stamp.exists():
+        pdf.unlink()
+    before = pdf.stat().st_mtime if pdf.exists() else None
+    t = time.perf_counter()
+    ok = convert(*args)
+    if ok and pdf.stat().st_mtime != before:
+        stamp.write_text(f"{time.perf_counter() - t:.3f}")
+    return ok, float(stamp.read_text()) if ok and stamp.exists() else None
 
 
 def run_out(cmd: list[str]) -> str:
@@ -228,23 +248,28 @@ def process_fixture(fixture: Path, group: str, tools: dict, opts) -> dict | None
     ref_dir = harness / "reference" if any((harness / "reference").glob("page_*.png")) else mine / "reference"
     add("reference", ref_pdf, ref_dir)
 
-    # Ours: prefer the harness output so scores line up with run-tests.sh
-    if (harness / "generated.pdf").exists():
-        add("generated", harness / "generated.pdf", harness / "generated")
-    elif tools.get("ours") and convert_ours(docx, mine / "generated.pdf"):
-        add("generated", mine / "generated.pdf", mine / "generated")
+    # Ours and LibreOffice: show the harness PDF when it exists so scores line up with run-tests.sh,
+    # but always time a conversion of our own so every engine's speed is measured by this script.
+    times: dict[str, float | None] = {}
+    if tools.get("ours"):
+        ok, times["generated"] = timed(convert_ours, docx, mine / "generated.pdf")
+        if (harness / "generated.pdf").exists():
+            add("generated", harness / "generated.pdf", harness / "generated")
+        elif ok:
+            add("generated", mine / "generated.pdf", mine / "generated")
 
     if tools.get("soffice"):
+        ok, times["libreoffice"] = timed(convert_libreoffice, tools["soffice"], docx, mine / "libreoffice.pdf")
         if (harness / "libreoffice.pdf").exists():
             add("libreoffice", harness / "libreoffice.pdf", harness / "libreoffice")
-        elif convert_libreoffice(tools["soffice"], docx, mine / "libreoffice.pdf"):
+        elif ok:
             add("libreoffice", mine / "libreoffice.pdf", mine / "libreoffice")
 
-    if tools.get("minipdf") and convert_minipdf(tools["minipdf"], docx, mine / "minipdf.pdf"):
-        add("minipdf", mine / "minipdf.pdf", mine / "minipdf")
-
-    if tools.get("rdocx") and convert_rdocx(tools["rdocx"], docx, mine / "rdocx.pdf"):
-        add("rdocx", mine / "rdocx.pdf", mine / "rdocx")
+    for key, convert in (("minipdf", convert_minipdf), ("rdocx", convert_rdocx)):
+        if tools.get(key):
+            ok, times[key] = timed(convert, tools[key], docx, mine / f"{key}.pdf")
+            if ok:
+                add(key, mine / f"{key}.pdf", mine / key)
 
     scores: dict[str, dict] = {}
     if not opts.no_scores:
@@ -260,6 +285,7 @@ def process_fixture(fixture: Path, group: str, tools: dict, opts) -> dict | None
         "case": case,
         "pages": {k: [rel(p) for p in v] for k, v in pages.items()},
         "scores": scores,
+        "times": {k: v for k, v in times.items() if v is not None},
         "reference_app": pdf_creator(ref_pdf),
     }
 
@@ -339,8 +365,10 @@ const DATA = __DATA__;
 const ENGINES = __ENGINES__;
 const METRICS = __METRICS__;
 const VERSIONS = __VERSIONS__;
-const METRIC_LABEL = { jaccard: 'J', ssim: 'SSIM', text_boundary: 'TB' };
+const TABLE_COLS = [...METRICS, 'time'];
+const METRIC_LABEL = { jaccard: 'J', ssim: 'SSIM', text_boundary: 'TB', time: 's' };
 const METRIC_INFO = {
+  time: 'Conversion time: wall-clock seconds for one DOCX→PDF run of the engine CLI (LibreOffice includes process start-up). Conversions run in parallel (--jobs), so compare engines against each other rather than reading absolute numbers.',
   jaccard: 'Jaccard on ink pixels: both pages rendered at 150 DPI, a pixel is ink when its luma is below 200, score = ink in both ÷ ink in either. Exact placement matters: a one-line vertical shift sends it toward zero.',
   ssim: 'Structural similarity on 8×8 luma windows, each window allowed to search ±8 px vertically for its best match, so small vertical drift is forgiven. Only windows that contain ink count. Measures shape and texture rather than exact position.',
   text_boundary: 'Text boundary: share of text lines (mutool extraction) whose first and last word match the reference line at the same position. Pages whose line counts differ by more than 15% are skipped. Measures line breaking and pagination, independent of fonts and pixels.',
@@ -382,6 +410,8 @@ function visibleCases() {
   return DATA.map((c,i) => [c,i]).filter(([c]) => !f || (c.case + ' ' + c.group).toLowerCase().includes(f));
 }
 function fmt(v) { return v == null ? '–' : v.toFixed(1) + '%'; }
+function fmtM(m, v) { return m === 'time' ? (v == null ? '–' : v.toFixed(2) + ' s') : fmt(v); }
+function val(c, k, m) { return (m === 'time' ? c.times?.[k] : c.scores[k]?.[m]) ?? null; }
 
 function renderList() {
   const list = $('#list'); list.innerHTML = '';
@@ -402,8 +432,8 @@ function renderScores() {
     { get: r => r.c.group, show: r => r.c.group },
     { get: r => (r.c.pages.reference || []).length, show: r => (r.c.pages.reference || []).length, num: true },
   ];
-  for (const [k] of engines) for (const m of METRICS)
-    cols.push({ k, m, num: true, get: r => r.c.scores[k]?.[m] ?? null, show: r => fmt(r.c.scores[k]?.[m]) });
+  for (const [k] of engines) for (const m of TABLE_COLS)
+    cols.push({ k, m, num: true, get: r => val(r.c, k, m), show: r => fmtM(m, val(r.c, k, m)) });
 
   const rows = visibleCases().map(([c, i]) => ({ c, i }));
   const { col: sc, dir } = state.sort; const sortCol = cols[sc] || cols[0];
@@ -415,15 +445,15 @@ function renderScores() {
   const mean = cl => { const v = rows.map(cl.get).filter(x => typeof x === 'number'); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
   const th = (j, label, cls = '') => `<th data-c="${j}" class="${cls}${j === sc ? ' sorted' : ''}">${label}${j === sc ? (dir > 0 ? ' ▲' : ' ▼') : ''}</th>`;
 
-  let html = `<div class="note">${rows.length} cases · click a column to sort, a row to open it · green = best engine for that metric</div><table><thead>`;
+  let html = `<div class="note">${rows.length} cases · click a column to sort, a row to open it · green = best engine for that column (highest score, lowest time)</div><table><thead>`;
   html += `<tr>${th(0, 'case')}${th(1, 'group')}${th(2, 'pages', 'num')}` +
-    engines.map(([, label]) => `<th class="eng" colspan="${METRICS.length}">${label}${VERSIONS[engines.find(e => e[1] === label)[0]] ? ` <span class="ver">${VERSIONS[engines.find(e => e[1] === label)[0]]}</span>` : ''}</th>`).join('') + '</tr>';
+    engines.map(([, label]) => `<th class="eng" colspan="${TABLE_COLS.length}">${label}${VERSIONS[engines.find(e => e[1] === label)[0]] ? ` <span class="ver">${VERSIONS[engines.find(e => e[1] === label)[0]]}</span>` : ''}</th>`).join('') + '</tr>';
   html += '<tr><th></th><th></th><th></th>' + cols.slice(3).map((cl, j) => th(j + 3, `<span title="${METRIC_INFO[cl.m]}">${METRIC_LABEL[cl.m]}</span>`, 'num' + (cl.m === METRICS[0] ? ' first' : ''))).join('') + '</tr>';
-  html += '<tr class="mean"><td>mean</td><td></td><td></td>' + cols.slice(3).map(cl => `<td class="num${cl.m === METRICS[0] ? ' first' : ''}">${fmt(mean(cl))}</td>`).join('') + '</tr></thead><tbody>';
+  html += '<tr class="mean"><td>mean</td><td></td><td></td>' + cols.slice(3).map(cl => `<td class="num${cl.m === METRICS[0] ? ' first' : ''}">${fmtM(cl.m, mean(cl))}</td>`).join('') + '</tr></thead><tbody>';
   for (const r of rows) {
-    // Highest value per metric across engines; ties all count as best.
+    // Highest score (lowest time) per column across engines; ties all count as best.
     const best = {};
-    for (const m of METRICS) best[m] = Math.max(...engines.map(([k]) => r.c.scores[k]?.[m] ?? -1));
+    for (const m of TABLE_COLS) { const v = engines.map(([k]) => val(r.c, k, m)).filter(x => x != null); best[m] = m === 'time' ? Math.min(...v) : Math.max(...v); }
     html += `<tr data-i="${r.i}"${r.i === state.sel ? ' class="sel"' : ''}>` + cols.map((cl, j) =>
       `<td class="${cl.num ? 'num' : ''}${j >= 3 && cl.m === METRICS[0] ? ' first' : ''}${j >= 3 && cl.get(r) != null && cl.get(r) === best[cl.m] ? ' best' : ''}">${cl.show(r)}</td>`).join('') + '</tr>';
   }
@@ -508,7 +538,7 @@ $('#ovlB').onchange = e => { state.ovlB = e.target.value; render(); };
 $('#blend').onchange = e => { state.blend = e.target.value; render(); };
 $('#alpha').oninput = e => { state.alpha = +e.target.value; render(); };
 $('#legend').innerHTML = '<span>All scores are against the Word reference, averaged over the pages both PDFs have; extra pages are ignored.</span>' +
-  METRICS.map(m => `<span><b>${METRIC_LABEL[m]}</b> ${METRIC_INFO[m]}</span>`).join('');
+  TABLE_COLS.map(m => `<span><b>${METRIC_LABEL[m]}</b> ${METRIC_INFO[m]}</span>`).join('');
 $('#filter').value = state.filter;
 $('#filter').oninput = e => { state.filter = e.target.value; renderList(); };
 document.onkeydown = e => {

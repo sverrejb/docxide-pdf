@@ -37,7 +37,7 @@ g -c user.name="engine_compare" -c user.email="engine_compare@localhost" \
     commit -q -m "engine comparison $(date +%Y-%m-%d) ($(g ls-files | grep -c 'page_' | tr -d ' ') pages)"
 
 URL=$(git -C "$ROOT" remote get-url "$REMOTE" 2>/dev/null || echo "$REMOTE")
-SIZE=$(du -sh -I work "$SITE" 2>/dev/null | cut -f1 || du -sh --exclude=work "$SITE" | cut -f1)   # BSD du, then GNU du
+SIZE=$( (du -sh --exclude=work "$SITE" 2>/dev/null || du -sh -I work "$SITE") | cut -f1)   # GNU du, then BSD du
 echo "commit $(g rev-parse --short HEAD): $(g ls-files | wc -l | tr -d ' ') files, $SIZE -> $URL $BRANCH"
 
 if [ -n "${DRY_RUN:-}" ]; then
