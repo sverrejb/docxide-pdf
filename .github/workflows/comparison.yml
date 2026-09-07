@@ -1,0 +1,82 @@
+# Rebuilds the engine comparison site (comparison/) and publishes it to gh-pages on every push to main.
+#
+# The Word fonts are not in this public repo; they come from the private sverrejb/docxide-pdf-assets repo,
+# checked out with a deploy key:
+#   assets/fonts/                           -> fonts/                   (ours reads this path via .cargo/config.toml)
+#   assets/fixtures/{scraped,new,samples}/  -> tests/fixtures/<group>/  (optional real-world corpus; only tracked
+#                                                                         cases are compared when absent)
+# Deploy key setup (public half on the assets repo, private half as a secret here):
+#   ssh-keygen -t ed25519 -N "" -f assets_key -C docxide-pdf-ci
+#   gh repo deploy-key add assets_key.pub -R sverrejb/docxide-pdf-assets -t docxide-pdf-ci
+#   gh secret set ASSETS_DEPLOY_KEY -R sverrejb/docxide-pdf < assets_key && rm assets_key assets_key.pub
+#
+# Caching: Rust deps (rust-cache), competitor binaries (keyed by the version resolved at run time, so a
+# new release is built once and then reused), and comparison/ itself (PDFs, screenshots, WebP pages).
+# engine_compare.py skips work whose output is newer than its input, so `git restore-mtime` gives
+# checked-out files their commit times and only changed fixtures are reconverted. Our binary is rebuilt
+# every run and always reconverted; a competitor version or font change is in the cache key and starts cold.
+# ponytail: comparison/ is ~3 GB per cache entry against a 10 GB repo cap; if it grows, drop work/*/*/lo_profile
+# from the path or stop caching the site WebPs.
+name: Engine comparison
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write   # force-push gh-pages
+concurrency:
+  group: engine-comparison   # deploy is a force-push; a queued run starts warm from the cache the running one saves
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # restore-mtime needs history
+      - uses: actions/checkout@v7
+        with:
+          repository: sverrejb/docxide-pdf-assets
+          ssh-key: ${{ secrets.ASSETS_DEPLOY_KEY }}
+          path: assets
+          fetch-depth: 0
+      - name: Install LibreOffice, mutool, cwebp, git-restore-mtime
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends mupdf-tools webp libreoffice-writer git-restore-mtime
+      - name: Link private assets
+        run: |
+          ln -s "$PWD/assets/fonts" fonts
+          for g in scraped new samples; do [ ! -d "assets/fixtures/$g" ] || ln -s "$PWD/assets/fixtures/$g" "tests/fixtures/$g"; done
+          mkdir -p ~/.local/share && ln -s "$PWD/assets/fonts" ~/.local/share/fonts && fc-cache -f   # LibreOffice sees them via fontconfig
+          git restore-mtime && git -C assets restore-mtime
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            tools -> target
+      - uses: taiki-e/cache-cargo-install-action@v3
+        with:
+          tool: minipdf-cli   # installs `minipdf`
+      - uses: taiki-e/cache-cargo-install-action@v3
+        with:
+          tool: rdocx-cli     # installs `rdocx`
+      - name: Competitor versions for the cache key
+        id: ver
+        run: echo "key=lo$(soffice --version | awk '{print $2}')-minipdf$(minipdf --version | awk '{print $NF}')-rdocx$(rdocx --version | awk '{print $NF}')-fonts${{ hashFiles('assets/fonts/**') }}" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v6
+        with:
+          path: comparison
+          key: comparison-${{ steps.ver.outputs.key }}-${{ github.run_id }}
+          restore-keys: comparison-${{ steps.ver.outputs.key }}-
+      - run: python3 tools/engine_compare.py
+      - uses: actions/cache/save@v6
+        if: always()   # keep the progress of a failed run
+        with:
+          path: comparison
+          key: comparison-${{ steps.ver.outputs.key }}-${{ github.run_id }}
+      - name: Publish to gh-pages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: tools/deploy_comparison.sh "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages

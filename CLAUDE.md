@@ -48,6 +48,7 @@ python3 tools/engine_compare.py --open                 # all fixtures (reuses te
 python3 tools/engine_compare.py --case case41 --case 'case2*'   # exact name or glob
 python3 tools/engine_compare.py --html-only            # rebuild index.html from comparison/work/manifest.json (no re-scoring)
 tools/deploy_comparison.sh [remote] [branch]           # publish comparison/ (work/ excluded) as an orphan gh-pages commit (DRY_RUN=1 to preview)
+# CI does both on every push to main: .github/workflows/comparison.yml (fonts come from the private sverrejb/docxide-pdf-assets repo; only tracked cases/ are compared)
 # MiniPdf = the Rust crate's CLI (`cargo install minipdf-cli`), never the .NET engine; rdocx via `cargo install rdocx`; LibreOffice via soffice
 ```
 
