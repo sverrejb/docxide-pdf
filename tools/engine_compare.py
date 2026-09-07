@@ -158,7 +158,10 @@ def convert_minipdf(minipdf: Path, docx: Path, pdf: Path) -> bool:
     if is_fresh(pdf, docx):
         return True
     pdf.parent.mkdir(parents=True, exist_ok=True)
-    r = subprocess.run([str(minipdf), "convert", str(docx), "-o", str(pdf)],
+    # Same Word fonts as the other engines. Without --fonts, minipdf 0.6 registers a hard-coded list of
+    # Linux system fonts and panics ("UnknownKind") on most documents.
+    fonts = ["--fonts", str(ROOT / "fonts")] if (ROOT / "fonts").is_dir() else []
+    r = subprocess.run([str(minipdf), "convert", str(docx), "-o", str(pdf), *fonts],
                        capture_output=True, text=True, timeout=300, check=False)
     return converted(r, pdf)
 
