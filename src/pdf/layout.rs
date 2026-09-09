@@ -1338,8 +1338,14 @@ pub(super) fn build_tabbed_line(
                     pending_space_color = run.color;
                     pending_space_border = run.border.clone();
                 }
-                let applied_space = pending_space_w > 0.0
-                    && (!all_chunks.is_empty() || space_count > 0);
+                // Word advances over explicit spaces wherever they occur, including
+                // as the first content of a line or right after a tab. Whitespace
+                // that is alone in its run (e.g. "<w:tab/>   " at one size, then
+                // text at another) only reaches here via pending_space_w with
+                // space_count == 0 and nothing emitted yet, so it must still be
+                // applied. pending_space_w is already zeroed at wraps, breaks and
+                // tabs, so this never re-applies absorbed line-end spaces.
+                let applied_space = pending_space_w > 0.0;
                 if applied_space {
                     if pending_space_underline && !all_chunks.is_empty() {
                         all_chunks.push(WordChunk::tab_underline(
@@ -2300,6 +2306,65 @@ mod tests {
             text_scale: 100.0,
             ..Run::default()
         }
+    }
+
+    /// Standard-14-style entry with every WinAnsi glyph 500/1000 wide.
+    fn stub_font_entry() -> FontEntry {
+        FontEntry {
+            pdf_name: "F1".to_string(),
+            font_ref: pdf_writer::Ref::new(1),
+            widths_1000: vec![500.0; 224],
+            line_h_ratio: None,
+            ascender_ratio: None,
+            typo_line_ratio: None,
+            char_to_gid: None,
+            char_widths_1000: None,
+            kern_pairs: None,
+            synthetic_bold: false,
+            is_substituted: false,
+            missing_cjk_chars: Default::default(),
+            font_path: None,
+            face_index: 0,
+        }
+    }
+
+    #[test]
+    fn test_tabbed_line_applies_whitespace_only_run_after_tab() {
+        // "<w:tab/>   " at 10pt followed by "x" at 9pt: the size difference keeps
+        // the spaces in their own run, and Word still advances over them, so the
+        // word starts at tab stop + 3 space widths rather than at the stop itself.
+        let text_run = |text: &str, font_size: f32| Run {
+            text: text.to_string(),
+            ..make_run(font_size, VertAlign::Baseline, false)
+        };
+        let tab = Run {
+            is_tab: true,
+            ..make_run(10.0, VertAlign::Baseline, false)
+        };
+        let runs = [tab, text_run("   ", 10.0), text_run("x", 9.0)];
+        let mut fonts = HashMap::new();
+        fonts.insert("Arial".to_string(), stub_font_entry());
+        let stops = [TabStop {
+            position: 100.0,
+            alignment: TabAlignment::Left,
+            leader: None,
+        }];
+        let lines = build_tabbed_line(
+            &runs, &fonts, &stops, 0.0, 400.0, 0.0, 0.0,
+            &HashMap::new(), &HashMap::new(), 36.0, &[],
+        );
+        assert_eq!(lines.len(), 1);
+        let word = lines[0]
+            .chunks
+            .iter()
+            .find(|c| c.text == "x")
+            .expect("word chunk");
+        let expected = 100.0 + 3.0 * fonts["Arial"].space_width(10.0);
+        assert!(
+            (word.x_offset - expected).abs() < 0.01,
+            "x_offset {} != {expected}",
+            word.x_offset
+        );
     }
 
     #[test]
