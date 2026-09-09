@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use pdf_writer::Content;
 
-use crate::model::{Footnote, LineSpacing, Run};
+use crate::model::{Footnote, LineSpacing, Paragraph, Run};
 
 use super::RenderContext;
 use super::layout::{
@@ -56,6 +56,13 @@ fn layout_paragraph(
     })
 }
 
+/// Word keeps one line for an empty paragraph, sized by its paragraph mark —
+/// the synthetic run the parser leaves in an empty paragraph carries that font.
+fn empty_paragraph_line_h(para: &Paragraph, ls: LineSpacing, ctx: &RenderContext) -> f32 {
+    let (fs, lhr, _) = tallest_run_metrics(&para.runs, ctx.fonts);
+    resolve_line_h(ls, fs, lhr)
+}
+
 pub(super) fn compute_footnote_height(
     footnote: &Footnote,
     ctx: &RenderContext,
@@ -69,9 +76,10 @@ pub(super) fn compute_footnote_height(
         let para_text_width =
             (text_width - para.indent_left - para.indent_right).max(1.0);
         let hanging = super::compute_text_hanging(para, 0.0);
-        let Some(layout) = layout_paragraph(&para.runs, ls, ctx, para_text_width, hanging) else {
+        let layout = layout_paragraph(&para.runs, ls, ctx, para_text_width, hanging);
+        if layout.is_none() && para.paragraph_mark_vanish {
             continue;
-        };
+        }
         if i > 0 {
             let effective_sb = if para.contextual_spacing && prev_contextual {
                 0.0
@@ -80,7 +88,10 @@ pub(super) fn compute_footnote_height(
             };
             total += f32::max(prev_space_after, effective_sb);
         }
-        total += layout.lines.len().max(1) as f32 * layout.line_height;
+        total += layout.as_ref().map_or_else(
+            || empty_paragraph_line_h(para, ls, ctx),
+            |l| l.lines.len().max(1) as f32 * l.line_height,
+        );
         prev_space_after = if para.contextual_spacing
             && footnote.paragraphs.get(i + 1).is_some_and(|p| p.contextual_spacing)
         {
@@ -213,9 +224,10 @@ fn render_notes_downward(
                 (text_width - para.indent_left - para.indent_right).max(1.0);
 
             let hanging = super::compute_text_hanging(para, 0.0);
-            let Some(layout) = layout_paragraph(&runs, ls, ctx, para_text_width, hanging) else {
+            let layout = layout_paragraph(&runs, ls, ctx, para_text_width, hanging);
+            if layout.is_none() && para.paragraph_mark_vanish {
                 continue;
-            };
+            }
 
             // Inter-paragraph spacing within the footnote
             if pi > 0 {
@@ -227,38 +239,42 @@ fn render_notes_downward(
                 fn_y -= f32::max(prev_space_after, effective_sb);
             }
 
-            let baseline_y = fn_y - layout.font_size * layout.ascender_ratio;
-            let line_count = layout.lines.len();
+            if let Some(layout) = layout {
+                let baseline_y = fn_y - layout.font_size * layout.ascender_ratio;
+                let line_count = layout.lines.len();
 
-            render_list_label(
-                content,
-                para,
-                ctx.fonts,
-                para_text_x - para.indent_hanging,
-                baseline_y,
-                layout.font_size,
-            );
+                render_list_label(
+                    content,
+                    para,
+                    ctx.fonts,
+                    para_text_x - para.indent_hanging,
+                    baseline_y,
+                    layout.font_size,
+                );
 
-            render_paragraph_lines(
-                content,
-                &layout.lines,
-                &para.alignment,
-                para_text_x,
-                para_text_width,
-                baseline_y,
-                layout.line_height,
-                line_count,
-                0,
-                &mut Vec::new(),
-                hanging,
-                ctx.fonts,
-                None,
-                gradient_specs,
-                None,
-                None,
-            );
+                render_paragraph_lines(
+                    content,
+                    &layout.lines,
+                    &para.alignment,
+                    para_text_x,
+                    para_text_width,
+                    baseline_y,
+                    layout.line_height,
+                    line_count,
+                    0,
+                    &mut Vec::new(),
+                    hanging,
+                    ctx.fonts,
+                    None,
+                    gradient_specs,
+                    None,
+                    None,
+                );
 
-            fn_y -= line_count as f32 * layout.line_height;
+                fn_y -= line_count as f32 * layout.line_height;
+            } else {
+                fn_y -= empty_paragraph_line_h(para, ls, ctx);
+            }
             prev_space_after = if para.contextual_spacing
                 && footnote.paragraphs.get(pi + 1).is_some_and(|p| p.contextual_spacing)
             {
