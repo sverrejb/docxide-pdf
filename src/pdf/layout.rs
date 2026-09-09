@@ -211,6 +211,10 @@ pub(super) struct WordChunk {
     /// of the glyphs behind the main text.
     pub(super) text_shadow: Option<TextShadow>,
     pub(super) comment_ids: Vec<u32>,
+    /// Footnote this chunk is the reference mark of. Word puts a footnote on
+    /// the page where its reference mark lands, so pagination needs to know
+    /// which line carries which reference.
+    pub(super) footnote_id: Option<u32>,
 }
 
 /// Pale-pink highlight color Word uses for comment-anchored text spans.
@@ -280,6 +284,7 @@ impl WordChunk {
             text_fill: run.text_fill.clone(),
             text_shadow: run.text_shadow.clone(),
             comment_ids: run.comment_ids.clone(),
+            footnote_id: run.footnote_id,
         }
     }
 
@@ -327,6 +332,7 @@ impl WordChunk {
             text_fill: None,
             text_shadow: None,
             comment_ids: Vec::new(),
+            footnote_id: None,
         }
     }
 
@@ -369,6 +375,7 @@ impl WordChunk {
             text_fill: None,
             text_shadow: None,
             comment_ids: Vec::new(),
+            footnote_id: None,
         }
     }
 
@@ -416,6 +423,7 @@ impl WordChunk {
             text_fill: None,
             text_shadow: None,
             comment_ids: Vec::new(),
+            footnote_id: None,
         }
     }
 }
