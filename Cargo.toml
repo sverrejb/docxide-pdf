@@ -10,7 +10,6 @@ categories = ["command-line-utilities", "text-processing", "text-editors"]
 exclude = [
     "tools/",
     "tests/",
-    "showcase/",
     "lancedb/",
     "models/",
     "specs/",
