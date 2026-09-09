@@ -1,5 +1,5 @@
 {
-  "next_id": 231,
+  "next_id": 238,
   "annotations": [
     {
       "id": 208,
@@ -405,7 +405,7 @@
       "x_pt": 138.96144,
       "y_pt": 170.67145,
       "note": "Footnotes fall on the wrong page, this page should have 4, 5, 6 too",
-      "fixed": false,
+      "fixed": true,
       "cleared": false
     },
     {
@@ -416,7 +416,7 @@
       "x_pt": 77.64451,
       "y_pt": 41.34906,
       "note": "Table cells that are broken should render with the bottom border. At least this one. Confirm if this is always the case.",
-      "fixed": false,
+      "fixed": true,
       "cleared": false
     },
     {
@@ -438,7 +438,7 @@
       "x_pt": 573.86115,
       "y_pt": 222.80783,
       "note": "Spurious grey line rendered above \"Medarbeiderens\" here.",
-      "fixed": false,
+      "fixed": true,
       "cleared": false
     },
     {
@@ -449,7 +449,7 @@
       "x_pt": 516.39966,
       "y_pt": 180.95215,
       "note": "Broklen textbox should still have bottom border here",
-      "fixed": false,
+      "fixed": true,
       "cleared": false
     },
     {
@@ -460,7 +460,7 @@
       "x_pt": 455.50012,
       "y_pt": 778.27716,
       "note": "Broken text box should have top border here",
-      "fixed": false,
+      "fixed": true,
       "cleared": false
     },
     {
@@ -471,8 +471,8 @@
       "x_pt": 420.9978,
       "y_pt": 148.77155,
       "note": "(datum) is not centered under the line above.",
-      "fixed": false,
-      "cleared": false
+      "fixed": true,
+      "cleared": true
     },
     {
       "id": 228,
@@ -504,6 +504,83 @@
       "x_pt": 71.04342,
       "y_pt": 593.27167,
       "note": "Vertical spacing between names and signatures is off.",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 231,
+      "case": "new/indigenous_innovation_sandbox_agreement",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 485.44128,
+      "y_pt": 32.92572,
+      "note": "Logo is rendered as a black square",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 232,
+      "case": "new/indigenous_innovation_sandbox_agreement",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 140.4051,
+      "y_pt": 693.08057,
+      "note": "This table should start on page 1 and be broken across pages",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 233,
+      "case": "new/croatian_thesis_topic_approval_form",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 320.8641,
+      "y_pt": 115.726746,
+      "note": "Signature and date lines are too short compared to reference",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 234,
+      "case": "new/auditor_regulatory_report_template",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 78.17676,
+      "y_pt": 73.54114,
+      "note": "Missing footnote here. Also footnote horizontal line is too low.",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 235,
+      "case": "scraped/croatian_grant_guidelines",
+      "page": 31,
+      "source": "Generated",
+      "x_pt": 341.99338,
+      "y_pt": 412.85886,
+      "note": "Table segment that neither starts or ends on this page should still be rendered with top and bottom border. At least in this case. Confirm if this is always the rule.",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 236,
+      "case": "scraped/croatian_grant_guidelines",
+      "page": 30,
+      "source": "Generated",
+      "x_pt": 311.92712,
+      "y_pt": 395.67072,
+      "note": "Table is missing internal horizontal and vertical borders.",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 237,
+      "case": "scraped/stem_partnerships_guide",
+      "page": 3,
+      "source": "Generated",
+      "x_pt": 358.6049,
+      "y_pt": 175.3728,
+      "note": "Content of this cell \"Banksia Park International High School in South Australia ....\" should start on this page, as there is plenty of room.",
       "fixed": false,
       "cleared": false
     }

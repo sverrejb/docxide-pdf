@@ -390,6 +390,14 @@
     "ssim": 0.9429,
     "text_boundary": 1.0
   },
+  "cases/case77": {
+    "jaccard": 0.5148,
+    "ssim": 0.7046
+  },
+  "cases/case78": {
+    "jaccard": 0.9962,
+    "ssim": 0.9937
+  },
   "cases/case8": {
     "jaccard": 0.481,
     "ssim": 0.9406,
@@ -493,8 +501,8 @@
     "text_boundary": 0.9064
   },
   "new/auditor_regulato..": {
-    "jaccard": 0.422,
-    "ssim": 0.5781,
+    "jaccard": 0.4225,
+    "ssim": 0.579,
     "text_boundary": 0.5942
   },
   "new/bahamas_sustaina..": {
@@ -548,7 +556,7 @@
     "text_boundary": 0.9492
   },
   "new/croatian_thesis_..": {
-    "jaccard": 0.1875,
+    "jaccard": 0.1874,
     "ssim": 0.4184,
     "text_boundary": 0.5385
   },
@@ -558,8 +566,8 @@
     "text_boundary": 0.6667
   },
   "new/czech_crisis_mea..": {
-    "jaccard": 0.3718,
-    "ssim": 0.5892,
+    "jaccard": 0.4186,
+    "ssim": 0.677,
     "text_boundary": 0.4662
   },
   "new/czech_works_cont..": {
@@ -598,13 +606,13 @@
     "text_boundary": 0.7628
   },
   "new/environmental_la..": {
-    "jaccard": 0.085,
-    "ssim": 0.1849,
+    "jaccard": 0.2126,
+    "ssim": 0.3778,
     "text_boundary": 0.0328
   },
   "new/erasmus_plus_sta..": {
-    "jaccard": 0.201,
-    "ssim": 0.5452,
+    "jaccard": 0.2017,
+    "ssim": 0.5467,
     "text_boundary": 0.3043
   },
   "new/family_kinship_l..": {
@@ -643,8 +651,8 @@
     "text_boundary": 0.7054
   },
   "new/isla_language_le..": {
-    "jaccard": 0.4194,
-    "ssim": 0.6187,
+    "jaccard": 0.4236,
+    "ssim": 0.6346,
     "text_boundary": 0.7744
   },
   "new/japanese_land_de..": {
@@ -683,8 +691,8 @@
     "text_boundary": 1.0
   },
   "new/master_thesis_le..": {
-    "jaccard": 0.1612,
-    "ssim": 0.3164,
+    "jaccard": 0.1618,
+    "ssim": 0.3189,
     "text_boundary": 0.8343
   },
   "new/old_blue_truck_g..": {
@@ -738,8 +746,8 @@
     "text_boundary": 0.9402
   },
   "new/russian_voluntee..": {
-    "jaccard": 0.2469,
-    "ssim": 0.3572,
+    "jaccard": 0.6696,
+    "ssim": 0.8446,
     "text_boundary": 0.1174
   },
   "new/school_meal_assi..": {
@@ -763,8 +771,8 @@
     "text_boundary": 0.3861
   },
   "new/slovak_eu_direct..": {
-    "jaccard": 0.1218,
-    "ssim": 0.1578,
+    "jaccard": 0.1297,
+    "ssim": 0.2139,
     "text_boundary": 0.1629
   },
   "new/slovak_fuel_pric..": {
@@ -838,9 +846,13 @@
     "text_boundary": 0.9669
   },
   "new/zimbabwe_gold_mi..": {
-    "jaccard": 0.2486,
-    "ssim": 0.4273,
+    "jaccard": 0.2446,
+    "ssim": 0.4227,
     "text_boundary": 0.3403
+  },
+  "samples/CV": {
+    "jaccard": 0.1145,
+    "ssim": 0.4306
   },
   "samples/double-underline": {
     "jaccard": 0.5881,
@@ -859,8 +871,8 @@
     "convert_ms": 18.3
   },
   "samples/samtale": {
-    "jaccard": 0.3448,
-    "ssim": 0.551,
+    "jaccard": 0.3254,
+    "ssim": 0.5511,
     "text_boundary": 0.8627,
     "convert_ms": 11.0
   },
@@ -871,8 +883,8 @@
     "convert_ms": 12.0
   },
   "scraped/brazilian_logist..": {
-    "jaccard": 0.1729,
-    "ssim": 0.2992,
+    "jaccard": 0.1717,
+    "ssim": 0.2989,
     "text_boundary": 0.1624,
     "convert_ms": 744.0
   },
@@ -895,8 +907,8 @@
     "convert_ms": 59.6
   },
   "scraped/croatian_grant_g..": {
-    "jaccard": 0.0746,
-    "ssim": 0.1871,
+    "jaccard": 0.0753,
+    "ssim": 0.1872,
     "text_boundary": 0.0129,
     "convert_ms": 270.5
   },
@@ -952,8 +964,8 @@
     "convert_ms": 22.0
   },
   "scraped/education_consul..": {
-    "jaccard": 0.115,
-    "ssim": 0.2912,
+    "jaccard": 0.1166,
+    "ssim": 0.3003,
     "text_boundary": 0.2899,
     "convert_ms": 47.1
   },
@@ -1036,8 +1048,8 @@
     "convert_ms": 43.3
   },
   "scraped/mongolian_human_..": {
-    "jaccard": 0.1407,
-    "ssim": 0.2179,
+    "jaccard": 0.141,
+    "ssim": 0.2162,
     "text_boundary": 0.1949,
     "convert_ms": 32.0
   },
@@ -1124,8 +1136,8 @@
     "text_boundary": 1.0
   },
   "scraped/stem_partnership..": {
-    "jaccard": 0.2586,
-    "ssim": 0.3087,
+    "jaccard": 0.2583,
+    "ssim": 0.3091,
     "text_boundary": 0.3098,
     "convert_ms": 32.2
   },
@@ -1154,8 +1166,8 @@
     "convert_ms": 2.4
   },
   "scraped/uk_commercial_le..": {
-    "jaccard": 0.0945,
-    "ssim": 0.2333,
+    "jaccard": 0.0973,
+    "ssim": 0.2369,
     "text_boundary": 0.0911,
     "convert_ms": 326.3
   },
