@@ -48,7 +48,7 @@ use positioning::{
 pub(super) use positioning::{resolve_h_position, resolve_fi_y_top};
 use images::{EffectXObjs, EmbeddedImages, embed_all_images};
 use layout::{
-    DualRegion, LineNumberArg, LinkAnnotation, build_paragraph_lines, build_tabbed_line,
+    DualRegion, LineNumberArg, LinkAnnotation, TextLine, build_paragraph_lines, build_tabbed_line,
     grid_snapped_line_h,
     is_text_empty, render_paragraph_lines, tallest_run_metrics,
 };
@@ -671,6 +671,81 @@ pub(super) struct LayoutState {
     /// ponytail: never reset — only `continuous` restart is exercised; newPage/
     /// newSection resets aren't implemented.
     pub(super) line_number_counter: u32,
+}
+
+/// Book footnote `id` into the current page's footnote area (once per page)
+/// and shrink the body area by its height, plus the separator for the first.
+fn track_page_footnote(
+    state: &mut LayoutState,
+    doc: &Document,
+    ctx: &RenderContext,
+    text_width: f32,
+    id: u32,
+) {
+    if !state.pb.footnote_ids_set.insert(id) {
+        return;
+    }
+    state.pb.footnote_ids.push(id);
+    if let Some(footnote) = doc.footnotes.get(&id) {
+        let fn_height = compute_footnote_height(footnote, ctx, text_width);
+        let separator_h = if state.pb.footnote_ids.len() == 1 { 12.0 } else { 0.0 };
+        state.effective_margin_bottom += separator_h + fn_height;
+    }
+}
+
+/// Footnote ids referenced by `lines`, in reading order, each once.
+fn line_footnote_ids(lines: &[TextLine]) -> Vec<u32> {
+    let mut seen = HashSet::new();
+    lines
+        .iter()
+        .flat_map(|l| l.chunks.iter())
+        .filter_map(|c| c.footnote_id)
+        .filter(|id| seen.insert(*id))
+        .collect()
+}
+
+/// Footnote space each line of a paragraph adds to the page, plus the total.
+/// Word charges a footnote to the page carrying its reference mark, so a
+/// footnote whose line overflows travels to the next page instead of eating
+/// room on this one. `line_refs` holds the ids referenced on each line and
+/// `run_refs` every id the paragraph's runs carry: a reference that produced
+/// no chunk is charged to the last line, where the split path registers it
+/// too. `sep_h` is added with the first footnote the page gets.
+fn per_line_footnote_extra(
+    line_refs: &[Vec<u32>],
+    run_refs: &[u32],
+    tracked: &HashSet<u32>,
+    sep_h: f32,
+    mut footnote_h: impl FnMut(u32) -> f32,
+) -> (Vec<f32>, f32) {
+    let mut seen = HashSet::new();
+    let mut charge = |id: u32| {
+        if !tracked.contains(&id) && seen.insert(id) {
+            footnote_h(id)
+        } else {
+            0.0
+        }
+    };
+    let mut per_line: Vec<f32> = line_refs
+        .iter()
+        .map(|ids| ids.iter().map(|&id| charge(id)).sum())
+        .collect();
+    let unattributed: f32 = run_refs.iter().map(|&id| charge(id)).sum();
+    if let Some(last) = per_line.last_mut() {
+        *last += unattributed;
+    }
+    let mut total: f32 = if per_line.is_empty() {
+        unattributed
+    } else {
+        per_line.iter().sum()
+    };
+    if total > 0.0 {
+        total += sep_h;
+        if let Some(first) = per_line.iter_mut().find(|e| **e > 0.0) {
+            *first += sep_h;
+        }
+    }
+    (per_line, total)
 }
 
 /// Compute effective first-line hanging indent for a paragraph.
@@ -1980,42 +2055,49 @@ fn render_paragraph_block(
     // page-break check accounts for footnotes the paragraph
     // introduces (otherwise they're only tracked after
     // rendering, which can cause body/footnote overlap).
-    let para_fn_extra = {
-        let mut extra = 0.0f32;
-        let mut seen_ids = HashSet::new();
-        for run in para.runs.iter() {
-            if let Some(id) = run.footnote_id {
-                if !state.pb.footnote_ids_set.contains(&id)
-                    && seen_ids.insert(id)
-                {
-                    if let Some(footnote) = doc.footnotes.get(&id) {
-                        extra += compute_footnote_height(
-                            footnote, &ctx, text_width,
-                        );
-                    }
-                }
-            }
-        }
-        if extra > 0.0 && state.pb.footnote_ids.is_empty() {
-            extra += 12.0;
-        }
-        extra
-    };
+    let line_refs: Vec<Vec<u32>> = lines
+        .iter()
+        .map(|l| l.chunks.iter().filter_map(|c| c.footnote_id).collect())
+        .collect();
+    let run_refs: Vec<u32> = para.runs.iter().filter_map(|r| r.footnote_id).collect();
+    let (line_fn_extra, para_fn_extra) = per_line_footnote_extra(
+        &line_refs,
+        &run_refs,
+        &state.pb.footnote_ids_set,
+        if state.pb.footnote_ids.is_empty() { 12.0 } else { 0.0 },
+        |id| {
+            doc.footnotes
+                .get(&id)
+                .map_or(0.0, |f| compute_footnote_height(f, &ctx, text_width))
+        },
+    );
 
     if !at_page_top
         && state.pb.slot_top - needed_with_floats - keep_next_extra + last_line_lead
             < state.effective_margin_bottom + para_fn_extra
     {
-        let available =
-            state.pb.slot_top - inter_gap - state.effective_margin_bottom - para_fn_extra;
+        let available = state.pb.slot_top - inter_gap - state.effective_margin_bottom;
         let first_line_h = tallest_lhr
             .map(|ratio| font_size * ratio)
             .unwrap_or(font_size);
-        let mut lines_that_fit = if line_h > 0.0 && available >= first_line_h {
-            1 + ((available - first_line_h) / line_h).floor() as usize
-        } else {
-            0
-        };
+        // Each line must fit together with the footnotes it introduces.
+        let mut lines_that_fit = 0usize;
+        if line_h > 0.0 {
+            let mut fn_acc = 0.0f32;
+            for (i, fn_extra) in line_fn_extra.iter().enumerate() {
+                fn_acc += fn_extra;
+                let room = available - fn_acc;
+                let fit = if room >= first_line_h {
+                    1 + ((room - first_line_h) / line_h).floor() as usize
+                } else {
+                    0
+                };
+                if fit <= i {
+                    break;
+                }
+                lines_that_fit = i + 1;
+            }
+        }
 
         if para.widow_control {
             // Ensure at least 2 lines remain on next page (orphan prevention)
@@ -2083,6 +2165,14 @@ fn render_paragraph_block(
                 }),
             );
 
+            // Footnotes referenced on the lines that stay here belong to this
+            // page's footnote area; the flush below would otherwise carry them
+            // to the continuation page while the space stays reserved here.
+            let first_part_fn_ids = line_footnote_ids(first_part);
+            for &id in &first_part_fn_ids {
+                track_page_footnote(state, doc, &ctx, text_width, id);
+            }
+
             state.pb.advance_column_or_page(
                 &mut state.current_col,
                 col_count,
@@ -2134,21 +2224,11 @@ fn render_paragraph_block(
             state.pb.slot_top -= rest_content_h;
             state.prev_space_after = effective_space_after;
 
-            // Track footnotes for the split paragraph on the new page
+            // Track the remaining footnotes for the split paragraph on the new page
             for run in para.runs.iter() {
                 if let Some(id) = run.footnote_id {
-                    if state.pb.footnote_ids_set.insert(id) {
-                        state.pb.footnote_ids.push(id);
-                        if let Some(footnote) = doc.footnotes.get(&id) {
-                            let fn_height =
-                                compute_footnote_height(footnote, &ctx, text_width);
-                            let separator_h = if state.pb.footnote_ids.len() == 1 {
-                                12.0
-                            } else {
-                                0.0
-                            };
-                            state.effective_margin_bottom += separator_h + fn_height;
-                        }
+                    if !first_part_fn_ids.contains(&id) {
+                        track_page_footnote(state, doc, &ctx, text_width, id);
                     }
                 }
                 if let Some(id) = run.endnote_id {
@@ -3512,4 +3592,31 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
     );
 
     Ok(pdf.finish())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn footnote_space_is_charged_to_the_line_holding_the_reference() {
+        let line_refs = vec![vec![], vec![4, 5], vec![], vec![6]];
+        let tracked = HashSet::from([4]);
+        let (per_line, total) =
+            per_line_footnote_extra(&line_refs, &[4, 5, 6, 7], &tracked, 12.0, |id| {
+                id as f32 * 10.0
+            });
+        // 4 is already on the page; 5 opens the footnote area so it carries the
+        // separator; 7 produced no chunk and is charged to the last line.
+        assert_eq!(per_line, vec![0.0, 62.0, 0.0, 130.0]);
+        assert_eq!(total, 192.0);
+    }
+
+    #[test]
+    fn footnote_free_paragraph_costs_nothing() {
+        let (per_line, total) =
+            per_line_footnote_extra(&[vec![], vec![]], &[], &HashSet::new(), 12.0, |_| 99.0);
+        assert_eq!(per_line, vec![0.0, 0.0]);
+        assert_eq!(total, 0.0);
+    }
 }

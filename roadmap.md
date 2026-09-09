@@ -410,6 +410,12 @@ Our `auto_fit_columns` uses `gridCol` widths from `tblGrid`, ignoring the specif
 
 ## Unimplemented Document Features
 
+### Footnote pagination of split paragraphs (DONE — 2026-09-09, annotation #221)
+
+Word puts a footnote in the footnote area of the page where its reference mark is laid out, and a body line fits on a page only together with the footnotes it references. The split-paragraph path in `render_paragraph_block` used to reserve every footnote of the paragraph on the first page and register them all on the continuation page after the flush (hole on page N, notes on page N+1, lines broken early). Now `WordChunk.footnote_id` records which `TextLine` carries which reference, `per_line_footnote_extra` charges each footnote to its line when computing `lines_that_fit`, and the first part's footnotes are registered before `advance_column_or_page`. Word also keeps one line for an empty footnote paragraph (sized by the paragraph mark) — `compute_footnote_height`/`render_notes_downward` count it. environmental_law_clinic_china Jaccard 0.085 → 0.210, russian_volunteerism_essay 0.247 → 0.670, czech_crisis_measure_notice 0.372 → 0.419.
+
+**Remaining deviation**: when a reference line fits but its footnote does not, Word splits the footnote across pages with a continuation separator; we push the line to the next page instead (no overlap, rarely hit). Table rows (`table.rs` `row_fn_extra`) still reserve per row, which is right because rows are atomic.
+
 ### Endnotes (TODO — MEDIUM IMPACT)
 
 `w:endnoteReference` is completely unimplemented. Footnotes already work — the plumbing (reference parsing, content parsing, rendering at page bottom) exists and could be adapted. Endnotes collect at the end of a section or document rather than at the page bottom.
