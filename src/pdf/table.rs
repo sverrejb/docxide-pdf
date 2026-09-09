@@ -1100,7 +1100,11 @@ fn render_vertical_cjk_cell(
 
 /// Render a subset of each cell's paragraphs for a split row.
 /// `starts[ci]..ends[ci]` gives the paragraph range for cell `ci`.
-/// `is_first`/`is_last` control top/bottom border drawing.
+///
+/// Word closes every fragment of a split row as a complete box: the fragment
+/// ends right after its last fitted item (not at the page's content bottom)
+/// with the cell's bottom border drawn there, and the continuation on the
+/// next page starts with the cell's top border again.
 fn render_partial_row(
     row: &TableRow,
     layout: &RowLayout,
@@ -1111,9 +1115,6 @@ fn render_partial_row(
     ctx: &RenderContext,
     starts: &[usize],
     ends: &[usize],
-    is_first: bool,
-    is_last: bool,
-    fill_to_bottom_y: Option<f32>,
 ) {
     let mut max_h: f32 = cm.top + cm.bottom;
     for (ci, cell_layout) in layout.cells.iter().enumerate() {
@@ -1134,13 +1135,7 @@ fn render_partial_row(
     }
 
     let row_top = pb.slot_top;
-    // For non-final chunks, extend the cell shading/borders to the page's
-    // content-bottom so the table visually spans the full page height — Word
-    // does this when splitting rows across pages.
-    let fill_h = fill_to_bottom_y
-        .map(|y_bot| (row_top - y_bot).max(max_h))
-        .unwrap_or(max_h);
-    let row_h = fill_h;
+    let row_h = max_h;
     let row_bottom = row_top - row_h;
 
     let mut grid_col = 0usize;
@@ -1201,7 +1196,6 @@ fn render_partial_row(
             continue;
         }
 
-        let draw_top = is_first;
         draw_cell_borders(
             &mut pb.content,
             &cell.borders,
@@ -1209,8 +1203,8 @@ fn render_partial_row(
             row_top,
             row_bottom,
             col_w,
-            draw_top,
-            is_last,
+            true,
+            true,
         );
     }
 
@@ -1394,8 +1388,6 @@ pub(super) fn render_table(
                                    emb: &mut f32| {
         let ncells = layout.cells.len();
         let mut starts = vec![0usize; ncells];
-        let mut is_first_chunk = true;
-
         loop {
             let avail = pb.slot_top - *emb;
             let mut ends = Vec::with_capacity(ncells);
@@ -1409,11 +1401,9 @@ pub(super) fn render_table(
                 ends.push(end);
             }
 
-            let fill_to_bottom_y = if all_done { None } else { Some(*emb) };
             render_partial_row(
                 row, layout, &col_widths, cm, table_left,
-                pb, ctx, &starts, &ends, is_first_chunk, all_done,
-                fill_to_bottom_y,
+                pb, ctx, &starts, &ends,
             );
 
             if all_done {
@@ -1421,7 +1411,6 @@ pub(super) fn render_table(
             }
 
             starts = ends;
-            is_first_chunk = false;
             if is_floating {
                 *did_flush = true;
             }

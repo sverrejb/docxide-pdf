@@ -306,6 +306,23 @@ HR `o:hrpct` width should use the indent-adjusted paragraph box.
   terminates; intermediate br-created lines keep the break size). samtale +57.7pp
   TxtBnd / +10.9pp SSIM / +6.5pp Jaccard, german_mezzo_soprano +2.2pp.
 
+## Annotation Fixes 2026-09-09 (#225 #226 — DONE)
+
+- **#225 / #226 split-row borders**: `render_partial_row` drew the cell's top
+  border only on the first fragment and the bottom border only on the last, and
+  stretched non-final fragments to the body bottom (`fill_to_bottom_y`, added
+  2026-04 without fixture evidence). Word closes every fragment as a complete
+  box: master_thesis p2 ref bottom border at y=181.5 (fragment = 3-line
+  paragraph + 1 empty paragraph, ends at an item boundary with ~9pt of body
+  space left unused), p3 top border at the top margin (y=771); slovak_eu shows
+  the same. Now every fragment draws all four borders and ends after its last
+  fitted item. slovak_eu +5.6pp SSIM, isla +1.4pp, master_thesis +0.25pp; 10
+  split-row fixtures scored, no regressions. Remaining on master_thesis p2: our
+  body bottom sits ~19pt lower than Word's (footnote area: our separator 3pt
+  below body bottom vs Word ~10.5pt; footnote text 15pt lower; last footnote
+  line ends at the margin with no space-after), so we fit two extra empty
+  paragraphs (26.9pt) and the bottom border lands at y=157 instead of 181.5.
+
 ## Annotation Fixes 2026-07-03 (#114 #118 #193 #214 #218 — DONE)
 
 - **#114 ellipsis line breaks**: UAX #14 allows a break after U+2024/25/26 before
