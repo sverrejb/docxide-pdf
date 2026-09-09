@@ -40,7 +40,7 @@ use header_footer::{
     resolve_footer_for_page, resolve_header_for_page,
 };
 pub(super) use helpers::resolve_line_h;
-use helpers::borders_match;
+use helpers::joins_border_group;
 use positioning::{
     render_connector, render_floating_images, render_foreground_floating_images_deferred,
     resolve_fi_x,
@@ -1935,31 +1935,12 @@ fn render_paragraph_block(
         inter_gap = 0.0;
     }
 
-    // When consecutive paragraphs share matching borders, Word
-    // suppresses the border padding on the continuous sides — only
-    // the first paragraph in a group gets top padding and only the
-    // last gets bottom padding.
-    let prev_borders_match = prev_para
-        .is_some_and(|pp| borders_match(&pp.borders, &para.borders));
-    let next_borders_match = next_para
-        .is_some_and(|np| borders_match(&para.borders, &np.borders));
-
-    // Per ISO/IEC 29500 §17.3.1.5/.7, identical adjoining paragraphs share a
-    // single `between` rule (or none, if unspecified) instead of individual
-    // bottom/top borders. Word follows this — collapsing the divider — when a
-    // `between` border is defined, when a competing top border meets this
-    // bottom border, or when either paragraph is *empty* (e.g. blank spacer
-    // paragraphs in a consent form, where the whole run collapses to one rule
-    // at the group's outer edge). The exception is two *non-empty* identical
-    // paragraphs separated only by a bottom rule — e.g. survey rows — where
-    // Word keeps each rule, so the divider between them must still be drawn.
-    let next_has_top = next_para.is_some_and(|np| np.borders.top.is_some());
-    let next_is_empty = next_para.is_some_and(|np| is_text_empty(&np.runs));
-    let bottom_collapses = next_borders_match
-        && (next_has_top
-            || para.borders.between.is_some()
-            || text_empty
-            || next_is_empty);
+    // Word treats consecutive paragraphs with identical border and indent
+    // settings as one border group: top padding/rule only on the first, bottom
+    // padding/rule only on the last, and a `between` rule (if any) at the joins.
+    let prev_borders_match = prev_para.is_some_and(|pp| joins_border_group(pp, para));
+    let next_borders_match = next_para.is_some_and(|np| joins_border_group(para, np));
+    let bottom_collapses = next_borders_match;
 
     let bdr_top_pad = if prev_borders_match {
         0.0
