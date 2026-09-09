@@ -263,6 +263,22 @@ higher so the mark fits and no page 2 is emitted — this alone costs case51
 end-of-cell-mark suppression after nested tables are already in (2026-07);
 only the per-row height accounting remains.
 
+## Paragraph Border Groups (DONE — 2026-09-09, annotation #224)
+
+Word joins adjacent paragraphs into one border group only when their `w:pBdr`
+*and* indentation (left/right/hanging/firstLine) are identical; inside a group
+no bottom/top rule or padding is drawn at the joins (only `between`).
+`joins_border_group` in `pdf/helpers.rs` replaces the earlier "collapse only if
+a paragraph is empty" heuristic from #122 — that heuristic was misreading
+samtale p2 items 12/13, whose rules survive because item 13 has a direct
+`w:ind left=1128` vs the numbering level's 1131 (3 twips → separate group).
+samtale p1: the br-only spacer above "Medarbeiderens navn" no longer draws its
+own rule; Din leder → name-line spacing 55.57 → 52.32pt (Word 52.56). Jaccard
+-1.9pp because the -2.85pt drift accumulated above (br-only paragraph -1.22pt,
+three bullets -0.53pt each) was previously masked by the bogus 3.25pt border
+space. Corpus has no other adjacent identical-border/identical-indent
+non-empty pair, so the other 14 pBdr fixtures are unchanged.
+
 ## Header Multi-Float Wrap (DONE — 2026-07-02, annotation #212)
 
 `hdr_fz` is now a Vec of zones; all wrapping floats (same-paragraph + earlier
