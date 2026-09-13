@@ -62,9 +62,12 @@ jobs:
       - uses: taiki-e/cache-cargo-install-action@v3
         with:
           tool: rdocx-cli     # installs `rdocx`
+      - uses: taiki-e/cache-cargo-install-action@v3
+        with:
+          tool: office2pdf-cli   # installs `office2pdf`
       - name: Competitor versions for the cache key
         id: ver
-        run: echo "key=lo$(soffice --version | awk '{print $2}')-minipdf$(minipdf --version | awk '{print $NF}')-rdocx$(rdocx --version | awk '{print $NF}')-fonts${{ hashFiles('assets/fonts/**') }}" >> "$GITHUB_OUTPUT"
+        run: echo "key=lo$(soffice --version | awk '{print $2}')-minipdf$(minipdf --version | awk '{print $NF}')-rdocx$(rdocx --version | awk '{print $NF}')-o2p$(office2pdf --version | awk '{print $NF}')-fonts${{ hashFiles('assets/fonts/**') }}" >> "$GITHUB_OUTPUT"
       - uses: actions/cache/restore@v6
         with:
           path: comparison

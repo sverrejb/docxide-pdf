@@ -19,7 +19,8 @@ Every fixture in the test corpus rendered side by side by Word (the reference) a
 * docxide-pdf (duh)
 * LibreOffice
 * [MiniPdf](https://github.com/mini-software/MiniPdf)'s Rust crate
-* [rdocx](https://crates.io/crates/rdocx).
+* [rdocx](https://crates.io/crates/rdocx)
+* [office2pdf](https://github.com/developer0hye/office2pdf).
 
 Each engine is scored against the Word reference with the same three metrics the test
 suite uses:

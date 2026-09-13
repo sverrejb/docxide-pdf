@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Side-by-side engine comparison: Word reference | docxide-pdf | LibreOffice | MiniPdf | rdocx.
+"""Side-by-side engine comparison: Word reference | docxide-pdf | LibreOffice | MiniPdf | rdocx | office2pdf.
 
 Reuses PNGs the test harness already produced under tests/output/<group>/<case>/
 (reference/, generated/, libreoffice/) and only converts what is missing. Conversions and
@@ -18,6 +18,7 @@ Usage:
 rdocx: `rdocx` on PATH (cargo install rdocx) or RDOCX_BIN.
 MiniPdf: the Rust crate's CLI, `minipdf` on PATH (cargo install minipdf-cli) or MINIPDF_BIN.
 The .NET engine is a different implementation and is deliberately not what we compare against.
+office2pdf: `office2pdf` on PATH (cargo install office2pdf-cli) or OFFICE2PDF_BIN.
 """
 from __future__ import annotations
 
@@ -54,6 +55,7 @@ ENGINES = [
     ("libreoffice", "LibreOffice"),
     ("minipdf", "MiniPdf (Rust)"),
     ("rdocx", "rdocx"),
+    ("office2pdf", "office2pdf"),
 ]
 COMPETITORS = [k for k, _ in ENGINES if k != "reference"]
 
@@ -84,6 +86,14 @@ def find_rdocx() -> Path | None:
         return Path(env)
     found = shutil.which("rdocx")
     return Path(found) if found else None
+
+
+def find_office2pdf() -> Path | None:
+    env = os.environ.get("OFFICE2PDF_BIN")
+    if env and Path(env).is_file():
+        return Path(env)
+    found = shutil.which("office2pdf") or str(Path.home() / ".cargo" / "bin" / "office2pdf")
+    return Path(found) if Path(found).is_file() else None
 
 
 def ensure_built(bin_path: Path, cwd: Path, *cargo_args: str, always: bool = False) -> Path | None:
@@ -175,6 +185,17 @@ def convert_rdocx(rdocx: Path, docx: Path, pdf: Path) -> bool:
     return converted(r, pdf)
 
 
+def convert_office2pdf(office2pdf: Path, docx: Path, pdf: Path) -> bool:
+    if is_fresh(pdf, docx):
+        return True
+    pdf.parent.mkdir(parents=True, exist_ok=True)
+    # Same Word fonts as the other engines; otherwise it uses whatever the host happens to have installed.
+    fonts = ["--font-path", str(ROOT / "fonts")] if (ROOT / "fonts").is_dir() else []
+    r = subprocess.run([str(office2pdf), str(docx), "-o", str(pdf), *fonts],
+                       capture_output=True, text=True, timeout=300, check=False)
+    return converted(r, pdf)
+
+
 def timed(convert, *args) -> tuple[bool, float | None]:
     """Run a convert_* and return (ok, wall-clock seconds). Seconds are stored beside the PDF so a
     cached conversion keeps its measured time; a cached PDF without one is converted again.
@@ -217,7 +238,7 @@ def engine_versions(tools: dict) -> dict[str, str]:
     v["generated"] = f"{m.group(1) if m else '?'} @{sha}{dirty}"
     if tools.get("soffice"):
         v["libreoffice"] = " ".join(run_out([str(tools["soffice"]), "--version"]).split()[:2])  # drop the build hash
-    for key in ("minipdf", "rdocx"):
+    for key in ("minipdf", "rdocx", "office2pdf"):
         if tools.get(key):
             v[key] = run_out([str(tools[key]), "--version"]).split()[-1]
     return v
@@ -282,7 +303,8 @@ def process_fixture(fixture: Path, group: str, tools: dict, opts) -> dict | None
         elif ok:
             add("libreoffice", mine / "libreoffice.pdf", mine / "libreoffice")
 
-    for key, convert in (("minipdf", convert_minipdf), ("rdocx", convert_rdocx)):
+    for key, convert in (("minipdf", convert_minipdf), ("rdocx", convert_rdocx),
+                         ("office2pdf", convert_office2pdf)):
         if tools.get(key):
             ok, times[key] = timed(convert, tools[key], docx, mine / f"{key}.pdf")
             if ok:
@@ -372,7 +394,7 @@ kbd { background:#333; border:1px solid #555; border-radius:3px; padding:0 4px; 
     <input type="range" id="alpha" min="0" max="100" value="50">
   </span>
   <span class="grp"><button id="viewToggle">Scores table</button></span>
-  <span style="color:var(--muted)"><kbd>1</kbd>-<kbd>5</kbd> engines &nbsp;<kbd>&uarr;</kbd><kbd>&darr;</kbd> cases &nbsp;<kbd>o</kbd> overlay &nbsp;<kbd>m</kbd> more pages &nbsp;<kbd>t</kbd> scores table</span>
+  <span style="color:var(--muted)"><kbd>1</kbd>-<kbd>6</kbd> engines &nbsp;<kbd>&uarr;</kbd><kbd>&darr;</kbd> cases &nbsp;<kbd>o</kbd> overlay &nbsp;<kbd>m</kbd> more pages &nbsp;<kbd>t</kbd> scores table</span>
 </div>
 <div id="legend"></div>
 <div id="side"><input id="filter" placeholder="filter cases (name, group)…"><div id="list"></div></div>
@@ -599,6 +621,12 @@ def build_site(results: list[dict], versions: dict, fmt: str, jobs: int) -> None
             for rel in files:
                 src = (WORK / rel).resolve()
                 dst = SITE / c["group"] / c["case"] / eng / (Path(rel).stem + "." + fmt)
+                if not src.exists():
+                    # A filtered run carries unprocessed cases over from the manifest; their PNGs may be
+                    # gone (a later test run rewrote tests/output). Keep the image already in the site.
+                    if dst.exists():
+                        new.append(dst.relative_to(SITE).as_posix())
+                    continue
                 new.append(dst.relative_to(SITE).as_posix())
                 if not dst.exists() or dst.stat().st_mtime < src.stat().st_mtime:
                     jobs_list.append((src, dst))
@@ -642,6 +670,7 @@ def main() -> None:
     ap.add_argument("--skip-libreoffice", action="store_true")
     ap.add_argument("--skip-minipdf", action="store_true")
     ap.add_argument("--skip-rdocx", action="store_true")
+    ap.add_argument("--skip-office2pdf", action="store_true")
     ap.add_argument("--no-scores", action="store_true", help="skip Jaccard scoring")
     ap.add_argument("--jobs", type=int, default=os.cpu_count() or 4)
     ap.add_argument("--open", action="store_true", help="open the HTML when done")
@@ -692,6 +721,10 @@ def main() -> None:
         tools["rdocx"] = find_rdocx()
         if not tools["rdocx"]:
             print("rdocx not found; skipping (cargo install rdocx, or RDOCX_BIN)")
+    if not opts.skip_office2pdf:
+        tools["office2pdf"] = find_office2pdf()
+        if not tools["office2pdf"]:
+            print("office2pdf not found; skipping (cargo install office2pdf-cli, or OFFICE2PDF_BIN)")
     if not opts.no_scores:
         # Release: SSIM over a 205-page fixture is painfully slow unoptimized.
         ensure_built(METRICS_BIN, ROOT / "tools", "--release", "--bin", "page-metrics")
