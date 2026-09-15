@@ -2,7 +2,7 @@
 #
 # The Word fonts are not in this public repo; they come from the private sverrejb/docxide-pdf-assets repo,
 # checked out with a deploy key:
-#   assets/fonts/                           -> fonts/                   (ours reads this path via .cargo/config.toml)
+#   assets/fonts/                           -> fonts/                   (engine_compare.py passes it as DOCXSIDE_FONTS)
 #   assets/fixtures/{scraped,new,samples}/  -> tests/fixtures/<group>/  (optional real-world corpus; only tracked
 #                                                                         cases are compared when absent)
 # Deploy key setup (public half on the assets repo, private half as a secret here):

@@ -2172,16 +2172,12 @@ pub(super) fn tallest_run_metrics(
         // the surrounding text line height (as Word lays it out), so clamp math
         // runs to a normal ratio and don't let them contribute a line-height
         // ratio — otherwise every line containing math balloons vertically.
-        let (ar, lhr, ascender_ratio) = if run.is_math {
-            (0.75f32, None, None)
+        let (lhr, ascender_ratio) = if run.is_math {
+            (None, None)
         } else {
-            (
-                entry.and_then(|e| e.ascender_ratio).unwrap_or(0.75),
-                entry.and_then(|e| e.line_h_ratio),
-                entry.and_then(|e| e.ascender_ratio),
-            )
+            entry.map_or((None, None), |e| run_line_metrics(e, &run.text))
         };
-        let ascent = run.font_size * ar;
+        let ascent = run.font_size * ascender_ratio.unwrap_or(0.75);
         if ascent > best_ascent {
             best_ascent = ascent;
             best_font_size = run.font_size;
@@ -2192,10 +2188,22 @@ pub(super) fn tallest_run_metrics(
     (best_font_size, best_line_h_ratio, best_ascender_ratio)
 }
 
-/// Grid-snapped line height: Word counts docGrid cells against sTypo metrics,
-/// not win metrics + hhea lineGap (Yu Mincho: typo 1.5 vs win+gap 1.787 —
-/// the latter would put every 12pt line in an 18pt grid into 2 cells).
-/// Falls back to `line_h` when no run provides a typo ratio.
+/// A run's (line_h_ratio, ascender_ratio). A run of nothing but spaces in an
+/// East Asian font gets the plain metrics rather than Word's 1.3× leading, so
+/// it cannot raise a Latin line (see `fonts::embed::compute_line_metrics`).
+/// Empty text — a tab, a paragraph mark, the blank line after a break — keeps
+/// the font's real metrics: those lines are sized by the East Asian font itself.
+pub(super) fn run_line_metrics(entry: &FontEntry, text: &str) -> (Option<f32>, Option<f32>) {
+    if !text.is_empty() && text.chars().all(is_break_space) {
+        (entry.plain_line_h_ratio, entry.plain_ascender_ratio)
+    } else {
+        (entry.line_h_ratio, entry.ascender_ratio)
+    }
+}
+
+/// Grid-snapped line height: Word counts docGrid cells with each font's
+/// `grid_line_ratio` (sTypo for Latin fonts, the 1.3× height for East Asian
+/// ones). Falls back to `line_h` when no run provides one.
 pub(super) fn grid_snapped_line_h(
     runs: &[Run],
     seen_fonts: &HashMap<String, FontEntry>,
@@ -2203,7 +2211,7 @@ pub(super) fn grid_snapped_line_h(
     line_h: f32,
     pitch: f32,
 ) -> f32 {
-    let mut typo_h = 0.0f32;
+    let mut grid_h = 0.0f32;
     let mut key_buf = String::new();
     for run in runs {
         if run.is_line_break || run.is_math {
@@ -2211,13 +2219,13 @@ pub(super) fn grid_snapped_line_h(
         }
         if let Some(t) = seen_fonts
             .get(font_key_buf(run, &mut key_buf))
-            .and_then(|e| e.typo_line_ratio)
+            .and_then(|e| e.grid_line_ratio)
         {
-            typo_h = typo_h.max(effective_font_size(run) * t);
+            grid_h = grid_h.max(effective_font_size(run) * t);
         }
     }
     let basis = match effective_ls {
-        crate::model::LineSpacing::Auto(m) if typo_h > 0.0 => typo_h * m,
+        crate::model::LineSpacing::Auto(m) if grid_h > 0.0 => grid_h * m,
         _ => line_h,
     };
     // Tolerance so an exact fit (12pt × 1.5 = 18pt pitch) stays one cell
@@ -2324,7 +2332,9 @@ mod tests {
             widths_1000: vec![500.0; 224],
             line_h_ratio: None,
             ascender_ratio: None,
-            typo_line_ratio: None,
+            grid_line_ratio: None,
+            plain_line_h_ratio: None,
+            plain_ascender_ratio: None,
             char_to_gid: None,
             char_widths_1000: None,
             kern_pairs: None,

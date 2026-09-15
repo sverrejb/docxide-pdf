@@ -150,13 +150,48 @@ Core CJK support is implemented: CIDFont/Identity-H/ToUnicode encoding, platform
 
 1. **`w:firstLineChars`** (MEDIUM) — character-based indent (e.g. `firstLineChars="100"` = 1 character width). Not parsed; we only handle `w:firstLine` (twip-based). In practice, twip fallback is always present alongside firstLineChars.
 2. **Vertical text centering** — `render_vertical_cjk_cell` uses a simplistic height calculation (chars x font_size) that doesn't account for paragraph spacing, causing vertical misalignment in merged cells.
-3. **Fallback line-height fidelity** (MEDIUM, annotation #8) — Korean fonts
-   (함초롬바탕, HY헤드라인M, 굴림) route to a fallback whose line ratio is ~1.27
-   vs ~1.73 for the fonts Word used in the reference. Every `lineRule="auto"`
-   line and every `atLeast` table row comes out short (east_asia_conference_form:
-   ~116pt lost over one table, flipping a page break). Fix alongside Bundled
-   Fallback Fonts: pick/ship CJK fallbacks with matching vertical metrics, or
-   apply a per-script line-height compensation.
+3. **East Asian line height is 1.3× the font's Windows metrics** (DONE
+   2026-09-14, was "Fallback line-height fidelity", annotation #8) — the ~1.73
+   ratio seen in references is Malgun Gothic's 1.33 × 1.3. Word lays out any
+   East Asian font (has CJK/Hangul/kana glyphs) at 1.3 × (winAscent+winDescent),
+   no hhea lineGap, extra leading above the glyphs; exact-height boxes still
+   bottom-align at winDescent; the docGrid counts cells with the same height
+   (16pt YaHei on an 18pt grid → 2 cells, 10.5pt Yu Mincho → 1). Verified to
+   0.1pt on line pitch in east_asia_conference_form, chinese_student,
+   taiwanese_education, japanese_medical, tokyo_welfare. A run of nothing but
+   spaces keeps the plain metrics so it cannot raise a Latin line
+   (destination_loyalty: a lone MS Mincho space in a Times New Roman line);
+   empty paragraph marks, tabs and the blank line after a break keep the real
+   metrics (japanese_interlibrary_loan loses 20pp SSIM otherwise).
+   `embed::compute_line_metrics`, `layout::run_line_metrics`.
+   Open: where the extra leading sits. All-above matches exact boxes, but the
+   first auto-spaced baselines in east_asia_conference_form (Batang 20pt after
+   an empty paragraph) and japanese_land_development (heading 5, Yu Gothic
+   10.5pt) land ~3pt higher than all-above predicts, closer to a half-above
+   split. Needs a clean no-grid, no-header, text-first measurement.
+4. **Linux CJK fallback list was Noto-only** (DONE 2026-09-14) — the Linux
+   lists in `fonts/mod.rs` and `pdf/fonts.rs` named only Noto Sans CJK, which
+   the CI runner lacks, so glyphs in runs whose font was missing were dropped
+   outright (east_asia_conference_form on gh-pages: title shrank to "2024 발표",
+   text boundary 0%). Locally the fixture looked fine only because
+   `engine_compare.py` ran the binary without `DOCXSIDE_FONTS` (the
+   `.cargo/config.toml` env applies only under cargo) and macOS system fonts
+   covered the gap. Now one platform-independent list (`cjk_fallback_fonts`)
+   leads with the vendored Word fonts, Apple/Noto faces trail, and the compare
+   script passes `DOCXSIDE_FONTS`. The per-character rescue font
+   (`cjk_rescue_fonts`) is ranked by glyph coverage of the missing characters.
+5. **Theme `a:ea typeface=""`** — `asciiTheme/hAnsiTheme="minorEastAsia"`
+   (47 table-label runs in east_asia_conference_form) resolves to an empty
+   name and registers Helvetica. Word resolves the empty typeface through
+   `a:font script="Hang"/"Jpan"` by the run's East Asian language (→ 맑은 고딕
+   here); we should do the same.
+6. **Missing CJK fonts substitute by charset + family** (DONE 2026-09-14) —
+   the reference shows Word turned HY헤드라인M and 새굴림 (fontTable
+   `charset=81`, `family=roman`) into Batang, rescuing kanji Batang lacks with
+   MS Mincho. `classify_cjk_script` now reads the fontTable charset (0x80 JA,
+   0x81 KO, 0x86 SC, 0x88 TC) before name hints, then Hangul/kana in the name or
+   text; `cjk_fallback_fonts` orders serif vs sans by `w:family`. The fixture's
+   font set now matches the reference except Helvetica for item 5.
 
 ## Bundled Fallback Fonts (TODO — MEDIUM IMPACT)
 

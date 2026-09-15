@@ -50,7 +50,7 @@ use images::{EffectXObjs, EmbeddedImages, embed_all_images};
 use layout::{
     DualRegion, LineNumberArg, LinkAnnotation, TextLine, build_paragraph_lines, build_tabbed_line,
     grid_snapped_line_h,
-    is_text_empty, render_paragraph_lines, tallest_run_metrics,
+    is_text_empty, render_paragraph_lines, run_line_metrics, tallest_run_metrics,
 };
 use crate::fonts::font_key;
 use color::{fill_rgb, stroke_rgb};
@@ -861,7 +861,7 @@ fn compute_bookmark_positions(
                         }
                         if let Some(ref mark_fn) = para.paragraph_mark_font_name {
                             if let Some(entry) = ctx.fonts.get(mark_fn.as_str()) {
-                                tallest_lhr = entry.line_h_ratio;
+                                tallest_lhr = run_line_metrics(entry, "").0;
                             }
                         }
                     }
@@ -1108,7 +1108,7 @@ fn render_paragraph_block(
             .unwrap_or(&para.runs.first().map(|r| r.font_name.as_str()).unwrap_or(""));
         if !mark_font_name.is_empty() {
             if let Some(entry) = ctx.fonts.get(mark_font_name) {
-                tallest_lhr = entry.line_h_ratio;
+                tallest_lhr = run_line_metrics(entry, "").0;
             }
         }
     }
@@ -1847,7 +1847,7 @@ fn render_paragraph_block(
                             .paragraph_mark_font_name
                             .as_deref()
                             .and_then(|n| ctx.fonts.get(n))
-                            .and_then(|e| e.line_h_ratio)
+                            .and_then(|e| run_line_metrics(e, "").0)
                             .or(tallest_lhr);
                         h += resolve_line_h(effective_ls, mfs, mlhr);
                     } else {

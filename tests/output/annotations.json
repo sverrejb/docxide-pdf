@@ -1,5 +1,5 @@
 {
-  "next_id": 238,
+  "next_id": 240,
   "annotations": [
     {
       "id": 208,
@@ -581,6 +581,28 @@
       "x_pt": 358.6049,
       "y_pt": 175.3728,
       "note": "Content of this cell \"Banksia Park International High School in South Australia ....\" should start on this page, as there is plenty of room.",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 238,
+      "case": "new/taiwanese_education_fraud_ruling",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 102.3861,
+      "y_pt": 681.3009,
+      "note": "Lone character from heading here.",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 239,
+      "case": "scraped/korean_japanese_conference_form",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 326.30557,
+      "y_pt": 127.81036,
+      "note": "There should be a page break here before the last line for some reason? Maybe just vertical size of everything else pushes it down naturally?",
       "fixed": false,
       "cleared": false
     }

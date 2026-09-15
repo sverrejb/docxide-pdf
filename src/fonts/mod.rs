@@ -19,8 +19,11 @@ pub(crate) struct FontMetrics {
     pub(crate) widths_1000: Vec<f32>,
     pub(crate) line_h_ratio: f32,
     pub(crate) ascender_ratio: f32,
-    /// sTypo-based line ratio — Word's basis for docGrid cell counting.
-    pub(crate) typo_line_ratio: Option<f32>,
+    /// The height Word counts docGrid cells with (`embed::compute_line_metrics`).
+    pub(crate) grid_line_ratio: Option<f32>,
+    /// Latin-rule metrics without the East Asian 1.3× leading (`embed::compute_line_metrics`).
+    pub(crate) plain_line_h_ratio: f32,
+    pub(crate) plain_ascender_ratio: f32,
     pub(crate) char_to_gid: HashMap<char, u16>,
     pub(crate) char_widths_1000: HashMap<char, f32>,
     pub(crate) kern_pairs: HashMap<(u16, u16), f32>,
@@ -40,8 +43,12 @@ pub(crate) struct FontEntry {
     pub(crate) widths_1000: Vec<f32>,
     pub(crate) line_h_ratio: Option<f32>,
     pub(crate) ascender_ratio: Option<f32>,
-    /// sTypo-based line ratio — Word's basis for docGrid cell counting.
-    pub(crate) typo_line_ratio: Option<f32>,
+    /// The height Word counts docGrid cells with (`embed::compute_line_metrics`).
+    pub(crate) grid_line_ratio: Option<f32>,
+    /// Metrics without the East Asian 1.3× leading, for whitespace-only runs and
+    /// empty paragraph marks (`pdf::layout::run_line_metrics`).
+    pub(crate) plain_line_h_ratio: Option<f32>,
+    pub(crate) plain_ascender_ratio: Option<f32>,
     pub(crate) char_to_gid: Option<HashMap<char, u16>>,
     pub(crate) char_widths_1000: Option<HashMap<char, f32>>,
     pub(crate) kern_pairs: Option<HashMap<(u16, u16), f32>>,
@@ -222,17 +229,13 @@ fn family_fallback(family: FontFamily) -> Option<&'static str> {
 /// True if the face declares itself a script/handwriting design
 /// (OS/2 sFamilyClass class 10, or PANOSE family kind 3 "Latin Script").
 fn face_is_script_design(path: &std::path::Path, face_index: u32) -> bool {
-    let Ok(data) = std::fs::read(path) else {
-        return false;
-    };
-    let Ok(face) = ttf_parser::Face::parse(&data, face_index) else {
-        return false;
-    };
-    let Some(os2) = face.raw_face().table(ttf_parser::Tag::from_bytes(b"OS/2")) else {
-        return false;
-    };
-    // sFamilyClass high byte at offset 30, PANOSE bFamilyType at offset 32
-    os2.get(30) == Some(&10) || os2.get(32) == Some(&3)
+    discovery::probe_face(path, face_index, |face| {
+        // sFamilyClass high byte at offset 30, PANOSE bFamilyType at offset 32
+        face.raw_face()
+            .table(ttf_parser::Tag::from_bytes(b"OS/2"))
+            .is_some_and(|os2| os2.get(30) == Some(&10) || os2.get(32) == Some(&3))
+    })
+    .unwrap_or(false)
 }
 
 fn known_font_alias(name: &str) -> Option<&'static str> {
@@ -247,7 +250,7 @@ fn has_cjk_chars(chars: &HashSet<char>) -> bool {
     chars.iter().any(|&c| crate::docx::is_east_asian_char(c))
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub(crate) enum CjkScript {
     Unknown,
     SimplifiedChinese,
@@ -256,9 +259,33 @@ pub(crate) enum CjkScript {
     Korean,
 }
 
-/// Guess the script from the primary font name so we can order the CJK
-/// fallback list to favor a font with matching metrics.
-pub(crate) fn classify_cjk_script(primary: &str) -> CjkScript {
+/// Korean if any Hangul, Japanese if any kana; Han alone is ambiguous → Unknown.
+pub(crate) fn script_of_chars(chars: impl Iterator<Item = char>) -> CjkScript {
+    let mut script = CjkScript::Unknown;
+    for c in chars {
+        match c as u32 {
+            0x1100..=0x11FF | 0x3130..=0x318F | 0xAC00..=0xD7AF => return CjkScript::Korean,
+            0x3040..=0x30FF | 0x31F0..=0x31FF => script = CjkScript::Japanese,
+            _ => {}
+        }
+    }
+    script
+}
+
+/// Script of a missing CJK font: the fontTable charset first (what Word itself
+/// keys substitution on), then the font name, then the text it has to render.
+pub(crate) fn classify_cjk_script(
+    primary: &str,
+    charset: Option<u8>,
+    used_chars: &HashSet<char>,
+) -> CjkScript {
+    match charset {
+        Some(0x80) => return CjkScript::Japanese,
+        Some(0x81) | Some(0x82) => return CjkScript::Korean,
+        Some(0x86) => return CjkScript::SimplifiedChinese,
+        Some(0x88) => return CjkScript::TraditionalChinese,
+        _ => {}
+    }
     // Simplified-Chinese family names (宋体/仿宋/黑体/楷体 + 华文 variants).
     const SC_HINTS: &[&str] = &[
         "宋体", "仿宋", "黑体", "楷体", "华文", "微软雅黑", "方正",
@@ -283,104 +310,118 @@ pub(crate) fn classify_cjk_script(primary: &str) -> CjkScript {
         "Batang", "Dotum", "Gulim", "Gungsuh", "Malgun Gothic", "Nanum",
     ];
 
-    for h in SC_HINTS {
-        if primary.contains(h) {
-            return CjkScript::SimplifiedChinese;
-        }
+    let by_name = [
+        (SC_HINTS, CjkScript::SimplifiedChinese),
+        (TC_HINTS, CjkScript::TraditionalChinese),
+        (JA_HINTS, CjkScript::Japanese),
+        (KO_HINTS, CjkScript::Korean),
+    ]
+    .into_iter()
+    .find(|(hints, _)| hints.iter().any(|h| primary.contains(h)));
+    if let Some((_, script)) = by_name {
+        return script;
     }
-    for h in TC_HINTS {
-        if primary.contains(h) {
-            return CjkScript::TraditionalChinese;
-        }
+    match script_of_chars(primary.chars()) {
+        CjkScript::Unknown => script_of_chars(used_chars.iter().copied()),
+        s => s,
     }
-    for h in JA_HINTS {
-        if primary.contains(h) {
-            return CjkScript::Japanese;
-        }
-    }
-    for h in KO_HINTS {
-        if primary.contains(h) {
-            return CjkScript::Korean;
-        }
-    }
-    CjkScript::Unknown
 }
 
-pub(crate) fn cjk_fallback_fonts_for_script(script: CjkScript) -> &'static [&'static str] {
-    #[cfg(target_os = "macos")]
-    {
-        match script {
-            CjkScript::SimplifiedChinese => &[
-                "Hiragino Sans GB",
-                "Hiragino Sans GB W3",
-                "PingFang SC",
-                "Songti SC",
-                "Malgun Gothic",
-                "PMingLiU",
-                "Arial Unicode MS",
-            ],
-            CjkScript::TraditionalChinese => &[
-                "PMingLiU",
-                "MingLiU",
-                "Songti TC",
-                "Malgun Gothic",
-                "Hiragino Sans GB",
-                "Arial Unicode MS",
-            ],
-            CjkScript::Japanese => &[
-                "Hiragino Kaku Gothic ProN W3",
-                "Hiragino Sans W3",
-                "Yu Gothic",
-                "Malgun Gothic",
-                "Arial Unicode MS",
-                "Hiragino Sans GB",
-            ],
-            CjkScript::Korean => &[
-                "Malgun Gothic",
-                "AppleSD Gothic Neo",
-                "Apple SD Gothic Neo",
-                "Hiragino Sans GB",
-                "Arial Unicode MS",
-            ],
-            CjkScript::Unknown => &[
-                "Malgun Gothic",
-                "Hiragino Sans GB",
-                "Hiragino Sans GB W3",
-                "PMingLiU",
-                "MingLiU",
-                "Songti TC",
-                "AppleSD Gothic Neo",
-                "Apple SD Gothic Neo",
-                "Hiragino Sans W3",
-                "Hiragino Kaku Gothic ProN W3",
-                "Arial Unicode MS",
-                "PingFang SC",
-            ],
+/// Substitutes for a missing CJK font, best first: one list for every platform,
+/// vendored Word fonts leading so local and CI agree, Apple and Noto faces
+/// trailing, and the lookup skips what is absent. `serif` (fontTable family
+/// roman) picks Batang over Malgun Gothic and so on, as Word does. Evidence per
+/// row: roadmap, "CJK Rendering Polish".
+pub(crate) fn cjk_fallback_fonts(script: CjkScript, serif: bool) -> &'static [&'static str] {
+    use CjkScript::*;
+    match (script, serif) {
+        (Korean, true) => &[
+            "Batang", "Malgun Gothic", "Gulim", "AppleMyungjo", "Apple SD Gothic Neo",
+            "Noto Serif CJK KR", "Noto Sans CJK KR", "Arial Unicode MS",
+        ],
+        (Korean, false) => &[
+            "Malgun Gothic", "Gulim", "Batang", "Apple SD Gothic Neo", "AppleGothic",
+            "Noto Sans CJK KR", "Arial Unicode MS",
+        ],
+        (Japanese, true) => &[
+            "MS Mincho", "Yu Mincho", "MS Gothic", "Yu Gothic", "Meiryo",
+            "Hiragino Mincho ProN W3", "Hiragino Kaku Gothic ProN W3",
+            "Noto Serif CJK JP", "Noto Sans CJK JP", "Arial Unicode MS",
+        ],
+        (Japanese, false) => &[
+            "MS Gothic", "Yu Gothic", "Meiryo", "MS Mincho", "Yu Mincho",
+            "Hiragino Kaku Gothic ProN W3", "Hiragino Sans W3",
+            "Noto Sans CJK JP", "Arial Unicode MS",
+        ],
+        (SimplifiedChinese, true) => &[
+            "SimSun", "Microsoft YaHei", "Songti SC", "PingFang SC", "Hiragino Sans GB W3",
+            "Noto Serif CJK SC", "Noto Sans CJK SC", "Arial Unicode MS",
+        ],
+        (SimplifiedChinese, false) => &[
+            "Microsoft YaHei", "SimSun", "PingFang SC", "Hiragino Sans GB W3", "Songti SC",
+            "Noto Sans CJK SC", "Arial Unicode MS",
+        ],
+        (TraditionalChinese, true) => &[
+            "PMingLiU", "MingLiU", "Microsoft JhengHei", "Songti TC", "PingFang TC",
+            "Noto Serif CJK TC", "Noto Sans CJK TC", "Arial Unicode MS",
+        ],
+        // Word rendered the missing script-family 標楷體 in Microsoft YaHei
+        // (taiwanese_education_fraud_ruling), the same face it uses for missing
+        // Simplified fonts, so YaHei leads the sans list here too.
+        (TraditionalChinese, false) => &[
+            "Microsoft YaHei", "Microsoft JhengHei", "PMingLiU", "MingLiU", "PingFang TC",
+            "Songti TC", "Noto Sans CJK TC", "Arial Unicode MS",
+        ],
+        // Han only. Kanji missing from a Korean face are usually Japanese
+        // shinjitai (the reference rescued Batang's gaps with MS Mincho), while
+        // SimSun/YaHei cover all 20 902 unified ideographs and catch the rest.
+        (Unknown, true) => &[
+            "MS Mincho", "SimSun", "PMingLiU", "Batang", "Songti SC",
+            "Hiragino Mincho ProN W3", "Noto Serif CJK SC", "Noto Sans CJK SC",
+            "Arial Unicode MS",
+        ],
+        (Unknown, false) => &[
+            "Microsoft YaHei", "MS Gothic", "Malgun Gothic", "PMingLiU", "PingFang SC",
+            "Hiragino Sans GB W3", "Noto Sans CJK SC", "Arial Unicode MS",
+        ],
+    }
+}
+
+/// How many of `chars` the named font has glyphs for; 0 when it is not installed.
+fn glyph_coverage(name: &str, chars: &HashSet<char>) -> usize {
+    let Some((path, face_index, _)) = discovery::find_font_file(name, false, false) else {
+        return 0;
+    };
+    discovery::probe_face(&path, face_index, |face| {
+        chars.iter().filter(|&&c| face.glyph_index(c).is_some()).count()
+    })
+    .unwrap_or(0)
+}
+
+/// Font for characters the resolved fonts lack, shared by the whole document
+/// (Word rescues per character too: kanji missing from Batang came out in
+/// MS Mincho). The best-covering candidate leads and the rest follow in list
+/// order, semicolon-separated so `register_font` tries each in turn.
+pub(crate) fn cjk_rescue_fonts(missing: &HashSet<char>) -> String {
+    let script = script_of_chars(missing.iter().copied());
+    // Hangul/kana gaps take the sans default (맑은 고딕 / MS Gothic); Han-only
+    // gaps lead with MS Mincho, see `cjk_fallback_fonts`.
+    let candidates = cjk_fallback_fonts(script, script == CjkScript::Unknown);
+    let mut best = (0usize, 0usize);
+    for (i, name) in candidates.iter().enumerate() {
+        let coverage = glyph_coverage(name, missing);
+        if coverage > best.0 {
+            best = (coverage, i);
+        }
+        if coverage == missing.len() {
+            break;
         }
     }
-    #[cfg(target_os = "linux")]
-    {
-        let _ = script;
-        &[
-            "Noto Sans CJK SC",
-            "Noto Sans CJK KR",
-            "Noto Sans CJK JP",
-        ]
-    }
-    #[cfg(target_os = "windows")]
-    {
-        let _ = script;
-        &[
-            "Malgun Gothic",
-            "Yu Gothic",
-            "Microsoft YaHei",
-        ]
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-    {
-        let _ = script;
-        &[]
-    }
+    let lead = candidates[best.1];
+    std::iter::once(lead)
+        .chain(candidates.iter().copied().filter(|n| *n != lead))
+        .collect::<Vec<_>>()
+        .join(";")
 }
 
 pub(crate) fn register_font(
@@ -416,13 +457,18 @@ pub(crate) fn register_font(
         )
     };
 
-    let needs_cjk = has_cjk_chars(used_chars);
     let table_entry = lookup_font_table(font_table, primary);
-
-    let script = classify_cjk_script(primary);
+    let script =
+        classify_cjk_script(primary, table_entry.and_then(|e| e.charset), used_chars);
+    // The declared script, not the sampled text, decides whether this is a CJK
+    // slot: an empty Korean paragraph's mark font still resolves to Batang.
+    let needs_cjk = script != CjkScript::Unknown || has_cjk_chars(used_chars);
+    let serif = table_entry.is_some_and(|e| e.family == FontFamily::Roman);
     let substituted = std::cell::Cell::new(false);
+    // List order, not glyph coverage: Word substitutes the whole run by script and
+    // family and rescues single missing glyphs per character (`cjk_rescue_fonts`).
     let try_cjk_fallback = |tc: &mut dyn FnMut(&str) -> Option<ResolvedFont>| {
-        cjk_fallback_fonts_for_script(script).iter().find_map(|cjk_font| {
+        cjk_fallback_fonts(script, serif).iter().find_map(|cjk_font| {
             log::debug!("Trying CJK fallback \"{cjk_font}\" for \"{primary}\"");
             let m = tc(cjk_font)?;
             log::info!("Font substitution: {primary} → CJK fallback \"{cjk_font}\"");
@@ -501,14 +547,14 @@ pub(crate) fn register_font(
 
     // Compute which CJK chars are missing from the resolved font
     let missing_cjk = if needs_cjk {
-        let covered: HashSet<char> = result
-            .as_ref()
-            .map(|r| r.metrics.char_to_gid.keys().copied().collect())
-            .unwrap_or_default();
+        let covered = result.as_ref().map(|r| &r.metrics.char_to_gid);
         used_chars
             .iter()
             .copied()
-            .filter(|ch| !covered.contains(ch) && crate::docx::is_east_asian_char(*ch))
+            .filter(|ch| {
+                crate::docx::is_east_asian_char(*ch)
+                    && !covered.is_some_and(|map| map.contains_key(ch))
+            })
             .collect()
     } else {
         HashSet::new()
@@ -521,7 +567,9 @@ pub(crate) fn register_font(
             widths_1000: r.metrics.widths_1000,
             line_h_ratio: Some(r.metrics.line_h_ratio),
             ascender_ratio: Some(r.metrics.ascender_ratio),
-            typo_line_ratio: r.metrics.typo_line_ratio,
+            grid_line_ratio: r.metrics.grid_line_ratio,
+            plain_line_h_ratio: Some(r.metrics.plain_line_h_ratio),
+            plain_ascender_ratio: Some(r.metrics.plain_ascender_ratio),
             char_to_gid: Some(r.metrics.char_to_gid),
             char_widths_1000: Some(r.metrics.char_widths_1000),
             kern_pairs: if r.metrics.kern_pairs.is_empty() {
@@ -558,7 +606,9 @@ pub(crate) fn register_font(
                 widths_1000: encoding::helvetica_widths(),
                 line_h_ratio: None,
                 ascender_ratio: None,
-                typo_line_ratio: None,
+                grid_line_ratio: None,
+                plain_line_h_ratio: None,
+                plain_ascender_ratio: None,
                 char_to_gid: None,
                 char_widths_1000: None,
                 kern_pairs: None,
@@ -582,6 +632,31 @@ pub(crate) fn register_font(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cjk_script_from_charset_then_name_then_text() {
+        let none = HashSet::new();
+        assert_eq!(classify_cjk_script("Whatever", Some(0x80), &none), CjkScript::Japanese);
+        assert_eq!(classify_cjk_script("HY헤드라인M", Some(0x81), &none), CjkScript::Korean);
+        assert_eq!(classify_cjk_script("X", Some(0x86), &none), CjkScript::SimplifiedChinese);
+        assert_eq!(classify_cjk_script("X", Some(0x88), &none), CjkScript::TraditionalChinese);
+        // Hangul in the name is a hint by itself.
+        assert_eq!(classify_cjk_script("HY헤드라인M", None, &none), CjkScript::Korean);
+        // Otherwise the text decides; Han alone stays Unknown.
+        let kana: HashSet<char> = "表タイトル".chars().collect();
+        assert_eq!(classify_cjk_script("Mystery", None, &kana), CjkScript::Japanese);
+        let han: HashSet<char> = "発表".chars().collect();
+        assert_eq!(classify_cjk_script("Mystery", None, &han), CjkScript::Unknown);
+    }
+
+    #[test]
+    fn cjk_fallback_picks_word_face_by_family() {
+        // Word substituted the roman-family HY헤드라인M with Batang in the reference.
+        assert_eq!(cjk_fallback_fonts(CjkScript::Korean, true)[0], "Batang");
+        assert_eq!(cjk_fallback_fonts(CjkScript::Korean, false)[0], "Malgun Gothic");
+        assert_eq!(cjk_fallback_fonts(CjkScript::Japanese, true)[0], "MS Mincho");
+        assert_eq!(cjk_fallback_fonts(CjkScript::Unknown, true)[0], "MS Mincho");
+    }
 
     #[test]
     fn test_primary_font_name_simple() {

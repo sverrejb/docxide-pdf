@@ -14,7 +14,9 @@ use crate::model::{
 
 use super::RenderContext;
 use super::header_footer::substitute_hf_runs;
-use super::layout::{TextLine, build_paragraph_lines, build_tabbed_line, is_text_empty, tallest_run_metrics};
+use super::layout::{
+    TextLine, build_paragraph_lines, build_tabbed_line, is_text_empty, run_line_metrics,
+};
 use super::resolve_line_h;
 
 pub(super) fn cell_span_width(col_widths: &[f32], grid_col: usize, span: usize) -> f32 {
@@ -632,8 +634,9 @@ pub(super) fn compute_row_layouts(
                                     .filter(|r| !r.is_math)
                                     .map(|r| font_key_buf(r, &mut kb0).to_owned())
                                     .and_then(|k| ctx.fonts.get(&k));
-                                let tallest_lhr = metric_font.and_then(|e| e.line_h_ratio);
-                                let tallest_ar = metric_font.and_then(|e| e.ascender_ratio);
+                                let (tallest_lhr, tallest_ar) = metric_run
+                                    .zip(metric_font)
+                                    .map_or((None, None), |(r, e)| run_line_metrics(e, &r.text));
                                 let effective_ls =
                                     para.line_spacing.unwrap_or(ctx.doc_line_spacing);
                                 let line_h =

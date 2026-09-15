@@ -153,13 +153,15 @@ pub(super) fn embed_truetype(
         .descendant_font(cid_font_ref)
         .to_unicode(tounicode_ref);
 
-    let (line_h_ratio, ascender_ratio, typo_line_ratio) = compute_line_metrics(&face, units);
+    let lm = compute_line_metrics(&face, units);
 
     Some(FontMetrics {
         widths_1000,
-        line_h_ratio,
-        ascender_ratio,
-        typo_line_ratio,
+        line_h_ratio: lm.line_h_ratio,
+        ascender_ratio: lm.ascender_ratio,
+        grid_line_ratio: lm.grid_line_ratio,
+        plain_line_h_ratio: lm.plain_line_h_ratio,
+        plain_ascender_ratio: lm.plain_ascender_ratio,
         char_to_gid,
         char_widths_1000,
         kern_pairs,
@@ -280,11 +282,51 @@ fn extract_gpos_pairs(
     }
 }
 
-/// Returns (line_h_ratio, ascender_ratio, typo_line_ratio). The sTypo-based
-/// ratio is what Word compares against the docGrid pitch when counting grid
-/// cells — win metrics + hhea lineGap overshoot the pitch for CJK fonts
-/// (Yu Mincho: 1.787 vs typo 1.5) and would double every grid line.
-fn compute_line_metrics(face: &Face, units: f32) -> (f32, f32, Option<f32>) {
+pub(super) struct LineMetrics {
+    pub(super) line_h_ratio: f32,
+    pub(super) ascender_ratio: f32,
+    /// What Word counts docGrid cells with: sTypo metrics for Latin fonts (win +
+    /// hhea lineGap would put Yu Mincho's 18pt-grid lines into two cells), the
+    /// 1.3× line height for East Asian fonts.
+    pub(super) grid_line_ratio: Option<f32>,
+    /// The Latin-rule values, for whitespace-only runs and empty paragraph marks
+    /// in an East Asian font (`pdf::layout::run_line_metrics`).
+    pub(super) plain_line_h_ratio: f32,
+    pub(super) plain_ascender_ratio: f32,
+}
+
+/// Has glyphs for CJK ideographs, Hangul or kana — what Word treats as an East Asian font.
+fn is_east_asian_font(face: &Face) -> bool {
+    ['一', '가', 'あ'].iter().any(|&c| face.glyph_index(c).is_some())
+}
+
+/// Word lays out an East Asian font 1.3× taller than its Windows metrics
+/// (10.5pt SimSun → the classic 15.6pt line), no hhea lineGap, the extra leading
+/// above the glyphs so an exact-height box still bottom-aligns at winDescent.
+/// Whitespace-only runs keep the plain values. Measurements: roadmap, "CJK
+/// Rendering Polish" item 3.
+fn compute_line_metrics(face: &Face, units: f32) -> LineMetrics {
+    let (plain_line_h_ratio, plain_ascender_ratio, typo_ratio) = plain_line_metrics(face, units);
+    let east_asian = match face.tables().os2 {
+        Some(os2) if is_east_asian_font(face) => {
+            let win_desc = -(os2.windows_descender() as f32) / units;
+            let win_h = (os2.windows_ascender() - os2.windows_descender()) as f32 / units;
+            let line_h = win_h * 1.3;
+            Some((line_h, line_h - win_desc))
+        }
+        _ => None,
+    };
+    LineMetrics {
+        line_h_ratio: east_asian.map_or(plain_line_h_ratio, |(h, _)| h),
+        ascender_ratio: east_asian.map_or(plain_ascender_ratio, |(_, a)| a),
+        grid_line_ratio: east_asian.map(|(h, _)| h).or(typo_ratio),
+        plain_line_h_ratio,
+        plain_ascender_ratio,
+    }
+}
+
+/// Returns (line_h_ratio, ascender_ratio, typo_line_ratio) by the Latin rules.
+fn plain_line_metrics(face: &Face, units: f32) -> (f32, f32, Option<f32>) {
     if let Some(os2) = face.tables().os2 {
         let t_asc = os2.typographic_ascender() as f32;
         let t_desc = os2.typographic_descender() as f32;

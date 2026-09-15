@@ -428,18 +428,7 @@ pub(super) fn collect_and_register_fonts(
     if !all_missing_cjk.is_empty() {
         let fallback_key = "__cjk_fallback".to_string();
         let pdf_name = format!("F{}", font_order.len() + 1);
-        // Per-character fallback needs comprehensive CJK coverage (including
-        // Japanese Kanji that Korean fonts like Malgun Gothic may lack).
-        // Try comprehensive fonts first, then language-specific ones.
-        #[cfg(target_os = "macos")]
-        let fallback_font_name =
-            "PMingLiU;MingLiU;Songti TC;Hiragino Sans GB;Hiragino Sans GB W3;Hiragino Sans W3;Hiragino Kaku Gothic ProN W3;Arial Unicode MS;Malgun Gothic";
-        #[cfg(target_os = "linux")]
-        let fallback_font_name = "Noto Sans CJK SC;Noto Sans CJK KR;Noto Sans CJK JP";
-        #[cfg(target_os = "windows")]
-        let fallback_font_name = "Yu Gothic;Microsoft YaHei;Malgun Gothic";
-        #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-        let fallback_font_name = "Arial Unicode MS";
+        let fallback_font_name = crate::fonts::cjk_rescue_fonts(&all_missing_cjk);
         let entry = register_font(
             pdf,
             &fallback_font_name,

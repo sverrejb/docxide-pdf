@@ -101,7 +101,12 @@ pub(super) fn parse_font_table<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> 
                 .unwrap_or(FontFamily::Auto);
             let pitch_fixed = wml_attr(font_node, "pitch")
                 .is_some_and(|v| v.eq_ignore_ascii_case("fixed"));
-            font_table.insert(font_name.to_string(), FontTableEntry { alt_name, family, pitch_fixed });
+            let charset =
+                wml_attr(font_node, "charset").and_then(|v| u8::from_str_radix(v, 16).ok());
+            font_table.insert(
+                font_name.to_string(),
+                FontTableEntry { alt_name, family, charset, pitch_fixed },
+            );
 
             for &(embed_tag, bold, italic) in EMBED_VARIANTS {
                 let Some(embed_node) = wml(font_node, embed_tag) else {

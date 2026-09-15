@@ -139,7 +139,11 @@ def convert_ours(docx: Path, pdf: Path) -> bool:
     if is_fresh(pdf, docx) and is_fresh(pdf, OURS_BIN):  # a rebuilt binary must be re-timed
         return True
     pdf.parent.mkdir(parents=True, exist_ok=True)
-    r = subprocess.run([str(OURS_BIN), str(docx), str(pdf)], capture_output=True, text=True)
+    # The binary reads DOCXSIDE_FONTS at run time; `.cargo/config.toml` only sets it under cargo,
+    # so without this a local run renders with system fonts while CI renders with the Word fonts.
+    env = {**os.environ}
+    env.setdefault("DOCXSIDE_FONTS", str(ROOT / "fonts"))
+    r = subprocess.run([str(OURS_BIN), str(docx), str(pdf)], capture_output=True, text=True, env=env)
     if r.returncode != 0:
         pdf.unlink(missing_ok=True)  # a partial file would otherwise count as fresh next run
     return converted(r, pdf)

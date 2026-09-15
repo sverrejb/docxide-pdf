@@ -208,6 +208,9 @@ pub enum FontFamily {
 pub struct FontTableEntry {
     pub alt_name: Option<String>,
     pub family: FontFamily,
+    /// Windows charset byte (`w:charset`, hex in the XML): 0x80 Shift-JIS, 0x81 Hangul,
+    /// 0x86 GB2312, 0x88 Big5. Word keys missing-font substitution on it.
+    pub charset: Option<u8>,
     #[allow(dead_code)]
     pub pitch_fixed: bool,
 }

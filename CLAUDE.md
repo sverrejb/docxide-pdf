@@ -172,6 +172,12 @@ Measured for case1: reference baseline at y=708.72pt from bottom (83.28pt from t
 ### Document Grid
 `w:sectPr/w:docGrid @w:linePitch` (in twips) defines the baseline-to-baseline distance for grid-snapped text. Divide by 20 to get points (360 twips = 18pt for case1).
 
+### East Asian Line Height
+Word lays out East Asian fonts (any face with CJK/Hangul/kana glyphs) at **1.3 × (usWinAscent + usWinDescent)** per line, with no hhea lineGap and the extra leading above the glyphs. This is why 10.5pt SimSun gives the classic 15.6pt line, why 16pt Microsoft YaHei takes two cells of an 18pt grid, and why Yu Mincho lines double past 10.5pt. Exact-height boxes still bottom-align at winDescent. A run of only spaces uses the plain metrics (it must not raise a Latin line); empty paragraph marks, tabs and blank lines after a break keep the font's real metrics. Implemented in `src/fonts/embed.rs` (`compute_line_metrics`) and `src/pdf/layout.rs` (`run_line_metrics`).
+
+### Missing CJK Fonts
+Word substitutes by fontTable `w:charset` (hex: 80 Shift-JIS, 81 Hangul, 86 GB2312, 88 Big5) and `w:family` (roman → Batang/MS Mincho/SimSun/PMingLiU, otherwise Malgun Gothic/MS Gothic/Microsoft YaHei), rescuing single missing glyphs per character (kanji missing from Batang → MS Mincho). One platform-independent list in `src/fonts/mod.rs` (`cjk_fallback_fonts`) leads with the vendored Word fonts so CI and macOS agree.
+
 ### Case Browser Annotations
 
 The case browser (`tools/src/bin/case_browser.rs`) supports click-to-annotate. All annotations are saved in a single file: `tests/output/annotations.json`. Each annotation includes the case name, page, source (Reference/Generated), PDF coordinates (x from left, y from bottom, in points), note text, and a `fixed` flag. The annotations capture rendering issues spotted during visual inspection — use them as precise bug reports when fixing rendering problems.

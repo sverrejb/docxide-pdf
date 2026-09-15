@@ -1172,7 +1172,7 @@ dependencies = [
 
 [[package]]
 name = "docxide-pdf"
-version = "0.17.0"
+version = "0.17.1"
 dependencies = [
  "image",
  "log",

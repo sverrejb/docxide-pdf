@@ -221,6 +221,13 @@ fn get_font_index() -> &'static FontLookup {
     FONT_INDEX.get_or_init(scan_font_dirs)
 }
 
+/// Parse one face of a font file (memory-mapped, so only the tables touched are read).
+pub(super) fn probe_face<T>(path: &Path, face_index: u32, f: impl FnOnce(&Face) -> T) -> Option<T> {
+    let file = fs::File::open(path).ok()?;
+    let data = unsafe { Mmap::map(&file) }.ok()?;
+    Face::parse(&data, face_index).ok().map(|face| f(&face))
+}
+
 /// Look up a font file by family name and style using the OS/2 table metadata index.
 /// Falls back to the regular variant if the requested bold/italic is not available.
 /// Returns `(path, face_index, exact_style_match)`.
