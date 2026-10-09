@@ -1793,6 +1793,10 @@ Vertical alignment of runs within a line (top/center/baseline/bottom/auto). Only
 
 ## Table Features
 
+### Empty anchor line at the top of a float
+
+Clear a blocking float before consuming a textless line whose box intersects its top edge. A 0.05pt text offset otherwise lets that line pass above the table and loses its height when the next paragraph clears it (cases170–175). Keep the existing side-strip policy.
+
 ### Cell paragraph `indent_right` in render pass (DONE — 2026-07-02, annotations #215/#217)
 
 `table.rs` computed the render-time `text_w` without subtracting `para.indent_right`

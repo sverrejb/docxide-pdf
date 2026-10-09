@@ -1697,6 +1697,39 @@ fn is_empty_wrapping_frame(para: &Paragraph, sp: &SectionProperties) -> bool {
         && !para.column_break_after
 }
 
+/// A textless line can start just above a float while most of its box
+/// intersects it. It must participate in the normal side-strip clearance
+/// before its height is consumed; otherwise the next block loses that gap.
+fn empty_line_enters_float(
+    block: &Block,
+    slot_top: f32,
+    prev_after: f32,
+    zone: &FloatZone,
+    ctx: &RenderContext,
+) -> bool {
+    let Block::Paragraph(p) = block else {
+        return false;
+    };
+    if !is_text_empty(&p.runs)
+        || p.image.is_some()
+        || p.inline_chart.is_some()
+        || !p.smartart.is_empty()
+        || !p.floating_images.is_empty()
+        || !p.textboxes.is_empty()
+        || !p.connectors.is_empty()
+        || p.runs
+            .iter()
+            .any(|r| r.inline_image.is_some() || r.field_code.is_some() || r.checkbox.is_some())
+    {
+        return false;
+    }
+    let (fs, _, _) = tallest_run_metrics(&p.runs, ctx.fonts);
+    let (fs, lhr) = unsized_line_metrics(p, fs, ctx.fonts);
+    let h = resolve_line_h(p.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr);
+    let top = slot_top - prev_after.max(p.space_before);
+    top - h < zone.top_y - h * 0.2
+}
+
 /// Compute effective first-line hanging indent for a paragraph.
 fn compute_text_hanging(
     para: &Paragraph,
@@ -4165,6 +4198,13 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         // Already past the zone — clear it
                         state.pb.float_zone = None;
                     } else if state.pb.slot_top <= fz.top_y
+                        || empty_line_enters_float(
+                            block,
+                            state.pb.slot_top,
+                            state.prev_space_after,
+                            fz,
+                            &ctx,
+                        )
                         || (fz.para_relative && state.pb.slot_top <= fz.top_y + 30.0)
                         // A floating table meets a paragraph whose first
                         // line reaches its top: physical_education's empty
