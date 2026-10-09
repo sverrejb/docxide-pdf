@@ -474,7 +474,7 @@ and `w:suff` (`a3681d62`). Still open; main hid each of these:
   decide whether an empty line fits beside a float. Probe the body case in
   Word and share one constant.
 - **Nested table origin (+4.9pt).** In the PR #43/#45 fixtures
-  (nested-fixed-*, explicit-overflow-nested-autofit-*) every nested cell's
+  (case204–205, case210–211) every nested cell's
   text sits 4.9pt right of Word's while the column boundaries match, so the
   nested table's left edge (cell margin outdent) is off.
 - **case111 cell too narrow.** "…ора по" overflows its cell in our layout
