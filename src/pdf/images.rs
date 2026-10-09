@@ -974,7 +974,7 @@ pub(super) fn embed_all_images(
     for section in &doc.sections {
         for block in &section.blocks {
             if let Block::Paragraph(para) = block {
-                for diagram in &para.smartart {
+                for diagram in para.smartart.iter().chain(&para.floating_smartart) {
                     for shape in &diagram.shapes {
                         if let Some(ref img) = shape.image_fill {
                             embed_keyed_image(

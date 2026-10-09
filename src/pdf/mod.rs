@@ -1956,6 +1956,18 @@ pub(super) fn para_tag_kind(para: &Paragraph, style_name: Option<&String>) -> &'
     })
 }
 
+/// Word's SmartArt alt text: the diagrams' text, one line per node.
+fn smartart_alt(diagrams: &[crate::model::SmartArtDiagram]) -> Option<String> {
+    let lines: Vec<String> = diagrams
+        .iter()
+        .flat_map(|d| &d.shapes)
+        .flat_map(|s| &s.paragraphs)
+        .map(|p| p.runs.iter().map(|r| r.text.as_str()).collect::<String>())
+        .filter(|t| !t.trim().is_empty())
+        .collect();
+    (!lines.is_empty()).then(|| lines.join("\n"))
+}
+
 /// How far outside its `space` a paragraph's left or right border sits.
 const LEFT_BORDER_GAP: f32 = 1.47;
 const RIGHT_BORDER_GAP: f32 = 1.73;
@@ -3549,6 +3561,45 @@ fn render_paragraph_block(
         state.pb.deferred_shapes.push((conn.z_index, shape_content));
     }
 
+    for diagram in &para.floating_smartart {
+        let Some(anchor) = &diagram.anchor else {
+            continue;
+        };
+        let x = positioning::resolve_h_position(
+            anchor.h_relative_from,
+            &anchor.h_position,
+            anchor.width,
+            sp,
+            col_x,
+            col_w,
+            text_width,
+        );
+        let y = header_footer::resolve_tb_y_top(
+            anchor.v_relative_from,
+            &anchor.v_position,
+            diagram.display_height,
+            sp,
+            state.pb.slot_top,
+        );
+        // A content-less Figure after the paragraph, as for an inline diagram.
+        let alt = smartart_alt(std::slice::from_ref(diagram));
+        state.pb.tags.hoist_figure(alt.as_deref(), 0);
+        let mut shape_content = tagging::artifact_content();
+        smartart::render_smartart(
+            &mut shape_content,
+            diagram,
+            x,
+            y,
+            ctx.fonts,
+            smartart_font_key,
+            smartart_image_names,
+        );
+        state
+            .pb
+            .deferred_shapes
+            .push((anchor.z_index, shape_content));
+    }
+
     if let Some(ref ic) = para.inline_chart {
         let chart_x = col_x + align_offset(para.alignment, (col_w - ic.display_width).max(0.0));
         state.pb.figure_without_content(para, doc, None);
@@ -3562,19 +3613,8 @@ fn render_paragraph_block(
             &mut state.pb.alpha_states,
         );
     } else if !para.smartart.is_empty() {
-        // Word's SmartArt alt text: the diagram's text, one line per node.
-        let alt: Vec<String> = para
-            .smartart
-            .iter()
-            .flat_map(|d| &d.shapes)
-            .flat_map(|s| &s.paragraphs)
-            .map(|p| p.runs.iter().map(|r| r.text.as_str()).collect::<String>())
-            .filter(|t| !t.trim().is_empty())
-            .collect();
-        let alt = alt.join("\n");
-        state
-            .pb
-            .figure_without_content(para, doc, (!alt.is_empty()).then_some(alt.as_str()));
+        let alt = smartart_alt(&para.smartart);
+        state.pb.figure_without_content(para, doc, alt.as_deref());
         for (i, diagram) in para.smartart.iter().enumerate() {
             if i > 0 {
                 state.pb.slot_top -= diagram.display_height;

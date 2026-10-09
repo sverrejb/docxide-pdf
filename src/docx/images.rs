@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::io::{Read, Seek};
 
 use crate::model::{
-    ConnectorShape, EmbeddedImage, FloatingImage, HRelativeFrom, HorizontalPosition, ImageFormat,
-    ImageGlow, ImageReflection, ImageShadow, InlineChart, InnerShadow, SmartArtDiagram, SoftEdge,
-    Textbox, VRelativeFrom, VerticalPosition, WrapText, WrapType,
+    ConnectorShape, DiagramAnchor, EmbeddedImage, FloatingImage, HRelativeFrom, HorizontalPosition,
+    ImageFormat, ImageGlow, ImageReflection, ImageShadow, InlineChart, InnerShadow,
+    SmartArtDiagram, SoftEdge, Textbox, VRelativeFrom, VerticalPosition, WrapText, WrapType,
 };
 
 use super::charts::parse_chart_from_zip;
@@ -637,11 +637,25 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                     anchor_seq: 0,
                 }));
             }
-            // SmartArt diagrams lack floating layout support; treat anchored
-            // diagrams the same as inline to avoid dropping them entirely
+            // A wrapNone diagram floats at its anchor, the paragraph's text laid
+            // out as if it weren't there.
+            // ponytail: other wraps are laid out inline; add wrap zones with a
+            // fixture that has one.
             if display_h > 0.0 && has_diagram_ref(container) {
-                let diagram =
+                let mut diagram =
                     parse_smartart_drawing(container, ctx.rels, ctx.zip, ctx.theme, display_h);
+                if parse_wrap_type(container).0 == WrapType::None {
+                    let (h_position, h_relative_from, v_position, v_relative_from) =
+                        parse_anchor_position(container);
+                    diagram.anchor = Some(DiagramAnchor {
+                        h_position,
+                        h_relative_from,
+                        v_position,
+                        v_relative_from,
+                        width: display_w,
+                        z_index: anchor_z_order(container).1,
+                    });
+                }
                 return Some(RunDrawingResult::SmartArt(diagram));
             }
             continue;

@@ -494,6 +494,8 @@ pub struct Paragraph {
     pub connectors: Vec<ConnectorShape>,
     pub inline_chart: Option<InlineChart>,
     pub smartart: Vec<SmartArtDiagram>,
+    /// Diagrams drawn at their anchor over the text (`SmartArtDiagram::anchor`).
+    pub floating_smartart: Vec<SmartArtDiagram>,
     pub horizontal_rule: Option<HorizontalRule>,
     pub is_section_break: bool,
     pub bookmarks: Vec<String>,

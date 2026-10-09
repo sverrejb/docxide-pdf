@@ -115,6 +115,7 @@ pub(super) fn parse_smartart_drawing<R: Read + Seek>(
     SmartArtDiagram {
         display_height: display_h,
         shapes,
+        anchor: None,
     }
 }
 

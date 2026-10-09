@@ -279,6 +279,18 @@ pub struct SmartArtShape {
 pub struct SmartArtDiagram {
     pub display_height: f32,
     pub shapes: Vec<SmartArtShape>,
+    /// Where a floating (wrapNone) diagram sits; None when it is inline.
+    pub anchor: Option<DiagramAnchor>,
+}
+
+pub struct DiagramAnchor {
+    pub h_position: HorizontalPosition,
+    pub h_relative_from: HRelativeFrom,
+    pub v_position: VerticalPosition,
+    pub v_relative_from: VRelativeFrom,
+    pub width: f32,
+    /// wp:anchor relativeHeight, as for connectors.
+    pub z_index: u32,
 }
 
 #[derive(Clone)]

@@ -193,7 +193,7 @@ fn collect_used_chars(doc: &Document, all_runs: &[&Run]) -> HashMap<String, Hash
         let sa_key = font_key_buf(first_run, &mut key_buf).to_string();
         let chars = used.entry(sa_key).or_default();
         for para in &all_paras {
-            for diagram in &para.smartart {
+            for diagram in para.smartart.iter().chain(&para.floating_smartart) {
                 for shape in &diagram.shapes {
                     for sa_para in &shape.paragraphs {
                         for run in &sa_para.runs {
@@ -401,7 +401,7 @@ pub(super) fn collect_and_register_fonts(
     for section in &doc.sections {
         for block in &section.blocks {
             if let Block::Paragraph(para) = block {
-                for diagram in &para.smartart {
+                for diagram in para.smartart.iter().chain(&para.floating_smartart) {
                     for shape in &diagram.shapes {
                         for sa_para in &shape.paragraphs {
                             for (i, run) in sa_para.runs.iter().enumerate() {

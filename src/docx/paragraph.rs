@@ -233,7 +233,11 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     if let Some(ref ic) = parsed.inline_chart {
         content_height = content_height.max(ic.display_height);
     }
-    for sa in &parsed.smartart {
+    let (floating_smartart, smartart): (Vec<_>, Vec<_>) = parsed
+        .smartart
+        .into_iter()
+        .partition(|d| d.anchor.is_some());
+    for sa in &smartart {
         content_height = content_height.max(sa.display_height);
     }
 
@@ -325,7 +329,8 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         textboxes,
         connectors: parsed.connectors,
         inline_chart: parsed.inline_chart,
-        smartart: parsed.smartart,
+        smartart,
+        floating_smartart,
         horizontal_rule: parsed.horizontal_rule,
         is_section_break: false,
         bookmarks,
