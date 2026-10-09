@@ -1828,7 +1828,8 @@ fn compute_bookmark_positions(
                     let keeps_line = ctx.compat_mode >= 15
                         && next_continuous
                         && matches!(blocks.get(bi.wrapping_sub(1)), Some(Block::Table(_)));
-                    if para.is_section_break && bi != 0 && !keeps_line && is_text_empty(&para.runs) {
+                    if para.is_section_break && bi != 0 && !keeps_line && is_text_empty(&para.runs)
+                    {
                         let drop;
                         (drop, prev_space_after) = section_break_spacing(
                             prev_space_after,
