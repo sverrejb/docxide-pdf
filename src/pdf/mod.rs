@@ -373,6 +373,8 @@ pub(super) struct RenderContext<'a> {
     pub(super) sections: &'a [crate::model::Section],
     /// `w:evenAndOddHeaders`: even pages lay out around the even header.
     pub(super) even_and_odd_headers: bool,
+    /// Paragraph style names by id, for tagging textbox paragraphs.
+    pub(super) style_id_to_name: &'a HashMap<String, String>,
     pub(super) doc_line_spacing: LineSpacing,
     pub(super) note_separator: footnotes::NoteSeparator,
     pub(super) default_tab_stop: f32,
@@ -1945,7 +1947,7 @@ fn compute_bookmark_positions(
 
 /// Structure type of a body paragraph. Word tags outline levels as H1–H6
 /// (deeper levels stay H6) and its Title style as Title, role-mapped to H1.
-fn para_tag_kind(para: &Paragraph, style_name: Option<&String>) -> &'static str {
+pub(super) fn para_tag_kind(para: &Paragraph, style_name: Option<&String>) -> &'static str {
     if style_name.is_some_and(|n| n.eq_ignore_ascii_case("title")) {
         return "H1";
     }
@@ -3957,6 +3959,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         fonts: &seen_fonts,
         sections: &doc.sections,
         even_and_odd_headers: doc.even_and_odd_headers,
+        style_id_to_name: &doc.style_id_to_name,
         doc_line_spacing: doc.line_spacing,
         default_tab_stop: doc.default_tab_stop,
         table_cell_image_names: &table_cell_image_names,

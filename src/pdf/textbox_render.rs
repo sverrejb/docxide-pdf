@@ -367,8 +367,8 @@ pub(super) fn render_textbox_paragraphs(
     ctx: &RenderContext,
     clip_bottom: Option<f32>,
     gradient_specs: &mut Vec<GradientSpec>,
-    // As in `render_single_textbox`; each paragraph becomes a P (a list
-    // paragraph an LI) in the Sect.
+    // As in `render_single_textbox`; each paragraph becomes a P or H1–H6
+    // (a list paragraph an LI) in the Sect.
     mut tag: Option<(&mut Tags, usize, usize)>,
 ) {
     let mut cursor_y = start_y;
@@ -391,7 +391,13 @@ pub(super) fn render_textbox_paragraphs(
         // (Lbl, text element) as in the body: see `para_tags`.
         let tag_nodes = tag.as_mut().map(|(tags, _, sect)| {
             let item = tp.list_item.filter(|_| tp.outline_level.is_none());
-            tags.para_nodes(&mut lists, *sect, item, !tp.list_label.is_empty(), "P")
+            // Word tags headings in textboxes too (never in table cells).
+            let style_name = tp
+                .style_id
+                .as_ref()
+                .and_then(|id| ctx.style_id_to_name.get(id));
+            let kind = super::para_tag_kind(tp, style_name);
+            tags.para_nodes(&mut lists, *sect, item, !tp.list_label.is_empty(), kind)
         });
         let para_tag = tag_nodes.map(|(_, text)| text);
         let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);

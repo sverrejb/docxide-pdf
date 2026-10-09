@@ -97,7 +97,11 @@ pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
 ) -> Vec<Paragraph> {
     let mut paragraphs = Vec::new();
     let mut lists = super::numbering::ListCounters::default();
-    let opts = super::paragraph::ParagraphOptions::default();
+    // Outline levels only tag headings here; the outline itself comes from the body.
+    let opts = super::paragraph::ParagraphOptions {
+        resolve_outline_level: true,
+        ..Default::default()
+    };
     for p in txbx_content
         .children()
         .filter(|n| n.has_tag_name((WML_NS, "p")))
