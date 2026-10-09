@@ -13,13 +13,83 @@
   "cases/case10": {
     "jaccard": 0.7192,
     "ssim": 0.8485,
-    "text_boundary": 0.9063,
+    "text_boundary": 0.9688,
     "convert_ms": 10.2,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 0.9512,
     "a11y_text": 0.5672
+  },
+  "cases/case100": {
+    "jaccard": 0.3909,
+    "ssim": 0.5774,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5625,
+    "a11y_text": 1.0
+  },
+  "cases/case101": {
+    "jaccard": 0.453,
+    "ssim": 0.6189,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.875,
+    "a11y_text": 1.0
+  },
+  "cases/case102": {
+    "jaccard": 0.6139,
+    "ssim": 0.7683,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.875,
+    "a11y_text": 1.0
+  },
+  "cases/case103": {
+    "jaccard": 0.5833,
+    "ssim": 0.6811,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case104": {
+    "jaccard": 0.6287,
+    "ssim": 0.7198,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case105": {
+    "jaccard": 0.5897,
+    "ssim": 0.6908,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case109": {
+    "jaccard": 0.4973,
+    "ssim": 0.6151,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6,
+    "a11y_text": 1.0
   },
   "cases/case11": {
     "jaccard": 0.7274,
@@ -30,6 +100,106 @@
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case110": {
+    "jaccard": 0.4989,
+    "ssim": 0.6168,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6,
+    "a11y_text": 1.0
+  },
+  "cases/case111": {
+    "jaccard": 0.4496,
+    "ssim": 0.5828,
+    "text_boundary": 0.6667,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 0.875
+  },
+  "cases/case112": {
+    "jaccard": 0.4749,
+    "ssim": 0.5803,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6,
+    "a11y_text": 1.0
+  },
+  "cases/case113": {
+    "jaccard": 0.5688,
+    "ssim": 0.7556,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5714,
+    "a11y_text": 1.0
+  },
+  "cases/case114": {
+    "jaccard": 0.5688,
+    "ssim": 0.7459,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5714,
+    "a11y_text": 1.0
+  },
+  "cases/case115": {
+    "jaccard": 0.8018,
+    "ssim": 0.929,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5714,
+    "a11y_text": 1.0
+  },
+  "cases/case116": {
+    "jaccard": 0.8018,
+    "ssim": 0.936,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5625,
+    "a11y_text": 1.0
+  },
+  "cases/case117": {
+    "jaccard": 0.8018,
+    "ssim": 0.936,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.625,
+    "a11y_text": 1.0
+  },
+  "cases/case118": {
+    "jaccard": 0.7447,
+    "ssim": 0.8814,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.55,
+    "a11y_text": 1.0
+  },
+  "cases/case119": {
+    "jaccard": 0.6364,
+    "ssim": 0.7986,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.55,
     "a11y_text": 1.0
   },
   "cases/case12": {
@@ -43,6 +213,206 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/case120": {
+    "jaccard": 0.7467,
+    "ssim": 0.8818,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.55,
+    "a11y_text": 1.0
+  },
+  "cases/case121": {
+    "jaccard": 0.6468,
+    "ssim": 0.9913,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case122": {
+    "jaccard": 0.6468,
+    "ssim": 0.9898,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case123": {
+    "jaccard": 0.9804,
+    "ssim": 0.9805,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case124": {
+    "jaccard": 0.9862,
+    "ssim": 0.9974,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case125": {
+    "jaccard": 0.801,
+    "ssim": 0.9898,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case126": {
+    "jaccard": 0.9862,
+    "ssim": 0.9974,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case127": {
+    "jaccard": 0.7071,
+    "ssim": 0.9313,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case128": {
+    "jaccard": 0.7071,
+    "ssim": 0.9313,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.7692,
+    "a11y_text": 1.0
+  },
+  "cases/case129": {
+    "jaccard": 0.4299,
+    "ssim": 0.6307,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case130": {
+    "jaccard": 0.4299,
+    "ssim": 0.6307,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.7692,
+    "a11y_text": 1.0
+  },
+  "cases/case131": {
+    "jaccard": 0.4959,
+    "ssim": 0.5954,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.619,
+    "a11y_text": 1.0
+  },
+  "cases/case132": {
+    "jaccard": 0.4959,
+    "ssim": 0.6021,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.619,
+    "a11y_text": 1.0
+  },
+  "cases/case133": {
+    "jaccard": 0.4959,
+    "ssim": 0.6021,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9048,
+    "a11y_text": 1.0
+  },
+  "cases/case134": {
+    "jaccard": 0.4959,
+    "ssim": 0.5748,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.8947,
+    "a11y_text": 1.0
+  },
+  "cases/case135": {
+    "jaccard": 0.4959,
+    "ssim": 0.6175,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9,
+    "a11y_text": 1.0
+  },
+  "cases/case136": {
+    "jaccard": 0.4701,
+    "ssim": 0.5892,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5652,
+    "a11y_text": 0.7447
+  },
+  "cases/case137": {
+    "jaccard": 0.4642,
+    "ssim": 0.5798,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9,
+    "a11y_text": 1.0
+  },
+  "cases/case138": {
+    "jaccard": 0.4642,
+    "ssim": 0.5798,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6,
+    "a11y_text": 1.0
+  },
+  "cases/case139": {
+    "jaccard": 0.6995,
+    "ssim": 0.9235,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.881,
+    "a11y_text": 1.0
+  },
   "cases/case14": {
     "jaccard": 0.7336,
     "ssim": 0.8902,
@@ -53,6 +423,106 @@
     "ua_deficit": 0,
     "a11y_struct": 1.0,
     "a11y_text": 1.0
+  },
+  "cases/case140": {
+    "jaccard": 0.5861,
+    "ssim": 0.8275,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.881,
+    "a11y_text": 1.0
+  },
+  "cases/case141": {
+    "jaccard": 0.6966,
+    "ssim": 0.9178,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.881,
+    "a11y_text": 1.0
+  },
+  "cases/case142": {
+    "jaccard": 0.5476,
+    "ssim": 0.8128,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.881,
+    "a11y_text": 1.0
+  },
+  "cases/case143": {
+    "jaccard": 0.6966,
+    "ssim": 0.9178,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.881,
+    "a11y_text": 1.0
+  },
+  "cases/case144": {
+    "jaccard": 0.6995,
+    "ssim": 0.9235,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.881,
+    "a11y_text": 1.0
+  },
+  "cases/case145": {
+    "jaccard": 0.5389,
+    "ssim": 0.949,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.881,
+    "a11y_text": 1.0
+  },
+  "cases/case146": {
+    "jaccard": 0.7659,
+    "ssim": 0.9379,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.881,
+    "a11y_text": 1.0
+  },
+  "cases/case147": {
+    "jaccard": 0.7487,
+    "ssim": 0.9534,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.881,
+    "a11y_text": 1.0
+  },
+  "cases/case148": {
+    "jaccard": 0.5304,
+    "ssim": 0.92,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.881,
+    "a11y_text": 1.0
+  },
+  "cases/case149": {
+    "jaccard": 0.7052,
+    "ssim": 0.9441,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6667,
+    "a11y_text": 0.7333
   },
   "cases/case15": {
     "jaccard": 0.8212,
@@ -65,12 +535,212 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/case150": {
+    "jaccard": 0.8498,
+    "ssim": 0.9617,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.8837,
+    "a11y_text": 1.0
+  },
+  "cases/case151": {
+    "jaccard": 0.7631,
+    "ssim": 0.9267,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.8837,
+    "a11y_text": 1.0
+  },
+  "cases/case152": {
+    "jaccard": 0.6913,
+    "ssim": 0.8262,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case153": {
+    "jaccard": 0.6913,
+    "ssim": 0.8262,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case154": {
+    "jaccard": 0.6913,
+    "ssim": 0.8262,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case155": {
+    "jaccard": 0.655,
+    "ssim": 0.8067,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case156": {
+    "jaccard": 0.6761,
+    "ssim": 0.8197,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case157": {
+    "jaccard": 0.6761,
+    "ssim": 0.8197,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case158": {
+    "jaccard": 0.6402,
+    "ssim": 0.8011,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case159": {
+    "jaccard": 0.6818,
+    "ssim": 0.8137,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
   "cases/case16": {
     "jaccard": 0.9897,
     "ssim": 0.9859,
     "text_boundary": 1.0,
     "convert_ms": 51.2,
     "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case160": {
+    "jaccard": 0.6514,
+    "ssim": 0.7973,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case161": {
+    "jaccard": 0.6761,
+    "ssim": 0.8095,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case162": {
+    "jaccard": 0.6761,
+    "ssim": 0.8197,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case163": {
+    "jaccard": 0.6761,
+    "ssim": 0.8131,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case164": {
+    "jaccard": 0.8718,
+    "ssim": 0.9674,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case165": {
+    "jaccard": 0.6734,
+    "ssim": 0.8157,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case166": {
+    "jaccard": 0.6913,
+    "ssim": 0.8262,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case167": {
+    "jaccard": 0.6913,
+    "ssim": 0.8193,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case168": {
+    "jaccard": 0.8902,
+    "ssim": 0.972,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case169": {
+    "jaccard": 0.6496,
+    "ssim": 0.8037,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 1.0,
@@ -90,7 +760,7 @@
   "cases/case18": {
     "jaccard": 0.7038,
     "ssim": 0.8829,
-    "text_boundary": 0.9545,
+    "text_boundary": 1.0,
     "convert_ms": 8.4,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -156,7 +826,7 @@
   "cases/case23": {
     "jaccard": 0.6822,
     "ssim": 0.8944,
-    "text_boundary": 0.6875,
+    "text_boundary": 1.0,
     "convert_ms": 6.3,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -189,7 +859,7 @@
   "cases/case26": {
     "jaccard": 0.7867,
     "ssim": 0.9138,
-    "text_boundary": 0.9048,
+    "text_boundary": 1.0,
     "convert_ms": 8.8,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -233,7 +903,7 @@
   "cases/case3": {
     "jaccard": 0.9345,
     "ssim": 0.9718,
-    "text_boundary": 0.6,
+    "text_boundary": 1.0,
     "convert_ms": 2.5,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -277,7 +947,7 @@
   "cases/case33": {
     "jaccard": 0.8442,
     "ssim": 0.955,
-    "text_boundary": 0.7273,
+    "text_boundary": 1.0,
     "convert_ms": 7.2,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -288,7 +958,7 @@
   "cases/case34": {
     "jaccard": 0.9903,
     "ssim": 0.9878,
-    "text_boundary": 0.75,
+    "text_boundary": 1.0,
     "convert_ms": 6.4,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -354,7 +1024,7 @@
   "cases/case4": {
     "jaccard": 0.731,
     "ssim": 0.9035,
-    "text_boundary": 0.9833,
+    "text_boundary": 1.0,
     "convert_ms": 10.7,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -365,7 +1035,7 @@
   "cases/case40": {
     "jaccard": 0.5284,
     "ssim": 0.6974,
-    "text_boundary": 0.5,
+    "text_boundary": 0.7,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -375,7 +1045,7 @@
   "cases/case41": {
     "jaccard": 0.9337,
     "ssim": 0.9554,
-    "text_boundary": 0.6702,
+    "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -385,7 +1055,7 @@
   "cases/case42": {
     "jaccard": 0.8323,
     "ssim": 0.8944,
-    "text_boundary": 0.1707,
+    "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -395,7 +1065,7 @@
   "cases/case43": {
     "jaccard": 0.5028,
     "ssim": 0.5342,
-    "text_boundary": 0.0,
+    "text_boundary": 0.6667,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -405,7 +1075,7 @@
   "cases/case44": {
     "jaccard": 0.5056,
     "ssim": 0.5448,
-    "text_boundary": 0.0,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -415,7 +1085,7 @@
   "cases/case45": {
     "jaccard": 0.5207,
     "ssim": 0.7077,
-    "text_boundary": 0.5902,
+    "text_boundary": 0.7541,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -425,7 +1095,7 @@
   "cases/case46": {
     "jaccard": 0.6799,
     "ssim": 0.8404,
-    "text_boundary": 0.7516,
+    "text_boundary": 0.9097,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -455,7 +1125,7 @@
   "cases/case49": {
     "jaccard": 0.5912,
     "ssim": 0.7912,
-    "text_boundary": 1.0,
+    "text_boundary": 0.9053,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -476,7 +1146,7 @@
   "cases/case50": {
     "jaccard": 0.8058,
     "ssim": 0.9408,
-    "text_boundary": 0.8919,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -566,7 +1236,7 @@
   "cases/case6": {
     "jaccard": 0.6646,
     "ssim": 0.8709,
-    "text_boundary": 0.9818,
+    "text_boundary": 1.0,
     "convert_ms": 15.3,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -607,7 +1277,7 @@
   "cases/case63": {
     "jaccard": 0.3589,
     "ssim": 0.6737,
-    "text_boundary": 0.5556,
+    "text_boundary": 0.3333,
     "ua_fail": 2,
     "a11y_missing": 0
   },
@@ -742,6 +1412,7 @@
   "cases/case77": {
     "jaccard": 0.521,
     "ssim": 0.7046,
+    "text_boundary": 0.8421,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -751,6 +1422,7 @@
   "cases/case78": {
     "jaccard": 0.9962,
     "ssim": 0.9937,
+    "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -760,6 +1432,7 @@
   "cases/case79": {
     "jaccard": 0.7205,
     "ssim": 0.9158,
+    "text_boundary": 0.9722,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -780,6 +1453,7 @@
   "cases/case80": {
     "jaccard": 0.6543,
     "ssim": 0.8241,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -789,6 +1463,7 @@
   "cases/case81": {
     "jaccard": 0.7104,
     "ssim": 0.922,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -798,11 +1473,82 @@
   "cases/case82": {
     "jaccard": 0.2124,
     "ssim": 0.3543,
+    "text_boundary": 0.0161,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 0.8298,
     "a11y_text": 0.902
+  },
+  "cases/case83": {
+    "jaccard": 0.9642,
+    "ssim": 0.9832,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.75,
+    "a11y_text": 1.0
+  },
+  "cases/case84": {
+    "jaccard": 0.8824,
+    "ssim": 0.9924,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case85": {
+    "jaccard": 0.974,
+    "ssim": 0.9859,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case86": {
+    "jaccard": 0.9807,
+    "ssim": 0.984,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.5,
+    "a11y_text": 1.0
+  },
+  "cases/case87": {
+    "jaccard": 0.7827,
+    "ssim": 0.9629,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6667,
+    "a11y_text": 1.0
+  },
+  "cases/case88": {
+    "jaccard": 0.3093,
+    "ssim": 0.3623,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.55,
+    "a11y_text": 1.0
+  },
+  "cases/case89": {
+    "jaccard": 0.3428,
+    "ssim": 0.4579,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.55,
+    "a11y_text": 1.0
   },
   "cases/case9": {
     "jaccard": 0.7323,
@@ -813,6 +1559,86 @@
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case90": {
+    "jaccard": 0.6326,
+    "ssim": 0.7102,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.55,
+    "a11y_text": 1.0
+  },
+  "cases/case91": {
+    "jaccard": 0.4658,
+    "ssim": 0.5975,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9,
+    "a11y_text": 1.0
+  },
+  "cases/case94": {
+    "jaccard": 0.6098,
+    "ssim": 0.8054,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6,
+    "a11y_text": 1.0
+  },
+  "cases/case95": {
+    "jaccard": 0.668,
+    "ssim": 0.7937,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6667,
+    "a11y_text": 1.0
+  },
+  "cases/case96": {
+    "jaccard": 0.8288,
+    "ssim": 0.9177,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case97": {
+    "jaccard": 0.8892,
+    "ssim": 0.9544,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/case98": {
+    "jaccard": 0.5325,
+    "ssim": 0.6818,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.7273,
+    "a11y_text": 1.0
+  },
+  "cases/case99": {
+    "jaccard": 0.504,
+    "ssim": 0.6583,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.7273,
     "a11y_text": 1.0
   },
   "fonts/arial": {
@@ -858,6 +1684,7 @@
   "fonts/missing_font_sub..": {
     "jaccard": 0.399,
     "ssim": 0.8852,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0
   },
@@ -884,7 +1711,7 @@
   "hyphenation/dutch": {
     "jaccard": 0.6476,
     "ssim": 0.8564,
-    "text_boundary": 0.9773,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -894,7 +1721,7 @@
   "hyphenation/english": {
     "jaccard": 0.6453,
     "ssim": 0.8468,
-    "text_boundary": 0.9885,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -914,7 +1741,7 @@
   "hyphenation/german": {
     "jaccard": 0.6489,
     "ssim": 0.8541,
-    "text_boundary": 0.9888,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -924,7 +1751,7 @@
   "hyphenation/italian": {
     "jaccard": 0.6367,
     "ssim": 0.8503,
-    "text_boundary": 0.9398,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -944,7 +1771,7 @@
   "hyphenation/slovak": {
     "jaccard": 0.6426,
     "ssim": 0.8506,
-    "text_boundary": 0.9515,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -954,7 +1781,7 @@
   "hyphenation/spanish": {
     "jaccard": 0.6177,
     "ssim": 0.8467,
-    "text_boundary": 0.9667,
+    "text_boundary": 0.9778,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -964,6 +1791,7 @@
   "samples/CV": {
     "jaccard": 0.8569,
     "ssim": 0.954,
+    "text_boundary": 0.6038,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -983,7 +1811,7 @@
   "samples/run-borders": {
     "jaccard": 0.4491,
     "ssim": 0.5837,
-    "text_boundary": 0.1752,
+    "text_boundary": 0.3429,
     "ua_fail": 0,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -993,7 +1821,7 @@
   "samples/sample500kB": {
     "jaccard": 0.1466,
     "ssim": 0.2882,
-    "text_boundary": 0.7816,
+    "text_boundary": 0.043,
     "convert_ms": 18.3,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -1004,7 +1832,7 @@
   "samples/samtale": {
     "jaccard": 0.7947,
     "ssim": 0.9134,
-    "text_boundary": 0.8627,
+    "text_boundary": 0.7059,
     "convert_ms": 11.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -1015,7 +1843,7 @@
   "scraped/air_pollution_pe..": {
     "jaccard": 0.386,
     "ssim": 0.6403,
-    "text_boundary": 0.9714,
+    "text_boundary": 0.9143,
     "convert_ms": 12.0,
     "ua_fail": 2,
     "a11y_missing": 18,
@@ -1026,7 +1854,7 @@
   "scraped/alfies_arc_adult..": {
     "jaccard": 0.5959,
     "ssim": 0.7984,
-    "text_boundary": 0.9405,
+    "text_boundary": 0.9702,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1046,17 +1874,27 @@
   "scraped/americas_counter..": {
     "jaccard": 0.7336,
     "ssim": 0.8843,
-    "text_boundary": 0.9259,
+    "text_boundary": 0.963,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 0.9888,
     "a11y_text": 0.8816
   },
+  "scraped/arabic_rice_bene..": {
+    "jaccard": 0.0583,
+    "ssim": 0.2134,
+    "text_boundary": 0.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 0.0
+  },
   "scraped/arizona_physical..": {
     "jaccard": 0.7047,
     "ssim": 0.8927,
-    "text_boundary": 0.9064,
+    "text_boundary": 0.963,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1064,19 +1902,29 @@
     "a11y_text": 0.9969
   },
   "scraped/auditor_regulato..": {
-    "jaccard": 0.5961,
-    "ssim": 0.812,
-    "text_boundary": 0.5942,
+    "jaccard": 0.5958,
+    "ssim": 0.8118,
+    "text_boundary": 0.9565,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 0.7879,
     "a11y_text": 0.9879
   },
+  "scraped/australian_highe..": {
+    "jaccard": 0.6553,
+    "ssim": 0.833,
+    "text_boundary": 0.8786,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.7577,
+    "a11y_text": 0.9209
+  },
   "scraped/bahamas_sustaina..": {
     "jaccard": 0.7177,
     "ssim": 0.9021,
-    "text_boundary": 0.6857,
+    "text_boundary": 0.9429,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1096,7 +1944,7 @@
   "scraped/biochemistry_pen..": {
     "jaccard": 0.624,
     "ssim": 0.8427,
-    "text_boundary": 0.9846,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1106,7 +1954,7 @@
   "scraped/bosch_software_a..": {
     "jaccard": 0.6735,
     "ssim": 0.9177,
-    "text_boundary": 0.0201,
+    "text_boundary": 0.959,
     "ua_fail": 0,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1114,9 +1962,9 @@
     "a11y_text": 0.9937
   },
   "scraped/brazilian_logist..": {
-    "jaccard": 0.6246,
-    "ssim": 0.778,
-    "text_boundary": 0.1624,
+    "jaccard": 0.4634,
+    "ssim": 0.6348,
+    "text_boundary": 0.8583,
     "convert_ms": 744.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -1124,9 +1972,20 @@
     "a11y_struct": 0.9897,
     "a11y_text": 0.9928
   },
+  "scraped/bulgarian_farmla..": {
+    "jaccard": 0.6613,
+    "ssim": 0.8585,
+    "text_boundary": 0.9556,
+    "ua_fail": 0,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.942,
+    "a11y_text": 1.0
+  },
   "scraped/bulgarian_road_s..": {
     "jaccard": 0.4825,
     "ssim": 0.8392,
+    "text_boundary": 0.9873,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1136,7 +1995,7 @@
   "scraped/bush_fires_act_c..": {
     "jaccard": 0.6919,
     "ssim": 0.9002,
-    "text_boundary": 0.8734,
+    "text_boundary": 0.9839,
     "convert_ms": 248.6,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -1147,7 +2006,7 @@
   "scraped/candidate_refere..": {
     "jaccard": 0.6916,
     "ssim": 0.8551,
-    "text_boundary": 0.2273,
+    "text_boundary": 0.5714,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1155,9 +2014,9 @@
     "a11y_text": 1.0
   },
   "scraped/carbon_farming_i..": {
-    "jaccard": 0.5724,
-    "ssim": 0.7601,
-    "text_boundary": 0.4458,
+    "jaccard": 0.6061,
+    "ssim": 0.7939,
+    "text_boundary": 0.8257,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1165,8 +2024,8 @@
     "a11y_text": 0.9083
   },
   "scraped/centrifugal_wate..": {
-    "jaccard": 0.8145,
-    "ssim": 0.9519,
+    "jaccard": 0.8147,
+    "ssim": 0.952,
     "text_boundary": 1.0,
     "convert_ms": 40.9,
     "ua_fail": 2,
@@ -1178,6 +2037,7 @@
   "scraped/chinese_asset_di..": {
     "jaccard": 0.7355,
     "ssim": 0.9333,
+    "text_boundary": 0.5,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1185,8 +2045,9 @@
     "a11y_text": 1.0
   },
   "scraped/chinese_costume_..": {
-    "jaccard": 0.205,
-    "ssim": 0.4508,
+    "jaccard": 0.2103,
+    "ssim": 0.4907,
+    "text_boundary": 0.3171,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1203,20 +2064,31 @@
     "a11y_struct": 0.9456,
     "a11y_text": 1.0
   },
+  "scraped/chiseldon_parish..": {
+    "jaccard": 0.6905,
+    "ssim": 0.8834,
+    "text_boundary": 0.7586,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.7569,
+    "a11y_text": 1.0
+  },
   "scraped/classroom_weekly..": {
     "jaccard": 0.9843,
     "ssim": 0.9839,
-    "text_boundary": 0.2609,
+    "text_boundary": 0.6923,
     "convert_ms": 59.6,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
-    "a11y_struct": 0.9403,
+    "a11y_struct": 0.9552,
     "a11y_text": 1.0
   },
   "scraped/clean_energy_reg..": {
-    "jaccard": 0.4569,
-    "ssim": 0.6636,
+    "jaccard": 0.4597,
+    "ssim": 0.6784,
+    "text_boundary": 0.83,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1226,7 +2098,7 @@
   "scraped/construction_bat..": {
     "jaccard": 0.6585,
     "ssim": 0.8631,
-    "text_boundary": 0.9355,
+    "text_boundary": 0.8226,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1236,6 +2108,7 @@
   "scraped/construction_qua..": {
     "jaccard": 0.8031,
     "ssim": 0.9507,
+    "text_boundary": 1.0,
     "ua_fail": 0,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1243,9 +2116,9 @@
     "a11y_text": 0.9978
   },
   "scraped/covid_insomnia_m..": {
-    "jaccard": 0.47,
-    "ssim": 0.7192,
-    "text_boundary": 0.1331,
+    "jaccard": 0.4735,
+    "ssim": 0.7222,
+    "text_boundary": 0.5771,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1253,20 +2126,20 @@
     "a11y_text": 0.9895
   },
   "scraped/croatian_grant_g..": {
-    "jaccard": 0.4397,
-    "ssim": 0.6446,
-    "text_boundary": 0.0129,
+    "jaccard": 0.4458,
+    "ssim": 0.6526,
+    "text_boundary": 0.7229,
     "convert_ms": 270.5,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
-    "a11y_struct": 0.9101,
-    "a11y_text": 0.9195
+    "a11y_struct": 0.9105,
+    "a11y_text": 0.9209
   },
   "scraped/croatian_militar..": {
     "jaccard": 0.6272,
     "ssim": 0.8787,
-    "text_boundary": 0.9492,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1276,7 +2149,7 @@
   "scraped/croatian_regulat..": {
     "jaccard": 0.5136,
     "ssim": 0.8457,
-    "text_boundary": 0.4737,
+    "text_boundary": 1.0,
     "convert_ms": 22.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -1287,11 +2160,21 @@
   "scraped/croatian_thesis_..": {
     "jaccard": 0.882,
     "ssim": 0.9487,
-    "text_boundary": 0.5385,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 0.9405,
+    "a11y_text": 1.0
+  },
+  "scraped/cyprus_ucits_mar..": {
+    "jaccard": 0.7967,
+    "ssim": 0.9314,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
   "scraped/czech_cafeteria_..": {
@@ -1308,7 +2191,7 @@
   "scraped/czech_census_202..": {
     "jaccard": 0.6316,
     "ssim": 0.836,
-    "text_boundary": 0.6667,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1318,7 +2201,7 @@
   "scraped/czech_crisis_mea..": {
     "jaccard": 0.7486,
     "ssim": 0.9138,
-    "text_boundary": 0.4662,
+    "text_boundary": 0.9552,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1347,9 +2230,9 @@
     "a11y_text": 1.0
   },
   "scraped/czech_municipal_..": {
-    "jaccard": 0.3455,
-    "ssim": 0.8965,
-    "text_boundary": 0.4118,
+    "jaccard": 0.3456,
+    "ssim": 0.897,
+    "text_boundary": 0.9808,
     "convert_ms": 34.9,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -1368,9 +2251,20 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "scraped/czech_village_bu..": {
+    "jaccard": 0.5107,
+    "ssim": 0.8873,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
   "scraped/czech_wastewater..": {
-    "jaccard": 0.5052,
-    "ssim": 0.7729,
+    "jaccard": 0.5371,
+    "ssim": 0.8131,
+    "text_boundary": 0.9451,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1380,7 +2274,7 @@
   "scraped/czech_works_cont..": {
     "jaccard": 0.6768,
     "ssim": 0.8503,
-    "text_boundary": 0.6508,
+    "text_boundary": 0.9802,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1390,7 +2284,7 @@
   "scraped/dental_amalgam_r..": {
     "jaccard": 0.7762,
     "ssim": 0.91,
-    "text_boundary": 0.8056,
+    "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1410,7 +2304,7 @@
   "scraped/dialysis_treatme..": {
     "jaccard": 0.7681,
     "ssim": 0.882,
-    "text_boundary": 0.5556,
+    "text_boundary": 0.9259,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1418,8 +2312,9 @@
     "a11y_text": 1.0
   },
   "scraped/door_air_cooling..": {
-    "jaccard": 0.824,
-    "ssim": 0.8714,
+    "jaccard": 0.8259,
+    "ssim": 0.8734,
+    "text_boundary": 0.3982,
     "ua_fail": 2,
     "a11y_missing": 0
   },
@@ -1454,9 +2349,9 @@
     "a11y_text": 1.0
   },
   "scraped/east_asia_confer..": {
-    "jaccard": 0.253,
-    "ssim": 0.5202,
-    "text_boundary": 0.619,
+    "jaccard": 0.551,
+    "ssim": 0.702,
+    "text_boundary": 0.0952,
     "convert_ms": 22.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -1467,7 +2362,7 @@
   "scraped/eco_int_agricult..": {
     "jaccard": 0.5957,
     "ssim": 0.9205,
-    "text_boundary": 0.8,
+    "text_boundary": 0.9714,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1475,9 +2370,9 @@
     "a11y_text": 1.0
   },
   "scraped/education_consul..": {
-    "jaccard": 0.5394,
-    "ssim": 0.8593,
-    "text_boundary": 0.2899,
+    "jaccard": 0.55,
+    "ssim": 0.8816,
+    "text_boundary": 0.8683,
     "convert_ms": 47.1,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -1486,9 +2381,9 @@
     "a11y_text": 0.7072
   },
   "scraped/english_town_cou..": {
-    "jaccard": 0.7605,
-    "ssim": 0.8246,
-    "text_boundary": 0.7628,
+    "jaccard": 0.7633,
+    "ssim": 0.8285,
+    "text_boundary": 0.9543,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1496,9 +2391,9 @@
     "a11y_text": 1.0
   },
   "scraped/environmental_la..": {
-    "jaccard": 0.5262,
-    "ssim": 0.7569,
-    "text_boundary": 0.0328,
+    "jaccard": 0.5283,
+    "ssim": 0.7581,
+    "text_boundary": 0.7985,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1506,9 +2401,9 @@
     "a11y_text": 0.9905
   },
   "scraped/erasmus_plus_sta..": {
-    "jaccard": 0.3519,
-    "ssim": 0.5429,
-    "text_boundary": 0.3043,
+    "jaccard": 0.5599,
+    "ssim": 0.7819,
+    "text_boundary": 0.0265,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1516,8 +2411,9 @@
     "a11y_text": 0.8056
   },
   "scraped/estonian_communi..": {
-    "jaccard": 0.5029,
-    "ssim": 0.8078,
+    "jaccard": 0.6975,
+    "ssim": 0.8361,
+    "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1527,7 +2423,7 @@
   "scraped/family_kinship_l..": {
     "jaccard": 0.7156,
     "ssim": 0.8413,
-    "text_boundary": 0.3188,
+    "text_boundary": 0.9437,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1537,7 +2433,7 @@
   "scraped/federal_procurem..": {
     "jaccard": 0.7133,
     "ssim": 0.8965,
-    "text_boundary": 0.8827,
+    "text_boundary": 0.9296,
     "convert_ms": 57.1,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -1548,7 +2444,7 @@
   "scraped/feminist_voice_d..": {
     "jaccard": 0.6156,
     "ssim": 0.8328,
-    "text_boundary": 0.8571,
+    "text_boundary": 0.999,
     "convert_ms": 305.8,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -1559,7 +2455,7 @@
   "scraped/french_lease_ear..": {
     "jaccard": 0.5605,
     "ssim": 0.8474,
-    "text_boundary": 0.82,
+    "text_boundary": 0.96,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1579,7 +2475,7 @@
   "scraped/german_mezzo_sop..": {
     "jaccard": 0.7589,
     "ssim": 0.8195,
-    "text_boundary": 0.8276,
+    "text_boundary": 0.9655,
     "convert_ms": 33.4,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -1588,9 +2484,9 @@
     "a11y_text": 1.0
   },
   "scraped/go_math_grade4_g..": {
-    "jaccard": 0.7443,
-    "ssim": 0.9173,
-    "text_boundary": 0.6491,
+    "jaccard": 0.7449,
+    "ssim": 0.9181,
+    "text_boundary": 0.9939,
     "convert_ms": 70.6,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -1601,6 +2497,7 @@
   "scraped/greek_history_le..": {
     "jaccard": 0.4913,
     "ssim": 0.6556,
+    "text_boundary": 1.0,
     "ua_fail": 0,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1618,9 +2515,9 @@
     "a11y_text": 1.0
   },
   "scraped/indigenous_innov..": {
-    "jaccard": 0.6803,
-    "ssim": 0.8475,
-    "text_boundary": 0.0065,
+    "jaccard": 0.6823,
+    "ssim": 0.85,
+    "text_boundary": 0.9416,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1630,7 +2527,7 @@
   "scraped/indonesian_bench..": {
     "jaccard": 0.7407,
     "ssim": 0.8978,
-    "text_boundary": 0.4351,
+    "text_boundary": 0.9742,
     "convert_ms": 170.5,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -1639,8 +2536,9 @@
     "a11y_text": 0.9994
   },
   "scraped/indonesian_schoo..": {
-    "jaccard": 0.2734,
-    "ssim": 0.8807,
+    "jaccard": 0.545,
+    "ssim": 0.8949,
+    "text_boundary": 0.9474,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1650,7 +2548,7 @@
   "scraped/international_te..": {
     "jaccard": 0.625,
     "ssim": 0.8856,
-    "text_boundary": 0.1661,
+    "text_boundary": 0.8497,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1660,7 +2558,7 @@
   "scraped/irish_school_enr..": {
     "jaccard": 0.7386,
     "ssim": 0.8766,
-    "text_boundary": 0.7054,
+    "text_boundary": 0.823,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1670,17 +2568,27 @@
   "scraped/isla_language_le..": {
     "jaccard": 0.6506,
     "ssim": 0.8516,
-    "text_boundary": 0.7744,
+    "text_boundary": 0.8718,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 0.7826,
     "a11y_text": 0.8412
   },
+  "scraped/italian_academic..": {
+    "jaccard": 0.4512,
+    "ssim": 0.5932,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9632,
+    "a11y_text": 0.7331
+  },
   "scraped/italian_evaluati..": {
     "jaccard": 0.7575,
     "ssim": 0.8908,
-    "text_boundary": 0.5768,
+    "text_boundary": 0.9917,
     "convert_ms": 115.1,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -1691,7 +2599,7 @@
   "scraped/italian_project_..": {
     "jaccard": 0.3963,
     "ssim": 0.6505,
-    "text_boundary": 0.75,
+    "text_boundary": 0.0,
     "convert_ms": 2.4,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -1702,6 +2610,7 @@
   "scraped/italian_teacher_..": {
     "jaccard": 0.5301,
     "ssim": 0.8982,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1709,9 +2618,9 @@
     "a11y_text": 1.0
   },
   "scraped/japanese_interli..": {
-    "jaccard": 0.6398,
-    "ssim": 0.8051,
-    "text_boundary": 0.2381,
+    "jaccard": 0.6849,
+    "ssim": 0.8346,
+    "text_boundary": 0.4286,
     "convert_ms": 4.5,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -1720,9 +2629,9 @@
     "a11y_text": 1.0
   },
   "scraped/japanese_land_de..": {
-    "jaccard": 0.3572,
-    "ssim": 0.7139,
-    "text_boundary": 0.1111,
+    "jaccard": 0.3583,
+    "ssim": 0.7186,
+    "text_boundary": 0.8519,
     "ua_fail": 4,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1730,9 +2639,9 @@
     "a11y_text": 1.0
   },
   "scraped/japanese_medical..": {
-    "jaccard": 0.5634,
-    "ssim": 0.8104,
-    "text_boundary": 0.4634,
+    "jaccard": 0.5658,
+    "ssim": 0.8153,
+    "text_boundary": 0.8537,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1742,7 +2651,7 @@
   "scraped/k4_regulations_s..": {
     "jaccard": 0.5012,
     "ssim": 0.809,
-    "text_boundary": 0.9892,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1750,15 +2659,15 @@
     "a11y_text": 1.0
   },
   "scraped/learning_culture..": {
-    "jaccard": 0.5815,
-    "ssim": 0.7315,
-    "text_boundary": 0.4073,
+    "jaccard": 0.5889,
+    "ssim": 0.7392,
+    "text_boundary": 0.8192,
     "convert_ms": 1027.5,
     "ua_fail": 3,
-    "a11y_missing": 43,
+    "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 0.9449,
-    "a11y_text": 0.9995
+    "a11y_text": 0.9997
   },
   "scraped/lenten_prayer_un..": {
     "jaccard": 0.9259,
@@ -1773,7 +2682,7 @@
   "scraped/lithuanian_ethic..": {
     "jaccard": 0.7287,
     "ssim": 0.8966,
-    "text_boundary": 0.65,
+    "text_boundary": 0.95,
     "convert_ms": 7.3,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -1784,7 +2693,7 @@
   "scraped/lithuanian_excis..": {
     "jaccard": 0.672,
     "ssim": 0.8574,
-    "text_boundary": 0.9107,
+    "text_boundary": 0.9643,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1794,7 +2703,7 @@
   "scraped/lithuanian_food_..": {
     "jaccard": 0.63,
     "ssim": 0.8387,
-    "text_boundary": 0.4815,
+    "text_boundary": 1.0,
     "convert_ms": 5.6,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -1805,7 +2714,7 @@
   "scraped/lithuanian_publi..": {
     "jaccard": 0.7395,
     "ssim": 0.9055,
-    "text_boundary": 0.2987,
+    "text_boundary": 0.968,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1815,17 +2724,27 @@
   "scraped/lithuanian_railw..": {
     "jaccard": 0.594,
     "ssim": 0.8,
-    "text_boundary": 1.0,
+    "text_boundary": 0.9952,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "scraped/maine_criminal_h..": {
+    "jaccard": 0.0455,
+    "ssim": 0.151,
+    "text_boundary": 0.3175,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4207,
+    "a11y_text": 1.0
+  },
   "scraped/mandated_reporte..": {
     "jaccard": 0.5934,
     "ssim": 0.8469,
-    "text_boundary": 0.7368,
+    "text_boundary": 0.9684,
     "convert_ms": 43.3,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -1836,6 +2755,7 @@
   "scraped/massachusetts_co..": {
     "jaccard": 0.7724,
     "ssim": 0.9367,
+    "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1845,7 +2765,7 @@
   "scraped/master_thesis_le..": {
     "jaccard": 0.4263,
     "ssim": 0.6454,
-    "text_boundary": 0.8343,
+    "text_boundary": 0.9773,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1853,9 +2773,9 @@
     "a11y_text": 1.0
   },
   "scraped/mongolian_human_..": {
-    "jaccard": 0.7427,
-    "ssim": 0.8986,
-    "text_boundary": 0.1949,
+    "jaccard": 0.7609,
+    "ssim": 0.9136,
+    "text_boundary": 1.0,
     "convert_ms": 32.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -1864,8 +2784,9 @@
     "a11y_text": 1.0
   },
   "scraped/nabl_lab_preasse..": {
-    "jaccard": 0.624,
-    "ssim": 0.8843,
+    "jaccard": 0.6351,
+    "ssim": 0.8842,
+    "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1875,7 +2796,7 @@
   "scraped/old_blue_truck_g..": {
     "jaccard": 0.8309,
     "ssim": 0.9415,
-    "text_boundary": 1.0,
+    "text_boundary": 0.9863,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1885,7 +2806,7 @@
   "scraped/parish_housing_d..": {
     "jaccard": 0.7207,
     "ssim": 0.8301,
-    "text_boundary": 0.9059,
+    "text_boundary": 1.0,
     "convert_ms": 97.8,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -1896,6 +2817,7 @@
   "scraped/pasto_city_hall_..": {
     "jaccard": 0.8849,
     "ssim": 0.9505,
+    "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1903,19 +2825,29 @@
     "a11y_text": 1.0
   },
   "scraped/pendulum_mechani..": {
-    "jaccard": 0.1833,
-    "ssim": 0.3816,
-    "text_boundary": 0.3043,
+    "jaccard": 0.1832,
+    "ssim": 0.3814,
+    "text_boundary": 0.1277,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 0.9496,
     "a11y_text": 0.9753
   },
+  "scraped/physical_educati..": {
+    "jaccard": 0.6848,
+    "ssim": 0.8223,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
   "scraped/physical_therapy..": {
     "jaccard": 0.7385,
     "ssim": 0.9319,
-    "text_boundary": 0.9167,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1925,7 +2857,7 @@
   "scraped/polish_archery_r..": {
     "jaccard": 0.67,
     "ssim": 0.8405,
-    "text_boundary": 0.6294,
+    "text_boundary": 1.0,
     "convert_ms": 16.3,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -1934,9 +2866,9 @@
     "a11y_text": 1.0
   },
   "scraped/polish_building_..": {
-    "jaccard": 0.4747,
-    "ssim": 0.6654,
-    "text_boundary": 0.215,
+    "jaccard": 0.5679,
+    "ssim": 0.7692,
+    "text_boundary": 0.8034,
     "convert_ms": 56.9,
     "ua_fail": 2,
     "a11y_missing": 42,
@@ -1947,7 +2879,7 @@
   "scraped/polish_council_r..": {
     "jaccard": 0.6183,
     "ssim": 0.8057,
-    "text_boundary": 0.3902,
+    "text_boundary": 1.0,
     "convert_ms": 10.4,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -1958,7 +2890,7 @@
   "scraped/polish_council_s..": {
     "jaccard": 0.6721,
     "ssim": 0.8518,
-    "text_boundary": 0.9412,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1966,8 +2898,9 @@
     "a11y_text": 0.9562
   },
   "scraped/polish_ministry_..": {
-    "jaccard": 0.3793,
-    "ssim": 0.6964,
+    "jaccard": 0.3794,
+    "ssim": 0.6967,
+    "text_boundary": 0.7129,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1977,7 +2910,7 @@
   "scraped/polish_municipal..": {
     "jaccard": 0.4493,
     "ssim": 0.8038,
-    "text_boundary": 0.9259,
+    "text_boundary": 1.0,
     "convert_ms": 11.8,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -1988,7 +2921,7 @@
   "scraped/polish_procureme..": {
     "jaccard": 0.6968,
     "ssim": 0.9132,
-    "text_boundary": 0.48,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1998,7 +2931,7 @@
   "scraped/polish_tender_de..": {
     "jaccard": 0.7499,
     "ssim": 0.8813,
-    "text_boundary": 0.4366,
+    "text_boundary": 1.0,
     "convert_ms": 19.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2006,9 +2939,20 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "scraped/potamites_geneti..": {
+    "jaccard": 0.7268,
+    "ssim": 0.9062,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
   "scraped/premises_approva..": {
-    "jaccard": 0.6676,
-    "ssim": 0.8694,
+    "jaccard": 0.6925,
+    "ssim": 0.8937,
+    "text_boundary": 0.9208,
     "ua_fail": 0,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2018,6 +2962,7 @@
   "scraped/radiographer_int..": {
     "jaccard": 0.7584,
     "ssim": 0.8657,
+    "text_boundary": 0.9875,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2027,7 +2972,7 @@
   "scraped/rehab_centre_phy..": {
     "jaccard": 0.8086,
     "ssim": 0.9418,
-    "text_boundary": 0.6341,
+    "text_boundary": 1.0,
     "convert_ms": 9.8,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2035,10 +2980,20 @@
     "a11y_struct": 0.9434,
     "a11y_text": 0.8721
   },
+  "scraped/renewable_dispat..": {
+    "jaccard": 0.8646,
+    "ssim": 0.9217,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9717,
+    "a11y_text": 1.0
+  },
   "scraped/romanian_quality..": {
-    "jaccard": 0.5713,
-    "ssim": 0.7458,
-    "text_boundary": 0.4859,
+    "jaccard": 0.5892,
+    "ssim": 0.7633,
+    "text_boundary": 0.7174,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2048,7 +3003,7 @@
   "scraped/russian_chess_pa..": {
     "jaccard": 0.8815,
     "ssim": 0.9392,
-    "text_boundary": 0.8958,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2058,7 +3013,7 @@
   "scraped/russian_construc..": {
     "jaccard": 0.7279,
     "ssim": 0.9144,
-    "text_boundary": 0.95,
+    "text_boundary": 1.0,
     "ua_fail": 0,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2068,7 +3023,7 @@
   "scraped/russian_municipa..": {
     "jaccard": 0.7509,
     "ssim": 0.9179,
-    "text_boundary": 0.8043,
+    "text_boundary": 0.9348,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2078,7 +3033,7 @@
   "scraped/russian_regional..": {
     "jaccard": 0.6867,
     "ssim": 0.8906,
-    "text_boundary": 0.9402,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2088,7 +3043,7 @@
   "scraped/russian_sports_r..": {
     "jaccard": 0.8059,
     "ssim": 0.9262,
-    "text_boundary": 0.4211,
+    "text_boundary": 1.0,
     "convert_ms": 11.7,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2099,7 +3054,7 @@
   "scraped/russian_student_..": {
     "jaccard": 0.7774,
     "ssim": 0.9206,
-    "text_boundary": 0.9574,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2109,7 +3064,7 @@
   "scraped/russian_universi..": {
     "jaccard": 0.7782,
     "ssim": 0.9222,
-    "text_boundary": 0.5934,
+    "text_boundary": 1.0,
     "convert_ms": 23.3,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -2120,7 +3075,7 @@
   "scraped/russian_voluntee..": {
     "jaccard": 0.7194,
     "ssim": 0.8765,
-    "text_boundary": 0.1174,
+    "text_boundary": 0.935,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2130,6 +3085,7 @@
   "scraped/sao_paulo_procur..": {
     "jaccard": 0.7241,
     "ssim": 0.8902,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2145,7 +3101,7 @@
   "scraped/school_meal_assi..": {
     "jaccard": 0.7149,
     "ssim": 0.9066,
-    "text_boundary": 0.3465,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2155,7 +3111,7 @@
   "scraped/scottish_fundrai..": {
     "jaccard": 0.3488,
     "ssim": 0.8861,
-    "text_boundary": 0.7612,
+    "text_boundary": 0.9552,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2176,7 +3132,7 @@
   "scraped/slovak_constitut..": {
     "jaccard": 0.6671,
     "ssim": 0.9141,
-    "text_boundary": 0.9762,
+    "text_boundary": 0.9524,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2186,7 +3142,7 @@
   "scraped/slovak_electoral..": {
     "jaccard": 0.6759,
     "ssim": 0.8757,
-    "text_boundary": 0.3861,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2196,7 +3152,7 @@
   "scraped/slovak_eu_direct..": {
     "jaccard": 0.6153,
     "ssim": 0.8103,
-    "text_boundary": 0.1629,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2204,8 +3160,8 @@
     "a11y_text": 0.8876
   },
   "scraped/slovak_fuel_pric..": {
-    "jaccard": 0.7839,
-    "ssim": 0.9077,
+    "jaccard": 0.7999,
+    "ssim": 0.9197,
     "text_boundary": 1.0,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -2216,7 +3172,7 @@
   "scraped/slovak_misdemean..": {
     "jaccard": 0.5831,
     "ssim": 0.78,
-    "text_boundary": 0.7385,
+    "text_boundary": 1.0,
     "convert_ms": 13.2,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2225,9 +3181,9 @@
     "a11y_text": 1.0
   },
   "scraped/slovak_pedagogic..": {
-    "jaccard": 0.2162,
-    "ssim": 0.8648,
-    "text_boundary": 0.1379,
+    "jaccard": 0.2158,
+    "ssim": 0.8649,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2247,7 +3203,7 @@
   "scraped/stem_partnership..": {
     "jaccard": 0.7242,
     "ssim": 0.8599,
-    "text_boundary": 0.3098,
+    "text_boundary": 0.808,
     "convert_ms": 32.2,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -2266,8 +3222,9 @@
     "a11y_text": 1.0
   },
   "scraped/strategi_pengemb..": {
-    "jaccard": 0.6449,
-    "ssim": 0.8663,
+    "jaccard": 0.6578,
+    "ssim": 0.8778,
+    "text_boundary": 0.9914,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2277,7 +3234,7 @@
   "scraped/streamnet_steeri..": {
     "jaccard": 0.7769,
     "ssim": 0.9281,
-    "text_boundary": 0.9264,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2287,7 +3244,7 @@
   "scraped/taiwanese_educat..": {
     "jaccard": 0.4938,
     "ssim": 0.6183,
-    "text_boundary": 0.1875,
+    "text_boundary": 0.4375,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2297,7 +3254,7 @@
   "scraped/tokyo_welfare_in..": {
     "jaccard": 0.412,
     "ssim": 0.6488,
-    "text_boundary": 0.5455,
+    "text_boundary": 0.7727,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2307,7 +3264,7 @@
   "scraped/traditional_skil..": {
     "jaccard": 0.4833,
     "ssim": 0.7846,
-    "text_boundary": 0.7614,
+    "text_boundary": 0.9773,
     "convert_ms": 22.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2316,14 +3273,14 @@
     "a11y_text": 1.0
   },
   "scraped/transition_to_wo..": {
-    "jaccard": 0.6511,
-    "ssim": 0.8476,
-    "text_boundary": 0.3971,
+    "jaccard": 0.6523,
+    "ssim": 0.8472,
+    "text_boundary": 0.8649,
     "convert_ms": 493.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
-    "a11y_struct": 0.8892,
+    "a11y_struct": 0.889,
     "a11y_text": 0.8991
   },
   "scraped/turkish_ancient_..": {
@@ -2350,7 +3307,7 @@
   "scraped/turkish_journal_..": {
     "jaccard": 0.6434,
     "ssim": 0.855,
-    "text_boundary": 0.9231,
+    "text_boundary": 0.9744,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2369,20 +3326,20 @@
     "a11y_text": 1.0
   },
   "scraped/uk_commercial_le..": {
-    "jaccard": 0.3791,
-    "ssim": 0.5536,
-    "text_boundary": 0.0911,
+    "jaccard": 0.2712,
+    "ssim": 0.4267,
+    "text_boundary": 0.2551,
     "convert_ms": 326.3,
     "ua_fail": 0,
     "a11y_missing": 0,
     "ua_deficit": 0,
-    "a11y_struct": 0.8038,
-    "a11y_text": 0.7653
+    "a11y_struct": 0.8079,
+    "a11y_text": 0.7648
   },
   "scraped/ukraine_humanita..": {
     "jaccard": 0.7635,
     "ssim": 0.9077,
-    "text_boundary": 0.2407,
+    "text_boundary": 1.0,
     "convert_ms": 12.9,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2391,8 +3348,9 @@
     "a11y_text": 1.0
   },
   "scraped/ukrainian_munici..": {
-    "jaccard": 0.5668,
-    "ssim": 0.7391,
+    "jaccard": 0.7854,
+    "ssim": 0.9114,
+    "text_boundary": 0.9818,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2402,7 +3360,7 @@
   "scraped/usep_handbook": {
     "jaccard": 0.8634,
     "ssim": 0.9268,
-    "text_boundary": 0.6171,
+    "text_boundary": 0.9955,
     "convert_ms": 38.6,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -2411,9 +3369,9 @@
     "a11y_text": 0.9579
   },
   "scraped/ut_koer_annual_m..": {
-    "jaccard": 0.6314,
-    "ssim": 0.8558,
-    "text_boundary": 0.3448,
+    "jaccard": 0.6298,
+    "ssim": 0.8553,
+    "text_boundary": 0.4253,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2423,18 +3381,18 @@
   "scraped/vaccines_history..": {
     "jaccard": 0.4569,
     "ssim": 0.5411,
-    "text_boundary": 0.1379,
+    "text_boundary": 0.2333,
     "convert_ms": 23.3,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
-    "a11y_struct": 0.8133,
+    "a11y_struct": 0.8267,
     "a11y_text": 1.0
   },
   "scraped/victorian_univer..": {
-    "jaccard": 0.6359,
-    "ssim": 0.8404,
-    "text_boundary": 0.7645,
+    "jaccard": 0.6753,
+    "ssim": 0.8438,
+    "text_boundary": 0.7975,
     "ua_fail": 0,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2442,8 +3400,9 @@
     "a11y_text": 0.8763
   },
   "scraped/wa_child_service..": {
-    "jaccard": 0.6565,
-    "ssim": 0.85,
+    "jaccard": 0.6636,
+    "ssim": 0.8597,
+    "text_boundary": 0.9488,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2464,6 +3423,7 @@
   "scraped/welsh_palliative..": {
     "jaccard": 0.5477,
     "ssim": 0.7559,
+    "text_boundary": 0.8506,
     "ua_fail": 4,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2473,7 +3433,7 @@
   "scraped/western_australi..": {
     "jaccard": 0.7212,
     "ssim": 0.8959,
-    "text_boundary": 0.524,
+    "text_boundary": 0.9654,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2483,7 +3443,7 @@
   "scraped/who_prescribing_..": {
     "jaccard": 0.7004,
     "ssim": 0.8754,
-    "text_boundary": 0.9667,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2503,7 +3463,7 @@
   "scraped/zimbabwe_broadca..": {
     "jaccard": 0.6342,
     "ssim": 0.8223,
-    "text_boundary": 0.9669,
+    "text_boundary": 0.9729,
     "ua_fail": 0,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -2513,7 +3473,7 @@
   "scraped/zimbabwe_gold_mi..": {
     "jaccard": 0.595,
     "ssim": 0.7861,
-    "text_boundary": 0.3403,
+    "text_boundary": 0.8539,
     "ua_fail": 0,
     "a11y_missing": 0,
     "ua_deficit": 0,
