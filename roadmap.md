@@ -151,6 +151,14 @@ Figures (Figure counts match Word's in 9 of 12 changed fixtures). struct
 95.84 → 95.87%, text 96.51 → 96.53%, ua_deficit 0, ua_fail 504 → 510
 (pictures without descr, as in Word).
 
+**Done, round 8 (2026-10-09, `3878e02a`..`88472fcb`):** headings in
+textboxes are H1–H6 (chiseldon's heading-order deficit); complex-script
+letters are drawn in the cs font, Arial by default, instead of `.notdef`
+(arabic_rice: 3 deficit rules → 0, its text reaches the tags); wrapNone
+SmartArt floats at its anchor and its paragraph's caption is drawn
+(learning_cultures). Over 340 fixtures: ua_deficit 0, ua_fail 706, all
+source-limited.
+
 Progress over the 173 tagged references: struct 0 → 94.8%, text 0 → 95.2%,
 ua_deficit 1165 → 0 (every fixture fails no PDF/UA-1 rule Word passes);
 LibreOffice's own tagged export scores 76% / 84% on the same yardstick. Over
@@ -190,8 +198,8 @@ symbol glyphs, see SCORING.md.)
 **Backlog, ordered by gap data (`tag_gaps.py` / `text_gaps.py` in the session
 scratchpad; rebuild them from `tests/common/a11y.rs` if needed):**
 1. Math speech reads matrices, accents and equation arrays as their contents
-   in order. Anchored SmartArt is laid out as if inline and its paragraph's
-   text isn't drawn (learning_cultures' Figure 1.2 caption).
+   in order. Anchored SmartArt with wrapping other than wrapNone is still
+   laid out as if inline (no fixture has one).
 2. (Decided, not a gap) slovak_eu_directive: Word has 14 TRs to our 9 because
    it starts a new TR per page a row runs onto; we keep one TR per row.
 3. Link rects and outline destinations ignore the comment-pane zoom
@@ -389,8 +397,8 @@ item 12; uk_commercial_lease −10.8 is the next step
 15. hideMark hides the mark left alone after a cell's closing line break,
     with its space after (maine's extra blank line; 5 Word probes).
 
-Still open from the focus set: complex-script fonts (arabic, needs the
-RTL/shaping item below), nested layout tables (maine).
+Still open from the focus set: Arabic layout (it has the cs font since
+`40f87b52`, but needs the RTL/shaping item below), nested layout tables (maine).
 ## Wrapped running-head pictures (2026-10-08)
 
 An image-only header/footer paragraph that wraps multiple inline pictures
