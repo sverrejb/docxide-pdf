@@ -511,6 +511,21 @@ fn render_cell_content(
                     .max(0.0);
                 let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
 
+                // Word clips cell text at the cell's horizontal edges, even
+                // when a negative paragraph indent puts a glyph outside it.
+                // Keep this around inline text/labels only: anchored shapes
+                // and nested floating tables have their own drawing bounds.
+                let page_h = ctx
+                    .sections
+                    .iter()
+                    .map(|s| s.properties.page_height)
+                    .fold(cursor_y_start.max(0.0), f32::max);
+                content.save_state();
+                content
+                    .rect(cell_x, 0.0, col_w, page_h)
+                    .clip_nonzero()
+                    .end_path();
+
                 let first_line_hanging = if para.list_label.is_empty() {
                     para.text_hanging
                 } else {
@@ -548,6 +563,7 @@ fn render_cell_content(
                     None,
                     cell_link_tagger(&mut tagger, cell_para),
                 );
+                content.restore_state();
                 end_cell_tag(content, &tagger);
 
                 cursor_y -= super::table_layout::para_block_height(para);
