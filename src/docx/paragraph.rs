@@ -49,15 +49,21 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
 
     let para_style = ctx.styles.paragraph_styles.get(para_style_id);
 
+    let mark_style = ppr_rpr
+        .and_then(|rpr| wml_attr(rpr, "rStyle"))
+        .and_then(|id| ctx.styles.character_styles.get(id));
+
     // The mark inherits like any run: its own rPr, then the paragraph style,
     // then docDefaults.
     let paragraph_mark_font_size = ppr_rpr
         .and_then(parse_font_size)
+        .or_else(|| mark_style.and_then(|s| s.font_size))
         .or_else(|| para_style.and_then(|s| s.font_size))
         .or(Some(ctx.styles.defaults.font_size));
     let paragraph_mark_font_name = ppr_rpr
         .and_then(|rpr| wml(rpr, "rFonts"))
         .and_then(|rf| resolve_font_from_node_opt(rf, ctx.theme))
+        .or_else(|| mark_style.and_then(|s| s.font_name.clone()))
         .or_else(|| para_style.and_then(|s| s.font_name.clone()))
         .or_else(|| Some(ctx.styles.defaults.font_name.clone()));
     let paragraph_mark_position = paragraph_mark_position(ppr_rpr, para_style);
@@ -519,6 +525,48 @@ mod tests {
         assert_eq!(stops[0].position, 28.35);
         add_hanging_tab_stop(&mut stops, 50.0, 0.0);
         assert_eq!(stops.len(), 1);
+    }
+
+    #[test]
+    fn paragraph_mark_inherits_character_style_with_direct_overrides() {
+        use std::io::{Cursor, Write};
+        use zip::write::SimpleFileOptions;
+
+        for (mark, font, size) in [
+            (r#"<w:rStyle w:val="Child"/>"#, "Times New Roman", 11.0),
+            (
+                r#"<w:rStyle w:val="Child"/><w:sz w:val="28"/>"#,
+                "Times New Roman",
+                14.0,
+            ),
+            (
+                r#"<w:rStyle w:val="Child"/><w:rFonts w:ascii="Arial"/>"#,
+                "Arial",
+                11.0,
+            ),
+            (r#"<w:rStyle w:val="Missing"/>"#, "Calibri", 12.0),
+        ] {
+            let document = format!(
+                r#"<w:document xmlns:w="{WML_NS}"><w:body><w:p><w:pPr><w:rPr>{mark}</w:rPr></w:pPr></w:p><w:sectPr/></w:body></w:document>"#
+            );
+            let styles = format!(
+                r#"<w:styles xmlns:w="{WML_NS}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri"/><w:sz w:val="24"/></w:rPr></w:rPrDefault></w:docDefaults><w:style w:type="character" w:styleId="Base"><w:name w:val="Base"/><w:rPr><w:rFonts w:ascii="Times New Roman"/><w:sz w:val="22"/></w:rPr></w:style><w:style w:type="character" w:styleId="Child"><w:name w:val="Child"/><w:basedOn w:val="Base"/></w:style></w:styles>"#
+            );
+            let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+            for (name, xml) in [("word/document.xml", document), ("word/styles.xml", styles)] {
+                zip.start_file(name, SimpleFileOptions::default()).unwrap();
+                zip.write_all(xml.as_bytes()).unwrap();
+            }
+            let bytes = zip.finish().unwrap().into_inner();
+            let parsed = crate::docx::parse_bytes(&bytes).unwrap();
+            let crate::model::Block::Paragraph(para) = &parsed.sections[0].blocks[0] else {
+                panic!("expected a paragraph");
+            };
+            assert_eq!(para.paragraph_mark_font_name.as_deref(), Some(font));
+            assert_eq!(para.paragraph_mark_font_size, Some(size));
+            assert_eq!(para.runs[0].font_name, font);
+            assert_eq!(para.runs[0].font_size, size);
+        }
     }
 
     #[test]

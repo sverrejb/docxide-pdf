@@ -515,6 +515,7 @@ fn ensure_nonempty_paragraph(
     defaults: &ParagraphRunDefaults,
     theme: &ThemeFonts,
     has_page_break_before: bool,
+    character_styles: &HashMap<String, RunProps>,
 ) {
     if !runs.is_empty() || has_page_break_before {
         return;
@@ -524,10 +525,16 @@ fn ensure_nonempty_paragraph(
     // Like a real run, an unset size or font inherits and so takes a table
     // style's (empty 10pt Table Grid cell paragraphs).
     let mark_rpr = ppr.and_then(|ppr| wml(ppr, "rPr"));
-    let mark_size = mark_rpr.and_then(parse_font_size);
+    let mark_style = mark_rpr
+        .and_then(|rpr| wml_attr(rpr, "rStyle"))
+        .and_then(|id| character_styles.get(id));
+    let mark_size = mark_rpr
+        .and_then(parse_font_size)
+        .or_else(|| mark_style.and_then(|s| s.font_size));
     let mark_font = mark_rpr
         .and_then(|n| wml(n, "rFonts"))
-        .and_then(|rfonts| resolve_font_from_node_opt(rfonts, theme));
+        .and_then(|rfonts| resolve_font_from_node_opt(rfonts, theme))
+        .or_else(|| mark_style.and_then(|s| s.font_name.clone()));
     runs.push(Run {
         font_size: mark_size.unwrap_or(defaults.font_size),
         font_size_from_default: mark_size.is_none() && defaults.font_size_is_doc_default,
@@ -1415,7 +1422,14 @@ pub(super) fn parse_runs<R: Read + Seek>(
         .unwrap_or(false)
         || page_break_before_content;
 
-    ensure_nonempty_paragraph(&mut runs, ppr, &defaults, ctx.theme, has_page_break_before);
+    ensure_nonempty_paragraph(
+        &mut runs,
+        ppr,
+        &defaults,
+        ctx.theme,
+        has_page_break_before,
+        &ctx.styles.character_styles,
+    );
 
     // Merge each side of a mid-paragraph page break on its own so the split
     // index stays valid; a break with nothing visible after it stays a plain
