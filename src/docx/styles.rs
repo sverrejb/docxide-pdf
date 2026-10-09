@@ -130,6 +130,7 @@ pub(super) struct StyleDefaults {
     pub(super) font_size: f32,
     pub(super) font_name: String,
     pub(super) east_asia_font: Option<String>,
+    pub(super) cs_font: Option<String>,
     pub(super) space_before: f32,
     pub(super) space_after: f32,
     pub(super) before_autospacing: bool,
@@ -163,6 +164,7 @@ pub(super) struct ParagraphStyle {
     pub(super) font_size: Option<f32>,
     pub(super) font_name: Option<String>,
     pub(super) east_asia_font: Option<String>,
+    pub(super) cs_font: Option<String>,
     pub(super) bold: Option<bool>,
     pub(super) italic: Option<bool>,
     pub(super) caps: Option<bool>,
@@ -224,6 +226,7 @@ pub(super) struct RunProps {
     pub(super) font_size: Option<f32>,
     pub(super) font_name: Option<String>,
     pub(super) east_asia_font: Option<String>,
+    pub(super) cs_font: Option<String>,
     pub(super) bold: Option<bool>,
     pub(super) italic: Option<bool>,
     pub(super) underline: Option<bool>,
@@ -259,6 +262,7 @@ pub(super) fn parse_run_props(rpr: roxmltree::Node, theme: &ThemeFonts) -> RunPr
         font_size: parse_font_size(rpr),
         font_name: rfonts.and_then(|rf| resolve_font_from_node_opt(rf, theme)),
         east_asia_font: rfonts.and_then(|rf| resolve_east_asia_font_from_node(rf, theme)),
+        cs_font: rfonts.and_then(|rf| resolve_cs_font_from_node(rf, theme)),
         bold: wml_bool(rpr, "b"),
         italic: wml_bool(rpr, "i"),
         underline: parse_underline(rpr),
@@ -298,6 +302,7 @@ impl RunProps {
             font_size,
             font_name,
             east_asia_font,
+            cs_font,
             bold,
             italic,
             underline,
@@ -638,6 +643,25 @@ pub(super) fn resolve_east_asia_font_from_node(
     resolve_east_asia_font(east_asia, east_asia_theme, theme)
 }
 
+/// `w:cs`/`w:cstheme`, the complex-script font. As for East Asian text, only
+/// the Bidi theme slots resolve.
+pub(super) fn resolve_cs_font_from_node(
+    rfonts: roxmltree::Node,
+    theme: &ThemeFonts,
+) -> Option<String> {
+    rfonts
+        .attribute((WML_NS, "cstheme"))
+        .filter(|t| t.ends_with("Bidi"))
+        .and_then(|t| theme.slot(t))
+        .map(str::to_string)
+        .or_else(|| {
+            rfonts
+                .attribute((WML_NS, "cs"))
+                .filter(|s| !s.is_empty())
+                .map(str::to_string)
+        })
+}
+
 /// `w:spacing @line/@lineRule`, or None when `@line` is absent.
 pub(super) fn parse_line_spacing(spacing_node: roxmltree::Node) -> Option<LineSpacing> {
     let line_val = spacing_node
@@ -757,6 +781,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
         font_size: 10.0,
         font_name: theme.minor.clone(),
         east_asia_font: None,
+        cs_font: None,
         space_before: 0.0,
         space_after: 0.0,
         before_autospacing: false,
@@ -817,6 +842,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
             defaults.font_size = r.font_size.unwrap_or(defaults.font_size);
             defaults.font_name = r.font_name.unwrap_or_else(|| theme.minor.clone());
             defaults.east_asia_font = r.east_asia_font;
+            defaults.cs_font = r.cs_font;
             defaults.kern_threshold = r.kern_threshold;
             defaults.position = r.position;
             defaults.bold = r.bold.unwrap_or(false);
@@ -922,6 +948,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                     font_size,
                     font_name,
                     east_asia_font,
+                    cs_font,
                     bold,
                     italic,
                     caps,
@@ -995,6 +1022,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         font_size,
                         font_name,
                         east_asia_font,
+                        cs_font,
                         bold,
                         italic,
                         caps,
@@ -1240,6 +1268,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     $src,
                     font_name,
                     east_asia_font,
+                    cs_font,
                     font_size,
                     bold,
                     italic,

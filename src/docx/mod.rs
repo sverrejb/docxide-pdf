@@ -225,6 +225,18 @@ pub(crate) fn is_east_asian_char(ch: char) -> bool {
     )
 }
 
+/// Letters Word draws in the complex-script (`w:cs`) font.
+// ponytail: right-to-left scripts only; Thai and Indic are complex script in
+// Word too, add them with a fixture that shows their fallback font.
+pub(crate) fn is_complex_script_char(ch: char) -> bool {
+    matches!(ch as u32,
+        0x0590..=0x07BF   // Hebrew, Arabic, Syriac, Arabic Supplement, Thaana
+        | 0x08A0..=0x08FF // Arabic Extended-A
+        | 0xFB1D..=0xFDFF // Hebrew and Arabic Presentation Forms-A
+        | 0xFE70..=0xFEFE // Arabic Presentation Forms-B (U+FEFF is the BOM)
+    )
+}
+
 pub(super) fn parse_hex_color(val: &str) -> Option<[u8; 3]> {
     if val == "auto" || val.len() != 6 {
         return None;

@@ -523,6 +523,8 @@ pub struct Run {
     pub font_size: f32,
     pub font_name: String,
     pub east_asia_font_name: Option<String>,
+    /// `w:rFonts@cs`: the font for complex-script letters (Arabic, Hebrew, Thai, …).
+    pub cs_font_name: Option<String>,
     pub bold: bool,
     pub italic: bool,
     pub underline: bool,
@@ -652,6 +654,7 @@ impl Default for Run {
             font_size: 0.0,
             font_name: String::new(),
             east_asia_font_name: None,
+            cs_font_name: None,
             bold: false,
             italic: false,
             underline: false,

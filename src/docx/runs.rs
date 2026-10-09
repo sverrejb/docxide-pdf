@@ -11,7 +11,6 @@ use super::images::{
     RunDrawingResult, is_vml_picture, parse_object_floating_image, parse_object_inline_image,
     parse_run_drawing,
 };
-use super::is_east_asian_char;
 use super::styles::{
     ParagraphStyle, RunProps, StyleDefaults, ThemeFonts, half_points, parse_font_size,
     parse_run_props, resolve_font_from_node_opt,
@@ -21,6 +20,7 @@ use super::{
     MATH_NS, MC_NS_TOP, OFFICE_NS, ParseContext, REL_NS, VML_NS, WML_NS, math_child, math_run_text,
     math_val, parse_hex_color, parse_pt, wml, wml_attr, wml_bool,
 };
+use super::{is_complex_script_char, is_east_asian_char};
 
 /// A field the renderer re-evaluates per page, from its instruction.
 fn parse_field_code(instr: &str) -> Option<FieldCode> {
@@ -268,6 +268,7 @@ struct ParagraphRunDefaults {
     kern_threshold: Option<f32>,
     position: Option<f32>,
     east_asia_font: Option<String>,
+    cs_font: Option<String>,
     text_outline: Option<TextOutline>,
     text_fill: Option<TextFill>,
     text_shadow: Option<TextShadow>,
@@ -312,6 +313,7 @@ impl ParagraphRunDefaults {
                 .or(defaults.kern_threshold),
             position: para_style.and_then(|s| s.position).or(defaults.position),
             east_asia_font: style_or_clone(|s| s.east_asia_font.as_ref(), &defaults.east_asia_font),
+            cs_font: style_or_clone(|s| s.cs_font.as_ref(), &defaults.cs_font),
             text_outline: para_style.and_then(|s| s.text_outline.clone()),
             text_fill: para_style.and_then(|s| s.text_fill.clone()),
             text_shadow: para_style.and_then(|s| s.text_shadow.clone()),
@@ -369,6 +371,10 @@ impl ParagraphRunDefaults {
                 .east_asia_font
                 .or_else(|| char_style.and_then(|cs| cs.east_asia_font.clone()))
                 .or_else(|| self.east_asia_font.clone()),
+            cs_font_name: own
+                .cs_font
+                .or_else(|| char_style.and_then(|cs| cs.cs_font.clone()))
+                .or_else(|| self.cs_font.clone()),
             bold: own.bold.or_else(|| cs(|c| c.bold)).unwrap_or(self.bold),
             italic: own
                 .italic
@@ -553,69 +559,56 @@ fn ensure_nonempty_paragraph(
 }
 
 fn split_run_by_script(run: Run) -> Vec<Run> {
-    let ea_font = match &run.east_asia_font_name {
-        Some(f) if f != &run.font_name => f.clone(),
-        _ => return vec![run],
-    };
-
-    let text = &run.text;
-    if text.is_empty() {
+    let ea_font = run
+        .east_asia_font_name
+        .clone()
+        .filter(|f| f != &run.font_name);
+    let has_cs = run.text.chars().any(is_complex_script_char);
+    if run.text.is_empty() || (ea_font.is_none() && !has_cs) {
         return vec![run];
     }
-
-    let mut result: Vec<Run> = Vec::new();
-    let mut segment_start = 0;
-    let mut in_ea = false;
-    let mut first = true;
-
-    for (i, ch) in text.char_indices() {
-        let ch_is_ea = if ch.is_whitespace() {
-            // Whitespace inherits current script context
-            in_ea
+    // Word draws complex-script letters in the cs font, in Arial when the
+    // document names none (arabic_rice_benefits_article has no styles part).
+    let cs_font = run.cs_font_name.clone().unwrap_or_else(|| "Arial".into());
+    // None: the run's own font.
+    let script_font = |ch: char| {
+        if is_complex_script_char(ch) {
+            Some(&cs_font)
+        } else if is_east_asian_char(ch) {
+            ea_font.as_ref()
         } else {
-            is_east_asian_char(ch)
-        };
-
-        if first {
-            in_ea = ch_is_ea;
-            first = false;
-            continue;
+            None
         }
-
-        if ch_is_ea != in_ea {
-            let segment = &text[segment_start..i];
-            if !segment.is_empty() {
-                let mut sub = run.clone();
-                sub.text = segment.to_string();
-                if in_ea {
-                    sub.font_name = ea_font.clone();
-                }
-                sub.east_asia_font_name = None;
-                result.push(sub);
-            }
-            segment_start = i;
-            in_ea = ch_is_ea;
-        }
-    }
-
-    let segment = &text[segment_start..];
-    if !segment.is_empty() {
+    };
+    let segment = |range: std::ops::Range<usize>, font: Option<&String>| {
         let mut sub = run.clone();
-        sub.text = segment.to_string();
-        if in_ea {
-            sub.font_name = ea_font;
+        sub.text = run.text[range].to_string();
+        if let Some(f) = font {
+            sub.font_name = f.clone();
         }
         sub.east_asia_font_name = None;
-        result.push(sub);
-    }
+        sub.cs_font_name = None;
+        sub
+    };
 
-    if result.is_empty() {
-        let mut r = run;
-        r.east_asia_font_name = None;
-        vec![r]
-    } else {
-        result
+    let mut result = Vec::new();
+    let mut segment_start = 0;
+    let mut current = None;
+    for (i, ch) in run.text.char_indices() {
+        // Whitespace inherits the current script context.
+        let font = if ch.is_whitespace() && i > 0 {
+            current
+        } else {
+            script_font(ch)
+        };
+        if i > 0 && font != current {
+            result.push(segment(segment_start..i, current));
+            segment_start = i;
+        }
+        current = font;
     }
+    result.push(segment(segment_start..run.text.len(), current));
+    result
 }
 
 fn is_comment_reference_run(node: roxmltree::Node) -> bool {
@@ -1556,6 +1549,30 @@ mod tests {
         );
         let doc = roxmltree::Document::parse(&text_field).unwrap();
         assert_eq!(parse_checkbox(doc.root_element(), 11.0), None);
+    }
+
+    #[test]
+    fn complex_script_letters_take_the_cs_font() {
+        let split = |cs: Option<&str>| {
+            let mut r = run("rice الأرز 150 x", None, None);
+            r.font_name = "Aptos".into();
+            r.cs_font_name = cs.map(Into::into);
+            split_run_by_script(r)
+                .into_iter()
+                .map(|r| (r.text, r.font_name))
+                .collect::<Vec<_>>()
+        };
+        let seg = |t: &str, f: &str| (t.to_string(), f.to_string());
+        // Spaces follow the letters before them; digits keep the run's font.
+        let expect = |cs| {
+            vec![
+                seg("rice ", "Aptos"),
+                seg("الأرز ", cs),
+                seg("150 x", "Aptos"),
+            ]
+        };
+        assert_eq!(split(None), expect("Arial"));
+        assert_eq!(split(Some("Tahoma")), expect("Tahoma"));
     }
 
     #[test]

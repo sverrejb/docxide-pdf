@@ -96,12 +96,12 @@ Commands: `python3 tools/line_diff.py <ref> <gen>`, `python3 tools/pdf_lines.py
    - Two nested floating tables (`tblpPr` in a cell) are stacked instead of
      side by side (`render_nested_table` ignores `position`; 8 corpus
      documents).
-2. **arabic (3.0):** complex script. `rFonts@cs`, `w:rtl`, `szCs`/`bCs` are
-   never read (`docx/styles.rs`, "ponytail: w:bidi ignored"); Word draws the
-   text in the cs font (B Nazanin → its altName, Faruma → MV Boli, B Zar /
-   IRANYekan / none → Arial). The font alone gains little: the text needs UAX
-   #9 reordering and Arabic shaping (roadmap "RTL / BiDi", high effort). Ask
-   the user before starting.
+2. **arabic (3.0 → 5.8):** complex script. Arabic letters now take the cs
+   font (`rFonts@cs`, else Arial; `split_run_by_script`), so nothing draws
+   `.notdef`; `w:rtl`, `szCs`/`bCs` are still never read. Word's cs choices:
+   B Nazanin → its altName, Faruma → MV Boli, B Zar / IRANYekan / none →
+   Arial. The rest needs UAX #9 reordering and Arabic shaping (roadmap
+   "RTL / BiDi", high effort). Ask the user before starting.
 
 ## 3. How to measure and work
 
