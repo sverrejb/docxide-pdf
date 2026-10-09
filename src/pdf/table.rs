@@ -315,13 +315,22 @@ fn para_has_visible_content(para: &CellParagraphLayout) -> bool {
 
 /// Total content height including trailing space_after, matching Word's vAlign calculation.
 fn cell_content_h_for_valign(items: &[CellContentItem]) -> f32 {
-    let mut h: f32 = items
-        .iter()
-        .map(|item| match item {
-            CellContentItem::Paragraph(p) => p.space_before + para_block_height(p),
-            nested @ CellContentItem::NestedTable { .. } => nested.height(),
-        })
-        .sum();
+    let mut h: f32 = 0.0;
+    let mut floating_extent: f32 = 0.0;
+    for item in items {
+        match item {
+            CellContentItem::Paragraph(p) => {
+                h += p.space_before;
+                // Anchored pictures do not enlarge an automatic row, but Word
+                // includes their lower edge when distributing vAlign space.
+                for fi in &p.floating_images {
+                    floating_extent = floating_extent.max(h + fi.v_offset + fi.display_height);
+                }
+                h += para_block_height(p);
+            }
+            nested @ CellContentItem::NestedTable { .. } => h += nested.height(),
+        }
+    }
     // Word includes the last paragraph's space_after in the content block height
     // used for vertical alignment, so bottom/center-aligned cells position correctly.
     if let Some(CellContentItem::Paragraph(last_para)) = items.last() {
@@ -341,7 +350,7 @@ fn cell_content_h_for_valign(items: &[CellContentItem]) -> f32 {
             h -= (last_para.line_h - ink_bottom).max(0.0);
         }
     }
-    h
+    h.max(floating_extent)
 }
 
 fn cell_has_visible_content(items: &[CellContentItem]) -> bool {
