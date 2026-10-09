@@ -1855,12 +1855,13 @@ fn compute_bookmark_positions(
                     if is_empty_wrapping_frame(para, sp) {
                         continue;
                     }
-                    if para.is_section_break && bi != 0
-                        && !(ctx.compat_mode >= 15 && matches!(blocks.get(bi - 1), Some(Block::Table(_))))
-                        && is_text_empty(&para.runs) {
-                        let next_continuous = doc.sections.get(si + 1).is_some_and(|next| {
-                            next.properties.break_type == SectionBreakType::Continuous
-                        });
+                    let next_continuous = doc.sections.get(si + 1).is_some_and(|next| {
+                        next.properties.break_type == SectionBreakType::Continuous
+                    });
+                    let keeps_line = ctx.compat_mode >= 15
+                        && next_continuous
+                        && matches!(blocks.get(bi.wrapping_sub(1)), Some(Block::Table(_)));
+                    if para.is_section_break && bi != 0 && !keeps_line && is_text_empty(&para.runs) {
                         let drop;
                         (drop, prev_space_after) = section_break_spacing(
                             prev_space_after,
@@ -2039,10 +2040,22 @@ fn render_paragraph_block(
     // continuous empty section:
     // transition_to_work's contents start a line and 8pt below the top of the
     // page that empty section opens.
+    let next_continuous = doc
+        .sections
+        .get(sect_idx + 1)
+        .is_some_and(|next| next.properties.break_type == SectionBreakType::Continuous);
     // In modern compatibility mode, Word preserves the section mark's own
     // paragraph line after a table. Legacy mode still collapses that line.
+    // Only before a continuous section: before a new page the line could only
+    // push itself onto a blank page, which Word doesn't do (indigenous_innovation
+    // ends a page with its signature table and starts Schedule A on the next).
     let keeps_line = block_idx == 0
-        || (ctx.compat_mode >= 15 && matches!(block_idx.checked_sub(1).and_then(|i| section_blocks.get(i)), Some(Block::Table(_))));
+        || (ctx.compat_mode >= 15
+            && next_continuous
+            && matches!(
+                block_idx.checked_sub(1).and_then(|i| section_blocks.get(i)),
+                Some(Block::Table(_))
+            ));
     if para.is_section_break
         && !keeps_line
         && is_text_empty(&para.runs)
@@ -2057,10 +2070,6 @@ fn render_paragraph_block(
         // heading 14pt down, victorian's (after=0) its 26pt heading 26pt down.
         // At a page top nothing moves (both this branch's and main's probes,
         // 2026-10-05: gap = prev after + max(0, next before − break after)).
-        let next_continuous = doc
-            .sections
-            .get(sect_idx + 1)
-            .is_some_and(|next| next.properties.break_type == SectionBreakType::Continuous);
         let drop;
         (drop, state.prev_space_after) =
             section_break_spacing(state.prev_space_after, para.space_after, next_continuous);
