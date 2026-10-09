@@ -355,8 +355,8 @@ polish_building +8.1. Details, evidence and the open queue:
 9. Keep-with-next chains end at pageBreakBefore; keep flags inherit via
    basedOn.
 
-Next: eleven local focus fixtures in `tests/fixtures/excluded/` (gitignored),
-one per open cause (`current_focus/layout-accuracy.md` §4).
+Next: eleven focus fixtures, one per open cause (`current_focus/layout-accuracy.md`
+§4; in `tests/fixtures/scraped/` with baselines since 2026-10-10).
 
 ## Focus-fixture round (2026-10-07)
 

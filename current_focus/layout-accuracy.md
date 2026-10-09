@@ -175,11 +175,11 @@ Diagnostics: `pdf_lines.py` (rules and baselines, y from page top),
   Arabic, CJK and ligatures. Compare fonts by visible glyphs (Word embeds
   faces that draw only spaces).
 
-## 4. Focus fixtures (`tests/fixtures/excluded/`, local only)
+## 4. Focus fixtures (in `tests/fixtures/scraped/` since 2026-10-10)
 
-Corpus documents copied in under descriptive names, one per open cause;
-gitignored, never committed. References are online exports. The suite runs
-them; without baselines they show as "new" and never fail.
+Corpus documents copied in under descriptive names, one per open cause.
+They lived in the gitignored `tests/fixtures/excluded/` until 2026-10-10,
+when they moved to `scraped/` with baselines. References are online exports.
 
 | fixture | J (start → now) | status |
 |---|---|---|
