@@ -106,6 +106,10 @@ fn leading_para(block: &Block) -> Option<&Paragraph> {
 /// text stay in the flow; lift them when a fixture needs it.
 fn lifted_frame<'a>(block: &'a Block, sp: &SectionProperties) -> Option<&'a FrameProperties> {
     let fp = leading_para(block)?.frame_props.as_ref()?;
+    frame_lifts(fp, sp).then_some(fp)
+}
+
+fn frame_lifts(fp: &FrameProperties, sp: &SectionProperties) -> bool {
     let beside_text = || {
         let (text_x, text_w) = (sp.margin_left, sp.text_width());
         let x = resolve_h_position(
@@ -119,8 +123,7 @@ fn lifted_frame<'a>(block: &'a Block, sp: &SectionProperties) -> Option<&'a Fram
         );
         fp.width > 0.0 && (x >= text_x + text_w || x + fp.width <= text_x)
     };
-    (fp.v_relative_from != VRelativeFrom::Paragraph && (fp.text_below || beside_text()))
-        .then_some(fp)
+    fp.v_relative_from != VRelativeFrom::Paragraph && (fp.text_below || beside_text())
 }
 
 /// The blocks from the start of `blocks` that share the frame `props`.
@@ -1660,10 +1663,12 @@ fn line_count(para: &Paragraph, ctx: &RenderContext, col_w: f32) -> usize {
 
 /// Empty auto-height wrapping frames have no body-flow content. Ordinary
 /// empty paragraphs and explicit breaks retain their paragraph-mark lines.
-fn is_empty_wrapping_frame(para: &Paragraph) -> bool {
+/// Inside a lifted frame the mark keeps its line too: Word spaces
+/// 3ec631ca50's address groups with empty frame paragraphs.
+fn is_empty_wrapping_frame(para: &Paragraph, sp: &SectionProperties) -> bool {
     para.frame_props
         .as_ref()
-        .is_some_and(|fp| !fp.text_below && fp.height == 0.0)
+        .is_some_and(|fp| !fp.text_below && fp.height == 0.0 && !frame_lifts(fp, sp))
         && is_text_empty(&para.runs)
         && !para.runs.iter().any(|r| {
             r.is_line_break
@@ -1814,7 +1819,7 @@ fn compute_bookmark_positions(
                     for bm in &para.bookmarks {
                         bookmark_positions.insert(bm.clone(), (page_idx, slot_top));
                     }
-                    if is_empty_wrapping_frame(para) {
+                    if is_empty_wrapping_frame(para, sp) {
                         continue;
                     }
                     if para.is_section_break && bi != 0 && is_text_empty(&para.runs) {
@@ -1974,7 +1979,7 @@ fn render_paragraph_block(
     smartart_image_names: &HashMap<usize, String>,
     debug_wrap: bool,
 ) -> bool {
-    if is_empty_wrapping_frame(para) {
+    if is_empty_wrapping_frame(para, sp) {
         state.global_block_idx += 1;
         return true;
     }
