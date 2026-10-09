@@ -19,6 +19,8 @@ pub enum ImageFormat {
 
 #[derive(Clone)]
 pub struct EmbeddedImage {
+    /// Preview of an actual Office OLE object, not an ordinary or static VML picture.
+    pub is_ole_preview: bool,
     /// `wp:docPr/@descr`, which Word exports as the Figure's /Alt.
     pub alt: Option<String>,
     /// Marked decorative in Word (Office 2019+): an artifact, not a Figure.

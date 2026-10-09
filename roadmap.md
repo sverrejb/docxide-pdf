@@ -1327,6 +1327,10 @@ draw the same font; every engine on the site was affected the same way.
 
 ## Picture Effects (PARTIALLY DONE)
 
+### Wide inline pictures and paragraph marks
+
+Ordinary inline pictures wider than the text column do not reserve a second paragraph-mark line (cases176–179, local Word references). Keep the historical extra-line rule only for actual Office OLE previews, identified by the Office OLEObject child, rather than all w:object images. Static VML pictures without an OLEObject are ordinary pictures. The existing alfies_arc_adult_safeguarding_policy OLE preview remains unchanged.
+
 **Done:** Smooth outer shadow (rasterized Gaussian blur mask via SMask), soft edge (edge-fade SMask on image), glow (centered blur), inner shadow (inverted blur mask), reflection (flipped image with gradient SMask). All use the same rasterized mask + SMask XObject infrastructure. Test fixtures: case56 (shadow variations), case57 (2D effects), case58 (3D effects — deferred).
 
 **Remaining (deferred — no real-world fixtures use these):**

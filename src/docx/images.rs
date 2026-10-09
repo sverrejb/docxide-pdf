@@ -393,6 +393,7 @@ pub(super) fn read_image_from_zip_extra<R: Read + Seek>(
     }
     let (pw, ph, fmt, components) = image_dimensions(&data)?;
     Some(EmbeddedImage {
+        is_ole_preview: false,
         alt: None,
         decorative: false,
         data: std::sync::Arc::new(data),
@@ -812,10 +813,16 @@ fn vml_imagedata_props(imagedata: roxmltree::Node) -> (Option<[f32; 4]>, Option<
     (src_rect, lum)
 }
 
+fn has_ole_object(obj: roxmltree::Node) -> bool {
+    obj.children()
+        .any(|n| n.has_tag_name(("urn:schemas-microsoft-com:office:office", "OLEObject")))
+}
+
 /// Word tags an OLE object as a Sect in its paragraph, with the VML shape's alt
 /// text or a blank one. One with alt text becomes a Figure with it; one without
 /// an artifact rather than a Figure with nothing to say (7.3-1).
 fn with_object_alt(obj: roxmltree::Node, mut img: EmbeddedImage) -> EmbeddedImage {
+    img.is_ole_preview = has_ole_object(obj);
     img.alt = obj
         .children()
         .filter(|n| n.tag_name().namespace() == Some(VML_NS))
@@ -1013,6 +1020,28 @@ mod tests {
         assert!((bright - 0.70).abs() < 0.001 && (contrast + 0.70).abs() < 0.001);
         let r = src_rect.unwrap();
         assert!((r[0] - 0.25).abs() < 1e-6 && (r[3] - 0.1).abs() < 1e-4 && r[1] == 0.0);
+    }
+
+    #[test]
+    fn ole_preview_requires_office_object_not_just_vml_shape() {
+        for (child, expected) in [
+            (r#"<v:shape><v:imagedata r:id="image"/></v:shape>"#, false),
+            (r#"<v:shape/><o:OLEObject Type="Embed"/>"#, true),
+            (
+                r#"<v:shape/><alias:OLEObject xmlns:alias="urn:schemas-microsoft-com:office:office"/>"#,
+                true,
+            ),
+            (
+                r#"<v:shape/><wrong:OLEObject xmlns:wrong="urn:other"/>"#,
+                false,
+            ),
+        ] {
+            let xml = format!(
+                r#"<w:object xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:v="{VML_NS}" xmlns:r="{REL_NS}" xmlns:o="urn:schemas-microsoft-com:office:office">{child}</w:object>"#
+            );
+            let doc = roxmltree::Document::parse(&xml).unwrap();
+            assert_eq!(has_ole_object(doc.root_element()), expected, "{child}");
+        }
     }
 
     fn src_rect_of(elem: &str) -> Option<[f32; 4]> {
