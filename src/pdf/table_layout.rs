@@ -1068,7 +1068,14 @@ pub(super) fn compute_row_layouts(
                                                 (col_w - fi.image.display_width) / 2.0
                                             }
                                             HorizontalPosition::AlignRight => {
-                                                col_w - fi.image.display_width
+                                                // Modern Word aligns to the cell's right text edge.
+                                                // Legacy mode also shifts the origin by the left inset.
+                                                let legacy_origin = if ctx.compat_mode < 15 {
+                                                    ecm.left
+                                                } else {
+                                                    0.0
+                                                };
+                                                col_w + legacy_origin - ecm.right - fi.image.display_width
                                             }
                                             HorizontalPosition::AlignLeft => 0.0,
                                         };
