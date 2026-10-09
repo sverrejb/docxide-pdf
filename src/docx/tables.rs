@@ -55,6 +55,19 @@ pub(super) fn margin_twips(mar: roxmltree::Node, primary: &str, fallback: &str) 
         .and_then(|n| twips_attr(n, "w"))
 }
 
+fn merge_cell_margins(mar: roxmltree::Node, base: CellMargins) -> CellMargins {
+    CellMargins {
+        top: wml(mar, "top")
+            .and_then(|n| twips_attr(n, "w"))
+            .unwrap_or(base.top),
+        left: margin_twips(mar, "left", "start").unwrap_or(base.left),
+        bottom: wml(mar, "bottom")
+            .and_then(|n| twips_attr(n, "w"))
+            .unwrap_or(base.bottom),
+        right: margin_twips(mar, "right", "end").unwrap_or(base.right),
+    }
+}
+
 /// `w:jc` under a `w:tblPr` or `w:trPr`.
 fn table_jc(pr: roxmltree::Node) -> Option<TableAlignment> {
     wml_attr(pr, "jc").map(|val| match val {
@@ -428,6 +441,10 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                 None => merged_tbl_borders,
             };
 
+        // Row exceptions override table defaults per side; explicit tcMar wins.
+        let row_cell_margins = wml(*tr, "tblPrEx")
+            .and_then(|pr| wml(pr, "tblCellMar"))
+            .map(|mar| merge_cell_margins(mar, cell_margins));
         let mut cells = Vec::new();
         let mut grid_col = grid_before;
         for tc in collect_block_nodes(*tr)
@@ -651,16 +668,8 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
 
             let per_cell_margins = tc_pr
                 .and_then(|pr| wml(pr, "tcMar"))
-                .map(|mar| CellMargins {
-                    top: wml(mar, "top")
-                        .and_then(|n| twips_attr(n, "w"))
-                        .unwrap_or(cell_margins.top),
-                    left: margin_twips(mar, "left", "start").unwrap_or(cell_margins.left),
-                    bottom: wml(mar, "bottom")
-                        .and_then(|n| twips_attr(n, "w"))
-                        .unwrap_or(cell_margins.bottom),
-                    right: margin_twips(mar, "right", "end").unwrap_or(cell_margins.right),
-                });
+                .map(|mar| merge_cell_margins(mar, row_cell_margins.unwrap_or(cell_margins)))
+                .or(row_cell_margins);
 
             let mut cell_blocks: Vec<Block> = Vec::new();
             let block_nodes = collect_block_nodes(tc);
@@ -989,6 +998,40 @@ fn cell_at(row: &TableRow, grid_col: usize) -> Option<&TableCell> {
 #[cfg(test)]
 mod border_conflict_tests {
     use super::*;
+
+    #[test]
+    fn row_margin_exceptions_inherit_per_side_and_do_not_leak() {
+        use std::io::{Cursor, Write};
+        let xml = r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl>
+          <w:tblPr><w:tblCellMar><w:top w:w="20"/><w:left w:w="100"/><w:bottom w:w="40"/><w:right w:w="120"/></w:tblCellMar></w:tblPr>
+          <w:tblGrid><w:gridCol w:w="1000"/><w:gridCol w:w="1000"/></w:tblGrid>
+          <w:tr><w:tblPrEx><w:tblCellMar><w:start w:w="28"/><w:end w:w="32"/></w:tblCellMar></w:tblPrEx>
+            <w:tc><w:p/></w:tc><w:tc><w:tcPr><w:tcMar><w:left w:w="0"/><w:bottom w:w="60"/></w:tcMar></w:tcPr><w:p/></w:tc>
+          </w:tr><w:tr><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr>
+        </w:tbl><w:sectPr/></w:body></w:document>"#;
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file(
+            "word/document.xml",
+            zip::write::SimpleFileOptions::default(),
+        )
+        .unwrap();
+        zip.write_all(xml.as_bytes()).unwrap();
+        let bytes = zip.finish().unwrap().into_inner();
+        let doc = crate::docx::parse_bytes(&bytes).unwrap();
+        let Block::Table(table) = &doc.sections[0].blocks[0] else {
+            panic!("expected table")
+        };
+        let margins = |r: usize, c: usize| {
+            let m = table.rows[r].cells[c]
+                .cell_margins
+                .unwrap_or(table.cell_margins);
+            (m.top, m.left, m.bottom, m.right)
+        };
+        assert_eq!(margins(0, 0), (1.0, 1.4, 2.0, 1.6));
+        assert_eq!(margins(0, 1), (1.0, 0.0, 3.0, 1.6));
+        assert_eq!(margins(1, 0), (1.0, 5.0, 2.0, 6.0));
+        assert!(table.rows[1].cells[0].cell_margins.is_none());
+    }
 
     fn border(style: BorderStyle, is_override: bool) -> CellBorder {
         CellBorder {
