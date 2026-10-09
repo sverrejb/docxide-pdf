@@ -454,7 +454,9 @@ and `w:suff` (`a3681d62`). Still open; main hid each of these:
   (2019)." is laid out one letter per line from y≈108 (Word: one line at
   y≈346), so the paragraph is squeezed to almost no width. It was already
   wrong in main; until #21 put the lists exactly at Word's indents, main's
-  35.6pt-too-narrow list indents absorbed the lost room.
+  35.6pt-too-narrow list indents absorbed the lost room. Since PR #36 (no
+  extra mark line after wide non-OLE pictures) the page count matches Word
+  again, but p10 still stacks the letters.
 - **chinese_costume (+1 page, 2 → 3).** Word widens Latin–CJK boundaries
   ("5-10 分钟", "3 分钟", "MP4 封装"); we don't, so CJK lines in table cells
   carry more text than Word's and break differently. Main stayed at 2 pages
@@ -471,6 +473,18 @@ and `w:suff` (`a3681d62`). Still open; main hid each of these:
   (18.75pt, `pdf/table_layout.rs`, measured between 18.70 and 18.75pt) both
   decide whether an empty line fits beside a float. Probe the body case in
   Word and share one constant.
+- **Nested table origin (+4.9pt).** In the PR #43/#45 fixtures
+  (nested-fixed-*, explicit-overflow-nested-autofit-*) every nested cell's
+  text sits 4.9pt right of Word's while the column boundaries match, so the
+  nested table's left edge (cell margin outdent) is off.
+- **case111 cell too narrow.** "…ора по" overflows its cell in our layout
+  but fits in Word's; since PR #40 clips cell text at the cell edges the
+  overflow shows as a cut-off word instead of overprinting the border.
+- **PR #44 only before a continuous section.** The section-break line kept
+  after a table is measured only when the next section is continuous (the
+  fixtures' case). Before a new page it spilled onto a blank page
+  (indigenous_innovation p15); whether Word keeps it when it fits there is
+  unprobed and invisible.
 
 ## Layout accuracy round (2026-10-01)
 
@@ -1803,7 +1817,7 @@ Vertical alignment of runs within a line (top/center/baseline/bottom/auto). Only
 
 ### Empty anchor line at the top of a float
 
-Clear a blocking float before consuming a textless line whose box intersects its top edge. A 0.05pt text offset otherwise lets that line pass above the table and loses its height when the next paragraph clears it (cases170–175). Keep the existing side-strip policy.
+Clear a blocking float before consuming a textless line whose box intersects its top edge. A 0.05pt text offset otherwise lets that line pass above the table and loses its height when the next paragraph clears it (cases170–175). Keep the existing side-strip policy. Covered by main's `40275abe` (a floating table pushes a paragraph whose first line reaches it); PR #35's separate empty-line check changed no fixture and was dropped, its fixtures kept.
 
 ### Cell paragraph `indent_right` in render pass (DONE — 2026-07-02, annotations #215/#217)
 
