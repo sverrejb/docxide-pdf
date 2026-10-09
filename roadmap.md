@@ -1740,6 +1740,10 @@ a text outline with no fill.
 
 ## Paragraph / Layout Features
 
+### Final descent of automatically wrapped running-head pictures
+
+Keep the paragraph-mark descent between picture lines, but omit its duplicate contribution after the final line when the image runs and mark use the same size (cases180–187, local Word references). Both measured height and render cursor use the same rule. Exact spacing, explicit breaks and differently sized marks retain their existing paths. Depends on the wrapped-picture rendering and measurement fixes. Tall final pictures and three-picture layouts retain separate residual discrepancies; this change does not claim to resolve them.
+
 `w:jc="distribute"` (see "Distributed Alignment"), `w:gutter` (`552c09cc`, incl.
 `gutterAtTop`/`rtlGutter`), `w:pgBorders` and sectPr `w:vAlign` (`79b7f850`) are
 done.

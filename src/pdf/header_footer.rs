@@ -230,6 +230,27 @@ pub(super) fn below_blocking_frames(mut top: f32, line_h: f32, bands: &[(f32, f3
     top
 }
 
+/// The mark's descent separates automatically wrapped picture lines, but is
+/// not retained again below the final line. A differently sized paragraph mark
+/// requires its own line metrics; keep that existing path until it is resolved.
+fn wrapped_picture_trailing_descent(
+    para: &Paragraph,
+    font_size: f32,
+    descent: f32,
+    spacing: LineSpacing,
+) -> f32 {
+    if matches!(spacing, LineSpacing::Exact(_))
+        || para.runs.iter().any(|r| r.is_line_break)
+        || para
+            .paragraph_mark_font_size
+            .is_some_and(|mark| (mark - font_size).abs() > 0.01)
+    {
+        0.0
+    } else {
+        descent
+    }
+}
+
 fn wrapped_header_picture_height(para: &Paragraph, ctx: &RenderContext, width: f32) -> Option<f32> {
     if para
         .runs
@@ -287,7 +308,8 @@ fn wrapped_header_picture_height(para: &Paragraph, ctx: &RenderContext, width: f
     if !matches!(spacing, LineSpacing::Exact(_)) {
         size_lines_by_own_runs(&mut lines, ctx.fonts, spacing, line_h, metrics.0);
     }
-    Some(lines_height(&lines, line_h, metrics))
+    let trailing_descent = wrapped_picture_trailing_descent(para, font_size, metrics.1, spacing);
+    Some(lines_height(&lines, line_h, metrics) - trailing_descent)
 }
 
 fn compute_header_height(
@@ -1386,7 +1408,17 @@ pub(super) fn render_header_footer(
                     None,
                 );
 
-                let para_h = lines_height(&lines, line_h, metrics);
+                let trailing_descent = if wrapped_pictures {
+                    wrapped_picture_trailing_descent(
+                        para,
+                        font_size,
+                        wrapped_picture_bottom,
+                        effective_ls,
+                    )
+                } else {
+                    0.0
+                };
+                let para_h = lines_height(&lines, line_h, metrics) - trailing_descent;
                 draw_para_borders(content, cursor_y - para_h);
                 cursor_y -= para_h + bottom_border_band(para);
                 prev_space_after = para.space_after;
