@@ -87,8 +87,8 @@ pub(super) fn cell_lines_h(p: &CellParagraphLayout, range: std::ops::Range<usize
 /// Auto-fit column widths so that the longest non-breakable word in each column
 /// fits within the cell (including padding). Columns that need more space grow;
 /// other columns shrink proportionally. Total width is preserved.
-/// When `available_width` is provided and the table exceeds it, all columns
-/// are scaled down proportionally to fit (matching Word's behavior).
+/// Auto-fit tables wider than `available_width` are scaled down to fit.
+/// Fixed-layout tables preserve their grid even when it exceeds the host cell.
 /// For nested auto-fit tables (`available_width` is Some and not fixed layout),
 /// Word shrinks columns to content-based minimum widths rather than using the
 /// gridCol preferred widths.
@@ -549,7 +549,9 @@ pub(super) fn auto_fit_columns(
         }
     }
 
-    if let Some(avail) = available_width {
+    if let Some(avail) = available_width
+        && !table.fixed_layout
+    {
         let final_total: f32 = widths.iter().sum();
         if final_total > avail && avail > 0.0 {
             let scale = avail / final_total;
