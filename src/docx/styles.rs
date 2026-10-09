@@ -43,19 +43,19 @@ fn script_font_typeface<'a>(font_group: roxmltree::Node<'a, 'a>, script: &str) -
         .filter(|tf| !tf.is_empty())
 }
 
-/// `w:lang`: the languages of Latin (`val`) and East Asian (`eastAsia`) text.
-/// Only well-formed tags: Word writes "x-none" for "no language".
-// ponytail: w:bidi (complex-script text) ignored until RTL runs are tagged
-pub(super) fn parse_lang(rpr: roxmltree::Node) -> (Option<String>, Option<String>) {
+/// `w:lang`: the languages of Latin (`val`), East Asian (`eastAsia`) and
+/// complex-script (`bidi`) text. Only well-formed tags: Word writes "x-none"
+/// for "no language".
+pub(super) fn parse_lang(rpr: roxmltree::Node) -> (Option<String>, Option<String>, Option<String>) {
     let Some(lang) = wml(rpr, "lang") else {
-        return (None, None);
+        return (None, None, None);
     };
     let tag = |attr| {
         lang.attribute((WML_NS, attr))
             .filter(|v| is_lang_tag(v))
             .map(str::to_string)
     };
-    (tag("val"), tag("eastAsia"))
+    (tag("val"), tag("eastAsia"), tag("bidi"))
 }
 
 /// A BCP 47-shaped language tag: a 2–3 letter language, then alphanumeric subtags.
@@ -151,6 +151,7 @@ pub(super) struct StyleDefaults {
     pub(super) char_spacing: f32,
     pub(super) lang: Option<String>,
     pub(super) lang_east_asia: Option<String>,
+    pub(super) lang_bidi: Option<String>,
     pub(super) widow_control: bool,
     pub(super) indent_left: f32,
     pub(super) indent_right: f32,
@@ -171,6 +172,7 @@ pub(super) struct ParagraphStyle {
     pub(super) small_caps: Option<bool>,
     pub(super) lang: Option<String>,
     pub(super) lang_east_asia: Option<String>,
+    pub(super) lang_bidi: Option<String>,
     pub(super) vanish: Option<bool>,
     pub(super) underline: Option<bool>,
     pub(super) double_underline: Option<bool>,
@@ -237,6 +239,7 @@ pub(super) struct RunProps {
     pub(super) small_caps: Option<bool>,
     pub(super) lang: Option<String>,
     pub(super) lang_east_asia: Option<String>,
+    pub(super) lang_bidi: Option<String>,
     pub(super) vanish: Option<bool>,
     pub(super) color: Option<[u8; 3]>,
     pub(super) highlight: Option<[u8; 3]>,
@@ -257,7 +260,7 @@ pub(super) struct RunProps {
 
 pub(super) fn parse_run_props(rpr: roxmltree::Node, theme: &ThemeFonts) -> RunProps {
     let rfonts = wml(rpr, "rFonts");
-    let (lang, lang_east_asia) = parse_lang(rpr);
+    let (lang, lang_east_asia, lang_bidi) = parse_lang(rpr);
     RunProps {
         font_size: parse_font_size(rpr),
         font_name: rfonts.and_then(|rf| resolve_font_from_node_opt(rf, theme)),
@@ -273,6 +276,7 @@ pub(super) fn parse_run_props(rpr: roxmltree::Node, theme: &ThemeFonts) -> RunPr
         small_caps: wml_bool(rpr, "smallCaps"),
         lang,
         lang_east_asia,
+        lang_bidi,
         vanish: wml_bool(rpr, "vanish"),
         color: wml_attr(rpr, "color").and_then(parse_text_color),
         highlight: wml_attr(rpr, "highlight").and_then(highlight_color),
@@ -313,6 +317,7 @@ impl RunProps {
             small_caps,
             lang,
             lang_east_asia,
+            lang_bidi,
             vanish,
             color,
             highlight,
@@ -802,6 +807,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
         char_spacing: 0.0,
         lang: None,
         lang_east_asia: None,
+        lang_bidi: None,
         widow_control: true,
         indent_left: 0.0,
         indent_right: 0.0,
@@ -856,7 +862,8 @@ pub(super) fn parse_styles<R: Read + Seek>(
             defaults.double_underline = r.double_underline.unwrap_or(false);
             defaults.color = r.color;
             defaults.char_spacing = r.char_spacing.unwrap_or(0.0);
-            (defaults.lang, defaults.lang_east_asia) = (r.lang, r.lang_east_asia);
+            (defaults.lang, defaults.lang_east_asia, defaults.lang_bidi) =
+                (r.lang, r.lang_east_asia, r.lang_bidi);
         }
         // A docDefaults with no pPrDefault at all (PHPWord writes these) takes
         // Word's built-in paragraph defaults, 8pt after and line 278 auto:
@@ -955,6 +962,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                     small_caps,
                     lang,
                     lang_east_asia,
+                    lang_bidi,
                     vanish,
                     underline,
                     double_underline,
@@ -1029,6 +1037,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         small_caps,
                         lang,
                         lang_east_asia,
+                        lang_bidi,
                         vanish,
                         underline,
                         double_underline,
@@ -1276,6 +1285,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     small_caps,
                     lang,
                     lang_east_asia,
+                    lang_bidi,
                     vanish,
                     underline,
                     double_underline,

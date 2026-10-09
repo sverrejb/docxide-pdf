@@ -722,8 +722,24 @@ impl<'a> LinkTagger<'a> {
                     t.clone()
                 }
             });
-            let (lang, formula) = (chunk.lang.as_deref(), chunk.formula.as_ref());
-            switched |= self.inline(content, formula, lang, actual.as_deref());
+            let formula = chunk.formula.as_ref();
+            // Punctuation and digits have no language: they stay in the open
+            // language Span (the commas between Arabic words aren't English).
+            let neutral = formula.is_none()
+                && actual.is_none()
+                && !chunk.text.chars().any(char::is_alphabetic);
+            let lang = match &self.inline {
+                None if neutral => None,
+                Some((
+                    Inline::Span {
+                        lang,
+                        actual: false,
+                    },
+                    _,
+                )) if neutral => lang.clone(),
+                _ => chunk.lang.as_deref().map(str::to_string),
+            };
+            switched |= self.inline(content, formula, lang.as_deref(), actual.as_deref());
         }
         // The Note goes inside the link on its reference mark (Word nests it there).
         if let Some((endnote, id)) = chunk.note() {
@@ -1119,23 +1135,49 @@ fn mark_space_after(chunks: &mut [WordChunk]) {
     }
 }
 
-/// The language of a run's text: Word takes East Asian text's from
-/// `w:lang/@eastAsia`, the rest from `@val`.
-pub(super) fn run_lang(run: &Run, east_asian: bool) -> Option<&Arc<str>> {
-    if east_asian {
-        run.text_lang_east_asia.as_ref().or(run.text_lang.as_ref())
-    } else {
-        run.text_lang.as_ref()
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum Script {
+    Latin,
+    EastAsian,
+    Complex,
+}
+
+impl Script {
+    pub(super) fn of(ch: char) -> Script {
+        if crate::docx::is_complex_script_char(ch) {
+            Script::Complex
+        } else if crate::docx::is_east_asian_char(ch) {
+            Script::EastAsian
+        } else {
+            Script::Latin
+        }
     }
 }
 
-/// The language of `text` in `run`; only scans for East Asian characters
-/// when the run gives them a language of their own.
+/// The language of a run's text: East Asian text's from `w:lang/@eastAsia`,
+/// complex-script text's (Arabic, Hebrew, …) from `@bidi`, the rest from `@val`.
+pub(super) fn run_lang(run: &Run, script: Script) -> Option<&Arc<str>> {
+    match script {
+        Script::Latin => None,
+        Script::EastAsian => run.text_lang_east_asia.as_ref(),
+        Script::Complex => run.text_lang_bidi.as_ref(),
+    }
+    .or(run.text_lang.as_ref())
+}
+
+/// The language of `text` in `run`; only scans the text when the run gives
+/// East Asian or complex-script letters a language of their own.
 fn chunk_lang(run: &Run, text: &str) -> Option<Arc<str>> {
-    let east_asian = run.text_lang_east_asia.is_some()
-        && run.text_lang_east_asia != run.text_lang
-        && text.chars().any(crate::docx::is_east_asian_char);
-    run_lang(run, east_asian).cloned()
+    let own = |l: &Option<Arc<str>>| l.is_some() && *l != run.text_lang;
+    let script = if own(&run.text_lang_bidi) || own(&run.text_lang_east_asia) {
+        text.chars()
+            .map(Script::of)
+            .find(|&s| s != Script::Latin)
+            .unwrap_or(Script::Latin)
+    } else {
+        Script::Latin
+    };
+    run_lang(run, script).cloned()
 }
 
 /// Push WordChunks for a word, splitting into per-segment chunks for smallCaps.
@@ -4460,6 +4502,29 @@ mod tests {
         tags.write(&mut pdf, &mut alloc, &[pdf_writer::Ref::new(1)], &[]);
         let bytes = pdf.finish();
         assert!(bytes.windows(19).any(|w| w == b"(Pirmasis skirsnis)"));
+    }
+
+    #[test]
+    fn complex_script_words_take_the_bidi_language() {
+        let run = Run {
+            text_lang: Some("en-US".into()),
+            text_lang_east_asia: Some("ja-JP".into()),
+            text_lang_bidi: Some("ar-SA".into()),
+            ..Run::default()
+        };
+        let lang = |text| chunk_lang(&run, text).map(|l| l.to_string());
+        assert_eq!(lang("الأرز").as_deref(), Some("ar-SA"));
+        assert_eq!(lang("日本").as_deref(), Some("ja-JP"));
+        assert_eq!(lang("rice").as_deref(), Some("en-US"));
+        let no_bidi = Run {
+            text_lang_bidi: None,
+            ..run.clone()
+        };
+        assert_eq!(
+            chunk_lang(&no_bidi, "الأرز").as_deref(),
+            Some("en-US"),
+            "without @bidi the run's language stands"
+        );
     }
 
     #[test]

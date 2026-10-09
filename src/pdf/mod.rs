@@ -1734,17 +1734,9 @@ fn body_runs<'a>(doc: &'a Document) -> impl Iterator<Item = &'a Run> + 'a {
 fn document_lang(doc: &Document) -> String {
     let mut letters: HashMap<&str, usize> = HashMap::new();
     for run in body_runs(doc) {
-        let (mut latin, mut east_asian) = (0, 0);
         for ch in run.text.chars().filter(|c| c.is_alphabetic()) {
-            if crate::docx::is_east_asian_char(ch) {
-                east_asian += 1;
-            } else {
-                latin += 1;
-            }
-        }
-        for (is_east_asian, n) in [(false, latin), (true, east_asian)] {
-            if let Some(lang) = layout::run_lang(run, is_east_asian).filter(|_| n > 0) {
-                *letters.entry(lang).or_default() += n;
+            if let Some(lang) = layout::run_lang(run, layout::Script::of(ch)) {
+                *letters.entry(lang).or_default() += 1;
             }
         }
     }

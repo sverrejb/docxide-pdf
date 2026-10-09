@@ -275,6 +275,7 @@ struct ParagraphRunDefaults {
     text_glow: Option<TextGlow>,
     lang: Option<String>,
     lang_east_asia: Option<String>,
+    lang_bidi: Option<String>,
 }
 
 impl ParagraphRunDefaults {
@@ -308,6 +309,7 @@ impl ParagraphRunDefaults {
                 .unwrap_or(defaults.char_spacing),
             lang: style_or_clone(|s| s.lang.as_ref(), &defaults.lang),
             lang_east_asia: style_or_clone(|s| s.lang_east_asia.as_ref(), &defaults.lang_east_asia),
+            lang_bidi: style_or_clone(|s| s.lang_bidi.as_ref(), &defaults.lang_bidi),
             kern_threshold: para_style
                 .and_then(|s| s.kern_threshold)
                 .or(defaults.kern_threshold),
@@ -476,6 +478,11 @@ impl ParagraphRunDefaults {
                 .lang_east_asia
                 .or_else(|| char_style.and_then(|cs| cs.lang_east_asia.clone()))
                 .or_else(|| self.lang_east_asia.clone())
+                .map(Into::into),
+            text_lang_bidi: own
+                .lang_bidi
+                .or_else(|| char_style.and_then(|cs| cs.lang_bidi.clone()))
+                .or_else(|| self.lang_bidi.clone())
                 .map(Into::into),
             font_size_from_default,
             font_name_from_default,
