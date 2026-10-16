@@ -813,11 +813,33 @@ pub(super) fn extract_indents(
     )
 }
 
+// Final view omits an empty paragraph whose paragraph mark was deleted.
+// Do not discard surviving runs, bookmarks, or section boundaries: deleting
+// the mark alone merges text with the next paragraph rather than deleting it.
+fn is_fully_deleted_paragraph(node: roxmltree::Node) -> bool {
+    if !node.has_tag_name((WML_NS, "p")) {
+        return false;
+    }
+    let Some(ppr) = wml(node, "pPr") else {
+        return false;
+    };
+    if wml(ppr, "sectPr").is_some() || wml(ppr, "rPr").and_then(|rpr| wml(rpr, "del")).is_none() {
+        return false;
+    }
+    node.children().filter(|n| n.is_element()).all(|n| {
+        n.tag_name().namespace() == Some(WML_NS)
+            && matches!(n.tag_name().name(), "pPr" | "del" | "moveFrom" | "proofErr")
+    })
+}
+
 pub(super) fn collect_block_nodes<'a>(
     parent: roxmltree::Node<'a, 'a>,
 ) -> Vec<roxmltree::Node<'a, 'a>> {
     let mut nodes = Vec::new();
     for child in parent.children() {
+        if is_fully_deleted_paragraph(child) {
+            continue;
+        }
         if child.has_tag_name((WML_NS, "sdt")) {
             if let Some(content) = wml(child, "sdtContent") {
                 nodes.extend(collect_block_nodes(content));
@@ -1333,6 +1355,42 @@ mod tests {
     }
 
     // --- Pure math / conversion ---
+
+    #[test]
+    fn deleted_paragraph_marks_hide_only_fully_deleted_blocks() {
+        let cases = [
+            (
+                "<w:p><w:pPr><w:rPr><w:del/></w:rPr></w:pPr><w:del><w:r><w:delText>old</w:delText></w:r></w:del></w:p>",
+                true,
+            ),
+            ("<w:p><w:pPr><w:rPr><w:del/></w:rPr></w:pPr></w:p>", true),
+            (
+                "<w:p><w:pPr><w:rPr><w:del/></w:rPr></w:pPr><w:r><w:t>kept</w:t></w:r></w:p>",
+                false,
+            ),
+            (
+                "<w:p><w:pPr><w:rPr><w:del/></w:rPr><w:sectPr/></w:pPr></w:p>",
+                false,
+            ),
+            (
+                "<w:p><w:pPr><w:rPr><w:del/></w:rPr></w:pPr><w:bookmarkStart w:id=\"1\"/></w:p>",
+                false,
+            ),
+            (
+                "<w:p><w:del><w:r><w:delText>old</w:delText></w:r></w:del></w:p>",
+                false,
+            ),
+            ("<w:p/>", false),
+        ];
+        for (paragraph, deleted) in cases {
+            let xml = format!("<w:body xmlns:w=\"{WML_NS}\">{paragraph}</w:body>");
+            let doc = roxmltree::Document::parse(&xml).unwrap();
+            let blocks = collect_block_nodes(doc.root_element());
+            assert_eq!(blocks.len(), usize::from(!deleted), "{paragraph}");
+        }
+    }
+
+
 
     #[test]
     fn test_twips_to_pts() {
