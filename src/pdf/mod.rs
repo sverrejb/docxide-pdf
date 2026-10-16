@@ -2356,6 +2356,7 @@ fn render_paragraph_block(
     smartart_font_key: &str,
     smartart_image_names: &HashMap<usize, String>,
     debug_wrap: bool,
+    table_connector_anchor: Option<(usize, f32)>,
 ) -> bool {
     if is_empty_wrapping_frame(para, sp) {
         state.global_block_idx += 1;
@@ -4033,7 +4034,9 @@ fn render_paragraph_block(
         // drawn over gradient circles)
         let mut shape_content = tagging::artifact_content();
         let (x, y) =
-            positioning::connector_top_left(conn, sp, col_x, col_w, text_width, state.pb.slot_top);
+            positioning::connector_top_left(conn, sp, col_x, col_w, text_width,
+                    table_connector_anchor.filter(|(page, _)| *page == state.pb.page_count())
+                        .map_or(anchor.top(false), |(_, top)| top));
         render_connector(conn, &mut shape_content, x, y);
         state.pb.deferred_shapes.push((conn.z_index, shape_content));
     }
@@ -4720,6 +4723,12 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     None => (&col_geometry[..], col_count, text_width),
                 };
 
+                // A table may move the text below its wrap zone while the
+                // paragraph-relative connector retains the original anchor.
+                let table_connector_anchor = state.pb.float_zone.as_ref()
+                    .filter(|zone| zone.from_table)
+                    .map(|_| (state.pb.page_count(), state.pb.slot_top));
+
                 // With no side strip, the whole empty clearing paragraph sits
                 // below the floating table, including the line ended by br.
                 if matches!(block, Block::Paragraph(p) if p.clears_floats && p.runs.iter().all(|r| r.is_line_break || (r.text.is_empty() && !r.is_tab && r.inline_image.is_none())))
@@ -4871,6 +4880,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             smartart_font_key,
                             &smartart_image_names,
                             debug_wrap,
+                            table_connector_anchor,
                         );
                         state.pb.tags.attach_hoisted();
                         if skip {
