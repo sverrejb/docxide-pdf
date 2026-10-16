@@ -980,8 +980,9 @@ pub(super) fn render_header_footer(
                 // Foreground anchored lines must cover an inline picture's white
                 // background, so they wait for the late pass; behind-document
                 // lines (and all lines when there is no picture) paint early.
-                let defer_connectors =
-                    has_para_image || para.runs.iter().any(|run| run.inline_image.is_some());
+                let defer_connectors = has_para_image
+                    || para.runs.iter().any(|run| run.inline_image.is_some())
+                    || para.textboxes.iter().any(|tb| tb.fill.is_some() && tb.behind_doc);
                 let draw_connectors = |content: &mut Content, late_pass: bool| {
                     for connector in &para.connectors {
                         if (defer_connectors && !connector.behind_doc) != late_pass {

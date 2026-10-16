@@ -804,6 +804,24 @@ fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
     })
 }
 
+/// VML textboxes have an opaque white solid fill unless explicitly disabled.
+fn parse_vml_textbox_fill(shape: roxmltree::Node) -> Option<ShapeFill> {
+    let fill = shape.children().find(|n| n.has_tag_name((VML_NS, "fill")));
+    if matches!(shape.attribute("filled"), Some("f" | "false" | "0"))
+        || fill.is_some_and(|n| matches!(n.attribute("on"), Some("f" | "false" | "0")))
+    {
+        return None;
+    }
+    // Other VML fill types need their own renderer, not an opaque approximation.
+    if fill.is_some_and(|n| n.attribute("type").is_some_and(|t| t != "solid")) {
+        return None;
+    }
+    let color = shape.attribute("fillcolor")
+        .or_else(|| fill.and_then(|n| n.attribute("color")))
+        .and_then(parse_vml_color).unwrap_or([255, 255, 255]);
+    Some(ShapeFill::Solid(color))
+}
+
 pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
     pict_node: roxmltree::Node,
     ctx: &mut ParseContext<'_, R>,
@@ -878,6 +896,10 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         v_relative_from: v_relative,
         stroke_color,
         stroke_width,
+        behind_doc: style_str.split(';').filter_map(|part| part.trim().split_once(':'))
+            .any(|(key, value)| key.trim() == "z-index"
+                && value.trim().parse::<i64>().is_ok_and(|z| z < 0)),
+        fill: parse_vml_textbox_fill(shape),
         margin_left: 7.2,
         margin_right: 7.2,
         margin_top: 3.6,
@@ -964,6 +986,30 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
 #[cfg(test)]
 mod connector_layer_tests {
     use super::*;
+
+    #[test]
+    fn legacy_textbox_fill_is_white_unless_disabled_or_colored() {
+        for (attrs, child, expected) in [
+            ("", "", Some([255, 255, 255])),
+            ("filled=\"f\"", "", None),
+            ("", "<v:fill on=\"false\"/>", None),
+            ("fillcolor=\"#fff080\"", "", Some([255, 240, 128])),
+            ("", "<v:fill type=\"gradient\"/>", None),
+        ] {
+            let xml = format!(r#"<v:shape xmlns:v="{VML_NS}" {attrs}>{child}</v:shape>"#);
+            let doc = roxmltree::Document::parse(&xml).unwrap();
+            let actual = match parse_vml_textbox_fill(doc.root_element()) {
+                Some(ShapeFill::Solid(color)) => Some(color),
+                None => None,
+                _ => panic!("expected a solid fill"),
+            };
+            assert_eq!(actual, expected);
+        }
+    }
+
+    use std::collections::HashMap;
+
+
 
     #[test]
     fn anchored_connector_preserves_behind_document_layer() {
