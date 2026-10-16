@@ -1025,6 +1025,25 @@ pub(super) fn compute_row_layouts(
                                             || !r.text.trim().is_empty()
                                     })
                                     .or(runs.first());
+                                // A tab-only empty cell paragraph is sized by its
+                                // paragraph mark, as in body text. Do not let an
+                                // inherited tab font enlarge a smaller explicit mark.
+                                let mark_run;
+                                let metric_run = if !runs.is_empty()
+                                    && runs.iter().all(|r| r.is_tab)
+                                    && para.tab_stops.iter().all(|tab| tab.leader.is_none())
+                                    && let Some(size) = para.paragraph_mark_font_size
+                                    && let Some(name) = &para.paragraph_mark_font_name
+                                {
+                                    mark_run = crate::model::Run {
+                                        font_size: size,
+                                        font_name: name.clone(),
+                                        ..Default::default()
+                                    };
+                                    Some(&mark_run)
+                                } else {
+                                    metric_run
+                                };
                                 let font_size = metric_run.map_or(12.0, |r| r.font_size);
                                 let mut kb0 = String::new();
                                 let metric_font = metric_run
