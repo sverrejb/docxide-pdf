@@ -1910,6 +1910,17 @@ pub(super) fn build_paragraph_lines(
 
             // Small tolerance for floating-point width accumulation over many glyphs
             let mut overflows = proposed_x + ww > cur_max + 0.05;
+            // Complete mixed letter/digit code suffixes can use the same
+            // Word 2013+ space budget as words following a space.
+            let mixed_code_suffix = cjk.squeeze_spaces
+                && !need_space
+                && current_chunks.last().is_some_and(|c| c.text.ends_with('-'))
+                && {
+                    let suffix = shown.trim_end_matches(['.', ',', ';', ':', '!', '?', ')', '»']);
+                    suffix.chars().all(char::is_alphanumeric)
+                        && suffix.chars().any(char::is_alphabetic)
+                        && suffix.chars().any(|c| c.is_ascii_digit())
+                };
             // A word glued to the previous run's word is judged as one word.
             let (word_x, word_w) = if is_continuation && word_start < current_chunks.len() {
                 let x = current_chunks[word_start].x_offset;
@@ -1917,13 +1928,12 @@ pub(super) fn build_paragraph_lines(
             } else {
                 (proposed_x, ww)
             };
-            if overflows && (need_space || is_continuation) && !in_right_region {
+            if overflows && (need_space || is_continuation || mixed_code_suffix) && !in_right_region {
                 // How far the word may overflow and stay: Word 2013+ narrows
                 // the spaces, wpJustification the whole line.
                 let space_room = (cjk.squeeze_spaces && word_x + word_w / 2.0 <= cur_max)
                     .then(|| SPACE_SQUEEZE * (line_space_width(&current_chunks) + pending_space_w));
-                let line_room = cjk
-                    .squeeze_line
+                let line_room = (cjk.squeeze_line && (need_space || is_continuation))
                     .then(|| SQUEEZE_LINE_SPACES * entry.space_width(eff_fs));
                 if [space_room, line_room]
                     .into_iter()
@@ -4449,6 +4459,39 @@ mod tests {
             split_preserving_spaces("a---b"),
             vec![(0, "a-"), (0, "-"), (0, "-"), (0, "b")]
         );
+    }
+
+    #[test]
+    fn complete_mixed_suffix_can_squeeze_spaces() {
+        let fonts = HashMap::from([("Arial".to_string(), FontEntry::stub())]);
+        let run = |s: &str| Run {
+            text: s.into(),
+            ..make_run(10.0, VertAlign::Baseline, false)
+        };
+        for suffix in ["AB2C2", "A1"] {
+            let text = format!("aa aa aa aa 11-{suffix}");
+            for runs in [vec![run(&text)], vec![run("aa aa aa aa 11-"), run(suffix)]] {
+                let build = |overflow, squeeze| {
+                    build_paragraph_lines(
+                        &runs,
+                        &fonts,
+                        text.len() as f32 * 5.0 - overflow,
+                        0.0,
+                        &HashMap::new(),
+                        &HashMap::new(),
+                        None,
+                        None,
+                        None,
+                        plain_layout(squeeze),
+                    )
+                };
+                let lines = build(1.0, true);
+                assert_eq!(lines.len(), 1, "suffix={suffix}");
+                assert!(lines[0].squeezed);
+                assert_eq!(build(1.0, false).len(), 2);
+                assert_eq!(build(6.0, true).len(), 2);
+            }
+        }
     }
 
     #[test]

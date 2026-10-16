@@ -1,0 +1,1 @@
+Synthetic public Word 2013+ control for space squeezing at a complete mixed letter/digit suffix after a hyphen. Latin, Cyrillic and split-run examples, plus budget and intermediate-fragment controls. No customer data.
