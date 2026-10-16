@@ -85,6 +85,21 @@ pub(super) fn apply_pct_width(
     }
 }
 
+/// Nested percentage preferences refer to the parent cell's content width,
+/// even when a saved grid exists. Content fitting must not shrink a 100% table.
+pub(super) fn apply_nested_pct_width(table: &Table, widths: &mut [f32], available_w: f32) {
+    let Some(pct) = table.width_pct else { return };
+    // Word caps a table's width at the text column width.
+    let target = available_w * pct.min(1.0);
+    let total: f32 = widths.iter().sum();
+    if total > 0.0 && target > 0.0 {
+        let scale = target / total;
+        for w in widths {
+            *w *= scale;
+        }
+    }
+}
+
 /// Each grid column's widest nested table or picture plus its cell padding:
 /// content that never wraps narrower.
 fn hard_content_widths(table: &Table) -> Vec<f32> {
@@ -403,7 +418,6 @@ pub(super) fn auto_fit_columns(
     // in Word, where content-fitting made it half as wide.
     if available_width.is_some()
         && !table.auto_width
-        && table.width_pct.is_none()
         && !table.fixed_layout
         && !table.grid_inferred
     {
@@ -845,7 +859,7 @@ fn spacers_clear_nested_registration(
             return false;
         }
         let mut widths = auto_fit_columns(table, ctx.fonts, Some(cell_text_w), None);
-        apply_pct_width(table, &mut widths, cell_text_w, ctx.compat_mode);
+        apply_nested_pct_width(table, &mut widths, cell_text_w);
         let strip =
             cell_text_w - widths.iter().sum::<f32>() - pos.left_from_text - pos.right_from_text;
         if strip < MIN_NESTED_FLOAT_STRIP {
@@ -1435,7 +1449,7 @@ pub(super) fn compute_row_layouts(
                                 // The widths the nested table is drawn at, so a split's
                                 // line cursors index the lines it draws.
                                 let mut nested_cw = auto_fit_columns(nested_table, ctx.fonts, Some(cell_text_w), None);
-                                apply_pct_width(nested_table, &mut nested_cw, cell_text_w, ctx.compat_mode);
+                                apply_nested_pct_width(nested_table, &mut nested_cw, cell_text_w);
                                 let nested_layouts =
                                     compute_row_layouts(nested_table, &nested_cw, ctx, hf_sub);
                                 let nested_h = nested_layouts.iter().map(|rl| rl.height).sum::<f32>();
