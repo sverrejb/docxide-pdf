@@ -2478,7 +2478,16 @@ fn render_paragraph_block(
         None
     };
 
-    let effective_space_before = if drops_contextual_spacing(para, prev_para) {
+    // A leading floating table is already the first body block. Word drops
+    // the following empty anchor's before-spacing at the page top, while a
+    // document's ordinary first paragraph retains its own before-spacing.
+    let empty_anchor_after_float = is_text_empty(&para.runs)
+        && state.pb.is_at_page_top(sp)
+        && block_idx.checked_sub(1).and_then(|i| section_blocks.get(i))
+            .is_some_and(|b| matches!(b, Block::Table(t) if t.position.is_some()));
+    let effective_space_before = if drops_contextual_spacing(para, prev_para)
+        || empty_anchor_after_float
+    {
         0.0
     } else {
         para.space_before
