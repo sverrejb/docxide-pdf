@@ -133,8 +133,9 @@ fn word_pair_rule(a: char, b: char) -> Option<bool> {
     // hyphen (LB21 would make a dash run one unbreakable word; family_kinship's
     // 87-dash rules wrap into two columns of dashes) and before a digit (LB25
     // keeps "2019-2024" whole; 13 reference line ends such as "Sindh 2019-",
-    // "1(4): 108-", "about 3-").
-    if a == '-' && (b == '-' || b.is_ascii_digit()) {
+    // "1(4): 108-", "about 3-"). Opening guillemets also permit a break:
+    // Word wraps `Office «North Ural»-«Branch»` after the hyphen.
+    if a == '-' && (b == '-' || b.is_ascii_digit() || b == '«') {
         return Some(true);
     }
     // Word breaks after any breaking space, also before what LB13 glues to it
@@ -4449,6 +4450,16 @@ mod tests {
             split_preserving_spaces("a---b"),
             vec![(0, "a-"), (0, "-"), (0, "-"), (0, "b")]
         );
+    }
+
+    #[test]
+    fn hyphen_can_break_before_opening_guillemet() {
+        assert_eq!(
+            split_preserving_spaces("«North Ural»-«Branch»"),
+            vec![(0, "«North"), (1, "Ural»-"), (0, "«Branch»")]
+        );
+        assert!(breaks_between('-', '«'));
+        assert!(!breaks_between('\u{2011}', '«'));
     }
 
     #[test]
