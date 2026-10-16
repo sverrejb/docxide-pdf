@@ -4698,7 +4698,10 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 
         let layout_blocks = |state: &mut LayoutState| {
             let mut frame: Option<OpenFrame> = None;
+            let mut last_block_consumption = None;
             for (block_idx, block) in section.blocks.iter().enumerate() {
+                let previous_block_consumption = last_block_consumption.take();
+                let block_start = (state.pb.page_count(), state.pb.slot_top);
                 let block_frame = lifted_frame(block, sp);
                 if let Some(f) = frame.take_if(|f| block_frame.is_none_or(|fp| fp != f.props)) {
                     f.close(state, sp);
@@ -4921,6 +4924,24 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             &mut state.effective_margin_bottom,
                             col_bounds,
                         );
+                        // A full-width, negatively positioned text float displaces
+                        // its preceding empty anchor line below the table in Word.
+                        // Keep the table's measured position, but reserve that line
+                        // in its clearing extent instead of losing it above the float.
+                        if table.position.as_ref().is_some_and(|p| p.v_anchor == "text" && p.v_offset_pt < 0.0)
+                            && block_idx.checked_sub(1).and_then(|i| section.blocks.get(i)).is_some_and(|b|
+                                matches!(b, Block::Paragraph(p) if is_text_empty(&p.runs)
+                                    && p.content_height == 0.0 && p.image.is_none()
+                                    && !p.is_section_break && p.frame_props.is_none()))
+                            && let Some((page, consumed)) = previous_block_consumption
+                            && page == state.pb.page_count() && consumed > 0.0
+                            && let Some(zone) = state.pb.float_zone.as_mut()
+                        {
+                            let (x, w) = geometry[state.current_col];
+                            let gap = (zone.obj_left - zone.left_from_text - x)
+                                .max(x + w - zone.obj_right - zone.right_from_text);
+                            if gap < MIN_EMPTY_STRIP { zone.bottom_y -= consumed; }
+                        }
                         if let Some(mut tags) = state.pb.table_tags.take() {
                             tags.finish(&mut state.pb.tags);
                         }
@@ -4984,6 +5005,8 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     state.pb.float_zone = None;
                 }
 
+                last_block_consumption = (block_start.0 == state.pb.page_count())
+                    .then_some((block_start.0, block_start.1 - state.pb.slot_top));
                 state.global_block_idx += 1;
             }
             if let Some(f) = frame {
