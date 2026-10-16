@@ -1140,6 +1140,15 @@ pub(super) fn render_header_footer(
                                 );
                             }
 
+                            // Match Word and body textboxes: fixed boxes clip overflow.
+                            let needs_clip = !matches!(tb.auto_fit, crate::model::AutoFit::Shape);
+                            if needs_clip {
+                                content.save_state();
+                                content.rect(tb_x, tb_y_top - tb_height, tb.width_pt, tb_height);
+                                content.clip_nonzero();
+                                content.end_path();
+                            }
+
                             let content_x = tb_x + tb.margin_left;
                             let content_w =
                                 (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0);
@@ -1324,6 +1333,9 @@ pub(super) fn render_header_footer(
                                 tb_cursor -= tp.space_before
                                     + (tb_lines.len() as f32) * tb_line_h
                                     + tp.space_after;
+                            }
+                            if needs_clip {
+                                content.restore_state();
                             }
                         }
                     }
