@@ -4972,8 +4972,15 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         // there (the break paragraph's mark line).
                         let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
                         let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                        state.pb.slot_top =
-                            fz.bottom_y - resolve_line_h(ls, fs, lhr) * (1 + extra_breaks) as f32;
+                        // A continuous section mark terminates this paragraph;
+                        // unlike an ordinary clearing paragraph, its mark has
+                        // no additional line below the float in Word.
+                        let section_mark = ctx.compat_mode < 15 && fz.from_table
+                            && empty_clear && p.is_section_break && block_idx > 0
+                            && doc.sections.get(sect_idx + 1).is_some_and(|next|
+                                next.properties.break_type == SectionBreakType::Continuous);
+                        let mark_lines = usize::from(!section_mark) + extra_breaks;
+                        state.pb.slot_top = fz.bottom_y - resolve_line_h(ls, fs, lhr) * mark_lines as f32;
                     }
                     state.pb.float_zone = None;
                 }
