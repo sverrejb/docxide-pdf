@@ -965,6 +965,17 @@ pub(super) fn compute_row_layouts(
                     let centered = matches!(cell.v_align, crate::model::CellVAlign::Center);
 
                     let block_count = cell.content.len();
+                    // Modern Word drops the relocated anchor line only when
+                    // its empty paragraph has expanded automatic line spacing.
+                    // Single/exact/at-least spacing and legacy modes retain it.
+                    let suppress_negative_mark = |idx: usize, offset: Option<f32>| {
+                        ctx.compat_mode >= 15 && offset.is_some_and(|y| y < 0.0)
+                            && idx.checked_sub(1).and_then(|i| cell.content.get(i))
+                                .is_some_and(|b| matches!(b, Block::Paragraph(p)
+                                    if is_text_empty(&p.runs)
+                                        && matches!(p.line_spacing.unwrap_or(ctx.doc_line_spacing),
+                                            crate::model::LineSpacing::Auto(factor) if factor > 1.0)))
+                    };
                     for (block_idx, block) in cell.content.iter().enumerate() {
                         match block {
                             Block::Paragraph(para) => {
@@ -1037,6 +1048,27 @@ pub(super) fn compute_row_layouts(
                                     para.line_spacing.unwrap_or(ctx.doc_line_spacing);
                                 let line_h =
                                     resolve_line_h(effective_ls, font_size, tallest_lhr);
+                                // A negative floating table moves its preceding empty
+                                // anchor mark below itself. The mandatory end-of-cell
+                                // mark does not replace that anchor's line metrics.
+                                let relocated_anchor_line = (block_idx + 1 == block_count
+                                    && nested_float_clearance > 0.0
+                                    && is_text_empty(runs)
+                                    && matches!(items.last(), Some(CellContentItem::NestedTable {
+                                        floating_offset: Some(offset), ..
+                                    }) if *offset < 0.0)
+                                    && block_idx.checked_sub(2).and_then(|i| cell.content.get(i))
+                                        .is_some_and(|b| matches!(b, Block::Paragraph(p)
+                                            if is_text_empty(&p.runs) && p.content_height == 0.0
+                                                && p.image.is_none() && !p.paragraph_mark_vanish)))
+                                    .then(|| items.get(items.len().saturating_sub(2)))
+                                    .flatten()
+                                    .and_then(|item| match item {
+                                        CellContentItem::Paragraph(p) => Some(p.line_h),
+                                        _ => None,
+                                    });
+                                let line_h = relocated_anchor_line.unwrap_or(line_h);
+
                                 // Auto-spaced cell lines snap to the section's line grid
                                 // like body lines: japanese_medical's ten empty cell
                                 // paragraphs step 18pt (the grid), not their 15pt
@@ -1445,7 +1477,7 @@ pub(super) fn compute_row_layouts(
                                         && p.image.is_none() && p.floating_images.is_empty() && p.textboxes.is_empty()
                                 };
                                 let mut floating_offset = nested_table.position.as_ref()
-                                    .filter(|pos| pos.v_anchor == "text" && nested_table.rows.len() == 1 && (top_aligned || (centered && block_idx == 0 && pos.v_offset_pt > 0.0)))
+                                    .filter(|pos| pos.v_anchor == "text" && nested_table.rows.len() == 1 && (top_aligned || (centered && pos.v_offset_pt < 0.0) || (centered && block_idx == 0 && pos.v_offset_pt > 0.0)))
                                     .filter(|pos| {
                                         let at_left_edge = matches!(pos.h_position, HorizontalPosition::Offset(v) if v == 0.0);
                                         let next_is_blank = matches!(
@@ -1494,8 +1526,9 @@ pub(super) fn compute_row_layouts(
                                     floating_x_offset,
                                 });
                                 if floating_offset.is_none() { prev_space_after = 0.0; }
-                                // A centered cell only floats a positive offset (filter above).
-                                prev_was_nested_table = floating_offset.is_none() || centered;
+                                // Positive offsets suppress the centered cell's trailing mark; negative offsets displace its anchor line.
+                                prev_was_nested_table = floating_offset.is_none() || (centered && floating_offset.is_some_and(|offset| offset > 0.0))
+                                    || suppress_negative_mark(block_idx, floating_offset);
                                 para_idx += 1;
                             }
                         }
@@ -1508,7 +1541,8 @@ pub(super) fn compute_row_layouts(
                     // already suppressed above via prev_was_nested_table.
                     let trailing_mark_after_table = items.len() >= 2
                         && matches!(items.get(items.len() - 2), Some(CellContentItem::NestedTable { floating_offset, .. })
-                            if floating_offset.is_none() || centered)
+                            if floating_offset.is_none() || (centered && floating_offset.is_some_and(|offset| offset > 0.0))
+                                || suppress_negative_mark(block_count.saturating_sub(2), *floating_offset))
                         && matches!(items.last(), Some(CellContentItem::Paragraph(p)) if p.lines.is_empty() && p.image_name.is_none() && p.floating_images.is_empty());
                     let trailing_space_after =
                         if trailing_mark_after_table { 0.0 } else { prev_space_after };
