@@ -2402,7 +2402,18 @@ fn render_paragraph_block(
             ctx.compat_mode,
             next_continuous,
             block_idx.checked_sub(1).and_then(|i| section_blocks.get(i)),
-        );
+        )
+        // A modern continuous section mark can occupy a side strip beside
+        // a floating table. Full-width floats still absorb that mark line.
+        || (ctx.compat_mode >= 15 && next_continuous
+            && block_idx.checked_sub(1).and_then(|i| section_blocks.get(i))
+                .is_some_and(|b| matches!(b, Block::Table(t) if t.position.is_some()))
+            && state.pb.float_zone.as_ref().is_some_and(|zone| {
+                let (x, w) = col_geometry[state.current_col];
+                (zone.obj_left - zone.left_from_text - x)
+                    .max(x + w - zone.obj_right - zone.right_from_text) >= MIN_EMPTY_STRIP
+            }));
+
     if para.is_section_break
         && !keeps_line
         && is_text_empty(&para.runs)
