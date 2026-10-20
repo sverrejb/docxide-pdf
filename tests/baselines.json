@@ -4078,6 +4078,42 @@
     "a11y_struct": 1.0,
     "a11y_text": 0.5636
   },
+  "numeric-slash-suffix/s0-c14-b-sm": {
+    "jaccard": 0.6539,
+    "ssim": 0.8166,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "numeric-slash-suffix/s0-c15-b-lg": {
+    "jaccard": 0.9528,
+    "ssim": 0.9837,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "numeric-slash-suffix/s0-c15-b-sm": {
+    "jaccard": 0.9202,
+    "ssim": 0.9766,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "numeric-slash-suffix/s0-c15-l-sm": {
+    "jaccard": 0.9457,
+    "ssim": 0.9812,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "numeric-slash-suffix/s1-c15-b-sm": {
+    "jaccard": 0.938,
+    "ssim": 0.9859,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
+  "numeric-slash-suffix/s2-c15-b-sm": {
+    "jaccard": 0.9335,
+    "ssim": 0.982,
+    "ref_pages": 1,
+    "gen_pages": 1
+  },
   "samples/CV": {
     "jaccard": 0.8569,
     "ssim": 0.954,
