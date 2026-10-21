@@ -145,9 +145,9 @@ pub(super) fn para_block_height(p: &CellParagraphLayout) -> f32 {
         if p.paragraph_mark_vanish {
             0.0
         } else if p.content_height > 0.0 {
-            p.content_height
+            p.content_height + super::helpers::border_band(p.bottom_border.as_ref())
         } else {
-            p.line_h
+            p.line_h + super::helpers::border_band(p.bottom_border.as_ref())
         }
     } else {
         cell_lines_h(p, 0..p.lines.len())
@@ -157,10 +157,13 @@ pub(super) fn para_block_height(p: &CellParagraphLayout) -> f32 {
 /// Height of a cell paragraph's lines `range`, each at its own pitch
 /// (`size_lines_by_own_runs`).
 pub(super) fn cell_lines_h(p: &CellParagraphLayout, range: std::ops::Range<usize>) -> f32 {
+    let bottom_band = if range.end == p.lines.len() {
+        super::helpers::border_band(p.bottom_border.as_ref())
+    } else { 0.0 };
     p.lines[range]
         .iter()
         .map(|l| super::layout::inline_line_advance(l, p.line_h, p.picture_metrics()))
-        .sum()
+        .sum::<f32>() + bottom_band
 }
 
 /// Auto-fit column widths so that the longest non-breakable word in each column
@@ -750,6 +753,7 @@ pub(super) struct CellParagraphLayout {
     pub(super) image_glow_xobj: Option<String>,
     pub(super) image_clip: Option<crate::model::ShapeGeometry>,
     pub(super) content_height: f32,
+    pub(super) bottom_border: Option<crate::model::ParagraphBorder>,
     pub(super) paragraph_mark_vanish: bool,
     pub(super) floating_images: Vec<CellFloatingImageLayout>,
     pub(super) space_after: f32,
@@ -1430,6 +1434,12 @@ pub(super) fn compute_row_layouts(
                                     })
                                     .collect();
 
+                                let next = super::block_para(&cell.content, block_idx + 1);
+                                let bottom_border = if next.is_some_and(|n| super::helpers::joins_border_group(para, n)) {
+                                    para.borders.between.clone()
+                                } else { para.borders.bottom.clone() };
+                                total_h += super::helpers::border_band(bottom_border.as_ref());
+
                                 items.push(CellContentItem::Paragraph(CellParagraphLayout {
                                     lines,
                                     line_h,
@@ -1492,6 +1502,7 @@ pub(super) fn compute_row_layouts(
                                     image_glow_xobj: img_glow_xobj,
                                     image_clip: para.image.as_ref().and_then(|img| img.clip_geometry.clone()),
                                     content_height: para.content_height,
+                                    bottom_border,
                                     paragraph_mark_vanish: para.paragraph_mark_vanish,
                                     floating_images: cell_floats,
                                     space_after,
@@ -2554,4 +2565,21 @@ mod floating_nested_tests {
         assert_eq!(find_cell_split(&row.cells[0], &start, 70.01).item, 4);
         assert_eq!(find_cell_split(&row.cells[0], &start, 69.9).item, 3);
     }
+    #[test]
+    fn bottom_border_band_belongs_only_to_the_last_line_chunk() {
+        let para = CellParagraphLayout {
+            lines: vec![TextLine::default(), TextLine::default()],
+            line_h: 10.0,
+            bottom_border: Some(crate::model::ParagraphBorder {
+                width_pt: 1.5, space_pt: 1.0, color: [0, 0, 0],
+            }),
+            ..Default::default()
+        };
+        assert_eq!(cell_lines_h(&para, 0..1), 10.0);
+        assert_eq!(cell_lines_h(&para, 1..2), 12.5);
+        assert_eq!(para_block_height(&para), 22.5);
+        let empty = CellParagraphLayout { lines: vec![], ..para };
+        assert_eq!(para_block_height(&empty), 12.5);
+    }
+
 }
