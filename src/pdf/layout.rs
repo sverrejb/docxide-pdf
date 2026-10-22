@@ -2098,7 +2098,9 @@ pub(super) fn build_paragraph_lines(
             if overflows && (need_space || is_continuation) && !in_right_region {
                 // How far the word may overflow and stay: Word 2013+ narrows
                 // the spaces, wpJustification the whole line.
-                let space_room = (cjk.squeeze_spaces && word_x + word_w / 2.0 <= cur_max)
+                let space_room = (cjk.squeeze_spaces
+                    && (word_x + word_w / 2.0 <= cur_max
+                        || (word == "." && pending_space_count > 1)))
                     .then(|| SPACE_SQUEEZE * (line_space_width(&current_chunks) + pending_space_w));
                 let line_room = cjk
                     .squeeze_line
@@ -4784,6 +4786,22 @@ mod tests {
             split_preserving_spaces("a---b"),
             vec![(0, "a-"), (0, "-"), (0, "-"), (0, "b")]
         );
+    }
+
+    #[test]
+    fn period_after_space_filler_can_use_space_budget() {
+        let fonts = HashMap::from([("Arial".to_string(), FontEntry::stub())]);
+        let run = Run {
+            text: format!("aa aa{}.", " ".repeat(16)),
+            ..make_run(10.0, VertAlign::Baseline, false)
+        };
+        let build = |overflow, squeeze| build_paragraph_lines(
+            std::slice::from_ref(&run), &fonts,
+            run.text.len() as f32 * 5.0 - overflow, 0.0,
+            &HashMap::new(), &HashMap::new(), None, None, None, plain_layout(squeeze));
+        assert_eq!(build(3.0, true).len(), 1);
+        assert_eq!(build(3.0, false).len(), 2);
+        assert_eq!(build(30.0, true).len(), 2);
     }
 
     #[test]
