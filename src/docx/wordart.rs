@@ -1,11 +1,11 @@
 use crate::model::{
-    Alignment, AutoFit, Paragraph, Run, TextFill, TextGlow, TextOutline, TextShadow, TextWarp,
-    Textbox,
+    Alignment, AutoFit, HorizontalPosition, Paragraph, Run, TextFill, TextGlow, TextOutline,
+    TextShadow, TextWarp, Textbox, VerticalPosition,
 };
 
 use super::color::{apply_color_transforms, parse_color_transforms, resolve_dml_color};
 use super::styles::{StylesInfo, ThemeFonts};
-use super::textbox::parse_avlst;
+use super::textbox::{parse_avlst, parse_vml_box_style, parse_vml_color};
 use super::{
     W14_NS, angle_attr, dml as find_dml, emu_attr_opt, find_child, frac_attr, parse_hex_color,
     parse_on_off, parse_pt, resolve_theme_color_key,
@@ -142,9 +142,17 @@ pub(super) fn parse_vml_wordart(
     let style_str = textpath.attribute("style").unwrap_or("");
     let (font_name, font_size) = parse_vml_font_style(style_str);
 
-    let fill_color = shape
-        .attribute("fillcolor")
-        .and_then(|v| parse_hex_color(v.trim_start_matches('#')));
+    // The fill's opacity is blended into the colour: WordArt sits on the page
+    // background (swiss_materials' watermark is red at 50%, drawn pink).
+    let fill_color = shape.attribute("fillcolor").and_then(parse_vml_color).map(|c| {
+        let a = shape
+            .children()
+            .find(|n| n.has_tag_name((super::VML_NS, "fill")))
+            .and_then(|f| f.attribute("opacity"))
+            .and_then(parse_vml_opacity)
+            .unwrap_or(1.0);
+        c.map(|v| (v as f32 * a + 255.0 * (1.0 - a)).round() as u8)
+    });
 
     let run = Run {
         text: text.to_string(),
@@ -163,15 +171,54 @@ pub(super) fn parse_vml_wordart(
 
     let shape_style = shape.attribute("style").unwrap_or("");
     let (width, height) = parse_vml_dimensions(shape_style);
+    let bs = parse_vml_box_style(shape_style);
+    // `fitshape` stretches the glyphs to the shape box (both ways), which is
+    // what the textPlain warp draws; the 1pt `font-size` Word writes is moot.
+    // The flag usually sits on the shapetype's textpath (every WordArt preset
+    // sets it), so it is on unless the shape's own textpath turns it off.
+    // ponytail: fitpath / unfitted WordArt would need the shapetype looked up.
+    let fit_shape = !matches!(textpath.attribute("fitshape"), Some("f" | "false" | "0"));
 
     Some(Textbox {
         paragraphs: vec![para],
         width_pt: width,
         height_pt: height,
+        h_position: if bs.h_center {
+            HorizontalPosition::AlignCenter
+        } else {
+            HorizontalPosition::Offset(bs.margin_left)
+        },
+        h_relative_from: bs.h_relative,
+        v_offset_pt: bs.margin_top,
+        v_position: if bs.v_center {
+            VerticalPosition::AlignCenter
+        } else {
+            VerticalPosition::Offset(bs.margin_top)
+        },
+        v_relative_from: bs.v_relative,
+        behind_doc: bs.behind_text,
+        rotation_deg: bs.rotation_deg,
+        fit_shape,
         no_text_wrap: true,
-        auto_fit: AutoFit::Shape,
+        auto_fit: if fit_shape { AutoFit::None } else { AutoFit::Shape },
+        text_warp: fit_shape.then(|| TextWarp {
+            preset: "textPlain".to_string(),
+            adjustments: Vec::new(),
+        }),
         ..Textbox::default()
     })
+}
+
+/// VML opacity: a fraction (".5"), a percentage ("50%") or 16.16 fixed point ("32768f").
+fn parse_vml_opacity(val: &str) -> Option<f32> {
+    let val = val.trim();
+    if let Some(f) = val.strip_suffix('f') {
+        return f.parse::<f32>().ok().map(|v| v / 65536.0);
+    }
+    if let Some(p) = val.strip_suffix('%') {
+        return p.parse::<f32>().ok().map(|v| v / 100.0);
+    }
+    val.parse().ok()
 }
 
 /// Resolve a `w14:srgbClr` or `w14:schemeClr` child of `fill_node`.

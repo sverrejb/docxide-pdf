@@ -118,6 +118,14 @@ pub(super) fn render_single_textbox(
     );
     let tb_height = textbox_height(tb, ctx);
     let tb_y_top = resolve_tb_y_top(tb.v_relative_from, &tb.v_position, tb_height, sp, slot_top);
+    log::debug!(
+        "TEXTBOX x={tb_x:.1} top={tb_y_top:.1} w={:.1} h={tb_height:.1} rot={} paras={}",
+        tb.width_pt,
+        tb.rotation_deg,
+        tb.paragraphs.len()
+    );
+    let rotated =
+        rotate_about_center(content, tb.rotation_deg, tb_x, tb_y_top, tb.width_pt, tb_height);
 
     if let Some(ref fill) = tb.fill {
         render_shape_fill(
@@ -194,6 +202,9 @@ pub(super) fn render_single_textbox(
             wordart::invisible_text(tb, content, ctx.fonts, x, top);
             Tags::end(content);
             if needs_clip {
+                content.restore_state();
+            }
+            if rotated {
                 content.restore_state();
             }
             return;
@@ -348,6 +359,29 @@ pub(super) fn render_single_textbox(
     if needs_clip {
         content.restore_state();
     }
+    if rotated {
+        content.restore_state();
+    }
+}
+
+/// Turn the graphics state by a shape's rotation (OOXML: degrees clockwise)
+/// about its box centre. Returns whether a state was pushed to restore.
+pub(super) fn rotate_about_center(
+    content: &mut Content,
+    rotation_deg: f32,
+    x: f32,
+    y_top: f32,
+    w: f32,
+    h: f32,
+) -> bool {
+    if rotation_deg.rem_euclid(360.0).abs() < 0.01 {
+        return false;
+    }
+    let (s, c) = (-rotation_deg).to_radians().sin_cos();
+    let (cx, cy) = (x + w / 2.0, y_top - h / 2.0);
+    content.save_state();
+    content.transform([c, s, -s, c, cx - c * cx + s * cy, cy - s * cx - c * cy]);
+    true
 }
 
 /// Shared paragraph iteration loop used by the glow, shadow, and normal text passes

@@ -435,4 +435,10 @@ pub struct Textbox {
     /// the paragraph's left indent, and their offsets count from the line top
     /// below the space before. Genuine anchored floats do neither.
     pub on_line: bool,
+    /// In-plane rotation in degrees, clockwise (OOXML / VML `rotation:`),
+    /// applied about the box centre at render time.
+    pub rotation_deg: f32,
+    /// VML `fitshape`: the warped glyphs stretch to the box width as well as
+    /// its height (a DrawingML warp keeps the text's natural width, centred).
+    pub fit_shape: bool,
 }

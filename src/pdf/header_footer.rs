@@ -1215,6 +1215,14 @@ pub(super) fn render_header_footer(
                                 sp,
                                 slot_top,
                             );
+                            let rotated = super::textbox_render::rotate_about_center(
+                                content,
+                                tb.rotation_deg,
+                                tb_x,
+                                tb_y_top,
+                                tb.width_pt,
+                                tb_height,
+                            );
 
                             if let Some(ref fill) = tb.fill {
                                 super::render_shape_fill(
@@ -1229,6 +1237,23 @@ pub(super) fn render_header_footer(
                                 );
                             }
 
+                            let content_x = tb_x + tb.margin_left;
+                            let content_w =
+                                (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0);
+
+                            // WordArt (a header watermark) draws its glyphs as warped
+                            // outlines, as the body path does.
+                            if tb.text_warp.as_ref().is_some_and(|w| w.preset != "textNoShape")
+                                && super::wordart::render_warped_textbox(
+                                    tb, content, ctx.fonts, tb_x, tb_y_top, content_w,
+                                )
+                            {
+                                if rotated {
+                                    content.restore_state();
+                                }
+                                continue;
+                            }
+
                             // Match Word and body textboxes: fixed boxes clip overflow.
                             let needs_clip = !matches!(tb.auto_fit, crate::model::AutoFit::Shape);
                             if needs_clip {
@@ -1237,10 +1262,6 @@ pub(super) fn render_header_footer(
                                 content.clip_nonzero();
                                 content.end_path();
                             }
-
-                            let content_x = tb_x + tb.margin_left;
-                            let content_w =
-                                (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0);
 
                             // Word vertically anchors textbox content per bodyPr anchor (ctr/b).
                             // The body textbox path (textbox_render::render_single_textbox) applies this,
@@ -1444,6 +1465,9 @@ pub(super) fn render_header_footer(
                                     + tp.space_after;
                             }
                             if needs_clip {
+                                content.restore_state();
+                            }
+                            if rotated {
                                 content.restore_state();
                             }
                         }

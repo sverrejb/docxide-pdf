@@ -504,7 +504,7 @@ pub(super) fn render_warped_textbox(
     // fill the shape height more completely (matching Word's rasterized output).
     let text_h = info.font_size as f64 * ascender / glyph_extent;
 
-    let boundary_w = text_w;
+    let boundary_w = if tb.fit_shape { content_w as f64 } else { text_w };
     let boundary_h = tb.height_pt as f64;
     let Some((top_boundary, bottom_boundary)) =
         evaluate_warp_boundaries(&warp.preset, &warp.adjustments, boundary_w, boundary_h)
@@ -676,12 +676,14 @@ pub(super) fn render_text_on_path(
     };
 
     let Some(info) = collect_text_info(tb) else {
+        log::debug!("WARP: no text info");
         return false;
     };
 
     let Some((font_data, face_index)) =
         load_font_data(&info.font_name, info.bold, info.italic, seen_fonts)
     else {
+        log::debug!("WARP: no font data for {} bold={}", info.font_name, info.bold);
         return false;
     };
     let Some(face) = ttf_parser::Face::parse(&font_data, face_index).ok() else {

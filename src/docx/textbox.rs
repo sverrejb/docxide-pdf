@@ -18,20 +18,25 @@ use super::{
     wps as find_wps,
 };
 
-struct VmlBoxStyle {
-    width: f32,
-    height: f32,
-    margin_left: f32,
-    margin_top: f32,
-    h_relative: HRelativeFrom,
-    v_relative: VRelativeFrom,
+pub(super) struct VmlBoxStyle {
+    pub(super) width: f32,
+    pub(super) height: f32,
+    pub(super) margin_left: f32,
+    pub(super) margin_top: f32,
+    pub(super) h_relative: HRelativeFrom,
+    pub(super) v_relative: VRelativeFrom,
     /// A negative z-index puts the shape behind the text.
-    behind_text: bool,
+    pub(super) behind_text: bool,
+    /// `mso-position-horizontal:center` / `mso-position-vertical:center`.
+    pub(super) h_center: bool,
+    pub(super) v_center: bool,
+    /// `rotation:` in degrees, clockwise.
+    pub(super) rotation_deg: f32,
 }
 
 /// Parse a VML shape `style` attribute (semicolon-separated `key:val`) into box
 /// geometry: dimensions/margins in points and the position-relative anchors.
-fn parse_vml_box_style(style_str: &str) -> VmlBoxStyle {
+pub(super) fn parse_vml_box_style(style_str: &str) -> VmlBoxStyle {
     let mut s = VmlBoxStyle {
         width: 0.0,
         height: 0.0,
@@ -40,6 +45,9 @@ fn parse_vml_box_style(style_str: &str) -> VmlBoxStyle {
         h_relative: HRelativeFrom::Column,
         v_relative: VRelativeFrom::Paragraph,
         behind_text: false,
+        h_center: false,
+        v_center: false,
+        rotation_deg: 0.0,
     };
     for part in style_str.split(';') {
         if let Some((key, val)) = part.trim().split_once(':') {
@@ -50,6 +58,11 @@ fn parse_vml_box_style(style_str: &str) -> VmlBoxStyle {
                 "margin-left" => s.margin_left = parse_pt(val).unwrap_or(0.0),
                 "margin-top" => s.margin_top = parse_pt(val).unwrap_or(0.0),
                 "z-index" => s.behind_text = val.parse::<i64>().is_ok_and(|z| z < 0),
+                "rotation" => {
+                    s.rotation_deg = val.trim_end_matches("deg").parse().unwrap_or(0.0);
+                }
+                "mso-position-horizontal" => s.h_center = val == "center",
+                "mso-position-vertical" => s.v_center = val == "center",
                 "mso-position-horizontal-relative" => {
                     s.h_relative = match val {
                         "page" => HRelativeFrom::Page,
@@ -671,7 +684,7 @@ fn parse_style_stroke_width(wsp: roxmltree::Node, theme: &ThemeFonts) -> f32 {
 /// `white [3212]` (the `[idx]` suffix is the resolved theme color we ignore in
 /// favor of the spelled-out name). Returns None for unrecognized values so the
 /// caller can fall back to a default.
-fn parse_vml_color(val: &str) -> Option<[u8; 3]> {
+pub(super) fn parse_vml_color(val: &str) -> Option<[u8; 3]> {
     let val = val.trim().split('[').next().unwrap_or("").trim();
     if let Some(hex) = val.strip_prefix('#') {
         if hex.len() == 6 {
@@ -777,6 +790,7 @@ fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
         h_relative,
         v_relative,
         behind_text,
+        ..
     } = parse_vml_box_style(shape.attribute("style").unwrap_or(""));
     if width <= 0.0 || height <= 0.0 {
         return None;
