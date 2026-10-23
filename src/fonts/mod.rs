@@ -809,6 +809,24 @@ pub(crate) fn register_font(
             log::info!("Font substitution: {primary} → alias \"{alias}\"");
             Some(m)
         })
+        .or_else(|| {
+            // Word draws a missing name starting with "Helv" as Arial (Helvetica 45
+            // Light, Helvetica Foo, HelveticaNeue ThinCond, Helv; probes 2026-10-23;
+            // swiss_materials' "Helvetica 35 Thin" with an unused Corbel Light
+            // altName) unless the altName is Bahnschrift: Word online finds that
+            // variable font but cannot export it and falls to the family fallback
+            // (Helvetica 55 Roman -> Calibri). "Zqx Helvetica" is not a match, and
+            // "Helvetica Neue" alone is Sylfaen.
+            let bahnschrift = table_entry
+                .and_then(|e| e.alt_name.as_deref())
+                .is_some_and(|a| a.starts_with("Bahnschrift"));
+            if bahnschrift || !primary.to_ascii_lowercase().starts_with("helv") {
+                return None;
+            }
+            let m = try_candidate("Arial")?;
+            log::info!("Font substitution: {primary} → Helvetica family \"Arial\"");
+            Some(m)
+        })
         // CJK fallback before Word's Latin defaults, which lack CJK glyphs and
         // would produce squares
         .or_else(|| {
