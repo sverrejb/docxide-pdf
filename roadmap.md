@@ -1,5 +1,52 @@
 # Roadmap
 
+## New fixtures round 2 (2026-10-23, branch `new-fixtures-2`)
+
+Ten more scraped fixtures with Word online references (`f6d664e78`):
+czech_village_council_minutes_2025 (67.8), swiss_materials_extraction_zone_guidance
+(9.4), greensboro_partnership_brochure (15.8), spanish_constitutional_court_1985
+(59.1), japanese_hr_consultation_application (39.8), catalan_university_transfer_offer
+(62.0), czech_after_school_april_activities (90.7), czech_council_resolutions_2023
+(66.9), primary_care_safeguarding_annual_review (71.5),
+lithuanian_value_added_tax_amendment (62.1). Four rules from the three weakest,
+each probed in Word online and verified on the suite (snapshots `nf2-base` /
+`nf2-final`, scraped mean 65.2 -> 65.6, nothing else moved):
+
+- A missing font whose name starts with "Helv" draws as Arial, altName or
+  not, unless the altName is Bahnschrift (Word finds the variable font but
+  cannot export it: family fallback). swiss_materials' body was Calibri.
+- VML WordArt (`v:textpath`): position from the VML style (`mso-position
+  center` on the margin box), `rotation`, fill `opacity` blended into the
+  colour, and `fitshape` (on by default, the shapetype carries it) stretching
+  the glyphs to the box through the textPlain warp; header textboxes rotate
+  and warp like body ones. swiss_materials' watermark now lands within 6pt of
+  Word's (9.4 -> 28.9 with the font rule).
+- Before a page- or margin-anchored floating table, a line that starts above
+  the table's top keeps its place even where it reaches into the table;
+  text-anchored tables keep the old "reaches the top" rule. The note box
+  anchored +517pt below that paragraph in japanese_hr_consultation is back
+  on the page (SSIM +2).
+- A word too wide for both strips beside a float leaves the line empty and
+  tries the next, down to the first line clear of the float; the first-line
+  indent moves to the first line with content. greensboro's 143 no-break
+  spaces beside a logo take four lines as in Word (15.8 -> 72.5).
+
+Still open on these fixtures:
+
+- **swiss_materials (28.9)**: Word keeps a 3-line list item at the foot of
+  page 2 (last baseline 776.6, body bottom 785.3) where we break the page
+  before it: a 1-line item fits, 3 lines do not, so our page-2 body bottom
+  sits ~20pt too high (footer `ACEn-tte` style, exact 10pt line, footer
+  distance 28.35pt). The `›` bullet (numbering font Arial) draws 3pt below
+  its text baseline.
+- **japanese_hr_consultation (39.9)**: table rows are ~1pt short each (HG丸ｺﾞｼｯｸM-PRO
+  9pt bold cells on a 17.5pt lines grid: Word rows 18.25/19.0, ours 18.0), so
+  the form drifts 9pt by the table's end; needs a row-height probe.
+- **greensboro (72.5)**: 0.03pt/line drift (Arial 11pt at 1.5 lines: ours
+  18.97, Word 19.0, the 0.25pt baseline grid).
+- spanish_constitutional_court (59.1, 18 pages), catalan, lithuanian,
+  czech_council (59-67): not inspected.
+
 ## New fixtures round (2026-10-22, branch `new-fixtures`)
 
 Ten new scraped fixtures with Word online references (`a05e5f00`), rules
