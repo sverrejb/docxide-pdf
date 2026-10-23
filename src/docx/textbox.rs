@@ -848,14 +848,13 @@ pub(super) fn parse_connector_from_vml(pict: roxmltree::Node) -> Option<Connecto
     let z = vml_style_prop(style, "z-index")
         .and_then(|v| v.parse::<i64>().ok())
         .unwrap_or(0);
-    line.behind_doc = z < 0;
+    (line.behind_doc, line.z_index) = super::images::vml_z_order(z);
     line.h_position = HorizontalPosition::Offset(b.margin_left);
     line.h_relative_from = b.h_relative;
     line.v_position = VerticalPosition::Offset(b.margin_top);
     line.v_relative_from = b.v_relative;
     line.width = b.width;
     line.height = b.height;
-    line.z_index = u32::try_from(z).unwrap_or(0);
     Some(line)
 }
 

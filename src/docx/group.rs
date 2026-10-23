@@ -15,7 +15,7 @@ use crate::model::{
 
 use super::images::{
     RunDrawingResult, anchor_z_order, extent_dimensions, find_blip_embed, parse_anchor_position,
-    read_image_from_zip,
+    read_image_from_zip, vml_imagedata_props, vml_z_order,
 };
 use super::textbox::{
     find_sp_pr, parse_connector_shape_node, parse_vml_box_style, parse_vml_line, parse_wsp_shape,
@@ -367,13 +367,14 @@ pub(super) fn parse_vml_group<R: Read + Seek>(
     let z = vml_style_prop(style, "z-index")
         .and_then(|v| v.parse::<i64>().ok())
         .unwrap_or(0);
+    let (behind_doc, z_index) = vml_z_order(z);
     let base = BaseAnchor {
         x: 0.0,
         y: 0.0,
         h_rel: box_style.h_relative,
         v_rel: box_style.v_relative,
-        behind_doc: z < 0,
-        z_index: u32::try_from(z).unwrap_or(0),
+        behind_doc,
+        z_index,
         on_line: false,
     };
     let mut out = Vec::new();
@@ -443,12 +444,14 @@ fn walk_vml_group<R: Read + Seek>(
             conn.height = h;
             place_connector(&mut conn, x, y, base);
             out.push(RunDrawingResult::Connector(conn));
-        } else if let Some(img) = node
+        } else if let Some(data) = node
             .children()
             .find(|n| n.has_tag_name((VML_NS, "imagedata")))
-            .and_then(|data| data.attribute((REL_NS, "id")))
-            .and_then(|id| read_image_from_zip(id, ctx.rels, ctx.zip, w, h))
+            && let Some(mut img) = data
+                .attribute((REL_NS, "id"))
+                .and_then(|id| read_image_from_zip(id, ctx.rels, ctx.zip, w, h))
         {
+            (img.src_rect, img.lum) = vml_imagedata_props(data);
             out.push(RunDrawingResult::Floating(group_image(img, x, y, base)));
         }
     }

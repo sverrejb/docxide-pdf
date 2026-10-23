@@ -863,10 +863,29 @@ fn vml_fraction(v: &str) -> Option<f32> {
     }
 }
 
+/// VML stacks by z-index; a negative one is behind the text. Word's VML
+/// fallbacks write a front shape's DrawingML relativeHeight as its z-index and a
+/// behind-text one as 503316480 minus it, so the least negative behind-text
+/// z-index draws on top (57 fallback pairs in the fixtures, and Word's own
+/// rendering of vml-group-behind-order-*).
+pub(super) fn vml_z_order(z_index: i64) -> (bool, u32) {
+    let relative_height = if z_index < 0 {
+        503_316_480 + z_index
+    } else {
+        z_index
+    };
+    (
+        z_index < 0,
+        relative_height.clamp(0, u32::MAX as i64) as u32,
+    )
+}
+
 /// `v:imagedata` crop and colour adjustments in DrawingML terms. Word writes its
 /// Washout preset (`a:lum bright=70% contrast=-70%`) as gain 0.3 / blacklevel
 /// 0.35, so contrast = gain − 1 and brightness = 2 × blacklevel.
-fn vml_imagedata_props(imagedata: roxmltree::Node) -> (Option<[f32; 4]>, Option<(f32, f32)>) {
+pub(super) fn vml_imagedata_props(
+    imagedata: roxmltree::Node,
+) -> (Option<[f32; 4]>, Option<(f32, f32)>) {
     let frac = |name| imagedata.attribute(name).and_then(vml_fraction);
     let crop = [
         frac("cropleft").unwrap_or(0.0),
@@ -972,6 +991,7 @@ pub(super) fn parse_object_floating_image<R: Read + Seek>(
         }
     }
     let image = parse_object_inline_image(obj, ctx)?;
+    let (behind_doc, z_index) = vml_z_order(z_index);
     // An explicit <w10:wrap type="square"/> means the object reflows text
     // (Word wraps centered header text between such logos); without it the
     // logo sits over/beside the text and None keeps the text full-width.
@@ -996,14 +1016,12 @@ pub(super) fn parse_object_floating_image<R: Read + Seek>(
         wrap_type,
         wrap_text: WrapText::BothSides,
         wrap_polygon: None,
-        // VML stacks by z-index; a negative one is behind the text.
-        behind_doc: z_index < 0,
+        behind_doc,
         dist_top: 0.0,
         dist_bottom: 0.0,
         dist_left: 0.0,
         dist_right: 0.0,
-        // Word writes the DrawingML relativeHeight here, negated when behind.
-        z_index: z_index.unsigned_abs().min(u32::MAX as u64) as u32,
+        z_index,
         anchor_seq: 0,
         anchor_at_start: false,
         on_line: false,
@@ -1079,6 +1097,15 @@ fn object_dimensions(obj: roxmltree::Node) -> Option<(f32, f32)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn vml_z_index_maps_to_word_relative_height() {
+        // Pairs Word wrote as relativeHeight + VML fallback z-index.
+        assert_eq!(vml_z_order(-251658240), (true, 251658240));
+        assert_eq!(vml_z_order(-251657216), (true, 251659264));
+        assert_eq!(vml_z_order(251659264), (false, 251659264));
+        assert_eq!(vml_z_order(0), (false, 0));
+    }
 
     #[test]
     fn vml_washout_maps_to_word_lum_preset() {
