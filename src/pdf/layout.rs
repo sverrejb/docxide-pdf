@@ -951,6 +951,9 @@ pub(super) struct TextLine {
     pub(super) squeeze_chars: bool,
     /// Left at natural width although justified (`doNotExpandShiftReturn`).
     pub(super) natural_width: bool,
+    /// An empty line beside a float that could not hold the next word: Word
+    /// moves on to the next line (and takes the first-line indent there).
+    pub(super) float_skip: bool,
     /// This line's own advance when its tallest face differs from the
     /// paragraph's (see `size_lines_by_own_runs`); None uses the paragraph pitch.
     pub(super) pitch: Option<f32>,
@@ -1694,7 +1697,11 @@ pub(super) fn build_paragraph_lines(
     // span several runs.
     let mut word_start = 0usize;
 
+    // Lines beside a float that cannot hold the first word are left out: the
+    // paragraph's first line is the first that can (`float_skip`).
+    let skip = std::cell::Cell::new(0usize);
     let left_max = |line_count: usize| -> f32 {
+        let line_count = line_count + skip.get();
         if let Some(dual) = per_line_dual
             && let Some(&(_, lw, _, _)) = dual.get(line_count)
         {
@@ -1714,7 +1721,7 @@ pub(super) fn build_paragraph_lines(
 
     let right_region_for = |line_count: usize| -> Option<(f32, f32, f32)> {
         per_line_dual.and_then(|dual| {
-            dual.get(line_count).and_then(|&(_, _, rx, rw)| {
+            dual.get(line_count + skip.get()).and_then(|&(_, _, rx, rw)| {
                 // The first line gets its first-line/hanging shift like the
                 // left region does (`eff_margin` in render_paragraph_lines).
                 let shift = if line_count == 0 {
@@ -2048,6 +2055,34 @@ pub(super) fn build_paragraph_lines(
             // the strip right of it moves there whole (Word puts "Extended"
             // past a logo, not "Extend" before it).
             let fits_right = right_region_for(lines.len()).is_some_and(|(_, rw, _)| ww <= rw);
+            // A word too wide for both strips beside a float leaves the line
+            // empty and goes on to the next; before any line, the paragraph
+            // itself starts lower (greensboro's 143 no-break spaces take four
+            // lines beside a logo, Word probe 2026-10-23).
+            if current_chunks.is_empty()
+                && !in_right_region
+                && !is_continuation
+                && ww > line_room
+                && !fits_right
+                && right_region_for(lines.len()).is_some()
+            {
+                if lines.is_empty() {
+                    skip.set(skip.get() + 1);
+                } else {
+                    lines.push(TextLine {
+                        float_skip: true,
+                        ..finish_dual_line(
+                            &mut current_chunks,
+                            &mut in_right_region,
+                            &mut cur_right_info,
+                        )
+                    });
+                }
+                pending_space_w = 0.0;
+                pending_space_count = 0;
+                words.push_front((0, source));
+                continue;
+            }
             if current_chunks.is_empty() && !in_right_region && ww > line_room && !fits_right {
                 let room = line_room - pending_space_w;
                 // Cut the letters as written, not the capitals drawn (ß → SS
@@ -2329,6 +2364,23 @@ pub(super) fn build_paragraph_lines(
                     // So does a word the left region is too narrow for: Word
                     // leaves that gap empty rather than split the word around
                     // the float (case42's "ullamcorper." beside the arm).
+                    // One too wide for the right region as well leaves the whole
+                    // line empty and tries the next one, down to the first line
+                    // clear of the float, where it breaks at the margin
+                    // (greensboro's 143 no-break spaces take 4 lines, Word probe
+                    // 2026-10-23).
+                    if (room <= 0.0 || ww > room) && ww > rw + 0.05 {
+                        lines.push(TextLine {
+                            float_skip: true,
+                            ..finish_dual_line(
+                                &mut current_chunks,
+                                &mut in_right_region,
+                                &mut cur_right_info,
+                            )
+                        });
+                        words.push_front((0, source));
+                        continue;
+                    }
                     if room <= 0.0 || ww > room {
                         cur_right_info = Some((0, rx, rw));
                         in_right_region = true;
@@ -2472,6 +2524,16 @@ pub(super) fn build_paragraph_lines(
         for line in lines.iter_mut().filter(|l| l.ends_with_break) {
             line.natural_width = true;
         }
+    }
+    if skip.get() > 0 {
+        let mut skipped: Vec<TextLine> = (0..skip.get())
+            .map(|_| TextLine {
+                float_skip: true,
+                ..TextLine::default()
+            })
+            .collect();
+        skipped.append(&mut lines);
+        lines = skipped;
     }
     super::bidi::reorder_lines(&mut lines, cjk.bidi, seen_fonts);
     for line in lines.iter_mut() {
@@ -3421,6 +3483,9 @@ pub(super) fn render_paragraph_lines(
     }
 
     let last_line_idx = total_line_count.saturating_sub(1);
+    // The first-line indent goes to the first line with content, past any
+    // `float_skip` lines.
+    let first_content_idx = lines.iter().take_while(|l| l.float_skip).count();
     for (line_num, line) in lines.iter().enumerate() {
         let y = first_baseline_y - line_y_offsets[line_num];
         let global_line_idx = first_line_index + line_num;
@@ -3429,7 +3494,9 @@ pub(super) fn render_paragraph_lines(
             .and_then(|g| g.get(global_line_idx))
             .copied()
             .unwrap_or((margin_left, text_width));
-        let (eff_margin, eff_width) = if global_line_idx == 0 && first_line_hanging.abs() > 0.001 {
+        let (eff_margin, eff_width) = if global_line_idx == first_content_idx
+            && first_line_hanging.abs() > 0.001
+        {
             let shift = if line.rtl_paragraph {
                 0.0
             } else {
