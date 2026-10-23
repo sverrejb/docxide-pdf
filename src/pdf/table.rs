@@ -2417,6 +2417,7 @@ pub(super) fn render_table(
                     wrap_text,
                     para_relative: false,
                     from_table: true,
+                    table_on_page: !fp.v_anchor_text,
                 });
                 if let Some(old) = preceding_float_zone
                     && let Some(ref mut current) = pb.float_zone

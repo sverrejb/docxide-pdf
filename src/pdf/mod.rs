@@ -348,6 +348,7 @@ impl<'a> OpenFrame<'a> {
                 wrap_text: WrapText::BothSides,
                 para_relative: false,
                 from_table: false,
+                table_on_page: false,
             });
         }
     }
@@ -862,6 +863,8 @@ pub(super) struct FloatZone {
     /// Set for a floating table: like a paragraph-relative float it sits
     /// tblpY below its anchor paragraph, which comes next in the flow.
     pub from_table: bool,
+    /// A floating table anchored to the page or margin, not to its text.
+    pub table_on_page: bool,
 }
 
 impl FloatZone {
@@ -883,6 +886,7 @@ impl FloatZone {
             wrap_text: fi.wrap_text,
             para_relative: fi.v_relative_from == VRelativeFrom::Paragraph,
             from_table: false,
+            table_on_page: false,
         }
     }
 
@@ -5017,7 +5021,14 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                         // A floating table meets a paragraph whose first
                         // line reaches its top: physical_education's empty
                         // anchor 0.05pt above a full-width table goes below
-                        // it with its line and space after.
+                        // it with its line and space after. Before a table
+                        // anchored to the page, a line that starts above the
+                        // top keeps its place even where it reaches into the
+                        // table (japanese_hr_consultation's 10pt line 7pt above
+                        // the table overlaps it; Word probes 2026-10-23 with
+                        // the table top 2pt and 8pt into the line kept it, 2pt
+                        // above its top pushed it). Text-anchored tables keep
+                        // the reach rule (case32, case174, east_asia_conference).
                         || (fz.from_table
                             && matches!(block, Block::Paragraph(p) if {
                                 let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
@@ -5030,7 +5041,12 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                                 {
                                     state.prev_space_after.max(p.space_before)
                                 } else { 0.0 };
-                                state.pb.slot_top - before - resolve_line_h(ls, fs, lhr) < fz.top_y
+                                let reach = if fz.table_on_page {
+                                    0.0
+                                } else {
+                                    resolve_line_h(ls, fs, lhr)
+                                };
+                                state.pb.slot_top - before - reach < fz.top_y + 0.1
                             }))
                     {
                         // Cursor is within, entering, or (for paragraph-relative
