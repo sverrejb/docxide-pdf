@@ -1166,8 +1166,11 @@ pub(super) fn render_header_footer(
                     .is_some_and(|(top_picture, low_box)| top_picture < low_box);
                 for pictures in [pictures_first, !pictures_first] {
                     if pictures {
-                        // Render floating images and register float zones
-                        for (fi_idx, fi) in para.floating_images.iter().enumerate() {
+                        // Render floating images and register float zones,
+                        // overlapping ones in z-order like the body does.
+                        let mut by_z: Vec<_> = para.floating_images.iter().enumerate().collect();
+                        by_z.sort_by_key(|(_, fi)| fi.z_index);
+                        for (fi_idx, fi) in by_z {
                             if let Some(pdf_name) = floating_image_names.get(&(pi, fi_idx)) {
                                 let img = &fi.image;
                                 let fi_x = super::resolve_h_position(
