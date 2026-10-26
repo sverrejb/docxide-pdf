@@ -15,6 +15,7 @@ pub(super) struct LevelDef {
     pub(super) tab_stop: Option<f32>,
     pub(super) start: u32,
     pub(super) label_font_size: Option<f32>,
+    pub(super) label_vert_align: Option<String>,
     /// The level's own b, i and color, None when it leaves them to the
     /// paragraph mark (Some(None) is color="auto").
     pub(super) label_bold: Option<bool>,
@@ -44,6 +45,7 @@ pub(super) struct ListLabelInfo {
     pub(super) font: Option<String>,
     pub(super) east_asia_font: Option<String>,
     pub(super) font_size: Option<f32>,
+    pub(super) rise: f32,
     pub(super) bold: bool,
     pub(super) italic: bool,
     pub(super) color: Option<[u8; 3]>,
@@ -140,6 +142,7 @@ fn parse_level_def(lvl: roxmltree::Node) -> Option<(u8, LevelDef)> {
         hansi.map(str::to_string).or_else(|| rfonts_ascii_name(r))
     });
     let label_font_size = rpr.and_then(parse_font_size);
+    let label_vert_align = rpr.and_then(|r| wml_attr(r, "vertAlign")).map(str::to_string);
     let label_bold = rpr.and_then(|r| wml_bool(r, "b"));
     let label_italic = rpr.and_then(|r| wml_bool(r, "i"));
     let label_color = rpr.and_then(|r| wml_attr(r, "color")).map(parse_hex_color);
@@ -162,6 +165,7 @@ fn parse_level_def(lvl: roxmltree::Node) -> Option<(u8, LevelDef)> {
             tab_stop,
             start,
             label_font_size,
+            label_vert_align,
             label_bold,
             label_italic,
             label_color,
@@ -696,6 +700,7 @@ pub(super) fn parse_list_info(
     // font; a bold italic blue first run changes nothing. A level's b="0"
     // and color="auto" undo the mark's (renewable_dispatch's ListSubhead1:
     // bold style, regular black "4.").
+    let font_size = def.label_font_size.or(mark.map(|m| m.font_size));
     ListLabelInfo {
         indent_left: def.indent_left,
         indent_hanging: def.indent_hanging,
@@ -705,7 +710,19 @@ pub(super) fn parse_list_info(
             .clone()
             .or_else(|| mark.map(|m| m.font_name.clone())),
         east_asia_font: mark.and_then(|m| m.east_asia_font_name.clone()),
-        font_size: def.label_font_size.or(mark.map(|m| m.font_size)),
+        // Sized and raised as a superscript run (swiss_materials' numbers:
+        // 11.5pt level, Word draws 7.5pt, 4pt up).
+        font_size: font_size.map(|s| match def.label_vert_align.as_deref() {
+            // ponytail: 0.65 is the common OS/2 script size; runs use the
+            // face's own ratio, which needs the font loaded.
+            Some("superscript" | "subscript") => (s * 0.65 * 2.0).round() / 2.0,
+            _ => s,
+        }),
+        rise: font_size.map_or(0.0, |s| match def.label_vert_align.as_deref() {
+            Some("superscript") => s * 0.35,
+            Some("subscript") => -s * 0.14,
+            _ => 0.0,
+        }),
         bold: def.label_bold.unwrap_or(mark.is_some_and(|m| m.bold)),
         italic: def.label_italic.unwrap_or(mark.is_some_and(|m| m.italic)),
         color: def.label_color.unwrap_or(mark.and_then(|m| m.color)),
@@ -868,6 +885,7 @@ mod tests {
             tab_stop: None,
             start: 1,
             label_font_size: None,
+            label_vert_align: None,
             label_bold: None,
             label_italic: None,
             label_color: None,

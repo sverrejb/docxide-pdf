@@ -162,6 +162,7 @@ pub(super) fn render_list_label(
     if para.list_label.is_empty() {
         return;
     }
+    let baseline_y = baseline_y + para.list_label_rise;
     let pieces = label_pieces(para);
     if pieces.len() > 1 && !para.bidi {
         let label_fs = para.list_label_font_size.unwrap_or(fallback_font_size);

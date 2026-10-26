@@ -484,6 +484,8 @@ pub struct Paragraph {
     /// The font the label's East Asian characters are drawn in.
     pub list_label_east_asia_font: Option<String>,
     pub list_label_font_size: Option<f32>,
+    /// How far a superscript or subscript label sits above the baseline.
+    pub list_label_rise: f32,
     pub list_label_bold: bool,
     pub list_label_italic: bool,
     pub list_label_color: Option<[u8; 3]>,
