@@ -203,6 +203,7 @@ pub(super) fn cell_lines_h(p: &CellParagraphLayout, range: std::ops::Range<usize
 /// gridCol preferred widths.
 /// Per-column natural (unwrapped, single-line) content width including cell
 /// horizontal padding. This is the "max" width input to Word's AutoFit.
+/// Columns holding nested tables are raised to fit them.
 fn natural_widths(
     table: &Table,
     fonts: &HashMap<String, FontEntry>,
@@ -253,6 +254,7 @@ fn natural_widths(
             }
         }
     }
+    raise_natural_for_nested_tables(table, fonts, cm, &mut natural);
     natural
 }
 
@@ -277,8 +279,7 @@ fn raise_natural_for_nested_tables(
             for block in &cell.content {
                 if let Block::Table(nt) = block {
                     let ncm = &nt.cell_margins;
-                    let mut nat = natural_widths(nt, fonts, ncm);
-                    raise_natural_for_nested_tables(nt, fonts, ncm, &mut nat);
+                    let nat = natural_widths(nt, fonts, ncm);
                     let min_cell = ncm.left + ncm.right;
                     let w: f32 = nat.iter().map(|&x| x.max(min_cell)).sum();
                     natural[grid_col] = natural[grid_col].max(w + h_pad);
@@ -384,7 +385,6 @@ pub(super) fn min_content_widths(table: &Table, fonts: &HashMap<String, FontEntr
                 } else {
                     h_pad + para.indent_left + para.indent_right + para.indent_first_line.max(0.0)
                 };
-                let may_join = !table.fixed_layout && para.indent_right > 0.0;
                 // A word continued from the previous run adds to its width.
                 let mut joined_width = 0.0f32;
                 let mut prev_char = None;
@@ -408,7 +408,7 @@ pub(super) fn min_content_widths(table: &Table, fonts: &HashMap<String, FontEntr
                     for (spaces, word) in super::layout::split_preserving_spaces(&text) {
                         let ww =
                             word_width_for_run(entry, run, word, fs, run.kerns_at(fs), 0.0, 1.0);
-                        let continues = may_join
+                        let continues = !table.fixed_layout
                             && spaces == 0
                             && prev_char
                                 .zip(word.chars().next())
@@ -497,8 +497,7 @@ pub(super) fn auto_fit_columns(
         && has_nested_table
         && let Some(avail) = fill_width.filter(|a| *a > 0.0)
     {
-        let mut natural = natural_widths(table, fonts, cm);
-        raise_natural_for_nested_tables(table, fonts, cm, &mut natural);
+        let natural = natural_widths(table, fonts, cm);
         let min_cell = cm.left + cm.right;
         let maxw: Vec<f32> = (0..ncols)
             .map(|i| natural[i].max(min_widths[i]).max(min_cell))
@@ -862,6 +861,106 @@ pub(super) struct HfSubstitution<'a> {
     pub(super) page_num_format: Option<&'a str>,
 }
 
+/// A one-row, text-anchored table floated at the cell's left margin with room
+/// for text beside it: its vertical extent below its anchor.
+fn registration_table_extent(table: &Table, cell_text_w: f32, ctx: &RenderContext) -> Option<f32> {
+    let pos = table.position.as_ref()?;
+    if table.rows.len() != 1
+        || pos.v_anchor != "text"
+        || pos.h_anchor != "margin"
+        || !matches!(pos.h_position, HorizontalPosition::Offset(x) if x == 0.0)
+        || table.table_indent != 0.0
+        || table.alignment != crate::model::TableAlignment::Left
+    {
+        return None;
+    }
+    let mut widths = auto_fit_columns(table, ctx.fonts, Some(cell_text_w), None);
+    apply_nested_pct_width(table, &mut widths, cell_text_w);
+    let strip = cell_text_w - widths.iter().sum::<f32>() - pos.left_from_text - pos.right_from_text;
+    if strip < MIN_NESTED_FLOAT_STRIP {
+        return None;
+    }
+    let height = compute_row_layouts(table, &widths, ctx, None)
+        .iter()
+        .map(|r| r.height)
+        .sum::<f32>();
+    Some(height + pos.v_offset_pt.max(0.0) + pos.top_from_text + pos.bottom_from_text)
+}
+
+/// A paragraph whose height is only its lines and spacing.
+fn plain_spacer(p: &crate::model::Paragraph) -> bool {
+    !(p.frame_props.is_some()
+        || p.paragraph_mark_vanish
+        || p.image.is_some()
+        || p.inline_chart.is_some()
+        || !p.smartart.is_empty()
+        || !p.floating_images.is_empty()
+        || !p.textboxes.is_empty()
+        || !p.connectors.is_empty()
+        || p.contextual_spacing
+        || p.space_before_auto
+        || p.space_after_auto
+        || p.runs.iter().any(|r| {
+            r.is_tab
+                || r.is_line_break
+                || r.inline_image.is_some()
+                || r.field_code.is_some()
+                || r.math.is_some()
+                || r.vanish
+                || r.footnote_id.is_some()
+                || r.endnote_id.is_some()
+        }))
+}
+
+fn spacer_line_h(p: &crate::model::Paragraph, ctx: &RenderContext) -> f32 {
+    let (fs, lhr, _) = super::layout::tallest_run_metrics(&p.runs, ctx.fonts);
+    resolve_line_h(p.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr)
+}
+
+// Interleaved empty anchors contribute flow height; their floating tables do
+// not, provided that the accumulated spacer lines clear every table's extent.
+fn interleaved_spacers_clear_nested_registration(
+    cell: &crate::model::TableCell,
+    block_idx: usize,
+    cell_text_w: f32,
+    ctx: &RenderContext,
+    hf_sub: Option<&HfSubstitution>,
+) -> bool {
+    if hf_sub.is_some() || cell.text_direction != TextDirection::LrTb {
+        return false;
+    }
+    let mut flow = 0.0f32;
+    let mut occupied = 0.0f32;
+    let mut prev_after = 0.0f32;
+    let mut tables = 0;
+    for (index, block) in cell.content.iter().enumerate() {
+        match block {
+            Block::Table(table) => {
+                tables += 1;
+                if tables > 2 || (tables == 2 && flow <= 0.0) {
+                    return false;
+                }
+                let Some(extent) = registration_table_extent(table, cell_text_w, ctx) else {
+                    return false;
+                };
+                occupied = occupied.max(flow + prev_after + extent);
+            }
+            Block::Paragraph(p) => {
+                if !plain_spacer(p) {
+                    return false;
+                }
+                flow += prev_after.max(p.space_before);
+                if p.runs.iter().any(|r| !r.text.trim().is_empty()) {
+                    return tables == 2 && block_idx < index && flow >= occupied;
+                }
+                flow += spacer_line_h(p, ctx);
+                prev_after = p.space_after;
+            }
+        }
+    }
+    false
+}
+
 // Leading margin-anchored registration tables may precede visible cell text
 // without contributing to flow height when measured empty paragraphs already
 // clear their entire extent. Keep the old narrow path for all other layouts.
@@ -888,32 +987,10 @@ fn spacers_clear_nested_registration(
     }
     let mut occupied = 0.0f32;
     for table in &tables {
-        let Some(pos) = &table.position else {
+        let Some(extent) = registration_table_extent(table, cell_text_w, ctx) else {
             return false;
         };
-        if table.rows.len() != 1
-            || pos.v_anchor != "text"
-            || pos.h_anchor != "margin"
-            || !matches!(pos.h_position, HorizontalPosition::Offset(x) if x == 0.0)
-            || table.table_indent != 0.0
-            || table.alignment != crate::model::TableAlignment::Left
-        {
-            return false;
-        }
-        let mut widths = auto_fit_columns(table, ctx.fonts, Some(cell_text_w), None);
-        apply_nested_pct_width(table, &mut widths, cell_text_w);
-        let strip =
-            cell_text_w - widths.iter().sum::<f32>() - pos.left_from_text - pos.right_from_text;
-        if strip < MIN_NESTED_FLOAT_STRIP {
-            return false;
-        }
-        occupied += compute_row_layouts(table, &widths, ctx, hf_sub)
-            .iter()
-            .map(|r| r.height)
-            .sum::<f32>()
-            + pos.v_offset_pt.max(0.0)
-            + pos.top_from_text
-            + pos.bottom_from_text;
+        occupied += extent;
     }
     let mut empty_space = 0.0f32;
     let mut prev_after = 0.0f32;
@@ -922,28 +999,7 @@ fn spacers_clear_nested_registration(
         let Block::Paragraph(p) = block else {
             return false;
         };
-        if p.frame_props.is_some()
-            || p.paragraph_mark_vanish
-            || p.image.is_some()
-            || p.inline_chart.is_some()
-            || !p.smartart.is_empty()
-            || !p.floating_images.is_empty()
-            || !p.textboxes.is_empty()
-            || !p.connectors.is_empty()
-            || p.contextual_spacing
-            || p.space_before_auto
-            || p.space_after_auto
-            || p.runs.iter().any(|r| {
-                r.is_tab
-                    || r.is_line_break
-                    || r.inline_image.is_some()
-                    || r.field_code.is_some()
-                    || r.math.is_some()
-                    || r.vanish
-                    || r.footnote_id.is_some()
-                    || r.endnote_id.is_some()
-            })
-        {
+        if !plain_spacer(p) {
             return false;
         }
         if visible_seen {
@@ -956,12 +1012,45 @@ fn spacers_clear_nested_registration(
             }
             visible_seen = true;
         } else {
-            let (fs, lhr, _) = super::layout::tallest_run_metrics(&p.runs, ctx.fonts);
-            empty_space += resolve_line_h(p.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr);
+            empty_space += spacer_line_h(p, ctx);
             prev_after = p.space_after;
         }
     }
     visible_seen
+}
+
+/// The single-line width of a paragraph of plain visible text with its
+/// indents; None for anything else or a missing font.
+fn plain_line_width(p: &crate::model::Paragraph, fonts: &HashMap<String, FontEntry>) -> Option<f32> {
+    if p.frame_props.is_some()
+        || p.list_item.is_some()
+        || p.image.is_some()
+        || !p.floating_images.is_empty()
+        || !p.textboxes.is_empty()
+        || !p.runs.iter().any(|r| !r.text.trim().is_empty())
+        || p.runs.iter().any(|r| {
+            r.is_tab
+                || r.is_line_break
+                || r.inline_image.is_some()
+                || r.field_code.is_some()
+                || r.math.is_some()
+                || r.vanish
+        })
+    {
+        return None;
+    }
+    let mut width = p.indent_left + p.indent_right + p.indent_first_line.max(0.0);
+    let mut key = String::new();
+    for run in &p.runs {
+        let font = fonts.get(font_key_buf(run, &mut key))?;
+        let text = if run.caps {
+            std::borrow::Cow::Owned(run.text.to_uppercase())
+        } else {
+            std::borrow::Cow::Borrowed(run.text.as_str())
+        };
+        width += word_width_for_run(font, run, &text, run.font_size, run.kerns_at(run.font_size), 0.0, 1.0);
+    }
+    Some(width)
 }
 
 fn plain_text_fits_nested_strip(
@@ -986,47 +1075,62 @@ fn plain_text_fits_nested_strip(
     let [Block::Paragraph(p)] = &cell.content[idx + 1..] else {
         return false;
     };
-    if p.frame_props.is_some()
-        || p.list_item.is_some()
-        || p.image.is_some()
-        || !p.floating_images.is_empty()
-        || !p.textboxes.is_empty()
-        || p.runs.iter().any(|r| {
-            r.is_tab
-                || r.is_line_break
-                || r.inline_image.is_some()
-                || r.field_code.is_some()
-                || r.math.is_some()
-                || r.vanish
-                || r.caps
-        })
-    {
-        return false;
-    }
-    if !p.runs.iter().any(|r| !r.text.trim().is_empty()) {
+    if p.runs.iter().any(|r| r.caps) {
         return false;
     }
     let strip = cell_text_w - widths.iter().sum::<f32>() - pos.right_from_text;
-    if strip < MIN_NESTED_FLOAT_STRIP {
+    strip >= MIN_NESTED_FLOAT_STRIP && plain_line_width(p, ctx.fonts).is_some_and(|w| w <= strip)
+}
+
+// A single cell heading can precede positive-offset floating tables even
+// when the tables are serialized before its anchor paragraph.
+fn text_fits_above_nested_floats(
+    cell: &crate::model::TableCell,
+    cell_text_w: f32,
+    fonts: &HashMap<String, FontEntry>,
+    doc_line_spacing: crate::model::LineSpacing,
+    hf_sub: Option<&HfSubstitution>,
+) -> bool {
+    if hf_sub.is_some()
+        || cell.text_direction != TextDirection::LrTb
+        || !matches!(cell.v_align, crate::model::CellVAlign::Top)
+    {
         return false;
     }
-    let mut text_w = p.indent_left + p.indent_right + p.indent_first_line.max(0.0);
-    let mut key = String::new();
-    for run in &p.runs {
-        let Some(font) = ctx.fonts.get(font_key_buf(run, &mut key)) else {
+    let Some((Block::Paragraph(p), prefix)) = cell.content.split_last() else {
+        return false;
+    };
+    if prefix.is_empty() {
+        return false;
+    }
+    let Some(width) = plain_line_width(p, fonts) else {
+        return false;
+    };
+    let mut first_top = f32::INFINITY;
+    for block in prefix {
+        let Block::Table(t) = block else {
             return false;
         };
-        text_w += word_width_for_run(
-            font,
-            run,
-            &run.text,
-            run.font_size,
-            run.kerns_at(run.font_size),
-            0.0,
-            1.0,
-        );
+        let Some(pos) = &t.position else {
+            return false;
+        };
+        if t.rows.len() != 1
+            || pos.v_anchor != "text"
+            || pos.h_anchor != "margin"
+            || pos.v_offset_pt <= 0.0
+            || t.table_indent != 0.0
+            || !matches!(pos.h_position, HorizontalPosition::Offset(x) if x == 0.0)
+            || t.alignment != crate::model::TableAlignment::Left
+        {
+            return false;
+        }
+        first_top = first_top.min(pos.v_offset_pt - pos.top_from_text);
     }
-    text_w <= strip
+    let (fs, lhr, _) = super::layout::tallest_run_metrics(&p.runs, fonts);
+    let height = p.space_before.max(0.0)
+        + resolve_line_h(p.line_spacing.unwrap_or(doc_line_spacing), fs, lhr)
+        + p.space_after.max(0.0);
+    width <= cell_text_w && height <= first_top
 }
 
 pub(super) fn compute_row_layouts(
@@ -1041,6 +1145,8 @@ pub(super) fn compute_row_layouts(
         .iter()
         .map(|row| {
             let mut max_h: f32 = 0.0;
+            let row_keeps_next = row.cells.iter().flat_map(|cell| &cell.content)
+                .any(|block| matches!(block, Block::Paragraph(p) if p.keep_next));
             // Word uses the largest top/bottom cell margins across a row,
             // even when the cell carrying the margin has only a hidden mark.
             // Left/right margins remain specific to each cell.
@@ -1101,6 +1207,8 @@ pub(super) fn compute_row_layouts(
                     let mut negative_anchor_shift = 0.0f32;
                     let mut final_float_mark_hidden = false;
                     let top_aligned = matches!(cell.v_align, crate::model::CellVAlign::Top);
+                    let text_above_floats =
+                        text_fits_above_nested_floats(cell, cell_text_w, ctx.fonts, ctx.doc_line_spacing, hf_sub);
                     let centered = matches!(cell.v_align, crate::model::CellVAlign::Center);
 
                     let block_count = cell.content.len();
@@ -1438,7 +1546,7 @@ pub(super) fn compute_row_layouts(
                                             effective_ls,
                                             line_h,
                                             font_size * ascender_ratio,
-                                            para.text_align_top,
+                                            para.text_alignment == crate::model::TextAlignment::Top,
                                         );
                                         // A final empty line after a break contains the
                                         // paragraph mark, rather than the preceding text.
@@ -1599,8 +1707,11 @@ pub(super) fn compute_row_layouts(
                                     text_hanging: super::list_label::text_hanging(para, ctx.default_tab_stop, ctx.fonts),
                                     label_shift: super::list_label::label_shift(para, ctx.fonts),
                                     float_indent_left,
-                                    keep_lines: para.keep_lines,
-                                    two_line_widow: ctx.compat_mode >= 15,
+                                    // Word 2010 layout splits a keepLines cell paragraph too.
+                                    keep_lines: para.keep_lines && ctx.compat_mode >= 15,
+                                    // Without widow control (and nothing keeping the row
+                                    // with the next) Word 2013+ also lets one line stand.
+                                    two_line_widow: ctx.compat_mode >= 15 && (para.widow_control || row_keeps_next),
                                     list_label: para.list_label.clone(),
                                     sole_formula: super::sole_formula(para),
                                     label_font_key: (!para.list_label.is_empty())
@@ -1697,8 +1808,10 @@ pub(super) fn compute_row_layouts(
                                                 t.position.as_ref().is_some_and(|p| p.v_anchor == "text")
                                                 || (at_left_edge && t.position.is_none() && next_is_blank)
                                             ),
-                                        }) || (top_aligned && spacers_clear_nested_registration(cell, block_idx, cell_text_w, ctx, hf_sub))
-                                            || plain_side_text
+                                        }) || plain_side_text
+                                            || text_above_floats
+                                            || (top_aligned && (spacers_clear_nested_registration(cell, block_idx, cell_text_w, ctx, hf_sub)
+                                                || interleaved_spacers_clear_nested_registration(cell, block_idx, cell_text_w, ctx, hf_sub)))
                                     })
                                     // Word keeps a table at the cell's top when its first
                                     // text anchor has a negative vertical offset.
@@ -2314,6 +2427,72 @@ mod tests {
     use super::*;
 
     #[test]
+    fn nested_autofit_preserves_each_level_of_cell_padding() {
+        use std::io::{Cursor, Write};
+        use zip::write::SimpleFileOptions;
+        let mut content = String::from(
+            r#"<w:p><w:r><w:rPr><w:rFonts w:ascii="TestFont" w:hAnsi="TestFont"/><w:sz w:val="20"/></w:rPr><w:t>abc def</w:t></w:r></w:p>"#,
+        );
+        let fonts = HashMap::from([("TestFont".into(), FontEntry::stub())]);
+        for levels in 1..=3 {
+            content = format!(
+                r#"<w:tbl><w:tblPr><w:tblW w:type="auto" w:w="0"/><w:tblCellMar><w:left w:w="100" w:type="dxa"/><w:right w:w="100" w:type="dxa"/></w:tblCellMar></w:tblPr><w:tblGrid><w:gridCol w:w="2000"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcW w:w="0" w:type="auto"/></w:tcPr>{content}</w:tc></w:tr></w:tbl>"#
+            );
+            let xml = format!(
+                r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>{content}<w:sectPr/></w:body></w:document>"#
+            );
+            let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+            zip.start_file("word/document.xml", SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(xml.as_bytes()).unwrap();
+            let doc = crate::docx::parse_bytes(&zip.finish().unwrap().into_inner()).unwrap();
+            let Block::Table(table) = &doc.sections[0].blocks[0] else {
+                panic!("table");
+            };
+            let width = auto_fit_columns(table, &fonts, Some(150.0), None)[0];
+            assert!((width - (35.0 + 10.0 * levels as f32)).abs() < 0.001);
+        }
+    }
+
+    #[test]
+    fn text_above_float_requires_both_horizontal_and_vertical_room() {
+        let mut doc = crate::docx::parse_bytes(include_bytes!(
+            "../../tests/fixtures/cases/cell-text-above-floats-y1200-n1-long0/input.docx"
+        ))
+        .unwrap();
+        let Block::Table(table) = &mut doc.sections[0].blocks[0] else {
+            panic!("outer table");
+        };
+        let cell = &mut table.rows[0].cells[0];
+        let fonts = HashMap::from([("Times New Roman".into(), FontEntry::stub())]);
+        let fits = |cell: &crate::model::TableCell, width| {
+            text_fits_above_nested_floats(
+                cell,
+                width,
+                &fonts,
+                crate::model::LineSpacing::Auto(1.0),
+                None,
+            )
+        };
+        assert!(fits(cell, 230.0));
+        assert!(!fits(cell, 10.0));
+        let Block::Table(float) = &mut cell.content[0] else {
+            panic!("float");
+        };
+        float.position.as_mut().unwrap().v_offset_pt = 1.0;
+        assert!(!fits(cell, 230.0));
+        let Block::Table(float) = &mut cell.content[0] else {
+            unreachable!();
+        };
+        float.position.as_mut().unwrap().v_offset_pt = 60.0;
+        let Some(Block::Paragraph(heading)) = cell.content.last_mut() else {
+            panic!("heading");
+        };
+        heading.runs[0].is_line_break = true;
+        assert!(!fits(cell, 230.0));
+    }
+
+    #[test]
     fn natural_width_includes_merged_cell_text() {
         use std::io::{Cursor, Write};
         use zip::write::SimpleFileOptions;
@@ -2339,8 +2518,8 @@ mod tests {
     }
 
     #[test]
-    fn indented_autofit_word_width_is_invariant_to_run_formatting() {
-        let measure = |parts: &[&str]| {
+    fn autofit_word_width_is_invariant_to_run_formatting() {
+        let measure = |parts: &[&str], indent_right| {
             let runs: Vec<crate::model::Run> = parts
                 .iter()
                 .enumerate()
@@ -2364,16 +2543,18 @@ mod tests {
             };
             table.rows[0].cells[1].content = vec![Block::Paragraph(crate::model::Paragraph {
                 runs,
-                indent_right: 11.0,
+                indent_right,
                 ..Default::default()
             })];
             table.fixed_layout = false;
             min_content_widths(&table, &fonts)[1]
         };
-        let whole = measure(&["abcdef"]);
-        assert_eq!(whole, measure(&["abc", "def"]));
-        assert!(measure(&["abc ", "def"]) < whole);
-        assert!(measure(&["abc", " def"]) < whole);
+        for indent in [0.0, 11.0] {
+            let whole = measure(&["abcdef"], indent);
+            assert_eq!(whole, measure(&["abc", "def"], indent));
+            assert!(measure(&["abc ", "def"], indent) < whole);
+            assert!(measure(&["abc", " def"], indent) < whole);
+        }
     }
 
     #[test]

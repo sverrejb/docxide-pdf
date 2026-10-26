@@ -179,6 +179,7 @@ pub(super) fn parse_vml_wordart(
     let shape_style = shape.attribute("style").unwrap_or("");
     let (width, height) = parse_vml_dimensions(shape_style);
     let bs = parse_vml_box_style(shape_style);
+    let (behind_doc, z_index) = super::images::vml_z_order(bs.z_index);
     // `fitshape` stretches the glyphs to the shape box (both ways), which is
     // what the textPlain warp draws; the 1pt `font-size` Word writes is moot.
     // The flag usually sits on the shapetype's textpath (every WordArt preset
@@ -203,7 +204,8 @@ pub(super) fn parse_vml_wordart(
             VerticalPosition::Offset(bs.margin_top)
         },
         v_relative_from: bs.v_relative,
-        behind_doc: bs.behind_text,
+        behind_doc,
+        z_index,
         rotation_deg: bs.rotation_deg,
         fit_shape,
         no_text_wrap: true,

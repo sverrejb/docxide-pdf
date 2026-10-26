@@ -162,6 +162,7 @@ pub(super) struct StyleDefaults {
     pub(super) complex: ComplexProps,
     pub(super) bidi: bool,
     pub(super) widow_control: bool,
+    pub(super) text_alignment: crate::model::TextAlignment,
     pub(super) indent_left: f32,
     pub(super) indent_right: f32,
     pub(super) indent_hanging: f32,
@@ -201,6 +202,7 @@ pub(super) struct ParagraphStyle {
     pub(super) keep_next: Option<bool>,
     pub(super) keep_lines: Option<bool>,
     pub(super) widow_control: Option<bool>,
+    pub(super) text_alignment: Option<crate::model::TextAlignment>,
     pub(super) page_break_before: Option<bool>,
     pub(super) line_spacing: Option<LineSpacing>,
     pub(super) indent_left: Option<f32>,
@@ -221,7 +223,6 @@ pub(super) struct ParagraphStyle {
     pub(super) ind_over_numbering: bool,
     pub(super) outline_level: Option<u8>,
     pub(super) snap_to_grid: Option<bool>,
-    pub(super) text_align_top: Option<bool>,
     pub(super) auto_space_de: Option<bool>,
     pub(super) auto_space_dn: Option<bool>,
     pub(super) text_outline: Option<TextOutline>,
@@ -876,6 +877,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
         complex: ComplexProps::default(),
         bidi: false,
         widow_control: true,
+        text_alignment: crate::model::TextAlignment::Auto,
         indent_left: 0.0,
         indent_right: 0.0,
         indent_hanging: 0.0,
@@ -951,6 +953,9 @@ pub(super) fn parse_styles<R: Read + Seek>(
         if let Some(wc) = default_ppr.and_then(|ppr| wml_bool(ppr, "widowControl")) {
             defaults.widow_control = wc;
         }
+        defaults.text_alignment = default_ppr
+            .and_then(|ppr| wml_attr(ppr, "textAlignment"))
+            .map_or_else(Default::default, crate::model::TextAlignment::parse);
         let default_spacing = default_ppr.and_then(|n| wml(n, "spacing"));
         if let Some(spacing) = default_spacing {
             if let Some(before_val) = twips_attr(spacing, "before") {
@@ -1064,6 +1069,9 @@ pub(super) fn parse_styles<R: Read + Seek>(
                 let keep_next = ppr.and_then(|ppr| wml_bool(ppr, "keepNext"));
                 let keep_lines = ppr.and_then(|ppr| wml_bool(ppr, "keepLines"));
                 let widow_control = ppr.and_then(|ppr| wml_bool(ppr, "widowControl"));
+                let text_alignment = ppr
+                    .and_then(|ppr| wml_attr(ppr, "textAlignment"))
+                    .map(crate::model::TextAlignment::parse);
                 let page_break_before = ppr.and_then(|ppr| wml_bool(ppr, "pageBreakBefore"));
 
                 let line_spacing = spacing.and_then(parse_line_spacing);
@@ -1094,9 +1102,6 @@ pub(super) fn parse_styles<R: Read + Seek>(
 
                 let bidi = ppr.and_then(|ppr| wml_bool(ppr, "bidi"));
                 let snap_to_grid = ppr.and_then(|ppr| wml_bool(ppr, "snapToGrid"));
-                let text_align_top = ppr
-                    .and_then(|ppr| wml_attr(ppr, "textAlignment"))
-                    .map(|v| v == "top");
                 let auto_space_de = ppr.and_then(|ppr| wml_bool(ppr, "autoSpaceDE"));
                 let auto_space_dn = ppr.and_then(|ppr| wml_bool(ppr, "autoSpaceDN"));
                 let frame_attrs = ppr.and_then(|ppr| wml(ppr, "framePr")).map(frame_attrs);
@@ -1135,6 +1140,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         keep_next,
                         keep_lines,
                         widow_control,
+                        text_alignment,
                         page_break_before,
                         line_spacing,
                         indent_left,
@@ -1153,7 +1159,6 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         ind_over_numbering: false,
                         outline_level,
                         snap_to_grid,
-                        text_align_top,
                         auto_space_de,
                         auto_space_dn,
                         text_outline,
@@ -1393,6 +1398,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     kern_threshold,
                     position,
                     widow_control,
+                    text_alignment,
                     contextual_spacing,
                     keep_next,
                     keep_lines,
@@ -1401,7 +1407,6 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     num_ilvl,
                     outline_level,
                     snap_to_grid,
-                    text_align_top,
                     auto_space_de,
                     auto_space_dn,
                     shading,
@@ -1557,6 +1562,37 @@ mod tests {
         assert_eq!(lang_to_script("ar-SA"), Some("Arab"));
         assert_eq!(lang_to_script("he-IL"), Some("Hebr"));
         assert_eq!(lang_to_script("th-TH"), None);
+    }
+
+    #[test]
+    fn vertical_center_is_inherited_and_explicit_baseline_resets_it() {
+        let mut styles = HashMap::from([
+            (
+                "Base".to_string(),
+                ParagraphStyle {
+                    text_alignment: Some(crate::model::TextAlignment::Center),
+                    ..Default::default()
+                },
+            ),
+            (
+                "Child".to_string(),
+                ParagraphStyle {
+                    based_on: Some("Base".to_string()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "Reset".to_string(),
+                ParagraphStyle {
+                    based_on: Some("Child".to_string()),
+                    text_alignment: Some(crate::model::TextAlignment::Auto),
+                    ..Default::default()
+                },
+            ),
+        ]);
+        resolve_based_on(&mut styles);
+        assert_eq!(styles["Child"].text_alignment, Some(crate::model::TextAlignment::Center));
+        assert_eq!(styles["Reset"].text_alignment, Some(crate::model::TextAlignment::Auto));
     }
 
     #[test]

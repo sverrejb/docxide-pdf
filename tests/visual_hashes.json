@@ -1344,6 +1344,24 @@
   "cases/header-textbox-line-metrics-times": [
     "4bb396316f0e1e2b5b2efea3f9003fb4231ca9b1dc555f9fcadbbf49b9a25f07"
   ],
+  "cases/hyphen-opening-guillemet-explicit-space": [
+    "921aec6e849dfd3dada1b035ae6db08e0c12ccc839907c34d0b45824947bf5cb"
+  ],
+  "cases/hyphen-opening-guillemet-hyphen-opening": [
+    "b5b1691e8c658091c8261d9e5cd15fa7843f836edd606c2b4b233e73620adc5e"
+  ],
+  "cases/hyphen-opening-guillemet-nonbreaking-hyphen": [
+    "6a421b17d164fbe2af8d1441cf561457494b95edba4bfae3302bcad910b47f87"
+  ],
+  "cases/hyphen-opening-guillemet-quoted-hyphen": [
+    "921aec6e849dfd3dada1b035ae6db08e0c12ccc839907c34d0b45824947bf5cb"
+  ],
+  "cases/hyphen-opening-guillemet-split-runs": [
+    "921aec6e849dfd3dada1b035ae6db08e0c12ccc839907c34d0b45824947bf5cb"
+  ],
+  "cases/hyphen-opening-guillemet-wide": [
+    "ee32e4069b5c5b5d6175843f5b3e98a5cb8790d81605d0fd016798bf24cf230e"
+  ],
   "cases/inline-canvas-header-width300-tab0-effect0-following0": [
     "3d135c386ac40256d880a46cd2593b0625bbb062289b495f3558c0d044ec6efa"
   ],
@@ -2121,8 +2139,91 @@
   "cases/trailing-table-clear-s28-h800-y1": [
     "10cb175d46d8670a6d33583690535d324744ba1c75f19b3a94b580ca8d07eadb"
   ],
+  "cases/underlined-space-compat14-underline0-split0": [
+    "44aeb7a71f841ee0423e0e834d5dd189e8bcc6523a90936e5af026722e1e805c"
+  ],
+  "cases/underlined-space-compat14-underline0-split1": [
+    "44aeb7a71f841ee0423e0e834d5dd189e8bcc6523a90936e5af026722e1e805c"
+  ],
+  "cases/underlined-space-compat14-underline1-split0": [
+    "fe353c95401b42b550037f544f7c38bfa57939ea23822c3b9e62b4fbfd8c4d8a"
+  ],
+  "cases/underlined-space-compat14-underline1-split1": [
+    "fe353c95401b42b550037f544f7c38bfa57939ea23822c3b9e62b4fbfd8c4d8a"
+  ],
+  "cases/underlined-space-compat15-underline0-split0": [
+    "4a7c9618f39e734a3ca5b9a0a6a28817c34f6c54b1acd568a101569952ce6cb2"
+  ],
+  "cases/underlined-space-compat15-underline0-split1": [
+    "4a7c9618f39e734a3ca5b9a0a6a28817c34f6c54b1acd568a101569952ce6cb2"
+  ],
+  "cases/underlined-space-compat15-underline1-split0": [
+    "070b77f950fbc571e5594417607342876863e61722fb160d0d5bdfb93292cef9"
+  ],
+  "cases/underlined-space-compat15-underline1-split1": [
+    "070b77f950fbc571e5594417607342876863e61722fb160d0d5bdfb93292cef9"
+  ],
   "cases/vml-front-rule-over-background": [
     "8e4421b2b727605f24a141c2e2d3f38bea955a2f2c4f4891fad6f03d4a39c1ba"
+  ],
+  "cases/vml-group-behind-order-group-higher": [
+    "157b349b37c90cd81ae0016406768c732ec47faf4b090f2aec173846ec9a1b4e",
+    "d5aea465d3676348876dbf6739f665b96519d397638a2d32158da02f869e84de"
+  ],
+  "cases/vml-group-behind-order-picture-higher": [
+    "3a412295569aaf4a30eb4019fcda351464c574efe3ee18ea54f81e8e88365f57",
+    "e3878011a422cd766f43b828f349539d84073312fa6eefddeb1f614f4d20c98e"
+  ],
+  "cases/vml-group-nested0-origin0-shift0": [
+    "520ebd549bbd7a3441121f51fef0caf8b7e04f35676913b4a544157e26eb9d1d",
+    "5505fef33d0621f036e72f5d54d3cd67a4c4c26c1d452e252301e35832068441"
+  ],
+  "cases/vml-group-nested0-origin0-shift15": [
+    "1ae8de6f2cd44f80ba8c1b2af06b1d22e7e2be91c4dd502969264585af42f4c4",
+    "92868d0737812c48cd88a75e2a9090f46450a07f7b43294e58034094f41e3597"
+  ],
+  "cases/vml-group-nested0-origin100-shift0": [
+    "520ebd549bbd7a3441121f51fef0caf8b7e04f35676913b4a544157e26eb9d1d",
+    "5505fef33d0621f036e72f5d54d3cd67a4c4c26c1d452e252301e35832068441"
+  ],
+  "cases/vml-group-nested0-origin100-shift15": [
+    "1ae8de6f2cd44f80ba8c1b2af06b1d22e7e2be91c4dd502969264585af42f4c4",
+    "92868d0737812c48cd88a75e2a9090f46450a07f7b43294e58034094f41e3597"
+  ],
+  "cases/vml-group-nested1-origin0-shift0": [
+    "520ebd549bbd7a3441121f51fef0caf8b7e04f35676913b4a544157e26eb9d1d",
+    "5505fef33d0621f036e72f5d54d3cd67a4c4c26c1d452e252301e35832068441"
+  ],
+  "cases/vml-group-nested1-origin0-shift15": [
+    "1ae8de6f2cd44f80ba8c1b2af06b1d22e7e2be91c4dd502969264585af42f4c4",
+    "92868d0737812c48cd88a75e2a9090f46450a07f7b43294e58034094f41e3597"
+  ],
+  "cases/vml-group-nested1-origin100-shift0": [
+    "520ebd549bbd7a3441121f51fef0caf8b7e04f35676913b4a544157e26eb9d1d",
+    "5505fef33d0621f036e72f5d54d3cd67a4c4c26c1d452e252301e35832068441"
+  ],
+  "cases/vml-group-nested1-origin100-shift15": [
+    "1ae8de6f2cd44f80ba8c1b2af06b1d22e7e2be91c4dd502969264585af42f4c4",
+    "92868d0737812c48cd88a75e2a9090f46450a07f7b43294e58034094f41e3597"
+  ],
+  "cases/vml-group-picture-crop": [
+    "6a6d3628bfe981f64f61752e1228024071089bed250300e3e77296b0339050d6",
+    "8f5d55502bd77d4bee9bd4e3a5188e2d5c8204e1694a576c9b2d0d7d7b6a1a4f"
+  ],
+  "cases/vml-group-picture-washout": [
+    "814ad3d42bc027c5245c952c03b8b813022645c3e135989e8f7fddb0516aa5ee",
+    "5919045225e6bd55857dfb0c3cf3ca8462bdd5c0366a1eab75668b503b43c134"
+  ],
+  "cases/vml-stroke-line-before-0": [
+    "5376b6c7c38eb7a4cba1a71ea2ef7ae169e22e2abcfddc1f189821329be9e69b"
+  ],
+  "cases/vml-textbox-behind-order-picture-higher": [
+    "26368c9aaa3768d2a9f079112935e699adee812be0b1724712b035ed3c1e06d0",
+    "cc2bfb792c88102f22756f3e2fe02ada6575cb7d12e7436db299d8f9fb4e2bf1"
+  ],
+  "cases/vml-textbox-behind-order-textbox-higher": [
+    "1e31ae8134fa4130f275cb499ef4cd227cc30d0797b7748d8050adf82e8bb946",
+    "f13b07a2dfe004468234865de268c91ba09af5e2d22fa1018ff13da83307c53b"
   ],
   "cases/vml-textbox-fill-color": [
     "8f8f1782aea4af51877ba4f4d924b10cec9de508bc33e26228729a2056de5ddb"
@@ -2135,6 +2236,14 @@
   ],
   "cases/vml-textbox-fill-none": [
     "c67b70dd5fb63352c810a58c2d912288e9953df8df3fdfab9c850203b033711f"
+  ],
+  "cases/vml-textbox-front-order-picture-higher": [
+    "26368c9aaa3768d2a9f079112935e699adee812be0b1724712b035ed3c1e06d0",
+    "cc2bfb792c88102f22756f3e2fe02ada6575cb7d12e7436db299d8f9fb4e2bf1"
+  ],
+  "cases/vml-textbox-front-order-textbox-higher": [
+    "1e31ae8134fa4130f275cb499ef4cd227cc30d0797b7748d8050adf82e8bb946",
+    "f13b07a2dfe004468234865de268c91ba09af5e2d22fa1018ff13da83307c53b"
   ],
   "fonts/arial": [
     "cefde7932aa0b9c9e21c664f8f40dd0db2beae693da8bc640bd1366a119ef511",
@@ -2684,7 +2793,7 @@
     "82a630cf48470fd53a02b13ea5100a873214ad47b8c007a9c2ab0cf9c500c053",
     "29a6b7106d5d96984818ddf7bfb1f18837fd7df0fe7e7c3e568b5343298f9aed",
     "d1266a5bbe7c553dbd72bc706c63fc7c48a78cd11f39cdb7967c9dde411a6ddb",
-    "aaea791f04bc86250bd5ca59023e7575240abff59693d91fb552eddfbcfa052a",
+    "df9d4180b73d2875ff75a2434aef31e1f007fe777c215907fa30a76caff3a63c",
     "44afed5f17c69071fa8d877cf51d1b4536612a099c02a71f31942ef764f481cf",
     "a41b83a114f8107267ade68b1071abcd79584edeffac5a75e446b7837483fdf8",
     "66f3bc5681fedf55b790fd32012ba25acf98a07d22d393d810e3c8744ccde56e",
@@ -2783,9 +2892,9 @@
   "scraped/czech_crisis_measure_notice": [
     "9d1f03937d458cf872cac78f32391bc5b52edf61f440400f37ca06b205f99556",
     "23be900348a30e07906edefa45fde2553cd0ae4e529d6c3e266a0ad464edb8a5",
-    "6fe072771520f6a924a9f0f28c0611d3ea8666d1d1238c045dfbe4820897ef18",
-    "ed352c6a01bb0f0f0dea8d2880d585d32fce86e2c5cc2d254caa1df722857d46",
-    "8f8716e7f2aba397b74107c94b53ecc2fe29e2009b689e38db7dc9c9f81035b6",
+    "673b42a7972270f6a28f9884aca999d0b8c17ca907dbbeb17c45638c66d8bd4c",
+    "4daf4e77a5ad7eaca45056334c0c8adf593e433090090da00faf2839aa816356",
+    "6c5a5ce4bafa03e08cb908a7cc9deebde9b40ae442dda73cbaf754e217449ee1",
     "714db5abaefd43f6a1ace5e9c27dbd287b03fadec23293540d9f2146c13e29b9",
     "a3016dc8b135263bcee96a8e460a7a25d9f34c271533f31d961014e33b2bd9ff"
   ],

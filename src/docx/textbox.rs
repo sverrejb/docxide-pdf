@@ -10,7 +10,7 @@ use crate::model::{
 use super::color::{
     apply_color_transforms, parse_line_stroke, parse_solid_fill, resolve_dml_color,
 };
-use super::images::{extent_dimensions, parse_anchor_position};
+use super::images::{extent_dimensions, parse_anchor_position, vml_z_order};
 use super::styles::{ThemeFillStyle, ThemeFonts};
 use super::{
     DML_NS, MC_NS_TOP, OFFICE_NS, ParseContext, VML_NS, WML_NS, WPD_NS, WPS_NS, angle_attr,
@@ -25,8 +25,8 @@ pub(super) struct VmlBoxStyle {
     pub(super) margin_top: f32,
     pub(super) h_relative: HRelativeFrom,
     pub(super) v_relative: VRelativeFrom,
-    /// A negative z-index puts the shape behind the text.
-    pub(super) behind_text: bool,
+    /// Raw VML z-index; `vml_z_order` turns it into the layer and stacking order.
+    pub(super) z_index: i64,
     /// `mso-position-horizontal:center` / `mso-position-vertical:center`.
     pub(super) h_center: bool,
     pub(super) v_center: bool,
@@ -44,7 +44,7 @@ pub(super) fn parse_vml_box_style(style_str: &str) -> VmlBoxStyle {
         margin_top: 0.0,
         h_relative: HRelativeFrom::Column,
         v_relative: VRelativeFrom::Paragraph,
-        behind_text: false,
+        z_index: 0,
         h_center: false,
         v_center: false,
         rotation_deg: 0.0,
@@ -57,7 +57,7 @@ pub(super) fn parse_vml_box_style(style_str: &str) -> VmlBoxStyle {
                 "height" => s.height = parse_pt(val).unwrap_or(0.0),
                 "margin-left" => s.margin_left = parse_pt(val).unwrap_or(0.0),
                 "margin-top" => s.margin_top = parse_pt(val).unwrap_or(0.0),
-                "z-index" => s.behind_text = val.parse::<i64>().is_ok_and(|z| z < 0),
+                "z-index" => s.z_index = val.parse().unwrap_or(0),
                 "rotation" => {
                     s.rotation_deg = val.trim_end_matches("deg").parse().unwrap_or(0.0);
                 }
@@ -730,7 +730,11 @@ fn vml_spt_to_preset(spt: u32) -> Option<&'static str> {
 /// Resolve a VML shape's preset geometry from its `o:spt` attribute or its
 /// `type="#_x0000_t<N>"` reference.
 fn vml_shape_preset(shape: roxmltree::Node) -> Option<&'static str> {
-    let spt = shape
+    vml_spt_to_preset(vml_spt(shape)?)
+}
+
+fn vml_spt(shape: roxmltree::Node) -> Option<u32> {
+    shape
         .attribute((OFFICE_NS, "spt"))
         .and_then(|v| v.trim().parse::<f64>().ok().map(|f| f as u32))
         .or_else(|| {
@@ -738,8 +742,7 @@ fn vml_shape_preset(shape: roxmltree::Node) -> Option<&'static str> {
                 .attribute("type")
                 .and_then(|t| t.rsplit_once('t'))
                 .and_then(|(_, n)| n.parse::<u32>().ok())
-        })?;
-    vml_spt_to_preset(spt)
+        })
 }
 
 /// Build a paragraph-less stroked textbox for a VML preset shape that has no
@@ -789,9 +792,10 @@ fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
         margin_top,
         h_relative,
         v_relative,
-        behind_text,
+        z_index,
         ..
     } = parse_vml_box_style(shape.attribute("style").unwrap_or(""));
+    let (behind_doc, z_index) = vml_z_order(z_index);
     if width <= 0.0 || height <= 0.0 {
         return None;
     }
@@ -812,7 +816,8 @@ fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
         stroke_color: stroked.then_some(stroke_color),
         stroke_width,
         fill,
-        behind_doc: behind_text,
+        behind_doc,
+        z_index,
         no_text_wrap: true,
         ..Textbox::default()
     })
@@ -834,6 +839,77 @@ fn parse_vml_textbox_fill(shape: roxmltree::Node) -> Option<ShapeFill> {
         .or_else(|| fill.and_then(|n| n.attribute("color")))
         .and_then(parse_vml_color).unwrap_or([255, 255, 255]);
     Some(ShapeFill::Solid(color))
+}
+
+/// Stroke-only legacy line shapes are connectors, including zero-height
+/// horizontal rules. Do not turn unrelated VML presets into rectangles.
+pub(super) fn parse_connector_from_vml(pict: roxmltree::Node) -> Option<ConnectorShape> {
+    let shape = pict
+        .children()
+        .find(|n| n.has_tag_name((VML_NS, "shape")))?;
+    let mut line = parse_vml_line(shape)?;
+    let style = shape.attribute("style").unwrap_or("");
+    if vml_style_prop(style, "visibility") == Some("hidden") {
+        return None;
+    }
+    let b = parse_vml_box_style(style);
+    if !b.width.is_finite()
+        || !b.height.is_finite()
+        || b.width < 0.0
+        || b.height < 0.0
+        || (b.width == 0.0 && b.height == 0.0)
+    {
+        return None;
+    }
+    (line.behind_doc, line.z_index) = vml_z_order(b.z_index);
+    line.h_position = HorizontalPosition::Offset(b.margin_left);
+    line.h_relative_from = b.h_relative;
+    line.v_position = VerticalPosition::Offset(b.margin_top);
+    line.v_relative_from = b.v_relative;
+    line.width = b.width;
+    line.height = b.height;
+    Some(line)
+}
+
+/// A stroked VML line (`o:spt` 32) with zeroed position and size; the caller
+/// supplies the placement.
+pub(super) fn parse_vml_line(shape: roxmltree::Node) -> Option<ConnectorShape> {
+    if vml_spt(shape) != Some(32) || matches!(shape.attribute("stroked"), Some("f" | "false")) {
+        return None;
+    }
+    let flip = vml_style_prop(shape.attribute("style").unwrap_or(""), "flip").unwrap_or("");
+    Some(ConnectorShape {
+        behind_doc: false,
+        h_position: HorizontalPosition::Offset(0.0),
+        h_relative_from: HRelativeFrom::default(),
+        v_position: VerticalPosition::Offset(0.0),
+        v_relative_from: VRelativeFrom::default(),
+        width: 0.0,
+        height: 0.0,
+        stroke_color: shape
+            .attribute("strokecolor")
+            .and_then(parse_vml_color)
+            .unwrap_or([0, 0, 0]),
+        stroke_width: shape
+            .attribute("strokeweight")
+            .and_then(parse_pt)
+            .filter(|w| w.is_finite() && *w > 0.0)
+            .unwrap_or(0.75),
+        connector_type: ConnectorType::Line {
+            flip_h: flip.contains('x'),
+            flip_v: flip.contains('y'),
+        },
+        head_end: ArrowEnd::None,
+        tail_end: ArrowEnd::None,
+        z_index: 0,
+    })
+}
+
+pub(super) fn vml_style_prop<'a>(style: &'a str, key: &str) -> Option<&'a str> {
+    style
+        .split(';')
+        .filter_map(|p| p.trim().split_once(':'))
+        .find_map(|(k, v)| (k.trim() == key).then_some(v.trim()))
 }
 
 pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
@@ -873,8 +949,10 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         margin_top,
         h_relative,
         v_relative,
+        z_index,
         ..
     } = parse_vml_box_style(style_str);
+    let (behind_doc, z_index) = vml_z_order(z_index);
 
     // VML shapes are stroked by default (black, 0.75pt) unless stroked="f".
     // Word renders this border, so honor it — previously every VML textbox was
@@ -910,9 +988,8 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         v_relative_from: v_relative,
         stroke_color,
         stroke_width,
-        behind_doc: style_str.split(';').filter_map(|part| part.trim().split_once(':'))
-            .any(|(key, value)| key.trim() == "z-index"
-                && value.trim().parse::<i64>().is_ok_and(|z| z < 0)),
+        behind_doc,
+        z_index,
         fill: parse_vml_textbox_fill(shape),
         margin_left: 7.2,
         margin_right: 7.2,
@@ -1000,6 +1077,29 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
 #[cfg(test)]
 mod connector_layer_tests {
     use super::*;
+
+    #[test]
+    fn legacy_zero_height_line_keeps_style_and_rejects_non_lines() {
+        let xml = format!(
+            r##"<w:pict xmlns:w="{WML_NS}" xmlns:v="{VML_NS}"><v:shape type="#_x0000_t32" style="width:240pt;height:0;margin-left:8pt;margin-top:4pt;z-index:42;mso-position-vertical-relative:page" strokecolor="#e36c0a [2409]" strokeweight="1.75pt"/></w:pict>"##
+        );
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        let line = parse_connector_from_vml(doc.root_element()).unwrap();
+        assert_eq!((line.width, line.height), (240.0, 0.0));
+        assert_eq!(line.stroke_color, [227, 108, 10]);
+        assert_eq!(line.stroke_width, 1.75);
+        assert_eq!(line.z_index, 42);
+        assert!(matches!(line.v_relative_from, VRelativeFrom::Page));
+        for change in [
+            xml.replace("_t32", "_t87"),
+            xml.replace("height:0", "height:-1pt"),
+            xml.replace("z-index:42", "visibility:hidden"),
+            xml.replace("strokeweight=", "stroked=\"f\" strokeweight="),
+        ] {
+            let doc = roxmltree::Document::parse(&change).unwrap();
+            assert!(parse_connector_from_vml(doc.root_element()).is_none());
+        }
+    }
 
     #[test]
     fn legacy_textbox_fill_is_white_unless_disabled_or_colored() {

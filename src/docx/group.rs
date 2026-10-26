@@ -9,16 +9,21 @@
 use std::io::{Read, Seek};
 
 use crate::model::{
-    ConnectorType, FloatingImage, HRelativeFrom, HorizontalPosition, Textbox, VRelativeFrom,
-    VerticalPosition, WrapText, WrapType,
+    ConnectorShape, ConnectorType, EmbeddedImage, FloatingImage, HRelativeFrom, HorizontalPosition,
+    Textbox, VRelativeFrom, VerticalPosition, WrapText, WrapType,
 };
 
 use super::images::{
     RunDrawingResult, anchor_z_order, extent_dimensions, find_blip_embed, parse_anchor_position,
-    read_image_from_zip,
+    read_image_from_zip, vml_imagedata_props, vml_z_order,
 };
-use super::textbox::{find_sp_pr, parse_connector_shape_node, parse_wsp_shape};
-use super::{PIC_NS, ParseContext, WPC_NS, WPG_NS, WPS_NS, dml, emu_attr};
+use super::textbox::{
+    find_sp_pr, parse_connector_shape_node, parse_vml_box_style, parse_vml_line, parse_wsp_shape,
+    vml_style_prop,
+};
+use super::{
+    PIC_NS, ParseContext, REL_NS, VML_NS, WPC_NS, WPG_NS, WPS_NS, dml, emu_attr, parse_pt,
+};
 
 /// Affine scale+translate mapping local shape coordinates to drawing
 /// coordinates (points, y-down, origin at the drawing's top-left).
@@ -267,12 +272,7 @@ fn emit_wsp<R: Read + Seek>(
                 *flip_h ^= t.connector_sx < 0.0;
                 *flip_v ^= t.connector_sy < 0.0;
             }
-            conn.h_position = HorizontalPosition::Offset(base.x + cx);
-            conn.h_relative_from = base.h_rel;
-            conn.v_position = VerticalPosition::Offset(base.y + cy);
-            conn.v_relative_from = base.v_rel;
-            conn.behind_doc = base.behind_doc;
-            conn.z_index = base.z_index;
+            place_connector(&mut conn, cx, cy, base);
             out.push(RunDrawingResult::Connector(conn));
         }
         return;
@@ -318,26 +318,145 @@ fn emit_pic<R: Read + Seek>(
         // vertical anchor).
         // Add it the way Textbox does if a fixture ever needs an indented
         // inline canvas with picture children.
-        out.push(RunDrawingResult::Floating(FloatingImage {
-            image: img,
-            h_position: HorizontalPosition::Offset(base.x + x),
-            h_relative_from: base.h_rel,
-            v_position: VerticalPosition::Offset(base.y + y),
-            v_relative_from: base.v_rel,
-            wrap_type: WrapType::None,
-            wrap_text: WrapText::BothSides,
-            wrap_polygon: None,
-            behind_doc: base.behind_doc,
-            dist_top: 0.0,
-            dist_bottom: 0.0,
-            dist_left: 0.0,
-            dist_right: 0.0,
-            z_index: base.z_index,
-            anchor_seq: 0,
-            anchor_at_start: false,
-            on_line: base.on_line,
-        }));
+        out.push(RunDrawingResult::Floating(group_image(img, x, y, base)));
     }
+}
+
+fn group_image(image: EmbeddedImage, x: f32, y: f32, base: &BaseAnchor) -> FloatingImage {
+    FloatingImage {
+        image,
+        h_position: HorizontalPosition::Offset(base.x + x),
+        h_relative_from: base.h_rel,
+        v_position: VerticalPosition::Offset(base.y + y),
+        v_relative_from: base.v_rel,
+        wrap_type: WrapType::None,
+        wrap_text: WrapText::BothSides,
+        wrap_polygon: None,
+        behind_doc: base.behind_doc,
+        dist_top: 0.0,
+        dist_bottom: 0.0,
+        dist_left: 0.0,
+        dist_right: 0.0,
+        z_index: base.z_index,
+        anchor_seq: 0,
+        anchor_at_start: false,
+        on_line: base.on_line,
+    }
+}
+
+fn place_connector(conn: &mut ConnectorShape, x: f32, y: f32, base: &BaseAnchor) {
+    conn.h_position = HorizontalPosition::Offset(base.x + x);
+    conn.h_relative_from = base.h_rel;
+    conn.v_position = VerticalPosition::Offset(base.y + y);
+    conn.v_relative_from = base.v_rel;
+    conn.behind_doc = base.behind_doc;
+    conn.z_index = base.z_index;
+}
+
+/// Flatten legacy VML groups, whose children use coordorigin/coordsize units.
+/// The leaf renderers still receive ordinary point-based anchors.
+pub(super) fn parse_vml_group<R: Read + Seek>(
+    pict: roxmltree::Node,
+    ctx: &mut ParseContext<'_, R>,
+) -> Option<RunDrawingResult> {
+    let group = pict
+        .children()
+        .find(|n| n.has_tag_name((VML_NS, "group")))?;
+    let style = group.attribute("style").unwrap_or("");
+    let box_style = parse_vml_box_style(style);
+    let (behind_doc, z_index) = vml_z_order(box_style.z_index);
+    let base = BaseAnchor {
+        x: 0.0,
+        y: 0.0,
+        h_rel: box_style.h_relative,
+        v_rel: box_style.v_relative,
+        behind_doc,
+        z_index,
+        on_line: false,
+    };
+    let mut out = Vec::new();
+    walk_vml_group(group, GroupTransform::IDENTITY, &base, 0, ctx, &mut out);
+    (!out.is_empty()).then_some(RunDrawingResult::Group(out))
+}
+
+fn walk_vml_group<R: Read + Seek>(
+    node: roxmltree::Node,
+    parent: GroupTransform,
+    base: &BaseAnchor,
+    depth: usize,
+    ctx: &mut ParseContext<'_, R>,
+    out: &mut Vec<RunDrawingResult>,
+) {
+    if depth > 32 {
+        return;
+    }
+    let style = node.attribute("style").unwrap_or("");
+    if vml_style_prop(style, "visibility") == Some("hidden")
+        || vml_style_prop(style, "rotation").is_some()
+        || vml_style_prop(style, "flip").is_some()
+    {
+        return;
+    }
+    let number = |key: &str| vml_style_prop(style, key).and_then(parse_pt).unwrap_or(0.0);
+    let x = number("left") + number("margin-left");
+    let y = number("top") + number("margin-top");
+    let w = number("width");
+    let h = number("height");
+    if ![x, y, w, h].iter().all(|v| v.is_finite()) || w < 0.0 || h < 0.0 {
+        return;
+    }
+    if node.has_tag_name((VML_NS, "group")) {
+        let Some(ch_ext) = node.attribute("coordsize").and_then(pair) else {
+            return;
+        };
+        let ch_off = node
+            .attribute("coordorigin")
+            .and_then(pair)
+            .unwrap_or((0.0, 0.0));
+        if ![ch_ext.0, ch_ext.1, ch_off.0, ch_off.1]
+            .iter()
+            .all(|v| v.is_finite())
+            || ch_ext.0 <= 0.0
+            || ch_ext.1 <= 0.0
+        {
+            return;
+        }
+        let xfrm = Xfrm {
+            off: (x, y),
+            ext: (w, h),
+            ch_off,
+            ch_ext,
+            flip_h: false,
+            flip_v: false,
+        };
+        let t = compose(parent, &xfrm);
+        for child in node.children().filter(|n| n.is_element()) {
+            walk_vml_group(child, t, base, depth + 1, ctx, out);
+        }
+    } else if node.has_tag_name((VML_NS, "shape")) || node.has_tag_name((VML_NS, "rect")) {
+        let (x, y) = parent.apply(x, y);
+        let (w, h) = parent.scale(w, h);
+        if let Some(mut conn) = parse_vml_line(node) {
+            conn.width = w;
+            conn.height = h;
+            place_connector(&mut conn, x, y, base);
+            out.push(RunDrawingResult::Connector(conn));
+        } else if let Some(data) = node
+            .children()
+            .find(|n| n.has_tag_name((VML_NS, "imagedata")))
+            && let Some(mut img) = data
+                .attribute((REL_NS, "id"))
+                .and_then(|id| read_image_from_zip(id, ctx.rels, ctx.zip, w, h))
+        {
+            (img.src_rect, img.lum) = vml_imagedata_props(data);
+            out.push(RunDrawingResult::Floating(group_image(img, x, y, base)));
+        }
+    }
+}
+
+fn pair(value: &str) -> Option<(f32, f32)> {
+    let (x, y) = value.split_once(',')?;
+    Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
 }
 
 #[cfg(test)]

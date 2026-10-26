@@ -15,7 +15,7 @@ use super::styles::{
     ComplexProps, ParagraphStyle, RunProps, StyleDefaults, ThemeFonts, half_points,
     parse_font_size, parse_run_props, resolve_font_from_node_opt,
 };
-use super::textbox::parse_textbox_from_vml;
+use super::textbox::{parse_connector_from_vml, parse_textbox_from_vml};
 use super::{
     MATH_NS, MC_NS_TOP, OFFICE_NS, ParseContext, REL_NS, VML_NS, WML_NS, math_run_text, math_val,
     parse_hex_color, parse_pt, wml, wml_attr, wml_bool,
@@ -1212,7 +1212,9 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         .descendants()
                         .filter(|n| n.has_tag_name((WML_NS, "pict")))
                     {
-                        if let Some(tb) = parse_textbox_from_vml(pict, ctx) {
+                        if let Some(connector) = parse_connector_from_vml(pict) {
+                            connectors.push(connector);
+                        } else if let Some(tb) = parse_textbox_from_vml(pict, ctx) {
                             push_textbox(&floating_images, &mut textboxes, tb);
                         }
                     }
@@ -1423,7 +1425,19 @@ pub(super) fn parse_runs<R: Read + Seek>(
                     );
                 }
                 "pict" if field_stack.is_empty() => {
-                    if let Some(hr) = parse_vml_horizontal_rule(child) {
+                    if let Some(result) = super::group::parse_vml_group(child, ctx) {
+                        handle_drawing_result!(
+                            Some(result),
+                            fmt,
+                            runs,
+                            floating_images,
+                            textboxes,
+                            inline_chart,
+                            smartart,
+                            connectors,
+                            pending_text
+                        );
+                    } else if let Some(hr) = parse_vml_horizontal_rule(child) {
                         horizontal_rule = Some(hr);
                     } else if is_vml_picture(child) {
                         flush_pending(&mut pending_text, &mut runs);
@@ -1436,6 +1450,8 @@ pub(super) fn parse_runs<R: Read + Seek>(
                                 ..fmt.minimal_run()
                             });
                         }
+                    } else if let Some(connector) = parse_connector_from_vml(child) {
+                        connectors.push(connector);
                     } else if let Some(tb) = parse_textbox_from_vml(child, ctx) {
                         push_textbox(&floating_images, &mut textboxes, tb);
                     }

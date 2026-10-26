@@ -844,6 +844,8 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     }
                     let tab_stops = super::resolve_tab_stops(ppr, para_style);
                     cell_blocks.push(Block::Paragraph(Paragraph {
+                        widow_control: super::paragraph::widow_control(ppr, para_style, &ctx.styles.defaults),
+                        keep_lines: super::paragraph::keep_lines(ppr, para_style),
                         runs,
                         alignment,
                         space_before_auto,
@@ -874,7 +876,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                             .and_then(|ppr| wml_bool(ppr, "snapToGrid"))
                             .or_else(|| para_style.and_then(|s| s.snap_to_grid))
                             .unwrap_or(true),
-                        text_align_top: super::paragraph::text_align_top(ppr, para_style),
+                        text_alignment: super::paragraph::text_alignment(ppr, para_style, &ctx.styles.defaults),
                         floating_images: parsed.floating_images,
                         textboxes: parsed.textboxes,
                         connectors: parsed.connectors,

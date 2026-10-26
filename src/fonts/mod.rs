@@ -418,6 +418,11 @@ fn known_font_alias(name: &str) -> Option<&'static str> {
         "Liberation Sans" => Some("Arial"),
         "Liberation Serif" => Some("Times New Roman"),
         "Carlito" => Some("Calibri"),
+        // The other way round, for machines without Office's fonts (a stock Mac or Linux box):
+        // Word's default faces fall to their metric-compatible clones instead of Arial, which
+        // keeps line breaks and pagination. Only reached when the real font isn't installed.
+        "Calibri" => Some("Carlito"),
+        "Cambria" => Some("Caladea"),
         "Palatino Linotype" => Some("Palatino"),
         "標楷體" | "DFKai-SB" => Some("BiauKai"),
         _ => None,
@@ -963,6 +968,13 @@ pub(crate) fn register_font(
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn word_defaults_fall_back_to_their_metric_clones() {
+        assert_eq!(known_font_alias("Calibri"), Some("Carlito"));
+        assert_eq!(known_font_alias("Cambria"), Some("Caladea"));
+        assert_eq!(known_font_alias("Carlito"), Some("Calibri"));
+    }
     use super::*;
 
     #[test]

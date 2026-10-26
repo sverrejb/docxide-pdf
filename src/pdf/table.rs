@@ -675,6 +675,7 @@ fn render_cell_content(
                         content,
                         cell_x + cm.left + floating_x_offset.unwrap_or(0.0),
                         col_w - cm.left - cm.right,
+                        floating_offset.map(|_| cm),
                         &mut cursor_y,
                         ctx,
                         gradient_specs,
@@ -1026,6 +1027,8 @@ fn render_nested_table(
     content: &mut Content,
     available_x: f32,
     available_w: f32,
+    // The host cell's margins when this table floats in it.
+    floating_host: Option<&CellMargins>,
     cursor_y: &mut f32,
     ctx: &RenderContext,
     gradient_specs: &mut Vec<super::GradientSpec>,
@@ -1036,10 +1039,32 @@ fn render_nested_table(
     chunk: &Chunk,
 ) {
     let table_total_w: f32 = col_widths.iter().sum();
-    let table_left = match table.alignment {
+    // A margin/text-anchored float's centre or right position overrides jc.
+    let anchored = table
+        .position
+        .as_ref()
+        .filter(|p| p.h_anchor == "margin" && p.v_anchor == "text");
+    let alignment = match anchored.map(|p| &p.h_position) {
+        Some(crate::model::HorizontalPosition::AlignCenter) => TableAlignment::Center,
+        Some(crate::model::HorizontalPosition::AlignRight) => TableAlignment::Right,
+        _ => table.alignment,
+    };
+    // Word 2013+ positions a fully over-wide, left-anchored nested float
+    // against its host cell edge rather than adding the host's left padding.
+    let edge_shift = floating_host
+        .filter(|m| {
+            ctx.compat_mode >= 15
+                && table.table_indent == 0.0
+                && table_total_w > available_w + m.left + m.right
+                && anchored.is_some_and(|p| {
+                    matches!(p.h_position, crate::model::HorizontalPosition::Offset(x) if x == 0.0)
+                })
+        })
+        .map_or(0.0, |m| m.left);
+    let table_left = match alignment {
         TableAlignment::Center => available_x + (available_w - table_total_w) / 2.0,
         TableAlignment::Right => available_x + available_w - table_total_w,
-        TableAlignment::Left => available_x + table.table_indent,
+        TableAlignment::Left => available_x + table.table_indent - edge_shift,
     };
 
     let merge_spans = compute_merge_spans(table, row_layouts);
@@ -1276,6 +1301,7 @@ fn render_partial_cell_content(
                                 floating_x_offset.unwrap_or(0.0)
                             },
                         col_w - cm.left - cm.right,
+                        floating_offset.map(|_| cm),
                         &mut cursor_y,
                         ctx,
                         gradient_specs,
@@ -2146,11 +2172,11 @@ pub(super) fn render_table(
         // instead).
         // Word 2013+ layout keeps two lines of a paragraph on each side of a
         // row break, Word 2010 layout one (`find_cell_split`).
-        let widow = if ctx.compat_mode >= 15 { 2 } else { 1 };
+        let widow = |p: &CellParagraphLayout| if p.two_line_widow { 2 } else { 1 };
         let any_cell_multi_item = layout.cells.iter().any(|c| {
             c.items.len() > 1
                 || c.items.iter().any(|it| match it {
-                    CellContentItem::Paragraph(p) => p.lines.len() >= 2 * widow && !p.keep_lines,
+                    CellContentItem::Paragraph(p) => p.lines.len() >= 2 * widow(p) && !p.keep_lines,
                     CellContentItem::NestedTable { rows, .. } => {
                         rows.len() >= 2 || rows.iter().any(|r| r.split_min.is_some())
                     }
@@ -2160,14 +2186,14 @@ pub(super) fn render_table(
         // two in Word 2013+ layout or for a row taller than the page
         // (croatian_grant's 776pt row waits for the next page rather than put
         // one line in the 21.8pt above a footnote), else one.
-        let start_lines = if widow == 2 || row_h > page_content_h { 2 } else { 1 };
+        let start_lines = |p: &CellParagraphLayout| if row_h > page_content_h { 2 } else { widow(p) };
         // Whether every cell's first chunk fits in the room left: its first
         // paragraph (`start_lines` of a longer one) or first nested row, with
         // the opening space before that find_cell_split charges.
         let first_chunks_fit = layout.cells.iter().all(|c| {
             c.items.first().is_none_or(|it| {
                 let end = match it {
-                    CellContentItem::Paragraph(p) if p.lines.len() >= 2 * start_lines && !p.keep_lines => Some(start_lines),
+                    CellContentItem::Paragraph(p) if p.lines.len() >= 2 * start_lines(p) && !p.keep_lines => Some(start_lines(p)),
                     CellContentItem::Paragraph(_) => None,
                     CellContentItem::NestedTable { .. } => Some(1),
                 };

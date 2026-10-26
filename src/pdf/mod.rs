@@ -219,6 +219,15 @@ fn step_below_bands(
                 .filter_map(|tb| blocking_textbox_band(tb, sp, col, text_width, ctx)),
         );
     }
+    step_below_existing_bands(state, block, sp, ctx);
+}
+
+fn step_below_existing_bands(
+    state: &mut LayoutState,
+    block: &Block,
+    sp: &SectionProperties,
+    ctx: &RenderContext,
+) {
     let top = sp.page_height - state.pb.slot_top;
     let Some(p) = leading_para(block) else { return };
     if state
@@ -585,6 +594,13 @@ pub(super) fn label_boosted_line_h(
     let Some(label_ar) = entry.ascender_ratio else {
         return text_line_h;
     };
+    if para.text_alignment == crate::model::TextAlignment::Center {
+        return if matches!(effective_ls, LineSpacing::Exact(_)) {
+            text_line_h
+        } else {
+            text_line_h.max(label_fs * entry.line_h_ratio.unwrap_or(1.0))
+        };
+    }
     // Word raises the line by the marker's ascent but keeps the text's descent,
     // never one font's whole line height: a Symbol bullet reaches 0.6pt above
     // 11pt Calibri and Word's line grows by exactly that (annotation #66, 16.0pt
@@ -624,7 +640,7 @@ fn label_boosted_baseline_offset(
     text_offset: f32,
     text_font_size: f32,
 ) -> f32 {
-    if para.list_label.is_empty() {
+    if para.list_label.is_empty() || para.text_alignment == crate::model::TextAlignment::Center {
         return text_offset;
     }
     let label_fs = para.list_label_font_size.unwrap_or(text_font_size);
@@ -683,7 +699,7 @@ fn mark_position_stretch(
     let size = para.paragraph_mark_font_size.unwrap_or(11.0);
     let pos = para.paragraph_mark_position;
     let natural = size * lhr;
-    let shifted = if para.text_align_top {
+    let shifted = if para.text_alignment == crate::model::TextAlignment::Top {
         natural + layout::top_aligned_drop(font, size, pos)
     } else {
         (size * ar + pos).max(0.0) + (size * (lhr - ar).max(0.0) - pos).max(0.0)
@@ -867,7 +883,34 @@ pub(super) struct FloatZone {
     pub table_on_page: bool,
 }
 
+// A table excludes part of the column; it does not reset the paragraph's
+// margin-relative left indent to the table's right edge.
+fn table_right_text_region(
+    col_x: f32,
+    col_right: f32,
+    float_right: f32,
+    para: &Paragraph,
+) -> (f32, f32) {
+    let left = (col_x + para.indent_left).max(float_right);
+    (left, (col_right - para.indent_right - left).max(0.0))
+}
+
 impl FloatZone {
+    /// The text region right of the wrap edge `float_right`.
+    // Images retain wrap-edge-relative indents (the French
+    // youth strategy's arrow list beside its logo). Tables
+    // instead intersect the margin-relative paragraph box.
+    fn right_region(&self, col_x: f32, col_right: f32, float_right: f32, para: &Paragraph) -> (f32, f32) {
+        if self.from_table {
+            table_right_text_region(col_x, col_right, float_right, para)
+        } else {
+            (
+                float_right + para.indent_left,
+                (col_right - float_right - para.indent_left - para.indent_right).max(0.0),
+            )
+        }
+    }
+
     /// The exclusion zone of a wrapping float whose frame's left edge is `fi_x`
     /// and top edge `fi_y_top` (page coordinates, y from the bottom).
     fn for_float(fi: &crate::model::FloatingImage, fi_x: f32, fi_y_top: f32) -> Self {
@@ -946,13 +989,11 @@ impl FloatZone {
             // For bothSides, use the wider region as primary text width (dual
             // geometry handles both regions per-line).
             let lw = (space_left - para.indent_left).max(0.0);
-            let rw = (space_right - para.indent_left - para.indent_right).max(0.0);
+            let (rx, rw) = self.right_region(col_x, col_right, ex_right + self.right_from_text, para);
             if rw > lw {
-                let new_left = ex_right + self.right_from_text;
                 *text_w = rw.max(1.0);
-                *text_x = new_left + para.indent_left;
-                *label_x =
-                    new_left + para.indent_left - para.indent_hanging + para.indent_first_line;
+                *text_x = rx;
+                *label_x = rx - para.indent_hanging + para.indent_first_line;
             } else if lw > 0.0 {
                 *text_w = lw.max(1.0);
             }
@@ -969,10 +1010,17 @@ impl FloatZone {
             };
             if use_right {
                 let new_left = ex_right + self.right_from_text;
-                *text_w = (col_right - new_left - para.indent_right).max(1.0);
-                *text_x = new_left + para.indent_left;
-                *label_x =
-                    new_left + para.indent_left - para.indent_hanging + para.indent_first_line;
+                let (x, w) = if self.from_table {
+                    table_right_text_region(col_x, col_right, new_left, para)
+                } else {
+                    (
+                        new_left + para.indent_left,
+                        col_right - new_left - para.indent_right,
+                    )
+                };
+                *text_w = w.max(1.0);
+                *text_x = x;
+                *label_x = x - para.indent_hanging + para.indent_first_line;
             } else if use_left {
                 let avail_right = ex_left - self.left_from_text;
                 *text_w = (avail_right - col_x - para.indent_left - para.indent_right).max(1.0);
@@ -2113,6 +2161,102 @@ fn leading_full_width_picture(
         < MIN_EMPTY_STRIP
 }
 
+// Full-width rectangular contour wrapping advances through candidate lines,
+// rather than applying the square-wrap jump to image/effect bounds.
+struct RectangularClearance {
+    top: f32,
+    bottom: f32,
+    pitch: f32,
+    line_h: f32,
+}
+
+impl RectangularClearance {
+    fn cleared_y(&self, start: f32) -> f32 {
+        let steps = ((start - self.bottom) / self.pitch).ceil().max(0.0);
+        start - steps * self.pitch
+    }
+}
+
+fn rectangular_polygon_bounds(pts: &[(f32, f32)]) -> Option<(f32, f32, f32, f32)> {
+    if !(4..=5).contains(&pts.len()) {
+        return None;
+    }
+    let left = pts.iter().map(|p| p.0).fold(f32::INFINITY, f32::min);
+    let right = pts.iter().map(|p| p.0).fold(f32::NEG_INFINITY, f32::max);
+    let bottom = pts.iter().map(|p| p.1).fold(f32::INFINITY, f32::min);
+    let top = pts.iter().map(|p| p.1).fold(f32::NEG_INFINITY, f32::max);
+    if left >= right || bottom >= top {
+        return None;
+    }
+    for (i, &(x, y)) in pts.iter().enumerate() {
+        if !(x == left || x == right) || !(y == bottom || y == top) {
+            return None;
+        }
+        let next = pts[(i + 1) % pts.len()];
+        if x != next.0 && y != next.1 {
+            return None;
+        }
+    }
+    [(left, bottom), (right, bottom), (left, top), (right, top)]
+        .iter()
+        .all(|c| pts.contains(c))
+        .then_some((left, right, top, bottom))
+}
+
+fn rectangular_polygon_clearance(
+    block: &Block,
+    zone: &FloatZone,
+    prev_after: f32,
+    ctx: &RenderContext,
+    (col_x, col_w): (f32, f32),
+) -> Option<RectangularClearance> {
+    if zone.from_table || !zone.para_relative || prev_after != 0.0 {
+        return None;
+    }
+    let (left, right, top, bottom) = rectangular_polygon_bounds(zone.polygon_pts.as_ref()?)?;
+    if side_strip((left, right), (zone.left_from_text, zone.right_from_text), (col_x, col_w))
+        >= MIN_EMPTY_STRIP
+    {
+        return None;
+    }
+    let Block::Paragraph(p) = block else {
+        return None;
+    };
+    if p.space_before != 0.0
+        || p.space_before_auto
+        || p.clears_floats
+        || p.image.is_some()
+        || p.inline_chart.is_some()
+        || !p.smartart.is_empty()
+        || !p.floating_images.is_empty()
+        || !p.textboxes.is_empty()
+        || p.frame_props.is_some()
+        || p.runs
+            .iter()
+            .any(|r| r.inline_image.is_some() || r.field_code.is_some() || r.math.is_some())
+    {
+        return None;
+    }
+    let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
+    if !matches!(ls, LineSpacing::Auto(_)) {
+        return None;
+    }
+    let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
+    let (fs, lhr) = if is_text_empty(&p.runs) {
+        unsized_line_metrics(p, fs, ctx.fonts)
+    } else {
+        (fs, lhr)
+    };
+    let pitch = resolve_line_h(LineSpacing::Auto(1.0), fs, lhr);
+    let line_h = resolve_line_h(ls, fs, lhr);
+    (pitch > 0.0 && pitch.is_finite()).then_some(RectangularClearance {
+        top,
+        bottom,
+        pitch,
+        line_h,
+    })
+}
+
 /// Compute effective first-line hanging indent for a paragraph.
 fn compute_text_hanging(
     para: &Paragraph,
@@ -3009,13 +3153,7 @@ fn render_paragraph_block(
                         let float_right = ex_right + fz.right_from_text;
                         let sr = col_right - float_right;
                         let sl = (ex_left - fz.left_from_text) - col_x;
-                        // Word measures the paragraph's indents from the
-                        // float's wrap edge as it does from the margin
-                        // (french youth strategy: arrow list beside a logo).
-                        let right_of_float = (
-                            float_right + para.indent_left,
-                            (sr - para.indent_left - para.indent_right).max(0.0),
-                        );
+                        let right_of_float = fz.right_region(col_x, col_right, float_right, para);
 
                         if is_both_sides {
                             // BothSides: provide both regions
@@ -3185,7 +3323,7 @@ fn render_paragraph_block(
             * auto_ascent_scale(effective_ls);
     // A grid or an exact rule gives every line the same box.
     if !grid_snapped && !matches!(effective_ls, LineSpacing::Exact(_)) {
-        size_lines_by_own_runs(&mut lines, ctx.fonts, effective_ls, line_h, para_ascent, para.text_align_top);
+        size_lines_by_own_runs(&mut lines, ctx.fonts, effective_ls, line_h, para_ascent, para.text_alignment == crate::model::TextAlignment::Top);
         // A line holding only a w:br is as tall as the break run, wherever it
         // falls: pasto's title opens with an unformatted <w:br/> (11pt) above
         // its 12pt bold text, and Word steps 12.65 for that line, not 13.80.
@@ -5009,46 +5147,57 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                     }
                 }
 
+                let before_float_clearance = state.pb.slot_top;
                 let mut table_cleared_float = false;
                 // If a float zone is active, decide whether to wrap text beside
                 // the object or push it below.
                 if let Some(ref fz) = state.pb.float_zone {
-                    if state.pb.slot_top <= fz.bottom_y {
+                    let rect_clear = rectangular_polygon_clearance(
+                        block,
+                        fz,
+                        state.prev_space_after,
+                        &ctx,
+                        col_geometry[state.current_col],
+                    );
+                    let clear_bottom = rect_clear.as_ref().map_or(fz.bottom_y, |rect| rect.bottom);
+                    if state.pb.slot_top <= clear_bottom {
                         // Already past the zone — clear it
                         state.pb.float_zone = None;
-                    } else if state.pb.slot_top <= fz.top_y
-                        || (fz.para_relative && state.pb.slot_top <= fz.top_y + 30.0)
-                        // A floating table meets a paragraph whose first
-                        // line reaches its top: physical_education's empty
-                        // anchor 0.05pt above a full-width table goes below
-                        // it with its line and space after. Before a table
-                        // anchored to the page, a line that starts above the
-                        // top keeps its place even where it reaches into the
-                        // table (japanese_hr_consultation's 10pt line 7pt above
-                        // the table overlaps it; Word probes 2026-10-23 with
-                        // the table top 2pt and 8pt into the line kept it, 2pt
-                        // above its top pushed it). Text-anchored tables keep
-                        // the reach rule (case32, case174, east_asia_conference).
-                        || (fz.from_table
-                            && matches!(block, Block::Paragraph(p) if {
-                                let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
-                                let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                                // An indented empty anchor can enter the float
-                                // through its before-spacing, before its line starts.
-                                let before = if ctx.compat_mode >= 15
-                                    && (p.indent_left != 0.0 || p.indent_right != 0.0)
-                                    && is_text_empty(&p.runs)
-                                {
-                                    state.prev_space_after.max(p.space_before)
-                                } else { 0.0 };
-                                let reach = if fz.table_on_page {
-                                    0.0
-                                } else {
-                                    resolve_line_h(ls, fs, lhr)
-                                };
-                                state.pb.slot_top - before - reach < fz.top_y + 0.1
-                            }))
-                    {
+                    } else if match &rect_clear {
+                        Some(rect) => state.pb.slot_top - rect.line_h < rect.top,
+                        None => state.pb.slot_top <= fz.top_y
+                            || (fz.para_relative && state.pb.slot_top <= fz.top_y + 30.0)
+                            // A floating table meets a paragraph whose first
+                            // line reaches its top: physical_education's empty
+                            // anchor 0.05pt above a full-width table goes below
+                            // it with its line and space after. Before a table
+                            // anchored to the page, a line that starts above the
+                            // top keeps its place even where it reaches into the
+                            // table (japanese_hr_consultation's 10pt line 7pt above
+                            // the table overlaps it; Word probes 2026-10-23 with
+                            // the table top 2pt and 8pt into the line kept it, 2pt
+                            // above its top pushed it). Text-anchored tables keep
+                            // the reach rule (case32, case174, east_asia_conference).
+                            || (fz.from_table
+                                && matches!(block, Block::Paragraph(p) if {
+                                    let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
+                                    let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
+                                    // An indented empty anchor can enter the float
+                                    // through its before-spacing, before its line starts.
+                                    let before = if ctx.compat_mode >= 15
+                                        && (p.indent_left != 0.0 || p.indent_right != 0.0)
+                                        && is_text_empty(&p.runs)
+                                    {
+                                        state.prev_space_after.max(p.space_before)
+                                    } else { 0.0 };
+                                    let reach = if fz.table_on_page {
+                                        0.0
+                                    } else {
+                                        resolve_line_h(ls, fs, lhr)
+                                    };
+                                    state.pb.slot_top - before - reach < fz.top_y + 0.1
+                                })),
+                    } {
                         // Cursor is within, entering, or (for paragraph-relative
                         // zones) slightly above the zone.  Paragraph-relative
                         // images with a positive vertical offset create zones that
@@ -5103,12 +5252,20 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
                             );
                             if !is_empty_para || !has_side_strip {
                                 table_cleared_float = matches!(block, Block::Table(_));
-                                state.pb.slot_top = fz.bottom_y;
+                                state.pb.slot_top = rect_clear
+                                    .as_ref()
+                                    .map_or(fz.bottom_y, |rect| rect.cleared_y(state.pb.slot_top));
                                 state.pb.float_zone = None;
                             }
                         }
                         // Otherwise leave zone active — paragraph layout adjusts width
                     }
+                }
+
+                // Clearing a floating table may move the first body line into
+                // a later frame band. Recheck the existing bands at that cursor.
+                if frame.is_none() && state.pb.slot_top != before_float_clearance {
+                    step_below_existing_bands(state, block, sp, &ctx);
                 }
 
                 match block {
@@ -5780,6 +5937,47 @@ mod tests {
     use super::*;
 
     #[test]
+    fn contour_clearance_keeps_the_natural_line_phase() {
+        let rect = RectangularClearance {
+            top: 80.0,
+            bottom: 15.0,
+            pitch: 10.0,
+            line_h: 15.0,
+        };
+        assert_eq!(rect.cleared_y(100.0), 10.0);
+        assert_eq!(rect.cleared_y(98.0), 8.0);
+        assert_eq!(rect.cleared_y(15.0), 15.0);
+        assert_eq!(rect.cleared_y(10.0), 10.0);
+    }
+
+    #[test]
+    fn rectangle_bounds_reject_diagonal_and_nonrectangular_contours() {
+        let rect = [
+            (0.0, 0.0),
+            (0.0, 20.0),
+            (30.0, 20.0),
+            (30.0, 0.0),
+            (0.0, 0.0),
+        ];
+        assert_eq!(
+            rectangular_polygon_bounds(&rect),
+            Some((0.0, 30.0, 20.0, 0.0))
+        );
+        assert_eq!(
+            rectangular_polygon_bounds(&rect[..4]),
+            Some((0.0, 30.0, 20.0, 0.0))
+        );
+        assert!(
+            rectangular_polygon_bounds(&[(0.0, 0.0), (30.0, 20.0), (0.0, 20.0), (30.0, 0.0)])
+                .is_none()
+        );
+        assert!(
+            rectangular_polygon_bounds(&[(0.0, 0.0), (0.0, 20.0), (15.0, 10.0), (30.0, 0.0)])
+                .is_none()
+        );
+    }
+
+    #[test]
     fn space_only_wrapping_frame_is_empty_but_content_controls_keep_flow() {
         let mut doc = crate::docx::parse_bytes(include_bytes!(
             "../../tests/fixtures/cases/space-only-frame/input.docx"
@@ -5927,6 +6125,25 @@ mod tests {
         // Courier New's deeper descent does not count (streamnet p5 sub-bullets).
         para.list_label_font = Some("Courier New".to_string());
         assert_eq!(boosted(&para), text_line_h);
+        para.list_label_font = Some("Symbol".to_string());
+        para.text_alignment = crate::model::TextAlignment::Center;
+        assert_eq!(boosted(&para), text_line_h);
+        assert_eq!(
+            label_boosted_baseline_offset(&para, &fonts, 11.0 * cal_ar, 11.0),
+            11.0 * cal_ar
+        );
+        assert_eq!(
+            label_boosted_line_h(
+                &para,
+                &fonts,
+                8.0,
+                LineSpacing::Exact(8.0),
+                11.0,
+                Some(cal_lhr),
+                Some(cal_ar)
+            ),
+            8.0
+        );
     }
 }
 
@@ -5988,4 +6205,37 @@ fn cell_grid_pitch(doc: &Document, sp: &crate::model::SectionProperties) -> f32 
     sp.line_grid_pitch()
         .filter(|_| doc.adjust_line_height_in_table)
         .unwrap_or(0.0)
+}
+
+#[cfg(test)]
+mod table_wrap_indent_tests {
+    use super::*;
+
+    #[test]
+    fn right_table_strip_intersects_margin_relative_paragraph_box() {
+        let mut para = Paragraph {
+            indent_left: 255.0,
+            indent_right: 12.0,
+            ..Default::default()
+        };
+        assert_eq!(
+            table_right_text_region(78.0, 552.0, 299.0, &para),
+            (333.0, 207.0)
+        );
+        para.indent_left = 100.0;
+        assert_eq!(
+            table_right_text_region(78.0, 552.0, 299.0, &para),
+            (299.0, 241.0)
+        );
+        para.indent_left = -10.0;
+        assert_eq!(
+            table_right_text_region(78.0, 552.0, 299.0, &para),
+            (299.0, 241.0)
+        );
+        para.indent_left = 500.0;
+        assert_eq!(
+            table_right_text_region(78.0, 552.0, 299.0, &para),
+            (578.0, 0.0)
+        );
+    }
 }

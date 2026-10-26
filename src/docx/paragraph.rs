@@ -83,15 +83,9 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
 
     // Word never splits display math over pages: a wrapped equation that
     // doesn't fit moves whole (probe `mp20_relpos`).
-    let keep_lines = ppr
-        .and_then(|ppr| wml_bool(ppr, "keepLines"))
-        .unwrap_or_else(|| para_style.and_then(|s| s.keep_lines).unwrap_or(false))
-        || super::runs::display_math(node).is_some();
+    let keep_lines = keep_lines(ppr, para_style) || super::runs::display_math(node).is_some();
 
-    let widow_control = ppr
-        .and_then(|ppr| wml_bool(ppr, "widowControl"))
-        .or_else(|| para_style.and_then(|s| s.widow_control))
-        .unwrap_or(ctx.styles.defaults.widow_control);
+    let widow_control = widow_control(ppr, para_style, &ctx.styles.defaults);
 
     let snap_to_grid = ppr
         .and_then(|ppr| wml_bool(ppr, "snapToGrid"))
@@ -341,7 +335,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         paragraph_mark_font_size,
         paragraph_mark_font_name,
         paragraph_mark_position,
-        text_align_top: text_align_top(ppr, para_style),
+        text_alignment: text_alignment(ppr, para_style, &ctx.styles.defaults),
         snap_to_grid,
         auto_space_de,
         auto_space_dn,
@@ -422,7 +416,7 @@ pub(super) fn split_at_page_break(para: &mut Paragraph) -> Option<Paragraph> {
         paragraph_mark_font_size: para.paragraph_mark_font_size,
         paragraph_mark_font_name: para.paragraph_mark_font_name.clone(),
         paragraph_mark_position: para.paragraph_mark_position,
-        text_align_top: para.text_align_top,
+        text_alignment: para.text_alignment,
         snap_to_grid: para.snap_to_grid,
         auto_space_de: para.auto_space_de,
         auto_space_dn: para.auto_space_dn,
@@ -444,18 +438,38 @@ pub(super) fn paragraph_mark_position(
         .unwrap_or(0.0)
 }
 
-/// `w:contextualSpacing`, direct or from the style. Shared by body and
-/// table-cell paragraphs.
-pub(super) fn text_align_top(
+/// `w:widowControl`, direct, from the style or the document defaults.
+pub(super) fn widow_control(
     ppr: Option<roxmltree::Node>,
     para_style: Option<&ParagraphStyle>,
+    defaults: &StyleDefaults,
 ) -> bool {
-    ppr.and_then(|ppr| wml_attr(ppr, "textAlignment"))
-        .map(|v| v == "top")
-        .or_else(|| para_style.and_then(|s| s.text_align_top))
+    ppr.and_then(|ppr| wml_bool(ppr, "widowControl"))
+        .or_else(|| para_style.and_then(|s| s.widow_control))
+        .unwrap_or(defaults.widow_control)
+}
+
+/// `w:keepLines`, direct or from the style.
+pub(super) fn keep_lines(ppr: Option<roxmltree::Node>, para_style: Option<&ParagraphStyle>) -> bool {
+    ppr.and_then(|ppr| wml_bool(ppr, "keepLines"))
+        .or_else(|| para_style.and_then(|s| s.keep_lines))
         .unwrap_or(false)
 }
 
+/// `w:textAlignment`, direct, from the style or the document defaults.
+pub(super) fn text_alignment(
+    ppr: Option<roxmltree::Node>,
+    para_style: Option<&ParagraphStyle>,
+    defaults: &StyleDefaults,
+) -> crate::model::TextAlignment {
+    ppr.and_then(|ppr| wml_attr(ppr, "textAlignment"))
+        .map(crate::model::TextAlignment::parse)
+        .or_else(|| para_style.and_then(|s| s.text_alignment))
+        .unwrap_or(defaults.text_alignment)
+}
+
+/// `w:contextualSpacing`, direct or from the style. Shared by body and
+/// table-cell paragraphs.
 pub(super) fn contextual_spacing(
     ppr: Option<roxmltree::Node>,
     para_style: Option<&ParagraphStyle>,
