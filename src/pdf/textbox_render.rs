@@ -503,7 +503,7 @@ pub(super) fn render_textbox_paragraphs(
             None => &tp.runs,
         };
         let inline_imgs = super::layout::run_image_map(runs, ctx.textbox_image_names);
-        let tb_lines = build_lines(
+        let mut tb_lines = build_lines(
             runs,
             ctx,
             tp_text_w,
@@ -531,6 +531,21 @@ pub(super) fn render_textbox_paragraphs(
         )
         .unwrap_or(tb_fs * tb_ar.unwrap_or(0.75));
         let tb_baseline = cursor_y - inter_gap - tb_ascent - y_offset;
+        // Each line is as tall as its own runs, as in the body: air_pollution's
+        // 10.5pt dot-leader line before a break steps 18.1 at 1.5 lines, not
+        // the 20.7 of the paragraph's 12pt text.
+        if !matches!(tp_ls, crate::model::LineSpacing::Exact(_)) {
+            super::layout::size_lines_by_own_runs(
+                &mut tb_lines,
+                ctx.fonts,
+                tp_ls,
+                tb_line_h,
+                tb_fs * tb_ar.unwrap_or(0.75),
+                tp.text_alignment == crate::model::TextAlignment::Top,
+            );
+            super::size_break_lines(&mut tb_lines, runs, tp_ls, tb_line_h, ctx.fonts);
+            super::size_mark_line(&mut tb_lines, tp, runs, tp_ls, tb_lhr, ctx.fonts);
+        }
         let tb_metrics = (
             tb_fs * tb_ar.unwrap_or(0.75),
             if inline_imgs.is_empty() {

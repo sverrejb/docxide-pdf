@@ -718,6 +718,54 @@ fn mark_position_stretch(
 }
 
 /// Look up the line_h_ratio for a break run's font, matching by font_size.
+/// A line holding only a w:br is as tall as the break run, wherever it
+/// falls: pasto's title opens with an unformatted <w:br/> (11pt) above
+/// its 12pt bold text, and Word steps 12.65 for that line, not 13.80.
+fn size_break_lines(
+    lines: &mut [TextLine],
+    runs: &[Run],
+    ls: LineSpacing,
+    line_h: f32,
+    fonts: &HashMap<String, FontEntry>,
+) {
+    for line in lines
+        .iter_mut()
+        .filter(|l| l.ends_with_break && l.pitch.is_none())
+    {
+        if let Some(bfs) = line.break_font_size {
+            let lhr = line.break_lhr.or_else(|| break_run_lhr(runs, bfs, fonts));
+            let pitch = resolve_line_h(ls, bfs, lhr);
+            if (pitch - line_h).abs() > 0.01 {
+                line.pitch = Some(pitch);
+            }
+        }
+    }
+}
+
+/// A final empty line after a break holds the paragraph mark, which sizes
+/// it rather than the preceding text.
+fn size_mark_line(
+    lines: &mut [TextLine],
+    para: &Paragraph,
+    runs: &[Run],
+    ls: LineSpacing,
+    fallback_lhr: Option<f32>,
+    fonts: &HashMap<String, FontEntry>,
+) {
+    if runs.last().is_some_and(|r| r.is_line_break)
+        && let Some(last) = lines.last_mut().filter(|l| l.chunks.is_empty())
+        && let Some(mark_size) = para.paragraph_mark_font_size
+    {
+        let mark_lhr = para
+            .paragraph_mark_font_name
+            .as_deref()
+            .and_then(|name| fonts.get(name))
+            .and_then(|font| run_line_metrics(font, "").0)
+            .or(fallback_lhr);
+        last.pitch = Some(resolve_line_h(ls, mark_size, mark_lhr));
+    }
+}
+
 fn break_run_lhr(runs: &[Run], break_fs: f32, fonts: &HashMap<String, FontEntry>) -> Option<f32> {
     // Find the break run with the matching font size
     let br_run = runs
@@ -3356,23 +3404,7 @@ fn render_paragraph_block(
     // A grid or an exact rule gives every line the same box.
     if !grid_snapped && !matches!(effective_ls, LineSpacing::Exact(_)) {
         size_lines_by_own_runs(&mut lines, ctx.fonts, effective_ls, line_h, para_ascent, para.text_alignment == crate::model::TextAlignment::Top);
-        // A line holding only a w:br is as tall as the break run, wherever it
-        // falls: pasto's title opens with an unformatted <w:br/> (11pt) above
-        // its 12pt bold text, and Word steps 12.65 for that line, not 13.80.
-        for line in lines
-            .iter_mut()
-            .filter(|l| l.ends_with_break && l.pitch.is_none())
-        {
-            if let Some(bfs) = line.break_font_size {
-                let lhr = line
-                    .break_lhr
-                    .or_else(|| break_run_lhr(&effective_runs, bfs, ctx.fonts));
-                let pitch = resolve_line_h(effective_ls, bfs, lhr);
-                if (pitch - line_h).abs() > 0.01 {
-                    line.pitch = Some(pitch);
-                }
-            }
-        }
+        size_break_lines(&mut lines, &effective_runs, effective_ls, line_h, ctx.fonts);
     }
     let mut para_metrics = (
         para_ascent,
