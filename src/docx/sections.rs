@@ -1,8 +1,8 @@
 use std::io::{Read, Seek};
 
 use crate::model::{
-    ColumnDef, ColumnsConfig, DocGridType, HeaderFooter, LineNumberRestart, LineNumbering,
-    PageBorderDisplay, PageBorders, PageVerticalAlign, SectionBreakType, SectionProperties,
+    ColumnDef, ColumnsConfig, DocGridType, HeaderFooter, LineNumbering, PageBorderDisplay,
+    PageBorders, PageVerticalAlign, SectionBreakType, SectionProperties,
 };
 
 use super::headers_footers::parse_header_footer_xml;
@@ -151,13 +151,9 @@ pub(super) fn parse_section_properties<R: Read + Seek>(
             start: n
                 .attribute((WML_NS, "start"))
                 .and_then(|v| v.parse().ok())
+                .map(|s: i32| s + 1)
                 .unwrap_or(1),
             distance: twips_attr(n, "distance"),
-            restart: match n.attribute((WML_NS, "restart")) {
-                Some("continuous") => LineNumberRestart::Continuous,
-                Some("newSection") => LineNumberRestart::NewSection,
-                _ => LineNumberRestart::NewPage,
-            },
             // Word draws the numbers in the document's default run font, not
             // the line's: a contract in 12pt Times New Roman numbered in its
             // 10.5pt DengXian default. ponytail: a LineNumber style's own

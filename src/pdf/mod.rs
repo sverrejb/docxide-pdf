@@ -2591,12 +2591,10 @@ fn render_paragraph_block(
 
     // §17.6.8: per-section line-number config (None if disabled). Holds no borrow
     // of `state`, so each render call can freshly borrow the shared counter.
-    let ln_cfg: Option<(i32, u32, u32, f32)> = sp.line_numbering.as_ref().map(|ln| {
-        let continuous_offset = (ln.restart == crate::model::LineNumberRestart::Continuous) as u32;
+    let ln_cfg: Option<(i32, u32, f32)> = sp.line_numbering.as_ref().map(|ln| {
         (
             ln.start,
             ln.count_by,
-            continuous_offset,
             sp.margin_left - ln.distance.unwrap_or(18.0),
         )
     });
@@ -3936,16 +3934,13 @@ fn render_paragraph_block(
                 poly_line_geom.as_deref(),
                 &mut state.pb.gradient_specs,
                 Some(&mut state.pb.comment_anchors),
-                ln_cfg.map(
-                    |(start, count_by, continuous_offset, right_x)| LineNumberArg {
-                        counter: &mut state.line_number_counter,
-                        start,
-                        count_by,
-                        continuous_offset,
-                        right_x,
-                        font: ln_font.clone(),
-                    },
-                ),
+                ln_cfg.map(|(start, count_by, right_x)| LineNumberArg {
+                    counter: &mut state.line_number_counter,
+                    start,
+                    count_by,
+                    right_x,
+                    font: ln_font.clone(),
+                }),
                 Some(LinkTagger::new(
                     &mut state.pb.tags,
                     state.pb.all_contents.len(),
@@ -4085,16 +4080,13 @@ fn render_paragraph_block(
                     None,
                     &mut state.pb.gradient_specs,
                     Some(&mut state.pb.comment_anchors),
-                    ln_cfg.map(
-                        |(start, count_by, continuous_offset, right_x)| LineNumberArg {
-                            counter: &mut state.line_number_counter,
-                            start,
-                            count_by,
-                            continuous_offset,
-                            right_x,
-                            font: ln_font.clone(),
-                        },
-                    ),
+                    ln_cfg.map(|(start, count_by, right_x)| LineNumberArg {
+                        counter: &mut state.line_number_counter,
+                        start,
+                        count_by,
+                        right_x,
+                        font: ln_font.clone(),
+                    }),
                     Some(LinkTagger::new(
                         &mut state.pb.tags,
                         state.pb.all_contents.len(),
@@ -4640,16 +4632,13 @@ fn render_paragraph_block(
             poly_line_geom.as_deref(),
             &mut state.pb.gradient_specs,
             Some(&mut state.pb.comment_anchors),
-            ln_cfg.map(
-                |(start, count_by, continuous_offset, right_x)| LineNumberArg {
-                    counter: &mut state.line_number_counter,
-                    start,
-                    count_by,
-                    continuous_offset,
-                    right_x,
-                    font: ln_font.clone(),
-                },
-            ),
+            ln_cfg.map(|(start, count_by, right_x)| LineNumberArg {
+                counter: &mut state.line_number_counter,
+                start,
+                count_by,
+                right_x,
+                font: ln_font.clone(),
+            }),
             Some(LinkTagger::new(
                 &mut state.pb.tags,
                 state.pb.all_contents.len(),

@@ -3385,9 +3385,6 @@ pub(super) struct LineNumberArg<'a> {
     pub counter: &'a mut u32,
     pub start: i32,
     pub count_by: u32,
-    /// Word continues a `continuous`-restart section from `start` as if it were
-    /// the previous section's last line, so the first line shows `start + 1`.
-    pub continuous_offset: u32,
     /// Page-coordinate x of the right edge the (right-aligned) numbers end at.
     pub right_x: f32,
     /// The registered face (PDF name) and size of the numbers; None falls
@@ -3547,7 +3544,7 @@ pub(super) fn render_paragraph_lines(
         if let Some(ln) = line_numbering.as_mut() {
             let idx = *ln.counter;
             *ln.counter = idx + 1;
-            let value = ln.start + ln.continuous_offset as i32 + idx as i32;
+            let value = ln.start + idx as i32;
             let show = value >= 1 && (ln.count_by <= 1 || value % ln.count_by as i32 == 0);
             if show
                 && let Some((font, fs)) = ln.font.clone().or_else(|| {

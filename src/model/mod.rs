@@ -167,24 +167,15 @@ impl SectionProperties {
 pub struct LineNumbering {
     /// `@countBy` — show a number on every Nth line (default 1 = every line).
     pub count_by: u32,
-    /// `@start` — starting line-number value (default 1).
+    /// The first line's number: `@start` + 1, Word's `@start` being the count
+    /// before the first line (probe: omitted shows 1, start="3" shows 4).
     pub start: i32,
     /// `@distance` (points) from the text margin to the numbers; `None` = Word's
     /// auto default of 0.25".
     pub distance: Option<f32>,
-    /// `@restart` — when the counter resets (ST_LineNumberRestart §17.18.47).
-    pub restart: LineNumberRestart,
     /// The face and size the numbers are drawn in: the document defaults.
     pub font_name: String,
     pub font_size: f32,
-}
-
-#[derive(Clone, Copy, Default, PartialEq)]
-pub enum LineNumberRestart {
-    #[default]
-    NewPage,
-    NewSection,
-    Continuous,
 }
 
 /// §17.6.23 ST_VerticalJc — how the section's body content is positioned
