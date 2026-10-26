@@ -4191,6 +4191,30 @@
     "a11y_struct": 0.375,
     "a11y_text": 1.0
   },
+  "cases/hyphen-segment-budget-control": {
+    "jaccard": 0.5213,
+    "ssim": 0.8714
+  },
+  "cases/hyphen-segment-left-control": {
+    "jaccard": 0.5201,
+    "ssim": 0.8739
+  },
+  "cases/hyphen-segment-space-squeeze": {
+    "jaccard": 0.5064,
+    "ssim": 0.8809
+  },
+  "cases/hyphen-squeeze-and-or": {
+    "jaccard": 0.6261,
+    "ssim": 0.8202
+  },
+  "cases/hyphen-squeeze-middle-segment": {
+    "jaccard": 0.6382,
+    "ssim": 0.8407
+  },
+  "cases/hyphen-squeeze-single-letter": {
+    "jaccard": 0.6186,
+    "ssim": 0.8211
+  },
   "cases/inline-canvas-header-width300-tab0-effect0-following0": {
     "jaccard": 0.9968,
     "ssim": 0.995,
@@ -4891,6 +4915,26 @@
     "a11y_struct": 0.4,
     "a11y_text": 1.0
   },
+  "cases/mixed-code-suffix-budget": {
+    "jaccard": 0.8748,
+    "ssim": 0.9488
+  },
+  "cases/mixed-code-suffix-cyrillic": {
+    "jaccard": 0.8193,
+    "ssim": 0.9382
+  },
+  "cases/mixed-code-suffix-intermediate": {
+    "jaccard": 0.8398,
+    "ssim": 0.9425
+  },
+  "cases/mixed-code-suffix-latin": {
+    "jaccard": 0.8425,
+    "ssim": 0.9446
+  },
+  "cases/mixed-code-suffix-split": {
+    "jaccard": 0.8425,
+    "ssim": 0.9446
+  },
   "cases/modern-oversized-lines5-cant1-prefix0": {
     "jaccard": 0.7441,
     "ssim": 0.9224,
@@ -5490,6 +5534,50 @@
     "ua_deficit": 0,
     "a11y_struct": 0.6429,
     "a11y_text": 1.0
+  },
+  "cases/numeric-slash-suffix-s0-c14-b-sm": {
+    "jaccard": 0.836,
+    "ssim": 0.975
+  },
+  "cases/numeric-slash-suffix-s0-c15-b-lg": {
+    "jaccard": 0.8504,
+    "ssim": 0.9723
+  },
+  "cases/numeric-slash-suffix-s0-c15-b-sm": {
+    "jaccard": 0.867,
+    "ssim": 0.9508
+  },
+  "cases/numeric-slash-suffix-s0-c15-l-sm": {
+    "jaccard": 0.8114,
+    "ssim": 0.9561
+  },
+  "cases/numeric-slash-suffix-s1-c15-b-sm": {
+    "jaccard": 0.8934,
+    "ssim": 0.9626
+  },
+  "cases/numeric-slash-suffix-s2-c15-b-sm": {
+    "jaccard": 0.8879,
+    "ssim": 0.9659
+  },
+  "cases/numeric-suffix-budget-control": {
+    "jaccard": 0.5695,
+    "ssim": 0.9235
+  },
+  "cases/numeric-suffix-final-five": {
+    "jaccard": 0.4899,
+    "ssim": 0.8519
+  },
+  "cases/numeric-suffix-final-four": {
+    "jaccard": 0.478,
+    "ssim": 0.8359
+  },
+  "cases/numeric-suffix-short-final": {
+    "jaccard": 0.484,
+    "ssim": 0.8342
+  },
+  "cases/numeric-suffix-split-final": {
+    "jaccard": 0.4899,
+    "ssim": 0.8519
   },
   "cases/page-header-frame-marker": {
     "jaccard": 0.9102,
@@ -6330,6 +6418,14 @@
     "ua_deficit": 0,
     "a11y_struct": 1.0,
     "a11y_text": 1.0
+  },
+  "cases/squeeze-threshold-after-hyphen": {
+    "jaccard": 0.6168,
+    "ssim": 0.7993
+  },
+  "cases/squeeze-threshold-after-space": {
+    "jaccard": 0.6242,
+    "ssim": 0.8136
   },
   "cases/standalone-picture-compat12-angle0-center0": {
     "jaccard": 0.9305,
@@ -7210,8 +7306,8 @@
     "a11y_text": 0.9969
   },
   "scraped/auditor_regulatory_report_template": {
-    "jaccard": 0.5958,
-    "ssim": 0.8118,
+    "jaccard": 0.6141,
+    "ssim": 0.8277,
     "text_boundary": 0.9565,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -7270,8 +7366,8 @@
     "a11y_text": 0.9937
   },
   "scraped/brazilian_logistics_study": {
-    "jaccard": 0.7604,
-    "ssim": 0.9137,
+    "jaccard": 0.7761,
+    "ssim": 0.9303,
     "text_boundary": 0.9638,
     "convert_ms": 744.0,
     "ua_fail": 3,
@@ -7432,8 +7528,8 @@
     "ssim": 0.9172
   },
   "scraped/covid_insomnia_mental_health": {
-    "jaccard": 0.4735,
-    "ssim": 0.7222,
+    "jaccard": 0.4724,
+    "ssim": 0.7202,
     "text_boundary": 0.5771,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -7442,8 +7538,8 @@
     "a11y_text": 0.9895
   },
   "scraped/croatian_grant_guidelines": {
-    "jaccard": 0.4667,
-    "ssim": 0.6686,
+    "jaccard": 0.462,
+    "ssim": 0.6616,
     "text_boundary": 0.7491,
     "convert_ms": 270.5,
     "ua_fail": 2,
@@ -7523,8 +7619,8 @@
     "ssim": 0.867
   },
   "scraped/czech_crisis_measure_notice": {
-    "jaccard": 0.7697,
-    "ssim": 0.9321,
+    "jaccard": 0.7753,
+    "ssim": 0.9365,
     "text_boundary": 0.9925,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -7594,8 +7690,8 @@
     "ssim": 0.9537
   },
   "scraped/czech_wastewater_discharge_permit": {
-    "jaccard": 0.5928,
-    "ssim": 0.8126,
+    "jaccard": 0.6035,
+    "ssim": 0.8236,
     "text_boundary": 0.9451,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -7604,8 +7700,8 @@
     "a11y_text": 0.9962
   },
   "scraped/czech_works_contract_proposal": {
-    "jaccard": 0.6823,
-    "ssim": 0.855,
+    "jaccard": 0.6917,
+    "ssim": 0.8633,
     "text_boundary": 0.9802,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -7634,8 +7730,8 @@
     "a11y_text": 1.0
   },
   "scraped/dialysis_treatment_transition_guide": {
-    "jaccard": 0.7681,
-    "ssim": 0.882,
+    "jaccard": 0.8157,
+    "ssim": 0.9239,
     "text_boundary": 0.9259,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -7723,8 +7819,8 @@
     "a11y_text": 0.7072
   },
   "scraped/english_town_council_report": {
-    "jaccard": 0.818,
-    "ssim": 0.9079,
+    "jaccard": 0.8224,
+    "ssim": 0.9115,
     "text_boundary": 0.9543,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -7733,8 +7829,8 @@
     "a11y_text": 1.0
   },
   "scraped/environmental_law_clinic_china": {
-    "jaccard": 0.5319,
-    "ssim": 0.7626,
+    "jaccard": 0.6492,
+    "ssim": 0.9096,
     "text_boundary": 0.7985,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -7743,8 +7839,8 @@
     "a11y_text": 0.9905
   },
   "scraped/erasmus_plus_staff_mobility_agreement": {
-    "jaccard": 0.7246,
-    "ssim": 0.8897,
+    "jaccard": 0.7444,
+    "ssim": 0.9109,
     "text_boundary": 0.9569,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -7799,8 +7895,8 @@
     "a11y_text": 0.9805
   },
   "scraped/french_lease_early_termination_form": {
-    "jaccard": 0.5605,
-    "ssim": 0.8474,
+    "jaccard": 0.5746,
+    "ssim": 0.8702,
     "text_boundary": 0.96,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -7869,8 +7965,8 @@
     "a11y_text": 1.0
   },
   "scraped/indigenous_innovation_sandbox_agreement": {
-    "jaccard": 0.6992,
-    "ssim": 0.864,
+    "jaccard": 0.7145,
+    "ssim": 0.877,
     "text_boundary": 0.9416,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -7900,8 +7996,8 @@
     "a11y_text": 0.9279
   },
   "scraped/international_terrorism_thesis": {
-    "jaccard": 0.6261,
-    "ssim": 0.8866,
+    "jaccard": 0.6547,
+    "ssim": 0.9252,
     "text_boundary": 0.8497,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -7948,8 +8044,8 @@
     "ssim": 0.9304
   },
   "scraped/italian_evaluation_minutes": {
-    "jaccard": 0.7575,
-    "ssim": 0.8908,
+    "jaccard": 0.7628,
+    "ssim": 0.8974,
     "text_boundary": 0.9917,
     "convert_ms": 115.1,
     "ua_fail": 2,
@@ -8272,8 +8368,8 @@
     "a11y_text": 0.9562
   },
   "scraped/polish_ministry_accessibility_report": {
-    "jaccard": 0.5538,
-    "ssim": 0.8614,
+    "jaccard": 0.5673,
+    "ssim": 0.8763,
     "text_boundary": 0.8146,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -8324,8 +8420,8 @@
     "a11y_text": 1.0
   },
   "scraped/premises_approval_registration_form": {
-    "jaccard": 0.7121,
-    "ssim": 0.9035,
+    "jaccard": 0.7262,
+    "ssim": 0.9158,
     "text_boundary": 0.9208,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -8413,8 +8509,8 @@
     "a11y_text": 1.0
   },
   "scraped/russian_municipal_council_draft": {
-    "jaccard": 0.7547,
-    "ssim": 0.9211,
+    "jaccard": 0.7724,
+    "ssim": 0.9374,
     "text_boundary": 0.9348,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -8634,8 +8730,8 @@
     "a11y_text": 1.0
   },
   "scraped/strategi_pengembangan_information_center_resort": {
-    "jaccard": 0.6589,
-    "ssim": 0.8788,
+    "jaccard": 0.6616,
+    "ssim": 0.8826,
     "text_boundary": 0.9914,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -8655,7 +8751,7 @@
   },
   "scraped/swiss_materials_extraction_zone_guidance": {
     "jaccard": 0.333,
-    "ssim": 0.5311
+    "ssim": 0.5312
   },
   "scraped/taiwanese_education_fraud_ruling": {
     "jaccard": 0.4938,
@@ -8746,8 +8842,8 @@
     "a11y_text": 1.0
   },
   "scraped/uk_commercial_lease_template": {
-    "jaccard": 0.2719,
-    "ssim": 0.4275,
+    "jaccard": 0.276,
+    "ssim": 0.4336,
     "text_boundary": 0.2551,
     "convert_ms": 326.3,
     "ua_fail": 0,
