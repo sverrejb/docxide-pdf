@@ -96,7 +96,7 @@ fn downscale_target(
 /// mapping LibreOffice uses for its DrawingML import; Word's exact curve is
 /// undocumented, but this reproduces the washed-out stamp on
 /// italian_evaluation_minutes p7 (annotation #229).
-fn apply_lum(samples: &mut [u8], bright: f32, contrast: f32) {
+pub(super) fn apply_lum(samples: &mut [u8], bright: f32, contrast: f32) {
     let c = contrast.clamp(-1.0, 1.0) * 127.0;
     let scale = if c >= 0.0 {
         128.0 / (128.0 - c)
@@ -522,7 +522,9 @@ fn embed_image_xobject(
             // Translate EMF records into a PDF Form XObject. The xobj_ref we
             // already allocated is unused — emf_to_form_xobject allocates its
             // own — so map the slot to the Form XObject ref instead.
-            if let Some(form_ref) = super::emf::emf_to_form_xobject(&img.data, pdf, alloc, fonts) {
+            if let Some(form_ref) =
+                super::emf::emf_to_form_xobject(&img.data, pdf, alloc, fonts, img.lum)
+            {
                 return form_ref;
             }
             // Conversion failed — register the wasted ref so it still maps to

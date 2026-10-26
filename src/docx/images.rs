@@ -401,7 +401,8 @@ pub(super) fn read_image_from_zip_extra<R: Read + Seek>(
     if super::wmf::is_wmf(&data) {
         data = match super::wmf::embedded_emf(&data) {
             Some(emf) => emf,
-            None => super::wmf::wmf_to_raster(&data)?,
+            None => super::wmf::wmf_to_raster(&data)
+                .or_else(|| super::wmf::wmf_to_emf(&data))?,
         };
     }
     if let Some(bmp) = super::emf::emf_to_raster(&data) {

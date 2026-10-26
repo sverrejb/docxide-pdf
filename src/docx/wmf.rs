@@ -324,3 +324,212 @@ mod tests {
         assert_eq!(file_size as usize, bmp.len());
     }
 }
+
+/// Translate a vector WMF (polygons, pens and brushes) into an EMF byte
+/// stream for the EMF translator: the stamp in swiss_materials' header is 47
+/// `META_POLYPOLYGON`s, which Word rasterises. Returns `None` when no record
+/// paints. ponytail: text, arcs and bitmaps in vector WMFs stay undrawn.
+pub(super) fn wmf_to_emf(data: &[u8]) -> Option<Vec<u8>> {
+    let i16_at = |o: usize| i16::from_le_bytes(data[o..o + 2].try_into().unwrap()) as i32;
+    let (skip, bbox, units_per_inch) = if data.starts_with(&PLACEABLE_MAGIC) {
+        if data.len() < 40 {
+            return None;
+        }
+        let upi = u16::from_le_bytes(data[14..16].try_into().unwrap()) as i32;
+        (40, Some((i16_at(6), i16_at(8), i16_at(10), i16_at(12))), upi.max(1))
+    } else if data.starts_with(&STANDARD_MAGIC) {
+        (18, None, 96)
+    } else {
+        return None;
+    };
+
+    let mut recs: Vec<Vec<u8>> = Vec::new();
+    let rec = |ty: u32, body: &[u32]| -> Vec<u8> {
+        let mut v = Vec::with_capacity(8 + body.len() * 4);
+        v.extend_from_slice(&ty.to_le_bytes());
+        v.extend_from_slice(&((8 + body.len() * 4) as u32).to_le_bytes());
+        for w in body {
+            v.extend_from_slice(&w.to_le_bytes());
+        }
+        v
+    };
+    // WMF objects take the first free slot; EMF handles are numbered from 1.
+    let mut slots: Vec<Option<u32>> = Vec::new();
+    let mut next_handle = 1u32;
+    let mut alloc = |slots: &mut Vec<Option<u32>>| -> u32 {
+        let h = next_handle;
+        next_handle += 1;
+        match slots.iter().position(Option::is_none) {
+            Some(i) => slots[i] = Some(h),
+            None => slots.push(Some(h)),
+        }
+        h
+    };
+    let mut window: (Option<(i32, i32)>, Option<(i32, i32)>) = (None, None);
+    let mut painted = false;
+    // META_SETROP2 R2_NOP (11) draws nothing: bulgarian_farmland's emblem
+    // first lays its silhouette under R2_NOP, then the real figure.
+    let mut rop2_nop = false;
+    let mut i = skip;
+    while i + 6 <= data.len() {
+        let size_bytes = (u32::from_le_bytes(data[i..i + 4].try_into().ok()?) as usize).checked_mul(2)?;
+        let func = u16::from_le_bytes(data[i + 4..i + 6].try_into().ok()?);
+        if size_bytes < 6 || i + size_bytes > data.len() {
+            return None;
+        }
+        let p = &data[i + 6..i + size_bytes];
+        let pi = |k: usize| -> Option<i32> {
+            p.get(2 * k..2 * k + 2)
+                .map(|s| i16::from_le_bytes(s.try_into().unwrap()) as i32)
+        };
+        let pu32 = |o: usize| -> Option<u32> {
+            p.get(o..o + 4).map(|s| u32::from_le_bytes(s.try_into().unwrap()))
+        };
+        let path = |recs: &mut Vec<Vec<u8>>, polys: &[&[(i32, i32)]], close: bool| {
+            recs.push(rec(59, &[]));
+            for pts in polys {
+                for (k, (x, y)) in pts.iter().enumerate() {
+                    recs.push(rec(if k == 0 { 27 } else { 54 }, &[*x as u32, *y as u32]));
+                }
+                if close {
+                    recs.push(rec(61, &[]));
+                }
+            }
+            recs.push(rec(60, &[]));
+            recs.push(rec(if close { 63 } else { 64 }, &[0, 0, 0, 0]));
+        };
+        match func {
+            0x0000 => break,
+            // META_SETWINDOWORG / EXT: parameters are (y, x).
+            0x020b => {
+                let (y, x) = (pi(0)?, pi(1)?);
+                window.0 = Some((x, y));
+                recs.push(rec(10, &[x as u32, y as u32]));
+            }
+            0x020c => {
+                let (y, x) = (pi(0)?, pi(1)?);
+                window.1 = Some((x, y));
+                recs.push(rec(9, &[x as u32, y as u32]));
+            }
+            0x0106 => recs.push(rec(19, &[pi(0)? as u32])),
+            0x0104 => rop2_nop = pi(0)? == 11,
+            0x02fc => {
+                let h = alloc(&mut slots);
+                recs.push(rec(39, &[h, pi(0)? as u32, pu32(2)?, pi(3)? as u32]));
+            }
+            0x02fa => {
+                let h = alloc(&mut slots);
+                // A width-0 pen is a device hairline; Word's export of these
+                // pictures draws no outline at all (bulgarian_farmland's
+                // emblem lost its white detail under 1pt strokes), so it is null.
+                let (style, width) = (pi(0)?, pi(1)?);
+                let style = if width == 0 { 5 } else { style };
+                recs.push(rec(38, &[h, style as u32, width as u32, pi(2)? as u32, pu32(6)?]));
+            }
+            // Other object kinds still take a slot.
+            0x02fb | 0x0142 | 0x01f9 | 0x0322 | 0x0b23 => {
+                alloc(&mut slots);
+            }
+            0x012d => {
+                if let Some(Some(h)) = slots.get(pi(0)? as usize) {
+                    recs.push(rec(37, &[*h]));
+                }
+            }
+            0x01f0 => {
+                let s = pi(0)? as usize;
+                if let Some(Some(h)) = slots.get(s) {
+                    recs.push(rec(40, &[*h]));
+                    slots[s] = None;
+                }
+            }
+            0x0538 if rop2_nop => {}
+            0x0324 | 0x0325 if rop2_nop => {}
+            0x0538 => {
+                let n = pi(0)? as usize;
+                let counts: Vec<usize> = (0..n).map(|k| pi(1 + k).map(|c| c as usize)).collect::<Option<_>>()?;
+                let mut at = 1 + n;
+                let mut polys: Vec<Vec<(i32, i32)>> = Vec::new();
+                for c in counts {
+                    let pts = (0..c)
+                        .map(|k| Some((pi(at + 2 * k)?, pi(at + 2 * k + 1)?)))
+                        .collect::<Option<Vec<_>>>()?;
+                    at += 2 * c;
+                    polys.push(pts);
+                }
+                let refs: Vec<&[(i32, i32)]> = polys.iter().map(Vec::as_slice).collect();
+                path(&mut recs, &refs, true);
+                painted = true;
+            }
+            0x0324 | 0x0325 => {
+                let c = pi(0)? as usize;
+                let pts = (0..c)
+                    .map(|k| Some((pi(1 + 2 * k)?, pi(2 + 2 * k)?)))
+                    .collect::<Option<Vec<_>>>()?;
+                path(&mut recs, &[pts.as_slice()], func == 0x0324);
+                painted = true;
+            }
+            _ => {}
+        }
+        i += size_bytes;
+    }
+    if !painted {
+        return None;
+    }
+    // Logical units are device units: the placeable box (or the window) is
+    // the frame, mapped 1:1.
+    let (l, t, r, b) = bbox.or_else(|| {
+        let (ox, oy) = window.0.unwrap_or((0, 0));
+        let (ex, ey) = window.1?;
+        Some((ox, oy, ox + ex, oy + ey))
+    })?;
+    let (w, h) = (r - l, b - t);
+    if w <= 0 || h <= 0 {
+        return None;
+    }
+    // The window maps onto the frame: a 1000-unit window on a 763-unit box
+    // scales down (bulgarian_farmland's emblem drew 20x too large without).
+    if window.1.is_some() {
+        recs.insert(0, rec(11, &[w as u32, h as u32]));
+        recs.insert(1, rec(12, &[0, 0]));
+    }
+    recs.push(rec(14, &[0, 16, 20]));
+    let body_len: usize = recs.iter().map(Vec::len).sum();
+    let mm = |v: i32| (v as f64 * 25.4 / units_per_inch as f64).round() as i32;
+    let header: Vec<u32> = vec![
+        1,
+        108,
+        l as u32,
+        t as u32,
+        (r - 1) as u32,
+        (b - 1) as u32,
+        0,
+        0,
+        (w as f64 * 2540.0 / units_per_inch as f64) as u32,
+        (h as f64 * 2540.0 / units_per_inch as f64) as u32,
+        0x464D4520,
+        0x10000,
+        (108 + body_len) as u32,
+        (recs.len() + 1) as u32,
+        (next_handle & 0xffff) | 0u32,
+        0,
+        0,
+        0,
+        w as u32,
+        h as u32,
+        mm(w).max(1) as u32,
+        mm(h).max(1) as u32,
+        0,
+        0,
+        0,
+        (mm(w).max(1) * 1000) as u32,
+        (mm(h).max(1) * 1000) as u32,
+    ];
+    let mut out = Vec::with_capacity(108 + body_len);
+    for v in header {
+        out.extend_from_slice(&v.to_le_bytes());
+    }
+    for r in recs {
+        out.extend_from_slice(&r);
+    }
+    Some(out)
+}

@@ -117,7 +117,12 @@ struct Translator<'a> {
     fonts: &'a HashMap<String, FontEntry>,
     /// PDF font name → font object, for the form's resources.
     used_fonts: BTreeMap<String, Ref>,
+    /// `a:lum` brightness/contrast, applied to every colour the metafile
+    /// sets (Word recolours the rasterised picture; swiss_materials' stamp
+    /// is drawn light grey).
+    lum: Option<(f32, f32)>,
 }
+
 
 /// Translate an EMF byte stream into a PDF Form XObject. Returns the
 /// allocated Ref, or `None` if the input isn't a parseable EMF. Text draws
@@ -127,6 +132,7 @@ pub(super) fn emf_to_form_xobject(
     pdf: &mut Pdf,
     alloc: &mut impl FnMut() -> Ref,
     fonts: &HashMap<String, FontEntry>,
+    lum: Option<(f32, f32)>,
 ) -> Option<Ref> {
     let header = parse_header(emf)?;
     let bounds_size = header.bounds_size();
@@ -143,6 +149,7 @@ pub(super) fn emf_to_form_xobject(
         content: Content::new(),
         fonts,
         used_fonts: BTreeMap::new(),
+        lum,
     };
     for_each_record(emf, |rec| {
         t.record(rec);
@@ -167,6 +174,15 @@ pub(super) fn emf_to_form_xobject(
 impl Translator<'_> {
     fn record(&mut self, rec: &EmfRecord) {
         use EmfRecord::*;
+        let lum = self.lum;
+        let lum_color = |c: [u8; 3]| -> [u8; 3] {
+            let Some((bright, contrast)) = lum else {
+                return c;
+            };
+            let mut c = c;
+            super::images::apply_lum(&mut c, bright, contrast);
+            c
+        };
         let state = &mut self.state;
         match rec {
             Header | Eof | Skip => {}
@@ -176,7 +192,7 @@ impl Translator<'_> {
             SetWindowExtEx(x, y) => state.window_ext = ((*x).max(1), (*y).max(1)),
             SetViewportOrgEx(x, y) => state.viewport_org = (*x, *y),
             SetViewportExtEx(x, y) => state.viewport_ext = ((*x).max(1), (*y).max(1)),
-            SetTextColor(c) => state.text_color = *c,
+            SetTextColor(c) => state.text_color = lum_color(*c),
             SetTextAlign(a) => state.text_align = *a,
             SaveDc => {
                 self.stack.push(state.clone());
@@ -189,7 +205,8 @@ impl Translator<'_> {
                 self.content.restore_state();
             }
             CreateBrushIndirect { handle, color } => {
-                self.objects.insert(*handle, EmfObject::Brush(*color));
+                let color = color.map(lum_color);
+                self.objects.insert(*handle, EmfObject::Brush(color));
             }
             CreatePen {
                 handle,
@@ -197,7 +214,7 @@ impl Translator<'_> {
                 width,
             } => {
                 self.objects
-                    .insert(*handle, EmfObject::Pen(color.map(|c| (c, *width))));
+                    .insert(*handle, EmfObject::Pen(color.map(|c| (lum_color(c), *width))));
             }
             CreateFont {
                 handle,
