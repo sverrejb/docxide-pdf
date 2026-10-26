@@ -19,6 +19,64 @@ pub(super) fn label_font_key(para: &Paragraph) -> Option<String> {
     })
 }
 
+/// The label split by font: East Asian characters go in the paragraph mark's
+/// East Asian font, like run text (Word draws "第 1 章" in SimSun around a
+/// Times New Roman "1"). Spaces stay with the text before them.
+pub(super) fn label_pieces(para: &Paragraph) -> Vec<(Option<String>, &str)> {
+    let key = label_font_key(para);
+    let label = para.list_label.as_str();
+    let Some(ea) = para.list_label_east_asia_font.as_deref() else {
+        return vec![(key, label)];
+    };
+    let ea_key = Some(font_key_for(
+        ea,
+        para.list_label_bold,
+        para.list_label_italic,
+    ));
+    if ea_key == key {
+        return vec![(key, label)];
+    }
+    let piece_key = |is_ea: bool| if is_ea { ea_key.clone() } else { key.clone() };
+    let mut pieces = Vec::new();
+    let (mut start, mut in_ea) = (0, false);
+    for (i, c) in label.char_indices() {
+        let is_ea = if c.is_whitespace() {
+            in_ea
+        } else {
+            crate::docx::is_east_asian_char(c)
+        };
+        if i > 0 && is_ea != in_ea {
+            pieces.push((piece_key(in_ea), &label[start..i]));
+            start = i;
+        }
+        in_ea = is_ea;
+    }
+    pieces.push((piece_key(in_ea), &label[start..]));
+    pieces
+}
+
+/// Shows a label of several fonts in an open text object, ending with a
+/// space like `encode_label`.
+pub(super) fn show_label_pieces<S: AsRef<str>>(
+    content: &mut Content,
+    pieces: &[(Option<String>, S)],
+    fonts: &HashMap<String, FontEntry>,
+    size: f32,
+) {
+    for (i, (key, text)) in pieces.iter().enumerate() {
+        let Some(entry) = key.as_deref().and_then(|k| fonts.get(k)) else {
+            continue;
+        };
+        let mut bytes = entry.encode(text.as_ref());
+        if i + 1 == pieces.len() && entry.has_char(' ') {
+            bytes.extend(entry.encode(" "));
+        }
+        content
+            .set_font(Name(entry.pdf_name.as_bytes()), size)
+            .show(Str(&bytes));
+    }
+}
+
 /// Symbol-font PUA bullet codepoints map to Unicode equivalents that any
 /// general-purpose font can render. When the labeled font is missing or
 /// can't encode the PUA char, fall back to these.
@@ -104,6 +162,22 @@ pub(super) fn render_list_label(
     if para.list_label.is_empty() {
         return;
     }
+    let pieces = label_pieces(para);
+    if pieces.len() > 1 && !para.bidi {
+        let label_fs = para.list_label_font_size.unwrap_or(fallback_font_size);
+        if let Some(c) = para.list_label_color {
+            fill_rgb(content, c);
+        }
+        content
+            .begin_text()
+            .next_line(label_x + label_shift(para, fonts), baseline_y);
+        show_label_pieces(content, &pieces, fonts, label_fs);
+        content.end_text();
+        if para.list_label_color.is_some() {
+            content.set_fill_gray(0.0);
+        }
+        return;
+    }
     let (entry, label_bytes) = label_for_paragraph(para, fonts).unzip();
     let label_bytes = label_bytes.unwrap_or_default();
     let label_font_name = entry.map_or("", |e| e.pdf_name.as_str());
@@ -131,15 +205,23 @@ pub(super) fn render_list_label(
 }
 
 fn label_width(para: &Paragraph, fonts: &HashMap<String, FontEntry>) -> f32 {
-    label_text_width(para, fonts, &para.list_label)
+    label_pieces(para)
+        .into_iter()
+        .map(|(key, text)| label_text_width(para, fonts, key, text))
+        .sum()
 }
 
 fn label_space_width(para: &Paragraph, fonts: &HashMap<String, FontEntry>) -> f32 {
-    label_text_width(para, fonts, " ")
+    label_text_width(para, fonts, label_font_key(para), " ")
 }
 
-fn label_text_width(para: &Paragraph, fonts: &HashMap<String, FontEntry>, text: &str) -> f32 {
-    let entry = label_font_key(para).and_then(|k| fonts.get(&k));
+fn label_text_width(
+    para: &Paragraph,
+    fonts: &HashMap<String, FontEntry>,
+    key: Option<String>,
+    text: &str,
+) -> f32 {
+    let entry = key.and_then(|k| fonts.get(&k));
     let size = para
         .list_label_font_size
         .unwrap_or_else(|| para.runs.first().map_or(11.0, |r| r.font_size));

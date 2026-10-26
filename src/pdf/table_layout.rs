@@ -774,7 +774,8 @@ pub(super) struct CellParagraphLayout {
     /// of this paragraph on each side; earlier layout lets a row start with one.
     pub(super) two_line_widow: bool,
     pub(super) list_label: String,
-    pub(super) label_font_key: Option<String>,
+    /// The label by font (`list_label::label_pieces`), empty without one.
+    pub(super) label_pieces: Vec<(Option<String>, String)>,
     pub(super) label_font_size: f32,
     /// For L/LI tagging inside the cell.
     pub(super) list_item: Option<crate::model::ListItem>,
@@ -1753,9 +1754,14 @@ pub(super) fn compute_row_layouts(
                                     two_line_widow: ctx.compat_mode >= 15 && (para.widow_control || row_keeps_next),
                                     list_label: para.list_label.clone(),
                                     sole_formula: super::sole_formula(para),
-                                    label_font_key: (!para.list_label.is_empty())
-                                        .then(|| super::list_label::label_font_key(para))
-                                        .flatten(),
+                                    label_pieces: if para.list_label.is_empty() {
+                                        Vec::new()
+                                    } else {
+                                        super::list_label::label_pieces(para)
+                                            .into_iter()
+                                            .map(|(k, t)| (k, t.to_string()))
+                                            .collect()
+                                    },
                                     label_font_size: para.list_label_font_size.unwrap_or(font_size),
                                     list_item: para.list_item,
                                     label_color: para.list_label_color,

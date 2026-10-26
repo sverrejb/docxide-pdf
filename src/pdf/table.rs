@@ -1369,7 +1369,26 @@ fn draw_cell_label(
     baseline_y: f32,
     fonts: &HashMap<String, FontEntry>,
 ) {
-    let Some(entry) = para.label_font_key.as_deref().and_then(|k| fonts.get(k)) else {
+    if para.label_pieces.len() > 1 {
+        if let Some(c) = para.label_color {
+            fill_rgb(content, c);
+        }
+        content
+            .begin_text()
+            .next_line(label_x + para.label_shift, baseline_y);
+        super::list_label::show_label_pieces(content, &para.label_pieces, fonts, para.label_font_size);
+        content.end_text();
+        if para.label_color.is_some() {
+            content.set_fill_gray(0.0);
+        }
+        return;
+    }
+    let Some(entry) = para
+        .label_pieces
+        .first()
+        .and_then(|(k, _)| k.as_deref())
+        .and_then(|k| fonts.get(k))
+    else {
         return;
     };
     let bytes = super::list_label::encode_label(entry, &para.list_label)

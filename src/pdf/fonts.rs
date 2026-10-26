@@ -6,7 +6,8 @@ use crate::fonts::{FontContext, FontEntry, font_key_buf, register_font};
 use crate::model::{Block, Document, FieldCode, IfPart, ImageFormat, Paragraph, Run};
 
 use super::header_footer::hf_paragraphs;
-use super::{collect_paras, label_font_key, para_runs_with_textboxes};
+use super::list_label::label_pieces;
+use super::{collect_paras, para_runs_with_textboxes};
 
 /// The font keys the comment pane draws with: the comment text in the body
 /// font, the "Commented [Rn]:" label in its bold variant. Aptos or Calibri
@@ -183,10 +184,12 @@ fn collect_used_chars(
     for para in &all_paras {
         if !para.list_label.is_empty() {
             // With the space `encode_label` ends the label with.
-            if let Some(key) = label_font_key(para) {
-                let chars = used.entry(key).or_default();
-                chars.extend(para.list_label.chars());
-                chars.insert(' ');
+            for (key, text) in label_pieces(para) {
+                if let Some(key) = key {
+                    let chars = used.entry(key).or_default();
+                    chars.extend(text.chars());
+                    chars.insert(' ');
+                }
             }
             // The label may fall back to the surrounding body font when the
             // labeled font (e.g. Symbol) can't render a PUA bullet char. Make

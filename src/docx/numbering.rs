@@ -42,6 +42,7 @@ pub(super) struct ListLabelInfo {
     pub(super) tab_stop: Option<f32>,
     pub(super) label: String,
     pub(super) font: Option<String>,
+    pub(super) east_asia_font: Option<String>,
     pub(super) font_size: Option<f32>,
     pub(super) bold: bool,
     pub(super) italic: bool,
@@ -703,6 +704,7 @@ pub(super) fn parse_list_info(
             .label_font
             .clone()
             .or_else(|| mark.map(|m| m.font_name.clone())),
+        east_asia_font: mark.and_then(|m| m.east_asia_font_name.clone()),
         font_size: def.label_font_size.or(mark.map(|m| m.font_size)),
         bold: def.label_bold.unwrap_or(mark.is_some_and(|m| m.bold)),
         italic: def.label_italic.unwrap_or(mark.is_some_and(|m| m.italic)),

@@ -481,6 +481,8 @@ pub struct Paragraph {
     pub indent_first_line: f32,
     pub list_label: String,
     pub list_label_font: Option<String>,
+    /// The font the label's East Asian characters are drawn in.
+    pub list_label_east_asia_font: Option<String>,
     pub list_label_font_size: Option<f32>,
     pub list_label_bold: bool,
     pub list_label_italic: bool,
