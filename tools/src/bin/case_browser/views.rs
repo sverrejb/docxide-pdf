@@ -453,7 +453,7 @@ pub fn show_image_static(
     if !path.exists() {
         ui.allocate_ui(egui::vec2(max_w, max_h), |ui| {
             ui.centered_and_justified(|ui| {
-                ui.weak("Not rendered.\nRun: cargo test --test libreoffice_comparison");
+                ui.weak("Not rendered.\nRun: cargo test --test suite libreoffice_comparison");
             });
         });
         return;

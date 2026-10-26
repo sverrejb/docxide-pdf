@@ -1,6 +1,6 @@
-mod common;
+use crate::common;
 
-use common::{compare_and_diff, ssim_score};
+use crate::common::{compare_and_diff, ssim_score};
 use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};

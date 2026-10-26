@@ -1,9 +1,9 @@
-mod common;
+use crate::common;
 
 use std::collections::HashMap;
 use std::time::Instant;
 
-use common::Baselines;
+use crate::common::Baselines;
 
 /// Allowed regression factor for per-fixture timing.
 /// A fixture that previously took 100ms can take up to 150ms before flagging.

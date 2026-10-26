@@ -57,7 +57,7 @@ pub fn regen(root: &Path, case: &CaseInfo) -> std::io::Result<Job> {
     // Force a fresh conversion — ensure_generated_pdf otherwise skips on mtime.
     let _ = std::fs::remove_file(case.dir.join("generated.pdf"));
     let child = Command::new("cargo")
-        .args(["test", "--test", "visual_comparison", "--", "--nocapture"])
+        .args(["test", "--test", "suite", "--", "--nocapture", "visual_comparison"])
         .env("DOCXIDE_CASE", name)
         .env("DOCXIDE_GROUP", group)
         .current_dir(root)

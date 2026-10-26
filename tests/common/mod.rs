@@ -6,6 +6,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{fs, io};
 
@@ -142,11 +143,16 @@ fn round4(v: f64) -> f64 {
     (v * 10000.0).round() / 10000.0
 }
 
+/// The suites run as threads of one process, so their read-modify-write of the latest
+/// scores and hashes must not interleave.
+static LATEST_LOCK: Mutex<()> = Mutex::new(());
+
 /// Write scores from the current test run to tests/output/latest_scores.json.
 /// Merges per-field so different tests (visual, text_boundary, speed) can each
 /// contribute their metrics without overwriting each other.
 /// This file is gitignored — use `accept-baselines` to promote into baselines.json.
 pub fn write_latest_scores(updates: &HashMap<String, Baselines>) {
+    let _guard = LATEST_LOCK.lock().unwrap();
     fs::create_dir_all("tests/output").ok();
     let path = Path::new("tests/output/latest_scores.json");
     let mut scores: BTreeMap<String, Baselines> = fs::read_to_string(path)
@@ -243,7 +249,7 @@ fn dir_newest_mtime(dir: &Path) -> SystemTime {
 
 /// The newest mtime of any file under `src/`, cached for the process lifetime.
 fn src_newest_mtime() -> SystemTime {
-    static SRC_MTIME: std::sync::OnceLock<SystemTime> = std::sync::OnceLock::new();
+    static SRC_MTIME: OnceLock<SystemTime> = OnceLock::new();
     *SRC_MTIME.get_or_init(|| dir_newest_mtime(Path::new("src")))
 }
 
@@ -263,6 +269,21 @@ pub fn convert(input: &Path, output: &Path) -> Result<(), String> {
 /// beside the PDF records which inputs it was last converted against, so an unchanged PDF is
 /// not reconverted on every run either.
 pub fn ensure_generated_pdf(fixture_dir: &Path) -> Result<PathBuf, String> {
+    // The suites start on the same fixtures at the same time: the first to reach a fixture
+    // converts it, the others wait for that result instead of racing it on the same files.
+    static MEMO: Mutex<BTreeMap<PathBuf, Arc<OnceLock<Result<PathBuf, String>>>>> =
+        Mutex::new(BTreeMap::new());
+    let cell = MEMO
+        .lock()
+        .unwrap()
+        .entry(fixture_dir.to_path_buf())
+        .or_default()
+        .clone();
+    cell.get_or_init(|| convert_generated_pdf(fixture_dir))
+        .clone()
+}
+
+fn convert_generated_pdf(fixture_dir: &Path) -> Result<PathBuf, String> {
     let input_docx = fixture_dir.join("input.docx");
     let out = output_dir(fixture_dir);
     fs::create_dir_all(&out).map_err(|e| e.to_string())?;
@@ -374,6 +395,7 @@ pub fn compute_page_hashes(gen_pages: &[PathBuf]) -> Vec<String> {
 /// updates that case without dropping every other case from the change-detection
 /// set. A full run still replaces every entry; run-tests.sh rm's the file first.
 pub fn write_latest_hashes(hashes: &BTreeMap<String, Vec<String>>) {
+    let _guard = LATEST_LOCK.lock().unwrap();
     fs::create_dir_all("tests/output").ok();
     let path = Path::new("tests/output/latest_hashes.json");
     let mut merged: BTreeMap<String, Vec<String>> = fs::read_to_string(path)

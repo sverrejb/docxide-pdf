@@ -4,11 +4,11 @@
 //!   page-metrics <ref.pdf> <other.pdf> <ref_png_dir> <other_png_dir>
 //!
 //! Prints one JSON object. Jaccard and SSIM are per-page means over the pages both
-//! PDFs have, exactly like tests/visual_comparison.rs; the metric code itself is the
+//! PDFs have, exactly like tests/suite/visual_comparison.rs; the metric code itself is the
 //! harness's own (tests/common/metrics.rs, a11y.rs, text_boundary.rs), included by path so
 //! the numbers cannot drift. Not tests/common/mod.rs: its convert() links the whole library,
 //! which had this binary rebuilt after every src/ change.
-//! Accessibility scores are those of tests/accessibility.rs, null without veraPDF and pdfinfo.
+//! Accessibility scores are those of tests/suite/accessibility.rs, null without veraPDF and pdfinfo.
 #[path = "../../../tests/common/metrics.rs"]
 #[allow(dead_code)]
 mod metrics;
@@ -23,7 +23,7 @@ use rayon::prelude::*;
 use std::path::Path;
 
 /// A PNG dir is named after its PDF, so for the harness's own output dirs the
-/// analysis cache is the very file tests/accessibility.rs writes and either side
+/// analysis cache is the very file tests/suite/accessibility.rs writes and either side
 /// reuses the other's work.
 fn a11y_metrics(ref_pdf: &Path, other_pdf: &Path, ref_dir: &Path, other_dir: &Path) -> Option<serde_json::Value> {
     let r = a11y::analyze_cached(ref_pdf, &a11y::cache_path(ref_dir)).ok()?;
