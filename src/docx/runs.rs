@@ -263,7 +263,7 @@ pub(super) struct ParsedRuns {
 impl Run {
     fn text_run(&self, text: String, hyperlink_url: Option<String>) -> Run {
         Run {
-            text,
+            text: super::compose::compose_latin(text),
             hyperlink_url,
             ..self.clone()
         }

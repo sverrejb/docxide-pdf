@@ -3,6 +3,7 @@ pub(crate) mod arabic;
 mod charts;
 mod color;
 mod comments;
+mod compose;
 mod embedded_fonts;
 pub(crate) mod emf;
 mod group;
