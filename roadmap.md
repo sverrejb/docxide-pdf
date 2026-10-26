@@ -100,6 +100,10 @@ Still open on these fixtures:
 - **advocacy_initiative_newsletter_2013 (36.7)**: our nested picture table
   is 1.4pt narrower than Word's grid, so the stories wrap a word earlier or
   later and pages 2-3 end 24pt off; the standard `o:hr` draws 1.5pt, Word 0.5.
+  The merge of PRs #115-#126 (0fdc63f7c) dropped the sole-table rule above
+  (restored, 30.9 -> 36.7) and the per-line `beside_lines` wrap (47024bf77,
+  still lost): a paragraph starting beside the picture stays indented
+  throughout, where Word returns its lower lines to full width.
 - **romanian_candidate_declaration_form_f2 (36.6, SSIM 91.5)**: layout is
   right to within 0.3pt; thin borders drift 0.1-0.3pt per row and miss the
   reference pixels. Word quantizes baselines to a 0.25pt grid (memory

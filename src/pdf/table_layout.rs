@@ -1072,14 +1072,26 @@ fn plain_text_fits_nested_strip(
     {
         return false;
     }
-    let [Block::Paragraph(p)] = &cell.content[idx + 1..] else {
+    let Some(Block::Paragraph(p)) = cell.content.get(idx + 1) else {
         return false;
     };
     if p.runs.iter().any(|r| r.caps) {
         return false;
     }
     let strip = cell_text_w - widths.iter().sum::<f32>() - pos.right_from_text;
-    strip >= MIN_NESTED_FLOAT_STRIP && plain_line_width(p, ctx.fonts).is_some_and(|w| w <= strip)
+    let Some(line_w) = plain_line_width(p, ctx.fonts) else {
+        return false;
+    };
+    // A cell's sole table lets text of any length, over several paragraphs,
+    // wrap beside it (advocacy's picture stories); beside another table only
+    // a lone paragraph fitting one line is known to.
+    let sole_table = cell
+        .content
+        .iter()
+        .enumerate()
+        .all(|(i, b)| i == idx || matches!(b, Block::Paragraph(_)));
+    strip >= MIN_NESTED_FLOAT_STRIP
+        && (sole_table || (cell.content.len() == idx + 2 && line_w <= strip))
 }
 
 // A single cell heading can precede positive-offset floating tables even
@@ -1795,7 +1807,7 @@ pub(super) fn compute_row_layouts(
                                 // text: the text flows beside it (advocacy's picture
                                 // tables with their stories to the right).
                                 let mut floating_offset = nested_table.position.as_ref()
-                                    .filter(|pos| pos.v_anchor == "text" && nested_table.rows.len() == 1 && (top_aligned || (centered && pos.v_offset_pt < 0.0) || (centered && block_idx == 0 && pos.v_offset_pt > 0.0)))
+                                    .filter(|pos| pos.v_anchor == "text" && (nested_table.rows.len() == 1 || plain_side_text) && (top_aligned || (centered && pos.v_offset_pt < 0.0) || (centered && block_idx == 0 && pos.v_offset_pt > 0.0)))
                                     .filter(|pos| {
                                         let at_left_edge = matches!(pos.h_position, HorizontalPosition::Offset(v) if v == 0.0);
                                         let next_is_blank = matches!(
