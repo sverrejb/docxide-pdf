@@ -4680,6 +4680,27 @@ fn render_paragraph_block(
             )),
         );
         state.pb.end_tag();
+    } else if !para.list_label.is_empty() {
+        // An empty numbered paragraph still shows its label: uk_commercial's
+        // "SCHEDULE 1" headings are empty paragraphs whose style numbers them.
+        let baseline_offset = if grid_snapped {
+            grid_baseline
+        } else {
+            first_baseline_offset
+        };
+        let baseline_y = state.pb.slot_top - bdr_top_pad - baseline_offset - text_drop;
+        let tags = state.pb.para_tags(para, doc);
+        state.pb.begin_para_tags(tags, |content| {
+            render_list_label(
+                content,
+                para,
+                ctx.fonts,
+                label_x,
+                baseline_y - first_line_drop,
+                font_size,
+            )
+        });
+        state.pb.end_tag();
     } else {
         // Word tags empty paragraphs too; keeping them keeps the P sequence aligned.
         state.pb.tag_empty_para(para, doc);

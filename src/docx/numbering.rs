@@ -20,6 +20,7 @@ pub(super) struct LevelDef {
     /// paragraph mark (Some(None) is color="auto").
     pub(super) label_bold: Option<bool>,
     pub(super) label_italic: Option<bool>,
+    pub(super) label_caps: Option<bool>,
     pub(super) label_color: Option<Option<[u8; 3]>>,
     pub(super) suff: String,
     pub(super) jc: Alignment,
@@ -145,6 +146,7 @@ fn parse_level_def(lvl: roxmltree::Node) -> Option<(u8, LevelDef)> {
     let label_vert_align = rpr.and_then(|r| wml_attr(r, "vertAlign")).map(str::to_string);
     let label_bold = rpr.and_then(|r| wml_bool(r, "b"));
     let label_italic = rpr.and_then(|r| wml_bool(r, "i"));
+    let label_caps = rpr.and_then(|r| wml_bool(r, "caps"));
     let label_color = rpr.and_then(|r| wml_attr(r, "color")).map(parse_hex_color);
     let suff = wml_attr(lvl, "suff").unwrap_or("tab").to_string();
     let jc = match wml_attr(lvl, "lvlJc") {
@@ -168,6 +170,7 @@ fn parse_level_def(lvl: roxmltree::Node) -> Option<(u8, LevelDef)> {
             label_vert_align,
             label_bold,
             label_italic,
+            label_caps,
             label_color,
             suff,
             jc,
@@ -692,6 +695,13 @@ pub(super) fn parse_list_info(
         }
         label
     };
+    // The mark's caps reach the label too: uk_commercial's SH Schedule
+    // Heading style numbers its empty paragraphs "SCHEDULE 1".
+    let label = if def.label_caps.unwrap_or(mark.is_some_and(|m| m.caps)) {
+        label.to_uppercase()
+    } else {
+        label
+    };
     // Word draws a list label in the paragraph mark's format under the
     // level's own rPr; the text runs never count. Probed on k4's "5." (mark
     // without rPr, Arial 10pt text): the label is Calibri 11pt from
@@ -888,6 +898,7 @@ mod tests {
             label_vert_align: None,
             label_bold: None,
             label_italic: None,
+            label_caps: None,
             label_color: None,
             suff: "tab".into(),
             jc: Alignment::Left,
