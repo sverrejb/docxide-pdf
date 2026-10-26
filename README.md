@@ -31,7 +31,8 @@ Every fixture in the test corpus rendered side by side by Word (the reference) a
 * [MiniPdf](https://github.com/mini-software/MiniPdf)'s Rust crate
 * [rdocx](https://crates.io/crates/rdocx)
 * [office2pdf](https://github.com/developer0hye/office2pdf)
-* [jubarte-redlines](https://crates.io/crates/jubarte-redlines).
+* [jubarte-redlines](https://crates.io/crates/jubarte-redlines)
+* [dxpdf](https://github.com/nerdy-pro/dxpdf).
 
 Each engine is scored against the Word reference with the same metrics the test
 suite uses: three for how the pages look, and one for how accessible the PDF is.

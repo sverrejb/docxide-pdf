@@ -77,11 +77,17 @@ jobs:
           unzip -q "$RUNNER_TEMP/verapdf.zip" -d "$RUNNER_TEMP"
           java -DINSTALL_PATH="$HOME/verapdf" -jar "$RUNNER_TEMP/verapdf-greenfield-${VERAPDF}/verapdf-izpack-installer-${VERAPDF}.jar" -options-system
           echo "$HOME/verapdf" >> "$GITHUB_PATH"
+      - name: Install dxpdf   # its release .deb, latest; `cargo install` would build Skia. Fonts come via fontconfig (below)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download -R nerdy-pro/dxpdf -p '*_amd64.deb' -D "$RUNNER_TEMP/dxpdf"
+          sudo apt-get install -y -q --no-install-recommends "$RUNNER_TEMP"/dxpdf/*.deb
       - name: Link private assets
         run: |
           ln -s "$PWD/assets/fonts" fonts
           for g in scraped; do [ ! -d "assets/fixtures/$g" ] || ln -s "$PWD/assets/fixtures/$g" "tests/fixtures/$g"; done
-          mkdir -p ~/.local/share && ln -s "$PWD/assets/fonts" ~/.local/share/fonts && fc-cache -f   # LibreOffice sees them via fontconfig
+          mkdir -p ~/.local/share && ln -s "$PWD/assets/fonts" ~/.local/share/fonts && fc-cache -f   # LibreOffice and dxpdf see them via fontconfig
           python3 tools/restore_mtime.py . && python3 tools/restore_mtime.py assets
       - name: Word fonts where jubarte looks for them
         # jubarte reads no Linux font directory and no fontconfig. It resolves its catalogue faces (Calibri,
