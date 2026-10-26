@@ -786,33 +786,23 @@ pub(super) fn extract_indents(
     ind: roxmltree::Node,
     char_width: Option<f32>,
 ) -> (Option<f32>, Option<f32>, Option<f32>, Option<f32>) {
-    // Word always writes both twip and *Chars values consistently; when both
-    // are present we prefer the twip value since it's Word's pre-resolved
-    // measurement. Our char_width approximation (font_size/2) is correct for
-    // Latin text but wrong for CJK text (where a character is a full em).
-    let cw = char_width.unwrap_or(0.0);
-    let has_cw = char_width.is_some();
+    // One character is the font size, Latin or not (Word probe: a style's
+    // firstLineChars=200 indents 24pt at 12pt, 20pt at 10pt). Word itself
+    // gives a non-zero *Chars value precedence, measured in the first run's
+    // size, but the twips it writes alongside already hold that result and
+    // we only know the style's size (east_asia_conference: 1900 chars =
+    // 4940 twips, a 13pt run in a 10.5pt style), so twips win when present.
+    let side = |chars: &str, twips: &[&str]| {
+        twips
+            .iter()
+            .find_map(|t| twips_attr(ind, t))
+            .or_else(|| char_width.and_then(|cw| chars_to_pts(ind, chars, cw)))
+    };
     (
-        twips_attr(ind, "start")
-            .or_else(|| twips_attr(ind, "left"))
-            .or_else(|| has_cw.then(|| chars_to_pts(ind, "leftChars", cw)).flatten()),
-        twips_attr(ind, "end")
-            .or_else(|| twips_attr(ind, "right"))
-            .or_else(|| {
-                has_cw
-                    .then(|| chars_to_pts(ind, "rightChars", cw))
-                    .flatten()
-            }),
-        twips_attr(ind, "hanging").or_else(|| {
-            has_cw
-                .then(|| chars_to_pts(ind, "hangingChars", cw))
-                .flatten()
-        }),
-        twips_attr(ind, "firstLine").or_else(|| {
-            has_cw
-                .then(|| chars_to_pts(ind, "firstLineChars", cw))
-                .flatten()
-        }),
+        side("leftChars", &["start", "left"]),
+        side("rightChars", &["end", "right"]),
+        side("hangingChars", &["hanging"]),
+        side("firstLineChars", &["firstLine"]),
     )
 }
 
@@ -1647,23 +1637,19 @@ mod tests {
     }
 
     #[test]
-    fn test_extract_indents_left_chars() {
-        // When both twips and *Chars are present, twips takes priority
-        // (Word's pre-resolved value is authoritative).
-        let xml = format!(
-            r#"<w:ind xmlns:w="{}" w:leftChars="200" w:left="480"/>"#,
-            WML_NS
+    fn test_extract_indents_chars() {
+        let parse = |attrs: &str| {
+            let xml = format!(r#"<w:ind xmlns:w="{}" {attrs}/>"#, WML_NS);
+            let doc = roxmltree::Document::parse(&xml).unwrap();
+            extract_indents(doc.root_element(), Some(12.0))
+        };
+        assert_eq!(parse(r#"w:leftChars="200" w:left="100""#).0, Some(5.0));
+        assert_eq!(parse(r#"w:firstLineChars="200""#).3, Some(24.0));
+        assert_eq!(
+            parse(r#"w:firstLineChars="0" w:firstLine="720""#).3,
+            Some(36.0)
         );
-        let doc = roxmltree::Document::parse(&xml).unwrap();
-        let node = doc.root_element();
-        let (left, _right, _hanging, _first_line) = extract_indents(node, Some(5.5));
-        assert_eq!(left, Some(24.0)); // w:left="480" twips → 24pt
-        // When only *Chars is present, use it with char_width approximation
-        let xml2 = format!(r#"<w:ind xmlns:w="{}" w:leftChars="200"/>"#, WML_NS);
-        let doc2 = roxmltree::Document::parse(&xml2).unwrap();
-        let node2 = doc2.root_element();
-        let (left2, _, _, _) = extract_indents(node2, Some(5.5));
-        assert_eq!(left2, Some(11.0)); // 200/100 * 5.5 = 11.0pt
+        assert_eq!(parse(r#"w:leftChars="0""#).0, Some(0.0));
     }
 
     // --- Theme color key resolution ---

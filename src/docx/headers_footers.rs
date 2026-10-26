@@ -212,7 +212,7 @@ fn parse_notes_simple<R: Read + Seek>(
                 .unwrap_or(styles.defaults.font_size);
             let (left, right, hanging, first) =
                 if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
-                    let (l, r, h, f) = extract_indents(ind, Some(char_fs / 2.0));
+                    let (l, r, h, f) = extract_indents(ind, Some(char_fs));
                     if let Some(s) = para_style {
                         (
                             l.or(s.indent_left),

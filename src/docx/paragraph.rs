@@ -508,7 +508,7 @@ pub(super) fn resolve_indents(
         && para_style.is_some_and(|s| s.ind_over_numbering);
     let numbering_ind = !style_ind_wins && (indent_left != 0.0 || indent_hanging != 0.0);
     let (left, right, hanging, first) = if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
-        let (l, r, h, f) = extract_indents(ind, Some(char_width_fs / 2.0));
+        let (l, r, h, f) = extract_indents(ind, Some(char_width_fs));
         // firstLine and hanging are one value: a direct either replaces the
         // style's both (indonesian's title, ind left=281 firstLine=0 over
         // Heading1's hanging=543, starts at 281 in Word).

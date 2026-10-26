@@ -972,7 +972,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
             }
         }
         if let Some(ind) = default_ppr.and_then(|n| wml(n, "ind")) {
-            let (left, right, hanging, first) = extract_indents(ind, None);
+            let (left, right, hanging, first) = extract_indents(ind, Some(defaults.font_size));
             if let Some(v) = left {
                 defaults.indent_left = v;
             }
@@ -1078,7 +1078,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
 
                 let (indent_left, indent_right, indent_hanging, indent_first_line) = ppr
                     .and_then(|n| wml(n, "ind"))
-                    .map(|ind| extract_indents(ind, None))
+                    .map(|ind| extract_indents(ind, Some(font_size.unwrap_or(defaults.font_size))))
                     .unwrap_or_default();
 
                 let (tab_stops, clear_tab_positions) =
