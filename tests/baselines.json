@@ -1764,8 +1764,8 @@
     "a11y_text": 1.0
   },
   "cases/case51": {
-    "jaccard": 0.6129,
-    "ssim": 0.8559,
+    "jaccard": 0.6143,
+    "ssim": 0.8576,
     "text_boundary": 0.8286,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -7970,8 +7970,8 @@
     "a11y_text": 1.0
   },
   "scraped/italian_teacher_hiring_preferences": {
-    "jaccard": 0.7264,
-    "ssim": 0.8999,
+    "jaccard": 0.7262,
+    "ssim": 0.8997,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -8027,7 +8027,7 @@
   "scraped/learning_cultures_dissertation": {
     "jaccard": 0.604,
     "ssim": 0.7589,
-    "text_boundary": 0.8192,
+    "text_boundary": 0.846,
     "convert_ms": 1027.5,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -8725,14 +8725,14 @@
     "a11y_text": 1.0
   },
   "scraped/turkish_journal_article_template": {
-    "jaccard": 0.6434,
-    "ssim": 0.855,
-    "text_boundary": 0.9744,
+    "jaccard": 0.6429,
+    "ssim": 0.8552,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 1.0,
-    "a11y_text": 0.9825
+    "a11y_text": 1.0
   },
   "scraped/turkish_prostate_cancer_course": {
     "jaccard": 0.8289,

@@ -493,8 +493,10 @@ pub(super) fn auto_fit_columns(
     });
     // Cells without a preferred width (tcW absent, auto or 0) leave Word only
     // the content to go by: a 2262/2828/2828 grid of "Item"/"Value"/"Notes"
-    // shrinks to the words, and a long cell wraps at the margin (Word probes,
-    // issue #140). A dxa tcW keeps the grid.
+    // shrinks to the words (Word probes, issue #140). A dxa tcW keeps the grid.
+    // ponytail: content too wide for the page keeps the grid, as a Word-saved
+    // grid already holds Word's full-width result (nabl's 9-column amendment
+    // sheet) and our redistribution drifts from it; a made-up grid stays wrong.
     if table.auto_width
         && !table.fixed_layout
         && ((grid_uniform && has_nested_table) || table.cells_unsized)
@@ -511,8 +513,10 @@ pub(super) fn auto_fit_columns(
         if maxw.iter().sum::<f32>() <= avail {
             return maxw;
         }
-        let minw: Vec<f32> = (0..ncols).map(|i| min_widths[i].max(min_cell)).collect();
-        return distribute_autofit(&minw, &maxw, avail);
+        if grid_uniform && has_nested_table {
+            let minw: Vec<f32> = (0..ncols).map(|i| min_widths[i].max(min_cell)).collect();
+            return distribute_autofit(&minw, &maxw, avail);
+        }
     }
 
     // For nested auto-fit tables, Word shrinks columns to content-based widths
