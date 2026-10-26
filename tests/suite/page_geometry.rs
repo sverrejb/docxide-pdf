@@ -1,5 +1,6 @@
 use crate::common;
 
+use rayon::prelude::*;
 use std::path::Path;
 
 fn pdf_mediabox(pdf: &Path) -> Option<(f32, f32)> {
@@ -27,6 +28,84 @@ fn pdf_mediabox(pdf: &Path) -> Option<(f32, f32)> {
     None
 }
 
+/// `pdf_mediabox`, kept in `cache` while the PDF is unchanged: the mutool spawn is the
+/// whole cost of this suite.
+fn mediabox_cached(pdf: &Path, cache: &Path) -> Option<(f32, f32)> {
+    common::cached(cache, &[pdf], || Some(pdf_mediabox(pdf))).flatten()
+}
+
+/// One fixture's table row and, when the page sizes differ, the mismatch to report.
+fn check(fixture: &Path) -> Option<(String, Option<String>)> {
+    let name = common::case_key(fixture);
+    let input = fixture.join("input.docx");
+    let reference = fixture.join("reference.pdf");
+
+    if !input.exists() || !reference.exists() {
+        return None;
+    }
+    let out = common::output_dir(fixture);
+    let _ = std::fs::create_dir_all(&out);
+
+    let Some(ref_dims) = mediabox_cached(&reference, &out.join("reference.mediabox.json")) else {
+        return Some((
+            format!("  {:<64}  {:<14}  {:<14}  {:<5}", name, "?", "?", "SKIP"),
+            None,
+        ));
+    };
+
+    let gen_pdf = match common::ensure_generated_pdf(fixture) {
+        Ok(p) => p,
+        Err(e) => {
+            return Some((
+                format!(
+                    "  {:<64}  {:>5.1}x{:<6.1}  {:<14}  {:<5}",
+                    name,
+                    ref_dims.0,
+                    ref_dims.1,
+                    format!("ERR:{e}"),
+                    "FAIL"
+                ),
+                Some(format!("{name}: conversion error: {e}")),
+            ));
+        }
+    };
+
+    let Some(gen_dims) = mediabox_cached(&gen_pdf, &out.join("generated.mediabox.json")) else {
+        return Some((
+            format!(
+                "  {:<64}  {:>5.1}x{:<6.1}  {:<14}  {:<5}",
+                name, ref_dims.0, ref_dims.1, "?", "FAIL"
+            ),
+            Some(format!("{name}: could not read generated mediabox")),
+        ));
+    };
+
+    let w_ok = (ref_dims.0 - gen_dims.0).abs() < 1.0;
+    let h_ok = (ref_dims.1 - gen_dims.1).abs() < 1.0;
+    let ok = w_ok && h_ok;
+
+    let status = if ok { "OK" } else { "FAIL" };
+    let mismatch = (!ok).then(|| {
+        format!(
+            "{name}: ref={:.1}x{:.1} gen={:.1}x{:.1} (dW={:+.1} dH={:+.1})",
+            ref_dims.0,
+            ref_dims.1,
+            gen_dims.0,
+            gen_dims.1,
+            gen_dims.0 - ref_dims.0,
+            gen_dims.1 - ref_dims.1,
+        )
+    });
+
+    Some((
+        format!(
+            "  {:<64}  {:>5.1}x{:<6.1}  {:>5.1}x{:<6.1}  {:<5}",
+            name, ref_dims.0, ref_dims.1, gen_dims.0, gen_dims.1, status
+        ),
+        mismatch,
+    ))
+}
+
 #[test]
 fn page_geometry_comparison() {
     let fixtures = common::discover_fixtures().expect("discover fixtures");
@@ -37,76 +116,13 @@ fn page_geometry_comparison() {
         "Case", "Reference", "Generated", "Match"
     );
 
-    let mut mismatches = Vec::new();
-
-    for fixture in &fixtures {
-        let name = common::case_key(fixture);
-        let input = fixture.join("input.docx");
-        let reference = fixture.join("reference.pdf");
-
-        if !input.exists() || !reference.exists() {
-            continue;
-        }
-
-        let ref_dims = match pdf_mediabox(&reference) {
-            Some(d) => d,
-            None => {
-                println!("  {:<64}  {:<14}  {:<14}  {:<5}", name, "?", "?", "SKIP");
-                continue;
-            }
-        };
-
-        let gen_pdf = match common::ensure_generated_pdf(fixture) {
-            Ok(p) => p,
-            Err(e) => {
-                println!(
-                    "  {:<64}  {:>5.1}x{:<6.1}  {:<14}  {:<5}",
-                    name,
-                    ref_dims.0,
-                    ref_dims.1,
-                    format!("ERR:{e}"),
-                    "FAIL"
-                );
-                mismatches.push(format!("{name}: conversion error: {e}"));
-                continue;
-            }
-        };
-
-        let gen_dims = match pdf_mediabox(&gen_pdf) {
-            Some(d) => d,
-            None => {
-                println!(
-                    "  {:<64}  {:>5.1}x{:<6.1}  {:<14}  {:<5}",
-                    name, ref_dims.0, ref_dims.1, "?", "FAIL"
-                );
-                mismatches.push(format!("{name}: could not read generated mediabox"));
-                continue;
-            }
-        };
-
-        let w_ok = (ref_dims.0 - gen_dims.0).abs() < 1.0;
-        let h_ok = (ref_dims.1 - gen_dims.1).abs() < 1.0;
-        let ok = w_ok && h_ok;
-
-        let status = if ok { "OK" } else { "FAIL" };
-        if !ok {
-            mismatches.push(format!(
-                "{name}: ref={:.1}x{:.1} gen={:.1}x{:.1} (dW={:+.1} dH={:+.1})",
-                ref_dims.0,
-                ref_dims.1,
-                gen_dims.0,
-                gen_dims.1,
-                gen_dims.0 - ref_dims.0,
-                gen_dims.1 - ref_dims.1,
-            ));
-        }
-
-        println!(
-            "  {:<64}  {:>5.1}x{:<6.1}  {:>5.1}x{:<6.1}  {:<5}",
-            name, ref_dims.0, ref_dims.1, gen_dims.0, gen_dims.1, status
-        );
+    let rows: Vec<(String, Option<String>)> =
+        fixtures.par_iter().filter_map(|f| check(f)).collect();
+    for (row, _) in &rows {
+        println!("{row}");
     }
 
+    let mismatches: Vec<&String> = rows.iter().filter_map(|(_, m)| m.as_ref()).collect();
     if !mismatches.is_empty() {
         println!("\nPage size mismatches ({}):", mismatches.len());
         for m in &mismatches {
