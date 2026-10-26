@@ -1724,7 +1724,14 @@ pub(super) fn compute_row_layouts(
                                     // in the body: carbon_farming's 8pt footer cells
                                     // sit on their descent under Normal's 13pt
                                     // minimum, arizona's exact 13.2pt lines 80% down.
-                                    ascender_ratio: super::layout::boxed_line_ascent(
+                                    // Grid-snapped lines centre in their cells as
+                                    // in the body (japanese_hr's 9pt lines sit
+                                    // 2.9pt into a 17.5pt cell).
+                                    ascender_ratio: grid_snapped
+                                        .then(|| super::layout::grid_baseline_offset(runs, ctx.fonts, line_h))
+                                        .flatten()
+                                        .map(|a| a / font_size)
+                                        .or_else(|| super::layout::boxed_line_ascent(
                                         effective_ls,
                                         line_h,
                                         font_size,
@@ -1732,11 +1739,10 @@ pub(super) fn compute_row_layouts(
                                         tallest_ar,
                                         runs,
                                         ctx.fonts,
-                                    )
-                                    .map_or(
+                                    ).map(|a| a / font_size))
+                                    .unwrap_or(
                                         ascender_ratio
                                             * super::helpers::auto_ascent_scale(effective_ls),
-                                        |a| a / font_size,
                                     ),
                                     descender_ratio,
                                     image_line_ascent,
