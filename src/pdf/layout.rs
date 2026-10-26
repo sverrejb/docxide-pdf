@@ -2168,6 +2168,15 @@ pub(super) fn build_paragraph_lines(
                     let suffix = shown.trim_end_matches(['.', ',', ';', ':', '!', '?', ')', '»']);
                     suffix.chars().count() >= 2 && suffix.chars().all(char::is_alphabetic)
                 };
+            // Earlier word spaces can shrink to keep a complete numeric
+            // suffix after a hyphen. Intermediate fragments ending in another
+            // hyphen are intentionally excluded.
+            let suffix = shown.trim_end_matches(['.', ',', ';', ':', '!', '?', ')', '»']);
+            let after_numeric_hyphen = overflows
+                && !need_space
+                && current_chunks.last().is_some_and(|c| c.text.ends_with('-'))
+                && !suffix.is_empty()
+                && suffix.chars().all(|c| c.is_ascii_digit());
             // A word glued to the previous run's word is judged as one word.
             let (word_x, word_w) = if is_continuation && word_start < current_chunks.len() {
                 let x = current_chunks[word_start].x_offset;
@@ -2176,7 +2185,9 @@ pub(super) fn build_paragraph_lines(
                 (proposed_x, ww)
             };
             if overflows
-                && (need_space || is_continuation || (cjk.squeeze_spaces && after_hyphen))
+                && (need_space
+                    || is_continuation
+                    || (cjk.squeeze_spaces && (after_hyphen || after_numeric_hyphen)))
                 && !in_right_region
             {
                 // How far the word may overflow and stay: Word 2013+ narrows
@@ -5077,6 +5088,39 @@ mod tests {
                 plain_layout(true),
             );
             assert_eq!(lines.len(), 2, "suffix={suffix}");
+        }
+    }
+
+    #[test]
+    fn complete_numeric_suffix_can_squeeze_spaces() {
+        let fonts = HashMap::from([("Arial".to_string(), FontEntry::stub())]);
+        let run = |s: &str| Run {
+            text: s.into(),
+            ..make_run(10.0, VertAlign::Baseline, false)
+        };
+        for suffix in ["05215", "2617.", "12"] {
+            let text = format!("aa aa aa aa 11-{suffix}");
+            for runs in [vec![run(&text)], vec![run("aa aa aa aa 11-"), run(suffix)]] {
+                let build = |overflow, squeeze| {
+                    build_paragraph_lines(
+                        &runs,
+                        &fonts,
+                        text.len() as f32 * 5.0 - overflow,
+                        0.0,
+                        &HashMap::new(),
+                        &HashMap::new(),
+                        None,
+                        None,
+                        None,
+                        plain_layout(squeeze),
+                    )
+                };
+                let lines = build(1.0, true);
+                assert_eq!(lines.len(), 1, "suffix={suffix}");
+                assert!(lines[0].squeezed);
+                assert_eq!(build(1.0, false).len(), 2);
+                assert_eq!(build(6.0, true).len(), 2);
+            }
         }
     }
 
