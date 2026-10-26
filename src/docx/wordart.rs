@@ -141,6 +141,13 @@ pub(super) fn parse_vml_wordart(
 
     let style_str = textpath.attribute("style").unwrap_or("");
     let (font_name, font_size) = parse_vml_font_style(style_str);
+    // Regular unless the textpath style asks for a weight (swiss_materials'
+    // watermark is plain Arial; it used to be drawn bold).
+    let bold = style_str.split(';').any(|part| {
+        part.trim()
+            .strip_prefix("font-weight:")
+            .is_some_and(|w| w.trim() == "bold" || w.trim().parse::<u32>().is_ok_and(|n| n >= 600))
+    });
 
     // The fill's opacity is blended into the colour: WordArt sits on the page
     // background (swiss_materials' watermark is red at 50%, drawn pink).
@@ -158,7 +165,7 @@ pub(super) fn parse_vml_wordart(
         text: text.to_string(),
         font_name: font_name.unwrap_or_else(|| styles.defaults.font_name.clone()),
         font_size: font_size.unwrap_or(36.0),
-        bold: true,
+        bold,
         color: fill_color,
         ..Run::default()
     };
