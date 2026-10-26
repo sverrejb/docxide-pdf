@@ -476,8 +476,12 @@ pub(super) struct RenderContext<'a> {
 
 impl RenderContext<'_> {
     /// The text a note reference mark run shows: its note's number. The run's
-    /// own text is empty (`docx::runs` `footnoteReference`).
+    /// own text is empty (`docx::runs` `footnoteReference`), unless it is a
+    /// custom mark.
     fn note_mark_text(&self, run: &Run) -> Option<String> {
+        if run.custom_note_mark {
+            return None;
+        }
         let (marks, id) = match (run.footnote_id, run.endnote_id) {
             (Some(id), _) => (self.footnote_marks, id),
             (None, Some(id)) => (self.endnote_marks, id),
@@ -4829,12 +4833,20 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         let mut next_en_num = 1u32;
         for run in body_runs(doc) {
             if let Some(id) = run.footnote_id {
+                if run.custom_note_mark {
+                    footnote_display_order.entry(id).or_default();
+                    continue;
+                }
                 footnote_display_order.entry(id).or_insert_with(|| {
                     next_fn_num += 1;
                     crate::docx::numbering::format_number(next_fn_num - 1, fn_fmt)
                 });
             }
             if let Some(id) = run.endnote_id {
+                if run.custom_note_mark {
+                    endnote_display_order.entry(id).or_default();
+                    continue;
+                }
                 endnote_display_order.entry(id).or_insert_with(|| {
                     next_en_num += 1;
                     crate::docx::numbering::format_number(next_en_num - 1, en_fmt)

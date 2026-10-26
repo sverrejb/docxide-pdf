@@ -615,6 +615,9 @@ pub struct Run {
     pub is_footnote_ref_mark: bool,
     pub endnote_id: Option<u32>,
     pub is_endnote_ref_mark: bool,
+    /// `w:customMarkFollows`: the note reference shows the text after it
+    /// instead of a number, and takes no number from the sequence.
+    pub custom_note_mark: bool,
     /// `w:kern` in points; see `Run::kerns_at`.
     pub kern_threshold: Option<f32>,
     /// Points the run is raised above the baseline (`w:position`; negative: lowered).
@@ -749,6 +752,7 @@ impl Default for Run {
             is_footnote_ref_mark: false,
             endnote_id: None,
             is_endnote_ref_mark: false,
+            custom_note_mark: false,
             kern_threshold: None,
             position: 0.0,
             char_style_id: None,

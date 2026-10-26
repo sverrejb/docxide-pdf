@@ -22,6 +22,12 @@ use super::{
 };
 use super::{is_complex_script_char, is_east_asian_char};
 
+fn custom_note_mark(note_ref: roxmltree::Node) -> bool {
+    note_ref
+        .attribute((WML_NS, "customMarkFollows"))
+        .is_some_and(super::parse_on_off)
+}
+
 /// A field the renderer re-evaluates per page, from its instruction.
 fn parse_field_code(instr: &str) -> Option<FieldCode> {
     let keyword = instr.split_whitespace().next()?;
@@ -910,7 +916,21 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
         return runs;
     }
     let mut result: Vec<Run> = Vec::with_capacity(runs.len());
-    for run in runs {
+    for mut run in runs {
+        // customMarkFollows: the text after the reference is its mark, so it
+        // carries the note (and its tag) itself.
+        if let Some(prev) = result.last()
+            && prev.custom_note_mark
+            && prev.text.is_empty()
+            && !run.text.is_empty()
+            && run.footnote_id.is_none()
+            && run.endnote_id.is_none()
+        {
+            run.footnote_id = prev.footnote_id;
+            run.endnote_id = prev.endnote_id;
+            run.custom_note_mark = true;
+            result.pop();
+        }
         let can_merge = result.last().is_some_and(|prev| {
             !prev.is_tab
                 && !run.is_tab
@@ -1476,6 +1496,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                     {
                         runs.push(Run {
                             footnote_id: Some(id),
+                            custom_note_mark: custom_note_mark(child),
                             ..fmt.superscript_run()
                         });
                     }
@@ -1495,6 +1516,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                     {
                         runs.push(Run {
                             endnote_id: Some(id),
+                            custom_note_mark: custom_note_mark(child),
                             ..fmt.superscript_run()
                         });
                     }
