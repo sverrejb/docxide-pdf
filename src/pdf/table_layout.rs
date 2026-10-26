@@ -491,10 +491,13 @@ pub(super) fn auto_fit_columns(
             .iter()
             .any(|c| c.content.iter().any(|b| matches!(b, Block::Table(_))))
     });
+    // Cells without a preferred width (tcW absent, auto or 0) leave Word only
+    // the content to go by: a 2262/2828/2828 grid of "Item"/"Value"/"Notes"
+    // shrinks to the words, and a long cell wraps at the margin (Word probes,
+    // issue #140). A dxa tcW keeps the grid.
     if table.auto_width
         && !table.fixed_layout
-        && grid_uniform
-        && has_nested_table
+        && ((grid_uniform && has_nested_table) || table.cells_unsized)
         && let Some(avail) = fill_width.filter(|a| *a > 0.0)
     {
         let natural = natural_widths(table, fonts, cm);
@@ -2676,6 +2679,7 @@ mod tests {
             auto_width: true,
             width_pct: None,
             grid_inferred: false,
+            cells_unsized: false,
             header_first_row: false,
             header_first_col: false,
         };
@@ -2733,6 +2737,7 @@ mod tests {
             auto_width: true,
             width_pct: None,
             grid_inferred: false,
+            cells_unsized: false,
             header_first_row: false,
             header_first_col: false,
         };

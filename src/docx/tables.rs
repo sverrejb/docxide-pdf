@@ -394,6 +394,19 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     // omit it. Infer the grid from the widest row's cell widths so layout
     // has real columns to work with, splitting spanned cells evenly.
     let grid_inferred = col_widths.is_empty() && !tbl_rows.is_empty();
+    let cells_unsized = tbl_rows.iter().all(|tr| {
+        collect_block_nodes(*tr)
+            .into_iter()
+            .filter(|n| n.has_tag_name((WML_NS, "tc")))
+            .all(|tc| {
+                wml(tc, "tcPr")
+                    .and_then(|pr| wml(pr, "tcW"))
+                    .is_none_or(|w| {
+                        matches!(w.attribute((WML_NS, "type")), Some("auto" | "nil"))
+                            || twips_attr(w, "w").is_none_or(|v| v == 0.0)
+                    })
+            })
+    });
     if col_widths.is_empty() {
         for tr in &tbl_rows {
             let mut row_widths: Vec<f32> = Vec::new();
@@ -949,6 +962,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
         auto_width,
         width_pct,
         grid_inferred,
+        cells_unsized,
         header_first_row: tbl_look_node.is_none() || look_first_row,
         header_first_col: tbl_look_node.is_none() || look_first_col,
     }
