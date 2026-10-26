@@ -314,6 +314,11 @@ Backlog (details in `current_focus/A11Y.md`):
 
 - Field codes: only PAGE, NUMPAGES, STYLEREF, PAGEREF and IF are evaluated;
   the rest print their cached result.
+- Body PAGE/NUMPAGES (issue #140) come from a first render pass: a PAGE in a
+  paragraph that spans two pages shows the first page's number, and fields in
+  table cells keep their cached result.
+- Line numbering ignores `w:restart`: the counter always runs on, never
+  restarting per page or section.
 - altChunk HTML: `ul`/`ol`/`li` are dropped by the converter.
 - `tblGrid`-less column inference (`row_widths`) doesn't add `gridBefore`
   columns (Word always writes a tblGrid).
