@@ -364,10 +364,7 @@ pub(super) fn parse_vml_group<R: Read + Seek>(
         .find(|n| n.has_tag_name((VML_NS, "group")))?;
     let style = group.attribute("style").unwrap_or("");
     let box_style = parse_vml_box_style(style);
-    let z = vml_style_prop(style, "z-index")
-        .and_then(|v| v.parse::<i64>().ok())
-        .unwrap_or(0);
-    let (behind_doc, z_index) = vml_z_order(z);
+    let (behind_doc, z_index) = vml_z_order(box_style.z_index);
     let base = BaseAnchor {
         x: 0.0,
         y: 0.0,

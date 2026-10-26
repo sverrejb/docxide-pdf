@@ -10,7 +10,7 @@ use crate::model::{
 use super::color::{
     apply_color_transforms, parse_line_stroke, parse_solid_fill, resolve_dml_color,
 };
-use super::images::{extent_dimensions, parse_anchor_position};
+use super::images::{extent_dimensions, parse_anchor_position, vml_z_order};
 use super::styles::{ThemeFillStyle, ThemeFonts};
 use super::{
     DML_NS, MC_NS_TOP, OFFICE_NS, ParseContext, VML_NS, WML_NS, WPD_NS, WPS_NS, angle_attr,
@@ -25,8 +25,8 @@ pub(super) struct VmlBoxStyle {
     margin_top: f32,
     pub(super) h_relative: HRelativeFrom,
     pub(super) v_relative: VRelativeFrom,
-    /// A negative z-index puts the shape behind the text.
-    behind_text: bool,
+    /// Raw VML z-index; `vml_z_order` turns it into the layer and stacking order.
+    pub(super) z_index: i64,
 }
 
 /// Parse a VML shape `style` attribute (semicolon-separated `key:val`) into box
@@ -39,7 +39,7 @@ pub(super) fn parse_vml_box_style(style_str: &str) -> VmlBoxStyle {
         margin_top: 0.0,
         h_relative: HRelativeFrom::Column,
         v_relative: VRelativeFrom::Paragraph,
-        behind_text: false,
+        z_index: 0,
     };
     for part in style_str.split(';') {
         if let Some((key, val)) = part.trim().split_once(':') {
@@ -49,7 +49,7 @@ pub(super) fn parse_vml_box_style(style_str: &str) -> VmlBoxStyle {
                 "height" => s.height = parse_pt(val).unwrap_or(0.0),
                 "margin-left" => s.margin_left = parse_pt(val).unwrap_or(0.0),
                 "margin-top" => s.margin_top = parse_pt(val).unwrap_or(0.0),
-                "z-index" => s.behind_text = val.parse::<i64>().is_ok_and(|z| z < 0),
+                "z-index" => s.z_index = val.parse().unwrap_or(0),
                 "mso-position-horizontal-relative" => {
                     s.h_relative = match val {
                         "page" => HRelativeFrom::Page,
@@ -779,8 +779,9 @@ fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
         margin_top,
         h_relative,
         v_relative,
-        behind_text,
+        z_index,
     } = parse_vml_box_style(shape.attribute("style").unwrap_or(""));
+    let (behind_doc, z_index) = vml_z_order(z_index);
     if width <= 0.0 || height <= 0.0 {
         return None;
     }
@@ -801,7 +802,8 @@ fn parse_vml_geometry_shape(shape: roxmltree::Node) -> Option<Textbox> {
         stroke_color: stroked.then_some(stroke_color),
         stroke_width,
         fill,
-        behind_doc: behind_text,
+        behind_doc,
+        z_index,
         no_text_wrap: true,
         ..Textbox::default()
     })
@@ -845,10 +847,7 @@ pub(super) fn parse_connector_from_vml(pict: roxmltree::Node) -> Option<Connecto
     {
         return None;
     }
-    let z = vml_style_prop(style, "z-index")
-        .and_then(|v| v.parse::<i64>().ok())
-        .unwrap_or(0);
-    (line.behind_doc, line.z_index) = super::images::vml_z_order(z);
+    (line.behind_doc, line.z_index) = vml_z_order(b.z_index);
     line.h_position = HorizontalPosition::Offset(b.margin_left);
     line.h_relative_from = b.h_relative;
     line.v_position = VerticalPosition::Offset(b.margin_top);
@@ -936,8 +935,9 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         margin_top,
         h_relative,
         v_relative,
-        ..
+        z_index,
     } = parse_vml_box_style(style_str);
+    let (behind_doc, z_index) = vml_z_order(z_index);
 
     // VML shapes are stroked by default (black, 0.75pt) unless stroked="f".
     // Word renders this border, so honor it — previously every VML textbox was
@@ -973,9 +973,8 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         v_relative_from: v_relative,
         stroke_color,
         stroke_width,
-        behind_doc: style_str.split(';').filter_map(|part| part.trim().split_once(':'))
-            .any(|(key, value)| key.trim() == "z-index"
-                && value.trim().parse::<i64>().is_ok_and(|z| z < 0)),
+        behind_doc,
+        z_index,
         fill: parse_vml_textbox_fill(shape),
         margin_left: 7.2,
         margin_right: 7.2,
