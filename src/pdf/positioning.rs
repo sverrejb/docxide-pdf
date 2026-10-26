@@ -73,6 +73,8 @@ pub(crate) fn resolve_fi_y_top(fi: &FloatingImage, sp: &SectionProperties, slot_
         },
         VerticalPosition::AlignTop => match fi.v_relative_from {
             VRelativeFrom::Page => sp.page_height,
+            // sample500kB's picture tops its anchor paragraph, 89pt below the margin.
+            VRelativeFrom::Paragraph => slot_top,
             _ => sp.page_height - sp.margin_top,
         },
         VerticalPosition::AlignCenter => match fi.v_relative_from {
