@@ -1708,6 +1708,21 @@ pub(super) fn render_header_footer(
                     .as_ref()
                     .map(|g| g.iter().map(|&(_, w)| w).collect());
 
+                // Tab stops are measured from the column, so a paragraph that
+                // starts beside a float (its lines shifted right of a logo)
+                // sees them that much nearer: bulgarian_farmland's letterhead
+                // tabs to 63.8pt from the margin, not from the emblem's edge.
+                // ponytail: default-interval stops are not shifted.
+                let tab_shift = para_text_x - (sp.margin_left + para.indent_left);
+                let shifted_stops: Vec<crate::model::TabStop> = para
+                    .tab_stops
+                    .iter()
+                    .map(|t| crate::model::TabStop {
+                        position: t.position - tab_shift,
+                        ..t.clone()
+                    })
+                    .collect();
+
                 let mut lines = build_lines(
                     &substituted_runs,
                     ctx,
@@ -1715,7 +1730,7 @@ pub(super) fn render_header_footer(
                     ctx.cjk(true, para),
                     &LineOpts {
                         inline_images: Some(&block_inline_images),
-                        tab_stops: &para.tab_stops,
+                        tab_stops: &shifted_stops,
                         indent_left: para.indent_left,
                         indent_right: para.indent_right,
                         hanging: text_hanging,
