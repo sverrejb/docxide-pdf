@@ -1460,9 +1460,8 @@ pub(super) struct CjkLayout {
     /// punctuation to keep one more character on the line.
     pub(super) compress_punct: bool,
     /// Justified paragraph under Word 2013+ layout (compatibilityMode 15): a
-    /// word that overflows stays on the line when its middle is still inside
-    /// the measure and the line's spaces can shrink to make room (see
-    /// `SPACE_SQUEEZE`).
+    /// word that overflows stays on the line when `squeeze_keeps` allows it
+    /// and the line's spaces can shrink to make room (see `SPACE_SQUEEZE`).
     pub(super) squeeze_spaces: bool,
     /// Justified paragraph under `wpJustification`: a word that overflows by
     /// at most two spaces' width stays, and the whole line is squeezed
@@ -1482,6 +1481,17 @@ pub(super) struct CjkLayout {
 /// 14,122 line-end decisions in those PDFs, "within this cap and the word's
 /// midpoint inside the margin" reproduces 94.6%; either condition alone ~90%.
 const SPACE_SQUEEZE: f32 = 0.25;
+
+/// Whether Word 2013+ keeps an overflowing word on a squeezed line. After a
+/// hyphen at most a third of the word may stick out; after a space, 0.35 of
+/// it plus a third of the space. Word probes at 12 and 14 pt in 0.1 pt steps
+/// (2026-10-26): 12 and 24 pt words after a hyphen stay to 4.0 and 8.0 pt
+/// over, after a 3 pt space to 5.2 and 9.4 pt; "half the word" kept short
+/// words 1-3 pt too long.
+fn squeeze_keeps(overflow: f32, word_w: f32, lead_space: f32) -> bool {
+    let share = if lead_space > 0.0 { 0.35 } else { 1.0 / 3.0 };
+    overflow <= share * word_w + lead_space / 3.0
+}
 
 /// How far a `wpJustification` line may overflow and still keep its last
 /// word, in spaces of the word's font. Measured on three compat-14 Courier
@@ -2172,7 +2182,9 @@ pub(super) fn build_paragraph_lines(
             if overflows && (need_space || is_continuation || after_hyphen) && !in_right_region {
                 // How far the word may overflow and stay: Word 2013+ narrows
                 // the spaces, wpJustification the whole line.
-                let space_room = (cjk.squeeze_spaces && word_x + word_w / 2.0 <= cur_max)
+                let lead_space = if need_space { pending_space_w } else { 0.0 };
+                let keeps = squeeze_keeps(word_x + word_w - cur_max, word_w, lead_space);
+                let space_room = (cjk.squeeze_spaces && keeps)
                     .then(|| SPACE_SQUEEZE * (line_space_width(&current_chunks) + pending_space_w));
                 let line_room = (cjk.squeeze_line && (need_space || is_continuation))
                     .then(|| SQUEEZE_LINE_SPACES * entry.space_width(eff_fs));
@@ -3141,11 +3153,11 @@ pub(super) fn build_tabbed_line(
                 // line ends in "опалення" with its spaces at 93%.
                 if overflows && cjk.squeeze_spaces && cur_line_max >= line_reach {
                     let after_tab = all_chunks.get(justify_from..).unwrap_or(&[]);
-                    let spaces = after_tab.last().map_or(0.0, |last| {
-                        line_space_width(after_tab)
-                            + (current_x - last.x_offset - last.width).max(0.0)
+                    let lead_space = after_tab.last().map_or(0.0, |last| {
+                        (current_x - last.x_offset - last.width).max(0.0)
                     });
-                    if current_x + ww / 2.0 <= cur_line_max
+                    let spaces = line_space_width(after_tab) + lead_space;
+                    if squeeze_keeps(current_x + ww - cur_line_max, ww, lead_space)
                         && current_x + ww - cur_line_max <= SPACE_SQUEEZE * spaces
                     {
                         overflows = false;
@@ -5019,6 +5031,19 @@ mod tests {
         );
         assert!(!breaks_between('.', '№'));
         assert!(breaks_between(' ', '№'));
+    }
+
+    #[test]
+    fn squeeze_keeps_words_to_word_probe_thresholds() {
+        for (word_w, lead, keeps_to, wraps_at) in [
+            (24.0, 3.0, 9.39, 9.5),
+            (12.0, 3.0, 5.19, 5.3),
+            (24.0, 0.0, 7.99, 8.1),
+            (12.0, 0.0, 3.99, 4.1),
+        ] {
+            assert!(squeeze_keeps(keeps_to, word_w, lead), "{word_w} {lead}");
+            assert!(!squeeze_keeps(wraps_at, word_w, lead), "{word_w} {lead}");
+        }
     }
 
     #[test]
