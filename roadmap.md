@@ -33,12 +33,19 @@ each probed in Word online and verified on the suite (snapshots `nf2-base` /
 
 Still open on these fixtures:
 
-- **swiss_materials (28.9)**: Word keeps a 3-line list item at the foot of
-  page 2 (last baseline 776.6, body bottom 785.3) where we break the page
-  before it: a 1-line item fits, 3 lines do not, so our page-2 body bottom
-  sits ~20pt too high (footer `ACEn-tte` style, exact 10pt line, footer
-  distance 28.35pt). The `›` bullet (numbering font Arial) draws 3pt below
-  its text baseline.
+- **swiss_materials (33.3)**: Word keeps a 3-line list item at the foot of
+  page 2 (last baseline 783.5, its 2pt descender past the 785.3 margin) where
+  we break the page before it; our fit test is 0.46pt over. Letting the last
+  line's descent hang (`last_line_lead = line_h - ascent`) regressed 27
+  fixtures and was reverted; Word's exact tolerance (its 0.25pt line grid
+  makes the item 3 x 11.0 = exactly the margin) is unknown. Its watermark
+  (VML WordArt, regular weight), SQS stamp (vector WMF, light grey via
+  `a:lum`) and Helvetica-family fonts are fixed; the rest of the gap is the
+  page-3 reflow.
+- **bulgarian_farmland (71.5, was 66.6)**: the emblem (vector WMF) now draws
+  and the letterhead's tabbed lines sit at Word's x; its first line is still
+  not wrapped beside the emblem, which is anchored to the *next* paragraph
+  with a negative offset (header float zones only start at their anchor).
 - **japanese_hr_consultation (39.9)**: table rows are ~1pt short each (HG丸ｺﾞｼｯｸM-PRO
   9pt bold cells on a 17.5pt lines grid: Word rows 18.25/19.0, ours 18.0), so
   the form drifts 9pt by the table's end; needs a row-height probe.
