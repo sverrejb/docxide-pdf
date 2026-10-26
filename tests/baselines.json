@@ -6995,8 +6995,8 @@
     "a11y_text": 0.9928
   },
   "scraped/bulgarian_farmland_allocation_order": {
-    "jaccard": 0.6663,
-    "ssim": 0.8637,
+    "jaccard": 0.7151,
+    "ssim": 0.891,
     "text_boundary": 0.9556,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -7044,6 +7044,10 @@
     "ua_deficit": 0,
     "a11y_struct": 0.8073,
     "a11y_text": 0.9083
+  },
+  "scraped/catalan_university_transfer_offer": {
+    "jaccard": 0.6196,
+    "ssim": 0.8242
   },
   "scraped/centrifugal_water_chillers": {
     "jaccard": 0.8147,
@@ -7203,6 +7207,10 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "scraped/czech_after_school_april_activities": {
+    "jaccard": 0.9072,
+    "ssim": 0.9689
+  },
   "scraped/czech_cafeteria_notice": {
     "jaccard": 0.7456,
     "ssim": 0.8756,
@@ -7223,6 +7231,10 @@
     "ua_deficit": 0,
     "a11y_struct": 1.0,
     "a11y_text": 1.0
+  },
+  "scraped/czech_council_resolutions_2023": {
+    "jaccard": 0.6693,
+    "ssim": 0.867
   },
   "scraped/czech_crisis_measure_notice": {
     "jaccard": 0.7488,
@@ -7290,6 +7302,10 @@
     "ua_deficit": 0,
     "a11y_struct": 1.0,
     "a11y_text": 1.0
+  },
+  "scraped/czech_village_council_minutes_2025": {
+    "jaccard": 0.6775,
+    "ssim": 0.9537
   },
   "scraped/czech_wastewater_discharge_permit": {
     "jaccard": 0.5928,
@@ -7552,6 +7568,10 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "scraped/greensboro_partnership_brochure": {
+    "jaccard": 0.7246,
+    "ssim": 0.9188
+  },
   "scraped/handels_messiah_biblical_analysis": {
     "jaccard": 0.7697,
     "ssim": 0.9204,
@@ -7673,6 +7693,10 @@
     "a11y_struct": 0.9773,
     "a11y_text": 1.0
   },
+  "scraped/japanese_hr_consultation_application": {
+    "jaccard": 0.3987,
+    "ssim": 0.5485
+  },
   "scraped/japanese_interlibrary_loan": {
     "jaccard": 0.6849,
     "ssim": 0.8346,
@@ -7786,6 +7810,10 @@
     "ua_deficit": 0,
     "a11y_struct": 1.0,
     "a11y_text": 1.0
+  },
+  "scraped/lithuanian_value_added_tax_amendment": {
+    "jaccard": 0.6209,
+    "ssim": 0.835
   },
   "scraped/maine_criminal_history_record": {
     "jaccard": 0.401,
@@ -8018,6 +8046,10 @@
     "ua_deficit": 0,
     "a11y_struct": 0.9831,
     "a11y_text": 0.9896
+  },
+  "scraped/primary_care_safeguarding_annual_review": {
+    "jaccard": 0.7147,
+    "ssim": 0.9212
   },
   "scraped/radiographer_interventional_job_desc": {
     "jaccard": 0.7748,
@@ -8280,6 +8312,10 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "scraped/spanish_constitutional_court_1985": {
+    "jaccard": 0.5905,
+    "ssim": 0.8063
+  },
   "scraped/spanish_constitutional_ruling": {
     "jaccard": 0.6058,
     "ssim": 0.8269,
@@ -8330,6 +8366,10 @@
     "ua_deficit": 0,
     "a11y_struct": 0.7185,
     "a11y_text": 0.8008
+  },
+  "scraped/swiss_materials_extraction_zone_guidance": {
+    "jaccard": 0.333,
+    "ssim": 0.5311
   },
   "scraped/taiwanese_education_fraud_ruling": {
     "jaccard": 0.4938,
