@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 use rayon::prelude::*;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -190,6 +191,32 @@ pub fn write_latest_scores(updates: &HashMap<String, Baselines>) {
     }
     let json = serde_json::to_string_pretty(&scores).expect("Failed to serialize latest scores");
     fs::write(path, json + "\n").expect("Failed to write latest_scores.json");
+}
+
+/// The per-case metric cache: `cache` is reused while it is newer than every input, since the
+/// metrics of an unchanged PDF pair cannot change and an unchanged PDF keeps its mtime (see
+/// `ensure_generated_pdf`). Otherwise `compute` runs and its result is written back.
+// ponytail: like the a11y cache this ignores the metric code's own version; delete
+// tests/output/*/*/<cache name> after changing a metric
+pub fn cached<T: Serialize + DeserializeOwned>(
+    cache: &Path,
+    inputs: &[&Path],
+    compute: impl FnOnce() -> Option<T>,
+) -> Option<T> {
+    let fresh =
+        mtime(cache).is_some_and(|c| inputs.iter().all(|i| mtime(i).is_some_and(|m| m <= c)));
+    if fresh
+        && let Some(v) = fs::read_to_string(cache)
+            .ok()
+            .and_then(|s| serde_json::from_str(&s).ok())
+    {
+        return Some(v);
+    }
+    let v = compute()?;
+    if let Ok(json) = serde_json::to_string(&v) {
+        let _ = fs::write(cache, json);
+    }
+    Some(v)
 }
 
 /// Returns the newest mtime of any file found by recursively walking `dir`.

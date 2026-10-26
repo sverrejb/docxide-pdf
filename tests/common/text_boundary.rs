@@ -153,6 +153,7 @@ fn last_word(s: &str) -> String {
     n.split_whitespace().last().unwrap_or_default().to_string()
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct TextBoundary {
     pub ref_pages: usize,
     pub gen_pages: usize,

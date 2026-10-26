@@ -18,7 +18,10 @@ fn analyze_fixture(fixture_dir: &Path) -> Option<CaseResult> {
         return None;
     }
     let generated_pdf = common::generated_pdf_or_skip(fixture_dir, &name)?;
-    let tb = common::text_boundary::analyze(&reference_pdf, &generated_pdf);
+    let cache = common::output_dir(fixture_dir).join("text_boundary.json");
+    let tb = common::cached(&cache, &[&reference_pdf, &generated_pdf], || {
+        Some(common::text_boundary::analyze(&reference_pdf, &generated_pdf))
+    })?;
     Some(CaseResult { name, tb })
 }
 
