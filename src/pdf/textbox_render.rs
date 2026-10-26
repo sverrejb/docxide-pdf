@@ -565,7 +565,9 @@ pub(super) fn render_textbox_paragraphs(
             tb_lines.len(),
             0,
             links,
-            0.0,
+            // The first line's indent also moves centred and right-aligned text
+            // (air_pollution's caption: firstLine 709 shifts it 17.6pt).
+            text_hanging,
             ctx.fonts,
             None,
             gradient_specs,
