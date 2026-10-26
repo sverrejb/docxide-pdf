@@ -4131,6 +4131,66 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/hyphen-opening-guillemet-explicit-space": {
+    "jaccard": 0.839,
+    "ssim": 0.9278,
+    "text_boundary": 1.0,
+    "ua_fail": 0,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.375,
+    "a11y_text": 1.0
+  },
+  "cases/hyphen-opening-guillemet-hyphen-opening": {
+    "jaccard": 0.8659,
+    "ssim": 0.926,
+    "text_boundary": 1.0,
+    "ua_fail": 0,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.375,
+    "a11y_text": 1.0
+  },
+  "cases/hyphen-opening-guillemet-nonbreaking-hyphen": {
+    "jaccard": 0.6746,
+    "ssim": 0.8098,
+    "text_boundary": 1.0,
+    "ua_fail": 0,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.375,
+    "a11y_text": 1.0
+  },
+  "cases/hyphen-opening-guillemet-quoted-hyphen": {
+    "jaccard": 0.839,
+    "ssim": 0.9278,
+    "text_boundary": 1.0,
+    "ua_fail": 0,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.375,
+    "a11y_text": 1.0
+  },
+  "cases/hyphen-opening-guillemet-split-runs": {
+    "jaccard": 0.839,
+    "ssim": 0.9278,
+    "text_boundary": 1.0,
+    "ua_fail": 0,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.375,
+    "a11y_text": 1.0
+  },
+  "cases/hyphen-opening-guillemet-wide": {
+    "jaccard": 0.8175,
+    "ssim": 0.9252,
+    "text_boundary": 1.0,
+    "ua_fail": 0,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.375,
+    "a11y_text": 1.0
+  },
   "cases/inline-canvas-header-width300-tab0-effect0-following0": {
     "jaccard": 0.9968,
     "ssim": 0.995,
@@ -6651,6 +6711,86 @@
     "a11y_struct": 0.5,
     "a11y_text": 1.0
   },
+  "cases/underlined-space-compat14-underline0-split0": {
+    "jaccard": 0.7168,
+    "ssim": 0.933,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/underlined-space-compat14-underline0-split1": {
+    "jaccard": 0.7168,
+    "ssim": 0.933,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/underlined-space-compat14-underline1-split0": {
+    "jaccard": 0.6412,
+    "ssim": 0.8481,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/underlined-space-compat14-underline1-split1": {
+    "jaccard": 0.6412,
+    "ssim": 0.8481,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/underlined-space-compat15-underline0-split0": {
+    "jaccard": 0.6307,
+    "ssim": 0.893,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/underlined-space-compat15-underline0-split1": {
+    "jaccard": 0.6307,
+    "ssim": 0.893,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/underlined-space-compat15-underline1-split0": {
+    "jaccard": 0.5897,
+    "ssim": 0.875,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/underlined-space-compat15-underline1-split1": {
+    "jaccard": 0.5897,
+    "ssim": 0.875,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
   "cases/vml-front-rule-over-background": {
     "jaccard": 0.9138,
     "ssim": 0.9558,
@@ -6660,6 +6800,138 @@
     "ua_deficit": 0,
     "a11y_struct": 1.0,
     "a11y_text": 1.0
+  },
+  "cases/vml-group-behind-order-group-higher": {
+    "jaccard": 0.9998,
+    "ssim": 0.998,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0
+  },
+  "cases/vml-group-behind-order-picture-higher": {
+    "jaccard": 0.9998,
+    "ssim": 1.0,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0
+  },
+  "cases/vml-group-nested0-origin0-shift0": {
+    "jaccard": 0.9707,
+    "ssim": 0.9422,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/vml-group-nested0-origin0-shift15": {
+    "jaccard": 0.9708,
+    "ssim": 0.9407,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/vml-group-nested0-origin100-shift0": {
+    "jaccard": 0.9707,
+    "ssim": 0.9422,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/vml-group-nested0-origin100-shift15": {
+    "jaccard": 0.9708,
+    "ssim": 0.9407,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/vml-group-nested1-origin0-shift0": {
+    "jaccard": 0.9707,
+    "ssim": 0.9422,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/vml-group-nested1-origin0-shift15": {
+    "jaccard": 0.9708,
+    "ssim": 0.9407,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/vml-group-nested1-origin100-shift0": {
+    "jaccard": 0.9707,
+    "ssim": 0.9422,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/vml-group-nested1-origin100-shift15": {
+    "jaccard": 0.9708,
+    "ssim": 0.9407,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/vml-group-picture-crop": {
+    "jaccard": 0.9997,
+    "ssim": 0.9724,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0
+  },
+  "cases/vml-group-picture-washout": {
+    "jaccard": 0.9991,
+    "ssim": 1.0,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0
+  },
+  "cases/vml-stroke-line-before-0": {
+    "jaccard": 0.9181,
+    "ssim": 0.967,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6667,
+    "a11y_text": 1.0
+  },
+  "cases/vml-textbox-behind-order-picture-higher": {
+    "jaccard": 0.9998,
+    "ssim": 0.9973,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0
+  },
+  "cases/vml-textbox-behind-order-textbox-higher": {
+    "jaccard": 0.9998,
+    "ssim": 0.9971,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0
   },
   "cases/vml-textbox-fill-color": {
     "jaccard": 0.8397,
@@ -6700,6 +6972,20 @@
     "ua_deficit": 0,
     "a11y_struct": 1.0,
     "a11y_text": 1.0
+  },
+  "cases/vml-textbox-front-order-picture-higher": {
+    "jaccard": 0.9998,
+    "ssim": 0.9973,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0
+  },
+  "cases/vml-textbox-front-order-textbox-higher": {
+    "jaccard": 0.9998,
+    "ssim": 0.9971,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0
   },
   "fonts/arial": {
     "jaccard": 0.8374,
@@ -7152,9 +7438,9 @@
     "a11y_text": 0.9895
   },
   "scraped/croatian_grant_guidelines": {
-    "jaccard": 0.4665,
-    "ssim": 0.6685,
-    "text_boundary": 0.7483,
+    "jaccard": 0.4667,
+    "ssim": 0.6686,
+    "text_boundary": 0.7491,
     "convert_ms": 270.5,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -7225,9 +7511,9 @@
     "a11y_text": 1.0
   },
   "scraped/czech_crisis_measure_notice": {
-    "jaccard": 0.7488,
-    "ssim": 0.9142,
-    "text_boundary": 0.9552,
+    "jaccard": 0.7697,
+    "ssim": 0.9321,
+    "text_boundary": 0.9925,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
