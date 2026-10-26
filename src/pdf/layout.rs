@@ -2157,50 +2157,11 @@ pub(super) fn build_paragraph_lines(
 
             // Small tolerance for floating-point width accumulation over many glyphs
             let mut overflows = proposed_x + ww > cur_max + 0.05;
-            // A break after a hyphen has no intervening space, but the line's
-            // earlier spaces can still shrink to keep the following segment.
-            let after_hyphen = overflows
-                && !need_space
-                && current_chunks.last().is_some_and(|c| c.text.ends_with('-'))
-                && {
-                    // Keep the existing breaks for short suffixes and numeric
-                    // identifiers: Word does not consistently squeeze those.
-                    let suffix = shown.trim_end_matches(['.', ',', ';', ':', '!', '?', ')', '»']);
-                    suffix.chars().count() >= 2 && suffix.chars().all(char::is_alphabetic)
-                };
-            // Earlier word spaces can shrink to keep a complete numeric
-            // suffix after a hyphen. Intermediate fragments ending in another
-            // hyphen are intentionally excluded.
-            let suffix = shown.trim_end_matches(['.', ',', ';', ':', '!', '?', ')', '»']);
-            let after_numeric_hyphen = overflows
-                && !need_space
-                && current_chunks.last().is_some_and(|c| c.text.ends_with('-'))
-                && !suffix.is_empty()
-                && suffix.chars().all(|c| c.is_ascii_digit());
-            // Complete mixed letter/digit code suffixes can use the same
-            // Word 2013+ space budget as words following a space.
-            let mixed_code_suffix = cjk.squeeze_spaces
-                && !need_space
-                && current_chunks.last().is_some_and(|c| c.text.ends_with('-'))
-                && {
-                    let suffix = shown.trim_end_matches(['.', ',', ';', ':', '!', '?', ')', '»']);
-                    suffix.chars().all(char::is_alphanumeric)
-                        && suffix.chars().any(char::is_alphabetic)
-                        && suffix.chars().any(|c| c.is_ascii_digit())
-                };
-            // A complete numeric identifier suffix may use the existing space
-            // squeeze budget even though its hyphen is a break opportunity.
-            let numeric_slash_suffix = overflows
-                && cjk.squeeze_spaces
-                && !need_space
-                && current_chunks.last().is_some_and(|c| c.text.ends_with('-'))
-                && {
-                    let suffix = shown.trim_end_matches(['.', ',', ';', ':', '!', '?', ')', '»']);
-                    suffix.contains('/')
-                        && suffix.split('/').all(|part| {
-                            !part.is_empty() && part.bytes().all(|c| c.is_ascii_digit())
-                        })
-                };
+            // The segment after a hyphen break may stay by narrowing the
+            // line's spaces, judged like a word after a space: Word 2013+ keeps
+            // "x", "12-", "based", "and/or" and "12345/2026" alike, within the
+            // same midpoint and budget (Word probe 2026-10-26).
+            let after_hyphen = current_chunks.last().is_some_and(|c| c.text.ends_with('-'));
             // A word glued to the previous run's word is judged as one word.
             let (word_x, word_w) = if is_continuation && word_start < current_chunks.len() {
                 let x = current_chunks[word_start].x_offset;
@@ -2208,14 +2169,7 @@ pub(super) fn build_paragraph_lines(
             } else {
                 (proposed_x, ww)
             };
-            if overflows
-                && (need_space
-                    || is_continuation
-                    || (cjk.squeeze_spaces && (after_hyphen || after_numeric_hyphen))
-                    || mixed_code_suffix
-                    || numeric_slash_suffix)
-                && !in_right_region
-            {
+            if overflows && (need_space || is_continuation || after_hyphen) && !in_right_region {
                 // How far the word may overflow and stay: Word 2013+ narrows
                 // the spaces, wpJustification the whole line.
                 let space_room = (cjk.squeeze_spaces && word_x + word_w / 2.0 <= cur_max)
@@ -4879,39 +4833,6 @@ mod tests {
     }
 
     #[test]
-    fn complete_numeric_slash_suffix_keeps_the_space_squeeze_cap() {
-        let fonts = HashMap::from([("Arial".to_string(), FontEntry::stub())]);
-        let run = |s: &str| Run {
-            text: s.into(),
-            ..make_run(10.0, VertAlign::Baseline, false)
-        };
-        for suffix in ["12345/2026", "12/3", "1/2/3"] {
-            let text = format!("aa aa aa aa A12-{suffix}");
-            for runs in [vec![run(&text)], vec![run("aa aa aa aa A12-"), run(suffix)]] {
-                let build = |overflow, squeeze| {
-                    build_paragraph_lines(
-                        &runs,
-                        &fonts,
-                        text.len() as f32 * 5.0 - overflow,
-                        0.0,
-                        &HashMap::new(),
-                        &HashMap::new(),
-                        None,
-                        None,
-                        None,
-                        plain_layout(squeeze),
-                    )
-                };
-                let squeezed = build(1.0, true);
-                assert_eq!(squeezed.len(), 1, "{suffix}");
-                assert!(squeezed[0].squeezed);
-                assert_eq!(build(1.0, false).len(), 2);
-                assert_eq!(build(6.0, true).len(), 2);
-            }
-        }
-    }
-
-    #[test]
     fn url_wraps_only_after_hyphens() {
         let words: Vec<&str> =
             split_preserving_spaces("see https://example.com/foo/bar?x=1&y=2#frag after")
@@ -5101,62 +5022,13 @@ mod tests {
     }
 
     #[test]
-    fn hyphen_segment_can_use_existing_space_squeeze_budget() {
+    fn segment_after_hyphen_squeezes_like_a_word_after_a_space() {
         let fonts = HashMap::from([("Arial".to_string(), FontEntry::stub())]);
         let run = |s: &str| Run {
             text: s.into(),
             ..make_run(10.0, VertAlign::Baseline, false)
         };
-        let text = "aa aa aa aa 335-PP.";
-        let full = text.len() as f32 * 5.0;
-        for runs in [vec![run(text)], vec![run("aa aa aa aa 335-"), run("PP.")]] {
-            let build = |overflow, squeeze| {
-                build_paragraph_lines(
-                    &runs,
-                    &fonts,
-                    full - overflow,
-                    0.0,
-                    &HashMap::new(),
-                    &HashMap::new(),
-                    None,
-                    None,
-                    None,
-                    plain_layout(squeeze),
-                )
-            };
-            let lines = build(1.0, true);
-            assert_eq!(lines.len(), 1);
-            assert!(lines[0].squeezed);
-            assert_eq!(build(1.0, false).len(), 2);
-            assert_eq!(build(6.0, true).len(), 2);
-        }
-        for suffix in ["x", "12-"] {
-            let text = format!("aa aa aa aa 335-{suffix}");
-            let runs = [run(&text)];
-            let lines = build_paragraph_lines(
-                &runs,
-                &fonts,
-                text.len() as f32 * 5.0 - 1.0,
-                0.0,
-                &HashMap::new(),
-                &HashMap::new(),
-                None,
-                None,
-                None,
-                plain_layout(true),
-            );
-            assert_eq!(lines.len(), 2, "suffix={suffix}");
-        }
-    }
-
-    #[test]
-    fn complete_numeric_suffix_can_squeeze_spaces() {
-        let fonts = HashMap::from([("Arial".to_string(), FontEntry::stub())]);
-        let run = |s: &str| Run {
-            text: s.into(),
-            ..make_run(10.0, VertAlign::Baseline, false)
-        };
-        for suffix in ["05215", "2617.", "12"] {
+        for suffix in ["PP.", "x", "12-", "05215", "AB2C2", "12345/2026", "and/or"] {
             let text = format!("aa aa aa aa 11-{suffix}");
             for runs in [vec![run(&text)], vec![run("aa aa aa aa 11-"), run(suffix)]] {
                 let build = |overflow, squeeze| {
@@ -5174,43 +5046,10 @@ mod tests {
                     )
                 };
                 let lines = build(1.0, true);
-                assert_eq!(lines.len(), 1, "suffix={suffix}");
+                assert_eq!(lines.len(), 1, "{suffix}");
                 assert!(lines[0].squeezed);
-                assert_eq!(build(1.0, false).len(), 2);
-                assert_eq!(build(6.0, true).len(), 2);
-            }
-        }
-    }
-
-    #[test]
-    fn complete_mixed_suffix_can_squeeze_spaces() {
-        let fonts = HashMap::from([("Arial".to_string(), FontEntry::stub())]);
-        let run = |s: &str| Run {
-            text: s.into(),
-            ..make_run(10.0, VertAlign::Baseline, false)
-        };
-        for suffix in ["AB2C2", "A1"] {
-            let text = format!("aa aa aa aa 11-{suffix}");
-            for runs in [vec![run(&text)], vec![run("aa aa aa aa 11-"), run(suffix)]] {
-                let build = |overflow, squeeze| {
-                    build_paragraph_lines(
-                        &runs,
-                        &fonts,
-                        text.len() as f32 * 5.0 - overflow,
-                        0.0,
-                        &HashMap::new(),
-                        &HashMap::new(),
-                        None,
-                        None,
-                        None,
-                        plain_layout(squeeze),
-                    )
-                };
-                let lines = build(1.0, true);
-                assert_eq!(lines.len(), 1, "suffix={suffix}");
-                assert!(lines[0].squeezed);
-                assert_eq!(build(1.0, false).len(), 2);
-                assert_eq!(build(6.0, true).len(), 2);
+                assert_eq!(build(1.0, false).len(), 2, "{suffix}");
+                assert_eq!(build(6.0, true).len(), 2, "{suffix}");
             }
         }
     }
