@@ -187,7 +187,13 @@ fn scan_font_dirs() -> FontLookup {
         let mut font_files = Vec::new();
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_dir() {
+            // readdir's file type spares a stat per font file; only symlinks need one.
+            let is_dir = match entry.file_type() {
+                Ok(t) if t.is_symlink() => path.is_dir(),
+                Ok(t) => t.is_dir(),
+                Err(_) => false,
+            };
+            if is_dir {
                 subdirs.push(path);
             } else if is_font_file(&path) {
                 font_files.push(path);
