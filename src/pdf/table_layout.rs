@@ -764,6 +764,10 @@ pub(super) struct CellParagraphLayout {
     /// Extra left indent from wrapSquare/Tight floating images in this paragraph.
     /// Text lines are laid out narrower and rendered further right to avoid the image.
     pub(super) float_indent_left: f32,
+    /// The first `beside_lines` lines start `beside_indent` further right,
+    /// level with a left floating nested table.
+    pub(super) beside_indent: f32,
+    pub(super) beside_lines: usize,
     /// `w:keepLines`: the paragraph never splits over a row break.
     pub(super) keep_lines: bool,
     /// Word 2013+ layout (compatibilityMode 15): a row break keeps two lines
@@ -1483,11 +1487,31 @@ pub(super) fn compute_row_layouts(
                                         };
                                         left_edge + fi.image.display_width + fi.dist_right
                                     })
-                                    .fold(0.0f32, f32::max)
-                                    .max(if total_h < left_float_bottom && total_h + line_h > left_float_top
-                                        && left_float_right_gap >= MIN_NESTED_FLOAT_STRIP {
-                                        left_float_indent
-                                    } else { 0.0 });
+                                    .fold(0.0f32, f32::max);
+                                // Lines level with a left floating nested table
+                                // keep clear of it, the rest run full width, as
+                                // beside a wrapping picture.
+                                let beside_float = total_h < left_float_bottom
+                                    && total_h + line_h > left_float_top
+                                    && left_float_right_gap >= MIN_NESTED_FLOAT_STRIP;
+                                let mut beside_indent = if beside_float {
+                                    (left_float_indent - float_indent_left).max(0.0)
+                                } else {
+                                    0.0
+                                };
+                                let mut beside_lines = if beside_indent > 0.0 {
+                                    ((left_float_bottom - total_h) / line_h.max(1.0)).ceil().max(1.0) as usize
+                                } else {
+                                    0
+                                };
+                                // ponytail: tabbed lines take no per-line widths, so
+                                // a tabbed paragraph stays indented throughout.
+                                let float_indent_left = if beside_lines > 0 && runs.iter().any(|r| r.is_tab) {
+                                    beside_lines = 0;
+                                    float_indent_left + std::mem::take(&mut beside_indent)
+                                } else {
+                                    float_indent_left
+                                };
 
                                 // An inline-image paragraph whose only other run
                                 // is a trailing line break (Word's logo-in-cell
@@ -1529,6 +1553,7 @@ pub(super) fn compute_row_layouts(
                                             ctx.cjk(false, para),
                                         )
                                     } else {
+                                        let beside_widths = vec![(para_text_w - beside_indent).max(1.0); beside_lines];
                                         build_paragraph_lines(
                                             runs,
                                             ctx.fonts,
@@ -1537,7 +1562,7 @@ pub(super) fn compute_row_layouts(
                                             &inline_images,
                                             &inline_effects,
                                             None,
-                                            None,
+                                            (beside_lines > 0).then_some(beside_widths.as_slice()),
                                             None,
                                             ctx.cjk(para.auto_space_de || para.auto_space_dn, para),
                                         )
@@ -1719,6 +1744,8 @@ pub(super) fn compute_row_layouts(
                                     text_hanging: super::list_label::text_hanging(para, ctx.default_tab_stop, ctx.fonts),
                                     label_shift: super::list_label::label_shift(para, ctx.fonts),
                                     float_indent_left,
+                                    beside_indent,
+                                    beside_lines,
                                     // Word 2010 layout splits a keepLines cell paragraph too.
                                     keep_lines: para.keep_lines && ctx.compat_mode >= 15,
                                     // Without widow control (and nothing keeping the row

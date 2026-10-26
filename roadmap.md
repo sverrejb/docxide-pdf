@@ -102,8 +102,10 @@ Still open on these fixtures:
   later and pages 2-3 end 24pt off; the standard `o:hr` draws 1.5pt, Word 0.5.
   The merge of PRs #115-#126 (0fdc63f7c) dropped the sole-table rule above
   (restored, 30.9 -> 36.7) and the per-line `beside_lines` wrap (47024bf77,
-  still lost): a paragraph starting beside the picture stays indented
-  throughout, where Word returns its lower lines to full width.
+  restored; no fixture moves yet). Page 2's "set out a standard" line stays
+  indented only because the story above wraps in 4 lines, not Word's 5: Word
+  starts the text ~91pt right of the picture table's edge for both 1755tw
+  grids, we start at 89.5-90 (table width + rightFromText).
 - **romanian_candidate_declaration_form_f2 (36.6, SSIM 91.5)**: layout is
   right to within 0.3pt; thin borders drift 0.1-0.3pt per row and miss the
   reference pixels. Word quantizes baselines to a 0.25pt grid (memory

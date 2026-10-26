@@ -615,7 +615,7 @@ fn render_cell_content(
                     links,
                     first_line_hanging,
                     ctx.fonts,
-                    None,
+                    beside_float_geometry(para, text_x, text_w).as_deref(),
                     gradient_specs,
                     Some(&mut ctx.cell_comment_anchors.borrow_mut()),
                     None,
@@ -890,6 +890,29 @@ fn render_simple_textbox(
         tag,
         hf_sub,
     );
+}
+
+/// Per-line (x, width) for a cell paragraph whose first lines run beside a
+/// left floating nested table (`CellParagraphLayout::beside_lines`).
+fn beside_float_geometry(
+    para: &CellParagraphLayout,
+    text_x: f32,
+    text_w: f32,
+) -> Option<Vec<(f32, f32)>> {
+    (para.beside_lines > 0).then(|| {
+        (0..para.lines.len())
+            .map(|i| {
+                if i < para.beside_lines {
+                    (
+                        text_x + para.beside_indent,
+                        (text_w - para.beside_indent).max(1.0),
+                    )
+                } else {
+                    (text_x, text_w)
+                }
+            })
+            .collect()
+    })
 }
 
 /// Render a nested table inline within a parent cell at the given cursor position.
@@ -1241,7 +1264,7 @@ fn render_partial_cell_content(
                     links,
                     first_line_hanging,
                     ctx.fonts,
-                    None,
+                    beside_float_geometry(para, text_x, text_w).as_deref(),
                     gradient_specs,
                     Some(&mut ctx.cell_comment_anchors.borrow_mut()),
                     None,
@@ -1325,7 +1348,15 @@ fn render_partial_cell_content(
 // including an empty numbered paragraph whose suffix still occupies a tab.
 fn cell_label_alignment_offset(para: &CellParagraphLayout, inner_w: f32) -> f32 {
     // Preserve signed remaining width when indents exceed a narrow cell.
-    let text_w = inner_w - para.indent_left - para.indent_right - para.float_indent_left;
+    let text_w = inner_w
+        - para.indent_left
+        - para.indent_right
+        - para.float_indent_left
+        - if para.beside_lines > 0 {
+            para.beside_indent
+        } else {
+            0.0
+        };
     let first_width = para.lines.first().map_or(0.0, |line| line.total_width);
     let slack = (text_w + para.text_hanging - first_width).max(0.0);
     super::helpers::align_offset(para.alignment, slack)
@@ -2553,6 +2584,24 @@ fn move_cell_comment_anchors(ctx: &RenderContext, page: &mut Vec<(u32, f32, f32,
 #[cfg(test)]
 mod floating_nested_visibility_tests {
     use super::*;
+
+    #[test]
+    fn only_lines_level_with_a_nested_float_are_indented() {
+        let para = CellParagraphLayout {
+            lines: (0..3)
+                .map(|_| super::super::layout::TextLine::default())
+                .collect(),
+            beside_indent: 90.0,
+            beside_lines: 2,
+            ..Default::default()
+        };
+        assert_eq!(
+            beside_float_geometry(&para, 10.0, 400.0),
+            Some(vec![(100.0, 310.0), (100.0, 310.0), (10.0, 400.0)])
+        );
+        let clear = CellParagraphLayout::default();
+        assert_eq!(beside_float_geometry(&clear, 10.0, 400.0), None);
+    }
 
     #[test]
     fn picture_clipping_does_not_clip_picture_free_text() {
