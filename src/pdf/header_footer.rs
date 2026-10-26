@@ -52,6 +52,14 @@ pub(super) fn styleref_key(name: &str, number: bool) -> String {
     if number { key + "\\n" } else { key }
 }
 
+/// A PAGE or NUMPAGES value in its numFmt (None = decimal).
+pub(super) fn page_field_text(n: usize, fmt: Option<&str>) -> String {
+    fmt.map_or_else(
+        || n.to_string(),
+        |fmt| crate::docx::numbering::format_number(n as u32, fmt),
+    )
+}
+
 /// What a header or footer field shows on one page.
 struct FieldValues<'a> {
     page_num: usize,
@@ -64,11 +72,8 @@ impl FieldValues<'_> {
     /// None keeps the cached result.
     fn eval(&self, fc: &FieldCode) -> Option<String> {
         Some(match fc {
-            FieldCode::Page => match self.page_num_format {
-                Some(fmt) => crate::docx::numbering::format_number(self.page_num as u32, fmt),
-                None => self.page_num.to_string(),
-            },
-            FieldCode::NumPages => self.total_pages.to_string(),
+            FieldCode::Page(fmt) => page_field_text(self.page_num, fmt.or(self.page_num_format)),
+            FieldCode::NumPages(fmt) => page_field_text(self.total_pages, *fmt),
             FieldCode::StyleRef { name, number } => self
                 .styleref_values
                 .get(&styleref_key(name, *number))

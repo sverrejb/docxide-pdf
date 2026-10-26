@@ -32,9 +32,9 @@ fn custom_note_mark(note_ref: roxmltree::Node) -> bool {
 fn parse_field_code(instr: &str) -> Option<FieldCode> {
     let keyword = instr.split_whitespace().next()?;
     if keyword.eq_ignore_ascii_case("PAGE") {
-        Some(FieldCode::Page)
+        Some(FieldCode::Page(number_format_switch(instr)))
     } else if keyword.eq_ignore_ascii_case("NUMPAGES") {
-        Some(FieldCode::NumPages)
+        Some(FieldCode::NumPages(number_format_switch(instr)))
     } else if keyword.eq_ignore_ascii_case("STYLEREF") {
         parse_styleref_arg(instr).map(|name| FieldCode::StyleRef {
             name,
@@ -85,6 +85,23 @@ fn has_switch(instr: &str, switch: &str) -> bool {
     instr
         .split_whitespace()
         .any(|s| s.eq_ignore_ascii_case(switch))
+}
+
+/// `\* ROMAN`, `\* alphabetic` …: the numFmt a numeric field is shown in.
+/// Like Word, the case of the format word picks upper or lower case.
+fn number_format_switch(instr: &str) -> Option<&'static str> {
+    let words: Vec<&str> = instr.split_whitespace().collect();
+    words.windows(2).filter(|w| w[0] == "\\*").find_map(|w| {
+        let upper = w[1].chars().all(|c| c.is_ascii_uppercase());
+        match w[1].to_ascii_lowercase().as_str() {
+            "roman" if upper => Some("upperRoman"),
+            "roman" => Some("lowerRoman"),
+            "alphabetic" if upper => Some("upperLetter"),
+            "alphabetic" => Some("lowerLetter"),
+            "arabic" => Some("decimal"),
+            _ => None,
+        }
+    })
 }
 
 /// One open complex field while parsing runs. Word fields nest: a field that

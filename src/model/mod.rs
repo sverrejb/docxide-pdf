@@ -780,8 +780,10 @@ impl Default for Run {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum FieldCode {
-    Page,
-    NumPages,
+    /// The `\*` number-format switch as a numFmt name (`ROMAN` = upperRoman);
+    /// None keeps the section's page number format.
+    Page(Option<&'static str>),
+    NumPages(Option<&'static str>),
     /// `number` is the `\n` switch: the referenced paragraph's list number.
     StyleRef {
         name: String,

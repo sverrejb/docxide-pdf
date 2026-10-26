@@ -94,6 +94,13 @@ fn collect_used_chars(
         .iter()
         .find_map(|s| s.properties.endnote_num_fmt.as_deref())
         .unwrap_or("lowerRoman");
+    // Collect all page number formats across sections so inherited footers get
+    // the right characters (e.g. footer in section 1 inherited by section 2 with lowerRoman).
+    let all_page_num_formats: Vec<&str> = doc
+        .sections
+        .iter()
+        .filter_map(|s| s.properties.page_num_format.as_deref())
+        .collect();
 
     for ln in doc
         .sections
@@ -119,8 +126,14 @@ fn collect_used_chars(
         }
         if let Some(ref fc) = run.field_code {
             match fc {
-                FieldCode::Page | FieldCode::NumPages | FieldCode::PageRef(_) => {
+                FieldCode::Page(_) | FieldCode::NumPages(_) | FieldCode::PageRef(_) => {
                     chars.extend('0'..='9');
+                    if let FieldCode::Page(Some(fmt)) | FieldCode::NumPages(Some(fmt)) = fc {
+                        extend_chars_for_num_format(chars, fmt);
+                    }
+                    for fmt in &all_page_num_formats {
+                        extend_chars_for_num_format(chars, fmt);
+                    }
                 }
                 FieldCode::StyleRef { .. } | FieldCode::If(_) => {}
             }
@@ -252,14 +265,6 @@ fn collect_used_chars(
         }
     }
 
-    // Collect all page number formats across sections so inherited footers get
-    // the right characters (e.g. footer in section 1 inherited by section 2 with lowerRoman).
-    let all_page_num_formats: Vec<&str> = doc
-        .sections
-        .iter()
-        .filter_map(|s| s.properties.page_num_format.as_deref())
-        .collect();
-
     for section in &doc.sections {
         for hf in [
             &section.properties.header_default,
@@ -283,8 +288,13 @@ fn collect_used_chars(
                     }
                     if let Some(ref fc) = run.field_code {
                         match fc {
-                            FieldCode::Page | FieldCode::NumPages | FieldCode::PageRef(_) => {
+                            FieldCode::Page(_) | FieldCode::NumPages(_) | FieldCode::PageRef(_) => {
                                 chars.extend('0'..='9');
+                                if let FieldCode::Page(Some(fmt)) | FieldCode::NumPages(Some(fmt)) =
+                                    fc
+                                {
+                                    extend_chars_for_num_format(chars, fmt);
+                                }
                                 for fmt in &all_page_num_formats {
                                     extend_chars_for_num_format(chars, fmt);
                                 }

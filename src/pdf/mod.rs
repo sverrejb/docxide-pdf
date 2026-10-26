@@ -453,6 +453,8 @@ pub(super) struct RenderContext<'a> {
     /// Display numbers of footnote and endnote reference marks, by note id.
     pub(super) footnote_marks: &'a HashMap<u32, String>,
     pub(super) endnote_marks: &'a HashMap<u32, String>,
+    /// Page numbers from a first pass, for PAGE and NUMPAGES fields in the body.
+    pub(super) body_page_fields: Option<&'a BodyPageFields>,
     /// Word's `compatibilityMode` (see `docx::settings`).
     pub(super) compat_mode: u32,
     /// Word's `doNotExpandShiftReturn` (see `docx::settings`).
@@ -2316,6 +2318,24 @@ fn document_lang(doc: &Document) -> String {
         .unwrap_or_else(|| "en-US".to_string())
 }
 
+/// A body PAGE or NUMPAGES field's value on page `page_idx`, from the first
+/// pass (None before it). ponytail: a paragraph that runs onto the next page
+/// shows its first page's number throughout.
+fn body_page_field_text(run: &Run, ctx: &RenderContext, page_idx: usize) -> Option<String> {
+    let fields = ctx.body_page_fields?;
+    match run.field_code {
+        Some(FieldCode::Page(fmt)) => {
+            let (num, section_fmt) = fields.pages.get(page_idx)?;
+            Some(header_footer::page_field_text(
+                *num,
+                fmt.or(section_fmt.as_deref()),
+            ))
+        }
+        Some(FieldCode::NumPages(fmt)) => Some(header_footer::page_field_text(fields.total, fmt)),
+        _ => None,
+    }
+}
+
 /// Pre-compute bookmark page positions so PAGEREF fields (e.g. TOC) can
 /// show correct page numbers. Simulates page layout without rendering.
 fn compute_bookmark_positions(
@@ -2863,10 +2883,12 @@ fn render_paragraph_block(
     // Substitute footnote/endnote refs and resolve PAGEREF fields
     let has_footnote_refs = para.runs.iter().any(|r| r.footnote_id.is_some());
     let has_endnote_refs = para.runs.iter().any(|r| r.endnote_id.is_some());
-    let has_pageref = para
-        .runs
-        .iter()
-        .any(|r| matches!(&r.field_code, Some(FieldCode::PageRef(_))));
+    let has_pageref = para.runs.iter().any(|r| {
+        matches!(
+            &r.field_code,
+            Some(FieldCode::PageRef(_) | FieldCode::Page(_) | FieldCode::NumPages(_))
+        )
+    });
     let effective_runs: std::borrow::Cow<'_, Vec<Run>> =
         if has_footnote_refs || has_endnote_refs || has_pageref {
             let substituted: Vec<Run> = para
@@ -2888,6 +2910,14 @@ fn render_paragraph_block(
                             r.text = (page_idx + 1).to_string();
                         }
                         r
+                    } else if let Some(text) =
+                        body_page_field_text(run, ctx, state.pb.all_contents.len())
+                    {
+                        Run {
+                            text,
+                            field_code: None,
+                            ..run.clone()
+                        }
                     } else {
                         run.clone()
                     }
@@ -4770,7 +4800,32 @@ fn render_paragraph_block(
     false
 }
 
+/// Each page's number and number format (None = decimal), and the page count.
+pub(super) struct BodyPageFields {
+    pages: Vec<(usize, Option<String>)>,
+    total: usize,
+}
+
 pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
+    let (pdf, page_fields) = render_pass(doc, None)?;
+    // Word shows body PAGE and NUMPAGES fields live, not their cached result,
+    // and their values are known only once the document is paginated.
+    let has_page_fields = body_runs(doc).any(|r| {
+        matches!(
+            r.field_code,
+            Some(FieldCode::Page(_) | FieldCode::NumPages(_))
+        )
+    });
+    if has_page_fields {
+        return render_pass(doc, Some(&page_fields)).map(|(pdf, _)| pdf);
+    }
+    Ok(pdf)
+}
+
+fn render_pass(
+    doc: &Document,
+    page_fields: Option<&BodyPageFields>,
+) -> Result<(Vec<u8>, BodyPageFields), Error> {
     let debug_wrap = std::env::var("DOCXIDE_DEBUG_WRAP").is_ok();
     let t0 = std::time::Instant::now();
     let mut pdf = Pdf::new();
@@ -4869,6 +4924,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         compress_punctuation: doc.compress_punctuation,
         footnote_marks: &footnote_display_order,
         endnote_marks: &endnote_display_order,
+        body_page_fields: page_fields,
         compat_mode: doc.compat_mode,
         do_not_expand_shift_return: doc.do_not_expand_shift_return,
         wp_justification: doc.wp_justification,
@@ -5930,7 +5986,17 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         (t_assembly - t_headers).as_secs_f64() * 1000.0,
     );
 
-    Ok(objstm::pack(pdf.finish()))
+    let page_fields = BodyPageFields {
+        pages: (0..total_pages)
+            .map(|i| {
+                let fmt = page_format_sources[i]
+                    .and_then(|si| doc.sections[si].properties.page_num_format.clone());
+                (page_numbers[i], fmt)
+            })
+            .collect(),
+        total: total_pages,
+    };
+    Ok((objstm::pack(pdf.finish()), page_fields))
 }
 
 #[cfg(test)]
