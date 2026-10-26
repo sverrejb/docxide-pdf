@@ -2188,6 +2188,19 @@ pub(super) fn build_paragraph_lines(
                         && suffix.chars().any(char::is_alphabetic)
                         && suffix.chars().any(|c| c.is_ascii_digit())
                 };
+            // A complete numeric identifier suffix may use the existing space
+            // squeeze budget even though its hyphen is a break opportunity.
+            let numeric_slash_suffix = overflows
+                && cjk.squeeze_spaces
+                && !need_space
+                && current_chunks.last().is_some_and(|c| c.text.ends_with('-'))
+                && {
+                    let suffix = shown.trim_end_matches(['.', ',', ';', ':', '!', '?', ')', '»']);
+                    suffix.contains('/')
+                        && suffix.split('/').all(|part| {
+                            !part.is_empty() && part.bytes().all(|c| c.is_ascii_digit())
+                        })
+                };
             // A word glued to the previous run's word is judged as one word.
             let (word_x, word_w) = if is_continuation && word_start < current_chunks.len() {
                 let x = current_chunks[word_start].x_offset;
@@ -2199,7 +2212,8 @@ pub(super) fn build_paragraph_lines(
                 && (need_space
                     || is_continuation
                     || (cjk.squeeze_spaces && (after_hyphen || after_numeric_hyphen))
-                    || mixed_code_suffix)
+                    || mixed_code_suffix
+                    || numeric_slash_suffix)
                 && !in_right_region
             {
                 // How far the word may overflow and stay: Word 2013+ narrows
@@ -4862,6 +4876,39 @@ mod tests {
         // Last line of a justified paragraph, and non-stretching alignments.
         assert_eq!(char_justify_gaps(Alignment::Justify, false, true, 10), None);
         assert_eq!(char_justify_gaps(Alignment::Left, false, true, 10), None);
+    }
+
+    #[test]
+    fn complete_numeric_slash_suffix_keeps_the_space_squeeze_cap() {
+        let fonts = HashMap::from([("Arial".to_string(), FontEntry::stub())]);
+        let run = |s: &str| Run {
+            text: s.into(),
+            ..make_run(10.0, VertAlign::Baseline, false)
+        };
+        for suffix in ["12345/2026", "12/3", "1/2/3"] {
+            let text = format!("aa aa aa aa A12-{suffix}");
+            for runs in [vec![run(&text)], vec![run("aa aa aa aa A12-"), run(suffix)]] {
+                let build = |overflow, squeeze| {
+                    build_paragraph_lines(
+                        &runs,
+                        &fonts,
+                        text.len() as f32 * 5.0 - overflow,
+                        0.0,
+                        &HashMap::new(),
+                        &HashMap::new(),
+                        None,
+                        None,
+                        None,
+                        plain_layout(squeeze),
+                    )
+                };
+                let squeezed = build(1.0, true);
+                assert_eq!(squeezed.len(), 1, "{suffix}");
+                assert!(squeezed[0].squeezed);
+                assert_eq!(build(1.0, false).len(), 2);
+                assert_eq!(build(6.0, true).len(), 2);
+            }
+        }
     }
 
     #[test]
