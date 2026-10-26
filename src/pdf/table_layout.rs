@@ -1256,7 +1256,15 @@ pub(super) fn compute_row_layouts(
                                 // where the hidden mark would otherwise collapse it.
                                 // ponytail: one measurement; Word's rule for the
                                 // shape's line box is unknown.
-                                let para_content_h = if cell.hide_mark && para.horizontal_rule.is_some() && is_text_empty(&para.runs) {
+                                // Word 2013+ layout (compatibilityMode 15) keeps the
+                                // mark's full text line instead: maine's separator
+                                // rows step one line, 5.25pt once saved as mode 14
+                                // (Word probes).
+                                let para_content_h = if cell.hide_mark
+                                    && ctx.compat_mode < 15
+                                    && para.horizontal_rule.is_some()
+                                    && is_text_empty(&para.runs)
+                                {
                                     5.25
                                 } else {
                                     para.content_height
@@ -1426,7 +1434,8 @@ pub(super) fn compute_row_layouts(
                                     && block_idx == block_count - 1
                                     && para_content_h == 0.0
                                     && is_text_empty(runs)
-                                    && !para.paragraph_mark_vanish;
+                                    && !para.paragraph_mark_vanish
+                                    && !(ctx.compat_mode >= 15 && para.horizontal_rule.is_some());
                                 // A cell drops HTML auto spacing at its edges.
                                 let space_before = if mark_hidden {
                                     prev_space_after
