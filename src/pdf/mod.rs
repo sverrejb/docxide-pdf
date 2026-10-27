@@ -51,10 +51,11 @@ use helpers::{
 use images::{EffectXObjs, EmbeddedImages, embed_all_images};
 use layout::{
     CjkLayout, DualRegion, EMPTY_EFFECTS, EMPTY_INLINE_IMAGES, LineNumberArg, LineOpts,
-    LinkAnnotation, LinkTagger, TextLine, build_lines, build_paragraph_lines, descender_ratio,
-    grid_baseline_offset, grid_snapped_line_h, inline_image_line_extra, is_text_empty,
-    line_max_image_h, lines_height, picture_line_bottom, render_paragraph_lines, run_line_metrics,
-    size_lines_by_own_runs, tallest_glyph_run_metrics, tallest_run_metrics,
+    LinkAnnotation, LinkTagger, PUNCT_PULL_FREE, PUNCT_SQUEEZE, TextLine, build_lines,
+    build_paragraph_lines, descender_ratio, grid_baseline_offset, grid_snapped_line_h,
+    inline_image_line_extra, is_text_empty, line_max_image_h, lines_height, picture_line_bottom,
+    render_paragraph_lines, run_line_metrics, size_lines_by_own_runs, tallest_glyph_run_metrics,
+    tallest_run_metrics,
 };
 use list_label::{label_font_key, render_list_label};
 use positioning::{
@@ -510,7 +511,27 @@ impl RenderContext<'_> {
     fn cjk(&self, auto_space: bool, para: &crate::model::Paragraph) -> CjkLayout {
         CjkLayout {
             auto_space,
+            // Word 2013+ squeezes marks only while justifying: the same text
+            // set left-aligned wraps where the justified copy compresses; the
+            // 2010 layout squeezes any alignment, a little less (Word online
+            // probes 2026-10-27, see `PUNCT_SQUEEZE`).
             compress_punct: self.compress_punctuation,
+            punct_pull: self.compat_mode < 15
+                || matches!(
+                    para.alignment,
+                    crate::model::Alignment::Justify | crate::model::Alignment::Distribute
+                ),
+            punct_cap: if self.compat_mode < 15 {
+                0.4
+            } else {
+                PUNCT_SQUEEZE
+            },
+            punct_pull_free_ratio: if self.compat_mode < 15 {
+                0.0
+            } else {
+                PUNCT_PULL_FREE
+            },
+            punct_pull_free_em: if self.compat_mode < 15 { 0.5 } else { 0.0 },
             squeeze_spaces: self.compat_mode >= 15
                 && matches!(para.alignment, crate::model::Alignment::Justify),
             squeeze_line: self.wp_justification

@@ -293,6 +293,23 @@ pub(crate) fn is_east_asian_char(ch: char) -> bool {
     )
 }
 
+/// Characters that `w:rFonts@hint` assigns to the East Asian font: Word then
+/// draws them full-width and treats them as ideographs for spacing and
+/// punctuation compression (in a hinted run 在“测 gets no autoSpaceDE gap and
+/// both quotes squeeze like commas, issue #139).
+// ponytail: the quotes, dashes, bullets and ellipsis of General Punctuation
+// plus the Latin-1 symbols; §17.3.2.26 lists many more (Greek, Cyrillic,
+// box drawing, …), add them with a fixture that shows one.
+pub(crate) fn is_hint_ambiguous(c: char) -> bool {
+    matches!(c as u32,
+        0x2013..=0x2016 // – — ‖
+        | 0x2018..=0x201D // ‘ ’ “ ”
+        | 0x2020..=0x2022 | 0x2025..=0x2026 | 0x2030 // † ‡ • ‥ … ‰
+        | 0x2032..=0x2033 | 0x2035 | 0x203B // ′ ″ ‵ ※
+        | 0x00A7 | 0x00A8 | 0x00B0 | 0x00B1 | 0x00B4 | 0x00B6 | 0x00B7 | 0x00D7 | 0x00F7
+    )
+}
+
 /// Letters Word draws in the complex-script (`w:cs`) font.
 // ponytail: right-to-left scripts only; Thai and Indic are complex script in
 // Word too, add them with a fixture that shows their fallback font.

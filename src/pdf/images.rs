@@ -127,6 +127,45 @@ fn encode_jpeg(rgb: &image::RgbImage) -> Option<Vec<u8>> {
     }
 }
 
+/// A PNG or BMP stored at 1 bit per pixel. Word keeps the stored depth: such a
+/// source stays 1 bit per sample, while an 8-bit RGB source drawn in black and
+/// white only stays RGB (french_sexual_health's 132×132 icon).
+fn stored_one_bit(data: &[u8]) -> bool {
+    if data.starts_with(b"\x89PNG\r\n\x1a\n") {
+        return data.get(24) == Some(&1);
+    }
+    if data.starts_with(b"BM") && data.len() >= 30 {
+        // Bit count sits after the 14-byte file header and the info header's
+        // size, width and height fields (BITMAPCOREHEADER packs them shorter).
+        let core = u32::from_le_bytes([data[14], data[15], data[16], data[17]]) == 12;
+        let at = if core { 24 } else { 28 };
+        return u16::from_le_bytes([data[at], data[at + 1]]) == 1;
+    }
+    false
+}
+
+/// Every pixel pure black or pure white and opaque: the only content a 1-bit
+/// gray sample can carry (a two-colour palette may hold other colours).
+fn is_bilevel(img: &image::DynamicImage) -> bool {
+    use image::GenericImageView;
+    img.pixels()
+        .all(|(_, _, p)| p[3] == 255 && p[0] == p[1] && p[1] == p[2] && (p[0] == 0 || p[0] == 255))
+}
+
+/// Pack RGB samples into 1-bit DeviceGray rows (MSB first, rows byte-aligned),
+/// thresholding resampled greys back to black and white.
+fn pack_bilevel(rgb: &[u8], w: u32, h: u32) -> Vec<u8> {
+    let stride = (w as usize).div_ceil(8);
+    let mut out = vec![0u8; stride * h as usize];
+    for (i, px) in rgb.chunks_exact(3).enumerate() {
+        if px[0] >= 128 {
+            let (x, y) = (i % w as usize, i / w as usize);
+            out[y * stride + x / 8] |= 0x80 >> (x % 8);
+        }
+    }
+    out
+}
+
 /// Fallback PNG decoder using the `png` crate directly. The `image` crate's
 /// format-pinned reader can fail on interlaced or unusual PNGs; this handles
 /// those cases by decoding with EXPAND+ALPHA transformations.
@@ -441,6 +480,7 @@ fn embed_image_xobject(
                 }
             };
 
+            let bilevel = stored_one_bit(&img.data) && is_bilevel(&decoded);
             let decoded = if let Some((tw, th)) = target {
                 log::debug!(
                     "Downscaling PNG/BMP {}x{} -> {}x{}",
@@ -488,6 +528,21 @@ fn embed_image_xobject(
                     alpha_data = se_mask;
                     has_alpha = true;
                 }
+            }
+
+            // Word keeps a black-and-white source at 1 bit per sample (DeviceGray,
+            // Flate, no Interpolate) even after downsampling: geneva_waste's logo
+            // is 589 bytes in its export and was 3.7 KB here as an RGB JPEG.
+            if bilevel && !has_alpha && img.lum.is_none() {
+                let packed = pack_bilevel(&rgb_data, w, h);
+                let data = miniz_oxide::deflate::compress_to_vec_zlib(&packed, 6);
+                let mut xobj = pdf.image_xobject(xobj_ref, &data);
+                xobj.filter(Filter::FlateDecode);
+                xobj.width(w as i32);
+                xobj.height(h as i32);
+                xobj.color_space().device_gray();
+                xobj.bits_per_component(1);
+                return xobj_ref;
             }
 
             let smask_ref = if has_alpha {
@@ -1111,7 +1166,7 @@ fn embed_textbox_images(
 
 #[cfg(test)]
 mod tests {
-    use super::{apply_lum, crop_matrix};
+    use super::{apply_lum, crop_matrix, is_bilevel, pack_bilevel, stored_one_bit};
 
     #[test]
     fn mixed_cell_paragraph_pictures_are_embedded_in_all_table_stories() {
@@ -1139,6 +1194,45 @@ mod tests {
             assert_eq!(images.table_cell_image_names.len(), 1);
             assert_eq!(images.image_xobjects.len(), 1);
         }
+    }
+
+    #[test]
+    fn bilevel_sources_pack_to_one_bit_rows() {
+        let luma = |w, h, px: Vec<u8>| {
+            image::DynamicImage::ImageLuma8(image::GrayImage::from_raw(w, h, px).unwrap())
+        };
+        assert!(is_bilevel(&luma(3, 2, vec![0, 255, 0, 255, 255, 0])));
+        assert!(!is_bilevel(&luma(1, 1, vec![128])));
+        // Three pixels per row: one byte per row, MSB first, zero-padded.
+        let rgb: Vec<u8> = [0u8, 255, 0, 255, 255, 0]
+            .iter()
+            .flat_map(|&v| [v, v, v])
+            .collect();
+        assert_eq!(pack_bilevel(&rgb, 3, 2), vec![0b0100_0000, 0b1100_0000]);
+    }
+
+    #[test]
+    fn stored_depth_is_read_from_png_and_bmp_headers() {
+        let png = |depth: u8| {
+            let mut d = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDR\0\0\0\x03\0\0\0\x02".to_vec();
+            d.extend_from_slice(&[depth, 0, 0, 0, 0]);
+            d
+        };
+        assert!(stored_one_bit(&png(1)));
+        assert!(!stored_one_bit(&png(8)));
+        let bmp = |header_size: u32, bits: u16| {
+            let mut d = b"BM".to_vec();
+            d.resize(14, 0);
+            d.extend_from_slice(&header_size.to_le_bytes());
+            d.resize(if header_size == 12 { 24 } else { 28 }, 0);
+            d.extend_from_slice(&bits.to_le_bytes());
+            d.resize(40, 0);
+            d
+        };
+        assert!(stored_one_bit(&bmp(40, 1)));
+        assert!(stored_one_bit(&bmp(12, 1)));
+        assert!(!stored_one_bit(&bmp(40, 24)));
+        assert!(!stored_one_bit(b"GIF89a"));
     }
 
     #[test]

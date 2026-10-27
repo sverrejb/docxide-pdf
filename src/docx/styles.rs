@@ -242,6 +242,10 @@ pub(super) struct RunProps {
     pub(super) font_size: Option<f32>,
     pub(super) font_name: Option<String>,
     pub(super) east_asia_font: Option<String>,
+    /// `w:rFonts@hint="eastAsia"`: the ambiguous characters (curly quotes,
+    /// dashes, …) are East Asian text, drawn full-width and spaced like
+    /// ideographs.
+    pub(super) east_asia_hint: Option<bool>,
     pub(super) cs_font: Option<String>,
     pub(super) bold: Option<bool>,
     pub(super) italic: Option<bool>,
@@ -324,6 +328,9 @@ pub(super) fn parse_run_props(rpr: roxmltree::Node, theme: &ThemeFonts) -> RunPr
         font_size: parse_font_size(rpr),
         font_name: rfonts.and_then(|rf| resolve_font_from_node_opt(rf, theme)),
         east_asia_font: rfonts.and_then(|rf| resolve_east_asia_font_from_node(rf, theme)),
+        east_asia_hint: rfonts
+            .and_then(|rf| rf.attribute((WML_NS, "hint")))
+            .map(|hint| hint == "eastAsia"),
         cs_font: rfonts.and_then(|rf| resolve_cs_font_from_node(rf, theme)),
         bold: wml_bool(rpr, "b"),
         italic: wml_bool(rpr, "i"),
@@ -367,6 +374,7 @@ impl RunProps {
             font_size,
             font_name,
             east_asia_font,
+            east_asia_hint,
             cs_font,
             bold,
             italic,
