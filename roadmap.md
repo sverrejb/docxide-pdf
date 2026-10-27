@@ -29,7 +29,13 @@ Open work only. Finished rounds, their rules and evidence live in git history
   there. Page 11's notes block is 0.67pt short from per-line differences of
   0.05-0.25pt (the 0.25pt grid below); the "bullet lines 9.2 vs 9.75" note
   does not reproduce (Word 9.25, ours 9.20).
-- **air_pollution (46.7)**: the dot leader after "Katastrálne územie: " (a tab
+- **air_pollution (45.7)**: its accents are stored decomposed ("t" + U+030C);
+  Word draws the precomposed glyph ("ť", 0.53 em in Times New Roman Bold
+  Italic) and maps that one glyph back to the decomposed pair in ToUnicode.
+  Composing at parse time gained +1.0 J but lost 47 letters from our
+  structure tree; an ActualText span instead garbled the extracted text and
+  added 3 PDF/UA failures (both reverted). Needs a glyph-to-several-chars
+  ToUnicode entry. The dot leader after "Katastrálne územie: " (a tab
   after a w:br) is missing; leaders start at x 68.8, Word 66.0.
 - **japanese_hr (42.2)**: sub-rows are 19.0pt where the merged left cell's
   continuation carries an invisible sz=12 border, 18.25 elsewhere (ours
