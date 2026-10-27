@@ -5,6 +5,45 @@ Open work only. Finished rounds, their rules and evidence live in git history
 
 ## Open fixture leads
 
+**Weakest-fixtures round (2026-10-27, branch `weak-fixtures`):**
+- **compressPunctuation needs probes**: chinese_costume's left-aligned cell
+  keeps "…使用。" on its line with "，" and the final "。" each half an em
+  narrower (4.5pt at 9pt), yet wraps "学" rather than squeeze the five marks
+  before it; taiwanese_education_fraud_ruling (mostly left-aligned) squeezes
+  for ordinary characters. Three rules failed on the suite: hanging the mark
+  past the margin, compressing only for a word ending in a mark (taiwanese
+  -23), and that only outside justified lines (taiwanese -23). Probe Word
+  online with left/justified paragraphs, a plain character versus a closing
+  mark at the line end, and a quarter versus half em. This is
+  chinese_costume's extra page.
+- **sample500kB (12.8)**: Word online draws "DejaVu Sans" in Sylfaen and
+  "Open Sans" in Segoe UI, by name: charset 00/01, family roman/swiss/auto and
+  removing Open Sans' altName Arial change nothing (probes 2026-10-27). Needs
+  Sylfaen and Segoe UI in the assets; DejaVu Sans in ~/Library/Fonts wins
+  locally anyway. Its page-4 picture now sits at its anchor paragraph's top
+  as in Word, but lower than Word's because our text above runs seven lines
+  longer.
+- **uk_commercial_lease (27.2, 78 pages vs 79)**: on page 64 we fit 4 lines
+  of 2.1.6 above the notes where Word fits 2 (our separator 736.83, Word's
+  737.23), so a blank page 67 goes missing; our fit test is more lenient
+  there. Page 11's notes block is 0.67pt short from per-line differences of
+  0.05-0.25pt (the 0.25pt grid below); the "bullet lines 9.2 vs 9.75" note
+  does not reproduce (Word 9.25, ours 9.20).
+- **air_pollution (46.7)**: the dot leader after "Katastrálne územie: " (a tab
+  after a w:br) is missing; leaders start at x 68.8, Word 66.0.
+- **japanese_hr (42.2)**: sub-rows are 19.0pt where the merged left cell's
+  continuation carries an invisible sz=12 border, 18.25 elsewhere (ours
+  18.0); Word puts the wrapNone box's empty anchor paragraph below the table
+  (all six 10pt paragraphs follow it); `w:spacing w:val="-10"` in 7pt Meiryo
+  draws -1.0pt per character in Word (-1 Tc), ours -0.5;
+  `balanceSingleByteDoubleByteWidth` is unimplemented (Meiryo spaces 0.507
+  em, ours 0.332; 10 fixtures set it); a paragraph bottom border ignores
+  `w:ind w:right="-903"`; the banner title sits 8.8pt high.
+- **swiss_materials (32.6)**: besides the page-2 break below, the VML
+  watermark draws ~24% heavier and ~4pt left of Word's; the "Helvetica 55
+  Roman" bold headings (altName Bahnschrift Light) draw regular-weight in
+  Word; page 6's table bottom border is solid grey in Word, dotted in ours.
+
 **New fixtures round 2 (2026-10-23):**
 - **swiss_materials (33.3)**: Word keeps a 3-line list item at the foot of
   page 2 (last baseline 783.5, its 2pt descender past the 785.3 margin) where
@@ -16,10 +55,6 @@ Open work only. Finished rounds, their rules and evidence live in git history
 - **bulgarian_farmland (71.5)**: the letterhead's first line is not wrapped
   beside the emblem, which is anchored to the *next* paragraph with a negative
   offset (header float zones only start at their anchor).
-- **japanese_hr_consultation (39.9)**: table rows are ~1pt short each
-  (HG丸ｺﾞｼｯｸM-PRO 9pt bold cells on a 17.5pt lines grid: Word rows
-  18.25/19.0, ours 18.0), so the form drifts 9pt by the table's end; needs a
-  row-height probe.
 - spanish_constitutional_court (59.1, 18 pages), catalan, lithuanian,
   czech_council (59-67): not inspected.
 
@@ -36,8 +71,6 @@ Open work only. Finished rounds, their rules and evidence live in git history
 - **brazilian_logistics p10**: "Fonte: ALARCOM, (2019)." is laid out one
   letter per line from y≈108 (Word: one line at y≈346); the paragraph is
   squeezed to almost no width.
-- **chinese_costume (+1 page)**: Word widens Latin–CJK boundaries ("5-10 分钟",
-  "MP4 封装"); we don't, so CJK lines in table cells break differently.
 - **covid_insomnia p5 right column**: the reference list sits one line low
   ("[10]" at 146.3pt, Word 135.3pt). Its two-column flow also regressed with
   the justified squeeze.
@@ -68,7 +101,6 @@ Open work only. Finished rounds, their rules and evidence live in git history
   out 0.7pt short; a borderless one-row table ~2pt short. Its reference came
   from a Word-repaired copy.
 - estonian: per-line drift.
-- maine: nested layout tables.
 - zimbabwe_gold p5 keeps a line whose lead reaches 1.12pt into the footnote
   area (unexplained); page 3 fits one more two-line double-spaced paragraph +
   footnote than Word.
@@ -98,7 +130,9 @@ Open queue from the large-corpus and focus-fixture rounds:
   local). Residuals it explains: greensboro (Arial 11pt at 1.5 lines: ours
   18.97, Word 19.0), romanian_candidate_declaration (borders drift 0.1-0.3pt
   per row, SSIM 91.5), case69 (last line 15.00 vs 14.83 under
-  `vAlign=center`), case33's list lines (16.115 vs 16.0).
+  `vAlign=center`), case33's list lines (16.115 vs 16.0), swiss_materials'
+  page-2 break (0.46pt over: our pitches 11.47/10.92, Word 11.50/11.00),
+  uk_commercial page 11's notes block (0.67pt short).
 - **Each space character is a justification stretch point**: polish_municipal's
   double space is 7.44pt in Word = 2 × (3.0 + 0.72 slack); we add one slot for
   the gap. Find justified lines with consecutive spaces across fixtures first.
