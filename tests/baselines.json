@@ -7453,8 +7453,8 @@
     "a11y_text": 1.0
   },
   "scraped/chinese_costume_design_course": {
-    "jaccard": 0.2103,
-    "ssim": 0.4902,
+    "jaccard": 0.2352,
+    "ssim": 0.5479,
     "text_boundary": 0.3293,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -8091,8 +8091,8 @@
     "a11y_text": 1.0
   },
   "scraped/japanese_land_development_sign_form": {
-    "jaccard": 0.3583,
-    "ssim": 0.7186,
+    "jaccard": 0.3935,
+    "ssim": 0.7618,
     "text_boundary": 0.8519,
     "ua_fail": 4,
     "a11y_missing": 0,
@@ -8101,8 +8101,8 @@
     "a11y_text": 1.0
   },
   "scraped/japanese_medical_consultation_form": {
-    "jaccard": 0.5658,
-    "ssim": 0.8153,
+    "jaccard": 0.5835,
+    "ssim": 0.8398,
     "text_boundary": 0.8537,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -8754,8 +8754,8 @@
     "ssim": 0.5312
   },
   "scraped/taiwanese_education_fraud_ruling": {
-    "jaccard": 0.4938,
-    "ssim": 0.6183,
+    "jaccard": 0.7328,
+    "ssim": 0.8236,
     "text_boundary": 0.4375,
     "ua_fail": 2,
     "a11y_missing": 0,
