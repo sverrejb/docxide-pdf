@@ -318,6 +318,10 @@ Backlog (details in `current_focus/A11Y.md`):
 - Body PAGE/NUMPAGES (issue #140) come from a first render pass: a PAGE in a
   paragraph that spans two pages shows the first page's number, and fields in
   table cells keep their cached result.
+- Pictures: 1-bit sources stay 1 bpc DeviceGray like Word's export, but
+  8-bit indexed sources are written as RGB Flate where Word keeps Indexed, and
+  every Flate image gets `/Interpolate true` where Word sets it only on JPEGs
+  (unmeasured).
 - Line numbering ignores `w:restart`: the counter always runs on, never
   restarting per page or section.
 - altChunk HTML: `ul`/`ol`/`li` are dropped by the converter.
