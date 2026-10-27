@@ -452,7 +452,6 @@ pub(super) fn keep_lines(ppr: Option<roxmltree::Node>, para_style: Option<&Parag
         .unwrap_or(false)
 }
 
-/// `w:textAlignment`, direct, from the style or the document defaults.
 /// `w:autoSpaceDE` and `w:autoSpaceDN`, on unless the paragraph or its style
 /// turns them off.
 pub(super) fn auto_space(
@@ -470,6 +469,7 @@ pub(super) fn auto_space(
     )
 }
 
+/// `w:textAlignment`, direct, from the style or the document defaults.
 pub(super) fn text_alignment(
     ppr: Option<roxmltree::Node>,
     para_style: Option<&ParagraphStyle>,

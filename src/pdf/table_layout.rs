@@ -1260,11 +1260,9 @@ pub(super) fn compute_row_layouts(
                                 // mark's full text line instead: maine's separator
                                 // rows step one line, 5.25pt once saved as mode 14
                                 // (Word probes).
-                                let para_content_h = if cell.hide_mark
-                                    && ctx.compat_mode < 15
-                                    && para.horizontal_rule.is_some()
-                                    && is_text_empty(&para.runs)
-                                {
+                                let rule_only = para.horizontal_rule.is_some() && is_text_empty(&para.runs);
+                                let rule_keeps_line = rule_only && ctx.compat_mode >= 15;
+                                let para_content_h = if cell.hide_mark && rule_only && !rule_keeps_line {
                                     5.25
                                 } else {
                                     para.content_height
@@ -1435,7 +1433,7 @@ pub(super) fn compute_row_layouts(
                                     && para_content_h == 0.0
                                     && is_text_empty(runs)
                                     && !para.paragraph_mark_vanish
-                                    && !(ctx.compat_mode >= 15 && para.horizontal_rule.is_some());
+                                    && !rule_keeps_line;
                                 // A cell drops HTML auto spacing at its edges.
                                 let space_before = if mark_hidden {
                                     prev_space_after
@@ -1728,20 +1726,20 @@ pub(super) fn compute_row_layouts(
                                     ascender_ratio: grid_snapped
                                         .then(|| super::layout::grid_baseline_offset(runs, ctx.fonts, line_h))
                                         .flatten()
-                                        .map(|a| a / font_size)
                                         .or_else(|| super::layout::boxed_line_ascent(
-                                        effective_ls,
-                                        line_h,
-                                        font_size,
-                                        tallest_lhr,
-                                        tallest_ar,
-                                        runs,
-                                        ctx.fonts,
-                                    ).map(|a| a / font_size))
-                                    .unwrap_or(
-                                        ascender_ratio
-                                            * super::helpers::auto_ascent_scale(effective_ls),
-                                    ),
+                                            effective_ls,
+                                            line_h,
+                                            font_size,
+                                            tallest_lhr,
+                                            tallest_ar,
+                                            runs,
+                                            ctx.fonts,
+                                        ))
+                                        .map_or(
+                                            ascender_ratio
+                                                * super::helpers::auto_ascent_scale(effective_ls),
+                                            |a| a / font_size,
+                                        ),
                                     descender_ratio,
                                     image_line_ascent,
                                     clip_inline_pictures: exact_spacing,

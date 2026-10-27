@@ -711,6 +711,12 @@ pub(super) fn parse_list_info(
     // and color="auto" undo the mark's (renewable_dispatch's ListSubhead1:
     // bold style, regular black "4.").
     let font_size = def.label_font_size.or(mark.map(|m| m.font_size));
+    // Rise per em, as for a script run (`vert_y_offset`).
+    let script_rise = match def.label_vert_align.as_deref() {
+        Some("superscript") => 0.35,
+        Some("subscript") => -0.14,
+        _ => 0.0,
+    };
     ListLabelInfo {
         indent_left: def.indent_left,
         indent_hanging: def.indent_hanging,
@@ -722,17 +728,16 @@ pub(super) fn parse_list_info(
         east_asia_font: mark.and_then(|m| m.east_asia_font_name.clone()),
         // Sized and raised as a superscript run (swiss_materials' numbers:
         // 11.5pt level, Word draws 7.5pt, 4pt up).
-        font_size: font_size.map(|s| match def.label_vert_align.as_deref() {
-            // ponytail: 0.65 is the common OS/2 script size; runs use the
-            // face's own ratio, which needs the font loaded.
-            Some("superscript" | "subscript") => (s * 0.65 * 2.0).round() / 2.0,
-            _ => s,
+        font_size: font_size.map(|s| {
+            if script_rise == 0.0 {
+                s
+            } else {
+                // ponytail: 0.65 is the common OS/2 script size; runs use
+                // the face's own ratio, which needs the font loaded.
+                (s * 0.65 * 2.0).round() / 2.0
+            }
         }),
-        rise: font_size.map_or(0.0, |s| match def.label_vert_align.as_deref() {
-            Some("superscript") => s * 0.35,
-            Some("subscript") => -s * 0.14,
-            _ => 0.0,
-        }),
+        rise: font_size.map_or(0.0, |s| s * script_rise),
         bold: def.label_bold.unwrap_or(mark.is_some_and(|m| m.bold)),
         italic: def.label_italic.unwrap_or(mark.is_some_and(|m| m.italic)),
         color: def.label_color.unwrap_or(mark.and_then(|m| m.color)),

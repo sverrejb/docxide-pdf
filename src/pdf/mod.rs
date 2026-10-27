@@ -717,7 +717,6 @@ fn mark_position_stretch(
     }
 }
 
-/// Look up the line_h_ratio for a break run's font, matching by font_size.
 /// A line holding only a w:br is as tall as the break run, wherever it
 /// falls: pasto's title opens with an unformatted <w:br/> (11pt) above
 /// its 12pt bold text, and Word steps 12.65 for that line, not 13.80.
@@ -766,6 +765,7 @@ fn size_mark_line(
     }
 }
 
+/// Look up the line_h_ratio for a break run's font, matching by font_size.
 fn break_run_lhr(runs: &[Run], break_fs: f32, fonts: &HashMap<String, FontEntry>) -> Option<f32> {
     // Find the break run with the matching font size
     let br_run = runs
@@ -4658,7 +4658,9 @@ fn render_paragraph_block(
                 .fill_nonzero()
                 .set_fill_gray(0.0);
         }
-    } else if !lines.is_empty() {
+    } else if !lines.is_empty() || !para.list_label.is_empty() {
+        // An empty numbered paragraph still shows its label: uk_commercial's
+        // "SCHEDULE 1" headings are empty paragraphs whose style numbers them.
         // When the document grid snaps line heights, align the first
         // baseline one linePitch below the slot top so text sits on
         // the grid rather than at a font-metric-dependent offset.
@@ -4681,57 +4683,38 @@ fn render_paragraph_block(
             )
         });
 
-        render_paragraph_lines(
-            &mut state.pb.content,
-            &lines,
-            &para.alignment,
-            para_text_x,
-            para_text_width,
-            baseline_y,
-            line_h,
-            para_metrics,
-            lines.len(),
-            0,
-            &mut state.pb.links,
-            text_hanging,
-            ctx.fonts,
-            poly_line_geom.as_deref(),
-            &mut state.pb.gradient_specs,
-            Some(&mut state.pb.comment_anchors),
-            ln_cfg.map(|(start, count_by, right_x)| LineNumberArg {
-                counter: &mut state.line_number_counter,
-                start,
-                count_by,
-                right_x,
-                font: ln_font.clone(),
-            }),
-            Some(LinkTagger::new(
-                &mut state.pb.tags,
-                state.pb.all_contents.len(),
-                tags.1,
-            )),
-        );
-        state.pb.end_tag();
-    } else if !para.list_label.is_empty() {
-        // An empty numbered paragraph still shows its label: uk_commercial's
-        // "SCHEDULE 1" headings are empty paragraphs whose style numbers them.
-        let baseline_offset = if grid_snapped {
-            grid_baseline
-        } else {
-            first_baseline_offset
-        };
-        let baseline_y = state.pb.slot_top - bdr_top_pad - baseline_offset - text_drop;
-        let tags = state.pb.para_tags(para, doc);
-        state.pb.begin_para_tags(tags, |content| {
-            render_list_label(
-                content,
-                para,
+        if !lines.is_empty() {
+            render_paragraph_lines(
+                &mut state.pb.content,
+                &lines,
+                &para.alignment,
+                para_text_x,
+                para_text_width,
+                baseline_y,
+                line_h,
+                para_metrics,
+                lines.len(),
+                0,
+                &mut state.pb.links,
+                text_hanging,
                 ctx.fonts,
-                label_x,
-                baseline_y - first_line_drop,
-                font_size,
-            )
-        });
+                poly_line_geom.as_deref(),
+                &mut state.pb.gradient_specs,
+                Some(&mut state.pb.comment_anchors),
+                ln_cfg.map(|(start, count_by, right_x)| LineNumberArg {
+                    counter: &mut state.line_number_counter,
+                    start,
+                    count_by,
+                    right_x,
+                    font: ln_font.clone(),
+                }),
+                Some(LinkTagger::new(
+                    &mut state.pb.tags,
+                    state.pb.all_contents.len(),
+                    tags.1,
+                )),
+            );
+        }
         state.pb.end_tag();
     } else {
         // Word tags empty paragraphs too; keeping them keeps the P sequence aligned.
