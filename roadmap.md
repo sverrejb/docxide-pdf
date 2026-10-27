@@ -29,13 +29,13 @@ Open work only. Finished rounds, their rules and evidence live in git history
   locally anyway. Its page-4 picture now sits at its anchor paragraph's top
   as in Word, but lower than Word's because our text above runs seven lines
   longer.
-- **uk_commercial_lease (27.2, 78 pages vs 79)**: on page 64 we fit 4 lines
+- **uk_commercial_lease (27.6, 78 pages vs 79)**: on page 64 we fit 4 lines
   of 2.1.6 above the notes where Word fits 2 (our separator 736.83, Word's
   737.23), so a blank page 67 goes missing; our fit test is more lenient
   there. Page 11's notes block is 0.67pt short from per-line differences of
   0.05-0.25pt (the 0.25pt grid below); the "bullet lines 9.2 vs 9.75" note
   does not reproduce (Word 9.25, ours 9.20).
-- **air_pollution (45.7)**: its accents are stored decomposed ("t" + U+030C);
+- **air_pollution (45.5)**: its accents are stored decomposed ("t" + U+030C);
   Word draws the precomposed glyph ("ť", 0.53 em in Times New Roman Bold
   Italic) and maps that one glyph back to the decomposed pair in ToUnicode.
   Composing at parse time gained +1.0 J but lost 47 letters from our
@@ -43,7 +43,7 @@ Open work only. Finished rounds, their rules and evidence live in git history
   added 3 PDF/UA failures (both reverted). Needs a glyph-to-several-chars
   ToUnicode entry. The dot leader after "Katastrálne územie: " (a tab
   after a w:br) is missing; leaders start at x 68.8, Word 66.0.
-- **japanese_hr (42.2)**: sub-rows are 19.0pt where the merged left cell's
+- **japanese_hr (41.4)**: sub-rows are 19.0pt where the merged left cell's
   continuation carries an invisible sz=12 border, 18.25 elsewhere (ours
   18.0); Word puts the wrapNone box's empty anchor paragraph below the table
   (all six 10pt paragraphs follow it); `w:spacing w:val="-10"` in 7pt Meiryo
