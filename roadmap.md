@@ -16,6 +16,12 @@ Open work only. Finished rounds, their rules and evidence live in git history
   online with left/justified paragraphs, a plain character versus a closing
   mark at the line end, and a quarter versus half em. This is
   chinese_costume's extra page.
+- **japanese_land_development (35.6)**: Word puts no gap between "、" and a
+  digit ("2、3", 10.5pt step), which our autospace rule now matches. But
+  Word's text after "　2　" plus a plain half-width space starts 2.6pt
+  (a quarter em) later than ours. The old rule's wrong gap after "、" hid
+  this, so the note wraps one character late. Probe where Word's gap sits:
+  "　" + space, or space + digit.
 - **sample500kB (12.8)**: Word online draws "DejaVu Sans" in Sylfaen and
   "Open Sans" in Segoe UI, by name: charset 00/01, family roman/swiss/auto and
   removing Open Sans' altName Arial change nothing (probes 2026-10-27). Needs
