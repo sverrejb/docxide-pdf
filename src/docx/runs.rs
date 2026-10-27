@@ -509,6 +509,12 @@ impl ParagraphRunDefaults {
                 .east_asia_font
                 .or_else(|| char_style.and_then(|cs| cs.east_asia_font.clone()))
                 .or_else(|| self.east_asia_font.clone()),
+            // ponytail: run and character style only; a paragraph style's hint
+            // needs a fixture that shows it.
+            east_asia_hint: own
+                .east_asia_hint
+                .or_else(|| char_style.and_then(|cs| cs.east_asia_hint))
+                .unwrap_or(false),
             cs_font_name,
             bold,
             italic,
@@ -987,6 +993,11 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
                 && run.math.is_none()
                 && prev.font_name == run.font_name
                 && prev.east_asia_font_name == run.east_asia_font_name
+                // The hint only tells the ambiguous characters apart; merging
+                // across it otherwise keeps autoSpaceDE gaps at run boundaries.
+                && (prev.east_asia_hint == run.east_asia_hint
+                    || !(prev.text.chars().any(super::is_hint_ambiguous)
+                        || run.text.chars().any(super::is_hint_ambiguous)))
                 && prev.rtl == run.rtl
                 && prev.font_size == run.font_size
                 && prev.bold == run.bold

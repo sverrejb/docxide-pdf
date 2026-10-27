@@ -584,6 +584,9 @@ pub struct Run {
     pub font_size: f32,
     pub font_name: String,
     pub east_asia_font_name: Option<String>,
+    /// `w:rFonts@hint="eastAsia"`: curly quotes, dashes and other ambiguous
+    /// characters count as East Asian text (no autoSpaceDE gap, compressible).
+    pub east_asia_hint: bool,
     /// `w:rFonts@cs`: the font for complex-script letters (Arabic, Hebrew, Thai, …).
     pub cs_font_name: Option<String>,
     pub bold: bool,
@@ -727,6 +730,7 @@ impl Default for Run {
             font_size: 0.0,
             font_name: String::new(),
             east_asia_font_name: None,
+            east_asia_hint: false,
             cs_font_name: None,
             bold: false,
             italic: false,

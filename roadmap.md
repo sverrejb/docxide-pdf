@@ -94,6 +94,16 @@ Open queue from the large-corpus and focus-fixture rounds:
 
 ## Line and paragraph layout
 
+- **compressPunctuation** (issue #139, probed through Word online 2026-10-27,
+  rules in `pdf/layout.rs` `PUNCT_SQUEEZE`/`PUNCT_PULL_FREE`): every mark on
+  the line gives the same cut; compat 15 squeezes only justified paragraphs,
+  ½ em per mark, and pulls the word only while 1.2% of the measure is free
+  before it; compat 14 squeezes any alignment, 0.4 em, pulls at ½ em free
+  including the autoSpaceDE gap. Japanese halves a closing mark before
+  another mark regardless of fit. Open: zh-TW centred marks lose the cut on
+  both sides (`locl` glyphs; taiwanese_education 二、 sits 1pt left of ours);
+  autoSpaceDE gaps are lost at run boundaries unless the runs merge
+  (chinese_costume "5-10 分钟").
 - **0.25pt baseline grid**: Word quantizes baselines to 0.25pt online (0.24
   local). Residuals it explains: greensboro (Arial 11pt at 1.5 lines: ours
   18.97, Word 19.0), romanian_candidate_declaration (borders drift 0.1-0.3pt
