@@ -4,7 +4,7 @@
 #
 # Usage:
 #   ./tools/run-tests.sh                        # run all tests
-#   ./tools/run-tests.sh --test visual_comparison  # one test suite
+#   ./tools/run-tests.sh --test visual_comparison  # one suite (a module of tests/suite)
 #   ./tools/run-tests.sh --case case5           # one fixture
 #   ./tools/run-tests.sh --libreoffice          # include LibreOffice comparison (opt-in)
 #   ./tools/run-tests.sh --verbose              # show full cargo output
@@ -32,10 +32,12 @@ done
 # Build cargo command. --no-fail-fast: one failing suite (e.g. accessibility)
 # must not skip the others, or their scores silently go missing.
 CARGO_ARGS=("test" "--no-fail-fast")
+# The suites are modules of the one `suite` binary; the name filters the tests run.
 if [[ -n "$TEST_NAME" ]]; then
-    CARGO_ARGS+=("--test" "$TEST_NAME")
+    CARGO_ARGS+=("--test" "suite")
 fi
 CARGO_ARGS+=("--" "--nocapture")
+[[ -n "$TEST_NAME" ]] && CARGO_ARGS+=("$TEST_NAME")
 
 # Set env filters
 [[ -n "$CASE_FILTER" ]] && export DOCXIDE_CASE="$CASE_FILTER"

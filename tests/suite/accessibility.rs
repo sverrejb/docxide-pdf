@@ -1,6 +1,6 @@
-mod common;
+use crate::common;
 
-use common::a11y::{self, Analysis, VsWord};
+use crate::common::a11y::{self, Analysis, VsWord};
 use rayon::prelude::*;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;

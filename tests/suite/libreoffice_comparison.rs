@@ -1,4 +1,4 @@
-mod common;
+use crate::common;
 
 use image::DynamicImage;
 use rayon::prelude::*;

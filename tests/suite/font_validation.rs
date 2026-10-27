@@ -1,4 +1,4 @@
-mod common;
+use crate::common;
 
 use rayon::prelude::*;
 use std::collections::{BTreeSet, HashMap};

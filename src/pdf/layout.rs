@@ -2157,6 +2157,11 @@ pub(super) fn build_paragraph_lines(
 
             // Small tolerance for floating-point width accumulation over many glyphs
             let mut overflows = proposed_x + ww > cur_max + 0.05;
+            // The segment after a hyphen break may stay by narrowing the
+            // line's spaces, judged like a word after a space: Word 2013+ keeps
+            // "x", "12-", "based", "and/or" and "12345/2026" alike, within the
+            // same midpoint and budget (Word probe 2026-10-26).
+            let after_hyphen = current_chunks.last().is_some_and(|c| c.text.ends_with('-'));
             // A word glued to the previous run's word is judged as one word.
             let (word_x, word_w) = if is_continuation && word_start < current_chunks.len() {
                 let x = current_chunks[word_start].x_offset;
@@ -2164,13 +2169,12 @@ pub(super) fn build_paragraph_lines(
             } else {
                 (proposed_x, ww)
             };
-            if overflows && (need_space || is_continuation) && !in_right_region {
+            if overflows && (need_space || is_continuation || after_hyphen) && !in_right_region {
                 // How far the word may overflow and stay: Word 2013+ narrows
                 // the spaces, wpJustification the whole line.
                 let space_room = (cjk.squeeze_spaces && word_x + word_w / 2.0 <= cur_max)
                     .then(|| SPACE_SQUEEZE * (line_space_width(&current_chunks) + pending_space_w));
-                let line_room = cjk
-                    .squeeze_line
+                let line_room = (cjk.squeeze_line && (need_space || is_continuation))
                     .then(|| SQUEEZE_LINE_SPACES * entry.space_width(eff_fs));
                 if [space_room, line_room]
                     .into_iter()
@@ -5015,6 +5019,39 @@ mod tests {
         );
         assert!(!breaks_between('.', '№'));
         assert!(breaks_between(' ', '№'));
+    }
+
+    #[test]
+    fn segment_after_hyphen_squeezes_like_a_word_after_a_space() {
+        let fonts = HashMap::from([("Arial".to_string(), FontEntry::stub())]);
+        let run = |s: &str| Run {
+            text: s.into(),
+            ..make_run(10.0, VertAlign::Baseline, false)
+        };
+        for suffix in ["PP.", "x", "12-", "05215", "AB2C2", "12345/2026", "and/or"] {
+            let text = format!("aa aa aa aa 11-{suffix}");
+            for runs in [vec![run(&text)], vec![run("aa aa aa aa 11-"), run(suffix)]] {
+                let build = |overflow, squeeze| {
+                    build_paragraph_lines(
+                        &runs,
+                        &fonts,
+                        text.len() as f32 * 5.0 - overflow,
+                        0.0,
+                        &HashMap::new(),
+                        &HashMap::new(),
+                        None,
+                        None,
+                        None,
+                        plain_layout(squeeze),
+                    )
+                };
+                let lines = build(1.0, true);
+                assert_eq!(lines.len(), 1, "{suffix}");
+                assert!(lines[0].squeezed);
+                assert_eq!(build(1.0, false).len(), 2, "{suffix}");
+                assert_eq!(build(6.0, true).len(), 2, "{suffix}");
+            }
+        }
     }
 
     #[test]

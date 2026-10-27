@@ -165,13 +165,14 @@ src/
     tagging.rs        — tagged PDF (PDF/UA) structure tree
     objstm.rs         — compressed object streams post-pass
 tests/
-  visual_comparison.rs — Jaccard/SSIM similarity test against Word-generated reference PDFs
-  accessibility.rs     — PDF/UA-1 + structure-tree parity vs Word (needs verapdf, poppler)
-  text_boundary.rs     — line start/end word metric (not run: no #[test], see SCORING.md)
-  font_validation.rs, image_count.rs, page_geometry.rs, file_size.rs — font/image/page-size/size parity
-  libreoffice_comparison.rs — opt-in (DOCXIDE_LO_COMPARE=1) comparison with LibreOffice
-  speed.rs             — conversion timing (#[ignore])
-  common/              — shared harness: mod.rs (fixtures, conversion, baselines), metrics.rs (rasterization, Jaccard/SSIM; also tools/page-metrics), a11y.rs, text_boundary.rs
+  suite/main.rs        — the one integration-test binary (`cargo test --test suite <module>`), modules:
+    visual_comparison.rs — Jaccard/SSIM similarity test against Word-generated reference PDFs
+    accessibility.rs     — PDF/UA-1 + structure-tree parity vs Word (needs verapdf, poppler)
+    text_boundary.rs     — line start/end word metric
+    font_validation.rs, image_count.rs, page_geometry.rs, file_size.rs — font/image/page-size/size parity
+    libreoffice_comparison.rs — opt-in (DOCXIDE_LO_COMPARE=1) comparison with LibreOffice
+    speed.rs             — conversion timing (#[ignore])
+  common/              — shared harness (suite's `common` module via #[path]): mod.rs (fixtures, conversion, baselines, per-case score caches), metrics.rs (rasterization, Jaccard/SSIM; also tools/page-metrics), a11y.rs, text_boundary.rs
   baselines.json, visual_hashes.json — accepted scores and page hashes
   fixtures/<group>/<case>/ — input.docx + reference.pdf; groups: cases/ (79 handcrafted), fonts/ (7), hyphenation/ (8), scraped/ (164); SKIPLIST
   output/<group>/<case>/ — generated.pdf, reference/, generated/, diff/ screenshots (gitignored)
@@ -199,9 +200,22 @@ tests/
 
 - Rust edition: 2024
 - Test output is compared using **Jaccard similarity on ink pixels** (luma < 200 = ink) and **SSIM** with spatial tolerance (±8px). Run tests with `cargo test -- --nocapture` to see scores.
-- Jaccard threshold: **20.5%**, SSIM threshold: **75%** (defined in `tests/visual_comparison.rs`)
-- Accessibility (`tests/accessibility.rs`, `tests/common/a11y.rs`): `ua_deficit` (veraPDF PDF/UA-1 rules we fail worse than Word; 0 = as good as Word), `a11y_struct` (tag sequence vs Word's), `a11y_text` (block text in structure order vs Word's), `a11y_missing` (DOCX letters and digits that never reach our structure tree; needs no reference, any increase fails). Untagged references score N/A on the Word-relative three. See the Accessibility section of `roadmap.md`
+- Jaccard threshold: **20.5%**, SSIM threshold: **75%** (defined in `tests/suite/visual_comparison.rs`)
+- Accessibility (`tests/suite/accessibility.rs`, `tests/common/a11y.rs`): `ua_deficit` (veraPDF PDF/UA-1 rules we fail worse than Word; 0 = as good as Word), `a11y_struct` (tag sequence vs Word's), `a11y_text` (block text in structure order vs Word's), `a11y_missing` (DOCX letters and digits that never reach our structure tree; needs no reference, any increase fails). Untagged references score N/A on the Word-relative three. See the Accessibility section of `roadmap.md`
 - 79 handcrafted test cases (`tests/fixtures/cases/`) covering text, tables, images, charts, shapes, SmartArt, and more, plus the fonts/, hyphenation/ and scraped/ groups
+
+## Working Alongside Other Sessions
+
+Several agent sessions often run on this repo at once. **Before your first edit**, check for another active session: `git status` (uncommitted changes that are not yours) and `pgrep -fl "claude|cargo"`. If one is active, do your work in a worktree, never in the main checkout:
+
+```bash
+git worktree add .worktrees/<topic> -b <topic>
+ln -s ../../fonts .worktrees/<topic>/fonts     # fonts/ is gitignored; without it every score collapses to the Arial fallback
+cd .worktrees/<topic> && ./tools/run-tests.sh
+git push origin <topic>:main                   # when done; leaves the shared checkout alone
+```
+
+Two suites in one checkout share `tests/output/`, each deleting and rewriting `latest_scores.json`: both reports are garbage. Never `git checkout`/`switch` branches in the main checkout either — the other session's edits silently move with you.
 
 ## Word Layout Learnings
 

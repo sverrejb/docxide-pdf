@@ -1,8 +1,9 @@
-mod common;
+use crate::common;
 
-use common::{compare_and_diff, is_ink_luma, ssim_score};
+use crate::common::{compare_and_diff, ssim_score};
 use image::{DynamicImage, GenericImageView, ImageBuffer, Rgba};
 use rayon::prelude::*;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -10,136 +11,6 @@ use std::sync::OnceLock;
 
 const SIMILARITY_THRESHOLD: f64 = 0.205;
 const SSIM_THRESHOLD: f64 = 0.75;
-
-/// Generate a diff image comparing acknowledged vs generated output, with red rectangle
-/// outlines around clusters of changed pixels. Returns None if images can't be loaded.
-fn generate_change_diff(ack_path: &Path, gen_path: &Path) -> Option<DynamicImage> {
-    let ack_img = image::open(ack_path).ok()?.to_rgba8();
-    let gen_img = image::open(gen_path).ok()?.to_rgba8();
-    let w = ack_img.width().min(gen_img.width());
-    let h = ack_img.height().min(gen_img.height());
-
-    let cell = 32u32;
-    let gw = w.div_ceil(cell);
-    let gh = h.div_ceil(cell);
-    let mut grid = vec![false; (gw * gh) as usize];
-
-    let mut buf = vec![255u8; (w * h * 4) as usize];
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            let ap = ack_img.get_pixel(x as u32, y as u32).0;
-            let gp = gen_img.get_pixel(x as u32, y as u32).0;
-            let ack_ink = is_ink_luma(ap[0], ap[1], ap[2]);
-            let gen_ink = is_ink_luma(gp[0], gp[1], gp[2]);
-            if ack_ink != gen_ink {
-                let gx = x as u32 / cell;
-                let gy = y as u32 / cell;
-                grid[(gy * gw + gx) as usize] = true;
-            }
-            let i = (y * w as usize + x) * 4;
-            buf[i..i + 4].copy_from_slice(&common::diff_pixel(ack_ink, gen_ink));
-        }
-    }
-
-    // Find connected change regions and draw red outlines
-    let rects = find_change_rects(&grid, gw, gh, cell, w, h);
-    for [rx, ry, rw, rh] in rects {
-        let stroke = 2u32;
-        let red = [255, 0, 0, 255];
-        for t in 0..stroke {
-            // Top and bottom edges
-            for x in rx..rx + rw {
-                if x < w {
-                    if ry + t < h {
-                        let i = ((ry + t) as usize * w as usize + x as usize) * 4;
-                        buf[i..i + 4].copy_from_slice(&red);
-                    }
-                    if ry + rh > t && ry + rh - 1 - t < h {
-                        let yy = ry + rh - 1 - t;
-                        let i = (yy as usize * w as usize + x as usize) * 4;
-                        buf[i..i + 4].copy_from_slice(&red);
-                    }
-                }
-            }
-            // Left and right edges
-            for y in ry..ry + rh {
-                if y < h {
-                    if rx + t < w {
-                        let i = (y as usize * w as usize + (rx + t) as usize) * 4;
-                        buf[i..i + 4].copy_from_slice(&red);
-                    }
-                    if rx + rw > t && rx + rw - 1 - t < w {
-                        let xx = rx + rw - 1 - t;
-                        let i = (y as usize * w as usize + xx as usize) * 4;
-                        buf[i..i + 4].copy_from_slice(&red);
-                    }
-                }
-            }
-        }
-    }
-
-    let img_buf: ImageBuffer<Rgba<u8>, Vec<u8>> = ImageBuffer::from_raw(w, h, buf)?;
-    Some(DynamicImage::ImageRgba8(img_buf))
-}
-
-/// Grid-based connected-component search for clusters of changed pixels.
-/// Returns `[x, y, width, height]` bounding rectangles in pixel coordinates.
-fn find_change_rects(
-    grid: &[bool],
-    gw: u32,
-    gh: u32,
-    cell: u32,
-    img_w: u32,
-    img_h: u32,
-) -> Vec<[u32; 4]> {
-    let mut visited = vec![false; grid.len()];
-    let mut rects = Vec::new();
-
-    for gy in 0..gh {
-        for gx in 0..gw {
-            let idx = (gy * gw + gx) as usize;
-            if !grid[idx] || visited[idx] {
-                continue;
-            }
-            let mut min_x = gx;
-            let mut min_y = gy;
-            let mut max_x = gx;
-            let mut max_y = gy;
-            let mut stack = vec![(gx, gy)];
-            while let Some((cx, cy)) = stack.pop() {
-                let ci = (cy * gw + cx) as usize;
-                if visited[ci] || !grid[ci] {
-                    continue;
-                }
-                visited[ci] = true;
-                min_x = min_x.min(cx);
-                min_y = min_y.min(cy);
-                max_x = max_x.max(cx);
-                max_y = max_y.max(cy);
-                for dy in -1i32..=1 {
-                    for dx in -1i32..=1 {
-                        if dx == 0 && dy == 0 {
-                            continue;
-                        }
-                        let nx = cx as i32 + dx;
-                        let ny = cy as i32 + dy;
-                        if nx >= 0 && (nx as u32) < gw && ny >= 0 && (ny as u32) < gh {
-                            stack.push((nx as u32, ny as u32));
-                        }
-                    }
-                }
-            }
-            let pad = 8u32;
-            let x0 = (min_x * cell).saturating_sub(pad);
-            let y0 = (min_y * cell).saturating_sub(pad);
-            let x1 = ((max_x + 1) * cell + pad).min(img_w);
-            let y1 = ((max_y + 1) * cell + pad).min(img_h);
-            rects.push([x0, y0, x1 - x0, y1 - y0]);
-        }
-    }
-
-    rects
-}
 
 fn save_side_by_side(img_a: &DynamicImage, img_b: &DynamicImage, out: &Path) -> Result<(), String> {
     let (wa, ha) = img_a.dimensions();
@@ -283,20 +154,39 @@ fn print_summary(
     );
 }
 
+#[derive(Serialize, Deserialize)]
 struct FixtureResult {
     name: String,
     jaccard: f64,
     ssim: f64,
     ref_pages: usize,
     gen_pages: usize,
+    /// SHA-256 of each generated page's pixels, for visual change detection.
+    hashes: Vec<String>,
 }
 
 fn save_side_by_side_images() -> bool {
     std::env::var("DOCXIDE_IMAGES").is_ok()
 }
 
+/// Scores from `visual.json` while the page PNGs are unchanged; a missing diff/ or a
+/// side-by-side request needs the images written, so those score afresh.
 fn score_fixture(fixture: &FixturePages) -> Option<FixtureResult> {
     let save_comparison = save_side_by_side_images();
+    let cache = fixture.output_base.join("visual.json");
+    if save_comparison || !fixture.diffs_fresh {
+        let _ = fs::remove_file(&cache);
+    }
+    let inputs: Vec<&Path> = fixture
+        .ref_pages
+        .iter()
+        .chain(&fixture.gen_pages)
+        .map(PathBuf::as_path)
+        .collect();
+    common::cached(&cache, &inputs, || compute_scores(fixture, save_comparison))
+}
+
+fn compute_scores(fixture: &FixturePages, save_comparison: bool) -> Option<FixtureResult> {
     let diff_dir = fixture.output_base.join("diff");
     let comparison_dir = fixture.output_base.join("comparison");
     let _ = fs::create_dir_all(&diff_dir);
@@ -329,22 +219,6 @@ fn score_fixture(fixture: &FixturePages) -> Option<FixtureResult> {
         })
         .collect();
 
-    // Generate change-diff images (acknowledged vs generated) with red outlines
-    let ack_dir = fixture.output_base.join("acknowledged");
-    if ack_dir.exists() {
-        let changes_dir = fixture.output_base.join("changes");
-        let _ = fs::create_dir_all(&changes_dir);
-        for i in 0..page_count {
-            let page_num = format!("page_{:03}", i + 1);
-            let ack_path = ack_dir.join(format!("{page_num}.png"));
-            if ack_path.exists()
-                && let Some(img) = generate_change_diff(&ack_path, &fixture.gen_pages[i])
-            {
-                let _ = img.save(changes_dir.join(format!("{page_num}.png")));
-            }
-        }
-    }
-
     if page_scores.is_empty() {
         return None;
     }
@@ -355,6 +229,7 @@ fn score_fixture(fixture: &FixturePages) -> Option<FixtureResult> {
         ssim: page_scores.iter().map(|s| s.1).sum::<f64>() / n,
         ref_pages: fixture.ref_pages.len(),
         gen_pages: fixture.gen_pages.len(),
+        hashes: common::compute_page_hashes(&fixture.gen_pages),
     })
 }
 
@@ -408,10 +283,9 @@ fn visual_comparison() {
     // Compute SHA-256 hashes of generated page PNGs for visual change detection
     let mut hash_updates: std::collections::BTreeMap<String, Vec<String>> =
         std::collections::BTreeMap::new();
-    for fixture in fixtures.iter() {
-        let hashes = common::compute_page_hashes(&fixture.gen_pages);
-        if !hashes.is_empty() {
-            hash_updates.insert(fixture.name.clone(), hashes);
+    for r in &results {
+        if !r.hashes.is_empty() {
+            hash_updates.insert(r.name.clone(), r.hashes.clone());
         }
     }
     common::write_latest_hashes(&hash_updates);

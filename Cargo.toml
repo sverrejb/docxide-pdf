@@ -51,6 +51,7 @@ opt-level = 2
 
 # The visual metrics live in tests/common, not in a dependency, so the override above does not
 # reach them: unoptimized, SSIM over a 205-page fixture takes 117 CPU-s against 17 optimized.
-# Costs ~2 s more on an incremental rebuild after a src/ edit.
+# Level 1 is the trade-off now that only changed fixtures are scored (per-case caches): a real
+# src/ edit recompiles in 7 s instead of 17 at level 2, and SSIM is 2.2× slower, not 7×.
 [profile.test]
-opt-level = 2
+opt-level = 1
