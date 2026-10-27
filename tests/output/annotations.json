@@ -1,5 +1,5 @@
 {
-  "next_id": 267,
+  "next_id": 271,
   "annotations": [
     {
       "id": 208,
@@ -65,7 +65,7 @@
       "y_pt": 410.5048,
       "note": "is this a line break we are adding, or just word wrapping?  Splitting in the middle of a phone number is unfortunate, but it migjt just be a result of  word with difference.\n\nTRIAGE (2026-09-18, not fixed): plain word wrapping, and not a width problem: the column is 322.1pt in both and the line above measures within 0.02%. Word keeps \"2251,\" on the line by COMPRESSING the 10 breakable spaces to 2.00pt (natural 2.75pt at 11pt Times New Roman, so ~73%); the nbsp inside \"59 740\" stays natural in both. We only ever expand justified lines (layout.rs: the overflow test has no shrink allowance and extra_per_gap is clamped at 0). No wpJustification compat flag is set, so this is Word's ordinary justification. Implementing it touches every justified paragraph in the corpus and the shrink limit needs calibration first.\n\nFIXED (2026-10-05, verified): \"2251,\" now stays on the line as in Word; the compat-15 justified squeeze (a66bb28b: spaces shrink to >=75%) covers it.",
       "fixed": true,
-      "cleared": false
+      "cleared": true
     },
     {
       "id": 111,
@@ -780,7 +780,7 @@
       "y_pt": 770.7291,
       "note": "Missing header\n\nCHECKED (2026-10-03): no longer reproduces. The document has no header parts at all; \"Přílohy\" follows a w:br type=page inside the signature paragraph, and a fresh render puts it at the top of page 5 exactly like Word (page 4 ends with the signature block in both). Most likely the screenshot predates a fix; please confirm.",
       "fixed": true,
-      "cleared": false
+      "cleared": true
     },
     {
       "id": 257,
@@ -890,6 +890,50 @@
       "y_pt": 643.805,
       "note": "Greeting should be right aligned here.",
       "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 267,
+      "case": "scraped/advocacy_initiative_newsletter_2013",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 195.55121,
+      "y_pt": 355.77493,
+      "note": "Text should be placed next to logo-thing here, not below.",
+      "fixed": true,
+      "cleared": false
+    },
+    {
+      "id": 268,
+      "case": "scraped/advocacy_initiative_newsletter_2013",
+      "page": 1,
+      "source": "Generated",
+      "x_pt": 177.2,
+      "y_pt": 737.0,
+      "note": "Text beside the picture table starts 1.4pt too far left (ours x=177.2, Word 178.6): the strip is wider, so this story wraps in 4 lines, not 5, and the next story starts 12pt high, leaving \"set out a standard\" indented. Word starts the text ~91pt from the table edge for both 1755tw grids; we use table width + rightFromText (89.5-90).",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 269,
+      "case": "scraped/advocacy_initiative_newsletter_2013",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 261.9947,
+      "y_pt": 102.8327,
+      "note": "Missing horizontal lines in this document",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 270,
+      "case": "scraped/geneva_waste_facility_permit_request",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 66.26649,
+      "y_pt": 784.5301,
+      "note": "Missing logo here",
+      "fixed": true,
       "cleared": false
     }
   ]
