@@ -5,7 +5,6 @@ use std::sync::{Arc, LazyLock};
 use pdf_writer::types::TextRenderingMode;
 use pdf_writer::{Content, Name, Rect, Str};
 
-use crate::docx::compose;
 use crate::fonts::{FontEntry, encode_as_gids, font_key_buf, to_winansi_bytes};
 use crate::model::{
     Alignment, FormCheckbox, LineSpacing, Paragraph, ParagraphBorder, Run, TabAlignment, TabStop,
@@ -1167,23 +1166,11 @@ fn effective_text(run: &Run) -> Cow<'_, str> {
 /// A word as `w:caps` draws it (capitals); words are uppercased one by one so
 /// the word as written stays at hand for `/ActualText`.
 fn caps_word<'a>(run: &Run, word: &'a str) -> Cow<'a, str> {
-    let shown = if run.caps {
+    if run.caps {
         Cow::Owned(word.to_uppercase())
     } else {
         Cow::Borrowed(word)
-    };
-    // A letter and its combining marks draw as the precomposed glyph, as in
-    // Word; the text keeps the document's sequence (`shown_source`).
-    if shown.chars().any(compose::is_mark) {
-        Cow::Owned(compose::compose_latin(shown.into_owned()))
-    } else {
-        shown
     }
-}
-
-/// The source text a word's ActualText restores when `caps_word` changed it.
-fn shown_source<'a>(run: &Run, source: &'a str) -> Option<&'a str> {
-    (run.caps || source.chars().any(compose::is_mark)).then_some(source)
 }
 
 fn round_half_point(pt: f32) -> f32 {
@@ -2152,7 +2139,7 @@ pub(super) fn build_paragraph_lines(
                 }
             }
             let mut word: &str = &shown;
-            let mut original = shown_source(run, source);
+            let mut original = run.caps.then_some(source);
             prev_last_char = word.chars().last();
 
             let need_space = !current_chunks.is_empty() && pending_space_w > 0.0;
@@ -2316,7 +2303,7 @@ pub(super) fn build_paragraph_lines(
                         source = &source[..cut];
                         shown = caps_word(run, source);
                         word = &shown;
-                        original = shown_source(run, source);
+                        original = run.caps.then_some(source);
                         ww = width(word);
                         prev_last_char = word.chars().last();
                     } else {
@@ -2417,7 +2404,7 @@ pub(super) fn build_paragraph_lines(
                     source = &source[..cut];
                     shown = caps_word(run, source);
                     word = &shown;
-                    original = shown_source(run, source);
+                    original = run.caps.then_some(source);
                     ww = width(word);
                     prev_last_char = word.chars().last();
                 }
@@ -3115,7 +3102,7 @@ pub(super) fn build_tabbed_line(
             for (seg_idx, &(space_count, source)) in segments.iter().enumerate() {
                 let shown = caps_word(run, source);
                 let word: &str = &shown;
-                let original = shown_source(run, source);
+                let original = run.caps.then_some(source);
                 let kern = run.kerns_at(eff_fs);
                 let ww = word_width_for_run(entry, run, word, eff_fs, kern, cs, ts);
                 pending_space_w += space_count as f32
