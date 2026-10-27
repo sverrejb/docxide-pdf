@@ -11,6 +11,54 @@
   "cases/autofit-indent-right-indent": [
     "58e72f9d885b2e5d3c44fa3d523298f0bcc8e945390fb0ff8621cb167053a96e"
   ],
+  "cases/autofit-run-boundaries-r1200-i0-s0-f0": [
+    "1f1dae86986f927de7603dabd2433c5d8932a60cb6b31fd72bc70916f7faa7a9"
+  ],
+  "cases/autofit-run-boundaries-r1200-i0-s0-f1": [
+    "a627318fe14a6d80a254c3d6ecfd7c159f381d430ec717f719e8e27124efb58d"
+  ],
+  "cases/autofit-run-boundaries-r1200-i0-s1-f0": [
+    "f41dd62c9beb0ca02fa77aacc38ef9c7c91bcac66d4db74306af3c9cd4821a5f"
+  ],
+  "cases/autofit-run-boundaries-r1200-i0-s1-f1": [
+    "75acd17e8990942b5d0d1f6e2a2b106548e9794aeaef9636b2f6a42a910b581f"
+  ],
+  "cases/autofit-run-boundaries-r1200-i1228-s0-f0": [
+    "70cdbf8b2858d193c1bb3fec6a017ddc03c3178d908f2b9d319a77f8aeb8e309"
+  ],
+  "cases/autofit-run-boundaries-r1200-i1228-s0-f1": [
+    "ae5badeb09cc16f41a4b2f75d6ae2d5f4c8d97f5e7d90459ba47e31e2901285d"
+  ],
+  "cases/autofit-run-boundaries-r1200-i1228-s1-f0": [
+    "834d2d24e325f6e6f020ae191845d1dadc54ac60ececf3edcbed14db62bf7537"
+  ],
+  "cases/autofit-run-boundaries-r1200-i1228-s1-f1": [
+    "5cc4e6c0cb5f0c2450130837da29e6dda8f966c0b3d3e6386f9ba2e4d89fd327"
+  ],
+  "cases/autofit-run-boundaries-r4600-i0-s0-f0": [
+    "bafc4cef2372d9554bdb9b3cd1f3fd770744ab4a21a973315bf9c2f81ba006b1"
+  ],
+  "cases/autofit-run-boundaries-r4600-i0-s0-f1": [
+    "bafc4cef2372d9554bdb9b3cd1f3fd770744ab4a21a973315bf9c2f81ba006b1"
+  ],
+  "cases/autofit-run-boundaries-r4600-i0-s1-f0": [
+    "fc5854754e740d990b5544db0493718556295f924920998070007e07ab42217e"
+  ],
+  "cases/autofit-run-boundaries-r4600-i0-s1-f1": [
+    "fc5854754e740d990b5544db0493718556295f924920998070007e07ab42217e"
+  ],
+  "cases/autofit-run-boundaries-r4600-i1228-s0-f0": [
+    "70cdbf8b2858d193c1bb3fec6a017ddc03c3178d908f2b9d319a77f8aeb8e309"
+  ],
+  "cases/autofit-run-boundaries-r4600-i1228-s0-f1": [
+    "48895b15ae5ac66360a5f11d9f7c9ab8c019e4bf82f0295e5e77d13aa6ec3a56"
+  ],
+  "cases/autofit-run-boundaries-r4600-i1228-s1-f0": [
+    "834d2d24e325f6e6f020ae191845d1dadc54ac60ececf3edcbed14db62bf7537"
+  ],
+  "cases/autofit-run-boundaries-r4600-i1228-s1-f1": [
+    "4d4c026ee63bad200b3109b16da8a244fbe27b8f9d5bbe254bd76cfc03b923ee"
+  ],
   "cases/autofit-saved-grid-absolute-nested-address": [
     "7578587a0b35e39faf54988031b22372c0c9f0f881d59cf38f877a6c0307f590"
   ],
@@ -979,6 +1027,30 @@
   "cases/cell-padding-visible-text": [
     "399b4d27b00903e5ae580f1602b3a34c6f22f954f41ab6c8ddf654543b3caf42"
   ],
+  "cases/cell-text-above-floats-y1200-n1-long0": [
+    "9d8cbd996b83915416759d8dcbdcf7752bc36ad77ded0086bb216a6b4430ba01"
+  ],
+  "cases/cell-text-above-floats-y1200-n2-long0": [
+    "2214e6a0c3b58eb52d140fc9b1ae9fe1135c9d8accf541bfaabfec3a17013a52"
+  ],
+  "cases/cell-text-above-floats-y600-n1-long0": [
+    "e84fb3081a30e9c3cbd5f394bbd288ed4b35956de71eede18850b92ea253aad3"
+  ],
+  "cases/cell-text-above-floats-y600-n2-long0": [
+    "81374d0f507377d4848108cb59d2d3cc2ebb03eb9f321768e4d1ffa93082141d"
+  ],
+  "cases/center-body-list-height-baseline-space0": [
+    "fe03ef088aa88f3afe483e24e8343033b625646683cb40bd31bfcc784d1c625b"
+  ],
+  "cases/center-body-list-height-baseline-space1": [
+    "5c8ef5eeacfbfb98a5b019cc84f6dbb6744c859ace7aebe163ed1f26e9be34c3"
+  ],
+  "cases/center-body-list-height-center-space0": [
+    "662f6a0a3a49ec9d535934fffc4ce7cd18c06c785b90fc580dc1bb00f1473661"
+  ],
+  "cases/center-body-list-height-center-space1": [
+    "6b9a7e4df6f8a18df1e3dc4228bb4d5f9adcc9f25564d3a0f3c9441f7bee1b00"
+  ],
   "cases/clear-break-lines-one": [
     "80230bcb5332a733bb6c659d176a35b6edaacefb8d5ed5e9c5fab288fa4460e9"
   ],
@@ -1293,6 +1365,30 @@
   "cases/first-header-small-control": [
     "9a0296336e0432b7e53e8824c89fb361d6325a55bdb28afb0d4a4b28c02901e4"
   ],
+  "cases/frame-float-clearance-f0-y400-h400": [
+    "7adc28988d74e9ca17aa7fddb1cc84d12852cc59970ea1f7b1acf5a96ef99e0a"
+  ],
+  "cases/frame-float-clearance-f0-y400-h700": [
+    "e5682a75e1539e21b18f7785b80dcba4bc6129ddd851818ba5a52e953180c6b4"
+  ],
+  "cases/frame-float-clearance-f1-y1000-h400": [
+    "d02f630bb2f1fad01512b2589f0fe5cd95ab1b40eca41ee7f78b31e409234621"
+  ],
+  "cases/frame-float-clearance-f1-y1000-h700": [
+    "50154f11663d4675c0100fed200a390871611b1d77721d0cf9188cea0aa65648"
+  ],
+  "cases/frame-float-clearance-f1-y400-h400": [
+    "081a4b3ab031a3710981f6e3adb41309bc4722774845da9d5083b4de233fe455"
+  ],
+  "cases/frame-float-clearance-f1-y400-h700": [
+    "bc05a4c77a7f3d73b6c7e1d1d5db6cdc3643bbda1e83f72eb79d3116f9467a96"
+  ],
+  "cases/frame-float-clearance-f1-y700-h400": [
+    "a5dccef9316fef8c7e10cdc2f09374b5c9f1d30700f2b39fc9f5ddd0b7b6257e"
+  ],
+  "cases/frame-float-clearance-f1-y700-h700": [
+    "1506e7a45761535313b393af09b87a5388f7d50062770339affe07ffd149e8a5"
+  ],
   "cases/full-width-float-empty-anchor": [
     "5acf32b47ef294fcb7d4c9fbd14cd05de70c8928f9eda2bc6da63dd053723546"
   ],
@@ -1475,6 +1571,27 @@
   ],
   "cases/inline-shape-alternate1-hide1-height23.75": [
     "13204ad1ce4d7d3610782e8fa08217e628b48d046312828dfd0de12ee953ab29"
+  ],
+  "cases/interleaved-registration-inline-s20": [
+    "ebe719b89d7eef68a780aa7dd00923abe6baf27307ff3208b7026571594d8806"
+  ],
+  "cases/interleaved-registration-inline-s28": [
+    "ffa790b185d670f409f42de44e23457d05faf6e8c61a798da8ed778be83c9bbc"
+  ],
+  "cases/interleaved-registration-w4800-s20-n4": [
+    "24eb1a6c3ba2994b36794f13fee598519023a5f4254b48b1d6a23c00daf8e8fb"
+  ],
+  "cases/interleaved-registration-w4800-s20-n6": [
+    "4aeba9193df557d147068010c6e90dfe869f314f51c8a316457484119fa8421a"
+  ],
+  "cases/interleaved-registration-w4800-s28-n2": [
+    "52613a46d8027cde4b339aebe5a1f3b7c31a46cdb45e5819b7863030885399d5"
+  ],
+  "cases/interleaved-registration-w4800-s28-n4": [
+    "311ee4380d38de3cd489545e3cfaaee47fa7d8396a9a2cdcb0906d66568144f7"
+  ],
+  "cases/interleaved-registration-w4800-s28-n6": [
+    "ce55cbfcd26916f59701e346f23139958374378b4d26a998c0ab15957c7a353f"
   ],
   "cases/leading-anchor-prefix0-offset80-behind0": [
     "0d8ab7824e3779ec02be70a4bdbf996ee54561bbf95ca8f67ef53df5f89f7374"
@@ -1676,6 +1793,54 @@
   "cases/nested-adjacent-negative-positive": [
     "09d1b6840f2d6252e025dd65263c331055da1af8bf6a31d3b5ac5eeb9448e232"
   ],
+  "cases/nested-autofit-padding-d1-p0-w4200": [
+    "1cf7ce6e579869f4126425c6ceeae58d9f4bb84857a3ffd71429442e65f06157"
+  ],
+  "cases/nested-autofit-padding-d1-p0-w6000": [
+    "1cf7ce6e579869f4126425c6ceeae58d9f4bb84857a3ffd71429442e65f06157"
+  ],
+  "cases/nested-autofit-padding-d1-p108-w4200": [
+    "0c092b9d02ec125ef11536387ea582b3000d678818dd470ed5302e4876a01d20"
+  ],
+  "cases/nested-autofit-padding-d1-p108-w6000": [
+    "5950152e45f442441e988e183e44d16b3b01da5c28c19c80378525dd3cf6ff4f"
+  ],
+  "cases/nested-autofit-padding-d1-p216-w4200": [
+    "1484830e44bcd5d5ab01939f87eede0b63b88a985a1d7a979021023fcc622a1c"
+  ],
+  "cases/nested-autofit-padding-d1-p216-w6000": [
+    "1dc673ff7fe63b6e1d45d4d090837576fad212fab6e6dfb9696cb3c7c33913a0"
+  ],
+  "cases/nested-autofit-padding-d2-p0-w4200": [
+    "1cf7ce6e579869f4126425c6ceeae58d9f4bb84857a3ffd71429442e65f06157"
+  ],
+  "cases/nested-autofit-padding-d2-p0-w6000": [
+    "1cf7ce6e579869f4126425c6ceeae58d9f4bb84857a3ffd71429442e65f06157"
+  ],
+  "cases/nested-autofit-padding-d2-p108-w4200": [
+    "1484830e44bcd5d5ab01939f87eede0b63b88a985a1d7a979021023fcc622a1c"
+  ],
+  "cases/nested-autofit-padding-d2-p108-w6000": [
+    "1dc673ff7fe63b6e1d45d4d090837576fad212fab6e6dfb9696cb3c7c33913a0"
+  ],
+  "cases/nested-autofit-padding-d2-p216-w6000": [
+    "20bc58bc4b4f2a92bcea2bf058023973c4c39b9286e967caedbb3335eab1ed1c"
+  ],
+  "cases/nested-autofit-padding-d3-p0-w4200": [
+    "1cf7ce6e579869f4126425c6ceeae58d9f4bb84857a3ffd71429442e65f06157"
+  ],
+  "cases/nested-autofit-padding-d3-p0-w6000": [
+    "1cf7ce6e579869f4126425c6ceeae58d9f4bb84857a3ffd71429442e65f06157"
+  ],
+  "cases/nested-autofit-padding-d3-p108-w4200": [
+    "fcb30342a9048f6026b88c48271ae558cb58356e813e3b3efd5c803f693c2218"
+  ],
+  "cases/nested-autofit-padding-d3-p108-w6000": [
+    "c98c7b24cec426e26f0cdfa87b7771ace70c202d712d86b93cec10dd534af169"
+  ],
+  "cases/nested-autofit-padding-d3-p216-w6000": [
+    "10d22e42a102adaae85b14599e1a3794ad145e1d5bde51657f186f610e947e92"
+  ],
   "cases/nested-final-mark-modern-y-33-n1": [
     "f84f87b79688cfbc94ac93816f552c93f1b1e00aa80f5300c57463419c3c4dc3"
   ],
@@ -1715,6 +1880,30 @@
   "cases/nested-first-row-prefix330-cant1": [
     "2619bebf1b9c6ce8a1f70534db6a3c978a4555a327015c65029304b9aba2b02c",
     "bd81bd80377085dada43aed16dfa4d0974f398d872d74a891637e162b34de8aa"
+  ],
+  "cases/nested-float-align-m15-center-o0-i0": [
+    "70f99eaa0696448eb9b18729db63a6bd0bc7245370c13299bf4482c5f6c39165"
+  ],
+  "cases/nested-float-align-m15-center-o0-i108": [
+    "3d763b8331967d18a8251adfd82031559833d09d7f106db05f0c5fbd5cc436ea"
+  ],
+  "cases/nested-float-align-m15-center-o108-i0": [
+    "70f99eaa0696448eb9b18729db63a6bd0bc7245370c13299bf4482c5f6c39165"
+  ],
+  "cases/nested-float-align-m15-center-o108-i108": [
+    "3d763b8331967d18a8251adfd82031559833d09d7f106db05f0c5fbd5cc436ea"
+  ],
+  "cases/nested-float-align-m15-right-o0-i0": [
+    "4822262e4100ed650b35191b793c2357f0aef5886842c6f9758a3b47c4c05683"
+  ],
+  "cases/nested-float-align-m15-right-o0-i108": [
+    "8d13e8587a77b540ec925ec8d4a6f945a280118e764093c2574841d14eda889c"
+  ],
+  "cases/nested-float-align-m15-right-o108-i0": [
+    "da50465a062fd47a113342ba3ef44e1124dec5b41d6f3a907ff6f43ac387a402"
+  ],
+  "cases/nested-float-align-m15-right-o108-i108": [
+    "4822262e4100ed650b35191b793c2357f0aef5886842c6f9758a3b47c4c05683"
   ],
   "cases/nested-float-no-spacer-inline": [
     "75366b047dc690d4c95b216a8d2ee325a9a0f3aca11ddf40b3e0780399a7d2c6"
@@ -1917,6 +2106,66 @@
   "cases/raised-empty-size14-position7-count2": [
     "7e2244e3bacb8fafdcbfc69dc5c8d79746901b020a7a6efb3ae277105d05daec"
   ],
+  "cases/rect-contour-clearance-m14-size12-line240-empty6-Through": [
+    "e80217fe2d3af7df3fd17da8d0aebc2cf27f693ee78e42bb41b5fbe6fb3d4819"
+  ],
+  "cases/rect-contour-clearance-m14-size12-line240-empty6-Tight": [
+    "e80217fe2d3af7df3fd17da8d0aebc2cf27f693ee78e42bb41b5fbe6fb3d4819"
+  ],
+  "cases/rect-contour-clearance-m14-size12-line360-empty2-Square": [
+    "b0df783146926800ed1a3421a1e6c0a9c34ee92db3e267b6fce8cd33340d7009"
+  ],
+  "cases/rect-contour-clearance-m14-size12-line360-empty2-Through": [
+    "b0df783146926800ed1a3421a1e6c0a9c34ee92db3e267b6fce8cd33340d7009"
+  ],
+  "cases/rect-contour-clearance-m14-size12-line360-empty2-Tight": [
+    "b0df783146926800ed1a3421a1e6c0a9c34ee92db3e267b6fce8cd33340d7009"
+  ],
+  "cases/rect-contour-clearance-m14-size14-line240-empty4-Through": [
+    "3f83d8d23897d2656a18a4c3211f84c5751635e5607d449173e1e12dcc1e0805"
+  ],
+  "cases/rect-contour-clearance-m14-size14-line240-empty4-Tight": [
+    "3f83d8d23897d2656a18a4c3211f84c5751635e5607d449173e1e12dcc1e0805"
+  ],
+  "cases/rect-contour-clearance-m14-size14-line360-empty1-Square": [
+    "364a7f6711f0147c528e25cc87e0e5b3951fbb4f04153cf90dd5d5e9e8455bf0"
+  ],
+  "cases/rect-contour-clearance-m14-size14-line360-empty1-Through": [
+    "7d0786609de99d06547ea154fd2a071f35d98a364089970d560aa8541bf6fd65"
+  ],
+  "cases/rect-contour-clearance-m14-size14-line360-empty1-Tight": [
+    "7d0786609de99d06547ea154fd2a071f35d98a364089970d560aa8541bf6fd65"
+  ],
+  "cases/rect-contour-clearance-m15-size12-line240-empty6-Through": [
+    "e80217fe2d3af7df3fd17da8d0aebc2cf27f693ee78e42bb41b5fbe6fb3d4819"
+  ],
+  "cases/rect-contour-clearance-m15-size12-line240-empty6-Tight": [
+    "e80217fe2d3af7df3fd17da8d0aebc2cf27f693ee78e42bb41b5fbe6fb3d4819"
+  ],
+  "cases/rect-contour-clearance-m15-size12-line360-empty2-Square": [
+    "b0df783146926800ed1a3421a1e6c0a9c34ee92db3e267b6fce8cd33340d7009"
+  ],
+  "cases/rect-contour-clearance-m15-size12-line360-empty2-Through": [
+    "b0df783146926800ed1a3421a1e6c0a9c34ee92db3e267b6fce8cd33340d7009"
+  ],
+  "cases/rect-contour-clearance-m15-size12-line360-empty2-Tight": [
+    "b0df783146926800ed1a3421a1e6c0a9c34ee92db3e267b6fce8cd33340d7009"
+  ],
+  "cases/rect-contour-clearance-m15-size14-line240-empty4-Through": [
+    "3f83d8d23897d2656a18a4c3211f84c5751635e5607d449173e1e12dcc1e0805"
+  ],
+  "cases/rect-contour-clearance-m15-size14-line240-empty4-Tight": [
+    "3f83d8d23897d2656a18a4c3211f84c5751635e5607d449173e1e12dcc1e0805"
+  ],
+  "cases/rect-contour-clearance-m15-size14-line360-empty1-Square": [
+    "364a7f6711f0147c528e25cc87e0e5b3951fbb4f04153cf90dd5d5e9e8455bf0"
+  ],
+  "cases/rect-contour-clearance-m15-size14-line360-empty1-Through": [
+    "7d0786609de99d06547ea154fd2a071f35d98a364089970d560aa8541bf6fd65"
+  ],
+  "cases/rect-contour-clearance-m15-size14-line360-empty1-Tight": [
+    "7d0786609de99d06547ea154fd2a071f35d98a364089970d560aa8541bf6fd65"
+  ],
   "cases/repeated-clear-tab-one-tab": [
     "880253776085d39aed48b76a86b9095b213273b91a9caa5e483e6c96c2334c0f"
   ],
@@ -2058,6 +2307,46 @@
   "cases/shifted-text-position7-mixed1-mark1": [
     "893974d6887eea09f40d97c31ee6dda3fc3fecd571e9e8101e24b60dd8a30d50"
   ],
+  "cases/short-cell-widows-m14-l2-room1-w0-lines": [
+    "379ba13b8fd51b0a970e51c98ca351ccac9dd9d0139bae9bd0e7a6ceaf2c846a",
+    "0cdb5f84366820bcaeb49a606471b0115a8b1d653046bc13b686c4166f73f9aa"
+  ],
+  "cases/short-cell-widows-m14-l2-room1-w0-next": [
+    "379ba13b8fd51b0a970e51c98ca351ccac9dd9d0139bae9bd0e7a6ceaf2c846a",
+    "883223f3afe7e75877313abc385433252b37a264a4bb04f8f07657e2733ed078"
+  ],
+  "cases/short-cell-widows-m14-l2-room1-w0-none": [
+    "379ba13b8fd51b0a970e51c98ca351ccac9dd9d0139bae9bd0e7a6ceaf2c846a",
+    "0cdb5f84366820bcaeb49a606471b0115a8b1d653046bc13b686c4166f73f9aa"
+  ],
+  "cases/short-cell-widows-m14-l3-room2-w0-none": [
+    "151dfdb74fd040eec8420b9549f6fac7055cee92c961597208cf55adf38ec955",
+    "77efdcc474ca1b0197138a2a1e51b4a5e13d993455d4fc085fa19f95a121ae92"
+  ],
+  "cases/short-cell-widows-m14-l3-room2-w1-none": [
+    "151dfdb74fd040eec8420b9549f6fac7055cee92c961597208cf55adf38ec955",
+    "77efdcc474ca1b0197138a2a1e51b4a5e13d993455d4fc085fa19f95a121ae92"
+  ],
+  "cases/short-cell-widows-m15-l2-room1-w0-lines": [
+    "b1ac969f93e5a5bf0612b7fc12b98b654c11499c32525e95a8a658e8dc03e786",
+    "902fdbc74ce1c01695aa2582b0b680535bdb0fcd7a217cca1afcd45eb52a71c8"
+  ],
+  "cases/short-cell-widows-m15-l2-room1-w0-next": [
+    "b1ac969f93e5a5bf0612b7fc12b98b654c11499c32525e95a8a658e8dc03e786",
+    "a6fdef3adcabe248352eacdbd8ac14df902bf8b835e75e9c4af909bd37455610"
+  ],
+  "cases/short-cell-widows-m15-l2-room1-w0-none": [
+    "379ba13b8fd51b0a970e51c98ca351ccac9dd9d0139bae9bd0e7a6ceaf2c846a",
+    "0cdb5f84366820bcaeb49a606471b0115a8b1d653046bc13b686c4166f73f9aa"
+  ],
+  "cases/short-cell-widows-m15-l3-room2-w0-none": [
+    "151dfdb74fd040eec8420b9549f6fac7055cee92c961597208cf55adf38ec955",
+    "77efdcc474ca1b0197138a2a1e51b4a5e13d993455d4fc085fa19f95a121ae92"
+  ],
+  "cases/short-cell-widows-m15-l3-room2-w1-none": [
+    "b1ac969f93e5a5bf0612b7fc12b98b654c11499c32525e95a8a658e8dc03e786",
+    "80716534e4d9e213fba2cc397d6d078af0eb1f6f6036a455c50836119a4fdef6"
+  ],
   "cases/short-float-clear-anchor-shorter-than-table": [
     "ca310bffd152b4035e04a7c59db0a1dca7bad8fd3da8f9323e4e6f9d678fac5b"
   ],
@@ -2172,6 +2461,24 @@
   ],
   "cases/tab-only-cell-mark-tab": [
     "db85d8b0a2ac4e308694d18e44f9e91fda4fd92e4104768a1260f2261aa39ce6"
+  ],
+  "cases/table-wrap-indent-inline-i5100-r0": [
+    "10d07a1b339ee8d587d69f8deba480e166c35b6ed500bf39941e080bc8d2bfb3"
+  ],
+  "cases/table-wrap-indent-inline-i5100-r240": [
+    "488f2b89442c23bd73aca3c79b65c624e7adc74fe4ad99b328da87040cd64f00"
+  ],
+  "cases/table-wrap-indent-w3000-i5100-r0": [
+    "8529123bae222a2753899fec6e4fdb87e4fe5c9c191814c3da1fc58a646e6301"
+  ],
+  "cases/table-wrap-indent-w3000-i5100-r240": [
+    "4917e269e0ddb8624001985adaa03b7b1d13e0ba71c87994efcf2970066acfcd"
+  ],
+  "cases/table-wrap-indent-w4200-i5100-r0": [
+    "8529123bae222a2753899fec6e4fdb87e4fe5c9c191814c3da1fc58a646e6301"
+  ],
+  "cases/table-wrap-indent-w4200-i5100-r240": [
+    "4917e269e0ddb8624001985adaa03b7b1d13e0ba71c87994efcf2970066acfcd"
   ],
   "cases/trailing-anchor-prefix0-offset80-behind0": [
     "0d8ab7824e3779ec02be70a4bdbf996ee54561bbf95ca8f67ef53df5f89f7374"
@@ -2317,6 +2624,42 @@
     "1e31ae8134fa4130f275cb499ef4cd227cc30d0797b7748d8050adf82e8bb946",
     "f13b07a2dfe004468234865de268c91ba09af5e2d22fa1018ff13da83307c53b"
   ],
+  "cases/wide-nested-float-edge-narrow-m15-left-o0-i0": [
+    "ebe4e7c20f868cc8c2d61ead875478ac91bfc23efb9584977db1139afc98c502"
+  ],
+  "cases/wide-nested-float-edge-narrow-m15-left-o0-i108": [
+    "8e6d27ec408e5ce029f992ceab25d286fd1c45023ae50da50459386fb99a7308"
+  ],
+  "cases/wide-nested-float-edge-narrow-m15-left-o108-i0": [
+    "8e6d27ec408e5ce029f992ceab25d286fd1c45023ae50da50459386fb99a7308"
+  ],
+  "cases/wide-nested-float-edge-narrow-m15-left-o108-i108": [
+    "eea956037a2e7cea9f7444eaccb123e6dea51f37cf52e77ef2c758d337918a1f"
+  ],
+  "cases/wide-nested-float-edge-wide-m14-left-o0-i0": [
+    "ebe4e7c20f868cc8c2d61ead875478ac91bfc23efb9584977db1139afc98c502"
+  ],
+  "cases/wide-nested-float-edge-wide-m14-left-o0-i108": [
+    "8e6d27ec408e5ce029f992ceab25d286fd1c45023ae50da50459386fb99a7308"
+  ],
+  "cases/wide-nested-float-edge-wide-m14-left-o108-i0": [
+    "ebe4e7c20f868cc8c2d61ead875478ac91bfc23efb9584977db1139afc98c502"
+  ],
+  "cases/wide-nested-float-edge-wide-m14-left-o108-i108": [
+    "8e6d27ec408e5ce029f992ceab25d286fd1c45023ae50da50459386fb99a7308"
+  ],
+  "cases/wide-nested-float-edge-wide-m15-left-o0-i0": [
+    "ebe4e7c20f868cc8c2d61ead875478ac91bfc23efb9584977db1139afc98c502"
+  ],
+  "cases/wide-nested-float-edge-wide-m15-left-o0-i108": [
+    "8e6d27ec408e5ce029f992ceab25d286fd1c45023ae50da50459386fb99a7308"
+  ],
+  "cases/wide-nested-float-edge-wide-m15-left-o108-i0": [
+    "ebe4e7c20f868cc8c2d61ead875478ac91bfc23efb9584977db1139afc98c502"
+  ],
+  "cases/wide-nested-float-edge-wide-m15-left-o108-i108": [
+    "8e6d27ec408e5ce029f992ceab25d286fd1c45023ae50da50459386fb99a7308"
+  ],
   "fonts/arial": [
     "cefde7932aa0b9c9e21c664f8f40dd0db2beae693da8bc640bd1366a119ef511",
     "31500d0149897e26bedd5b144fe641bcb53d8964d21311c6e11c6833c9b93c6c"
@@ -2390,13 +2733,12 @@
     "6ddf03f4d11a3ecd827e36998e7d9c527b50ea5a8f8770ee04fa627d2f515f04"
   ],
   "scraped/advocacy_initiative_newsletter_2013": [
-    "3e6031fa68bc2ae032504f83ce6475e27ffb1a1d0e6600414f130bb3b655a880",
-    "7a8eb897ccb21bd14b45ff63764a827b318e184c9cdb9abe5a962d1b6d34eb0c",
-    "d36b663d3c8cf84f81837765617e55130b8843bc76af8ebdac2c55e24811f60b",
-    "200126cf7086b2fdcf6843a93bbe5eadf18b31a1355b6b764a9109c51c9d7b5a"
+    "bafe82d54cd279a83e15475fadd38f7323fb63396feebf0dcf46b40a130eb063",
+    "aef877916bfc69663dafd1c8f2e0d5dc6f53b81b5298f8a0375a878b5f5c813c",
+    "678f1e90a44b72a002337b7161f830eae3eab1302b6be64fc81fd1359e846e6b"
   ],
   "scraped/air_pollution_permit_form": [
-    "4c9a762f7613172f81bf639a9d9cb74ba08f5fdc5d9f200068ce4000ac5fd707"
+    "51a5675de8304c34dcb8876ff625cea7095eaa9afa094055ea54c422f52cd727"
   ],
   "scraped/alfies_arc_adult_safeguarding_policy": [
     "76021035ac9d34d3d529705413f063eac9eb2788365e008a2aed96f89b3042a9",
@@ -2415,7 +2757,7 @@
     "e1e87e53d59151ddbe4e71d0649c049730a53cfa171e0df633d6f4feff0d00b5"
   ],
   "scraped/arizona_physical_education_standards": [
-    "58a731e85b4f4bf9ce638959a0b1aa1807914640ddc0fd6fe9647e29151c1721",
+    "b84db9e18961a9632d5bd7e6584ef4ce88bff3455143c4958fe45646e3635551",
     "3b4445f54055f43a8798ff6d40ed3961e4f44acbad85cf543680099b3622e0b1",
     "5a543e8e4dd6388d8f37a915b163f8129a54f43ff0c160496df065f6a3be5f38",
     "d9162f9f5bdb434bec29bdf8d2cbf2065b7f6f9c8d8c76cabcab1d13279eed12",
@@ -2765,8 +3107,8 @@
     "84643107178a3d3be34d4b463ad630472ceb39cebf1c3b7726ae099dc1d78bb9"
   ],
   "scraped/chinese_costume_design_course": [
-    "bc318612268b9fd72a21fbad22daff0d514d7d3795c21c4a6c37771bbbd0d71a",
-    "9d6c3073833b005fca4b9da0dcc0228c8dea6dcce2a4cbbf2fc9b73cd03679bf",
+    "1c70ef1c65f8b8e51bf7d23baa51fa2c7edccd52f8720824e955196afe94401b",
+    "9f2a48c2b1da53d56d8ada6f55828bafac2e8b318cdf5624488345ecfb94cc76",
     "9e98525e0d6aeb47f3a28a87281d439c3b65a4a5bc14c133cbbc4a13a005582a"
   ],
   "scraped/chinese_student_union_nomination_form": [
@@ -2774,11 +3116,11 @@
     "6f279875c59be0de0cc785ab29fb75459ad46be24f489a0dd7a476ad03b94e76",
     "fd281c79ca94a1b3b27f759f50ab6dcd05fa67de59add17d5c8c59465f9b03fa",
     "81f30410d57b38c4fea1c60240a49a1efc6d797b2278e74828bd35ce7364186f",
-    "87bde57f3fa83cc12be06d4d976995526be395d8ef2df64939449c83c104262c",
+    "f1c019ae650a80d268e20f502e714df065efe94ec6c174cd0d96a7206ff291ce",
     "04862c6ec9f3effbb25b08cdeb919ba5bda1ace55f573143c18b9423bcebc9c0"
   ],
   "scraped/chiseldon_parish_planning_agenda": [
-    "34678c0880b535a3a0f072b4b3331ecac7874b0e53c2dd237d1c20e0a23d7ceb",
+    "bbc4560728d4475600b327813248845621c758a52bb370962354289f657aadf3",
     "e361bc1125bc91308b4a8a1f0531d260210b2b060bda027fee797ce6271d1e3e"
   ],
   "scraped/classroom_weekly_newsletter": [
@@ -3129,7 +3471,7 @@
     "ba0a6adf935426222dd976f32da72c03e5a3ac1e7e5604b9c5d582d8586848a5",
     "24fc8bd871b53dc6187d454707913df2aea017813a08fe7efb9941d26314db13",
     "f339effedff1c890b68419e59e35cd6a369050eb46f1f4b81d3fc5545cf63df8",
-    "1e90f66e073ef49397a31a14e9249252fc000d20b01cf1b717adc5fece50b5e7"
+    "926acc81027df3319f806c75ffb4c5aa195131f88afc0262961b054e213b335d"
   ],
   "scraped/federal_design_services_letter_interest": [
     "fa4a5c032bd8f2fa285ab461ab21d708211bf112be55e6b80cec61d001b7d95c",
@@ -3275,7 +3617,7 @@
     "5cb2a247c14ee18841886e201d1060a411400bc2cc9ab271644c20a337622d0a"
   ],
   "scraped/german_mezzo_soprano_bio": [
-    "cfee42c6f6742be2ef187f8c1145f1c8150cd66125e18ce1eed4a8e7f236370e"
+    "fb9779ffb8bba0f670012fd8e825699b314338f0c9a57e8bef7878e7f990f312"
   ],
   "scraped/go_math_grade4_guide": [
     "9356837856606039ae883070a6b647221bc682a3834629ef47f30db796365c3d",
@@ -3407,7 +3749,7 @@
     "1e893b55c8b2dc9fba7f2314d8385224908677274cf1cd7837e85cde03e0e167",
     "57b045e479bf6cfa260121ddc7f85963eae8076228299a4de66f16074499533b",
     "b37ff68a991d3dbb310f69fef59ca4f67b8aab9d76febc7ad02579dd2b751367",
-    "37b5e848f4d4a2e235988cc369e0a9bdfcebec49c1a4ecfe564436ced0e14d11",
+    "2878269f15f04294f3efae663a0f1c39ef7fd73f0c8df66119f9ce875fe2bae3",
     "15bd2f094f60afbf04f576b0049fe24ceebb5110f4822e8b662616fa88f05a8b"
   ],
   "scraped/italian_academic_cv_form": [
@@ -3435,17 +3777,17 @@
     "9d9bbfd88a9e165598e171dac33c670f4fb3e50780967a2dc83b345c85cbfbeb"
   ],
   "scraped/japanese_hr_consultation_application": [
-    "6880c2eeab41ad0277a5965a0bfc3513ed32776944009933166fb0b5b11145b1"
+    "0936a434172b16825e232d237c4e7f2207dcd7f53e0ae0d725470057dd416cfa"
   ],
   "scraped/japanese_interlibrary_loan": [
     "a662c26f968a82360e19b6e222fefdecac5935ce7e9d5ea77100ebd968f0735e"
   ],
   "scraped/japanese_land_development_sign_form": [
-    "f6f04be1e27011f6055e9e177258be09c26277bf83fc2feee34faff02372ea2b"
+    "97cf237f4623afd0c75f2436e09ef29329bc70fa1921fd93f82a26a808dd949e"
   ],
   "scraped/japanese_medical_consultation_form": [
-    "c2fe68cbdd984c376a809db4f052332580ad273fd52fb036aaea9c63eddad095",
-    "d167b27a134a606767838bcb1de24122a89c3f4bea668cff43f475900bad2286"
+    "41dd56c6a2508aa60ed413c58c45d732f96543852bea8e77094a88159d222c2e",
+    "553ed3cdf04b6b65e3643d3d6c6df8ceab7e4fcbf162c130b79b15b478871524"
   ],
   "scraped/k4_regulations_synthesis_document": [
     "4e6ab1f3323db11008b92337255b35a4879e5cf001eba8f15bd288e01a6caaa5",
@@ -3631,9 +3973,9 @@
   ],
   "scraped/maine_criminal_history_record": [
     "42102a08bc6a2d3551c1abf0263284b9b087833037389fe8c19c450b48d766f4",
-    "8ba138ce3ef6bb6de96e7943f8fc39843f4bab2d3d179eee5078b5670289620e",
-    "dff2d41bb5610d5b609ec95d2d94916b0bdc912c98a7790447e64011e2107a47",
-    "d35d67fffc18122d2fa7e27bf86ad332fd273a913420ba2d1b24c491f28fdcdb"
+    "50c20a705b4791c6a94dcd3ae7adf0af7ef6fdef4b41cc620373e852cf887386",
+    "f1ea1fa014c4e40c61c7543722e246abc1c94e31233480e4198968bcef4b5c3e",
+    "e5e5ca5eb2b208f4952c87533249574eeb147aa58e930479003927567ca0d0c6"
   ],
   "scraped/mandated_reporter_child_abuse": [
     "28144ea3d7d39e5b82d315f2d66eeb01a29259813862d64bd1bc4d7007cb15eb",
@@ -3992,8 +4334,8 @@
     "40eeae5571aee89de2e34d5a7cef37075f99300743062da1d9499946af5585b5",
     "4cf2112db5f28cffbcc737914fac89f416b1cf803da15dccce2bc68826c997c4",
     "b63627c9824add716c2b39acfb5297176679ba98d3e91b42d6b50e416744a240",
-    "752c62981a3f974751a74ba5494af9896d644c06c5a78ea2b45f335d415f3164",
-    "605e137f54ad068c17c6f88d11f5d8a4e013e2fb5dbf47c8029fbf500700dc2a"
+    "38a324fb1500192d2c0fe7294465bee8b869464bc052568084798ec1cf8c455b",
+    "55c56b6de2f386c27089992190fab696b9f9b2083fa458e511b1061a77d4bc8a"
   ],
   "scraped/samtale": [
     "e2d4192da6599af12db9c18d78a1234a4c80bea927bbc3c399cf9da0c94f7843",
@@ -4128,15 +4470,15 @@
     "9446acabcdcc8176d25b21298766c83840a5e3535d4d404f704e490674ffcdb4",
     "2aa4179c10e2e57dcfdee69b65384924fbc7f3104de2cf36a562e6647f843cc8",
     "b8f3c57a19692679590fe41b103c0f10f757cff183fb4d6ed305f79f49434434",
-    "2eca223383fa5a2c2d37ba993a435ebbcec59f688e9b5537f9b3eb362330dfcf",
-    "b1f05a902328f7d10e74e9af308d9a214deebaa73cd7bf1da9e92a3da8551653",
+    "65c4db9cf135618d7d3507d6129c15c7792a02da967325abfea3889b19439066",
+    "8fc0f5805a55b8b90b5366140511d622ba428a346ba74336932b31ae34894910",
     "23454156bf9ca7df73cd42e3aa4ab444f049ac3d07a4251ff18032753ca3ac6f"
   ],
   "scraped/taiwanese_education_fraud_ruling": [
-    "64b77d9307065f6c8c771102ce0c39ba6445467c49169539910bc39a658dd97a"
+    "c85508e3d11d021fbec9a7a7ef9fd7f106e4542623fcc537be07458d9cb49fc1"
   ],
   "scraped/tokyo_welfare_infrastructure_briefing": [
-    "d683925047d4f5de1ee110c064630282e7fb6f1ab9b9cff538c59d196052149d"
+    "8811141363ff91bbb9c08bc21861826a453c5672625a997e3378e1718ea8c237"
   ],
   "scraped/traditional_skills_job_form": [
     "cc4a1ef72ef334a7d957fbe45e912c942b191c996198b9c4c1dccfb8e66b0244",
@@ -4363,36 +4705,36 @@
     "f19d415514a7cb82db080848c548e632ec001039ce8c1119fb892d194f1ac956",
     "0f636206cd35f6e8b43fd7a2e454a24e12de9d90b01fd1baedcbd025e11dee89",
     "7aad926371d930940d9f178a1d94f4149c255bd6974655d624f79733ff34541c",
-    "c020da5fa2b79b3fcd19b593b992b746ce565223f45fefc7ae70e4c446231bb7",
+    "182fa91f3fbc12f28078ccc96624517ec898a218a34a71598cdbd094d5a0d6a1",
     "be504bfee19e928d6eb36d53b2b92347749c8ffc7a48194d1a03676f335eabd3",
     "90de3eabde428212cdc48b9cb8677fade66184cfb05b7fbc5b17ccbf1bef944f",
     "f77d3b110e1e8b06c8e6e126b87d7719a6072db254a1e6302fb4c76e282c778b",
-    "e5f850a814fe179a22d48e2f6a510700d980433fac6179c2ba97e55a8d517420",
+    "7edf72f00e35815a17596e4b76a91d31909df45cd0b4b773232cf3957c37c338",
     "6318e1854259bd2b4413381af78cfce47f8f0639da1d10de20c47bd9fbae0430",
     "305d102403790911cf11e753371940ec375dd9178e8853d7034e2db6ad9d3c92",
     "1f6e4423c438d2f66ab8d84b499579b99e48419a310e85b67238df1b41a9dbef",
-    "79dbe2be105914e8704c368c32504a44ecc1e7f1d41b0b1c5fd8b5d04b54eb03",
+    "7c361f1aef37686ffa9fa89e86348eed99e5ca03d35459ffbbd0df4f0afd1326",
     "d02d72da44a2449a9882c4554d916a7459a7ececcee6779000de1bd582355752",
     "d640c60bf4b4b4d9bf69126839c4ad77ac45b7afdd25bf151020352330ae5acd",
     "282bc9ff0017fd042cc8fd480a948381d063ca98b44c3da6af2ba3fe672ef95f",
     "d12771d6ebd4d62b1888253ef27b9930f565bffa11bcfb3487f771e042bd50a3",
     "66541298e9881a4bb5e3c18fd4d35bca658c6558fcb7519200fe8eea72603999",
     "ff70e95a5b6efcef6293468a2bc3e1b6fdc2ab6f0131bad1988b2822b6372e28",
-    "10e8b907b0c2a07b40ec7435b9218cbe8989141882463abe5beac7e2bc70f9d5",
+    "194ced905b4a8708e252b4a0b880b9c8c50d2caa77db619e23d46f0bd13be832",
     "fdf898648c765d47b34a9ecda78e24ba3078531a2d3cdb97f22e9176d60cd52c",
     "7ac0bdb61b9aa851d418bc9615d3a6a9405163728a76379a4e7e650ad96bce82",
     "fcde067f7720e1b131e8d485f56b618e5585e4e070c9a4146cf59fdb9ab7dac1",
-    "cb48f5dddba254172e4a68d2c8da63fc973a24350ce55364ca024765ca73198b",
-    "25152ab9d13c181e19afc95a8247e6e7db0f92390affbd6a65a70ad95ddd1262",
+    "e43db477476edd24f4f1a885fbc56aedc97c11d79b099a15685e06cdbbb5b55b",
+    "0eb129d679d60b3db3c4d33732e95110c18477c6cfb52ecdb89317dc37712889",
     "912db3a7d53fca0349e99c5d76c548fa87008be154179aa78a8b889de1307988",
     "7a15e3f09d6506eed832b9d9b962108b2628fef0b27123dce97dc7f22603eb64",
-    "f26fb3eb600eb8f23b35b4d8b297056b8402642e5ed3732495dd610c3232c761",
+    "87e7f9d96f5eb9105eb2781742d550d85e094db82f674a89d9bb166b845bae1e",
     "7541eba5a78aa8bcd632983d9bd30154ccb37b4507049fd080638ac2af28ef3a",
     "c1f559c9f68fde33757a8b8a06ff22d0299ea9cbe65f047d69fca212c4aca9e3",
-    "642b0ebc5158fc6692519d4626b8da766910848013f52c3aa0d5f60a04244733",
+    "b9bdc346849219fd7a59ada82e6bc5026e2c79c7330bedbb5b03ae204b9ac69c",
     "27f9563348769cae4bbb1e8ecc9940791b2efb128b001d00c98ae18b7376b25e",
     "e3b07a354973b239e376f2ccbb0bc4f6515a2eb13f4ca20c403dcfd28e95ae06",
-    "af989b8501a747ef5c1b8f0e8aca49140594b0684073f0299e15b6d488d23329",
+    "f32cddc006b4d32b2268cf35186c64a45a79dce78fe4e8123b444fefe96b3cbd",
     "bc1a77c2a68a51dfdf83f0442e52a0f977f6b75b17f72a66610fc065df8c6a3a",
     "95576cf17fc28180dbc4d98fb35556dc1566dd28b18b26df4753a45e06599f14",
     "2b6e4b3d4ba104e4150a8fa6e010378a2fade5d4f67f8d3f563d70e328afd200",
