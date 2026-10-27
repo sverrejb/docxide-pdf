@@ -5,7 +5,7 @@
 /// Roman); drawing the two glyphs apart misplaces the accent and the advance.
 // ponytail: Latin only (U+00C0–024F, U+1E00–1EFF); Greek and Cyrillic marks
 // stay decomposed until a document needs them.
-pub(super) fn compose_latin(text: String) -> String {
+pub(crate) fn compose_latin(text: String) -> String {
     if !text.chars().any(is_mark) {
         return text;
     }
@@ -25,7 +25,7 @@ pub(super) fn compose_latin(text: String) -> String {
     out
 }
 
-fn is_mark(ch: char) -> bool {
+pub(crate) fn is_mark(ch: char) -> bool {
     ('\u{0300}'..='\u{036F}').contains(&ch)
 }
 
