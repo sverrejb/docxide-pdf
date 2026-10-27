@@ -822,6 +822,8 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         jc: list_label_jc,
                         item: list_item,
                     } = numbering;
+                    let (auto_space_de, auto_space_dn) =
+                        super::paragraph::auto_space(ppr, para_style);
                     let space_before =
                         sp_before
                             .or(style_space_before)
@@ -894,6 +896,10 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                             .or_else(|| para_style.and_then(|s| s.snap_to_grid))
                             .unwrap_or(true),
                         text_alignment: super::paragraph::text_alignment(ppr, para_style, &ctx.styles.defaults),
+                        // Cells space Latin text from ideographs as the body
+                        // does (chinese_costume's "5-10 分钟").
+                        auto_space_de,
+                        auto_space_dn,
                         floating_images: parsed.floating_images,
                         textboxes: parsed.textboxes,
                         connectors: parsed.connectors,

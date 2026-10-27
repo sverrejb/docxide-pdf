@@ -92,15 +92,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         .or_else(|| para_style.and_then(|s| s.snap_to_grid))
         .unwrap_or(true);
 
-    let auto_space_de = ppr
-        .and_then(|ppr| wml_bool(ppr, "autoSpaceDE"))
-        .or_else(|| para_style.and_then(|s| s.auto_space_de))
-        .unwrap_or(true);
-
-    let auto_space_dn = ppr
-        .and_then(|ppr| wml_bool(ppr, "autoSpaceDN"))
-        .or_else(|| para_style.and_then(|s| s.auto_space_dn))
-        .unwrap_or(true);
+    let (auto_space_de, auto_space_dn) = auto_space(ppr, para_style);
 
     let bidi = ppr
         .and_then(|ppr| wml_bool(ppr, "bidi"))
@@ -461,6 +453,23 @@ pub(super) fn keep_lines(ppr: Option<roxmltree::Node>, para_style: Option<&Parag
 }
 
 /// `w:textAlignment`, direct, from the style or the document defaults.
+/// `w:autoSpaceDE` and `w:autoSpaceDN`, on unless the paragraph or its style
+/// turns them off.
+pub(super) fn auto_space(
+    ppr: Option<roxmltree::Node>,
+    para_style: Option<&ParagraphStyle>,
+) -> (bool, bool) {
+    let flag = |name: &str, style: fn(&ParagraphStyle) -> Option<bool>| {
+        ppr.and_then(|ppr| wml_bool(ppr, name))
+            .or_else(|| para_style.and_then(style))
+            .unwrap_or(true)
+    };
+    (
+        flag("autoSpaceDE", |s| s.auto_space_de),
+        flag("autoSpaceDN", |s| s.auto_space_dn),
+    )
+}
+
 pub(super) fn text_alignment(
     ppr: Option<roxmltree::Node>,
     para_style: Option<&ParagraphStyle>,

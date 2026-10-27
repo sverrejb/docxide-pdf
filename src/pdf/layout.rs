@@ -2046,14 +2046,14 @@ pub(super) fn build_paragraph_lines(
                 && pending_space_w == 0.0
                 && space_count == 0
             {
-                let prev_ea =
-                    crate::docx::is_east_asian_char(prev_ch) || is_cjk_punctuation(prev_ch);
-                let cur_ea =
-                    crate::docx::is_east_asian_char(first_ch) || is_cjk_punctuation(first_ch);
-                // An ideographic space is a space, not East Asian text: Word
-                // sets japanese_medical's "　kg　" with no gap around "kg".
-                let beside_space = prev_ch == '\u{3000}' || first_ch == '\u{3000}';
-                if prev_ea != cur_ea && !beside_space {
+                // Only a letter or digit meets an ideograph: Word sets no gap
+                // after japanese_interlibrary's "〒" before "2", nor between
+                // chinese_costume's ")" and "格". An ideographic space is a
+                // space: japanese_medical's "　kg　" has no gap around "kg".
+                let ideograph =
+                    |c: char| crate::docx::is_east_asian_char(c) && !is_cjk_punctuation(c);
+                let latin = |c: char| c.is_alphanumeric() && !crate::docx::is_east_asian_char(c);
+                if (ideograph(prev_ch) && latin(first_ch)) || (latin(prev_ch) && ideograph(first_ch)) {
                     pending_space_w += eff_fs * 0.25;
                 }
             }
