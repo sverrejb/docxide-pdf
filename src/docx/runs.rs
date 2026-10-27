@@ -121,6 +121,8 @@ struct FieldFrame {
     /// A nested field we cannot evaluate: an `IF` keeps its cached result.
     opaque: bool,
     checkbox: Option<FormCheckbox>,
+    /// A MACROBUTTON: its value is what follows the macro name, with no separator.
+    macrobutton: bool,
 }
 
 /// Fields still open when a paragraph ends, carried into the next one: a
@@ -152,6 +154,7 @@ impl FieldFrame {
             parts: Vec::new(),
             opaque: false,
             checkbox: None,
+            macrobutton: false,
         }
     }
 
@@ -189,6 +192,19 @@ impl FieldFrame {
     fn dynamic(&self) -> bool {
         self.evaluable_if() || parse_field_code(&self.instr).is_some()
     }
+}
+
+/// The display text of a `MACROBUTTON` instruction once its macro name is
+/// complete: everything after the name. The field has no separator — the text
+/// or graphic after the macro name is its value (ISO/IEC 29500-1 §17.16.5.34).
+fn macrobutton_display(instr: &str) -> Option<&str> {
+    let (keyword, rest) = instr.trim_start().split_once(char::is_whitespace)?;
+    if !keyword.eq_ignore_ascii_case("MACROBUTTON") {
+        return None;
+    }
+    rest.trim_start()
+        .split_once(char::is_whitespace)
+        .map(|(_, display)| display)
 }
 
 /// A legacy check box form field (`w:ffData/w:checkBox` on its begin
@@ -1306,6 +1322,17 @@ pub(super) fn parse_runs<R: Read + Seek>(
                             });
                             continue;
                         }
+                        if f.macrobutton {
+                            let text = f.result.trim();
+                            if !text.is_empty() {
+                                runs.push(Run {
+                                    text: text.to_string(),
+                                    hyperlink_url: hyperlink_url.clone(),
+                                    ..fmt.styled_run()
+                                });
+                            }
+                            continue;
+                        }
                         let fc = if f.evaluable_if() {
                             Some(FieldCode::If(std::mem::take(&mut f.parts)))
                         } else {
@@ -1347,10 +1374,20 @@ pub(super) fn parse_runs<R: Read + Seek>(
                     // Instruction text belongs to the innermost open field that
                     // has not yet reached its separator.
                     if let Some(f) = field_stack.last_mut()
-                        && !f.seen_sep
                         && let Some(t) = child.text()
                     {
-                        f.push_instr(t, simple.is_some());
+                        if f.macrobutton {
+                            f.result.push_str(t);
+                        } else if !f.seen_sep {
+                            f.push_instr(t, simple.is_some());
+                            if let Some(display) = macrobutton_display(&f.instr) {
+                                // The macro name ends the code: what follows (text
+                                // here, a picture in later runs) is the value.
+                                f.result = display.to_string();
+                                f.seen_sep = true;
+                                f.macrobutton = true;
+                            }
+                        }
                     }
                 }
                 "t" => {
@@ -1445,7 +1482,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         ..fmt.minimal_run()
                     });
                 }
-                "drawing" if !field_stack.is_empty() => {}
+                "drawing" if !fields_visible(&field_stack) => {}
                 "drawing" => {
                     flush_pending(&mut pending_text, &mut runs);
                     let result = parse_run_drawing(child, ctx);
@@ -1461,7 +1498,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         pending_text
                     );
                 }
-                "pict" if field_stack.is_empty() => {
+                "pict" if fields_visible(&field_stack) => {
                     if let Some(result) = super::group::parse_vml_group(child, ctx) {
                         handle_drawing_result!(
                             Some(result),
@@ -1493,7 +1530,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         push_textbox(&floating_images, &mut textboxes, tb);
                     }
                 }
-                "object" if field_stack.is_empty() => {
+                "object" if fields_visible(&field_stack) => {
                     flush_pending(&mut pending_text, &mut runs);
                     if let Some(mut fi) = parse_object_floating_image(child, ctx) {
                         fi.anchor_at_start = anchor_precedes_text(&runs);
@@ -1709,6 +1746,17 @@ mod tests {
         assert_eq!(parse_eq_overstrike(r"EQ \f(1,2)"), None);
         assert_eq!(parse_eq_overstrike(r"PAGE \* MERGEFORMAT"), None);
         assert_eq!(parse_eq_overstrike(r"EQ \o()"), None);
+    }
+
+    #[test]
+    fn macrobutton_value_follows_the_macro_name() {
+        assert_eq!(macrobutton_display(" MACROBUTTON AutoNew "), Some(""));
+        assert_eq!(
+            macrobutton_display(" MACROBUTTON NoMacro [Click here] "),
+            Some("[Click here] ")
+        );
+        assert_eq!(macrobutton_display(" MACROBUTTON AutoNew"), None);
+        assert_eq!(macrobutton_display(r" PAGE \* MERGEFORMAT "), None);
     }
 
     fn run(text: &str, shading: Option<[u8; 3]>, highlight: Option<[u8; 3]>) -> Run {
