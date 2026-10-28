@@ -174,10 +174,9 @@ pub(super) fn para_block_height(p: &CellParagraphLayout) -> f32 {
     if p.lines.is_empty() {
         if p.paragraph_mark_vanish {
             0.0
-        } else if p.content_height > 0.0 {
-            p.content_height + super::helpers::border_band(p.bottom_border.as_ref())
         } else {
-            p.line_h + super::helpers::border_band(p.bottom_border.as_ref())
+            let h = if p.content_height > 0.0 { p.content_height } else { p.line_h };
+            h + super::helpers::border_band(p.bottom_border.as_ref())
         }
     } else {
         cell_lines_h(p, 0..p.lines.len())

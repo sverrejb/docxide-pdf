@@ -51,11 +51,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     let paragraph_mark_font_name = Some(mark.font_name.clone());
     let paragraph_mark_position = paragraph_mark_position(ppr_rpr, para_style);
 
-    // A paragraph-level pBdr element overrides the style borders even when
-    // all individual borders are set to val="none" (parsed as None).
-    let borders = ppr
-        .and_then(parse_paragraph_borders)
-        .unwrap_or_else(|| para_style.map(|s| s.borders.clone()).unwrap_or_default());
+    let borders = borders(ppr, para_style);
     let (sp_before, sp_after, line_spacing) =
         parse_paragraph_spacing(ppr, para_style, &ctx.styles.defaults);
     let space_before = sp_before.unwrap_or(ctx.styles.defaults.space_before);
@@ -443,6 +439,13 @@ pub(super) fn widow_control(
     ppr.and_then(|ppr| wml_bool(ppr, "widowControl"))
         .or_else(|| para_style.and_then(|s| s.widow_control))
         .unwrap_or(defaults.widow_control)
+}
+
+pub(super) fn borders(ppr: Option<roxmltree::Node>, para_style: Option<&ParagraphStyle>) -> crate::model::ParagraphBorders {
+    // A paragraph-level pBdr element overrides the style borders even when
+    // all individual borders are set to val="none" (parsed as None).
+    ppr.and_then(parse_paragraph_borders)
+        .unwrap_or_else(|| para_style.map(|s| s.borders.clone()).unwrap_or_default())
 }
 
 /// `w:keepLines`, direct or from the style.

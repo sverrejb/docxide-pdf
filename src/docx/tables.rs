@@ -865,8 +865,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         keep_lines: super::paragraph::keep_lines(ppr, para_style),
                         runs,
                         alignment,
-                        borders: ppr.and_then(super::parse_paragraph_borders)
-                            .unwrap_or_else(|| para_style.map(|s| s.borders.clone()).unwrap_or_default()),
+                        borders: super::paragraph::borders(ppr, para_style),
                         space_before_auto,
                         space_after_auto,
                         indent_left,
