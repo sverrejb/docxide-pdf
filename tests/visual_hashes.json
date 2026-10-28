@@ -2072,6 +2072,18 @@
   "cases/paragraph-offset-frame-no-frame": [
     "79c9b739fd62d0e7cf85dbf6e637a14d2b41bf2518d5a5013b798b1247cbb368"
   ],
+  "cases/period-after-space-filler-period-normal": [
+    "0ee48440cb23ad0677f0faa553d72bd3da30fbdb3e7f98f7790df33434f1b579"
+  ],
+  "cases/period-after-space-filler-period-normal-compat15": [
+    "5b322d51096a8ab4c296ccd0d4b220a6eb066f6020e1b6c9cfaf9f167ed83cd3"
+  ],
+  "cases/period-after-space-filler-period-small": [
+    "0ee82af7afccc92a186f2a585c762e69869bc83c7733ca8174fa808361032e05"
+  ],
+  "cases/period-after-space-filler-period-small-compat15": [
+    "831d35902c257582b6c6d23014e9a617ca41e806cf5c4013cb22865c78cb246b"
+  ],
   "cases/picture-mark-leading-compat14-line480": [
     "d4e7a23d167ab4fb43d4fe9d92ce6dba8fec6a37e69f8c08f0b6cf87d04e215f"
   ],

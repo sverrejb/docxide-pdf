@@ -6483,6 +6483,22 @@
     "a11y_struct": 0.5833,
     "a11y_text": 1.0
   },
+  "cases/period-after-space-filler-period-normal": {
+    "jaccard": 0.8315,
+    "ssim": 0.9286
+  },
+  "cases/period-after-space-filler-period-normal-compat15": {
+    "jaccard": 0.7578,
+    "ssim": 0.8916
+  },
+  "cases/period-after-space-filler-period-small": {
+    "jaccard": 0.8309,
+    "ssim": 0.9275
+  },
+  "cases/period-after-space-filler-period-small-compat15": {
+    "jaccard": 0.7941,
+    "ssim": 0.9185
+  },
   "cases/picture-mark-leading-compat14-line480": {
     "jaccard": 0.7946,
     "ssim": 0.5959,
