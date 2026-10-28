@@ -1952,6 +1952,10 @@ pub(super) fn render_table(
         .as_ref()
         .is_some_and(|fp| fp.v_anchor_text && fp.v_offset_pt >= 0.0);
     let keep_with_anchor = is_floating && !flows_inline;
+    let area = column_bounds.unwrap_or((
+        sp.margin_left,
+        sp.page_width - sp.margin_left - sp.margin_right,
+    ));
     let (table_left, saved_slot_top, text_margins) = if let Some(ref fp) = override_pos {
         // The float zone starts at the table's drawn top, which sits below fp.y
         // by the space after the previous paragraph (see below).
@@ -1962,10 +1966,6 @@ pub(super) fn render_table(
         pb.slot_top = fp.y;
         (fp.x, saved, (fp.top_from_text, fp.bottom_from_text))
     } else {
-        let area = column_bounds.unwrap_or((
-            sp.margin_left,
-            sp.page_width - sp.margin_left - sp.margin_right,
-        ));
         let total_w: f32 = col_widths.iter().sum();
         let left = aligned_table_left(table, area, total_w, ctx.compat_mode);
         (left, None, (0.0, 0.0))
@@ -1999,6 +1999,11 @@ pub(super) fn render_table(
             && zone.from_table
             && table_left < zone.obj_right + zone.right_from_text
             && table_left + total_width > zone.obj_left - zone.left_from_text
+            // A float whose wrap area stays in the margin pushes nothing, even a
+            // table running onto its box (dutch_government_budget_letter; Word
+            // probes 2026-10-28: 1pt outside the column stays beside, 1pt inside clears).
+            && zone.obj_left - zone.left_from_text < area.0 + area.1
+            && zone.obj_right + zone.right_from_text > area.0
             && pb.slot_top > zone.bottom_y
             && pb.slot_top - total_height < zone.top_y
         {
