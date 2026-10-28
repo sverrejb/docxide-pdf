@@ -165,12 +165,17 @@ Open queue from the large-corpus and focus-fixture rounds:
   hang 2.9pt where we squeeze the spaces fully; `Distribute` keeps the old
   per-character spread.
 - **`w:ind` character units** (issue #143, probes 2026-10-28,
-  `apply_indent_chars`): chars beat twips at any level, first run's size,
-  left + hanging add up in chars mode. Numbering-level `*Chars` are not read.
+  `apply_indent_chars`): chars beat twips at any level, an explicit 0 switches
+  them off, one character is the first run's size plus the section grid's
+  `charSpace`/4096, left + hanging add up in chars mode. Numbering-level
+  `*Chars` are not read; headers and footnotes use no grid delta.
 - **Trailing punctuation**: Word never lets a Latin mark hang past the margin
-  (`overflowPunct` is not what it does); in zh/ja/ko documents a justified
-  line keeps a word ending in a mark when half the mark's width fits the
-  squeeze budget (`punct_half_out`). Probed with `.` only; `, ; : ! ?` assumed.
+  (`overflowPunct` is not what it does). In a zh/ja/ko document whose East
+  Asian font is a CJK face, a justified line's word-share limit grows by half
+  a final mark (`punct_half_out`; the 25% space cap never widens). Probed with
+  `.` only; `, ; : ! ?` assumed. Issue #142's "introduction." still wraps: with
+  Word's glyph advances the line sits 0.4pt inside the cap, with ours 0.4pt
+  outside — the glyph device-grid work decides it.
 - **Each space character is a justification stretch point**: polish_municipal's
   double space is 7.44pt in Word = 2 × (3.0 + 0.72 slack); we add one slot for
   the gap. Find justified lines with consecutive spaces across fixtures first.
