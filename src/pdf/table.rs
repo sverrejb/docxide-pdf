@@ -444,6 +444,17 @@ fn end_cell_tag(content: &mut Content, tagger: &Option<CellTagger<'_>>) {
     }
 }
 
+fn draw_cell_paragraph_bottom(content: &mut Content, para: &CellParagraphLayout, cell_x: f32, col_w: f32, cm: &CellMargins, bottom: f32) {
+    if let Some(border) = &para.bottom_border {
+        // Word extends a horizontal paragraph rule 1.5pt past the text area,
+        // independently of the stroke width and vertical space.
+        let left = cell_x + cm.left + para.indent_left - 1.5;
+        let right = cell_x + col_w - cm.right - para.indent_right + 1.5;
+        super::color::stroke_segment(content, (left, bottom + border.width_pt / 2.0),
+            (right, bottom + border.width_pt / 2.0), border.width_pt, Some(border.color));
+    }
+}
+
 fn render_cell_content(
     content: &mut Content,
     items: &[CellContentItem],
@@ -508,6 +519,7 @@ fn render_cell_content(
                             cursor_y,
                         );
                     }
+                    draw_cell_paragraph_bottom(content, para, cell_x, col_w, cm, cursor_y);
                     end_cell_tag(content, &tagger);
                     continue;
                 }
@@ -550,6 +562,8 @@ fn render_cell_content(
                     cursor_y -= cell_figure(content, &mut tagger, None, picture, |c| {
                         render_cell_inline_image(c, para, img_name, cell_x, col_w, cursor_y, cm)
                     });
+                    cursor_y -= super::helpers::border_band(para.bottom_border.as_ref());
+                    draw_cell_paragraph_bottom(content, para, cell_x, col_w, cm, cursor_y);
                     continue;
                 }
 
@@ -628,6 +642,7 @@ fn render_cell_content(
                 end_cell_tag(content, &tagger);
 
                 cursor_y -= block_h;
+                draw_cell_paragraph_bottom(content, para, cell_x, col_w, cm, cursor_y);
 
                 if let Some(src) = source_para {
                     render_cell_floating_shapes(
@@ -1190,6 +1205,7 @@ fn render_partial_cell_content(
                 let cell_para = cell_nodes.map(|(_, body)| body);
                 if !para_has_visible_content(para) {
                     cursor_y -= sb + para_block_height(para);
+                    draw_cell_paragraph_bottom(content, para, cell_x, col_w, cm, cursor_y);
                     end_cell_tag(content, &tagger);
                     continue;
                 }
@@ -1211,6 +1227,8 @@ fn render_partial_cell_content(
                     cursor_y -= cell_figure(content, &mut tagger, None, picture, |c| {
                         render_cell_inline_image(c, para, img_name, cell_x, col_w, cursor_y, cm)
                     });
+                    cursor_y -= super::helpers::border_band(para.bottom_border.as_ref());
+                    draw_cell_paragraph_bottom(content, para, cell_x, col_w, cm, cursor_y);
                     continue;
                 }
 
@@ -1280,6 +1298,9 @@ fn render_partial_cell_content(
                 } else {
                     lines_h
                 };
+                if l1 == para.lines.len() {
+                    draw_cell_paragraph_bottom(content, para, cell_x, col_w, cm, cursor_y);
+                }
             }
             CellContentItem::NestedTable {
                 col_widths,
