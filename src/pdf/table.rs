@@ -2554,7 +2554,10 @@ pub(super) fn render_table(
 }
 
 pub(super) fn compute_hf_table_height(table: &Table, ctx: &RenderContext, content_w: f32) -> f32 {
-    let mut col_widths = auto_fit_columns(table, ctx.fonts, None, None);
+    // A header's auto-fit table sizes to its content like a body table
+    // (issue #142: Word shrinks the same two-word table to 64pt in both
+    // places; without the fill target the header one kept its 396pt grid).
+    let mut col_widths = auto_fit_columns(table, ctx.fonts, None, Some(content_w));
     apply_pct_width(table, &mut col_widths, content_w, ctx.compat_mode);
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     row_layouts.iter().map(|r| r.height).sum()
@@ -2573,13 +2576,9 @@ pub(super) fn render_header_footer_table(
     gradient_specs: &mut Vec<super::GradientSpec>,
     links: &mut Vec<LinkAnnotation>,
 ) {
-    let mut col_widths = auto_fit_columns(table, ctx.fonts, None, None);
-    apply_pct_width(
-        table,
-        &mut col_widths,
-        sp.page_width - sp.margin_left - sp.margin_right,
-        ctx.compat_mode,
-    );
+    let content_w = sp.page_width - sp.margin_left - sp.margin_right;
+    let mut col_widths = auto_fit_columns(table, ctx.fonts, None, Some(content_w));
+    apply_pct_width(table, &mut col_widths, content_w, ctx.compat_mode);
     let hf_sub = HfSubstitution {
         page_num,
         total_pages,
