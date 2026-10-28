@@ -3121,6 +3121,76 @@
     "a11y_struct": 0.4444,
     "a11y_text": 1.0
   },
+  "cases/cell-paragraph-bottom-group": {
+    "jaccard": 0.7832,
+    "ssim": 0.9537,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4444,
+    "a11y_text": 1.0
+  },
+  "cases/cell-paragraph-bottom-no-space": {
+    "jaccard": 0.8919,
+    "ssim": 0.953,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.375,
+    "a11y_text": 1.0
+  },
+  "cases/cell-paragraph-bottom-space-four": {
+    "jaccard": 0.8824,
+    "ssim": 0.953,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.375,
+    "a11y_text": 1.0
+  },
+  "cases/cell-paragraph-bottom-split-cell": {
+    "jaccard": 0.7547,
+    "ssim": 0.9081,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.375,
+    "a11y_text": 1.0
+  },
+  "cases/cell-paragraph-bottom-standard": {
+    "jaccard": 0.8919,
+    "ssim": 0.9595,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.375,
+    "a11y_text": 1.0
+  },
+  "cases/cell-paragraph-bottom-thin": {
+    "jaccard": 0.8706,
+    "ssim": 0.9523,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.375,
+    "a11y_text": 1.0
+  },
+  "cases/cell-paragraph-bottom-wide": {
+    "jaccard": 0.9133,
+    "ssim": 0.9588,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.375,
+    "a11y_text": 1.0
+  },
   "cases/cell-text-above-floats-y1200-n1-long0": {
     "jaccard": 0.6406,
     "ssim": 0.8985,

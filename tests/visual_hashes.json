@@ -1027,6 +1027,29 @@
   "cases/cell-padding-visible-text": [
     "399b4d27b00903e5ae580f1602b3a34c6f22f954f41ab6c8ddf654543b3caf42"
   ],
+  "cases/cell-paragraph-bottom-group": [
+    "202b487d5f7aebad9377de6b61f1e1ddcd9d1edbf6b75ff53dc18b27918a0359"
+  ],
+  "cases/cell-paragraph-bottom-no-space": [
+    "49bc8c4aafdd3a6f44e887c0ed81390f8dafb7d6815b7d6bbc08d4ef8a4abbc5"
+  ],
+  "cases/cell-paragraph-bottom-space-four": [
+    "48780c8fb36ec4e5484ec5d49818b500d7db4ca56e64181d89c7390049f65f8c"
+  ],
+  "cases/cell-paragraph-bottom-split-cell": [
+    "b2458f3a7ea4ecf50351536af5fb0f191e45b72eef9b70d6c6dee98a4028a74c",
+    "8d4000a409d66c4ba30b3c523adee3e314272c781ef25524cc5fc52bda7f1abc",
+    "0d318e16570c3cdaa141f52de23e1d9c3740e4dae38c2fcd6e2074939038bc53"
+  ],
+  "cases/cell-paragraph-bottom-standard": [
+    "05cd3ebfca3da287a9d65507dcbe798388264393887fd8a66c2e0b6fee4c7661"
+  ],
+  "cases/cell-paragraph-bottom-thin": [
+    "e50c1ba0920e8221f5b786d7f0febe42e981c9ad6b2871522bce66c73149aeea"
+  ],
+  "cases/cell-paragraph-bottom-wide": [
+    "c925251efb521bedcb7ae533c89b11ad875ff14f969c70a56db8ec4380452672"
+  ],
   "cases/cell-text-above-floats-y1200-n1-long0": [
     "9d8cbd996b83915416759d8dcbdcf7752bc36ad77ded0086bb216a6b4430ba01"
   ],
