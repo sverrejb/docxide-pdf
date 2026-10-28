@@ -1989,6 +1989,23 @@ pub(super) fn render_table(
         pb.page_top_gap(sp, 0.0, prev_space_after)
             .unwrap_or(prev_space_after)
     };
+    // An inline table retains its alignment and width instead of using the
+    // paragraph's narrow wrapping strip. Clear a preceding floating table
+    // when the actual table rectangles intersect.
+    if !is_floating {
+        let total_width: f32 = col_widths.iter().sum();
+        let total_height: f32 = row_layouts.iter().map(|row| row.height).sum();
+        if let Some(zone) = pb.float_zone.as_ref()
+            && zone.from_table
+            && table_left < zone.obj_right + zone.right_from_text
+            && table_left + total_width > zone.obj_left - zone.left_from_text
+            && pb.slot_top > zone.bottom_y
+            && pb.slot_top - total_height < zone.top_y
+        {
+            pb.slot_top = zone.bottom_y;
+            pb.float_zone = None;
+        }
+    }
     // The outer border bands sit inside the table's flow height: the top band
     // starts where the previous text ends and the next paragraph starts below
     // the bottom band. The row insets hold the inner halves (docx::tables).
