@@ -4641,6 +4641,10 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/inline-beside-float": {
+    "jaccard": 0.8106,
+    "ssim": 0.9232
+  },
   "cases/inline-canvas-header-width300-tab0-effect0-following0": {
     "jaccard": 0.9968,
     "ssim": 0.995,
@@ -4800,6 +4804,14 @@
     "ua_deficit": 0,
     "a11y_struct": 1.0,
     "a11y_text": 1.0
+  },
+  "cases/inline-clear-control": {
+    "jaccard": 0.8365,
+    "ssim": 0.9124
+  },
+  "cases/inline-clear-float": {
+    "jaccard": 0.8106,
+    "ssim": 0.9165
   },
   "cases/inline-picture-indent-center-first": {
     "jaccard": 1.0,
@@ -9133,8 +9145,8 @@
     "a11y_text": 1.0
   },
   "scraped/dutch_government_budget_letter": {
-    "jaccard": 0.2876,
-    "ssim": 0.9272,
+    "jaccard": 0.7857,
+    "ssim": 0.9271,
     "text_boundary": 0.9091,
     "ua_fail": 3,
     "a11y_missing": 0,

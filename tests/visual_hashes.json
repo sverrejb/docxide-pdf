@@ -1499,6 +1499,9 @@
   "cases/hyphen-squeeze-single-letter": [
     "99d8d042f44f444a059d2700095a6aee01a284e93a9fc753a527ef8b1adfbdb1"
   ],
+  "cases/inline-beside-float": [
+    "d73816969709fefacd1a51070879de46bd8fdee9ddecb24d55818ff130a214b8"
+  ],
   "cases/inline-canvas-header-width300-tab0-effect0-following0": [
     "3d135c386ac40256d880a46cd2593b0625bbb062289b495f3558c0d044ec6efa"
   ],
@@ -1546,6 +1549,12 @@
   ],
   "cases/inline-canvas-header-width500-tab1-effect2-following1": [
     "186970c353251f0b67f43461d515e7b30d361212dbea35d2dd23c2ed1b885d41"
+  ],
+  "cases/inline-clear-control": [
+    "f14a45dcbf927bf92e0f018fa4e5393b72fad09d54a3fcb9faaada8661418827"
+  ],
+  "cases/inline-clear-float": [
+    "6c7404542903e497ad8327f6c910d79d5347ef0e7b060326bf07800a5f697398"
   ],
   "cases/inline-picture-indent-center-first": [
     "d589d5cb4b928a70fc6cb2332ec3a57cb4331c52a8ac0c53ac0838d5ed845a25"
@@ -3404,7 +3413,7 @@
     "d4895b92051b1fce0b58cc786fb2fbaa6371968ba91a042373148552a3e490af"
   ],
   "scraped/dutch_government_budget_letter": [
-    "1660d18e3a2a579d18257280fddd6908cc5890d76745c6fc2ef874390f5b778a"
+    "3ca908795e642979e9127fec77440a23cd72cf9c166428ff4a7f0e43c9b7706c"
   ],
   "scraped/dutch_school_evaluation_form": [
     "4d914e6df3ac52a98fa1a2a22d702cd24bb9d817aaf1ed15693fae8dd29845f3",
