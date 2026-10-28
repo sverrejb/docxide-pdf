@@ -7,7 +7,7 @@ license = "Apache-2.0"
 repository = "https://github.com/sverrejb/docxide-pdf"
 keywords = ["experimental", "docx", "pdf", "word", "converter"]
 categories = ["command-line-utilities", "text-processing", "text-editors"]
-include = ["src/**/*.rs", "Cargo.toml", "README.md", "LICENSE"]
+include = ["/src/**/*.rs", "/Cargo.toml", "/README.md", "/LICENSE"]
 
 [lib]
 name = "docxide_pdf"
