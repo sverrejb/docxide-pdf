@@ -298,9 +298,11 @@ pub struct Document {
     pub compress_punctuation: bool,
     /// Word's `compatibilityMode` (see `docx::settings`).
     pub compat_mode: u32,
-    /// The document's East Asian language is Chinese, Japanese or Korean:
-    /// Word then lets a line-ending Latin mark sit half outside the measure
-    /// (`SPACE_SQUEEZE`).
+    /// The document's East Asian language is Chinese, Japanese or Korean and
+    /// its default East Asian font a CJK face: Word then lets a line-ending
+    /// Latin mark overflow a justified line by half (`SPACE_SQUEEZE`). With
+    /// Times New Roman as the East Asian font (slovak_misdemeanor_amendment,
+    /// Word probe 2026-10-28) nothing changes.
     pub east_asian_lang: bool,
     /// Word's `doNotExpandShiftReturn` (see `docx::settings`).
     pub do_not_expand_shift_return: bool,

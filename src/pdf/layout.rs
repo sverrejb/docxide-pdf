@@ -1649,9 +1649,11 @@ pub(super) struct CjkLayout {
     /// and the line's spaces can shrink to make room (see `SPACE_SQUEEZE`).
     pub(super) squeeze_spaces: bool,
     /// Chinese, Japanese or Korean document: a word ending in a Latin mark
-    /// may overflow by half the mark on top of what the squeeze allows
+    /// may overflow by half the mark on top of what `squeeze_keeps` allows
     /// (Word online probes 2026-10-28: "barn." stays 1.5pt longer with
     /// eastAsia zh-CN than en-US, "barnx" the same in both; issue #142).
+    /// The 25% space cap is not widened: slovak_misdemeanor_amendment (zh-CN
+    /// defaults) wraps "predstaviteľov." at 28% of its spaces in Word.
     pub(super) punct_half_out: bool,
     /// Justified paragraph under `wpJustification`: a word that overflows by
     /// at most two spaces' width stays, and the whole line is squeezed
@@ -2444,7 +2446,7 @@ pub(super) fn build_paragraph_lines(
                 if [space_room, line_room]
                     .into_iter()
                     .flatten()
-                    .any(|room| proposed_x + ww - cur_max - half_mark <= room)
+                    .any(|room| proposed_x + ww - cur_max <= room)
                 {
                     overflows = false;
                     squeezed_lines.push(lines.len());

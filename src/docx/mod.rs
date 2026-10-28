@@ -203,6 +203,9 @@ pub(in crate::docx) struct ParseContext<'a, R: std::io::Read + std::io::Seek> {
     pub(in crate::docx) comments: CommentRanges,
     /// Fields left open by the previous paragraph (`runs::FieldCarry`).
     pub(in crate::docx) fields: runs::FieldCarry,
+    /// What the current section's character grid adds to one character
+    /// (`sections::grid_char_delta`), the unit of `w:ind` `*Chars` values.
+    pub(in crate::docx) grid_char_delta: f32,
 }
 
 #[derive(Default)]
@@ -800,7 +803,9 @@ fn chars_to_pts(ind: roxmltree::Node, attr: &str, char_width: f32) -> Option<f32
 }
 
 /// A `w:ind`'s character-unit attributes, in characters (the attributes are
-/// hundredths). Zero counts as absent: Word then uses the twips value.
+/// hundredths). An explicit zero switches the value off, also over a style's
+/// (taiwanese_education_fraud_ruling: `leftChars="0" left="0"` under a
+/// List Paragraph style's 200 starts at the margin); Word then uses the twips.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(super) struct IndentChars {
     pub(super) left: Option<f32>,
@@ -815,7 +820,6 @@ pub(super) fn extract_indent_chars(ind: roxmltree::Node) -> IndentChars {
             .iter()
             .find_map(|a| ind.attribute((WML_NS, *a)))
             .and_then(|v| v.parse::<f32>().ok())
-            .filter(|v| *v != 0.0)
             .map(|hundredths| hundredths / 100.0)
     };
     IndentChars {
@@ -836,6 +840,13 @@ pub(super) fn extract_indent_chars(ind: roxmltree::Node) -> IndentChars {
 /// leftChars=200 hangingChars=200 start at 0/24 and 24/48pt. `firstLineChars`
 /// alone keeps the twips left.
 pub(super) fn apply_indent_chars(ind: &mut (f32, f32, f32, f32), chars: IndentChars, char_width: f32) {
+    let on = |v: Option<f32>| v.filter(|v| *v != 0.0);
+    let chars = IndentChars {
+        left: on(chars.left),
+        right: on(chars.right),
+        hanging: on(chars.hanging),
+        first_line: on(chars.first_line),
+    };
     let (left, right, hanging, first) = ind;
     if let Some(r) = chars.right {
         *right = r * char_width;
@@ -1122,6 +1133,16 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
             c.display_index = next_index;
         }
     }
+    // A sectPr closes its section, so the grid its paragraphs' chars indents
+    // measure by is read ahead (tokyo_welfare: firstLineChars=1000 is 2217
+    // twips at 11pt under charSpace 339; Word probes 2026-10-28: 13pt per
+    // character under charSpace 4096 at 12pt, 12 under a lines-only grid).
+    let grid_deltas: Vec<f32> = body
+        .descendants()
+        .filter(|n| n.has_tag_name((WML_NS, "sectPr")))
+        .map(sections::grid_char_delta)
+        .collect();
+    let mut sect_idx = 0;
     let mut ctx = ParseContext {
         styles: &styles,
         theme: &theme,
@@ -1130,6 +1151,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         numbering: &numbering,
         comments: comment_ranges,
         fields: Default::default(),
+        grid_char_delta: grid_deltas.first().copied().unwrap_or(0.0),
     };
 
     let mut sections: Vec<Section> = Vec::new();
@@ -1212,6 +1234,8 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                         properties: props,
                         blocks: std::mem::take(&mut blocks),
                     });
+                    sect_idx += 1;
+                    ctx.grid_char_delta = grid_deltas.get(sect_idx).copied().unwrap_or(0.0);
                 }
             }
             "altChunk" => {
@@ -1377,7 +1401,12 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
             .lang_east_asia
             .as_deref()
             .or(settings.east_asia_lang.as_deref())
-            .is_some_and(|l| ["zh", "ja", "ko"].iter().any(|p| l.starts_with(p))),
+            .is_some_and(|l| ["zh", "ja", "ko"].iter().any(|p| l.starts_with(p)))
+            && styles
+                .defaults
+                .east_asia_font
+                .as_deref()
+                .is_some_and(crate::fonts::is_cjk_family),
         do_not_expand_shift_return: settings.do_not_expand_shift_return,
         wp_justification: settings.wp_justification,
         additive_paragraph_spacing: settings.no_html_auto_spacing,

@@ -12,6 +12,18 @@ use super::{
     twips_attr, wml, wml_attr, wml_bool,
 };
 
+/// What a `linesAndChars`/`snapToChars` grid adds to each character, in points:
+/// `charSpace` is in 1/4096 pt (§17.6.5: 40960 = 10pt). Other grids add nothing.
+pub(super) fn grid_char_delta(sect_node: roxmltree::Node) -> f32 {
+    let Some(grid) = wml(sect_node, "docGrid") else { return 0.0 };
+    if !matches!(grid.attribute((WML_NS, "type")), Some("linesAndChars" | "snapToChars")) {
+        return 0.0;
+    }
+    grid.attribute((WML_NS, "charSpace"))
+        .and_then(|v| v.parse::<f32>().ok())
+        .map_or(0.0, |v| v / 4096.0)
+}
+
 pub(super) fn parse_section_properties<R: Read + Seek>(
     sect_node: roxmltree::Node,
     ctx: &mut ParseContext<'_, R>,
@@ -246,6 +258,7 @@ fn resolve_hf<R: Read + Seek>(
         numbering: ctx.numbering,
         comments: Default::default(),
         fields: Default::default(),
+        grid_char_delta: 0.0,
     };
     parse_header_footer_xml(&xml_text, &mut hf_ctx)
 }

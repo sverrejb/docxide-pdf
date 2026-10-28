@@ -812,6 +812,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                             &runs,
                             para_style,
                             &ctx.styles.defaults,
+                            ctx.grid_char_delta,
                         ),
                     );
                     let (indent_left, indent_right, indent_hanging, indent_first_line) = indents;

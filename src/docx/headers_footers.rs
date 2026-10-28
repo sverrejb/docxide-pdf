@@ -139,6 +139,7 @@ fn parse_notes_simple<R: Read + Seek>(
         numbering,
         comments: Default::default(),
         fields: Default::default(),
+        grid_char_delta: 0.0,
     };
     let mut lists = ListCounters::default();
 
@@ -253,6 +254,7 @@ fn parse_notes_simple<R: Read + Seek>(
                     &parsed.runs,
                     para_style,
                     &styles.defaults,
+                    fn_ctx.grid_char_delta,
                 ),
             );
             let (left, right, hanging, first) = indents;
@@ -352,6 +354,7 @@ fn parse_notes_rich<R: Read + Seek>(
         numbering,
         comments: Default::default(),
         fields: Default::default(),
+        grid_char_delta: 0.0,
     };
 
     let mut lists = ListCounters::default();

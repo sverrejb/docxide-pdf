@@ -455,6 +455,12 @@ fn script_of_chars(chars: impl Iterator<Item = char>) -> CjkScript {
     script
 }
 
+/// Whether a font family name is a Chinese, Japanese or Korean face (SimSun,
+/// ＭＳ 明朝, Batang…); Times New Roman as a document's East Asian font is not.
+pub(crate) fn is_cjk_family(name: &str) -> bool {
+    classify_cjk_script(name, None, &HashSet::new()) != CjkScript::Unknown
+}
+
 /// Script of a missing CJK font: the fontTable charset first (what Word itself
 /// keys substitution on), then the font name, then the text it has to render.
 fn classify_cjk_script(

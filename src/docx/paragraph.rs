@@ -146,7 +146,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     apply_indent_chars(
         &mut indents,
         indent_chars,
-        indent_char_width(&parsed.runs, para_style, &ctx.styles.defaults),
+        indent_char_width(&parsed.runs, para_style, &ctx.styles.defaults, ctx.grid_char_delta),
     );
     let (indent_left, indent_right, indent_hanging, indent_first_line) = indents;
     let mut runs = parsed.runs;
@@ -508,17 +508,19 @@ pub(super) fn contextual_spacing(
 /// `w:ind`, its style and its numbering level, over the document defaults.
 /// Shared by body and table-cell paragraphs.
 /// One character for `*Chars` indents: the paragraph's first run's size
-/// (`apply_indent_chars`), else the style's.
+/// (`apply_indent_chars`), else the style's, plus the section's character
+/// grid pitch (`ParseContext::grid_char_delta`).
 pub(super) fn indent_char_width(
     runs: &[crate::model::Run],
     para_style: Option<&ParagraphStyle>,
     defaults: &StyleDefaults,
+    grid_char_delta: f32,
 ) -> f32 {
     runs.first().map(|r| r.font_size).unwrap_or_else(|| {
         para_style
             .and_then(|s| s.font_size)
             .unwrap_or(defaults.font_size)
-    })
+    }) + grid_char_delta
 }
 
 pub(super) fn resolve_indents(
