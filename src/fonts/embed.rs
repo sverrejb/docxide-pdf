@@ -662,7 +662,13 @@ mod tests {
             "Synthetic hyphen",
             data,
             0,
-            &chars.chars().collect(),
+            &FontContext {
+                embedded_fonts: &HashMap::new(),
+                font_table: &HashMap::new(),
+                used_chars: &chars.chars().collect(),
+                word_text: true,
+                extra_glyphs: None,
+            },
             &mut || {
                 let r = Ref::new(next);
                 next += 1;
