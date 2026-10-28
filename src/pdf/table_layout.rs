@@ -94,9 +94,14 @@ pub(super) fn apply_nested_pct_width(table: &Table, widths: &mut [f32], availabl
     let total: f32 = widths.iter().sum();
     if total > 0.0 && target > 0.0 {
         let scale = target / total;
-        for w in widths {
+        for w in widths.iter_mut() {
             *w *= scale;
         }
+    }
+    // The share never clips a picture: Word widens the column to it even
+    // in a fixed-layout nested table (issue #142, control-02-fixed-outer).
+    for (w, hard) in widths.iter_mut().zip(hard_content_widths(table, false)) {
+        *w = w.max(hard);
     }
 }
 
@@ -283,7 +288,15 @@ fn raise_natural_for_nested_tables(
                     let ncm = &nt.cell_margins;
                     let nat = natural_widths(nt, fonts, ncm);
                     let min_cell = ncm.left + ncm.right;
-                    let w: f32 = nat.iter().map(|&x| x.max(min_cell)).sum();
+                    // A nested table's pictures never wrap either (issue #142:
+                    // a 166pt plot in a fixed 40% nested table inside an
+                    // auto-fit host collapsed the host column to its padding).
+                    let hard = hard_content_widths(nt, false);
+                    let w: f32 = nat
+                        .iter()
+                        .zip(&hard)
+                        .map(|(&x, &h)| x.max(h).max(min_cell))
+                        .sum();
                     natural[grid_col] = natural[grid_col].max(w + h_pad);
                 }
             }
