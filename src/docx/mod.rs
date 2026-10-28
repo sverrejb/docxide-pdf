@@ -799,16 +799,73 @@ fn chars_to_pts(ind: roxmltree::Node, attr: &str, char_width: f32) -> Option<f32
         .map(|hundredths| hundredths / 100.0 * char_width)
 }
 
+/// A `w:ind`'s character-unit attributes, in characters (the attributes are
+/// hundredths). Zero counts as absent: Word then uses the twips value.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(super) struct IndentChars {
+    pub(super) left: Option<f32>,
+    pub(super) right: Option<f32>,
+    pub(super) hanging: Option<f32>,
+    pub(super) first_line: Option<f32>,
+}
+
+pub(super) fn extract_indent_chars(ind: roxmltree::Node) -> IndentChars {
+    let chars = |attrs: &[&str]| {
+        attrs
+            .iter()
+            .find_map(|a| ind.attribute((WML_NS, *a)))
+            .and_then(|v| v.parse::<f32>().ok())
+            .filter(|v| *v != 0.0)
+            .map(|hundredths| hundredths / 100.0)
+    };
+    IndentChars {
+        left: chars(&["startChars", "leftChars"]),
+        right: chars(&["endChars", "rightChars"]),
+        hanging: chars(&["hangingChars"]),
+        first_line: chars(&["firstLineChars"]),
+    }
+}
+
+/// Word's character-unit indents, measured (online export probes 2026-10-28,
+/// issue #143): a non-zero `*Chars` value wins over the twips next to it, even
+/// a style's over a paragraph's direct `w:hanging`; one character is the
+/// paragraph's first run's font size (a 14pt style with 12pt runs indents
+/// 24pt for 200); and with `leftChars` or `hangingChars` in play the left
+/// value is the first line's position and the hanging (chars or twips) is
+/// added for the body, so left=480 hanging=200 hangingChars=200 and
+/// leftChars=200 hangingChars=200 start at 0/24 and 24/48pt. `firstLineChars`
+/// alone keeps the twips left.
+pub(super) fn apply_indent_chars(ind: &mut (f32, f32, f32, f32), chars: IndentChars, char_width: f32) {
+    let (left, right, hanging, first) = ind;
+    if let Some(r) = chars.right {
+        *right = r * char_width;
+    }
+    let first_chars = chars.first_line.map(|f| f * char_width);
+    if chars.left.is_some() || chars.hanging.is_some() {
+        let base = chars.left.map_or(0.0, |l| l * char_width);
+        let hang = match (chars.hanging, first_chars) {
+            (Some(h), _) => h * char_width,
+            (None, Some(_)) => 0.0,
+            (None, None) => *hanging,
+        };
+        *left = base + hang;
+        *hanging = hang;
+        *first = first_chars.unwrap_or(0.0);
+    } else if let Some(f) = first_chars {
+        *first = f;
+        *hanging = 0.0;
+    }
+}
+
 pub(super) fn extract_indents(
     ind: roxmltree::Node,
     char_width: Option<f32>,
 ) -> (Option<f32>, Option<f32>, Option<f32>, Option<f32>) {
     // One character is the font size, Latin or not (Word probe: a style's
-    // firstLineChars=200 indents 24pt at 12pt, 20pt at 10pt). Word itself
-    // gives a non-zero *Chars value precedence, measured in the first run's
-    // size, but the twips it writes alongside already hold that result and
-    // we only know the style's size (east_asia_conference: 1900 chars =
-    // 4940 twips, a 13pt run in a 10.5pt style), so twips win when present.
+    // firstLineChars=200 indents 24pt at 12pt, 20pt at 10pt). Styles and
+    // paragraphs pass no width and resolve their `*Chars` values with the
+    // first run's size instead (`apply_indent_chars`); the document defaults
+    // keep this fallback.
     let side = |chars: &str, twips: &[&str]| {
         twips
             .iter()
@@ -1290,7 +1347,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         .find_map(|id| styles.paragraph_styles.get(*id)?.font_name.clone())
         .unwrap_or_else(|| styles.defaults.font_name.clone());
 
-    Ok(Document {
+    let mut doc = Document {
         sections,
         line_spacing: styles.defaults.line_spacing,
         embedded_fonts,
@@ -1315,12 +1372,92 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         default_lang: styles.defaults.lang.clone().or(settings.default_lang),
         compress_punctuation: settings.compress_punctuation,
         compat_mode: settings.compat_mode,
+        east_asian_lang: styles
+            .defaults
+            .lang_east_asia
+            .as_deref()
+            .or(settings.east_asia_lang.as_deref())
+            .is_some_and(|l| ["zh", "ja", "ko"].iter().any(|p| l.starts_with(p))),
         do_not_expand_shift_return: settings.do_not_expand_shift_return,
         wp_justification: settings.wp_justification,
         additive_paragraph_spacing: settings.no_html_auto_spacing,
         adjust_line_height_in_table: settings.adjust_line_height_in_table,
         math: settings.math,
-    })
+    };
+    resolve_body_stylerefs(&mut doc);
+    Ok(doc)
+}
+
+/// Body STYLEREF fields show the nearest paragraph in the named style before
+/// the field, else the first one after it (§17.16.5.59). Word updates them on
+/// export, so the cached text is stale (issue #142: the body copy of a header's
+/// STYLEREF kept "Heading pending"). Headers resolve theirs per page instead.
+fn resolve_body_stylerefs(doc: &mut Document) {
+    use crate::model::{FieldCode, styleref_key};
+    fn paragraphs<'a>(blocks: &'a mut [Block], out: &mut Vec<&'a mut crate::model::Paragraph>) {
+        for block in blocks {
+            match block {
+                Block::Paragraph(p) => out.push(p),
+                Block::Table(t) => {
+                    for cell in t.rows.iter_mut().flat_map(|r| r.cells.iter_mut()) {
+                        paragraphs(&mut cell.content, out);
+                    }
+                }
+            }
+        }
+    }
+    let names = std::mem::take(&mut doc.style_id_to_name);
+    let mut paras = Vec::new();
+    for section in &mut doc.sections {
+        paragraphs(&mut section.blocks, &mut paras);
+    }
+    // Per paragraph, the keys it defines (paragraph style and character
+    // styles, by id and by name) and their values.
+    let defined: Vec<Vec<(String, String)>> = paras
+        .iter()
+        .map(|p| {
+            let number = if p.list_label.is_empty() { "0" } else { p.list_label.as_str() };
+            let mut defs = Vec::new();
+            let mut define = |id: &str, text: String| {
+                for name in std::iter::once(id).chain(names.get(id).map(String::as_str)) {
+                    defs.push((styleref_key(name, false), text.clone()));
+                    defs.push((styleref_key(name, true), number.to_string()));
+                }
+            };
+            if let Some(sid) = &p.style_id {
+                let text: String = p.runs.iter().map(|r| r.text.as_str()).collect();
+                if !text.is_empty() {
+                    define(sid, text);
+                }
+            }
+            for group in p.runs.chunk_by(|a, b| a.char_style_id == b.char_style_id) {
+                if let Some(csid) = &group[0].char_style_id {
+                    let text: String = group.iter().map(|r| r.text.as_str()).collect();
+                    if !text.is_empty() {
+                        define(csid, text);
+                    }
+                }
+            }
+            defs
+        })
+        .collect();
+    let lookup = |key: &str, at: usize| {
+        let before = (0..at).rev();
+        let after = at + 1..defined.len();
+        before
+            .chain(after)
+            .find_map(|i| defined[i].iter().find(|(k, _)| k == key).map(|(_, v)| v.clone()))
+    };
+    for (i, p) in paras.iter_mut().enumerate() {
+        for run in &mut p.runs {
+            if let Some(FieldCode::StyleRef { name, number }) = run.field_code.clone()
+                && let Some(text) = lookup(&styleref_key(&name, number), i)
+            {
+                run.text = text;
+            }
+        }
+    }
+    doc.style_id_to_name = names;
 }
 
 #[cfg(test)]
@@ -1651,6 +1788,25 @@ mod tests {
         assert_eq!(right, Some(36.0)); // 720/20
         assert_eq!(hanging, None);
         assert_eq!(first_line, None);
+    }
+
+    #[test]
+    fn chars_indents_follow_word_probes() {
+        // (left, hanging, hangingChars, leftChars, firstLineChars) → (first line x, body x)
+        let case = |twips: (f32, f32), chars: IndentChars, cw: f32| {
+            let mut ind = (twips.0, 0.0, twips.1, 0.0);
+            apply_indent_chars(&mut ind, chars, cw);
+            (ind.0 - ind.2 + ind.3, ind.0)
+        };
+        let c = |l, h, f| IndentChars { left: l, right: None, hanging: h, first_line: f };
+        assert_eq!(case((10.0, 10.0), c(None, Some(2.0), None), 12.0), (0.0, 24.0));
+        assert_eq!(case((24.0, 10.0), c(None, Some(2.0), None), 12.0), (0.0, 24.0));
+        assert_eq!(case((0.0, 0.0), c(Some(2.0), Some(2.0), None), 12.0), (24.0, 48.0));
+        assert_eq!(case((0.0, 20.0), c(Some(2.0), None, None), 12.0), (24.0, 44.0));
+        assert_eq!(case((48.0, 0.0), c(None, None, Some(2.0)), 12.0), (72.0, 48.0));
+        assert_eq!(case((0.0, 0.0), c(Some(2.0), None, Some(1.0)), 12.0), (36.0, 24.0));
+        assert_eq!(case((10.0, 10.0), c(None, Some(2.0), None), 18.0), (0.0, 36.0));
+        assert_eq!(case((10.0, 10.0), IndentChars::default(), 12.0), (0.0, 10.0));
     }
 
     #[test]

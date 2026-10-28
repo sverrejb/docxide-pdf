@@ -67,6 +67,98 @@ fn char_justify_gaps(
     }
 }
 
+/// Word's justification of a line mixing Latin and East Asian text: the slack
+/// spreads over every space and the gap after every East Asian character
+/// alike, each space getting a fixed 1/9 em on top, and Latin letters never
+/// spread (Word online probes 2026-10-28, issue #142: a 10pt line with 6
+/// spaces and 17 CJK gaps widens the spaces by 5.17pt and the gaps by
+/// 4.04pt; 12pt lines of 2–11 spaces and 2–24 gaps fit the same model within
+/// Word's quarter-point rounding). The gap before an East Asian character
+/// counts only after a Latin letter, and the line's last character has none.
+struct MixedJustify {
+    /// Spaces and East Asian gaps before each chunk.
+    spaces_before: Vec<usize>,
+    points_before: Vec<usize>,
+    /// The last chunk holding text: its final character gets no gap.
+    last_text_chunk: usize,
+    extra: f32,
+    space_bonus: f32,
+}
+
+impl MixedJustify {
+    fn new(chunks: &[WordChunk], spaces_before: &[usize], slack: f32) -> Self {
+        let last_text_chunk = chunks
+            .iter()
+            .rposition(|c| c.text.chars().any(|ch| !is_break_space(ch)))
+            .unwrap_or(0);
+        let mut points_before = Vec::with_capacity(chunks.len());
+        let mut points = 0usize;
+        for (i, c) in chunks.iter().enumerate() {
+            points_before.push(points);
+            points += cjk_gap_points(&c.text, i == last_text_chunk)
+                .iter()
+                .filter(|p| **p)
+                .count();
+        }
+        let spaces = spaces_before.last().copied().unwrap_or(0) as f32;
+        let total = spaces + points as f32;
+        let bonus = chunks.first().map_or(0.0, |c| c.font_size / 9.0);
+        let (extra, space_bonus) = if total == 0.0 {
+            (0.0, 0.0)
+        } else if slack >= spaces * bonus {
+            ((slack - spaces * bonus) / total, bonus)
+        } else {
+            (0.0, slack / spaces.max(1.0))
+        };
+        Self {
+            spaces_before: spaces_before.to_vec(),
+            points_before,
+            last_text_chunk,
+            extra,
+            space_bonus,
+        }
+    }
+
+    /// How far chunk `idx` moves right.
+    fn offset_before(&self, idx: usize) -> f32 {
+        let at = |v: &[usize]| v.get(idx).copied().unwrap_or(0) as f32;
+        at(&self.spaces_before) * (self.extra + self.space_bonus)
+            + at(&self.points_before) * self.extra
+    }
+
+    /// Extra advance after each character of chunk `idx`, if any widens.
+    fn char_extras(&self, idx: usize, text: &str) -> Option<Vec<f32>> {
+        let points = cjk_gap_points(text, idx == self.last_text_chunk);
+        points.iter().any(|p| *p).then(|| {
+            points
+                .into_iter()
+                .map(|p| if p { self.extra } else { 0.0 })
+                .collect()
+        })
+    }
+}
+
+/// Per character of `text`, whether the gap after it is a justification
+/// point (see `MixedJustify`); `last` marks the line's last text chunk.
+fn cjk_gap_points(text: &str, last: bool) -> Vec<bool> {
+    let chars: Vec<char> = text.chars().collect();
+    let n = chars.len();
+    (0..n)
+        .map(|i| {
+            let c = chars[i];
+            if is_break_space(c) {
+                false
+            } else if crate::docx::is_east_asian_char(c) {
+                !(last && i + 1 == n)
+            } else {
+                chars
+                    .get(i + 1)
+                    .is_some_and(|next| crate::docx::is_east_asian_char(*next))
+            }
+        })
+        .collect()
+}
+
 /// Resolve aligned segment start position given a tab stop, segment runs, and minimum x.
 fn resolve_tab_aligned_start(
     stop: &TabStop,
@@ -1556,6 +1648,11 @@ pub(super) struct CjkLayout {
     /// word that overflows stays on the line when `squeeze_keeps` allows it
     /// and the line's spaces can shrink to make room (see `SPACE_SQUEEZE`).
     pub(super) squeeze_spaces: bool,
+    /// Chinese, Japanese or Korean document: a word ending in a Latin mark
+    /// may overflow by half the mark on top of what the squeeze allows
+    /// (Word online probes 2026-10-28: "barn." stays 1.5pt longer with
+    /// eastAsia zh-CN than en-US, "barnx" the same in both; issue #142).
+    pub(super) punct_half_out: bool,
     /// Justified paragraph under `wpJustification`: a word that overflows by
     /// at most two spaces' width stays, and the whole line is squeezed
     /// (`SQUEEZE_LINE_SPACES`).
@@ -2331,7 +2428,15 @@ pub(super) fn build_paragraph_lines(
                 // How far the word may overflow and stay: Word 2013+ narrows
                 // the spaces, wpJustification the whole line.
                 let lead_space = if need_space { pending_space_w } else { 0.0 };
-                let keeps = squeeze_keeps(word_x + word_w - cur_max, word_w, lead_space);
+                let half_mark = if cjk.punct_half_out {
+                    word.chars()
+                        .last()
+                        .filter(|c| ".,;:!?".contains(*c))
+                        .map_or(0.0, |c| entry.char_width_1000(c) * eff_fs / 2000.0)
+                } else {
+                    0.0
+                };
+                let keeps = squeeze_keeps(word_x + word_w - cur_max - half_mark, word_w, lead_space);
                 let space_room = (cjk.squeeze_spaces && keeps)
                     .then(|| SPACE_SQUEEZE * (line_space_width(&current_chunks) + pending_space_w));
                 let line_room = (cjk.squeeze_line && (need_space || is_continuation))
@@ -2339,7 +2444,7 @@ pub(super) fn build_paragraph_lines(
                 if [space_room, line_room]
                     .into_iter()
                     .flatten()
-                    .any(|room| proposed_x + ww - cur_max <= room)
+                    .any(|room| proposed_x + ww - cur_max - half_mark <= room)
                 {
                     overflows = false;
                     squeezed_lines.push(lines.len());
@@ -3808,13 +3913,27 @@ pub(super) fn render_paragraph_lines(
             _ => false,
         };
 
-        let char_justify_gaps = if squeezed && line.squeeze_chars {
+        let mixed = (can_justify
+            && has_cjk_content
+            && matches!(*alignment, Alignment::Justify)
+            && !(squeezed && line.squeeze_chars))
+        .then(|| {
+            MixedJustify::new(
+                &line.chunks[..left_chunk_count],
+                &gaps_before,
+                eff_width - left_content_width,
+            )
+        });
+        let char_justify_gaps = if mixed.is_some() {
+            None
+        } else if squeezed && line.squeeze_chars {
             Some(left_char_count.saturating_sub(1).max(1))
         } else {
             char_justify_gaps(*alignment, can_justify, has_cjk_content, left_char_count)
         };
         let is_char_justified = char_justify_gaps.is_some();
-        let is_justified = is_char_justified || (can_justify && left_gaps > 0);
+        let is_justified =
+            mixed.is_some() || is_char_justified || (can_justify && left_gaps > 0);
 
         let line_start_x = match alignment {
             Alignment::Center => eff_margin + (eff_width - left_content_width) / 2.0,
@@ -3834,7 +3953,7 @@ pub(super) fn render_paragraph_lines(
             None => 0.0,
         };
 
-        let extra_per_gap = if is_justified && !is_char_justified {
+        let extra_per_gap = if is_justified && !is_char_justified && mixed.is_none() {
             let per_gap = (eff_width - left_content_width) / left_gaps.max(1) as f32;
             if squeezed { per_gap } else { per_gap.max(0.0) }
         } else {
@@ -3867,7 +3986,9 @@ pub(super) fn render_paragraph_lines(
                 let local_idx = chunk_idx - rr.first_chunk_idx;
                 return right_start_x + chunk.x_offset + local_idx as f32 * right_extra_per_gap;
             }
-            if is_char_justified {
+            if let Some(m) = &mixed {
+                line_start_x + chunk.x_offset + m.offset_before(chunk_idx)
+            } else if is_char_justified {
                 // Tc adds extra space after each character; shift chunk start
                 // by the cumulative Tc of all chars in preceding chunks.
                 let chars_before: usize = line.chunks[..chunk_idx]
@@ -4276,7 +4397,59 @@ pub(super) fn render_paragraph_lines(
                     .then(|| seen_fonts.get("__glyph_fallback"))
                     .flatten();
 
-                if let Some(entry) = primary_entry.filter(|_| chunk.rtl_glyphs) {
+                if let Some(extras) = mixed
+                    .as_ref()
+                    .and_then(|m| m.char_extras(chunk_idx, &chunk.text))
+                {
+                    // Only the East Asian gaps widen: one Tc per segment, the
+                    // fallback font where the primary lacks the glyphs.
+                    let missing = |c: char| primary_entry.is_some_and(|p| p.missing_chars.contains(&c));
+                    let fallback_gids = fallback_entry.and_then(|f| f.char_to_gid.as_ref());
+                    let chars: Vec<char> = chunk.text.chars().collect();
+                    let mut i = 0;
+                    while i < chars.len() {
+                        let in_fallback = missing(chars[i]);
+                        let mut j = i + 1;
+                        while j < chars.len()
+                            && extras[j] == extras[i]
+                            && missing(chars[j]) == in_fallback
+                        {
+                            j += 1;
+                        }
+                        let cs = chunk.char_spacing + extras[i];
+                        if cs != cur_char_spacing {
+                            content.set_char_spacing(cs);
+                            cur_char_spacing = cs;
+                        }
+                        let seg: String = chars[i..j].iter().collect();
+                        match (in_fallback, fallback_entry, fallback_gids) {
+                            (true, Some(fb), Some(map)) => {
+                                content.set_font(Name(fb.pdf_name.as_bytes()), chunk.font_size);
+                                content.show(Str(&encode_as_gids(&seg, map)));
+                                content.set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size);
+                            }
+                            _ => {
+                                content.show(Str(&encode_text_for_pdf(
+                                    &seg,
+                                    &chunk.pdf_font,
+                                    &pdf_name_to_entry,
+                                )));
+                            }
+                        }
+                        i = j;
+                    }
+                    if boundary_space {
+                        if effective_cs != cur_char_spacing {
+                            content.set_char_spacing(effective_cs);
+                            cur_char_spacing = effective_cs;
+                        }
+                        content.show(Str(&encode_text_for_pdf(
+                            " ",
+                            &chunk.pdf_font,
+                            &pdf_name_to_entry,
+                        )));
+                    }
+                } else if let Some(entry) = primary_entry.filter(|_| chunk.rtl_glyphs) {
                     // ponytail: no CJK-fallback glyphs or kerning in right-to-left chunks
                     show_rtl(
                         content,
@@ -4871,6 +5044,7 @@ mod tests {
 
     fn plain_layout(squeeze_spaces: bool) -> CjkLayout {
         CjkLayout {
+            punct_half_out: false,
             auto_space: false,
             compress_punct: false,
             punct_pull: false,
@@ -4921,6 +5095,7 @@ mod tests {
                     punct_pull_free_ratio: 0.0,
                     punct_pull_free_em: 0.0,
                     squeeze_spaces: true,
+                    punct_half_out: false,
                     expand_shift_return: true,
                     squeeze_line: false,
                     bidi: false,

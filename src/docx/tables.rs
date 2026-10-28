@@ -799,13 +799,22 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         cell_lists,
                         Some(&mark),
                     );
-                    let (indent_left, indent_right, indent_hanging, indent_first_line) =
-                        super::paragraph::resolve_indents(
-                            ppr,
+                    let (mut indents, indent_chars) = super::paragraph::resolve_indents(
+                        ppr,
+                        para_style,
+                        &numbering,
+                        &ctx.styles.defaults,
+                    );
+                    super::apply_indent_chars(
+                        &mut indents,
+                        indent_chars,
+                        super::paragraph::indent_char_width(
+                            &runs,
                             para_style,
-                            &numbering,
                             &ctx.styles.defaults,
-                        );
+                        ),
+                    );
+                    let (indent_left, indent_right, indent_hanging, indent_first_line) = indents;
                     let ListLabelInfo {
                         indent_left: _,
                         indent_hanging: _,

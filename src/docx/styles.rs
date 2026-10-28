@@ -9,7 +9,8 @@ use crate::model::{
 pub(super) use super::color::{ColorTransforms, parse_color_transforms};
 use super::wordart::{parse_text_fill, parse_text_glow, parse_text_outline, parse_text_shadow};
 use super::{
-    DML_NS, WML_NS, angle_attr, dml, emu_attr, extract_indents, frac_attr, frame_attrs,
+    DML_NS, WML_NS, angle_attr, dml, emu_attr, extract_indent_chars, extract_indents, frac_attr,
+    frame_attrs,
     highlight_color, merge_tab_stops, parse_cell_border, parse_cell_border_left,
     parse_cell_border_right, parse_hex_color, parse_on_off, parse_one_border,
     parse_paragraph_borders, parse_run_shd, parse_tab_stops_with_clears, parse_text_color,
@@ -209,6 +210,8 @@ pub(super) struct ParagraphStyle {
     pub(super) indent_right: Option<f32>,
     pub(super) indent_hanging: Option<f32>,
     pub(super) indent_first_line: Option<f32>,
+    /// Character-unit indents, resolved per paragraph (`apply_indent_chars`).
+    pub(super) indent_chars: super::IndentChars,
     pub(super) borders: ParagraphBorders,
     pub(super) shading: Option<[u8; 3]>,
     pub(super) based_on: Option<String>,
@@ -1084,10 +1087,10 @@ pub(super) fn parse_styles<R: Read + Seek>(
 
                 let line_spacing = spacing.and_then(parse_line_spacing);
 
-                let (indent_left, indent_right, indent_hanging, indent_first_line) = ppr
-                    .and_then(|n| wml(n, "ind"))
-                    .map(|ind| extract_indents(ind, Some(font_size.unwrap_or(defaults.font_size))))
-                    .unwrap_or_default();
+                let ind = ppr.and_then(|n| wml(n, "ind"));
+                let (indent_left, indent_right, indent_hanging, indent_first_line) =
+                    ind.map(|ind| extract_indents(ind, None)).unwrap_or_default();
+                let indent_chars = ind.map(extract_indent_chars).unwrap_or_default();
 
                 let (tab_stops, clear_tab_positions) =
                     ppr.map(parse_tab_stops_with_clears).unwrap_or_default();
@@ -1155,6 +1158,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         indent_right,
                         indent_hanging,
                         indent_first_line,
+                        indent_chars,
                         borders,
                         shading,
                         based_on,
@@ -1334,7 +1338,10 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
         .map(|(id, s)| {
             let ind = s.indent_left.is_some()
                 || s.indent_hanging.is_some()
-                || s.indent_first_line.is_some();
+                || s.indent_first_line.is_some()
+                || s.indent_chars.left.is_some()
+                || s.indent_chars.hanging.is_some()
+                || s.indent_chars.first_line.is_some();
             let num = s.num_id.is_some() || s.num_ilvl.is_some();
             (
                 id.clone(),
@@ -1438,6 +1445,13 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                 if s.indent_hanging.is_some() || s.indent_first_line.is_some() {
                     inh.indent_hanging = s.indent_hanging;
                     inh.indent_first_line = s.indent_first_line;
+                }
+                let (c, ic) = (&s.indent_chars, &mut inh.indent_chars);
+                ic.left = c.left.or(ic.left);
+                ic.right = c.right.or(ic.right);
+                if c.hanging.is_some() || c.first_line.is_some() {
+                    ic.hanging = c.hanging;
+                    ic.first_line = c.first_line;
                 }
                 // Tab stops are additive: accumulate from ancestors, child overrides at same pos
                 // Clear tabs remove inherited tabs at matching positions

@@ -298,6 +298,10 @@ pub struct Document {
     pub compress_punctuation: bool,
     /// Word's `compatibilityMode` (see `docx::settings`).
     pub compat_mode: u32,
+    /// The document's East Asian language is Chinese, Japanese or Korean:
+    /// Word then lets a line-ending Latin mark sit half outside the measure
+    /// (`SPACE_SQUEEZE`).
+    pub east_asian_lang: bool,
     /// Word's `doNotExpandShiftReturn` (see `docx::settings`).
     pub do_not_expand_shift_return: bool,
     /// Word's `wpJustification` (see `docx::settings`).
@@ -784,6 +788,14 @@ impl Default for Run {
             math: None,
         }
     }
+}
+
+/// The key a STYLEREF value is stored under: Word matches style names
+/// case-insensitively ("CharSchno" for CharSchNo), and the `\n` switch reads
+/// the paragraph's list number.
+pub fn styleref_key(name: &str, number: bool) -> String {
+    let key = name.to_lowercase();
+    if number { key + "\\n" } else { key }
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -44,13 +44,7 @@ pub(super) fn substitute_hf_runs(
         .collect()
 }
 
-/// The key a STYLEREF value is stored under: Word matches style names
-/// case-insensitively ("CharSchno" for CharSchNo), and the `\n` switch reads
-/// the paragraph's list number.
-pub(super) fn styleref_key(name: &str, number: bool) -> String {
-    let key = name.to_lowercase();
-    if number { key + "\\n" } else { key }
-}
+pub(super) use crate::model::styleref_key;
 
 /// A PAGE or NUMPAGES value in its numFmt (None = decimal).
 pub(super) fn page_field_text(n: usize, fmt: Option<&str>) -> String {

@@ -6,8 +6,8 @@ use super::runs::{parse_runs, push_textbox};
 use super::styles::{ParagraphStyle, StyleDefaults, half_points};
 use super::textbox::collect_textboxes_from_paragraph;
 use super::{
-    ParseContext, WML_NS, extract_indents, parse_frame_props, parse_paragraph_borders,
-    parse_paragraph_spacing, wml, wml_attr, wml_bool,
+    IndentChars, ParseContext, WML_NS, apply_indent_chars, extract_indent_chars, extract_indents,
+    parse_frame_props, parse_paragraph_borders, parse_paragraph_spacing, wml, wml_attr, wml_bool,
 };
 
 /// Options controlling which paragraph features to resolve.
@@ -108,7 +108,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         lists,
         Some(&mark),
     );
-    let (indent_left, indent_right, indent_hanging, indent_first_line) =
+    let (mut indents, indent_chars) =
         resolve_indents(ppr, para_style, &numbering, &ctx.styles.defaults);
     let ListLabelInfo {
         indent_left: _,
@@ -143,6 +143,12 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     }
 
     let parsed = parse_runs(node, ctx);
+    apply_indent_chars(
+        &mut indents,
+        indent_chars,
+        indent_char_width(&parsed.runs, para_style, &ctx.styles.defaults),
+    );
+    let (indent_left, indent_right, indent_hanging, indent_first_line) = indents;
     let mut runs = parsed.runs;
 
     if let Some(color) = style_color {
@@ -501,19 +507,51 @@ pub(super) fn contextual_spacing(
 /// A paragraph's indents (left, right, hanging, first line) from its direct
 /// `w:ind`, its style and its numbering level, over the document defaults.
 /// Shared by body and table-cell paragraphs.
+/// One character for `*Chars` indents: the paragraph's first run's size
+/// (`apply_indent_chars`), else the style's.
+pub(super) fn indent_char_width(
+    runs: &[crate::model::Run],
+    para_style: Option<&ParagraphStyle>,
+    defaults: &StyleDefaults,
+) -> f32 {
+    runs.first().map(|r| r.font_size).unwrap_or_else(|| {
+        para_style
+            .and_then(|s| s.font_size)
+            .unwrap_or(defaults.font_size)
+    })
+}
+
 pub(super) fn resolve_indents(
     ppr: Option<roxmltree::Node>,
     para_style: Option<&ParagraphStyle>,
     numbering: &ListLabelInfo,
     defaults: &StyleDefaults,
-) -> (f32, f32, f32, f32) {
+) -> ((f32, f32, f32, f32), IndentChars) {
     let mut indent_left = numbering.indent_left;
     let mut indent_hanging = numbering.indent_hanging;
     let mut indent_first_line = defaults.indent_first_line;
     let mut indent_right = defaults.indent_right;
-    let char_width_fs = para_style
-        .and_then(|s| s.font_size)
-        .unwrap_or(defaults.font_size);
+    // Character units: a direct value replaces the style's; hanging and
+    // first line are one value here too. Resolved once the runs are known.
+    let direct_chars = ppr
+        .and_then(|ppr| wml(ppr, "ind"))
+        .map(extract_indent_chars)
+        .unwrap_or_default();
+    let style_chars = para_style.map(|s| s.indent_chars).unwrap_or_default();
+    let chars = IndentChars {
+        left: direct_chars.left.or(style_chars.left),
+        right: direct_chars.right.or(style_chars.right),
+        hanging: if direct_chars.hanging.is_some() || direct_chars.first_line.is_some() {
+            direct_chars.hanging
+        } else {
+            style_chars.hanging
+        },
+        first_line: if direct_chars.hanging.is_some() || direct_chars.first_line.is_some() {
+            direct_chars.first_line
+        } else {
+            style_chars.first_line
+        },
+    };
     // Numbering-level ind (already in indent_left/indent_hanging) outranks
     // style ind (§17.9.27); only directly-specified attributes override it.
     // Numbering that comes from the paragraph style sits below an ind set on
@@ -524,7 +562,7 @@ pub(super) fn resolve_indents(
         && para_style.is_some_and(|s| s.ind_over_numbering);
     let numbering_ind = !style_ind_wins && (indent_left != 0.0 || indent_hanging != 0.0);
     let (left, right, hanging, first) = if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
-        let (l, r, h, f) = extract_indents(ind, Some(char_width_fs));
+        let (l, r, h, f) = extract_indents(ind, None);
         // firstLine and hanging are one value: a direct either replaces the
         // style's both (indonesian's title, ind left=281 firstLine=0 over
         // Heading1's hanging=543, starts at 281 in Word).
@@ -589,7 +627,7 @@ pub(super) fn resolve_indents(
         // under a 284/284 bullet level puts its label at the margin in Word).
         indent_first_line = 0.0;
     }
-    (indent_left, indent_right, indent_hanging, indent_first_line)
+    ((indent_left, indent_right, indent_hanging, indent_first_line), chars)
 }
 
 #[cfg(test)]

@@ -207,12 +207,9 @@ fn parse_notes_simple<R: Read + Seek>(
             // Indents: inline w:ind overrides the style, missing attributes
             // fall back to the (basedOn-resolved) style — same merge as body
             // paragraphs, minus list-numbering interplay.
-            let char_fs = para_style
-                .and_then(|s| s.font_size)
-                .unwrap_or(styles.defaults.font_size);
             let (left, right, hanging, first) =
                 if let Some(ind) = ppr.and_then(|ppr| wml(ppr, "ind")) {
-                    let (l, r, h, f) = extract_indents(ind, Some(char_fs));
+                    let (l, r, h, f) = extract_indents(ind, None);
                     if let Some(s) = para_style {
                         (
                             l.or(s.indent_left),
@@ -233,14 +230,36 @@ fn parse_notes_simple<R: Read + Seek>(
                 } else {
                     (None, None, None, None)
                 };
+            let mut indents = (
+                left.unwrap_or(0.0),
+                right.unwrap_or(0.0),
+                hanging.unwrap_or(0.0),
+                first.unwrap_or(0.0),
+            );
+            let direct_chars = ppr
+                .and_then(|ppr| wml(ppr, "ind"))
+                .map(super::extract_indent_chars)
+                .unwrap_or_default();
+            let style_chars = para_style.map(|s| s.indent_chars).unwrap_or_default();
+            super::apply_indent_chars(
+                &mut indents,
+                super::IndentChars {
+                    left: direct_chars.left.or(style_chars.left),
+                    right: direct_chars.right.or(style_chars.right),
+                    hanging: direct_chars.hanging.or(style_chars.hanging),
+                    first_line: direct_chars.first_line.or(style_chars.first_line),
+                },
+                super::paragraph::indent_char_width(
+                    &parsed.runs,
+                    para_style,
+                    &styles.defaults,
+                ),
+            );
+            let (left, right, hanging, first) = indents;
             // uk_commercial_lease's FootnoteText hangs 567 twips with no tab
             // stops: Word's "1<tab>" text starts at that implicit stop.
             let mut tab_stops = super::resolve_tab_stops(ppr, para_style);
-            super::paragraph::add_hanging_tab_stop(
-                &mut tab_stops,
-                left.unwrap_or(0.0),
-                hanging.unwrap_or(0.0),
-            );
+            super::paragraph::add_hanging_tab_stop(&mut tab_stops, left, hanging);
 
             Paragraph {
                 runs: parsed.runs,
@@ -250,10 +269,10 @@ fn parse_notes_simple<R: Read + Seek>(
                 alignment,
                 line_spacing: ls.or(Some(styles.defaults.line_spacing)),
                 snap_to_grid: true,
-                indent_left: left.unwrap_or(0.0),
-                indent_right: right.unwrap_or(0.0),
-                indent_hanging: hanging.unwrap_or(0.0),
-                indent_first_line: first.unwrap_or(0.0),
+                indent_left: left,
+                indent_right: right,
+                indent_hanging: hanging,
+                indent_first_line: first,
                 ..Paragraph::default()
             }
         };

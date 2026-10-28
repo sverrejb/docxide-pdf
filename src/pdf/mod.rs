@@ -458,6 +458,8 @@ pub(super) struct RenderContext<'a> {
     pub(super) body_page_fields: Option<&'a BodyPageFields>,
     /// Word's `compatibilityMode` (see `docx::settings`).
     pub(super) compat_mode: u32,
+    /// `Document::east_asian_lang`.
+    pub(super) east_asian_lang: bool,
     /// Word's `doNotExpandShiftReturn` (see `docx::settings`).
     pub(super) do_not_expand_shift_return: bool,
     /// Word's `wpJustification` (see `docx::settings`).
@@ -534,6 +536,7 @@ impl RenderContext<'_> {
             punct_pull_free_em: if self.compat_mode < 15 { 0.5 } else { 0.0 },
             squeeze_spaces: self.compat_mode >= 15
                 && matches!(para.alignment, crate::model::Alignment::Justify),
+            punct_half_out: self.east_asian_lang,
             squeeze_line: self.wp_justification
                 && matches!(para.alignment, crate::model::Alignment::Justify),
             expand_shift_return: !self.do_not_expand_shift_return,
@@ -4983,6 +4986,7 @@ fn render_pass(
         endnote_marks: &endnote_display_order,
         body_page_fields: page_fields,
         compat_mode: doc.compat_mode,
+        east_asian_lang: doc.east_asian_lang,
         do_not_expand_shift_return: doc.do_not_expand_shift_return,
         wp_justification: doc.wp_justification,
         additive_paragraph_spacing: doc.additive_paragraph_spacing,
