@@ -67,7 +67,7 @@ fn main() {
     let out = serde_json::json!({
         "jaccard": mean(|p| p.0),
         "ssim": mean(|p| p.1),
-        "text_boundary": (tb.total_lines > 0).then(|| tb.line_match_pct()),
+        "text_boundary": tb.line_match_pct(),
         "ref_pages": ref_pngs.len(),
         "pages": other_pngs.len(),
         "scored_pages": pages.len(),

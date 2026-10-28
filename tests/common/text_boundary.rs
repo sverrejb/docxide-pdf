@@ -164,12 +164,9 @@ pub struct TextBoundary {
 }
 
 impl TextBoundary {
-    pub fn line_match_pct(&self) -> f64 {
-        if self.total_lines > 0 {
-            self.matching_lines as f64 / self.total_lines as f64
-        } else {
-            0.0
-        }
+    /// None when no page was comparable line by line (n/a, not a 0% match).
+    pub fn line_match_pct(&self) -> Option<f64> {
+        (self.total_lines > 0).then(|| self.matching_lines as f64 / self.total_lines as f64)
     }
 }
 

@@ -80,13 +80,10 @@ fn text_boundaries_match() {
         };
 
         let line_pct = r.tb.line_match_pct();
-        let line_pct_str = if r.tb.total_lines > 0 {
-            format!("{:.0}%", line_pct * 100.0)
-        } else {
-            "-".to_string()
-        };
-
-        let delta = common::delta_str(line_pct, prev_scores.get(&r.name).copied());
+        let line_pct_str = line_pct.map_or("n/a".to_string(), |p| format!("{:.0}%", p * 100.0));
+        let delta = line_pct.map_or(String::new(), |p| {
+            common::delta_str(p, prev_scores.get(&r.name).copied())
+        });
 
         println!(
             "  {:<name_w$}  {:>5}  {:>6}  {:>12}  {:>5}  {:>5}  {:<9}",
@@ -99,7 +96,7 @@ fn text_boundaries_match() {
         baseline_updates.insert(
             r.name.clone(),
             common::Baselines {
-                text_boundary: Some(r.tb.line_match_pct()),
+                text_boundary: r.tb.line_match_pct(),
                 ..Default::default()
             },
         );
@@ -109,7 +106,7 @@ fn text_boundaries_match() {
     let regressions = common::regressions(
         results
             .iter()
-            .map(|r| (r.name.as_str(), r.tb.line_match_pct())),
+            .filter_map(|r| Some((r.name.as_str(), r.tb.line_match_pct()?))),
         &prev_scores,
     );
     if !regressions.is_empty() {
@@ -141,5 +138,5 @@ fn an_actual_pdf_self_comparison_measures_text_lines() {
         "a successful mutool run must measure actual lines"
     );
     assert_eq!(metrics.ref_pages, metrics.gen_pages);
-    assert_eq!(metrics.line_match_pct(), 1.0);
+    assert_eq!(metrics.line_match_pct(), Some(1.0));
 }
