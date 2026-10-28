@@ -155,6 +155,22 @@ Open queue from the large-corpus and focus-fixture rounds:
   `vAlign=center`), case33's list lines (16.115 vs 16.0), swiss_materials'
   page-2 break (0.46pt over: our pitches 11.47/10.92, Word 11.50/11.00),
   uk_commercial page 11's notes block (0.67pt short).
+- **Mixed Latin/East Asian justification** (issue #142, Word online probes
+  2026-10-28, `MixedJustify` in `pdf/layout.rs`): the slack spreads over every
+  space and the gap after every East Asian character alike, each space +1/9
+  em, Latin letters never stretch, the line's last character has no gap.
+  Open: a Latin letter glued to a CJK character ("abc一二三def") measures the
+  gap plus ~5pt (autoSpaceDE and something else) on both sides; Word's
+  squeezed spaces come in 0.25pt steps and it let the repro's final period
+  hang 2.9pt where we squeeze the spaces fully; `Distribute` keeps the old
+  per-character spread.
+- **`w:ind` character units** (issue #143, probes 2026-10-28,
+  `apply_indent_chars`): chars beat twips at any level, first run's size,
+  left + hanging add up in chars mode. Numbering-level `*Chars` are not read.
+- **Trailing punctuation**: Word never lets a Latin mark hang past the margin
+  (`overflowPunct` is not what it does); in zh/ja/ko documents a justified
+  line keeps a word ending in a mark when half the mark's width fits the
+  squeeze budget (`punct_half_out`). Probed with `.` only; `, ; : ! ?` assumed.
 - **Each space character is a justification stretch point**: polish_municipal's
   double space is 7.44pt in Word = 2 × (3.0 + 0.72 slack); we add one slot for
   the gap. Find justified lines with consecutive spaces across fixtures first.
@@ -222,6 +238,11 @@ Open queue from the large-corpus and focus-fixture rounds:
 - Nested tables use neither compat rule for the outdent
   (`render_nested_table`); needs a compat 14/15 probe. A nested header table
   (logo beside a title table) can sit 5–7pt low.
+- A nested table's pictures now floor the host's natural width and the nested
+  percentage share (issue #142). Open: in a fixed 396pt host Word draws the
+  40% nested table's picture page-centred (control-02-fixed-outer) where we
+  keep the nested table at the cell's left; the nested width/position in a
+  fixed host is unprobed.
 - Single-row nested tables: global nested-table origin/float positioning,
   horizontal positioning and explicit/page/column horizontal anchors of
   nested floats remain.
@@ -320,6 +341,8 @@ Open queue from the large-corpus and focus-fixture rounds:
   their own draw path. Block pictures (`para.image`) ignore rotation.
 - EMF: clipping regions and opaque text backgrounds; immediate-mode segments
   and mid-path SaveDc/RestoreDc; mixed vector+bitmap EMFs.
+- SVG pictures (`asvg:svgBlip`, issue #142 item 3) draw their PNG fallback
+  (~69 dpi); Word exports the vector paths. Needs an SVG → PDF path renderer.
 - SmartArt: `dsp:grpSp` groups, `dsp:cxnSp` connectors; the layout engine for
   files without the `dsp:drawing` fallback (not planned).
 - Charts: 3D charts (pie3D drawn flat), stock, combo (only the first type),
@@ -373,7 +396,9 @@ Backlog (details in `current_focus/A11Y.md`):
   result.
 - Body PAGE/NUMPAGES (issue #140) come from a first render pass: a PAGE in a
   paragraph that spans two pages shows the first page's number, and fields in
-  table cells keep their cached result.
+  table cells keep their cached result. Body STYLEREF (issue #142) is resolved
+  at parse time: nearest preceding paragraph in the style, else the first
+  following one; `IF` over STYLEREF in the body still prints its cache.
 - Pictures: 1-bit sources stay 1 bpc DeviceGray like Word's export, but
   8-bit indexed sources are written as RGB Flate where Word keeps Indexed, and
   every Flate image gets `/Interpolate true` where Word sets it only on JPEGs
