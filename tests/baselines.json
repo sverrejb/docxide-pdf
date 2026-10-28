@@ -1750,7 +1750,6 @@
   "cases/case36": {
     "jaccard": 0.9959,
     "ssim": 0.9953,
-    "text_boundary": 0.0,
     "convert_ms": 4.4,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -1761,7 +1760,6 @@
   "cases/case37": {
     "jaccard": 0.2325,
     "ssim": 0.003,
-    "text_boundary": 0.0,
     "convert_ms": 4.2,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2061,7 +2059,6 @@
   "cases/case66": {
     "jaccard": 0.8989,
     "ssim": 0.8774,
-    "text_boundary": 0.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -4643,7 +4640,8 @@
   },
   "cases/inline-beside-float": {
     "jaccard": 0.8106,
-    "ssim": 0.9232
+    "ssim": 0.9232,
+    "text_boundary": 1.0
   },
   "cases/inline-canvas-header-width300-tab0-effect0-following0": {
     "jaccard": 0.9968,
@@ -4807,16 +4805,17 @@
   },
   "cases/inline-clear-control": {
     "jaccard": 0.8365,
-    "ssim": 0.9124
+    "ssim": 0.9124,
+    "text_boundary": 1.0
   },
   "cases/inline-clear-float": {
     "jaccard": 0.8106,
-    "ssim": 0.9165
+    "ssim": 0.9165,
+    "text_boundary": 1.0
   },
   "cases/inline-picture-indent-center-first": {
     "jaccard": 1.0,
     "ssim": 1.0,
-    "text_boundary": 0.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -4826,7 +4825,6 @@
   "cases/inline-picture-indent-center-hanging": {
     "jaccard": 1.0,
     "ssim": 1.0,
-    "text_boundary": 0.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -4836,7 +4834,6 @@
   "cases/inline-picture-indent-center-left-right": {
     "jaccard": 1.0,
     "ssim": 1.0,
-    "text_boundary": 0.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -4846,7 +4843,6 @@
   "cases/inline-picture-indent-center-zero": {
     "jaccard": 1.0,
     "ssim": 1.0,
-    "text_boundary": 0.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -4856,7 +4852,6 @@
   "cases/inline-picture-indent-justify-first": {
     "jaccard": 1.0,
     "ssim": 1.0,
-    "text_boundary": 0.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -4866,7 +4861,6 @@
   "cases/inline-picture-indent-left-first": {
     "jaccard": 1.0,
     "ssim": 1.0,
-    "text_boundary": 0.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -4876,7 +4870,6 @@
   "cases/inline-picture-indent-left-hanging": {
     "jaccard": 1.0,
     "ssim": 1.0,
-    "text_boundary": 0.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -4886,7 +4879,6 @@
   "cases/inline-picture-indent-right-first": {
     "jaccard": 1.0,
     "ssim": 1.0,
-    "text_boundary": 0.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -6036,7 +6028,6 @@
   "cases/nested-float-no-spacer-inline": {
     "jaccard": 0.2837,
     "ssim": 0.4447,
-    "text_boundary": 0.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -6482,6 +6473,24 @@
     "ua_deficit": 0,
     "a11y_struct": 0.5833,
     "a11y_text": 1.0
+  },
+  "cases/period-after-space-filler-period-normal": {
+    "jaccard": 0.8315,
+    "ssim": 0.9286,
+    "text_boundary": 1.0
+  },
+  "cases/period-after-space-filler-period-normal-compat15": {
+    "jaccard": 0.7578,
+    "ssim": 0.8916
+  },
+  "cases/period-after-space-filler-period-small": {
+    "jaccard": 0.8309,
+    "ssim": 0.9275,
+    "text_boundary": 1.0
+  },
+  "cases/period-after-space-filler-period-small-compat15": {
+    "jaccard": 0.7941,
+    "ssim": 0.9185
   },
   "cases/picture-mark-leading-compat14-line480": {
     "jaccard": 0.7946,
@@ -8630,7 +8639,6 @@
   "scraped/arabic_rice_benefits_article": {
     "jaccard": 0.7299,
     "ssim": 0.8734,
-    "text_boundary": 0.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -9147,7 +9155,7 @@
   "scraped/dutch_government_budget_letter": {
     "jaccard": 0.7857,
     "ssim": 0.9271,
-    "text_boundary": 0.9091,
+    "text_boundary": 0.9697,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,

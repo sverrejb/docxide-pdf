@@ -1,0 +1,1 @@
+Public synthetic Word control: justified text, repeated space filler, terminal full stop at 1pt or 14pt. Compatibility modes 14 and 15. Word 2013+ can narrow the filler despite the period midpoint initially being past the margin. The 25% budget remains. No customer data.

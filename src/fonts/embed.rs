@@ -80,10 +80,36 @@ pub(super) fn embed_truetype(
         extra_widths.push((new_gid, advance_1000(ttf_parser::GlyphId(gid)), ch));
     }
 
+    let hyphen_fallback = char_to_gid
+        .get(&'\u{2011}')
+        .copied()
+        .filter(|_| face.glyph_index('\u{2011}').is_none());
+    if hyphen_fallback.is_some() {
+        log::info!("Font glyph substitution: {font_name}: U+2011 uses an available hyphen glyph");
+    }
+    // Keep the original Unicode when '-' or U+2010 is also used. Identity
+    // CIDs would merge both characters into the fallback glyph's one CID.
+    let hyphen_alias = hyphen_fallback
+        .filter(|&gid| char_to_gid.values().filter(|&&g| g == gid).count() > 1)
+        .map(|gid| {
+            // The first CID past every remapped glyph, extra glyphs included.
+            let cid = remapper.num_gids();
+            char_to_gid.insert('\u{2011}', cid);
+            (cid, gid)
+        });
+
     let mut kern_pairs = HashMap::new();
     let char_gids: Vec<(ttf_parser::GlyphId, u16)> = char_to_gid
         .iter()
-        .filter_map(|(&ch, &new_gid)| face.glyph_index(ch).map(|orig| (orig, new_gid)))
+        .filter_map(|(&ch, &cid)| {
+            // resolve_glyph tries U+2011 itself first, then its hyphen fallback.
+            let glyph = if ch == '\u{2011}' {
+                resolve_glyph(&face, ch)
+            } else {
+                face.glyph_index(ch)
+            };
+            glyph.map(|original| (original, cid))
+        })
         .collect();
 
     extract_kern_pairs(&face, &char_gids, &to_1000, &mut kern_pairs);
@@ -129,6 +155,12 @@ pub(super) fn embed_truetype(
         .stem_v(80.0)
         .font_file2(refs.data);
 
+    let cid_to_gid_ref = hyphen_alias.map(|(cid, gid)| {
+        let mapping: Vec<u8> = (0..cid).chain([gid]).flat_map(u16::to_be_bytes).collect();
+        let reference = alloc();
+        pdf.stream(reference, &mapping);
+        reference
+    });
     let cid_font_ref = alloc();
     {
         let mut cid = pdf.cid_font(cid_font_ref);
@@ -137,7 +169,11 @@ pub(super) fn embed_truetype(
         cid.system_info(system_info);
         cid.font_descriptor(refs.descriptor);
         cid.default_width(0.0);
-        cid.cid_to_gid_map_predefined(Name(b"Identity"));
+        if let Some(reference) = cid_to_gid_ref {
+            cid.cid_to_gid_map_stream(reference);
+        } else {
+            cid.cid_to_gid_map_predefined(Name(b"Identity"));
+        }
 
         // The width of the glyph each character maps to (`resolve_glyph`): a
         // symbol font's character missing here got /DW 0 while drawn at its
@@ -344,6 +380,16 @@ fn resolve_glyph(face: &Face, ch: char) -> Option<ttf_parser::GlyphId> {
                 .subtables
                 .into_iter()
                 .find_map(|st| st.glyph_index(ch as u32))
+        })
+        // U+2011 keeps its no-break semantics in the source text. Older fonts
+        // can lack it while still providing the same visible hyphen shape.
+        .or_else(|| {
+            (ch == '\u{2011}')
+                .then(|| {
+                    face.glyph_index('\u{2010}')
+                        .or_else(|| face.glyph_index('-'))
+                })
+                .flatten()
         })
         // A Unicode space the font lacks (U+202F in macOS Arial 5.01 and Aptos
         // Italic) takes the font's own space instead of drawing .notdef.
@@ -590,6 +636,92 @@ fn plain_line_metrics(face: &Face, units: f32) -> (f32, f32, Option<f32>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const HYPHEN_ASCII: &[u8] = include_bytes!("testdata/nb-hyphen-ascii.ttf");
+    const HYPHEN_UNICODE: &[u8] = include_bytes!("testdata/nb-hyphen-unicode.ttf");
+    const HYPHEN_NATIVE: &[u8] = include_bytes!("testdata/nb-hyphen-native.ttf");
+    const HYPHEN_NONE: &[u8] = include_bytes!("testdata/nb-hyphen-none.ttf");
+
+    fn embed_hyphens(data: &[u8], chars: &str) -> (FontMetrics, String) {
+        let mut pdf = Pdf::new();
+        let refs = FontRefs {
+            font: Ref::new(1),
+            descriptor: Ref::new(2),
+            data: Ref::new(3),
+        };
+        let mut next = 4;
+        let metrics = embed_truetype(
+            &mut pdf,
+            refs,
+            "Synthetic hyphen",
+            data,
+            0,
+            &FontContext {
+                embedded_fonts: &HashMap::new(),
+                font_table: &HashMap::new(),
+                used_chars: &chars.chars().collect(),
+                word_text: true,
+                extra_glyphs: None,
+            },
+            &mut || {
+                let r = Ref::new(next);
+                next += 1;
+                r
+            },
+        )
+        .unwrap();
+        (metrics, String::from_utf8_lossy(&pdf.finish()).into_owned())
+    }
+
+    #[test]
+    fn missing_nb_hyphen_prefers_unicode_hyphen_then_ascii() {
+        for (data, expected) in [
+            (HYPHEN_ASCII, '-'),
+            (HYPHEN_UNICODE, '\u{2010}'),
+            (HYPHEN_NATIVE, '\u{2011}'),
+        ] {
+            let face = Face::parse(data, 0).unwrap();
+            assert_eq!(resolve_glyph(&face, '\u{2011}'), face.glyph_index(expected));
+        }
+        let face = Face::parse(HYPHEN_NONE, 0).unwrap();
+        assert!(resolve_glyph(&face, '\u{2011}').is_none());
+    }
+
+    #[test]
+    fn fallback_nb_hyphen_has_own_cid_and_advance() {
+        for (data, chars, other, width, kern) in [
+            (HYPHEN_ASCII, "1-2\u{2011}1", '-', 400.0, -50.0),
+            (
+                HYPHEN_UNICODE,
+                "1-2\u{2010}1\u{2011}2",
+                '\u{2010}',
+                500.0,
+                -75.0,
+            ),
+        ] {
+            let (metrics, pdf) = embed_hyphens(data, chars);
+            assert_ne!(
+                metrics.char_to_gid[&'\u{2011}'],
+                metrics.char_to_gid[&other]
+            );
+            assert_eq!(metrics.char_widths_1000[&'\u{2011}'], width);
+            assert_eq!(
+                metrics.kern_pairs[&(metrics.char_to_gid[&'\u{2011}'], metrics.char_to_gid[&'1'])],
+                kern
+            );
+            assert!(pdf.contains("2011"));
+            assert!(!pdf.contains("/CIDToGIDMap /Identity"));
+        }
+    }
+
+    #[test]
+    fn solitary_fallback_and_native_hyphen_keep_identity_map() {
+        let (_, pdf) = embed_hyphens(HYPHEN_ASCII, "1\u{2011}2");
+        assert!(pdf.contains("/CIDToGIDMap /Identity"));
+        let (native, pdf) = embed_hyphens(HYPHEN_NATIVE, "1-2\u{2010}1\u{2011}2");
+        assert_eq!(native.char_widths_1000[&'\u{2011}'], 700.0);
+        assert!(pdf.contains("/CIDToGIDMap /Identity"));
+    }
 
     #[test]
     fn wingdings_bullets_extract_as_unicode() {
