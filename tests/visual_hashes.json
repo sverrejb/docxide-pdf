@@ -1708,6 +1708,12 @@
   "cases/leading-table-clear-trailing-clear": [
     "c53b0d35099a147c28d4101e90de16ede2c6a438bbcc57cc8872a7a5a58e092d"
   ],
+  "cases/line_numbering_restart": [
+    "1dde82ed29be0138e6f6c7144c4795ec8322529991fa9539157b887c6eaf948f",
+    "227723c5f019bc07b5430c3b232410fabfd5045991ffce7f05b6ff0962ea2e5a",
+    "27dce8d342deb46e5850b73a8e39ca758405e15a1daf544bf82f16ad7927b7da",
+    "b60cac0bd8cec4fed3e258eff0d0365557aee3ec384c779f7172eeb4e45ac87e"
+  ],
   "cases/list-hanging-explicit-first": [
     "0afe8a091b58eff0345c775ea69ca66b573ab619745564c523ce32049bf198ad"
   ],
@@ -2544,6 +2550,11 @@
   ],
   "cases/table-wrap-indent-w4200-i5100-r240": [
     "4917e269e0ddb8624001985adaa03b7b1d13e0ba71c87994efcf2970066acfcd"
+  ],
+  "cases/torture_test": [
+    "34280d5ef244ae8287471e871db1775a16d424c5317e071dc00303d7fdc65cb5",
+    "cf1b118ed0f7fab372ac53b05813f0b72f996aa3b3f950cbe861784e7d7ea6a0",
+    "4ad6a273412a83f7a5b4aaf40c496be809223c8578288c9c4d52c1f21728fd65"
   ],
   "cases/trailing-anchor-prefix0-offset80-behind0": [
     "0d8ab7824e3779ec02be70a4bdbf996ee54561bbf95ca8f67ef53df5f89f7374"

@@ -5320,6 +5320,16 @@
     "a11y_struct": 0.6154,
     "a11y_text": 1.0
   },
+  "cases/line_numbering_restart": {
+    "jaccard": 0.7714,
+    "ssim": 0.9639,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
   "cases/list-hanging-explicit-first": {
     "jaccard": 0.6489,
     "ssim": 0.8994,
@@ -8016,6 +8026,15 @@
     "ua_deficit": 0,
     "a11y_struct": 0.5,
     "a11y_text": 1.0
+  },
+  "cases/torture_test": {
+    "jaccard": 0.0275,
+    "ssim": 0.2674,
+    "ua_fail": 3,
+    "a11y_missing": 46,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9153,
+    "a11y_text": 0.9257
   },
   "cases/trailing-anchor-prefix0-offset80-behind0": {
     "jaccard": 0.9934,
