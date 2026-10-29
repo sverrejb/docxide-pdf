@@ -7908,8 +7908,8 @@
     "a11y_text": 1.0
   },
   "cases/symbol-fallback-per-character": {
-    "jaccard": 0.0991,
-    "ssim": 0.2719,
+    "jaccard": 0.7561,
+    "ssim": 0.9153,
     "text_boundary": 0.7857,
     "ua_fail": 2,
     "a11y_missing": 0,
