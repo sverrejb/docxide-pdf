@@ -1427,6 +1427,9 @@
   "cases/fullwidth-float-empty-clear": [
     "1b93d74607c4e47c5e9265bcbe252e69e8d033db49e5579f0539c530ad1af047"
   ],
+  "cases/header-autofit-table": [
+    "a6e71a0cea4f220626a268faee94609955fb228be27a1d33560a8e3fad63cdd2"
+  ],
   "cases/header-inline-connector-behind": [
     "bcd22cc4a7ae94ac43fed39a4cebb3807763270a6bf3f1b30d8476f6d8d6d91b"
   ],
@@ -1470,7 +1473,7 @@
     "b5b1691e8c658091c8261d9e5cd15fa7843f836edd606c2b4b233e73620adc5e"
   ],
   "cases/hyphen-opening-guillemet-nonbreaking-hyphen": [
-    "6a421b17d164fbe2af8d1441cf561457494b95edba4bfae3302bcad910b47f87"
+    "d1dea65c3a4107d065c7c62384484a939c8767ea495f7819c63cf06d1e2ecb89"
   ],
   "cases/hyphen-opening-guillemet-quoted-hyphen": [
     "921aec6e849dfd3dada1b035ae6db08e0c12ccc839907c34d0b45824947bf5cb"
@@ -1498,6 +1501,9 @@
   ],
   "cases/hyphen-squeeze-single-letter": [
     "99d8d042f44f444a059d2700095a6aee01a284e93a9fc753a527ef8b1adfbdb1"
+  ],
+  "cases/indent-chars-hanging": [
+    "e3bfb919b216f46593e3a6ce24ed38fd5a1b503c9adbab43410c8e3a0b951c96"
   ],
   "cases/inline-beside-float": [
     "d73816969709fefacd1a51070879de46bd8fdee9ddecb24d55818ff130a214b8"
@@ -1624,6 +1630,9 @@
   ],
   "cases/interleaved-registration-w4800-s28-n6": [
     "ce55cbfcd26916f59701e346f23139958374378b4d26a998c0ab15957c7a353f"
+  ],
+  "cases/justify-mixed-script-footnote": [
+    "4f0669f56013a90e36a6b4573eb1887cbfa15cfdf5e9edbfc764c6e61fbee1b0"
   ],
   "cases/leading-anchor-prefix0-offset80-behind0": [
     "0d8ab7824e3779ec02be70a4bdbf996ee54561bbf95ca8f67ef53df5f89f7374"
@@ -2008,6 +2017,9 @@
   ],
   "cases/nested-side-text-sp42-w9000-y1": [
     "588da3b2a01fce7d6653699c1d2c1e52082dd317dabacafbf94b0eb3321a22c4"
+  ],
+  "cases/nested-table-picture-width": [
+    "eb872408a0470aa58af3ccd11e959e22551176962cb62d38e3199dc31091c7ed"
   ],
   "cases/nested_table_bottom_positive": [
     "3a79209adacd766aa8085c766a70d9caa22c5380efc818e98ade56500f7a04cc"
@@ -2493,6 +2505,9 @@
   ],
   "cases/standalone-picture-indent-angle90": [
     "9f5f507f6293da2f25fe9dcd67dada7d7fa79fea8b5087fea877867e0bbf3675"
+  ],
+  "cases/styleref-body-field": [
+    "d548fa127cb4019b5713a50f8f281937fdf48f0d7304be474f91e1acab49c8b9"
   ],
   "cases/tab-break": [
     "3ef297fe879c3f61afabd225fddc553e4563b71ef898e127a0ab818219c8d40d"
@@ -3151,13 +3166,13 @@
     "84643107178a3d3be34d4b463ad630472ceb39cebf1c3b7726ae099dc1d78bb9"
   ],
   "scraped/chinese_costume_design_course": [
-    "85a7382d05506e392978f99945a971e6327e66da46fb7748109d241f6f891b5a",
+    "92ecd9e6fb3a18a9080a7f0fb45710414aac080fb3c7ec569a30212c1a13c09c",
     "98d67e78522334a676c7e4a398b33675c0ca96dc6ef1f61513c0e18c92624dfa",
     "9e98525e0d6aeb47f3a28a87281d439c3b65a4a5bc14c133cbbc4a13a005582a"
   ],
   "scraped/chinese_student_union_nomination_form": [
     "e29fc8bc62d62d5d8cfdfb59eca5bb9ea4862c5bce8aa23472c3c869ea373d88",
-    "6f279875c59be0de0cc785ab29fb75459ad46be24f489a0dd7a476ad03b94e76",
+    "ec3e9819b6d732676944e3dcd0b8e612d5e0ef6cde9271789623f5a8929059e1",
     "fd281c79ca94a1b3b27f759f50ab6dcd05fa67de59add17d5c8c59465f9b03fa",
     "81f30410d57b38c4fea1c60240a49a1efc6d797b2278e74828bd35ce7364186f",
     "f1c019ae650a80d268e20f502e714df065efe94ec6c174cd0d96a7206ff291ce",
@@ -3368,8 +3383,8 @@
     "281048a541ac8a226cfc3e116c2a94ede017e429c14d4fede1f1d19686bcfdb6"
   ],
   "scraped/czech_municipal_grant_form": [
-    "e9e161d43b836c16fc4c52eeb7686289234abf944272304971b68cae0041e8b0",
-    "79dea4440bcb04fb7e5ebf4e6791e01ab9f44541b5a2e87be9debbff50b429f1"
+    "3c16131bb9bd470c928e8abbde5b35bb53a2a100d58b1f469f461b6bdb2f11c6",
+    "7a6bef53a6599477d1ade20ec0d2f835694aa00b28a96ee2b2ed49ee6ec8a7e7"
   ],
   "scraped/czech_tree_cutting_permit": [
     "579a2c67632d6c06c632e85350c92ad90e30a638604f6a55ba47124cc7f6bc54"
@@ -3432,7 +3447,7 @@
     "728033019f91c6e50b4e16cf7bbbb1523a509ea450608bf9cecd905f875432c0"
   ],
   "scraped/east_asia_conference_form": [
-    "79b55729368298a5a90bdc33c43b18dbc894c9058e3fb0dfc4a3aad788de2c14",
+    "c9ce4fc710779d1d558aeee0eecc9ddd9be28cb3c769f956f6238aae949fda81",
     "a02f30c841c957bc8b6b722829ab7100a92e9ecfabd804c43274cdcce0edea59"
   ],
   "scraped/eco_int_agriculture_registration": [
@@ -3821,13 +3836,13 @@
     "9d9bbfd88a9e165598e171dac33c670f4fb3e50780967a2dc83b345c85cbfbeb"
   ],
   "scraped/japanese_hr_consultation_application": [
-    "4bc85e203da98506b8b241b1612abedd3816a936d0a06dc7f274852f77253df6"
+    "5d5f0fdf8537d258fba9cbe193101637f0c8ac8090eb69a8a9016289a8026c9d"
   ],
   "scraped/japanese_interlibrary_loan": [
-    "a662c26f968a82360e19b6e222fefdecac5935ce7e9d5ea77100ebd968f0735e"
+    "a392075c101df44ce2bf1be39cf7fc71ae51b8a6fe2fde4412536d0170f9c7ca"
   ],
   "scraped/japanese_land_development_sign_form": [
-    "e426f256d5aa4241122edbfe0cf58730f6fb2e1405cd418033eae888eb77e9eb"
+    "501ad1f6e1f35715c9b2c792ff788378476f9accdf371ae8daa838a370834f50"
   ],
   "scraped/japanese_medical_consultation_form": [
     "7a547505080a89ee242d3fa48cdd5b66291ce2925105cdef5a9aff22f8c7fbaf",
@@ -4519,10 +4534,10 @@
     "23454156bf9ca7df73cd42e3aa4ab444f049ac3d07a4251ff18032753ca3ac6f"
   ],
   "scraped/taiwanese_education_fraud_ruling": [
-    "bc5a3e19004018876485f461cfb26371ffc61ed50d69dba0d1bdc09debbb5069"
+    "1670d3f503797d10ab9a1341bc87c241f9093110e4ef9d5e784b93eb5aab2767"
   ],
   "scraped/tokyo_welfare_infrastructure_briefing": [
-    "72dd77044072c3fe437720aec4bcb0fd8a15430a1ecf18eeb930a8a2600b66e4"
+    "f60fa133712b7504f768bc65b5f03689fd24a97772452ce5c1e046dd41f4b8aa"
   ],
   "scraped/traditional_skills_job_form": [
     "cc4a1ef72ef334a7d957fbe45e912c942b191c996198b9c4c1dccfb8e66b0244",
@@ -4831,7 +4846,7 @@
     "1cb9f18c32d87ea09cac24d03824fd122e19edfd7f08f37c3a133ca214ee43f3"
   ],
   "scraped/wa_child_services_regulations": [
-    "7730b5780e118ef0a13dc22c1225e3f5fdc8e6e62761ab007965f52b7a79716f",
+    "013bdfd649beef4cccdcdd6de9356a02016942f5ae0e2d1ca276b624422f6b99",
     "1edc63cc1e6930edcd710a9ff6e3220d0994b3460d292b0721e83d3bdf83f64e",
     "939f3d37f46728d0d2691dcf40319660cc9744d6cf8ce0cf986e11ccecf9d2d2",
     "55830d6770b7dbb213d6b64e16609447a421a3a49f436614a77f5ab0a2967693",

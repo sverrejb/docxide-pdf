@@ -4398,6 +4398,10 @@
     "a11y_struct": 0.4444,
     "a11y_text": 1.0
   },
+  "cases/header-autofit-table": {
+    "jaccard": 0.4589,
+    "ssim": 0.8855
+  },
   "cases/header-inline-connector-behind": {
     "jaccard": 0.9587,
     "ssim": 0.9772,
@@ -4539,8 +4543,8 @@
     "a11y_text": 1.0
   },
   "cases/hyphen-opening-guillemet-nonbreaking-hyphen": {
-    "jaccard": 0.6746,
-    "ssim": 0.8098,
+    "jaccard": 0.8348,
+    "ssim": 0.9344,
     "text_boundary": 1.0,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -4637,6 +4641,10 @@
     "ua_deficit": 0,
     "a11y_struct": 1.0,
     "a11y_text": 1.0
+  },
+  "cases/indent-chars-hanging": {
+    "jaccard": 0.7474,
+    "ssim": 0.9213
   },
   "cases/inline-beside-float": {
     "jaccard": 0.8106,
@@ -5034,6 +5042,10 @@
     "ua_deficit": 0,
     "a11y_struct": 0.5862,
     "a11y_text": 1.0
+  },
+  "cases/justify-mixed-script-footnote": {
+    "jaccard": 0.4198,
+    "ssim": 0.7952
   },
   "cases/leading-anchor-prefix0-offset80-behind0": {
     "jaccard": 0.9934,
@@ -6263,6 +6275,10 @@
     "ua_deficit": 0,
     "a11y_struct": 0.6667,
     "a11y_text": 1.0
+  },
+  "cases/nested-table-picture-width": {
+    "jaccard": 0.5976,
+    "ssim": 0.7908
   },
   "cases/nested_table_bottom_positive": {
     "jaccard": 0.033,
@@ -7812,6 +7828,10 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/styleref-body-field": {
+    "jaccard": 0.4986,
+    "ssim": 0.8637
+  },
   "cases/tab-break": {
     "jaccard": 0.6282,
     "ssim": 0.9326,
@@ -8809,8 +8829,8 @@
     "a11y_text": 1.0
   },
   "scraped/chinese_costume_design_course": {
-    "jaccard": 0.3586,
-    "ssim": 0.5827,
+    "jaccard": 0.3619,
+    "ssim": 0.5866,
     "text_boundary": 0.4699,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -8819,8 +8839,8 @@
     "a11y_text": 0.7054
   },
   "scraped/chinese_student_union_nomination_form": {
-    "jaccard": 0.399,
-    "ssim": 0.7952,
+    "jaccard": 0.3985,
+    "ssim": 0.7921,
     "text_boundary": 0.8197,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -9034,8 +9054,8 @@
     "a11y_text": 0.8411
   },
   "scraped/czech_municipal_grant_form": {
-    "jaccard": 0.7396,
-    "ssim": 0.8972,
+    "jaccard": 0.7393,
+    "ssim": 0.8969,
     "text_boundary": 0.9808,
     "convert_ms": 34.9,
     "ua_fail": 2,
@@ -9174,7 +9194,7 @@
   },
   "scraped/east_asia_conference_form": {
     "jaccard": 0.551,
-    "ssim": 0.702,
+    "ssim": 0.7019,
     "text_boundary": 0.0952,
     "convert_ms": 22.0,
     "ua_fail": 2,
@@ -9492,8 +9512,8 @@
     "a11y_text": 1.0
   },
   "scraped/japanese_hr_consultation_application": {
-    "jaccard": 0.4143,
-    "ssim": 0.5631,
+    "jaccard": 0.4139,
+    "ssim": 0.5618,
     "text_boundary": 0.1778,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -9502,8 +9522,8 @@
     "a11y_text": 1.0
   },
   "scraped/japanese_interlibrary_loan": {
-    "jaccard": 0.6849,
-    "ssim": 0.8346,
+    "jaccard": 0.6842,
+    "ssim": 0.8338,
     "text_boundary": 0.4286,
     "convert_ms": 4.5,
     "ua_fail": 2,
@@ -9514,7 +9534,7 @@
   },
   "scraped/japanese_land_development_sign_form": {
     "jaccard": 0.3558,
-    "ssim": 0.7172,
+    "ssim": 0.7174,
     "text_boundary": 0.9259,
     "ua_fail": 4,
     "a11y_missing": 0,
@@ -10212,8 +10232,8 @@
     "a11y_text": 0.9487
   },
   "scraped/taiwanese_education_fraud_ruling": {
-    "jaccard": 0.7387,
-    "ssim": 0.829,
+    "jaccard": 0.7608,
+    "ssim": 0.8512,
     "text_boundary": 0.8125,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10222,7 +10242,7 @@
     "a11y_text": 1.0
   },
   "scraped/tokyo_welfare_infrastructure_briefing": {
-    "jaccard": 0.4552,
+    "jaccard": 0.4551,
     "ssim": 0.6659,
     "text_boundary": 0.9091,
     "ua_fail": 2,
@@ -10381,7 +10401,7 @@
   },
   "scraped/wa_child_services_regulations": {
     "jaccard": 0.6636,
-    "ssim": 0.8598,
+    "ssim": 0.8597,
     "text_boundary": 0.9488,
     "ua_fail": 2,
     "a11y_missing": 0,
