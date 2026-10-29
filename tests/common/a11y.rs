@@ -416,16 +416,39 @@ fn letters(text: &str) -> String {
 }
 
 /// A WordprocessingML part's paragraph texts as a reader should get them: no
-/// deleted, hidden or field-code text, no `mc:Fallback` copies, no note
-/// separators; a textbox's paragraphs follow the one that anchors it.
+/// deleted, hidden or field-code text, no cached result of a field the
+/// renderer recomputes, no `mc:Fallback` copies, no note separators; a
+/// textbox's paragraphs follow the one that anchors it.
 pub fn docx_paragraphs(xml: &str) -> Result<Vec<String>, String> {
     let doc = roxmltree::Document::parse(xml).map_err(|e| format!("xml: {e}"))?;
     let mut out = Vec::new();
-    collect_paragraphs(doc.root_element(), None, &mut out);
+    collect_paragraphs(doc.root_element(), None, &mut out, &mut Vec::new());
     Ok(out)
 }
 
-fn collect_paragraphs(node: roxmltree::Node, mut para: Option<usize>, out: &mut Vec<String>) {
+/// Fields whose result the renderer computes at layout time (the keywords
+/// `parse_field_code` in src/docx/runs.rs knows), so the result cached in the
+/// DOCX is not what the page shows nor what the reader should get: Word
+/// updates them on export too, and a stale body STYLEREF still reads
+/// "Heading pending" in the XML while the page says the real heading.
+fn recomputed_field(instr: &str) -> bool {
+    instr.split_whitespace().next().is_some_and(|kw| {
+        ["PAGE", "NUMPAGES", "STYLEREF", "PAGEREF"]
+            .iter()
+            .any(|f| kw.eq_ignore_ascii_case(f))
+    })
+}
+
+/// `fields` holds the open complex fields in document order: each one's
+/// instruction and whether its separator has passed, after which its runs
+/// are the cached result. The walk is in document order, so a field that
+/// spans paragraphs stays open across them.
+fn collect_paragraphs(
+    node: roxmltree::Node,
+    mut para: Option<usize>,
+    out: &mut Vec<String>,
+    fields: &mut Vec<(String, bool)>,
+) {
     let separator = || {
         matches!(
             node.attribute((W_NS, "type")),
@@ -436,19 +459,46 @@ fn collect_paragraphs(node: roxmltree::Node, mut para: Option<usize>, out: &mut 
         (Some(MC_NS), "Fallback") | (Some(W_NS), "del") => return,
         (Some(W_NS), "footnote" | "endnote") if separator() => return,
         (Some(W_NS), "r") if hidden_run(node) => return,
+        (Some(W_NS), "fldSimple")
+            if recomputed_field(node.attribute((W_NS, "instr")).unwrap_or("")) =>
+        {
+            return;
+        }
+        (Some(W_NS), "fldChar") => match node.attribute((W_NS, "fldCharType")) {
+            Some("begin") => fields.push((String::new(), false)),
+            Some("separate") => {
+                if let Some(field) = fields.last_mut() {
+                    field.1 = true;
+                }
+            }
+            Some("end") => {
+                fields.pop();
+            }
+            _ => {}
+        },
+        (Some(W_NS), "instrText") => {
+            if let (Some(field), Some(t)) = (fields.last_mut(), node.text()) {
+                field.0.push_str(t);
+            }
+        }
         (Some(W_NS), "p") => {
             out.push(String::new());
             para = Some(out.len() - 1);
         }
         (Some(W_NS), "t") => {
-            if let (Some(i), Some(t)) = (para, node.text()) {
+            let cached_result = fields
+                .iter()
+                .any(|(instr, in_result)| *in_result && recomputed_field(instr));
+            if let (Some(i), Some(t)) = (para, node.text())
+                && !cached_result
+            {
                 out[i].push_str(t);
             }
         }
         _ => {}
     }
     for child in node.children().filter(|n| n.is_element()) {
-        collect_paragraphs(child, para, out);
+        collect_paragraphs(child, para, out, fields);
     }
 }
 
@@ -457,4 +507,41 @@ fn hidden_run(run: roxmltree::Node) -> bool {
         .find(|n| n.has_tag_name((W_NS, "rPr")))
         .and_then(|p| p.children().find(|n| n.has_tag_name((W_NS, "vanish"))))
         .is_some_and(|v| !matches!(v.attribute((W_NS, "val")), Some("0" | "false" | "off")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::docx_paragraphs;
+
+    fn wml(body: &str) -> String {
+        format!(
+            r#"<w:document xmlns:w="{}"><w:body>{body}</w:body></w:document>"#,
+            super::W_NS
+        )
+    }
+
+    fn field(instr: &str, result: &str) -> String {
+        format!(
+            r#"<w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> {instr} </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>{result}</w:t></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>"#
+        )
+    }
+
+    #[test]
+    fn recomputed_field_results_are_not_docx_text() {
+        // The fixture cases/styleref-body-field: a stale STYLEREF result.
+        let stale = field(r#"STYLEREF "Example Heading""#, "Heading pending");
+        let xml = wml(&format!(
+            "<w:p><w:r><w:t>Body heading: </w:t></w:r>{stale}<w:r><w:t> after</w:t></w:r></w:p>"
+        ));
+        assert_eq!(docx_paragraphs(&xml).unwrap(), ["Body heading:  after"]);
+
+        // A field the renderer never evaluates keeps its cached result; nesting
+        // and the simple form follow the same rule.
+        let date = field("DATE", "29 Oct 2026");
+        let page = field("PAGE", "7");
+        let xml = wml(&format!(
+            r#"<w:p>{date}<w:r><w:t> p. </w:t></w:r><w:fldSimple w:instr=" NUMPAGES "><w:r><w:t>9</w:t></w:r></w:fldSimple></w:p><w:p><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText> REF x </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>see </w:t></w:r>{page}<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>"#
+        ));
+        assert_eq!(docx_paragraphs(&xml).unwrap(), ["29 Oct 2026 p. ", "see "]);
+    }
 }
