@@ -4,7 +4,7 @@ use crate::common::a11y::{self, Analysis, VsWord};
 use rayon::prelude::*;
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 struct Scored {
     name: String,
@@ -108,6 +108,28 @@ fn analyze_fixture(fixture: &Path, gen_name: &str) -> Option<Result<Scored, Stri
     }))
 }
 
+/// The reference and generated PDFs of `fixture` whose analysis cache is stale.
+fn pdfs_to_validate(fixture: &Path, gen_name: &str) -> Vec<PathBuf> {
+    let reference = fixture.join("reference.pdf");
+    if !fixture.join("input.docx").exists() || !reference.exists() {
+        return Vec::new();
+    }
+    let out = common::output_dir(fixture);
+    let generated = if gen_name == "generated.pdf" {
+        common::ensure_generated_pdf(fixture).ok()
+    } else {
+        Some(out.join(gen_name))
+    };
+    [Some(reference), generated]
+        .into_iter()
+        .flatten()
+        .filter(|pdf| {
+            let cache = a11y::cache_path(&out.join(pdf.file_stem().unwrap()));
+            pdf.exists() && !a11y::cache_fresh(pdf, &cache)
+        })
+        .collect()
+}
+
 #[test]
 fn accessibility_vs_reference() {
     if !a11y::tools_available() {
@@ -116,6 +138,13 @@ fn accessibility_vs_reference() {
     }
     let gen_name = gen_pdf_name();
     let fixtures = common::discover_fixtures().expect("Failed to read tests/fixtures");
+    // One verapdf process per batch of PDFs, not per PDF: its JVM start would
+    // otherwise be most of this test's time.
+    let stale: Vec<PathBuf> = fixtures
+        .par_iter()
+        .flat_map_iter(|f| pdfs_to_validate(f, &gen_name))
+        .collect();
+    a11y::prefetch_ua_rules(&stale);
     let outcomes: Vec<Result<Scored, String>> = fixtures
         .par_iter()
         .filter_map(|f| analyze_fixture(f, &gen_name))
@@ -289,6 +318,26 @@ const LIST_DUMP: &str = r#"Document
 "#;
 
 #[test]
+fn verapdf_report_keeps_every_job() {
+    let json = r#"{"report":{"jobs":[
+        {"itemDetails":{"name":"/a.pdf"},"validationResult":[{"details":{"ruleSummaries":[
+            {"clause":"7.1","testNumber":3,"failedChecks":2,"passedChecks":5,"description":"tagged"}]}}]},
+        {"itemDetails":{"name":"/b.pdf"},"taskResult":{"exceptionMessage":"Couldn't parse stream"}}
+    ]}}"#;
+    let jobs = a11y::parse_verapdf_report(json).unwrap();
+    assert_eq!(jobs[0].0, Path::new("/a.pdf"));
+    let rule = &jobs[0].1.as_ref().unwrap()["7.1-3"];
+    assert_eq!(
+        (rule.failed, rule.passed, rule.description.as_str()),
+        (2, 5, "tagged")
+    );
+    assert_eq!(
+        jobs[1].1.as_ref().unwrap_err(),
+        "verapdf: Couldn't parse stream"
+    );
+}
+
+#[test]
 fn parses_struct_dump() {
     let elems = a11y::parse_struct_text(LIST_DUMP);
     let kinds: Vec<&str> = elems
@@ -365,7 +414,8 @@ fn deficit_counts_only_rules_worse_than_word() {
             })
             .collect();
         let report = serde_json::json!({"report": {"jobs": [{"validationResult": [{"details": {"ruleSummaries": summaries}}]}]}});
-        a11y::parse_verapdf_json(&report.to_string()).unwrap()
+        let mut jobs = a11y::parse_verapdf_report(&report.to_string()).unwrap();
+        jobs.pop().unwrap().1.unwrap()
     };
     // Word fails 5-1 (no pdfuaid) and one stray 7.1-3 check.
     let word = json(&[("5", 1, 1, 0), ("7.1", 3, 1, 999), ("6.2", 1, 0, 1)]);

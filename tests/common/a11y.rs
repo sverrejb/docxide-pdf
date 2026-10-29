@@ -3,11 +3,13 @@
 //! reads them (`pdfinfo -struct-text`). `coverage` alone needs no reference:
 //! it checks the DOCX's own text against our structure tree.
 
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Mutex;
 
 /// Pseudo element kind for a content item's text, kept in the element list so
 /// text stays interleaved with inline children in reading order.
@@ -79,10 +81,15 @@ pub fn cache_path(stem: &Path) -> PathBuf {
     stem.with_extension("a11y.json")
 }
 
+/// True while `cache` is newer than `pdf`: what `analyze_cached` reuses.
+pub fn cache_fresh(pdf: &Path, cache: &Path) -> bool {
+    matches!((super::metrics::mtime(cache), super::metrics::mtime(pdf)), (Some(c), Some(p)) if c >= p)
+}
+
 /// Analyse `pdf`, reusing `cache` while it is newer than the PDF.
 // ponytail: cache ignores the veraPDF/Poppler version; delete tests/output/**/*.a11y.json after upgrading them
 pub fn analyze_cached(pdf: &Path, cache: &Path) -> Result<Analysis, String> {
-    if matches!((super::metrics::mtime(cache), super::metrics::mtime(pdf)), (Some(c), Some(p)) if c >= p)
+    if cache_fresh(pdf, cache)
         && let Some(a) = fs::read_to_string(cache)
             .ok()
             .and_then(|s| serde_json::from_str(&s).ok())
@@ -156,7 +163,46 @@ pub fn parse_struct_text(dump: &str) -> Vec<Elem> {
     elems
 }
 
-fn ua_rules(pdf: &Path) -> Result<BTreeMap<String, Rule>, String> {
+/// PDFs per verapdf process. Starting its JVM costs about six files' worth of
+/// validation, and with `--success` the report runs to megabytes per file, so
+/// batches stay small enough to parse comfortably.
+const BATCH: usize = 24;
+
+type Rules = BTreeMap<String, Rule>;
+
+/// Results of `prefetch_ua_rules` by canonical path, each taken once by `ua_rules`.
+static PREFETCHED: Mutex<BTreeMap<PathBuf, Result<Rules, String>>> = Mutex::new(BTreeMap::new());
+
+/// Validate `pdfs` a batch per verapdf process, for `analyze_cached` to pick up
+/// later. One process per PDF would make the JVM start the suite's main cost.
+pub fn prefetch_ua_rules(pdfs: &[PathBuf]) {
+    let pdfs: Vec<PathBuf> = pdfs
+        .iter()
+        .filter_map(|p| fs::canonicalize(p).ok())
+        .collect();
+    let results: Vec<_> = pdfs
+        .par_chunks(BATCH)
+        .filter_map(|batch| run_verapdf(batch).ok())
+        .flatten()
+        .collect();
+    PREFETCHED.lock().unwrap().extend(results);
+}
+
+fn ua_rules(pdf: &Path) -> Result<Rules, String> {
+    if let Some(prefetched) = fs::canonicalize(pdf)
+        .ok()
+        .and_then(|p| PREFETCHED.lock().unwrap().remove(&p))
+    {
+        return prefetched;
+    }
+    run_verapdf(&[pdf.to_path_buf()])?
+        .pop()
+        .ok_or("verapdf: no job in report")?
+        .1
+}
+
+/// One verapdf run over `pdfs`: each file's rule map, or why it has none.
+fn run_verapdf(pdfs: &[PathBuf]) -> Result<Vec<(PathBuf, Result<Rules, String>)>, String> {
     // Forced to ua1: Word writes no pdfuaid, so auto-detection would validate
     // PDF/A-1b. --success lists passing rules too, with per-rule check counts.
     let out = Command::new("verapdf")
@@ -169,38 +215,53 @@ fn ua_rules(pdf: &Path) -> Result<BTreeMap<String, Rule>, String> {
             "--maxfailuresdisplayed",
             "0",
         ])
-        .arg(pdf)
+        .args(pdfs)
         .output()
         .map_err(|e| format!("verapdf: {e}"))?;
-    // Exit code 1 only means "not compliant".
-    if !matches!(out.status.code(), Some(0 | 1)) {
-        return Err(format!("verapdf exited with {:?}", out.status.code()));
-    }
-    parse_verapdf_json(&String::from_utf8_lossy(&out.stdout))
+    // The exit code only summarises the jobs (1: non-compliant, 7: one failed to
+    // parse); the report says which file, so it is what gets checked.
+    parse_verapdf_report(&String::from_utf8_lossy(&out.stdout))
+        .map_err(|e| format!("{e} (exit {:?})", out.status.code()))
 }
 
-pub fn parse_verapdf_json(json: &str) -> Result<BTreeMap<String, Rule>, String> {
+/// Every job of a verapdf JSON report: the file as verapdf names it (absolute)
+/// and its rule id ("7.1-3") → check counts, or the error that stopped it.
+pub fn parse_verapdf_report(json: &str) -> Result<Vec<(PathBuf, Result<Rules, String>)>, String> {
     let v: serde_json::Value =
         serde_json::from_str(json).map_err(|e| format!("verapdf json: {e}"))?;
-    let summaries = v["report"]["jobs"][0]["validationResult"][0]["details"]["ruleSummaries"]
+    let jobs = v["report"]["jobs"]
         .as_array()
-        .ok_or("verapdf json: no ruleSummaries")?;
-    Ok(summaries
+        .ok_or("verapdf json: no jobs")?;
+    Ok(jobs
         .iter()
-        .map(|r| {
-            let id = format!(
-                "{}-{}",
-                r["clause"].as_str().unwrap_or("?"),
-                r["testNumber"]
-            );
-            let rule = Rule {
-                failed: r["failedChecks"].as_u64().unwrap_or(0),
-                passed: r["passedChecks"].as_u64().unwrap_or(0),
-                description: r["description"].as_str().unwrap_or("").to_string(),
+        .map(|job| {
+            let path = PathBuf::from(job["itemDetails"]["name"].as_str().unwrap_or(""));
+            let rules = match job["validationResult"][0]["details"]["ruleSummaries"].as_array() {
+                Some(summaries) => Ok(summaries.iter().map(rule_summary).collect()),
+                None => Err(format!(
+                    "verapdf: {}",
+                    job["taskResult"]["exceptionMessage"]
+                        .as_str()
+                        .unwrap_or("no validation result")
+                )),
             };
-            (id, rule)
+            (path, rules)
         })
         .collect())
+}
+
+fn rule_summary(r: &serde_json::Value) -> (String, Rule) {
+    let id = format!(
+        "{}-{}",
+        r["clause"].as_str().unwrap_or("?"),
+        r["testNumber"]
+    );
+    let rule = Rule {
+        failed: r["failedChecks"].as_u64().unwrap_or(0),
+        passed: r["passedChecks"].as_u64().unwrap_or(0),
+        description: r["description"].as_str().unwrap_or("").to_string(),
+    };
+    (id, rule)
 }
 
 /// Rules where we do worse than Word: failed where Word passes, or failing a
