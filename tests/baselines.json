@@ -4400,7 +4400,13 @@
   },
   "cases/header-autofit-table": {
     "jaccard": 0.4589,
-    "ssim": 0.8855
+    "ssim": 0.8855,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.6875,
+    "a11y_text": 1.0
   },
   "cases/header-inline-connector-behind": {
     "jaccard": 0.9587,
@@ -4543,8 +4549,8 @@
     "a11y_text": 1.0
   },
   "cases/hyphen-opening-guillemet-nonbreaking-hyphen": {
-    "jaccard": 0.8348,
-    "ssim": 0.9344,
+    "jaccard": 0.8282,
+    "ssim": 0.934,
     "text_boundary": 1.0,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -4644,12 +4650,23 @@
   },
   "cases/indent-chars-hanging": {
     "jaccard": 0.7474,
-    "ssim": 0.9213
+    "ssim": 0.9213,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/inline-beside-float": {
     "jaccard": 0.8106,
     "ssim": 0.9232,
-    "text_boundary": 1.0
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.3684,
+    "a11y_text": 1.0
   },
   "cases/inline-canvas-header-width300-tab0-effect0-following0": {
     "jaccard": 0.9968,
@@ -4814,12 +4831,22 @@
   "cases/inline-clear-control": {
     "jaccard": 0.8365,
     "ssim": 0.9124,
-    "text_boundary": 1.0
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.3636,
+    "a11y_text": 1.0
   },
   "cases/inline-clear-float": {
     "jaccard": 0.8106,
     "ssim": 0.9165,
-    "text_boundary": 1.0
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.3684,
+    "a11y_text": 1.0
   },
   "cases/inline-picture-indent-center-first": {
     "jaccard": 1.0,
@@ -5045,7 +5072,13 @@
   },
   "cases/justify-mixed-script-footnote": {
     "jaccard": 0.4198,
-    "ssim": 0.7952
+    "ssim": 0.7952,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/leading-anchor-prefix0-offset80-behind0": {
     "jaccard": 0.9934,
@@ -6278,7 +6311,13 @@
   },
   "cases/nested-table-picture-width": {
     "jaccard": 0.5976,
-    "ssim": 0.7908
+    "ssim": 0.7908,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.625,
+    "a11y_text": 1.0
   },
   "cases/nested_table_bottom_positive": {
     "jaccard": 0.033,
@@ -6493,20 +6532,40 @@
   "cases/period-after-space-filler-period-normal": {
     "jaccard": 0.8315,
     "ssim": 0.9286,
-    "text_boundary": 1.0
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.375,
+    "a11y_text": 1.0
   },
   "cases/period-after-space-filler-period-normal-compat15": {
     "jaccard": 0.7578,
-    "ssim": 0.8916
+    "ssim": 0.8916,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.375,
+    "a11y_text": 1.0
   },
   "cases/period-after-space-filler-period-small": {
     "jaccard": 0.8309,
     "ssim": 0.9275,
-    "text_boundary": 1.0
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.375,
+    "a11y_text": 1.0
   },
   "cases/period-after-space-filler-period-small-compat15": {
     "jaccard": 0.7941,
-    "ssim": 0.9185
+    "ssim": 0.9185,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.375,
+    "a11y_text": 1.0
   },
   "cases/picture-mark-leading-compat14-line480": {
     "jaccard": 0.7946,
@@ -7830,11 +7889,33 @@
   },
   "cases/styleref-body-field": {
     "jaccard": 0.4986,
-    "ssim": 0.8637
+    "ssim": 0.8637,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 8,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/svg-pictures": {
     "jaccard": 0.9432,
-    "ssim": 0.9382
+    "ssim": 0.9382,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/symbol-fallback-per-character": {
+    "jaccard": 0.0991,
+    "ssim": 0.2719,
+    "text_boundary": 0.7857,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/tab-break": {
     "jaccard": 0.6282,

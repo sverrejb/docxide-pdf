@@ -1473,7 +1473,7 @@
     "b5b1691e8c658091c8261d9e5cd15fa7843f836edd606c2b4b233e73620adc5e"
   ],
   "cases/hyphen-opening-guillemet-nonbreaking-hyphen": [
-    "d1dea65c3a4107d065c7c62384484a939c8767ea495f7819c63cf06d1e2ecb89"
+    "ce362e63e2fec0a7ace6106d89016e4c9284654c5e763bf855871558b9cb6db7"
   ],
   "cases/hyphen-opening-guillemet-quoted-hyphen": [
     "921aec6e849dfd3dada1b035ae6db08e0c12ccc839907c34d0b45824947bf5cb"
@@ -2511,6 +2511,9 @@
   ],
   "cases/svg-pictures": [
     "dcf7adf16a56d29305a14d16933067d25f98aef68ce6341fd36610c5aabd6cdf"
+  ],
+  "cases/symbol-fallback-per-character": [
+    "926dc37fa9f012be5b2003de5cf35df73367faa8ac3f95dded0d51788b280b1c"
   ],
   "cases/tab-break": [
     "3ef297fe879c3f61afabd225fddc553e4563b71ef898e127a0ab818219c8d40d"
