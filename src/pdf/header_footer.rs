@@ -913,7 +913,7 @@ pub(super) fn render_header_footer(
     } else {
         Default::default()
     };
-    for block in &hf.blocks {
+    for (bi, block) in hf.blocks.iter().enumerate() {
         match block {
             Block::Table(table) => {
                 table::render_header_footer_table(
@@ -1647,6 +1647,50 @@ pub(super) fn render_header_footer(
                     })
                     .collect();
                 zones.extend(hdr_fz.iter().copied());
+                // A wrapping float the next paragraph raises above its own top
+                // wraps this paragraph too, as the body's look-ahead does:
+                // bulgarian_farmland's emblem, anchored in the letterhead's
+                // second line, sits beside the first. ponytail: the next
+                // paragraph's top assumes this one keeps its full-width lines.
+                if let Some(Block::Paragraph(next)) = hf.blocks.get(bi + 1) {
+                    let raised: Vec<_> = next
+                        .floating_images
+                        .iter()
+                        .filter(|fi| {
+                            fi.wrap_type.wraps_beside()
+                                && fi.v_relative_from == VRelativeFrom::Paragraph
+                                && matches!(fi.v_position, VerticalPosition::Offset(o) if o < 0.0)
+                        })
+                        .collect();
+                    if !raised.is_empty() {
+                        let full_lines = build_lines(
+                            &substituted_runs,
+                            ctx,
+                            (text_width - para.indent_left - para.indent_right).max(1.0),
+                            ctx.cjk(true, para),
+                            &LineOpts {
+                                tab_stops: &para.tab_stops,
+                                ..Default::default()
+                            },
+                        );
+                        let next_top = cursor_y
+                            - full_lines.len() as f32 * line_h
+                            - hf_paragraph_gap(Some(para), para.space_after, next);
+                        for fi in raised {
+                            let fi_x = super::resolve_h_position(
+                                fi.h_relative_from,
+                                &fi.h_position,
+                                fi.image.display_width,
+                                sp,
+                                sp.margin_left,
+                                text_width,
+                                text_width,
+                            );
+                            let fi_y_top = super::resolve_fi_y_top(fi, sp, next_top);
+                            zones.push(HfFloatZone::for_float(fi, fi_x, fi_y_top));
+                        }
+                    }
+                }
 
                 {
                     let col_x = sp.margin_left;
