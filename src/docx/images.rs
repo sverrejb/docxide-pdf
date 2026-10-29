@@ -126,6 +126,17 @@ pub(super) fn image_dimensions(data: &[u8]) -> Option<(u32, u32, ImageFormat, u8
         return Some((pw, ph, ImageFormat::Emf, 0));
     }
 
+    if super::svg::looks_like_svg(data) {
+        let drawing = super::svg::parse(data)?;
+        let px = |v: f32| v.round().max(1.0) as u32;
+        return Some((
+            px(drawing.view_box[2]),
+            px(drawing.view_box[3]),
+            ImageFormat::Svg,
+            0,
+        ));
+    }
+
     None
 }
 
@@ -448,6 +459,25 @@ pub(super) fn find_blip_embed<'a>(container: roxmltree::Node<'a, 'a>) -> Option<
     find_blip(container)?.attribute((REL_NS, "embed"))
 }
 
+const ASVG_NS: &str = "http://schemas.microsoft.com/office/drawing/2016/SVG/main";
+
+/// The picture's image parts, vector first: the `asvg:svgBlip` extension (Office
+/// 2016+), then the `a:blip` raster that doubles as its fallback. Readers try
+/// them in order, so an SVG we cannot draw still leaves the PNG.
+pub(super) fn find_blip_embeds<'a>(
+    container: roxmltree::Node<'a, 'a>,
+) -> impl Iterator<Item = &'a str> {
+    let blip = find_blip(container);
+    let svg = blip
+        .and_then(|b| {
+            b.descendants()
+                .find(|n| n.has_tag_name((ASVG_NS, "svgBlip")))
+        })
+        .and_then(|n| n.attribute((REL_NS, "embed")));
+    svg.into_iter()
+        .chain(blip.and_then(|b| b.attribute((REL_NS, "embed"))))
+}
+
 pub(super) struct DrawingInfo {
     pub(super) height: f32,
     pub(super) image: Option<EmbeddedImage>,
@@ -629,9 +659,8 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
             if let Some(conn) = parse_connector_from_wsp(container, ctx.theme) {
                 return Some(RunDrawingResult::Connector(conn));
             }
-            if let Some(embed_id) = find_blip_embed(container)
-                && let Some(mut img) =
-                    read_image_from_zip(embed_id, ctx.rels, ctx.zip, display_w, display_h)
+            if let Some(mut img) = find_blip_embeds(container)
+                .find_map(|id| read_image_from_zip(id, ctx.rels, ctx.zip, display_w, display_h))
             {
                 apply_pic_props(&mut img, container);
                 let (h_position, h_relative, v_position, v_relative) =
@@ -696,14 +725,14 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
             }));
         }
 
-        if let Some(embed_id) = find_blip_embed(container) {
-            let (extra_h, extra_top) = inline_extra_height(container);
-            if let Some(mut img) = read_image_from_zip_extra(
-                embed_id, ctx.rels, ctx.zip, display_w, display_h, extra_h, extra_top,
-            ) {
-                apply_pic_props(&mut img, container);
-                return Some(RunDrawingResult::Inline(img));
-            }
+        let (extra_h, extra_top) = inline_extra_height(container);
+        if let Some(mut img) = find_blip_embeds(container).find_map(|id| {
+            read_image_from_zip_extra(
+                id, ctx.rels, ctx.zip, display_w, display_h, extra_h, extra_top,
+            )
+        }) {
+            apply_pic_props(&mut img, container);
+            return Some(RunDrawingResult::Inline(img));
         }
 
         if let Some(chart_rid) = find_chart_ref(container) {
@@ -803,12 +832,12 @@ pub(super) fn compute_drawing_info<R: Read + Seek>(
             let (extra_h, extra_top) = inline_extra_height(container);
             max_height = max_height.max(display_h + extra_h);
 
-            if image.is_none()
-                && let Some(embed_id) = find_blip_embed(container)
-            {
-                image = read_image_from_zip_extra(
-                    embed_id, rels, zip, display_w, display_h, extra_h, extra_top,
-                );
+            if image.is_none() {
+                image = find_blip_embeds(container).find_map(|id| {
+                    read_image_from_zip_extra(
+                        id, rels, zip, display_w, display_h, extra_h, extra_top,
+                    )
+                });
                 if let Some(ref mut img) = image {
                     apply_pic_props(img, container);
                 }

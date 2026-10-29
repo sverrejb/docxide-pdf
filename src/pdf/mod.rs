@@ -16,6 +16,7 @@ mod list_label;
 mod objstm;
 mod positioning;
 mod smartart;
+mod svg;
 mod table;
 mod table_layout;
 mod tagging;

@@ -15,6 +15,8 @@ pub enum ImageFormat {
     /// Enhanced Metafile — a vector graphics format. Embedded as a PDF Form
     /// XObject (PDF drawing operators) rather than a raster Image XObject.
     Emf,
+    /// SVG picture (`asvg:svgBlip`), drawn as a Form XObject like an EMF.
+    Svg,
 }
 
 #[derive(Clone)]

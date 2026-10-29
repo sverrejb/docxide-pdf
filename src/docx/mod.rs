@@ -17,6 +17,7 @@ mod sections;
 mod settings;
 pub(crate) mod smartart;
 mod styles;
+pub(crate) mod svg;
 mod tables;
 mod textbox;
 mod wmf;

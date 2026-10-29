@@ -573,13 +573,16 @@ fn embed_image_xobject(
             };
             write_image_xobject(pdf, xobj_ref, &data, filter, w, h, smask_ref);
         }
-        ImageFormat::Emf => {
-            // Translate EMF records into a PDF Form XObject. The xobj_ref we
-            // already allocated is unused — emf_to_form_xobject allocates its
-            // own — so map the slot to the Form XObject ref instead.
-            if let Some(form_ref) =
+        ImageFormat::Emf | ImageFormat::Svg => {
+            // Translate EMF records (or SVG elements) into a PDF Form XObject.
+            // The xobj_ref we already allocated is unused — the translator
+            // allocates its own — so map the slot to the Form XObject ref instead.
+            let form_ref = if img.format == ImageFormat::Emf {
                 super::emf::emf_to_form_xobject(&img.data, pdf, alloc, fonts, img.lum)
-            {
+            } else {
+                super::svg::svg_to_form_xobject(&img.data, pdf, alloc)
+            };
+            if let Some(form_ref) = form_ref {
                 return form_ref;
             }
             // Conversion failed — register the wasted ref so it still maps to
@@ -684,7 +687,7 @@ fn embed_reflection(
                 Some(grad_ref),
             );
         }
-        ImageFormat::Emf => return None,
+        ImageFormat::Emf | ImageFormat::Svg => return None,
         ImageFormat::Png | ImageFormat::Bmp => {
             // Decode and re-encode as RGB (strip any existing alpha — the gradient replaces it)
             let img_fmt = match img.format {

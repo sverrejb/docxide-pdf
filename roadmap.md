@@ -346,8 +346,14 @@ Open queue from the large-corpus and focus-fixture rounds:
   their own draw path. Block pictures (`para.image`) ignore rotation.
 - EMF: clipping regions and opaque text backgrounds; immediate-mode segments
   and mid-path SaveDc/RestoreDc; mixed vector+bitmap EMFs.
-- SVG pictures (`asvg:svgBlip`, issue #142 item 3) draw their PNG fallback
-  (~69 dpi); Word exports the vector paths. Needs an SVG → PDF path renderer.
+- SVG pictures (`asvg:svgBlip`) draw as vector Form XObjects (shapes, paths,
+  solid paints, strokes, dashes, transforms, `.class` stylesheets; the viewBox
+  is stretched to the frame like Word does). Anything else keeps the PNG
+  fallback: `text`, `use`, `image` (indigenous_innovation_sandbox_agreement's
+  icons), gradients, opacity, clip paths, filters, nested `svg`, the 130 less
+  common colour names. Word online rasterises SVGs at 2× their pixel size;
+  desktop Word emits the vectors with a ~0.7px inset in a 161×81px box for a
+  160×80 drawing (unmodelled, no online reference does it).
 - SmartArt: `dsp:grpSp` groups, `dsp:cxnSp` connectors; the layout engine for
   files without the `dsp:drawing` fallback (not planned).
 - Charts: 3D charts (pie3D drawn flat), stock, combo (only the first type),
