@@ -2509,6 +2509,9 @@
   "cases/styleref-body-field": [
     "d548fa127cb4019b5713a50f8f281937fdf48f0d7304be474f91e1acab49c8b9"
   ],
+  "cases/svg-pictures": [
+    "dcf7adf16a56d29305a14d16933067d25f98aef68ce6341fd36610c5aabd6cdf"
+  ],
   "cases/tab-break": [
     "3ef297fe879c3f61afabd225fddc553e4563b71ef898e127a0ab818219c8d40d"
   ],
@@ -2807,7 +2810,7 @@
     "3a2e4a93303acd6063c63503d17b5ede7bbacffdb2e61844cc23880ee09c2fe0"
   ],
   "scraped/alpharetta_school_governance_council": [
-    "23156f6446bbe79fd1b1d92193043ad01fb0c970a9f0fd82a47bc995e1f881c4"
+    "d244be4fce6e64005492611a41aa7cf6c131bf3424eaf7be9279836397fd0ed0"
   ],
   "scraped/americas_counter_terrorism_agenda": [
     "545478a402153f8f9eacd7aa8f5c4fffc38ef87fba782dfaebdfc17f3e764ec8"

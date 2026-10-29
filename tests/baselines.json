@@ -7832,6 +7832,10 @@
     "jaccard": 0.4986,
     "ssim": 0.8637
   },
+  "cases/svg-pictures": {
+    "jaccard": 0.9432,
+    "ssim": 0.9382
+  },
   "cases/tab-break": {
     "jaccard": 0.6282,
     "ssim": 0.9326,
@@ -8637,8 +8641,8 @@
     "a11y_text": 1.0
   },
   "scraped/alpharetta_school_governance_council": {
-    "jaccard": 0.8403,
-    "ssim": 0.9332,
+    "jaccard": 0.8394,
+    "ssim": 0.9333,
     "text_boundary": 0.0,
     "ua_fail": 2,
     "a11y_missing": 0,
