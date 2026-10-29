@@ -5,6 +5,31 @@ Open work only. Finished rounds, their rules and evidence live in git history
 
 ## Open fixture leads
 
+**torture_test round (2026-10-29, branch `torture_test`):** a two-page
+fixture built only from features absent from `src/` (kit with generator in
+`tests/output/torture_test/`; Word online reference). Scores 2.8% J /
+26.7% SSIM, 3 pages against Word's 2. What Word does that we do not, by ink:
+- **bar3DChart** (with `c:dLbls` values and a `c:dTable`): nothing drawn.
+- **Linked text boxes** (`wps:linkedTxbx`): the second box stays empty, the
+  overflow is drawn past the first box's bottom edge, and the anchor
+  paragraph reserves ~100pt of blank space under the boxes (that gap alone
+  pushes the last table to a third page).
+- **Drop cap** (`framePr dropCap="drop" lines="3"`): the letter sits alone
+  on its own line instead of a 3-line frame with the first lines shortened.
+  Word draws each line number 24pt left of *that line's* start, so the
+  numbers of the shortened lines land on the cap (screen view differs).
+- **Ruby** (`w:ruby`): base text and guide text are both dropped (content
+  loss, a11y_missing 46 with the chart).
+- `w:fitText`/`w:tcFitText` at natural width (Word's re-save shows fitText
+  as cached `w:spacing` = (target − natural)/(n − 1) with the last letter
+  split into its own run); `w:wordWrap w:val="0"` only splits over-wide
+  words (Word fills every line); `w:bidiVisual` columns not mirrored;
+  `w:suppressLineNumbers` still numbered; `a:grayscl`/`a:duotone`/
+  `a:alphaModFix` ignored; a `wps` shape with a tiled `a:blipFill` is
+  missing; `a:glow`/`a:reflection`/`a:softEdge` absent.
+- Fixed on the branch: `lnNumType` restart (newPage is the default; we
+  never reset) — fixture `line_numbering_restart`.
+
 **Weakest-fixtures round (2026-10-27, branch `weak-fixtures`):**
 - **compressPunctuation needs probes**: chinese_costume's left-aligned cell
   keeps "…使用。" on its line with "，" and the final "。" each half an em

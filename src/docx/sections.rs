@@ -1,8 +1,8 @@
 use std::io::{Read, Seek};
 
 use crate::model::{
-    ColumnDef, ColumnsConfig, DocGridType, HeaderFooter, LineNumbering, PageBorderDisplay,
-    PageBorders, PageVerticalAlign, SectionBreakType, SectionProperties,
+    ColumnDef, ColumnsConfig, DocGridType, HeaderFooter, LineNumberRestart, LineNumbering,
+    PageBorderDisplay, PageBorders, PageVerticalAlign, SectionBreakType, SectionProperties,
 };
 
 use super::headers_footers::parse_header_footer_xml;
@@ -172,6 +172,11 @@ pub(super) fn parse_section_properties<R: Read + Seek>(
             // rPr is not applied yet.
             font_name: ctx.styles.defaults.font_name.clone(),
             font_size: ctx.styles.defaults.font_size,
+            restart: match n.attribute((WML_NS, "restart")) {
+                Some("newSection") => LineNumberRestart::NewSection,
+                Some("continuous") => LineNumberRestart::Continuous,
+                _ => LineNumberRestart::NewPage,
+            },
         })
     });
 

@@ -30,9 +30,9 @@ use pdf_writer::{Content, Name, Pdf, Ref};
 use crate::error::Error;
 use crate::fonts::FontEntry;
 use crate::model::{
-    Block, Document, FieldCode, FrameProperties, HRelativeFrom, LineSpacing, PageVerticalAlign,
-    Paragraph, ParagraphBorder, Run, SectionBreakType, SectionProperties, ShapeFill, ShapeGeometry,
-    VRelativeFrom, VerticalPosition, WrapText, WrapType,
+    Block, Document, FieldCode, FrameProperties, HRelativeFrom, LineNumberRestart, LineSpacing,
+    PageVerticalAlign, Paragraph, ParagraphBorder, Run, SectionBreakType, SectionProperties,
+    ShapeFill, ShapeGeometry, VRelativeFrom, VerticalPosition, WrapText, WrapType,
 };
 
 use crate::fonts::font_key;
@@ -1398,6 +1398,11 @@ pub(super) struct PageBuilder {
     all_footnote_cols: Vec<Vec<(f32, f32)>>,
     /// Footnote space booked in the current column.
     pub(super) col_fn_reserved: f32,
+    /// §17.6.8 body line-number counter (0-based count of lines seen).
+    pub(super) line_number_counter: u32,
+    /// The current section's `lnNumType restart` is newPage (the default):
+    /// the counter goes back to zero with every page flushed.
+    pub(super) line_numbers_restart_each_page: bool,
     all_alpha_states: Vec<HashSet<u8>>,
     all_gradient_specs: Vec<Vec<GradientSpec>>,
     /// Pages inserted by odd/even section breaks; Word prints them without header or footer.
@@ -1471,6 +1476,8 @@ impl PageBuilder {
             footnote_cols: Vec::new(),
             all_footnote_cols: Vec::new(),
             col_fn_reserved: 0.0,
+            line_number_counter: 0,
+            line_numbers_restart_each_page: false,
             all_alpha_states: Vec::new(),
             all_gradient_specs: Vec::new(),
             filler_pages: Vec::new(),
@@ -1589,6 +1596,9 @@ impl PageBuilder {
         self.all_footnote_cols
             .push(std::mem::take(&mut self.footnote_cols));
         self.col_fn_reserved = 0.0;
+        if self.line_numbers_restart_each_page {
+            self.line_number_counter = 0;
+        }
         self.footnote_ids_set.clear();
         self.all_alpha_states
             .push(std::mem::take(&mut self.alpha_states));
@@ -1860,10 +1870,6 @@ pub(super) struct LayoutState {
     pub(super) global_block_idx: usize,
     pub(super) heading_entries: Vec<HeadingEntry>,
     pub(super) bookmark_positions: HashMap<String, (usize, f32)>,
-    /// §17.6.8 continuous body line-number counter (0-based count of lines seen).
-    /// ponytail: never reset — only `continuous` restart is exercised; newPage/
-    /// newSection resets aren't implemented.
-    pub(super) line_number_counter: u32,
     /// The keep-with-next chain being laid out is too long for a page: its
     /// paragraphs keep only their own link to the next.
     pub(super) long_keep_chain: bool,
@@ -1883,6 +1889,8 @@ impl LayoutState {
         pb.next_text_below_picture = self.pb.next_text_below_picture;
         pb.footnote_ids_set = self.pb.footnote_ids_set.clone();
         pb.col_fn_reserved = self.pb.col_fn_reserved;
+        pb.line_number_counter = self.pb.line_number_counter;
+        pb.line_numbers_restart_each_page = self.pb.line_numbers_restart_each_page;
         // Page-top rules look at whether a page was already flushed.
         if !self.pb.all_contents.is_empty() {
             pb.all_contents.push(Content::new());
@@ -1895,7 +1903,6 @@ impl LayoutState {
             global_block_idx: self.global_block_idx,
             heading_entries: Vec::new(),
             bookmark_positions: self.bookmark_positions.clone(),
-            line_number_counter: self.line_number_counter,
             long_keep_chain: self.long_keep_chain,
         }
     }
@@ -4026,7 +4033,7 @@ fn render_paragraph_block(
                 &mut state.pb.gradient_specs,
                 Some(&mut state.pb.comment_anchors),
                 ln_cfg.map(|(start, count_by, right_x)| LineNumberArg {
-                    counter: &mut state.line_number_counter,
+                    counter: &mut state.pb.line_number_counter,
                     start,
                     count_by,
                     right_x,
@@ -4172,7 +4179,7 @@ fn render_paragraph_block(
                     &mut state.pb.gradient_specs,
                     Some(&mut state.pb.comment_anchors),
                     ln_cfg.map(|(start, count_by, right_x)| LineNumberArg {
-                        counter: &mut state.line_number_counter,
+                        counter: &mut state.pb.line_number_counter,
                         start,
                         count_by,
                         right_x,
@@ -4727,7 +4734,7 @@ fn render_paragraph_block(
                 &mut state.pb.gradient_specs,
                 Some(&mut state.pb.comment_anchors),
                 ln_cfg.map(|(start, count_by, right_x)| LineNumberArg {
-                    counter: &mut state.line_number_counter,
+                    counter: &mut state.pb.line_number_counter,
                     start,
                     count_by,
                     right_x,
@@ -5024,7 +5031,6 @@ fn render_pass(
         global_block_idx: 0,
         heading_entries: Vec::new(),
         bookmark_positions,
-        line_number_counter: 0,
         long_keep_chain: false,
     };
     state.pb.tags.lang = document_lang(doc);
@@ -5032,6 +5038,13 @@ fn render_pass(
     for (sect_idx, section) in doc.sections.iter().enumerate() {
         let sp = &section.properties;
         ctx.cell_grid_pitch.set(cell_grid_pitch(doc, sp));
+
+        // §17.6.8 restart="newPage": set before the break handling so the
+        // flush that opens this section's first page already resets the count.
+        state.pb.line_numbers_restart_each_page = sp
+            .line_numbering
+            .as_ref()
+            .is_some_and(|ln| ln.restart == LineNumberRestart::NewPage);
 
         // Section break handling (not for the first section)
         if sect_idx > 0 {
@@ -5121,6 +5134,19 @@ fn render_pass(
                     // geometry updates on the next page without a forced break.
                 }
             }
+        }
+
+        // §17.6.8 restart: newSection starts over here; newPage does too when
+        // the section owns a fresh sheet (a continuous section joining a page
+        // mid-way keeps that page's count).
+        if let Some(ln) = &sp.line_numbering
+            && match ln.restart {
+                LineNumberRestart::NewSection => true,
+                LineNumberRestart::NewPage => state.pb.page_hf_section == sect_idx,
+                LineNumberRestart::Continuous => false,
+            }
+        {
+            state.pb.line_number_counter = 0;
         }
 
         cur_sp = sp;

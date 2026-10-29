@@ -176,6 +176,17 @@ pub struct LineNumbering {
     /// The face and size the numbers are drawn in: the document defaults.
     pub font_name: String,
     pub font_size: f32,
+    /// `@restart` — when the count goes back to `start`.
+    pub restart: LineNumberRestart,
+}
+
+/// §17.18.47 ST_LineNumberRestart. Word writes nothing for `newPage`, so an
+/// absent attribute means every page starts over.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum LineNumberRestart {
+    NewPage,
+    NewSection,
+    Continuous,
 }
 
 /// §17.6.23 ST_VerticalJc — how the section's body content is positioned

@@ -3698,8 +3698,9 @@ pub(super) fn encode_text_for_pdf(
     }
 }
 
-/// §17.6.8 line numbering for a body paragraph's rendered lines. The counter is
-/// shared (continuous) across paragraphs so it survives between calls.
+/// §17.6.8 line numbering for a body paragraph's rendered lines. The counter
+/// lives on the PageBuilder, which resets it per page or section as
+/// `lnNumType restart` asks.
 pub(super) struct LineNumberArg<'a> {
     /// Body lines counted so far = 0-based index of the next line to number.
     pub counter: &'a mut u32,
@@ -3859,7 +3860,7 @@ pub(super) fn render_paragraph_lines(
         };
 
         // §17.6.8 margin line number: every counted body line advances the
-        // shared counter; numbers are right-aligned in the page margin at the
+        // page's counter; numbers are right-aligned in the page margin at the
         // line's own baseline, in that line's font/size (matching Word).
         if let Some(ln) = line_numbering.as_mut() {
             let idx = *ln.counter;
