@@ -429,12 +429,11 @@ Backlog (details in `current_focus/A11Y.md`):
 
 ## Fonts
 
-- Fallback fonts don't count toward line height: Word sizes a line by the
-  ascent and descent of every face drawing on it, including the per-character
-  fallbacks (`rescue_fonts`). Segoe UI Symbol's 1.33 em box makes a 14pt
-  Arial line holding ☑ 21.5pt at 1.15 spacing where we lay out 18.5pt
-  (`symbol-fallback-per-character`). Cambria Math lines grow far less than its
-  3 em win box: probe which metrics Word takes for it first.
+- An at-least line whose minimum wins bottom-aligns at the deepest descent
+  of all its faces in Word (Arial 20pt at-least 30 with ☑: baseline 0.78pt
+  higher, Segoe UI Symbol's deeper descent); `boxed_line_ascent` only looks
+  at the paragraph's tallest run, and per-line sizing keeps the paragraph's
+  baseline when the pitch doesn't change. Same gap for mixed-font lines.
 - ※ ‥ ‧ ‵ in a Latin run come from MS Gothic in Word, the East Asian slot
   rather than a fallback; we rescue them from Segoe UI Symbol.
 - Bundle metric-compatible open fonts behind a feature flag (Liberation

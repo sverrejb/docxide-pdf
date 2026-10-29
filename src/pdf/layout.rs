@@ -1116,6 +1116,11 @@ pub(super) fn size_lines_by_own_runs(
 ) {
     let by_pdf_name: HashMap<&str, &FontEntry> =
         fonts.values().map(|e| (e.pdf_name.as_str(), e)).collect();
+    let fallbacks: Vec<&FontEntry> = fonts
+        .iter()
+        .filter(|(key, _)| key.starts_with(super::fonts::GLYPH_FALLBACK))
+        .map(|(_, e)| e)
+        .collect();
     for line in lines.iter_mut() {
         if line.leading_space_wrap || line.leading_tab_wrap {
             if let Some(fs) = line.break_font_size {
@@ -1145,7 +1150,13 @@ pub(super) fn size_lines_by_own_runs(
                 continue;
             };
             let (lhr, ar) = run_line_metrics(entry, &c.text);
-            let (lhr, ar) = (lhr.unwrap_or(1.2), ar.unwrap_or(0.75));
+            let own = (lhr.unwrap_or(1.2), ar.unwrap_or(0.75));
+            // A form check box's ☐ is a placeholder: it is drawn as a square.
+            let (lhr, ar) = if c.checkbox.is_some() {
+                own
+            } else {
+                with_fallback_faces(own, entry, &c.text, &fallbacks)
+            };
             // Word makes room for a run border's box around the glyphs
             // (run-borders: 12pt Calibri in a 1.44pt border steps
             // (14.65 + 2 × 1.44) × 1.079 = 18.96).
@@ -1181,6 +1192,32 @@ pub(super) fn size_lines_by_own_runs(
             line.ascent_shift = ascent + above_extra - para_ascent;
         }
     }
+}
+
+/// A run's (line_h_ratio, ascender_ratio) grown to the box of every fallback
+/// face drawing one of its characters: Word sizes the line by the highest
+/// ascent and the deepest descent of all faces on it. A 14pt Arial line
+/// holding ☑ (Segoe UI Symbol) steps 21.5pt at 1.15, not 18.5.
+fn with_fallback_faces(
+    (lhr, ar): (f32, f32),
+    entry: &FontEntry,
+    text: &str,
+    fallbacks: &[&FontEntry],
+) -> (f32, f32) {
+    if entry.missing_chars.is_empty() {
+        return (lhr, ar);
+    }
+    let (asc, desc) = text
+        .chars()
+        .filter(|c| entry.missing_chars.contains(c) && !crate::docx::is_east_asian_char(*c))
+        .filter_map(|c| {
+            fallbacks
+                .iter()
+                .find(|f| f.char_to_gid.as_ref().is_some_and(|m| m.contains_key(&c)))
+        })
+        .filter_map(|f| Some((f.plain_ascender_ratio?, f.plain_line_h_ratio?)))
+        .fold((ar, lhr - ar), |(a, d), (fa, fl)| (a.max(fa), d.max(fl - fa)));
+    (asc + desc, asc)
 }
 
 /// How far a run moved by `raise` stretches a `w:textAlignment="top"` line
@@ -5013,6 +5050,27 @@ pub(super) fn grid_baseline_offset(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fallback_faces_grow_the_line_box() {
+        // Arial (0.938 / 0.212) and Segoe UI Symbol's hhea box (1.079 / 0.251).
+        let arial = FontEntry {
+            missing_chars: ['☑', '中'].into_iter().collect(),
+            ..FontEntry::stub()
+        };
+        let segoe = FontEntry {
+            plain_ascender_ratio: Some(1.079),
+            plain_line_h_ratio: Some(1.33),
+            char_to_gid: Some([('☑', 1), ('中', 2)].into_iter().collect()),
+            ..FontEntry::stub()
+        };
+        let own = (1.15, 0.938);
+        let (lhr, ar) = with_fallback_faces(own, &arial, "A☑B", &[&segoe]);
+        assert!((ar - 1.079).abs() < 1e-4 && (lhr - 1.33).abs() < 1e-4);
+        // East Asian rescues and characters the font has leave the line alone.
+        assert_eq!(with_fallback_faces(own, &arial, "A中B", &[&segoe]), own);
+        assert_eq!(with_fallback_faces(own, &arial, "AB", &[&segoe]), own);
+    }
 
     #[test]
     fn top_aligned_drop_spends_external_leading_first() {

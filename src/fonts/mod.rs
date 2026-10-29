@@ -388,6 +388,16 @@ fn face_is_script_design(path: &std::path::Path, face_index: u32) -> bool {
     .unwrap_or(false)
 }
 
+/// A face's hhea ascent and descent per em. Read from the table itself:
+/// ttf-parser's `ascender()` switches to the typo values under USE_TYPO_METRICS.
+pub(crate) fn hhea_box(path: &std::path::Path, face_index: u32) -> Option<(f32, f32)> {
+    discovery::probe_face(path, face_index, |face| {
+        let hhea = face.tables().hhea;
+        let units = face.units_per_em() as f32;
+        (hhea.ascender as f32 / units, -(hhea.descender as f32) / units)
+    })
+}
+
 /// Names Word draws with its own face even where the OS has one: Mac Word sets
 /// "Times" in Times New Roman (no fontTable entry, or altName Times New Roman),
 /// and Windows maps Times, Courier and Helvetica to Times New Roman, Courier New

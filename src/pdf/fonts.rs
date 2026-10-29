@@ -633,7 +633,7 @@ pub(super) fn collect_and_register_fonts(
             word_text: false,
             extra_glyphs: None,
         };
-        let entry = register_font(
+        let mut entry = register_font(
             pdf,
             &fallback_font_name,
             false,
@@ -642,6 +642,24 @@ pub(super) fn collect_and_register_fonts(
             alloc,
             &ctx,
         );
+        // A line holding symbol fallbacks grows to the fallback face's hhea
+        // box, whatever its win or typo metrics say: Cambria Math (hhea
+        // 1946/455, win 6383/5045, USE_TYPO_METRICS) adds its 0.95 em ascent
+        // and 0.22 em descent like Segoe UI Symbol adds 1.08/0.25 (online
+        // probes 2026-10-29: Arial, Aptos, Calibri at 12/20/48pt, single,
+        // at-least and multiple spacing). East Asian rescues keep their own
+        // metrics: they never size a line (`size_lines_by_own_runs`).
+        if !chars.iter().all(|&c| crate::docx::is_east_asian_char(c))
+            && let Some((asc, desc)) = entry
+                .font_path
+                .as_deref()
+                .and_then(|p| crate::fonts::hhea_box(p, entry.face_index))
+        {
+            entry.line_h_ratio = Some(asc + desc);
+            entry.ascender_ratio = Some(asc);
+            entry.plain_line_h_ratio = Some(asc + desc);
+            entry.plain_ascender_ratio = Some(asc);
+        }
         // Copy fallback char widths into each primary font so layout uses correct widths
         if let Some(fb_widths) = entry.char_widths_1000.clone() {
             for primary in seen_fonts.values_mut() {
