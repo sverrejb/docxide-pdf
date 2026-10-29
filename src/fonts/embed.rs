@@ -87,9 +87,12 @@ pub(super) fn embed_truetype(
     if hyphen_fallback.is_some() {
         log::info!("Font glyph substitution: {font_name}: U+2011 uses an available hyphen glyph");
     }
-    // Keep the original Unicode when '-' or U+2010 is also used. Identity
-    // CIDs would merge both characters into the fallback glyph's one CID.
-    let hyphen_alias = hyphen_fallback
+    // Keep U+2011 in the text when its glyph also draws '-' or U+2010, the
+    // stand-in above or a font mapping both to one glyph (Cambria Math): Word's
+    // PDF keeps both, and Identity CIDs would merge them into one CID.
+    let hyphen_alias = char_to_gid
+        .get(&'\u{2011}')
+        .copied()
         .filter(|&gid| char_to_gid.values().filter(|&&g| g == gid).count() > 1)
         .map(|gid| {
             // The first CID past every remapped glyph, extra glyphs included.
@@ -267,6 +270,7 @@ pub(super) fn embed_truetype(
         char_ink_1000,
         kern_pairs,
         gid_remap,
+        stand_ins: hyphen_fallback.map(|_| '\u{2011}').into_iter().collect(),
     })
 }
 

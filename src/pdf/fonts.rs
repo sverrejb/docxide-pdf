@@ -401,6 +401,8 @@ fn extend_chars_for_num_format(chars: &mut HashSet<char>, fmt: &str) {
 
 /// The `seen_fonts` key of the math font (`register_math_font`).
 pub(super) const MATH_FONT_KEY: &str = "__math";
+/// Key prefix of the fonts that draw characters their run's font lacks.
+pub(super) const GLYPH_FALLBACK: &str = "__glyph_fallback";
 
 /// The document's math font (`m:mathFont`, else Cambria Math) when there are
 /// zones and it has a MATH table: its name and file.
@@ -611,20 +613,23 @@ pub(super) fn collect_and_register_fonts(
         );
     }
 
-    // Collect all CJK chars missing from their primary fonts and register a
-    // shared CJK fallback font so the rendering code can substitute per-character.
-    let mut all_missing_cjk: HashSet<char> = HashSet::new();
+    // Collect all chars missing from their primary fonts and register the
+    // fallback fonts that draw them, so the rendering code can substitute
+    // per-character.
+    let mut all_missing: HashSet<char> = HashSet::new();
     for entry in seen_fonts.values() {
-        all_missing_cjk.extend(&entry.missing_chars);
+        all_missing.extend(&entry.missing_chars);
     }
-    if !all_missing_cjk.is_empty() {
-        let fallback_key = "__glyph_fallback".to_string();
+    for (i, (fallback_font_name, chars)) in crate::fonts::rescue_fonts(&all_missing)
+        .into_iter()
+        .enumerate()
+    {
+        let fallback_key = format!("{GLYPH_FALLBACK}{i}");
         let pdf_name = format!("F{}", font_order.len() + 1);
-        let fallback_font_name = crate::fonts::rescue_fonts(&all_missing_cjk);
         let ctx = FontContext {
             embedded_fonts: &doc.embedded_fonts,
             font_table: &doc.font_table,
-            used_chars: &all_missing_cjk,
+            used_chars: &chars,
             word_text: false,
             extra_glyphs: None,
         };
@@ -637,26 +642,22 @@ pub(super) fn collect_and_register_fonts(
             alloc,
             &ctx,
         );
-        font_order.push(fallback_key.clone());
-        seen_fonts.insert(fallback_key, entry);
-
         // Copy fallback char widths into each primary font so layout uses correct widths
-        if let Some(fb_widths) = seen_fonts
-            .get("__glyph_fallback")
-            .and_then(|e| e.char_widths_1000.clone())
-        {
-            for entry in seen_fonts.values_mut() {
-                if entry.missing_chars.is_empty() {
+        if let Some(fb_widths) = entry.char_widths_1000.clone() {
+            for primary in seen_fonts.values_mut() {
+                if primary.missing_chars.is_empty() {
                     continue;
                 }
-                let widths = entry.char_widths_1000.get_or_insert_with(HashMap::new);
-                for &ch in &entry.missing_chars {
+                let widths = primary.char_widths_1000.get_or_insert_with(HashMap::new);
+                for &ch in &primary.missing_chars {
                     if let Some(&w) = fb_widths.get(&ch) {
                         widths.insert(ch, w);
                     }
                 }
             }
         }
+        font_order.push(fallback_key.clone());
+        seen_fonts.insert(fallback_key, entry);
     }
 
     if seen_fonts.is_empty() {

@@ -393,10 +393,7 @@ Backlog (details in `current_focus/A11Y.md`):
    vAlign (no fixture has links with either).
 3. Wingdings 2 and Webdings extract as private-use code points; `w:lang/@bidi`
    ignored.
-4. Missing glyphs other than spaces draw `.notdef`: Word rescues them per
-   character from another font; widen the CJK rescue (`missing_cjk_chars`) to
-   non-CJK characters. The space fallback lays U+2002/2003/2009/202F out at
-   U+0020's width.
+4. The space fallback lays U+2002/2003/2009/202F out at U+0020's width.
 5. `anchor_seq` counts per parse pass: textboxes from paragraph-level
    `mc:Choice` sort after every run-level anchor.
 
@@ -432,6 +429,14 @@ Backlog (details in `current_focus/A11Y.md`):
 
 ## Fonts
 
+- Fallback fonts don't count toward line height: Word sizes a line by the
+  ascent and descent of every face drawing on it, including the per-character
+  fallbacks (`rescue_fonts`). Segoe UI Symbol's 1.33 em box makes a 14pt
+  Arial line holding ☑ 21.5pt at 1.15 spacing where we lay out 18.5pt
+  (`symbol-fallback-per-character`). Cambria Math lines grow far less than its
+  3 em win box: probe which metrics Word takes for it first.
+- ※ ‥ ‧ ‵ in a Latin run come from MS Gothic in Word, the East Asian slot
+  rather than a fallback; we rescue them from Segoe UI Symbol.
 - Bundle metric-compatible open fonts behind a feature flag (Liberation
   Sans/Serif/Mono, Carlito, Caladea) for servers and Docker; today only
   installed fonts and the assets repo count (Carlito/Caladea are used when

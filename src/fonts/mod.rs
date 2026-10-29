@@ -42,6 +42,9 @@ pub(crate) struct FontMetrics {
     pub(crate) kern_pairs: HashMap<(u16, u16), f32>,
     /// Subset ids of `FontContext::extra_glyphs`, by original id.
     pub(crate) gid_remap: HashMap<u16, u16>,
+    /// Characters drawn with a stand-in glyph (U+2011 as the font's hyphen):
+    /// a rescue font with the real glyph draws them first, as Word does.
+    pub(crate) stand_ins: HashSet<char>,
 }
 
 /// Font metrics bundled with resolution metadata from the font discovery phase.
@@ -681,24 +684,77 @@ fn cjk_fallback_fonts(script: CjkScript, serif: bool) -> &'static [&'static str]
 
 /// How many of `chars` the named font has glyphs for; 0 when it is not installed.
 fn glyph_coverage(name: &str, chars: &HashSet<char>) -> usize {
+    covered_chars(name, chars).len()
+}
+
+/// The chars the named font has glyphs for; none when it is not installed.
+fn covered_chars(name: &str, chars: &HashSet<char>) -> HashSet<char> {
     let Some((path, face_index, ..)) = discovery::find_font_file(name, false, false) else {
-        return 0;
+        return HashSet::new();
     };
     discovery::probe_face(&path, face_index, |face| {
         chars
             .iter()
-            .filter(|&&c| face.glyph_index(c).is_some())
-            .count()
+            .copied()
+            .filter(|&c| face.glyph_index(c).is_some())
+            .collect()
     })
-    .unwrap_or(0)
+    .unwrap_or_default()
 }
 
-/// Font for characters the resolved fonts lack, shared by the whole document
-/// (Word rescues per character too: kanji missing from Batang came out in
-/// MS Mincho, and a missing ☑ comes from the linked symbol face). The
-/// best-covering candidate leads and the rest follow in list order,
+/// Fonts for the characters the resolved fonts lack, each with the characters
+/// it draws. Word picks per character: kanji missing from Batang came out in
+/// MS Mincho, and in one document ⇒ came from Cambria Math while ☑ came from
+/// Segoe UI Symbol. East Asian gaps share the best-covering CJK face; every
+/// other character takes the first face in `symbol_candidates` that has it.
+pub(crate) fn rescue_fonts(missing: &HashSet<char>) -> Vec<(String, HashSet<char>)> {
+    let (cjk, other): (HashSet<char>, HashSet<char>) = missing
+        .iter()
+        .partition(|&&ch| crate::docx::is_east_asian_char(ch));
+    let mut groups: BTreeMap<String, HashSet<char>> = BTreeMap::new();
+    if !cjk.is_empty() {
+        groups.insert(cjk_rescue_font(&cjk), cjk);
+    }
+    let mut covered: HashMap<&str, HashSet<char>> = HashMap::new();
+    for ch in other {
+        let font = symbol_candidates(ch)
+            .find(|&name| {
+                covered
+                    .entry(name)
+                    .or_insert_with(|| covered_chars(name, missing))
+                    .contains(&ch)
+            })
+            // Nothing has it: the symbol face draws its .notdef, as before.
+            .unwrap_or(SYMBOL_FALLBACK_FONTS[0]);
+        // The chosen face leads; the rest stay behind it for `register_font`.
+        let chain = std::iter::once(font)
+            .chain(symbol_candidates(ch).filter(|&n| n != font))
+            .collect::<Vec<_>>()
+            .join(";");
+        groups.entry(chain).or_default().insert(ch);
+    }
+    groups.into_iter().collect()
+}
+
+/// Word's fallback order for a non-East-Asian character the run font lacks
+/// (online export probe 2026-10-29: 151 characters under Arial, Aptos, Calibri
+/// and Times New Roman). Misc Symbols and Dingbats (☑ ★ ✓ ♠) come from the
+/// symbol face even when Arial has them; everything else from the first of
+/// Arial, Cambria Math and the symbol face with the glyph (‒ from Arial, ⇒ ‐ ∀
+/// from Cambria Math, ‱ ⁎ from Segoe UI Symbol).
+fn symbol_candidates(ch: char) -> impl Iterator<Item = &'static str> {
+    let lead: &[&str] = if ('\u{2600}'..='\u{27BF}').contains(&ch) {
+        &[]
+    } else {
+        &["Arial", "Cambria Math"]
+    };
+    lead.iter().chain(SYMBOL_FALLBACK_FONTS).copied()
+}
+
+/// Font for East Asian characters the resolved fonts lack, shared by all of
+/// them. The best-covering candidate leads and the rest follow in list order,
 /// semicolon-separated so `register_font` tries each in turn.
-pub(crate) fn rescue_fonts(missing: &HashSet<char>) -> String {
+fn cjk_rescue_font(missing: &HashSet<char>) -> String {
     let script = script_of_chars(missing.iter().copied());
     let has_cjk = missing
         .iter()
@@ -874,7 +930,7 @@ pub(crate) fn register_font(
         .iter()
         .copied()
         .filter(|ch| match result.as_ref() {
-            Some(r) => !r.metrics.char_to_gid.contains_key(ch),
+            Some(r) => !r.metrics.char_to_gid.contains_key(ch) || r.metrics.stand_ins.contains(ch),
             None => crate::docx::is_east_asian_char(*ch),
         })
         .collect();
@@ -1033,6 +1089,38 @@ mod tests {
             "MS Mincho"
         );
         assert_eq!(cjk_fallback_fonts(CjkScript::Unknown, true)[0], "MS Mincho");
+    }
+
+    #[test]
+    fn missing_glyphs_take_words_fallback_per_character() {
+        let lead = |missing: &str, ch: char| {
+            rescue_fonts(&missing.chars().collect())
+                .into_iter()
+                .find(|(_, chars)| chars.contains(&ch))
+                .map(|(chain, _)| chain.split(';').next().unwrap().to_string())
+        };
+        // One document, three faces, as in Word's export.
+        let missing = "\u{2010}\u{21D2}\u{2611}\u{2605}\u{2012}\u{2031}";
+        assert_eq!(lead(missing, '\u{2010}').as_deref(), Some("Cambria Math"));
+        assert_eq!(lead(missing, '\u{21D2}').as_deref(), Some("Cambria Math"));
+        assert_eq!(
+            lead(missing, '\u{2611}').as_deref(),
+            Some("Segoe UI Symbol")
+        );
+        assert_eq!(
+            lead(missing, '\u{2605}').as_deref(),
+            Some("Segoe UI Symbol")
+        );
+        assert_eq!(lead(missing, '\u{2012}').as_deref(), Some("Arial"));
+        assert_eq!(
+            lead(missing, '\u{2031}').as_deref(),
+            Some("Segoe UI Symbol")
+        );
+        // Misc Symbols skip Arial even where it has the glyph.
+        assert_eq!(
+            lead("\u{2660}", '\u{2660}').as_deref(),
+            Some("Segoe UI Symbol")
+        );
     }
 
     #[test]

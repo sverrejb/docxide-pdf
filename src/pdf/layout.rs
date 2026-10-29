@@ -4393,11 +4393,24 @@ pub(super) fn render_paragraph_lines(
 
                 // Per-character font fallback: if some chars are missing
                 // from the primary font, split into segments and render
-                // missing chars with the CJK fallback font.
+                // missing chars with the fallback font that has them.
                 let has_missing = primary_entry.is_some_and(|e| !e.missing_chars.is_empty());
-                let fallback_entry = has_missing
-                    .then(|| seen_fonts.get("__glyph_fallback"))
-                    .flatten();
+                let fallbacks: Vec<&FontEntry> = if has_missing {
+                    seen_fonts
+                        .iter()
+                        .filter(|(key, _)| key.starts_with(super::fonts::GLYPH_FALLBACK))
+                        .map(|(_, entry)| entry)
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+                // Which of `fallbacks` draws `c`; None when the primary font has it.
+                let fallback_idx = |c: char| {
+                    primary_entry.filter(|p| p.missing_chars.contains(&c))?;
+                    fallbacks
+                        .iter()
+                        .position(|f| f.char_to_gid.as_ref().is_some_and(|m| m.contains_key(&c)))
+                };
 
                 if let Some(extras) = mixed
                     .as_ref()
@@ -4405,16 +4418,14 @@ pub(super) fn render_paragraph_lines(
                 {
                     // Only the East Asian gaps widen: one Tc per segment, the
                     // fallback font where the primary lacks the glyphs.
-                    let missing = |c: char| primary_entry.is_some_and(|p| p.missing_chars.contains(&c));
-                    let fallback_gids = fallback_entry.and_then(|f| f.char_to_gid.as_ref());
                     let chars: Vec<char> = chunk.text.chars().collect();
                     let mut i = 0;
                     while i < chars.len() {
-                        let in_fallback = missing(chars[i]);
+                        let fb = fallback_idx(chars[i]);
                         let mut j = i + 1;
                         while j < chars.len()
                             && extras[j] == extras[i]
-                            && missing(chars[j]) == in_fallback
+                            && fallback_idx(chars[j]) == fb
                         {
                             j += 1;
                         }
@@ -4424,8 +4435,9 @@ pub(super) fn render_paragraph_lines(
                             cur_char_spacing = cs;
                         }
                         let seg: String = chars[i..j].iter().collect();
-                        match (in_fallback, fallback_entry, fallback_gids) {
-                            (true, Some(fb), Some(map)) => {
+                        let fb = fb.map(|k| fallbacks[k]);
+                        match fb.and_then(|f| Some((f, f.char_to_gid.as_ref()?))) {
+                            Some((fb, map)) => {
                                 content.set_font(Name(fb.pdf_name.as_bytes()), chunk.font_size);
                                 content.show(Str(&encode_as_gids(&seg, map)));
                                 content.set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size);
@@ -4461,14 +4473,13 @@ pub(super) fn render_paragraph_lines(
                         effective_cs,
                         boundary_space,
                     );
-                } else if let (Some(primary), Some(fallback)) = (primary_entry, fallback_entry) {
-                    let fallback_gids = fallback.char_to_gid.as_ref();
+                } else if primary_entry.is_some() && !fallbacks.is_empty() {
                     // A segment of the chunk in its own font, or in the fallback
                     // font when its characters are missing from the primary one.
-                    let show_seg = |content: &mut Content, seg: &[char], in_fallback: bool| {
+                    let show_seg = |content: &mut Content, seg: &[char], fb: Option<usize>| {
                         let seg: String = seg.iter().collect();
-                        if in_fallback {
-                            if let Some(map) = fallback_gids {
+                        if let Some(fallback) = fb.map(|k| fallbacks[k]) {
+                            if let Some(map) = fallback.char_to_gid.as_ref() {
                                 content
                                     .set_font(Name(fallback.pdf_name.as_bytes()), chunk.font_size);
                                 content.show(Str(&encode_as_gids(&seg, map)));
@@ -4482,19 +4493,19 @@ pub(super) fn render_paragraph_lines(
                     };
                     // Split text into runs of primary vs fallback chars
                     let mut seg_start = 0;
-                    let mut in_fallback = false;
+                    let mut cur_fb = None;
                     let chars: Vec<char> = chunk.text.chars().collect();
                     for (i, &ch) in chars.iter().enumerate() {
-                        let needs_fb = primary.missing_chars.contains(&ch);
+                        let fb = fallback_idx(ch);
                         if i == 0 {
-                            in_fallback = needs_fb;
-                        } else if needs_fb != in_fallback {
-                            show_seg(content, &chars[seg_start..i], in_fallback);
+                            cur_fb = fb;
+                        } else if fb != cur_fb {
+                            show_seg(content, &chars[seg_start..i], cur_fb);
                             seg_start = i;
-                            in_fallback = needs_fb;
+                            cur_fb = fb;
                         }
                     }
-                    show_seg(content, &chars[seg_start..], in_fallback);
+                    show_seg(content, &chars[seg_start..], cur_fb);
                     if boundary_space {
                         content.show(Str(&encode_text_for_pdf(
                             " ",
