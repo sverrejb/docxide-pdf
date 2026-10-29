@@ -2,7 +2,11 @@
 //!
 //! Usage:
 //!   page-metrics <ref.pdf> <other.pdf> <ref_png_dir> <other_png_dir>
+//!   page-metrics --a11y <pdf> <png_dir> [<pdf> <png_dir>...]
 //!
+//! The second form only runs the accessibility analyses, all in one veraPDF process, and leaves
+//! their caches for the pair calls that follow: engine_compare.py calls it once per fixture so a
+//! JVM starts per fixture rather than per PDF.
 //! Prints one JSON object. Jaccard and SSIM are per-page means over the pages both
 //! PDFs have, exactly like tests/suite/visual_comparison.rs; the metric code itself is the
 //! harness's own (tests/common/metrics.rs, a11y.rs, text_boundary.rs), included by path so
@@ -20,7 +24,7 @@ mod a11y;
 mod text_boundary;
 
 use rayon::prelude::*;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// A PNG dir is named after its PDF, so for the harness's own output dirs the
 /// analysis cache is the very file tests/suite/accessibility.rs writes and either side
@@ -38,10 +42,31 @@ fn a11y_metrics(ref_pdf: &Path, other_pdf: &Path, ref_dir: &Path, other_dir: &Pa
     }))
 }
 
+fn prefetch_a11y(pairs: &[String]) {
+    let pairs: Vec<(&Path, PathBuf)> = pairs
+        .chunks(2)
+        .map(|c| (Path::new(&c[0]), a11y::cache_path(Path::new(&c[1]))))
+        .collect();
+    let stale: Vec<PathBuf> = pairs
+        .iter()
+        .filter(|(pdf, cache)| !a11y::cache_fresh(pdf, cache))
+        .map(|(pdf, _)| pdf.to_path_buf())
+        .collect();
+    a11y::prefetch_ua_rules(&stale);
+    pairs.par_iter().for_each(|(pdf, cache)| {
+        let _ = a11y::analyze_cached(pdf, cache);
+    });
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(String::as_str) == Some("--a11y") && args.len().is_multiple_of(2) {
+        prefetch_a11y(&args[2..]);
+        return;
+    }
     if args.len() != 5 {
         eprintln!("usage: page-metrics <ref.pdf> <other.pdf> <ref_png_dir> <other_png_dir>");
+        eprintln!("       page-metrics --a11y <pdf> <png_dir> [<pdf> <png_dir>...]");
         std::process::exit(1);
     }
     let (ref_pdf, other_pdf) = (Path::new(&args[1]), Path::new(&args[2]));

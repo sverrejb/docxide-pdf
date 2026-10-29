@@ -169,6 +169,8 @@ pub fn parse_struct_text(dump: &str) -> Vec<Elem> {
 const BATCH: usize = 24;
 
 type Rules = BTreeMap<String, Rule>;
+/// One verapdf job: the file as verapdf names it (absolute), and its rules or the error that stopped it.
+type Job = (PathBuf, Result<Rules, String>);
 
 /// Results of `prefetch_ua_rules` by canonical path, each taken once by `ua_rules`.
 static PREFETCHED: Mutex<BTreeMap<PathBuf, Result<Rules, String>>> = Mutex::new(BTreeMap::new());
@@ -202,7 +204,7 @@ fn ua_rules(pdf: &Path) -> Result<Rules, String> {
 }
 
 /// One verapdf run over `pdfs`: each file's rule map, or why it has none.
-fn run_verapdf(pdfs: &[PathBuf]) -> Result<Vec<(PathBuf, Result<Rules, String>)>, String> {
+fn run_verapdf(pdfs: &[PathBuf]) -> Result<Vec<Job>, String> {
     // Forced to ua1: Word writes no pdfuaid, so auto-detection would validate
     // PDF/A-1b. --success lists passing rules too, with per-rule check counts.
     let out = Command::new("verapdf")
@@ -224,9 +226,8 @@ fn run_verapdf(pdfs: &[PathBuf]) -> Result<Vec<(PathBuf, Result<Rules, String>)>
         .map_err(|e| format!("{e} (exit {:?})", out.status.code()))
 }
 
-/// Every job of a verapdf JSON report: the file as verapdf names it (absolute)
-/// and its rule id ("7.1-3") → check counts, or the error that stopped it.
-pub fn parse_verapdf_report(json: &str) -> Result<Vec<(PathBuf, Result<Rules, String>)>, String> {
+/// Every job of a verapdf JSON report; rule ids are "7.1-3" style.
+pub fn parse_verapdf_report(json: &str) -> Result<Vec<Job>, String> {
     let v: serde_json::Value =
         serde_json::from_str(json).map_err(|e| format!("verapdf json: {e}"))?;
     let jobs = v["report"]["jobs"]

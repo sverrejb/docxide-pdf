@@ -686,6 +686,13 @@ def process_fixture(fixture: Path, group: str, tools: dict, opts) -> dict | None
                 add(key, mine / f"{key}.pdf", mine / key)
 
     scores: dict[str, dict] = {}
+    if not opts.no_scores and METRICS_BIN.is_file():
+        # The fixture's accessibility analyses in one veraPDF process (a JVM start each otherwise);
+        # the per-engine scoring below then finds their caches.
+        pairs = [str(p) for key in ("reference", *COMPETITORS) if pages.get(key)
+                 for p in (pdfs[key], pages[key][0].parent)]
+        spent("a11y", subprocess.run, [str(METRICS_BIN), "--a11y", *pairs],
+              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=False)
     if not opts.no_scores:
         ref_hash = file_hash(ref_pdf)
         for key in COMPETITORS:
