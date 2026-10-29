@@ -8851,8 +8851,8 @@
     "a11y_text": 0.9928
   },
   "scraped/bulgarian_farmland_allocation_order": {
-    "jaccard": 0.7151,
-    "ssim": 0.891,
+    "jaccard": 0.7546,
+    "ssim": 0.9154,
     "text_boundary": 0.9556,
     "ua_fail": 0,
     "a11y_missing": 0,

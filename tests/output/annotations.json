@@ -1,5 +1,5 @@
 {
-  "next_id": 271,
+  "next_id": 272,
   "annotations": [
     {
       "id": 208,
@@ -868,7 +868,7 @@
       "y_pt": 86.37262,
       "note": "Image is suddenly wrong place.\n\nFIXED (2026-10-05, branch annot/french-logo 8ff40fad): broken by fa4db3fa, whose shorter header let the look-ahead fire on page 1; the keep-with-next chain then moved the logo paragraph to page 2 with its page-1 anchor. The one-shot float anchor now resets on page flush and column advance.",
       "fixed": true,
-      "cleared": false
+      "cleared": true
     },
     {
       "id": 265,
@@ -933,6 +933,17 @@
       "x_pt": 66.26649,
       "y_pt": 784.5301,
       "note": "Missing logo here",
+      "fixed": true,
+      "cleared": true
+    },
+    {
+      "id": 271,
+      "case": "scraped/bulgarian_farmland_allocation_order",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 143.20103,
+      "y_pt": 744.1875,
+      "note": "Top text line starts too far to the left",
       "fixed": true,
       "cleared": false
     }
