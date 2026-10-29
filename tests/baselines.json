@@ -7892,7 +7892,7 @@
     "ssim": 0.8637,
     "text_boundary": 1.0,
     "ua_fail": 2,
-    "a11y_missing": 8,
+    "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 1.0,
     "a11y_text": 1.0
