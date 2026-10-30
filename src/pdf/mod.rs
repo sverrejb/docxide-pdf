@@ -8,6 +8,7 @@ mod comments;
 mod emf;
 mod fonts;
 mod footnotes;
+mod glyph_grid;
 mod header_footer;
 mod helpers;
 mod images;

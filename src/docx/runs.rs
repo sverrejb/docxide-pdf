@@ -1035,7 +1035,11 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
                 }
         });
         if can_merge {
-            result.last_mut().unwrap().text.push_str(&run.text);
+            let prev = result.last_mut().unwrap();
+            let base = prev.text.len();
+            prev.source_breaks.push(base);
+            prev.source_breaks.extend(run.source_breaks.iter().map(|b| base + b));
+            prev.text.push_str(&run.text);
         } else {
             result.push(run);
         }

@@ -424,6 +424,9 @@ pub(super) struct WordChunk {
     pub(super) space_after: bool,
     /// Literal break spaces before this chunk (more than one when typed so).
     pub(super) preceding_spaces: usize,
+    /// Characters of `text` that begin a source run (`Run::source_breaks`);
+    /// 0 also when the run began in the spaces before the word.
+    pub(super) source_starts: Vec<usize>,
     /// Ordinary word-space decoration; excludes tab-stop decorations.
     pub(super) word_space_bridge: bool,
     /// The math zone's spoken form, for its Formula (see `Run::formula`).
@@ -522,6 +525,7 @@ impl WordChunk {
     ) -> Self {
         Self {
             pdf_font: entry.pdf_name.clone(),
+            source_starts: source_starts(run, word),
             text: word.to_string(),
             font_size: eff_fs,
             line_font_size: run.font_size,
@@ -607,6 +611,7 @@ impl WordChunk {
     ) -> Self {
         let (width, height) = img.layout_size();
         Self {
+            source_starts: Vec::new(),
             pdf_font: String::new(),
             text: String::new(),
             font_size,
@@ -673,6 +678,7 @@ impl WordChunk {
         width: f32,
     ) -> Self {
         Self {
+            source_starts: Vec::new(),
             pdf_font: entry.pdf_name.clone(),
             text,
             font_size,
@@ -764,6 +770,7 @@ impl WordChunk {
         width: f32,
     ) -> Self {
         Self {
+            source_starts: Vec::new(),
             pdf_font: entry.pdf_name.clone(),
             text: String::new(),
             font_size,
@@ -1505,6 +1512,25 @@ fn chunk_lang(run: &Run, text: &str) -> Option<Arc<str>> {
         Script::Latin
     };
     run_lang(run, script).cloned()
+}
+
+/// Where source runs begin inside `word`, when `word` is a slice of the run's
+/// text (caps and other rewrites lose the mapping; they get none).
+fn source_starts(run: &Run, word: &str) -> Vec<usize> {
+    let text = run.text.as_bytes();
+    if word.is_empty() || !text.as_ptr_range().contains(&word.as_ptr()) {
+        return Vec::new();
+    }
+    let at = word.as_ptr() as usize - text.as_ptr() as usize;
+    let lead = text[..at].iter().rev().take_while(|&&b| b == b' ').count();
+    let mut starts: Vec<usize> = std::iter::once(0)
+        .chain(run.source_breaks.iter().copied())
+        .filter(|&b| b + lead >= at && b < at + word.len())
+        // A run's text rewritten after the merge leaves stale offsets.
+        .filter_map(|b| word.get(..b.saturating_sub(at)).map(|s| s.chars().count()))
+        .collect();
+    starts.dedup();
+    starts
 }
 
 /// Push WordChunks for a word, splitting into per-segment chunks for smallCaps.
@@ -3616,6 +3642,124 @@ fn show_placed(
     }
 }
 
+/// Each chunk's glyph x positions as Word's online export draws them
+/// (`glyph_grid`), for the chunks the rule is known for. Chunks set edge to
+/// edge or a plain space apart share one grid, the line's exact positions.
+fn device_grid(
+    line: &TextLine,
+    entries: &HashMap<&str, &FontEntry>,
+    chunk_abs_x: &dyn Fn(usize, &WordChunk) -> f32,
+) -> Vec<Option<Vec<f32>>> {
+    use super::glyph_grid::{GridGlyph, drawn_positions};
+    fn flush(
+        line: &TextLine,
+        x0: f32,
+        seq: &mut Vec<GridGlyph>,
+        members: &mut Vec<(usize, usize)>,
+        out: &mut [Option<Vec<f32>>],
+    ) {
+        let drawn = drawn_positions(x0, seq);
+        for &(ci, first) in members.iter() {
+            let n = line.chunks[ci].text.chars().count();
+            out[ci] = Some(drawn[first..first + n].to_vec());
+        }
+        seq.clear();
+        members.clear();
+    }
+    let mut out = vec![None; line.chunks.len()];
+    let mut seq: Vec<GridGlyph> = Vec::new();
+    // (chunk, its first glyph in `seq`)
+    let mut members: Vec<(usize, usize)> = Vec::new();
+    let mut x0 = 0.0;
+    // The previous chunk when it is in `seq`, and where it ends.
+    let mut prev: Option<(usize, f32)> = None;
+    for (i, chunk) in line.chunks.iter().enumerate() {
+        let Some(entry) = entries
+            .get(chunk.pdf_font.as_str())
+            .copied()
+            .filter(|e| grid_eligible(chunk, e))
+        else {
+            flush(line, x0, &mut seq, &mut members, &mut out);
+            prev = None;
+            continue;
+        };
+        let x = chunk_abs_x(i, chunk);
+        let size = chunk.font_size;
+        // The spaces before this chunk, when they are plain ones.
+        let joined = prev.and_then(|(p, end)| {
+            let gap = x - end;
+            let n = chunk.preceding_spaces;
+            if n == 0 {
+                return (gap.abs() < 0.01).then_some((0, 0.0));
+            }
+            let pc = &line.chunks[p];
+            let sw = gap / n as f32;
+            let plain = [entry.space_width(size)]
+                .into_iter()
+                .chain(
+                    entries
+                        .get(pc.pdf_font.as_str())
+                        .map(|e| e.space_width(pc.font_size)),
+                )
+                .any(|w| (w - sw).abs() < 0.01);
+            plain.then_some((n, sw))
+        });
+        let new_run = match (joined, prev) {
+            (Some((n, sw)), Some((p, _))) => {
+                let pc = &line.chunks[p];
+                seq.extend((0..n).map(|_| GridGlyph {
+                    advance: sw,
+                    font_size: pc.font_size,
+                    run_start: false,
+                }));
+                pc.pdf_font != chunk.pdf_font
+                    || pc.font_size != size
+                    || pc.color != chunk.color
+                    || pc.y_offset != chunk.y_offset
+            }
+            _ => {
+                flush(line, x0, &mut seq, &mut members, &mut out);
+                x0 = x;
+                true
+            }
+        };
+        members.push((i, seq.len()));
+        seq.extend(chunk.text.chars().enumerate().map(|(j, ch)| GridGlyph {
+            advance: entry.char_width_1000(ch) * size / 1000.0,
+            font_size: size,
+            run_start: (j == 0 && new_run) || chunk.source_starts.contains(&j),
+        }));
+        prev = Some((i, x + chunk.width));
+    }
+    flush(line, x0, &mut seq, &mut members, &mut out);
+    out
+}
+
+/// Plain text whose drawn width is its glyphs' exact advances.
+fn grid_eligible(chunk: &WordChunk, entry: &FontEntry) -> bool {
+    let exact: f32 = chunk
+        .text
+        .chars()
+        .map(|c| entry.char_width_1000(c))
+        .sum::<f32>()
+        * chunk.font_size
+        / 1000.0;
+    !chunk.text.is_empty()
+        && chunk.math.is_none()
+        && chunk.text_shadow.is_none()
+        && chunk.checkbox.is_none()
+        && chunk.inline_image_name.is_none()
+        && !chunk.rtl
+        && chunk.char_spacing == 0.0
+        && chunk.text_scale == 100.0
+        && !(chunk.kern && entry.kern_pairs.is_some())
+        && chunk
+            .text
+            .chars()
+            .all(|c| c < '\u{2E80}' && !entry.missing_chars.contains(&c))
+        && (exact - chunk.width).abs() < 0.01
+}
+
 /// `text` split into characters, each with its advance in thousandths;
 /// `marks_attach` keeps combining marks with the letter before them.
 fn glyph_clusters<'a>(
@@ -4177,6 +4321,21 @@ pub(super) fn render_paragraph_lines(
             .iter()
             .any(|c| c.inline_image_name.is_none() && (!c.text.is_empty() || c.underline));
 
+        // Only lines like the probe's: unjustified, unkerned, no letter
+        // spacing, left to right, no East Asian text. The rest keep exact
+        // positions until each gets its own probe.
+        let plain_line = line.draw_order.is_empty()
+            && !line.rtl_paragraph
+            && line.right_region.is_none()
+            && mixed.is_none()
+            && !is_char_justified
+            && extra_per_gap == 0.0;
+        let grid = if plain_line {
+            device_grid(line, &pdf_name_to_entry, &chunk_abs_x)
+        } else {
+            Vec::new()
+        };
+
         if has_text_chunks {
             content.begin_text();
             let mut td_x = 0.0_f32;
@@ -4427,7 +4586,8 @@ pub(super) fn render_paragraph_lines(
                     td_y = my;
                 };
 
-                move_to(content, fx, fy);
+                let grid_xs = grid.get(chunk_idx).and_then(|g| g.as_deref());
+                move_to(content, grid_xs.map_or(fx, |g| g[0]), fy);
 
                 // Per-character font fallback: if some chars are missing
                 // from the primary font, split into segments and render
@@ -4450,7 +4610,22 @@ pub(super) fn render_paragraph_lines(
                         .position(|f| f.char_to_gid.as_ref().is_some_and(|m| m.contains_key(&c)))
                 };
 
-                if let Some(extras) = mixed
+                if let (Some(xs), Some(entry)) = (grid_xs, primary_entry) {
+                    let placed: Vec<(&str, f32, f32)> = chunk
+                        .text
+                        .char_indices()
+                        .zip(xs)
+                        .map(|((i, ch), gx)| {
+                            let x = (gx - xs[0]) * 1000.0 / chunk.font_size;
+                            (
+                                &chunk.text[i..i + ch.len_utf8()],
+                                x,
+                                entry.char_width_1000(ch),
+                            )
+                        })
+                        .collect();
+                    show_placed(content, entry, &placed, boundary_space.then_some(" "));
+                } else if let Some(extras) = mixed
                     .as_ref()
                     .and_then(|m| m.char_extras(chunk_idx, &chunk.text))
                 {
