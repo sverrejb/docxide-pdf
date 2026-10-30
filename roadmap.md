@@ -255,6 +255,32 @@ Open queue from the large-corpus and focus-fixture rounds:
   "Open Sans" → Segoe UI (`current_focus/merge-regressions.md` item 5).
   Courier → Courier New is Windows' substitute, unverified for Mac Word.
 
+- **Online glyph positioning** (merged 2026-10-30, `src/pdf/glyph_grid.rs`,
+  `current_focus/fundamentals.md` §2, probes 1–5): a 288 dpi device grid,
+  device advances rounding up from 0.46 px (half-up for OpenType-kerned
+  runs), a one-glyph look-ahead ±1 px correction, 1024 px chunks, the PDF
+  writer's per-glyph unit rounding restarting at rsid run boundaries;
+  justified spaces, plain-path kerning and letter spacing rounded apart; line
+  starts rounded per part (frame or margin, left indent, first line). Visual
+  suite J +4.34, SSIM +2.89; output +3.7 %. Left exact: RTL, East Asian
+  text, text scaling, fallback glyphs, centred and right-aligned starts.
+  Regressions against online references, not yet investigated unless noted
+  (Jaccard points):
+  - case152–154, case166, case167 (−3.2, one small case five times); our
+    text order differs from Word's.
+  - case149 (−4.4): glyphs closer to Word than before (mean |dx| 0.087 →
+    0.058pt); a near-empty page, so likely score noise.
+  - nested-float-align-m15-center-* (−2.4) and -right-* (−1.7): the line
+    beside the inner float now starts ~0.47pt right of Word (was ~0.3).
+  - cell-label-double-level-left-para-center-text1 (−2.8),
+    underlined-space-compat15-* (−2.1), air_pollution_permit_form (−2.4).
+  - About −1: traditional_skills_job_form (glyph |dx| 0.195 → 0.245pt),
+    ut_koer_annual_meeting_minutes, frame-float-clearance-*, case69,
+    case119, case142, min-width-run-whole.
+  The 12 Quartz-produced references (case63/64, door_air_cooling_unit_spec,
+  missing_font_substitution, 8 vml-*) lose up to 9.6: they place glyphs at
+  exact positions; best-effort, not tuned for.
+
 ## Tables
 
 - **Autofit vs Word** (2026-10-05 x-drift survey): case45 (tblW 4000, tcW 4680
@@ -444,16 +470,6 @@ Backlog (details in `current_focus/A11Y.md`):
 
 ## Parked
 
-- **Online glyph positioning / width drift**: rule found 2026-10-28 and
-  implemented 2026-10-30 on branch `fundamentals` (`src/pdf/glyph_grid.rs`,
-  `current_focus/fundamentals.md` §2, probes 1–5): a 288 dpi device grid,
-  device advances rounding up from 0.46 px (half-up for OpenType-kerned
-  runs), a one-glyph look-ahead ±1 px correction, 1024 px chunks, the PDF
-  writer's per-glyph unit rounding restarting at rsid run boundaries;
-  justified spaces, plain-path kerning and letter spacing rounded apart.
-  Visual suite J +4.34, SSIM +2.89; output +3.7 %.
-  Left exact: RTL, East Asian text, text scaling, fallback glyphs. Not
-  merged to main yet.
 - **Hyphenation**: Word's online converter never hyphenates; the 8
   `hyphenation/` fixtures wait for desktop-Word references with proofing
   tools.
