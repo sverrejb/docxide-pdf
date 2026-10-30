@@ -1660,8 +1660,8 @@
     "a11y_text": 1.0
   },
   "cases/case29": {
-    "jaccard": 0.7576,
-    "ssim": 0.7943,
+    "jaccard": 0.8124,
+    "ssim": 0.7988,
     "text_boundary": 0.9474,
     "convert_ms": 6.9,
     "ua_fail": 3,
@@ -1682,8 +1682,8 @@
     "a11y_text": 1.0
   },
   "cases/case30": {
-    "jaccard": 0.8473,
-    "ssim": 0.8538,
+    "jaccard": 0.8633,
+    "ssim": 0.8653,
     "text_boundary": 1.0,
     "convert_ms": 6.7,
     "ua_fail": 3,
@@ -1693,8 +1693,8 @@
     "a11y_text": 1.0
   },
   "cases/case31": {
-    "jaccard": 0.6042,
-    "ssim": 0.7955,
+    "jaccard": 0.6658,
+    "ssim": 0.8063,
     "text_boundary": 0.875,
     "convert_ms": 7.0,
     "ua_fail": 3,
@@ -1932,8 +1932,8 @@
     "a11y_text": 1.0
   },
   "cases/case52": {
-    "jaccard": 0.7073,
-    "ssim": 0.7821,
+    "jaccard": 0.7853,
+    "ssim": 0.7873,
     "text_boundary": 0.814,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -1942,8 +1942,8 @@
     "a11y_text": 1.0
   },
   "cases/case53": {
-    "jaccard": 0.5611,
-    "ssim": 0.5507,
+    "jaccard": 0.5957,
+    "ssim": 0.5534,
     "text_boundary": 0.7561,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -8028,13 +8028,14 @@
     "a11y_text": 1.0
   },
   "cases/torture_test": {
-    "jaccard": 0.0273,
-    "ssim": 0.2672,
+    "jaccard": 0.6858,
+    "ssim": 0.8312,
+    "text_boundary": 0.6111,
     "ua_fail": 3,
-    "a11y_missing": 46,
+    "a11y_missing": 39,
     "ua_deficit": 0,
-    "a11y_struct": 0.9153,
-    "a11y_text": 0.9257
+    "a11y_struct": 0.9492,
+    "a11y_text": 0.9071
   },
   "cases/trailing-anchor-prefix0-offset80-behind0": {
     "jaccard": 0.9957,
@@ -8853,7 +8854,7 @@
   "scraped/bulgarian_farmland_allocation_order": {
     "jaccard": 0.7837,
     "ssim": 0.9382,
-    "text_boundary": 0.9556,
+    "text_boundary": 1.0,
     "ua_fail": 0,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -9389,8 +9390,8 @@
     "a11y_text": 1.0
   },
   "scraped/federal_procurement_terms": {
-    "jaccard": 0.7473,
-    "ssim": 0.9217,
+    "jaccard": 0.7518,
+    "ssim": 0.9216,
     "text_boundary": 0.9296,
     "convert_ms": 57.1,
     "ua_fail": 3,
@@ -9556,7 +9557,7 @@
   "scraped/isla_language_lesson_plan": {
     "jaccard": 0.7343,
     "ssim": 0.8922,
-    "text_boundary": 0.8718,
+    "text_boundary": 0.9949,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -9616,8 +9617,8 @@
     "a11y_text": 1.0
   },
   "scraped/japanese_hr_consultation_application": {
-    "jaccard": 0.4139,
-    "ssim": 0.5616,
+    "jaccard": 0.414,
+    "ssim": 0.5618,
     "text_boundary": 0.1778,
     "ua_fail": 0,
     "a11y_missing": 0,
