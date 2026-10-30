@@ -3716,13 +3716,15 @@ fn render_paragraph_block(
                 }
                 VRelativeFrom::Paragraph => {
                     let before = own_space_before(inter_gap, state.prev_space_after);
-                    let line_overlaps = tb.v_offset_pt < before + content_h && tb_bottom > before;
+                    let line_overlaps = tb.v_offset_pt < before + lines_h && tb_bottom > before;
                     // Only a mark line moves below the box: a picture-only
                     // paragraph keeps its picture line beside it (a 65pt logo
                     // beside a square-wrapped title box ends the paragraph at
                     // the logo's foot in Word, not the two stacked).
+                    // Side-by-side boxes move the line below the lower one, not
+                    // below their stacked heights (torture_test's linked pair).
                     content_h = if text_empty && para.image.is_none() && line_overlaps {
-                        tb_bottom + content_h
+                        content_h.max(tb_bottom + lines_h)
                     } else {
                         content_h.max(tb_bottom - before)
                     };
