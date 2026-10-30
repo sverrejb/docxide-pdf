@@ -60,8 +60,8 @@ pub(super) fn stroke_border(
 }
 
 /// A wave border: half-period cubic arcs alternating across the line, the
-/// band `extent` tall and the waves 5.17 line widths long (7.44pt at sz 12
-/// in Word's desktop PDF of issue #145's probe).
+/// band `extent` tall and the waves five line widths long (7.5pt tiles at
+/// sz 12 in Word's export of `paragraph-border-styles`).
 fn stroke_wave(
     content: &mut Content,
     b: &ParagraphBorder,
@@ -80,7 +80,7 @@ fn stroke_wave(
     // A cubic whose inner control points sit 4/3 of the amplitude out peaks
     // at the amplitude.
     let bulge = (b.extent() - w) / 2.0 * 4.0 / 3.0;
-    let half = 5.17 * w / 2.0;
+    let half = 5.0 * w / 2.0;
     content.save_state();
     content.set_line_width(w);
     stroke_rgb(content, b.color);
