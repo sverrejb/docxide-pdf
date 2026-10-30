@@ -76,7 +76,7 @@ While the idea, architecture, testing strategy and validation of output are all 
 - **Headers/footers**: default, first-page, and even/odd variants, per-section headers/footers, STYLEREF field resolution (spec-compliant backward search), page number and page count fields, images in headers/footers, correct z-ordering (behind body content)
 - **Footnotes & endnotes**: footnote references and page-bottom rendering with separator line, endnotes flowed at document end, per-section mark numbering formats, shading on reference marks
 - **Comments**: `word/comments.xml` rendered in Word's right-hand review pane with callouts and body scaling
-- **Fields**: PAGE, NUMPAGES, PAGEREF, STYLEREF (with spec-compliant search order) and IF evaluated in complex `w:fldChar` fields, MACROBUTTON shows its display text or picture, cached results for every other field (and for `w:fldSimple`)
+- **Fields**: PAGE, NUMPAGES, PAGEREF, STYLEREF (with spec-compliant search order, `\n` and `\t`), SEQ (`\*`, `\c`, `\r`, `\h`) and IF evaluated in complex `w:fldChar` fields, a TOC whose cache is a single placeholder paragraph regenerated (`\o`, `\t`, `\u`, `\c`, `\n`), MACROBUTTON shows its display text or picture, cached results for every other field (and for `w:fldSimple` other than STYLEREF and SEQ)
 - **Hyperlinks**: clickable external links (URI link annotations) and internal links (bookmarks, footnote marks)
 - **Tab stops**: left, center, right, decimal; dot, hyphen and underscore leaders
 - **Track changes**: final mode (insertions and moved-to text included, deletions and moved-from text removed — matches Word's PDF export)
@@ -98,7 +98,7 @@ While the idea, architecture, testing strategy and validation of output are all 
 - **Charts**: 3D charts (3D pie is drawn flat), stock charts, combo charts (first chart type only), data labels, chart titles, secondary axes
 - **Shape effects**: shadow/glow/soft edges on shapes and text boxes (pictures only), dashed outlines (`a:prstDash`), 3D bevel/rotation (`a:scene3d`, `a:sp3d`), preset shadows (`a:prstShdw`), radial/path gradient fills (drawn as linear)
 - **SmartArt**: no layout engine for documents missing the `dsp:drawing` fallback (see roadmap)
-- **Features**: table of contents generation (cached TOC results are drawn), embedded OLE object data (only the preview picture is drawn), lists inside `altChunk` HTML (dropped)
+- **Features**: regeneration of a TOC Word has already filled in (its cached entries are drawn; only a one-paragraph placeholder is generated), embedded OLE object data (only the preview picture is drawn), lists inside `altChunk` HTML (dropped)
 - **Fonts**: bundled fallback fonts (without the document's fonts installed, Arial/Liberation Sans/DejaVu Sans or Helvetica stand in)
 
 ## Examples

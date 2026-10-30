@@ -198,9 +198,16 @@ Open queue from the large-corpus and focus-fixture rounds:
 - **Paragraph borders** (probe 2026-10-30, `paragraph-borders-inherited`):
   pBdr merges per side through basedOn and from direct formatting, none/nil
   removing a side; boxes join when their edges line up, whatever the
-  indents. Open: `val="double"` is drawn as one line; header/footer
-  paragraphs never join a group; renewable_dispatch's last blue "CBIR
-  Process" heading bar is not drawn at all (white text on white).
+  indents. Border styles (issue #145, `paragraph-border-styles`):
+  dotted/dashed/dotDash dash arrays of 1/3/3-1-1 line widths, double = two
+  lines a line apart, thinThick*Gap = full line inside, half gap, half line
+  outside in the online export (desktop Word puts the thin line inside;
+  medium gap measured, small/large drawn alike), wave = a 2.5-line band of
+  5-line waves; the band's extent sizes the box.
+  Open: header/footer paragraphs never join a group; renewable_dispatch's
+  last blue "CBIR Process" heading bar is not drawn at all (white text on
+  white); table cell borders keep their own dash arrays and draw wave and
+  thin/thick pairs as one line (`pdf::table::draw_border`).
 - **Trailing punctuation**: Word never lets a Latin mark hang past the margin
   (`overflowPunct` is not what it does). In a zh/ja/ko document whose East
   Asian font is a CJK face, a justified line's word-share limit grows by half
@@ -457,9 +464,27 @@ Backlog (details in `current_focus/A11Y.md`):
 
 ## Other features
 
-- Field codes: only PAGE, NUMPAGES, STYLEREF, PAGEREF and IF are evaluated;
-  MACROBUTTON shows its display text or picture; the rest print their cached
-  result.
+- Field codes: PAGE, NUMPAGES, STYLEREF (`\n`, `\t`), PAGEREF, IF and SEQ
+  are evaluated; MACROBUTTON shows its display text or picture; the rest
+  print their cached result. SEQ (issue #145): one counter per name in body
+  order with `\*`, `\c`, `\r n` and `\h`; `\s` (restart under a heading
+  level) is not read, and SEQ fields in text boxes, headers and footers keep
+  their cache. A TOC whose field begins and ends in one paragraph (a
+  placeholder cache) is regenerated from `\o`/`\u` outline levels, `\t`
+  styles and `\c` SEQ names with `\n`; `\p` separators, `\b` scopes and TC
+  fields are ignored, and a document without "toc N" styles indents level N
+  by 11pt × (N − 1) (unprobed). A Word-written TOC spanning paragraphs is
+  still drawn as cached.
+- Issue #145 follow-ups: `table-style-centered`'s tables are 22pt narrower in
+  Word: a table style without `tblCellMar` in a document without a default
+  table style gets Word's 0.5pt side margins, we give the 5.4pt that come
+  with a style (`has_style_or_cell_mar`); a table style's `tblStylePr` (firstRow…) `vAlign`
+  is not read (base `tcPr` and `jc` are); table styles are still walked per
+  table (`style_chain`) instead of flattened at load like paragraph styles;
+  the row-split predictor (`first_chunks_fit`) and `find_cell_split` encode
+  the first chunk twice; list labels in headers, text boxes and footnotes do
+  not follow a centred or right-aligned first line as body and cell labels
+  now do.
 - Body PAGE/NUMPAGES (issue #140) come from a first render pass: a PAGE in a
   paragraph that spans two pages shows the first page's number, and fields in
   table cells keep their cached result. Body STYLEREF (issue #142) is resolved
