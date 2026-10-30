@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
 
 use crate::model::{
-    Alignment, CellBorder, LineSpacing, TabStop, TableAlignment, TextFill, TextGlow, TextOutline,
-    TextShadow,
+    Alignment, CellBorder, CellVAlign, LineSpacing, TabStop, TableAlignment, TextFill, TextGlow,
+    TextOutline, TextShadow,
 };
 
 pub(super) use super::color::{ColorTransforms, parse_color_transforms};
@@ -457,6 +457,9 @@ pub(super) struct TableStyleDef {
     /// `w:tblPr/w:jc`: tables in the style centre or right-align like a
     /// direct jc (issue #145's "Centered table" style).
     pub(super) jc: Option<TableAlignment>,
+    /// `w:tcPr/w:vAlign`: every cell's vertical alignment unless it sets its
+    /// own (issue #145's vertically merged "Vertical group" cell).
+    pub(super) v_align: Option<CellVAlign>,
     /// The style's `w:pPr/w:spacing` before/after and line rule: cell
     /// paragraphs take them over docDefaults.
     pub(super) space_before: Option<f32>,
@@ -1280,6 +1283,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         conditionals,
                         cell_margins,
                         jc: wml(style_node, "tblPr").and_then(super::tables::table_jc),
+                        v_align: wml(style_node, "tcPr").and_then(super::tables::cell_v_align),
                         space_before: style_spacing.and_then(|n| twips_attr(n, "before")),
                         space_after: style_spacing.and_then(|n| twips_attr(n, "after")),
                         line_spacing: style_line_spacing,

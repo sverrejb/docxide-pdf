@@ -68,6 +68,16 @@ fn merge_cell_margins(mar: roxmltree::Node, base: CellMargins) -> CellMargins {
     }
 }
 
+/// `w:vAlign` under a `w:tcPr`.
+pub(super) fn cell_v_align(tc_pr: roxmltree::Node) -> Option<CellVAlign> {
+    match wml_attr(tc_pr, "vAlign")? {
+        "center" => Some(CellVAlign::Center),
+        "bottom" => Some(CellVAlign::Bottom),
+        "top" => Some(CellVAlign::Top),
+        _ => None,
+    }
+}
+
 /// `w:jc` under a `w:tblPr` or `w:trPr`.
 pub(super) fn table_jc(pr: roxmltree::Node) -> Option<TableAlignment> {
     wml_attr(pr, "jc").map(|val| match val {
@@ -308,6 +318,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     let style_space_before = style_chain().find_map(|s| s.space_before);
     let style_space_after = style_chain().find_map(|s| s.space_after);
     let style_line_spacing = style_chain().find_map(|s| s.line_spacing);
+    let style_v_align = style_chain().find_map(|s| s.v_align);
 
     let table_position = tbl_pr.and_then(|pr| wml(pr, "tblpPr")).map(|tblp| {
         let v_anchor = match tblp.attribute((WML_NS, "vertAnchor")) {
@@ -513,11 +524,10 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                 })
                 .unwrap_or(VMerge::None);
 
-            let v_align = match tc_pr.and_then(|pr| wml_attr(pr, "vAlign")) {
-                Some("center") => CellVAlign::Center,
-                Some("bottom") => CellVAlign::Bottom,
-                _ => CellVAlign::Top,
-            };
+            let v_align = tc_pr
+                .and_then(cell_v_align)
+                .or(style_v_align)
+                .unwrap_or(CellVAlign::Top);
 
             let text_direction = match tc_pr.and_then(|pr| wml_attr(pr, "textDirection")) {
                 Some("tbRlV" | "tbRl" | "rlV" | "rl" | "tbV" | "tb") => TextDirection::TbRl,
