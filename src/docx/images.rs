@@ -11,9 +11,9 @@ use super::charts::parse_chart_from_zip;
 use super::smartart::{has_diagram_ref, parse_smartart_drawing};
 use super::textbox::{parse_connector_from_wsp, parse_textbox_from_wsp};
 use super::{
-    CHART_NS, DML_NS, PIC_NS, ParseContext, REL_NS, VML_NS, W10_NS, WML_NS, WPD_NS, angle_attr,
-    dml, emu_attr, emu_attr_opt, emu_to_pts, f32_attr, frac_attr, parse_hex_color, parse_on_off,
-    parse_pt, part_path, read_zip_bytes, twips_attr, wml, wpd,
+    CHART_NS, DML_NS, PIC_NS, ParseContext, REL_NS, VML_NS, W10_NS, WML_NS, WPD_NS, WPS_NS,
+    angle_attr, dml, emu_attr, emu_attr_opt, emu_to_pts, f32_attr, frac_attr, parse_hex_color,
+    parse_on_off, parse_pt, part_path, read_zip_bytes, twips_attr, wml, wpd,
 };
 
 fn parse_emu_text(text: &str) -> f32 {
@@ -91,7 +91,73 @@ fn gif_or_tiff_to_png(data: &[u8]) -> Option<Vec<u8>> {
         f @ (image::ImageFormat::Gif | image::ImageFormat::Tiff) => f,
         _ => return None,
     };
-    let img = image::load_from_memory_with_format(data, fmt).ok()?;
+    encode_png(image::load_from_memory_with_format(data, fmt).ok()?)
+}
+
+/// An inline `wps` shape filled with a picture and holding no text: a picture
+/// in the line like any other, keeping its place after the pictures before
+/// it, with the shape's own properties. An `a:tile` fill is drawn into one
+/// raster.
+fn picture_filled_shape<R: Read + Seek>(
+    container: roxmltree::Node,
+    ctx: &mut ParseContext<'_, R>,
+    display_w: f32,
+    display_h: f32,
+) -> Option<EmbeddedImage> {
+    let wsp = container
+        .descendants()
+        .find(|n| n.has_tag_name((WPS_NS, "wsp")))?;
+    let fill = dml(super::textbox::find_sp_pr(wsp)?, "blipFill")?;
+    if wsp.descendants().any(|n| n.has_tag_name((WPS_NS, "txbx"))) {
+        return None;
+    }
+    let mut img = find_blip_embeds(fill)
+        .find_map(|id| read_image_from_zip(id, ctx.rels, ctx.zip, display_w, display_h))?;
+    if let Some(tile) = dml(fill, "tile")
+        && let Some((png, w, h)) = tile_picture(&img.data, tile, display_w, display_h)
+    {
+        img.data = std::sync::Arc::new(png);
+        (img.pixel_width, img.pixel_height, img.format) = (w, h, ImageFormat::Png);
+    }
+    apply_pic_props(&mut img, container);
+    Some(img)
+}
+
+/// `a:tile`: the picture repeated at `sx`/`sy` of its size (96 dpi) from the
+/// frame's top-left corner, offset by `tx`/`ty`, as a PNG of the frame. None
+/// (the picture stretched instead) past 4096 pixels a side.
+/// ponytail: `flip` and `algn` other than the top-left are ignored; Word
+/// writes a tiling pattern, which would keep the tile's size in the file.
+fn tile_picture(
+    data: &[u8],
+    tile: roxmltree::Node,
+    frame_w: f32,
+    frame_h: f32,
+) -> Option<(Vec<u8>, u32, u32)> {
+    const MAX_SIDE: f32 = 4096.0;
+    let pic = image::load_from_memory(data).ok()?.into_rgba8();
+    // Pixels per point at the tile's size, so each tile keeps its pixels.
+    let px = |axis| 96.0 / 72.0 / frac_attr(tile, axis).unwrap_or(1.0);
+    let (w, h) = (frame_w * px("sx"), frame_h * px("sy"));
+    if !(1.0..=MAX_SIDE).contains(&w) || !(1.0..=MAX_SIDE).contains(&h) {
+        return None;
+    }
+    let offset = |attr, axis, size: u32| {
+        let o = (emu_attr_opt(tile, attr).unwrap_or(0.0) * px(axis)) as i64;
+        o.rem_euclid(size as i64) - size as i64
+    };
+    let mut canvas = image::RgbaImage::new(w.ceil() as u32, h.ceil() as u32);
+    let (tw, th) = (pic.width() as usize, pic.height() as usize);
+    for y in (offset("ty", "sy", pic.height())..canvas.height() as i64).step_by(th) {
+        for x in (offset("tx", "sx", pic.width())..canvas.width() as i64).step_by(tw) {
+            image::imageops::replace(&mut canvas, &pic, x, y);
+        }
+    }
+    let (cw, ch) = canvas.dimensions();
+    Some((encode_png(image::DynamicImage::ImageRgba8(canvas))?, cw, ch))
+}
+
+fn encode_png(img: image::DynamicImage) -> Option<Vec<u8>> {
     let mut png = Vec::new();
     img.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .ok()?;
@@ -198,7 +264,13 @@ fn apply_pic_props(img: &mut EmbeddedImage, container: roxmltree::Node) {
             n.tag_name().name() == "decorative" && n.attribute("val").is_some_and(parse_on_off)
         });
     }
-    let sp_pr = find_pic_sp_pr(container);
+    // A picture-filled shape has its properties on the shape (`wps:spPr`).
+    let sp_pr = find_pic_sp_pr(container).or_else(|| {
+        container
+            .descendants()
+            .find(|n| n.has_tag_name((WPS_NS, "wsp")))
+            .and_then(super::textbox::find_sp_pr)
+    });
     img.rotation_deg = parse_image_rotation(sp_pr);
     let (stroke_color, stroke_width) = parse_pic_outline(sp_pr);
     img.stroke_color = stroke_color;
@@ -738,6 +810,10 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                 return Some(RunDrawingResult::SmartArt(diagram));
             }
             continue;
+        }
+
+        if let Some(img) = picture_filled_shape(container, ctx, display_w, display_h) {
+            return Some(RunDrawingResult::Inline(img));
         }
 
         // Inline textbox: wp:inline containing wps:wsp with text content
