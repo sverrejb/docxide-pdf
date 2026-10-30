@@ -3906,7 +3906,15 @@ fn render_paragraph_block(
             chain_notes.extend(next.runs.iter().filter_map(|r| r.footnote_id));
             let (nfs, nlhr, _) = tallest_run_metrics(&next.runs, ctx.fonts);
             let next_inter = f32::max(prev_sa, next.space_before);
-            let next_first_line_h = nlhr.map(|ratio| nfs * ratio).unwrap_or(nfs * 1.2);
+            let next_ls = next.line_spacing.unwrap_or(ctx.doc_line_spacing);
+            // An exact or at-least box is the whole first line (issue #145's
+            // heading moves with its 40pt-exact successor); an auto multiple's
+            // extra leading may hang past the margin like `last_line_lead`.
+            let first_ls = match next_ls {
+                LineSpacing::Auto(_) => LineSpacing::Auto(1.0),
+                boxed => boxed,
+            };
+            let next_first_line_h = resolve_line_h(first_ls, nfs, nlhr);
             // The chain needs as many of the next paragraph's lines as must
             // stay together on this page: all of a keepLines paragraph; else
             // one without widow control, with it two, or all of a paragraph
@@ -3925,7 +3933,6 @@ fn render_paragraph_block(
             } else {
                 lines_kept_together(next.widow_control, &mut count)
             };
-            let next_ls = next.line_spacing.unwrap_or(ctx.doc_line_spacing);
             extra += next_inter
                 + next_first_line_h
                 + needed.saturating_sub(1) as f32 * resolve_line_h(next_ls, nfs, nlhr);
