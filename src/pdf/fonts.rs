@@ -23,6 +23,11 @@ pub(super) fn comment_pane_keys(doc: &Document) -> (String, String) {
     )
 }
 
+/// The registered fonts by their PDF resource name.
+pub(super) fn by_pdf_name(fonts: &HashMap<String, FontEntry>) -> HashMap<&str, &FontEntry> {
+    fonts.values().map(|e| (e.pdf_name.as_str(), e)).collect()
+}
+
 pub(super) fn collect_all_runs(doc: &Document) -> Vec<&Run> {
     let hf_runs = doc.sections.iter().flat_map(|s| {
         [
@@ -124,6 +129,9 @@ fn collect_used_chars(
             chars.extend(run.text.to_uppercase().chars());
         } else {
             chars.extend(run.text.chars());
+        }
+        if let Some(ruby) = &run.ruby {
+            chars.extend(ruby.text.chars());
         }
         if let Some(ref fc) = run.field_code {
             match fc {

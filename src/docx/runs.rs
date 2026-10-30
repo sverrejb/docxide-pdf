@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::io::{Read, Seek};
+use std::sync::Arc;
 
 use crate::model::{
     ConnectorShape, FieldCode, FloatingImage, FormCheckbox, HorizontalRule, IfPart, InlineChart,
-    Run, SmartArtDiagram, TabAlignment, TextFill, TextGlow, TextOutline, TextShadow, Textbox,
+    Ruby, Run, SmartArtDiagram, TabAlignment, TextFill, TextGlow, TextOutline, TextShadow, Textbox,
     VertAlign,
 };
 
@@ -782,10 +783,20 @@ fn is_comment_reference_run(node: roxmltree::Node) -> bool {
         .any(|c| c.has_tag_name((WML_NS, "commentReference")))
 }
 
+/// A run node with what its wrappers give it: hyperlink URL (and whether it
+/// is an in-document anchor), open comments, and the ruby whose base it is.
+type RunNode<'a> = (
+    roxmltree::Node<'a, 'a>,
+    Option<String>,
+    bool,
+    Vec<u32>,
+    Option<Arc<Ruby>>,
+);
+
 fn collect_run_nodes<'a>(
     parent: roxmltree::Node<'a, 'a>,
     rels: &HashMap<String, String>,
-    out: &mut Vec<(roxmltree::Node<'a, 'a>, Option<String>, bool, Vec<u32>)>,
+    out: &mut Vec<RunNode<'a>>,
     active_comments: &mut Vec<u32>,
 ) {
     for child in parent.children() {
@@ -815,11 +826,23 @@ fn collect_run_nodes<'a>(
             if is_comment_reference_run(child) {
                 continue;
             }
-            out.push((child, None, false, active_comments.clone()));
+            // A ruby's base text stands in the line, its runs sharing the guide.
+            if let Some(ruby) = wml(child, "ruby") {
+                let first = out.len();
+                if let Some(base) = wml(ruby, "rubyBase") {
+                    collect_run_nodes(base, rels, out, active_comments);
+                }
+                let guide = ruby_of(ruby);
+                for (.., r) in &mut out[first..] {
+                    *r = Some(guide.clone());
+                }
+                continue;
+            }
+            out.push((child, None, false, active_comments.clone(), None));
         } else if is_wml && name == "br" {
             // A w:br straight under w:p is malformed, but Word breaks there
             // (a citation's URL then starts the next line).
-            out.push((child, None, false, active_comments.clone()));
+            out.push((child, None, false, active_comments.clone(), None));
         } else if is_wml && name == "hyperlink" {
             let has_rid = child.attribute((REL_NS, "id")).is_some();
             let has_anchor = child.attribute((WML_NS, "anchor")).is_some();
@@ -837,7 +860,7 @@ fn collect_run_nodes<'a>(
             // inside a hyperlink, and the inner one wins.
             let first = out.len();
             collect_run_nodes(child, rels, out, active_comments);
-            for (_, run_url, anchor_only, _) in &mut out[first..] {
+            for (_, run_url, anchor_only, ..) in &mut out[first..] {
                 if run_url.is_none() {
                     *run_url = url.clone();
                     *anchor_only = is_anchor_only;
@@ -869,10 +892,10 @@ fn collect_run_nodes<'a>(
                 .children()
                 .filter(|n| n.has_tag_name((MATH_NS, "oMath")))
             {
-                out.push((om, None, false, active_comments.clone()));
+                out.push((om, None, false, active_comments.clone(), None));
             }
         } else if ns == Some(MATH_NS) && name == "oMath" {
-            out.push((child, None, false, active_comments.clone()));
+            out.push((child, None, false, active_comments.clone(), None));
         }
     }
 }
@@ -947,6 +970,33 @@ macro_rules! handle_drawing_result {
 }
 
 /// Merge consecutive text runs with identical visual properties.
+/// Both absent, or the same shared value.
+fn same_arc<T: ?Sized>(a: &Option<Arc<T>>, b: &Option<Arc<T>>) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a), Some(b)) => Arc::ptr_eq(a, b),
+        _ => false,
+    }
+}
+
+/// A `w:ruby`'s guide text and its placement.
+/// ponytail: the guide is drawn in its base text's font; read `w:rt`'s run
+/// formatting when a document's guide uses another face.
+fn ruby_of(ruby: roxmltree::Node) -> Arc<Ruby> {
+    let pr = wml(ruby, "rubyPr");
+    let text = wml(ruby, "rt")
+        .into_iter()
+        .flat_map(|rt| rt.descendants())
+        .filter(|n| n.has_tag_name((WML_NS, "t")))
+        .filter_map(|t| t.text())
+        .collect();
+    Arc::new(Ruby {
+        text,
+        font_size: pr.and_then(|pr| half_points(pr, "hps")).unwrap_or(5.0),
+        raise: pr.and_then(|pr| half_points(pr, "hpsRaise")).unwrap_or(10.0),
+    })
+}
+
 /// Word often splits a single word across multiple `w:r` elements for revision
 /// tracking (different rsidR). Without merging, the layout engine treats each
 /// run's text independently, allowing line breaks mid-word.
@@ -1028,11 +1078,9 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
                 && prev.comment_anchor_ids.is_empty()
                 && run.comment_anchor_ids.is_empty()
                 // One Formula per math zone, never merged into the text around it.
-                && match (&prev.formula, &run.formula) {
-                    (None, None) => true,
-                    (Some(a), Some(b)) => std::sync::Arc::ptr_eq(a, b),
-                    _ => false,
-                }
+                && same_arc(&prev.formula, &run.formula)
+                // One ruby's base runs merge only with each other.
+                && same_arc(&prev.ruby, &run.ruby)
         });
         if can_merge {
             let prev = result.last_mut().unwrap();
@@ -1135,7 +1183,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
     let para_style = ctx.styles.paragraph_styles.get(para_style_id);
     let defaults = ParagraphRunDefaults::from_style(para_style, &ctx.styles.defaults);
 
-    let mut run_nodes: Vec<(roxmltree::Node, Option<String>, bool, Vec<u32>)> = Vec::new();
+    let mut run_nodes: Vec<RunNode> = Vec::new();
     let mut active_comments: Vec<u32> = ctx
         .comments
         .open_at
@@ -1145,7 +1193,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
     collect_run_nodes(para_node, ctx.rels, &mut run_nodes, &mut active_comments);
     // Word shows only comments the text references; a range without its
     // w:commentReference gets no tint and no balloon.
-    for (.., ids) in &mut run_nodes {
+    for (_, _, _, ids, _) in &mut run_nodes {
         ids.retain(|id| ctx.comments.shown.contains(id));
     }
     // A referenced comment whose range holds no text (empty, or missing)
@@ -1184,7 +1232,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
     let mut has_clear_break = false;
     let mut field_stack: Vec<FieldFrame> = std::mem::take(&mut ctx.fields.frames);
 
-    for (node_idx, (run_node, hyperlink_url, is_anchor_hyperlink, comment_ids)) in
+    for (node_idx, (run_node, hyperlink_url, is_anchor_hyperlink, comment_ids, ruby)) in
         run_nodes.into_iter().enumerate()
     {
         attach_comment_anchors(&mut runs, &mut ref_anchors, node_idx);
@@ -1636,6 +1684,11 @@ pub(super) fn parse_runs<R: Read + Seek>(
         if !comment_ids.is_empty() {
             for r in &mut runs[runs_before..] {
                 r.comment_ids = comment_ids.clone();
+            }
+        }
+        if ruby.is_some() {
+            for r in &mut runs[runs_before..] {
+                r.ruby = ruby.clone();
             }
         }
     }

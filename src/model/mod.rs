@@ -703,6 +703,18 @@ pub struct Run {
     pub checkbox: Option<FormCheckbox>,
     /// An Office Math zone laid out as one box; `text` holds its linear form.
     pub math: Option<std::sync::Arc<MathZone>>,
+    /// `w:ruby`: this run is (part of) the base text the guide text sits above.
+    pub ruby: Option<std::sync::Arc<Ruby>>,
+}
+
+/// Phonetic guide text (`w:rt`) set above its base text.
+#[derive(Debug, PartialEq)]
+pub struct Ruby {
+    pub text: String,
+    /// `w:hps`, in points.
+    pub font_size: f32,
+    /// `w:hpsRaise`: the guide's baseline above the base text's, in points.
+    pub raise: f32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -820,6 +832,7 @@ impl Default for Run {
             formula: None,
             checkbox: None,
             math: None,
+            ruby: None,
         }
     }
 }

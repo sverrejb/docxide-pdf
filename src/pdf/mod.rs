@@ -4853,13 +4853,10 @@ fn render_paragraph_block(
         && content_h > 0.0
         && let Some((start, count_by, right_x)) = ln_cfg
     {
+        // ponytail: no grid snap; a grid-snapped empty anchor's number may sit off its line.
         let mark_baseline =
             state.pb.slot_top - bdr_top_pad - content_h + (line_h - first_baseline_offset).max(0.0);
-        let fonts: HashMap<&str, &FontEntry> = ctx
-            .fonts
-            .values()
-            .map(|e| (e.pdf_name.as_str(), e))
-            .collect();
+        let fonts = fonts::by_pdf_name(ctx.fonts);
         LineNumberArg {
             counter: &mut state.pb.line_number_counter,
             start,

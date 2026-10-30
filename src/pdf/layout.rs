@@ -436,6 +436,8 @@ pub(super) struct WordChunk {
     pub(super) kern: bool,
     /// Drawn as a square in place of the text (`Run::checkbox`).
     pub(super) checkbox: Option<FormCheckbox>,
+    /// Guide text drawn above this chunk and the ones sharing it.
+    pub(super) ruby: Option<std::sync::Arc<crate::model::Ruby>>,
     /// From a `w:rtl` run (bidi embedding, mirrored brackets).
     pub(super) rtl: bool,
     /// From a `w:hint="eastAsia"` run: its curly quotes are full-width
@@ -578,6 +580,7 @@ impl WordChunk {
             formula: run.formula.clone(),
             kern: run.kerns_at(eff_fs),
             checkbox: run.checkbox,
+            ruby: run.ruby.clone(),
             rtl: run.rtl,
             east_asia_hint: run.east_asia_hint,
             rtl_glyphs: false,
@@ -648,6 +651,7 @@ impl WordChunk {
             formula: None,
             kern: false,
             checkbox: None,
+            ruby: None,
             rtl: false,
             east_asia_hint: false,
             rtl_glyphs: false,
@@ -715,6 +719,7 @@ impl WordChunk {
             formula: None,
             kern: false,
             checkbox: None,
+            ruby: None,
             rtl: false,
             east_asia_hint: false,
             rtl_glyphs: false,
@@ -809,6 +814,7 @@ impl WordChunk {
             formula: None,
             kern: false,
             checkbox: None,
+            ruby: None,
             rtl: false,
             east_asia_hint: false,
             rtl_glyphs: false,
@@ -1124,8 +1130,7 @@ pub(super) fn size_lines_by_own_runs(
     para_ascent: f32,
     top_aligned: bool,
 ) {
-    let by_pdf_name: HashMap<&str, &FontEntry> =
-        fonts.values().map(|e| (e.pdf_name.as_str(), e)).collect();
+    let by_pdf_name = super::fonts::by_pdf_name(fonts);
     let fallbacks: Vec<&FontEntry> = fonts
         .iter()
         .filter(|(key, _)| key.starts_with(super::fonts::GLYPH_FALLBACK))
@@ -1179,6 +1184,9 @@ pub(super) fn size_lines_by_own_runs(
             // Position shifts both edges. A wholly raised line can lose its
             // descent before growing taller; an unshifted run alongside it
             // retains that descent. Do not stretch both sides independently.
+            if let Some(ruby) = &c.ruby {
+                ascent = ascent.max(ruby.raise + ruby.font_size * ar);
+            }
             if top_aligned {
                 ascent = ascent.max(c.line_font_size * ar + pad);
                 below = below.max(c.line_font_size * (lhr - ar).max(0.0) + pad + top_aligned_drop(entry, c.line_font_size, c.raise));
@@ -1941,6 +1949,35 @@ pub(super) struct LineOpts<'a> {
     pub(super) dual: Option<&'a [DualRegion]>,
 }
 
+/// A ruby's base text spreads over its guide's width when the guide is the
+/// wider (torture_test's 東京 under とうきょう: the base glyphs sit 2.75pt
+/// apart). ponytail: per run, Word's distributeSpace puts half a gap before
+/// the first glyph, and we put it all after the last; table autofit
+/// (`min_content_widths`) still measures the bare base.
+fn widen_ruby_bases(runs: &[Run], fonts: &HashMap<String, FontEntry>) -> Vec<Run> {
+    let mut runs = runs.to_vec();
+    for run in &mut runs {
+        let (Some(ruby), Some(entry)) = (&run.ruby, fonts.get(&crate::fonts::font_key(run))) else {
+            continue;
+        };
+        let n = run.text.chars().count() as f32;
+        let base_w = word_width_for_run(
+            entry,
+            run,
+            &run.text,
+            run.font_size,
+            run.kerns_at(run.font_size),
+            run.char_spacing,
+            run.text_scale / 100.0,
+        );
+        let free = entry.word_width(&ruby.text, ruby.font_size, false) - base_w;
+        if free > 0.0 && n > 0.0 {
+            run.char_spacing += free / n;
+        }
+    }
+    runs
+}
+
 /// Lay a paragraph out as lines: against its tab stops when it holds a tab,
 /// by plain word wrapping otherwise.
 pub(super) fn build_lines(
@@ -1952,6 +1989,13 @@ pub(super) fn build_lines(
 ) -> Vec<TextLine> {
     let inline_images = opts.inline_images.unwrap_or(&EMPTY_INLINE_IMAGES);
     let effects = opts.effects.unwrap_or(&EMPTY_EFFECTS);
+    let widened;
+    let runs = if runs.iter().any(|r| r.ruby.is_some()) {
+        widened = widen_ruby_bases(runs, ctx.fonts);
+        &widened[..]
+    } else {
+        runs
+    };
     if runs.iter().any(|r| r.is_tab) {
         build_tabbed_line(
             runs,
@@ -4059,10 +4103,7 @@ pub(super) fn render_paragraph_lines(
     let mut cur_synthetic_bold = false;
     let mut has_text_outline = false;
 
-    let pdf_name_to_entry: HashMap<&str, &FontEntry> = seen_fonts
-        .values()
-        .map(|e| (e.pdf_name.as_str(), e))
-        .collect();
+    let pdf_name_to_entry = super::fonts::by_pdf_name(seen_fonts);
 
     // Per-line baseline offsets below `first_baseline_y`: each line's top is the
     // sum of the previous lines' advances, and a picture line drops its baseline
@@ -5075,6 +5116,25 @@ pub(super) fn render_paragraph_lines(
             }
             content.rect(dx, dy, dw, dh).fill_nonzero();
         }
+
+        let same_ruby = |a: &WordChunk, b: &WordChunk| matches!((&a.ruby, &b.ruby), (Some(x), Some(y)) if Arc::ptr_eq(x, y));
+        let mut ci = 0;
+        for group in line.chunks.chunk_by(same_ruby) {
+            let (first, last) = (&group[0], &group[group.len() - 1]);
+            if let Some(ruby) = &first.ruby {
+                let x0 = chunk_abs_x(ci, first);
+                let span = chunk_abs_x(ci + group.len() - 1, last) + last.width - x0;
+                draw_ruby_guide(
+                    content,
+                    ruby,
+                    pdf_name_to_entry.get(first.pdf_font.as_str()).copied(),
+                    (x0, span),
+                    y + first.y_offset,
+                    first.color,
+                );
+            }
+            ci += group.len();
+        }
     }
     if current_color.is_some() {
         content.set_fill_gray(0.0);
@@ -5082,6 +5142,34 @@ pub(super) fn render_paragraph_lines(
     if let Some(lt) = link_tags {
         lt.finish(content);
     }
+}
+
+/// A ruby's guide text `raise` above its base's baseline, spread over the base's
+/// `span` (Word's distributeSpace: equal gaps, half a gap at each end).
+fn draw_ruby_guide(
+    content: &mut Content,
+    ruby: &crate::model::Ruby,
+    entry: Option<&FontEntry>,
+    (x0, span): (f32, f32),
+    baseline: f32,
+    color: Option<[u8; 3]>,
+) {
+    let Some(entry) = entry else { return };
+    let n = ruby.text.chars().count().max(1) as f32;
+    let gap = ((span - entry.word_width(&ruby.text, ruby.font_size, false)) / n).max(0.0);
+    content.save_state();
+    fill_color_or_black(content, color);
+    content.set_char_spacing(gap);
+    super::charts::show_text(
+        content,
+        &entry.pdf_name,
+        ruby.font_size,
+        x0 + gap / 2.0,
+        baseline + ruby.raise,
+        &ruby.text,
+        Some(entry),
+    );
+    content.restore_state();
 }
 
 /// Compute the effective font_size, line_h_ratio, and ascender_ratio for a set of runs
