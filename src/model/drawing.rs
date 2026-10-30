@@ -54,6 +54,13 @@ pub struct EmbeddedImage {
     /// None when both are zero. Applied to the decoded pixels at embed time, so
     /// only raster formats honour it; an EMF keeps its colours.
     pub lum: Option<(f32, f32)>,
+    /// `a:duotone` (or `a:grayscl`, black to white) on the blip: each pixel's
+    /// luminance picks a colour on the ramp from the first to the second.
+    /// Applied to the decoded pixels like `lum`.
+    pub recolor: Option<([u8; 3], [u8; 3])>,
+    /// `a:alphaModFix` below 1: the picture's opacity. Word bakes it into an
+    /// SMask, as we do.
+    pub alpha: Option<f32>,
     /// In-plane rotation in degrees, clockwise (OOXML convention). Sourced from
     /// `a:xfrm @rot` or a 3D scene camera `a:scene3d/a:camera/a:rot @rev`.
     /// Applied as a rotation about the picture's center at render time.
@@ -61,6 +68,11 @@ pub struct EmbeddedImage {
 }
 
 impl EmbeddedImage {
+    /// Whether `lum` or `recolor` change the decoded colours.
+    pub fn recolored(&self) -> bool {
+        self.lum.is_some() || self.recolor.is_some()
+    }
+
     /// Identity of the picture bytes, the key of the image name maps: pictures
     /// sharing one `Arc` of data are embedded once.
     pub fn key(&self) -> usize {

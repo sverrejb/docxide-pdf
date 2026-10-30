@@ -114,6 +114,26 @@ pub(super) fn apply_lum(samples: &mut [u8], bright: f32, contrast: f32) {
     }
 }
 
+/// A picture's `lum` and `recolor` on packed RGB samples: the duotone maps
+/// each pixel's luminance to a point on the ramp between its two colours.
+fn apply_blip_colors(img: &EmbeddedImage, rgb: &mut [u8]) {
+    if let Some((bright, contrast)) = img.lum {
+        apply_lum(rgb, bright, contrast);
+    }
+    let Some((dark, light)) = img.recolor else {
+        return;
+    };
+    let ramp: [[u8; 3]; 256] = std::array::from_fn(|l| {
+        std::array::from_fn(|i| {
+            (dark[i] as f32 + (light[i] as f32 - dark[i] as f32) * l as f32 / 255.0).round() as u8
+        })
+    });
+    for px in rgb.chunks_exact_mut(3) {
+        let luma = (299 * px[0] as u32 + 587 * px[1] as u32 + 114 * px[2] as u32 + 500) / 1000;
+        px.copy_from_slice(&ramp[luma as usize]);
+    }
+}
+
 /// Encode an RGB image as JPEG, returning the bytes. Returns `None` on failure.
 fn encode_jpeg(rgb: &image::RgbImage) -> Option<Vec<u8>> {
     let mut buf = Vec::new();
@@ -409,9 +429,8 @@ fn embed_image_xobject(
                         None => decoded,
                     };
                     let mut rgb = resized.into_rgb8();
-                    if let Some((bright, contrast)) = img.lum {
-                        apply_lum(&mut rgb, bright, contrast);
-                    }
+                    // ponytail: a JPEG's alphaModFix is not applied.
+                    apply_blip_colors(img, &mut rgb);
                     let (tw, th) = rgb.dimensions();
                     if let Some(jpeg_buf) = encode_jpeg(&rgb) {
                         log::debug!(
@@ -512,8 +531,12 @@ fn embed_image_xobject(
                     has_alpha = true;
                 }
             }
-            if let Some((bright, contrast)) = img.lum {
-                apply_lum(&mut rgb_data, bright, contrast);
+            apply_blip_colors(img, &mut rgb_data);
+            if let Some(opacity) = img.alpha {
+                for a in &mut alpha_data {
+                    *a = (*a as f32 * opacity).round() as u8;
+                }
+                has_alpha = true;
             }
 
             // Apply soft-edge mask: multiply with existing alpha or create new alpha
@@ -533,7 +556,7 @@ fn embed_image_xobject(
             // Word keeps a black-and-white source at 1 bit per sample (DeviceGray,
             // Flate, no Interpolate) even after downsampling: geneva_waste's logo
             // is 589 bytes in its export and was 3.7 KB here as an RGB JPEG.
-            if bilevel && !has_alpha && img.lum.is_none() {
+            if bilevel && !has_alpha && !img.recolored() {
                 let packed = pack_bilevel(&rgb_data, w, h);
                 let data = miniz_oxide::deflate::compress_to_vec_zlib(&packed, 6);
                 let mut xobj = pdf.image_xobject(xobj_ref, &data);

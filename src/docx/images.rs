@@ -214,6 +214,32 @@ fn apply_pic_props(img: &mut EmbeddedImage, container: roxmltree::Node) {
         .filter(|g| g.preset.as_deref() != Some("rect") || g.custom.is_some());
     img.src_rect = parse_src_rect(container);
     img.lum = parse_lum(container);
+    let blip = find_blip(container);
+    img.recolor = blip.and_then(parse_recolor);
+    img.alpha = blip
+        .and_then(|b| dml(b, "alphaModFix"))
+        .and_then(|a| frac_attr(a, "amt"))
+        .filter(|&amt| amt < 1.0);
+}
+
+/// `a:grayscl` (black to white), or an `a:duotone` of two sRGB colours.
+/// ponytail: a duotone in scheme or preset colours is left in full colour.
+fn parse_recolor(blip: roxmltree::Node) -> Option<([u8; 3], [u8; 3])> {
+    if dml(blip, "grayscl").is_some() {
+        return Some(([0; 3], [255; 3]));
+    }
+    let colors: Vec<_> = dml(blip, "duotone")?
+        .children()
+        .filter(|n| n.is_element())
+        .collect();
+    let srgb = |n: &roxmltree::Node| {
+        n.has_tag_name((DML_NS, "srgbClr"))
+            .then(|| n.attribute("val").and_then(parse_hex_color))?
+    };
+    let [dark, light] = colors.as_slice() else {
+        return None;
+    };
+    Some((srgb(dark)?, srgb(light)?))
 }
 
 /// `a:lum` brightness/contrast on the picture's blip, each stored as 1/1000 of a
@@ -446,6 +472,8 @@ pub(super) fn read_image_from_zip_extra<R: Read + Seek>(
         clip_geometry: None,
         src_rect: None,
         lum: None,
+        recolor: None,
+        alpha: None,
     })
 }
 
