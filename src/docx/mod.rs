@@ -498,7 +498,27 @@ pub(super) fn parse_one_border(node: roxmltree::Node) -> Option<ParagraphBorder>
         width_pt,
         space_pt,
         color,
+        style: border_style(val),
     })
+}
+
+/// A border's `w:val` as drawn. ponytail: the thin/thick pairs' small,
+/// medium and large gaps draw alike (medium measured); `triple`, `thick`,
+/// 3-D and inset/outset borders draw as one line.
+pub(super) fn border_style(val: &str) -> BorderStyle {
+    match val {
+        "dotted" => BorderStyle::Dotted,
+        "dashed" => BorderStyle::Dashed,
+        "dashSmallGap" => BorderStyle::DashSmallGap,
+        "dotDash" | "dashDotStroked" | "dashDot" => BorderStyle::DashDot,
+        "dotDotDash" | "dashDotDot" => BorderStyle::DashDotDot,
+        "double" => BorderStyle::Double,
+        "wave" | "doubleWave" => BorderStyle::Wave,
+        v if v.starts_with("thinThickThin") => BorderStyle::ThinThickThin,
+        v if v.starts_with("thinThick") => BorderStyle::ThinThick,
+        v if v.starts_with("thickThin") => BorderStyle::ThickThin,
+        _ => BorderStyle::Single,
+    }
 }
 
 /// The pBdr sides one level of the style hierarchy sets: `None` = not set
@@ -568,16 +588,7 @@ pub(super) fn parse_cell_border(parent: roxmltree::Node, name: &str) -> CellBord
         .map(|v| v / 8.0)
         .unwrap_or(0.5);
     let color = n.attribute((WML_NS, "color")).and_then(parse_hex_color);
-    let style = match val {
-        "dotted" => BorderStyle::Dotted,
-        "dashed" => BorderStyle::Dashed,
-        "dashSmallGap" => BorderStyle::DashSmallGap,
-        "dashDotStroked" | "dashDot" => BorderStyle::DashDot,
-        "dashDotDot" => BorderStyle::DashDotDot,
-        "double" => BorderStyle::Double,
-        _ => BorderStyle::Single,
-    };
-    CellBorder::visible(color, width, style)
+    CellBorder::visible(color, width, border_style(val))
 }
 
 fn parse_cell_border_with_fallback(
@@ -1585,6 +1596,23 @@ fn resolve_body_stylerefs(doc: &mut Document) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn border_styles_parse_and_size_their_bands() {
+        use crate::model::BorderStyle;
+        let style = super::border_style;
+        assert_eq!(style("thinThickMediumGap"), BorderStyle::ThinThick);
+        assert_eq!(style("thickThinSmallGap"), BorderStyle::ThickThin);
+        assert_eq!(style("dotDash"), BorderStyle::DashDot);
+        assert_eq!(style("triple"), BorderStyle::Single);
+        let xml = r#"<w:bottom xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:val="double" w:sz="12"/>"#;
+        let b = super::parse_one_border(roxmltree::Document::parse(xml).unwrap().root_element())
+            .unwrap();
+        assert_eq!(
+            (b.style, b.width_pt, b.extent()),
+            (BorderStyle::Double, 1.5, 4.5)
+        );
+    }
+
     #[test]
     fn twips_take_universal_measures() {
         let doc = roxmltree::Document::parse(

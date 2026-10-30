@@ -26,7 +26,7 @@ fn render_page_borders(pb: &PageBorders, sp: &SectionProperties) -> Content {
     // the stroke is centered on (space + width/2) inward. For "text", @space is
     // measured outward from the text margins.
     let edge_pos = |b: &ParagraphBorder, margin: f32| {
-        let inset = b.space_pt + b.width_pt / 2.0;
+        let inset = b.space_pt + b.extent() / 2.0;
         if pb.offset_from_page {
             inset
         } else {
@@ -50,29 +50,21 @@ fn render_page_borders(pb: &PageBorders, sp: &SectionProperties) -> Content {
     let rx = right_x.unwrap_or(sp.page_width);
     let ty = top_y.unwrap_or(sp.page_height);
     let by = bottom_y.unwrap_or(0.0);
-    let l_ext = pb.left.as_ref().map(|b| b.width_pt / 2.0).unwrap_or(0.0);
-    let r_ext = pb.right.as_ref().map(|b| b.width_pt / 2.0).unwrap_or(0.0);
+    let l_ext = pb.left.as_ref().map(|b| b.extent() / 2.0).unwrap_or(0.0);
+    let r_ext = pb.right.as_ref().map(|b| b.extent() / 2.0).unwrap_or(0.0);
 
-    let mut draw = |b: &ParagraphBorder, x0: f32, y0: f32, x1: f32, y1: f32| {
-        content.save_state();
-        content.set_line_width(b.width_pt);
-        super::color::stroke_rgb(&mut content, b.color);
-        content.move_to(x0, y0);
-        content.line_to(x1, y1);
-        content.stroke();
-        content.restore_state();
-    };
+    let stroke = super::color::stroke_border;
     if let (Some(b), Some(y)) = (&pb.top, top_y) {
-        draw(b, lx - l_ext, y, rx + r_ext, y);
+        stroke(&mut content, b, (lx - l_ext, y), (rx + r_ext, y), -1.0);
     }
     if let (Some(b), Some(y)) = (&pb.bottom, bottom_y) {
-        draw(b, lx - l_ext, y, rx + r_ext, y);
+        stroke(&mut content, b, (lx - l_ext, y), (rx + r_ext, y), 1.0);
     }
     if let (Some(b), Some(x)) = (&pb.left, left_x) {
-        draw(b, x, ty, x, by);
+        stroke(&mut content, b, (x, ty), (x, by), 1.0);
     }
     if let (Some(b), Some(x)) = (&pb.right, right_x) {
-        draw(b, x, ty, x, by);
+        stroke(&mut content, b, (x, ty), (x, by), -1.0);
     }
     content
 }

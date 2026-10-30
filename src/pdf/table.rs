@@ -72,7 +72,12 @@ fn draw_border(content: &mut Content, border: &CellBorder, x1: f32, y1: f32, x2:
             content.restore_state();
             return;
         }
-        BorderStyle::Single => {}
+        // ponytail: cell borders draw wave and thin/thick pairs as one line
+        BorderStyle::Single
+        | BorderStyle::Wave
+        | BorderStyle::ThinThick
+        | BorderStyle::ThickThin
+        | BorderStyle::ThinThickThin => {}
     }
     content.move_to(x1, y1);
     content.line_to(x2, y2);
@@ -450,8 +455,8 @@ fn draw_cell_paragraph_bottom(content: &mut Content, para: &CellParagraphLayout,
         // independently of the stroke width and vertical space.
         let left = cell_x + cm.left + para.indent_left - 1.5;
         let right = cell_x + col_w - cm.right - para.indent_right + 1.5;
-        super::color::stroke_segment(content, (left, bottom + border.width_pt / 2.0),
-            (right, bottom + border.width_pt / 2.0), border.width_pt, Some(border.color));
+        let y = bottom + border.extent() / 2.0;
+        super::color::stroke_border(content, border, (left, y), (right, y), 1.0);
     }
 }
 

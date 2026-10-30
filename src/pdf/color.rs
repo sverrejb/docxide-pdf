@@ -1,5 +1,7 @@
 use pdf_writer::Content;
 
+use crate::model::{BorderStyle, ParagraphBorder};
+
 /// Set fill color from an RGB byte array.
 pub(super) fn fill_rgb(content: &mut Content, [r, g, b]: [u8; 3]) {
     content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
@@ -19,6 +21,86 @@ pub(super) fn set_fill_alpha(
 /// Set stroke color from an RGB byte array.
 pub(super) fn stroke_rgb(content: &mut Content, [r, g, b]: [u8; 3]) {
     content.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
+}
+
+/// Stroke a paragraph, run or page border whose band is centred on the line
+/// `p0`→`p1`, in the style's `layers` and `dashes`. `inward` is +1 when what
+/// the border encloses lies to the left of the line's direction (above a
+/// left-to-right line, right of a downward one), -1 when to the right.
+pub(super) fn stroke_border(
+    content: &mut Content,
+    b: &ParagraphBorder,
+    (x0, y0): (f32, f32),
+    (x1, y1): (f32, f32),
+    inward: f32,
+) {
+    let w = b.width_pt;
+    let (dx, dy) = (x1 - x0, y1 - y0);
+    let len = dx.hypot(dy);
+    if len <= 0.0 {
+        return;
+    }
+    let (ix, iy) = (-dy / len * inward, dx / len * inward);
+    if b.style == BorderStyle::Wave {
+        return stroke_wave(content, b, (x0, y0), (x1, y1), (ix, iy));
+    }
+    content.save_state();
+    stroke_rgb(content, b.color);
+    let dashes = b.style.dashes();
+    if !dashes.is_empty() {
+        content.set_dash_pattern(dashes.iter().map(|d| d * w), 0.0);
+    }
+    for &(offset, width) in b.style.layers() {
+        content.set_line_width(width * w);
+        content.move_to(x0 + ix * offset * w, y0 + iy * offset * w);
+        content.line_to(x1 + ix * offset * w, y1 + iy * offset * w);
+        content.stroke();
+    }
+    content.restore_state();
+}
+
+/// A wave border: half-period cubic arcs alternating across the line, the
+/// band `extent` tall and the waves 5.17 line widths long (7.44pt at sz 12
+/// in Word's desktop PDF of issue #145's probe).
+fn stroke_wave(
+    content: &mut Content,
+    b: &ParagraphBorder,
+    (x0, y0): (f32, f32),
+    (x1, y1): (f32, f32),
+    (ix, iy): (f32, f32),
+) {
+    let w = b.width_pt;
+    let (dx, dy) = (x1 - x0, y1 - y0);
+    let len = dx.hypot(dy);
+    if len <= 0.0 {
+        return;
+    }
+    let (ux, uy) = (dx / len, dy / len);
+    let at = |along: f32, across: f32| (x0 + ux * along + ix * across, y0 + uy * along + iy * across);
+    // A cubic whose inner control points sit 4/3 of the amplitude out peaks
+    // at the amplitude.
+    let bulge = (b.extent() - w) / 2.0 * 4.0 / 3.0;
+    let half = 5.17 * w / 2.0;
+    content.save_state();
+    content.set_line_width(w);
+    stroke_rgb(content, b.color);
+    content.move_to(x0, y0);
+    let mut along = 0.0;
+    let mut side = 1.0;
+    while along + half <= len + 0.01 {
+        let (c1x, c1y) = at(along + half / 3.0, side * bulge);
+        let (c2x, c2y) = at(along + 2.0 * half / 3.0, side * bulge);
+        let (ex, ey) = at(along + half, 0.0);
+        content.cubic_to(c1x, c1y, c2x, c2y, ex, ey);
+        along += half;
+        side = -side;
+    }
+    if along < len {
+        let (ex, ey) = at(len, 0.0);
+        content.line_to(ex, ey);
+    }
+    content.stroke();
+    content.restore_state();
 }
 
 /// Stroke one straight line in its own graphics state; `None` keeps the

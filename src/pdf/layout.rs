@@ -4430,14 +4430,17 @@ pub(super) fn render_paragraph_lines(
         let flush_border =
             |content: &mut Content, border: &ParagraphBorder, sx: f32, ex: f32, fs: f32, y: f32| {
                 let pad = border.space_pt;
-                let bottom = y - fs * 0.2 - pad;
-                let height = fs * 1.15 + pad * 2.0;
-                content.save_state();
-                content.set_line_width(border.width_pt.max(0.1));
-                stroke_color_or_black(content, Some(border.color));
-                content.rect(sx - pad, bottom, (ex - sx) + pad * 2.0, height);
-                content.stroke();
-                content.restore_state();
+                let (left, right) = (sx - pad, ex + pad);
+                let (bottom, top) = (y - fs * 0.2 - pad, y + fs * 0.95 + pad);
+                // Each side in its style, the box's inside to its left.
+                for (p0, p1, inward) in [
+                    ((left, top), (right, top), -1.0),
+                    ((left, bottom), (right, bottom), 1.0),
+                    ((left, top), (left, bottom), 1.0),
+                    ((right, top), (right, bottom), -1.0),
+                ] {
+                    super::color::stroke_border(content, border, p0, p1, inward);
+                }
             };
         for (chunk_idx, chunk) in line.chunks.iter().enumerate() {
             let x = chunk_abs_x(chunk_idx, chunk);

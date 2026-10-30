@@ -38,7 +38,7 @@ use crate::model::{
 
 use crate::fonts::font_key;
 use assembly::{HeadingEntry, assemble_pdf_pages};
-use color::{fill_rgb, stroke_segment};
+use color::{fill_rgb, stroke_border, stroke_segment};
 use fonts::collect_and_register_fonts;
 use footnotes::{footnote_height, render_endnotes_inline, render_page_footnotes};
 use header_footer::{
@@ -2656,7 +2656,7 @@ pub(super) fn side_border_outsets(
 ) -> (f32, f32) {
     let outset = |b: Option<&crate::model::ParagraphBorder>, gap: f32| {
         b.map_or(0.0, |b| {
-            b.space_pt + gap + if to_centre { b.width_pt / 2.0 } else { 0.0 }
+            b.space_pt + gap + if to_centre { b.extent() / 2.0 } else { 0.0 }
         })
     };
     (
@@ -3788,7 +3788,7 @@ fn render_paragraph_block(
     let bdr_top_half_band = if prev_borders_match {
         0.0
     } else {
-        para.borders.top.as_ref().map_or(0.0, |b| b.width_pt / 2.0)
+        para.borders.top.as_ref().map_or(0.0, |b| b.extent() / 2.0)
     };
     let bdr_bottom_pad = if bottom_collapses {
         0.0
@@ -3796,7 +3796,7 @@ fn render_paragraph_block(
         para.borders
             .bottom
             .as_ref()
-            .map(|b| b.space_pt + b.width_pt / 2.0)
+            .map(|b| b.space_pt + b.extent() / 2.0)
             .unwrap_or(0.0)
     };
     // Full extent of bottom border below content (to border bottom edge)
@@ -4828,16 +4828,12 @@ fn render_paragraph_block(
 
         // Extend horizontal borders past the corners so they cover
         // the corner gap left by butt-capped vertical border strokes.
-        let h_left_ext = bdr.left.as_ref().map(|b| b.width_pt / 2.0).unwrap_or(0.0);
-        let h_right_ext = bdr.right.as_ref().map(|b| b.width_pt / 2.0).unwrap_or(0.0);
-        let draw_h_border = |content: &mut Content, b: &ParagraphBorder, y: f32| {
-            stroke_segment(
-                content,
-                (box_left - h_left_ext, y),
-                (box_right + h_right_ext, y),
-                b.width_pt,
-                Some(b.color),
-            );
+        let h_left_ext = bdr.left.as_ref().map(|b| b.extent() / 2.0).unwrap_or(0.0);
+        let h_right_ext = bdr.right.as_ref().map(|b| b.extent() / 2.0).unwrap_or(0.0);
+        // `inward`: +1 for a border below the text, -1 for one above.
+        let draw_h_border = |content: &mut Content, b: &ParagraphBorder, y: f32, inward: f32| {
+            let (x0, x1) = (box_left - h_left_ext, box_right + h_right_ext);
+            stroke_border(content, b, (x0, y), (x1, y), inward);
         };
         // When this paragraph continues a border group, extend vertical
         // borders upward through the inter-paragraph gap so there is no
@@ -4848,31 +4844,26 @@ fn render_paragraph_block(
             } else {
                 0.0
             };
-        let draw_v_border = |content: &mut Content, b: &ParagraphBorder, x: f32| {
-            stroke_segment(
-                content,
-                (x, v_border_top),
-                (x, box_bottom),
-                b.width_pt,
-                Some(b.color),
-            );
+        // `inward`: +1 for the left border, -1 for the right.
+        let draw_v_border = |content: &mut Content, b: &ParagraphBorder, x: f32, inward: f32| {
+            stroke_border(content, b, (x, v_border_top), (x, box_bottom), inward);
         };
 
         if !prev_borders_match && let Some(b) = &bdr.top {
-            draw_h_border(&mut state.pb.content, b, box_top);
+            draw_h_border(&mut state.pb.content, b, box_top, -1.0);
         }
         if bottom_collapses {
             if let Some(b) = &bdr.between {
-                draw_h_border(&mut state.pb.content, b, box_bottom);
+                draw_h_border(&mut state.pb.content, b, box_bottom, 1.0);
             }
         } else if let Some(b) = &bdr.bottom {
-            draw_h_border(&mut state.pb.content, b, box_bottom);
+            draw_h_border(&mut state.pb.content, b, box_bottom, 1.0);
         }
         if let Some(b) = &bdr.left {
-            draw_v_border(&mut state.pb.content, b, box_left);
+            draw_v_border(&mut state.pb.content, b, box_left, 1.0);
         }
         if let Some(b) = &bdr.right {
-            draw_v_border(&mut state.pb.content, b, box_right);
+            draw_v_border(&mut state.pb.content, b, box_right, -1.0);
         }
     }
 

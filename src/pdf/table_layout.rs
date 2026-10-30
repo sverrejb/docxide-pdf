@@ -2979,6 +2979,7 @@ mod floating_nested_tests {
             line_h: 10.0,
             bottom_border: Some(crate::model::ParagraphBorder {
                 width_pt: 1.5, space_pt: 1.0, color: [0, 0, 0],
+                style: crate::model::BorderStyle::Single,
             }),
             ..Default::default()
         };

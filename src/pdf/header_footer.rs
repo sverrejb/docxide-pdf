@@ -8,7 +8,7 @@ use crate::model::{
     WrapType,
 };
 
-use super::color::stroke_segment;
+use super::color::stroke_border;
 use super::helpers::{align_offset, draw_horizontal_rule};
 use super::layout::{
     LineOpts, LinkAnnotation, build_lines, is_text_empty, lines_height, picture_line_bottom,
@@ -1100,35 +1100,26 @@ pub(super) fn render_header_footer(
                 let (box_left, box_right, box_top) =
                     (sp.margin_left, sp.margin_left + text_width, slot_top);
                 let draw_para_borders = |content: &mut Content, box_bottom: f32| {
-                    let draw_h_border =
-                        |content: &mut Content, b: &crate::model::ParagraphBorder, y: f32| {
-                            stroke_segment(
-                                content,
-                                (box_left, y),
-                                (box_right, y),
-                                b.width_pt,
-                                Some(b.color),
-                            );
-                        };
                     if let Some(b) = &bdr.top {
-                        draw_h_border(content, b, box_top - b.width_pt / 2.0);
+                        let y = box_top - b.extent() / 2.0;
+                        stroke_border(content, b, (box_left, y), (box_right, y), -1.0);
                     }
                     if let Some(b) = &bdr.bottom {
                         // The stroke sits `space` below the box, outside it,
                         // as the body path's bottom pad places it.
-                        draw_h_border(content, b, box_bottom - b.space_pt - b.width_pt / 2.0);
+                        let y = box_bottom - b.space_pt - b.extent() / 2.0;
+                        stroke_border(content, b, (box_left, y), (box_right, y), 1.0);
                     }
                     // Side borders as in the body: their inner edge `space`
                     // plus Word's 1.47 / 1.73pt outside the text.
                     let v_bottom = box_bottom - bdr.bottom.as_ref().map_or(0.0, |b| b.space_pt);
                     let (left_x, right_x) = super::side_border_outsets(bdr, true);
-                    for (b, x) in [
-                        (&bdr.left, box_left - left_x),
-                        (&bdr.right, box_right + right_x),
+                    for (b, x, inward) in [
+                        (&bdr.left, box_left - left_x, 1.0),
+                        (&bdr.right, box_right + right_x, -1.0),
                     ] {
                         if let Some(b) = b {
-                            let (top, bottom) = ((x, box_top), (x, v_bottom));
-                            stroke_segment(content, top, bottom, b.width_pt, Some(b.color));
+                            stroke_border(content, b, (x, box_top), (x, v_bottom), inward);
                         }
                     }
                 };

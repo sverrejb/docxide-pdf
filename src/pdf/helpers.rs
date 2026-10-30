@@ -84,15 +84,17 @@ pub(crate) fn auto_ascent_scale(ls: LineSpacing) -> f32 {
     }
 }
 
-/// The band a paragraph border adds to its box: its `space` and its stroke.
+/// The band a paragraph border adds to its box: its `space` and its lines.
 pub(super) fn border_band(border: Option<&ParagraphBorder>) -> f32 {
-    border.map_or(0.0, |b| b.space_pt + b.width_pt)
+    border.map_or(0.0, |b| b.space_pt + b.extent())
 }
 
 fn border_eq(a: &Option<ParagraphBorder>, b: &Option<ParagraphBorder>) -> bool {
     match (a, b) {
         (None, None) => true,
-        (Some(a), Some(b)) => a.width_pt == b.width_pt && a.color == b.color,
+        (Some(a), Some(b)) => {
+            a.width_pt == b.width_pt && a.color == b.color && a.style == b.style
+        }
         _ => false,
     }
 }
@@ -196,6 +198,7 @@ mod tests {
                     width_pt: 2.25,
                     space_pt: 1.0,
                     color: [166, 166, 166],
+                    style: crate::model::BorderStyle::Single,
                 }),
                 ..Default::default()
             },

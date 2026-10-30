@@ -32,6 +32,44 @@ pub enum BorderStyle {
     DashDot,
     DashDotDot,
     Double,
+    Wave,
+    /// Thin line inside, thick line outside (`thinThick*Gap`).
+    ThinThick,
+    /// Thick line inside, thin line outside (`thickThin*Gap`).
+    ThickThin,
+    ThinThickThin,
+}
+
+/// How paragraph, run and page borders draw (`pdf::color::stroke_border`);
+/// cell borders keep their own conventions in `pdf::table::draw_border`.
+/// From Word's desktop PDF of issue #145's probe (sz 12 = 1.44pt, butt caps).
+impl BorderStyle {
+    /// The lines of the band as (offset, width) in line widths, offsets
+    /// positive toward what the border encloses: a double border is two
+    /// lines a line apart, thinThick*Gap a half line inside, a half gap and
+    /// a full line outside. Dashed styles are one line; the wave is a path.
+    pub fn layers(self) -> &'static [(f32, f32)] {
+        match self {
+            BorderStyle::Double => &[(1.0, 1.0), (-1.0, 1.0)],
+            BorderStyle::ThinThick => &[(0.75, 0.5), (-0.5, 1.0)],
+            BorderStyle::ThickThin => &[(0.5, 1.0), (-0.75, 0.5)],
+            BorderStyle::ThinThickThin => &[(1.25, 0.5), (0.0, 1.0), (-1.25, 0.5)],
+            _ => &[(0.0, 1.0)],
+        }
+    }
+
+    /// The dash array in line widths; empty for a solid line. ponytail:
+    /// dashSmallGap and dotDotDash unmeasured.
+    pub fn dashes(self) -> &'static [f32] {
+        match self {
+            BorderStyle::Dotted => &[1.0, 1.0],
+            BorderStyle::Dashed => &[3.0, 1.0],
+            BorderStyle::DashSmallGap => &[2.0, 1.0],
+            BorderStyle::DashDot => &[3.0, 1.0, 1.0, 1.0],
+            BorderStyle::DashDotDot => &[3.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+            _ => &[],
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

@@ -469,6 +469,23 @@ pub struct ParagraphBorder {
     pub width_pt: f32,
     pub space_pt: f32,
     pub color: [u8; 3],
+    pub style: BorderStyle,
+}
+
+impl ParagraphBorder {
+    /// How much of the page the border's lines span across their direction:
+    /// the outer edges of its `BorderStyle::layers`, or 2.58 lines for a
+    /// wave (3.72pt at sz 12 in Word's desktop PDF of issue #145's probe).
+    pub fn extent(&self) -> f32 {
+        if self.style == BorderStyle::Wave {
+            return 2.58 * self.width_pt;
+        }
+        let edges = self.style.layers().iter();
+        let (near, far) = edges.fold((f32::MAX, f32::MIN), |(near, far), (offset, width)| {
+            (near.min(offset - width / 2.0), far.max(offset + width / 2.0))
+        });
+        (far - near) * self.width_pt
+    }
 }
 
 #[derive(Clone, Default)]

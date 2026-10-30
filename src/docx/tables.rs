@@ -174,8 +174,11 @@ impl CondFormat {
 /// edge to a solid line.
 fn border_style_precedence(style: BorderStyle) -> u8 {
     match style {
-        BorderStyle::Double => 0,
-        BorderStyle::Single => 1,
+        BorderStyle::Double
+        | BorderStyle::ThinThick
+        | BorderStyle::ThickThin
+        | BorderStyle::ThinThickThin => 0,
+        BorderStyle::Single | BorderStyle::Wave => 1,
         BorderStyle::Dotted => 2,
         BorderStyle::Dashed | BorderStyle::DashSmallGap => 3,
         BorderStyle::DashDot => 4,
