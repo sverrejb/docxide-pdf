@@ -10,8 +10,10 @@
 
 /// One glyph of a sequence of glyphs set edge to edge on a line.
 pub(super) struct GridGlyph {
-    /// Exact advance in points.
+    /// Exact advance in points, `stretch` included.
     pub advance: f32,
+    /// A justified space's share of the line's slack, in points.
+    pub stretch: f32,
     pub font_size: f32,
     /// Word's writer starts a new text matrix here (a new run).
     pub run_start: bool,
@@ -30,17 +32,23 @@ const PHASE_PT: f64 = 0.025;
 /// size (bar a few hinted glyphs), which halves the wrong advances.
 const ROUND_UP_FROM: f64 = 0.46;
 
+/// A glyph's device advance (px): its own width rounded up from 0.46 px, a
+/// justified space's stretch rounded apart (half up) and added (Arial 10:
+/// 11.11 + 11.47 px draws 22 px, not 23; probe 2).
+fn device_advance(g: &GridGlyph) -> i64 {
+    let own = (g.advance - g.stretch) as f64 * PX_PER_PT;
+    let stretch = (g.stretch as f64 * PX_PER_PT).round() as i64;
+    own.floor() as i64 + i64::from(own.fract() >= ROUND_UP_FROM) + stretch
+}
+
 /// Device advances (px) of glyphs whose exact origins are `ideal` (absolute
 /// px) and exact advances `exact` (px): each glyph keeps its device advance
-/// unless the glyph after next would then land 2 px or more from its rounded
-/// exact place, measured from the chunk start; then it moves 1 px toward it.
-fn device_steps(ideal: &[f64], exact: &[f64]) -> Vec<i64> {
+/// `base` unless the glyph after next would then land 2 px or more from its
+/// rounded exact place, measured from the chunk start; then it moves 1 px
+/// toward it.
+fn device_steps(ideal: &[f64], exact: &[f64], base: &[i64]) -> Vec<i64> {
     let n = exact.len();
     let ideal_end = ideal[n - 1] + exact[n - 1];
-    let base: Vec<i64> = exact
-        .iter()
-        .map(|w| w.floor() as i64 + i64::from(w.fract() >= ROUND_UP_FROM))
-        .collect();
     let mut starts = vec![false; n];
     starts[0] = true;
     let mut chunk0 = 0;
@@ -93,7 +101,8 @@ pub(super) fn drawn_positions(x0: f32, glyphs: &[GridGlyph]) -> Vec<f32> {
         ideal.push(x);
         x += w;
     }
-    let steps = device_steps(&ideal, &exact);
+    let base: Vec<i64> = glyphs.iter().map(device_advance).collect();
+    let steps = device_steps(&ideal, &exact, &base);
     let mut device = ideal[0].round() as i64;
     let mut drawn = Vec::with_capacity(glyphs.len());
     let mut pen = 0.0f64;
@@ -106,7 +115,7 @@ pub(super) fn drawn_positions(x0: f32, glyphs: &[GridGlyph]) -> Vec<f32> {
             // zero, one more when the device advance exceeds W.
             let prev = &glyphs[k - 1];
             let unit = prev.font_size as f64 / 1000.0;
-            let w = (prev.advance as f64 / unit).round();
+            let w = ((prev.advance - prev.stretch) as f64 / unit).round();
             let d = steps[k - 1] as f64 / PX_PER_PT / unit;
             let gap = w - d;
             let adj = if gap.abs() < 0.5 {
@@ -135,6 +144,7 @@ mod tests {
             .iter()
             .map(|&advance| GridGlyph {
                 advance,
+                stretch: 0.0,
                 font_size: size,
                 run_start: false,
             })
@@ -148,13 +158,26 @@ mod tests {
         let g = run(&[w; 70], 12.0);
         let exact: Vec<f64> = g.iter().map(|g| g.advance as f64 * 4.0).collect();
         let ideal: Vec<f64> = (0..70).map(|k| 288.0 + k as f64 * exact[0]).collect();
-        let steps = device_steps(&ideal, &exact);
+        let base: Vec<i64> = g.iter().map(device_advance).collect();
+        let steps = device_steps(&ideal, &exact, &base);
         let mut pos = 288i64;
         for (k, s) in steps.iter().enumerate() {
             assert!((21..=22).contains(s));
             pos += s;
             assert!((pos as f64 - ideal[k + 1]).abs() < 1.5);
         }
+    }
+
+    #[test]
+    fn a_stretched_space_rounds_its_stretch_apart() {
+        // Arial 10 space 11.113 px + 11.47 px of stretch: 11 + 11, not 23.
+        let space = GridGlyph {
+            advance: (11.113 + 11.47) / 4.0,
+            stretch: 11.47 / 4.0,
+            font_size: 10.0,
+            run_start: false,
+        };
+        assert_eq!(device_advance(&space), 22);
     }
 
     #[test]

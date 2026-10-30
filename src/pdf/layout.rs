@@ -3644,11 +3644,13 @@ fn show_placed(
 
 /// Each chunk's glyph x positions as Word's online export draws them
 /// (`glyph_grid`), for the chunks the rule is known for. Chunks set edge to
-/// edge or a plain space apart share one grid, the line's exact positions.
+/// edge or a plain space apart share one grid, the line's exact positions;
+/// a justified line's spaces are plain ones plus `extra_per_gap` shared out.
 fn device_grid(
     line: &TextLine,
     entries: &HashMap<&str, &FontEntry>,
     chunk_abs_x: &dyn Fn(usize, &WordChunk) -> f32,
+    extra_per_gap: f32,
 ) -> Vec<Option<Vec<f32>>> {
     use super::glyph_grid::{GridGlyph, drawn_positions};
     fn flush(
@@ -3685,12 +3687,13 @@ fn device_grid(
         };
         let x = chunk_abs_x(i, chunk);
         let size = chunk.font_size;
-        // The spaces before this chunk, when they are plain ones.
+        // The spaces before this chunk (count, width, stretch of each), when
+        // they are plain ones, stretched or not.
         let joined = prev.and_then(|(p, end)| {
             let gap = x - end;
             let n = chunk.preceding_spaces;
             if n == 0 {
-                return (gap.abs() < 0.01).then_some((0, 0.0));
+                return (gap.abs() < 0.01).then_some((0, 0.0, 0.0));
             }
             let pc = &line.chunks[p];
             let sw = gap / n as f32;
@@ -3700,15 +3703,18 @@ fn device_grid(
                     entries
                         .get(pc.pdf_font.as_str())
                         .map(|e| e.space_width(pc.font_size)),
-                )
-                .any(|w| (w - sw).abs() < 0.01);
-            plain.then_some((n, sw))
+                );
+            plain
+                .flat_map(|w| [0.0, extra_per_gap / n as f32].map(|s| (w, s)))
+                .find(|&(w, s)| (w + s - sw).abs() < 0.01)
+                .map(|(_, s)| (n, sw, s))
         });
         let new_run = match (joined, prev) {
-            (Some((n, sw)), Some((p, _))) => {
+            (Some((n, sw, stretch)), Some((p, _))) => {
                 let pc = &line.chunks[p];
                 seq.extend((0..n).map(|_| GridGlyph {
                     advance: sw,
+                    stretch,
                     font_size: pc.font_size,
                     run_start: false,
                 }));
@@ -3726,6 +3732,7 @@ fn device_grid(
         members.push((i, seq.len()));
         seq.extend(chunk.text.chars().enumerate().map(|(j, ch)| GridGlyph {
             advance: entry.char_width_1000(ch) * size / 1000.0,
+            stretch: 0.0,
             font_size: size,
             run_start: (j == 0 && new_run) || chunk.source_starts.contains(&j),
         }));
@@ -4321,17 +4328,17 @@ pub(super) fn render_paragraph_lines(
             .iter()
             .any(|c| c.inline_image_name.is_none() && (!c.text.is_empty() || c.underline));
 
-        // Only lines like the probe's: unjustified, unkerned, no letter
-        // spacing, left to right, no East Asian text. The rest keep exact
-        // positions until each gets its own probe.
+        // Only lines like the probes': unkerned, no letter spacing, left to
+        // right, no East Asian text, justified by widening the spaces only.
+        // The rest keep exact positions until each gets its own probe.
         let plain_line = line.draw_order.is_empty()
             && !line.rtl_paragraph
             && line.right_region.is_none()
             && mixed.is_none()
             && !is_char_justified
-            && extra_per_gap == 0.0;
+            && extra_per_gap >= 0.0;
         let grid = if plain_line {
-            device_grid(line, &pdf_name_to_entry, &chunk_abs_x)
+            device_grid(line, &pdf_name_to_entry, &chunk_abs_x, extra_per_gap)
         } else {
             Vec::new()
         };

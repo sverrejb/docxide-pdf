@@ -224,16 +224,28 @@ take Word's +0.025 pt phase.
 ### Justified lines (probe 2, `tests/output/fundamentals/justify/`)
 
 Five faces × left/justified/per-word runs/double spaces/long words/"eee"
-words. Word draws a justified line as one `Tm` (with per-word runs too),
-every space as the same device width (12 + 8.12 px → 20 px for Times New
-Roman 12 on one line), and the ±1 px corrections land on letters, tracking
-the exact positions with the stretch spread evenly. But the look-ahead rule
-over those positions gets 25–27 % of the steps wrong whatever the variant
-(spaces fixed or corrected, grid phase, look-ahead 1–4, threshold 1–3;
-`just2..5.py`). Open: justified lines keep exact positions.
+words. Word draws a justified line as one `Tm` (with per-word runs too).
+The rule is probe 1's with two additions (`just10.py`: 70 wrong of 5,777
+steps, most of them the step into the line's trailing space):
+
+- the ideal positions are the exact advances with each space widened by
+  an even share e of the slack, e taken from the layout (measure minus
+  natural width over the spaces). Solving e from the drawn last glyph
+  instead (`just2..9.py`, 20–27 % wrong) is what hid the rule: that glyph
+  carries the writer's drift;
+- a stretched space's device advance is its own (0.46 rule) plus e rounded
+  half-up apart: Arial 10 11.11 + 11.47 px → 11 + 11 = 22, not 23.
+
+Corrections then fall where the look-ahead rule puts them, spaces included.
+Implemented: `GridGlyph::stretch`, and `device_grid` joins chunks across
+plain spaces plus the line's `extra_per_gap`. 24 justified fixtures: J
+66.97 → 68.89, SSIM 87.13 → 89.05 (czech_expert_witness_law J +10.6).
 
 ## 3. Queue after probe 1
 
-1. Justified lines (above): the correction cadence on stretched lines.
-2. Kerning pairs and `Tc` on the device grid (each needs a probe).
+1. Kerning pairs on the device grid. Feeding kerned advances (width +
+   pair kern) to the rule is mixed on the 20 `w:kern="2"` fixtures (case3
+   J −6.6, czech_health_statement_form +5.8): needs a probe of how Word
+   rounds a kerned pair.
+2. `Tc` (letter spacing) and text scaling on the grid.
 3. Items 2–5 of §1, in that order; each gets its own probe kit and section.
