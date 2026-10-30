@@ -13,8 +13,8 @@ pub(super) struct GridGlyph {
     /// Exact advance in points, `apart` included.
     pub advance: f32,
     /// Points Word rounds on their own before adding them to the glyph's
-    /// device advance: a justified space's share of the line's slack, or a
-    /// kerning pair's adjustment on the plain path (probe 4).
+    /// device advance: a justified space's share of the line's slack, letter
+    /// spacing, a kerning pair's adjustment on the plain path (probes 2, 4, 5).
     pub apart: f32,
     /// From kerned text set with `enableOpenTypeFeatures`, which Word lays
     /// out through its shaping path: that one rounds the whole advance,

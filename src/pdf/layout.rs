@@ -3695,8 +3695,9 @@ fn device_grid(
         };
         let x = chunk_abs_x(i, chunk);
         let size = chunk.font_size;
-        // The spaces before this chunk (count, width, stretch of each), when
-        // they are plain ones, stretched or not.
+        // The spaces before this chunk (count, width, and the part of it Word
+        // rounds apart: letter spacing and justification stretch), when they
+        // are plain ones.
         let joined = prev.and_then(|(p, end)| {
             let gap = x - end;
             let n = chunk.preceding_spaces;
@@ -3712,10 +3713,13 @@ fn device_grid(
                         .get(pc.pdf_font.as_str())
                         .map(|e| e.space_width(pc.font_size)),
                 );
+            let spacing = [0.0, chunk.char_spacing, pc.char_spacing];
+            let stretch = [0.0, extra_per_gap / n as f32];
             plain
-                .flat_map(|w| [0.0, extra_per_gap / n as f32].map(|s| (w, s)))
-                .find(|&(w, s)| (w + s - sw).abs() < 0.01)
-                .map(|(_, s)| (n, sw, s))
+                .flat_map(|w| spacing.map(|cs| (w, cs)))
+                .flat_map(|(w, cs)| stretch.map(|st| (w, cs + st)))
+                .find(|&(w, apart)| (w + apart - sw).abs() < 0.01)
+                .map(|(_, apart)| (n, sw, apart))
         });
         let new_run = match (joined, prev) {
             (Some((n, sw, stretch)), Some((p, _))) => {
@@ -3747,7 +3751,7 @@ fn device_grid(
         let shaped = line.shaped_kerning && chunk.kern && entry.kern_pairs.is_some();
         seq.extend(glyph_advances(chunk, entry).enumerate().map(|(j, (advance, kern))| GridGlyph {
             advance,
-            apart: if shaped { 0.0 } else { kern },
+            apart: chunk.char_spacing + if shaped { 0.0 } else { kern },
             shaped,
             font_size: size,
             run_start: (j == 0 && new_run) || chunk.source_starts.contains(&j),
@@ -3767,7 +3771,6 @@ fn grid_eligible(chunk: &WordChunk, entry: &FontEntry) -> bool {
         && chunk.checkbox.is_none()
         && chunk.inline_image_name.is_none()
         && !chunk.rtl
-        && chunk.char_spacing == 0.0
         && chunk.text_scale == 100.0
         && chunk
             .text
@@ -3776,8 +3779,8 @@ fn grid_eligible(chunk: &WordChunk, entry: &FontEntry) -> bool {
         && (exact - chunk.width).abs() < 0.01
 }
 
-/// Each glyph's exact advance in points and the kerning in it: a kerned
-/// pair's adjustment on its first glyph.
+/// Each glyph's exact advance in points, letter spacing included, and the
+/// kerning in it: a kerned pair's adjustment on its first glyph.
 fn glyph_advances<'a>(
     chunk: &'a WordChunk,
     entry: &'a FontEntry,
@@ -3791,7 +3794,10 @@ fn glyph_advances<'a>(
             _ => 0.0,
         };
         let scale = chunk.font_size / 1000.0;
-        Some(((entry.char_width_1000(ch) + k) * scale, k * scale))
+        Some((
+            (entry.char_width_1000(ch) + k) * scale + chunk.char_spacing,
+            k * scale,
+        ))
     })
 }
 
@@ -4356,8 +4362,8 @@ pub(super) fn render_paragraph_lines(
             .iter()
             .any(|c| c.inline_image_name.is_none() && (!c.text.is_empty() || c.underline));
 
-        // Only lines like the probes': no letter spacing, left to right, no
-        // East Asian text, justified by widening the spaces only.
+        // Only lines like the probes': left to right, no East Asian text,
+        // justified by widening the spaces only.
         // The rest keep exact positions until each gets its own probe.
         let plain_line = line.draw_order.is_empty()
             && !line.rtl_paragraph
@@ -4652,10 +4658,12 @@ pub(super) fn render_paragraph_lines(
                         .zip(xs)
                         .map(|((i, ch), gx)| {
                             let x = (gx - xs[0]) * 1000.0 / chunk.font_size;
+                            // The pen also moves by Tc, the letter spacing.
+                            let tc = chunk.char_spacing * 1000.0 / chunk.font_size;
                             (
                                 &chunk.text[i..i + ch.len_utf8()],
                                 x,
-                                entry.char_width_1000(ch),
+                                entry.char_width_1000(ch) + tc,
                             )
                         })
                         .collect();

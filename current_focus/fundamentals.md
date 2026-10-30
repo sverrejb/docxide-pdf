@@ -272,7 +272,23 @@ shaped_kerning` from `DocumentSettings::open_type_features`. 28
 `w:kern="2"` fixtures: J 66.07 → 67.37, SSIM 85.49 → 87.15, none worse
 (case1 J +6.3, case18 +8.2).
 
+### Other scripts and letter spacing (probe 5, `tests/output/fundamentals/script_tc/`)
+
+Five faces, unkerned: Cyrillic, Greek and Polish prose (CID fonts, outside
+WinAnsi), and Latin prose with `w:spacing` +20, −10 and +3 twips (`an.py`).
+
+- Text outside WinAnsi keeps the 0.46 rule on the CID path (Cyrillic 4 %,
+  Greek 2.6 %, Polish 1.5 % wrong; half-up is worse or equal): the half-up
+  rounding belongs to OpenType kerning, not to CID output.
+- Letter spacing is written as TJ moves (no `Tc`) and rounds apart like the
+  justification stretch: glyph 0.46-rounded plus the spacing rounded
+  half-up (+0.15 pt: 11 % wrong against 19–23 % combined; whole-pixel
+  spacings fit every variant). Spaces carry the spacing too, so a spaced
+  line is one sequence: restarting at every word (our spaces were not
+  "plain") reset the writer's drift that Word keeps, up to 1 pt by the
+  line end. Probe: glyph error 0.165 → 0.029 pt, J 72.5 → 81.4.
+
 ## 3. Queue after probe 1
 
-1. `Tc` (letter spacing) and text scaling on the grid.
+1. Text scaling (`w:w`) on the grid.
 2. Items 2–5 of §1, in that order; each gets its own probe kit and section.
