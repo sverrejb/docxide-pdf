@@ -1117,6 +1117,19 @@ pub(super) struct TextLine {
     pub(super) ascent_shift: f32,
 }
 
+impl TextLine {
+    /// The width of the content before any right region (for alignment and
+    /// justification).
+    pub(super) fn left_content_width(&self) -> f32 {
+        match &self.right_region {
+            Some(rr) => self.chunks[..rr.first_chunk_idx]
+                .last()
+                .map_or(0.0, |c| c.x_offset + c.width),
+            None => self.total_width,
+        }
+    }
+}
+
 /// Word sizes each line by the runs on that line, not the paragraph's tallest
 /// run: russian_sports_ranking_decree's 20pt "ГЛАВА" followed by `w:br` lines
 /// of 14pt steps 17.25 then 16.0 in Word, not 23.0 twice. Lines that come out
@@ -4229,15 +4242,7 @@ pub(super) fn render_paragraph_lines(
             );
         }
 
-        // Compute left-region content width (for alignment/justify)
-        let left_content_width = if let Some(ref rr) = line.right_region {
-            line.chunks[..rr.first_chunk_idx]
-                .last()
-                .map(|c| c.x_offset + c.width)
-                .unwrap_or(0.0)
-        } else {
-            line.total_width
-        };
+        let left_content_width = line.left_content_width();
 
         let left_chunk_count = line
             .right_region

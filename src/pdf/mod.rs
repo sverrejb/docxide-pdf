@@ -4339,6 +4339,17 @@ fn render_paragraph_block(
             &mut label_x,
         );
     }
+    // A centred or right-aligned paragraph carries its label with the text:
+    // Word lays out label, tab gap and first line as one left-aligned unit
+    // and shifts the unit by the line's slack (issue #145 probe: bullet at
+    // 244.7, text at 266.6 on a 453.85pt measure, the 21.85pt gap the same
+    // as the left-aligned control's); `cell_label_alignment_offset` is the
+    // same rule for cells. ponytail: left-to-right paragraphs only.
+    if !para.bidi {
+        let first_width = lines.first().map_or(0.0, |l| l.left_content_width());
+        let slack = (para_text_width + text_hanging - first_width).max(0.0);
+        label_x += align_offset(para.alignment, slack);
+    }
 
     // A floating table pushed onto a fresh page hands its anchor paragraph the
     // page-body top so paragraph-relative shapes anchor there (the flow cursor
