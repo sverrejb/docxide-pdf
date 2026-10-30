@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
 
 use crate::model::{
-    Alignment, CellBorder, LineSpacing, TabStop, TextFill, TextGlow, TextOutline,
+    Alignment, CellBorder, LineSpacing, TabStop, TableAlignment, TextFill, TextGlow, TextOutline,
     TextShadow,
 };
 
@@ -454,6 +454,9 @@ pub(super) struct TableStyleDef {
     pub(super) conditionals: HashMap<String, TableConditionalFormat>,
     /// `w:tblPr/w:tblCellMar`, top/left/bottom/right, unset sides `None`.
     pub(super) cell_margins: [Option<f32>; 4],
+    /// `w:tblPr/w:jc`: tables in the style centre or right-align like a
+    /// direct jc (issue #145's "Centered table" style).
+    pub(super) jc: Option<TableAlignment>,
     /// The style's `w:pPr/w:spacing` before/after and line rule: cell
     /// paragraphs take them over docDefaults.
     pub(super) space_before: Option<f32>,
@@ -1276,6 +1279,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         base_italic,
                         conditionals,
                         cell_margins,
+                        jc: wml(style_node, "tblPr").and_then(super::tables::table_jc),
                         space_before: style_spacing.and_then(|n| twips_attr(n, "before")),
                         space_after: style_spacing.and_then(|n| twips_attr(n, "after")),
                         line_spacing: style_line_spacing,

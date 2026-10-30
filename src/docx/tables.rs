@@ -69,7 +69,7 @@ fn merge_cell_margins(mar: roxmltree::Node, base: CellMargins) -> CellMargins {
 }
 
 /// `w:jc` under a `w:tblPr` or `w:trPr`.
-fn table_jc(pr: roxmltree::Node) -> Option<TableAlignment> {
+pub(super) fn table_jc(pr: roxmltree::Node) -> Option<TableAlignment> {
     wml_attr(pr, "jc").map(|val| match val {
         "center" => TableAlignment::Center,
         "right" | "end" => TableAlignment::Right,
@@ -229,16 +229,6 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     let table_indent = table_indent_opt.unwrap_or(0.0);
     let table_indent_explicit = table_indent_opt.is_some();
 
-    let alignment = tbl_pr.and_then(table_jc).unwrap_or_else(|| {
-        // Fall back to first row's w:trPr/w:jc if table-level jc absent
-        collect_block_nodes(node)
-            .into_iter()
-            .find(|n| n.has_tag_name((WML_NS, "tr")))
-            .and_then(|tr| wml(tr, "trPr"))
-            .and_then(table_jc)
-            .unwrap_or_default()
-    });
-
     let fixed_layout = tbl_pr
         .and_then(|pr| wml(pr, "tblLayout"))
         .and_then(|n| n.attribute((WML_NS, "type")))
@@ -276,6 +266,20 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
         })
         .take(8)
     };
+
+    // The table's own jc, else its style's, else the first row's trPr/jc.
+    let alignment = tbl_pr
+        .and_then(table_jc)
+        .or_else(|| style_chain().find_map(|s| s.jc))
+        .unwrap_or_else(|| {
+            collect_block_nodes(node)
+                .into_iter()
+                .find(|n| n.has_tag_name((WML_NS, "tr")))
+                .and_then(|tr| wml(tr, "trPr"))
+                .and_then(table_jc)
+                .unwrap_or_default()
+        });
+
     // Each side: the table's own, then its style's (estonian_community's
     // TableGrid zeroes them), then Word's default.
     let own_mar = tbl_pr.and_then(|pr| wml(pr, "tblCellMar"));
