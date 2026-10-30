@@ -1146,7 +1146,7 @@ fn embed_textbox_images(
     alloc: &mut impl FnMut() -> Ref,
     fonts: &HashMap<String, FontEntry>,
 ) {
-    let mut stack: Vec<&[Paragraph]> = vec![&tb.paragraphs];
+    let mut stack: Vec<&[Paragraph]> = vec![tb.content()];
     while let Some(paras) = stack.pop() {
         for para in paras {
             if let Some(img) = &para.image {

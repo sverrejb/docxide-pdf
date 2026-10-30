@@ -4,7 +4,7 @@ use crate::geometry::{FormulaOp, PathFill};
 use crate::model::{
     ArrowEnd, AutoFit, ConnectorShape, ConnectorType, CustomGeometry, CustomGuideDef,
     CustomPathCommand, CustomPathDef, HRelativeFrom, HorizontalPosition, Paragraph, ShapeFill,
-    ShapeGeometry, TextAnchor, TextWarp, Textbox, VRelativeFrom, VerticalPosition,
+    ShapeGeometry, TextAnchor, TextWarp, Textbox, TextboxLink, VRelativeFrom, VerticalPosition,
 };
 
 use super::color::{
@@ -384,6 +384,7 @@ pub(super) struct WspResult {
     pub(super) no_text_wrap: bool,
     pub(super) text_warp: Option<TextWarp>,
     pub(super) auto_fit: AutoFit,
+    pub(super) link: Option<TextboxLink>,
 }
 
 /// The shape's own properties; size, anchoring and wrapping stay at their
@@ -404,6 +405,7 @@ impl From<WspResult> for Textbox {
             no_text_wrap: wsp.no_text_wrap,
             text_warp: wsp.text_warp,
             auto_fit: wsp.auto_fit,
+            link: wsp.link,
             ..Textbox::default()
         }
     }
@@ -502,7 +504,22 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
         margin_right = wr;
     }
 
-    let paragraphs = find_wps(wsp, "txbx")
+    // A chain's first box holds the story (wps:txbx id); the others say
+    // where they follow on (wps:linkedTxbx id seq).
+    let txbx = find_wps(wsp, "txbx");
+    let link = match (txbx, find_wps(wsp, "linkedTxbx")) {
+        (Some(t), _) => t.attribute("id").map(|id| (id, "0")),
+        (None, Some(l)) => l.attribute("id").zip(l.attribute("seq")),
+        (None, None) => None,
+    }
+    .and_then(|(id, seq)| {
+        Some(TextboxLink {
+            id: id.parse().ok()?,
+            seq: seq.parse().ok()?,
+            ..Default::default()
+        })
+    });
+    let paragraphs = txbx
         .and_then(|txbx| {
             txbx.children()
                 .find(|n| n.has_tag_name((WML_NS, "txbxContent")))
@@ -510,7 +527,11 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
         .map(|tc| parse_txbx_content_paragraphs(tc, ctx))
         .unwrap_or_default();
 
-    if paragraphs.is_empty() && (has_no_fill || fill.is_none()) && stroke_color.is_none() {
+    if paragraphs.is_empty()
+        && link.is_none()
+        && (has_no_fill || fill.is_none())
+        && stroke_color.is_none()
+    {
         return None;
     }
 
@@ -528,6 +549,7 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
         no_text_wrap,
         text_warp: wa_props.text_warp,
         auto_fit: wa_props.auto_fit,
+        link,
     })
 }
 

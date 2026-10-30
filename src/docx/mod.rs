@@ -626,7 +626,10 @@ pub(super) fn parse_frame_props(
     // many paragraphs come before it.
     let drop_cap = match attr("dropCap") {
         Some(kind @ ("drop" | "margin")) => Some(DropCap {
-            lines: attr("lines").and_then(|v| v.parse().ok()).unwrap_or(1).max(1),
+            lines: attr("lines")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(1)
+                .max(1),
             in_margin: kind == "margin",
         }),
         _ => None,
@@ -1428,7 +1431,54 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         math: settings.math,
     };
     resolve_body_stylerefs(&mut doc);
+    link_textbox_stories(&mut doc);
     Ok(doc)
+}
+
+/// Every body paragraph, table cells included, in document order.
+fn body_paragraphs<'a>(blocks: &'a mut [Block], out: &mut Vec<&'a mut crate::model::Paragraph>) {
+    for block in blocks {
+        match block {
+            Block::Paragraph(p) => out.push(p),
+            Block::Table(t) => {
+                for cell in t.rows.iter_mut().flat_map(|r| r.cells.iter_mut()) {
+                    body_paragraphs(&mut cell.content, out);
+                }
+            }
+        }
+    }
+}
+
+/// Each box of a linked chain shares the story its first box holds and
+/// learns the text areas of the boxes before it, from which the renderer works
+/// out the part it shows. ponytail: body text boxes only, not headers or groups.
+fn link_textbox_stories(doc: &mut Document) {
+    let mut paras = Vec::new();
+    for section in &mut doc.sections {
+        body_paragraphs(&mut section.blocks, &mut paras);
+    }
+    let mut boxes: Vec<(u32, u32, &mut crate::model::Textbox)> = paras
+        .into_iter()
+        .flat_map(|p| p.textboxes.iter_mut())
+        .filter_map(|tb| Some((tb.link.as_ref()?.id, tb.link.as_ref()?.seq, tb)))
+        .collect();
+    boxes.sort_by_key(|&(id, seq, _)| (id, seq));
+    for chain in boxes.chunk_by_mut(|a, b| a.0 == b.0) {
+        let story = std::sync::Arc::new(std::mem::take(&mut chain[0].2.paragraphs));
+        let mut before = Vec::new();
+        for (_, _, tb) in chain.iter_mut() {
+            let area = tb.text_area(tb.height_pt);
+            if let Some(link) = &mut tb.link {
+                link.story = story.clone();
+                link.before = before.clone();
+                link.continues = true;
+            }
+            before.push(area);
+        }
+        if let Some(link) = chain.last_mut().and_then(|(_, _, tb)| tb.link.as_mut()) {
+            link.continues = false;
+        }
+    }
 }
 
 /// Body STYLEREF fields show the nearest paragraph in the named style before
@@ -1437,22 +1487,10 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
 /// STYLEREF kept "Heading pending"). Headers resolve theirs per page instead.
 fn resolve_body_stylerefs(doc: &mut Document) {
     use crate::model::{FieldCode, styleref_key};
-    fn paragraphs<'a>(blocks: &'a mut [Block], out: &mut Vec<&'a mut crate::model::Paragraph>) {
-        for block in blocks {
-            match block {
-                Block::Paragraph(p) => out.push(p),
-                Block::Table(t) => {
-                    for cell in t.rows.iter_mut().flat_map(|r| r.cells.iter_mut()) {
-                        paragraphs(&mut cell.content, out);
-                    }
-                }
-            }
-        }
-    }
     let names = std::mem::take(&mut doc.style_id_to_name);
     let mut paras = Vec::new();
     for section in &mut doc.sections {
-        paragraphs(&mut section.blocks, &mut paras);
+        body_paragraphs(&mut section.blocks, &mut paras);
     }
     // Per paragraph, the keys it defines (paragraph style and character
     // styles, by id and by name) and their values.

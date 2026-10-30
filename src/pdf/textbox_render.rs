@@ -46,48 +46,94 @@ pub(super) fn textbox_height(tb: &Textbox, ctx: &RenderContext) -> f32 {
         let tmp_w = if tb.no_text_wrap {
             10000.0
         } else {
-            (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0)
+            tb.text_area(0.0).0.max(0.0)
         };
-        let mut h = 0.0f32;
-        for tp in &tb.paragraphs {
-            if let Some(img) = textbox_para_block_image(tp) {
-                h += tp.space_before + image_block_height(img) + tp.space_after;
-                continue;
-            }
-            let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
-            let tw = (tmp_w - tp.indent_left - tp.indent_right).max(1.0);
-            let hang = if !tp.list_label.is_empty() {
-                if tp.indent_first_line > 0.0 && tp.indent_hanging == 0.0 {
-                    -tp.indent_first_line
-                } else {
-                    0.0
-                }
-            } else if tp.indent_hanging > 0.0 {
-                tp.indent_hanging
-            } else {
-                -tp.indent_first_line
-            };
-            let lines = build_lines(
-                &tp.runs,
-                ctx,
-                tw,
-                ctx.cjk(true, tp),
-                &LineOpts {
-                    tab_stops: &tp.tab_stops,
-                    indent_left: tp.indent_left,
-                    indent_right: tp.indent_right,
-                    hanging: hang,
-                    ..Default::default()
-                },
-            );
-            let (fs, lhr, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
-            let lh = resolve_line_h(tp_ls, fs, lhr);
-            h += tp.space_before + lines.len().max(1) as f32 * lh + tp.space_after;
-        }
+        let h: f32 = tb
+            .paragraphs
+            .iter()
+            .map(|tp| tp.space_before + paragraph_body_height(tp, tmp_w, ctx) + tp.space_after)
+            .sum();
         h + tb.margin_top + tb.margin_bottom
     } else {
         tb.height_pt
     }
+}
+
+/// A textbox paragraph's height without its spacing, at text width `text_w`.
+fn paragraph_body_height(tp: &Paragraph, text_w: f32, ctx: &RenderContext) -> f32 {
+    if let Some(img) = textbox_para_block_image(tp) {
+        return image_block_height(img);
+    }
+    let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
+    let tw = (text_w - tp.indent_left - tp.indent_right).max(1.0);
+    let hang = if !tp.list_label.is_empty() {
+        match tp.num_level_tab_stop {
+            Some(nts)
+                if nts < tp.indent_left && (tp.indent_left - tp.indent_hanging).abs() < 0.5 =>
+            {
+                (tp.indent_left - nts).max(0.0)
+            }
+            _ if tp.indent_first_line > 0.0 && tp.indent_hanging == 0.0 => -tp.indent_first_line,
+            _ => 0.0,
+        }
+    } else if tp.indent_hanging > 0.0 {
+        tp.indent_hanging
+    } else {
+        -tp.indent_first_line
+    };
+    let lines = build_lines(
+        &tp.runs,
+        ctx,
+        tw,
+        ctx.cjk(true, tp),
+        &LineOpts {
+            tab_stops: &tp.tab_stops,
+            indent_left: tp.indent_left,
+            indent_right: tp.indent_right,
+            hanging: hang,
+            ..Default::default()
+        },
+    );
+    let (fs, lhr, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
+    lines.len().max(1) as f32 * resolve_line_h(tp_ls, fs, lhr)
+}
+
+/// The part of its story a linked box shows: after what the boxes before it
+/// hold, and only what fits when a later box takes the rest (torture_test's
+/// second paragraph opens the right-hand box). ponytail: whole paragraphs;
+/// Word splits a story between lines.
+fn story_window<'t>(tb: &'t Textbox, height: f32, ctx: &RenderContext) -> &'t [Paragraph] {
+    let Some(link) = &tb.link else {
+        return &tb.paragraphs;
+    };
+    // A chain outside the body was never linked: its first box keeps the text.
+    let mut rest = if link.story.is_empty() {
+        &tb.paragraphs[..]
+    } else {
+        &link.story[..]
+    };
+    for &area in &link.before {
+        rest = &rest[paragraphs_fitting(rest, area, ctx)..];
+    }
+    if !link.continues {
+        return rest;
+    }
+    &rest[..paragraphs_fitting(rest, tb.text_area(height), ctx)]
+}
+
+/// How many of `paras` a text area holds, at least one when there are any.
+fn paragraphs_fitting(paras: &[Paragraph], (w, h): (f32, f32), ctx: &RenderContext) -> usize {
+    let mut used = 0.0;
+    let mut n = 0;
+    for tp in paras {
+        let bottom = used + tp.space_before + paragraph_body_height(tp, w, ctx);
+        if n > 0 && bottom > h + 0.01 {
+            break;
+        }
+        used = bottom + tp.space_after;
+        n += 1;
+    }
+    n
 }
 
 pub(super) fn render_single_textbox(
@@ -117,12 +163,13 @@ pub(super) fn render_single_textbox(
         text_width,
     );
     let tb_height = textbox_height(tb, ctx);
+    let paragraphs = story_window(tb, tb_height, ctx);
     let tb_y_top = resolve_tb_y_top(tb.v_relative_from, &tb.v_position, tb_height, sp, slot_top);
     log::debug!(
         "TEXTBOX x={tb_x:.1} top={tb_y_top:.1} w={:.1} h={tb_height:.1} rot={} paras={}",
         tb.width_pt,
         tb.rotation_deg,
-        tb.paragraphs.len()
+        paragraphs.len()
     );
     let rotated =
         rotate_about_center(content, tb.rotation_deg, tb_x, tb_y_top, tb.width_pt, tb_height);
@@ -214,52 +261,12 @@ pub(super) fn render_single_textbox(
     let anchor_offset = match tb.text_anchor {
         TextAnchor::Top => 0.0,
         TextAnchor::Middle | TextAnchor::Bottom => {
-            let mut total_h = 0.0f32;
-            for tp in &tb.paragraphs {
-                let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                let tp_text_w = (content_w - tp.indent_left - tp.indent_right).max(1.0);
-                let text_hanging = if !tp.list_label.is_empty() {
-                    if let Some(nts) = tp.num_level_tab_stop {
-                        if nts < tp.indent_left && (tp.indent_left - tp.indent_hanging).abs() < 0.5
-                        {
-                            (tp.indent_left - nts).max(0.0)
-                        } else if tp.indent_first_line > 0.0 && tp.indent_hanging == 0.0 {
-                            -tp.indent_first_line
-                        } else {
-                            0.0
-                        }
-                    } else if tp.indent_first_line > 0.0 && tp.indent_hanging == 0.0 {
-                        -tp.indent_first_line
-                    } else {
-                        0.0
-                    }
-                } else if tp.indent_hanging > 0.0 {
-                    tp.indent_hanging
-                } else {
-                    -tp.indent_first_line
-                };
-                if let Some(img) = textbox_para_block_image(tp) {
-                    total_h += tp.space_before + image_block_height(img) + tp.space_after;
-                    continue;
-                }
-                let lines = build_lines(
-                    &tp.runs,
-                    ctx,
-                    tp_text_w,
-                    ctx.cjk(true, tp),
-                    &LineOpts {
-                        tab_stops: &tp.tab_stops,
-                        indent_left: tp.indent_left,
-                        indent_right: tp.indent_right,
-                        hanging: text_hanging,
-                        ..Default::default()
-                    },
-                );
-                let (fs, lhr, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
-                let lh = resolve_line_h(tp_ls, fs, lhr);
-                let n = lines.len().max(1) as f32;
-                total_h += tp.space_before + n * lh + tp.space_after;
-            }
+            let total_h: f32 = paragraphs
+                .iter()
+                .map(|tp| {
+                    tp.space_before + paragraph_body_height(tp, content_w, ctx) + tp.space_after
+                })
+                .sum();
             let available = txt_h - tb.margin_top - tb.margin_bottom;
             let gap = (available - total_h).max(0.0);
             match tb.text_anchor {
@@ -286,7 +293,7 @@ pub(super) fn render_single_textbox(
         content.set_text_rendering_mode(pdf_writer::types::TextRenderingMode::Stroke);
         let mut discard_links: Vec<LinkAnnotation> = Vec::new();
         render_textbox_paragraphs(
-            &tb.paragraphs,
+            paragraphs,
             content,
             content_x,
             content_w,
@@ -317,7 +324,7 @@ pub(super) fn render_single_textbox(
         ];
         let mut discard_links: Vec<LinkAnnotation> = Vec::new();
         render_textbox_paragraphs(
-            &tb.paragraphs,
+            paragraphs,
             content,
             content_x,
             content_w,
@@ -338,7 +345,7 @@ pub(super) fn render_single_textbox(
     }
 
     render_textbox_paragraphs(
-        &tb.paragraphs,
+        paragraphs,
         content,
         content_x,
         content_w,

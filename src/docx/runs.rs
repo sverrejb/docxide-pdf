@@ -999,7 +999,9 @@ fn ruby_of(ruby: roxmltree::Node) -> Arc<Ruby> {
     Arc::new(Ruby {
         text,
         font_size: pr.and_then(|pr| half_points(pr, "hps")).unwrap_or(5.0),
-        raise: pr.and_then(|pr| half_points(pr, "hpsRaise")).unwrap_or(10.0),
+        raise: pr
+            .and_then(|pr| half_points(pr, "hpsRaise"))
+            .unwrap_or(10.0),
     })
 }
 

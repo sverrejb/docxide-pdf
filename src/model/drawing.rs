@@ -443,4 +443,39 @@ pub struct Textbox {
     /// VML `fitshape`: the warped glyphs stretch to the box width as well as
     /// its height (a DrawingML warp keeps the text's natural width, centred).
     pub fit_shape: bool,
+    /// A box in a linked chain (`wps:txbx id` / `wps:linkedTxbx id seq`).
+    pub link: Option<TextboxLink>,
+}
+
+impl Textbox {
+    /// The paragraphs this box carries: a linked chain's story belongs to its
+    /// first box.
+    pub fn content(&self) -> &[crate::model::Paragraph] {
+        match &self.link {
+            Some(link) if link.before.is_empty() && !link.story.is_empty() => &link.story,
+            _ => &self.paragraphs,
+        }
+    }
+
+    /// The (width, height) inside the body margins of a box `height` tall.
+    pub fn text_area(&self, height: f32) -> (f32, f32) {
+        (
+            self.width_pt - self.margin_left - self.margin_right,
+            height - self.margin_top - self.margin_bottom,
+        )
+    }
+}
+
+/// Linked text boxes share one story: every box in the chain shows what the
+/// boxes before it could not hold.
+#[derive(Default)]
+pub struct TextboxLink {
+    pub id: u32,
+    pub seq: u32,
+    /// The chain's paragraphs (filled in once the document is parsed).
+    pub story: Arc<Vec<crate::model::Paragraph>>,
+    /// The text areas (width, height) of the boxes before this one.
+    pub before: Vec<(f32, f32)>,
+    /// A later box takes the overflow, so this one shows only what fits.
+    pub continues: bool,
 }

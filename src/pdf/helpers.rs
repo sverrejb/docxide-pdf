@@ -164,7 +164,7 @@ pub(super) fn joins_border_group(a: &Paragraph, b: &Paragraph) -> bool {
 pub(super) fn para_runs_with_textboxes(para: &Paragraph) -> Vec<&Run> {
     let mut out: Vec<&Run> = para.runs.iter().collect();
     for tb in &para.textboxes {
-        for tp in &tb.paragraphs {
+        for tp in tb.content() {
             out.extend(para_runs_with_textboxes(tp));
         }
     }
@@ -175,7 +175,7 @@ pub(super) fn para_runs_with_textboxes(para: &Paragraph) -> Vec<&Run> {
 pub(super) fn collect_paras(para: &Paragraph) -> Vec<&Paragraph> {
     let mut out = vec![para];
     for tb in &para.textboxes {
-        for tp in &tb.paragraphs {
+        for tp in tb.content() {
             out.extend(collect_paras(tp));
         }
     }
