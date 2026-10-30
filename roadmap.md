@@ -20,7 +20,7 @@ alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
   the front: rotX 15/rotY 20/depth 100 on a 432pt frame gives front x
   159–459.8 and dx≈21.5, dy≈16.7; rotY 40 dx≈38.8 (dy same); depthPercent 200
   dx≈36.3, dy≈27.8; rotX 30 dx≈19.4, dy≈27.9; a 300pt frame dx≈15.1. Probes
-  and `measure.py` in `tests/output/tt/probe/` (worktree). Raster extents
+  and `measure.py` in `tests/output/torture_test/probe3d/` (main checkout, gitignored). Raster extents
   include margins: measure the wall from the raster pixels before fitting.
   Word also picks axis max 25 for a 24 maximum where we pick 30.
 - Inline `wps` shapes with text, charts and SmartArt are block boxes at the
