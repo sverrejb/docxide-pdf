@@ -1539,12 +1539,12 @@ fn resolve_body_stylerefs(doc: &mut Document) {
     let defined: Vec<Vec<(String, String)>> = paras
         .iter()
         .map(|p| {
-            let number = if p.list_label.is_empty() { "0" } else { p.list_label.as_str() };
             let mut defs = Vec::new();
             let mut define = |id: &str, text: String| {
                 for name in std::iter::once(id).chain(names.get(id).map(String::as_str)) {
-                    defs.push((styleref_key(name, false), text.clone()));
-                    defs.push((styleref_key(name, true), number.to_string()));
+                    for (form, value) in p.styleref_values(&text) {
+                        defs.push((styleref_key(name, form), value.to_string()));
+                    }
                 }
             };
             if let Some(sid) = &p.style_id {
@@ -1573,8 +1573,8 @@ fn resolve_body_stylerefs(doc: &mut Document) {
     };
     for (i, p) in paras.iter_mut().enumerate() {
         for run in &mut p.runs {
-            if let Some(FieldCode::StyleRef { name, number }) = run.field_code.clone()
-                && let Some(text) = lookup(&styleref_key(&name, number), i)
+            if let Some(FieldCode::StyleRef { name, form }) = run.field_code.clone()
+                && let Some(text) = lookup(&styleref_key(&name, form), i)
             {
                 run.text = text;
             }

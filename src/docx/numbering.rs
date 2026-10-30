@@ -43,6 +43,8 @@ pub(super) struct ListLabelInfo {
     pub(super) indent_hanging: f32,
     pub(super) tab_stop: Option<f32>,
     pub(super) label: String,
+    /// `Paragraph::list_number`.
+    pub(super) number: String,
     pub(super) font: Option<String>,
     pub(super) east_asia_font: Option<String>,
     pub(super) font_size: Option<f32>,
@@ -112,10 +114,7 @@ fn parse_level_def(lvl: roxmltree::Node) -> Option<(u8, LevelDef)> {
     let num_fmt = wml_attr(lvl, "numFmt")
         .map(|s| s.to_string())
         .unwrap_or_else(|| {
-            let has_placeholder = lvl_text
-                .as_bytes()
-                .windows(2)
-                .any(|w| w[0] == b'%' && w[1].is_ascii_digit());
+            let has_placeholder = placeholder_starts(&lvl_text).next().is_some();
             if has_placeholder { "decimal" } else { "bullet" }.to_string()
         });
     let start = wml_attr(lvl, "start")
@@ -655,8 +654,8 @@ pub(super) fn parse_list_info(
             .lvl_text
             .chars()
             .any(|c| (0xF000..=0xF0FF).contains(&(c as u32)));
-    let label = if is_bullet {
-        if original_had_pua && def.label_font.is_some() {
+    let (label, number) = if is_bullet {
+        let label = if original_had_pua && def.label_font.is_some() {
             // Keep PUA chars for symbol fonts — their cmaps expect PUA encoding
             def.lvl_text.clone()
         } else {
@@ -666,41 +665,45 @@ pub(super) fn parse_list_info(
             } else {
                 text
             }
-        }
+        };
+        (label, String::new())
     } else {
-        let mut label = def.lvl_text.clone();
-        for lvl_idx in 0..9u8 {
-            let placeholder = format!("%{}", lvl_idx + 1);
-            if label.contains(&placeholder) {
-                let ref_def = lookup_level(lvl_idx);
-                let lvl_counter = if lvl_idx == ilvl {
-                    current_counter
-                } else {
-                    counters
-                        .get(&(abs_key, lvl_idx))
-                        .copied()
-                        .unwrap_or(ref_def.map(|d| d.start).unwrap_or(1))
-                };
-                // §17.9.4: isLgl shows every referenced level in Arabic
-                // numerals; decimalZero already is one ("Section 1.01" under
-                // a cardinalText "Article One" level).
-                let fmt = ref_def.map(|d| d.num_fmt.as_str()).unwrap_or("decimal");
-                let lvl_fmt = if def.is_lgl && fmt != "decimalZero" {
-                    "decimal"
-                } else {
-                    fmt
-                };
-                label = label.replace(&placeholder, &format_number(lvl_counter, lvl_fmt));
+        let expand = |template: &str| {
+            let mut label = template.to_string();
+            for lvl_idx in 0..9u8 {
+                let placeholder = format!("%{}", lvl_idx + 1);
+                if label.contains(&placeholder) {
+                    let ref_def = lookup_level(lvl_idx);
+                    let lvl_counter = if lvl_idx == ilvl {
+                        current_counter
+                    } else {
+                        counters
+                            .get(&(abs_key, lvl_idx))
+                            .copied()
+                            .unwrap_or(ref_def.map(|d| d.start).unwrap_or(1))
+                    };
+                    // §17.9.4: isLgl shows every referenced level in Arabic
+                    // numerals; decimalZero already is one ("Section 1.01" under
+                    // a cardinalText "Article One" level).
+                    let fmt = ref_def.map(|d| d.num_fmt.as_str()).unwrap_or("decimal");
+                    let lvl_fmt = if def.is_lgl && fmt != "decimalZero" {
+                        "decimal"
+                    } else {
+                        fmt
+                    };
+                    label = label.replace(&placeholder, &format_number(lvl_counter, lvl_fmt));
+                }
             }
-        }
-        label
+            label
+        };
+        (expand(&def.lvl_text), expand(placeholder_span(&def.lvl_text)))
     };
     // The mark's caps reach the label too: uk_commercial's SH Schedule
     // Heading style numbers its empty paragraphs "SCHEDULE 1".
-    let label = if def.label_caps.unwrap_or(mark.is_some_and(|m| m.caps)) {
-        label.to_uppercase()
+    let (label, number) = if def.label_caps.unwrap_or(mark.is_some_and(|m| m.caps)) {
+        (label.to_uppercase(), number.to_uppercase())
     } else {
-        label
+        (label, number)
     };
     // Word draws a list label in the paragraph mark's format under the
     // level's own rPr; the text runs never count. Probed on k4's "5." (mark
@@ -749,7 +752,31 @@ pub(super) fn parse_list_info(
             numbering: list_numbering(&def.num_fmt, &label),
         }),
         label,
+        number,
     }
+}
+
+/// The part of a lvlText from its first `%N` placeholder to the end of its
+/// last: the numbers and the delimiters between them, without the literal
+/// text around ("第 %1 章" → "%1", "%1.%2." → "%1.%2"), as STYLEREF `\t`
+/// shows them.
+fn placeholder_span(lvl_text: &str) -> &str {
+    let mut starts = placeholder_starts(lvl_text);
+    let Some(first) = starts.next() else {
+        return "";
+    };
+    let last = starts.last().unwrap_or(first);
+    &lvl_text[first..last + 2]
+}
+
+/// Byte offsets of a lvlText's `%N` placeholders.
+fn placeholder_starts(lvl_text: &str) -> impl Iterator<Item = usize> + '_ {
+    lvl_text
+        .as_bytes()
+        .windows(2)
+        .enumerate()
+        .filter(|(_, w)| w[0] == b'%' && w[1].is_ascii_digit())
+        .map(|(i, _)| i)
 }
 
 pub(super) fn label_suffix(suff: &str) -> LabelSuffix {
@@ -763,6 +790,15 @@ pub(super) fn label_suffix(suff: &str) -> LabelSuffix {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn placeholder_span_keeps_numbers_and_inner_delimiters() {
+        assert_eq!(placeholder_span("第 %1 章"), "%1");
+        assert_eq!(placeholder_span("%1.%2."), "%1.%2");
+        assert_eq!(placeholder_span("Chapter %1:"), "%1");
+        assert_eq!(placeholder_span("•"), "");
+        assert_eq!(placeholder_span("50% off %1"), "%1");
+    }
 
     // --- Decimal ---
 

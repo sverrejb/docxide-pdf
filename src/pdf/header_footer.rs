@@ -68,9 +68,9 @@ impl FieldValues<'_> {
         Some(match fc {
             FieldCode::Page(fmt) => page_field_text(self.page_num, fmt.or(self.page_num_format)),
             FieldCode::NumPages(fmt) => page_field_text(self.total_pages, *fmt),
-            FieldCode::StyleRef { name, number } => self
+            FieldCode::StyleRef { name, form } => self
                 .styleref_values
-                .get(&styleref_key(name, *number))
+                .get(&styleref_key(name, *form))
                 .cloned()
                 .unwrap_or_default(),
             FieldCode::PageRef(_) => return None,
@@ -2007,24 +2007,25 @@ pub(super) fn hf_paragraph_gap(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::StyleRefForm;
 
     #[test]
     fn if_over_stylerefs_takes_the_page_value() {
-        let sr = |number| {
+        let sr = |form| {
             IfPart::Field(FieldCode::StyleRef {
                 name: "CharPartNo".into(),
-                number,
+                form,
             })
         };
         let text = |t: &str| IfPart::Text(t.into());
         // IF {STYLEREF CharPartNo \n} = 0 "{STYLEREF CharPartNo}" "Part {STYLEREF CharPartNo \n}"
         let parts = [
             text(" IF "),
-            sr(true),
+            sr(StyleRefForm::Label),
             text(" = 0 \""),
-            sr(false),
+            sr(StyleRefForm::Text),
             text("\" \"Part "),
-            sr(true),
+            sr(StyleRefForm::Label),
             text("\""),
         ];
         let mut styleref_values = HashMap::new();
@@ -2038,10 +2039,11 @@ mod tests {
             .eval(&FieldCode::If(parts.to_vec()))
         };
         assert_eq!(eval(&styleref_values), None);
-        styleref_values.insert(styleref_key("charpartno", false), "Part 3".to_string());
-        styleref_values.insert(styleref_key("charpartno", true), "0".to_string());
+        let key = |form| styleref_key("charpartno", form);
+        styleref_values.insert(key(StyleRefForm::Text), "Part 3".to_string());
+        styleref_values.insert(key(StyleRefForm::Label), "0".to_string());
         assert_eq!(eval(&styleref_values).as_deref(), Some("Part 3"));
-        styleref_values.insert(styleref_key("charpartno", true), "4".to_string());
+        styleref_values.insert(key(StyleRefForm::Label), "4".to_string());
         assert_eq!(eval(&styleref_values).as_deref(), Some("Part 4"));
         assert_eq!(field_args("a<>\"b c\" 2"), ["a", "<>", "b c", "2"]);
     }

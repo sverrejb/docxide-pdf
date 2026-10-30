@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use crate::model::{
     ConnectorShape, FieldCode, FitText, FloatingImage, FormCheckbox, HorizontalRule, IfPart,
-    InlineChart, Ruby, Run, SmartArtDiagram, TabAlignment, TextFill, TextGlow, TextOutline,
-    TextShadow, Textbox, VertAlign,
+    InlineChart, Ruby, Run, SmartArtDiagram, StyleRefForm, TabAlignment, TextFill, TextGlow,
+    TextOutline, TextShadow, Textbox, VertAlign,
 };
 
 use super::images::{
@@ -39,7 +39,12 @@ fn parse_field_code(instr: &str) -> Option<FieldCode> {
     } else if keyword.eq_ignore_ascii_case("STYLEREF") {
         parse_styleref_arg(instr).map(|name| FieldCode::StyleRef {
             name,
-            number: has_switch(instr, "\\n"),
+            // `\t` only qualifies a number switch.
+            form: match (has_switch(instr, "\\n"), has_switch(instr, "\\t")) {
+                (true, true) => StyleRefForm::Number,
+                (true, false) => StyleRefForm::Label,
+                _ => StyleRefForm::Text,
+            },
         })
     } else if keyword.eq_ignore_ascii_case("PAGEREF") {
         instr

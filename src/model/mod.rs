@@ -508,6 +508,9 @@ pub struct Paragraph {
     pub indent_hanging: f32,
     pub indent_first_line: f32,
     pub list_label: String,
+    /// The label's numbers with the delimiters between them, literal text
+    /// dropped ("第 1 章" → "1", "%1.%2." → "1.2"): STYLEREF's `\t` switch.
+    pub list_number: String,
     pub list_label_font: Option<String>,
     /// The font the label's East Asian characters are drawn in.
     pub list_label_east_asia_font: Option<String>,
@@ -601,6 +604,21 @@ impl Paragraph {
         } else {
             self.indent_left
         }
+    }
+
+    /// What a STYLEREF to this paragraph shows per form, `text` being the
+    /// styled text it carries.
+    pub fn styleref_values<'a>(&'a self, text: &'a str) -> [(StyleRefForm, &'a str); 3] {
+        let (label, number) = if self.list_label.is_empty() {
+            ("0", "0")
+        } else {
+            (self.list_label.as_str(), self.list_number.as_str())
+        };
+        [
+            (StyleRefForm::Text, text),
+            (StyleRefForm::Label, label),
+            (StyleRefForm::Number, number),
+        ]
     }
 }
 
@@ -851,12 +869,26 @@ impl Default for Run {
     }
 }
 
+/// What a STYLEREF field shows of the paragraph it finds.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum StyleRefForm {
+    Text,
+    /// `\n`: the list label ("第 1 章"; 0 without one, as running heads
+    /// test `IF {STYLEREF X \n} = 0`).
+    Label,
+    /// `\n \t`: the label's numbers with the delimiters between them ("1").
+    Number,
+}
+
 /// The key a STYLEREF value is stored under: Word matches style names
-/// case-insensitively ("CharSchno" for CharSchNo), and the `\n` switch reads
-/// the paragraph's list number.
-pub fn styleref_key(name: &str, number: bool) -> String {
+/// case-insensitively ("CharSchno" for CharSchNo).
+pub fn styleref_key(name: &str, form: StyleRefForm) -> String {
     let key = name.to_lowercase();
-    if number { key + "\\n" } else { key }
+    match form {
+        StyleRefForm::Text => key,
+        StyleRefForm::Label => key + "\\n",
+        StyleRefForm::Number => key + "\\n\\t",
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -865,10 +897,9 @@ pub enum FieldCode {
     /// None keeps the section's page number format.
     Page(Option<&'static str>),
     NumPages(Option<&'static str>),
-    /// `number` is the `\n` switch: the referenced paragraph's list number.
     StyleRef {
         name: String,
-        number: bool,
+        form: StyleRefForm,
     },
     PageRef(String),
     /// An `IF` over nested fields, evaluated per page: legislation running

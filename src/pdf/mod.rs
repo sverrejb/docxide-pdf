@@ -824,22 +824,18 @@ fn break_run_lhr(runs: &[Run], break_fs: f32, fonts: &HashMap<String, FontEntry>
     }
 }
 
-/// Record one STYLEREF value under the style's id and name, with the
-/// paragraph's list number (0 when it has none) for the `\n` switch: running
-/// heads test `IF {STYLEREF X \n} = 0`.
+/// Record what STYLEREF reads from `para` under the style's id and name.
 fn styleref_insert(
     running: &mut HashMap<String, String>,
     page_first: &mut HashMap<String, String>,
     id: &str,
+    para: &Paragraph,
     text: &str,
-    number: &str,
     style_id_to_name: &HashMap<String, String>,
 ) {
     for name in std::iter::once(id).chain(style_id_to_name.get(id).map(String::as_str)) {
-        for (key, value) in [
-            (header_footer::styleref_key(name, false), text),
-            (header_footer::styleref_key(name, true), number),
-        ] {
+        for (form, value) in para.styleref_values(text) {
+            let key = header_footer::styleref_key(name, form);
             if !page_first.contains_key(&key) {
                 page_first.insert(key.clone(), value.to_string());
             }
@@ -854,15 +850,10 @@ fn update_styleref_from_para(
     para: &Paragraph,
     style_id_to_name: &HashMap<String, String>,
 ) {
-    let number = if para.list_label.is_empty() {
-        "0"
-    } else {
-        para.list_label.as_str()
-    };
     if let Some(ref sid) = para.style_id {
         let text: String = para.runs.iter().map(|r| r.text.as_str()).collect();
         if !text.is_empty() {
-            styleref_insert(running, page_first, sid, &text, number, style_id_to_name);
+            styleref_insert(running, page_first, sid, para, &text, style_id_to_name);
         }
     }
     // A character style's text is the whole stretch of runs carrying it.
@@ -875,7 +866,7 @@ fn update_styleref_from_para(
         };
         let text: String = group.iter().map(|r| r.text.as_str()).collect();
         if !text.is_empty() {
-            styleref_insert(running, page_first, csid, &text, number, style_id_to_name);
+            styleref_insert(running, page_first, csid, para, &text, style_id_to_name);
         }
     }
 }
