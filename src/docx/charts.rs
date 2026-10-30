@@ -7,8 +7,9 @@ use crate::model::{
 };
 
 use super::{
-    chart_ns as chart_child, chart_ns_attr as chart_attr, chart_ns_children as chart_children,
-    dml as dml_child, frac_attr, parse_hex_color, part_path, read_zip_text,
+    CHART_NS, DML_NS, chart_ns as chart_child, chart_ns_attr as chart_attr,
+    chart_ns_children as chart_children, dml as dml_child, frac_attr, parse_hex_color, part_path,
+    read_zip_text,
 };
 
 fn find_srgb_clr<'a>(sp_pr: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
@@ -253,6 +254,21 @@ fn parse_chart_space(xml_content: &str, accent_colors: Vec<[u8; 3]>) -> Option<C
         plot_border_color: extract_plot_border(plot_area),
         accent_colors,
         val_format_code,
+        title: chart_child(chart_node, "title")
+            .filter(|_| chart_attr(chart_node, "autoTitleDeleted") != Some("1"))
+            .map(|t| {
+                t.descendants()
+                    .filter(|n| n.has_tag_name((DML_NS, "t")))
+                    .filter_map(|n| n.text())
+                    .collect::<String>()
+            })
+            .filter(|t| !t.is_empty()),
+        show_values: type_node
+            .descendants()
+            .filter(|n| n.has_tag_name((CHART_NS, "dLbls")))
+            .any(|d| chart_attr(d, "showVal") == Some("1")),
+        data_table: chart_child(plot_area, "dTable").is_some(),
+        frame: chart_child(chart_space, "spPr").map_or(Some([0, 0, 0]), extract_line_color),
     })
 }
 

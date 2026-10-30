@@ -75,6 +75,16 @@ pub struct Chart {
     pub plot_border_color: Option<[u8; 3]>,
     pub accent_colors: Vec<[u8; 3]>,
     pub val_format_code: Option<String>,
+    /// `c:title`'s text, when it has one of its own.
+    pub title: Option<String>,
+    /// `c:dLbls/c:showVal`: each bar carries its value.
+    pub show_values: bool,
+    /// `c:dTable`: a table of the values under the plot, in place of the
+    /// category axis labels.
+    pub data_table: bool,
+    /// The chart area's outline: Word draws one when `c:chartSpace` sets no
+    /// `c:spPr` of its own.
+    pub frame: Option<[u8; 3]>,
 }
 
 pub struct InlineChart {

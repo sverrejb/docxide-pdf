@@ -5,7 +5,9 @@ use pdf_writer::{Content, Name, Str};
 use crate::fonts::{FontEntry, to_winansi_bytes};
 use crate::model::{BarGrouping, Chart, ChartType, InlineChart, LegendPosition, MarkerSymbol};
 
-use super::chart_legend::{LegendItem, LegendPlacement, SwatchStyle, render_chart_legend};
+use super::chart_legend::{
+    LegendItem, LegendPlacement, SwatchStyle, render_chart_legend, render_swatch,
+};
 use super::charts_radial;
 use super::color::{fill_rgb, stroke_rgb};
 use super::helpers::draw_circle;
@@ -286,6 +288,7 @@ fn compute_axis_range(max_val: f32, target_ticks: usize, headroom_threshold: f32
     (ts, am)
 }
 
+#[derive(Clone, Copy)]
 struct PlotRect {
     x: f32,
     y: f32,
@@ -304,7 +307,8 @@ fn draw_chart_series(
     axis_max: f32,
     x_axis_max: f32,
     alpha_states: &mut HashSet<u8>,
-) {
+) -> Vec<BarTop> {
+    let mut bar_tops = Vec::new();
     let PlotRect {
         x: plot_x,
         y: plot_y,
@@ -367,13 +371,15 @@ fn draw_chart_series(
                         let val = series.values.get(ci).copied().unwrap_or(0.0);
                         let len = (val / axis_max) * val_extent;
                         set_color(content, series.color);
-                        bar(
-                            content,
-                            group_pos + si as f32 * thick,
-                            val_origin,
-                            thick,
-                            len,
-                        );
+                        let pos = group_pos + si as f32 * thick;
+                        bar(content, pos, val_origin, thick, len);
+                        if c.show_values && !horizontal {
+                            bar_tops.push(BarTop {
+                                x: pos + thick / 2.0,
+                                top: val_origin + len,
+                                value: val,
+                            });
+                        }
                     }
                 }
             }
@@ -526,6 +532,103 @@ fn draw_chart_series(
         }
         ChartType::Pie | ChartType::Doughnut { .. } | ChartType::Radar => unreachable!(),
     }
+    bar_tops
+}
+
+/// Where a bar's value label goes: above `top`, centred on `x`.
+/// ponytail: vertical clustered bars only; stacked and horizontal bars and
+/// line points do not show their values yet.
+struct BarTop {
+    x: f32,
+    top: f32,
+    value: f32,
+}
+
+/// A chart title's size and place: torture_test's 18pt title sits on a
+/// baseline 24.6pt under the chart's top, in a 30pt band above the plot.
+/// ponytail: pie and radar charts draw no title yet.
+const TITLE_PT: f32 = 18.0;
+const TITLE_BASELINE: f32 = 24.6;
+const TITLE_BAND: f32 = 30.0;
+
+/// A data label's text: the value as the number format shows it, or as
+/// written when the format is General.
+fn data_label(val: f32, format_code: Option<&str>) -> String {
+    match format_code.filter(|f| *f != "General") {
+        Some(fmt) => apply_number_format(val, fmt),
+        None => format!("{val}"),
+    }
+}
+
+/// `c:dTable` under a column chart's plot: the category row, then a row per
+/// series with its legend key, name and values, ruled like Word's grid
+/// (torture_test at 10pt: 15.1pt rows, text 12.8pt under each row's top).
+fn draw_data_table(
+    content: &mut Content,
+    c: &Chart,
+    plot: PlotRect,
+    num_categories: usize,
+    header_w: f32,
+    font_key: &str,
+    font_size: f32,
+    font: Option<&FontEntry>,
+    val_fmt: Option<&str>,
+) {
+    const KEY: f32 = 5.27;
+    const PAD: f32 = 3.4;
+    let row_h = table_row_h(font_size);
+    let rows = 1 + c.series.len();
+    let bottom = plot.y - rows as f32 * row_h;
+    let left = plot.x - header_w;
+    let right = plot.x + plot.w;
+    let col_w = plot.w / num_categories.max(1) as f32;
+    let baseline = |row: usize| plot.y - row as f32 * row_h - 1.28 * font_size;
+    let centered = |content: &mut Content, ci: usize, row: usize, text: &str| {
+        let tw = text_width(text, font_size, font);
+        let cx = plot.x + (ci as f32 + 0.5) * col_w;
+        let (x, y) = (cx - tw / 2.0, baseline(row));
+        show_text(content, font_key, font_size, x, y, text, font);
+    };
+
+    content.set_line_width(0.5);
+    stroke_rgb(content, DEFAULT_AXIS_COLOR);
+    for row in 0..=rows {
+        let ly = plot.y - row as f32 * row_h;
+        content.move_to(if row == 0 { plot.x } else { left }, ly);
+        content.line_to(right, ly);
+    }
+    for ci in 0..=num_categories {
+        let gx = plot.x + ci as f32 * col_w;
+        content.move_to(gx, plot.y);
+        content.line_to(gx, bottom);
+    }
+    content.move_to(left, plot.y - row_h);
+    content.line_to(left, bottom);
+    content.stroke();
+
+    content.set_fill_gray(0.0);
+    if let Some(cat_axis) = &c.cat_axis {
+        for (ci, label) in cat_axis.labels.iter().enumerate() {
+            centered(content, ci, 0, label);
+        }
+    }
+    for (si, series) in c.series.iter().enumerate() {
+        let row = si + 1;
+        let key_y = plot.y - (row + 1) as f32 * row_h + (row_h - KEY) / 2.0;
+        let color = series.color.unwrap_or([0, 0, 0]);
+        render_swatch(content, &SwatchStyle::Rect, color, left + PAD, key_y, KEY);
+        content.set_fill_gray(0.0);
+        let (x, y) = (left + PAD + KEY + 2.3, baseline(row));
+        show_text(content, font_key, font_size, x, y, &series.label, font);
+        for (ci, val) in series.values.iter().enumerate().take(num_categories) {
+            centered(content, ci, row, &data_label(*val, val_fmt));
+        }
+    }
+}
+
+/// A data table row's height at the table's font size.
+fn table_row_h(font_size: f32) -> f32 {
+    1.51 * font_size
 }
 
 pub(super) fn render_chart(
@@ -561,6 +664,16 @@ pub(super) fn render_chart(
     let is_scatter_like = matches!(c.chart_type, ChartType::Scatter | ChartType::Bubble);
     if num_categories == 0 && !is_scatter_like {
         return;
+    }
+
+    // The chart area's outline, whatever the chart type.
+    if let Some(color) = c.frame {
+        content.save_state();
+        content.set_line_width(0.75);
+        stroke_rgb(content, color);
+        content.rect(x, y - h, w, h);
+        content.stroke();
+        content.restore_state();
     }
 
     match c.chart_type {
@@ -663,7 +776,26 @@ pub(super) fn render_chart(
         c.chart_type,
         ChartType::Line | ChartType::Area | ChartType::Scatter | ChartType::Bubble
     );
-    let margin_left = if !horizontal { val_label_w } else { w * 0.12 };
+    // Word's data table runs under the plot: a row of categories, then one
+    // per series headed by its legend key and name in a column left of it.
+    let table_rows = if c.data_table && !horizontal && !is_scatter_like {
+        1 + num_series
+    } else {
+        0
+    };
+    let table_header_w = if table_rows > 0 {
+        c.series
+            .iter()
+            .map(|s| text_width(&s.label, font_size, label_font) + 15.0)
+            .fold(0.0f32, f32::max)
+    } else {
+        0.0
+    };
+    let margin_left = if !horizontal { val_label_w } else { w * 0.12 }.max(if table_rows > 0 {
+        table_header_w + 10.0
+    } else {
+        0.0
+    });
     let margin_right = if has_legend && legend_on_right {
         let legend_swatch = 5.5;
         let legend_gap = 8.0;
@@ -682,7 +814,7 @@ pub(super) fn render_chart(
     } else {
         8.0
     };
-    let margin_top = h * 0.05;
+    let margin_top = h * 0.05 + if c.title.is_some() { TITLE_BAND } else { 0.0 };
 
     // Estimate plot_w for label wrapping and thinning calculations
     let plot_w_est = w - margin_left - margin_right;
@@ -705,7 +837,14 @@ pub(super) fn render_chart(
     };
 
     let cat_label_h = line_h * max_wrap_lines as f32 + 4.0;
-    let margin_bottom = if has_legend && legend_on_bottom {
+    let margin_bottom = if table_rows > 0 {
+        let legend_band = if has_legend && legend_on_bottom {
+            30.0
+        } else {
+            8.0
+        };
+        legend_band + table_rows as f32 * table_row_h(font_size)
+    } else if has_legend && legend_on_bottom {
         h * 0.22
     } else {
         cat_label_h + 8.0
@@ -802,15 +941,16 @@ pub(super) fn render_chart(
     }
 
     // Data rendering
-    draw_chart_series(
+    let plot = PlotRect {
+        x: plot_x,
+        y: plot_y,
+        w: plot_w,
+        h: plot_h,
+    };
+    let bar_tops = draw_chart_series(
         c,
         content,
-        PlotRect {
-            x: plot_x,
-            y: plot_y,
-            w: plot_w,
-            h: plot_h,
-        },
+        plot,
         num_categories,
         axis_max,
         x_axis_max,
@@ -903,8 +1043,46 @@ pub(super) fn render_chart(
             }
         }
 
+        if let Some(title) = &c.title {
+            let tw = text_width(title, TITLE_PT, label_font);
+            let (tx, ty) = (x + (w - tw) / 2.0, y - TITLE_BASELINE);
+            show_text(content, label_font_key, TITLE_PT, tx, ty, title, label_font);
+        }
+
+        for bar in &bar_tops {
+            let label = data_label(bar.value, val_fmt);
+            let tw = text_width(&label, font_size, label_font);
+            let (lx, ly) = (bar.x - tw / 2.0, bar.top + 3.0);
+            show_text(
+                content,
+                label_font_key,
+                font_size,
+                lx,
+                ly,
+                &label,
+                label_font,
+            );
+        }
+
+        if table_rows > 0 {
+            draw_data_table(
+                content,
+                c,
+                plot,
+                num_categories,
+                table_header_w,
+                label_font_key,
+                font_size,
+                label_font,
+                val_fmt,
+            );
+        }
+
         // Category axis labels with auto-skip and multi-line wrapping
-        if !is_scatter_like && let Some(ref cat_axis) = c.cat_axis {
+        if !is_scatter_like
+            && table_rows == 0
+            && let Some(ref cat_axis) = c.cat_axis
+        {
             let label_skip = if !horizontal {
                 let slot_w = plot_w / num_categories.max(1) as f32;
                 // Measure the widest wrapped line to decide thinning.

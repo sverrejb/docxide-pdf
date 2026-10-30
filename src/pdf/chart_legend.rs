@@ -94,7 +94,7 @@ fn line_extension(swatch: &SwatchStyle) -> f32 {
     }
 }
 
-fn render_swatch(
+pub(super) fn render_swatch(
     content: &mut Content,
     swatch: &SwatchStyle,
     color: [u8; 3],
