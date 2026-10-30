@@ -5253,12 +5253,13 @@ pub(super) fn tallest_glyph_run_metrics(
 }
 
 /// Distance from the top of an exact or at-least line box to its baseline, or
-/// None for an ordinary line. Word bottom-aligns an exact-height box, and an at-least
-/// one whose minimum wins (online export: czech_census's 10pt lines under
-/// atLeast 12.05 start 0.55pt lower), at the glyphs' descent: line_h_ratio −
+/// None for an ordinary line. An exact line puts its baseline 80% down the box
+/// whatever the font (Word probes: Calibri, Times New Roman, Arial and Cambria
+/// at 8-24pt; online export 2026-10-30, issue #139: KaiTi, SimSun, SimHei and
+/// Microsoft YaHei at 12-24pt in 14-40pt boxes). An at-least box whose minimum
+/// wins (online export: czech_census's 10pt lines under atLeast 12.05 start
+/// 0.55pt lower) bottom-aligns at the glyphs' descent: line_h_ratio −
 /// ascender_ratio, less the East Asian leading Word puts below normal lines.
-/// A Latin exact line instead puts its baseline 80% down the box whatever the
-/// font (Word probes: Calibri, Times New Roman, Arial and Cambria at 8-24pt).
 pub(super) fn boxed_line_ascent(
     ls: LineSpacing,
     line_h: f32,
@@ -5268,19 +5269,13 @@ pub(super) fn boxed_line_ascent(
     runs: &[Run],
     seen_fonts: &HashMap<String, FontEntry>,
 ) -> Option<f32> {
-    if matches!(ls, LineSpacing::Exact(_))
-        && tallest_glyph_run_half_leading(runs, seen_fonts) == 0.0
-    {
-        return Some(line_h * 0.8);
-    }
-    let (lhr, ar) = (lhr?, ar?);
-    let bottom_aligned = match ls {
-        // East Asian: a Latin exact line returned above.
-        LineSpacing::Exact(_) => true,
-        LineSpacing::AtLeast(min) => min > font_size * lhr,
-        LineSpacing::Auto(_) => false,
+    let min = match ls {
+        LineSpacing::Exact(_) => return Some(line_h * 0.8),
+        LineSpacing::AtLeast(min) => min,
+        LineSpacing::Auto(_) => return None,
     };
-    (lhr > ar && bottom_aligned).then(|| {
+    let (lhr, ar) = (lhr?, ar?);
+    (lhr > ar && min > font_size * lhr).then(|| {
         let half_lead = tallest_glyph_run_half_leading(runs, seen_fonts);
         line_h - font_size * (lhr - ar - half_lead)
     })
