@@ -967,6 +967,13 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     share_row_top_margins(&mut rows, cell_margins);
     settle_row_borders(&mut rows, cell_margins);
     apply_cell_spacing(&mut rows, &row_spacing, num_cols, cell_margins);
+    let bidi_visual = tbl_pr
+        .and_then(|p| wml_bool(p, "bidiVisual"))
+        .unwrap_or(false);
+    let mut cell_margins = cell_margins;
+    if bidi_visual {
+        mirror_columns(&mut rows, &mut col_widths, &mut cell_margins);
+    }
 
     Table {
         col_widths,
@@ -982,8 +989,26 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
         width_pct,
         grid_inferred,
         cells_unsized,
+        bidi_visual,
         header_first_row: tbl_look_node.is_none() || look_first_row,
         header_first_col: tbl_look_node.is_none() || look_first_col,
+    }
+}
+
+/// A right-to-left table laid out left to right: each row's cells and the grid
+/// reversed, with left and right borders and margins swapped.
+/// ponytail: gridBefore keeps its side; a row with one goes wrong.
+fn mirror_columns(rows: &mut [TableRow], col_widths: &mut [f32], margins: &mut CellMargins) {
+    col_widths.reverse();
+    std::mem::swap(&mut margins.left, &mut margins.right);
+    for cell in rows.iter_mut().flat_map(|r| {
+        r.cells.reverse();
+        r.cells.iter_mut()
+    }) {
+        std::mem::swap(&mut cell.borders.left, &mut cell.borders.right);
+        if let Some(m) = &mut cell.cell_margins {
+            std::mem::swap(&mut m.left, &mut m.right);
+        }
     }
 }
 

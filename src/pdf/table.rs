@@ -1848,7 +1848,7 @@ fn aligned_table_left(
     compat_mode: u32,
 ) -> f32 {
     use crate::model::TableAlignment;
-    match table.alignment {
+    let left = match table.alignment {
         TableAlignment::Center => area_left + (area_width - total_width) / 2.0,
         TableAlignment::Right => area_left + area_width - total_width,
         // Before Word 2013 layout, tblInd positions the first cell's text, so
@@ -1861,7 +1861,12 @@ fn aligned_table_left(
             area_left + table.table_indent + word2013_border_shift(table)
         }
         TableAlignment::Left => area_left + table.table_indent - table.first_cell_left_margin(),
+    };
+    // A right-to-left table starts at the right margin, its offset mirrored.
+    if table.bidi_visual && matches!(table.alignment, TableAlignment::Left) {
+        return area_left + area_width - total_width - (left - area_left);
     }
+    left
 }
 
 /// `override_pos`: positioning info for floating tables.

@@ -785,6 +785,7 @@ fn convert_table(
         width_pct: None,
         grid_inferred: false,
         cells_unsized: false,
+        bidi_visual: false,
         header_first_row: false,
         header_first_col: false,
     })

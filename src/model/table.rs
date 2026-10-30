@@ -153,6 +153,9 @@ pub struct Table {
     /// `tblLook` firstRow / firstColumn for tagging: Word's tagged export
     /// treats them as on when `tblLook` is absent (header row → THead/TH,
     /// first column → TH).
+    /// `w:bidiVisual`: the columns run right to left (already mirrored in
+    /// `rows` and `col_widths`), and the table starts at the right margin.
+    pub bidi_visual: bool,
     pub header_first_row: bool,
     pub header_first_col: bool,
 }
