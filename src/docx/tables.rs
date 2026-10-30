@@ -1,9 +1,9 @@
 use std::io::{Read, Seek};
 
 use crate::model::{
-    Alignment, Block, BorderStyle, CellBorder, CellBorders, CellMargins, CellVAlign, HatchPattern,
-    HorizontalPosition, LineSpacing, Paragraph, Table, TableAlignment, TableCell, TablePosition,
-    TableRow, TextDirection, VMerge,
+    Alignment, Block, BorderStyle, CellBorder, CellBorders, CellMargins, CellVAlign, FitText,
+    HatchPattern, HorizontalPosition, LineSpacing, Paragraph, Table, TableAlignment, TableCell,
+    TablePosition, TableRow, TextDirection, VMerge,
 };
 
 use super::numbering::{ListCounters, ListLabelInfo, parse_list_info};
@@ -295,7 +295,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
             .or_else(|| style_chain().find_map(|s| s.cell_margins[i]))
             .unwrap_or(default)
     };
-    let cell_margins = CellMargins {
+    let mut cell_margins = CellMargins {
         top: side(0, "top", "top", 0.0),
         left: side(1, "left", "start", default_side),
         bottom: side(2, "bottom", "bottom", 0.0),
@@ -940,6 +940,9 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     cell_blocks.push(Block::Table(nested));
                 }
             }
+            if tc_pr.and_then(|pr| wml_bool(pr, "tcFitText")) == Some(true) {
+                fit_cell_text(&mut cell_blocks);
+            }
             cells.push(TableCell {
                 width: cell_width,
                 content: cell_blocks,
@@ -970,7 +973,6 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     let bidi_visual = tbl_pr
         .and_then(|p| wml_bool(p, "bidiVisual"))
         .unwrap_or(false);
-    let mut cell_margins = cell_margins;
     if bidi_visual {
         mirror_columns(&mut rows, &mut col_widths, &mut cell_margins);
     }
@@ -995,19 +997,36 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     }
 }
 
+/// `w:tcFitText`: each paragraph of the cell fills the cell's text width,
+/// as one region apart from any fitText of its own.
+fn fit_cell_text(blocks: &mut [Block]) {
+    const CELL_FIT_ID: i64 = i64::MIN;
+    for block in blocks {
+        if let Block::Paragraph(p) = block {
+            for run in p.runs.iter_mut().filter(|r| r.fit_text.is_none()) {
+                run.fit_text = Some(FitText {
+                    width: None,
+                    id: CELL_FIT_ID,
+                });
+            }
+        }
+    }
+}
+
 /// A right-to-left table laid out left to right: each row's cells and the grid
 /// reversed, with left and right borders and margins swapped.
-/// ponytail: gridBefore keeps its side; a row with one goes wrong.
+/// ponytail: gridBefore keeps its side, and tagging reads the mirrored order
+/// (the first-column TH lands on the logically last column).
 fn mirror_columns(rows: &mut [TableRow], col_widths: &mut [f32], margins: &mut CellMargins) {
     col_widths.reverse();
     std::mem::swap(&mut margins.left, &mut margins.right);
-    for cell in rows.iter_mut().flat_map(|r| {
-        r.cells.reverse();
-        r.cells.iter_mut()
-    }) {
-        std::mem::swap(&mut cell.borders.left, &mut cell.borders.right);
-        if let Some(m) = &mut cell.cell_margins {
-            std::mem::swap(&mut m.left, &mut m.right);
+    for row in rows {
+        row.cells.reverse();
+        for cell in &mut row.cells {
+            std::mem::swap(&mut cell.borders.left, &mut cell.borders.right);
+            if let Some(m) = &mut cell.cell_margins {
+                std::mem::swap(&mut m.left, &mut m.right);
+            }
         }
     }
 }

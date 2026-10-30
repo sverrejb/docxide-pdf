@@ -1864,9 +1864,10 @@ fn aligned_table_left(
     };
     // A right-to-left table starts at the right margin, its offset mirrored.
     if table.bidi_visual && matches!(table.alignment, TableAlignment::Left) {
-        return area_left + area_width - total_width - (left - area_left);
+        area_left + area_width - total_width - (left - area_left)
+    } else {
+        left
     }
-    left
 }
 
 /// `override_pos`: positioning info for floating tables.

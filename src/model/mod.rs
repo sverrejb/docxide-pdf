@@ -705,6 +705,17 @@ pub struct Run {
     pub math: Option<std::sync::Arc<MathZone>>,
     /// `w:ruby`: this run is (part of) the base text the guide text sits above.
     pub ruby: Option<std::sync::Arc<Ruby>>,
+    /// `w:fitText` (or the cell's `w:tcFitText`): the text is spread or
+    /// squeezed to this width.
+    pub fit_text: Option<FitText>,
+}
+
+/// A fitText region: the runs sharing an `id` fill `width` points together,
+/// or the line's width (`w:tcFitText`: the cell's) when None.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FitText {
+    pub width: Option<f32>,
+    pub id: i64,
 }
 
 /// Phonetic guide text (`w:rt`) set above its base text.
@@ -833,6 +844,7 @@ impl Default for Run {
             checkbox: None,
             math: None,
             ruby: None,
+            fit_text: None,
         }
     }
 }

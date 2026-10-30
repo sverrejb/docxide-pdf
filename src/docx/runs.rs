@@ -3,9 +3,9 @@ use std::io::{Read, Seek};
 use std::sync::Arc;
 
 use crate::model::{
-    ConnectorShape, FieldCode, FloatingImage, FormCheckbox, HorizontalRule, IfPart, InlineChart,
-    Ruby, Run, SmartArtDiagram, TabAlignment, TextFill, TextGlow, TextOutline, TextShadow, Textbox,
-    VertAlign,
+    ConnectorShape, FieldCode, FitText, FloatingImage, FormCheckbox, HorizontalRule, IfPart,
+    InlineChart, Ruby, Run, SmartArtDiagram, TabAlignment, TextFill, TextGlow, TextOutline,
+    TextShadow, Textbox, VertAlign,
 };
 
 use super::images::{
@@ -19,7 +19,7 @@ use super::styles::{
 use super::textbox::{parse_connector_from_vml, parse_textbox_from_vml};
 use super::{
     MATH_NS, MC_NS_TOP, OFFICE_NS, ParseContext, REL_NS, VML_NS, WML_NS, math_run_text, math_val,
-    parse_hex_color, parse_pt, wml, wml_attr, wml_bool,
+    parse_hex_color, parse_pt, twips_attr, wml, wml_attr, wml_bool,
 };
 use super::{is_complex_script_char, is_east_asian_char};
 
@@ -538,6 +538,12 @@ impl ParagraphRunDefaults {
                 .unwrap_or(self.strikethrough),
             dstrike: own.dstrike.unwrap_or(self.dstrike),
             char_spacing: own.char_spacing.unwrap_or(self.char_spacing),
+            fit_text: rpr.and_then(|n| wml(n, "fitText")).and_then(|ft| {
+                Some(FitText {
+                    width: Some(twips_attr(ft, "val")?),
+                    id: wml_attr(ft, "id").and_then(|v| v.parse().ok()).unwrap_or(0),
+                })
+            }),
             text_scale: rpr
                 .and_then(|n| wml_attr(n, "w"))
                 .and_then(|v| v.trim_end_matches('%').parse::<f32>().ok())
@@ -1081,6 +1087,7 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
                 && same_arc(&prev.formula, &run.formula)
                 // One ruby's base runs merge only with each other.
                 && same_arc(&prev.ruby, &run.ruby)
+                && prev.fit_text == run.fit_text
         });
         if can_merge {
             let prev = result.last_mut().unwrap();

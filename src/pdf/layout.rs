@@ -1949,11 +1949,29 @@ pub(super) struct LineOpts<'a> {
     pub(super) dual: Option<&'a [DualRegion]>,
 }
 
+/// Run widths Word sets from the text itself, before line breaking: ruby
+/// bases and fitText regions (borrowed when there are none). `line_width`
+/// is the width a tcFitText cell's paragraphs fill.
+/// ponytail: table autofit (`min_content_widths`) measures the bare runs.
+fn prepare_runs<'r>(
+    runs: &'r [Run],
+    fonts: &HashMap<String, FontEntry>,
+    line_width: f32,
+) -> Cow<'r, [Run]> {
+    if !runs
+        .iter()
+        .any(|r| r.ruby.is_some() || r.fit_text.is_some())
+    {
+        return Cow::Borrowed(runs);
+    }
+    let runs = widen_ruby_bases(runs, fonts);
+    Cow::Owned(fit_text_regions(&runs, fonts, line_width))
+}
+
 /// A ruby's base text spreads over its guide's width when the guide is the
 /// wider (torture_test's 東京 under とうきょう: the base glyphs sit 2.75pt
 /// apart). ponytail: per run, Word's distributeSpace puts half a gap before
-/// the first glyph, and we put it all after the last; table autofit
-/// (`min_content_widths`) still measures the bare base.
+/// the first glyph, and we put it all after the last.
 fn widen_ruby_bases(runs: &[Run], fonts: &HashMap<String, FontEntry>) -> Vec<Run> {
     let mut runs = runs.to_vec();
     for run in &mut runs {
@@ -1961,21 +1979,50 @@ fn widen_ruby_bases(runs: &[Run], fonts: &HashMap<String, FontEntry>) -> Vec<Run
             continue;
         };
         let n = run.text.chars().count() as f32;
-        let base_w = word_width_for_run(
-            entry,
-            run,
-            &run.text,
-            run.font_size,
-            run.kerns_at(run.font_size),
-            run.char_spacing,
-            run.text_scale / 100.0,
-        );
-        let free = entry.word_width(&ruby.text, ruby.font_size, false) - base_w;
+        let free =
+            entry.word_width(&ruby.text, ruby.font_size, false) - segment_width(&[run], fonts);
         if free > 0.0 && n > 0.0 {
             run.char_spacing += free / n;
         }
     }
     runs
+}
+
+/// A fitText region's letters get equal gaps that make it exactly its width,
+/// none after the last: Word replaces any cached w:spacing
+/// (japanese_hr_consultation's 氏名, 30pt apart in a 48pt region).
+fn fit_text_regions(runs: &[Run], fonts: &HashMap<String, FontEntry>, line_width: f32) -> Vec<Run> {
+    let mut out = Vec::with_capacity(runs.len() + 1);
+    for region in runs.chunk_by(|a, b| a.fit_text.is_some() && a.fit_text == b.fit_text) {
+        let n: usize = region.iter().map(|r| r.text.chars().count()).sum();
+        let Some(fit) = region[0].fit_text.filter(|_| n > 1) else {
+            out.extend_from_slice(region);
+            continue;
+        };
+        let start = out.len();
+        out.extend(region.iter().map(|r| Run {
+            char_spacing: 0.0,
+            ..r.clone()
+        }));
+        let bare: Vec<&Run> = out[start..].iter().collect();
+        let gap = (fit.width.unwrap_or(line_width) - segment_width(&bare, fonts)) / (n - 1) as f32;
+        for run in &mut out[start..] {
+            run.char_spacing = gap;
+        }
+        // The last letter takes no gap after it.
+        let mut tail = out.pop().expect("region is non-empty");
+        let i = tail.text.char_indices().last().map_or(0, |(i, _)| i);
+        if i > 0 {
+            out.push(Run {
+                text: tail.text[..i].to_string(),
+                ..tail.clone()
+            });
+            tail.text.drain(..i);
+        }
+        tail.char_spacing = 0.0;
+        out.push(tail);
+    }
+    out
 }
 
 /// Lay a paragraph out as lines: against its tab stops when it holds a tab,
@@ -1989,13 +2036,6 @@ pub(super) fn build_lines(
 ) -> Vec<TextLine> {
     let inline_images = opts.inline_images.unwrap_or(&EMPTY_INLINE_IMAGES);
     let effects = opts.effects.unwrap_or(&EMPTY_EFFECTS);
-    let widened;
-    let runs = if runs.iter().any(|r| r.ruby.is_some()) {
-        widened = widen_ruby_bases(runs, ctx.fonts);
-        &widened[..]
-    } else {
-        runs
-    };
     if runs.iter().any(|r| r.is_tab) {
         build_tabbed_line(
             runs,
@@ -2047,6 +2087,7 @@ pub(super) fn build_paragraph_lines(
     per_line_dual: Option<&[DualRegion]>,
     cjk: CjkLayout,
 ) -> Vec<TextLine> {
+    let runs = &*prepare_runs(runs, seen_fonts, max_width);
     let mut lines: Vec<TextLine> = Vec::new();
     // Indices of lines that kept a word by squeezing their spaces.
     let mut squeezed_lines: Vec<usize> = Vec::new();
@@ -3129,6 +3170,7 @@ pub(super) fn build_tabbed_line(
     compat_mode: u32,
     cjk: CjkLayout,
 ) -> Vec<TextLine> {
+    let runs = &*prepare_runs(runs, seen_fonts, max_width);
     // Split runs into segments at tab markers, tracking original run indices.
     // The fourth tuple element is the `<w:tab/>` run itself (when present) so the
     // segment can see its underline/color formatting and render a decoration line
