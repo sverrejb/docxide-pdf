@@ -1100,20 +1100,24 @@ pub(super) fn render_header_footer(
                 let (box_left, box_right, box_top) =
                     (sp.margin_left, sp.margin_left + text_width, slot_top);
                 let draw_para_borders = |content: &mut Content, box_bottom: f32| {
+                    // Side borders as in the body: their inner edge `space`
+                    // plus Word's 1.47 / 1.73pt outside the text, and the
+                    // horizontal borders run out to their outer edges.
+                    let (left_x, right_x) = super::side_border_outsets(bdr, true);
+                    let (l_ext, r_ext) = super::horizontal_border_ext(bdr);
+                    let h_left = box_left - left_x - l_ext;
+                    let h_right = box_right + right_x + r_ext;
                     if let Some(b) = &bdr.top {
                         let y = box_top - b.extent() / 2.0;
-                        stroke_border(content, b, (box_left, y), (box_right, y), -1.0);
+                        stroke_border(content, b, (h_left, y), (h_right, y), -1.0);
                     }
                     if let Some(b) = &bdr.bottom {
                         // The stroke sits `space` below the box, outside it,
                         // as the body path's bottom pad places it.
                         let y = box_bottom - b.space_pt - b.extent() / 2.0;
-                        stroke_border(content, b, (box_left, y), (box_right, y), 1.0);
+                        stroke_border(content, b, (h_left, y), (h_right, y), 1.0);
                     }
-                    // Side borders as in the body: their inner edge `space`
-                    // plus Word's 1.47 / 1.73pt outside the text.
                     let v_bottom = box_bottom - bdr.bottom.as_ref().map_or(0.0, |b| b.space_pt);
-                    let (left_x, right_x) = super::side_border_outsets(bdr, true);
                     for (b, x, inward) in [
                         (&bdr.left, box_left - left_x, 1.0),
                         (&bdr.right, box_right + right_x, -1.0),

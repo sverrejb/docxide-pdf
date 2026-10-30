@@ -2648,6 +2648,17 @@ fn smartart_alt(diagrams: &[crate::model::SmartArtDiagram]) -> Option<String> {
 const LEFT_BORDER_GAP: f32 = 1.47;
 const RIGHT_BORDER_GAP: f32 = 1.73;
 
+/// How far a top or bottom border runs past its box at each side: to a side
+/// border's outer edge, or without one by the side gaps Word keeps anyway
+/// (paragraph-border-styles: 70.5–541.7 on a 72–540 measure).
+pub(super) fn horizontal_border_ext(borders: &crate::model::ParagraphBorders) -> (f32, f32) {
+    let ext = |b: &Option<ParagraphBorder>, gap: f32| b.as_ref().map_or(gap, |b| b.extent() / 2.0);
+    (
+        ext(&borders.left, LEFT_BORDER_GAP),
+        ext(&borders.right, RIGHT_BORDER_GAP),
+    )
+}
+
 /// How far outside the text the left and right borders' inner edges sit
 /// (`space` plus the gap), or their stroke centres with `to_centre`.
 pub(super) fn side_border_outsets(
@@ -4826,10 +4837,9 @@ fn render_paragraph_block(
         let box_left = col_x - bdr_left_outset;
         let box_right = col_x + col_w + bdr_right_outset;
 
-        // Extend horizontal borders past the corners so they cover
-        // the corner gap left by butt-capped vertical border strokes.
-        let h_left_ext = bdr.left.as_ref().map(|b| b.extent() / 2.0).unwrap_or(0.0);
-        let h_right_ext = bdr.right.as_ref().map(|b| b.extent() / 2.0).unwrap_or(0.0);
+        // Extend horizontal borders past the corners so they cover the
+        // corner gap left by butt-capped vertical border strokes.
+        let (h_left_ext, h_right_ext) = horizontal_border_ext(bdr);
         // `inward`: +1 for a border below the text, -1 for one above.
         let draw_h_border = |content: &mut Content, b: &ParagraphBorder, y: f32, inward: f32| {
             let (x0, x1) = (box_left - h_left_ext, box_right + h_right_ext);
