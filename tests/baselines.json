@@ -6503,6 +6503,10 @@
     "a11y_struct": 0.6667,
     "a11y_text": 1.0
   },
+  "cases/paragraph-borders-inherited": {
+    "jaccard": 0.8944,
+    "ssim": 0.9756
+  },
   "cases/paragraph-offset-frame-exact": {
     "jaccard": 0.8672,
     "ssim": 0.9936,
@@ -8979,8 +8983,8 @@
     "a11y_text": 1.0
   },
   "scraped/clean_energy_regulator_act": {
-    "jaccard": 0.5295,
-    "ssim": 0.7338,
+    "jaccard": 0.5427,
+    "ssim": 0.7459,
     "text_boundary": 0.83,
     "ua_fail": 2,
     "a11y_missing": 0,
