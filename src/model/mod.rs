@@ -918,11 +918,30 @@ pub enum FieldCode {
         name: String,
         form: StyleRefForm,
     },
+    /// `SEQ name [\* fmt] [\c | \r n] [\h]`: one counter per name, numbered
+    /// in document order at parse time (`docx::resolve_seq_fields`).
+    Seq {
+        name: String,
+        format: Option<&'static str>,
+        step: SeqStep,
+        /// `\h`: hide the result.
+        hidden: bool,
+    },
     PageRef(String),
     /// An `IF` over nested fields, evaluated per page: legislation running
     /// heads read `IF {STYLEREF X \n} = 0 "{STYLEREF X}" "Part {STYLEREF X \n}"`,
     /// so the cached result is one page's value.
     If(Vec<IfPart>),
+}
+
+/// What a SEQ field does to its counter.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SeqStep {
+    Next,
+    /// `\c`: the latest number again.
+    Repeat,
+    /// `\r n`.
+    Restart(u32),
 }
 
 #[derive(Clone, Debug, PartialEq)]

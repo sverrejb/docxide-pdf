@@ -1483,9 +1483,46 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         adjust_line_height_in_table: settings.adjust_line_height_in_table,
         math: settings.math,
     };
+    // Captions get their numbers before a STYLEREF quotes them.
+    resolve_seq_fields(&mut doc);
     resolve_body_stylerefs(&mut doc);
     link_textbox_stories(&mut doc);
     Ok(doc)
+}
+
+/// Number the body's SEQ fields in document order, one counter per name
+/// (issue #145: a stale "old" cache shows 1). ponytail: `\s` (restart under
+/// a heading level) is not read, and text-box captions are not counted.
+fn resolve_seq_fields(doc: &mut Document) {
+    use crate::model::{FieldCode, SeqStep};
+    let mut paras = Vec::new();
+    for section in &mut doc.sections {
+        body_paragraphs(&mut section.blocks, &mut paras);
+    }
+    let mut counters: HashMap<String, u32> = HashMap::new();
+    for run in paras.iter_mut().flat_map(|p| p.runs.iter_mut()) {
+        let Some(FieldCode::Seq {
+            name,
+            format,
+            step,
+            hidden,
+        }) = &run.field_code
+        else {
+            continue;
+        };
+        let counter = counters.entry(name.clone()).or_insert(0);
+        match step {
+            SeqStep::Next => *counter += 1,
+            // A repeat before any number shows the first.
+            SeqStep::Repeat => *counter = (*counter).max(1),
+            SeqStep::Restart(n) => *counter = *n,
+        }
+        run.text = if *hidden {
+            String::new()
+        } else {
+            numbering::format_number(*counter, format.unwrap_or("decimal"))
+        };
+    }
 }
 
 /// Every body paragraph, table cells included, in document order.

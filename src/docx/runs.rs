@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use crate::model::{
     ConnectorShape, FieldCode, FitText, FloatingImage, FormCheckbox, HorizontalRule, IfPart,
-    InlineChart, Ruby, Run, SmartArtDiagram, StyleRefForm, TabAlignment, TextFill, TextGlow,
-    TextOutline, TextShadow, Textbox, VertAlign,
+    InlineChart, Ruby, Run, SeqStep, SmartArtDiagram, StyleRefForm, TabAlignment, TextFill,
+    TextGlow, TextOutline, TextShadow, Textbox, VertAlign,
 };
 
 use super::images::{
@@ -51,6 +51,24 @@ fn parse_field_code(instr: &str) -> Option<FieldCode> {
             .split_whitespace()
             .nth(1)
             .map(|s| FieldCode::PageRef(s.to_string()))
+    } else if keyword.eq_ignore_ascii_case("SEQ") {
+        let name = instr
+            .split_whitespace()
+            .nth(1)
+            .filter(|w| !w.starts_with('\\'))?;
+        let step = if let Some(n) = switch_args(instr, "\\r").next() {
+            SeqStep::Restart(n.parse().ok()?)
+        } else if has_switch(instr, "\\c") {
+            SeqStep::Repeat
+        } else {
+            SeqStep::Next
+        };
+        Some(FieldCode::Seq {
+            name: name.to_string(),
+            format: number_format_switch(instr),
+            step,
+            hidden: has_switch(instr, "\\h"),
+        })
     } else {
         None
     }
@@ -93,13 +111,22 @@ fn has_switch(instr: &str, switch: &str) -> bool {
         .any(|s| s.eq_ignore_ascii_case(switch))
 }
 
+/// The word after each `switch` in a field instruction (`\* ROMAN \*
+/// MERGEFORMAT` → "ROMAN", "MERGEFORMAT").
+fn switch_args<'a>(instr: &'a str, switch: &'a str) -> impl Iterator<Item = &'a str> + 'a {
+    instr
+        .split_whitespace()
+        .zip(instr.split_whitespace().skip(1))
+        .filter(move |(word, _)| word.eq_ignore_ascii_case(switch))
+        .map(|(_, arg)| arg)
+}
+
 /// `\* ROMAN`, `\* alphabetic` …: the numFmt a numeric field is shown in.
 /// Like Word, the case of the format word picks upper or lower case.
 fn number_format_switch(instr: &str) -> Option<&'static str> {
-    let words: Vec<&str> = instr.split_whitespace().collect();
-    words.windows(2).filter(|w| w[0] == "\\*").find_map(|w| {
-        let upper = w[1].chars().all(|c| c.is_ascii_uppercase());
-        match w[1].to_ascii_lowercase().as_str() {
+    switch_args(instr, "\\*").find_map(|fmt| {
+        let upper = fmt.chars().all(|c| c.is_ascii_uppercase());
+        match fmt.to_ascii_lowercase().as_str() {
             "roman" if upper => Some("upperRoman"),
             "roman" => Some("lowerRoman"),
             "alphabetic" if upper => Some("upperLetter"),
@@ -1286,10 +1313,11 @@ pub(super) fn parse_runs<R: Read + Seek>(
             acc << 32 | v.and_then(|v| u32::from_str_radix(v, 16).ok()).unwrap_or(0) as u64
         });
 
-        // A STYLEREF fldSimple on its own is one field run, re-evaluated per
-        // page like the complex form.
+        // A STYLEREF or SEQ fldSimple on its own is one field run, evaluated
+        // like the complex form.
         if field_stack.is_empty()
-            && let Some(code @ FieldCode::StyleRef { .. }) = simple_instr.and_then(parse_field_code)
+            && let Some(code @ (FieldCode::StyleRef { .. } | FieldCode::Seq { .. })) =
+                simple_instr.and_then(parse_field_code)
         {
             if simple_first_run {
                 let cached: String = simple
@@ -1826,6 +1854,31 @@ fn parse_vml_horizontal_rule(pict_node: roxmltree::Node) -> Option<HorizontalRul
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn seq_field_reads_its_name_and_switches() {
+        let Some(FieldCode::Seq {
+            name,
+            format,
+            step,
+            hidden,
+        }) = parse_field_code(" SEQ 自定义 \\* ROMAN \\r 4 \\h ")
+        else {
+            panic!("not a SEQ field");
+        };
+        assert_eq!(
+            (name.as_str(), format, step, hidden),
+            ("自定义", Some("upperRoman"), SeqStep::Restart(4), true)
+        );
+        assert!(matches!(
+            parse_field_code(" SEQ Figure \\c "),
+            Some(FieldCode::Seq {
+                step: SeqStep::Repeat,
+                ..
+            })
+        ));
+        assert!(parse_field_code(" SEQ \\* ARABIC ").is_none());
+    }
 
     #[test]
     fn eq_overstrike_checkbox_and_other_fields() {

@@ -73,7 +73,7 @@ impl FieldValues<'_> {
                 .get(&styleref_key(name, *form))
                 .cloned()
                 .unwrap_or_default(),
-            FieldCode::PageRef(_) => return None,
+            FieldCode::PageRef(_) | FieldCode::Seq { .. } => return None,
             FieldCode::If(parts) => return self.eval_if(parts),
         })
     }

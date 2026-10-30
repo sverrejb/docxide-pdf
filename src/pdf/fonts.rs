@@ -144,7 +144,7 @@ fn collect_used_chars(
                         extend_chars_for_num_format(chars, fmt);
                     }
                 }
-                FieldCode::StyleRef { .. } | FieldCode::If(_) => {}
+                FieldCode::StyleRef { .. } | FieldCode::If(_) | FieldCode::Seq { .. } => {}
             }
         }
         if run.footnote_id.is_some() || run.is_footnote_ref_mark {
@@ -310,7 +310,9 @@ fn collect_used_chars(
                                     extend_chars_for_num_format(chars, fmt);
                                 }
                             }
-                            FieldCode::StyleRef { .. } | FieldCode::If(_) => {
+                            FieldCode::StyleRef { .. }
+                            | FieldCode::If(_)
+                            | FieldCode::Seq { .. } => {
                                 chars.extend(styleref_chars.iter());
                                 // An IF shows its own text and nested PAGE digits too
                                 if let FieldCode::If(parts) = fc {
