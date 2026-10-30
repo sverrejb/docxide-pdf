@@ -1,8 +1,14 @@
+
+use std::collections::HashSet;
+
 use pdf_writer::Content;
 
-use crate::model::{EmbeddedImage, Paragraph, SectionProperties, TextAnchor, Textbox};
+use crate::model::{
+    EmbeddedImage, ImageGlow, ImageReflection, Paragraph, SectionProperties, ShapeFill,
+    ShapeGeometry, TextAnchor, Textbox,
+};
 
-use super::color::{fill_rgb, stroke_rgb};
+use super::color::{fill_rgb, set_fill_alpha, stroke_rgb};
 use super::header_footer::resolve_tb_y_top;
 use super::helpers::align_offset;
 use super::layout::{
@@ -12,6 +18,7 @@ use super::layout::{
 use super::list_label::render_list_label;
 use super::positioning::resolve_h_position;
 use super::tagging::{Lists, Tags};
+use super::smartart::draw_shape_path;
 use super::wordart;
 use super::{GradientSpec, RenderContext, render_shape_fill, resolve_line_h};
 
@@ -136,6 +143,67 @@ fn paragraphs_fitting(paras: &[Paragraph], (w, h): (f32, f32), ctx: &RenderConte
     n
 }
 
+/// `a:glow` on a shape: the shape grown by up to the glow's radius in faint
+/// layers of its colour, so it fades outward from the edge to nothing.
+/// ponytail: layered fills; Word draws a blurred raster.
+fn draw_shape_glow(
+    content: &mut Content,
+    glow: &ImageGlow,
+    (x, y, w, h): (f32, f32, f32, f32),
+    shape: &ShapeGeometry,
+    alpha_states: &mut HashSet<u8>,
+) {
+    const LAYERS: usize = 8;
+    content.save_state();
+    // Layers stack to the glow's own opacity at the shape's edge.
+    let layer_alpha = 1.0 - (1.0 - glow.alpha).powf(1.0 / LAYERS as f32);
+    set_fill_alpha(content, layer_alpha, alpha_states);
+    fill_rgb(content, glow.color);
+    for i in 0..LAYERS {
+        let d = glow.radius * (LAYERS - i) as f32 / LAYERS as f32;
+        draw_shape_path(content, x - d, y - d, w + 2.0 * d, h + 2.0 * d, shape);
+        content.fill_nonzero();
+    }
+    content.restore_state();
+}
+
+/// `a:reflection` on a shape: its fill mirrored under it, fading from
+/// `start_alpha` to `end_alpha` over `end_pos` of its height. Layers all start
+/// at the top and reach one band further each, so their opacities stack
+/// to the fade without seams between bands.
+/// ponytail: the fill only (no outline or text).
+fn draw_shape_reflection(
+    content: &mut Content,
+    refl: &ImageReflection,
+    color: [u8; 3],
+    (x, y, w, h): (f32, f32, f32, f32),
+    shape: &ShapeGeometry,
+    alpha_states: &mut HashSet<u8>,
+) {
+    const BANDS: usize = 8;
+    let top = y - refl.distance;
+    let band_h = h * refl.end_pos / BANDS as f32;
+    let target = |k: usize| {
+        let t = (k as f32 + 0.5) / BANDS as f32;
+        refl.start_alpha + (refl.end_alpha - refl.start_alpha) * t
+    };
+    content.save_state();
+    // The mirror image of a symmetric shape is the shape itself.
+    draw_shape_path(content, x, top - h, w, h, shape);
+    content.clip_nonzero();
+    content.end_path();
+    fill_rgb(content, color);
+    for k in (0..BANDS).rev() {
+        // Band k lies under layers k.., so layer k adds what band k + 1 lacks.
+        let below = if k + 1 < BANDS { target(k + 1) } else { 0.0 };
+        let alpha = 1.0 - (1.0 - target(k)) / (1.0 - below);
+        set_fill_alpha(content, alpha, alpha_states);
+        content.rect(x, top - (k + 1) as f32 * band_h, w, (k + 1) as f32 * band_h);
+        content.fill_nonzero();
+    }
+    content.restore_state();
+}
+
 pub(super) fn render_single_textbox(
     tb: &Textbox,
     sp: &SectionProperties,
@@ -151,6 +219,7 @@ pub(super) fn render_single_textbox(
     // paragraph; `content` must be inside the default artifact.
     tags: &mut Tags,
     page: usize,
+    alpha_states: &mut HashSet<u8>,
 ) {
     let sect = tags.hoist("Sect", tb.anchor_seq);
     let tb_x = resolve_h_position(
@@ -173,6 +242,14 @@ pub(super) fn render_single_textbox(
     );
     let rotated =
         rotate_about_center(content, tb.rotation_deg, tb_x, tb_y_top, tb.width_pt, tb_height);
+
+    let frame = (tb_x, tb_y_top - tb_height, tb.width_pt, tb_height);
+    if let Some(glow) = &tb.glow {
+        draw_shape_glow(content, glow, frame, &tb.shape_type, alpha_states);
+    }
+    if let (Some(refl), Some(ShapeFill::Solid(color))) = (&tb.reflection, &tb.fill) {
+        draw_shape_reflection(content, refl, *color, frame, &tb.shape_type, alpha_states);
+    }
 
     if let Some(ref fill) = tb.fill {
         render_shape_fill(

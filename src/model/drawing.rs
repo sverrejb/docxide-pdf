@@ -457,6 +457,9 @@ pub struct Textbox {
     pub fit_shape: bool,
     /// A box in a linked chain (`wps:txbx id` / `wps:linkedTxbx id seq`).
     pub link: Option<TextboxLink>,
+    /// `a:effectLst` glow and reflection on the shape.
+    pub glow: Option<ImageGlow>,
+    pub reflection: Option<ImageReflection>,
 }
 
 impl Textbox {

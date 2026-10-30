@@ -9,7 +9,7 @@ use super::chart_legend::{
     LegendItem, LegendPlacement, SwatchStyle, render_chart_legend, render_swatch,
 };
 use super::charts_radial;
-use super::color::{fill_rgb, stroke_rgb};
+use super::color::{fill_rgb, set_fill_alpha, stroke_rgb};
 use super::helpers::draw_circle;
 
 fn ceil_nice(val: f32) -> f32 {
@@ -500,10 +500,7 @@ fn draw_chart_series(
             for series in &c.series {
                 set_color(content, series.color);
                 if let Some(alpha) = series.fill_alpha {
-                    let pct = (alpha * 100.0).round() as u8;
-                    let gs_name = format!("GSa{pct}");
-                    content.set_parameters(Name(gs_name.as_bytes()));
-                    alpha_states.insert(pct);
+                    set_fill_alpha(content, alpha, alpha_states);
                 }
                 if let Some(color) = series.color {
                     stroke_rgb(content, color);
@@ -525,8 +522,7 @@ fn draw_chart_series(
                     }
                 }
                 if series.fill_alpha.is_some() {
-                    content.set_parameters(Name(b"GSa100"));
-                    alpha_states.insert(100);
+                    set_fill_alpha(content, 1.0, alpha_states);
                 }
             }
         }

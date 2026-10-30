@@ -4396,6 +4396,7 @@ fn render_paragraph_block(
             &mut state.pb.links,
             &mut state.pb.tags,
             page,
+            &mut state.pb.alpha_states,
         );
     }
 
@@ -4492,6 +4493,7 @@ fn render_paragraph_block(
             &mut state.pb.links,
             &mut state.pb.tags,
             page,
+            &mut state.pb.alpha_states,
         );
         state.pb.deferred_shapes.push((tb.z_index, shape_content));
     }

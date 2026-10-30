@@ -404,6 +404,14 @@ struct PicEffects {
     reflection: Option<ImageReflection>,
 }
 
+/// A shape's `a:effectLst` glow and reflection.
+pub(super) fn parse_glow_reflection(
+    sp_pr: Option<roxmltree::Node>,
+) -> (Option<ImageGlow>, Option<ImageReflection>) {
+    let fx = parse_pic_effects(sp_pr);
+    (fx.glow, fx.reflection)
+}
+
 /// Parse all picture effects from `pic:spPr/a:effectLst`.
 fn parse_pic_effects(sp_pr: Option<roxmltree::Node>) -> PicEffects {
     let mut fx = PicEffects {

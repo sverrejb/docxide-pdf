@@ -5,6 +5,17 @@ pub(super) fn fill_rgb(content: &mut Content, [r, g, b]: [u8; 3]) {
     content.set_fill_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);
 }
 
+/// Fill at `alpha` through the page's `GSa{pct}` ExtGState (see assembly).
+pub(super) fn set_fill_alpha(
+    content: &mut Content,
+    alpha: f32,
+    alpha_states: &mut std::collections::HashSet<u8>,
+) {
+    let pct = (alpha * 100.0).round().clamp(0.0, 100.0) as u8;
+    alpha_states.insert(pct);
+    content.set_parameters(pdf_writer::Name(format!("GSa{pct}").as_bytes()));
+}
+
 /// Set stroke color from an RGB byte array.
 pub(super) fn stroke_rgb(content: &mut Content, [r, g, b]: [u8; 3]) {
     content.set_stroke_rgb(r as f32 / 255.0, g as f32 / 255.0, b as f32 / 255.0);

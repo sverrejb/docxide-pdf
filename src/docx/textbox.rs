@@ -3,8 +3,9 @@ use std::io::Read;
 use crate::geometry::{FormulaOp, PathFill};
 use crate::model::{
     ArrowEnd, AutoFit, ConnectorShape, ConnectorType, CustomGeometry, CustomGuideDef,
-    CustomPathCommand, CustomPathDef, HRelativeFrom, HorizontalPosition, Paragraph, ShapeFill,
-    ShapeGeometry, TextAnchor, TextWarp, Textbox, TextboxLink, VRelativeFrom, VerticalPosition,
+    CustomPathCommand, CustomPathDef, HRelativeFrom, HorizontalPosition, ImageGlow,
+    ImageReflection, Paragraph, ShapeFill, ShapeGeometry, TextAnchor, TextWarp, Textbox,
+    TextboxLink, VRelativeFrom, VerticalPosition,
 };
 
 use super::color::{
@@ -385,6 +386,8 @@ pub(super) struct WspResult {
     pub(super) text_warp: Option<TextWarp>,
     pub(super) auto_fit: AutoFit,
     pub(super) link: Option<TextboxLink>,
+    pub(super) glow: Option<ImageGlow>,
+    pub(super) reflection: Option<ImageReflection>,
 }
 
 /// The shape's own properties; size, anchoring and wrapping stay at their
@@ -406,6 +409,8 @@ impl From<WspResult> for Textbox {
             text_warp: wsp.text_warp,
             auto_fit: wsp.auto_fit,
             link: wsp.link,
+            glow: wsp.glow,
+            reflection: wsp.reflection,
             ..Textbox::default()
         }
     }
@@ -428,6 +433,7 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
     ctx: &mut ParseContext<'_, R>,
 ) -> Option<WspResult> {
     let sp_pr = find_sp_pr(wsp);
+    let (glow, reflection) = super::images::parse_glow_reflection(sp_pr);
 
     // Line/arc presets without text are connectors — decline so the caller
     // falls through to the connector parser, which renders flipH/flipV and
@@ -550,6 +556,8 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
         text_warp: wa_props.text_warp,
         auto_fit: wa_props.auto_fit,
         link,
+        glow,
+        reflection,
     })
 }
 
