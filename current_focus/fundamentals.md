@@ -288,6 +288,22 @@ WinAnsi), and Latin prose with `w:spacing` +20, −10 and +3 twips (`an.py`).
   "plain") reset the writer's drift that Word keeps, up to 1 pt by the
   line end. Probe: glyph error 0.165 → 0.029 pt, J 72.5 → 81.4.
 
+### Open leads from the implementation
+
+- **Line starts round per component.** paragraph-offset-frame-exact: frame
+  x 1306 tw (261.2 px), left indent −1418 tw (−283.6 px), first line
+  1560 tw (312 px). Word starts the line at 72.275 = (261 − 284 + 312) px
+  + 0.1 px: each part rounded on its own; we round the sum (289.6 → 290,
+  72.525). Needs the components at draw time. A second start phase, +0.2 px
+  instead of +0.1 px (19 % of lines, probe 2's 90 pt margin among them), is
+  not explained by twips, size or face.
+- **Vertical**: 75 % of Word's baseline steps are whole 0.25 pt, the rest
+  slip by 0.02–0.03 pt; our baselines are off by a median 0.15 pt, but
+  render-only snapping to the grid (any phase) does not lower that
+  (0.215 → 0.217 at best): the vertical error is layout, not rounding.
+- **Left exact**: RTL, East Asian text, text scaling (`w:w`), fallback
+  glyphs, shadows, math.
+
 ## 3. Queue after probe 1
 
 1. Text scaling (`w:w`) on the grid.
