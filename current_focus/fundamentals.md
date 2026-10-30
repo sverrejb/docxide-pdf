@@ -1,0 +1,184 @@
+# Fundamentals review — current focus
+
+Are the core rules derived from Word, or fitted until a fixture matched?
+Started 2026-10-28 after the Word probing workflow (`tools/word_export.py`)
+made every such question answerable in an afternoon. Branch `fundamentals`
+(worktree `.worktrees/fundamentals`). Probe kits live in
+`tests/output/fundamentals/<probe>/` (gitignored scratch, like
+`tests/output/probe_adv/`); each finding is recorded here with its kit.
+
+## 1. Verdict of the initial code review (2026-10-28, no code changes)
+
+Sound (probe-derived, evidence in the code comments): the line model
+(`fonts/embed.rs` line metrics, external leading by the OS/2 definition,
+East Asian 1.3× leading, exact/at-least boxes, grid snapping), missing-font
+substitution, small caps, strikeout, punctuation squeeze and pull, widow and
+orphan counting, cell margin defaults, the list-marker line rule.
+
+Fitted on one or two documents, or never probed, ranked by expected gain:
+
+1. **Horizontal glyph placement** (every online reference). Layout widths
+   are proven exact; Word draws each source run on a 0.25pt grid, ~0.07%
+   narrower than exact, face-dependent, and resets at run boundaries that
+   `docx/runs.rs merge_compatible_runs` erases before layout. A fitted
+   in-run shrink (+0.6 J mean) is parked. Section 2 below.
+2. **Vertical 0.25pt grid.** Word's online export rounds every baseline to
+   0.25pt (with a phase); ours are exact floats. uk_commercial's note block
+   is 0.67pt short from 0.05–0.25pt per-line residues, swiss_materials misses
+   a page bottom by 0.46pt. `snap_baseline_288` never reached main.
+3. **Float-wrap thresholds**, each from one or two documents or unsourced:
+   18pt minimum strip for empty paragraphs (`pdf/mod.rs` `MIN_EMPTY_STRIP`),
+   48pt "text can sit beside" (`pdf/mod.rs`, the paragraph look-ahead), 72pt
+   minimum wrap width (`min_wrap_w`), 20% line-overlap rule (annotation #120).
+4. **Run-level constants never probed:** superscript +0.35 em and subscript
+   −0.14 em (`pdf/layout.rs vert_y_offset`), highlight box −0.2 to +1.15 em,
+   0.65 super/sub size fallback. OS/2 carries superscript offsets.
+5. **Table autofit** `natural × 0.9` for nested tables
+   (`pdf/table_layout.rs`), and `apply_pct_width` keeping grid proportions
+   where Word re-splits by content (150:425 came out 200:350).
+
+Structural, no probe needed:
+
+- Table cells and footnotes build paragraphs by hand
+  (`docx/tables.rs`, `headers_footers::parse_notes_simple`, "tuned against
+  the existing corpus"); rules added to `paragraph::build_paragraph` miss
+  them. Also layout-accuracy.md §5 item 9.
+- Cell heights subtract "dangling leading" only for substituted fonts
+  (`pdf/table.rs`): a correction layered on a fallback.
+- `compute_bookmark_positions` guesses 14pt per table paragraph; only an
+  empty PAGEREF result sees it.
+- CLAUDE.md's baseline formula ("slot_top − font_size, aligns cap tops")
+  no longer describes the code (ascender-based).
+
+## 2. Probe 1: how Word places glyphs inside a run
+
+### What is already known (`current_focus/online-references.md` §4a)
+
+- Layout widths (line breaking, run starts) are the exact font widths.
+- Inside a run the PDF draws each glyph step on a 0.25pt grid (288 dpi): a
+  constant step (the exact width rounded to 0.25) with ±0.25 corrections.
+- The corrections do not follow the drift of the exact cumulative position
+  (uncorrected steps occur at drifts from −0.6 to +0.35pt).
+- Over 114k glyphs, in-run positions average ~0.07% narrower than exact:
+  TNR −1.0‰, Calibri −0.8, Cambria −0.6, Arial −0.4, Aptos −0.2, Arial Bold 0.
+- The last glyph of a word absorbs a correction; word starts drift by a
+  font-dependent amount (TNR 12 −0.27pt, Arial 12 −0.12, Aptos ≈ 0).
+
+### Hypotheses the probe separates
+
+- **H-A, cumulative rounding of exact positions** (prefix-invariant, mean
+  step = exact). Already contradicted by the drift data; the probe
+  re-checks it cheaply.
+- **H-B, GDI-style per-run distribution:** each glyph has a device width
+  (exact rounded to 0.25pt); the run's total device error against the
+  exact total is spread as ±1px corrections at even intervals through the
+  run. Predicts correction positions that depend on the run length and the
+  3/4 periods seen for TNR 12 "e" (25 × 21.3px: 8px of error over 25).
+- **H-C, truncated widths:** device positions accumulate the glyph widths
+  truncated to whole 1/1000 em (the PDF /Widths integers), snapped to the
+  grid. Predicts a per-glyph shrink equal to the width's fractional part
+  (TNR 12 "e" 443.85 → 443: −0.19%; "o" 500.0: 0; "i" 277.8: −0.29%) and
+  a face dependence that matches the ‰ list above (Arial's widths are
+  near-integers in 1/1000 em, TNR's are not).
+- **H-D, hinted device widths** at 288 dpi distributed per run.
+
+### Probe document (`tests/output/fundamentals/glyph_grid/mk.py`)
+
+Letter, 1" margins, one run per paragraph, 5 faces × 10/12pt:
+
+- A. long single-glyph runs (e o i s m t n a; 45–80 copies): the mean
+  step per glyph to ±0.003pt decides H-C against H-A/H-B.
+- B. "e" × 5, 10, 20, 40, 70 in separate paragraphs: prefix invariance
+  decides cumulative (H-A/H-C) against per-run distribution (H-B).
+- C. alternations "eo", "ei", "ie", "em": how mixed widths share the
+  corrections.
+- D. "eeeeeeee" × 8 with single spaces in one run: whether a word end
+  resets the accumulation, and whether the space carries it.
+
+Export: `python3 tools/word_export.py tests/output/fundamentals/glyph_grid/glyph_grid.docx`
+(default online preset). Positions: `tests/output/probe_adv/pdfglyphs.py`
+(simple-font TJ walker), analysis `an.py` in the kit.
+
+### Findings (2026-10-28): the rule, derived
+
+Word's online export places glyphs on a 288 dpi device grid (1 px = 0.25 pt)
+by a cumulative, chunked, one-glyph-look-ahead rule. `sim.py` reproduces all
+8,824 glyph steps of the probe except the 155 of two glyphs whose device
+width is not the nearest pixel (item 2). On real references (`validate.py`,
+line by line): mandated_reporter p1 18 wrong advances of 3,211,
+dutch_council p1 4 of 361 (all four in the two glyph-width exceptions below).
+H-A (plain rounding) and H-B (per-run distribution) are dead: the B rows are
+prefix-invariant and the mean step is below the exact width. H-C (truncated
+widths) was wrong too: the shrink is the PDF writer's (item 5).
+
+1. **Ideal positions** are the exact font advances accumulated across the
+   whole line. Run boundaries play no part: a run's `Tm` is the writer's
+   running pen, not a layout position (a 26-glyph run starts 0.85 px off
+   the exact cumulative, its single leading space is its own segment and
+   advances by the device width). The line's first glyph anchors the grid.
+2. **Device advance** of a glyph = its exact advance in px rounded half up.
+   Exceptions seen: Cambria 12 pt "o" (25.48 → 26), Aptos 12 pt "i"
+   (11.46 → 12), Calibri 11.5 pt "E" (22.45 → 23) and "I" (11.59 → 11),
+   consistently for every copy: the hinted advance at that ppem. FreeType's
+   v35 and v40 interpreters reproduce none of them (`hint288.py`), the
+   fonts carry no `hdmx` record for 40/46/48 ppem, and the rounded
+   `/Widths` value does not explain them either. Roughly 1 glyph in 25.
+3. **Correction**: glyph k keeps its device advance unless the glyph after
+   next, placed with device advances, would land 2 px or more from the
+   half-up rounded ideal (both measured from the chunk start); then k's
+   advance moves 1 px toward the ideal. The run end stands in for the glyph
+   after next when k+1 is the last glyph. (A plain error threshold fits
+   only with T = 1.5 − 2|δ| per glyph; this rule is why.) Ties: half-up
+   rounding of the ideal makes the two directions asymmetric, and the
+   probe's exact-tie glyphs (Aptos 10 "a" = 21.25 px, Cambria 12 "s" =
+   20.625) confirm it.
+4. **Chunks**: a glyph whose rounded ideal end lies 1024 px (256 pt) or
+   more past the chunk's first glyph starts a new chunk at round(ideal);
+   the error is measured from that start. 1024 is sharp: 1000 or 1040
+   quadruples the mismatches.
+5. **PDF writer**: `/Widths` = round(exact × 1000). A run whose device
+   advance is below W is tightened with a negative `Tc`; otherwise each
+   advance is written as W − adj with adj = ceil(W − D) + [D > W] (D the
+   device advance in 1/1000 em), so the drawn advance is one unit
+   (size/1000 pt) short whenever D > W. Over a line this is the
+   "~0.07 % in-run shrink" of online-references.md §4a: a rendering
+   artifact of the writer, face-dependent only through how often a glyph's
+   nearest pixel lies above its rounded width. Not a layout effect.
+
+Also measured (`half_sizes.pdf`, mk2.py/an2.py): 10, 10.5, 11, 11.5 and
+12 pt give the same picture; the "X after 25 copies" method of §4a measures
+a device position, so its ±0.005 pt was really ±0.015 pt per glyph. The
+device model itself is the sharper instrument: a quantised ideal width
+(twips, 0.025 pt) would change the correction cadence, and it does not.
+
+Not covered by this probe: justified lines (czech_census p1 fails 146 of
+647 — 12 paragraphs are `w:jc both`, so the ideal space widths differ),
+kerning pairs (`w:kern`), character spacing (`Tc`), tabs, RTL. Each needs
+its own probe before the rule is applied there.
+
+### What it means for the engine
+
+- Line breaking keeps exact widths. Correct as is.
+- Drawing: per line, run this rule over the glyph sequence and emit the
+  device positions (TJ) instead of exact advances, in
+  `src/pdf/layout.rs` (`show_kerned` / `show_placed`). Expected gain: the
+  ~0.38 pt per-line word drift against every online reference (§4a), the
+  largest known residual. Whether to also mimic item 5 (the writer's unit
+  loss) is a choice: it is an artifact, but the references carry it.
+- The hinted-advance exceptions need a TrueType hinting VM to reproduce
+  (skrifa would be a new dependency; FreeType does not match anyway).
+  Nearest pixel first; measure what the exceptions cost.
+- `merge_compatible_runs` is fine: run boundaries do not matter to the rule.
+
+Kit: `tests/output/fundamentals/glyph_grid/` — `mk.py`/`glyph_grid.docx`
+(A/B/C/D rows), `mk2.py`/`half_sizes.docx`, `an.py` (per-row steps),
+`sim.py` (the rule vs the probe), `validate.py <ref.pdf> fonts [page]
+[-v|-d|-j|-t]` (the rule vs a real reference, line by line), `widths.py`
+(the `/Widths` Word wrote), `hint288.py` (FreeType hinted advances).
+
+## 3. Queue after probe 1
+
+1. Justified lines: how Word sizes the stretched spaces (exact share,
+   twips, or device px) — needed before the rule can be applied to
+   justified paragraphs (czech_census, most legal fixtures).
+2. Items 2–5 of §1, in that order; each gets its own probe kit and section.

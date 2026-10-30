@@ -444,10 +444,11 @@ Backlog (details in `current_focus/A11Y.md`):
 
 ## Parked
 
-- **Online glyph positioning / width drift** (`current_focus/online-references.md`
-  §4a): Word's per-glyph corrections are not derivable from exact widths; an
-  empirical 0.07% in-run shrink gives +0.6 J. Fit or more probing is the
-  user's call.
+- **Online glyph positioning / width drift**: rule found 2026-10-28
+  (`current_focus/fundamentals.md` §2): a 288 dpi device grid, a one-glyph
+  look-ahead ±1 px correction, 1024 px chunks, and the PDF writer's one-unit
+  loss (the old "0.07% shrink"). Unparked: implement at draw time; justified
+  lines, kerning and `Tc` still need probes.
 - **Hyphenation**: Word's online converter never hyphenates; the 8
   `hyphenation/` fixtures wait for desktop-Word references with proofing
   tools.
