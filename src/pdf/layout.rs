@@ -3654,28 +3654,35 @@ fn show_placed(
 /// (`glyph_grid`), for the chunks the rule is known for. Chunks set edge to
 /// edge or a plain space apart share one grid, the line's exact positions;
 /// a justified line's spaces are plain ones plus `extra_per_gap` shared out.
+/// `line_start` is the line's exact start and where Word lays it out: a
+/// sequence starting there moves by the whole pixels between the two.
 fn device_grid(
     line: &TextLine,
     entries: &HashMap<&str, &FontEntry>,
     chunk_abs_x: &dyn Fn(usize, &WordChunk) -> f32,
     extra_per_gap: f32,
+    line_start: (f32, f32),
 ) -> Vec<Option<Vec<f32>>> {
     use super::glyph_grid::{GridGlyph, drawn_positions};
-    fn flush(
-        line: &TextLine,
-        x0: f32,
-        seq: &mut Vec<GridGlyph>,
-        members: &mut Vec<(usize, usize)>,
-        out: &mut [Option<Vec<f32>>],
-    ) {
+    let flush = |line: &TextLine,
+                 x0: f32,
+                 seq: &mut Vec<GridGlyph>,
+                 members: &mut Vec<(usize, usize)>,
+                 out: &mut [Option<Vec<f32>>]| {
+        let px = |v: f32| (v * 4.0).round() / 4.0;
+        let shift = if (x0 - line_start.0).abs() < 1e-3 {
+            px(line_start.1) - px(x0)
+        } else {
+            0.0
+        };
         let drawn = drawn_positions(x0, seq);
         for &(ci, first) in members.iter() {
             let n = line.chunks[ci].text.chars().count();
-            out[ci] = Some(drawn[first..first + n].to_vec());
+            out[ci] = Some(drawn[first..first + n].iter().map(|x| x + shift).collect());
         }
         seq.clear();
         members.clear();
-    }
+    };
     let mut out = vec![None; line.chunks.len()];
     let mut seq: Vec<GridGlyph> = Vec::new();
     // (chunk, its first glyph in `seq`)
@@ -3976,6 +3983,8 @@ pub(super) fn render_paragraph_lines(
     lines: &[TextLine],
     alignment: &Alignment,
     margin_left: f32,
+    // The part of `margin_left` that is the paragraph's left indent.
+    indent_left: f32,
     text_width: f32,
     first_baseline_y: f32,
     line_pitch: f32,
@@ -4031,18 +4040,26 @@ pub(super) fn render_paragraph_lines(
             .and_then(|g| g.get(global_line_idx))
             .copied()
             .unwrap_or((margin_left, text_width));
+        let shift = if global_line_idx == first_content_idx
+            && first_line_hanging.abs() > 0.001
+            && !line.rtl_paragraph
+        {
+            first_line_hanging
+        } else {
+            0.0
+        };
         let (eff_margin, eff_width) = if global_line_idx == first_content_idx
             && first_line_hanging.abs() > 0.001
         {
-            let shift = if line.rtl_paragraph {
-                0.0
-            } else {
-                first_line_hanging
-            };
             (base_margin - shift, base_width + first_line_hanging)
         } else {
             (base_margin, base_width)
         };
+        // Word lays a line out from its frame or margin, left indent and
+        // first-line indent each rounded to device pixels on their own
+        // (paragraph-offset-frame-*: 261 − 284 + 312 px, not 289.6 → 290).
+        let px = |v: f32| (v * 4.0).round() / 4.0;
+        let laid_out_margin = px(base_margin - indent_left) + px(indent_left) + px(-shift);
 
         // §17.6.8 margin line number: every counted body line advances the
         // page's counter; numbers are right-aligned in the page margin at the
@@ -4372,7 +4389,21 @@ pub(super) fn render_paragraph_lines(
             && !is_char_justified
             && extra_per_gap >= 0.0;
         let grid = if plain_line {
-            device_grid(line, &pdf_name_to_entry, &chunk_abs_x, extra_per_gap)
+            let line_start = match alignment {
+                Alignment::Left | Alignment::Justify | Alignment::Distribute
+                    if line_start_x == eff_margin =>
+                {
+                    (line_start_x, laid_out_margin)
+                }
+                _ => (line_start_x, line_start_x),
+            };
+            device_grid(
+                line,
+                &pdf_name_to_entry,
+                &chunk_abs_x,
+                extra_per_gap,
+                line_start,
+            )
         } else {
             Vec::new()
         };

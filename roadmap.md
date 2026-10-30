@@ -451,7 +451,7 @@ Backlog (details in `current_focus/A11Y.md`):
   runs), a one-glyph look-ahead ±1 px correction, 1024 px chunks, the PDF
   writer's per-glyph unit rounding restarting at rsid run boundaries;
   justified spaces, plain-path kerning and letter spacing rounded apart.
-  Visual suite J +4.28, SSIM +2.86 (scraped +4.26/+3.73); output +3.7 %.
+  Visual suite J +4.34, SSIM +2.89; output +3.7 %.
   Left exact: RTL, East Asian text, text scaling, fallback glyphs. Not
   merged to main yet.
 - **Hyphenation**: Word's online converter never hyphenates; the 8

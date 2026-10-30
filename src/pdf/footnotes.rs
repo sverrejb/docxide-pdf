@@ -360,6 +360,7 @@ fn render_notes_downward(
                     &layout.lines,
                     &para.alignment,
                     para_text_x,
+                    para.indent_left,
                     para_text_width,
                     baseline_y,
                     layout.line_height,

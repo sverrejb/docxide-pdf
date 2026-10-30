@@ -290,11 +290,14 @@ WinAnsi), and Latin prose with `w:spacing` +20, −10 and +3 twips (`an.py`).
 
 ### Open leads from the implementation
 
-- **Line starts round per component.** paragraph-offset-frame-exact: frame
-  x 1306 tw (261.2 px), left indent −1418 tw (−283.6 px), first line
+- **Line starts round per component** (done). paragraph-offset-frame-exact:
+  frame x 1306 tw (261.2 px), left indent −1418 tw (−283.6 px), first line
   1560 tw (312 px). Word starts the line at 72.275 = (261 − 284 + 312) px
-  + 0.1 px: each part rounded on its own; we round the sum (289.6 → 290,
-  72.525). Needs the components at draw time. A second start phase, +0.2 px
+  + 0.1 px: each part rounded on its own, not the sum (289.6 → 290,
+  72.525); no-frame likewise 340 − 284 + 312 px. `render_paragraph_lines`
+  takes the paragraph's `indent_left` for this; left-aligned and justified
+  starts only, centred and right-aligned lines still round the sum
+  (unprobed). A second start phase, +0.2 px
   instead of +0.1 px (19 % of lines, probe 2's 90 pt margin among them), is
   not explained by twips, size or face.
 - **Vertical**: 75 % of Word's baseline steps are whole 0.25 pt, the rest

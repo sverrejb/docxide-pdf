@@ -574,6 +574,7 @@ pub(super) fn render_textbox_paragraphs(
             &tb_lines,
             &tp.alignment,
             tp_text_x,
+            tp.indent_left,
             tp_align_w,
             tb_baseline,
             tb_line_h,

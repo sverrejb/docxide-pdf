@@ -1009,6 +1009,11 @@ pub(super) fn render_header_footer(
                     &lines,
                     &Alignment::Left,
                     frame_x,
+                    if fp.width > 0.0 {
+                        para.indent_left
+                    } else {
+                        0.0
+                    },
                     content_width,
                     frame_baseline,
                     font_size,
@@ -1447,6 +1452,7 @@ pub(super) fn render_header_footer(
                                     &tb_lines,
                                     &tp.alignment,
                                     content_x + tp.indent_left,
+                                    tp.indent_left,
                                     tp_text_w,
                                     tb_baseline,
                                     tb_line_h,
@@ -1846,6 +1852,7 @@ pub(super) fn render_header_footer(
                     &lines,
                     &para.alignment,
                     para_text_x,
+                    para.indent_left,
                     para_text_width,
                     baseline_y,
                     line_h,
