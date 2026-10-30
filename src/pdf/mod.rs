@@ -4847,6 +4847,36 @@ fn render_paragraph_block(
         }
     }
 
+    // Word numbers a paragraph without text lines too (an empty anchor under
+    // its boxes, a chart or a picture), on its mark line at the foot.
+    if lines.is_empty()
+        && content_h > 0.0
+        && let Some((start, count_by, right_x)) = ln_cfg
+    {
+        let mark_baseline =
+            state.pb.slot_top - bdr_top_pad - content_h + (line_h - first_baseline_offset).max(0.0);
+        let fonts: HashMap<&str, &FontEntry> = ctx
+            .fonts
+            .values()
+            .map(|e| (e.pdf_name.as_str(), e))
+            .collect();
+        LineNumberArg {
+            counter: &mut state.pb.line_number_counter,
+            start,
+            count_by,
+            right_x,
+            font: ln_font.clone(),
+        }
+        .number(
+            &mut state.pb.content,
+            0.0,
+            mark_baseline,
+            || None,
+            &fonts,
+            None,
+        );
+    }
+
     state.pb.slot_top -= content_h + bdr_top_pad + bdr_bottom_extent;
     if state.pb.slot_top < state.effective_margin_bottom - 1.0 {
         log::warn!(

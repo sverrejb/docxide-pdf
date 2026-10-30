@@ -3905,6 +3905,54 @@ pub(super) struct LineNumberArg<'a> {
     pub font: Option<(String, f32)>,
 }
 
+impl LineNumberArg<'_> {
+    /// Count one line and draw its number, if shown, at baseline `y`,
+    /// `x_shift` right of the usual place, in the numbers' font or else
+    /// `line_font`.
+    pub(super) fn number(
+        &mut self,
+        content: &mut Content,
+        x_shift: f32,
+        y: f32,
+        line_font: impl FnOnce() -> Option<(String, f32)>,
+        pdf_name_to_entry: &HashMap<&str, &FontEntry>,
+        link_tags: Option<&mut LinkTagger<'_>>,
+    ) {
+        let idx = *self.counter;
+        *self.counter = idx + 1;
+        let value = self.start + idx as i32;
+        let show = value >= 1 && (self.count_by <= 1 || value % self.count_by as i32 == 0);
+        let Some((font, fs)) = show.then(|| self.font.clone().or_else(line_font)).flatten() else {
+            return;
+        };
+        let s = value.to_string();
+        let w = pdf_name_to_entry
+            .get(font.as_str())
+            .map(|e| e.word_width(&s, fs, false))
+            .unwrap_or(fs * 0.5 * s.chars().count() as f32);
+        let bytes = encode_text_for_pdf(&s, &font, pdf_name_to_entry);
+        let x = self.right_x + x_shift - w;
+        let draw = |content: &mut Content| {
+            content.save_state();
+            content.set_char_spacing(0.0);
+            content.set_horizontal_scaling(100.0);
+            fill_color_or_black(content, None);
+            content.begin_text();
+            content.set_font(Name(font.as_bytes()), fs);
+            content.next_line(x, y);
+            content.show(Str(&bytes));
+            content.end_text();
+            content.restore_state();
+        };
+        // Margin numbering isn't the paragraph's text: a screen
+        // reader would read "2Numbered line".
+        match link_tags {
+            Some(lt) => lt.artifact(content, draw),
+            None => draw(content),
+        }
+    }
+}
+
 pub(super) fn line_max_image_h(line: &TextLine) -> f32 {
     line.chunks
         .iter()
@@ -4065,50 +4113,26 @@ pub(super) fn render_paragraph_lines(
         // page's counter; numbers are right-aligned in the page margin at the
         // line's own baseline, in that line's font/size (matching Word).
         if let Some(ln) = line_numbering.as_mut() {
-            let idx = *ln.counter;
-            *ln.counter = idx + 1;
-            let value = ln.start + idx as i32;
-            let show = value >= 1 && (ln.count_by <= 1 || value % ln.count_by as i32 == 0);
-            if show
-                && let Some((font, fs)) = ln.font.clone().or_else(|| {
-                    line.chunks
-                        .iter()
-                        .find(|c| c.inline_image_name.is_none() && !c.text.is_empty())
-                        .map(|c| (c.pdf_font.clone(), c.font_size))
-                })
-            {
-                let s = value.to_string();
-                let w = pdf_name_to_entry
-                    .get(font.as_str())
-                    .map(|e| e.word_width(&s, fs, false))
-                    .unwrap_or(fs * 0.5 * s.chars().count() as f32);
-                let bytes = encode_text_for_pdf(&s, &font, &pdf_name_to_entry);
-                // Word keeps the distance from a line pushed right by a float
-                // (torture_test's drop cap: the numbers land on the cap).
-                let float_shift = match &line.right_region {
-                    Some(rr) if rr.first_chunk_idx == 0 => (rr.region_x - base_margin).max(0.0),
-                    _ => 0.0,
-                };
-                let x = ln.right_x + float_shift - w;
-                let draw = |content: &mut Content| {
-                    content.save_state();
-                    content.set_char_spacing(0.0);
-                    content.set_horizontal_scaling(100.0);
-                    fill_color_or_black(content, None);
-                    content.begin_text();
-                    content.set_font(Name(font.as_bytes()), fs);
-                    content.next_line(x, y);
-                    content.show(Str(&bytes));
-                    content.end_text();
-                    content.restore_state();
-                };
-                // Margin numbering isn't the paragraph's text: a screen
-                // reader would read "2Numbered line".
-                match link_tags.as_mut() {
-                    Some(lt) => lt.artifact(content, draw),
-                    None => draw(content),
-                }
-            }
+            // Word keeps the distance from a line pushed right by a float
+            // (torture_test's drop cap: the numbers land on the cap).
+            let float_shift = match &line.right_region {
+                Some(rr) if rr.first_chunk_idx == 0 => (rr.region_x - base_margin).max(0.0),
+                _ => 0.0,
+            };
+            let line_font = || {
+                line.chunks
+                    .iter()
+                    .find(|c| c.inline_image_name.is_none() && !c.text.is_empty())
+                    .map(|c| (c.pdf_font.clone(), c.font_size))
+            };
+            ln.number(
+                content,
+                float_shift,
+                y,
+                line_font,
+                &pdf_name_to_entry,
+                link_tags.as_mut(),
+            );
         }
 
         // Compute left-region content width (for alignment/justify)
