@@ -4660,7 +4660,13 @@
   },
   "cases/indent-chars-inherited": {
     "jaccard": 0.585,
-    "ssim": 0.9847
+    "ssim": 0.9847,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/inline-beside-float": {
     "jaccard": 0.9898,
@@ -6505,7 +6511,13 @@
   },
   "cases/paragraph-borders-inherited": {
     "jaccard": 0.8944,
-    "ssim": 0.9756
+    "ssim": 0.9756,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
   },
   "cases/paragraph-offset-frame-exact": {
     "jaccard": 0.8672,
@@ -8952,8 +8964,8 @@
     "a11y_text": 0.7054
   },
   "scraped/chinese_student_union_nomination_form": {
-    "jaccard": 0.3985,
-    "ssim": 0.7923,
+    "jaccard": 0.4052,
+    "ssim": 0.7954,
     "text_boundary": 0.8197,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -9625,8 +9637,8 @@
     "a11y_text": 1.0
   },
   "scraped/japanese_hr_consultation_application": {
-    "jaccard": 0.414,
-    "ssim": 0.5618,
+    "jaccard": 0.4113,
+    "ssim": 0.5623,
     "text_boundary": 0.1778,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -9635,8 +9647,8 @@
     "a11y_text": 1.0
   },
   "scraped/japanese_interlibrary_loan": {
-    "jaccard": 0.6845,
-    "ssim": 0.8345,
+    "jaccard": 0.718,
+    "ssim": 0.8346,
     "text_boundary": 0.4286,
     "convert_ms": 4.5,
     "ua_fail": 2,
@@ -9646,8 +9658,8 @@
     "a11y_text": 1.0
   },
   "scraped/japanese_land_development_sign_form": {
-    "jaccard": 0.3557,
-    "ssim": 0.7171,
+    "jaccard": 0.3566,
+    "ssim": 0.7173,
     "text_boundary": 0.9259,
     "ua_fail": 4,
     "a11y_missing": 0,
@@ -10356,7 +10368,7 @@
   },
   "scraped/tokyo_welfare_infrastructure_briefing": {
     "jaccard": 0.4558,
-    "ssim": 0.667,
+    "ssim": 0.6669,
     "text_boundary": 0.9091,
     "ua_fail": 2,
     "a11y_missing": 0,

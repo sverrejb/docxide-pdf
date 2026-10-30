@@ -480,6 +480,15 @@ Backlog (details in `current_focus/A11Y.md`):
 - **Hyphenation**: Word's online converter never hyphenates; the 8
   `hyphenation/` fixtures wait for desktop-Word references with proofing
   tools.
+- **Embedded-font references** (issue #139, 2026-10-30): Word online can use
+  fonts embedded in the docx (case8's Feb 2026 reference draws Press Start 2P
+  as `___WRD_EMBED_SUB_1437`), but nothing embedded survives
+  `tools/word_export.py --preset online`: 楷体_GB2312 full or subset, under
+  either name, and even case8's Press Start bytes in another document all
+  fell back to YaHei; case8 itself now hangs Word (its fontTable rels list
+  rId20 four times). `--preset print` does use them. Next step: export
+  `tests/output/i139/gb2312font/embed4/issue139_gb2312.docx` through Word on
+  the web to tell the docx apart from the Mac export path.
 
 ## Fonts
 
@@ -488,6 +497,9 @@ Backlog (details in `current_focus/A11Y.md`):
   higher, Segoe UI Symbol's deeper descent); `boxed_line_ascent` only looks
   at the paragraph's tallest run, and per-line sizing keeps the paragraph's
   baseline when the pitch doesn't change. Same gap for mixed-font lines.
+- With only a regular face embedded, our bold run falls back to the charset
+  substitute (Microsoft YaHei in issue #139) instead of emboldening the
+  embedded face; untested against Word.
 - ※ ‥ ‧ ‵ in a Latin run come from MS Gothic in Word, the East Asian slot
   rather than a fallback; we rescue them from Segoe UI Symbol.
 - Bundle metric-compatible open fonts behind a feature flag (Liberation
