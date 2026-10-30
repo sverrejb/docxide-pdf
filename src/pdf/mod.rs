@@ -3492,23 +3492,35 @@ fn render_paragraph_block(
     // One line of the mark's font at single spacing: a picture-only line's
     // baseline below its top (and the base its leading is measured from).
     let natural_line_h = font_size * tallest_lhr.unwrap_or(1.2);
-    let mut content_h = if para.inline_chart.is_some() {
-        para.content_height
-    } else if let Some(img) = &para.image {
-        // A picture taller than the text line takes its paragraph's own
-        // line-spacing leading below it, sized by the paragraph mark
-        // (dental_amalgam: a 68.25pt logo under Normal's 1.15 lines is
-        // 70.1pt tall in Word although the next paragraph is single-spaced).
-        // The mark's, not the picture run's: Word probe at 3× spacing, 12pt
-        // Times New Roman, 12pt Calibri, 24pt Times New Roman and 11pt Cambria
-        // marks add 2 × their line whatever the picture run's font and size.
+    // A picture taller than the text line takes its paragraph's own
+    // line-spacing leading below it, sized by the paragraph mark
+    // (dental_amalgam: a 68.25pt logo under Normal's 1.15 lines is
+    // 70.1pt tall in Word although the next paragraph is single-spaced).
+    // The mark's, not the picture run's: Word probe at 3× spacing, 12pt
+    // Times New Roman, 12pt Calibri, 24pt Times New Roman and 11pt Cambria
+    // marks add 2 × their line whatever the picture run's font and size.
+    // Lazy: most paragraphs hold no picture.
+    let mark_line = || {
         let (mark_fs, mark_lhr) = unsized_line_metrics(para, font_size, ctx.fonts);
         let mark_line_h = resolve_line_h(effective_ls, mark_fs, mark_lhr);
-        let leading = spacing_leading(mark_line_h, mark_fs, mark_lhr);
-        // A shorter one sits on the baseline of a full line of the mark's
-        // font (indigenous_innovation's 2.25pt rule under the title). Taller
-        // than a natural line is enough for the leading: a 30pt picture under
-        // 3 × 13.8pt lines is 57.6pt in Word, not 41.4.
+        (mark_line_h, spacing_leading(mark_line_h, mark_fs, mark_lhr))
+    };
+    // A shorter one sits on the baseline of a full line of the mark's
+    // font (indigenous_innovation's 2.25pt rule under the title). Taller
+    // than a natural line is enough for the leading: a 30pt picture under
+    // 3 × 13.8pt lines is 57.6pt in Word, not 41.4. Charts and an inline
+    // shape alone on its line are pictures too (torture_test: Word's next
+    // line is 2.09pt lower than the chart's bottom).
+    let picture_line_h = |bottom: f32| {
+        if bottom > natural_line_h {
+            bottom + mark_line().1
+        } else {
+            line_h
+        }
+    };
+    let mut content_h = if para.inline_chart.is_some() {
+        picture_line_h(para.content_height)
+    } else if let Some(img) = &para.image {
         // Modern Word swaps the inline layout axes in the nearest quarter-turn
         // quadrant; it does not reserve the exact oblique bounding rectangle.
         let swap_axes = ctx.compat_mode >= 15
@@ -3518,11 +3530,7 @@ fn render_paragraph_block(
         } else {
             para.content_height
         };
-        let picture_h = if image_height > natural_line_h {
-            image_height + leading
-        } else {
-            line_h
-        };
+        let picture_h = picture_line_h(image_height);
         // An OLE preview wider than the column leaves its line no room for the
         // paragraph mark, which wraps onto a line of its own (alfies_arc: an
         // 11pt line follows a 1014pt-wide OLE logo strip, annotation #186).
@@ -3532,7 +3540,7 @@ fn render_paragraph_block(
         // twips from its EMU extent against an 8617 twip column) fits.
         let twips = |pt: f32| (pt * 20.0).round();
         if img.is_ole_preview && twips(img.layout_size().0) > twips(col_w) {
-            picture_h + mark_line_h
+            picture_h + mark_line().0
         } else {
             picture_h
         }
@@ -3724,7 +3732,7 @@ fn render_paragraph_block(
             _ => false,
         };
         if reserve {
-            let tb_bottom = tb.v_offset_pt + tb.height_pt + tb.dist_bottom;
+            let tb_bottom = tb.flow_bottom();
             match tb.v_relative_from {
                 // The offset counts from above the paragraph's own space
                 // before, which already sits above the content. An empty
@@ -3734,8 +3742,14 @@ fn render_paragraph_block(
                 // line - 33.18).
                 // Drawings on the line count from it (isla_language's lesson
                 // canvas).
+                // An inline shape alone on its line is a picture there.
                 VRelativeFrom::Paragraph if tb.on_line => {
-                    content_h = content_h.max(tb_bottom);
+                    let h = if text_empty {
+                        picture_line_h(tb_bottom)
+                    } else {
+                        tb_bottom
+                    };
+                    content_h = content_h.max(h);
                 }
                 VRelativeFrom::Paragraph => {
                     let before = own_space_before(inter_gap, state.prev_space_after);
@@ -4857,8 +4871,22 @@ fn render_paragraph_block(
         && let Some((start, count_by, right_x)) = ln_cfg
     {
         // ponytail: no grid snap; a grid-snapped empty anchor's number may sit off its line.
-        let mark_baseline =
-            state.pb.slot_top - bdr_top_pad - content_h + (line_h - first_baseline_offset).max(0.0);
+        // A picture's, chart's or inline shape's bottom sits on its line's
+        // baseline.
+        let picture_bottom = if para.image.is_some() || para.inline_chart.is_some() {
+            Some(para.content_height)
+        } else {
+            para.textboxes
+                .iter()
+                .filter(|tb| tb.on_line)
+                .map(crate::model::Textbox::flow_bottom)
+                .reduce(f32::max)
+        };
+        let mark_baseline = if let Some(bottom) = picture_bottom {
+            state.pb.slot_top - bdr_top_pad - bottom
+        } else {
+            state.pb.slot_top - bdr_top_pad - content_h + (line_h - first_baseline_offset).max(0.0)
+        };
         let fonts = fonts::by_pdf_name(ctx.fonts);
         LineNumberArg {
             counter: &mut state.pb.line_number_counter,

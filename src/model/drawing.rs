@@ -472,6 +472,11 @@ impl Textbox {
         }
     }
 
+    /// How far below its anchor's top the box reaches, with its wrap distance.
+    pub fn flow_bottom(&self) -> f32 {
+        self.v_offset_pt + self.height_pt + self.dist_bottom
+    }
+
     /// The (width, height) inside the body margins of a box `height` tall.
     pub fn text_area(&self, height: f32) -> (f32, f32) {
         (
