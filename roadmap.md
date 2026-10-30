@@ -444,14 +444,16 @@ Backlog (details in `current_focus/A11Y.md`):
 
 ## Parked
 
-- **Online glyph positioning / width drift**: rule found 2026-10-28
-  (`current_focus/fundamentals.md` §2): a 288 dpi device grid, a one-glyph
-  look-ahead ±1 px correction, 1024 px chunks, and the PDF writer's one-unit
-  loss (the old "0.07% shrink"). Implemented 2026-10-30 on branch
-  `fundamentals` (`src/pdf/glyph_grid.rs`): device advances round up from
-  0.46 px, the writer restarts at rsid run boundaries; visual suite J +1.45,
-  SSIM +1.00 (scraped +2.31/+1.92). Justified lines (probe 2: cadence not
-  yet reproduced), kerning and `Tc` keep exact positions.
+- **Online glyph positioning / width drift**: rule found 2026-10-28 and
+  implemented 2026-10-30 on branch `fundamentals` (`src/pdf/glyph_grid.rs`,
+  `current_focus/fundamentals.md` §2, probes 1–5): a 288 dpi device grid,
+  device advances rounding up from 0.46 px (half-up for OpenType-kerned
+  runs), a one-glyph look-ahead ±1 px correction, 1024 px chunks, the PDF
+  writer's per-glyph unit rounding restarting at rsid run boundaries;
+  justified spaces, plain-path kerning and letter spacing rounded apart.
+  Visual suite J +4.28, SSIM +2.86 (scraped +4.26/+3.73); output +3.7 %.
+  Left exact: RTL, East Asian text, text scaling, fallback glyphs. Not
+  merged to main yet.
 - **Hyphenation**: Word's online converter never hyphenates; the 8
   `hyphenation/` fixtures wait for desktop-Word references with proofing
   tools.
