@@ -8,24 +8,27 @@ Open work only. Finished rounds, their rules and evidence live in git history
 **torture_test round (2026-10-29/30, branch `torture-test`):** a two-page
 fixture built only from features absent from `src/` (kit with generator in
 `tests/output/torture_test/`; Word online reference). 2.8% J / 26.7% SSIM
-(3 pages against 2) → 56.9% J / 74.9% SSIM (2 pages). Done on the branch:
-linked text boxes (whole paragraphs only; Word splits between lines), drop
-caps, ruby, fitText/tcFitText, bidiVisual, suppressLineNumbers, numbers on
-lines without text, picture grayscale/duotone/alphaModFix, chart title,
-frame, column value labels and data table. Still open, by ink:
-- **3-D charts** (`c:bar3DChart`, `c:view3D`): drawn flat. Word's oblique
-  projection (rotX 15, rotY 20, rAngAx) sets the back wall about (18, 12.5)pt
-  behind the front face, so its plot is narrower (75pt categories against our
-  89) and the axis max is 25 where we pick 30. Probe the depth rule with
-  `tools/word_export.py` before modelling it.
-- **Shape effects** (`a:glow`/`a:reflection`/`a:softEdge` on a `wps` shape):
-  absent; picture glow has the XObject machinery to reuse.
-- **Inline `wps` shapes** sit at the paragraph start as a block (images.rs
-  "acts as a block element"), so one after inline pictures overlaps the first;
-  its tiled `a:blipFill` (`a:tile`) is not parsed either.
-- `w:wordWrap w:val="0"`: only over-wide words split; Word breaks any word at
-  the line end.
-- Value labels only on vertical clustered bars; titles not on pie/radar.
+(3 pages against 2) → 67.2% J / 81.2% SSIM (2 pages); the picture-line rule
+for charts also lifted case52/case31/case29/case53 by 3–8pp. Done on the
+branch: linked text boxes (whole paragraphs; Word splits between lines),
+drop caps, ruby, fitText/tcFitText, bidiVisual, suppressLineNumbers,
+wordWrap=0, numbers on lines without text, picture grayscale/duotone/
+alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
+(vector approximations), chart title/frame/value labels/data table. Open:
+- **3-D charts** (`c:bar3DChart`, `c:view3D`) draw flat. Word rasterises the
+  plot and its back wall sits (dx, dy) behind the front face, which shrinks
+  the front: rotX 15/rotY 20/depth 100 on a 432pt frame gives front x
+  159–459.8 and dx≈21.5, dy≈16.7; rotY 40 dx≈38.8 (dy same); depthPercent 200
+  dx≈36.3, dy≈27.8; rotX 30 dx≈19.4, dy≈27.9; a 300pt frame dx≈15.1. Probes
+  and `measure.py` in `tests/output/tt/probe/` (worktree). Raster extents
+  include margins: measure the wall from the raster pixels before fitting.
+  Word also picks axis max 25 for a 24 maximum where we pick 30.
+- Inline `wps` shapes with text, charts and SmartArt are block boxes at the
+  paragraph start, not line objects (a picture-filled shape is now a
+  picture); an inline-object run kind would fix all three.
+- The empty line before a page-break run gets no margin number ("19").
+- Value labels only on vertical clustered bars; titles not on pie/radar;
+  shape soft edge absent; reflection mirrors the fill, not the text.
 
 **Weakest-fixtures round (2026-10-27, branch `weak-fixtures`):**
 - **compressPunctuation needs probes**: chinese_costume's left-aligned cell
