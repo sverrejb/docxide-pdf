@@ -4658,6 +4658,10 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/indent-chars-inherited": {
+    "jaccard": 0.585,
+    "ssim": 0.9847
+  },
   "cases/inline-beside-float": {
     "jaccard": 0.9898,
     "ssim": 0.9967,

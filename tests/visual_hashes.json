@@ -1505,6 +1505,9 @@
   "cases/indent-chars-hanging": [
     "fb58f76762d46f064cf82f7d0f2d8f56659219fe49b168fdfd690e59782a1296"
   ],
+  "cases/indent-chars-inherited": [
+    "97901144cce1a1ac22483c1288936f4995a9ada551e46a342d4e16c892cde706"
+  ],
   "cases/inline-beside-float": [
     "16f4c07f6dfde2fbbbb1bfba04ccbc25452ff9ba61e33648c0f76685a157ea14"
   ],
