@@ -259,7 +259,10 @@ fn parse_chart_space(xml_content: &str, accent_colors: Vec<[u8; 3]>) -> Option<C
 fn detect_chart_type<'a>(
     plot_area: roxmltree::Node<'a, 'a>,
 ) -> Option<(roxmltree::Node<'a, 'a>, ChartType, f32)> {
-    if let Some(n) = chart_child(plot_area, "barChart") {
+    // ponytail: a 3-D bar chart draws flat, without its depth faces.
+    if let Some(n) =
+        chart_child(plot_area, "barChart").or_else(|| chart_child(plot_area, "bar3DChart"))
+    {
         let horizontal = chart_attr(n, "barDir") == Some("bar");
         let grouping = match chart_attr(n, "grouping") {
             Some("stacked") => BarGrouping::Stacked,
