@@ -545,6 +545,11 @@ pub struct Paragraph {
     /// A `TOC` field begins here. Word tags "toc N" paragraphs as TOC/TOCI
     /// only inside such a field; hand-styled ones stay paragraphs.
     pub starts_toc_field: bool,
+    /// A TOC field that begins and ends in this paragraph: its instruction.
+    /// Such a one-paragraph cache is a placeholder that
+    /// `docx::expand_toc_fields` regenerates; a Word-written TOC spans
+    /// several paragraphs and is drawn as cached.
+    pub toc_field: Option<String>,
     /// Numbering level tab stop (pts from paragraph left edge)
     pub num_level_tab_stop: Option<f32>,
     /// `doNotUseIndentAsNumberingTabStop`: the hanging indent is no tab stop

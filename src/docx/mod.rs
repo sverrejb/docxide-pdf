@@ -1368,6 +1368,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         properties: final_props,
         blocks,
     });
+    expand_toc_fields(&mut sections, &mut ctx);
     // HTML auto spacing never opens the document, from a w:p or an altChunk
     // alike: case42's first Normal (Web) paragraph sits at the top margin.
     if let Some(Block::Paragraph(first)) = sections[0].blocks.first_mut()
@@ -1525,6 +1526,197 @@ fn resolve_seq_fields(doc: &mut Document) {
     }
 }
 
+/// What a TOC field collects: `\o "a-b"` (and `\u`) the heading outline
+/// levels, `\t "Style,level,…"` paragraphs of a style, `\c "Name"` paragraphs
+/// holding a SEQ of that name; `\n` drops the page numbers. Without any of
+/// them Word takes headings 1–3.
+#[derive(Debug, PartialEq)]
+struct TocSpec {
+    outline: Option<std::ops::RangeInclusive<u8>>,
+    styles: Vec<(String, u8)>,
+    seq: Option<String>,
+    page_numbers: bool,
+}
+
+impl TocSpec {
+    fn parse(instr: &str) -> TocSpec {
+        let has = |s| runs::has_switch(instr, s);
+        let mut outline = toc_switch_arg(instr, "\\o")
+            .and_then(|r| r.split_once('-'))
+            .and_then(|(a, b)| Some(a.trim().parse().ok()?..=b.trim().parse().ok()?))
+            .or_else(|| (has("\\o") || has("\\u")).then_some(1..=9));
+        let styles: Vec<(String, u8)> = toc_switch_arg(instr, "\\t")
+            .map(|list| {
+                let items: Vec<&str> = list.split([',', ';']).map(str::trim).collect();
+                items
+                    .chunks(2)
+                    .filter_map(|c| Some((c.first()?.to_string(), c.get(1)?.parse().ok()?)))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let seq = toc_switch_arg(instr, "\\c").map(str::to_string);
+        if outline.is_none() && styles.is_empty() && seq.is_none() {
+            outline = Some(1..=3);
+        }
+        TocSpec {
+            outline,
+            styles,
+            seq,
+            page_numbers: !has("\\n"),
+        }
+    }
+
+    /// The TOC level `p` enters at, if any.
+    fn level_of(&self, p: &crate::model::Paragraph, names: &HashMap<String, String>) -> Option<u8> {
+        use crate::model::FieldCode;
+        if let (Some(range), Some(level)) = (&self.outline, p.outline_level)
+            && range.contains(&(level + 1))
+        {
+            return Some(level + 1);
+        }
+        if let Some(id) = &p.style_id
+            && let Some((_, level)) = self.styles.iter().find(|(name, _)| {
+                id.eq_ignore_ascii_case(name)
+                    || names.get(id).is_some_and(|n| n.eq_ignore_ascii_case(name))
+            })
+        {
+            return Some(*level);
+        }
+        let seq = self.seq.as_deref()?;
+        p.runs
+            .iter()
+            .any(|r| matches!(&r.field_code, Some(FieldCode::Seq { name, .. }) if name.eq_ignore_ascii_case(seq)))
+            .then_some(1)
+    }
+}
+
+/// The argument after a TOC switch (`\o "1-3"`), if the switch is present.
+fn toc_switch_arg<'a>(instr: &'a str, switch: &str) -> Option<&'a str> {
+    let lower = instr.to_ascii_lowercase();
+    let after = lower
+        .match_indices(&switch.to_ascii_lowercase())
+        .map(|(start, m)| (start, start + m.len()))
+        .find(|&(start, end)| {
+            (start == 0 || lower.as_bytes()[start - 1].is_ascii_whitespace())
+                && lower[end..].chars().next().is_none_or(char::is_whitespace)
+        })
+        .map(|(_, end)| end)?;
+    runs::quoted_or_word(&instr[after..])
+}
+
+fn xml_text(s: &str) -> String {
+    s.replace('&', "&amp;").replace('<', "&lt;").replace('"', "&quot;")
+}
+
+/// Regenerate the TOC fields whose cache is a single paragraph (issue #145's
+/// "Update field in Word."), as Word's field update does: one "toc N"
+/// paragraph per entry with its text, a dot-leader right tab 10 twips inside
+/// the margin and a PAGEREF to the entry's paragraph (a bookmark added here),
+/// then the field's own paragraph left empty. Later TOCs are expanded first
+/// so the earlier ones' block indices hold. ponytail: `\p` separators, `\b`
+/// scopes and TC fields are ignored; without a "toc N" style a level N entry
+/// is indented 11pt × (N − 1).
+fn expand_toc_fields<R: Read + std::io::Seek>(
+    sections: &mut [Section],
+    ctx: &mut ParseContext<'_, R>,
+) {
+    let mut hosts = Vec::new();
+    for (s, section) in sections.iter().enumerate() {
+        for (b, block) in section.blocks.iter().enumerate() {
+            if matches!(block, Block::Paragraph(p) if p.toc_field.is_some()) {
+                hosts.push((s, b));
+            }
+        }
+    }
+    let names = &ctx.styles.style_id_to_name;
+    let mut bookmarks = 0;
+    for (s, b) in hosts.into_iter().rev() {
+        let Block::Paragraph(host) = &mut sections[s].blocks[b] else {
+            continue;
+        };
+        let spec = TocSpec::parse(&host.toc_field.take().unwrap_or_default());
+        host.runs.clear();
+        host.starts_toc_field = false;
+
+        // (level, bookmark, list label, text) of each entry, in document order.
+        let mut entries = Vec::new();
+        let mut paras = Vec::new();
+        for section in sections.iter_mut() {
+            body_paragraphs(&mut section.blocks, &mut paras);
+        }
+        for p in paras {
+            if p.starts_toc_field || p.toc_field.is_some() {
+                continue;
+            }
+            let Some(level) = spec.level_of(p, names) else {
+                continue;
+            };
+            let text: String = p.runs.iter().map(|r| r.text.as_str()).collect();
+            let bookmark = format!("_Toc145_{bookmarks}");
+            bookmarks += 1;
+            p.bookmarks.push(bookmark.clone());
+            let label = p.list_label.clone();
+            entries.push((level, bookmark, label, text.trim().to_string()));
+        }
+
+        let sp = &sections[s].properties;
+        let text_width = sp.page_width - sp.margin_left - sp.margin_right;
+        let tab_pos = (text_width * 20.0).round() as i32 - 10;
+        let toc_style = |level: u8| {
+            let name = format!("toc {level}");
+            names.iter().find(|(_, n)| n.eq_ignore_ascii_case(&name)).map(|(id, _)| id.clone())
+        };
+        let mut xmls: Vec<String> = entries
+            .iter()
+            .map(|(level, bookmark, label, text)| {
+                let mut ppr = match toc_style(*level) {
+                    Some(id) => format!(r#"<w:pStyle w:val="{}"/>"#, xml_text(&id)),
+                    None if *level > 1 => format!(r#"<w:ind w:left="{}"/>"#, 220 * (*level as i32 - 1)),
+                    None => String::new(),
+                };
+                let mut body = String::new();
+                if !label.is_empty() {
+                    body += &format!(r#"<w:r><w:t xml:space="preserve">{}</w:t></w:r><w:r><w:tab/></w:r>"#, xml_text(label));
+                }
+                body += &format!(r#"<w:r><w:t xml:space="preserve">{}</w:t></w:r>"#, xml_text(text));
+                if spec.page_numbers {
+                    ppr += &format!(r#"<w:tabs><w:tab w:val="right" w:leader="dot" w:pos="{tab_pos}"/></w:tabs>"#);
+                    body += &format!(
+                        r#"<w:r><w:tab/></w:r><w:r><w:fldChar w:fldCharType="begin"/></w:r><w:r><w:instrText xml:space="preserve"> PAGEREF {bookmark} \h </w:instrText></w:r><w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:fldChar w:fldCharType="end"/></w:r>"#
+                    );
+                }
+                format!(r#"<w:p xmlns:w="{WML_NS}"><w:pPr>{ppr}</w:pPr>{body}</w:p>"#)
+            })
+            .collect();
+        if xmls.is_empty() {
+            xmls.push(format!(
+                r#"<w:p xmlns:w="{WML_NS}"><w:r><w:t>No table of contents entries found.</w:t></w:r></w:p>"#
+            ));
+        }
+        let opts = paragraph::ParagraphOptions {
+            resolve_bookmarks: false,
+            resolve_outline_level: false,
+            resolve_drawings: false,
+            collect_extra_textboxes: false,
+            style_num_id: None,
+            style_num_ilvl: None,
+        };
+        let mut generated: Vec<Block> = xmls
+            .iter()
+            .filter_map(|xml| roxmltree::Document::parse(xml).ok())
+            .map(|doc| {
+                ctx.fields = Default::default();
+                let mut lists = numbering::ListCounters::default();
+                Block::Paragraph(paragraph::build_paragraph(doc.root_element(), ctx, &mut lists, &opts))
+            })
+            .collect();
+        if let Some(Block::Paragraph(first)) = generated.first_mut() {
+            first.starts_toc_field = true;
+        }
+        sections[s].blocks.splice(b..b, generated);
+    }
+}
+
 /// Every body paragraph, table cells included, in document order.
 fn body_paragraphs<'a>(blocks: &'a mut [Block], out: &mut Vec<&'a mut crate::model::Paragraph>) {
     for block in blocks {
@@ -1648,6 +1840,19 @@ mod tests {
             (b.style, b.width_pt, b.extent()),
             (BorderStyle::Double, 1.5, 4.5)
         );
+    }
+
+    #[test]
+    fn toc_spec_reads_its_switches() {
+        let spec = super::TocSpec::parse(r#" TOC \o "1-3" \h \z \u "#);
+        assert_eq!((spec.outline, spec.page_numbers), (Some(1..=3), true));
+        let spec = super::TocSpec::parse(r#" TOC \t "Figure Caption,1,Table Caption,2" \n "#);
+        let styles = [("Figure Caption".to_string(), 1), ("Table Caption".to_string(), 2)];
+        assert_eq!(spec.styles, styles);
+        assert!(!spec.page_numbers && spec.outline.is_none());
+        let spec = super::TocSpec::parse(r#" TOC \c "Figure" "#);
+        assert_eq!(spec.seq.as_deref(), Some("Figure"));
+        assert_eq!(super::TocSpec::parse(" TOC \\h ").outline, Some(1..=3));
     }
 
     #[test]

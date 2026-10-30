@@ -105,7 +105,7 @@ fn parse_eq_overstrike(instr: &str) -> Option<String> {
     (!base.is_empty()).then(|| base.to_string())
 }
 
-fn has_switch(instr: &str, switch: &str) -> bool {
+pub(super) fn has_switch(instr: &str, switch: &str) -> bool {
     instr
         .split_whitespace()
         .any(|s| s.eq_ignore_ascii_case(switch))
@@ -147,6 +147,8 @@ fn number_format_switch(instr: &str) -> Option<&'static str> {
 struct FieldFrame {
     seen_sep: bool,
     visible: bool,
+    /// Opened in an earlier paragraph (`FieldCarry`).
+    carried: bool,
     instr: String,
     result: String,
     /// The instruction as text and nested fields, for `FieldCode::If`.
@@ -182,6 +184,7 @@ impl FieldFrame {
         Self {
             seen_sep: false,
             visible,
+            carried: false,
             instr: String::new(),
             result: String::new(),
             parts: Vec::new(),
@@ -257,13 +260,24 @@ fn parse_styleref_arg(instr: &str) -> Option<String> {
     if !kw.eq_ignore_ascii_case("styleref") {
         return None;
     }
-    let rest = trimmed[kw.len()..].trim();
-    if let Some(quoted) = rest.strip_prefix('"') {
-        let end = quoted.find('"')?;
-        Some(quoted[..end].to_string())
-    } else {
-        Some(rest.split_whitespace().next()?.to_string())
+    quoted_or_word(&trimmed[kw.len()..]).map(str::to_string)
+}
+
+/// A field argument: a quoted string, or one bare word that is no switch.
+pub(super) fn quoted_or_word(rest: &str) -> Option<&str> {
+    let rest = rest.trim_start();
+    match rest.strip_prefix('"') {
+        Some(quoted) => quoted.split('"').next(),
+        None => rest.split_whitespace().next().filter(|w| !w.starts_with('\\')),
     }
+}
+
+/// The instruction of a TOC field.
+pub(super) fn is_toc_instr(instr: &str) -> bool {
+    instr
+        .split_whitespace()
+        .next()
+        .is_some_and(|k| k.eq_ignore_ascii_case("TOC"))
 }
 
 fn mc_choice_or_fallback<'a>(node: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
@@ -305,6 +319,8 @@ pub(super) struct ParsedRuns {
     /// The paragraph mark lies inside a field's code: hidden, the next
     /// paragraph continues this one.
     pub(super) mark_in_field_code: bool,
+    /// `Paragraph::toc_field`.
+    pub(super) toc_instr: Option<String>,
 }
 
 /// A `Run` doubles as the resolved formatting of one `w:r`: every run the
@@ -1272,6 +1288,10 @@ pub(super) fn parse_runs<R: Read + Seek>(
     let mut has_column_break = false;
     let mut has_clear_break = false;
     let mut field_stack: Vec<FieldFrame> = std::mem::take(&mut ctx.fields.frames);
+    for frame in &mut field_stack {
+        frame.carried = true;
+    }
+    let mut toc_instr: Option<String> = None;
 
     for (node_idx, (run_node, hyperlink_url, is_anchor_hyperlink, comment_ids, ruby)) in
         run_nodes.into_iter().enumerate()
@@ -1444,6 +1464,11 @@ pub(super) fn parse_runs<R: Read + Seek>(
                                 });
                             }
                             continue;
+                        }
+                        // A TOC held in one paragraph is a placeholder to
+                        // regenerate (`docx::expand_toc_fields`).
+                        if !f.carried && is_toc_instr(&f.instr) {
+                            toc_instr = Some(f.instr.clone());
                         }
                         let fc = if f.evaluable_if() {
                             Some(FieldCode::If(std::mem::take(&mut f.parts)))
@@ -1788,6 +1813,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
     ParsedRuns {
         runs,
         mark_in_field_code,
+        toc_instr,
         has_explicit_page_break_before: page_break_before_content,
         has_page_break_after,
         column_break_at,

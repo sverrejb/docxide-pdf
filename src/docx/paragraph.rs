@@ -297,8 +297,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         list_label_suff: super::numbering::label_suffix(&list_label_suff),
         list_item,
         starts_toc_field: node.descendants().any(|n| {
-            n.has_tag_name((WML_NS, "instrText"))
-                && n.text().is_some_and(|t| t.trim_start().starts_with("TOC"))
+            n.has_tag_name((WML_NS, "instrText")) && n.text().is_some_and(super::runs::is_toc_instr)
         }),
         num_level_tab_stop: num_tab_stop,
         no_indent_num_tab: ctx.styles.defaults.no_indent_as_num_tab,
@@ -338,6 +337,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         floating_smartart,
         horizontal_rule: parsed.horizontal_rule,
         field_code_mark: parsed.mark_in_field_code,
+        toc_field: parsed.toc_instr,
         is_section_break: false,
         bookmarks,
         outline_level,
