@@ -4083,7 +4083,13 @@ pub(super) fn render_paragraph_lines(
                     .map(|e| e.word_width(&s, fs, false))
                     .unwrap_or(fs * 0.5 * s.chars().count() as f32);
                 let bytes = encode_text_for_pdf(&s, &font, &pdf_name_to_entry);
-                let x = ln.right_x - w;
+                // Word keeps the distance from a line pushed right by a float
+                // (torture_test's drop cap: the numbers land on the cap).
+                let float_shift = match &line.right_region {
+                    Some(rr) if rr.first_chunk_idx == 0 => (rr.region_x - base_margin).max(0.0),
+                    _ => 0.0,
+                };
+                let x = ln.right_x + float_shift - w;
                 let draw = |content: &mut Content| {
                     content.save_state();
                     content.set_char_spacing(0.0);

@@ -28,7 +28,7 @@ use std::io::Read;
 
 use crate::error::Error;
 use crate::model::{
-    Block, BorderStyle, CellBorder, DocGridType, Document, FrameProperties, HRelativeFrom,
+    Block, BorderStyle, CellBorder, DocGridType, Document, DropCap, FrameProperties, HRelativeFrom,
     HorizontalPosition, LineSpacing, ParagraphBorder, ParagraphBorders, Section, SectionBreakType,
     SectionProperties, TabAlignment, TabStop, VRelativeFrom, VerticalPosition,
 };
@@ -624,7 +624,17 @@ pub(super) fn parse_frame_props(
     };
     // Word probe: a frame without vAnchor sits w:y below the top margin, however
     // many paragraphs come before it.
+    let drop_cap = match attr("dropCap") {
+        Some(kind @ ("drop" | "margin")) => Some(DropCap {
+            lines: attr("lines").and_then(|v| v.parse().ok()).unwrap_or(1).max(1),
+            in_margin: kind == "margin",
+        }),
+        _ => None,
+    };
+    // The spec ignores a drop cap's vertical position: it sits at the top of
+    // the next paragraph.
     let v_anchor = match attr("vAnchor") {
+        _ if drop_cap.is_some() => VRelativeFrom::Paragraph,
         Some("page") => VRelativeFrom::Page,
         Some("text") => VRelativeFrom::Paragraph,
         _ => VRelativeFrom::Margin,
@@ -634,6 +644,7 @@ pub(super) fn parse_frame_props(
         h_position,
         v_relative_from: v_anchor,
         v_position: match attr("yAlign") {
+            _ if drop_cap.is_some() => VerticalPosition::Offset(0.0),
             Some("top" | "inside") => VerticalPosition::AlignTop,
             Some("center") => VerticalPosition::AlignCenter,
             Some("bottom" | "outside") => VerticalPosition::AlignBottom,
@@ -645,6 +656,7 @@ pub(super) fn parse_frame_props(
         text_below: matches!(attr("wrap"), Some("none") | Some("notBeside")),
         h_space: twips("hSpace"),
         v_space: twips("vSpace"),
+        drop_cap,
     })
 }
 

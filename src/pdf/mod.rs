@@ -119,12 +119,13 @@ fn lifted_frame<'a>(block: &'a Block, sp: &SectionProperties) -> Option<&'a Fram
 }
 
 /// A wrapping paragraph-anchored frame with an explicit height and a nonzero
-/// offset: it keeps its own coordinates, and text wraps around it.
+/// offset, or a drop cap: it keeps its own coordinates, and text wraps around it.
 fn paragraph_offset_frame(fp: &FrameProperties) -> bool {
-    !fp.text_below
-        && fp.v_relative_from == VRelativeFrom::Paragraph
-        && fp.height > 0.0
-        && matches!(fp.v_position, VerticalPosition::Offset(y) if y != 0.0)
+    fp.drop_cap.is_some()
+        || (!fp.text_below
+            && fp.v_relative_from == VRelativeFrom::Paragraph
+            && fp.height > 0.0
+            && matches!(fp.v_position, VerticalPosition::Offset(y) if y != 0.0))
 }
 
 fn frame_lifts(fp: &FrameProperties, sp: &SectionProperties) -> bool {
@@ -255,6 +256,8 @@ struct OpenFrame<'a> {
     top: f32,
     /// The frame's column: its left edge and width.
     geometry: (f32, f32),
+    /// The height text wraps around (`w:h`, or a drop cap's lines).
+    wrap_height: f32,
     flow: SavedFlow,
 }
 
@@ -280,15 +283,26 @@ impl<'a> OpenFrame<'a> {
             auto_frame_width(props, blocks, ctx, sp.text_width())
         };
         let (text_x, text_w) = (sp.margin_left, sp.text_width());
-        let x = resolve_h_position(
-            props.h_relative_from,
-            &props.h_position,
-            width,
-            sp,
-            text_x,
-            text_w,
-            text_w,
-        );
+        let x = match props.drop_cap {
+            Some(dc) if dc.in_margin => text_x - props.h_space - width,
+            Some(_) => text_x,
+            None => resolve_h_position(
+                props.h_relative_from,
+                &props.h_position,
+                width,
+                sp,
+                text_x,
+                text_w,
+                text_w,
+            ),
+        };
+        // A drop cap is as tall as the next paragraph's first `lines` lines.
+        // ponytail: that paragraph's space before and indents are not added;
+        // the probed drop cap has neither.
+        let wrap_height = props.drop_cap.map_or(props.height, |dc| {
+            let next = block_para(blocks, frame_blocks(props, blocks).count());
+            dc.lines as f32 * next.map_or(0.0, |p| table_layout::spacer_line_h(p, ctx))
+        });
         let height = match props.v_position {
             VerticalPosition::AlignBottom | VerticalPosition::AlignCenter
                 if props.height == 0.0 =>
@@ -319,6 +333,7 @@ impl<'a> OpenFrame<'a> {
             props,
             top,
             geometry: (x, width),
+            wrap_height,
             flow,
         }
     }
@@ -335,9 +350,9 @@ impl<'a> OpenFrame<'a> {
         ) < MIN_EMPTY_STRIP;
         if self.props.text_below || full_width
         {
-            let wrap_bottom = if full_width && self.props.height_exact && self.props.height > 0.0 {
-                self.top + self.props.height
-            } else if full_width { self.top + self.props.height.max(bottom - self.top) }
+            let wrap_bottom = if full_width && self.props.height_exact && self.wrap_height > 0.0 {
+                self.top + self.wrap_height
+            } else if full_width { self.top + self.wrap_height.max(bottom - self.top) }
             else { bottom };
             state.pb.frame_bands.push((self.top, wrap_bottom));
         }
@@ -351,7 +366,7 @@ impl<'a> OpenFrame<'a> {
             let top = sp.page_height - self.top;
             state.pb.float_zone.get_or_insert(FloatZone {
                 top_y: top + self.props.v_space,
-                bottom_y: top - self.props.height - self.props.v_space,
+                bottom_y: top - self.wrap_height - self.props.v_space,
                 obj_left: self.geometry.0,
                 obj_right: self.geometry.0 + self.geometry.1,
                 left_from_text: self.props.h_space,
@@ -2699,18 +2714,25 @@ fn render_paragraph_block(
 
     // §17.6.8: per-section line-number config (None if disabled). Holds no borrow
     // of `state`, so each render call can freshly borrow the shared counter.
-    let ln_cfg: Option<(i32, u32, f32)> = sp.line_numbering.as_ref().map(|ln| {
-        (
-            ln.start,
-            ln.count_by,
-            sp.margin_left - ln.distance.unwrap_or(18.0),
-        )
-    });
-    let ln_font: Option<(String, f32)> = sp.line_numbering.as_ref().and_then(|ln| {
-        ctx.fonts
-            .get(&crate::fonts::font_key_for(&ln.font_name, false, false))
-            .map(|e| (e.pdf_name.clone(), ln.font_size))
-    });
+    // Word numbers neither frame text (a drop cap's letter) nor suppressed lines.
+    let numbered = para.frame_props.is_none() && !para.suppress_line_numbers;
+    let ln_cfg: Option<(i32, u32, f32)> =
+        sp.line_numbering.as_ref().filter(|_| numbered).map(|ln| {
+            (
+                ln.start,
+                ln.count_by,
+                sp.margin_left - ln.distance.unwrap_or(18.0),
+            )
+        });
+    let ln_font: Option<(String, f32)> =
+        sp.line_numbering
+            .as_ref()
+            .filter(|_| numbered)
+            .and_then(|ln| {
+                ctx.fonts
+                    .get(&crate::fonts::font_key_for(&ln.font_name, false, false))
+                    .map(|e| (e.pdf_name.clone(), ln.font_size))
+            });
     if para.frame_props.is_none() && para.runs.iter().any(|run| !run.text.trim().is_empty()) {
         if let Some(bottom) = state.pb.next_text_below_picture.take() {
             state.pb.slot_top = state.pb.slot_top.min(bottom);

@@ -453,6 +453,15 @@ pub struct FrameProperties {
     /// `w:hSpace` / `w:vSpace` in points.
     pub h_space: f32,
     pub v_space: f32,
+    /// `w:dropCap` drop/margin: the frame sits beside the first `lines` lines
+    /// of the next paragraph, inside or outside the text margin.
+    pub drop_cap: Option<DropCap>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DropCap {
+    pub lines: u32,
+    pub in_margin: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -525,6 +534,8 @@ pub struct Paragraph {
     pub contextual_spacing: bool,
     pub keep_next: bool,
     pub keep_lines: bool,
+    /// `w:suppressLineNumbers`: no margin numbers, and its lines are not counted.
+    pub suppress_line_numbers: bool,
     pub widow_control: bool,
     pub line_spacing: Option<LineSpacing>,
     pub image: Option<EmbeddedImage>,

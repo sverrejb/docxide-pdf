@@ -940,7 +940,7 @@ fn plain_spacer(p: &crate::model::Paragraph) -> bool {
         }))
 }
 
-fn spacer_line_h(p: &crate::model::Paragraph, ctx: &RenderContext) -> f32 {
+pub(super) fn spacer_line_h(p: &crate::model::Paragraph, ctx: &RenderContext) -> f32 {
     let (fs, lhr, _) = super::layout::tallest_run_metrics(&p.runs, ctx.fonts);
     resolve_line_h(p.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr)
 }

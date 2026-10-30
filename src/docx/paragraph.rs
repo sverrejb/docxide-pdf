@@ -82,6 +82,10 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     let keep_lines = keep_lines(ppr, para_style) || super::runs::display_math(node).is_some();
 
     let widow_control = widow_control(ppr, para_style, &ctx.styles.defaults);
+    // ponytail: direct formatting only; read the style's when a fixture sets it there.
+    let suppress_line_numbers = ppr
+        .and_then(|ppr| wml_bool(ppr, "suppressLineNumbers"))
+        .unwrap_or(false);
 
     let snap_to_grid = ppr
         .and_then(|ppr| wml_bool(ppr, "snapToGrid"))
@@ -295,6 +299,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         contextual_spacing,
         keep_next,
         keep_lines,
+        suppress_line_numbers,
         widow_control,
         line_spacing,
         image: para_image,
@@ -405,6 +410,7 @@ pub(super) fn split_at_page_break(para: &mut Paragraph) -> Option<Paragraph> {
         keep_next: std::mem::take(&mut para.keep_next),
         field_code_mark: std::mem::take(&mut para.field_code_mark),
         keep_lines: para.keep_lines,
+        suppress_line_numbers: para.suppress_line_numbers,
         widow_control: para.widow_control,
         line_spacing: para.line_spacing,
         borders: para.borders.clone(),
