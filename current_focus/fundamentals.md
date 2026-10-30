@@ -241,11 +241,38 @@ Implemented: `GridGlyph::stretch`, and `device_grid` joins chunks across
 plain spaces plus the line's `extra_per_gap`. 24 justified fixtures: J
 66.97 → 68.89, SSIM 87.13 → 89.05 (czech_expert_witness_law J +10.6).
 
+### Kerned text (probe 4, `tests/output/fundamentals/kern/`)
+
+Five faces, prose with kerning pairs, "AVAV…", "To To …", and the prose
+unkerned as control (`kan.py`, `kan3.py`; pair values from GPOS or the
+legacy `kern` table by `kernpairs.py`). Word has two paths for kerned text,
+switched by the `enableOpenTypeFeatures` compat setting, not by the
+compatibility mode (the probe exported at modes 12, 14 and 15 with the
+setting all go one way, the mode-15 probe without it the other):
+
+- **With it**: kerned runs are written with a CID font (glyph ids,
+  Identity-H), Word's shaping path. The kern joins the first glyph's
+  advance and the whole advance rounds **half-up**, for every glyph of the
+  run, spaces included (Aptos 12 "o" 26.48 → 26, Cambria 11 "e" 21.46 →
+  21): prose 3.5 %, "To" rows 2.8 % wrong; 0.46-rounding on the same lines
+  12 %.
+- **Without it** (learning_cultures_dissertation, `kern_noot.pdf`): plain
+  WinAnsi fonts, kerned all the same (TJ "A)47(T"); the glyph keeps its
+  0.46-rounded advance and the kern is rounded half-up on its own and
+  added, like a justified space's stretch: 3.5 % / 3.8 % wrong (combined
+  rounding 17–20 %).
+
+Unkerned rows keep the 0.46 rule on either path. Writer: the same rule
+(TNR "AV": W − D = 138.7 → TJ 139). Text outside WinAnsi (Cyrillic in
+underlined-space-compat14) is written with a CID font even unkerned; its
+rounding is not probed.
+
+Implemented: `GridGlyph::shaped` / `GridGlyph::apart`, `TextLine::
+shaped_kerning` from `DocumentSettings::open_type_features`. 28
+`w:kern="2"` fixtures: J 66.07 → 67.37, SSIM 85.49 → 87.15, none worse
+(case1 J +6.3, case18 +8.2).
+
 ## 3. Queue after probe 1
 
-1. Kerning pairs on the device grid. Feeding kerned advances (width +
-   pair kern) to the rule is mixed on the 20 `w:kern="2"` fixtures (case3
-   J −6.6, czech_health_statement_form +5.8): needs a probe of how Word
-   rounds a kerned pair.
-2. `Tc` (letter spacing) and text scaling on the grid.
-3. Items 2–5 of §1, in that order; each gets its own probe kit and section.
+1. `Tc` (letter spacing) and text scaling on the grid.
+2. Items 2–5 of §1, in that order; each gets its own probe kit and section.

@@ -10,10 +10,16 @@
 
 /// One glyph of a sequence of glyphs set edge to edge on a line.
 pub(super) struct GridGlyph {
-    /// Exact advance in points, `stretch` included.
+    /// Exact advance in points, `apart` included.
     pub advance: f32,
-    /// A justified space's share of the line's slack, in points.
-    pub stretch: f32,
+    /// Points Word rounds on their own before adding them to the glyph's
+    /// device advance: a justified space's share of the line's slack, or a
+    /// kerning pair's adjustment on the plain path (probe 4).
+    pub apart: f32,
+    /// From kerned text set with `enableOpenTypeFeatures`, which Word lays
+    /// out through its shaping path: that one rounds the whole advance,
+    /// kerning included, half-up (probe 4).
+    pub shaped: bool,
     pub font_size: f32,
     /// Word's writer starts a new text matrix here (a new run).
     pub run_start: bool,
@@ -32,13 +38,14 @@ const PHASE_PT: f64 = 0.025;
 /// size (bar a few hinted glyphs), which halves the wrong advances.
 const ROUND_UP_FROM: f64 = 0.46;
 
-/// A glyph's device advance (px): its own width rounded up from 0.46 px, a
-/// justified space's stretch rounded apart (half up) and added (Arial 10:
-/// 11.11 + 11.47 px draws 22 px, not 23; probe 2).
+/// A glyph's device advance (px): its own width rounded up from 0.46 px plus
+/// `apart` rounded half-up on its own (Arial 10 justified space: 11.11 +
+/// 11.47 px draws 22 px, not 23; probe 2).
 fn device_advance(g: &GridGlyph) -> i64 {
-    let own = (g.advance - g.stretch) as f64 * PX_PER_PT;
-    let stretch = (g.stretch as f64 * PX_PER_PT).round() as i64;
-    own.floor() as i64 + i64::from(own.fract() >= ROUND_UP_FROM) + stretch
+    let own = (g.advance - g.apart) as f64 * PX_PER_PT;
+    let apart = (g.apart as f64 * PX_PER_PT).round() as i64;
+    let up_from = if g.shaped { 0.5 } else { ROUND_UP_FROM };
+    own.floor() as i64 + i64::from(own.fract() >= up_from) + apart
 }
 
 /// Device advances (px) of glyphs whose exact origins are `ideal` (absolute
@@ -115,7 +122,7 @@ pub(super) fn drawn_positions(x0: f32, glyphs: &[GridGlyph]) -> Vec<f32> {
             // zero, one more when the device advance exceeds W.
             let prev = &glyphs[k - 1];
             let unit = prev.font_size as f64 / 1000.0;
-            let w = ((prev.advance - prev.stretch) as f64 / unit).round();
+            let w = ((prev.advance - prev.apart) as f64 / unit).round();
             let d = steps[k - 1] as f64 / PX_PER_PT / unit;
             let gap = w - d;
             let adj = if gap.abs() < 0.5 {
@@ -144,7 +151,8 @@ mod tests {
             .iter()
             .map(|&advance| GridGlyph {
                 advance,
-                stretch: 0.0,
+                apart: 0.0,
+                shaped: false,
                 font_size: size,
                 run_start: false,
             })
@@ -173,11 +181,27 @@ mod tests {
         // Arial 10 space 11.113 px + 11.47 px of stretch: 11 + 11, not 23.
         let space = GridGlyph {
             advance: (11.113 + 11.47) / 4.0,
-            stretch: 11.47 / 4.0,
+            apart: 11.47 / 4.0,
+            shaped: false,
             font_size: 10.0,
             run_start: false,
         };
         assert_eq!(device_advance(&space), 22);
+    }
+
+    #[test]
+    fn shaped_text_rounds_half_up() {
+        // Cambria 11 "e": 21.463 px, 22 on the plain path, 21 when kerned.
+        let mut e = GridGlyph {
+            advance: 21.463 / 4.0,
+            apart: 0.0,
+            shaped: false,
+            font_size: 11.0,
+            run_start: false,
+        };
+        assert_eq!(device_advance(&e), 22);
+        e.shaped = true;
+        assert_eq!(device_advance(&e), 21);
     }
 
     #[test]

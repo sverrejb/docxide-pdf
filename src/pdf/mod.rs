@@ -460,6 +460,8 @@ pub(super) struct RenderContext<'a> {
     pub(super) body_page_fields: Option<&'a BodyPageFields>,
     /// Word's `compatibilityMode` (see `docx::settings`).
     pub(super) compat_mode: u32,
+    /// Word's `enableOpenTypeFeatures` (see `docx::settings`).
+    pub(super) open_type_features: bool,
     /// `Document::east_asian_lang`.
     pub(super) east_asian_lang: bool,
     /// Word's `doNotExpandShiftReturn` (see `docx::settings`).
@@ -543,6 +545,7 @@ impl RenderContext<'_> {
                 && matches!(para.alignment, crate::model::Alignment::Justify),
             expand_shift_return: !self.do_not_expand_shift_return,
             bidi: para.bidi,
+            shaped_kerning: self.open_type_features,
         }
     }
 }
@@ -4995,6 +4998,7 @@ fn render_pass(
         endnote_marks: &endnote_display_order,
         body_page_fields: page_fields,
         compat_mode: doc.compat_mode,
+        open_type_features: doc.open_type_features,
         east_asian_lang: doc.east_asian_lang,
         do_not_expand_shift_return: doc.do_not_expand_shift_return,
         wp_justification: doc.wp_justification,

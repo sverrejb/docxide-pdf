@@ -1103,6 +1103,9 @@ pub(super) struct TextLine {
     /// In a `w:bidi` paragraph: the first-line indent is on the right and a
     /// justified paragraph's last line ends at the right.
     pub(super) rtl_paragraph: bool,
+    /// Kerned text on this line is drawn through Word's OpenType shaping
+    /// path, which rounds device advances differently (`glyph_grid`).
+    pub(super) shaped_kerning: bool,
     /// How far this line's baseline sits below where the paragraph ascent
     /// would put it (negative: above), for lines with their own `pitch`.
     pub(super) ascent_shift: f32,
@@ -1727,6 +1730,9 @@ pub(super) struct CjkLayout {
     pub(super) expand_shift_return: bool,
     /// `w:bidi`: the paragraph's base direction is right to left.
     pub(super) bidi: bool,
+    /// `enableOpenTypeFeatures`: kerned text goes through Word's shaping path
+    /// (see `TextLine::shaped_kerning`).
+    pub(super) shaped_kerning: bool,
 }
 
 /// How far Word 2013+ narrows the spaces of a justified line to keep its
@@ -2917,6 +2923,7 @@ pub(super) fn build_paragraph_lines(
     super::bidi::reorder_lines(&mut lines, cjk.bidi, seen_fonts);
     for line in lines.iter_mut() {
         line.rtl_paragraph = cjk.bidi;
+        line.shaped_kerning = cjk.shaped_kerning;
     }
     lines
 }
@@ -3575,6 +3582,7 @@ pub(super) fn build_tabbed_line(
 
     for line in result_lines.iter_mut() {
         line.rtl_paragraph = cjk.bidi;
+        line.shaped_kerning = cjk.shaped_kerning;
     }
     result_lines
 }
@@ -3712,9 +3720,15 @@ fn device_grid(
         let new_run = match (joined, prev) {
             (Some((n, sw, stretch)), Some((p, _))) => {
                 let pc = &line.chunks[p];
+                let shaped = line.shaped_kerning
+                    && pc.kern
+                    && entries
+                        .get(pc.pdf_font.as_str())
+                        .is_some_and(|e| e.kern_pairs.is_some());
                 seq.extend((0..n).map(|_| GridGlyph {
                     advance: sw,
-                    stretch,
+                    apart: stretch,
+                    shaped,
                     font_size: pc.font_size,
                     run_start: false,
                 }));
@@ -3730,9 +3744,11 @@ fn device_grid(
             }
         };
         members.push((i, seq.len()));
-        seq.extend(chunk.text.chars().enumerate().map(|(j, ch)| GridGlyph {
-            advance: entry.char_width_1000(ch) * size / 1000.0,
-            stretch: 0.0,
+        let shaped = line.shaped_kerning && chunk.kern && entry.kern_pairs.is_some();
+        seq.extend(glyph_advances(chunk, entry).enumerate().map(|(j, (advance, kern))| GridGlyph {
+            advance,
+            apart: if shaped { 0.0 } else { kern },
+            shaped,
             font_size: size,
             run_start: (j == 0 && new_run) || chunk.source_starts.contains(&j),
         }));
@@ -3744,13 +3760,7 @@ fn device_grid(
 
 /// Plain text whose drawn width is its glyphs' exact advances.
 fn grid_eligible(chunk: &WordChunk, entry: &FontEntry) -> bool {
-    let exact: f32 = chunk
-        .text
-        .chars()
-        .map(|c| entry.char_width_1000(c))
-        .sum::<f32>()
-        * chunk.font_size
-        / 1000.0;
+    let exact: f32 = glyph_advances(chunk, entry).map(|(a, _)| a).sum();
     !chunk.text.is_empty()
         && chunk.math.is_none()
         && chunk.text_shadow.is_none()
@@ -3759,12 +3769,30 @@ fn grid_eligible(chunk: &WordChunk, entry: &FontEntry) -> bool {
         && !chunk.rtl
         && chunk.char_spacing == 0.0
         && chunk.text_scale == 100.0
-        && !(chunk.kern && entry.kern_pairs.is_some())
         && chunk
             .text
             .chars()
             .all(|c| c < '\u{2E80}' && !entry.missing_chars.contains(&c))
         && (exact - chunk.width).abs() < 0.01
+}
+
+/// Each glyph's exact advance in points and the kerning in it: a kerned
+/// pair's adjustment on its first glyph.
+fn glyph_advances<'a>(
+    chunk: &'a WordChunk,
+    entry: &'a FontEntry,
+) -> impl Iterator<Item = (f32, f32)> + 'a {
+    let kern = chunk.kern && entry.kern_pairs.is_some();
+    let mut chars = chunk.text.chars().peekable();
+    std::iter::from_fn(move || {
+        let ch = chars.next()?;
+        let k = match chars.peek() {
+            Some(&next) if kern => entry.kern_1000(ch, next),
+            _ => 0.0,
+        };
+        let scale = chunk.font_size / 1000.0;
+        Some(((entry.char_width_1000(ch) + k) * scale, k * scale))
+    })
 }
 
 /// `text` split into characters, each with its advance in thousandths;
@@ -4328,8 +4356,8 @@ pub(super) fn render_paragraph_lines(
             .iter()
             .any(|c| c.inline_image_name.is_none() && (!c.text.is_empty() || c.underline));
 
-        // Only lines like the probes': unkerned, no letter spacing, left to
-        // right, no East Asian text, justified by widening the spaces only.
+        // Only lines like the probes': no letter spacing, left to right, no
+        // East Asian text, justified by widening the spaces only.
         // The rest keep exact positions until each gets its own probe.
         let plain_line = line.draw_order.is_empty()
             && !line.rtl_paragraph
@@ -5309,6 +5337,7 @@ mod tests {
             squeeze_line: false,
             expand_shift_return: true,
             bidi: false,
+            shaped_kerning: false,
         }
     }
     use crate::model::VertAlign;
@@ -5353,6 +5382,7 @@ mod tests {
                     expand_shift_return: true,
                     squeeze_line: false,
                     bidi: false,
+                    shaped_kerning: false,
                 },
             )
             .len()

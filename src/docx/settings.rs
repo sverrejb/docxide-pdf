@@ -18,6 +18,9 @@ pub(super) struct DocumentSettings {
     /// `w:compat/w:compatSetting[@w:name="compatibilityMode"]`: 15 = Word 2013+
     /// layout, 14 = Word 2010, lower or 0 (absent) = older.
     pub compat_mode: u32,
+    /// `w:compat/w:compatSetting[@w:name="enableOpenTypeFeatures"]`: kerned
+    /// text goes through Word's OpenType shaping (fundamentals probe 4).
+    pub open_type_features: bool,
     /// §17.15.1.57 `w:linkStyles` with no `w:attachedTemplate`: Word refreshes
     /// the styles from its own Normal.dotm when it opens the file. A named
     /// template lives on the author's machine and can't be loaded.
@@ -52,6 +55,7 @@ impl Default for DocumentSettings {
             default_lang: None,
             compress_punctuation: false,
             compat_mode: 0,
+            open_type_features: false,
             styles_from_normal_template: false,
             do_not_expand_shift_return: false,
             adjust_line_height_in_table: false,
@@ -106,6 +110,12 @@ pub(super) fn parse_settings<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> Do
             .and_then(|n| n.attribute((WML_NS, "val")))
             .and_then(|v| v.parse().ok())
             .unwrap_or(0),
+        open_type_features: compat
+            .into_iter()
+            .flat_map(|c| c.children())
+            .find(|n| n.attribute((WML_NS, "name")) == Some("enableOpenTypeFeatures"))
+            .and_then(|n| n.attribute((WML_NS, "val")))
+            .is_some_and(super::parse_on_off),
         styles_from_normal_template: wml_bool(root, "linkStyles").unwrap_or(false)
             && wml(root, "attachedTemplate").is_none(),
         do_not_expand_shift_return: compat_flag("doNotExpandShiftReturn"),

@@ -309,6 +309,8 @@ pub struct Document {
     pub compress_punctuation: bool,
     /// Word's `compatibilityMode` (see `docx::settings`).
     pub compat_mode: u32,
+    /// Word's `enableOpenTypeFeatures` (see `docx::settings`).
+    pub open_type_features: bool,
     /// The document's East Asian language is Chinese, Japanese or Korean and
     /// its default East Asian font a CJK face: Word then lets a line-ending
     /// Latin mark overflow a justified line by half (`SPACE_SQUEEZE`). With
