@@ -268,7 +268,8 @@ fn parse_chart_space(xml_content: &str, accent_colors: Vec<[u8; 3]>) -> Option<C
             .filter(|n| n.has_tag_name((CHART_NS, "dLbls")))
             .any(|d| chart_attr(d, "showVal") == Some("1")),
         data_table: chart_child(plot_area, "dTable").is_some(),
-        frame: chart_child(chart_space, "spPr").map_or(Some([0, 0, 0]), extract_line_color),
+        // Word's default outline draws grey 133 at 600 dpi (torture_test).
+        frame: chart_child(chart_space, "spPr").map_or(Some([0x85; 3]), extract_line_color),
     })
 }
 

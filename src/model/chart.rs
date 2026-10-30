@@ -82,8 +82,8 @@ pub struct Chart {
     /// `c:dTable`: a table of the values under the plot, in place of the
     /// category axis labels.
     pub data_table: bool,
-    /// The chart area's outline: Word draws one when `c:chartSpace` sets no
-    /// `c:spPr` of its own.
+    /// The chart area's outline: Word draws a grey 0.75pt one when
+    /// `c:chartSpace` sets no `c:spPr` of its own.
     pub frame: Option<[u8; 3]>,
 }
 
