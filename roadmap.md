@@ -192,7 +192,8 @@ Open queue from the large-corpus and focus-fixture rounds:
 - **`w:ind` character units** (issue #143, probes 2026-10-28,
   `apply_indent_chars`): chars beat twips at any level, an explicit 0 switches
   them off, one character is the first run's size plus the section grid's
-  `charSpace`/4096, left + hanging add up in chars mode. Numbering-level
+  `charSpace`/4096, left + hanging add up in chars mode, style `basedOn`
+  chains pass them down (#144). Numbering-level
   `*Chars` are not read; headers and footnotes use no grid delta.
 - **Trailing punctuation**: Word never lets a Latin mark hang past the margin
   (`overflowPunct` is not what it does). In a zh/ja/ko document whose East

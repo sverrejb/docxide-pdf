@@ -1475,12 +1475,14 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             .find_map(|c| own_ind_or_num.get(c).copied().flatten())
             .unwrap_or(false);
         if let Some(s) = styles.get_mut(&id) {
-            s.ind_over_numbering = ind_over_numbering;
             // The chain starts with the style itself, so `inh` already holds
-            // its own values: one field list serves both directions.
-            inherit!(s, inh);
-            s.complex = inh.complex;
-            s.tab_stops = inh.tab_stops;
+            // its own values; replacing the whole style means no accumulated
+            // field can be left behind (#144). Only the uninherited ones stay.
+            inh.ind_over_numbering = ind_over_numbering;
+            inh.based_on = s.based_on.take();
+            inh.clear_tab_positions = std::mem::take(&mut s.clear_tab_positions);
+            inh.borders = std::mem::take(&mut s.borders);
+            *s = inh;
         }
     }
 }
@@ -1643,6 +1645,31 @@ mod tests {
         resolve_based_on(&mut styles);
         assert_eq!(styles["BodyText3"].lang.as_deref(), Some("lt-LT"));
         assert_eq!(styles["BodyText3"].lang_east_asia.as_deref(), Some("ja-JP"));
+    }
+
+    #[test]
+    fn based_on_styles_inherit_indent_chars() {
+        let mut styles = HashMap::from([
+            (
+                "Parent".to_string(),
+                ParagraphStyle {
+                    indent_chars: super::super::IndentChars {
+                        first_line: Some(2.0),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            ),
+            (
+                "Child".to_string(),
+                ParagraphStyle {
+                    based_on: Some("Parent".into()),
+                    ..Default::default()
+                },
+            ),
+        ]);
+        resolve_based_on(&mut styles);
+        assert_eq!(styles["Child"].indent_chars.first_line, Some(2.0));
     }
 
     #[test]
