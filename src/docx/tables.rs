@@ -808,10 +808,10 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     super::apply_indent_chars(
                         &mut indents,
                         indent_chars,
-                        super::paragraph::indent_char_width(
+                        super::paragraph::indent_char_widths(
                             &runs,
                             para_style,
-                            &ctx.styles.defaults,
+                            &ctx.styles,
                             ctx.grid_char_delta,
                         ),
                     );

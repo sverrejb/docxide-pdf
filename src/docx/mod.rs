@@ -885,14 +885,19 @@ pub(super) fn extract_indent_chars(ind: roxmltree::Node) -> IndentChars {
 
 /// Word's character-unit indents, measured (online export probes 2026-10-28,
 /// issue #143): a non-zero `*Chars` value wins over the twips next to it, even
-/// a style's over a paragraph's direct `w:hanging`; one character is the
-/// paragraph's first run's font size (a 14pt style with 12pt runs indents
-/// 24pt for 200); and with `leftChars` or `hangingChars` in play the left
+/// a style's over a paragraph's direct `w:hanging`; `char_widths` is one
+/// character for left/right and for first line/hanging (`indent_char_widths`);
+/// and with `leftChars` or `hangingChars` in play the left
 /// value is the first line's position and the hanging (chars or twips) is
 /// added for the body, so left=480 hanging=200 hangingChars=200 and
 /// leftChars=200 hangingChars=200 start at 0/24 and 24/48pt. `firstLineChars`
 /// alone keeps the twips left.
-pub(super) fn apply_indent_chars(ind: &mut (f32, f32, f32, f32), chars: IndentChars, char_width: f32) {
+pub(super) fn apply_indent_chars(
+    ind: &mut (f32, f32, f32, f32),
+    chars: IndentChars,
+    char_widths: (f32, f32),
+) {
+    let (side_width, char_width) = char_widths;
     let on = |v: Option<f32>| v.filter(|v| *v != 0.0);
     let chars = IndentChars {
         left: on(chars.left),
@@ -902,11 +907,11 @@ pub(super) fn apply_indent_chars(ind: &mut (f32, f32, f32, f32), chars: IndentCh
     };
     let (left, right, hanging, first) = ind;
     if let Some(r) = chars.right {
-        *right = r * char_width;
+        *right = r * side_width;
     }
     let first_chars = chars.first_line.map(|f| f * char_width);
     if chars.left.is_some() || chars.hanging.is_some() {
-        let base = chars.left.map_or(0.0, |l| l * char_width);
+        let base = chars.left.map_or(0.0, |l| l * side_width);
         let hang = match (chars.hanging, first_chars) {
             (Some(h), _) => h * char_width,
             (None, Some(_)) => 0.0,
@@ -1926,7 +1931,7 @@ mod tests {
         // (left, hanging, hangingChars, leftChars, firstLineChars) → (first line x, body x)
         let case = |twips: (f32, f32), chars: IndentChars, cw: f32| {
             let mut ind = (twips.0, 0.0, twips.1, 0.0);
-            apply_indent_chars(&mut ind, chars, cw);
+            apply_indent_chars(&mut ind, chars, (cw, cw));
             (ind.0 - ind.2 + ind.3, ind.0)
         };
         let c = |l, h, f| IndentChars { left: l, right: None, hanging: h, first_line: f };
@@ -1938,6 +1943,10 @@ mod tests {
         assert_eq!(case((0.0, 0.0), c(Some(2.0), None, Some(1.0)), 12.0), (36.0, 24.0));
         assert_eq!(case((10.0, 10.0), c(None, Some(2.0), None), 18.0), (0.0, 36.0));
         assert_eq!(case((10.0, 10.0), IndentChars::default(), 12.0), (0.0, 10.0));
+        // Issue #139 probes: Normal 10.5pt, 7pt runs, leftChars=400 hangingChars=200
+        let mut ind = (0.0, 0.0, 0.0, 0.0);
+        apply_indent_chars(&mut ind, c(Some(4.0), Some(2.0), None), (10.5, 7.0));
+        assert_eq!((ind.0 - ind.2, ind.0), (42.0, 56.0));
     }
 
     #[test]

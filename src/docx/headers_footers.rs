@@ -250,10 +250,10 @@ fn parse_notes_simple<R: Read + Seek>(
                     hanging: direct_chars.hanging.or(style_chars.hanging),
                     first_line: direct_chars.first_line.or(style_chars.first_line),
                 },
-                super::paragraph::indent_char_width(
+                super::paragraph::indent_char_widths(
                     &parsed.runs,
                     para_style,
-                    &styles.defaults,
+                    styles,
                     fn_ctx.grid_char_delta,
                 ),
             );
