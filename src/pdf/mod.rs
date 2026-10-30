@@ -3779,8 +3779,8 @@ fn render_paragraph_block(
         inter_gap = 0.0;
     }
 
-    // Word treats consecutive paragraphs with identical border and indent
-    // settings as one border group: top padding/rule only on the first, bottom
+    // Word treats consecutive paragraphs with identical borders and matching
+    // box edges as one border group: top padding/rule only on the first, bottom
     // padding/rule only on the last, and a `between` rule (if any) at the joins.
     let prev_borders_match = prev_para.is_some_and(|pp| joins_border_group(pp, para));
     let next_borders_match = next_para.is_some_and(|np| joins_border_group(para, np));
@@ -4421,8 +4421,11 @@ fn render_paragraph_block(
         let (shd_left_outset, shd_right_outset) = side_border_outsets(&para.borders, false);
         let shd_left = col_x - shd_left_outset;
         let shd_right = col_x + col_w + shd_right_outset;
+        // Only a group member with the same fill closes the gap above:
+        // renewable_dispatch's blue headings join the unshaded list item
+        // above them in a (borderless) group, and Word leaves that gap white.
         let shd_top = state.pb.slot_top
-            + if prev_borders_match {
+            + if prev_borders_match && prev_para.is_some_and(|pp| pp.shading == para.shading) {
                 applied_inter_gap
             } else {
                 0.0

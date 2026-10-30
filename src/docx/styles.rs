@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::{Read, Seek};
 
 use crate::model::{
-    Alignment, CellBorder, LineSpacing, ParagraphBorders, TabStop, TextFill, TextGlow, TextOutline,
+    Alignment, CellBorder, LineSpacing, TabStop, TextFill, TextGlow, TextOutline,
     TextShadow,
 };
 
@@ -214,7 +214,7 @@ pub(super) struct ParagraphStyle {
     pub(super) indent_first_line: Option<f32>,
     /// Character-unit indents, resolved per paragraph (`apply_indent_chars`).
     pub(super) indent_chars: super::IndentChars,
-    pub(super) borders: ParagraphBorders,
+    pub(super) borders: super::ParagraphBorderSides,
     pub(super) shading: Option<[u8; 3]>,
     pub(super) based_on: Option<String>,
     pub(super) kern_threshold: Option<f32>,
@@ -1040,7 +1040,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                     .and_then(|n| n.attribute((WML_NS, "beforeAutospacing")).map(parse_on_off));
                 let space_after_autospacing = spacing
                     .and_then(|n| n.attribute((WML_NS, "afterAutospacing")).map(parse_on_off));
-                let borders = ppr.and_then(parse_paragraph_borders).unwrap_or_default();
+                let borders = ppr.map(parse_paragraph_borders).unwrap_or_default();
                 let shading = ppr.and_then(|n| wml(n, "shd")).and_then(super::shd_color);
 
                 let RunProps {
@@ -1458,6 +1458,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     ic.hanging = c.hanging;
                     ic.first_line = c.first_line;
                 }
+                inh.borders = s.borders.over(&inh.borders);
                 // Tab stops are additive: accumulate from ancestors, child overrides at same pos
                 // Clear tabs remove inherited tabs at matching positions
                 merge_tab_stops(
@@ -1481,7 +1482,6 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             inh.ind_over_numbering = ind_over_numbering;
             inh.based_on = s.based_on.take();
             inh.clear_tab_positions = std::mem::take(&mut s.clear_tab_positions);
-            inh.borders = std::mem::take(&mut s.borders);
             *s = inh;
         }
     }

@@ -195,6 +195,12 @@ Open queue from the large-corpus and focus-fixture rounds:
   `charSpace`/4096, left + hanging add up in chars mode, style `basedOn`
   chains pass them down (#144). Numbering-level
   `*Chars` are not read; headers and footnotes use no grid delta.
+- **Paragraph borders** (probe 2026-10-30, `paragraph-borders-inherited`):
+  pBdr merges per side through basedOn and from direct formatting, none/nil
+  removing a side; boxes join when their edges line up, whatever the
+  indents. Open: `val="double"` is drawn as one line; header/footer
+  paragraphs never join a group; renewable_dispatch's last blue "CBIR
+  Process" heading bar is not drawn at all (white text on white).
 - **Trailing punctuation**: Word never lets a Latin mark hang past the margin
   (`overflowPunct` is not what it does). In a zh/ja/ko document whose East
   Asian font is a CJK face, a justified line's word-share limit grows by half

@@ -501,17 +501,54 @@ pub(super) fn parse_one_border(node: roxmltree::Node) -> Option<ParagraphBorder>
     })
 }
 
-/// Returns `None` when the pBdr element is absent, `Some` when present
-/// (even if all individual borders are none/nil).
-pub(super) fn parse_paragraph_borders(ppr: roxmltree::Node) -> Option<ParagraphBorders> {
-    let pbdr = wml(ppr, "pBdr")?;
-    Some(ParagraphBorders {
-        top: wml(pbdr, "top").and_then(parse_one_border),
-        bottom: wml(pbdr, "bottom").and_then(parse_one_border),
-        left: wml(pbdr, "left").and_then(parse_one_border),
-        right: wml(pbdr, "right").and_then(parse_one_border),
-        between: wml(pbdr, "between").and_then(parse_one_border),
-    })
+/// The pBdr sides one level of the style hierarchy sets: `None` = not set
+/// here, `Some(None)` = set to none/nil. Word merges them per side through
+/// basedOn and from direct formatting onto the style (probe 2026-10-30).
+#[derive(Clone, Debug, Default)]
+pub(super) struct ParagraphBorderSides {
+    top: Option<Option<ParagraphBorder>>,
+    bottom: Option<Option<ParagraphBorder>>,
+    left: Option<Option<ParagraphBorder>>,
+    right: Option<Option<ParagraphBorder>>,
+    between: Option<Option<ParagraphBorder>>,
+}
+
+impl ParagraphBorderSides {
+    /// The sides set here, the rest from `base`.
+    pub(super) fn over(&self, base: &Self) -> Self {
+        let side = |own: &Option<_>, base: &Option<_>| own.clone().or_else(|| base.clone());
+        Self {
+            top: side(&self.top, &base.top),
+            bottom: side(&self.bottom, &base.bottom),
+            left: side(&self.left, &base.left),
+            right: side(&self.right, &base.right),
+            between: side(&self.between, &base.between),
+        }
+    }
+
+    pub(super) fn resolve(self) -> ParagraphBorders {
+        ParagraphBorders {
+            top: self.top.flatten(),
+            bottom: self.bottom.flatten(),
+            left: self.left.flatten(),
+            right: self.right.flatten(),
+            between: self.between.flatten(),
+        }
+    }
+}
+
+pub(super) fn parse_paragraph_borders(ppr: roxmltree::Node) -> ParagraphBorderSides {
+    let Some(pbdr) = wml(ppr, "pBdr") else {
+        return ParagraphBorderSides::default();
+    };
+    let side = |name| wml(pbdr, name).map(parse_one_border);
+    ParagraphBorderSides {
+        top: side("top"),
+        bottom: side("bottom"),
+        left: side("left"),
+        right: side("right"),
+        between: side("between"),
+    }
 }
 
 pub(super) fn parse_cell_border(parent: roxmltree::Node, name: &str) -> CellBorder {
@@ -1557,6 +1594,19 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn paragraph_borders_merge_per_side() {
+        let sides = |pbdr: &str| {
+            let xml = format!(r#"<w:pPr xmlns:w="{WML_NS}"><w:pBdr>{pbdr}</w:pBdr></w:pPr>"#);
+            parse_paragraph_borders(roxmltree::Document::parse(&xml).unwrap().root_element())
+        };
+        let parent = sides(r#"<w:top w:val="single"/><w:left w:val="single"/>"#);
+        let child = sides(r#"<w:left w:val="nil"/><w:bottom w:val="single"/>"#);
+        let b = child.over(&parent).resolve();
+        assert!(b.top.is_some() && b.bottom.is_some());
+        assert!(b.left.is_none() && b.right.is_none());
+    }
 
     #[test]
     fn strict_namespaces_read_as_transitional() {

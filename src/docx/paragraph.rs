@@ -460,10 +460,12 @@ pub(super) fn widow_control(
 }
 
 pub(super) fn borders(ppr: Option<roxmltree::Node>, para_style: Option<&ParagraphStyle>) -> crate::model::ParagraphBorders {
-    // A paragraph-level pBdr element overrides the style borders even when
-    // all individual borders are set to val="none" (parsed as None).
-    ppr.and_then(parse_paragraph_borders)
-        .unwrap_or_else(|| para_style.map(|s| s.borders.clone()).unwrap_or_default())
+    let own = ppr.map(parse_paragraph_borders).unwrap_or_default();
+    match para_style {
+        Some(s) => own.over(&s.borders),
+        None => own,
+    }
+    .resolve()
 }
 
 /// `w:keepLines`, direct or from the style.

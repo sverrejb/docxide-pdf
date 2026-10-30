@@ -105,10 +105,6 @@ pub(super) fn borders_match(a: &ParagraphBorders, b: &ParagraphBorders) -> bool 
         && border_eq(&a.between, &b.between)
 }
 
-/// Word merges the borders of adjacent paragraphs into one box only when their
-/// border *and* indentation settings are identical (Paragraph dialog's Indentation
-/// group); a differing indent — even by a few twips — starts a new border group
-/// that gets its own top/bottom rule.
 /// §17.3.1.9: contextualSpacing drops a paragraph's spacing next to a paragraph
 /// of the same style (a Title line keeps it beside a Normal one).
 pub(super) fn drops_contextual_spacing(para: &Paragraph, neighbour: Option<&Paragraph>) -> bool {
@@ -151,13 +147,19 @@ pub(super) fn effective_space_after(para: &Paragraph, next: Option<&Paragraph>) 
     }
 }
 
+/// Word merges adjacent paragraphs with identical borders into one box when
+/// their boxes line up: a box edge differing by a few twips starts a new group
+/// with its own top/bottom rule, but the indents themselves may differ —
+/// clean_energy_regulator_act's bullets (left 1559tw, hanging 425) and
+/// sub-paragraphs (2070, 936) both start at 1134tw and share one box.
 pub(super) fn joins_border_group(a: &Paragraph, b: &Paragraph) -> bool {
     let same = |x: f32, y: f32| (x - y).abs() < 0.01;
+    let box_start =
+        |p: &Paragraph| p.start_indent() + (p.indent_first_line - p.indent_hanging).min(0.0);
+    let end_indent = |p: &Paragraph| p.indent_left + p.indent_right - p.start_indent();
     borders_match(&a.borders, &b.borders)
-        && same(a.indent_left, b.indent_left)
-        && same(a.indent_right, b.indent_right)
-        && same(a.indent_hanging, b.indent_hanging)
-        && same(a.indent_first_line, b.indent_first_line)
+        && same(box_start(a), box_start(b))
+        && same(end_indent(a), end_indent(b))
 }
 
 /// The paragraph's runs and those of the paragraphs in its textboxes, at any depth.
@@ -212,5 +214,13 @@ mod tests {
         let mut other = bordered(0.0);
         other.borders.bottom.as_mut().unwrap().color = [0, 0, 0];
         assert!(!joins_border_group(&bordered(0.0), &other));
+        let hanging = |left: f32, hanging: f32| Paragraph {
+            indent_hanging: hanging,
+            ..bordered(left)
+        };
+        assert!(joins_border_group(
+            &hanging(77.95, 21.25),
+            &hanging(103.5, 46.8)
+        ));
     }
 }
