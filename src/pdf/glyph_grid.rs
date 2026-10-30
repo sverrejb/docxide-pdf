@@ -25,14 +25,22 @@ const CHUNK_PX: f64 = 1023.5;
 /// 36pt margin, in every reference checked).
 const PHASE_PT: f64 = 0.025;
 
+/// A glyph's own device advance rounds up from 0.46 px, not 0.5: over the
+/// fixture references 236/512 px goes up and 235/512 down in every face and
+/// size (bar a few hinted glyphs), which halves the wrong advances.
+const ROUND_UP_FROM: f64 = 0.46;
+
 /// Device advances (px) of glyphs whose exact origins are `ideal` (absolute
-/// px) and exact advances `exact` (px): each glyph keeps its rounded advance
+/// px) and exact advances `exact` (px): each glyph keeps its device advance
 /// unless the glyph after next would then land 2 px or more from its rounded
 /// exact place, measured from the chunk start; then it moves 1 px toward it.
 fn device_steps(ideal: &[f64], exact: &[f64]) -> Vec<i64> {
     let n = exact.len();
     let ideal_end = ideal[n - 1] + exact[n - 1];
-    let base: Vec<i64> = exact.iter().map(|w| w.round() as i64).collect();
+    let base: Vec<i64> = exact
+        .iter()
+        .map(|w| w.floor() as i64 + i64::from(w.fract() >= ROUND_UP_FROM))
+        .collect();
     let mut starts = vec![false; n];
     starts[0] = true;
     let mut chunk0 = 0;

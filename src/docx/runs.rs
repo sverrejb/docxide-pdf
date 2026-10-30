@@ -1037,7 +1037,10 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
         if can_merge {
             let prev = result.last_mut().unwrap();
             let base = prev.text.len();
-            prev.source_breaks.push(base);
+            if prev.rsid != run.rsid {
+                prev.source_breaks.push(base);
+            }
+            prev.rsid = run.rsid;
             prev.source_breaks.extend(run.source_breaks.iter().map(|b| base + b));
             prev.text.push_str(&run.text);
         } else {
@@ -1215,7 +1218,11 @@ pub(super) fn parse_runs<R: Read + Seek>(
             char_style_id_str.and_then(|id| ctx.styles.character_styles.get(id))
         };
 
-        let fmt = defaults.resolve_run_format(rpr, char_style, char_style_id_str, ctx.theme);
+        let mut fmt = defaults.resolve_run_format(rpr, char_style, char_style_id_str, ctx.theme);
+        fmt.rsid = ["rsidR", "rsidRPr"].iter().fold(0, |acc, a| {
+            let v = run_node.attribute((WML_NS, *a));
+            acc << 32 | v.and_then(|v| u32::from_str_radix(v, 16).ok()).unwrap_or(0) as u64
+        });
 
         // A STYLEREF fldSimple on its own is one field run, re-evaluated per
         // page like the complex form.
@@ -1931,6 +1938,23 @@ mod tests {
         assert_eq!(merged.len(), 1);
         assert_eq!(merged[0].text, "green continues");
         assert_eq!(merged[0].shading, c);
+    }
+
+    #[test]
+    fn merge_compatible_runs_keeps_rsid_boundaries() {
+        let with_rsid = |text: &str, rsid| Run {
+            rsid,
+            ..run(text, None, None)
+        };
+        let runs = vec![
+            with_rsid("one ", 1),
+            with_rsid("two ", 1),
+            with_rsid("thr", 2),
+            with_rsid("ee", 1),
+        ];
+        let merged = merge_compatible_runs(runs);
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].source_breaks, vec![8, 11]);
     }
 
     #[test]

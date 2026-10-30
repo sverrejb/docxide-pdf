@@ -169,6 +169,7 @@ its own probe before the rule is applied there.
   (skrifa would be a new dependency; FreeType does not match anyway).
   Nearest pixel first; measure what the exceptions cost.
 - `merge_compatible_runs` is fine: run boundaries do not matter to the rule.
+  (They do to the writer; see the corrections below.)
 
 Kit: `tests/output/fundamentals/glyph_grid/` — `mk.py`/`glyph_grid.docx`
 (A/B/C/D rows), `mk2.py`/`half_sizes.docx`, `an.py` (per-row steps),
@@ -176,9 +177,63 @@ Kit: `tests/output/fundamentals/glyph_grid/` — `mk.py`/`glyph_grid.docx`
 [-v|-d|-j|-t]` (the rule vs a real reference, line by line), `widths.py`
 (the `/Widths` Word wrote), `hint288.py` (FreeType hinted advances).
 
+### Corrections and implementation (2026-10-30)
+
+Checked against every online fixture reference (pages 1–2, 321k in-run
+steps on unstretched lines; kit scripts `thresh*.py`, `boundary.py`,
+`aggb.py`, `xcompare.py`), not only the probe. Three items above were wrong
+or incomplete:
+
+- **Item 2, device advance: rounds up from 0.46 px, not 0.5.** Grouping the
+  clear-cut glyph classes by the fraction of their exact px advance, 235/512
+  (0.4590) goes down and 236/512 (0.4609) goes up in every face and size
+  (Cambria 11 "e" 21.463 → 22, Arial 11 "a" 24.471 → 25, Calibri 11 "A"
+  23.459 → 23). Wrong advances: 12.9 % → 6.6 % (Cambria 11 26.9 → 0.5 %,
+  Aptos 12 31 → 1.5 %, Arial 11 42 → 10 %). The probe's "hinted" Cambria 12
+  "o" and Aptos 12 "i" are this rule; the probe now fails 26 of 10,010
+  steps. The rounded ideal in the correction (item 3) and the chunk starts
+  stay half-up (8.3 % if they take the 0.46 too). A scale factor fits worse
+  (k = 1.002: 7.4 %). Not hinting either: the vendored Cambria has no
+  `fpgm`/`prep`. The genuine hinted exceptions left are few (Times New Roman
+  12 "F" 26.70 → 26, "G" 34.66 → 34; Arial 11 "g"/"q" stay down).
+- **Item 5, writer.** Fitted on observed device steps the writer writes, for
+  each advance, adj = round(W − D) half away from zero when W > D, one more
+  when W < D, nothing when |W − D| < 0.5 (`models_seg2.py`). Small gaps
+  (|W − D| ≤ 3) are sometimes left uncorrected in Cambria 11, but that dead
+  band fits worse once D is predicted (0.083 vs 0.066 pt), so it is left out.
+- **Item 1 / run boundaries.** The writer restarts (new `Tm`) at Word's own
+  run boundaries, and those are where adjacent source runs differ in
+  `w:rsidR` or `w:rsidRPr` (probe 3, `tests/output/fundamentals/runsplit/`:
+  per-word runs with no or equal rsids give one `Tm` per line, alternating
+  ones a `Tm` per word, even mid-word). So `merge_compatible_runs` must
+  keep those boundaries: `Run::source_breaks`/`Run::rsid`. A new `Tm` lands
+  0.05–0.2 pt right of the device position, growing along the line; no
+  quantisation of the advances reproduces it (`tm4.py`), so the engine
+  starts it on the device grid.
+
+Pooled in-run error against the references (`aggb.py`, glyphs anchored at
+Word's run starts): exact advances 0.146 pt, device grid 0.112, device grid
+plus writer 0.066; better than exact in every face/size bucket.
+
+Implemented in `src/pdf/glyph_grid.rs` (the rule) and `device_grid` in
+`src/pdf/layout.rs` (which chunks, sequences of chunks set edge to edge or a
+plain space apart, run starts). Applies to lines without justification,
+kerning, letter spacing, text scaling, RTL or East Asian text. Line starts
+take Word's +0.025 pt phase.
+
+### Justified lines (probe 2, `tests/output/fundamentals/justify/`)
+
+Five faces × left/justified/per-word runs/double spaces/long words/"eee"
+words. Word draws a justified line as one `Tm` (with per-word runs too),
+every space as the same device width (12 + 8.12 px → 20 px for Times New
+Roman 12 on one line), and the ±1 px corrections land on letters, tracking
+the exact positions with the stretch spread evenly. But the look-ahead rule
+over those positions gets 25–27 % of the steps wrong whatever the variant
+(spaces fixed or corrected, grid phase, look-ahead 1–4, threshold 1–3;
+`just2..5.py`). Open: justified lines keep exact positions.
+
 ## 3. Queue after probe 1
 
-1. Justified lines: how Word sizes the stretched spaces (exact share,
-   twips, or device px) — needed before the rule can be applied to
-   justified paragraphs (czech_census, most legal fixtures).
-2. Items 2–5 of §1, in that order; each gets its own probe kit and section.
+1. Justified lines (above): the correction cadence on stretched lines.
+2. Kerning pairs and `Tc` on the device grid (each needs a probe).
+3. Items 2–5 of §1, in that order; each gets its own probe kit and section.

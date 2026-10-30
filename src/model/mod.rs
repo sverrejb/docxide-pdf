@@ -600,10 +600,12 @@ pub struct HorizontalRule {
 #[derive(Clone)]
 pub struct Run {
     pub text: String,
-    /// Byte offsets in `text` where a source run merged into this one began.
-    /// Word's PDF writer restarts its glyph positions at each source run
-    /// (`pdf::glyph_grid`), so drawing needs them after the merge.
+    /// Byte offsets in `text` where a merged source run with another `rsid`
+    /// began. Word keeps such runs apart and its PDF writer restarts its glyph
+    /// positions at each (`pdf::glyph_grid`), so drawing needs them after the merge.
     pub source_breaks: Vec<usize>,
+    /// The `w:rsidR` and `w:rsidRPr` of the source run (of its last part once merged).
+    pub rsid: u64,
     pub font_size: f32,
     pub font_name: String,
     pub east_asia_font_name: Option<String>,
@@ -751,6 +753,7 @@ impl Default for Run {
         Self {
             text: String::new(),
             source_breaks: Vec::new(),
+            rsid: 0,
             font_size: 0.0,
             font_name: String::new(),
             east_asia_font_name: None,
