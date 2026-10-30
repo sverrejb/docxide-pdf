@@ -561,6 +561,7 @@ impl RenderContext<'_> {
             expand_shift_return: !self.do_not_expand_shift_return,
             bidi: para.bidi,
             shaped_kerning: self.open_type_features,
+            break_words: para.break_words,
         }
     }
 }

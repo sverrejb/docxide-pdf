@@ -536,6 +536,8 @@ pub struct Paragraph {
     pub keep_lines: bool,
     /// `w:suppressLineNumbers`: no margin numbers, and its lines are not counted.
     pub suppress_line_numbers: bool,
+    /// `w:wordWrap w:val="0"`: a word breaks wherever the line ends.
+    pub break_words: bool,
     pub widow_control: bool,
     pub line_spacing: Option<LineSpacing>,
     pub image: Option<EmbeddedImage>,

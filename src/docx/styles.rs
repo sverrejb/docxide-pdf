@@ -202,6 +202,8 @@ pub(super) struct ParagraphStyle {
     pub(super) contextual_spacing: Option<bool>,
     pub(super) keep_next: Option<bool>,
     pub(super) keep_lines: Option<bool>,
+    /// `w:wordWrap`; false breaks words at the line end.
+    pub(super) word_wrap: Option<bool>,
     pub(super) widow_control: Option<bool>,
     pub(super) text_alignment: Option<crate::model::TextAlignment>,
     pub(super) page_break_before: Option<bool>,
@@ -1079,6 +1081,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                 let contextual_spacing = ppr.and_then(|ppr| wml_bool(ppr, "contextualSpacing"));
                 let keep_next = ppr.and_then(|ppr| wml_bool(ppr, "keepNext"));
                 let keep_lines = ppr.and_then(|ppr| wml_bool(ppr, "keepLines"));
+                let word_wrap = ppr.and_then(|ppr| wml_bool(ppr, "wordWrap"));
                 let widow_control = ppr.and_then(|ppr| wml_bool(ppr, "widowControl"));
                 let text_alignment = ppr
                     .and_then(|ppr| wml_attr(ppr, "textAlignment"))
@@ -1150,6 +1153,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         contextual_spacing,
                         keep_next,
                         keep_lines,
+                        word_wrap,
                         widow_control,
                         text_alignment,
                         page_break_before,
@@ -1417,6 +1421,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     contextual_spacing,
                     keep_next,
                     keep_lines,
+                    word_wrap,
                     page_break_before,
                     num_id,
                     num_ilvl,

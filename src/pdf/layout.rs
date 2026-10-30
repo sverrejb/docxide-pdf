@@ -1741,6 +1741,8 @@ pub(super) struct CjkLayout {
     /// `enableOpenTypeFeatures`: kerned text goes through Word's shaping path
     /// (see `TextLine::shaped_kerning`).
     pub(super) shaped_kerning: bool,
+    /// `Paragraph::break_words`.
+    pub(super) break_words: bool,
 }
 
 /// How far Word 2013+ narrows the spaces of a justified line to keep its
@@ -2506,8 +2508,15 @@ pub(super) fn build_paragraph_lines(
                 words.push_front((0, source));
                 continue;
             }
-            if current_chunks.is_empty() && !in_right_region && ww > line_room && !fits_right {
-                let room = line_room - pending_space_w;
+            // Under wordWrap=0 a word that overruns the rest of the line breaks
+            // there too (torture_test: "…aufga" / "benübertragungsgesetz").
+            let room = line_room - current_x - pending_space_w;
+            let cut_here = if current_chunks.is_empty() {
+                ww > line_room
+            } else {
+                cjk.break_words && ww > room
+            };
+            if cut_here && !in_right_region && !fits_right {
                 // Cut the letters as written, not the capitals drawn (ß → SS
                 // changes length), so each half keeps its own /ActualText.
                 if let Some(cut) = fitting_prefix_len(source, room, |w| width(&caps_word(run, w))) {
@@ -2682,7 +2691,9 @@ pub(super) fn build_paragraph_lines(
                 && right_region_for(lines.len()).is_none()
             {
                 let dx = current_chunks[word_start].x_offset;
-                if word_start > 0 {
+                // Under wordWrap=0 the part already placed stays, and the rest
+                // breaks at the line end like a single-run word.
+                if word_start > 0 && !cjk.break_words {
                     let carried: Vec<WordChunk> = current_chunks.drain(word_start..).collect();
                     lines.push(finish_dual_line(
                         &mut current_chunks,
@@ -5537,6 +5548,7 @@ mod tests {
             expand_shift_return: true,
             bidi: false,
             shaped_kerning: false,
+            break_words: false,
         }
     }
     use crate::model::VertAlign;
@@ -5582,6 +5594,7 @@ mod tests {
                     squeeze_line: false,
                     bidi: false,
                     shaped_kerning: false,
+                    break_words: false,
                 },
             )
             .len()
