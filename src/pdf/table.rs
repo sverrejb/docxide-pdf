@@ -17,8 +17,8 @@ use super::table_layout::{
     CELL_START, CellContentItem, CellCursor, CellFloatingImageLayout, CellLayout,
     CellParagraphLayout, Chunk, HfSubstitution, RowLayout, RowPiece, apply_pct_width,
     auto_fit_columns, cell_span_width, cell_x_offset, chunk_space_before, compute_merge_spans,
-    compute_row_layouts, cursor_chunks, find_cell_split, item_chunk_height, min_content_widths,
-    para_block_height, partial_row_height, row_pieces, squeeze_to_width,
+    compute_row_layouts, cursor_chunks, find_cell_split, item_chunk_height, keep_chain_end,
+    min_content_widths, para_block_height, partial_row_height, row_pieces, squeeze_to_width,
 };
 use super::tagging::{CellTagger, TableTags, Tags};
 
@@ -2132,18 +2132,21 @@ pub(super) fn render_table(
                                   emb: &mut f32| {
         let ncells = layout.cells.len();
         let mut starts = vec![CellCursor::default(); ncells];
+        // A page that follows one nothing fitted on must take something.
+        let mut force = false;
         loop {
             let avail = pb.slot_top - *emb;
             let mut ends = Vec::with_capacity(ncells);
             let mut all_done = true;
 
             for ci in 0..ncells {
-                let end = find_cell_split(&layout.cells[ci], &starts[ci], avail);
+                let end = find_cell_split(&layout.cells[ci], &starts[ci], avail, force);
                 if end.item < layout.cells[ci].items.len() {
                     all_done = false;
                 }
                 ends.push(end);
             }
+            force = ends == starts;
 
             let page = pb.all_contents.len();
             render_partial_row(
@@ -2243,17 +2246,10 @@ pub(super) fn render_table(
         // Rows with keepNext only in later cells split as usual (a 199-page
         // corpus document's syllabus tables). ponytail: first-cell rule fits
         // the three measured documents; probe if one disagrees.
-        let keeps_next = |r: &TableRow| {
-            r.cells.first().is_some_and(|c| {
-                c.content
-                    .iter()
-                    .any(|b| matches!(b, Block::Paragraph(p) if p.keep_next))
-            })
-        };
-        let chain_moves = !at_page_top && keeps_next(row) && {
+        let chain_moves = !at_page_top && row_layouts[ri].keeps_next && {
             let mut k = ri;
             let mut h = 0.0;
-            while k < table.rows.len() && keeps_next(&table.rows[k]) {
+            while k < table.rows.len() && row_layouts[k].keeps_next {
                 h += row_layouts[k].height;
                 k += 1;
             }
@@ -2301,7 +2297,7 @@ pub(super) fn render_table(
                 let end = match it {
                     CellContentItem::Paragraph(p) if p.lines.len() >= 2 * start_lines(p) && !p.keep_lines => Some(start_lines(p)),
                     CellContentItem::Paragraph(_) => None,
-                    CellContentItem::NestedTable { .. } => Some(1),
+                    CellContentItem::NestedTable { rows, .. } => Some(keep_chain_end(rows, 0)),
                 };
                 c.cm.top
                     + c.cm.bottom
@@ -2327,8 +2323,9 @@ pub(super) fn render_table(
             matches!(c.items.first(), Some(CellContentItem::NestedTable { rows, .. })
                 if rows.first().is_some_and(|r| r.split_min.is_some()))) && {
             let ends: Vec<CellCursor> = layout.cells.iter()
-                .map(|c| find_cell_split(c, &CELL_START, available_h)).collect();
-            partial_row_height(layout, &[], &ends) <= available_h
+                .map(|c| find_cell_split(c, &CELL_START, available_h, false)).collect();
+            ends.iter().any(|e| *e != CELL_START)
+                && partial_row_height(layout, &[], &ends) <= available_h
         });
         // Word splits with one line of room: nabl's "Remarks" row breaks
         // between its paragraphs with 30pt left. ponytail: 14pt (a line) guard
@@ -2707,6 +2704,7 @@ mod floating_nested_visibility_tests {
                 height: 12.0,
                 cells: vec![],
                 split_min: None,
+                keeps_next: false,
             }],
             space_before: 0.0,
             floating_offset: Some(0.0),

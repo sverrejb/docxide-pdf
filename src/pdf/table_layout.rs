@@ -878,6 +878,20 @@ pub(super) struct RowLayout {
     /// bullets break at the foot of a page, stem_partnerships' 76.55pt row
     /// and traditional_skills' form rows move whole).
     pub(super) split_min: Option<f32>,
+    /// The first cell holds a keepNext paragraph: the row breaks only
+    /// together with the next (`table::render_table`'s rule; issue #145's
+    /// nested panels).
+    pub(super) keeps_next: bool,
+}
+
+/// The index after the run of rows from `start` that keep with their
+/// successor: a chain that moves as one.
+pub(super) fn keep_chain_end(rows: &[RowLayout], start: usize) -> usize {
+    let mut end = start + 1;
+    while end < rows.len() && rows[end - 1].keeps_next {
+        end += 1;
+    }
+    end
 }
 
 /// When provided, field codes in header/footer table runs are substituted with
@@ -2012,6 +2026,11 @@ pub(super) fn compute_row_layouts(
                 cells,
                 split_min: (!row.cant_split && !row.height_exact)
                     .then(|| row.height.map_or(0.0, |h| h + insets)),
+                keeps_next: row.cells.first().is_some_and(|c| {
+                    c.content
+                        .iter()
+                        .any(|b| matches!(b, Block::Paragraph(p) if p.keep_next))
+                }),
             }
         })
         .collect();
@@ -2355,11 +2374,15 @@ pub(super) fn chunk_space_before(item: &CellContentItem, pi: usize, start: &Cell
 /// (mode 14) a row starts with as many lines as fit, one included, and one
 /// may follow alone (Word online probes 2026-10-22 with 1-3 lines of room,
 /// widowControl set or absent; advocacy's two-line heading splits 1/1).
-/// A keepLines paragraph moves whole. Always progresses by at least one item.
+/// A keepLines paragraph moves whole. Progresses by at least one item, except
+/// that a nested table whose leading keep-with-next rows do not fit stays
+/// whole for the next page (`start` comes back) unless `force` says this page
+/// is that next page.
 pub(super) fn find_cell_split(
     cell: &CellLayout,
     start: &CellCursor,
     available_h: f32,
+    force: bool,
 ) -> CellCursor {
     let cm = &cell.cm;
     let done = CellCursor::at(cell.items.len(), 0);
@@ -2466,7 +2489,23 @@ pub(super) fn find_cell_split(
                 r += 1;
                 row_start = &[];
             }
-            if r < rows.len() && rows[r].split_min.is_some_and(|m| available_h - used >= m) {
+            // Rows keeping with their successor move with the row that did
+            // not fit (issue #145's panels); a chain too tall for any page
+            // breaks where it must once it has a page of its own.
+            let fits = r;
+            while r > l0 && rows[r - 1].keeps_next {
+                r -= 1;
+            }
+            if r < fits && r == l0 && first && *start == CELL_START {
+                if !force {
+                    return start.clone();
+                }
+                r = fits;
+            }
+            if r == fits
+                && r < rows.len()
+                && rows[r].split_min.is_some_and(|m| available_h - used >= m)
+            {
                 let starts: Vec<CellCursor> = (0..rows[r].cells.len())
                     .map(|ci| row_start.get(ci).unwrap_or(&CELL_START).clone())
                     .collect();
@@ -2474,7 +2513,7 @@ pub(super) fn find_cell_split(
                     .cells
                     .iter()
                     .zip(&starts)
-                    .map(|(c, s)| find_cell_split(c, s, available_h - used))
+                    .map(|(c, s)| find_cell_split(c, s, available_h - used, force))
                     .collect();
                 if ends != starts
                     && used + partial_row_height(&rows[r], &starts, &ends) <= available_h
@@ -2842,7 +2881,7 @@ mod tests {
             trailing_space_after: 0.0,
             text_direction: TextDirection::default(),
         };
-        let split = |start, avail| find_cell_split(&cell, &start, avail);
+        let split = |start, avail| find_cell_split(&cell, &start, avail, false);
         let at = CellCursor::at;
 
         // the heading's own space_before (5, the cell opens with it) + heading
@@ -2912,6 +2951,7 @@ mod floating_nested_tests {
                 height,
                 cells: vec![],
                 split_min: None,
+                keeps_next: false,
             }],
             space_before: gap,
             floating_offset,
@@ -2933,13 +2973,14 @@ mod floating_nested_tests {
                 text_direction: TextDirection::LrTb,
             }],
             split_min: None,
+            keeps_next: false,
         };
-        let split = find_cell_split(&row.cells[0], &CELL_START, 30.0);
+        let split = find_cell_split(&row.cells[0], &CELL_START, 30.0, false);
         assert_eq!(split.item, 1);
         assert!((partial_row_height(&row, &[], &[split.clone()]) - 12.0).abs() < 0.001);
         assert!((partial_row_height(&row, &[split.clone()], &[]) - 48.0).abs() < 0.001);
         assert!((partial_row_height(&row, &[], &[]) - 66.35).abs() < 0.001);
-        assert_eq!(find_cell_split(&row.cells[0], &split, 48.0).item, 2);
+        assert_eq!(find_cell_split(&row.cells[0], &split, 48.0, false).item, 2);
     }
 
     #[test]
@@ -2966,11 +3007,12 @@ mod floating_nested_tests {
                 text_direction: TextDirection::LrTb,
             }],
             split_min: None,
+            keeps_next: false,
         };
         let start = CellCursor::at(1, 0);
         assert!((partial_row_height(&row, &[start.clone()], &[]) - 70.0).abs() < 0.001);
-        assert_eq!(find_cell_split(&row.cells[0], &start, 70.01).item, 4);
-        assert_eq!(find_cell_split(&row.cells[0], &start, 69.9).item, 3);
+        assert_eq!(find_cell_split(&row.cells[0], &start, 70.01, false).item, 4);
+        assert_eq!(find_cell_split(&row.cells[0], &start, 69.9, false).item, 3);
     }
     #[test]
     fn bottom_border_band_belongs_only_to_the_last_line_chunk() {
