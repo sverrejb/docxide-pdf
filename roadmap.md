@@ -264,7 +264,13 @@ Open queue from the large-corpus and focus-fixture rounds:
   `char_justify_gaps`). Kashida justification changes Word's line breaks
   (needs kashida metrics). thaiDistribute on Thai text is untested.
 - `eastAsiaTheme="minorHAnsi"` (997 runs in the corpus) is ignored by
-  `resolve_east_asia_font`.
+  `resolve_east_asia_font`. Resolving every slot (tried 2026-10-31) moved 4
+  fixtures by under 0.01 J, none towards Word: in arizona p4 a run with
+  explicit Calibri rFonts and a following run inheriting Calibri now share a
+  font key and merge (both rsid 0), so the glyph-grid rounding no longer
+  restarts between them and "(S2.E1.3-" sits 0.09pt left of Word's. Word
+  restarts at that source run boundary though no rsid differs: probe whether
+  every `w:r` boundary restarts the writer's rounding before revisiting this.
 - Missing fonts: names with `;` (Word takes "Open Sans;Arial" literally), and
   "Open Sans" → Segoe UI (`current_focus/merge-regressions.md` item 5).
   Courier → Courier New is Windows' substitute, unverified for Mac Word.
