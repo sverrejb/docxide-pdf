@@ -1074,6 +1074,9 @@
   "cases/center-body-list-height-center-space1": [
     "02e906bd7005ebbe803e17865bd5c4204efa93e1c5db5021daf372e23eeb81db"
   ],
+  "cases/centered-list-marker": [
+    "73c02d113e61420c1c787d8be1c62438ef003cf6abf1f7f651b3ae6c742d7458"
+  ],
   "cases/clear-break-lines-one": [
     "4a4c277a0011fda81cff20dccac51fc7bfdf600fb57630c1660669e270005225"
   ],
@@ -1465,6 +1468,10 @@
   ],
   "cases/header-textbox-line-metrics-times": [
     "0045b161e1ca23dd552dae8402b41dde4ba73bec3b778245872b46304537dfee"
+  ],
+  "cases/heading-keep-next-exact": [
+    "7ddd7ac48827715f3d8632304198d11fcbf6f90dcdbb813643808a069cfd3434",
+    "a5cc5f0aa8356243c0db31664f92d857c2ec16651d4c4d5526279b0cb6a24817"
   ],
   "cases/hyphen-opening-guillemet-explicit-space": [
     "b241e534e5213f652c1ae22d1f07b8937404aab8159de1a7dfcfca37c91a10ab"
@@ -2027,6 +2034,10 @@
   "cases/nested-side-text-sp42-w9000-y1": [
     "a0c239a580363fcfe099da231cf5c782bbdbae7a5e9302f31426db783c4a4e89"
   ],
+  "cases/nested-table-keep-next": [
+    "6bcc687e1fa6ff660b20b7c53261b587e2105b493eccd490a1bffc441c4cff21",
+    "4356ef8decb1ca1c69c557d679241c82e1f6b9b5ec143966e57283bb0a9ee053"
+  ],
   "cases/nested-table-picture-width": [
     "01086aa67538d20c2bd9ca0c77e6269f59feaab0d0742acc79c6e968179e1741"
   ],
@@ -2080,6 +2091,9 @@
   ],
   "cases/page-header-ordinary-marker": [
     "fc540d9dce905d42e091ae6222e8bb9cd11aa0efbdca8e8163c2efe2a60dbcdc"
+  ],
+  "cases/paragraph-border-styles": [
+    "47d18eeb84c16c3a998c5e82d5599dbe92458757879de1e3cd0d0f4480264c33"
   ],
   "cases/paragraph-borders-inherited": [
     "7888d1684fc0cde194f0bbe55910ba56f09febb484e329ebf44240a175eb8ffd"
@@ -2339,6 +2353,9 @@
   "cases/section-mark-legacy-full-width-float": [
     "31d358bfc099fdd643ba55cdd5515f5ca7d0216553177fae3419ddf5f5b58a83"
   ],
+  "cases/seq-fields": [
+    "c530ecc4fbd0735fd43e4c0749c26f44b856529f1fd24b93dd5d98d11253b788"
+  ],
   "cases/shifted-text-position-7-mixed0-mark0": [
     "075283c57ba5d50940428cef58f86d1d276de3853239ac2922993a28c7a9fb36"
   ],
@@ -2521,6 +2538,9 @@
   "cases/styleref-body-field": [
     "86dc263c9755831b9a874d1444f67d8930b979768e458f9f864de682e8008f08"
   ],
+  "cases/styleref-number-only": [
+    "891026d21c830dd24740bde0ca512edf60da59e73c9a34f1bcb3001bdc622122"
+  ],
   "cases/svg-pictures": [
     "96e9f31d367aff64dc058056339631d65c87deb085ccbcc569fe81760cafa766"
   ],
@@ -2539,6 +2559,12 @@
   "cases/tab-only-cell-mark-tab": [
     "0597b9b1efe794dacc7b924e26fa044ecd7271fb57010030ba238c5db81eb4d6"
   ],
+  "cases/table-style-centered": [
+    "ab94b2dc2e5e62cb8b8dd7ef35524d3bf86c142058f9a21996babcb95e84d265"
+  ],
+  "cases/table-style-valign-merged": [
+    "a536f37301dcc7354cf0efdf7dfdb452f833f8c4c7c7d746c6051a4201d4aaaa"
+  ],
   "cases/table-wrap-indent-inline-i5100-r0": [
     "2fa5fe1d1715a7267f9bb971843284d8cab3071d124d5af2c2bab760e9b20d53"
   ],
@@ -2556,6 +2582,9 @@
   ],
   "cases/table-wrap-indent-w4200-i5100-r240": [
     "77e04cd24f8ca96676deb4006096277bc413658cf055509ed2509a26184407bf"
+  ],
+  "cases/toc-placeholder": [
+    "d0c186999012728f42446edc6d0194f0a7671ab1a7c23ea1e3763b59b67fdc7d"
   ],
   "cases/torture_test": [
     "72ce56fb939e63d212375bd755a71f746a68dd6ac6c485b9f67b059cb85f3a81",
