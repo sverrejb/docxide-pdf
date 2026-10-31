@@ -1791,7 +1791,7 @@
   },
   "cases/case4": {
     "jaccard": 0.7886,
-    "ssim": 0.9506,
+    "ssim": 0.9507,
     "text_boundary": 1.0,
     "convert_ms": 10.7,
     "ua_fail": 2,
@@ -6550,8 +6550,8 @@
     "a11y_text": 1.0
   },
   "cases/paragraph-borders-inherited": {
-    "jaccard": 0.8944,
-    "ssim": 0.9756,
+    "jaccard": 0.8946,
+    "ssim": 0.9757,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -8852,8 +8852,8 @@
     "a11y_text": 1.0
   },
   "scraped/alpharetta_school_governance_council": {
-    "jaccard": 0.8541,
-    "ssim": 0.9421,
+    "jaccard": 0.8545,
+    "ssim": 0.943,
     "text_boundary": 0.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -8911,8 +8911,8 @@
     "a11y_text": 0.9209
   },
   "scraped/bahamas_sustainable_development_hosting": {
-    "jaccard": 0.8078,
-    "ssim": 0.9338,
+    "jaccard": 0.808,
+    "ssim": 0.9339,
     "text_boundary": 0.9429,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -8982,8 +8982,8 @@
     "a11y_text": 0.8826
   },
   "scraped/bush_fires_act_comparison": {
-    "jaccard": 0.732,
-    "ssim": 0.9332,
+    "jaccard": 0.7321,
+    "ssim": 0.9339,
     "text_boundary": 0.9839,
     "convert_ms": 248.6,
     "ua_fail": 2,
@@ -8993,8 +8993,8 @@
     "a11y_text": 0.9985
   },
   "scraped/candidate_reference_check_form": {
-    "jaccard": 0.7086,
-    "ssim": 0.8675,
+    "jaccard": 0.7088,
+    "ssim": 0.8678,
     "text_boundary": 0.5714,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -9003,8 +9003,8 @@
     "a11y_text": 1.0
   },
   "scraped/carbon_farming_initiative_rule": {
-    "jaccard": 0.6461,
-    "ssim": 0.8211,
+    "jaccard": 0.6462,
+    "ssim": 0.8217,
     "text_boundary": 0.8257,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -9085,8 +9085,8 @@
     "a11y_text": 1.0
   },
   "scraped/clean_energy_regulator_act": {
-    "jaccard": 0.5427,
-    "ssim": 0.7459,
+    "jaccard": 0.5426,
+    "ssim": 0.7468,
     "text_boundary": 0.83,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -9126,7 +9126,7 @@
   },
   "scraped/covid_insomnia_mental_health": {
     "jaccard": 0.4977,
-    "ssim": 0.7416,
+    "ssim": 0.7417,
     "text_boundary": 0.5735,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -9457,7 +9457,7 @@
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 0.9963,
-    "a11y_text": 0.9905
+    "a11y_text": 0.9917
   },
   "scraped/erasmus_plus_staff_mobility_agreement": {
     "jaccard": 0.7796,
@@ -9533,7 +9533,7 @@
   },
   "scraped/french_sexual_health_youth_strategy": {
     "jaccard": 0.5315,
-    "ssim": 0.7709,
+    "ssim": 0.7711,
     "text_boundary": 0.8269,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -9655,8 +9655,8 @@
     "a11y_text": 1.0
   },
   "scraped/irish_school_enrollment_form": {
-    "jaccard": 0.8246,
-    "ssim": 0.9544,
+    "jaccard": 0.8247,
+    "ssim": 0.9546,
     "text_boundary": 0.823,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -9728,7 +9728,7 @@
   },
   "scraped/japanese_hr_consultation_application": {
     "jaccard": 0.4113,
-    "ssim": 0.5623,
+    "ssim": 0.5625,
     "text_boundary": 0.1778,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -9995,7 +9995,7 @@
   },
   "scraped/polish_archery_range_plan": {
     "jaccard": 0.8315,
-    "ssim": 0.9634,
+    "ssim": 0.9635,
     "text_boundary": 1.0,
     "convert_ms": 16.3,
     "ua_fail": 0,
@@ -10140,8 +10140,8 @@
     "a11y_text": 1.0
   },
   "scraped/romanian_candidate_declaration_form_f2": {
-    "jaccard": 0.3843,
-    "ssim": 0.9628,
+    "jaccard": 0.3841,
+    "ssim": 0.9634,
     "text_boundary": 0.8042,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10151,7 +10151,7 @@
   },
   "scraped/romanian_quality_evaluation_strategy": {
     "jaccard": 0.6529,
-    "ssim": 0.8191,
+    "ssim": 0.8193,
     "text_boundary": 0.7174,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10160,7 +10160,7 @@
     "a11y_text": 0.9785
   },
   "scraped/run-borders": {
-    "jaccard": 0.4623,
+    "jaccard": 0.4622,
     "ssim": 0.5912,
     "text_boundary": 0.3429,
     "ua_fail": 0,
@@ -10263,8 +10263,8 @@
     "a11y_text": 1.0
   },
   "scraped/samtale": {
-    "jaccard": 0.8211,
-    "ssim": 0.9393,
+    "jaccard": 0.8215,
+    "ssim": 0.9417,
     "text_boundary": 0.7059,
     "convert_ms": 11.0,
     "ua_fail": 2,
@@ -10520,8 +10520,8 @@
     "a11y_text": 1.0
   },
   "scraped/turkish_journal_article_template": {
-    "jaccard": 0.697,
-    "ssim": 0.8967,
+    "jaccard": 0.6971,
+    "ssim": 0.8973,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10541,8 +10541,8 @@
     "a11y_text": 1.0
   },
   "scraped/uk_commercial_lease_template": {
-    "jaccard": 0.301,
-    "ssim": 0.4611,
+    "jaccard": 0.3018,
+    "ssim": 0.4614,
     "text_boundary": 0.3394,
     "convert_ms": 326.3,
     "ua_fail": 0,
@@ -10584,8 +10584,8 @@
     "a11y_text": 0.9579
   },
   "scraped/ut_koer_annual_meeting_minutes": {
-    "jaccard": 0.6185,
-    "ssim": 0.8618,
+    "jaccard": 0.6187,
+    "ssim": 0.8626,
     "text_boundary": 0.4253,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -10615,8 +10615,8 @@
     "a11y_text": 0.8763
   },
   "scraped/wa_child_services_regulations": {
-    "jaccard": 0.714,
-    "ssim": 0.8998,
+    "jaccard": 0.7142,
+    "ssim": 0.9007,
     "text_boundary": 0.9488,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10646,8 +10646,8 @@
     "a11y_text": 0.8339
   },
   "scraped/western_australia_owner_drivers_act": {
-    "jaccard": 0.7796,
-    "ssim": 0.9391,
+    "jaccard": 0.7798,
+    "ssim": 0.94,
     "text_boundary": 0.9654,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10676,8 +10676,8 @@
     "a11y_text": 1.0
   },
   "scraped/zimbabwe_broadcasting_corporation_judgment": {
-    "jaccard": 0.7726,
-    "ssim": 0.945,
+    "jaccard": 0.7732,
+    "ssim": 0.9455,
     "text_boundary": 0.9819,
     "ua_fail": 0,
     "a11y_missing": 0,
