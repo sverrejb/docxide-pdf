@@ -70,8 +70,9 @@ COMPILE_ERRORS=$(grep -E '^\s*error(\[E[0-9]+\]|:)' "$TMPFILE" 2>/dev/null | gre
 # Extract test result lines (skip trivial "0 passed; 0 failed" and doc tests)
 TEST_RESULTS=$(grep '^test result:' "$TMPFILE" 2>/dev/null | grep -v '[^0-9]0 passed; 0 failed; 0 ignored' || true)
 
-# Extract panic messages
-PANICS=$(grep 'thread.*panicked' "$TMPFILE" 2>/dev/null || true)
+# Extract panic messages: the message follows the "panicked at" line, and
+# conversion threads are unnamed, so the [SKIP] lines are what name the case.
+PANICS=$(grep -A1 -e 'thread.*panicked' -e '\[SKIP\].*conversion panicked' "$TMPFILE" 2>/dev/null | grep -v '^--$' || true)
 
 # Print compact report
 if [[ -n "$COMPILE_ERRORS" ]]; then

@@ -237,7 +237,8 @@ fn compute_scores(fixture: &FixturePages, save_comparison: bool) -> Option<Fixtu
 fn visual_comparison() {
     let _ = env_logger::try_init();
     let fixtures = prepared_fixtures();
-    if fixtures.is_empty() {
+    let panicked = common::panicked_cases();
+    if fixtures.is_empty() && panicked.is_empty() {
         return;
     }
 
@@ -289,6 +290,12 @@ fn visual_comparison() {
         }
     }
     common::write_latest_hashes(&hash_updates);
+
+    assert!(
+        panicked.is_empty(),
+        "conversion panicked in: {}",
+        panicked.join(", ")
+    );
 
     let jaccard_rows: Vec<(String, f64, bool)> = results
         .iter()

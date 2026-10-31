@@ -253,12 +253,32 @@ fn src_newest_mtime() -> SystemTime {
     *SRC_MTIME.get_or_init(|| dir_newest_mtime(Path::new("src")))
 }
 
+/// Prefix of the error `convert` returns for a panic; `panicked_cases` looks for it.
+const PANIC_ERROR: &str = "conversion panicked";
+
 /// Convert `input` to `output`, turning a conversion panic into an error.
 pub fn convert(input: &Path, output: &Path) -> Result<(), String> {
     match std::panic::catch_unwind(|| docxide_pdf::convert_docx_to_pdf(input, output)) {
         Ok(r) => r.map_err(|e| e.to_string()),
-        Err(_) => Err("conversion panicked".to_string()),
+        Err(payload) => {
+            let msg = payload
+                .downcast_ref::<&str>()
+                .copied()
+                .or_else(|| payload.downcast_ref::<String>().map(String::as_str))
+                .unwrap_or("");
+            Err(format!("{PANIC_ERROR}: {msg}"))
+        }
     }
+}
+
+/// The fixtures whose conversion panicked. They get no score, so without this they pass silently.
+pub fn panicked_cases() -> Vec<String> {
+    discover_fixtures()
+        .unwrap_or_default()
+        .iter()
+        .filter(|d| matches!(ensure_generated_pdf(d), Err(e) if e.starts_with(PANIC_ERROR)))
+        .map(|d| case_key(d))
+        .collect()
 }
 
 /// Convert DOCX→PDF only if the generated PDF is missing or older than input.docx or src/.

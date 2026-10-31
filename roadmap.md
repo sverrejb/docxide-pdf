@@ -575,10 +575,6 @@ Backlog (details in `current_focus/A11Y.md`):
 
 ## Test harness and tooling
 
-- **Surface conversion panics** (high priority): `run-tests.sh` prints a
-  Panics section but exits 0; panicked cases get no score and look green;
-  conversion threads are unnamed, so panics don't name the case. Exit
-  non-zero, list panicked cases by name, name threads after the case.
 - Deterministic output regressed once: scraped/door_air_cooling_unit_spec gave
   two different PDFs over three runs (2026-10-03); not investigated.
 - Engine-comparison site: if runs grow, batch veraPDF into one call per shard
