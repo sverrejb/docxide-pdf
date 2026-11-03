@@ -60,6 +60,8 @@ fn parse_field_code(instr: &str) -> Option<FieldCode> {
             SeqStep::Restart(n.parse().ok()?)
         } else if has_switch(instr, "\\c") {
             SeqStep::Repeat
+        } else if let Some(n) = switch_args(instr, "\\s").next() {
+            SeqStep::Heading(n.parse().ok()?)
         } else {
             SeqStep::Next
         };
@@ -1906,6 +1908,13 @@ mod tests {
             parse_field_code(" SEQ Figure \\c "),
             Some(FieldCode::Seq {
                 step: SeqStep::Repeat,
+                ..
+            })
+        ));
+        assert!(matches!(
+            parse_field_code(" SEQ Figure \\* ARABIC \\s 1 "),
+            Some(FieldCode::Seq {
+                step: SeqStep::Heading(1),
                 ..
             })
         ));

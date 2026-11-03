@@ -1492,37 +1492,63 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
 }
 
 /// Number the body's SEQ fields in document order, one counter per name
-/// (issue #145: a stale "old" cache shows 1). ponytail: `\s` (restart under
-/// a heading level) is not read, and text-box captions are not counted.
+/// (issue #145: a stale "old" cache shows 1). `\s n` restarts a counter
+/// after a built-in "heading 1"…"heading n" paragraph that follows the
+/// sequence's previous field, so a heading before an intervening `\c` does
+/// not count; custom styles with an outline level never do (Word online
+/// probes, 2026-11-03; issue #146). ponytail: text-box captions are not
+/// counted.
 fn resolve_seq_fields(doc: &mut Document) {
     use crate::model::{FieldCode, SeqStep};
     let mut paras = Vec::new();
     for section in &mut doc.sections {
         body_paragraphs(&mut section.blocks, &mut paras);
     }
-    let mut counters: HashMap<String, u32> = HashMap::new();
-    for run in paras.iter_mut().flat_map(|p| p.runs.iter_mut()) {
-        let Some(FieldCode::Seq {
-            name,
-            format,
-            step,
-            hidden,
-        }) = &run.field_code
-        else {
-            continue;
-        };
-        let counter = counters.entry(name.clone()).or_insert(0);
-        match step {
-            SeqStep::Next => *counter += 1,
-            // A repeat before any number shows the first.
-            SeqStep::Repeat => *counter = (*counter).max(1),
-            SeqStep::Restart(n) => *counter = *n,
+    // Per name: the count and the paragraph holding the last field.
+    let mut counters: HashMap<String, (u32, usize)> = HashMap::new();
+    // (paragraph, level) of every built-in heading so far.
+    let mut headings: Vec<(usize, u8)> = Vec::new();
+    for (i, para) in paras.into_iter().enumerate() {
+        if let Some(level) = para
+            .style_id
+            .as_deref()
+            .and_then(|id| doc.style_id_to_name.get(id))
+            .and_then(|name| styles::builtin_heading_level(name))
+        {
+            headings.push((i, level + 1));
         }
-        run.text = if *hidden {
-            String::new()
-        } else {
-            numbering::format_number(*counter, format.unwrap_or("decimal"))
-        };
+        for run in &mut para.runs {
+            let Some(FieldCode::Seq {
+                name,
+                format,
+                step,
+                hidden,
+            }) = &run.field_code
+            else {
+                continue;
+            };
+            let (counter, last) = counters.entry(name.clone()).or_insert((0, 0));
+            match step {
+                SeqStep::Next => *counter += 1,
+                // A repeat before any number shows the first.
+                SeqStep::Repeat => *counter = (*counter).max(1),
+                SeqStep::Restart(n) => *counter = *n,
+                SeqStep::Heading(n) => {
+                    let restarts = headings
+                        .iter()
+                        .rev()
+                        .take_while(|(at, _)| *at > *last)
+                        .any(|(_, level)| level <= n);
+                    *counter = if restarts { 1 } else { *counter + 1 };
+                }
+            }
+            *last = i;
+            run.text = if *hidden {
+                String::new()
+            } else {
+                numbering::format_number(*counter, format.unwrap_or("decimal"))
+            };
+        }
     }
 }
 

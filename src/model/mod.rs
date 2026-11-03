@@ -924,8 +924,8 @@ pub enum FieldCode {
         name: String,
         form: StyleRefForm,
     },
-    /// `SEQ name [\* fmt] [\c | \r n] [\h]`: one counter per name, numbered
-    /// in document order at parse time (`docx::resolve_seq_fields`).
+    /// `SEQ name [\* fmt] [\c | \r n | \s n] [\h]`: one counter per name,
+    /// numbered in document order at parse time (`docx::resolve_seq_fields`).
     Seq {
         name: String,
         format: Option<&'static str>,
@@ -948,6 +948,9 @@ pub enum SeqStep {
     Repeat,
     /// `\r n`.
     Restart(u32),
+    /// `\s n`: back to 1 after a built-in "heading 1"…"heading n" paragraph
+    /// that follows the sequence's previous field.
+    Heading(u8),
 }
 
 #[derive(Clone, Debug, PartialEq)]

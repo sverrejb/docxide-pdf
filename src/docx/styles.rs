@@ -764,7 +764,7 @@ pub(super) fn parse_line_spacing(spacing_node: roxmltree::Node) -> Option<LineSp
 
 /// Word gives its built-in "heading N" styles outline level N−1 even when the
 /// style omits `w:outlineLvl` (it tags and bookmarks them as headings).
-fn builtin_heading_level(name: &str) -> Option<u8> {
+pub(super) fn builtin_heading_level(name: &str) -> Option<u8> {
     let level = name
         .to_ascii_lowercase()
         .strip_prefix("heading ")?
