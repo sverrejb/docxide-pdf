@@ -2594,6 +2594,14 @@ fn compute_bookmark_positions(
                         slot_top = effective_slot_top(sp, false, page_idx, ctx);
                         margin_bottom = compute_effective_margin_bottom(sp, false, page_idx, ctx);
                     }
+                    // Captions in cells count as on the table's page (issue
+                    // #146: a panel table's TOC entries had no page numbers).
+                    // ponytail: a table that splits keeps its first page.
+                    for cell in table.rows.iter().flat_map(|r| r.cells.iter()) {
+                        for bm in cell.all_paragraphs().iter().flat_map(|p| &p.bookmarks) {
+                            bookmark_positions.insert(bm.clone(), (page_idx, slot_top));
+                        }
+                    }
                     slot_top -= est_h;
                     prev_space_after = 0.0;
                     prev_para = None;
