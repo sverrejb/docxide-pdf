@@ -210,6 +210,22 @@ or incomplete:
   0.05–0.2 pt right of the device position, growing along the line; no
   quantisation of the advances reproduces it (`tm4.py`), so the engine
   starts it on the device grid.
+- **Probe 4, rPr boundaries** (2026-11-03, `tests/output/fundamentals/runsplit2/`,
+  48 paragraphs, two runs each, no rsids, Calibri 11/TNR 12, split at a word
+  or mid-word; `tms.py` lists each paragraph's `Tm`s). A new `Tm` comes where
+  the runs' *resolved* properties differ, including ones that never touch
+  the Latin glyphs: `rFonts@eastAsia/@cs`, `noProof`, `szCs` 24 against a 22
+  default (4/4 each). Redundant spellings never split: `b val=0`, `i` vs
+  `i val=1`, `lang` equal to the default, `color auto`, `vanish val=0`,
+  `rStyle DefaultParagraphFont`, `szCs` equal to the default. 5 of 48
+  paragraphs (two of them identical-run controls) split anyway,
+  deterministically over three exports, at document offsets near multiples
+  of ~490 characters: Word-internal, not predictable from the XML. Mac
+  Word's re-save keeps a run boundary for every redundant property it then
+  drops, so its run structure does not predict the writer either. Of these,
+  `Run` carries `cs_font_name`, so `merge_compatible_runs` records a
+  `source_break` where it changes (arizona p4: explicit `cs="Calibri"` next to
+  an inherited Arial); `noProof` and `szCs` are not parsed.
 
 Pooled in-run error against the references (`aggb.py`, glyphs anchored at
 Word's run starts): exact advances 0.146 pt, device grid 0.112, device grid

@@ -1061,7 +1061,10 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
         return runs;
     }
     let mut result: Vec<Run> = Vec::with_capacity(runs.len());
+    // The previous source run's, not the merged run's (which keeps its first part's).
+    let mut prev_cs_font: Option<String> = None;
     for mut run in runs {
+        let cs_font = run.cs_font_name.clone();
         // customMarkFollows: the text after the reference is its mark, so it
         // carries the note (and its tag) itself.
         if let Some(prev) = result.last()
@@ -1142,7 +1145,9 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
         if can_merge {
             let prev = result.last_mut().unwrap();
             let base = prev.text.len();
-            if prev.rsid != run.rsid {
+            // Word also keeps runs apart whose complex-script font differs, though
+            // Latin text draws alike in both (probe 4, current_focus/fundamentals.md).
+            if prev.rsid != run.rsid || prev_cs_font != cs_font {
                 prev.source_breaks.push(base);
             }
             prev.rsid = run.rsid;
@@ -1151,6 +1156,7 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
         } else {
             result.push(run);
         }
+        prev_cs_font = cs_font;
     }
     result
 }
@@ -2004,6 +2010,23 @@ mod tests {
         let merged = merge_compatible_runs(runs);
         assert_eq!(merged.len(), 3, "runs differing in shading must not merge");
         assert_eq!(merged[1].shading, Some([255, 244, 163]));
+    }
+
+    #[test]
+    fn merge_compatible_runs_breaks_where_cs_font_changes() {
+        let cs = |text, font: Option<&str>| Run {
+            cs_font_name: font.map(Into::into),
+            ..run(text, None, None)
+        };
+        let runs = vec![
+            cs("a ", Some("Calibri")),
+            cs("b ", Some("Arial")),
+            cs("c ", Some("Arial")),
+            cs("d", Some("Calibri")),
+        ];
+        let merged = merge_compatible_runs(runs);
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].source_breaks, vec![2, 6]);
     }
 
     #[test]
