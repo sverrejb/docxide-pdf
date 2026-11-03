@@ -3093,6 +3093,14 @@ fn segment_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 
         if run.is_line_break {
             break;
         }
+        if let Some(img) = &run.inline_image {
+            // A picture is part of the aligned segment (issue #147: a centred
+            // tab put a 123pt picture's left edge, not its middle, on the stop).
+            w += img.layout_size().0;
+            first = false;
+            spaces = 0;
+            continue;
+        }
         let key = font_key_buf(run, &mut key_buf);
         let entry = seen_fonts.get(key).expect("font registered");
         let eff_fs = effective_font_size(run, entry);
