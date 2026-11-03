@@ -1881,6 +1881,8 @@ pub(super) struct LayoutState {
     pub(super) global_block_idx: usize,
     pub(super) heading_entries: Vec<HeadingEntry>,
     pub(super) bookmark_positions: HashMap<String, (usize, f32)>,
+    /// What a PAGEREF shows for each page of the bookmark pre-pass.
+    pub(super) page_labels: Vec<String>,
     /// The keep-with-next chain being laid out is too long for a page: its
     /// paragraphs keep only their own link to the next.
     pub(super) long_keep_chain: bool,
@@ -1914,6 +1916,7 @@ impl LayoutState {
             global_block_idx: self.global_block_idx,
             heading_entries: Vec::new(),
             bookmark_positions: self.bookmark_positions.clone(),
+            page_labels: self.page_labels.clone(),
             long_keep_chain: self.long_keep_chain,
         }
     }
@@ -2428,11 +2431,12 @@ fn body_page_field_text(run: &Run, ctx: &RenderContext, page_idx: usize) -> Opti
 }
 
 /// Pre-compute bookmark page positions so PAGEREF fields (e.g. TOC) can
-/// show correct page numbers. Simulates page layout without rendering.
+/// show correct page numbers, and each simulated page's label. Simulates
+/// page layout without rendering.
 fn compute_bookmark_positions(
     doc: &Document,
     ctx: &RenderContext,
-) -> HashMap<String, (usize, f32)> {
+) -> (HashMap<String, (usize, f32)>, Vec<String>) {
     let has_pagerefs = doc.sections.iter().any(|s| {
         s.blocks.iter().any(|b| match b {
             Block::Paragraph(p) => p
@@ -2443,11 +2447,13 @@ fn compute_bookmark_positions(
         })
     });
     if !has_pagerefs {
-        return HashMap::new();
+        return (HashMap::new(), Vec::new());
     }
 
     let mut bookmark_positions: HashMap<String, (usize, f32)> = HashMap::new();
     let mut page_idx = 0usize;
+    // The section each simulated page opens in, for its label.
+    let mut pages = vec![0usize];
     let first_sp = &doc.sections[0].properties;
     let mut sp = first_sp;
     let mut slot_top = effective_slot_top(sp, true, page_idx, ctx);
@@ -2463,6 +2469,7 @@ fn compute_bookmark_positions(
                 | SectionBreakType::OddPage
                 | SectionBreakType::EvenPage => {
                     page_idx += 1;
+                    pages.push(si);
                     slot_top = effective_slot_top(sp, true, page_idx, ctx);
                     margin_bottom = compute_effective_margin_bottom(sp, true, page_idx, ctx);
                     prev_space_after = 0.0;
@@ -2479,6 +2486,7 @@ fn compute_bookmark_positions(
                         && slot_top < effective_slot_top(sp, false, page_idx, ctx)
                     {
                         page_idx += 1;
+                        pages.push(si);
                         slot_top = effective_slot_top(sp, false, page_idx, ctx);
                         margin_bottom = compute_effective_margin_bottom(sp, false, page_idx, ctx);
                         prev_space_after = 0.0;
@@ -2570,6 +2578,7 @@ fn compute_bookmark_positions(
                         && slot_top < effective_slot_top(sp, false, page_idx, ctx)
                     {
                         page_idx += 1;
+                        pages.push(si);
                         slot_top = effective_slot_top(sp, false, page_idx, ctx);
                         margin_bottom = compute_effective_margin_bottom(sp, false, page_idx, ctx);
                         slot_top -= content_h;
@@ -2591,6 +2600,7 @@ fn compute_bookmark_positions(
                     let est_h = para_count as f32 * 14.0;
                     if slot_top - est_h < margin_bottom {
                         page_idx += 1;
+                        pages.push(si);
                         slot_top = effective_slot_top(sp, false, page_idx, ctx);
                         margin_bottom = compute_effective_margin_bottom(sp, false, page_idx, ctx);
                     }
@@ -2609,7 +2619,17 @@ fn compute_bookmark_positions(
             }
         }
     }
-    bookmark_positions
+    // A page's label: its logical number in its section's format (issue
+    // #146: a TOC after "i" front matter shows 1, not the sheet count).
+    let indices: Vec<(usize, bool, usize)> = pages.iter().map(|&si| (si, false, si)).collect();
+    let labels = page_numbers(doc, &indices)
+        .into_iter()
+        .zip(&pages)
+        .map(|(n, &si)| {
+            header_footer::page_field_text(n, doc.sections[si].properties.page_num_format.as_deref())
+        })
+        .collect();
+    (bookmark_positions, labels)
 }
 
 /// Structure type of a body paragraph. Word tags outline levels as H1–H6
@@ -3024,7 +3044,11 @@ fn render_paragraph_block(
                         if r.text.trim().is_empty()
                             && let Some(&(page_idx, _)) = state.bookmark_positions.get(bookmark)
                         {
-                            r.text = (page_idx + 1).to_string();
+                            r.text = state
+                                .page_labels
+                                .get(page_idx)
+                                .cloned()
+                                .unwrap_or_else(|| (page_idx + 1).to_string());
                         }
                         r
                     } else if let Some(text) =
@@ -5128,7 +5152,7 @@ fn render_pass(
         hf_heights: Default::default(),
     };
 
-    let bookmark_positions = compute_bookmark_positions(doc, &ctx);
+    let (bookmark_positions, page_labels) = compute_bookmark_positions(doc, &ctx);
 
     // Phase 2: build multi-page content streams (section-aware)
     let first_sp = &doc.sections[0].properties;
@@ -5142,6 +5166,7 @@ fn render_pass(
         global_block_idx: 0,
         heading_entries: Vec::new(),
         bookmark_positions,
+        page_labels,
         long_keep_chain: false,
     };
     state.pb.tags.lang = document_lang(doc);
