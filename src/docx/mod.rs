@@ -1562,6 +1562,9 @@ struct TocSpec {
     styles: Vec<(String, u8)>,
     seq: Option<String>,
     page_numbers: bool,
+    /// `\c`, with or without a name: a table of figures, whose entries all
+    /// take the "table of figures" style instead of "toc N".
+    figures: bool,
 }
 
 impl TocSpec {
@@ -1589,6 +1592,7 @@ impl TocSpec {
             styles,
             seq,
             page_numbers: !has("\\n"),
+            figures: has("\\c"),
         }
     }
 
@@ -1688,8 +1692,15 @@ fn expand_toc_fields<R: Read + std::io::Seek>(
         let sp = &sections[s].properties;
         let text_width = sp.page_width - sp.margin_left - sp.margin_right;
         let tab_pos = (text_width * 20.0).round() as i32 - 10;
+        // A table of figures styles every entry "table of figures", whatever
+        // its level; Word's built-in definition indents 24pt (issue #146,
+        // Windows Word 16.0.20527: entries without the style start 24pt in).
         let toc_style = |level: u8| {
-            let name = format!("toc {level}");
+            let name = if spec.figures {
+                "table of figures".to_string()
+            } else {
+                format!("toc {level}")
+            };
             names.iter().find(|(_, n)| n.eq_ignore_ascii_case(&name)).map(|(id, _)| id.clone())
         };
         let mut xmls: Vec<String> = entries
@@ -1697,6 +1708,7 @@ fn expand_toc_fields<R: Read + std::io::Seek>(
             .map(|(level, bookmark, label, text)| {
                 let mut ppr = match toc_style(*level) {
                     Some(id) => format!(r#"<w:pStyle w:val="{}"/>"#, xml_text(&id)),
+                    None if spec.figures => r#"<w:ind w:left="480"/>"#.to_string(),
                     None if *level > 1 => format!(r#"<w:ind w:left="{}"/>"#, 220 * (*level as i32 - 1)),
                     None => String::new(),
                 };
@@ -1878,7 +1890,11 @@ mod tests {
         assert!(!spec.page_numbers && spec.outline.is_none());
         let spec = super::TocSpec::parse(r#" TOC \c "Figure" "#);
         assert_eq!(spec.seq.as_deref(), Some("Figure"));
-        assert_eq!(super::TocSpec::parse(" TOC \\h ").outline, Some(1..=3));
+        assert!(spec.figures);
+        assert!(super::TocSpec::parse(r#" TOC \t "Figure Caption,1" \h \z \c "#).figures);
+        let spec = super::TocSpec::parse(" TOC \\h ");
+        assert_eq!(spec.outline, Some(1..=3));
+        assert!(!spec.figures);
     }
 
     #[test]
