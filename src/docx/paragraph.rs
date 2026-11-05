@@ -160,6 +160,19 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     let (indent_left, indent_right, indent_hanging, indent_first_line) = indents;
     let mut runs = parsed.runs;
 
+    let mark_deleted = ppr_rpr.is_some_and(|rpr| wml(rpr, "del").is_some());
+    // Markup view: a revised paragraph mark or paragraph formatting
+    // (`w:pPrChange`) draws no inline mark, only the change bar.
+    if super::markup()
+        && (mark_deleted
+            || ppr_rpr.is_some_and(|rpr| wml(rpr, "ins").is_some())
+            || ppr.is_some_and(|p| wml(p, "pPrChange").is_some()))
+    {
+        for run in &mut runs {
+            run.revised = true;
+        }
+    }
+
     if let Some(color) = style_color {
         for run in &mut runs {
             run.color.get_or_insert(color);
@@ -267,6 +280,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         super::autospacing(ppr, para_style, &ctx.styles.defaults);
     Paragraph {
         runs,
+        mark_deleted,
         style_id: Some(para_style_id.to_string()),
         space_before,
         space_after,

@@ -512,6 +512,9 @@ pub struct ListItem {
 #[derive(Default)]
 pub struct Paragraph {
     pub runs: Vec<Run>,
+    /// The paragraph mark is a tracked deletion (`w:pPr/w:rPr/w:del`): the
+    /// final view joins this paragraph to the next.
+    pub mark_deleted: bool,
     pub style_id: Option<String>,
     pub space_before: f32,
     pub space_after: f32,
@@ -676,6 +679,9 @@ pub struct Run {
     pub double_underline: bool,
     pub strikethrough: bool,
     pub dstrike: bool,
+    /// Inserted, deleted or reformatted under tracked changes, printed in the
+    /// markup view: the line it lands on gets a change bar.
+    pub revised: bool,
     pub char_spacing: f32,
     pub text_scale: f32,
     pub caps: bool,
@@ -843,6 +849,7 @@ impl Default for Run {
             underline: false,
             double_underline: false,
             strikethrough: false,
+            revised: false,
             dstrike: false,
             char_spacing: 0.0,
             text_scale: 100.0,

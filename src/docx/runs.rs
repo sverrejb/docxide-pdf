@@ -927,7 +927,11 @@ fn collect_run_nodes<'a>(
             // Final mode shows moved text at its destination (moveTo).
             collect_run_nodes(child, rels, out, active_comments);
         } else if is_wml && matches!(name, "del" | "moveFrom") {
-            // Final mode: skip deleted content and the source of moved text
+            // Final mode: skip deleted content and the source of moved text;
+            // markup keeps them in the layout, struck through.
+            if super::markup() {
+                collect_run_nodes(child, rels, out, active_comments);
+            }
         } else if is_wml && name == "sdt" {
             if let Some(content) = wml(child, "sdtContent") {
                 collect_run_nodes(content, rels, out, active_comments);
@@ -952,6 +956,72 @@ fn collect_run_nodes<'a>(
             }
         } else if ns == Some(MATH_NS) && name == "oMath" {
             out.push((child, None, false, active_comments.clone(), None));
+        }
+    }
+}
+
+/// Word's "by author" revision colours in the order new authors take them
+/// (Word for Mac probe 2026-11-05, 24 fresh authors: a cycle of 20).
+const AUTHOR_COLORS: [[u8; 3]; 20] = [
+    [0xD1, 0x34, 0x38],
+    [0x00, 0x78, 0xD4],
+    [0x5C, 0x2E, 0x91],
+    [0x49, 0x82, 0x05],
+    [0xCC, 0x35, 0x95],
+    [0x71, 0x60, 0xE8],
+    [0x03, 0x83, 0x87],
+    [0x6D, 0x57, 0x00],
+    [0xCF, 0x0F, 0x1F],
+    [0x4E, 0x6A, 0xED],
+    [0xB1, 0x46, 0xC2],
+    [0x39, 0x41, 0x46],
+    [0x0B, 0x6A, 0x0B],
+    [0xCA, 0x50, 0x10],
+    [0x75, 0x0B, 0x1C],
+    [0x5D, 0x5A, 0x58],
+    [0x88, 0x17, 0x98],
+    [0x69, 0x79, 0x7E],
+    [0x00, 0x5B, 0x70],
+    [0x8E, 0x56, 0x2E],
+];
+
+/// The innermost `w:ins` / `w:moveTo` / `w:del` / `w:moveFrom` around a run
+/// node, as (deleted, element).
+fn revision_of<'a>(node: roxmltree::Node<'a, 'a>) -> Option<(bool, roxmltree::Node<'a, 'a>)> {
+    node.ancestors()
+        .skip(1)
+        .take_while(|n| !n.has_tag_name((WML_NS, "p")))
+        .find_map(|n| match n.tag_name().name() {
+            "ins" | "moveTo" if n.tag_name().namespace() == Some(WML_NS) => Some((false, n)),
+            "del" | "moveFrom" if n.tag_name().namespace() == Some(WML_NS) => Some((true, n)),
+            _ => None,
+        })
+}
+
+/// Markup view: inserted text is underlined and deleted text struck through,
+/// both in the author's colour, which replaces the run's own colour and its
+/// underline or strike style (Word for Mac probes 2026-11-05: a double-
+/// underlined insertion prints one single underline, a red deletion prints in
+/// the author's colour). A run whose formatting changed (`w:rPrChange`) only
+/// gets the change bar.
+fn mark_revision(runs: &mut [Run], node: roxmltree::Node, rpr: Option<roxmltree::Node>) {
+    if let Some((deleted, rev)) = revision_of(node) {
+        let author = rev.attribute((WML_NS, "author")).unwrap_or("");
+        let color = AUTHOR_COLORS[super::author_index(author) % AUTHOR_COLORS.len()];
+        for r in runs.iter_mut() {
+            r.revised = true;
+            r.color = Some(color);
+            if deleted {
+                r.strikethrough = true;
+                r.dstrike = false;
+            } else {
+                r.underline = true;
+                r.double_underline = false;
+            }
+        }
+    } else if rpr.is_some_and(|rpr| wml(rpr, "rPrChange").is_some()) {
+        for r in runs.iter_mut() {
+            r.revised = true;
         }
     }
 }
@@ -1515,7 +1585,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                     }
                     _ => {}
                 },
-                "instrText" => {
+                "instrText" | "delInstrText" => {
                     // Instruction text belongs to the innermost open field that
                     // has not yet reached its separator.
                     if let Some(f) = field_stack.last_mut()
@@ -1535,7 +1605,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         }
                     }
                 }
-                "t" => {
+                "t" | "delText" => {
                     let visible = fields_visible(&field_stack);
                     let dyn_result = field_stack
                         .last()
@@ -1765,6 +1835,9 @@ pub(super) fn parse_runs<R: Read + Seek>(
             for r in &mut runs[runs_before..] {
                 r.ruby = ruby.clone();
             }
+        }
+        if super::markup() {
+            mark_revision(&mut runs[runs_before..], run_node, rpr);
         }
     }
 
@@ -2103,6 +2176,40 @@ mod tests {
             .filter_map(|t| t.text())
             .collect();
         assert_eq!(texts, ["new"]);
+    }
+
+    #[test]
+    fn markup_keeps_deleted_text_struck_in_the_author_colour() {
+        let ns = WML_NS;
+        let xml = format!(
+            r#"<w:p xmlns:w="{ns}">
+              <w:ins w:id="1" w:author="Zoe"><w:r><w:rPr><w:u w:val="double"/></w:rPr><w:t>new</w:t></w:r></w:ins>
+              <w:del w:id="2" w:author="Ann"><w:r><w:delText>old</w:delText></w:r></w:del>
+              <w:r><w:t>plain</w:t></w:r>
+            </w:p>"#
+        );
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        super::super::set_markup(true);
+        let mut out = Vec::new();
+        collect_run_nodes(doc.root_element(), &HashMap::new(), &mut out, &mut Vec::new());
+        let mut runs: Vec<Run> = out
+            .iter()
+            .map(|(r, ..)| Run {
+                text: r.text().unwrap_or("").to_string(),
+                double_underline: true,
+                ..Run::default()
+            })
+            .collect();
+        for (i, (node, ..)) in out.iter().enumerate() {
+            mark_revision(&mut runs[i..=i], *node, wml(*node, "rPr"));
+        }
+        super::super::set_markup(false);
+        assert_eq!(runs.len(), 3);
+        assert!(runs[0].revised && runs[0].underline && !runs[0].double_underline);
+        assert_eq!(runs[0].color, Some(AUTHOR_COLORS[0]));
+        assert!(runs[1].revised && runs[1].strikethrough && !runs[1].underline);
+        assert_eq!(runs[1].color, Some(AUTHOR_COLORS[1]));
+        assert!(!runs[2].revised && runs[2].color.is_none());
     }
 
     #[test]

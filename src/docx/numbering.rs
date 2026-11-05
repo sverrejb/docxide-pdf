@@ -643,10 +643,24 @@ pub(super) fn parse_list_info(
     }
 
     let start = override_start.unwrap_or(def.start);
-    let current_counter = *counters
-        .entry((abs_key, ilvl))
-        .and_modify(|c| *c += 1)
-        .or_insert(start);
+    // Markup view: a deleted item shows a number without consuming one (Word
+    // for Mac probe 2026-11-05: items 1, inserted 2, deleted 2, 3).
+    // ponytail: Word prints the item's original number, which drifts from
+    // this after several deleted items in a row.
+    let deleted = super::markup()
+        && num_pr
+            .and_then(|np| np.parent())
+            .and_then(|ppr| wml(ppr, "rPr"))
+            .and_then(|rpr| wml(rpr, "del"))
+            .is_some();
+    let current_counter = if deleted {
+        counters.get(&(abs_key, ilvl)).map_or(start, |c| c + 1)
+    } else {
+        *counters
+            .entry((abs_key, ilvl))
+            .and_modify(|c| *c += 1)
+            .or_insert(start)
+    };
 
     let is_bullet = def.num_fmt == "bullet";
     let original_had_pua = is_bullet

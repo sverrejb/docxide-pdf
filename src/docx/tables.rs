@@ -406,6 +406,11 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     let tbl_rows: Vec<_> = collect_block_nodes(node)
         .into_iter()
         .filter(|n| n.has_tag_name((WML_NS, "tr")))
+        // The final view drops a deleted row (Word online export probe
+        // 2026-11-05); the markup view keeps it, struck through.
+        .filter(|n| {
+            super::markup() || wml(*n, "trPr").and_then(|pr| wml(pr, "del")).is_none()
+        })
         .collect();
 
     // OOXML §17.4.48 requires tblGrid, but some generators (e.g. SpecLink)

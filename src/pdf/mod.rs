@@ -1435,6 +1435,8 @@ pub(super) struct PageBuilder {
     /// Separator lines on the current page: (x positions, top y, bottom y).
     col_seps: Vec<(Vec<f32>, f32, f32)>,
     all_col_seps: Vec<Vec<(Vec<f32>, f32, f32)>>,
+    /// Per page, (bottom, top) of each revised line (markup view).
+    all_change_bars: Vec<Vec<(f32, f32)>>,
     /// Summed heights of the current region's finished columns on this page.
     col_heights: f32,
     /// Space before dropped at the top of this page (balancing still counts it).
@@ -1501,6 +1503,7 @@ impl PageBuilder {
             region_sep_xs: Vec::new(),
             col_seps: Vec::new(),
             all_col_seps: Vec::new(),
+            all_change_bars: Vec::new(),
             col_heights: 0.0,
             top_suppressed: 0.0,
             balance_floor: None,
@@ -1625,6 +1628,7 @@ impl PageBuilder {
         ));
         self.push_col_seps(self.slot_top);
         self.all_col_seps.push(std::mem::take(&mut self.col_seps));
+        self.all_change_bars.push(layout::take_change_bars());
         self.top_suppressed = 0.0;
         self.all_styleref.push(self.styleref_running.clone());
         self.all_first_styleref
@@ -1653,6 +1657,7 @@ impl PageBuilder {
         self.page_section_indices
             .push((self.page_hf_section, false, sect_idx));
         self.all_col_seps.push(Vec::new());
+        self.all_change_bars.push(Vec::new());
         self.all_styleref.push(self.styleref_running.clone());
         self.all_first_styleref
             .push(std::mem::take(&mut self.styleref_page_first));
@@ -5040,6 +5045,8 @@ fn render_pass(
 ) -> Result<(Vec<u8>, BodyPageFields), Error> {
     let debug_wrap = std::env::var("DOCXIDE_DEBUG_WRAP").is_ok();
     let t0 = std::time::Instant::now();
+    // Bars collected by a previous pass (headers, footers) must not leak in.
+    layout::take_change_bars();
     let mut pdf = Pdf::new();
     let mut next_id = 1i32;
     let mut alloc = || {
@@ -5884,6 +5891,40 @@ fn render_pass(
                 stroke_segment(content, (x, *bottom), (x, *top), 0.75, None);
             }
         }
+    }
+
+    // Phase 2b': change bars (markup view). Word draws them in the left
+    // margin (the outside margin with mirrored margins), half an inch from
+    // the text but no deeper than halfway into the margin, 0.72pt wide, on
+    // its 0.48pt device grid (Word for Mac probes 2026-11-05: margins of
+    // 0.5, 1, 1.25 and 2 inches; two columns still bar at the page's left).
+    for (page_idx, (content, bars)) in state
+        .pb
+        .all_contents
+        .iter_mut()
+        .zip(&state.pb.all_change_bars)
+        .enumerate()
+    {
+        if bars.is_empty() {
+            continue;
+        }
+        let (.., si) = state.pb.page_section_indices[page_idx];
+        let sp = &doc.sections[si].properties;
+        let snap = |v: f32| (v / 0.48).round() * 0.48;
+        let x = if doc.mirror_margins && page_idx % 2 == 0 {
+            sp.page_width - sp.margin_right + f32::min(36.0, sp.margin_right / 2.0)
+        } else {
+            sp.margin_left - f32::min(36.0, sp.margin_left / 2.0)
+        };
+        // x lands on a 0.24pt step, rounded down (27 → 26.88, 585 → 584.88).
+        let x = (x / 0.24).floor() * 0.24;
+        content.save_state();
+        content.set_fill_rgb(0.0, 0.0, 0.0);
+        for &(bottom, top) in bars {
+            let (bottom, top) = (snap(bottom), snap(top));
+            content.rect(x, bottom, 0.72, top - bottom).fill_nonzero();
+        }
+        content.restore_state();
     }
 
     // Phase 2c: render footnotes at page bottom (above footer). Endnotes

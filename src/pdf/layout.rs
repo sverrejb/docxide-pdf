@@ -370,6 +370,8 @@ pub(super) struct WordChunk {
     pub(super) double_underline: bool,
     pub(super) strikethrough: bool,
     pub(super) dstrike: bool,
+    /// A tracked change (markup view): its line gets a change bar.
+    pub(super) revised: bool,
     pub(super) char_spacing: f32,
     pub(super) text_scale: f32, // percentage, 100.0 = normal
     pub(super) y_offset: f32,   // superscript/subscript, or inline picture's bottom extent
@@ -545,6 +547,7 @@ impl WordChunk {
             double_underline: run.double_underline,
             strikethrough: run.strikethrough,
             dstrike: run.dstrike,
+            revised: run.revised,
             char_spacing,
             text_scale: run.text_scale,
             y_offset,
@@ -607,11 +610,12 @@ impl WordChunk {
 
     fn image(
         pdf_name: &str,
-        font_size: f32,
+        run: &Run,
         x_offset: f32,
         img: &crate::model::EmbeddedImage,
         effect_xobjs: Option<super::images::EffectXObjs>,
     ) -> Self {
+        let font_size = run.font_size;
         let (width, height) = img.layout_size();
         Self {
             source_starts: Vec::new(),
@@ -629,6 +633,7 @@ impl WordChunk {
             double_underline: false,
             strikethrough: false,
             dstrike: false,
+            revised: run.revised,
             char_spacing: 0.0,
             text_scale: 100.0,
             y_offset: 0.0,
@@ -697,6 +702,7 @@ impl WordChunk {
             double_underline: false,
             strikethrough: false,
             dstrike: false,
+            revised: false,
             char_spacing: 0.0,
             text_scale: 100.0,
             y_offset: 0.0,
@@ -792,6 +798,7 @@ impl WordChunk {
             double_underline,
             strikethrough: false,
             dstrike: false,
+            revised: false,
             char_spacing: 0.0,
             text_scale: 100.0,
             y_offset: 0.0,
@@ -2269,7 +2276,7 @@ pub(super) fn build_paragraph_lines(
                         if proposed_x2 + img_w <= rw {
                             current_chunks.push(WordChunk::image(
                                 pdf_name,
-                                run.font_size,
+                                run,
                                 proposed_x2,
                                 img,
                                 effect_inline_names.get(&run_idx).cloned(),
@@ -2305,7 +2312,7 @@ pub(super) fn build_paragraph_lines(
 
                 current_chunks.push(WordChunk::image(
                     pdf_name,
-                    run.font_size,
+                    run,
                     current_x,
                     img,
                     effect_inline_names.get(&run_idx).cloned(),
@@ -3525,7 +3532,7 @@ pub(super) fn build_tabbed_line(
                 if let Some(pdf_name) = inline_image_names.get(&seg_indices[local_idx]) {
                     all_chunks.push(WordChunk::image(
                         pdf_name,
-                        run.font_size,
+                        run,
                         current_x,
                         img,
                         effect_inline_names.get(&seg_indices[local_idx]).cloned(),
@@ -4140,6 +4147,20 @@ pub(super) fn descender_ratio(lhr: Option<f32>, ar: Option<f32>) -> f32 {
     lhr.zip(ar).map_or(0.25, |(l, a)| (l - a).max(0.0))
 }
 
+// ponytail: change bars are collected here and drawn by the page pass in
+// `render_pass` (margin side, mirror-aware); an out-parameter through the ten
+// `render_paragraph_lines` callers can wait until headers, footers and text
+// boxes want bars too.
+thread_local! {
+    static CHANGE_BARS: std::cell::RefCell<Vec<(f32, f32)>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// (bottom, top) of every revised line drawn since the last call.
+pub(super) fn take_change_bars() -> Vec<(f32, f32)> {
+    CHANGE_BARS.with(|b| std::mem::take(&mut *b.borrow_mut()))
+}
+
 /// Render pre-built lines applying the paragraph alignment.
 /// `first_baseline_y` is line 0's text baseline as if it held no picture; a
 /// picture line drops its own baseline here (see `inline_image_line_extra`).
@@ -4198,6 +4219,14 @@ pub(super) fn render_paragraph_lines(
     for (line_num, line) in lines.iter().enumerate() {
         let y = first_baseline_y - line_y_offsets[line_num];
         let global_line_idx = first_line_index + line_num;
+        // Markup view: a revised line's change bar spans its line box, the
+        // ascent above the baseline and the rest of the advance below (Word
+        // for Mac probes 2026-11-05, single, 1.15, double and exact spacing).
+        if line.chunks.iter().any(|c| c.revised) {
+            let top = y + text_metrics.0;
+            let advance = inline_line_advance(line, line_pitch, text_metrics);
+            CHANGE_BARS.with(|b| b.borrow_mut().push((top - advance, top)));
+        }
 
         let (base_margin, base_width) = line_geometry
             .and_then(|g| g.get(global_line_idx))

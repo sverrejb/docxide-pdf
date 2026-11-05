@@ -193,6 +193,38 @@ pub(super) fn chart_ns_children<'a>(
     find_children(parent, name, CHART_NS)
 }
 
+// ponytail: the revision view and the author colour table are per-conversion
+// state read deep inside the parser (runs, paragraphs, tables, numbering); a
+// thread-local spares threading them through every ParseContext. A conversion
+// runs on one thread, so concurrent conversions never share them.
+thread_local! {
+    static MARKUP: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    static AUTHORS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Print tracked changes as Word's All Markup view (`RevisionView::Markup`).
+pub(crate) fn markup() -> bool {
+    MARKUP.with(|m| m.get())
+}
+
+pub(crate) fn set_markup(on: bool) {
+    MARKUP.with(|m| m.set(on));
+    AUTHORS.with(|a| a.borrow_mut().clear());
+}
+
+/// Word colours each author's revisions by the order the authors first
+/// appear (Word for Mac probes 2026-11-05; a machine that has seen an author
+/// before keeps that author's earlier colour, which no converter can know).
+pub(crate) fn author_index(author: &str) -> usize {
+    AUTHORS.with(|a| {
+        let mut a = a.borrow_mut();
+        a.iter().position(|n| n == author).unwrap_or_else(|| {
+            a.push(author.to_string());
+            a.len() - 1
+        })
+    })
+}
+
 pub(in crate::docx) struct ParseContext<'a, R: std::io::Read + std::io::Seek> {
     pub(in crate::docx) styles: &'a styles::StylesInfo,
     pub(in crate::docx) theme: &'a styles::ThemeFonts,
@@ -984,7 +1016,8 @@ pub(super) fn collect_block_nodes<'a>(
 ) -> Vec<roxmltree::Node<'a, 'a>> {
     let mut nodes = Vec::new();
     for child in parent.children() {
-        if is_fully_deleted_paragraph(child) {
+        // The markup view keeps a deleted paragraph, struck through.
+        if !markup() && is_fully_deleted_paragraph(child) {
             continue;
         }
         if child.has_tag_name((WML_NS, "sdt")) {
@@ -1256,6 +1289,16 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     style_num_ilvl: para_style.and_then(|s| s.num_ilvl),
                 };
                 let mut para = paragraph::build_paragraph(node, &mut ctx, &mut lists, &opts);
+
+                // Final view: a deleted paragraph mark joins its text to the
+                // next paragraph, which keeps its own properties (Word online
+                // export probe 2026-11-05: "Para C, deleted mark after it.Para D.").
+                if !markup()
+                    && matches!(blocks.last(), Some(Block::Paragraph(prev)) if prev.mark_deleted)
+                    && let Some(Block::Paragraph(prev)) = blocks.pop()
+                {
+                    para.runs.splice(0..0, prev.runs);
+                }
 
                 // HTML auto spacing drops between items of one list:
                 // russian_university's auto-spaced list items step a plain

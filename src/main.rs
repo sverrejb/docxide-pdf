@@ -8,6 +8,11 @@ struct Args {
     input: PathBuf,
     /// Output PDF file (defaults to input with .pdf extension)
     output: Option<PathBuf>,
+    /// Print tracked changes as Word's All Markup view (insertions
+    /// underlined, deletions struck through, change bars in the margin)
+    /// instead of the final text
+    #[arg(long)]
+    markup: bool,
 }
 
 fn available_path(path: PathBuf) -> PathBuf {
@@ -53,7 +58,12 @@ fn main() {
     );
 
     let t0 = std::time::Instant::now();
-    if let Err(e) = docxide_pdf::convert_docx_to_pdf(&args.input, &output) {
+    let options = docxide_pdf::ConvertOptions::new().revisions(if args.markup {
+        docxide_pdf::RevisionView::Markup
+    } else {
+        docxide_pdf::RevisionView::Final
+    });
+    if let Err(e) = docxide_pdf::convert_docx_to_pdf_with(&args.input, &output, &options) {
         eprintln!("Error: {e}");
         std::process::exit(1);
     }
