@@ -6569,6 +6569,10 @@ fn render_pass(
                 .bookmark_positions
                 .insert(footnotes::note_anchor(false, id), (page_idx, y));
         }
+        // Footnotes render after the body's bars were drawn; theirs would
+        // otherwise all fall to the first page's header pass.
+        let note_bars = layout::take_change_bars();
+        draw_change_bars(content, &note_bars, content_sp, doc.mirror_margins, page_idx);
         if page_idx == last_page_idx && !state.pb.endnote_ids.is_empty() {
             let tops = render_endnotes_inline(
                 content,
