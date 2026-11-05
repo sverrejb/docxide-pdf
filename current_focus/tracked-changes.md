@@ -194,7 +194,7 @@ delta buckets plus an XML feature census of the worst documents).
 
 | set | ours, markup (J / SSIM / pages wrong) | competitor | we win / lose |
 |---|---|---|---|
-| tracking, no comments (317) | 67.9 / 82.1 / 11 | 62.2 / 80.4 / 11 | 233 / 84 before the pagination fix |
+| tracking, no comments (317) | 71.5 / 85.1 / 9 (2026-11-05 evening; 67.9 / 82.1 / 11 in the morning) | 62.2 / 80.4 / 11 | 259 / 58 |
 | comments + tracking (24) | 55.5 / 72.5 / 0 | 29.3 / 48.6 / 4 | 24 / 0 |
 | comments only (1) | 70.8 / 88.4 / 0 | 60.0 | |
 
@@ -280,9 +280,11 @@ behind, 17 of those thirty or more.
    pages against Word's 17, three siblings at one page short with row
    revisions and deleted fields, one with 543 deleted marks and 52 row
    revisions, one with 14 deleted pictures.
-7. Cosmetic: no change bars in headers/footers (the marks themselves print),
-   bars stop at the line box, per-word strikes, no strike/underline lines on
-   deleted/inserted pictures, list labels uncoloured, two bars per table row.
+7. Cosmetic, mostly done (bars over empty paragraphs and spacing, bridged
+   strikes, coloured labels). Still open: bars in headers/footers (the marks
+   themselves print), strike/underline lines on deleted/inserted pictures,
+   the label's tab gap, two-number labels in the numbering-change colour,
+   two bars per table row.
 
 ## Out of scope
 
