@@ -929,13 +929,23 @@ impl ParaAnchor {
     /// A body float's top (`resolve_fi_y_top`) under the anchor's ceiling.
     pub(super) fn fi_y_top(self, fi: &crate::model::FloatingImage, sp: &SectionProperties) -> f32 {
         let y = resolve_fi_y_top(fi, sp, self.top(fi.on_line));
+        let wrapping_para = fi.wrap_type != WrapType::None
+            && matches!(fi.v_relative_from, VRelativeFrom::Paragraph);
+        // A wrapping picture taller than the page body fits no page: Word
+        // keeps it on its anchor's sheet, moved up to the page top (an
+        // external corpus cover: a 797pt picture anchored -82.7pt above the
+        // third paragraph of a 595pt landscape page prints at y 0, the title
+        // wrapped beside it; its A4 sibling, where the picture fits, keeps
+        // 18.85). One that fits a page is not moved: its anchor paragraph
+        // goes to the next page instead (leading-anchor fixtures).
+        let h = fi.image.display_height;
+        let y = if wrapping_para && h > sp.page_height - sp.margin_top - sp.margin_bottom && y - h < 0.0 {
+            y.max(h.min(sp.page_height))
+        } else {
+            y
+        };
         match self.ceiling {
-            Some(c)
-                if fi.wrap_type != WrapType::None
-                    && matches!(fi.v_relative_from, VRelativeFrom::Paragraph) =>
-            {
-                y.min(c)
-            }
+            Some(c) if wrapping_para => y.min(c),
             _ => y,
         }
     }
@@ -3832,9 +3842,14 @@ fn render_paragraph_block(
                     content_h = content_h.max(content_top - zone.bottom_y - para.space_after);
                 }
             }
-        } else if fi.v_relative_from == VRelativeFrom::Paragraph && fi.wrap_type.wraps_beside() {
+        } else if fi.v_relative_from == VRelativeFrom::Paragraph
+            && fi.wrap_type.wraps_beside()
+            && fi_h <= sp.page_height - sp.margin_top - sp.margin_bottom
+        {
             // Paragraph-relative wrapping images: track overflow
-            // for page-break check only (text wraps beside them).
+            // for page-break check only (text wraps beside them). One taller
+            // than the page body fits no page: it stays, moved up to the
+            // page top (`ParaAnchor::fi_y_top`).
             float_overflow_h = float_overflow_h.max(fi_h);
         }
     }
