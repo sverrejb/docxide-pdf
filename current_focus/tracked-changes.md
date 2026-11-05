@@ -94,7 +94,17 @@ references). Exports: `inline/` (print preset, inline revisions), `print/`
   strike height across its width plus a 1.44pt line through its middle; an
   inserted one gets the underline; the bar covers the picture's height
   (p10: 603.6–720). Implemented 2026-11-05 (strike 678.80 vs 678.96).
-- Deleted fields (`w:delInstrText`): the cached result struck through.
+- Deleted fields (`w:delInstrText`): the cached result struck through; a
+  deleted TOC with an empty cached result prints nothing (a corpus document
+  showed the heading and its tip, no entries; we regenerated the entries).
+- Comments on deleted content (probes p21/p21b, 2026-11-05): a comment on
+  deleted text in a paragraph or a deleted cell keeps its balloon, also with
+  a dateless "Comparison" deletion; one whose range opens before a wholly
+  deleted table and closes after it (between blocks), with its reference in
+  a deleted paragraph, gets no balloon in the markup view either, though it
+  still takes a number. Four table-heavy comments-set documents print no
+  pane for that reason (6.7 → 76.4 Jaccard once modelled: deleted text
+  counts as text in `comment_ranges`).
 - Lists: an inserted item takes its final number; a deleted item shows a
   number without consuming one (1, inserted 2, deleted 2, 3). The label is
   coloured and underlined / struck like the text (we leave the label plain).
@@ -274,9 +284,10 @@ behind, 17 of those thirty or more.
    DejaVu Sans Mono in this Mac's `~/Library/Fonts` (also matplotlib's
    copy) and uses it, so the lines wrap differently. CI has no DejaVu;
    nothing to change in the code.
-5. Table-heavy redlines with dozens of inserted/deleted rows, deleted fields
-   and comments (the four 6–7-point documents in the comments set, 9–11
-   pages each; the competitor scores 5–6 there too).
+5. ~~Table-heavy redlines~~ (the four 6–7-point comments-set documents):
+   their comments sit on wholly deleted tables and Word prints no pane; we
+   zoomed the page for one. Fixed 2026-11-05 (6.7 → 76.4 on the first);
+   the deleted TOC regeneration went with it.
 6. Remaining page-count misses (11): a portrait/landscape document at 9
    pages against Word's 17, three siblings at one page short with row
    revisions and deleted fields, one with 543 deleted marks and 52 row

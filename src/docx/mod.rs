@@ -254,6 +254,10 @@ pub(in crate::docx) struct CommentRanges {
     pub(in crate::docx) reference_order: Vec<u32>,
 }
 
+fn is_text_node(n: roxmltree::Node) -> bool {
+    n.has_tag_name((WML_NS, "t")) || n.has_tag_name((WML_NS, "delText"))
+}
+
 /// Comment ranges as Word reads them, over the whole body (a range may start
 /// between blocks and span paragraphs and tables).
 fn comment_ranges(root: roxmltree::Node) -> CommentRanges {
@@ -272,20 +276,26 @@ fn comment_ranges(root: roxmltree::Node) -> CommentRanges {
             // paragraph, or between blocks, gets no balloon wherever its reference is
             // (after a table or a paragraph alike); one ending after text,
             // in a cell's last paragraph too, gets one.
+            // Deleted text is text here too (Word for Mac probes p21/p21b:
+            // a comment on a deleted cell's text keeps its balloon, one whose
+            // range opens before a wholly deleted table and closes after it,
+            // with its reference in a deleted paragraph, loses it in the
+            // markup view as well; four external corpus documents print no
+            // pane for that reason).
             let text_before = n
                 .ancestors()
                 .find(|a| a.has_tag_name((WML_NS, "p")))
                 .is_some_and(|p| {
-                    p.descendants().take_while(|d| *d != n).any(|d| {
-                        d.has_tag_name((WML_NS, "t")) && d.text().is_some_and(|t| !t.is_empty())
-                    })
+                    p.descendants()
+                        .take_while(|d| *d != n)
+                        .any(|d| is_text_node(d) && d.text().is_some_and(|t| !t.is_empty()))
                 });
             if !text_before {
                 unballooned.extend(id(n));
             }
         } else if n.has_tag_name((WML_NS, "commentReference")) {
             reference_order.extend(id(n));
-        } else if n.has_tag_name((WML_NS, "t")) && n.text().is_some_and(|t| !t.is_empty()) {
+        } else if is_text_node(n) && n.text().is_some_and(|t| !t.is_empty()) {
             with_text.extend(open.iter().copied());
         } else if n.has_tag_name((WML_NS, "p")) && !open.is_empty() {
             open_at.insert(n.range().start, open.clone());
@@ -1925,6 +1935,27 @@ mod tests {
             (b.style, b.width_pt, b.extent()),
             (BorderStyle::Double, 1.5, 4.5)
         );
+    }
+
+    #[test]
+    fn deleted_text_counts_for_a_comment_range() {
+        // Word for Mac probes p21/p21b (2026-11-05): a comment whose range
+        // closes after deleted text in a paragraph keeps its balloon; one
+        // whose range opens before a wholly deleted table and closes between
+        // blocks loses it, in the markup view too.
+        let xml = format!(
+            r#"<w:body xmlns:w="{WML_NS}">
+<w:p><w:commentRangeStart w:id="1"/><w:del w:id="9" w:author="a"><w:r><w:delText>gone</w:delText></w:r></w:del><w:commentRangeEnd w:id="1"/><w:r><w:commentReference w:id="1"/></w:r></w:p>
+<w:commentRangeStart w:id="2"/><w:tbl><w:tr><w:tc><w:p><w:del w:id="8" w:author="a"><w:r><w:delText>cell</w:delText></w:r></w:del></w:p></w:tc></w:tr></w:tbl><w:commentRangeEnd w:id="2"/>
+<w:p><w:r><w:commentReference w:id="2"/></w:r></w:p>
+<w:p><w:commentRangeStart w:id="3"/><w:commentRangeEnd w:id="3"/><w:r><w:commentReference w:id="3"/></w:r></w:p>
+</w:body>"#
+        );
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        let ranges = super::comment_ranges(doc.root_element());
+        assert!(ranges.shown.contains(&1), "deleted text before the end keeps the balloon");
+        assert!(!ranges.shown.contains(&2), "a range over a deleted table between blocks loses it");
+        assert!(ranges.shown.contains(&3), "an empty range keeps its balloon");
     }
 
     #[test]
