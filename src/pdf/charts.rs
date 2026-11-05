@@ -982,6 +982,9 @@ pub(super) const TITLE_BAND: f32 = 30.0;
 const CHART_PAD_TOP: f32 = 10.7;
 const CHART_PAD_RIGHT: f32 = 11.0;
 const LEGEND_BAND: f32 = 23.6;
+const LEGEND_PAD_RIGHT: f32 = 9.9;
+/// A legend key's width and the space after it.
+const LEGEND_KEY_W: f32 = 8.0;
 /// A title's rich text without run properties of its own falls back to
 /// DrawingML's default face, not the theme's: Word draws it in Arial where
 /// every other label takes the minor font (torture_test, probe exports).
@@ -1265,19 +1268,16 @@ pub(super) fn render_chart(
     } else {
         0.0
     });
+    let legend_label_w = c
+        .series
+        .iter()
+        .map(|s| text_width(&s.label, 10.0, label_font))
+        .fold(0.0f32, f32::max);
+    // A right legend ends 9.9pt from the chart's edge, its key 8pt before
+    // its names, and stands 15.6pt clear of the plot (v2d_legend_r probe).
+    let legend_right_x = x + w - LEGEND_PAD_RIGHT - legend_label_w - LEGEND_KEY_W;
     let margin_right = if has_legend && legend_on_right {
-        let legend_swatch = 5.5;
-        let legend_gap = 8.0;
-        let max_label_w = c
-            .series
-            .iter()
-            .map(|s| text_width(&s.label, 10.0, label_font))
-            .fold(0.0f32, f32::max);
-        // Line/Area use wider line+marker legend swatches; Scatter/Bubble use small marker dots
-        let has_line_swatch = matches!(c.chart_type, ChartType::Line | ChartType::Area);
-        let swatch_w = if has_line_swatch { 20.0 } else { legend_swatch };
-        let computed = legend_gap + swatch_w + 6.0 + max_label_w + 12.0;
-        computed.max(w * 0.15)
+        LEGEND_PAD_RIGHT + legend_label_w + LEGEND_KEY_W + 15.6
     } else if is_point_chart {
         (w * 0.06).max(20.0)
     } else if horizontal {
@@ -1712,13 +1712,17 @@ pub(super) fn render_chart(
                 })
                 .collect();
             let placement = match legend.position {
+                // Centred on the chart below its title; names 17.63pt apart.
                 LegendPosition::Right => LegendPlacement::Right {
-                    x: plot_x + plot_w + 5.0,
-                    center_y: plot_y + plot_h / 2.0,
+                    x: legend_right_x,
+                    center_y: y
+                        - (h + if c.title.is_some() { TITLE_BAND } else { 0.0 }) / 2.0
+                        - 4.67,
                 },
+                // Names on a baseline 11.9pt above the chart's bottom.
                 _ => LegendPlacement::Bottom {
                     center_x: plot_x + plot_w / 2.0,
-                    y: y - h + 4.0,
+                    y: y - h + 10.9,
                 },
             };
             render_chart_legend(
@@ -1728,7 +1732,7 @@ pub(super) fn render_chart(
                 label_font_key,
                 label_font,
                 5.5,
-                18.0,
+                17.63,
             );
         }
     }
