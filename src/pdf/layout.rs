@@ -5404,6 +5404,24 @@ pub(super) fn picture_line_bottom(
     descent + leading
 }
 
+/// The line a picture `picture_h` tall makes: the picture plus the text
+/// descent, never less than the pitch `line_h`, which a line without one
+/// keeps (the laid-out form is `inline_line_advance`).
+pub(super) fn line_h_with_picture(
+    picture_h: f32,
+    runs: &[Run],
+    para: &Paragraph,
+    seen_fonts: &HashMap<String, FontEntry>,
+    ls: LineSpacing,
+    line_h: f32,
+) -> f32 {
+    if picture_h > 0.0 {
+        line_h.max(picture_h + picture_line_bottom(runs, para, seen_fonts, ls))
+    } else {
+        line_h
+    }
+}
+
 /// A run's (line_h_ratio, ascender_ratio). A run of nothing but spaces in an
 /// East Asian font gets the plain metrics rather than Word's 1.3× leading, so
 /// it cannot raise a Latin line (see `fonts::embed::compute_line_metrics`).

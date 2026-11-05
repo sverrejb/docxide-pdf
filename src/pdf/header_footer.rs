@@ -11,7 +11,8 @@ use crate::model::{
 use super::color::stroke_border;
 use super::helpers::{align_offset, draw_horizontal_rule};
 use super::layout::{
-    LineOpts, LinkAnnotation, build_lines, is_text_empty, lines_height, picture_line_bottom,
+    LineOpts, LinkAnnotation, build_lines, is_text_empty, line_h_with_picture, lines_height,
+    picture_line_bottom,
     position_stretch, render_paragraph_lines, runs_max_image_h, size_lines_by_own_runs,
     tallest_run_metrics,
 };
@@ -578,9 +579,7 @@ fn measure_header_height(
                 let mut content_h = if let Some(h) = wrapped_h {
                     h
                 } else if picture_h > 0.0 {
-                    line_h.max(
-                        picture_h + picture_line_bottom(&para.runs, para, ctx.fonts, effective_ls),
-                    )
+                    line_h_with_picture(picture_h, &para.runs, para, ctx.fonts, effective_ls, line_h)
                 } else {
                     text_lines.unwrap_or(1) as f32 * line_h
                 } + if with_floats {

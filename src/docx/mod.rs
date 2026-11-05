@@ -1506,8 +1506,9 @@ fn resolve_seq_fields(doc: &mut Document) {
     }
     // Per name: the count and the paragraph holding the last field.
     let mut counters: HashMap<String, (u32, usize)> = HashMap::new();
-    // (paragraph, level) of every built-in heading so far.
-    let mut headings: Vec<(usize, u8)> = Vec::new();
+    // The latest built-in heading paragraph per 0-based level (0 = none,
+    // harmless because `last` starts at 0 too).
+    let mut last_heading = [0usize; 9];
     for (i, para) in paras.into_iter().enumerate() {
         if let Some(level) = para
             .style_id
@@ -1515,7 +1516,7 @@ fn resolve_seq_fields(doc: &mut Document) {
             .and_then(|id| doc.style_id_to_name.get(id))
             .and_then(|name| styles::builtin_heading_level(name))
         {
-            headings.push((i, level + 1));
+            last_heading[level as usize] = i;
         }
         for run in &mut para.runs {
             let Some(FieldCode::Seq {
@@ -1534,11 +1535,8 @@ fn resolve_seq_fields(doc: &mut Document) {
                 SeqStep::Repeat => *counter = (*counter).max(1),
                 SeqStep::Restart(n) => *counter = *n,
                 SeqStep::Heading(n) => {
-                    let restarts = headings
-                        .iter()
-                        .rev()
-                        .take_while(|(at, _)| *at > *last)
-                        .any(|(_, level)| level <= n);
+                    let restarts =
+                        last_heading[..(*n as usize).min(9)].iter().any(|&at| at > *last);
                     *counter = if restarts { 1 } else { *counter + 1 };
                 }
             }
@@ -1692,24 +1690,23 @@ fn expand_toc_fields<R: Read + std::io::Seek>(
         let sp = &sections[s].properties;
         let text_width = sp.page_width - sp.margin_left - sp.margin_right;
         let tab_pos = (text_width * 20.0).round() as i32 - 10;
-        // A table of figures styles every entry "table of figures", whatever
-        // its level; Word's built-in definition indents 24pt (issue #146,
-        // Windows Word 16.0.20527: entries without the style start 24pt in).
-        let toc_style = |level: u8| {
-            let name = if spec.figures {
-                "table of figures".to_string()
-            } else {
-                format!("toc {level}")
-            };
-            names.iter().find(|(_, n)| n.eq_ignore_ascii_case(&name)).map(|(id, _)| id.clone())
-        };
         let mut xmls: Vec<String> = entries
             .iter()
             .map(|(level, bookmark, label, text)| {
-                let mut ppr = match toc_style(*level) {
-                    Some(id) => format!(r#"<w:pStyle w:val="{}"/>"#, xml_text(&id)),
-                    None if spec.figures => r#"<w:ind w:left="480"/>"#.to_string(),
-                    None if *level > 1 => format!(r#"<w:ind w:left="{}"/>"#, 220 * (*level as i32 - 1)),
+                // A table of figures styles every entry "table of figures",
+                // whatever its level; a contents table "toc N". Without the
+                // style Word's stock definition applies: 24pt in (issue #146,
+                // Windows Word 16.0.20527), 11pt × (N − 1) (unprobed).
+                let (name, stock_indent) = if spec.figures {
+                    ("table of figures".to_string(), 480)
+                } else {
+                    (format!("toc {level}"), 220 * (*level as i32 - 1))
+                };
+                let style_id =
+                    names.iter().find(|(_, n)| n.eq_ignore_ascii_case(&name)).map(|(id, _)| id);
+                let mut ppr = match style_id {
+                    Some(id) => format!(r#"<w:pStyle w:val="{}"/>"#, xml_text(id)),
+                    None if stock_indent > 0 => format!(r#"<w:ind w:left="{stock_indent}"/>"#),
                     None => String::new(),
                 };
                 let mut body = String::new();

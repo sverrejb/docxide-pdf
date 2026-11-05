@@ -55,7 +55,8 @@ use layout::{
     CjkLayout, DualRegion, EMPTY_EFFECTS, EMPTY_INLINE_IMAGES, LineNumberArg, LineOpts,
     LinkAnnotation, LinkTagger, PUNCT_PULL_FREE, PUNCT_SQUEEZE, TextLine, build_lines,
     build_paragraph_lines, descender_ratio, grid_baseline_offset, grid_snapped_line_h,
-    inline_image_line_extra, is_text_empty, line_max_image_h, lines_height, picture_line_bottom,
+    inline_image_line_extra, is_text_empty, line_h_with_picture, line_max_image_h, lines_height,
+    picture_line_bottom,
     render_paragraph_lines, run_line_metrics, size_lines_by_own_runs, tallest_glyph_run_metrics,
     tallest_run_metrics,
 };
@@ -473,6 +474,8 @@ pub(super) struct RenderContext<'a> {
     pub(super) endnote_marks: &'a HashMap<u32, String>,
     /// Page numbers from a first pass, for PAGE and NUMPAGES fields in the body.
     pub(super) body_page_fields: Option<&'a BodyPageFields>,
+    /// What a PAGEREF shows for each page of the bookmark pre-pass.
+    pub(super) page_labels: Vec<String>,
     /// Word's `compatibilityMode` (see `docx::settings`).
     pub(super) compat_mode: u32,
     /// Word's `enableOpenTypeFeatures` (see `docx::settings`).
@@ -1881,8 +1884,6 @@ pub(super) struct LayoutState {
     pub(super) global_block_idx: usize,
     pub(super) heading_entries: Vec<HeadingEntry>,
     pub(super) bookmark_positions: HashMap<String, (usize, f32)>,
-    /// What a PAGEREF shows for each page of the bookmark pre-pass.
-    pub(super) page_labels: Vec<String>,
     /// The keep-with-next chain being laid out is too long for a page: its
     /// paragraphs keep only their own link to the next.
     pub(super) long_keep_chain: bool,
@@ -1916,7 +1917,6 @@ impl LayoutState {
             global_block_idx: self.global_block_idx,
             heading_entries: Vec::new(),
             bookmark_positions: self.bookmark_positions.clone(),
-            page_labels: self.page_labels.clone(),
             long_keep_chain: self.long_keep_chain,
         }
     }
@@ -2452,8 +2452,9 @@ fn compute_bookmark_positions(
 
     let mut bookmark_positions: HashMap<String, (usize, f32)> = HashMap::new();
     let mut page_idx = 0usize;
-    // The section each simulated page opens in, for its label.
-    let mut pages = vec![0usize];
+    // The section each simulated page opens in, shaped like
+    // `PageBuilder::page_section_indices` for `page_number_formats`.
+    let mut pages = vec![(0, false, 0)];
     let first_sp = &doc.sections[0].properties;
     let mut sp = first_sp;
     let mut slot_top = effective_slot_top(sp, true, page_idx, ctx);
@@ -2469,7 +2470,7 @@ fn compute_bookmark_positions(
                 | SectionBreakType::OddPage
                 | SectionBreakType::EvenPage => {
                     page_idx += 1;
-                    pages.push(si);
+                    pages.push((si, false, si));
                     slot_top = effective_slot_top(sp, true, page_idx, ctx);
                     margin_bottom = compute_effective_margin_bottom(sp, true, page_idx, ctx);
                     prev_space_after = 0.0;
@@ -2486,7 +2487,7 @@ fn compute_bookmark_positions(
                         && slot_top < effective_slot_top(sp, false, page_idx, ctx)
                     {
                         page_idx += 1;
-                        pages.push(si);
+                        pages.push((si, false, si));
                         slot_top = effective_slot_top(sp, false, page_idx, ctx);
                         margin_bottom = compute_effective_margin_bottom(sp, false, page_idx, ctx);
                         prev_space_after = 0.0;
@@ -2578,7 +2579,7 @@ fn compute_bookmark_positions(
                         && slot_top < effective_slot_top(sp, false, page_idx, ctx)
                     {
                         page_idx += 1;
-                        pages.push(si);
+                        pages.push((si, false, si));
                         slot_top = effective_slot_top(sp, false, page_idx, ctx);
                         margin_bottom = compute_effective_margin_bottom(sp, false, page_idx, ctx);
                         slot_top -= content_h;
@@ -2589,28 +2590,26 @@ fn compute_bookmark_positions(
                     prev_para = Some(para);
                 }
                 Block::Table(table) => {
-                    let para_count: usize = table
+                    let cells: Vec<Vec<&Paragraph>> = table
                         .rows
                         .iter()
                         .flat_map(|r| r.cells.iter())
-                        .map(|c| c.all_paragraphs().len().max(1))
-                        .max()
-                        .unwrap_or(1)
-                        * table.rows.len();
+                        .map(|c| c.all_paragraphs())
+                        .collect();
+                    let para_count =
+                        cells.iter().map(|c| c.len().max(1)).max().unwrap_or(1) * table.rows.len();
                     let est_h = para_count as f32 * 14.0;
                     if slot_top - est_h < margin_bottom {
                         page_idx += 1;
-                        pages.push(si);
+                        pages.push((si, false, si));
                         slot_top = effective_slot_top(sp, false, page_idx, ctx);
                         margin_bottom = compute_effective_margin_bottom(sp, false, page_idx, ctx);
                     }
                     // Captions in cells count as on the table's page (issue
                     // #146: a panel table's TOC entries had no page numbers).
                     // ponytail: a table that splits keeps its first page.
-                    for cell in table.rows.iter().flat_map(|r| r.cells.iter()) {
-                        for bm in cell.all_paragraphs().iter().flat_map(|p| &p.bookmarks) {
-                            bookmark_positions.insert(bm.clone(), (page_idx, slot_top));
-                        }
+                    for bm in cells.iter().flatten().flat_map(|p| &p.bookmarks) {
+                        bookmark_positions.insert(bm.clone(), (page_idx, slot_top));
                     }
                     slot_top -= est_h;
                     prev_space_after = 0.0;
@@ -2619,15 +2618,11 @@ fn compute_bookmark_positions(
             }
         }
     }
-    // A page's label: its logical number in its section's format (issue
-    // #146: a TOC after "i" front matter shows 1, not the sheet count).
-    let indices: Vec<(usize, bool, usize)> = pages.iter().map(|&si| (si, false, si)).collect();
-    let labels = page_numbers(doc, &indices)
+    // A page's label as its PAGE field shows it (issue #146: a TOC after
+    // "i" front matter shows 1, not the sheet count).
+    let labels = page_number_formats(doc, &pages)
         .into_iter()
-        .zip(&pages)
-        .map(|(n, &si)| {
-            header_footer::page_field_text(n, doc.sections[si].properties.page_num_format.as_deref())
-        })
+        .map(|(n, fmt)| header_footer::page_field_text(n, fmt))
         .collect();
     (bookmark_positions, labels)
 }
@@ -3044,7 +3039,7 @@ fn render_paragraph_block(
                         if r.text.trim().is_empty()
                             && let Some(&(page_idx, _)) = state.bookmark_positions.get(bookmark)
                         {
-                            r.text = state
+                            r.text = ctx
                                 .page_labels
                                 .get(page_idx)
                                 .cloned()
@@ -3948,22 +3943,22 @@ fn render_paragraph_block(
                 LineSpacing::Auto(_) => LineSpacing::Auto(1.0),
                 boxed => boxed,
             };
-            let next_first_line_h = resolve_line_h(first_ls, nfs, nlhr);
-            // An inline picture sits on the baseline, so its line is the
-            // picture plus the text descent (issue #146: a heading kept with
-            // an 80pt picture under a 14pt line moves with it). A paragraph
-            // of one picture holds it in `image`, not in a run.
+            // A picture makes its line as tall as itself (issue #146: a
+            // heading kept with an 80pt picture under a 14pt line moves with
+            // it); a paragraph of one picture holds it in `image`, not a run.
             let picture_h = if next.image.is_some() {
                 next.content_height
             } else {
                 layout::runs_max_image_h(&next.runs)
             };
-            let next_first_line_h = if picture_h > 0.0 {
-                next_first_line_h
-                    .max(picture_h + picture_line_bottom(&next.runs, next, ctx.fonts, next_ls))
-            } else {
-                next_first_line_h
-            };
+            let next_first_line_h = line_h_with_picture(
+                picture_h,
+                &next.runs,
+                next,
+                ctx.fonts,
+                next_ls,
+                resolve_line_h(first_ls, nfs, nlhr),
+            );
             // The chain needs as many of the next paragraph's lines as must
             // stay together on this page: all of a keepLines paragraph; else
             // one without widow control, with it two, or all of a paragraph
@@ -5127,7 +5122,7 @@ fn render_pass(
         }
     }
 
-    let ctx = RenderContext {
+    let mut ctx = RenderContext {
         fonts: &seen_fonts,
         sections: &doc.sections,
         even_and_odd_headers: doc.even_and_odd_headers,
@@ -5142,6 +5137,7 @@ fn render_pass(
         footnote_marks: &footnote_display_order,
         endnote_marks: &endnote_display_order,
         body_page_fields: page_fields,
+        page_labels: Vec::new(),
         compat_mode: doc.compat_mode,
         open_type_features: doc.open_type_features,
         east_asian_lang: doc.east_asian_lang,
@@ -5168,6 +5164,7 @@ fn render_pass(
     };
 
     let (bookmark_positions, page_labels) = compute_bookmark_positions(doc, &ctx);
+    ctx.page_labels = page_labels;
 
     // Phase 2: build multi-page content streams (section-aware)
     let first_sp = &doc.sections[0].properties;
@@ -5181,7 +5178,6 @@ fn render_pass(
         global_block_idx: 0,
         heading_entries: Vec::new(),
         bookmark_positions,
-        page_labels,
         long_keep_chain: false,
     };
     state.pb.tags.lang = document_lang(doc);
@@ -6013,30 +6009,7 @@ fn render_pass(
     }
     let empty_hf_maps: HfMaps = Default::default();
 
-    // Pre-compute page numbers and formats: sections without w:pgNumType @start
-    // continue numbering from the previous section, but the format never
-    // inherits — fmt applies only to its own section and an omitted fmt means
-    // decimal (OOXML §17.6.12; Word renders arabic after roman front matter)
-    // Track which section's format applies to each page (None = decimal default).
-    // Uses a section index to avoid cloning the format string for every page.
-    let mut page_format_sources: Vec<Option<usize>> = Vec::with_capacity(total_pages);
-    let page_numbers = page_numbers(doc, &state.pb.page_section_indices);
-    {
-        let mut running_format_si: Option<usize> = None;
-        let mut prev_content_si: Option<usize> = None;
-        for page_idx in 0..total_pages {
-            let (_, _, content_si) = state.pb.page_section_indices[page_idx];
-            if prev_content_si != Some(content_si) {
-                running_format_si = doc.sections[content_si]
-                    .properties
-                    .page_num_format
-                    .is_some()
-                    .then_some(content_si);
-            }
-            page_format_sources.push(running_format_si);
-            prev_content_si = Some(content_si);
-        }
-    }
+    let page_numbers = page_number_formats(doc, &state.pb.page_section_indices);
 
     let empty_styleref: HashMap<String, String> = HashMap::new();
     // The first occurrence of each style in the document. The running values
@@ -6060,9 +6033,7 @@ fn render_pass(
         let sp = &doc.sections[si].properties;
         ctx.cell_grid_pitch.set(cell_grid_pitch(doc, sp));
 
-        let page_num = page_numbers[page_idx];
-        let effective_page_num_format = page_format_sources[page_idx]
-            .and_then(|si| doc.sections[si].properties.page_num_format.as_deref());
+        let (page_num, effective_page_num_format) = page_numbers[page_idx];
 
         // Per spec §17.16.5.59: in headers/footers of a printed document, STYLEREF
         // searches the current page top-to-bottom first, then backward to doc start.
@@ -6226,12 +6197,9 @@ fn render_pass(
     );
 
     let page_fields = BodyPageFields {
-        pages: (0..total_pages)
-            .map(|i| {
-                let fmt = page_format_sources[i]
-                    .and_then(|si| doc.sections[si].properties.page_num_format.clone());
-                (page_numbers[i], fmt)
-            })
+        pages: page_numbers
+            .into_iter()
+            .map(|(n, fmt)| (n, fmt.map(str::to_string)))
             .collect(),
         total: total_pages,
     };
@@ -6488,6 +6456,20 @@ fn page_numbers(doc: &Document, page_section_indices: &[(usize, bool, usize)]) -
         prev_si = Some(last_si);
     }
     numbers
+}
+
+/// Each page's logical number and number format (None = decimal): the format
+/// of the section a page ends in, which never inherits from the one before
+/// (OOXML §17.6.12; Word renders arabic after roman front matter).
+fn page_number_formats<'a>(
+    doc: &'a Document,
+    page_section_indices: &[(usize, bool, usize)],
+) -> Vec<(usize, Option<&'a str>)> {
+    page_numbers(doc, page_section_indices)
+        .into_iter()
+        .zip(page_section_indices)
+        .map(|(n, &(_, _, si))| (n, doc.sections[si].properties.page_num_format.as_deref()))
+        .collect()
 }
 
 /// The docGrid pitch table-cell lines snap to in a section: only under
