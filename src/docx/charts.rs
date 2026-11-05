@@ -163,11 +163,13 @@ fn non_empty_vec(v: Vec<f32>) -> Option<Vec<f32>> {
 }
 
 fn parse_axis(ax_node: roxmltree::Node) -> ChartAxis {
+    // Lines with no `c:spPr` of their own draw black (the probes' 2-D and
+    // 3-D charts, torture_test).
+    const UNSTYLED: [u8; 3] = [0, 0, 0];
     let gridline_color = chart_child(ax_node, "majorGridlines")
-        .and_then(|gl| chart_child(gl, "spPr"))
-        .and_then(extract_line_color);
+        .and_then(|gl| chart_child(gl, "spPr").map_or(Some(UNSTYLED), extract_line_color));
 
-    let line_color = chart_child(ax_node, "spPr").and_then(extract_line_color);
+    let line_color = chart_child(ax_node, "spPr").map_or(Some(UNSTYLED), extract_line_color);
 
     ChartAxis {
         labels: Vec::new(),
