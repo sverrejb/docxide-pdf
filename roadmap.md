@@ -470,13 +470,21 @@ Open queue from the large-corpus and focus-fixture rounds:
   a margin has no strip there (p26a/p26b, the Erasmus cover); VML lengths
   in inches and other units (an OLE preview a page off). 317 set 72.9
   Jaccard, page misses 4.
-- Next steps, in order: (1) fixed-layout tables take their columns from
-  the cells' `tcW`, not the grid (Word probes p28a–d: 36pt columns under
-  a 137pt grid with `tblW auto`; a 100% table shares its width over them,
-  a pct cell takes its share first) — the 9-vs-17-page document; (2) the
-  page's text re-flowing below a page-anchored floating table that fits
-  (p24a/p24g); (3) moves (`w:moveFrom` / `w:moveTo`, 3 of 317 documents)
-  once a Word-made probe exists (Word hangs on hand-written move ranges).
+- Done 2026-11-06 (round 4, Word for Mac probes p28–p29): fixed-layout
+  tables take their columns from the cells' `tcW`, not the grid (case111
+  +12.4, italian_project +3.6); a paragraph that opens with a page break
+  must fit its own line first or leaves a blank page (p29a–c); revised
+  footnotes bar on their own page, not page 1's header. The 9-vs-17-page
+  document is 16/17 pages (18.7 → 48.5).
+- Next steps, in order: (1) the page's text re-flowing below a
+  page-anchored floating table that fits (p24a/p24g; needs the page re-laid
+  once the float lands, our render is single-pass); (2) a header that
+  overlaps the body on later pages (a press-release family, ~60pt); (3) an
+  auto table whose cells' `tcW` sum to twice the column (Word centres it off
+  both page edges); (4) moves (`w:moveFrom` / `w:moveTo`, 3 of 317) once a
+  Word-made probe exists (Word hangs on hand-written move ranges); (5) text
+  boxes' change bars (unprobed). Environment: Berlin Sans FB missing (one
+  document 5 vs 6 pages).
 - Final view: a deleted paragraph mark merges its paragraph into the next
   and takes its section break with it, deleted table rows are dropped (Word
   online export probes 2026-11-05).

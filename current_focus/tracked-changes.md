@@ -174,6 +174,23 @@ below the baseline at 12pt).
   such a table over the text). Compat 14 with a too-tall table keeps a row or
   two on the anchor's page and the text below them (p24c, p24d; unmodelled).
   `table.rs` `render_table`.
+- Fixed-layout tables (`tblLayout fixed`) with a percentage or auto width
+  take their columns from the cells' `tcW`, not the saved grid (p28a–g,
+  0.2pt): 720-twip cells under a 2746…-twip grid make 36pt columns in a
+  `tblW auto` table; in a 100% table pct cells take their share and dxa
+  cells share the rest in proportion; shares that overrun the width starve
+  columns from the right down to 12pt (Word then sets one letter per line).
+  A column only spanned cells size, or a table over 100% (a fixture's 105%
+  table fills its 478pt grid), keeps the saved grid. `table_layout.rs`
+  `fixed_layout_columns`. Unprobed: how a spanned cell's preference splits.
+- A paragraph that opens with a page break still sets the break on its first
+  line, and that line must fit first; one that does not moves to a page of
+  its own and breaks from there, leaving that page blank (p29a–c: 25pt exact
+  break line under 23pt of room → blank page, 15pt → none). The space above
+  it may run past the page bottom (erasmus_plus, nabl_lab). `pdf/mod.rs`,
+  explicit break branch.
+- Revised footnote lines bar like body lines (Word draws them); ours drew
+  every page's footnote bars on page 1's header layer, now on their page.
 
 **Change bars**: black, 0.72pt wide, in the left margin at
 `margin_left − min(36pt, margin_left / 2)` (margins 0.5/1/1.25/2in → 18, 36,
@@ -259,8 +276,8 @@ delta buckets plus an XML feature census of the worst documents).
 
 | set | ours, markup (J / SSIM / pages wrong) | competitor | we win / lose |
 |---|---|---|---|
-| tracking, no comments (317) | 72.9 / 86.3 / 4 (2026-11-05 night, round 3; 71.7 / 85.4 / 9 in the evening, 67.9 / 82.1 / 11 in the morning) | 62.2 / 80.4 / 11 | 259 / 58 |
-| comments + tracking (24) | 68.0 / 86.2 / 0 (2026-11-05 night; 67.9 in the evening, 55.5 / 72.5 / 0 in the morning) | 29.3 / 48.6 / 4 | 24 / 0 |
+| tracking, no comments (317) | 73.0 / 86.4 / 4 (2026-11-06, round 4; 72.9 / 86.3 / 4 after round 3, 71.7 / 85.4 / 9 in the evening, 67.9 / 82.1 / 11 in the morning) | 62.2 / 80.4 / 11 | 259 / 58 |
+| comments + tracking (24) | 68.0 / 86.2 / 0 (2026-11-06, round 4 unchanged; 2026-11-05 night; 67.9 in the evening, 55.5 / 72.5 / 0 in the morning) | 29.3 / 48.6 / 4 | 24 / 0 |
 
 Round 3 (labels `tc-gap8` → `tc-gap9`, `tc-comments9` → `tc-comments10`):
 317 set 71.7 → 72.6 → 72.9 Jaccard; eight documents +14 to +48 (deleted
@@ -268,6 +285,10 @@ page-anchored tables that now start on the next page), then four more +13
 to +36 (the exact-line foot, the OLE preview, the Erasmus cover), one −1.0
 (its deleted table now on Word's page, the text beside it not yet
 re-flowed); page misses 9 → 6 → 4; the comments set 67.9 → 68.0.
+Round 4 (labels `tc-gap9` → `tc-gap12`, `tc-comments11`): 317 set 72.89
+→ 72.98; the 9-vs-17-page document 18.7 → 48.5 (16/17 pages: the
+fixed-layout columns, then the break line that leaves Word's blank page),
+one document −0.9 from the fixed-layout columns.
 | comments only (1) | 70.8 / 88.4 / 0 | 60.0 | |
 
 (317 set before the page-top split fix below: 66.5 / 80.6 / 25.) 108 of the
@@ -361,13 +382,15 @@ behind, 17 of those thirty or more.
    that fills its indent and the too-tall page-anchored floating table
    (rules above, probes p22–p24, one commit each) take the 3-vs-4 sibling to
    4/4 pages (its remaining −0.9pt per page is the header font) and the
-   `a1872de6f9` labels to Word's x. Still open from the page-count misses:
-   - The `29379c07bf` siblings' constant −1.2pt: their header title is
+   label-filled siblings' labels to Word's x. Still open from the page-count
+   misses:
+   - A family of siblings' constant −1.2pt: their header title is
      Microsoft PhagsPa Bold 18 (an Office cloud font; not in `fonts/`, not on
      this Mac — Word embedded it from its cloud cache); we fall back to
      Calibri. Environment, not code (a what-if with Calibri in the header
      still gives Word 4 pages).
-   - `fc29454fff` (5 vs 4): Word prints an extra empty black 12pt line
+   - A document under a wholly deleted header (5 vs 4): Word prints an
+     extra empty black 12pt line
      (docDefaults spacing after 200 / line 276 and its firstLine 720 indent)
      between the wholly deleted header and the first body paragraph that no
      `w:p` in the body or any header accounts for. What-ifs that keep it:
@@ -377,14 +400,14 @@ behind, 17 of those thirty or more.
      sectPrChange removed; docDefaults firstLine 0 moves it to the margin.
      A minimal document with the same start (p25a–d) does not show it.
      Unexplained.
-   - `a1872de6f9` (5 vs 6): after the label fix a 24pt exact line still
+   - A labelled list (5 vs 6): after the label fix a 24pt exact line still
      fits at the foot of our page 2 (baseline 771.2 on an A4 page whose
      body ends at 769.9; Word moves it on), then an extra page break.
-   - `aa5340125d` (5 vs 4): the header holds an inserted and a deleted copy
-     of a `wpg` group (text boxes) on paragraphs 1 and 3; Word stacks them
-     29pt apart, we draw each twice (a plain grey copy 2pt above the red
-     one, probably the `mc:Fallback` VML drawn as well as the Choice) and
-     page 3 diverges by 55pt; unexamined further.
+   - A press-release family whose header holds an inserted and a deleted
+     copy of a `wpg` group (text boxes): page 1 matches Word closely (round
+     4 look); the loss is page 3, where Word starts the body at the top
+     margin under a different header that overlaps it and we start it below
+     that header (~60pt lower). Header-extent rule, unexamined.
    - Page-anchored floating tables that fit: Word re-flows the page's text
      below them (p24a, p24g); we draw them over it.
 7. Cosmetic, mostly done (bars over empty paragraphs and spacing, bridged
