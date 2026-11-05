@@ -532,6 +532,24 @@ fn style_matches_owner(
     false
 }
 
+/// A list paragraph whose mark and every run are tracked deletions.
+pub(super) fn fully_deleted_item(p: roxmltree::Node) -> bool {
+    let mark_deleted = wml(p, "pPr")
+        .and_then(|ppr| wml(ppr, "rPr"))
+        .and_then(|rpr| wml(rpr, "del"))
+        .is_some();
+    mark_deleted
+        && p
+            .descendants()
+            .filter(|n| n.has_tag_name((WML_NS, "r")))
+            .all(|r| {
+                r.ancestors().skip(1).take_while(|a| *a != p).any(|a| {
+                    a.tag_name().namespace() == Some(WML_NS)
+                        && matches!(a.tag_name().name(), "del" | "moveFrom")
+                })
+            })
+}
+
 pub(super) fn parse_list_info(
     num_pr: Option<roxmltree::Node>,
     style_num_id: Option<&str>,
@@ -643,18 +661,16 @@ pub(super) fn parse_list_info(
     }
 
     let start = override_start.unwrap_or(def.start);
-    // Markup view: a deleted item shows a number without consuming one (Word
-    // for Mac probe 2026-11-05: items 1, inserted 2, deleted 2, 3).
-    // ponytail: Word prints the item's original number, which drifts from
-    // this after several deleted items in a row.
-    let deleted = super::markup()
-        && num_pr
-            .and_then(|np| np.parent())
-            .and_then(|ppr| wml(ppr, "rPr"))
-            .and_then(|rpr| wml(rpr, "del"))
-            .is_some();
+    // Markup view: a fully deleted item shows the counter as it stands and
+    // does not advance it (Word for Mac probe 2026-11-05: items 1, inserted
+    // 2, deleted 2, 3). An item whose mark alone is deleted still has live
+    // text and numbers normally (corpus: 1.2, 1.3, 1.4 under deleted marks).
+    // ponytail: Word prints a deleted item's original number, which drifts
+    // from this after several deleted items in a row.
+    // The caller flags a fully deleted item on its mark run (`fully_deleted_item`).
+    let deleted = super::markup() && mark.is_some_and(|m| m.revised);
     let current_counter = if deleted {
-        counters.get(&(abs_key, ilvl)).map_or(start, |c| c + 1)
+        counters.get(&(abs_key, ilvl)).copied().unwrap_or(start)
     } else {
         *counters
             .entry((abs_key, ilvl))
