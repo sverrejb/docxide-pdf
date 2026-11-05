@@ -9500,8 +9500,8 @@
     "a11y_text": 1.0
   },
   "scraped/federal_procurement_terms": {
-    "jaccard": 0.7518,
-    "ssim": 0.9216,
+    "jaccard": 0.7527,
+    "ssim": 0.9222,
     "text_boundary": 0.9296,
     "convert_ms": 57.1,
     "ua_fail": 3,
@@ -10005,8 +10005,8 @@
     "a11y_text": 1.0
   },
   "scraped/polish_building_procurement_spec": {
-    "jaccard": 0.6597,
-    "ssim": 0.841,
+    "jaccard": 0.6598,
+    "ssim": 0.8412,
     "text_boundary": 0.8034,
     "convert_ms": 56.9,
     "ua_fail": 2,
@@ -10130,8 +10130,8 @@
     "a11y_text": 0.8721
   },
   "scraped/renewable_dispatch_committee_agenda": {
-    "jaccard": 0.869,
-    "ssim": 0.9182,
+    "jaccard": 0.8689,
+    "ssim": 0.9179,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -10294,7 +10294,7 @@
     "a11y_text": 1.0
   },
   "scraped/scottish_fundraising_awards_campaign": {
-    "jaccard": 0.361,
+    "jaccard": 0.3611,
     "ssim": 0.9198,
     "text_boundary": 0.9552,
     "ua_fail": 2,
@@ -10427,8 +10427,8 @@
     "a11y_text": 0.992
   },
   "scraped/streamnet_steering_committee_meeting": {
-    "jaccard": 0.7735,
-    "ssim": 0.9236,
+    "jaccard": 0.7739,
+    "ssim": 0.9242,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
