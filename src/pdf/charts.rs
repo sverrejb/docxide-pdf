@@ -975,6 +975,13 @@ enum LabelPlace {
 const TITLE_PT: f32 = 18.0;
 const TITLE_BASELINE: f32 = 24.6;
 pub(super) const TITLE_BAND: f32 = 30.0;
+/// The plot area's distance from the chart's top and right edges, and the
+/// band a one-row legend takes under it. Word, 252pt-high probes: 10.55
+/// top (11.0 on case53's 216pt charts, so not a share of the height), 11.0
+/// right (10–12.6 on case29/53), legend 23.6.
+const CHART_PAD_TOP: f32 = 10.7;
+const CHART_PAD_RIGHT: f32 = 11.0;
+const LEGEND_BAND: f32 = 23.6;
 /// A title's rich text without run properties of its own falls back to
 /// DrawingML's default face, not the theme's: Word draws it in Arial where
 /// every other label takes the minor font (torture_test, probe exports).
@@ -1230,13 +1237,31 @@ pub(super) fn render_chart(
     let table_header_w = if table_rows > 0 {
         c.series
             .iter()
-            .map(|s| text_width(&s.label, font_size, label_font) + 15.0)
+            .map(|s| text_width(&s.label, font_size, label_font) + 13.5)
             .fold(0.0f32, f32::max)
     } else {
         0.0
     };
-    let margin_left = if !horizontal { val_label_w } else { w * 0.12 }.max(if table_rows > 0 {
-        table_header_w + 10.0
+    // The axis down the left takes its widest label plus 15pt: values on a
+    // column chart, categories on a bar chart (h2d_bar/h2d_bar_long probes).
+    let cat_label_w = || {
+        c.cat_axis.as_ref().map_or(0.0, |ax| {
+            ax.labels
+                .iter()
+                .map(|l| text_width(l, font_size, label_font))
+                .fold(0.0f32, f32::max)
+        }) + 15.0
+    };
+    // A data table's header column (series names behind their keys) starts
+    // 17pt in from the chart's left edge and is 13.5pt wider than its
+    // widest name (f_2d probe).
+    let margin_left = if !horizontal {
+        val_label_w
+    } else {
+        cat_label_w()
+    }
+    .max(if table_rows > 0 {
+        table_header_w + 17.0
     } else {
         0.0
     });
@@ -1255,10 +1280,13 @@ pub(super) fn render_chart(
         computed.max(w * 0.15)
     } else if is_point_chart {
         (w * 0.06).max(20.0)
+    } else if horizontal {
+        // The last value label overhangs the plot's right end by half.
+        CHART_PAD_RIGHT + (val_label_w - 15.0) / 2.0
     } else {
-        8.0
+        CHART_PAD_RIGHT
     };
-    let margin_top = h * 0.05 + if c.title.is_some() { TITLE_BAND } else { 0.0 };
+    let margin_top = CHART_PAD_TOP + if c.title.is_some() { TITLE_BAND } else { 0.0 };
 
     // Estimate plot_w for label wrapping and thinning calculations
     let plot_w_est = w - margin_left - margin_right;
@@ -1282,14 +1310,15 @@ pub(super) fn render_chart(
 
     let cat_label_h = line_h * max_wrap_lines as f32 + 4.0;
     let margin_bottom = if table_rows > 0 {
+        // Word, f_2d probe: the table ends 29.05pt above the chart's bottom.
         let legend_band = if has_legend && legend_on_bottom {
-            30.0
+            28.6
         } else {
             8.0
         };
         legend_band + table_rows as f32 * table_row_h(font_size)
     } else if has_legend && legend_on_bottom {
-        h * 0.22
+        cat_label_h + 8.0 + LEGEND_BAND
     } else {
         cat_label_h + 8.0
     };
