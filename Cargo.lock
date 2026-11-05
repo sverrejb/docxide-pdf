@@ -325,7 +325,7 @@ dependencies = [
 
 [[package]]
 name = "docxide-pdf"
-version = "0.20.1"
+version = "0.20.2"
 dependencies = [
  "clap",
  "env_logger",
