@@ -200,6 +200,25 @@ pub(super) fn render_list_label(
             .show(Str(&label_bytes));
     }
     content.end_text();
+    if let (Some(deleted), Some(entry)) = (para.list_label_revision, entry) {
+        // Struck or underlined as a run of the same font would be (Word for
+        // Mac probe p11b: 0.72pt lines, 2.16 above / 1.92 below the baseline
+        // at Calibri 11), over the label's width.
+        let x = label_x + label_shift(para, fonts);
+        let w = label_width(para, fonts);
+        let q = |v: f32| (v * 4.0).round() / 4.0;
+        let line = if deleted {
+            super::layout::os2_strike(entry, label_fs).map(|(top, th)| (baseline_y + top - th, th))
+        } else {
+            entry.underline.map(|(pos, th)| {
+                let th = q(th * label_fs).max(0.25);
+                (baseline_y - q(pos * label_fs) - th, th)
+            })
+        };
+        if let Some((bottom, th)) = line {
+            content.rect(x, bottom, w, th).fill_nonzero();
+        }
+    }
     if label_color.is_some() {
         content.set_fill_gray(0.0);
     }

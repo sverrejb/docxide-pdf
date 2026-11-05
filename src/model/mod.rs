@@ -545,6 +545,9 @@ pub struct Paragraph {
     pub list_label_bold: bool,
     pub list_label_italic: bool,
     pub list_label_color: Option<[u8; 3]>,
+    /// Markup view: the item is a tracked deletion (true) or insertion
+    /// (false); the label is struck or underlined in its colour.
+    pub list_label_revision: Option<bool>,
     /// `w:lvlJc`: the label is left-, centre- or right-aligned on its position.
     pub list_label_jc: Alignment,
     pub list_label_suff: LabelSuffix,

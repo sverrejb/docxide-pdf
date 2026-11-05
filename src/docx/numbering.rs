@@ -52,6 +52,8 @@ pub(super) struct ListLabelInfo {
     pub(super) bold: bool,
     pub(super) italic: bool,
     pub(super) color: Option<[u8; 3]>,
+    /// Markup view: Some(deleted) when the item is a tracked deletion or insertion.
+    pub(super) revision: Option<bool>,
     pub(super) suff: String,
     pub(super) jc: Alignment,
     /// None when the paragraph shows no label.
@@ -541,24 +543,33 @@ fn style_matches_owner(
 pub(super) enum ItemRevision {
     /// Plain, or any item outside the markup view.
     Live,
-    /// Its paragraph mark is a tracked insertion: not in the original numbering.
-    Inserted,
+    /// Its paragraph mark is a tracked insertion (in the author's colour):
+    /// not in the original numbering.
+    Inserted([u8; 3]),
     /// Mark and every run are tracked deletions: not in the final numbering.
-    Deleted,
+    Deleted([u8; 3]),
 }
 
 pub(super) fn item_revision(p: roxmltree::Node) -> ItemRevision {
     if !super::markup() {
         return ItemRevision::Live;
     }
+    let mark = |kind: &str| {
+        wml(p, "pPr")
+            .and_then(|ppr| wml(ppr, "rPr"))
+            .and_then(|rpr| wml(rpr, kind))
+    };
+    let colour = |rev: roxmltree::Node| {
+        let author = rev.attribute((WML_NS, "author")).unwrap_or("");
+        super::runs::AUTHOR_COLORS[super::author_index(author) % super::runs::AUTHOR_COLORS.len()]
+    };
     if fully_deleted_item(p) {
-        return ItemRevision::Deleted;
+        return ItemRevision::Deleted(mark("del").map_or([0, 0, 0], colour));
     }
-    let mark_inserted = wml(p, "pPr")
-        .and_then(|ppr| wml(ppr, "rPr"))
-        .and_then(|rpr| wml(rpr, "ins"))
-        .is_some();
-    if mark_inserted { ItemRevision::Inserted } else { ItemRevision::Live }
+    match mark("ins") {
+        Some(rev) => ItemRevision::Inserted(colour(rev)),
+        None => ItemRevision::Live,
+    }
 }
 
 /// A list paragraph whose mark and every run are tracked deletions.
@@ -710,8 +721,16 @@ pub(super) fn parse_list_info(
     };
     let (final_counter, original_counter) = match revision {
         ItemRevision::Live => (Some(advance(counters)), Some(advance(original))),
-        ItemRevision::Inserted => (Some(advance(counters)), None),
-        ItemRevision::Deleted => (None, Some(advance(original))),
+        ItemRevision::Inserted(_) => (Some(advance(counters)), None),
+        ItemRevision::Deleted(_) => (None, Some(advance(original))),
+    };
+    // The label is coloured and struck or underlined like the item's text
+    // (probe p11b: "2." struck in the author's colour before "B deleted",
+    // "3." underlined before "E inserted").
+    let (label_revision, revision_color) = match revision {
+        ItemRevision::Live => (None, None),
+        ItemRevision::Inserted(c) => (Some(false), Some(c)),
+        ItemRevision::Deleted(c) => (Some(true), Some(c)),
     };
     let (stream, current_counter) = match (final_counter, original_counter) {
         (Some(c), _) => (&*counters, c),
@@ -821,7 +840,8 @@ pub(super) fn parse_list_info(
         rise: font_size.map_or(0.0, |s| s * script_rise),
         bold: def.label_bold.unwrap_or(mark.is_some_and(|m| m.bold)),
         italic: def.label_italic.unwrap_or(mark.is_some_and(|m| m.italic)),
-        color: def.label_color.unwrap_or(mark.and_then(|m| m.color)),
+        color: revision_color.or(def.label_color.unwrap_or(mark.and_then(|m| m.color))),
+        revision: label_revision,
         suff: def.suff.clone(),
         jc: def.jc,
         item: Some(ListItem {
@@ -1281,10 +1301,10 @@ mod tests {
             .label
         };
         use ItemRevision::{Deleted, Inserted, Live};
+        let (d, i) = (Deleted([0; 3]), Inserted([0; 3]));
         // Word for Mac probe p11b: plain, deleted, deleted, plain, inserted,
         // inserted, deleted, plain.
-        let got: Vec<String> =
-            [Live, Deleted, Deleted, Live, Inserted, Inserted, Deleted, Live]
+        let got: Vec<String> = [Live, d, d, Live, i, i, d, Live]
                 .into_iter()
                 .map(&mut label)
                 .collect();

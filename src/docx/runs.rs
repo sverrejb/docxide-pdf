@@ -962,7 +962,7 @@ fn collect_run_nodes<'a>(
 
 /// Word's "by author" revision colours in the order new authors take them
 /// (Word for Mac probe 2026-11-05, 24 fresh authors: a cycle of 20).
-const AUTHOR_COLORS: [[u8; 3]; 20] = [
+pub(super) const AUTHOR_COLORS: [[u8; 3]; 20] = [
     [0xD1, 0x34, 0x38],
     [0x00, 0x78, 0xD4],
     [0x5C, 0x2E, 0x91],
