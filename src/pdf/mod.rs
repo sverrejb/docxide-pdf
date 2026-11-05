@@ -2182,6 +2182,20 @@ fn per_line_footnote_extra(
     (per_line, total)
 }
 
+/// How much of a line must fit above the margin for the line to stay on the
+/// page: its text height when its trailing leading may hang past the margin,
+/// else its whole pitch — above a footnote area, and for an exact-spaced
+/// line, whose box is fixed (Word for Mac probe p27: 25 lines of 25pt on a
+/// 648pt body, the 26th moves on although its 12pt glyphs would end 0.5pt
+/// above the margin).
+fn line_fit_height(whole_box: bool, own_pitch: Option<f32>, line_h: f32, text_h: f32) -> f32 {
+    if whole_box {
+        own_pitch.unwrap_or(line_h)
+    } else {
+        own_pitch.map_or(text_h, |p| p.min(text_h))
+    }
+}
+
 /// Lines of an `n`-line paragraph that must share a page with what precedes
 /// it: one, or with widow control two — all of them when it has three or
 /// fewer, since any split would leave a lone line. `n` is only counted when
@@ -4361,11 +4375,12 @@ fn render_paragraph_block(
                 let room = available - fn_acc;
                 let own_pitch = lines.get(i).and_then(|l| l.pitch);
                 let above_footnotes = state.pb.col_fn_reserved > 0.0 || fn_acc > 0.0;
-                let own_h = if above_footnotes {
-                    own_pitch.unwrap_or(line_h)
-                } else {
-                    own_pitch.map_or(first_line_h, |p| p.min(first_line_h))
-                };
+                let own_h = line_fit_height(
+                    above_footnotes || matches!(effective_ls, LineSpacing::Exact(_)),
+                    own_pitch,
+                    line_h,
+                    first_line_h,
+                );
                 if above + own_h > room {
                     break;
                 }
@@ -6734,6 +6749,19 @@ fn render_pass(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exact_lines_fit_by_their_whole_box() {
+        // Auto spacing: the 13.8pt text of a 25pt pitch may hang its leading
+        // past the margin; exact spacing (whole box) and lines above
+        // footnotes need the full pitch.
+        assert_eq!(line_fit_height(false, Some(25.0), 25.0, 13.8), 13.8);
+        assert_eq!(line_fit_height(false, None, 25.0, 13.8), 13.8);
+        assert_eq!(line_fit_height(true, Some(25.0), 25.0, 13.8), 25.0);
+        assert_eq!(line_fit_height(true, None, 25.0, 13.8), 25.0);
+        // A pitch shorter than the text (an own-run line) is the line's size.
+        assert_eq!(line_fit_height(false, Some(9.0), 25.0, 13.8), 9.0);
+    }
 
     #[test]
     fn a_trailing_anchor_has_only_blank_runs_after_it() {
