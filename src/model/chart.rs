@@ -85,6 +85,18 @@ pub struct Chart {
     /// The chart area's outline: Word draws a grey 0.75pt one when
     /// `c:chartSpace` sets no `c:spPr` of its own.
     pub frame: Option<[u8; 3]>,
+    /// `c:view3D` of a `c:bar3DChart`.
+    pub view_3d: Option<View3D>,
+}
+
+/// A 3-D bar chart's view: rotations in degrees, depth and the gap between
+/// depth rows as fractions of a bar's width (`depthPercent`, `gapDepth`).
+#[derive(Clone, Copy)]
+pub struct View3D {
+    pub rot_x: f32,
+    pub rot_y: f32,
+    pub depth: f32,
+    pub gap_depth: f32,
 }
 
 pub struct InlineChart {

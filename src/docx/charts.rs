@@ -3,7 +3,7 @@ use std::io::{Read, Seek};
 
 use crate::model::{
     BarGrouping, Chart, ChartAxis, ChartLegend, ChartSeries, ChartType, InlineChart,
-    LegendPosition, MarkerSymbol,
+    LegendPosition, MarkerSymbol, View3D,
 };
 
 use super::{
@@ -270,13 +270,31 @@ fn parse_chart_space(xml_content: &str, accent_colors: Vec<[u8; 3]>) -> Option<C
         data_table: chart_child(plot_area, "dTable").is_some(),
         // Word's default outline draws grey 133 at 600 dpi (torture_test).
         frame: chart_child(chart_space, "spPr").map_or(Some([0x85; 3]), extract_line_color),
+        view_3d: type_node
+            .has_tag_name((CHART_NS, "bar3DChart"))
+            .then(|| parse_view_3d(chart_node, type_node)),
     })
+}
+
+/// The spec's defaults: rotX 15, rotY 20, depthPercent 100, gapDepth 150.
+fn parse_view_3d(chart_node: roxmltree::Node, type_node: roxmltree::Node) -> View3D {
+    let view = chart_child(chart_node, "view3D");
+    let num = |node: Option<roxmltree::Node>, name, default| {
+        node.and_then(|n| chart_attr(n, name))
+            .and_then(|v| v.trim_end_matches('%').parse::<f32>().ok())
+            .unwrap_or(default)
+    };
+    View3D {
+        rot_x: num(view, "rotX", 15.0),
+        rot_y: num(view, "rotY", 20.0),
+        depth: num(view, "depthPercent", 100.0) / 100.0,
+        gap_depth: num(Some(type_node), "gapDepth", 150.0) / 100.0,
+    }
 }
 
 fn detect_chart_type<'a>(
     plot_area: roxmltree::Node<'a, 'a>,
 ) -> Option<(roxmltree::Node<'a, 'a>, ChartType, f32)> {
-    // ponytail: a 3-D bar chart draws flat, without its depth faces.
     if let Some(n) =
         chart_child(plot_area, "barChart").or_else(|| chart_child(plot_area, "bar3DChart"))
     {

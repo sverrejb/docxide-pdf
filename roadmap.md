@@ -15,14 +15,21 @@ drop caps, ruby, fitText/tcFitText, bidiVisual, suppressLineNumbers,
 wordWrap=0, numbers on lines without text, picture grayscale/duotone/
 alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
 (vector approximations), chart title/frame/value labels/data table. Open:
-- **3-D charts** (`c:bar3DChart`, `c:view3D`) draw flat. Word rasterises the
-  plot and its back wall sits (dx, dy) behind the front face, which shrinks
-  the front: rotX 15/rotY 20/depth 100 on a 432pt frame gives front x
-  159–459.8 and dx≈21.5, dy≈16.7; rotY 40 dx≈38.8 (dy same); depthPercent 200
-  dx≈36.3, dy≈27.8; rotX 30 dx≈19.4, dy≈27.9; a 300pt frame dx≈15.1. Probes
-  and `measure.py` in `tests/output/torture_test/probe3d/` (main checkout, gitignored). Raster extents
-  include margins: measure the wall from the raster pixels before fitting.
-  Word also picks axis max 25 for a 24 maximum where we pick 30.
+- **3-D columns done** (2026-11-05, branch `chart-3d`): a bar is a square
+  prism `depthPercent` bar widths deep, the floor adds `gapDepth`, depth z
+  projects to (z sin rotY, z sin rotX); Word's 3-D plot is the 2-D one inset
+  5.0/6.35/2.85/1.77pt (l/r/t/b) and the front shrinks until the box fits;
+  top faces 0.76×, sides 0.63× the series colour; no axis headroom step.
+  Probes a–h and `walls.py`/`cmp.py` in `tests/output/torture_test/probe3d/`
+  (main checkout). Open: horizontal 3-D bars, perspective (`rAngAx` 0),
+  pie3D, 3-D line/area stay flat.
+- **2-D plot rectangle off by 2–7pt**: the probes' 2-D variants (`f_2d`,
+  `h_2d_nodt`) put Word's plot at x 145.6–493.0 / 98.6–493.0 and y (from
+  the top) 137.5–275.2 / 137.5–300.7 where we draw 140.1–496.0 / 98.1–496.0
+  and 139.4–273.5 / 139.4–293.4. Every 3-D front inherits this.
+- **Default gridline/axis colour**: Word draws black 0.5pt gridlines and a
+  black value axis for charts without `spPr` (2-D and 3-D probes); we use
+  grey 179.
 - Inline `wps` shapes with text, charts and SmartArt are block boxes at the
   paragraph start, not line objects (a picture-filled shape is now a
   picture); an inline-object run kind would fix all three.

@@ -3,7 +3,9 @@ use std::collections::{HashMap, HashSet};
 use pdf_writer::{Content, Name, Str};
 
 use crate::fonts::{FontEntry, to_winansi_bytes};
-use crate::model::{BarGrouping, Chart, ChartType, InlineChart, LegendPosition, MarkerSymbol};
+use crate::model::{
+    BarGrouping, Chart, ChartType, InlineChart, LegendPosition, MarkerSymbol, View3D,
+};
 
 use super::chart_legend::{
     LegendItem, LegendPlacement, SwatchStyle, render_chart_legend, render_swatch,
@@ -288,6 +290,86 @@ fn compute_axis_range(max_val: f32, target_ticks: usize, headroom_threshold: f32
     (ts, am)
 }
 
+/// A category's slot along the category axis and the width of one bar in it.
+fn bar_slot(c: &Chart, cat_extent: f32, num_categories: usize) -> (f32, f32) {
+    let group = cat_extent / num_categories as f32;
+    let slots = match c.chart_type {
+        ChartType::Bar {
+            grouping: BarGrouping::Clustered,
+            ..
+        } => c.series.len() as f32,
+        _ => 1.0,
+    };
+    (group, group / (slots + c.gap_width_pct / 100.0))
+}
+
+/// A 3-D column chart's depth axis. With right-angle axes Word keeps the
+/// front face a rectangle and draws a point `z` deep at (z sin rotY,
+/// z sin rotX) from where it would sit on the front plane (five Word probes
+/// varying rotX, rotY, depthPercent and the chart width).
+impl View3D {
+    fn project(self, z: f32) -> (f32, f32) {
+        (
+            z * self.rot_y.to_radians().sin(),
+            z * self.rot_x.to_radians().sin(),
+        )
+    }
+
+    /// The front face in a 3-D chart's plot area and where the floor's back
+    /// edge sits from its front edge. Word's 3-D plot is its 2-D one inset
+    /// 5.0/6.35pt left/right and 2.85/1.77pt top/bottom (probes with and
+    /// without a data table); the front shrinks until the box with its depth
+    /// fits, bottom-aligned and centred across.
+    fn front(self, c: &Chart, plot: PlotRect, num_categories: usize) -> (PlotRect, (f32, f32)) {
+        let inner = PlotRect {
+            x: plot.x + 5.0,
+            y: plot.y + 1.77,
+            w: plot.w - (5.0 + 6.35),
+            h: plot.h - (2.85 + 1.77),
+        };
+        // The floor: a bar's depth plus the gap between depth rows.
+        let thick = bar_slot(c, inner.w, num_categories).1;
+        let (dx, dy) = self.project(thick * self.depth * (1.0 + self.gap_depth));
+        let s = (inner.h / (inner.h + dy)).min(inner.w / (inner.w + dx));
+        let front = PlotRect {
+            x: inner.x + (inner.w - s * (inner.w + dx)) / 2.0,
+            y: inner.y,
+            w: s * inner.w,
+            h: s * inner.h,
+        };
+        (front, (s * dx, s * dy))
+    }
+}
+
+/// A 3-D bar: its right side and top in the series colour shaded as Word's
+/// lighting draws them (sampled at every probed rotation), then the front.
+fn draw_prism(
+    content: &mut Content,
+    color: Option<[u8; 3]>,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    (dx, dy): (f32, f32),
+) {
+    let base = color.unwrap_or([0, 0, 0]);
+    // The parallelogram from (px, py) along (ax, ay), swept back by (dx, dy).
+    let face = |content: &mut Content, k: f32, px: f32, py: f32, ax: f32, ay: f32| {
+        fill_rgb(content, base.map(|v| (v as f32 * k).round() as u8));
+        content.move_to(px, py);
+        content.line_to(px + ax, py + ay);
+        content.line_to(px + ax + dx, py + ay + dy);
+        content.line_to(px + dx, py + dy);
+        content.close_path();
+        content.fill_nonzero();
+    };
+    face(content, 0.63, x + w, y, 0.0, h);
+    face(content, 0.76, x, y + h, w, 0.0);
+    fill_rgb(content, base);
+    content.rect(x, y, w, h);
+    content.fill_nonzero();
+}
+
 #[derive(Clone, Copy)]
 struct PlotRect {
     x: f32,
@@ -306,6 +388,7 @@ fn draw_chart_series(
     num_categories: usize,
     axis_max: f32,
     x_axis_max: f32,
+    depth: Option<View3D>,
     alpha_states: &mut HashSet<u8>,
 ) -> Vec<BarTop> {
     let mut bar_tops = Vec::new();
@@ -326,7 +409,27 @@ fn draw_chart_series(
             } else {
                 (plot_x, plot_w, plot_y, plot_h)
             };
-            let bar = |content: &mut Content, cat_pos: f32, val_pos: f32, thick: f32, len: f32| {
+            let stacked = grouping != BarGrouping::Clustered;
+            let is_percent_stacked = grouping == BarGrouping::PercentStacked;
+            let (group, thick) = bar_slot(c, cat_extent, num_categories);
+            let gap = c.gap_width_pct / 100.0 * thick;
+            // A 3-D bar is `depth` bar widths deep and its front face sits half
+            // the depth rows' gap into the floor.
+            let (shift_x, shift_y) = depth.map_or((0.0, 0.0), |d| {
+                d.project(thick * d.depth * d.gap_depth / 2.0)
+            });
+            let (cat_origin, val_origin) = (cat_origin + shift_x, val_origin + shift_y);
+            let prism_back = depth.map(|d| d.project(thick * d.depth));
+            let bar = |content: &mut Content,
+                       color: Option<[u8; 3]>,
+                       cat_pos: f32,
+                       val_pos: f32,
+                       len: f32| {
+                if let Some(back) = prism_back {
+                    draw_prism(content, color, cat_pos, val_pos, thick, len, back);
+                    return;
+                }
+                set_color(content, color);
                 if horizontal {
                     content.rect(val_pos, cat_pos, len, thick);
                 } else {
@@ -334,13 +437,6 @@ fn draw_chart_series(
                 }
                 content.fill_nonzero();
             };
-            let stacked = grouping != BarGrouping::Clustered;
-            let is_percent_stacked = grouping == BarGrouping::PercentStacked;
-            let gap_ratio = c.gap_width_pct / 100.0;
-            let group = cat_extent / num_categories as f32;
-            let slots = if stacked { 1.0 } else { c.series.len() as f32 };
-            let thick = group / (slots + gap_ratio);
-            let gap = gap_ratio * thick;
 
             for ci in 0..num_categories {
                 let group_pos = cat_origin + ci as f32 * group + gap / 2.0;
@@ -362,17 +458,21 @@ fn draw_chart_series(
                             raw
                         };
                         let len = (val / axis_max) * val_extent;
-                        set_color(content, series.color);
-                        bar(content, group_pos, val_origin + cumulative, thick, len);
+                        bar(
+                            content,
+                            series.color,
+                            group_pos,
+                            val_origin + cumulative,
+                            len,
+                        );
                         cumulative += len;
                     }
                 } else {
                     for (si, series) in c.series.iter().enumerate() {
                         let val = series.values.get(ci).copied().unwrap_or(0.0);
                         let len = (val / axis_max) * val_extent;
-                        set_color(content, series.color);
                         let pos = group_pos + si as f32 * thick;
-                        bar(content, pos, val_origin, thick, len);
+                        bar(content, series.color, pos, val_origin, len);
                         if c.show_values && !horizontal {
                             bar_tops.push(BarTop {
                                 x: pos + thick / 2.0,
@@ -530,6 +630,10 @@ fn draw_chart_series(
     }
     bar_tops
 }
+
+/// A value label's baseline above its bar's front face, 2-D and 3-D alike
+/// (Word probes: 6.63pt and 6.65pt).
+const VALUE_LABEL_RISE: f32 = 6.64;
 
 /// Where a bar's value label goes: above `top`, centred on `x`.
 /// ponytail: vertical clustered bars only; stacked and horizontal bars and
@@ -709,6 +813,7 @@ pub(super) fn render_chart(
     };
     let is_stacked = bar_grouping == BarGrouping::Stacked;
     let is_percent_stacked = bar_grouping == BarGrouping::PercentStacked;
+    let depth = c.view_3d.filter(|_| !horizontal);
 
     let legend_pos = c.legend.as_ref().map(|l| l.position);
     let has_legend = legend_pos.is_some();
@@ -736,6 +841,10 @@ pub(super) fn render_chart(
         (10.0, 100.0)
     } else if matches!(c.chart_type, ChartType::Scatter) {
         compute_axis_range(max_val, 10, 0.98)
+    } else if depth.is_some() {
+        // ponytail: one probe — Word's 3-D columns end the axis at 25 for a
+        // 24 maximum, without the 2-D headroom step.
+        compute_axis_range(max_val, 5, f32::INFINITY)
     } else {
         compute_axis_range(max_val, 5, 0.9)
     };
@@ -846,10 +955,21 @@ pub(super) fn render_chart(
         cat_label_h + 8.0
     };
 
-    let plot_x = x + margin_left;
-    let plot_y = y - h + margin_bottom;
-    let plot_w = w - margin_left - margin_right;
-    let plot_h = h - margin_top - margin_bottom;
+    let plot_2d = PlotRect {
+        x: x + margin_left,
+        y: y - h + margin_bottom,
+        w: w - margin_left - margin_right,
+        h: h - margin_top - margin_bottom,
+    };
+    let (plot, (back_dx, back_dy)) = depth.map_or((plot_2d, (0.0, 0.0)), |d| {
+        d.front(c, plot_2d, num_categories)
+    });
+    let PlotRect {
+        x: plot_x,
+        y: plot_y,
+        w: plot_w,
+        h: plot_h,
+    } = plot;
 
     content.save_state();
 
@@ -866,9 +986,13 @@ pub(super) fn render_chart(
         for i in 0..=num_ticks {
             let frac = (i as f32 * tick_step) / axis_max;
             if !horizontal {
+                // In 3-D along the left wall to the back, then across it.
                 let gy = plot_y + frac * plot_h;
                 content.move_to(plot_x, gy);
-                content.line_to(plot_x + plot_w, gy);
+                if depth.is_some() {
+                    content.line_to(plot_x + back_dx, gy + back_dy);
+                }
+                content.line_to(plot_x + plot_w + back_dx, gy + back_dy);
             } else {
                 let gx = plot_x + frac * plot_w;
                 content.move_to(gx, plot_y);
@@ -936,13 +1060,6 @@ pub(super) fn render_chart(
         }
     }
 
-    // Data rendering
-    let plot = PlotRect {
-        x: plot_x,
-        y: plot_y,
-        w: plot_w,
-        h: plot_h,
-    };
     let bar_tops = draw_chart_series(
         c,
         content,
@@ -950,6 +1067,7 @@ pub(super) fn render_chart(
         num_categories,
         axis_max,
         x_axis_max,
+        depth,
         alpha_states,
     );
 
@@ -971,6 +1089,9 @@ pub(super) fn render_chart(
         content.stroke();
         content.move_to(plot_x, plot_y);
         content.line_to(plot_x + plot_w, plot_y);
+        if depth.is_some() {
+            content.line_to(plot_x + plot_w + back_dx, plot_y + back_dy);
+        }
         content.stroke();
     }
 
@@ -1048,7 +1169,7 @@ pub(super) fn render_chart(
         for bar in &bar_tops {
             let label = data_label(bar.value, val_fmt);
             let tw = text_width(&label, font_size, label_font);
-            let (lx, ly) = (bar.x - tw / 2.0, bar.top + 3.0);
+            let (lx, ly) = (bar.x - tw / 2.0, bar.top + VALUE_LABEL_RISE);
             show_text(
                 content,
                 label_font_key,
