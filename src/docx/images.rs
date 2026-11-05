@@ -846,17 +846,9 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
         }
 
         if let Some(chart_rid) = find_chart_ref(container) {
-            let accent_colors: Vec<[u8; 3]> = (1..=6)
-                .filter_map(|i| ctx.theme.colors.get(&format!("accent{i}")).copied())
-                .collect();
-            if let Some(ic) = parse_chart_from_zip(
-                chart_rid,
-                ctx.rels,
-                ctx.zip,
-                display_w,
-                display_h,
-                accent_colors,
-            ) {
+            if let Some(ic) =
+                parse_chart_from_zip(chart_rid, ctx.rels, ctx.zip, display_w, display_h, ctx.theme)
+            {
                 return Some(RunDrawingResult::Chart(ic));
             }
         }
@@ -873,7 +865,10 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
 fn find_chart_ref<'a>(container: roxmltree::Node<'a, 'a>) -> Option<&'a str> {
     container
         .descendants()
-        .find(|n| n.has_tag_name((DML_NS, "graphicData")) && n.attribute("uri") == Some(CHART_NS))
+        .find(|n| {
+            n.has_tag_name((DML_NS, "graphicData"))
+                && matches!(n.attribute("uri"), Some(CHART_NS | super::chartex::CHARTEX_NS))
+        })
         .and_then(|gd| {
             gd.children()
                 .find(|n| n.tag_name().name() == "chart")

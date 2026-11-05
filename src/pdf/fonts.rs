@@ -350,6 +350,16 @@ fn collect_used_chars(
                         chart_label_chars.extend(label.chars());
                     }
                 }
+                for label in &ic.chart.parent_labels {
+                    chart_label_chars.extend(label.chars());
+                }
+                // Office 2016 charts set their title in the minor font too.
+                if ic.chart.ex_text.is_some() {
+                    chart_label_chars.extend(ic.chart.title.iter().flat_map(|t| t.chars()));
+                }
+                if matches!(ic.chart.chart_type, crate::model::ChartType::Waterfall { .. }) {
+                    chart_label_chars.extend(crate::model::WATERFALL_LEGEND.concat().chars());
+                }
             }
         }
         if !chart_label_chars.is_empty() {
@@ -359,7 +369,9 @@ fn collect_used_chars(
         }
         let title_chars: HashSet<char> = all_paras
             .iter()
-            .filter_map(|p| p.inline_chart.as_ref()?.chart.title.as_deref())
+            .filter_map(|p| p.inline_chart.as_ref())
+            .filter(|ic| ic.chart.ex_text.is_none())
+            .filter_map(|ic| ic.chart.title.as_deref())
             .flat_map(str::chars)
             .collect();
         if !title_chars.is_empty() {

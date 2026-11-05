@@ -46,14 +46,19 @@ alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
   Probes `f_2d`, `h_2d_nodt`, in5/out5 (`h2d_bar*`, `v2d_*`) and
   `tests/output/tt/plotrect2.py` in the chart-3d worktree. Open: a 3-D pie's
   legend entries sit 7.2pt apart in Word, not 9.2.
-- **Office 2016 charts (chartEx)**, branch `chartex-wip`, NOT verified:
-  waterfall, funnel, histogram (bins → column chart), treemap, sunburst,
-  box & whisker parse (`src/docx/chartex.rs`) and draw (`src/pdf/charts_ex.rs`,
-  waterfall/box in `charts.rs`). Word only opens a chartEx part with its
-  chartStyle + chartColorStyle parts (probe kit `probe3d/mkx.py`, samples in
-  `probe3d/lo_samples/` from LibreOffice's test data; Word renders in
-  `probe3d/outx/`). First-pass gaps: title in the theme font (we use Arial),
-  waterfall axis top, label/legend spacing, pareto and region maps.
+- **Office 2016 charts (chartEx) done** (2026-11-06, branch `chartex-wip`):
+  waterfall, histogram, pareto, box & whisker, funnel, treemap, sunburst in
+  `src/pdf/charts_ex.rs`, within 0.6pt of Word on 12pt and 9pt probes. Text
+  comes from the chartStyle part (sizes rounded to half points, minor font,
+  title included); one plot box 5.2–5.5pt inside the frame, 3.75pt under the
+  title, 28.75pt above a bottom legend; value axis = 5% headroom, smallest
+  1-2-5 unit with at most 10 steps; treemap rows grow while the mean tile
+  aspect falls (not plain squarify); sunburst hole = ring width, labels
+  along the radius. Probes `probe3d/inx`, `inx9` (`mkx9.py`, Word's 9/14pt
+  style + pareto), `inx9b` (no legend/title, right legend); `cx/cmp.py`
+  diffs ours against Word. Open: pareto plot 1.2pt lower in Word (cause
+  unknown); top/left legends unprobed; element `txPr` overrides and rich
+  titles not read; region maps not drawn.
 - Inline `wps` shapes with text, charts and SmartArt are block boxes at the
   paragraph start, not line objects (a picture-filled shape is now a
   picture); an inline-object run kind would fix all three.

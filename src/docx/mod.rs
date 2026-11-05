@@ -1,6 +1,7 @@
 mod alt_chunk;
 pub(crate) mod arabic;
 mod charts;
+mod chartex;
 mod color;
 mod comments;
 mod embedded_fonts;
@@ -1136,19 +1137,39 @@ mod relationships {
         zip: &mut zip::ZipArchive<R>,
         part_path: &str,
     ) -> HashMap<String, String> {
-        let (dir, file) = match part_path.rsplit_once('/') {
-            Some((d, f)) => (d, f),
-            None => ("", part_path),
-        };
-        let rels_path = if dir.is_empty() {
-            format!("_rels/{}.rels", file)
-        } else {
-            format!("{}/_rels/{}.rels", dir, file)
-        };
-        let Some(xml_content) = read_zip_text(zip, &rels_path) else {
+        let Some(xml_content) = read_zip_text(zip, &rels_path(part_path)) else {
             return HashMap::new();
         };
         parse_rels_xml(&xml_content)
+    }
+
+    fn rels_path(part_path: &str) -> String {
+        match part_path.rsplit_once('/') {
+            Some((dir, file)) => format!("{dir}/_rels/{file}.rels"),
+            None => format!("_rels/{part_path}.rels"),
+        }
+    }
+
+    /// The zip path of the part `part_path` relates to with a relationship
+    /// type ending `/type_name`.
+    pub(in crate::docx) fn related_part<R: Read + std::io::Seek>(
+        zip: &mut zip::ZipArchive<R>,
+        part_path: &str,
+        type_name: &str,
+    ) -> Option<String> {
+        let xml_content = read_zip_text(zip, &rels_path(part_path))?;
+        let xml = roxmltree::Document::parse(&xml_content).ok()?;
+        let target = xml.root_element().children().find_map(|n| {
+            let ty = n.attribute("Type")?;
+            (ty.rsplit('/').next() == Some(type_name)).then(|| n.attribute("Target"))?
+        })?;
+        Some(match target.strip_prefix('/') {
+            Some(absolute) => absolute.to_string(),
+            None => match part_path.rsplit_once('/') {
+                Some((dir, _)) => format!("{dir}/{target}"),
+                None => target.to_string(),
+            },
+        })
     }
 }
 

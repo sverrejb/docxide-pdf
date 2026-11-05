@@ -2,6 +2,7 @@ mod assembly;
 mod bidi;
 mod chart_legend;
 mod charts;
+mod charts_ex;
 mod charts_radial;
 pub(crate) mod color;
 mod comments;

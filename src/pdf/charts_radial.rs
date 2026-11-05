@@ -25,13 +25,13 @@ struct RadialLayout {
 
 const ARC_SEGMENTS: usize = 64;
 
-fn arc_segment_count(sweep: f32) -> usize {
+pub(super) fn arc_segment_count(sweep: f32) -> usize {
     ((ARC_SEGMENTS as f32 * sweep / TAU).ceil() as usize).max(2)
 }
 
 /// `n` line segments from `start` clockwise through `sweep` (a negative
 /// sweep runs the arc back anticlockwise).
-fn emit_arc(
+pub(super) fn emit_arc(
     content: &mut Content,
     cx: f32,
     cy: f32,

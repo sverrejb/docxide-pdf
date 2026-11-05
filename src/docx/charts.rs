@@ -290,6 +290,8 @@ fn parse_chart_space(xml_content: &str, accent_colors: Vec<[u8; 3]>) -> Option<C
             .iter()
             .any(|t| type_node.has_tag_name((CHART_NS, *t)))
             .then(|| parse_view_3d(chart_node, plot_area, type_node)),
+        parent_labels: Vec::new(),
+        ex_text: None,
     })
 }
 
@@ -385,10 +387,20 @@ pub(super) fn parse_chart_from_zip<R: Read + Seek>(
     zip: &mut zip::ZipArchive<R>,
     display_w: f32,
     display_h: f32,
-    accent_colors: Vec<[u8; 3]>,
+    theme: &super::styles::ThemeFonts,
 ) -> Option<InlineChart> {
-    let xml_content = read_zip_text(zip, &part_path(rels.get(r_id)?))?;
-    let chart = parse_chart_space(&xml_content, accent_colors)?;
+    let accent_colors: Vec<[u8; 3]> = (1..=6)
+        .filter_map(|i| theme.colors.get(&format!("accent{i}")).copied())
+        .collect();
+    let part = part_path(rels.get(r_id)?);
+    let xml_content = read_zip_text(zip, &part)?;
+    let chart = if xml_content.contains(super::chartex::CHARTEX_NS) {
+        let style = super::relationships::related_part(zip, &part, "chartStyle")
+            .and_then(|p| read_zip_text(zip, &p));
+        super::chartex::parse_chartex_space(&xml_content, accent_colors, theme, style.as_deref())?
+    } else {
+        parse_chart_space(&xml_content, accent_colors)?
+    };
     Some(InlineChart {
         chart,
         display_width: display_w,

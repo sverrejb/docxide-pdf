@@ -52,6 +52,21 @@ pub enum ChartType {
         hole_size_pct: f32,
     },
     Radar,
+    /// Office 2016 charts. A waterfall's `totals` are the points drawn
+    /// from zero as running totals.
+    Waterfall {
+        totals: Vec<usize>,
+    },
+    Funnel,
+    Treemap,
+    Sunburst,
+    /// Quartiles by Excel's exclusive method (rank p·(n+1)), else inclusive
+    /// (rank p·(n−1)+1).
+    BoxWhisker {
+        exclusive: bool,
+    },
+    /// Bars sorted largest first under the line of their cumulative share.
+    Pareto,
 }
 
 #[derive(Clone)]
@@ -95,7 +110,33 @@ pub struct Chart {
     pub frame: Option<[u8; 3]>,
     /// `c:view3D` of a `c:bar3DChart`.
     pub view_3d: Option<View3D>,
+    /// A treemap's or sunburst's outer category of each point.
+    pub parent_labels: Vec<String>,
+    /// An Office 2016 chart's text, which Word takes from the chartStyle part.
+    pub ex_text: Option<ChartExText>,
 }
+
+/// Size and colour of one kind of chart text.
+#[derive(Clone, Copy)]
+pub struct ChartText {
+    pub size: f32,
+    pub color: [u8; 3],
+}
+
+#[derive(Clone, Copy)]
+pub struct ChartExText {
+    pub title: ChartText,
+    pub axis: ChartText,
+    pub data_label: ChartText,
+    pub legend: ChartText,
+}
+
+/// An Office 2016 chart's default grey (tx1 at 15%) for its frame, axis
+/// lines and gridlines.
+pub const CHARTEX_GRID: [u8; 3] = [0xD9, 0xD9, 0xD9];
+
+/// A waterfall's legend: its three kinds of bar.
+pub const WATERFALL_LEGEND: [&str; 3] = ["Increase", "Decrease", "Total"];
 
 /// A 3-D bar chart's view: rotations in degrees, depth and the gap between
 /// depth rows as fractions of a bar's width (`depthPercent`, `gapDepth`).

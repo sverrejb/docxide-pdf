@@ -10,6 +10,7 @@ use crate::model::{
 use super::chart_legend::{
     LegendItem, LegendPlacement, SwatchStyle, render_chart_legend, render_swatch,
 };
+use super::charts_ex;
 use super::charts_radial;
 use super::color::{fill_rgb, set_fill_alpha, stroke_rgb};
 use super::helpers::draw_circle;
@@ -299,6 +300,19 @@ pub(super) fn show_text(
     text: &str,
     font_entry: Option<&FontEntry>,
 ) {
+    let matrix = [1.0, 0.0, 0.0, 1.0, x, y];
+    show_text_matrix(content, font_key, font_size, matrix, text, font_entry);
+}
+
+/// `show_text` placed by a whole text matrix, for turned text.
+pub(super) fn show_text_matrix(
+    content: &mut Content,
+    font_key: &str,
+    font_size: f32,
+    matrix: [f32; 6],
+    text: &str,
+    font_entry: Option<&FontEntry>,
+) {
     let bytes = match font_entry {
         Some(e) => e.encode(text),
         None => to_winansi_bytes(text),
@@ -306,7 +320,7 @@ pub(super) fn show_text(
     content
         .begin_text()
         .set_font(Name(font_key.as_bytes()), font_size)
-        .next_line(x, y)
+        .set_text_matrix(matrix)
         .show(Str(&bytes))
         .end_text();
 }
@@ -974,7 +988,15 @@ fn draw_chart_series(
                 }
             }
         }
-        ChartType::Pie | ChartType::Doughnut { .. } | ChartType::Radar => unreachable!(),
+        ChartType::Pie
+        | ChartType::Doughnut { .. }
+        | ChartType::Radar
+        | ChartType::Waterfall { .. }
+        | ChartType::Funnel
+        | ChartType::Treemap
+        | ChartType::Sunburst
+        | ChartType::BoxWhisker { .. }
+        | ChartType::Pareto => unreachable!(),
     }
     labels
 }
@@ -1146,6 +1168,11 @@ pub(super) fn render_chart(
         content.rect(x, y - h, w, h);
         content.stroke();
         content.restore_state();
+    }
+
+    if c.ex_text.is_some() {
+        charts_ex::render(chart, content, x, y, label_font_key, label_font);
+        return;
     }
 
     if has_font && let Some(title) = &c.title {
