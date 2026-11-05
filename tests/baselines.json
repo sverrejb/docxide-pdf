@@ -1660,9 +1660,9 @@
     "a11y_text": 1.0
   },
   "cases/case29": {
-    "jaccard": 0.8124,
-    "ssim": 0.7988,
-    "text_boundary": 0.9474,
+    "jaccard": 0.8973,
+    "ssim": 0.9112,
+    "text_boundary": 1.0,
     "convert_ms": 6.9,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -1682,8 +1682,8 @@
     "a11y_text": 1.0
   },
   "cases/case30": {
-    "jaccard": 0.8633,
-    "ssim": 0.8653,
+    "jaccard": 0.9309,
+    "ssim": 0.9258,
     "text_boundary": 1.0,
     "convert_ms": 6.7,
     "ua_fail": 3,
@@ -1693,9 +1693,9 @@
     "a11y_text": 1.0
   },
   "cases/case31": {
-    "jaccard": 0.6658,
-    "ssim": 0.8063,
-    "text_boundary": 0.875,
+    "jaccard": 0.784,
+    "ssim": 0.9021,
+    "text_boundary": 1.0,
     "convert_ms": 7.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -1932,9 +1932,9 @@
     "a11y_text": 1.0
   },
   "cases/case52": {
-    "jaccard": 0.7853,
-    "ssim": 0.7873,
-    "text_boundary": 0.814,
+    "jaccard": 0.8556,
+    "ssim": 0.8838,
+    "text_boundary": 0.9767,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -1942,9 +1942,9 @@
     "a11y_text": 1.0
   },
   "cases/case53": {
-    "jaccard": 0.5957,
-    "ssim": 0.5534,
-    "text_boundary": 0.7561,
+    "jaccard": 0.7448,
+    "ssim": 0.7757,
+    "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -8198,9 +8198,9 @@
     "a11y_text": 0.3122
   },
   "cases/torture_test": {
-    "jaccard": 0.749,
-    "ssim": 0.8658,
-    "text_boundary": 0.8364,
+    "jaccard": 0.7877,
+    "ssim": 0.9188,
+    "text_boundary": 0.9821,
     "ua_fail": 3,
     "a11y_missing": 39,
     "ua_deficit": 0,
@@ -10312,8 +10312,8 @@
     "a11y_text": 0.9918
   },
   "scraped/sample500kB": {
-    "jaccard": 0.1285,
-    "ssim": 0.2656,
+    "jaccard": 0.1299,
+    "ssim": 0.2738,
     "text_boundary": 0.0313,
     "convert_ms": 18.3,
     "ua_fail": 3,

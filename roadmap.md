@@ -33,13 +33,27 @@ alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
   - Pie: Word's default 30° perspective (~4% larger), best-fit label
     placement (we use 70% of the radius), rotY/firstSliceAng, explosion.
   - Stacked 3-D areas still draw a row per series; surface3D not drawn.
-- **2-D plot rectangle**: fixtures' plots match Word within 0.5pt on the
-  left, top and bottom but run 2–4.6pt wide on the right
-  (`tests/output/tt/plotrects.py` in the chart-3d worktree lists both);
-  the probes with a data table (`f_2d`) or a bottom legend and no table
-  (`h_2d_nodt`) are 3–7pt off. Horizontal bars' left margin is still 12% of
-  the width where Word sizes it from the category labels (24pt off on
-  hbar3d).
+- **2-D chart layout done** (2026-11-05, chart-3d): plot 10.7pt below the
+  chart top (+30pt title band), 11pt from the right (+ half the last value
+  label on bar/scatter charts), a one-row bottom legend 23.6pt under the
+  axis labels, bar charts' left edge 15pt past the widest category, data
+  table header 17pt in; right legends end 9.9pt from the edge, 15.6pt clear
+  of the plot, centred below the title, names 17.63pt apart; bottom legends
+  baseline 11.9pt up, entries 9.2pt (plain key) / 13.75pt (line key) apart,
+  centred 2pt right of the chart middle; pies keep 11pt from the edges and
+  centre in what the legend leaves; markers c:size (5) + outline (marker's,
+  series', else 2.25pt; 0.75 scatter), fill = marker's own else theme accent.
+  Probes `f_2d`, `h_2d_nodt`, in5/out5 (`h2d_bar*`, `v2d_*`) and
+  `tests/output/tt/plotrect2.py` in the chart-3d worktree. Open: a 3-D pie's
+  legend entries sit 7.2pt apart in Word, not 9.2.
+- **Office 2016 charts (chartEx)**, branch `chartex-wip`, NOT verified:
+  waterfall, funnel, histogram (bins → column chart), treemap, sunburst,
+  box & whisker parse (`src/docx/chartex.rs`) and draw (`src/pdf/charts_ex.rs`,
+  waterfall/box in `charts.rs`). Word only opens a chartEx part with its
+  chartStyle + chartColorStyle parts (probe kit `probe3d/mkx.py`, samples in
+  `probe3d/lo_samples/` from LibreOffice's test data; Word renders in
+  `probe3d/outx/`). First-pass gaps: title in the theme font (we use Arial),
+  waterfall axis top, label/legend spacing, pareto and region maps.
 - Inline `wps` shapes with text, charts and SmartArt are block boxes at the
   paragraph start, not line objects (a picture-filled shape is now a
   picture); an inline-object run kind would fix all three.
