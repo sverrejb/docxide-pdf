@@ -39,9 +39,13 @@ pub(super) fn render_chart_legend(
     let legend_fs = 10.0;
     let spacing = 2.5;
 
+    // An entry runs from its key to its name's end, then a gap before the
+    // next: 9.2pt after a plain key, 13.75pt after a line through a marker
+    // (Word, h2d_bar and case31's radar legends).
     let item_width = |item: &LegendItem| -> f32 {
         let ext = line_extension(&item.swatch);
-        swatch_size + ext * 2.0 + spacing + text_width(item.label, legend_fs, label_font) + 12.0
+        let gap = if ext > 0.0 { 13.75 } else { 9.2 };
+        swatch_size + ext + spacing + text_width(item.label, legend_fs, label_font) + gap
     };
 
     match placement {
@@ -65,7 +69,15 @@ pub(super) fn render_chart_legend(
             }
         }
         LegendPlacement::Bottom { center_x, y: ly } => {
-            let total_w: f32 = items.iter().map(&item_width).sum();
+            // Centred without the gap after the last entry.
+            let last_gap = items.last().map_or(0.0, |i| {
+                if line_extension(&i.swatch) > 0.0 {
+                    13.75
+                } else {
+                    9.2
+                }
+            });
+            let total_w: f32 = items.iter().map(&item_width).sum::<f32>() - last_gap;
             let mut lx = center_x - total_w / 2.0;
             for item in items {
                 render_swatch(content, &item.swatch, item.color, lx, ly, swatch_size);

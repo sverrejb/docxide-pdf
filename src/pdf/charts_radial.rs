@@ -14,6 +14,8 @@ struct RadialLayout {
     cy: f32,
     radius: f32,
     title_band: f32,
+    /// Where a bottom legend centres: 2pt right of the chart's middle.
+    legend_mid_x: f32,
     legend_x: f32,
     colors: Vec<[u8; 3]>,
     has_legend: bool,
@@ -105,6 +107,7 @@ fn setup_radial_chart(
         cy,
         radius,
         title_band: if c.title.is_some() { TITLE_BAND } else { 0.0 },
+        legend_mid_x: x + w / 2.0 + 2.0,
         legend_x,
         colors,
         has_legend,
@@ -143,7 +146,7 @@ fn render_radial_legend(
         }
     } else {
         LegendPlacement::Bottom {
-            center_x: layout.cx,
+            center_x: layout.legend_mid_x,
             y: y - h + 10.9,
         }
     };

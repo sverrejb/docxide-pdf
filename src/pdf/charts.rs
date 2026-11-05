@@ -1767,9 +1767,11 @@ pub(super) fn render_chart(
                         - (h + if c.title.is_some() { TITLE_BAND } else { 0.0 }) / 2.0
                         - 4.67,
                 },
-                // Names on a baseline 11.9pt above the chart's bottom.
+                // Names on a baseline 11.9pt above the chart's bottom, the
+                // entries centred 2pt right of the chart's middle (1.4–2.85
+                // on the h2d_bar, pie3d and case31 radar legends).
                 _ => LegendPlacement::Bottom {
-                    center_x: plot_x + plot_w / 2.0,
+                    center_x: x + w / 2.0 + 2.0,
                     y: y - h + 10.9,
                 },
             };
@@ -2014,8 +2016,8 @@ fn render_radar(
                 }
             } else {
                 LegendPlacement::Bottom {
-                    center_x: cx,
-                    y: y - h + 12.0,
+                    center_x: x + w / 2.0 + 2.0,
+                    y: y - h + 10.9,
                 }
             };
             render_chart_legend(
