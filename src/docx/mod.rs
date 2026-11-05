@@ -118,8 +118,16 @@ pub(super) fn parse_on_off(v: &str) -> bool {
 
 /// Parse a VML/CSS length like "12.5pt" — the "pt" suffix and surrounding
 /// whitespace are optional.
+/// A VML length in points: `12pt`, `2in`, `5cm`, `10mm`, `3pc`, `96px` or a
+/// bare number (points). An OLE preview sized `height:2in` fell back to its
+/// `dyaOrig` (240pt for a 144pt chart) and moved to the next page.
 pub(super) fn parse_pt(s: &str) -> Option<f32> {
-    s.trim().trim_end_matches("pt").trim().parse::<f32>().ok()
+    let s = s.trim();
+    let (num, per_unit) = [("pt", 1.0), ("in", 72.0), ("cm", 72.0 / 2.54), ("mm", 72.0 / 25.4), ("pc", 12.0), ("px", 0.75)]
+        .into_iter()
+        .find_map(|(unit, k)| s.strip_suffix(unit).map(|n| (n, k)))
+        .unwrap_or((s, 1.0));
+    num.trim().parse::<f32>().ok().map(|v| v * per_unit)
 }
 
 /// Find a child element by name and namespace.
@@ -1941,6 +1949,20 @@ fn resolve_body_stylerefs(doc: &mut Document) {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn vml_lengths_convert_to_points() {
+        let pt = super::parse_pt;
+        assert_eq!(pt("12pt"), Some(12.0));
+        assert_eq!(pt(" 2in "), Some(144.0));
+        assert_eq!(pt("186.8pt"), Some(186.8));
+        assert!((pt("2.54cm").unwrap() - 72.0).abs() < 1e-4);
+        assert!((pt("25.4mm").unwrap() - 72.0).abs() < 1e-4);
+        assert_eq!(pt("3pc"), Some(36.0));
+        assert_eq!(pt("96px"), Some(72.0));
+        assert_eq!(pt("7"), Some(7.0));
+        assert_eq!(pt("auto"), None);
+    }
+
     #[test]
     fn border_styles_parse_and_size_their_bands() {
         use crate::model::BorderStyle;
