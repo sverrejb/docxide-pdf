@@ -365,10 +365,34 @@ Open queue from the large-corpus and focus-fixture rounds:
 
 ## Floats, frames and wrapping
 
-- Bands are checked at block start (a paragraph running into one part way
-  keeps its lines) and live beside `FloatZone`; one mechanism with a
-  full-width flag would be cleaner. Textbox `reserve` still uses "width ≥
-  half the column" where images and bands use the side-strip test.
+- Done 2026-11-06 (issue #148): picture-filled shapes with an outline draw
+  as pictures (header and groups too, theme outline colours); topMargin
+  counts from the page top, bottomMargin from the bottom margin; a:grpFill
+  takes the group's fill; aligned groups place their shapes; an anchored
+  group wraps as one box. Page- or margin-anchored topAndBottom floats, and
+  ones with no strip beside them, are bands: Word probes fixed the fit rule
+  (one-line paragraph needs its space after, the space before counts),
+  the gap below (previous space after dropped, own excess before kept)
+  and paragraph-relative drawings staying where a pushed paragraph stood;
+  each page pre-scans its upcoming anchors so text above an anchor keeps
+  out too. A paragraph-relative topAndBottom box below its anchor's text is
+  a band for what follows. Fixtures: the eight cases plus five probes.
+- Bands are checked at block start: a multi-line paragraph running into
+  one part way keeps its later lines there, where Word moves the first
+  overlapping line below the band with no gap (probe `multiline`, kit in
+  the issue-148 worktree's tests/output/i148/probe). Paragraph heights
+  don't all go through `inline_line_advance`, so a per-line drop needs
+  care. Bands live beside `FloatZone`; one mechanism with a full-width flag
+  would be cleaner. Textbox `reserve` still uses "width ≥ half the column"
+  where images and bands use the side-strip test.
+- The page pre-scan estimates where the page ends from plain line counts and
+  stops at the first table; an anchor that lands on the next page anyway
+  keeps its band on this one too.
+- Paragraph-relative topAndBottom pictures below their anchor's text still
+  reserve in the anchor (textboxes and groups are bands); topAndBottom
+  `distT` is ignored for textboxes (no field).
+- Group `positionV` alignment (top/center/bottom) is lost like the
+  horizontal one was: children get `offset_or_zero`.
 - Text-anchored body frames, and wrap-around frames reaching into the text
   (croatian_grant's two), still flow inline.
 - `content_h` in `render_paragraph_block` includes the room reserved for a
