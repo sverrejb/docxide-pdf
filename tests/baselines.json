@@ -8198,9 +8198,9 @@
     "a11y_text": 0.3122
   },
   "cases/torture_test": {
-    "jaccard": 0.6858,
-    "ssim": 0.8312,
-    "text_boundary": 0.6111,
+    "jaccard": 0.749,
+    "ssim": 0.8658,
+    "text_boundary": 0.8364,
     "ua_fail": 3,
     "a11y_missing": 39,
     "ua_deficit": 0,
