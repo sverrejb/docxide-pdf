@@ -2197,12 +2197,31 @@ pub(super) fn render_table(
         let available = pb.slot_top - *effective_margin_bottom;
         let total_h: f32 = row_layouts.iter().map(|r| r.height).sum();
         let page_content_h = eff_top - *effective_margin_bottom;
-        // Keep the floating table together: when it doesn't fit in the space
-        // left here but would fit on a fresh page, move the whole table to the
-        // next page (re-anchoring to the top). Using the full height (not just
-        // the first row) is robust to short header rows. Tables taller than a
-        // full page fall through to the per-row split path below.
-        if !at_page_top && total_h > available && total_h <= page_content_h {
+        // A page- or margin-anchored table positioned above the text already on
+        // its anchor's page, too tall to fit below that position, starts on the
+        // next page at the same position and breaks from there; the anchor's
+        // page keeps its text (Word for Mac probe p24f at compat 15 and a
+        // corpus deleted table, both 1.3 pages tall at tblpY 72pt: the anchor's
+        // page ends half empty, the table fills the next page and a third).
+        // One that fits stays put, and Word re-flows the page's text below it
+        // (p24a, p24g) — not modelled; compat 14 keeps a row or two on the
+        // anchor's page (p24c, p24d) — not modelled either.
+        let flow_top = saved_slot_top.map_or(pb.slot_top, |(flow, _)| flow);
+        let over_placed_text = override_pos.as_ref().is_some_and(|fp| !fp.v_anchor_text)
+            && flow_top < pb.slot_top - 0.5
+            && (flow_top - eff_top).abs() >= 1.0;
+        if over_placed_text && total_h > available {
+            let table_top = pb.slot_top;
+            pb.begin_next_page(sect_idx, sp, effective_margin_bottom, ctx);
+            did_flush_while_floating = true;
+            flushed_page_top = Some(pb.slot_top);
+            pb.slot_top = table_top;
+        } else if !at_page_top && total_h > available && total_h <= page_content_h {
+            // Keep the floating table together: when it doesn't fit in the space
+            // left here but would fit on a fresh page, move the whole table to the
+            // next page (re-anchoring to the top). Using the full height (not just
+            // the first row) is robust to short header rows. Tables taller than a
+            // full page fall through to the per-row split path below.
             pb.begin_next_page(sect_idx, sp, effective_margin_bottom, ctx);
             did_flush_while_floating = true;
             // The body top is where the anchor paragraph flows (and where its
