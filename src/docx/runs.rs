@@ -160,6 +160,9 @@ struct FieldFrame {
     checkbox: Option<FormCheckbox>,
     /// A MACROBUTTON: its value is what follows the macro name, with no separator.
     macrobutton: bool,
+    /// The code came as `w:delInstrText`: a deleted field keeps only its
+    /// cached result (markup view), never a regenerated one.
+    instr_deleted: bool,
 }
 
 /// Fields still open when a paragraph ends, carried into the next one: a
@@ -193,6 +196,7 @@ impl FieldFrame {
             opaque: false,
             checkbox: None,
             macrobutton: false,
+            instr_deleted: false,
         }
     }
 
@@ -1544,7 +1548,10 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         }
                         // A TOC held in one paragraph is a placeholder to
                         // regenerate (`docx::expand_toc_fields`).
-                        if !f.carried && is_toc_instr(&f.instr) {
+                        // A deleted TOC with an empty cached result prints
+                        // nothing (an external tracked corpus: Word's markup
+                        // view shows the heading and a tip, no entries).
+                        if !f.carried && !f.instr_deleted && is_toc_instr(&f.instr) {
                             toc_instr = Some(f.instr.clone());
                         }
                         let fc = if f.evaluable_if() {
@@ -1594,6 +1601,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                             f.result.push_str(t);
                         } else if !f.seen_sep {
                             f.push_instr(t, simple.is_some());
+                            f.instr_deleted |= child.has_tag_name((WML_NS, "delInstrText"));
                             if let Some(display) = macrobutton_display(&f.instr) {
                                 // The macro name ends the code: what follows (text
                                 // here, a picture in later runs) is the value.
