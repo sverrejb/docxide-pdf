@@ -328,7 +328,15 @@ impl View3D {
             h: plot.h - (2.85 + 1.77),
         };
         // The floor: a bar's depth plus the gap between depth rows.
-        let thick = bar_slot(c, inner.w, num_categories).1;
+        let horizontal = matches!(
+            c.chart_type,
+            ChartType::Bar {
+                horizontal: true,
+                ..
+            }
+        );
+        let cat_extent = if horizontal { inner.h } else { inner.w };
+        let thick = bar_slot(c, cat_extent, num_categories).1;
         let (dx, dy) = self.project(thick * self.depth * (1.0 + self.gap_depth));
         let s = (inner.h / (inner.h + dy)).min(inner.w / (inner.w + dx));
         let front = PlotRect {
@@ -540,7 +548,11 @@ fn draw_chart_series(
             let (shift_x, shift_y) = depth.map_or((0.0, 0.0), |d| {
                 d.project(thick * d.depth * d.gap_depth / 2.0)
             });
-            let (cat_origin, val_origin) = (cat_origin + shift_x, val_origin + shift_y);
+            let (cat_origin, val_origin) = if horizontal {
+                (cat_origin + shift_y, val_origin + shift_x)
+            } else {
+                (cat_origin + shift_x, val_origin + shift_y)
+            };
             let solid = depth.map(|d| (d.shape, d.project(thick * d.depth)));
             // `stack` is the whole column's length: a cone or pyramid narrows
             // over the stack, a `ToMax` one over the value axis.
@@ -558,8 +570,21 @@ fn draw_chart_series(
                     };
                     let lo = val_pos - val_origin;
                     let taper = (1.0 - lo / span, 1.0 - (lo + len) / span);
-                    let rect = (cat_pos, val_pos, thick, len);
-                    draw_bar_3d(content, color, shape, rect, back, taper);
+                    if !horizontal {
+                        let rect = (cat_pos, val_pos, thick, len);
+                        draw_bar_3d(content, color, shape, rect, back, taper);
+                    } else if shape == BarShape::Box {
+                        // A box lights by screen direction: top 0.76, end 0.63.
+                        let rect = (val_pos, cat_pos, len, thick);
+                        draw_bar_3d(content, color, shape, rect, back, taper);
+                    } else {
+                        // A lying solid is a standing one mirrored about y = x.
+                        content.save_state();
+                        content.transform([0.0, 1.0, 1.0, 0.0, 0.0, 0.0]);
+                        let rect = (cat_pos, val_pos, thick, len);
+                        draw_bar_3d(content, color, shape, rect, (back.1, back.0), taper);
+                        content.restore_state();
+                    }
                     return;
                 }
                 set_color(content, color);
@@ -952,7 +977,7 @@ pub(super) fn render_chart(
     };
     let is_stacked = bar_grouping == BarGrouping::Stacked;
     let is_percent_stacked = bar_grouping == BarGrouping::PercentStacked;
-    let depth = c.view_3d.filter(|_| !horizontal);
+    let depth = c.view_3d;
 
     let legend_pos = c.legend.as_ref().map(|l| l.position);
     let has_legend = legend_pos.is_some();
@@ -1133,9 +1158,13 @@ pub(super) fn render_chart(
                 }
                 content.line_to(plot_x + plot_w + back_dx, gy + back_dy);
             } else {
+                // In 3-D along the floor to the back, then up it.
                 let gx = plot_x + frac * plot_w;
                 content.move_to(gx, plot_y);
-                content.line_to(gx, plot_y + plot_h);
+                if depth.is_some() {
+                    content.line_to(gx + back_dx, plot_y + back_dy);
+                }
+                content.line_to(gx + back_dx, plot_y + plot_h + back_dy);
             }
             content.stroke();
         }
@@ -1225,10 +1254,14 @@ pub(super) fn render_chart(
         stroke_rgb(content, axis_color);
         content.move_to(plot_x, plot_y);
         content.line_to(plot_x, plot_y + plot_h);
+        // The category wall's free edge recedes from the far end of its axis.
+        if depth.is_some() && horizontal {
+            content.line_to(plot_x + back_dx, plot_y + plot_h + back_dy);
+        }
         content.stroke();
         content.move_to(plot_x, plot_y);
         content.line_to(plot_x + plot_w, plot_y);
-        if depth.is_some() {
+        if depth.is_some() && !horizontal {
             content.line_to(plot_x + plot_w + back_dx, plot_y + back_dy);
         }
         content.stroke();
@@ -1405,16 +1438,19 @@ pub(super) fn render_chart(
                 ChartType::Line | ChartType::Scatter | ChartType::Bubble | ChartType::Radar
             );
             let is_bubble = matches!(c.chart_type, ChartType::Bubble);
-            let reverse_legend = matches!(
-                c.chart_type,
+            // Word lists 2-D stacked columns top series first, but its 3-D
+            // stacked columns in series order (stacked3d probe).
+            let reverse_legend = match c.chart_type {
                 ChartType::Bar {
                     horizontal: true,
                     grouping: BarGrouping::Clustered,
-                } | ChartType::Bar {
+                } => true,
+                ChartType::Bar {
                     horizontal: false,
                     grouping: BarGrouping::Stacked | BarGrouping::PercentStacked,
-                }
-            );
+                } => depth.is_none(),
+                _ => false,
+            };
             let series_order: Vec<(usize, &crate::model::ChartSeries)> = if reverse_legend {
                 c.series.iter().enumerate().rev().collect()
             } else {
