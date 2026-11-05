@@ -72,7 +72,9 @@ pub(super) fn parse_section_properties<R: Read + Seek>(
         })
         .unwrap_or(DocGridType::Default);
 
-    let different_first_page = wml(sect_node, "titlePg").is_some();
+    // `<w:titlePg w:val="0"/>` switches the first-page header off (a redline's
+    // sectPrChange kept the old one on; Word prints the default header).
+    let different_first_page = super::wml_bool(sect_node, "titlePg").unwrap_or(false);
 
     let pg_num_type = wml(sect_node, "pgNumType");
     let page_num_start = pg_num_type
