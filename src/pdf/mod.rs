@@ -4033,7 +4033,11 @@ fn render_paragraph_block(
         0.0
     };
 
-    if !at_page_top
+    // A multi-line paragraph that opens the page and outruns it splits like
+    // any other: one of 108 manual line breaks, double spaced, took one page
+    // instead of five (corpus 2026-11-05; probe p18b, 70 break lines). A
+    // single oversized line stays put (case150's 700pt exact spacer).
+    if (!at_page_top || lines.len() > 1)
         && state.pb.slot_top - needed_with_floats - keep_next_extra + last_line_lead
             < state.effective_margin_bottom + para_fn_extra
     {
