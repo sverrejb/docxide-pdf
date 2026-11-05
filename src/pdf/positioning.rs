@@ -64,10 +64,54 @@ pub(super) fn wraps_in_column(
     col_w: f32,
     text_width: f32,
 ) -> bool {
-    fi.wrap_type.wraps_beside() && {
-        let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
-        fi_x + fi.image.display_width + fi.dist_right > col_x && fi_x - fi.dist_left < col_x + col_w
+    fi.wrap_type.wraps_beside()
+        && side_gaps(fi, sp, col_x, col_w, text_width).is_some()
+        && !image_blocks_band(fi, sp, col_x, col_w, text_width)
+}
+
+/// The free room left and right of a float in the column, None when the
+/// float (with its text distances) stays out of the column.
+fn side_gaps(
+    fi: &FloatingImage,
+    sp: &SectionProperties,
+    col_x: f32,
+    col_w: f32,
+    text_width: f32,
+) -> Option<(f32, f32)> {
+    let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
+    let left = fi_x - fi.dist_left - col_x;
+    let right = col_x + col_w - (fi_x + fi.image.display_width + fi.dist_right);
+    (left < col_w && right < col_w).then_some((left, right))
+}
+
+/// A page- or margin-anchored picture that keeps body lines out of its whole
+/// band (`frame_bands`) like the matching textboxes: topAndBottom, or
+/// square/tight with no usable strip beside it.
+pub(super) fn image_blocks_band(
+    fi: &FloatingImage,
+    sp: &SectionProperties,
+    col_x: f32,
+    col_w: f32,
+    text_width: f32,
+) -> bool {
+    if fi.v_relative_from == VRelativeFrom::Paragraph {
+        return false;
     }
+    let Some((left, right)) = side_gaps(fi, sp, col_x, col_w, text_width) else {
+        return false;
+    };
+    match fi.wrap_type {
+        WrapType::TopAndBottom => true,
+        WrapType::Square | WrapType::Tight => left.max(right) < super::MIN_EMPTY_STRIP,
+        _ => false,
+    }
+}
+
+/// The band of a picture that `image_blocks_band`, down from the page top.
+pub(super) fn image_band(fi: &FloatingImage, sp: &SectionProperties) -> (f32, f32) {
+    // The slot top only places paragraph-relative floats.
+    let top = sp.page_height - resolve_fi_y_top(fi, sp, 0.0);
+    (top - fi.dist_top, top + fi.image.display_height + fi.dist_bottom)
 }
 
 pub(crate) fn resolve_fi_y_top(fi: &FloatingImage, sp: &SectionProperties, slot_top: f32) -> f32 {

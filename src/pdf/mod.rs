@@ -64,7 +64,7 @@ use layout::{
 use list_label::{label_font_key, render_list_label};
 use positioning::{
     render_connector, render_floating_images, render_foreground_floating_images_deferred,
-    resolve_fi_x, wraps_in_column,
+    image_band, image_blocks_band, resolve_fi_x, wraps_in_column,
 };
 pub(super) use positioning::{resolve_fi_y_top, resolve_h_position};
 use smartart::draw_shape_path;
@@ -170,34 +170,48 @@ fn side_room(wrap_text: WrapText, left: f32, right: f32) -> f32 {
     }
 }
 
-/// The band (down from the page top) of a page- or margin-anchored textbox
-/// that leaves text no room on its wrap side, which keeps body lines out like
-/// a lifted frame: massachusetts' secretary box at the right edge wraps text on
-/// its right only, so its anchor's line and the date start below it. Wider
-/// boxes already reserve their height in the anchor paragraph.
-fn blocking_textbox_band(
+/// Whether a page- or margin-anchored textbox keeps body lines out of its
+/// whole band, like a lifted frame: a topAndBottom box (issue #148: text
+/// flows above a page-placed one and resumes below it), or one leaving no
+/// room on its wrap side (massachusetts' secretary box at the right edge wraps
+/// text on its right only, so its anchor's line and the date start below it).
+fn textbox_blocks_band(
     tb: &crate::model::Textbox,
     sp: &SectionProperties,
     (col_x, col_w): (f32, f32),
     text_width: f32,
+) -> bool {
+    if tb.v_relative_from == VRelativeFrom::Paragraph {
+        return false;
+    }
+    match tb.wrap_type {
+        WrapType::TopAndBottom => true,
+        WrapType::Square | WrapType::Tight => {
+            let x = resolve_h_position(
+                tb.h_relative_from,
+                &tb.h_position,
+                tb.width_pt,
+                sp,
+                col_x,
+                col_w,
+                text_width,
+            );
+            side_room(tb.wrap_text, x - col_x, col_x + col_w - (x + tb.width_pt))
+                < MIN_EMPTY_STRIP
+        }
+        _ => false,
+    }
+}
+
+/// The band (down from the page top) of a textbox that `textbox_blocks_band`.
+fn blocking_textbox_band(
+    tb: &crate::model::Textbox,
+    sp: &SectionProperties,
+    col: (f32, f32),
+    text_width: f32,
     ctx: &RenderContext,
 ) -> Option<(f32, f32)> {
-    if tb.v_relative_from == VRelativeFrom::Paragraph
-        || !matches!(tb.wrap_type, WrapType::Square | WrapType::Tight)
-        || tb.width_pt >= text_width * 0.5
-    {
-        return None;
-    }
-    let x = resolve_h_position(
-        tb.h_relative_from,
-        &tb.h_position,
-        tb.width_pt,
-        sp,
-        col_x,
-        col_w,
-        text_width,
-    );
-    if side_room(tb.wrap_text, x - col_x, col_x + col_w - (x + tb.width_pt)) >= MIN_EMPTY_STRIP {
+    if !textbox_blocks_band(tb, sp, col, text_width) {
         return None;
     }
     let h = textbox_render::textbox_height(tb, ctx);
@@ -206,7 +220,35 @@ fn blocking_textbox_band(
     Some((top, top + h + tb.dist_bottom))
 }
 
-/// Before a body block: its paragraph's blocking textboxes join the page's
+/// The bands of a paragraph's blocking page- or margin-anchored floats.
+fn paragraph_bands(
+    p: &Paragraph,
+    sp: &SectionProperties,
+    col: (f32, f32),
+    text_width: f32,
+    ctx: &RenderContext,
+) -> Vec<(f32, f32)> {
+    let textboxes = p
+        .textboxes
+        .iter()
+        .filter_map(|tb| blocking_textbox_band(tb, sp, col, text_width, ctx));
+    let pictures = p
+        .floating_images
+        .iter()
+        .filter(|fi| image_blocks_band(fi, sp, col.0, col.1, text_width))
+        .map(|fi| image_band(fi, sp));
+    textboxes.chain(pictures).collect()
+}
+
+fn add_bands(bands: &mut Vec<(f32, f32)>, new: Vec<(f32, f32)>) {
+    for b in new {
+        if !bands.contains(&b) {
+            bands.push(b);
+        }
+    }
+}
+
+/// Before a body block: its paragraph's blocking floats join the page's
 /// bands, and its first line steps below any band it would overlap.
 /// ponytail: checked at the block start only, like the float zones; a
 /// paragraph that runs into a band part way down keeps its later lines there.
@@ -219,19 +261,75 @@ fn step_below_bands(
     ctx: &RenderContext,
 ) {
     if let Block::Paragraph(p) = block {
-        state.pb.frame_bands.extend(
-            p.textboxes
-                .iter()
-                .filter_map(|tb| blocking_textbox_band(tb, sp, col, text_width, ctx)),
+        add_bands(
+            &mut state.pb.frame_bands,
+            paragraph_bands(p, sp, col, text_width, ctx),
         );
     }
-    step_below_existing_bands(state, block, sp, ctx);
+    step_below_existing_bands(state, block, sp, col.1, ctx);
+}
+
+/// Word places all of a page's page- or margin-anchored floats before it lays
+/// out the page's lines, so text above an anchor keeps out of its band too
+/// (issue #148: a letterhead band at the page top anchored in the third
+/// paragraph moves the first two below it). On a page's first block, the
+/// bands of the paragraphs estimated to start on the page join its bands.
+/// ponytail: plain line counts estimate where the page ends, stopping at the
+/// first table or page break; an anchor that still lands on the next page
+/// keeps its band on this one too.
+fn prescan_page_bands(
+    state: &mut LayoutState,
+    blocks: &[Block],
+    sp: &SectionProperties,
+    col: (f32, f32),
+    text_width: f32,
+    ctx: &RenderContext,
+) {
+    let bottom = sp.page_height - state.effective_margin_bottom;
+    let mut y = sp.page_height - state.pb.slot_top;
+    let mut bands = std::mem::take(&mut state.pb.frame_bands);
+    for (i, block) in blocks.iter().enumerate() {
+        let Block::Paragraph(p) = block else { break };
+        if i > 0 && p.page_break_before {
+            break;
+        }
+        add_bands(&mut bands, paragraph_bands(p, sp, col, text_width, ctx));
+        let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
+        let line_h = resolve_line_h(p.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr);
+        let lines = paragraph_line_count(p, col.1, ctx).max(1) as f32;
+        y = header_footer::below_blocking_frames(y + p.space_before, line_h, &bands)
+            + lines * line_h
+            + p.space_after;
+        if y > bottom || p.page_break_after || p.page_break_at.is_some() {
+            break;
+        }
+    }
+    state.pb.frame_bands = bands;
+}
+
+/// How many lines a paragraph takes in a column `col_w` wide.
+fn paragraph_line_count(p: &Paragraph, col_w: f32, ctx: &RenderContext) -> usize {
+    build_lines(
+        &p.runs,
+        ctx,
+        (col_w - p.indent_left - p.indent_right).max(1.0),
+        ctx.cjk(true, p),
+        &LineOpts {
+            tab_stops: &p.tab_stops,
+            indent_left: p.indent_left,
+            indent_right: p.indent_right,
+            hanging: p.indent_hanging - p.indent_first_line,
+            ..Default::default()
+        },
+    )
+    .len()
 }
 
 fn step_below_existing_bands(
     state: &mut LayoutState,
     block: &Block,
     sp: &SectionProperties,
+    col_w: f32,
     ctx: &RenderContext,
 ) {
     let top = sp.page_height - state.pb.slot_top;
@@ -246,8 +344,25 @@ fn step_below_existing_bands(
     }
     let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
     let line_h = resolve_line_h(p.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr);
-    state.pb.slot_top =
-        sp.page_height - header_footer::below_blocking_frames(top, line_h, &state.pb.frame_bands);
+    // The first line fits above a band with the space before it, and a
+    // one-line paragraph only with its space after too (Word probes, 12.65pt
+    // line + 6pt after: an 18.0pt gap between two topAndBottom boxes is
+    // skipped, 19.0pt holds it; 14.2pt holds it with no space after).
+    let one_line = paragraph_line_count(p, col_w, ctx) <= 1;
+    let need = line_h + if one_line { p.space_after } else { 0.0 };
+    let line_top = top + state.prev_space_after.max(p.space_before);
+    let below = header_footer::below_blocking_frames(line_top, need, &state.pb.frame_bands);
+    if below != line_top {
+        // Its paragraph-relative drawings still hang from where the paragraph
+        // stood (probe: a wrapNone box at offset 0 in a paragraph pushed below
+        // a band stays above the band; vaccines' circles under their banner).
+        let anchor = state.pb.slot_top - state.prev_space_after;
+        state.pb.pending_float_anchor.get_or_insert(anchor);
+        // Below a band the previous paragraph's space after is gone and this
+        // one's own space before stays (probe, 6pt after and 12pt before: the
+        // line starts 6pt below the box).
+        state.pb.slot_top = sp.page_height - (below - state.prev_space_after);
+    }
 }
 
 /// A lifted frame being laid out: its blocks render in the frame's own column
@@ -1397,6 +1512,9 @@ pub(super) struct PageBuilder {
     /// The (top, bottom) bands of this page's lifted frames, down from the
     /// page top: body lines may not overlap them (see `OpenFrame`).
     frame_bands: Vec<(f32, f32)>,
+    /// The (section, page) whose upcoming float bands `prescan_page_bands`
+    /// collected.
+    bands_prescanned: Option<(usize, usize)>,
     /// One-shot anchor override for the paragraph that follows a floating table
     /// which was pushed whole onto a fresh page. That paragraph (the table's
     /// vertAnchor="text" anchor) must position its paragraph-relative shapes
@@ -1493,6 +1611,7 @@ impl PageBuilder {
             float_zone: None,
             float_table_extent: None,
             frame_bands: Vec::new(),
+            bands_prescanned: None,
             pending_float_anchor: None,
             table_extent: None,
             next_text_below_picture: None,
@@ -3325,6 +3444,7 @@ fn render_paragraph_block(
         para.floating_images
             .iter()
             .filter(|fi| fi.wrap_type.wraps_beside() && wraps_here(fi))
+            .filter(|fi| !image_blocks_band(fi, sp, col_x, col_w, text_width))
             .skip(1)
             .map(|fi| {
                 let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
@@ -3800,7 +3920,12 @@ fn render_paragraph_block(
     // How far a topAndBottom float over the first line pushes the text down.
     let mut text_drop = 0.0f32;
 
-    for fi in para.floating_images.iter().filter(|fi| wraps_here(fi)) {
+    // A band keeps the lines out by itself (`step_below_bands`).
+    for fi in para
+        .floating_images
+        .iter()
+        .filter(|fi| wraps_here(fi) && !image_blocks_band(fi, sp, col_x, col_w, text_width))
+    {
         let reserve = match fi.wrap_type {
             WrapType::TopAndBottom => true,
             // wrapSquare/Tight with a usable side strip: content (even empty
@@ -3888,11 +4013,13 @@ fn render_paragraph_block(
     }
 
     for tb in &para.textboxes {
-        let reserve = match tb.wrap_type {
-            WrapType::TopAndBottom => true,
-            WrapType::Square => tb.width_pt >= text_width * 0.5,
-            _ => false,
-        };
+        // A band keeps the lines out by itself (`step_below_bands`).
+        let reserve = !textbox_blocks_band(tb, sp, (col_x, col_w), text_width)
+            && match tb.wrap_type {
+                WrapType::TopAndBottom => true,
+                WrapType::Square => tb.width_pt >= text_width * 0.5,
+                _ => false,
+            };
         if reserve {
             let tb_bottom = tb.flow_bottom();
             match tb.v_relative_from {
@@ -5684,6 +5811,12 @@ fn render_pass(
                         }
                         None => {
                             let col = col_geometry[state.current_col];
+                            let page = (sect_idx, state.pb.page_count());
+                            if col_count == 1 && state.pb.bands_prescanned != Some(page) {
+                                state.pb.bands_prescanned = Some(page);
+                                let rest = &section.blocks[block_idx..];
+                                prescan_page_bands(state, rest, sp, col, text_width, &ctx);
+                            }
                             step_below_bands(state, block, sp, col, text_width, &ctx);
                         }
                     }
@@ -5855,7 +5988,8 @@ fn render_pass(
                 // Clearing a floating table may move the first body line into
                 // a later frame band. Recheck the existing bands at that cursor.
                 if frame.is_none() && state.pb.slot_top != before_float_clearance {
-                    step_below_existing_bands(state, block, sp, &ctx);
+                    let col_w = col_geometry[state.current_col].1;
+                    step_below_existing_bands(state, block, sp, col_w, &ctx);
                 }
 
                 match block {
