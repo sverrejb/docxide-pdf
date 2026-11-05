@@ -125,6 +125,40 @@ before keeps an earlier colour (corpus docs: the same author name has the
 same colour across documents, unrelated to its order there); no converter can
 reproduce that, and ink is ink for the scores.
 
+**Inserted pictures** (p22–p22e, 2026-11-05 night): a lone picture in its own
+paragraph makes a line of exactly its height (bottom on the baseline, nothing
+below; compat 14 and 15, Times New Roman and Arial, single / 1.5 / triple
+spacing, as already modelled). The same picture *inserted* keeps its run's
+descent below it, like the underlined text it is (+2.6pt at 12pt Times New
+Roman at every spacing); a short inserted picture keeps its line but sits on
+the text baseline instead of the line's foot. A deleted picture adds nothing.
+Implemented in `picture_line_bottom` / `inserted_picture_descent`
+(`pdf/layout.rs`) and the `para.image` path of `pdf/mod.rs`, which also draws
+the revision underline under a lone inserted picture (Word: 0.48pt, 1.44pt
+below the baseline at 12pt).
+
+**General layout rules found on the corpus** (not markup-specific):
+- A list label that exactly fills its hanging indent keeps the text on the
+  indent (p23: "(1)" in SimSun 12 under a 360/360 indent → text at 360;
+  "(10)" overshoots by 6pt → the next default stop). "Fills" is judged on
+  Word's 288 dpi device grid: "(iii)" in Courier New 12 is 36.25pt there, not
+  36.006, and tabs past a 36pt indent (zimbabwe_broadcasting p5). An explicit
+  stop the label ends on is skipped like any tab stop (indigenous_innovation
+  p5: "b." in Arial 12 ends on a 1280-twip stop, the text goes to the 1440
+  indent); a plain tab also skips a stop its pen lands on (12 half-width
+  letters = 72pt before a 1in stop → the next stop). `list_label.rs`
+  `text_hanging` / `label_device_width`.
+- A page- or margin-anchored floating table positioned above the text
+  already on its anchor's page, too tall to fit below that position, starts
+  on the next page at the same position and breaks from there; the anchor's
+  page keeps its text (p24f, compat 15, 70 lines then a 1.3-page table at
+  tblpY 72pt: page 2 ends half empty, the table fills page 3 and part of 4,
+  the anchor paragraph follows it). One that fits stays, and Word re-flows
+  the page's text below it (p24a compat 14, p24g compat 15; we still draw
+  such a table over the text). Compat 14 with a too-tall table keeps a row or
+  two on the anchor's page and the text below them (p24c, p24d; unmodelled).
+  `table.rs` `render_table`.
+
 **Change bars**: black, 0.72pt wide, in the left margin at
 `margin_left − min(36pt, margin_left / 2)` (margins 0.5/1/1.25/2in → 18, 36,
 54, 108pt; with mirrored margins the outside margin: right on odd pages at
@@ -209,8 +243,13 @@ delta buckets plus an XML feature census of the worst documents).
 
 | set | ours, markup (J / SSIM / pages wrong) | competitor | we win / lose |
 |---|---|---|---|
-| tracking, no comments (317) | 71.7 / 85.4 / 9 (2026-11-05 evening; 67.9 / 82.1 / 11 in the morning) | 62.2 / 80.4 / 11 | 259 / 58 |
-| comments + tracking (24) | 67.9 / 86.2 / 0 (2026-11-05 evening; 55.5 / 72.5 / 0 in the morning) | 29.3 / 48.6 / 4 | 24 / 0 |
+| tracking, no comments (317) | 72.6 / 85.9 / 6 (2026-11-05 night, round 3; 71.7 / 85.4 / 9 in the evening, 67.9 / 82.1 / 11 in the morning) | 62.2 / 80.4 / 11 | 259 / 58 |
+| comments + tracking (24) | 68.0 / 86.2 / 0 (2026-11-05 night; 67.9 in the evening, 55.5 / 72.5 / 0 in the morning) | 29.3 / 48.6 / 4 | 24 / 0 |
+
+Round 3 (labels `tc-gap8`, `tc-comments9`): 317 set +0.9 Jaccard, eight
+documents +14 to +48 (deleted page-anchored tables that now start on the
+next page), one −1.0 (its deleted table now on Word's page, the text beside
+it not yet re-flowed), page misses 9 → 6; the comments set +0.15.
 | comments only (1) | 70.8 / 88.4 / 0 | 60.0 | |
 
 (317 set before the page-top split fix below: 66.5 / 80.6 / 25.) 108 of the
@@ -300,6 +339,36 @@ behind, 17 of those thirty or more.
    −6.0 by mid-page) until a two-line bullet fits above the footnote area
    where Word's does not: generic spacing rules, not markup. The others
    (543 deleted marks and 52 row revisions, 14 deleted pictures) unexamined.
+6b. Round 3 (2026-11-05 night): the inserted-picture descent, the label
+   that fills its indent and the too-tall page-anchored floating table
+   (rules above, probes p22–p24, one commit each) take the 3-vs-4 sibling to
+   4/4 pages (its remaining −0.9pt per page is the header font) and the
+   `a1872de6f9` labels to Word's x. Still open from the page-count misses:
+   - The `29379c07bf` siblings' constant −1.2pt: their header title is
+     Microsoft PhagsPa Bold 18 (an Office cloud font; not in `fonts/`, not on
+     this Mac — Word embedded it from its cloud cache); we fall back to
+     Calibri. Environment, not code (a what-if with Calibri in the header
+     still gives Word 4 pages).
+   - `fc29454fff` (5 vs 4): Word prints an extra empty black 12pt line
+     (docDefaults spacing after 200 / line 276 and its firstLine 720 indent)
+     between the wholly deleted header and the first body paragraph that no
+     `w:p` in the body or any header accounts for. What-ifs that keep it:
+     no even/first header refs, no default header at all (it then follows
+     the empty header), header marks live, header row live, header table
+     removed, body's last paragraph removed, first paragraph's mark plain,
+     sectPrChange removed; docDefaults firstLine 0 moves it to the margin.
+     A minimal document with the same start (p25a–d) does not show it.
+     Unexplained.
+   - `a1872de6f9` (5 vs 6): after the label fix a 24pt exact line still
+     fits at the foot of our page 2 (baseline 771.2 on an A4 page whose
+     body ends at 769.9; Word moves it on), then an extra page break.
+   - `aa5340125d` (5 vs 4): the header holds an inserted and a deleted copy
+     of a `wpg` group (text boxes) on paragraphs 1 and 3; Word stacks them
+     29pt apart, we draw each twice (a plain grey copy 2pt above the red
+     one, probably the `mc:Fallback` VML drawn as well as the Choice) and
+     page 3 diverges by 55pt; unexamined further.
+   - Page-anchored floating tables that fit: Word re-flows the page's text
+     below them (p24a, p24g); we draw them over it.
 7. Cosmetic, mostly done (bars over empty paragraphs and spacing, bridged
    strikes, coloured labels, bars in headers and footers, strike / underline
    lines on deleted / inserted pictures, one bar per revised table row,
