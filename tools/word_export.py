@@ -67,6 +67,15 @@ on run argv
         if not (exists document docName) then error "Word did not open " & docName
         set theDoc to document docName
         try
+            -- "Show revisions in balloons" is a Word preference, not in the docx;
+            -- the markup references want Word's inline All Markup view
+            if (count of argv) > 3 then
+                if item 4 of argv is "inline" then
+                    set revisions mode of view of active window to in line revisions
+                else
+                    set revisions mode of view of active window to balloon revisions
+                end if
+            end if
             save as theDoc file name dstPath file format format PDF
             close theDoc saving no
         on error msg number n
@@ -79,6 +88,7 @@ on run argv
 end run
 """
 
+REVISIONS: str | None = None  # --revisions, passed to EXPORT as its 4th argument
 PING = 'tell application "Microsoft Word" to get name'
 QUIT = 'tell application "Microsoft Word" to quit saving no'
 
@@ -240,7 +250,7 @@ def export_one(src: Path, dst: Path, stage: Path, timeout: float) -> None:
     shutil.copy2(src, s_docx)
     subprocess.run(["xattr", "-d", "com.apple.quarantine", str(s_docx)], capture_output=True)
     try:
-        r = osa(EXPORT, str(s_docx), str(s_pdf), s_docx.name, timeout=timeout)
+        r = osa(EXPORT, str(s_docx), str(s_pdf), s_docx.name, *([REVISIONS] if REVISIONS else []), timeout=timeout)
         if r.returncode != 0:
             raise RuntimeError(r.stderr.strip() or f"osascript exit {r.returncode}")
         if not s_pdf.exists():
@@ -271,7 +281,12 @@ def main() -> int:
     ap.add_argument("--check", action="store_true", help="preflight only (starts Word if it is not running)")
     ap.add_argument("--preset", choices=("online", "print"), default="online",
                     help="PDF \"Optimize for\": online = tagged, via Microsoft's service (default); print = local")
+    ap.add_argument("--revisions", choices=("inline", "balloon"),
+                    help="tracked changes: inline (All Markup in the text, as the corpus references) or balloon; "
+                         "default = Word's current setting")
     a = ap.parse_args()
+    global REVISIONS
+    REVISIONS = a.revisions
 
     problems = preflight()
     for p in problems:
