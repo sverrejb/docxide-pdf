@@ -427,6 +427,11 @@ Open queue from the large-corpus and focus-fixture rounds:
   is honoured. The cover document 8.9 → 64.9. The Verdana list is an
   environment difference (this Mac's user fonts hold DejaVu Sans Mono,
   Word for Mac used the fontTable's altName).
+- Done 2026-11-05 (markup cosmetics and harness): bars over empty revised
+  paragraphs and the paragraph's spacing, strikes bridging spaces, list
+  labels coloured and struck / underlined; the visual suite scores a
+  fixture's `reference-markup.pdf` as `<case>@markup` from the `--markup`
+  rendering (`cases/tracked-changes-inline` carries both references).
 - Next steps, in order: (5) `reference-markup.pdf` support in the harness so fixtures
   can carry a markup reference; (6) cosmetic markup: bars in headers /
   footers and over the paragraph's space before/after, continuous strikes,

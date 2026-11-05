@@ -255,7 +255,15 @@ fn src_newest_mtime() -> SystemTime {
 
 /// Convert `input` to `output`, turning a conversion panic into an error.
 pub fn convert(input: &Path, output: &Path) -> Result<(), String> {
-    match std::panic::catch_unwind(|| docxide_pdf::convert_docx_to_pdf(input, output)) {
+    convert_with(input, output, false)
+}
+
+/// `convert`, in Word's All Markup view when `markup` is set.
+pub fn convert_with(input: &Path, output: &Path, markup: bool) -> Result<(), String> {
+    use docxide_pdf::{ConvertOptions, RevisionView};
+    let view = if markup { RevisionView::Markup } else { RevisionView::Final };
+    let options = ConvertOptions::new().revisions(view);
+    match std::panic::catch_unwind(|| docxide_pdf::convert_docx_to_pdf_with(input, output, &options)) {
         Ok(r) => r.map_err(|e| e.to_string()),
         Err(payload) => {
             let msg = payload
@@ -296,13 +304,36 @@ pub fn ensure_generated_pdf(fixture_dir: &Path) -> Result<PathBuf, String> {
         .entry(fixture_dir.to_path_buf())
         .or_default()
         .clone();
-    cell.get_or_init(|| convert_generated_pdf(fixture_dir))
+    cell.get_or_init(|| convert_generated_pdf(fixture_dir, output_dir(fixture_dir), false))
         .clone()
 }
 
-fn convert_generated_pdf(fixture_dir: &Path) -> Result<PathBuf, String> {
+/// A fixture's `reference-markup.pdf` (Word's All Markup view, inline), when it has one.
+pub fn markup_reference(fixture_dir: &Path) -> Option<PathBuf> {
+    Some(fixture_dir.join("reference-markup.pdf")).filter(|p| p.exists())
+}
+
+/// `ensure_generated_pdf` in the markup view: tests/output/<group>/<case>/markup/generated.pdf.
+pub fn ensure_generated_markup_pdf(fixture_dir: &Path) -> Result<PathBuf, String> {
+    static MEMO: Mutex<BTreeMap<PathBuf, Arc<OnceLock<Result<PathBuf, String>>>>> =
+        Mutex::new(BTreeMap::new());
+    let cell = MEMO
+        .lock()
+        .unwrap()
+        .entry(fixture_dir.to_path_buf())
+        .or_default()
+        .clone();
+    cell.get_or_init(|| convert_generated_pdf(fixture_dir, markup_output_dir(fixture_dir), true))
+        .clone()
+}
+
+/// Output directory of a fixture's markup entry: tests/output/<group>/<case>/markup/
+pub fn markup_output_dir(fixture: &Path) -> PathBuf {
+    output_dir(fixture).join("markup")
+}
+
+fn convert_generated_pdf(fixture_dir: &Path, out: PathBuf, markup: bool) -> Result<PathBuf, String> {
     let input_docx = fixture_dir.join("input.docx");
-    let out = output_dir(fixture_dir);
     fs::create_dir_all(&out).map_err(|e| e.to_string())?;
     let generated_pdf = out.join("generated.pdf");
     let stamp = out.join("generated.stamp");
@@ -319,7 +350,7 @@ fn convert_generated_pdf(fixture_dir: &Path) -> Result<PathBuf, String> {
 
     if !up_to_date {
         let tmp = out.join("generated.tmp.pdf");
-        if let Err(e) = convert(&input_docx, &tmp) {
+        if let Err(e) = convert_with(&input_docx, &tmp, markup) {
             let _ = fs::remove_file(&tmp);
             return Err(e);
         }

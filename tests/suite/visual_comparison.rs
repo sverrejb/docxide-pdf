@@ -63,9 +63,33 @@ struct FixturePages {
 }
 
 fn prepare_fixture(fixture_dir: &Path) -> Option<FixturePages> {
-    let name = common::case_key(fixture_dir);
-    let reference_pdf = fixture_dir.join("reference.pdf");
-    let output_base = common::output_dir(fixture_dir);
+    prepare_entry(
+        common::case_key(fixture_dir),
+        fixture_dir.join("reference.pdf"),
+        common::output_dir(fixture_dir),
+        common::ensure_generated_pdf(fixture_dir),
+    )
+}
+
+/// The markup entry of a fixture that carries a `reference-markup.pdf`
+/// (Word's All Markup view, inline): scored as `<group>/<case>@markup` from
+/// our `--markup` rendering, next to the final-view entry.
+fn prepare_markup_fixture(fixture_dir: &Path) -> Option<FixturePages> {
+    let reference_pdf = common::markup_reference(fixture_dir)?;
+    prepare_entry(
+        format!("{}@markup", common::case_key(fixture_dir)),
+        reference_pdf,
+        common::markup_output_dir(fixture_dir),
+        common::ensure_generated_markup_pdf(fixture_dir),
+    )
+}
+
+fn prepare_entry(
+    name: String,
+    reference_pdf: PathBuf,
+    output_base: PathBuf,
+    generated: Result<PathBuf, String>,
+) -> Option<FixturePages> {
     let reference_screenshots = output_base.join("reference");
     let generated_screenshots = output_base.join("generated");
 
@@ -80,7 +104,13 @@ fn prepare_fixture(fixture_dir: &Path) -> Option<FixturePages> {
             return None;
         }
     };
-    let generated_pdf = common::generated_pdf_or_skip(fixture_dir, &name)?;
+    let generated_pdf = match generated {
+        Ok(p) => p,
+        Err(e) => {
+            println!("  [SKIP] {name}: conversion failed: {e}");
+            return None;
+        }
+    };
     // An unchanged generated.pdf keeps its screenshots (see ensure_generated_pdf).
     let gen_fresh = match common::ensure_screenshots(&generated_pdf, &generated_screenshots) {
         Ok(fresh) => fresh,
@@ -118,7 +148,8 @@ fn prepared_fixtures() -> &'static Vec<FixturePages> {
         let fixture_dirs = common::discover_fixtures().expect("Failed to read tests/fixtures");
         fixture_dirs
             .par_iter()
-            .filter_map(|d| prepare_fixture(d))
+            .flat_map_iter(|d| [prepare_fixture(d), prepare_markup_fixture(d)])
+            .flatten()
             .collect()
     })
 }

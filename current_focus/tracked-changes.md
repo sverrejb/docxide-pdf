@@ -144,11 +144,11 @@ left margin. Table rows: the row's line boxes (= between its borders here).
 Probe parity (ours vs Word, inline export): text and reflow identical; bars
 identical where lines are the paragraph's middle lines or table rows.
 
-Known gaps (ponytail ceilings): no space-before/after share on a paragraph's
-first/last bar; strike drawn per word, not bridged across spaces; deleted
-pictures get no strike lines, inserted ones no underline; list labels not
-coloured; headers/footers/footnotes/text boxes stay final in markup mode;
-moves untested; mirrored margins use the right-side rule only on odd pages.
+Known gaps (ponytail ceilings): deleted pictures get no strike lines,
+inserted ones no underline; the label's tab gap is not struck and a live
+item's two numbers print plain; headers/footers/footnotes/text boxes get no
+bars in markup mode; moves untested; mirrored margins use the right-side
+rule only on odd pages.
 
 ## Testing
 
@@ -158,8 +158,12 @@ moves untested; mirrored margins use the right-side rule only on odd pages.
   references): see the scores section below.
 - Fixtures: a fixture with revisions keeps `reference.pdf` = final view
   (online export) and may gain `reference-markup.pdf` = markup view (local
-  export with `--revisions inline`, untagged). Harness support for scoring
-  `reference-markup.pdf` as its own entry is still to do.
+  export with `--revisions inline`, untagged). The visual suite scores the
+  latter as its own entry, `<group>/<case>@markup`, from our `--markup`
+  rendering (`tests/output/<group>/<case>/markup/`), with its own baseline
+  and hashes. `cases/tracked-changes-inline` (probe p01: inserted and
+  deleted runs, two long deletions and insertions) carries both: final 76.3,
+  markup 69.1 Jaccard (2026-11-05, baselines pending).
 - Existing: bush_fires (final) must not move; door_air's local reference has
   deletion balloons and stays on the final view.
 
