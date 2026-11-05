@@ -471,15 +471,25 @@ Backlog (details in `current_focus/A11Y.md`):
 
 - Field codes: PAGE, NUMPAGES, STYLEREF (`\n`, `\t`), PAGEREF, IF and SEQ
   are evaluated; MACROBUTTON shows its display text or picture; the rest
-  print their cached result. SEQ (issue #145): one counter per name in body
-  order with `\*`, `\c`, `\r n` and `\h`; `\s` (restart under a heading
-  level) is not read, and SEQ fields in text boxes, headers and footers keep
-  their cache. A TOC whose field begins and ends in one paragraph (a
-  placeholder cache) is regenerated from `\o`/`\u` outline levels, `\t`
-  styles and `\c` SEQ names with `\n`; `\p` separators, `\b` scopes and TC
-  fields are ignored, and a document without "toc N" styles indents level N
-  by 11pt × (N − 1) (unprobed). A Word-written TOC spanning paragraphs is
-  still drawn as cached.
+  print their cached result. SEQ (issues #145, #146): one counter per name in
+  body order with `\*`, `\c`, `\r n`, `\s n` (restart after a built-in
+  "heading 1"–"heading n" paragraph since the sequence's last field; custom
+  outline-level styles never restart) and `\h`; SEQ fields in text boxes,
+  headers and footers keep their cache. A TOC whose field begins and ends in
+  one paragraph (a placeholder cache) is regenerated from `\o`/`\u` outline
+  levels, `\t` styles and `\c` SEQ names with `\n`; a `\c` table of figures
+  styles every entry "table of figures" (24pt in without the style), a
+  contents table "toc N" (11pt × (N − 1) in without, unprobed); `\p`
+  separators, `\b` scopes and TC fields are ignored. Entry page numbers come
+  from the bookmark pre-pass as section page labels; a table's cells count
+  as its first page, so a split table's later rows point at the wrong page.
+  A Word-written TOC spanning paragraphs is still drawn as cached.
+- Issue #147 follow-up: an inline MathType OLE equation sits with its
+  bottom on the baseline like any picture, but Word lifts it by the baseline
+  offset in the equation's WMF preview (MathType's comment record), so the
+  "(1)" labels of `rust.docx` sit 12pt below Word's. The MathType-generated
+  WMF previews of its `both.docx` draw nothing in our output, where Word
+  paints each as a picture (a bitmap record our WMF reader skips).
 - Issue #145 follow-ups: `table-style-centered`'s tables are 22pt narrower in
   Word: a table style without `tblCellMar` in a document without a default
   table style gets Word's 0.5pt side margins, we give the 5.4pt that come
