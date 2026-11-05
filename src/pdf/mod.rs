@@ -5821,6 +5821,13 @@ fn render_pass(
             _ => Vec::new(),
         };
 
+        // The page pre-scan lays lines out twice; most sections have no band
+        // to look for.
+        let section_has_bands = col_count == 1
+            && section.blocks.iter().any(|b| {
+                matches!(b, Block::Paragraph(p)
+                    if !paragraph_bands(p, sp, col_geometry[0], text_width, &ctx).is_empty())
+            });
         let empty_frame_anchor_page = state.pb.page_count();
         let empty_frame_bands = if col_count == 1 {
             empty_frame_table_bands(
@@ -5853,7 +5860,7 @@ fn render_pass(
                         None => {
                             let col = col_geometry[state.current_col];
                             let page = (sect_idx, state.pb.page_count());
-                            if col_count == 1 && state.pb.bands_prescanned != Some(page) {
+                            if section_has_bands && state.pb.bands_prescanned != Some(page) {
                                 state.pb.bands_prescanned = Some(page);
                                 let rest = &section.blocks[block_idx..];
                                 prescan_page_bands(state, rest, sp, col, text_width, &ctx);
