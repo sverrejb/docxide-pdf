@@ -78,6 +78,15 @@ references). Exports: `inline/` (print preset, inline revisions), `print/`
   merged paragraph keeping the next one's properties (p04 online export:
   "Para C, deleted mark after it.Para D."). A fully deleted paragraph stays
   in the markup layout, struck through; the final view drops it.
+- Section breaks in a deleted paragraph mark (p17): the **final view drops
+  the break** (online export: three such sections print as one page with
+  the last section's header, the text before the mark joined to the next
+  paragraph); the **markup view keeps it** (inline export: three pages, each
+  with its own header). Corpus documents mix Letter and A4 sections this
+  way, so their final-view scores against markup references are meaningless.
+- `<w:titlePg w:val="0"/>` (left behind with a `sectPrChange`) means no
+  first-page header; we used to read presence as true and printed a header
+  Word does not.
 - Tables: inserted and deleted rows stay in the markup view with their runs
   marked; the final view drops deleted rows (p06 online export). Cell
   borders keep their colour.
@@ -125,8 +134,9 @@ left margin. Table rows: the row's line boxes (= between its borders here).
 - `paragraph.rs`: `Paragraph::mark_deleted`; a revised mark or `pPrChange`
   flags all runs. `mod.rs` merges a deleted-mark paragraph into the next in
   the final view; `collect_block_nodes` keeps fully deleted paragraphs in
-  markup. `tables.rs` drops deleted rows in the final view. `numbering.rs`:
-  deleted items do not advance the counter.
+  markup, and a deleted mark's `sectPr` ends the section only in markup.
+  `tables.rs` drops deleted rows in the final view. `numbering.rs`: deleted
+  items do not advance the counter. `sections.rs`: `titlePg` by value.
 - `pdf/layout.rs`: `WordChunk::revised`; `render_paragraph_lines` records
   each revised line's box in a thread-local; `pdf/mod.rs` draws the bars per
   page after layout (phase 2b').
@@ -162,9 +172,10 @@ inline references (`tools/corpus_score.py`, labels `tc-final` / `tc-markup`,
 | view | Jaccard | SSIM | page count wrong |
 |---|---|---|---|
 | final (default, main) | 28.4 | 38.5 | 65 / 150 |
-| markup (`--markup`) | 61.2 | 75.0 | 14 / 150 |
+| markup (`--markup`) | 62.2 | 75.9 | 13 / 150 |
 
-The fixture suite is unchanged in the final view except
+(Markup 61.2 before the `titlePg w:val=0` fix, which took one redline from
+6 to 73.) The fixture suite is unchanged in the final view except
 scraped/catalan_university_transfer_offer (+18.5 Jaccard from the deleted-row
 drop) and bush_fires (+0.01, deleted-mark merge).
 
