@@ -614,24 +614,31 @@ impl WordChunk {
         x_offset: f32,
         img: &crate::model::EmbeddedImage,
         effect_xobjs: Option<super::images::EffectXObjs>,
+        // The run's registered font: its metrics place a revised picture's
+        // strike and underline.
+        pdf_font: String,
     ) -> Self {
         let font_size = run.font_size;
         let (width, height) = img.layout_size();
         Self {
             source_starts: Vec::new(),
-            pdf_font: String::new(),
+            pdf_font,
             text: String::new(),
             font_size,
             line_font_size: font_size,
-            color: None,
+            color: run.color,
             highlight: None,
             shading: None,
             border: None,
             x_offset,
             width,
-            underline: false,
+            // Markup view: a deleted picture is struck at the text's strike
+            // height across its width (plus a 1.44pt line through its middle,
+            // drawn with the picture), an inserted one underlined (Word for
+            // Mac probe p10).
+            underline: run.underline,
             double_underline: false,
-            strikethrough: false,
+            strikethrough: run.strikethrough,
             dstrike: false,
             revised: run.revised,
             char_spacing: 0.0,
@@ -2282,6 +2289,7 @@ pub(super) fn build_paragraph_lines(
                                 proposed_x2,
                                 img,
                                 effect_inline_names.get(&run_idx).cloned(),
+                                seen_fonts.get(font_key_buf(run, &mut key_buf)).map_or_else(String::new, |e| e.pdf_name.clone()),
                             ));
                             current_x = img_w;
                             continue;
@@ -2318,6 +2326,7 @@ pub(super) fn build_paragraph_lines(
                     current_x,
                     img,
                     effect_inline_names.get(&run_idx).cloned(),
+                    seen_fonts.get(font_key_buf(run, &mut key_buf)).map_or_else(String::new, |e| e.pdf_name.clone()),
                 ));
                 current_x += img_w;
                 word_start = current_chunks.len();
@@ -3555,6 +3564,7 @@ pub(super) fn build_tabbed_line(
                         current_x,
                         img,
                         effect_inline_names.get(&seg_indices[local_idx]).cloned(),
+                        seen_fonts.get(font_key_buf(run, &mut key_buf)).map_or_else(String::new, |e| e.pdf_name.clone()),
                     ));
                     current_x += img.layout_size().0;
                 }
@@ -4273,10 +4283,17 @@ pub(super) fn render_paragraph_lines(
         // for Mac probes 2026-11-05, single, 1.15, double and exact spacing).
         if line.chunks.iter().any(|c| c.revised) {
             let (above, below) = BAR_EXTENSION.with(|e| e.get());
-            let top = y + text_metrics.0 + if global_line_idx == 0 { above } else { 0.0 };
+            // A picture standing above the ascent raises the line box (p10:
+            // the bar starts at the deleted picture's top).
+            let visual_top = y + line
+                .chunks
+                .iter()
+                .map(|c| c.inline_image_height + c.y_offset)
+                .fold(text_metrics.0, f32::max);
+            let top = visual_top + if global_line_idx == 0 { above } else { 0.0 };
             let advance = inline_line_advance(line, line_pitch, text_metrics)
                 + if global_line_idx + 1 == total_line_count { below } else { 0.0 };
-            CHANGE_BARS.with(|b| b.borrow_mut().push((y + text_metrics.0 - advance, top)));
+            CHANGE_BARS.with(|b| b.borrow_mut().push((visual_top - advance, top)));
         }
 
         let (base_margin, base_width) = line_geometry
@@ -5189,6 +5206,26 @@ pub(super) fn render_paragraph_lines(
                 let (w, h) = chunk.inline_image_size;
                 let x = box_x + (chunk.width - w) / 2.0;
                 let img_bottom = box_bottom + (chunk.inline_image_height - h) / 2.0;
+                let thick = (chunk.font_size * 0.05).max(0.5);
+                let entry = pdf_name_to_entry.get(chunk.pdf_font.as_str());
+                if chunk.strikethrough {
+                    let mid = box_bottom + chunk.inline_image_height / 2.0;
+                    push_decoration(&mut decorations, box_x, mid - 0.72, chunk.width, 1.44, chunk.color);
+                    let (st_y, st_thick) = entry
+                        .and_then(|e| os2_strike(e, chunk.font_size))
+                        .map_or((y + chunk.font_size * 0.3, thick), |(top, th)| (y + top - th, th));
+                    push_decoration(&mut decorations, box_x, st_y, chunk.width, st_thick, chunk.color);
+                }
+                if chunk.underline {
+                    let q = |v: f32| (v * 4.0).round() / 4.0;
+                    let (bottom, th) = entry
+                        .and_then(|e| e.underline)
+                        .map_or((y - chunk.font_size * 0.12 - thick, thick), |(pos, th)| {
+                            let th = q(th * chunk.font_size).max(0.25);
+                            (y - q(pos * chunk.font_size) - th, th)
+                        });
+                    push_decoration(&mut decorations, box_x, bottom, chunk.width, th, chunk.color);
+                }
                 let turned = chunk.inline_image_rotation_deg.abs() > 0.01;
                 if turned {
                     content.save_state();
