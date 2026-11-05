@@ -165,6 +165,36 @@ fn resolve_marker(marker: Option<MarkerSymbol>, series_index: usize) -> MarkerSy
     marker.unwrap_or(DEFAULT_MARKER_CYCLE[series_index % DEFAULT_MARKER_CYCLE.len()])
 }
 
+/// A series' marker as Word draws it: `c:size` (default 5) wide plus its
+/// outline, which is the marker's line, else the series' line, else
+/// `default_lw` wide; filled with the marker's own colour, else the theme
+/// accent for the series (case30's orange line carries accent2's red
+/// squares, 7.25pt with the default 2.25pt line). Returns the fill and the
+/// radius `draw_marker` takes for that symbol.
+fn marker_look(
+    series: &crate::model::ChartSeries,
+    si: usize,
+    accents: &[[u8; 3]],
+    symbol: MarkerSymbol,
+    default_lw: f32,
+) -> ([u8; 3], f32) {
+    let outline = series
+        .marker_line_width
+        .or(series.line_width)
+        .unwrap_or(default_lw);
+    let size = series.marker_size.unwrap_or(5.0) + outline;
+    let color = series.marker_color.unwrap_or(accents[si % accents.len()]);
+    let r = if symbol == MarkerSymbol::Square {
+        size / 1.6
+    } else {
+        size / 2.0
+    };
+    (color, r)
+}
+
+/// Word's default series line on line and radar charts.
+const DEFAULT_LINE_W: f32 = 2.25;
+
 pub(super) fn draw_marker(content: &mut Content, symbol: MarkerSymbol, x: f32, y: f32, r: f32) {
     match symbol {
         MarkerSymbol::None => {}
@@ -800,9 +830,10 @@ fn draw_chart_series(
             draw_ribbons(c, content, rect, num_categories, axis_max, view, area);
         }
         ChartType::Line => {
-            content.set_line_width(2.0);
+            let accents = resolve_accent_colors(&c.accent_colors);
             let group_w = plot_w / num_categories as f32;
             for (si, series) in c.series.iter().enumerate() {
+                content.set_line_width(series.line_width.unwrap_or(DEFAULT_LINE_W));
                 set_stroke_color(content, series.color);
                 let pts: Vec<(f32, f32)> = series
                     .values
@@ -840,9 +871,9 @@ fn draw_chart_series(
                 }
                 content.stroke();
 
-                set_color(content, series.color);
-                let marker_r = 3.5;
                 let sym = resolve_marker(series.marker, si);
+                let (color, marker_r) = marker_look(series, si, accents, sym, DEFAULT_LINE_W);
+                fill_rgb(content, color);
                 for (ci, &val) in series.values.iter().enumerate() {
                     let lx = plot_x + (ci as f32 + 0.5) * group_w;
                     let ly = plot_y + (val / axis_max) * plot_h;
@@ -889,10 +920,12 @@ fn draw_chart_series(
             }
         }
         ChartType::Scatter => {
+            let accents = resolve_accent_colors(&c.accent_colors);
             for (si, series) in c.series.iter().enumerate() {
-                set_color(content, series.color);
-                let marker_r = 4.0;
                 let sym = resolve_marker(series.marker, si);
+                // A scatter marker's outline defaults to a hairline 0.75pt.
+                let (color, marker_r) = marker_look(series, si, accents, sym, 0.75);
+                fill_rgb(content, color);
                 if let Some(ref x_vals) = series.x_values {
                     for (&xv, &yv) in x_vals.iter().zip(series.values.iter()) {
                         let px = plot_x + (xv / x_axis_max) * plot_w;
@@ -1858,11 +1891,11 @@ fn render_radar(
     // Series data polygons
     let accent_colors = resolve_accent_colors(&c.accent_colors);
 
-    content.set_line_width(2.0);
     for (si, series) in c.series.iter().enumerate() {
         let color = series
             .color
             .unwrap_or(accent_colors[si % accent_colors.len()]);
+        content.set_line_width(series.line_width.unwrap_or(DEFAULT_LINE_W));
         stroke_rgb(content, color);
         for ci in 0..num_categories {
             let val = series.values.get(ci).copied().unwrap_or(0.0);
@@ -1880,13 +1913,14 @@ fn render_radar(
         content.stroke();
 
         // Markers
-        set_color(content, Some(color));
         let sym = resolve_marker(series.marker, si);
+        let (marker_color, marker_r) = marker_look(series, si, accent_colors, sym, DEFAULT_LINE_W);
+        fill_rgb(content, marker_color);
         for ci in 0..num_categories {
             let val = series.values.get(ci).copied().unwrap_or(0.0);
             let r = (val / axis_max) * radius;
             let a = cat_angle(ci);
-            draw_marker(content, sym, cx + r * a.cos(), cy + r * a.sin(), 4.0);
+            draw_marker(content, sym, cx + r * a.cos(), cy + r * a.sin(), marker_r);
         }
     }
 

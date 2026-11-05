@@ -20,6 +20,12 @@ pub struct ChartSeries {
     pub x_values: Option<Vec<f32>>,
     pub bubble_sizes: Option<Vec<f32>>,
     pub marker: Option<MarkerSymbol>,
+    /// `c:spPr/a:ln@w` in points.
+    pub line_width: Option<f32>,
+    /// `c:marker/c:size`, its fill and outline width.
+    pub marker_size: Option<f32>,
+    pub marker_color: Option<[u8; 3]>,
+    pub marker_line_width: Option<f32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

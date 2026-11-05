@@ -127,6 +127,14 @@ fn parse_series(ser_node: roxmltree::Node) -> (ChartSeries, Vec<String>, Option<
     let marker = marker_node
         .and_then(|m| chart_attr(m, "symbol"))
         .and_then(parse_marker_symbol);
+    let marker_sp_pr = marker_node.and_then(|m| chart_child(m, "spPr"));
+    let ln_width = |sp_pr: Option<roxmltree::Node>| {
+        sp_pr
+            .and_then(|s| dml_child(s, "ln"))
+            .and_then(|ln| ln.attribute("w"))
+            .and_then(|w| w.parse::<f32>().ok())
+            .map(|emu| emu / 12700.0)
+    };
 
     // Scatter/bubble use yVal instead of val
     let (y_vals, y_fmt) = parse_num_cache(ser_node, "yVal");
@@ -152,6 +160,12 @@ fn parse_series(ser_node: roxmltree::Node) -> (ChartSeries, Vec<String>, Option<
             x_values,
             bubble_sizes,
             marker,
+            line_width: ln_width(sp_pr),
+            marker_size: marker_node
+                .and_then(|m| chart_attr(m, "size"))
+                .and_then(|v| v.parse().ok()),
+            marker_color: marker_sp_pr.and_then(extract_srgb_fill),
+            marker_line_width: ln_width(marker_sp_pr),
         },
         cat_labels,
         val_fmt,
