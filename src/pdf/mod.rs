@@ -1731,6 +1731,10 @@ impl PageBuilder {
     /// text alone ends (Word probes under a 133pt floating letterhead: offsets
     /// 0 and +30pt land at the 56.7pt margin and 30pt below it, while the
     /// text sits under the letterhead; a header of flowing text moves both).
+    fn footer_top(&self, sp: &SectionProperties, ctx: &RenderContext) -> f32 {
+        header_footer::footer_top(sp, self.is_first_page_of_section, self.page_count(), ctx)
+    }
+
     fn anchor_slot_top(&self, sp: &SectionProperties, ctx: &RenderContext) -> f32 {
         match self.page_top_header(sp, ctx) {
             Some(is_first) => self
@@ -2247,6 +2251,68 @@ fn is_empty_wrapping_frame(para: &Paragraph, sp: &SectionProperties) -> bool {
 }
 
 /// Whether a leading picture leaves no usable text strip on either side.
+/// Where a split paragraph's final fragment goes around its trailing float.
+enum FragmentPlan {
+    /// Lines `from..to` sit beside the float in a narrowed box.
+    Beside { from: usize, to: usize, text_x: f32, text_w: f32 },
+    /// Lines from `from` on start below the float, at `top`.
+    Below { from: usize, top: f32 },
+    /// Below is off the page: the lines above the band keep their place
+    /// (the page's first line stays even inside the band) and the rest
+    /// move on, the float with them.
+    NextPage { keep: usize },
+    /// The anchor line alone on a page, below the float's off-page bottom:
+    /// Word sets it at the page bottom above the footer.
+    PageBottom,
+}
+
+/// The float's anchor follows every run with visible text, a break, a tab or
+/// an inline picture: its line is the paragraph's last.
+fn anchor_after_text(fi: &crate::model::FloatingImage, runs: &[crate::model::Run]) -> bool {
+    blank_after(runs, fi.anchor_run)
+}
+
+/// No run from `index` on shows anything. ponytail: the index counts the
+/// runs as parsed; a run dropped since (a deleted page break) only moves it
+/// past the end.
+fn blank_after(runs: &[crate::model::Run], index: usize) -> bool {
+    runs[index.min(runs.len())..]
+        .iter()
+        .all(|r| r.text.trim().is_empty() && !r.is_line_break && !r.is_tab && r.inline_image.is_none())
+}
+
+/// The floats `keep` selects, with their XObject names re-keyed to their
+/// positions in the subset (`render_floating_images` keys by index).
+fn float_subset(
+    fis: &[crate::model::FloatingImage],
+    pdf_names: &HashMap<(usize, usize), String>,
+    effect_names: &HashMap<(usize, usize), images::EffectXObjs>,
+    block_idx: usize,
+    keep: impl Fn(&crate::model::FloatingImage) -> bool,
+) -> (
+    Vec<crate::model::FloatingImage>,
+    HashMap<(usize, usize), String>,
+    HashMap<(usize, usize), images::EffectXObjs>,
+) {
+    let mut sub = Vec::new();
+    let mut names = HashMap::new();
+    let mut effects = HashMap::new();
+    for (i, fi) in fis.iter().enumerate() {
+        if !keep(fi) {
+            continue;
+        }
+        let j = sub.len();
+        if let Some(n) = pdf_names.get(&(block_idx, i)) {
+            names.insert((block_idx, j), n.clone());
+        }
+        if let Some(e) = effect_names.get(&(block_idx, i)) {
+            effects.insert((block_idx, j), e.clone());
+        }
+        sub.push(fi.clone());
+    }
+    (sub, names, effects)
+}
+
 fn leading_full_width_picture(
     fi: &crate::model::FloatingImage,
     sp: &SectionProperties,
@@ -3081,6 +3147,16 @@ fn render_paragraph_block(
         .filter(|((bi, _), _)| *bi == state.global_block_idx)
         .map(|((_, ri), fx)| (*ri, fx.clone()))
         .collect();
+    // A float anchored after the paragraph's text belongs to the page its
+    // last line lands on (the split path draws it there); when the forced
+    // breaks alone outrun this page the paragraph will split, so that float
+    // wraps none of the lines laid out here (an external tracked corpus
+    // cover: five pages of break-separated lines, a page-wide picture after
+    // them, set one letter per line beside a picture Word prints on page 5).
+    let forced_lines = para.runs.iter().filter(|r| r.is_line_break).count() as f32 + 1.0;
+    let splits_for_sure = forced_lines * line_h > first_line_top - state.effective_margin_bottom;
+    let wraps_here =
+        |fi: &crate::model::FloatingImage| !(splits_for_sure && anchor_after_text(fi, &para.runs));
     // Self-wrapping: if this paragraph anchors a wrapping float
     // and has text, set up the float zone NOW so width-narrowing
     // applies to this paragraph's own lines.  Always replace any
@@ -3090,6 +3166,7 @@ fn render_paragraph_block(
         && let Some(fi) = para
             .floating_images
             .iter()
+            .filter(|fi| wraps_here(fi))
             .find(|fi| wraps_in_column(fi, sp, col_x, col_w, text_width))
     {
         let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
@@ -3201,7 +3278,7 @@ fn render_paragraph_block(
     let extra_float_zones: Vec<FloatZone> = if !text_empty {
         para.floating_images
             .iter()
-            .filter(|fi| fi.wrap_type.wraps_beside())
+            .filter(|fi| fi.wrap_type.wraps_beside() && wraps_here(fi))
             .skip(1)
             .map(|fi| {
                 let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
@@ -3390,7 +3467,7 @@ fn render_paragraph_block(
         let slot_top = state.pb.slot_top;
         para.floating_images
             .iter()
-            .filter(|fi| fi.wrap_type.wraps_beside())
+            .filter(|fi| fi.wrap_type.wraps_beside() && wraps_here(fi))
             .filter_map(|fi| {
                 let fi_y_top = pre_anchor.fi_y_top(fi, sp);
                 let fi_y_bottom = fi_y_top - fi.image.display_height;
@@ -3677,7 +3754,7 @@ fn render_paragraph_block(
     // How far a topAndBottom float over the first line pushes the text down.
     let mut text_drop = 0.0f32;
 
-    for fi in &para.floating_images {
+    for fi in para.floating_images.iter().filter(|fi| wraps_here(fi)) {
         let reserve = match fi.wrap_type {
             WrapType::TopAndBottom => true,
             // wrapSquare/Tight with a usable side strip: content (even empty
@@ -4097,6 +4174,13 @@ fn render_paragraph_block(
         if lines_that_fit >= min_split_lines && lines_that_fit < lines.len() {
             let first_part = &lines[..lines_that_fit];
             state.pb.slot_top -= inter_gap;
+            let split_anchor = ParaAnchor::new(
+                state.pb.pending_float_anchor.take(),
+                state.pb.anchor_slot_top(sp, ctx),
+                own_space_before(inter_gap, state.prev_space_after),
+                sp,
+                ctx,
+            );
             let baseline_offset = if grid_snapped {
                 grid_baseline
             } else {
@@ -4150,6 +4234,26 @@ fn render_paragraph_block(
                 )),
             );
             state.pb.end_tag();
+
+            // Floats anchored before the paragraph's last text hang from its
+            // top on this page, like an unsplit paragraph's (the split path
+            // returns before the ordinary float rendering below).
+            let (leading, leading_names, leading_effects) = float_subset(
+                &para.floating_images,
+                floating_image_pdf_names,
+                effect_floating_names,
+                state.global_block_idx,
+                |fi| !anchor_after_text(fi, &para.runs),
+            );
+            if !leading.is_empty() {
+                let page = state.pb.all_contents.len();
+                render_floating_images(&leading, true, state.global_block_idx,
+                    &leading_names, &leading_effects, sp, col_x, col_w, text_width,
+                    split_anchor, &mut state.pb.content, &mut state.pb.tags, page);
+                render_foreground_floating_images_deferred(&leading, state.global_block_idx,
+                    &leading_names, &leading_effects, sp, col_x, col_w, text_width,
+                    split_anchor, &mut state.pb.deferred_shapes, &mut state.pb.tags, page);
+            }
 
             // Footnotes referenced on the lines that stay here belong to this
             // page's footnote area; the flush below would otherwise carry them
@@ -4225,15 +4329,89 @@ fn render_paragraph_block(
                 let rest_text_x = rest_col_x + para.indent_left;
                 let rest_text_width = (rest_col_w - para.indent_left - para.indent_right).max(1.0);
 
-                // The trailing picture of a split paragraph belongs to its
-                // final fragment; the ordinary float-rendering path is skipped.
-                // Full-width pictures also keep following visible text below
-                // them, while intervening empty marks may occupy the space above.
-                let trailing_images_fit = fit >= remaining.len()
-                    && !para.floating_images.is_empty()
-                    && para.floating_images.iter().all(|fi| {
-                        !fi.anchor_at_start
-                            && fi.v_relative_from == VRelativeFrom::Paragraph
+                // The trailing pictures of a split paragraph belong to its
+                // final fragment: a float goes on the page its anchor run's
+                // line lands on, hung from the paragraph's top on that page
+                // (an external tracked corpus cover: a deleted page-wide
+                // picture after five pages of inserted text prints on the
+                // fifth page). Full-width pictures also keep following visible
+                // text below them, while intervening empty marks may occupy
+                // the space above.
+                let (trailing, trailing_names, trailing_effects) = float_subset(
+                    &para.floating_images,
+                    floating_image_pdf_names,
+                    effect_floating_names,
+                    state.global_block_idx,
+                    |fi| anchor_after_text(fi, &para.runs),
+                );
+                let last_fragment = fit >= remaining.len() && !trailing.is_empty();
+                let anchor = ParaAnchor::new(None, state.pb.slot_top, 0.0, sp, ctx);
+                // Where the fragment's lines go around the first wrapping
+                // trailing float (Word probes p20c/p20e: lines whose box meets
+                // the picture's band sit beside it, x 249 by a 150pt picture
+                // at 90; the corpus cover's page-wide picture leaves no side,
+                // its lines go below, and when below is off the page the
+                // lines move to the next page, one line staying per page, and
+                // the anchor line alone sits at the page bottom above the
+                // footer: the corpus cover's "Montering", an empty line and
+                // "Med forbehold" take one page each).
+                let mut plan: Option<FragmentPlan> = None;
+                if last_fragment
+                    && let Some(fi) = trailing.iter().find(|fi| fi.wrap_type.wraps_beside())
+                {
+                    let fi_x = resolve_fi_x(fi, sp, rest_col_x, rest_col_w, text_width);
+                    let zone = FloatZone::for_float(fi, fi_x, anchor.fi_y_top(fi, sp));
+                    let mut y = state.pb.slot_top;
+                    let mut first_in = None;
+                    let mut after = chunk.len();
+                    for (i, l) in chunk.iter().enumerate() {
+                        let adv = lines_height(std::slice::from_ref(l), line_h, para_metrics);
+                        let in_band = y > zone.bottom_y && y - adv < zone.top_y;
+                        if in_band && first_in.is_none() {
+                            first_in = Some((i, y));
+                        }
+                        if !in_band && first_in.is_some() && after == chunk.len() {
+                            after = i;
+                        }
+                        y -= adv;
+                    }
+                    if let Some((from, y_b)) = first_in {
+                        let (mut tx, mut tw, mut lx) = (rest_text_x, rest_text_width, 0.0);
+                        // The line's box meets the band though its top may sit above it.
+                        zone.narrow_paragraph(y_b.min(zone.top_y), rest_col_x, rest_col_w, para, &mut tx, &mut tw, &mut lx);
+                        plan = Some(if tw < rest_text_width - 0.5 {
+                            FragmentPlan::Beside { from, to: after, text_x: tx, text_w: tw }
+                        } else if zone.bottom_y - lines_height(&chunk[from..], line_h, para_metrics)
+                            >= state.effective_margin_bottom
+                        {
+                            FragmentPlan::Below { from, top: zone.bottom_y }
+                        } else if chunk.len() > from.max(1) {
+                            FragmentPlan::NextPage { keep: from.max(1) }
+                        } else {
+                            FragmentPlan::PageBottom
+                        });
+                    }
+                }
+                if let Some(FragmentPlan::NextPage { keep }) = plan {
+                    fit = keep;
+                }
+                let chunk = &remaining[..fit.clamp(1, remaining.len())];
+                let last_fragment = last_fragment && fit >= remaining.len();
+                if last_fragment {
+                    let page = state.pb.all_contents.len();
+                    render_floating_images(&trailing, true, state.global_block_idx,
+                        &trailing_names, &trailing_effects, sp, rest_col_x, rest_col_w,
+                        text_width, anchor, &mut state.pb.content, &mut state.pb.tags, page);
+                    render_foreground_floating_images_deferred(&trailing,
+                        state.global_block_idx, &trailing_names, &trailing_effects,
+                        sp, rest_col_x, rest_col_w, text_width, anchor,
+                        &mut state.pb.deferred_shapes, &mut state.pb.tags, page);
+                }
+                // Full-width pictures keep following visible text below them,
+                // while intervening empty marks may occupy the space above.
+                let trailing_images_fit = last_fragment
+                    && trailing.iter().all(|fi| {
+                        fi.v_relative_from == VRelativeFrom::Paragraph
                             && matches!(fi.v_position, VerticalPosition::Offset(y) if y > 0.0)
                             && fi.wrap_type.wraps_beside()
                             && {
@@ -4246,16 +4424,7 @@ fn render_paragraph_block(
                                 - fi.image.display_height - fi.dist_bottom >= state.effective_margin_bottom
                     });
                 if trailing_images_fit {
-                    let anchor = ParaAnchor::new(None, state.pb.slot_top, 0.0, sp, ctx);
-                    let page = state.pb.all_contents.len();
-                    render_floating_images(&para.floating_images, true, state.global_block_idx,
-                        floating_image_pdf_names, effect_floating_names, sp, rest_col_x, rest_col_w,
-                        text_width, anchor, &mut state.pb.content, &mut state.pb.tags, page);
-                    render_foreground_floating_images_deferred(&para.floating_images,
-                        state.global_block_idx, floating_image_pdf_names, effect_floating_names,
-                        sp, rest_col_x, rest_col_w, text_width, anchor,
-                        &mut state.pb.deferred_shapes, &mut state.pb.tags, page);
-                    for fi in &para.floating_images {
+                    for fi in &trailing {
                         let x = resolve_fi_x(fi, sp, rest_col_x, rest_col_w, text_width);
                         let top = resolve_fi_y_top(fi, sp, anchor.top(fi.on_line));
                         state.pb.float_zone = Some(FloatZone::for_float(fi, x, top));
@@ -4264,19 +4433,48 @@ fn render_paragraph_block(
                             state.pb.next_text_below_picture.map_or(bottom, |old| old.min(bottom)));
                     }
                 }
+                // (from, to, text_x, text_w, baseline of the segment's first line)
+                let mut segments: Vec<(usize, usize, f32, f32, f32)> = Vec::new();
+                let mut extra_drop = 0.0f32;
+                // (`lines_height` of no lines is one pitch.)
+                let seg_h = |a: usize, b: usize| {
+                    if a < b { lines_height(&chunk[a..b], line_h, para_metrics) } else { 0.0 }
+                };
+                match plan {
+                    Some(FragmentPlan::Beside { from, to, text_x, text_w }) if last_fragment => {
+                        let h_a = seg_h(0, from);
+                        let h_b = seg_h(from, to);
+                        segments.push((0, from, rest_text_x, rest_text_width, baseline_y2));
+                        segments.push((from, to, text_x, text_w, baseline_y2 - h_a));
+                        segments.push((to, chunk.len(), rest_text_x, rest_text_width, baseline_y2 - h_a - h_b));
+                    }
+                    Some(FragmentPlan::Below { from, top }) if last_fragment => {
+                        let h_a = seg_h(0, from);
+                        segments.push((0, from, rest_text_x, rest_text_width, baseline_y2));
+                        segments.push((from, chunk.len(), rest_text_x, rest_text_width, top - baseline_offset2));
+                        extra_drop = (state.pb.slot_top - h_a) - top;
+                    }
+                    Some(FragmentPlan::PageBottom) if last_fragment => {
+                        let top = state.pb.footer_top(sp, ctx) + lines_height(chunk, line_h, para_metrics);
+                        segments.push((0, chunk.len(), rest_text_x, rest_text_width, top - baseline_offset2));
+                        extra_drop = state.pb.slot_top - top;
+                    }
+                    _ => segments.push((0, chunk.len(), rest_text_x, rest_text_width, baseline_y2)),
+                }
                 state.pb.begin_tag(tag);
+                for &(from, to, seg_x, seg_w, seg_baseline) in segments.iter().filter(|s| s.1 > s.0) {
                 render_paragraph_lines(
                     &mut state.pb.content,
-                    chunk,
+                    &chunk[from..to],
                     &para.alignment,
-                    rest_text_x,
+                    seg_x,
                     para.indent_left,
-                    rest_text_width,
-                    baseline_y2,
+                    seg_w,
+                    seg_baseline,
                     line_h,
                     para_metrics,
                     lines.len(),
-                    start,
+                    start + from,
                     &mut state.pb.links,
                     text_hanging,
                     ctx.fonts,
@@ -4296,9 +4494,10 @@ fn render_paragraph_block(
                         tag,
                     )),
                 );
+                }
                 state.pb.end_tag();
 
-                state.pb.slot_top -= lines_height(chunk, line_h, para_metrics);
+                state.pb.slot_top -= lines_height(chunk, line_h, para_metrics) + extra_drop;
                 start += chunk.len();
                 if start >= lines.len() {
                     break;
@@ -6254,6 +6453,18 @@ fn render_pass(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_trailing_anchor_has_only_blank_runs_after_it() {
+        let text = |t: &str| crate::model::Run { text: t.to_string(), ..Default::default() };
+        let brk = crate::model::Run { is_line_break: true, ..Default::default() };
+        let runs = [text("Med forbehold"), text(" "), brk, text("")];
+        assert!(blank_after(&runs, 4));
+        assert!(blank_after(&runs, 3));
+        assert!(blank_after(&runs, 9), "an index past the end is a trailing anchor");
+        assert!(!blank_after(&runs, 2), "a break after the anchor is a line");
+        assert!(!blank_after(&runs, 0));
+    }
 
     #[test]
     fn contour_clearance_keeps_the_natural_line_phase() {

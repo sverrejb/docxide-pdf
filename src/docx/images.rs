@@ -793,6 +793,7 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                     z_index,
                     anchor_seq: 0,
                     anchor_at_start: false,
+                    anchor_run: 0,
                     on_line: false,
                 }));
             }
@@ -1166,6 +1167,7 @@ pub(super) fn parse_object_floating_image<R: Read + Seek>(
         z_index,
         anchor_seq: 0,
         anchor_at_start: false,
+        anchor_run: 0,
         on_line: false,
     })
 }

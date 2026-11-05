@@ -1057,6 +1057,7 @@ macro_rules! handle_drawing_result {
             }
             Some(RunDrawingResult::Floating(mut fi)) => {
                 fi.anchor_at_start = $pending.is_empty() && anchor_precedes_text(&$runs);
+                fi.anchor_run = $runs.len();
                 push_floating(&mut $floating_images, &$textboxes, fi)
             }
             Some(RunDrawingResult::TextBox(tb)) => {
@@ -1078,6 +1079,7 @@ macro_rules! handle_drawing_result {
                         RunDrawingResult::Floating(mut fi) => {
                             fi.anchor_at_start =
                                 $pending.is_empty() && anchor_precedes_text(&$runs);
+                                fi.anchor_run = $runs.len();
                             push_floating(&mut $floating_images, &$textboxes, fi)
                         }
                         RunDrawingResult::TextBox(tb) => {
@@ -1729,6 +1731,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         flush_pending(&mut pending_text, &mut runs);
                         if let Some(mut fi) = parse_object_floating_image(child, ctx) {
                             fi.anchor_at_start = anchor_precedes_text(&runs);
+                            fi.anchor_run = runs.len();
                             push_floating(&mut floating_images, &textboxes, fi);
                         } else if let Some(img) = parse_object_inline_image(child, ctx) {
                             runs.push(Run {
@@ -1746,6 +1749,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                     flush_pending(&mut pending_text, &mut runs);
                     if let Some(mut fi) = parse_object_floating_image(child, ctx) {
                         fi.anchor_at_start = anchor_precedes_text(&runs);
+                            fi.anchor_run = runs.len();
                         push_floating(&mut floating_images, &textboxes, fi);
                     } else if let Some(img) = parse_object_inline_image(child, ctx) {
                         runs.push(Run {

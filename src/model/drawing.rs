@@ -156,6 +156,9 @@ pub struct FloatingImage {
     pub anchor_seq: u32,
     /// The picture anchor precedes visible text and explicit breaks in this paragraph.
     pub anchor_at_start: bool,
+    /// Index of the paragraph run the anchor sits in front of: the float
+    /// belongs to the page that run's line lands on.
+    pub anchor_run: usize,
     /// Flattened from an inline canvas: its offset counts from the line top,
     /// as for `Textbox::on_line`.
     pub on_line: bool,

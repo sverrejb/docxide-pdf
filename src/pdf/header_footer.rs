@@ -774,6 +774,16 @@ pub(super) fn compute_effective_margin_bottom(
     }
 }
 
+/// The top of the footer's line boxes, from the page bottom (the footer
+/// margin when the page has no footer): where Word stops the lines a
+/// page-wide float pushes past the bottom margin.
+pub(super) fn footer_top(sp: &SectionProperties, is_first: bool, page_idx: usize, ctx: &RenderContext) -> f32 {
+    match layout_hf(sp, is_first, page_idx, false, ctx) {
+        Some(hf) => sp.footer_margin + compute_header_height(hf, ctx, sp, false),
+        None => sp.footer_margin,
+    }
+}
+
 /// The header (or footer) whose extent a section's page lays out around: its
 /// own, else the one it inherits, as drawn (radiographer's later sections
 /// inherit a two-line empty header that starts their body 27pt below the
