@@ -3153,6 +3153,25 @@ fn render_paragraph_block(
     // when already at the top.
     if para.page_break_before {
         let at_top = state.pb.is_at_page_top(sp);
+        // The break still sits on its paragraph's first line, and that line
+        // must fit first: one that does not moves to a page of its own before
+        // breaking, leaving that page blank (Word probes p29a–c: a 25pt exact
+        // break line under 23pt of room makes a blank page, a 15pt one does
+        // not). The space above it may run past the page bottom (erasmus_plus:
+        // a 17pt line with 22pt left under 12pt of space after stays put).
+        if !at_top && para.page_break_before_explicit && {
+            let (font_size, mut lhr, _) = tallest_glyph_run_metrics(&para.runs, ctx.fonts);
+            let mut font_size = font_size;
+            if lhr.is_none() {
+                (font_size, lhr) = unsized_line_metrics(para, font_size, ctx.fonts);
+            }
+            let ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
+            state.pb.slot_top - resolve_line_h(ls, font_size, lhr) < state.effective_margin_bottom
+        } {
+            state
+                .pb
+                .begin_next_page(sect_idx, sp, &mut state.effective_margin_bottom, ctx);
+        }
         if !at_top || para.page_break_before_explicit {
             state
                 .pb
@@ -6893,6 +6912,30 @@ mod tests {
             rectangular_polygon_bounds(&[(0.0, 0.0), (0.0, 20.0), (15.0, 10.0), (30.0, 0.0)])
                 .is_none()
         );
+    }
+
+    #[test]
+    fn a_break_line_that_does_not_fit_leaves_a_blank_page() {
+        use std::io::{Cursor, Write};
+        let pages = |break_twips: u32| {
+            let exact = |t: u32| format!(r#"<w:pPr><w:spacing w:before="0" w:after="0" w:line="{t}" w:lineRule="exact"/></w:pPr>"#);
+            // 25 exact 25pt lines leave 23pt of a 648pt body.
+            let lines = (0..25)
+                .map(|i| format!("<w:p>{}<w:r><w:t>Line {i}</w:t></w:r></w:p>", exact(500)))
+                .collect::<String>();
+            let xml = format!(
+                r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>{lines}<w:p>{}<w:r><w:br w:type="page"/></w:r></w:p><w:p><w:r><w:t>After</w:t></w:r></w:p><w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440"/></w:sectPr></w:body></w:document>"#,
+                exact(break_twips)
+            );
+            let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+            zip.start_file("word/document.xml", zip::write::SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(xml.as_bytes()).unwrap();
+            let doc = crate::docx::parse_bytes(&zip.finish().unwrap().into_inner()).unwrap();
+            render_pass(&doc, None, &ConvertOptions::default()).unwrap().1.total
+        };
+        assert_eq!(pages(500), 3); // p29a
+        assert_eq!(pages(300), 2); // p29c
     }
 
     #[test]
