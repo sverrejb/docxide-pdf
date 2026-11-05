@@ -6371,6 +6371,24 @@ mod tests {
         para.tab_stops.clear();
         para.list_label = "12345678.".into();
         assert!((hanging(&para) + 72.0).abs() < 0.01);
+        // A label exactly filling the hanging indent keeps the text on it
+        // (Word for Mac probe p23); one 5pt wider goes to the next default
+        // stop, and an explicit stop the label ends on is skipped like any
+        // tab (indigenous_innovation p5).
+        para.list_label = "123.".into();
+        para.indent_left = 20.0;
+        para.indent_hanging = 20.0;
+        assert!(hanging(&para).abs() < 0.01);
+        para.list_label = "1234.".into();
+        assert!((hanging(&para) + 16.0).abs() < 0.01);
+        para.indent_left = 40.0;
+        para.indent_hanging = 40.0;
+        para.tab_stops.push(TabStop {
+            position: 25.0,
+            alignment: TabAlignment::Left,
+            leader: None,
+        });
+        assert!(hanging(&para).abs() < 0.01);
     }
 
     #[test]
