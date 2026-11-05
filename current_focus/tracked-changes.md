@@ -225,6 +225,32 @@ behind, 17 of those thirty or more.
   numbering-change colour (0078D4 with one author); ours print plain.
   The decree 15.1 → 72.6.
 
+**Fixed 2026-11-05 (third round: floats of split paragraphs)**
+- A split paragraph drew none of its floating pictures (the split path
+  returned before the float rendering) unless one narrow case matched.
+  Now a float whose anchor precedes the last text hangs from the paragraph's
+  top on its first page; one anchored after all text (`anchor_run`, the run
+  index at the anchor) goes to the page its last line lands on, hung from
+  the fragment's top there (probes p20c/p20e, Word for Mac, compat 14:
+  +20pt → y 92 on page 2; corpus cover: 101.55 − 82.7 = 18.85 on page 5).
+- Compat 14 keeps a negative paragraph offset only down to the page edge
+  (p20c/p20d: −82.7pt from a page-top paragraph → y 0; compat 15 stops at
+  the margin as before). A wrapping picture wider than the page starts at
+  x 0 (p20d, the cover); one that fits keeps a negative x (cyprus_ucits).
+- The final fragment's lines around its trailing float: lines whose box
+  meets the picture's band sit beside it when a side is wide enough (x 249
+  by a 150pt picture at 90, p20c/p20e match Word to 0.13pt), else below;
+  when below is off the page the fragment keeps one line (those above the
+  band, or the page's first line) and the rest move on with the float, and
+  a lone anchor line sits at the page bottom above the footer (the cover:
+  "Montering", an empty line and "Med forbehold" take one page each,
+  "Med forbehold" at 782 vs Word's 779).
+- A page break ending a split paragraph is honoured (it was dropped with
+  the early return). swiss_materials loses 4 points from it: Word ends
+  that paragraph exactly at page 3's bottom, we split it one line later,
+  so the break now adds a page where the ignored break happened to match.
+- The cover document: 8.9 → 64.9 Jaccard, 10/10 pages.
+
 **Remaining gaps, ranked by evidence**
 3. Cover-page redlines (8.9 vs 68.8, Word 10 pages, ours 8): paragraph 1
    holds a deleted full-page picture (615 × 797pt, wrapSquare, anchored
@@ -237,13 +263,12 @@ behind, 17 of those thirty or more.
    float that leaves less than some minimum beside it (Word: the lines
    ignore it, or the float becomes top-and-bottom) — probe a wrapSquare
    picture wider than the column with a text paragraph anchored to it.
-4. Greek letters in an Aptos document (28.3 vs 75.1): the document has no
-   `rFonts` at all (docDefaults Aptos); Word for Mac's reference sets the
-   Greek letters in Verdana (its per-character fallback for a face without
-   the glyph; the Mac's Aptos lacks Greek, our vendored Aptos 2.01 has it)
-   and we set them in DejaVu Sans Mono from the fontTable. Lines then wrap
-   differently ("presentations.Αα" / "Alpha"). Decide whether to model the
-   Mac fallback (Verdana) or keep Aptos; the fixtures are Windows exports.
+4. ~~Verdana list (28.3 vs 75.1)~~: environment, not a lookup bug. The
+   runs use the "Preformatted Text" style (DejaVu Sans Mono, fontTable
+   `altName` Verdana). Word for Mac took the altName; our discovery finds
+   DejaVu Sans Mono in this Mac's `~/Library/Fonts` (also matplotlib's
+   copy) and uses it, so the lines wrap differently. CI has no DejaVu;
+   nothing to change in the code.
 5. Table-heavy redlines with dozens of inserted/deleted rows, deleted fields
    and comments (the four 6–7-point documents in the comments set, 9–11
    pages each; the competitor scores 5–6 there too).

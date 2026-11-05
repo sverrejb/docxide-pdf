@@ -419,11 +419,15 @@ Open queue from the large-corpus and focus-fixture rounds:
   default paragraph style (a header did it and pushed a body 4pt); markup
   list numbering keeps an original and a final stream (deleted items show
   the original number, live items the final, both when they differ).
-- Next steps, in order: (3) a wrapSquare picture wider than the column
-  (Word prints the anchored text full-width over it, we wrap it one letter
-  per line beside it: a cover page loses two pages); (4) Greek letters in an
-  Aptos document set in Verdana by Word for Mac's per-character fallback,
-  in DejaVu Sans Mono by us; (5) `reference-markup.pdf` support in the harness so fixtures
+- Done 2026-11-05 (floats): a split paragraph's floats are drawn (they
+  were dropped): on the anchor line's page, hung from the fragment's top,
+  the fragment's lines beside, below or moved on (Word for Mac probes
+  p20c–p20e); compat 14 stops a negative offset at the page edge; a
+  page-wide picture starts at x 0; a page break ending a split paragraph
+  is honoured. The cover document 8.9 → 64.9. The Verdana list is an
+  environment difference (this Mac's user fonts hold DejaVu Sans Mono,
+  Word for Mac used the fontTable's altName).
+- Next steps, in order: (5) `reference-markup.pdf` support in the harness so fixtures
   can carry a markup reference; (6) cosmetic markup: bars in headers /
   footers and over the paragraph's space before/after, continuous strikes,
   lines on deleted / inserted pictures, coloured list labels; (7) moves
