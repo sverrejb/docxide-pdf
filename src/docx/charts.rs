@@ -270,8 +270,9 @@ fn parse_chart_space(xml_content: &str, accent_colors: Vec<[u8; 3]>) -> Option<C
         data_table: chart_child(plot_area, "dTable").is_some(),
         // Word's default outline draws grey 133 at 600 dpi (torture_test).
         frame: chart_child(chart_space, "spPr").map_or(Some([0x85; 3]), extract_line_color),
-        view_3d: type_node
-            .has_tag_name((CHART_NS, "bar3DChart"))
+        view_3d: ["bar3DChart", "pie3DChart"]
+            .iter()
+            .any(|t| type_node.has_tag_name((CHART_NS, *t)))
             .then(|| parse_view_3d(chart_node, plot_area, type_node)),
     })
 }
@@ -292,6 +293,7 @@ fn parse_view_3d(
         rot_x: num(view, "rotX", 15.0),
         rot_y: num(view, "rotY", 20.0),
         depth: num(view, "depthPercent", 100.0) / 100.0,
+        height: num(view, "hPercent", 100.0) / 100.0,
         gap_depth: num(Some(type_node), "gapDepth", 150.0) / 100.0,
         series_axis: chart_child(plot_area, "serAx")
             .is_some_and(|ax| chart_attr(ax, "delete") != Some("1")),

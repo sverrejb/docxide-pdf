@@ -3,10 +3,10 @@ use std::f32::consts::{FRAC_PI_2, TAU};
 use pdf_writer::Content;
 
 use crate::fonts::FontEntry;
-use crate::model::{InlineChart, LegendPosition};
+use crate::model::{InlineChart, LegendPosition, View3D};
 
 use super::chart_legend::{LegendItem, LegendPlacement, SwatchStyle, render_chart_legend};
-use super::charts::{resolve_accent_colors, text_width};
+use super::charts::{TITLE_BAND, resolve_accent_colors, show_text, text_width};
 use super::color::fill_rgb;
 
 struct RadialLayout {
@@ -159,10 +159,33 @@ pub(super) fn render_radial(
     let c = &chart.chart;
     let h = chart.display_height;
     let margin = chart.display_width * 0.05;
-    let outer_r = (h - margin * 2.0) / 2.0;
-    let inner_r = hole_pct.map(|pct| outer_r * (pct / 100.0));
+    let title_band = if c.title.is_some() { TITLE_BAND } else { 0.0 };
 
     content.save_state();
+    if let Some(view) = c.view_3d.filter(|_| hole_pct.is_none()) {
+        draw_pie_3d(
+            content,
+            chart,
+            &layout,
+            view,
+            x,
+            y,
+            label_font_key,
+            label_font,
+        );
+        if label_font.is_some() {
+            render_radial_legend(content, &layout, label_font_key, y, h, label_font);
+        }
+        content.set_fill_gray(0.0);
+        content.restore_state();
+        return;
+    }
+    let outer_r = (h - title_band - margin * 2.0) / 2.0;
+    let inner_r = hole_pct.map(|pct| outer_r * (pct / 100.0));
+    let layout = RadialLayout {
+        cy: layout.cy - title_band / 2.0,
+        ..layout
+    };
 
     let mut angle = FRAC_PI_2;
     let values = &c.series[0].values;
@@ -206,4 +229,129 @@ pub(super) fn render_radial(
 
     content.set_fill_gray(0.0);
     content.restore_state();
+}
+
+/// A 3-D pie seen from `rotX` above: the top an ellipse `sin rotX` as tall as
+/// it is wide, standing on a rim 0.261 of the radius thick (times
+/// `hPercent`) foreshortened by `cos rotX`, the whole fitted between Word's
+/// insets (pie3d probes: 54pt below the chart's top with a title, 49.6pt
+/// above its bottom with a legend there). Top faces take the slice colour,
+/// the rim darkens left to right from 0.87× to 0.40× at 72% of the width.
+/// ponytail: orthographic; Word's default 30° perspective draws the pie
+/// ~4% larger with a fuller near half. Value labels sit at 70% of the
+/// radius on each slice's middle, where Word's best fit varies by slice.
+#[allow(clippy::too_many_arguments)]
+fn draw_pie_3d(
+    content: &mut Content,
+    chart: &InlineChart,
+    layout: &RadialLayout,
+    view: View3D,
+    x: f32,
+    y: f32,
+    label_font_key: &str,
+    label_font: Option<&FontEntry>,
+) {
+    let c = &chart.chart;
+    let (w, h) = (chart.display_width, chart.display_height);
+    let values = &c.series[0].values;
+    let total: f32 = values.iter().sum();
+    let (sin_x, cos_x) = (view.rot_x.to_radians().sin(), view.rot_x.to_radians().cos());
+    let rim_k = 0.261 * view.height * cos_x;
+    let top = y - 24.05 - if c.title.is_some() { TITLE_BAND } else { 0.0 };
+    let bottom = y - h
+        + if layout.has_legend && !layout.legend_on_right {
+            49.6
+        } else {
+            24.05
+        };
+    let avail_w = (layout.legend_x - x) - 2.0 * w * 0.05;
+    let a = (avail_w / 2.0).min((top - bottom) / (2.0 * sin_x + rim_k));
+    let (b, rim) = (a * sin_x, a * rim_k);
+    let cx = layout.cx;
+    let cy = (top + bottom) / 2.0 + (rim / 2.0);
+    // A point on the top ellipse, `t` radians clockwise from 12 o'clock.
+    let at = |t: f32, r: f32, drop: f32| (cx + r * a * t.sin(), cy + r * b * t.cos() - drop);
+    let slices: Vec<(f32, f32)> = values
+        .iter()
+        .scan(0.0f32, |start, &v| {
+            let sweep = v / total * TAU;
+            let s = *start;
+            *start += sweep;
+            Some((s, s + sweep))
+        })
+        .collect();
+    let color = |i: usize| layout.colors[i % layout.colors.len()];
+    let steps = |sweep: f32| arc_segment_count(sweep);
+
+    // The rim: the front half of the outline (from 3 o'clock round through
+    // 6 to 9), per slice, shaded in vertical strips.
+    for (i, &(t0, t1)) in slices.iter().enumerate() {
+        let (lo, hi) = (t0.max(FRAC_PI_2), t1.min(3.0 * FRAC_PI_2));
+        if lo >= hi {
+            continue;
+        }
+        let n = steps(hi - lo);
+        let edge: Vec<(f32, f32)> = (0..=n)
+            .map(|k| at(lo + (hi - lo) * k as f32 / n as f32, 1.0, 0.0))
+            .collect();
+        let mut band = edge.clone();
+        band.extend(edge.iter().rev().map(|&(px, py)| (px, py - rim)));
+        content.save_state();
+        if let Some(&(px, py)) = band.first() {
+            content.move_to(px, py);
+            for &(px, py) in &band[1..] {
+                content.line_to(px, py);
+            }
+            content.close_path();
+        }
+        content.clip_nonzero();
+        content.end_path();
+        const STRIPS: usize = 40;
+        let (x0, sw) = (cx - a, 2.0 * a / STRIPS as f32);
+        for k in 0..STRIPS {
+            let t = (k as f32 + 0.5) / STRIPS as f32;
+            let shade = (0.87 - 0.655 * t).max(0.40);
+            fill_rgb(content, color(i).map(|v| (v as f32 * shade).round() as u8));
+            // Each strip runs to the right edge so the next covers the join.
+            let left = x0 + k as f32 * sw;
+            content.rect(
+                left,
+                cy - b - rim - 1.0,
+                2.0 * a - k as f32 * sw,
+                2.0 * b + rim + 2.0,
+            );
+            content.fill_nonzero();
+        }
+        content.restore_state();
+    }
+
+    for (i, &(t0, t1)) in slices.iter().enumerate() {
+        fill_rgb(content, color(i));
+        content.move_to(cx, cy);
+        let n = steps(t1 - t0);
+        for k in 0..=n {
+            let (px, py) = at(t0 + (t1 - t0) * k as f32 / n as f32, 1.0, 0.0);
+            content.line_to(px, py);
+        }
+        content.close_path();
+        content.fill_nonzero();
+    }
+
+    if c.show_values && label_font.is_some() {
+        content.set_fill_gray(0.0);
+        for (&(t0, t1), &v) in slices.iter().zip(values) {
+            let text = format!("{v}");
+            let tw = text_width(&text, 10.0, label_font);
+            let (px, py) = at((t0 + t1) / 2.0, 0.7, 0.0);
+            show_text(
+                content,
+                label_font_key,
+                10.0,
+                px - tw / 2.0,
+                py - 3.66,
+                &text,
+                label_font,
+            );
+        }
+    }
 }

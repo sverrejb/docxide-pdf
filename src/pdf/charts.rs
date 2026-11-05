@@ -481,7 +481,8 @@ fn draw_bar_3d(
                     1.07 - 0.27 * (t - 0.45) / 0.55
                 };
                 fill_rgb(content, shade(k));
-                content.rect(x0 + i as f32 * sw, y0, sw + 0.25, y1 - y0);
+                // Each strip runs to the right edge so the next covers the join.
+                content.rect(x0 + i as f32 * sw, y0, x1 - x0 - i as f32 * sw, y1 - y0);
                 content.fill_nonzero();
             }
             content.restore_state();
@@ -896,10 +897,9 @@ enum LabelPlace {
 
 /// A chart title's size and place: torture_test's 18pt title sits on a
 /// baseline 24.6pt under the chart's top, in a 30pt band above the plot.
-/// ponytail: pie and radar charts draw no title yet.
 const TITLE_PT: f32 = 18.0;
 const TITLE_BASELINE: f32 = 24.6;
-const TITLE_BAND: f32 = 30.0;
+pub(super) const TITLE_BAND: f32 = 30.0;
 /// A title's rich text without run properties of its own falls back to
 /// DrawingML's default face, not the theme's: Word draws it in Arial where
 /// every other label takes the minor font (torture_test, probe exports).
@@ -1028,6 +1028,16 @@ pub(super) fn render_chart(
         content.rect(x, y - h, w, h);
         content.stroke();
         content.restore_state();
+    }
+
+    if has_font && let Some(title) = &c.title {
+        let (key, font) = match seen_fonts.get(TITLE_FONT) {
+            Some(e) => (e.pdf_name.as_str(), Some(e)),
+            None => (label_font_key, label_font),
+        };
+        let tw = text_width(title, TITLE_PT, font);
+        let (tx, ty) = (x + (w - tw) / 2.0, y - TITLE_BASELINE);
+        show_text(content, key, TITLE_PT, tx, ty, title, font);
     }
 
     match c.chart_type {
@@ -1431,16 +1441,6 @@ pub(super) fn render_chart(
                     label_font,
                 );
             }
-        }
-
-        if let Some(title) = &c.title {
-            let (key, font) = match seen_fonts.get(TITLE_FONT) {
-                Some(e) => (e.pdf_name.as_str(), Some(e)),
-                None => (label_font_key, label_font),
-            };
-            let tw = text_width(title, TITLE_PT, font);
-            let (tx, ty) = (x + (w - tw) / 2.0, y - TITLE_BASELINE);
-            show_text(content, key, TITLE_PT, tx, ty, title, font);
         }
 
         for value_label in &value_labels {

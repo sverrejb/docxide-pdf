@@ -99,6 +99,8 @@ pub struct View3D {
     pub rot_y: f32,
     pub depth: f32,
     pub gap_depth: f32,
+    /// `hPercent`: a 3-D pie's thickness against its default.
+    pub height: f32,
     pub shape: BarShape,
     /// `c:serAx` shown: series names along the floor's right edge.
     pub series_axis: bool,
