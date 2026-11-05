@@ -163,11 +163,11 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     let mark_deleted = ppr_rpr.is_some_and(|rpr| wml(rpr, "del").is_some());
     // Markup view: a revised paragraph mark or paragraph formatting
     // (`w:pPrChange`) draws no inline mark, only the change bar.
-    if super::markup()
+    let mark_revised = super::markup()
         && (mark_deleted
             || ppr_rpr.is_some_and(|rpr| wml(rpr, "ins").is_some())
-            || ppr.is_some_and(|p| wml(p, "pPrChange").is_some()))
-    {
+            || ppr.is_some_and(|p| wml(p, "pPrChange").is_some()));
+    if mark_revised {
         for run in &mut runs {
             run.revised = true;
         }
@@ -281,6 +281,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     Paragraph {
         runs,
         mark_deleted,
+        mark_revised,
         style_id: Some(para_style_id.to_string()),
         space_before,
         space_after,

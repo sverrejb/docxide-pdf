@@ -4160,6 +4160,23 @@ pub(super) fn descender_ratio(lhr: Option<f32>, ar: Option<f32>) -> f32 {
 thread_local! {
     static CHANGE_BARS: std::cell::RefCell<Vec<(f32, f32)>> =
         const { std::cell::RefCell::new(Vec::new()) };
+    /// (above, below): what the paragraph's first revised line adds above
+    /// its box and its last below (Word for Mac probe p16: the paragraph's
+    /// own share of the gap above it, max(0, before - previous after), and
+    /// its space after).
+    static BAR_EXTENSION: std::cell::Cell<(f32, f32)> = const { std::cell::Cell::new((0.0, 0.0)) };
+}
+
+/// Set before a paragraph's lines render, cleared after.
+pub(super) fn set_change_bar_extension(above: f32, below: f32) {
+    BAR_EXTENSION.with(|e| e.set((above, below)));
+}
+
+/// A revised line box that drew no chunk (an empty paragraph with a revised
+/// mark: Word's bar runs unbroken over a decree's empty inserted paragraphs).
+pub(super) fn record_change_bar(bottom: f32, top: f32) {
+    let (above, below) = BAR_EXTENSION.with(|e| e.get());
+    CHANGE_BARS.with(|b| b.borrow_mut().push((bottom - below, top + above)));
 }
 
 /// (bottom, top) of every revised line drawn since the last call.
@@ -4229,9 +4246,11 @@ pub(super) fn render_paragraph_lines(
         // ascent above the baseline and the rest of the advance below (Word
         // for Mac probes 2026-11-05, single, 1.15, double and exact spacing).
         if line.chunks.iter().any(|c| c.revised) {
-            let top = y + text_metrics.0;
-            let advance = inline_line_advance(line, line_pitch, text_metrics);
-            CHANGE_BARS.with(|b| b.borrow_mut().push((top - advance, top)));
+            let (above, below) = BAR_EXTENSION.with(|e| e.get());
+            let top = y + text_metrics.0 + if global_line_idx == 0 { above } else { 0.0 };
+            let advance = inline_line_advance(line, line_pitch, text_metrics)
+                + if global_line_idx + 1 == total_line_count { below } else { 0.0 };
+            CHANGE_BARS.with(|b| b.borrow_mut().push((y + text_metrics.0 - advance, top)));
         }
 
         let (base_margin, base_width) = line_geometry

@@ -515,6 +515,10 @@ pub struct Paragraph {
     /// The paragraph mark is a tracked deletion (`w:pPr/w:rPr/w:del`): the
     /// final view joins this paragraph to the next.
     pub mark_deleted: bool,
+    /// Markup view: the mark is a tracked insertion or deletion, or the
+    /// paragraph formatting changed; the change bar covers the paragraph
+    /// even when it has no runs.
+    pub mark_revised: bool,
     pub style_id: Option<String>,
     pub space_before: f32,
     pub space_after: f32,

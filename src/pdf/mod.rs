@@ -4177,6 +4177,10 @@ fn render_paragraph_block(
         if lines_that_fit >= min_split_lines && lines_that_fit < lines.len() {
             let first_part = &lines[..lines_that_fit];
             state.pb.slot_top -= inter_gap;
+            layout::set_change_bar_extension(
+                own_space_before(inter_gap, state.prev_space_after),
+                effective_space_after,
+            );
             let split_anchor = ParaAnchor::new(
                 state.pb.pending_float_anchor.take(),
                 state.pb.anchor_slot_top(sp, ctx),
@@ -4515,6 +4519,7 @@ fn render_paragraph_block(
                 );
             }
             state.prev_space_after = effective_space_after;
+            layout::set_change_bar_extension(0.0, 0.0);
 
             // Track the remaining footnotes for the split paragraph on the new page
             for run in para.runs.iter() {
@@ -5020,6 +5025,19 @@ fn render_paragraph_block(
                 .fill_nonzero()
                 .set_fill_gray(0.0);
         }
+    } else if lines.is_empty()
+        && para.list_label.is_empty()
+        && para.mark_revised
+        && !para.paragraph_mark_vanish
+    {
+        layout::set_change_bar_extension(
+            own_space_before(applied_inter_gap, state.prev_space_after),
+            effective_space_after,
+        );
+        // Markup view: an empty paragraph with a revised mark gets its bar
+        // (Word's bar runs unbroken over a decree's empty inserted paragraphs).
+        let top = state.pb.slot_top - bdr_top_pad;
+        layout::record_change_bar(top - content_h, top);
     } else if !lines.is_empty() || !para.list_label.is_empty() {
         // An empty numbered paragraph still shows its label: uk_commercial's
         // "SCHEDULE 1" headings are empty paragraphs whose style numbers them.
@@ -5032,6 +5050,10 @@ fn render_paragraph_block(
             first_baseline_offset
         };
         let baseline_y = state.pb.slot_top - bdr_top_pad - baseline_offset - text_drop;
+        layout::set_change_bar_extension(
+            own_space_before(applied_inter_gap, state.prev_space_after),
+            effective_space_after,
+        );
 
         let tags = state.pb.para_tags(para, doc);
         state.pb.begin_para_tags(tags, |content| {
@@ -5189,6 +5211,7 @@ fn render_paragraph_block(
     }
     if !(text_empty && para.paragraph_mark_vanish) {
         state.prev_space_after = effective_space_after;
+        layout::set_change_bar_extension(0.0, 0.0);
     }
 
     // Track footnotes referenced on this page
