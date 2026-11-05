@@ -221,6 +221,14 @@ pub(super) fn render_single_textbox(
     page: usize,
     alpha_states: &mut HashSet<u8>,
 ) {
+    // A group's wrap placeholder: nothing to draw or tag.
+    if tb.paragraphs.is_empty()
+        && tb.link.is_none()
+        && tb.fill.is_none()
+        && tb.stroke_color.is_none()
+    {
+        return;
+    }
     let sect = tags.hoist("Sect", tb.anchor_seq);
     let tb_x = resolve_h_position(
         tb.h_relative_from,
