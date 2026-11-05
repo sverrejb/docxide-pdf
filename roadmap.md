@@ -408,14 +408,34 @@ Open queue from the large-corpus and focus-fixture rounds:
 - Revision markup (Word's inline All Markup: author colours, underline /
   strike, deleted text kept in the layout, change bars) is opt-in:
   `ConvertOptions::revisions(RevisionView::Markup)` / CLI `--markup`; the
-  final view stays the default. Rules, probes and the remaining gaps (bars
-  without the paragraph's space before/after, per-word strikes, deleted
-  pictures and list labels unmarked, headers/footers/footnotes/text boxes
-  still final, moves unprobed, no `reference-markup.pdf` harness support
-  yet) in `current_focus/tracked-changes.md`. door_air (#259/#260) is the
-  fixture whose reference shows markup, in balloons (out of scope).
-- Final view: a deleted paragraph mark merges its paragraph into the next,
-  deleted table rows are dropped (Word online export probes 2026-11-05).
+  final view stays the default. Rules, probes, the gap analysis on an
+  external tracked corpus (2026-11-05: Jaccard 67.9 on 317 documents against
+  Word for Mac inline references, 55.5 on 24 with comments) and the ranked
+  remaining gaps are in `current_focus/tracked-changes.md`. door_air
+  (#259/#260) is the fixture whose reference shows markup, in balloons (out
+  of scope).
+- Next steps, in order: (1) tabs after a wrapped line in tab-separated
+  text (a one-page inventory list scores 25 where Word's layout differs by
+  one wrap); (2) paragraph spacing of wholly inserted heading paragraphs
+  with bottom borders (4pt page-top drift, gap after the heading block);
+  (3) cover pages of anchored pictures and text boxes (title box lands in
+  the body, picture on page 2); (4) a Verdana-styled run printing in DejaVu
+  Sans Mono; (5) `reference-markup.pdf` support in the harness so fixtures
+  can carry a markup reference; (6) cosmetic markup: bars in headers /
+  footers and over the paragraph's space before/after, continuous strikes,
+  lines on deleted / inserted pictures, coloured list labels; (7) moves
+  (`w:moveFrom` / `w:moveTo`, 3 of 317 documents) once a Word-made probe
+  exists (Word hangs on hand-written move ranges).
+- Final view: a deleted paragraph mark merges its paragraph into the next
+  and takes its section break with it, deleted table rows are dropped (Word
+  online export probes 2026-11-05).
+
+## Pagination
+
+- A multi-line paragraph that opens a page and outruns it now splits (it
+  used to run off the page: one paragraph of 108 manual line breaks, double
+  spaced, took one page instead of five). A single line taller than the page
+  stays on it (case150's 700pt exact spacer).
 - Comment balloons: font (7pt) and line height (8.5pt) are case63's zoomed
   values.
 

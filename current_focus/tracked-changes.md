@@ -179,6 +179,63 @@ inline references (`tools/corpus_score.py`, labels `tc-final` / `tc-markup`,
 scraped/catalan_university_transfer_offer (+18.5 Jaccard from the deleted-row
 drop) and bush_fires (+0.01, deleted-mark merge).
 
+## Gap analysis on the published tracked sets (2026-11-05)
+
+The competitor publishes per-document scores for 317 tracked documents
+without comments, 24 with comments and tracking, and 1 with comments only
+(all Word for Mac inline-markup references). Rebuilt locally from the full
+corpus (`tests/output/tc/jub_sets.py`, symlink dirs in `tests/output/tc/jub/`;
+`tc_gap.py <label> <group>` joins our corpus scores with theirs and prints
+delta buckets plus an XML feature census of the worst documents).
+
+| set | ours, markup (J / SSIM / pages wrong) | competitor | we win / lose |
+|---|---|---|---|
+| tracking, no comments (317) | 67.9 / 82.1 / 11 | 62.2 / 80.4 / 11 | 233 / 84 before the pagination fix |
+| comments + tracking (24) | 55.5 / 72.5 / 0 | 29.3 / 48.6 / 4 | 24 / 0 |
+| comments only (1) | 70.8 / 88.4 / 0 | 60.0 | |
+
+(317 set before the page-top split fix below: 66.5 / 80.6 / 25.) 108 of the
+317 are ten or more Jaccard points ahead of the competitor, 45 ten or more
+behind, 17 of those thirty or more.
+
+**Found and fixed while analysing**
+- A multi-line paragraph that opens a page and outruns it was never split
+  (the split path was skipped at the page top): one template of 108 manual
+  line breaks, double spaced, took one page instead of five. 16 of our 25
+  page-count misses; those documents gained 23–50 points. A single oversized
+  line (case150's 700pt exact spacer) still stays put.
+- List items whose mark alone is deleted were numbered as deleted items
+  (1.1, 1.1, 1.1 instead of 1.2, 1.3, 1.4).
+- `titlePg w:val="0"`, deleted section breaks (above).
+
+**Remaining gaps, ranked by evidence**
+1. Tab-separated revised lines wrap differently after the first line (an
+   inventory list: Word keeps "Hub 30 $45" on line two, we push "30 $45" to a
+   third line, and everything below shifts: 24.9 vs 75.1). A tabs-after-wrap
+   rule, not markup-specific; the ink diff is in `tests/output/tc/png-gap/`.
+2. Paragraph spacing drift on pages of wholly inserted paragraphs
+   (`w:pPr/w:rPr/w:ins` with heading styles, bottom borders, `w:tabs num`):
+   our lines sit 4pt higher from the first line and the gap after a heading
+   block differs (15.1 vs 67.0 on a two-page decree). Needs a line-by-line
+   measurement against the Word export; general paragraph-spacing rules.
+3. Cover-page redlines with many anchored pictures and text boxes
+   (`anchor` appears in 53% of the worst 30 against 18% overall): the title
+   text box lands in the body and the cover picture on page 2 (8.3 vs 68.8).
+   Floating-object layout, not markup.
+4. Font resolution: a Verdana-styled list prints in DejaVu Sans Mono (28.3
+   vs 75.1) although `fonts/` has Verdana; check style-based `rFonts` and
+   the Greek-glyph fallback choice.
+5. Table-heavy redlines with dozens of inserted/deleted rows, deleted fields
+   and comments (the four 6–7-point documents in the comments set, 9–11
+   pages each; the competitor scores 5–6 there too).
+6. Remaining page-count misses (11): a portrait/landscape document at 9
+   pages against Word's 17, three siblings at one page short with row
+   revisions and deleted fields, one with 543 deleted marks and 52 row
+   revisions, one with 14 deleted pictures.
+7. Cosmetic: no change bars in headers/footers (the marks themselves print),
+   bars stop at the line box, per-word strikes, no strike/underline lines on
+   deleted/inserted pictures, list labels uncoloured, two bars per table row.
+
 ## Out of scope
 
 - Revision balloons (deletions / formatting in the margin pane).
