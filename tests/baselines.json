@@ -3268,6 +3268,16 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/center-tab-inline-image": {
+    "jaccard": 0.9587,
+    "ssim": 0.9946,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
   "cases/centered-list-marker": {
     "jaccard": 0.7198,
     "ssim": 0.9806,
@@ -5105,6 +5115,16 @@
     "ssim": 0.8241,
     "text_boundary": 1.0,
     "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/keep-next-inline-image": {
+    "jaccard": 0.9372,
+    "ssim": 0.9745,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 1.0,
@@ -7417,6 +7437,16 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/seq-heading-reset": {
+    "jaccard": 0.8144,
+    "ssim": 0.9489,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9091,
+    "a11y_text": 1.0
+  },
   "cases/shifted-text-position-7-mixed0-mark0": {
     "jaccard": 0.8156,
     "ssim": 0.9839,
@@ -8136,6 +8166,36 @@
     "ua_deficit": 0,
     "a11y_struct": 0.4167,
     "a11y_text": 0.1365
+  },
+  "cases/toc-section-page-labels": {
+    "jaccard": 0.6751,
+    "ssim": 0.8327,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 20,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4167,
+    "a11y_text": 0.1398
+  },
+  "cases/toc-table-cell-targets": {
+    "jaccard": 0.6636,
+    "ssim": 0.8033,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 2,
+    "ua_deficit": 0,
+    "a11y_struct": 0.3158,
+    "a11y_text": 0.1527
+  },
+  "cases/toc-table-of-figures-style": {
+    "jaccard": 0.6681,
+    "ssim": 0.8303,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 29,
+    "ua_deficit": 0,
+    "a11y_struct": 0.4706,
+    "a11y_text": 0.3122
   },
   "cases/torture_test": {
     "jaccard": 0.6858,
@@ -9013,8 +9073,8 @@
     "a11y_text": 0.9083
   },
   "scraped/catalan_university_transfer_offer": {
-    "jaccard": 0.6311,
-    "ssim": 0.8341,
+    "jaccard": 0.8163,
+    "ssim": 0.886,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -9135,7 +9195,7 @@
     "a11y_text": 0.9895
   },
   "scraped/croatian_grant_guidelines": {
-    "jaccard": 0.5345,
+    "jaccard": 0.5344,
     "ssim": 0.7397,
     "text_boundary": 0.7382,
     "convert_ms": 270.5,

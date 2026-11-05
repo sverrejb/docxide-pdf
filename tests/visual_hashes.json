@@ -1074,6 +1074,9 @@
   "cases/center-body-list-height-center-space1": [
     "02e906bd7005ebbe803e17865bd5c4204efa93e1c5db5021daf372e23eeb81db"
   ],
+  "cases/center-tab-inline-image": [
+    "1a5d4e2f90b7093239c33bfd5345f746bcfa498626ec948fe9db5a95102b345d"
+  ],
   "cases/centered-list-marker": [
     "73c02d113e61420c1c787d8be1c62438ef003cf6abf1f7f651b3ae6c742d7458"
   ],
@@ -1643,6 +1646,10 @@
   ],
   "cases/justify-mixed-script-footnote": [
     "bae63e7c58d6e23f36d0175ccb58b625366d8d54c25d8d74d29c0513b43e6725"
+  ],
+  "cases/keep-next-inline-image": [
+    "6bcc687e1fa6ff660b20b7c53261b587e2105b493eccd490a1bffc441c4cff21",
+    "49d2dc6809a7d68b0f80fb92166917e82000f8ca5451ccac0af4a96dace4138a"
   ],
   "cases/leading-anchor-prefix0-offset80-behind0": [
     "b50a7007d150fe1090021acdddb6c39381fecfbfb511b47f4514317269717d6d"
@@ -2356,6 +2363,9 @@
   "cases/seq-fields": [
     "c530ecc4fbd0735fd43e4c0749c26f44b856529f1fd24b93dd5d98d11253b788"
   ],
+  "cases/seq-heading-reset": [
+    "3ea01d43b2e92d26886bdbb445eaa306ca71d8388512f43990707697e390b527"
+  ],
   "cases/shifted-text-position-7-mixed0-mark0": [
     "075283c57ba5d50940428cef58f86d1d276de3853239ac2922993a28c7a9fb36"
   ],
@@ -2585,6 +2595,16 @@
   ],
   "cases/toc-placeholder": [
     "d0c186999012728f42446edc6d0194f0a7671ab1a7c23ea1e3763b59b67fdc7d"
+  ],
+  "cases/toc-section-page-labels": [
+    "8eb5ea454aaebdcd37e8b5635d2a6a541b9d40fb524e2088e346c3c8cd40515a",
+    "9cd865641241853e769d8c62434b3da469117b6b6aba5d2af7fe0e0031cb49e5"
+  ],
+  "cases/toc-table-cell-targets": [
+    "8ae4946a2ff2673164ed360c00a07a7f9e4874db80a9ad7cb5701dfd7f90fb75"
+  ],
+  "cases/toc-table-of-figures-style": [
+    "72aa85a539921889b1d0cf6368d797dbc2374a7e2b38b3aeff996eca6cb9c9df"
   ],
   "cases/torture_test": [
     "72ce56fb939e63d212375bd755a71f746a68dd6ac6c485b9f67b059cb85f3a81",
@@ -3200,7 +3220,7 @@
     "6e3e1e2d71288921e28c65a433a52a9bd0c26275b451cf14290ac6513b3f94ad"
   ],
   "scraped/catalan_university_transfer_offer": [
-    "ab46652a918847bb275082894de3b55a990e1583a523b98a6d2a56ed5b31141d"
+    "9f57ad6da596f513d0e5079ef5cd7643ffff35c5174cb6bb6d9ba299c7fdb5bc"
   ],
   "scraped/centrifugal_water_chillers": [
     "26a9841b79a1a7ab855f8fee79bf232976e08c69971501bacf2edf2c060d5998",
@@ -3310,7 +3330,7 @@
     "106bbe72e180dd218a9def36fb2b04bd811c29d87f57f6df73770c52fba84dcd"
   ],
   "scraped/croatian_grant_guidelines": [
-    "615c0e477372aad3eac8498f27f7c7d34bd943c80bae20e9660e13d12c045e56",
+    "35c46748dcfae1f94ac9a81b0c5f0c43f9c745f2b6e41f287874a508873b5f02",
     "8067a48a7501a81c5afeb5b83505f47979e90aa51a90a71eb0b540dfc084f124",
     "8e3d23ef3d2581c998e645f083be40637535b728bbef3989697ac4a2eaee01d5",
     "de76e5be27fd80ac488a857b45eeda45b2a1a1ffed8daf9cf7e7ae978ee130b7",
