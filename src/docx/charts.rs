@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io::{Read, Seek};
 
 use crate::model::{
-    BarGrouping, Chart, ChartAxis, ChartLegend, ChartSeries, ChartType, InlineChart,
+    BarGrouping, BarShape, Chart, ChartAxis, ChartLegend, ChartSeries, ChartType, InlineChart,
     LegendPosition, MarkerSymbol, View3D,
 };
 
@@ -289,6 +289,14 @@ fn parse_view_3d(chart_node: roxmltree::Node, type_node: roxmltree::Node) -> Vie
         rot_y: num(view, "rotY", 20.0),
         depth: num(view, "depthPercent", 100.0) / 100.0,
         gap_depth: num(Some(type_node), "gapDepth", 150.0) / 100.0,
+        shape: match chart_attr(type_node, "shape") {
+            Some("cylinder") => BarShape::Cylinder,
+            Some("cone") => BarShape::Cone,
+            Some("coneToMax") => BarShape::ConeToMax,
+            Some("pyramid") => BarShape::Pyramid,
+            Some("pyramidToMax") => BarShape::PyramidToMax,
+            _ => BarShape::Box,
+        },
     }
 }
 

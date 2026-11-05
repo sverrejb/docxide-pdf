@@ -4,7 +4,7 @@ use pdf_writer::{Content, Name, Str};
 
 use crate::fonts::{FontEntry, to_winansi_bytes};
 use crate::model::{
-    BarGrouping, Chart, ChartType, InlineChart, LegendPosition, MarkerSymbol, View3D,
+    BarGrouping, BarShape, Chart, ChartType, InlineChart, LegendPosition, MarkerSymbol, View3D,
 };
 
 use super::chart_legend::{
@@ -341,33 +341,155 @@ impl View3D {
     }
 }
 
-/// A 3-D bar: its right side and top in the series colour shaded as Word's
-/// lighting draws them (sampled at every probed rotation), then the front.
-fn draw_prism(
+/// A 3-D bar standing on its front face's bottom edge (x, y), `w` wide, `h`
+/// tall and (dx, dy) deep, its bottom and top sections scaled by `taper`
+/// about the bar's axis (1 for a box or cylinder, 0 at a cone's or
+/// pyramid's tip). Faces take the
+/// series colour shaded as Word's lighting draws them, sampled at every
+/// probed rotation: box front 1.0, right 0.63, top 0.76; pyramid front 1.06,
+/// right 0.69; round solids run 0.72 → 1.07 (at 45%) → 0.80 left to right.
+fn draw_bar_3d(
     content: &mut Content,
     color: Option<[u8; 3]>,
-    x: f32,
-    y: f32,
-    w: f32,
-    h: f32,
+    shape: BarShape,
+    (x, y, w, h): (f32, f32, f32, f32),
     (dx, dy): (f32, f32),
+    (bottom, top): (f32, f32),
 ) {
     let base = color.unwrap_or([0, 0, 0]);
-    // The parallelogram from (px, py) along (ax, ay), swept back by (dx, dy).
-    let face = |content: &mut Content, k: f32, px: f32, py: f32, ax: f32, ay: f32| {
-        fill_rgb(content, base.map(|v| (v as f32 * k).round() as u8));
-        content.move_to(px, py);
-        content.line_to(px + ax, py + ay);
-        content.line_to(px + ax + dx, py + ay + dy);
-        content.line_to(px + dx, py + dy);
-        content.close_path();
+    let shade = |k: f32| base.map(|v| (v as f32 * k).round().min(255.0) as u8);
+    let fill = |content: &mut Content, k: f32, pts: &[(f32, f32)]| {
+        fill_rgb(content, shade(k));
+        polygon(content, pts);
         content.fill_nonzero();
     };
-    face(content, 0.63, x + w, y, 0.0, h);
-    face(content, 0.76, x, y + h, w, 0.0);
-    fill_rgb(content, base);
-    content.rect(x, y, w, h);
-    content.fill_nonzero();
+    // Where a point of the bottom's outline at (u across, v deep), both
+    // 0..1, sits at height `z` on a section scaled about the axis.
+    let at = |u: f32, v: f32, z: f32| {
+        let s = if z > 0.0 { top } else { bottom };
+        let (u, v) = (0.5 + (u - 0.5) * s, 0.5 + (v - 0.5) * s);
+        (x + u * w + v * dx, y + v * dy + z)
+    };
+    match shape {
+        BarShape::Box | BarShape::Pyramid | BarShape::PyramidToMax => {
+            let (front, side) = if shape == BarShape::Box {
+                (1.0, 0.63)
+            } else {
+                (1.06, 0.69)
+            };
+            fill(
+                content,
+                side,
+                &[
+                    at(1.0, 0.0, 0.0),
+                    at(1.0, 1.0, 0.0),
+                    at(1.0, 1.0, h),
+                    at(1.0, 0.0, h),
+                ],
+            );
+            if top > 0.0 {
+                fill(
+                    content,
+                    0.76,
+                    &[
+                        at(0.0, 0.0, h),
+                        at(1.0, 0.0, h),
+                        at(1.0, 1.0, h),
+                        at(0.0, 1.0, h),
+                    ],
+                );
+            }
+            fill(
+                content,
+                front,
+                &[
+                    at(0.0, 0.0, 0.0),
+                    at(1.0, 0.0, 0.0),
+                    at(1.0, 0.0, h),
+                    at(0.0, 0.0, h),
+                ],
+            );
+        }
+        BarShape::Cylinder | BarShape::Cone | BarShape::ConeToMax => {
+            const STEPS: usize = 48;
+            let ring = |z: f32| -> Vec<(f32, f32)> {
+                (0..STEPS)
+                    .map(|i| {
+                        let t = i as f32 / STEPS as f32 * std::f32::consts::TAU;
+                        at(0.5 + 0.5 * t.cos(), 0.5 + 0.5 * t.sin(), z)
+                    })
+                    .collect()
+            };
+            let cap = ring(h);
+            let mut body = ring(0.0);
+            body.extend(&cap);
+            let body = convex_hull(body);
+            let (x0, x1) = body
+                .iter()
+                .fold((f32::MAX, f32::MIN), |(a, b), p| (a.min(p.0), b.max(p.0)));
+            let (y0, y1) = body
+                .iter()
+                .fold((f32::MAX, f32::MIN), |(a, b), p| (a.min(p.1), b.max(p.1)));
+            content.save_state();
+            polygon(content, &body);
+            content.clip_nonzero();
+            content.end_path();
+            const STRIPS: usize = 24;
+            let sw = (x1 - x0) / STRIPS as f32;
+            for i in 0..STRIPS {
+                let t = (i as f32 + 0.5) / STRIPS as f32;
+                let k = if t < 0.45 {
+                    0.72 + 0.35 * t / 0.45
+                } else {
+                    1.07 - 0.27 * (t - 0.45) / 0.55
+                };
+                fill_rgb(content, shade(k));
+                content.rect(x0 + i as f32 * sw, y0, sw + 0.25, y1 - y0);
+                content.fill_nonzero();
+            }
+            content.restore_state();
+            if top > 0.0 {
+                fill(content, 0.76, &cap);
+            }
+        }
+    }
+}
+
+fn polygon(content: &mut Content, pts: &[(f32, f32)]) {
+    if let Some(&(x, y)) = pts.first() {
+        content.move_to(x, y);
+        for &(x, y) in &pts[1..] {
+            content.line_to(x, y);
+        }
+        content.close_path();
+    }
+}
+
+/// Andrew's monotone chain, counter-clockwise.
+fn convex_hull(mut pts: Vec<(f32, f32)>) -> Vec<(f32, f32)> {
+    pts.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+    let cross = |o: (f32, f32), a: (f32, f32), b: (f32, f32)| {
+        (a.0 - o.0) * (b.1 - o.1) - (a.1 - o.1) * (b.0 - o.0)
+    };
+    let mut hull: Vec<(f32, f32)> = Vec::with_capacity(pts.len() + 1);
+    for pass in [false, true] {
+        let start = hull.len();
+        let iter: Box<dyn Iterator<Item = &(f32, f32)>> = if pass {
+            Box::new(pts.iter().rev())
+        } else {
+            Box::new(pts.iter())
+        };
+        for &p in iter {
+            while hull.len() >= start + 2
+                && cross(hull[hull.len() - 2], hull[hull.len() - 1], p) <= 0.0
+            {
+                hull.pop();
+            }
+            hull.push(p);
+        }
+        hull.pop();
+    }
+    hull
 }
 
 #[derive(Clone, Copy)]
@@ -419,14 +541,25 @@ fn draw_chart_series(
                 d.project(thick * d.depth * d.gap_depth / 2.0)
             });
             let (cat_origin, val_origin) = (cat_origin + shift_x, val_origin + shift_y);
-            let prism_back = depth.map(|d| d.project(thick * d.depth));
+            let solid = depth.map(|d| (d.shape, d.project(thick * d.depth)));
+            // `stack` is the whole column's length: a cone or pyramid narrows
+            // over the stack, a `ToMax` one over the value axis.
             let bar = |content: &mut Content,
                        color: Option<[u8; 3]>,
                        cat_pos: f32,
                        val_pos: f32,
-                       len: f32| {
-                if let Some(back) = prism_back {
-                    draw_prism(content, color, cat_pos, val_pos, thick, len, back);
+                       len: f32,
+                       stack: f32| {
+                if let Some((shape, back)) = solid {
+                    let span = match shape {
+                        BarShape::Cone | BarShape::Pyramid => stack,
+                        BarShape::ConeToMax | BarShape::PyramidToMax => val_extent,
+                        BarShape::Box | BarShape::Cylinder => f32::INFINITY,
+                    };
+                    let lo = val_pos - val_origin;
+                    let taper = (1.0 - lo / span, 1.0 - (lo + len) / span);
+                    let rect = (cat_pos, val_pos, thick, len);
+                    draw_bar_3d(content, color, shape, rect, back, taper);
                     return;
                 }
                 set_color(content, color);
@@ -449,22 +582,24 @@ fn draw_chart_series(
                     } else {
                         0.0
                     };
+                    let lens: Vec<f32> = c
+                        .series
+                        .iter()
+                        .map(|series| {
+                            let raw = series.values.get(ci).copied().unwrap_or(0.0);
+                            let val = if is_percent_stacked && cat_total > 0.0 {
+                                (raw / cat_total) * 100.0
+                            } else {
+                                raw
+                            };
+                            (val / axis_max) * val_extent
+                        })
+                        .collect();
+                    let stack: f32 = lens.iter().sum();
                     let mut cumulative = 0.0;
-                    for series in c.series.iter() {
-                        let raw = series.values.get(ci).copied().unwrap_or(0.0);
-                        let val = if is_percent_stacked && cat_total > 0.0 {
-                            (raw / cat_total) * 100.0
-                        } else {
-                            raw
-                        };
-                        let len = (val / axis_max) * val_extent;
-                        bar(
-                            content,
-                            series.color,
-                            group_pos,
-                            val_origin + cumulative,
-                            len,
-                        );
+                    for (series, len) in c.series.iter().zip(lens) {
+                        let pos = val_origin + cumulative;
+                        bar(content, series.color, group_pos, pos, len, stack);
                         cumulative += len;
                     }
                 } else {
@@ -472,7 +607,7 @@ fn draw_chart_series(
                         let val = series.values.get(ci).copied().unwrap_or(0.0);
                         let len = (val / axis_max) * val_extent;
                         let pos = group_pos + si as f32 * thick;
-                        bar(content, series.color, pos, val_origin, len);
+                        bar(content, series.color, pos, val_origin, len, len);
                         if c.show_values && !horizontal {
                             bar_tops.push(BarTop {
                                 x: pos + thick / 2.0,

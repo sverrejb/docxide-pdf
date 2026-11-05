@@ -97,6 +97,19 @@ pub struct View3D {
     pub rot_y: f32,
     pub depth: f32,
     pub gap_depth: f32,
+    pub shape: BarShape,
+}
+
+/// `c:shape`: a 3-D bar's solid. The `ToMax` kinds are cut from a cone or
+/// pyramid whose tip sits at the value axis maximum.
+#[derive(Clone, Copy, PartialEq)]
+pub enum BarShape {
+    Box,
+    Cylinder,
+    Cone,
+    ConeToMax,
+    Pyramid,
+    PyramidToMax,
 }
 
 pub struct InlineChart {
