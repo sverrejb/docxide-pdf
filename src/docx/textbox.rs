@@ -14,7 +14,7 @@ use super::color::{
 use super::images::{extent_dimensions, parse_anchor_position, vml_z_order};
 use super::styles::{ThemeFillStyle, ThemeFonts};
 use super::{
-    DML_NS, MC_NS_TOP, OFFICE_NS, ParseContext, VML_NS, WML_NS, WPD_NS, WPS_NS, angle_attr,
+    DML_NS, MC_NS_TOP, OFFICE_NS, ParseContext, VML_NS, WML_NS, WPD_NS, WPG_NS, WPS_NS, angle_attr,
     dml as find_dml, dml_children as find_dml_all, emu_attr, emu_attr_opt, frac_attr, parse_pt,
     wps as find_wps,
 };
@@ -448,18 +448,28 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
     {
         return None;
     }
-    let has_no_fill = sp_pr.is_some_and(|sp| find_dml(sp, "noFill").is_some());
+    // `a:grpFill` takes the fill of the nearest enclosing group that has its
+    // own, never the shape style's fillRef.
+    let group_fill = sp_pr.is_some_and(|sp| find_dml(sp, "grpFill").is_some());
+    let fill_pr = if group_fill {
+        wsp.ancestors()
+            .filter_map(|g| g.children().find(|n| n.has_tag_name((WPG_NS, "grpSpPr"))))
+            .find(|&pr| find_dml(pr, "grpFill").is_none())
+    } else {
+        sp_pr
+    };
+    let has_no_fill = fill_pr.is_some_and(|sp| find_dml(sp, "noFill").is_some());
     // Explicit a:noFill overrides any style-ref (fillRef) fill
     let fill: Option<ShapeFill> = if has_no_fill {
         None
     } else {
-        sp_pr
+        fill_pr
             .and_then(|sp| {
                 parse_solid_fill(sp, ctx.theme)
                     .map(ShapeFill::Solid)
                     .or_else(|| parse_gradient_fill(sp, ctx.theme))
             })
-            .or_else(|| parse_style_fill(wsp, ctx.theme))
+            .or_else(|| (!group_fill).then(|| parse_style_fill(wsp, ctx.theme))?)
     };
 
     let ln_node = sp_pr.and_then(|sp| find_dml(sp, "ln"));
