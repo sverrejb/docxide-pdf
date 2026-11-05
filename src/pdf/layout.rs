@@ -2126,6 +2126,8 @@ pub(super) fn build_paragraph_lines(
     // continuously across spaces inside an underlined run, but not across a
     // space that belongs to a neighbouring non-underlined run).
     let mut pending_space_underline = false;
+    // The space's run is struck (a deletion): Word's strike bridges the space.
+    let mut pending_space_strike = false;
     // Whether the pending spaces came from a `w:rtl` run (`WordChunk::gap_rtl`).
     let mut space_rtl = false;
     let mut pending_space_double = false;
@@ -2437,7 +2439,8 @@ pub(super) fn build_paragraph_lines(
             if space_count > 0 {
                 pending_real_space = true;
                 space_rtl = run.rtl;
-                pending_space_underline = run.underline;
+                pending_space_underline = run.underline || run.strikethrough;
+                pending_space_strike = run.strikethrough && !run.underline;
                 pending_space_double = run.double_underline;
                 pending_space_color = run.color;
                 pending_space_border = run.border.clone();
@@ -2737,6 +2740,12 @@ pub(super) fn build_paragraph_lines(
                         current_x,
                         pending_space_w,
                     ));
+                    if pending_space_strike
+                        && let Some(c) = current_chunks.last_mut()
+                    {
+                        c.underline = false;
+                        c.strikethrough = true;
+                    }
                 }
                 current_x += pending_space_w;
                 pending_space_w = 0.0;
@@ -2920,6 +2929,12 @@ pub(super) fn build_paragraph_lines(
                     current_x - pending_space_w,
                     pending_space_w,
                 ));
+                if pending_space_strike
+                    && let Some(c) = current_chunks.last_mut()
+                {
+                    c.underline = false;
+                    c.strikethrough = true;
+                }
             }
             pending_space_w = 0.0;
             pending_space_count = 0;
@@ -2964,7 +2979,8 @@ pub(super) fn build_paragraph_lines(
                 trailing_spaces as f32 * word_space_width(run, entry, eff_fs, "", &mut prev_char);
             pending_real_space = true;
             space_rtl = run.rtl;
-            pending_space_underline = run.underline;
+            pending_space_underline = run.underline || run.strikethrough;
+            pending_space_strike = run.strikethrough && !run.underline;
             pending_space_double = run.double_underline;
             pending_space_color = run.color;
             pending_space_border = run.border.clone();
@@ -3258,6 +3274,8 @@ pub(super) fn build_tabbed_line(
     // Underline state of the run that emitted the pending whitespace, so an
     // underline bridges spaces inside an underlined run (see build_paragraph_lines).
     let mut pending_space_underline = false;
+    // The space's run is struck (a deletion): Word's strike bridges the space.
+    let mut pending_space_strike = false;
     let mut pending_space_double = false;
     let mut pending_space_color: Option<[u8; 3]> = None;
     let mut pending_space_border: Option<ParagraphBorder> = None;
@@ -3570,7 +3588,8 @@ pub(super) fn build_tabbed_line(
                 pending_space_w += space_count as f32
                     * word_space_width(run, entry, eff_fs, source, &mut prev_char);
                 if space_count > 0 {
-                    pending_space_underline = run.underline;
+                    pending_space_underline = run.underline || run.strikethrough;
+                    pending_space_strike = run.strikethrough && !run.underline;
                     pending_space_double = run.double_underline;
                     pending_space_color = run.color;
                     pending_space_border = run.border.clone();
@@ -3595,6 +3614,12 @@ pub(super) fn build_tabbed_line(
                             current_x,
                             pending_space_w,
                         ));
+                        if pending_space_strike
+                            && let Some(c) = all_chunks.last_mut()
+                        {
+                            c.underline = false;
+                            c.strikethrough = true;
+                        }
                     }
                     current_x += pending_space_w;
                     pending_space_w = 0.0;
@@ -3667,7 +3692,8 @@ pub(super) fn build_tabbed_line(
             if trailing_spaces > 0 {
                 pending_space_w += trailing_spaces as f32
                     * word_space_width(run, entry, eff_fs, "", &mut prev_char);
-                pending_space_underline = run.underline;
+                pending_space_underline = run.underline || run.strikethrough;
+                pending_space_strike = run.strikethrough && !run.underline;
                 pending_space_double = run.double_underline;
                 pending_space_color = run.color;
                 pending_space_border = run.border.clone();
