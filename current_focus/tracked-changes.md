@@ -208,23 +208,42 @@ behind, 17 of those thirty or more.
   (1.1, 1.1, 1.1 instead of 1.2, 1.3, 1.4).
 - `titlePg w:val="0"`, deleted section breaks (above).
 
+**Fixed 2026-11-05 (second round, three commits on the branch)**
+- Tabs after a wrapped word resolve from the new line's pen (probe
+  p19_tab_wrap: "Hub<tab>30<tab>$45" at 72/108/144 after a wrap at the
+  space; a tab that wraps by itself still lands on the new line's first
+  stop). The inventory list 24.9 → 84.0; 317 set 67.9 → 68.2.
+- A `w:pStyle` naming a missing or character style falls back to the
+  default paragraph style, not docDefaults (the decree's header pStyle is
+  "BodyTextIndentChar": Word prints Normal's Arial 9, our Calibri 11 + 8pt
+  after pushed the body 4pt down). General rule, final view too.
+- List numbering in markup: deleted items number by the original stream
+  (plain + deleted), live items by the final one (plain + inserted), a
+  live item whose numbers differ shows both, original first (probe
+  p11b: 1, 2, 3, "4.2.", 3, 4, 5, "6.5."; an all-deleted list 1, 2, 3).
+  Word strikes the original and underlines the final number in its
+  numbering-change colour (0078D4 with one author); ours print plain.
+  The decree 15.1 → 72.6.
+
 **Remaining gaps, ranked by evidence**
-1. Tab-separated revised lines wrap differently after the first line (an
-   inventory list: Word keeps "Hub 30 $45" on line two, we push "30 $45" to a
-   third line, and everything below shifts: 24.9 vs 75.1). A tabs-after-wrap
-   rule, not markup-specific; the ink diff is in `tests/output/tc/png-gap/`.
-2. Paragraph spacing drift on pages of wholly inserted paragraphs
-   (`w:pPr/w:rPr/w:ins` with heading styles, bottom borders, `w:tabs num`):
-   our lines sit 4pt higher from the first line and the gap after a heading
-   block differs (15.1 vs 67.0 on a two-page decree). Needs a line-by-line
-   measurement against the Word export; general paragraph-spacing rules.
-3. Cover-page redlines with many anchored pictures and text boxes
-   (`anchor` appears in 53% of the worst 30 against 18% overall): the title
-   text box lands in the body and the cover picture on page 2 (8.3 vs 68.8).
-   Floating-object layout, not markup.
-4. Font resolution: a Verdana-styled list prints in DejaVu Sans Mono (28.3
-   vs 75.1) although `fonts/` has Verdana; check style-based `rFonts` and
-   the Greek-glyph fallback choice.
+3. Cover-page redlines (8.9 vs 68.8, Word 10 pages, ours 8): paragraph 1
+   holds a deleted full-page picture (615 × 797pt, wrapSquare, anchored
+   −71.5pt from the column and −82.7pt above the paragraph) plus the
+   inserted text of the whole first page in one paragraph of `w:br` lines.
+   Word prints that text full-width at the top of page 1 (over the
+   picture); we wrap it one letter per line in the sliver beside the
+   picture ("A", "C", "B", "-" at x 72–79), so page 1 holds the whole
+   paragraph and the document loses two pages. Rule to measure: a wrapped
+   float that leaves less than some minimum beside it (Word: the lines
+   ignore it, or the float becomes top-and-bottom) — probe a wrapSquare
+   picture wider than the column with a text paragraph anchored to it.
+4. Greek letters in an Aptos document (28.3 vs 75.1): the document has no
+   `rFonts` at all (docDefaults Aptos); Word for Mac's reference sets the
+   Greek letters in Verdana (its per-character fallback for a face without
+   the glyph; the Mac's Aptos lacks Greek, our vendored Aptos 2.01 has it)
+   and we set them in DejaVu Sans Mono from the fontTable. Lines then wrap
+   differently ("presentations.Αα" / "Alpha"). Decide whether to model the
+   Mac fallback (Verdana) or keep Aptos; the fixtures are Windows exports.
 5. Table-heavy redlines with dozens of inserted/deleted rows, deleted fields
    and comments (the four 6–7-point documents in the comments set, 9–11
    pages each; the competitor scores 5–6 there too).

@@ -414,13 +414,16 @@ Open queue from the large-corpus and focus-fixture rounds:
   remaining gaps are in `current_focus/tracked-changes.md`. door_air
   (#259/#260) is the fixture whose reference shows markup, in balloons (out
   of scope).
-- Next steps, in order: (1) tabs after a wrapped line in tab-separated
-  text (a one-page inventory list scores 25 where Word's layout differs by
-  one wrap); (2) paragraph spacing of wholly inserted heading paragraphs
-  with bottom borders (4pt page-top drift, gap after the heading block);
-  (3) cover pages of anchored pictures and text boxes (title box lands in
-  the body, picture on page 2); (4) a Verdana-styled run printing in DejaVu
-  Sans Mono; (5) `reference-markup.pdf` support in the harness so fixtures
+- Done 2026-11-05: tabs after a wrapped word resolve from the new line's
+  pen; a `w:pStyle` naming a missing or character style falls back to the
+  default paragraph style (a header did it and pushed a body 4pt); markup
+  list numbering keeps an original and a final stream (deleted items show
+  the original number, live items the final, both when they differ).
+- Next steps, in order: (3) a wrapSquare picture wider than the column
+  (Word prints the anchored text full-width over it, we wrap it one letter
+  per line beside it: a cover page loses two pages); (4) Greek letters in an
+  Aptos document set in Verdana by Word for Mac's per-character fallback,
+  in DejaVu Sans Mono by us; (5) `reference-markup.pdf` support in the harness so fixtures
   can carry a markup reference; (6) cosmetic markup: bars in headers /
   footers and over the paragraph's space before/after, continuous strikes,
   lines on deleted / inserted pictures, coloured list labels; (7) moves
