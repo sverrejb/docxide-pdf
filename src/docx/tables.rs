@@ -817,6 +817,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         ctx.numbering,
                         cell_lists,
                         Some(&mark),
+                        super::numbering::item_revision(p),
                     );
                     let (mut indents, indent_chars) = super::paragraph::resolve_indents(
                         ppr,

@@ -87,6 +87,10 @@ fn list_numbering(num_fmt: &str, label: &str) -> ListNumbering {
 pub(super) struct ListCounters {
     /// Current value per (abstract list, level).
     pub(super) counters: HashMap<(u32, u8), u32>,
+    /// The same counters as the original document had them, before the
+    /// tracked changes: deleted items count, inserted ones do not
+    /// (`ItemRevision`). Equal to `counters` outside the markup view.
+    pub(super) original: HashMap<(u32, u8), u32>,
     /// Level most recently used per abstract list.
     pub(super) last_seen_level: HashMap<u32, u8>,
     /// (numId, level) startOverrides already applied.
@@ -532,6 +536,31 @@ fn style_matches_owner(
     false
 }
 
+/// A list item's tracked state, as it numbers in the markup view.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub(super) enum ItemRevision {
+    /// Plain, or any item outside the markup view.
+    Live,
+    /// Its paragraph mark is a tracked insertion: not in the original numbering.
+    Inserted,
+    /// Mark and every run are tracked deletions: not in the final numbering.
+    Deleted,
+}
+
+pub(super) fn item_revision(p: roxmltree::Node) -> ItemRevision {
+    if !super::markup() {
+        return ItemRevision::Live;
+    }
+    if fully_deleted_item(p) {
+        return ItemRevision::Deleted;
+    }
+    let mark_inserted = wml(p, "pPr")
+        .and_then(|ppr| wml(ppr, "rPr"))
+        .and_then(|rpr| wml(rpr, "ins"))
+        .is_some();
+    if mark_inserted { ItemRevision::Inserted } else { ItemRevision::Live }
+}
+
 /// A list paragraph whose mark and every run are tracked deletions.
 pub(super) fn fully_deleted_item(p: roxmltree::Node) -> bool {
     let mark_deleted = wml(p, "pPr")
@@ -559,9 +588,11 @@ pub(super) fn parse_list_info(
     numbering: &NumberingInfo,
     lists: &mut ListCounters,
     mark: Option<&Run>,
+    revision: ItemRevision,
 ) -> ListLabelInfo {
     let ListCounters {
         counters,
+        original,
         last_seen_level,
         applied_overrides,
     } = lists;
@@ -639,6 +670,7 @@ pub(super) fn parse_list_info(
             };
             if restarts {
                 counters.remove(&(abs_key, deeper));
+                original.remove(&(abs_key, deeper));
             }
         }
     }
@@ -658,24 +690,32 @@ pub(super) fn parse_list_info(
         // First time seeing this numId+ilvl override — reset the
         // shared counter so the next increment produces restart.
         counters.insert((abs_key, ilvl), restart - 1);
+        original.insert((abs_key, ilvl), restart - 1);
     }
 
     let start = override_start.unwrap_or(def.start);
-    // Markup view: a fully deleted item shows the counter as it stands and
-    // does not advance it (Word for Mac probe 2026-11-05: items 1, inserted
-    // 2, deleted 2, 3). An item whose mark alone is deleted still has live
-    // text and numbers normally (corpus: 1.2, 1.3, 1.4 under deleted marks).
-    // ponytail: Word prints a deleted item's original number, which drifts
-    // from this after several deleted items in a row.
-    // The caller flags a fully deleted item on its mark run (`fully_deleted_item`).
-    let deleted = super::markup() && mark.is_some_and(|m| m.revised);
-    let current_counter = if deleted {
-        counters.get(&(abs_key, ilvl)).copied().unwrap_or(start)
-    } else {
-        *counters
+    // Markup view: Word numbers a deleted item by the original document's
+    // numbering (plain and deleted items) and a live one by the final
+    // numbering (plain and inserted); a live item whose two numbers differ
+    // shows both, the original first (Word for Mac probe p11b, 2026-11-05:
+    // A plain, B C deleted, D plain, E F inserted, G deleted, H plain number
+    // 1, 2, 3, "4.2.", 3, 4, 5, "6.5."; a list of only deleted items counts
+    // 1, 2, 3). An item whose mark alone is deleted still has live text and
+    // numbers as live (corpus: 1.2, 1.3, 1.4 under deleted marks).
+    let advance = |stream: &mut HashMap<(u32, u8), u32>| {
+        *stream
             .entry((abs_key, ilvl))
             .and_modify(|c| *c += 1)
             .or_insert(start)
+    };
+    let (final_counter, original_counter) = match revision {
+        ItemRevision::Live => (Some(advance(counters)), Some(advance(original))),
+        ItemRevision::Inserted => (Some(advance(counters)), None),
+        ItemRevision::Deleted => (None, Some(advance(original))),
+    };
+    let (stream, current_counter) = match (final_counter, original_counter) {
+        (Some(c), _) => (&*counters, c),
+        (None, o) => (&*original, o.unwrap_or(start)),
     };
 
     let is_bullet = def.num_fmt == "bullet";
@@ -698,16 +738,16 @@ pub(super) fn parse_list_info(
         };
         (label, String::new())
     } else {
-        let expand = |template: &str| {
+        let expand = |template: &str, stream: &HashMap<(u32, u8), u32>, current: u32| {
             let mut label = template.to_string();
             for lvl_idx in 0..9u8 {
                 let placeholder = format!("%{}", lvl_idx + 1);
                 if label.contains(&placeholder) {
                     let ref_def = lookup_level(lvl_idx);
                     let lvl_counter = if lvl_idx == ilvl {
-                        current_counter
+                        current
                     } else {
-                        counters
+                        stream
                             .get(&(abs_key, lvl_idx))
                             .copied()
                             .unwrap_or(ref_def.map(|d| d.start).unwrap_or(1))
@@ -726,7 +766,15 @@ pub(super) fn parse_list_info(
             }
             label
         };
-        (expand(&def.lvl_text), expand(placeholder_span(&def.lvl_text)))
+        let mut label = expand(&def.lvl_text, stream, current_counter);
+        if let (Some(f), Some(o)) = (final_counter, original_counter)
+            && f != o
+        {
+            // ponytail: Word strikes the original number and underlines the
+            // final one in its numbering-change colour; both print plain here.
+            label = expand(&def.lvl_text, original, o) + &label;
+        }
+        (label, expand(placeholder_span(&def.lvl_text), stream, current_counter))
     };
     // The mark's caps reach the label too: uk_commercial's SH Schedule
     // Heading style numbers its empty paragraphs "SCHEDULE 1".
@@ -1003,6 +1051,7 @@ mod tests {
             &numbering,
             &mut lists,
             None,
+            ItemRevision::Live,
         );
         assert_eq!(info.label, "A)");
         assert_eq!(info.indent_left, 10.0);
@@ -1038,6 +1087,7 @@ mod tests {
             &numbering,
             &mut lists,
             None,
+            ItemRevision::Live,
         );
         assert_eq!(lvl0_info.label, "I.");
         let lvl1_info = parse_list_info(
@@ -1049,6 +1099,7 @@ mod tests {
             &numbering,
             &mut lists,
             None,
+            ItemRevision::Live,
         );
         // Without isLgl this would be "I.1."; isLgl forces %1 to decimal.
         assert_eq!(lvl1_info.label, "1.1.");
@@ -1084,6 +1135,7 @@ mod tests {
                 &numbering,
                 &mut lists,
                 None,
+                ItemRevision::Live,
             )
             .label
         };
@@ -1122,6 +1174,7 @@ mod tests {
                 &numbering,
                 &mut lists,
                 None,
+                ItemRevision::Live,
             )
         };
         // Owning style numbers.
@@ -1168,6 +1221,7 @@ mod tests {
             &numbering,
             &mut lists,
             None,
+            ItemRevision::Live,
         );
         assert_eq!(d1.label, "1.");
         let b2 = parse_list_info(
@@ -1179,7 +1233,61 @@ mod tests {
             &numbering,
             &mut lists,
             None,
+            ItemRevision::Live,
         );
         assert_eq!(b2.label, "2.");
+    }
+
+    #[test]
+    fn markup_numbers_deleted_items_by_the_original_stream() {
+        let mut numbering = NumberingInfo::default();
+        let def = LevelDef {
+            num_fmt: "decimal".into(),
+            lvl_text: "%1.".into(),
+            indent_left: 36.0,
+            indent_hanging: 18.0,
+            tab_stop: None,
+            start: 1,
+            label_font_size: None,
+            label_vert_align: None,
+            label_bold: None,
+            label_italic: None,
+            label_caps: None,
+            label_color: None,
+            suff: "tab".into(),
+            jc: Alignment::Left,
+            label_font: None,
+            is_lgl: false,
+            lvl_restart: None,
+            pstyle: None,
+        };
+        numbering
+            .abstract_nums
+            .insert("0".into(), HashMap::from([(0u8, def)]));
+        numbering.num_to_abstract.insert("1".into(), "0".into());
+        let mut lists = ListCounters::default();
+        let mut label = |revision| {
+            parse_list_info(
+                None,
+                Some("1"),
+                Some(0),
+                None,
+                &HashMap::new(),
+                &numbering,
+                &mut lists,
+                None,
+                revision,
+            )
+            .label
+        };
+        use ItemRevision::{Deleted, Inserted, Live};
+        // Word for Mac probe p11b: plain, deleted, deleted, plain, inserted,
+        // inserted, deleted, plain.
+        let got: Vec<String> =
+            [Live, Deleted, Deleted, Live, Inserted, Inserted, Deleted, Live]
+                .into_iter()
+                .map(&mut label)
+                .collect();
+        assert_eq!(got, ["1.", "2.", "3.", "4.2.", "3.", "4.", "5.", "6.5."]);
     }
 }

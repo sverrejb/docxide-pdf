@@ -114,6 +114,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         ctx.numbering,
         lists,
         Some(&mark),
+        super::numbering::item_revision(node),
     );
     let (mut indents, indent_chars) =
         resolve_indents(ppr, para_style, &numbering, &ctx.styles.defaults);
