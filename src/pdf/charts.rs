@@ -650,6 +650,10 @@ struct BarTop {
 const TITLE_PT: f32 = 18.0;
 const TITLE_BASELINE: f32 = 24.6;
 const TITLE_BAND: f32 = 30.0;
+/// A title's rich text without run properties of its own falls back to
+/// DrawingML's default face, not the theme's: Word draws it in Arial where
+/// every other label takes the minor font (torture_test, probe exports).
+pub(super) const TITLE_FONT: &str = "Arial";
 
 /// A data label's text: the value as the number format shows it, or as
 /// written when the format is General.
@@ -1161,9 +1165,13 @@ pub(super) fn render_chart(
         }
 
         if let Some(title) = &c.title {
-            let tw = text_width(title, TITLE_PT, label_font);
+            let (key, font) = match seen_fonts.get(TITLE_FONT) {
+                Some(e) => (e.pdf_name.as_str(), Some(e)),
+                None => (label_font_key, label_font),
+            };
+            let tw = text_width(title, TITLE_PT, font);
             let (tx, ty) = (x + (w - tw) / 2.0, y - TITLE_BASELINE);
-            show_text(content, label_font_key, TITLE_PT, tx, ty, title, label_font);
+            show_text(content, key, TITLE_PT, tx, ty, title, font);
         }
 
         for bar in &bar_tops {

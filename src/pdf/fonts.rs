@@ -345,9 +345,6 @@ fn collect_used_chars(
                 for series in &ic.chart.series {
                     chart_label_chars.extend(series.label.chars());
                 }
-                if let Some(title) = &ic.chart.title {
-                    chart_label_chars.extend(title.chars());
-                }
                 if let Some(ref cat_axis) = ic.chart.cat_axis {
                     for label in &cat_axis.labels {
                         chart_label_chars.extend(label.chars());
@@ -359,6 +356,16 @@ fn collect_used_chars(
             used.entry(doc.theme_minor_font.clone())
                 .or_default()
                 .extend(chart_label_chars);
+        }
+        let title_chars: HashSet<char> = all_paras
+            .iter()
+            .filter_map(|p| p.inline_chart.as_ref()?.chart.title.as_deref())
+            .flat_map(str::chars)
+            .collect();
+        if !title_chars.is_empty() {
+            used.entry(super::charts::TITLE_FONT.to_string())
+                .or_default()
+                .extend(title_chars);
         }
     }
 
