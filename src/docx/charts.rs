@@ -270,7 +270,7 @@ fn parse_chart_space(xml_content: &str, accent_colors: Vec<[u8; 3]>) -> Option<C
         data_table: chart_child(plot_area, "dTable").is_some(),
         // Word's default outline draws grey 133 at 600 dpi (torture_test).
         frame: chart_child(chart_space, "spPr").map_or(Some([0x85; 3]), extract_line_color),
-        view_3d: ["bar3DChart", "pie3DChart"]
+        view_3d: ["bar3DChart", "pie3DChart", "line3DChart", "area3DChart"]
             .iter()
             .any(|t| type_node.has_tag_name((CHART_NS, *t)))
             .then(|| parse_view_3d(chart_node, plot_area, type_node)),
@@ -345,9 +345,11 @@ fn detect_chart_type<'a>(
 
     let simple_types: &[(&str, ChartType)] = &[
         ("lineChart", ChartType::Line),
+        ("line3DChart", ChartType::Line),
         ("pieChart", ChartType::Pie),
         ("pie3DChart", ChartType::Pie),
         ("areaChart", ChartType::Area),
+        ("area3DChart", ChartType::Area),
         ("radarChart", ChartType::Radar),
         ("scatterChart", ChartType::Scatter),
         ("bubbleChart", ChartType::Bubble),

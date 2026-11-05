@@ -308,13 +308,16 @@ fn bar_slot(c: &Chart, cat_extent: f32, num_categories: usize) -> (f32, f32) {
 /// z sin rotX) from where it would sit on the front plane (five Word probes
 /// varying rotX, rotY, depthPercent and the chart width).
 /// Depth rows on a 3-D chart's floor: one per series when they stand one
-/// behind another, else one.
+/// behind another (3-D lines and areas always do), else one.
+/// ponytail: stacked 3-D areas still get a row per series.
 fn depth_rows(c: &Chart) -> usize {
     match c.chart_type {
         ChartType::Bar {
             grouping: BarGrouping::Standard,
             ..
-        } => c.series.len().max(1),
+        }
+        | ChartType::Line
+        | ChartType::Area => c.series.len().max(1),
         _ => 1,
     }
 }
@@ -375,6 +378,74 @@ impl View3D {
             h: s * inner.h,
         };
         (front, (s * dx, s * dy))
+    }
+}
+
+/// 3-D lines and areas: each series a depth row (as standard-grouped bars),
+/// a line a ribbon one bar depth deep through the category centres, an area
+/// a slab under it. Fronts take the series colour, ribbons and slab tops
+/// 0.82× and a slab's end 0.63× (line3d/area3d probes).
+/// ponytail: Word draws these with rAngAx 0 in true perspective (receding
+/// floor, slanted front); we use the right-angle projection.
+fn draw_ribbons(
+    c: &Chart,
+    content: &mut Content,
+    rect: PlotRect,
+    num_categories: usize,
+    axis_max: f32,
+    view: View3D,
+    area: bool,
+) {
+    let (group, thick) = bar_slot(c, rect.w, num_categories);
+    let row = thick * view.depth;
+    let back = view.project(row);
+    let shade = |color: Option<[u8; 3]>, k: f32| {
+        color
+            .unwrap_or([0, 0, 0])
+            .map(|v| (v as f32 * k).round() as u8)
+    };
+    for (si, series) in c.series.iter().enumerate().rev() {
+        let (ox, oy) = view.project(si as f32 * view.row_pitch(thick) + row * view.gap_depth / 2.0);
+        let pts: Vec<(f32, f32)> = series
+            .values
+            .iter()
+            .take(num_categories)
+            .enumerate()
+            .map(|(ci, &v)| {
+                let x = rect.x + (ci as f32 + 0.5) * group + ox;
+                (x, rect.y + oy + v / axis_max * rect.h)
+            })
+            .collect();
+        let (Some(&first), Some(&last)) = (pts.first(), pts.last()) else {
+            continue;
+        };
+        let quad = |content: &mut Content, a: (f32, f32), b: (f32, f32)| {
+            polygon(
+                content,
+                &[
+                    a,
+                    b,
+                    (b.0 + back.0, b.1 + back.1),
+                    (a.0 + back.0, a.1 + back.1),
+                ],
+            );
+            content.fill_nonzero();
+        };
+        fill_rgb(content, shade(series.color, 0.82));
+        for pair in pts.windows(2) {
+            quad(content, pair[0], pair[1]);
+        }
+        if area {
+            let base = rect.y + oy;
+            fill_rgb(content, shade(series.color, 0.63));
+            quad(content, last, (last.0, base));
+            let mut front = vec![(first.0, base)];
+            front.extend(&pts);
+            front.push((last.0, base));
+            fill_rgb(content, shade(series.color, 1.0));
+            polygon(content, &front);
+            content.fill_nonzero();
+        }
     }
 }
 
@@ -723,6 +794,10 @@ fn draw_chart_series(
                     }
                 }
             }
+        }
+        ChartType::Line | ChartType::Area if let Some(view) = depth => {
+            let area = matches!(c.chart_type, ChartType::Area);
+            draw_ribbons(c, content, rect, num_categories, axis_max, view, area);
         }
         ChartType::Line => {
             content.set_line_width(2.0);
@@ -1564,10 +1639,11 @@ pub(super) fn render_chart(
 
         // Legend
         if let Some(ref legend) = c.legend {
+            // A 3-D line's legend shows its ribbon as a plain swatch.
             let is_line = matches!(
                 c.chart_type,
                 ChartType::Line | ChartType::Scatter | ChartType::Bubble | ChartType::Radar
-            );
+            ) && depth.is_none();
             let is_bubble = matches!(c.chart_type, ChartType::Bubble);
             // Word lists 2-D stacked columns top series first, but its 3-D
             // stacked columns in series order (stacked3d probe).
