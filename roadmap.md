@@ -405,11 +405,17 @@ Open queue from the large-corpus and focus-fixture rounds:
 
 ## Tracked changes and comments
 
-- Revision markup (insert/delete colours, change bars, per-author colours,
-  moves, property-change balloons) is on branch `tracked-changes`, not merged;
-  final view stays the default. door_air (#259/#260) is the fixture whose
-  reference shows markup. Deleted paragraph marks (`w:pPr/w:rPr/w:del`) don't
-  merge paragraphs.
+- Revision markup (Word's inline All Markup: author colours, underline /
+  strike, deleted text kept in the layout, change bars) is opt-in:
+  `ConvertOptions::revisions(RevisionView::Markup)` / CLI `--markup`; the
+  final view stays the default. Rules, probes and the remaining gaps (bars
+  without the paragraph's space before/after, per-word strikes, deleted
+  pictures and list labels unmarked, headers/footers/footnotes/text boxes
+  still final, moves unprobed, no `reference-markup.pdf` harness support
+  yet) in `current_focus/tracked-changes.md`. door_air (#259/#260) is the
+  fixture whose reference shows markup, in balloons (out of scope).
+- Final view: a deleted paragraph mark merges its paragraph into the next,
+  deleted table rows are dropped (Word online export probes 2026-11-05).
 - Comment balloons: font (7pt) and line height (8.5pt) are case63's zoomed
   values.
 
