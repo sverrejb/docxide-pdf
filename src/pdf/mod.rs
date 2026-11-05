@@ -1108,6 +1108,22 @@ impl ParaAnchor {
     }
 }
 
+impl PageBuilder {
+    /// The pending float anchor, when it is section block `block_idx`'s (or
+    /// the next paragraph's, when no block was named).
+    fn float_anchor_for(&self, block_idx: usize) -> Option<f32> {
+        self.pending_float_anchor
+            .filter(|_| self.pending_float_anchor_block.is_none_or(|b| b == block_idx))
+    }
+
+    fn take_float_anchor_for(&mut self, block_idx: usize) -> Option<f32> {
+        let anchor = self.float_anchor_for(block_idx)?;
+        self.pending_float_anchor = None;
+        self.pending_float_anchor_block = None;
+        Some(anchor)
+    }
+}
+
 pub(super) struct FloatTableExtent {
     pub(super) left: f32,
     pub(super) right: f32,
@@ -1563,6 +1579,9 @@ pub(super) struct PageBuilder {
     /// though the flow cursor stays below the table so following text doesn't
     /// overlap it. Without this the shapes drop by the table's height.
     pub(super) pending_float_anchor: Option<f32>,
+    /// The section block the pending anchor is for, when a look-ahead found
+    /// its float more than one paragraph ahead; `None` means the next one.
+    pending_float_anchor_block: Option<usize>,
     next_text_below_picture: Option<f32>,
     /// Anchored shapes for this page, painted above the text layer sorted by
     /// relativeHeight: Word stacks floating shapes in z order regardless of
@@ -1654,6 +1673,7 @@ impl PageBuilder {
             frame_bands: Vec::new(),
             bands_prescanned: None,
             pending_float_anchor: None,
+            pending_float_anchor_block: None,
             table_extent: None,
             next_text_below_picture: None,
             deferred_shapes: Vec::new(),
@@ -1811,6 +1831,7 @@ impl PageBuilder {
         self.frame_bands.clear();
         // An anchor measured on the old page must not place a float on this one
         self.pending_float_anchor = None;
+        self.pending_float_anchor_block = None;
         self.next_text_below_picture = None;
         // After flush, the new page starts with the current section
         self.page_hf_section = sect_idx;
@@ -2016,6 +2037,7 @@ impl PageBuilder {
             self.col_fn_reserved = 0.0;
             self.slot_top = self.column_top_y;
             self.pending_float_anchor = None;
+            self.pending_float_anchor_block = None;
         } else {
             *current_col = 0;
             self.begin_next_page(sect_idx, sp, effective_margin_bottom, ctx);
@@ -2083,6 +2105,7 @@ impl LayoutState {
         pb.page_hf_section = self.pb.page_hf_section;
         pb.float_zone = self.pb.float_zone.clone();
         pb.pending_float_anchor = self.pb.pending_float_anchor;
+        pb.pending_float_anchor_block = self.pb.pending_float_anchor_block;
         pb.next_text_below_picture = self.pb.next_text_below_picture;
         pb.footnote_ids_set = self.pb.footnote_ids_set.clone();
         pb.col_fn_reserved = self.pb.col_fn_reserved;
@@ -3210,7 +3233,7 @@ fn render_paragraph_block(
     // break or a page top's suppressed space before is known (peeked here,
     // taken when the drawings render).
     let pre_anchor = ParaAnchor::new(
-        state.pb.pending_float_anchor,
+        state.pb.float_anchor_for(block_idx),
         state.pb.anchor_slot_top(sp, ctx) - inter_gap,
         own_space_before(inter_gap, state.prev_space_after),
         sp,
@@ -3420,42 +3443,76 @@ fn render_paragraph_block(
     // lines it reaches, and hand the anchor position to the next paragraph so
     // it draws the picture there rather than where it now flows.
     // (anchor paragraph top, the zone's real top edge) once installed.
-    let mut lookahead: Option<(f32, f32)> = None;
+    let mut lookahead: Option<(f32, f32, usize)> = None;
     if state.pb.float_zone.is_none() && !text_empty && !has_tabs {
-        // The next paragraph may carry text of its own (case41 p6, annotation
-        // #240): the anchor is its top either way.
-        let next = section_blocks.get(block_idx + 1).and_then(|b| match b {
-            Block::Paragraph(np) if np.image.is_none() && np.inline_chart.is_none() => {
-                np.floating_images
-                    .iter()
-                    .find(|fi| {
-                        // Only floats that hang off the anchor paragraph itself;
-                        // a page- or margin-relative float does not move with it.
-                        fi.v_relative_from == VRelativeFrom::Paragraph
-                            && matches!(
-                                fi.v_position,
-                                VerticalPosition::Offset(_) | VerticalPosition::AlignTop
-                            )
-                            && wraps_in_column(fi, sp, col_x, col_w, text_width)
-                            // Only a float text can sit beside: Word wraps the
-                            // preceding paragraph next to case41 p3's centred
-                            // picture (64.8pt free on each side) but leaves
-                            // brazilian p9's caption alone above a figure with
-                            // 37.5pt beside it. ponytail: 48pt threshold, two
-                            // calibration points.
-                            && {
-                                let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
-                                let left = fi_x - fi.dist_left - col_x;
-                                let right = col_x + col_w
-                                    - (fi_x + fi.image.display_width + fi.dist_right);
-                                left.max(right) >= 48.0
-                            }
-                    })
-                    .map(|fi| (fi, np.space_before))
+        // The anchor paragraph may carry text of its own (case41 p6, annotation
+        // #240): the anchor is its top either way. It may also sit up to three
+        // paragraphs ahead: Word places the float from the paragraphs between
+        // laid out at full width, then re-wraps them all beside it (Word for
+        // Mac probes p26a and p26b: two short titles before the anchor both
+        // wrap beside a page-tall picture at y 0 and beside a 300pt one
+        // hoisted 60pt above the third paragraph). ponytail: plain paragraphs
+        // between only, three at most.
+        let qualifies = |fi: &crate::model::FloatingImage| {
+            // Only floats that hang off the anchor paragraph itself;
+            // a page- or margin-relative float does not move with it.
+            fi.v_relative_from == VRelativeFrom::Paragraph
+                && matches!(
+                    fi.v_position,
+                    VerticalPosition::Offset(_) | VerticalPosition::AlignTop
+                )
+                && wraps_in_column(fi, sp, col_x, col_w, text_width)
+                // Only a float text can sit beside: Word wraps the
+                // preceding paragraph next to case41 p3's centred
+                // picture (64.8pt free on each side) but leaves
+                // brazilian p9's caption alone above a figure with
+                // 37.5pt beside it. ponytail: 48pt threshold, two
+                // calibration points.
+                && {
+                    let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
+                    let left = fi_x - fi.dist_left - col_x;
+                    let right = col_x + col_w - (fi_x + fi.image.display_width + fi.dist_right);
+                    left.max(right) >= 48.0
+                }
+        };
+        let mut found = None;
+        let mut first_gap = 0.0f32;
+        let mut between = 0.0f32;
+        let mut prev_after = para.space_after;
+        for k in 1..=3 {
+            let Some(Block::Paragraph(np)) = section_blocks.get(block_idx + k) else {
+                break;
+            };
+            if np.image.is_some() || np.inline_chart.is_some() || np.page_break_before {
+                break;
             }
-            _ => None,
-        });
-        if let Some((fi, next_space_before)) = next {
+            let gap = if ctx.additive_paragraph_spacing {
+                prev_after + np.space_before
+            } else {
+                prev_after.max(np.space_before)
+            };
+            if k == 1 {
+                first_gap = gap;
+            }
+            if let Some(fi) = np.floating_images.iter().find(|fi| qualifies(fi)) {
+                found = Some((fi, between + gap, block_idx + k));
+                break;
+            }
+            if !np.floating_images.is_empty() || !np.textboxes.is_empty() || np.page_break_after {
+                break;
+            }
+            let (nfs, nlhr, _) = tallest_run_metrics(&np.runs, ctx.fonts);
+            let (nfs, nlhr) = if nlhr.is_none() {
+                unsized_line_metrics(np, nfs, ctx.fonts)
+            } else {
+                (nfs, nlhr)
+            };
+            let np_ls = np.line_spacing.unwrap_or(ctx.doc_line_spacing);
+            between +=
+                gap + line_count(np, ctx, col_w).max(1) as f32 * resolve_line_h(np_ls, nfs, nlhr);
+            prev_after = np.space_after;
+        }
+        if let Some((fi, gap, anchor_block)) = found {
             let full_lines = build_lines(
                 &effective_runs,
                 ctx,
@@ -3468,7 +3525,6 @@ fn render_paragraph_block(
                     ..Default::default()
                 },
             );
-            let gap = para.space_after.max(next_space_before);
             let anchor_top = state.pb.slot_top - inter_gap - full_lines.len() as f32 * line_h - gap;
             let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
             let fi_y_top = match fi.v_position {
@@ -3476,17 +3532,21 @@ fn render_paragraph_block(
                 _ => anchor_top,
             };
             let mut zone = FloatZone::for_float(fi, fi_x, fi_y_top);
-            // Only when the float lands on this page: a paragraph that breaks
-            // before its anchor would hand the next page a stale anchor.
-            if zone.bottom_y > state.effective_margin_bottom {
+            // Only when the float's top and its anchor land on this page: a
+            // paragraph that breaks before its anchor would hand the next
+            // page a stale anchor. (A page-tall picture's foot lies below the
+            // margin and still wraps this page: p26a.)
+            if zone.top_y > state.effective_margin_bottom
+                && anchor_top > state.effective_margin_bottom
+            {
                 let true_top = zone.top_y;
                 // Word treats the last line's space-after as part of that line
                 // when testing overlap, so the zone reaches up through the gap
                 // for this paragraph's geometry (restored after the lines are
                 // built).
-                zone.top_y += gap;
+                zone.top_y += first_gap;
                 state.pb.float_zone = Some(zone);
-                lookahead = Some((anchor_top, true_top));
+                lookahead = Some((anchor_top, true_top, anchor_block));
             }
         }
     }
@@ -3778,7 +3838,7 @@ fn render_paragraph_block(
     }
     // The look-ahead zone reached up through this paragraph's space-after only
     // for its own geometry; following paragraphs see the float's real edge.
-    if let (Some((_, top)), Some(fz)) = (lookahead, state.pb.float_zone.as_mut()) {
+    if let (Some((_, top, _)), Some(fz)) = (lookahead, state.pb.float_zone.as_mut()) {
         fz.top_y = top;
     }
 
@@ -4418,7 +4478,7 @@ fn render_paragraph_block(
                 effective_space_after,
             );
             let split_anchor = ParaAnchor::new(
-                state.pb.pending_float_anchor.take(),
+                state.pb.take_float_anchor_for(block_idx),
                 state.pb.anchor_slot_top(sp, ctx),
                 own_space_before(inter_gap, state.prev_space_after),
                 sp,
@@ -4858,7 +4918,7 @@ fn render_paragraph_block(
     // page-body top so paragraph-relative shapes anchor there (the flow cursor
     // stays below the table). One-shot: consumed by this, the next, paragraph.
     let anchor = ParaAnchor::new(
-        state.pb.pending_float_anchor.take(),
+        state.pb.take_float_anchor_for(block_idx),
         state.pb.anchor_slot_top(sp, ctx),
         own_space_before(applied_inter_gap, state.prev_space_after),
         sp,
@@ -4871,9 +4931,17 @@ fn render_paragraph_block(
             col_x
         }
     };
-    // Hand the look-ahead float's anchor to the next paragraph (the one that
-    // actually carries it) only after this paragraph has taken its own.
-    state.pb.pending_float_anchor = lookahead.map(|(anchor_top, _)| anchor_top);
+    // Hand the look-ahead float's anchor to the paragraph that actually
+    // carries it only after this paragraph has taken its own.
+    if let Some((anchor_top, _, anchor_block)) = lookahead {
+        state.pb.pending_float_anchor = Some(anchor_top);
+        state.pb.pending_float_anchor_block = Some(anchor_block);
+    } else if state.pb.pending_float_anchor_block.is_none_or(|b| b <= block_idx) {
+        // One-shot: an anchor meant for this paragraph (or any next one) is
+        // spent; one for a later block rides through the paragraphs between.
+        state.pb.pending_float_anchor = None;
+        state.pb.pending_float_anchor_block = None;
+    }
 
     // Margin anchors belong to the page that already started. A continuous
     // section's new margins apply on its next sheet, not to this page's float.
@@ -6031,8 +6099,12 @@ fn render_pass(
                         };
                         let min_wrap_w: f32 = 72.0;
                         let enough_space = if fz.wrap_text == WrapText::BothSides {
-                            // For bothSides, check combined width of both regions
-                            (space_left + space_right) >= min_wrap_w
+                            // For bothSides, check combined width of both regions.
+                            // A float overhanging a margin has no strip on that
+                            // side, not a negative one (an external tracked corpus
+                            // cover 71.5pt into the left margin left 147pt on the
+                            // right, and the title went below the page-tall picture).
+                            (space_left.max(0.0) + space_right.max(0.0)) >= min_wrap_w
                         } else {
                             side_room(fz.wrap_text, space_left, space_right) >= min_wrap_w
                         };
