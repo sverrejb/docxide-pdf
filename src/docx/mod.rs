@@ -993,8 +993,10 @@ pub(super) fn extract_indents(
 }
 
 // Final view omits an empty paragraph whose paragraph mark was deleted.
-// Do not discard surviving runs, bookmarks, or section boundaries: deleting
-// the mark alone merges text with the next paragraph rather than deleting it.
+// Do not discard surviving runs or bookmarks: deleting the mark alone merges
+// text with the next paragraph rather than deleting it. A section break in
+// the deleted mark goes with it (Word online export probe 2026-11-05: three
+// sections whose break marks are deleted print as one, with the last header).
 fn is_fully_deleted_paragraph(node: roxmltree::Node) -> bool {
     if !node.has_tag_name((WML_NS, "p")) {
         return false;
@@ -1002,7 +1004,7 @@ fn is_fully_deleted_paragraph(node: roxmltree::Node) -> bool {
     let Some(ppr) = wml(node, "pPr") else {
         return false;
     };
-    if wml(ppr, "sectPr").is_some() || wml(ppr, "rPr").and_then(|rpr| wml(rpr, "del")).is_none() {
+    if wml(ppr, "rPr").and_then(|rpr| wml(rpr, "del")).is_none() {
         return false;
     }
     node.children().filter(|n| n.is_element()).all(|n| {
@@ -1289,6 +1291,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                     style_num_ilvl: para_style.and_then(|s| s.num_ilvl),
                 };
                 let mut para = paragraph::build_paragraph(node, &mut ctx, &mut lists, &opts);
+                let mark_deleted = para.mark_deleted;
 
                 // Final view: a deleted paragraph mark joins its text to the
                 // next paragraph, which keeps its own properties (Word online
@@ -1326,8 +1329,15 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                 blocks.extend(continuation.map(Block::Paragraph));
                 paragraph::merge_field_code_paragraphs(&mut blocks);
 
-                // Mid-document section break: sectPr inside pPr ends the current section
-                if let Some(sect_node) = ppr.and_then(|ppr| wml(ppr, "sectPr")) {
+                // Mid-document section break: sectPr inside pPr ends the current section.
+                // A deleted paragraph mark takes its section break with it in the
+                // final view; the markup view keeps the break (Word probes
+                // 2026-11-05: online export one page with the last section's
+                // header, inline markup export three pages, one header each).
+                if let Some(sect_node) = ppr
+                    .and_then(|ppr| wml(ppr, "sectPr"))
+                    .filter(|_| markup() || !mark_deleted)
+                {
                     if let Some(Block::Paragraph(last_para)) = blocks.last_mut() {
                         last_para.is_section_break = true;
                         // A page break ending the section's last paragraph is dropped:
@@ -2009,7 +2019,7 @@ mod tests {
             ),
             (
                 "<w:p><w:pPr><w:rPr><w:del/></w:rPr><w:sectPr/></w:pPr></w:p>",
-                false,
+                true,
             ),
             (
                 "<w:p><w:pPr><w:rPr><w:del/></w:rPr></w:pPr><w:bookmarkStart w:id=\"1\"/></w:p>",
