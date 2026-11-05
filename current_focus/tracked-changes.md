@@ -148,6 +148,22 @@ below the baseline at 12pt).
   indent); a plain tab also skips a stop its pen lands on (12 half-width
   letters = 72pt before a 1in stop → the next stop). `list_label.rs`
   `text_hanging` / `label_device_width`.
+- An exact-spaced line fits a page only with its whole box (p27: 25 lines
+  of 25pt on a 648pt body, the 26th moves on although its 12pt glyphs would
+  end 0.5pt above the margin); automatic spacing may hang its trailing
+  leading past the margin, as before. `pdf/mod.rs` `line_fit_height`.
+- Paragraphs up to three before a float's anchor wrap beside it (p26a: two
+  short titles before an empty paragraph anchoring a page-tall wrapSquare
+  picture 82.7pt above it both sit beside the picture, at y 0; p26b: both
+  beside a 300pt picture hoisted 60pt above a text-carrying third
+  paragraph). Word places the float from the paragraphs between laid out at
+  full width, then re-wraps them all. The look-ahead in `pdf/mod.rs` now
+  scans three plain paragraphs ahead and addresses the anchor it hands on
+  to the float's block (`PageBuilder::float_anchor_for`); a float
+  overhanging a margin has no strip on that side, not a negative one
+  (an Erasmus cover 71.5pt into the left margin left 147pt on the right).
+- VML lengths: `2in`, `cm`, `mm`, `pc`, `px` convert to points (an OLE
+  preview `height:2in` fell back to its 240pt `dyaOrig` and moved a page).
 - A page- or margin-anchored floating table positioned above the text
   already on its anchor's page, too tall to fit below that position, starts
   on the next page at the same position and breaks from there; the anchor's
@@ -243,13 +259,15 @@ delta buckets plus an XML feature census of the worst documents).
 
 | set | ours, markup (J / SSIM / pages wrong) | competitor | we win / lose |
 |---|---|---|---|
-| tracking, no comments (317) | 72.6 / 85.9 / 6 (2026-11-05 night, round 3; 71.7 / 85.4 / 9 in the evening, 67.9 / 82.1 / 11 in the morning) | 62.2 / 80.4 / 11 | 259 / 58 |
+| tracking, no comments (317) | 72.9 / 86.3 / 4 (2026-11-05 night, round 3; 71.7 / 85.4 / 9 in the evening, 67.9 / 82.1 / 11 in the morning) | 62.2 / 80.4 / 11 | 259 / 58 |
 | comments + tracking (24) | 68.0 / 86.2 / 0 (2026-11-05 night; 67.9 in the evening, 55.5 / 72.5 / 0 in the morning) | 29.3 / 48.6 / 4 | 24 / 0 |
 
-Round 3 (labels `tc-gap8`, `tc-comments9`): 317 set +0.9 Jaccard, eight
-documents +14 to +48 (deleted page-anchored tables that now start on the
-next page), one −1.0 (its deleted table now on Word's page, the text beside
-it not yet re-flowed), page misses 9 → 6; the comments set +0.15.
+Round 3 (labels `tc-gap8` → `tc-gap9`, `tc-comments9` → `tc-comments10`):
+317 set 71.7 → 72.6 → 72.9 Jaccard; eight documents +14 to +48 (deleted
+page-anchored tables that now start on the next page), then four more +13
+to +36 (the exact-line foot, the OLE preview, the Erasmus cover), one −1.0
+(its deleted table now on Word's page, the text beside it not yet
+re-flowed); page misses 9 → 6 → 4; the comments set 67.9 → 68.0.
 | comments only (1) | 70.8 / 88.4 / 0 | 60.0 | |
 
 (317 set before the page-top split fix below: 66.5 / 80.6 / 25.) 108 of the

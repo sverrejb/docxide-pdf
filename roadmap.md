@@ -464,16 +464,19 @@ Open queue from the large-corpus and focus-fixture rounds:
   page (the 3-vs-4 sibling is 4/4 pages now). The siblings' remaining
   −1.2pt is a missing cloud font (Microsoft PhagsPa); an extra empty line
   Word prints under one document's wholly deleted header resisted nine
-  what-ifs (`current_focus/tracked-changes.md`).
-- Next steps, in order: (1) a fixed-layout table with a duplicated
-  12-column grid and 720-twip cells where Word wraps one letter per line
-  (9 vs 17 pages, the competitor fails it too); (2) paragraphs before a
-  page-top float wrapped beside it (the look-ahead narrows only the one
-  right before the anchor), and the page's text re-flowing below a
-  page-anchored floating table that fits (p24a/p24g); (3) a 24pt exact
-  line that fits at our page foot but not Word's (`a1872de6f9`); (4) moves
-  (`w:moveFrom` / `w:moveTo`, 3 of 317 documents) once a Word-made probe
-  exists (Word hangs on hand-written move ranges).
+  what-ifs (`current_focus/tracked-changes.md`). Later the same night: an
+  exact-spaced line fits a page only with its whole box (p27); paragraphs
+  up to three before a float's anchor wrap beside it, a float overhanging
+  a margin has no strip there (p26a/p26b, the Erasmus cover); VML lengths
+  in inches and other units (an OLE preview a page off). 317 set 72.9
+  Jaccard, page misses 4.
+- Next steps, in order: (1) fixed-layout tables take their columns from
+  the cells' `tcW`, not the grid (Word probes p28a–d: 36pt columns under
+  a 137pt grid with `tblW auto`; a 100% table shares its width over them,
+  a pct cell takes its share first) — the 9-vs-17-page document; (2) the
+  page's text re-flowing below a page-anchored floating table that fits
+  (p24a/p24g); (3) moves (`w:moveFrom` / `w:moveTo`, 3 of 317 documents)
+  once a Word-made probe exists (Word hangs on hand-written move ranges).
 - Final view: a deleted paragraph mark merges its paragraph into the next
   and takes its section break with it, deleted table rows are dropped (Word
   online export probes 2026-11-05).
