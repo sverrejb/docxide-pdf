@@ -1277,10 +1277,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
             }
             "p" => {
                 let ppr = wml(node, "pPr");
-                let para_style_id = ppr
-                    .and_then(|ppr| wml_attr(ppr, "pStyle"))
-                    .unwrap_or(&styles.default_paragraph_style_id);
-                let para_style = styles.paragraph_styles.get(para_style_id);
+                let (_, para_style) = styles.paragraph_style_of(ppr);
 
                 let opts = paragraph::ParagraphOptions {
                     resolve_bookmarks: true,

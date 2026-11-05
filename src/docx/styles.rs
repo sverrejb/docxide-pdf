@@ -482,6 +482,25 @@ pub(super) struct StylesInfo {
     pub(super) default_paragraph_style_id: String,
 }
 
+impl StylesInfo {
+    /// The paragraph style `ppr`'s `w:pStyle` names, with its id, else the
+    /// default paragraph style: Word falls back to Normal, not to docDefaults,
+    /// when the id is missing or names a character style (a header whose
+    /// pStyle is "BodyTextIndentChar" prints in Normal's Arial 9 with no
+    /// space after, not docDefaults' Calibri 11 with 8pt; its extra height
+    /// pushed a whole body 4pt down).
+    pub(super) fn paragraph_style_of<'a>(
+        &'a self,
+        ppr: Option<roxmltree::Node<'a, 'a>>,
+    ) -> (&'a str, Option<&'a ParagraphStyle>) {
+        let id = ppr
+            .and_then(|ppr| wml_attr(ppr, "pStyle"))
+            .filter(|id| self.paragraph_styles.contains_key(*id))
+            .unwrap_or(&self.default_paragraph_style_id);
+        (id, self.paragraph_styles.get(id))
+    }
+}
+
 pub(super) fn parse_alignment(val: &str) -> Alignment {
     match val {
         "center" => Alignment::Center,

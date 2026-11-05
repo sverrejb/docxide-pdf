@@ -40,11 +40,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         .and_then(|rpr| wml_bool(rpr, "vanish"))
         .unwrap_or(false);
 
-    let para_style_id = ppr
-        .and_then(|ppr| wml_attr(ppr, "pStyle"))
-        .unwrap_or(&ctx.styles.default_paragraph_style_id);
-
-    let para_style = ctx.styles.paragraph_styles.get(para_style_id);
+    let (para_style_id, para_style) = ctx.styles.paragraph_style_of(ppr);
 
     let mut mark = super::runs::paragraph_mark_run(ppr, para_style, ctx);
     // Markup view: a fully deleted list item keeps its number without
@@ -863,5 +859,39 @@ mod tests {
         assert_eq!((rest.indent_left, rest.indent_hanging), (18.0, 0.0));
         assert!(rest.list_label.is_empty() && !rest.page_break_after);
         assert!(split_at_page_break(&mut para).is_none());
+    }
+
+    #[test]
+    fn a_pstyle_naming_a_character_style_falls_back_to_normal() {
+        use std::io::{Cursor, Write};
+        use zip::write::SimpleFileOptions;
+
+        let document = format!(
+            r#"<w:document xmlns:w="{WML_NS}"><w:body><w:p><w:pPr><w:pStyle w:val="BodyChar"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p><w:p><w:pPr><w:pStyle w:val="Missing"/></w:pPr></w:p><w:sectPr/></w:body></w:document>"#
+        );
+        let styles = format!(
+            r#"<w:styles xmlns:w="{WML_NS}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:sz w:val="22"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="160" w:line="259" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="18"/></w:rPr></w:style><w:style w:type="character" w:styleId="BodyChar"><w:name w:val="Body Char"/><w:rPr><w:sz w:val="40"/></w:rPr></w:style></w:styles>"#
+        );
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        for (name, xml) in [("word/document.xml", document), ("word/styles.xml", styles)] {
+            zip.start_file(name, SimpleFileOptions::default()).unwrap();
+            zip.write_all(xml.as_bytes()).unwrap();
+        }
+        let bytes = zip.finish().unwrap().into_inner();
+        let parsed = crate::docx::parse_bytes(&bytes).unwrap();
+        for block in &parsed.sections[0].blocks[..2] {
+            let crate::model::Block::Paragraph(para) = block else {
+                panic!("expected a paragraph");
+            };
+            assert_eq!(para.space_after, 0.0);
+            assert!(matches!(para.line_spacing, Some(crate::model::LineSpacing::Auto(m)) if m == 1.0));
+            assert_eq!(para.paragraph_mark_font_size, Some(9.0));
+            assert_eq!(para.paragraph_mark_font_name.as_deref(), Some("Arial"));
+            assert_eq!(para.style_id.as_deref(), Some("Normal"));
+        }
+        let crate::model::Block::Paragraph(para) = &parsed.sections[0].blocks[0] else {
+            panic!("expected a paragraph");
+        };
+        assert_eq!((para.runs[0].font_name.as_str(), para.runs[0].font_size), ("Arial", 9.0));
     }
 }

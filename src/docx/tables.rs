@@ -794,10 +794,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         (None, 0.0)
                     };
                     let ppr = wml(p, "pPr");
-                    let para_style_id = ppr
-                        .and_then(|ppr| wml_attr(ppr, "pStyle"))
-                        .unwrap_or(&ctx.styles.default_paragraph_style_id);
-                    let para_style = ctx.styles.paragraph_styles.get(para_style_id);
+                    let (para_style_id, para_style) = ctx.styles.paragraph_style_of(ppr);
                     let alignment = super::runs::paragraph_alignment(p, ppr, para_style)
                         .unwrap_or(Alignment::Left);
                     let (sp_before, sp_after, ls) =

@@ -1312,10 +1312,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
     ctx: &mut ParseContext<'_, R>,
 ) -> ParsedRuns {
     let ppr = wml(para_node, "pPr");
-    let para_style_id = ppr
-        .and_then(|ppr| wml_attr(ppr, "pStyle"))
-        .unwrap_or(&ctx.styles.default_paragraph_style_id);
-    let para_style = ctx.styles.paragraph_styles.get(para_style_id);
+    let (_, para_style) = ctx.styles.paragraph_style_of(ppr);
     let defaults = ParagraphRunDefaults::from_style(para_style, &ctx.styles.defaults);
 
     let mut run_nodes: Vec<RunNode> = Vec::new();
