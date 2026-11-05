@@ -15,21 +15,31 @@ drop caps, ruby, fitText/tcFitText, bidiVisual, suppressLineNumbers,
 wordWrap=0, numbers on lines without text, picture grayscale/duotone/
 alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
 (vector approximations), chart title/frame/value labels/data table. Open:
-- **3-D columns done** (2026-11-05, branch `chart-3d`): a bar is a square
-  prism `depthPercent` bar widths deep, the floor adds `gapDepth`, depth z
-  projects to (z sin rotY, z sin rotX); Word's 3-D plot is the 2-D one inset
-  5.0/6.35/2.85/1.77pt (l/r/t/b) and the front shrinks until the box fits;
-  top faces 0.76×, sides 0.63× the series colour; no axis headroom step.
-  Probes a–h and `walls.py`/`cmp.py` in `tests/output/torture_test/probe3d/`
-  (main checkout). Open: horizontal 3-D bars, perspective (`rAngAx` 0),
-  pie3D, 3-D line/area stay flat.
-- **2-D plot rectangle off by 2–7pt**: the probes' 2-D variants (`f_2d`,
-  `h_2d_nodt`) put Word's plot at x 145.6–493.0 / 98.6–493.0 and y (from
-  the top) 137.5–275.2 / 137.5–300.7 where we draw 140.1–496.0 / 98.1–496.0
-  and 139.4–273.5 / 139.4–293.4. Every 3-D front inherits this.
-- **Default gridline/axis colour**: Word draws black 0.5pt gridlines and a
-  black value axis for charts without `spPr` (2-D and 3-D probes); we use
-  grey 179.
+- **3-D charts** (branch `chart-3d`, 2026-11-05): columns and bars (box,
+  cylinder, cone, pyramid and the ToMax cuts; clustered, stacked, standard
+  rows with a series axis), pies, lines and areas. Columns: a bar is a
+  square prism `depthPercent` bar widths deep, the floor adds `gapDepth`
+  per row, depth z projects to (z sin rotY, z sin rotX); Word's 3-D plot is
+  the 2-D one inset 5.0/6.35/2.85/1.77pt and the front shrinks until the
+  box fits, centred; faces 1.0/0.76/0.63; no axis headroom step. Pies:
+  ellipse a·sin rotX tall on a rim 0.261·a·hPercent·cos rotX. Probes in
+  `tests/output/torture_test/probe3d/` (in*/out* dirs; `front.py`,
+  `barpx.py`, `piemeasure.py`, `cmp.py`). Open:
+  - rAngAx 0 (true perspective, Word's default for 3-D line/area): Word
+    rotates the scene and recedes the floor; we draw the right-angle view.
+  - Standard (several depth rows): Word's front is 103pt tall for 2 rows,
+    96 for 3 whatever the width (probes standard3d/std*); we keep the
+    one-row fit (≤12pt off; 43pt wide when the series axis is hidden).
+  - Pie: Word's default 30° perspective (~4% larger), best-fit label
+    placement (we use 70% of the radius), rotY/firstSliceAng, explosion.
+  - Stacked 3-D areas still draw a row per series; surface3D not drawn.
+- **2-D plot rectangle**: fixtures' plots match Word within 0.5pt on the
+  left, top and bottom but run 2–4.6pt wide on the right
+  (`tests/output/tt/plotrects.py` in the chart-3d worktree lists both);
+  the probes with a data table (`f_2d`) or a bottom legend and no table
+  (`h_2d_nodt`) are 3–7pt off. Horizontal bars' left margin is still 12% of
+  the width where Word sizes it from the category labels (24pt off on
+  hbar3d).
 - Inline `wps` shapes with text, charts and SmartArt are block boxes at the
   paragraph start, not line objects (a picture-filled shape is now a
   picture); an inline-object run kind would fix all three.
