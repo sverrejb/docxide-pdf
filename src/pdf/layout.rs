@@ -3524,6 +3524,7 @@ pub(super) fn build_tabbed_line(
                 current_x = 0.0;
                 is_first_line = false;
                 pending_space_w = 0.0;
+                tab_stop_pos = None;
                 continue;
             }
 
@@ -3635,6 +3636,11 @@ pub(super) fn build_tabbed_line(
                     line_reach = 0.0;
                     current_x = 0.0;
                     is_first_line = false;
+                    // The stop that opened this segment belongs to the line
+                    // just finished: the next tab resolves from the wrapped
+                    // word's own end (Word keeps "Hub<tab>30<tab>$45" on the
+                    // continuation line of a tab-separated inventory list).
+                    tab_stop_pos = None;
                 }
                 push_word_chunks(
                     &mut all_chunks,
