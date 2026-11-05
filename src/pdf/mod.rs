@@ -57,8 +57,8 @@ use layout::{
     CjkLayout, DualRegion, EMPTY_EFFECTS, EMPTY_INLINE_IMAGES, LineNumberArg, LineOpts,
     LinkAnnotation, LinkTagger, PUNCT_PULL_FREE, PUNCT_SQUEEZE, TextLine, build_lines,
     build_paragraph_lines, descender_ratio, grid_baseline_offset, grid_snapped_line_h,
-    inline_image_line_extra, is_text_empty, line_h_with_picture, line_max_image_h, lines_height,
-    picture_line_bottom,
+    inline_image_line_extra, inserted_picture_descent, is_text_empty, line_h_with_picture,
+    line_max_image_h, lines_height, picture_line_bottom,
     render_paragraph_lines, run_line_metrics, size_lines_by_own_runs, tallest_glyph_run_metrics,
     tallest_run_metrics,
 };
@@ -3829,9 +3829,13 @@ fn render_paragraph_block(
     // 3 × 13.8pt lines is 57.6pt in Word, not 41.4. Charts and an inline
     // shape alone on its line are pictures too (torture_test: Word's next
     // line is 2.09pt lower than the chart's bottom).
+    // Markup view: an inserted picture keeps its run's descent below it like
+    // the underlined text it is; a short one then sits on the text baseline
+    // instead of the line's foot (Word for Mac probe p22d).
+    let inserted_descent = inserted_picture_descent(&effective_runs, ctx.fonts);
     let picture_line_h = |bottom: f32| {
-        if bottom > natural_line_h {
-            bottom + mark_line().1
+        if bottom + inserted_descent > natural_line_h {
+            bottom + inserted_descent + mark_line().1
         } else {
             line_h
         }
@@ -5124,10 +5128,11 @@ fn render_paragraph_block(
                 (img.display_width, img.display_height)
             };
             let image_height = box_h + img.layout_extra_height;
-            let bottom_depth = if image_height > line_h {
+            let bottom_depth = if image_height + inserted_descent > line_h {
                 img.layout_extra_top + box_h
             } else {
-                let baseline = image_height.max(natural_line_h);
+                let baseline =
+                    (image_height + inserted_descent).max(natural_line_h) - inserted_descent;
                 baseline - (img.layout_extra_height - img.layout_extra_top)
             };
             let box_bottom = state.pb.slot_top - bottom_depth;
@@ -5229,6 +5234,21 @@ fn render_paragraph_block(
             }
             if turned {
                 state.pb.content.restore_state();
+            }
+            // Markup view: the inserted picture's revision underline, the run's
+            // post-table geometry on a 0.25pt grid like the text path's.
+            if inserted_descent > 0.0
+                && let Some(run) = para.runs.iter().find(|r| r.revised && r.underline)
+                && let Some((pos, th)) = ctx.fonts.get(&font_key(run)).and_then(|e| e.underline)
+            {
+                let q = |v: f32| (v * 4.0).round() / 4.0;
+                let (offset, thick) = (q(pos * run.font_size), q(th * run.font_size).max(0.25));
+                color::fill_color_or_black(&mut state.pb.content, run.color);
+                state
+                    .pb
+                    .content
+                    .rect(box_x, box_bottom - offset - thick, box_w, thick)
+                    .fill_nonzero();
             }
             if !img.decorative {
                 state.pb.end_tag();

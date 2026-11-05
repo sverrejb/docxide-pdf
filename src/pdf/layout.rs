@@ -5536,7 +5536,24 @@ pub(super) fn picture_line_bottom(
     let glyph_runs = text_runs().filter(|r| !r.text.trim().is_empty());
     let descent = tallest_by_ascent(glyph_runs, seen_fonts)
         .map_or(0.0, |(fs, lhr, ar)| fs * descender_ratio(lhr, ar));
-    descent + leading
+    descent.max(inserted_picture_descent(runs, seen_fonts)) + leading
+}
+
+/// Markup view: an inserted picture is underlined, and Word keeps its run's
+/// descent below the picture as under underlined text (Word for Mac probe
+/// p22d: 50pt pictures alone in 12pt Times New Roman paragraphs push the next
+/// baseline 2.6pt further than plain ones at single, 1.5 and triple spacing;
+/// deleted pictures, p22e, add nothing). The run is textless: a lone picture's
+/// run keeps its flags after the picture moves to `Paragraph::image`.
+pub(super) fn inserted_picture_descent(
+    runs: &[Run],
+    seen_fonts: &HashMap<String, FontEntry>,
+) -> f32 {
+    let inserted = runs.iter().filter(|r| {
+        r.revised && r.underline && !r.vanish && (r.inline_image.is_some() || r.text.is_empty())
+    });
+    tallest_by_ascent(inserted, seen_fonts)
+        .map_or(0.0, |(fs, lhr, ar)| fs * descender_ratio(lhr, ar))
 }
 
 /// The line a picture `picture_h` tall makes: the picture plus the text
@@ -5655,6 +5672,30 @@ mod tests {
         // East Asian rescues and characters the font has leave the line alone.
         assert_eq!(with_fallback_faces(own, &arial, "A中B", &[&segoe]), own);
         assert_eq!(with_fallback_faces(own, &arial, "AB", &[&segoe]), own);
+    }
+
+    #[test]
+    fn inserted_picture_keeps_its_runs_descent() {
+        // Times New Roman's plain box: 1.149 line, 0.891 ascent → 0.258 descent.
+        let tnr = FontEntry {
+            plain_line_h_ratio: Some(1.149),
+            plain_ascender_ratio: Some(0.891),
+            ..FontEntry::stub()
+        };
+        let run = |revised: bool, underline: bool| Run {
+            font_name: "Times New Roman".to_string(),
+            font_size: 12.0,
+            revised,
+            underline,
+            ..Run::default()
+        };
+        let fonts: HashMap<String, FontEntry> =
+            [(crate::fonts::font_key(&run(true, true)), tnr)].into_iter().collect();
+        let inserted = [run(true, true)];
+        assert!((inserted_picture_descent(&inserted, &fonts) - 12.0 * 0.258).abs() < 0.01);
+        // A deleted (struck) picture and a plain one add nothing.
+        assert_eq!(inserted_picture_descent(&[run(true, false)], &fonts), 0.0);
+        assert_eq!(inserted_picture_descent(&[run(false, false)], &fonts), 0.0);
     }
 
     #[test]
