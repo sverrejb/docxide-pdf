@@ -307,7 +307,24 @@ fn bar_slot(c: &Chart, cat_extent: f32, num_categories: usize) -> (f32, f32) {
 /// front face a rectangle and draws a point `z` deep at (z sin rotY,
 /// z sin rotX) from where it would sit on the front plane (five Word probes
 /// varying rotX, rotY, depthPercent and the chart width).
+/// Depth rows on a 3-D chart's floor: one per series when they stand one
+/// behind another, else one.
+fn depth_rows(c: &Chart) -> usize {
+    match c.chart_type {
+        ChartType::Bar {
+            grouping: BarGrouping::Standard,
+            ..
+        } => c.series.len().max(1),
+        _ => 1,
+    }
+}
+
 impl View3D {
+    /// How deep one row of bars sits on the floor, its gap included.
+    fn row_pitch(self, thick: f32) -> f32 {
+        thick * self.depth * (1.0 + self.gap_depth)
+    }
+
     fn project(self, z: f32) -> (f32, f32) {
         (
             z * self.rot_y.to_radians().sin(),
@@ -319,15 +336,26 @@ impl View3D {
     /// edge sits from its front edge. Word's 3-D plot is its 2-D one inset
     /// 5.0/6.35pt left/right and 2.85/1.77pt top/bottom (probes with and
     /// without a data table); the front shrinks until the box with its depth
-    /// fits, bottom-aligned and centred across.
-    fn front(self, c: &Chart, plot: PlotRect, num_categories: usize) -> (PlotRect, (f32, f32)) {
+    /// fits, centred both ways, beside `reserve` points kept on the right
+    /// for series names.
+    /// ponytail: with several depth rows Word's front no longer keeps the
+    /// plot's proportions (standard3d/std3 probes: 103pt tall for 2 rows, 96
+    /// for 3, whatever the width; the box fills the width, 390pt, or 345pt
+    /// beside series names); we keep the one-row rule, within ~12pt of it.
+    fn front(
+        self,
+        c: &Chart,
+        plot: PlotRect,
+        num_categories: usize,
+        reserve: f32,
+    ) -> (PlotRect, (f32, f32)) {
         let inner = PlotRect {
             x: plot.x + 5.0,
             y: plot.y + 1.77,
             w: plot.w - (5.0 + 6.35),
             h: plot.h - (2.85 + 1.77),
         };
-        // The floor: a bar's depth plus the gap between depth rows.
+        // The floor: a bar's depth plus the gap between depth rows, per row.
         let horizontal = matches!(
             c.chart_type,
             ChartType::Bar {
@@ -337,11 +365,12 @@ impl View3D {
         );
         let cat_extent = if horizontal { inner.h } else { inner.w };
         let thick = bar_slot(c, cat_extent, num_categories).1;
-        let (dx, dy) = self.project(thick * self.depth * (1.0 + self.gap_depth));
-        let s = (inner.h / (inner.h + dy)).min(inner.w / (inner.w + dx));
+        let (dx, dy) = self.project(self.row_pitch(thick) * depth_rows(c) as f32);
+        let avail_w = inner.w - reserve;
+        let s = (inner.h / (inner.h + dy)).min(avail_w / (inner.w + dx));
         let front = PlotRect {
-            x: inner.x + (inner.w - s * (inner.w + dx)) / 2.0,
-            y: inner.y,
+            x: inner.x + (avail_w - s * (inner.w + dx)) / 2.0,
+            y: inner.y + (inner.h - s * (inner.h + dy)) / 2.0,
             w: s * inner.w,
             h: s * inner.h,
         };
@@ -539,7 +568,7 @@ fn draw_chart_series(
             } else {
                 (plot_x, plot_w, plot_y, plot_h)
             };
-            let stacked = grouping != BarGrouping::Clustered;
+            let stacked = matches!(grouping, BarGrouping::Stacked | BarGrouping::PercentStacked);
             let is_percent_stacked = grouping == BarGrouping::PercentStacked;
             let (group, thick) = bar_slot(c, cat_extent, num_categories);
             let gap = c.gap_width_pct / 100.0 * thick;
@@ -596,6 +625,48 @@ fn draw_chart_series(
                 content.fill_nonzero();
             };
 
+            // A label past a bar's end: after a lying bar, above a column.
+            let end_label = |pos: f32, len: f32, value: f32, (rx, ry): (f32, f32)| {
+                let (end, across) = (val_origin + len, pos + thick / 2.0);
+                if horizontal {
+                    let at = (end + rx, across + ry);
+                    ValueLabel {
+                        at,
+                        value,
+                        place: LabelPlace::After,
+                    }
+                } else {
+                    let at = (across + rx, end + ry);
+                    ValueLabel {
+                        at,
+                        value,
+                        place: LabelPlace::Above,
+                    }
+                }
+            };
+
+            if grouping == BarGrouping::Standard {
+                // Each series a row further back, the first in front: draw
+                // the back row first.
+                let pitch = depth.map_or((0.0, 0.0), |d| d.project(d.row_pitch(thick)));
+                for (si, series) in c.series.iter().enumerate().rev() {
+                    let row = (pitch.0 * si as f32, pitch.1 * si as f32);
+                    content.save_state();
+                    content.transform([1.0, 0.0, 0.0, 1.0, row.0, row.1]);
+                    for ci in 0..num_categories {
+                        let val = series.values.get(ci).copied().unwrap_or(0.0);
+                        let len = (val / axis_max) * val_extent;
+                        let pos = cat_origin + ci as f32 * group + gap / 2.0;
+                        bar(content, series.color, pos, val_origin, len, len);
+                        if c.show_values {
+                            labels.push(end_label(pos, len, val, row));
+                        }
+                    }
+                    content.restore_state();
+                }
+                return labels;
+            }
+
             for ci in 0..num_categories {
                 let group_pos = cat_origin + ci as f32 * group + gap / 2.0;
                 if stacked {
@@ -646,20 +717,7 @@ fn draw_chart_series(
                         let pos = group_pos + si as f32 * thick;
                         bar(content, series.color, pos, val_origin, len, len);
                         if c.show_values {
-                            let (end, across) = (val_origin + len, pos + thick / 2.0);
-                            labels.push(if horizontal {
-                                ValueLabel {
-                                    at: (end, across),
-                                    value: val,
-                                    place: LabelPlace::After,
-                                }
-                            } else {
-                                ValueLabel {
-                                    at: (across, end),
-                                    value: val,
-                                    place: LabelPlace::Above,
-                                }
-                            });
+                            labels.push(end_label(pos, len, val, (0.0, 0.0)));
                         }
                     }
                 }
@@ -1151,6 +1209,17 @@ pub(super) fn render_chart(
         cat_label_h + 8.0
     };
 
+    // Series names along the floor's right edge start 12pt past it.
+    let series_axis = depth.is_some_and(|d| d.series_axis && depth_rows(c) > 1);
+    let series_axis_w = if series_axis {
+        c.series
+            .iter()
+            .map(|s| text_width(&s.label, font_size, label_font))
+            .fold(0.0f32, f32::max)
+            + 12.0
+    } else {
+        0.0
+    };
     let plot_2d = PlotRect {
         x: x + margin_left,
         y: y - h + margin_bottom,
@@ -1158,7 +1227,7 @@ pub(super) fn render_chart(
         h: h - margin_top - margin_bottom,
     };
     let (plot, (back_dx, back_dy)) = depth.map_or((plot_2d, (0.0, 0.0)), |d| {
-        d.front(c, plot_2d, num_categories)
+        d.front(c, plot_2d, num_categories, series_axis_w)
     });
     let PlotRect {
         x: plot_x,
@@ -1392,6 +1461,31 @@ pub(super) fn render_chart(
                 &label,
                 label_font,
             );
+        }
+
+        // Series names beside the floor's right edge, one per depth row
+        // (standard3d probe: 12pt right of a row's middle, baseline 3.9pt
+        // below it).
+        if series_axis {
+            let rows = depth_rows(c) as f32;
+            let (corner_x, corner_y) = if horizontal {
+                (plot_x, plot_y + plot_h)
+            } else {
+                (plot_x + plot_w, plot_y)
+            };
+            for (si, series) in c.series.iter().enumerate() {
+                let k = (si as f32 + 0.5) / rows;
+                let (lx, ly) = (corner_x + k * back_dx + 12.0, corner_y + k * back_dy - 3.9);
+                show_text(
+                    content,
+                    label_font_key,
+                    font_size,
+                    lx,
+                    ly,
+                    &series.label,
+                    label_font,
+                );
+            }
         }
 
         if table_rows > 0 {

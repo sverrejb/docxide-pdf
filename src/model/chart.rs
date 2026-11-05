@@ -25,6 +25,8 @@ pub struct ChartSeries {
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BarGrouping {
     Clustered,
+    /// A 3-D chart's series one behind another, each in its own depth row.
+    Standard,
     Stacked,
     PercentStacked,
 }
@@ -98,6 +100,8 @@ pub struct View3D {
     pub depth: f32,
     pub gap_depth: f32,
     pub shape: BarShape,
+    /// `c:serAx` shown: series names along the floor's right edge.
+    pub series_axis: bool,
 }
 
 /// `c:shape`: a 3-D bar's solid. The `ToMax` kinds are cut from a cone or

@@ -272,12 +272,16 @@ fn parse_chart_space(xml_content: &str, accent_colors: Vec<[u8; 3]>) -> Option<C
         frame: chart_child(chart_space, "spPr").map_or(Some([0x85; 3]), extract_line_color),
         view_3d: type_node
             .has_tag_name((CHART_NS, "bar3DChart"))
-            .then(|| parse_view_3d(chart_node, type_node)),
+            .then(|| parse_view_3d(chart_node, plot_area, type_node)),
     })
 }
 
 /// The spec's defaults: rotX 15, rotY 20, depthPercent 100, gapDepth 150.
-fn parse_view_3d(chart_node: roxmltree::Node, type_node: roxmltree::Node) -> View3D {
+fn parse_view_3d(
+    chart_node: roxmltree::Node,
+    plot_area: roxmltree::Node,
+    type_node: roxmltree::Node,
+) -> View3D {
     let view = chart_child(chart_node, "view3D");
     let num = |node: Option<roxmltree::Node>, name, default| {
         node.and_then(|n| chart_attr(n, name))
@@ -289,6 +293,8 @@ fn parse_view_3d(chart_node: roxmltree::Node, type_node: roxmltree::Node) -> Vie
         rot_y: num(view, "rotY", 20.0),
         depth: num(view, "depthPercent", 100.0) / 100.0,
         gap_depth: num(Some(type_node), "gapDepth", 150.0) / 100.0,
+        series_axis: chart_child(plot_area, "serAx")
+            .is_some_and(|ax| chart_attr(ax, "delete") != Some("1")),
         shape: match chart_attr(type_node, "shape") {
             Some("cylinder") => BarShape::Cylinder,
             Some("cone") => BarShape::Cone,
@@ -310,6 +316,7 @@ fn detect_chart_type<'a>(
         let grouping = match chart_attr(n, "grouping") {
             Some("stacked") => BarGrouping::Stacked,
             Some("percentStacked") => BarGrouping::PercentStacked,
+            Some("standard") if n.has_tag_name((CHART_NS, "bar3DChart")) => BarGrouping::Standard,
             _ => BarGrouping::Clustered,
         };
         let gap_width_pct = chart_attr(n, "gapWidth")
