@@ -9,7 +9,8 @@
 use std::io::{Read, Seek};
 
 use crate::model::{
-    ConnectorShape, ConnectorType, EmbeddedImage, FloatingImage, HRelativeFrom, HorizontalPosition,
+    ConnectorShape, ConnectorType, EmbeddedImage, FloatingImage, GroupAlign, HRelativeFrom,
+    HorizontalPosition,
     Textbox, VRelativeFrom, VerticalPosition, WrapText, WrapType,
 };
 
@@ -124,6 +125,9 @@ fn compose(parent: GroupTransform, xfrm: &Xfrm) -> GroupTransform {
 
 struct BaseAnchor {
     x: f32,
+    /// An aligned group's alignment and width; its shapes then count `x`
+    /// from the group's left edge wherever the alignment puts it.
+    h_align: Option<(GroupAlign, f32)>,
     y: f32,
     h_rel: HRelativeFrom,
     v_rel: VRelativeFrom,
@@ -132,6 +136,15 @@ struct BaseAnchor {
     /// True for inline canvases — their flattened children flow at the
     /// paragraph text-start and so must pick up the paragraph's left indent.
     on_line: bool,
+}
+
+impl BaseAnchor {
+    fn h_position(&self, x: f32) -> HorizontalPosition {
+        match self.h_align {
+            Some((align, group_w)) => HorizontalPosition::InGroup { align, group_w, x },
+            None => HorizontalPosition::Offset(self.x + x),
+        }
+    }
 }
 
 /// Detect and flatten a canvas/group drawing. Returns None when the container
@@ -150,8 +163,15 @@ pub(super) fn parse_canvas_or_group<R: Read + Seek>(
     let base = if is_anchor {
         let (h_pos, h_rel, v_pos, v_rel) = parse_anchor_position(container);
         let (behind_doc, z_index) = anchor_z_order(container);
+        let h_align = match h_pos {
+            HorizontalPosition::AlignLeft => Some(GroupAlign::Left),
+            HorizontalPosition::AlignCenter => Some(GroupAlign::Center),
+            HorizontalPosition::AlignRight => Some(GroupAlign::Right),
+            _ => None,
+        };
         BaseAnchor {
             x: h_pos.offset_or_zero(),
+            h_align: h_align.map(|a| (a, display_w)),
             y: v_pos.offset_or_zero(),
             h_rel,
             v_rel,
@@ -162,6 +182,7 @@ pub(super) fn parse_canvas_or_group<R: Read + Seek>(
     } else {
         BaseAnchor {
             x: 0.0,
+            h_align: None,
             y: 0.0,
             h_rel: HRelativeFrom::Column,
             v_rel: VRelativeFrom::Paragraph,
@@ -286,7 +307,7 @@ fn emit_wsp<R: Read + Seek>(
         out.push(RunDrawingResult::TextBox(Textbox {
             width_pt: w,
             height_pt: h,
-            h_position: HorizontalPosition::Offset(base.x + x),
+            h_position: base.h_position(x),
             h_relative_from: base.h_rel,
             v_offset_pt: base.y + y,
             v_position: VerticalPosition::Offset(base.y + y),
@@ -328,7 +349,7 @@ fn emit_pic<R: Read + Seek>(
 fn group_image(image: EmbeddedImage, x: f32, y: f32, base: &BaseAnchor) -> FloatingImage {
     FloatingImage {
         image,
-        h_position: HorizontalPosition::Offset(base.x + x),
+        h_position: base.h_position(x),
         h_relative_from: base.h_rel,
         v_position: VerticalPosition::Offset(base.y + y),
         v_relative_from: base.v_rel,
@@ -349,7 +370,7 @@ fn group_image(image: EmbeddedImage, x: f32, y: f32, base: &BaseAnchor) -> Float
 }
 
 fn place_connector(conn: &mut ConnectorShape, x: f32, y: f32, base: &BaseAnchor) {
-    conn.h_position = HorizontalPosition::Offset(base.x + x);
+    conn.h_position = base.h_position(x);
     conn.h_relative_from = base.h_rel;
     conn.v_position = VerticalPosition::Offset(base.y + y);
     conn.v_relative_from = base.v_rel;
@@ -371,6 +392,7 @@ pub(super) fn parse_vml_group<R: Read + Seek>(
     let (behind_doc, z_index) = vml_z_order(box_style.z_index);
     let base = BaseAnchor {
         x: 0.0,
+        h_align: None,
         y: 0.0,
         h_rel: box_style.h_relative,
         v_rel: box_style.v_relative,

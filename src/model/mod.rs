@@ -336,6 +336,20 @@ pub enum HorizontalPosition {
     AlignCenter,
     AlignLeft,
     AlignRight,
+    /// A shape in an aligned group: the group, `group_w` wide, placed by
+    /// `align`, and the shape `x` in from the group's left edge.
+    InGroup {
+        align: GroupAlign,
+        group_w: f32,
+        x: f32,
+    },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum GroupAlign {
+    Left,
+    Center,
+    Right,
 }
 
 impl Default for HorizontalPosition {
@@ -361,6 +375,14 @@ impl HorizontalPosition {
             HorizontalPosition::AlignRight => origin + area_w - obj_w,
             HorizontalPosition::AlignLeft => origin,
             HorizontalPosition::Offset(o) => origin + o,
+            HorizontalPosition::InGroup { align, group_w, x } => {
+                let group = match align {
+                    GroupAlign::Left => HorizontalPosition::AlignLeft,
+                    GroupAlign::Center => HorizontalPosition::AlignCenter,
+                    GroupAlign::Right => HorizontalPosition::AlignRight,
+                };
+                group.place(origin, area_w, group_w) + x
+            }
         }
     }
 }

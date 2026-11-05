@@ -788,7 +788,6 @@ fn render_cell_floating_shapes(
     hf_sub: Option<&HfSubstitution>,
 ) {
     use super::positioning::render_connector;
-    use crate::model::HorizontalPosition;
 
     // Positioned relative to the cell column origin and paragraph top.
     for conn in &para.connectors {
@@ -802,12 +801,7 @@ fn render_cell_floating_shapes(
     }
 
     for tb in &para.textboxes {
-        let h_off = match tb.h_position {
-            HorizontalPosition::Offset(o) => o,
-            HorizontalPosition::AlignCenter => (col_w - tb.width_pt) / 2.0,
-            HorizontalPosition::AlignRight => col_w - tb.width_pt,
-            HorizontalPosition::AlignLeft => 0.0,
-        };
+        let h_off = tb.h_position.place(0.0, col_w, tb.width_pt);
         let tb_x = cell_x + h_off;
         let tb_y_top = para_top - tb.v_offset_pt;
         let tag = tagger

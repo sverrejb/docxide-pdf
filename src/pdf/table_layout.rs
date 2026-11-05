@@ -1721,6 +1721,9 @@ pub(super) fn compute_row_layouts(
                                                 col_w + legacy_origin - ecm.right - fi.image.display_width
                                             }
                                             HorizontalPosition::AlignLeft => 0.0,
+                                            p @ HorizontalPosition::InGroup { .. } => {
+                                                p.place(0.0, col_w, fi.image.display_width)
+                                            }
                                         };
                                         let v_offset = match fi.v_position {
                                             VerticalPosition::Offset(o) => o,
