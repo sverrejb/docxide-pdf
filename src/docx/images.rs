@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::io::{Read, Seek};
 
+use super::styles::ThemeFonts;
+
 use crate::model::{
     ConnectorShape, DiagramAnchor, EmbeddedImage, FloatingImage, HRelativeFrom, HorizontalPosition,
     ImageFormat, ImageGlow, ImageReflection, ImageShadow, InlineChart, InnerShadow,
@@ -98,7 +100,7 @@ fn gif_or_tiff_to_png(data: &[u8]) -> Option<Vec<u8>> {
 /// in the line like any other, keeping its place after the pictures before
 /// it, with the shape's own properties. An `a:tile` fill is drawn into one
 /// raster.
-fn picture_filled_shape<R: Read + Seek>(
+pub(super) fn picture_filled_shape<R: Read + Seek>(
     container: roxmltree::Node,
     ctx: &mut ParseContext<'_, R>,
     display_w: f32,
@@ -119,7 +121,7 @@ fn picture_filled_shape<R: Read + Seek>(
         img.data = std::sync::Arc::new(png);
         (img.pixel_width, img.pixel_height, img.format) = (w, h, ImageFormat::Png);
     }
-    apply_pic_props(&mut img, container);
+    apply_pic_props(&mut img, container, ctx.theme);
     Some(img)
 }
 
@@ -253,7 +255,7 @@ fn parse_src_rect(container: roxmltree::Node) -> Option<[f32; 4]> {
 
 /// Apply the picture properties shared by inline and anchored pictures: rotation,
 /// outline, effects, non-rectangular clip and `a:srcRect` crop.
-fn apply_pic_props(img: &mut EmbeddedImage, container: roxmltree::Node) {
+fn apply_pic_props(img: &mut EmbeddedImage, container: roxmltree::Node, theme: &ThemeFonts) {
     if let Some(doc_pr) = wpd(container, "docPr") {
         img.alt = doc_pr
             .attribute("descr")
@@ -272,7 +274,7 @@ fn apply_pic_props(img: &mut EmbeddedImage, container: roxmltree::Node) {
             .and_then(super::textbox::find_sp_pr)
     });
     img.rotation_deg = parse_image_rotation(sp_pr);
-    let (stroke_color, stroke_width) = parse_pic_outline(sp_pr);
+    let (stroke_color, stroke_width) = parse_pic_outline(sp_pr, theme);
     img.stroke_color = stroke_color;
     img.stroke_width = stroke_width;
     let effects = parse_pic_effects(sp_pr);
@@ -349,23 +351,12 @@ fn parse_image_rotation(sp_pr: Option<roxmltree::Node>) -> f32 {
         .unwrap_or(0.0)
 }
 
-/// Parse outline stroke from `pic:spPr/a:ln`.
-fn parse_pic_outline(sp_pr: Option<roxmltree::Node>) -> (Option<[u8; 3]>, f32) {
-    let ln = sp_pr.and_then(|s| s.children().find(|c| c.has_tag_name((DML_NS, "ln"))));
-    let Some(ln) = ln else {
-        return (None, 0.0);
-    };
-    let width = emu_attr_opt(ln, "w").unwrap_or(0.75); // default 0.75pt
-    let color = ln
-        .descendants()
-        .find(|n| n.has_tag_name((DML_NS, "srgbClr")))
-        .and_then(|n| n.attribute("val"))
-        .and_then(parse_hex_color);
-    if color.is_some() {
-        (color, width)
-    } else {
-        (None, 0.0)
-    }
+/// Parse outline stroke from `pic:spPr/a:ln` (or a picture-filled shape's).
+fn parse_pic_outline(sp_pr: Option<roxmltree::Node>, theme: &ThemeFonts) -> (Option<[u8; 3]>, f32) {
+    sp_pr
+        .and_then(|s| s.children().find(|c| c.has_tag_name((DML_NS, "ln"))))
+        .and_then(|ln| super::color::parse_line_stroke(ln, theme))
+        .map_or((None, 0.0), |(color, width)| (Some(color), width))
 }
 
 /// Parse color + alpha from a DML element that has `a:srgbClr` or `a:schemeClr`
@@ -767,10 +758,15 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
             if let Some(conn) = parse_connector_from_wsp(container, ctx.theme) {
                 return Some(RunDrawingResult::Connector(conn));
             }
-            if let Some(mut img) = find_blip_embeds(container)
-                .find_map(|id| read_image_from_zip(id, ctx.rels, ctx.zip, display_w, display_h))
+            if let Some(img) = picture_filled_shape(container, ctx, display_w, display_h)
+                .or_else(|| {
+                    let mut img = find_blip_embeds(container).find_map(|id| {
+                        read_image_from_zip(id, ctx.rels, ctx.zip, display_w, display_h)
+                    })?;
+                    apply_pic_props(&mut img, container, ctx.theme);
+                    Some(img)
+                })
             {
-                apply_pic_props(&mut img, container);
                 let (h_position, h_relative, v_position, v_relative) =
                     parse_anchor_position(container);
                 let (wrap_type, wrap_text, wrap_polygon) = parse_wrap_type(container);
@@ -844,7 +840,7 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                 id, ctx.rels, ctx.zip, display_w, display_h, extra_h, extra_top,
             )
         }) {
-            apply_pic_props(&mut img, container);
+            apply_pic_props(&mut img, container, ctx.theme);
             return Some(RunDrawingResult::Inline(img));
         }
 
@@ -921,6 +917,7 @@ pub(super) fn compute_drawing_info<R: Read + Seek>(
     para_node: roxmltree::Node,
     rels: &HashMap<String, String>,
     zip: &mut zip::ZipArchive<R>,
+    theme: &ThemeFonts,
 ) -> DrawingInfo {
     let mut max_height: f32 = 0.0;
     let mut image: Option<EmbeddedImage> = None;
@@ -952,7 +949,7 @@ pub(super) fn compute_drawing_info<R: Read + Seek>(
                     )
                 });
                 if let Some(ref mut img) = image {
-                    apply_pic_props(img, container);
+                    apply_pic_props(img, container, theme);
                 }
             }
         }

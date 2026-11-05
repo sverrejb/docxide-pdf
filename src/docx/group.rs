@@ -278,6 +278,10 @@ fn emit_wsp<R: Read + Seek>(
         return;
     }
 
+    if let Some(img) = super::images::picture_filled_shape(wsp, ctx, w, h) {
+        out.push(RunDrawingResult::Floating(group_image(img, x, y, base)));
+        return;
+    }
     if let Some(shape) = parse_wsp_shape(wsp, ctx) {
         out.push(RunDrawingResult::TextBox(Textbox {
             width_pt: w,

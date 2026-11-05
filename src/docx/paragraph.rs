@@ -233,7 +233,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     } else if has_inline_images {
         (None, 0.0)
     } else {
-        let drawing = compute_drawing_info(node, ctx.rels, ctx.zip);
+        let drawing = compute_drawing_info(node, ctx.rels, ctx.zip, ctx.theme);
         (drawing.image, drawing.height)
     };
 

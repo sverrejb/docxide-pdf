@@ -533,10 +533,12 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
         .map(|tc| parse_txbx_content_paragraphs(tc, ctx))
         .unwrap_or_default();
 
+    // A text-less picture-filled shape is a picture with the shape's outline
+    // (`picture_filled_shape`), not an outline around nothing.
+    let picture_fill = sp_pr.is_some_and(|sp| find_dml(sp, "blipFill").is_some());
     if paragraphs.is_empty()
         && link.is_none()
-        && (has_no_fill || fill.is_none())
-        && stroke_color.is_none()
+        && (picture_fill || ((has_no_fill || fill.is_none()) && stroke_color.is_none()))
     {
         return None;
     }

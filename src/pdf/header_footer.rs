@@ -1200,6 +1200,18 @@ pub(super) fn render_header_footer(
                                     img.display_height,
                                     img.clip_geometry.as_ref(),
                                 );
+                                if let Some(sc) = img.stroke_color {
+                                    super::smartart::stroke_image_border(
+                                        content,
+                                        fi_x,
+                                        fi_y_top - img.display_height,
+                                        img.display_width,
+                                        img.display_height,
+                                        sc,
+                                        img.stroke_width,
+                                        img.clip_geometry.as_ref(),
+                                    );
+                                }
                                 // Register float zone for wrapping images
                                 if fi.wrap_type.wraps_beside() {
                                     hdr_fz.push(HfFloatZone::for_float(fi, fi_x, fi_y_top));
