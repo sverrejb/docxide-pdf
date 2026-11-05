@@ -25,6 +25,93 @@ pub(super) fn cell_span_width(col_widths: &[f32], grid_col: usize, span: usize) 
         .sum()
 }
 
+/// The width a `w:tblW type="pct"` table is scaled to (`apply_pct_width`'s
+/// target); `None` for a table without a percentage width.
+pub(super) fn pct_target(table: &Table, available_w: f32, compat_mode: u32) -> Option<f32> {
+    let pct = table.width_pct?;
+    let basis = if compat_mode >= 15 {
+        available_w
+    } else {
+        available_w + table.first_cell_left_margin() + table.last_cell_right_margin()
+    };
+    Some(basis * pct.min(1.0))
+}
+
+/// Columns of a `tblLayout fixed` table come from the cells' preferred widths,
+/// not the saved grid (Word for Mac probes p28a–g: 720-twip cells under a
+/// 2746…-twip grid make 36pt columns in a `tblW auto` table, a doubled grid
+/// changes nothing, and a 100% table shares its width over them). In a
+/// percentage-width table each column's preference is the widest over its
+/// rows; pct cells take their share of the table width, dxa cells share the
+/// rest in proportion (p28c: a 25% cell and five 360-twip ones → 25% and five
+/// equal columns). When the shares overrun the width, columns are starved
+/// from the right down to 12pt each and the others share what is left
+/// (p28e, p28f and a corpus document: five 25% cells and a 360-twip one →
+/// four columns of 25% of the width less 24pt, then two 12pt slivers where
+/// Word sets one letter per line).
+pub(super) fn fixed_layout_columns(table: &Table, table_w: Option<f32>) -> Vec<f32> {
+    const MIN_COL: f32 = 12.0;
+    let n = table.col_widths.len();
+    let mut dxa = vec![0.0f32; n];
+    let mut pct = vec![None::<f32>; n];
+    let mut used = 0usize;
+    for row in &table.rows {
+        for (col, span, cell) in row.grid_cells() {
+            if col >= n {
+                break;
+            }
+            used = used.max((col + span).min(n));
+            if span != 1 {
+                continue;
+            }
+            match cell.width_pct {
+                Some(p) => pct[col] = Some(pct[col].map_or(p, |q| q.max(p))),
+                None => dxa[col] = dxa[col].max(cell.width),
+            }
+        }
+    }
+    let Some(w) = table_w else {
+        // `tblW auto`: the cells' twips as they are, the saved grid where a
+        // column names none.
+        return (0..n)
+            .map(|i| if pct[i].is_some() || dxa[i] <= 0.0 { table.col_widths[i] } else { dxa[i] })
+            .collect();
+    };
+    // ponytail: a column only spanned cells cover keeps the saved grid; how
+    // Word splits a spanned preference over its columns is unprobed. A table
+    // over 100% keeps it too, as in `apply_pct_width` (a 105% table in the
+    // fixtures fills its 478pt grid, wider than the 454pt column).
+    if table.width_pct.is_some_and(|p| p > 1.0)
+        || (0..used).any(|i| pct[i].is_none() && dxa[i] <= 0.0)
+    {
+        return table.col_widths.clone();
+    }
+    let mut widths = vec![0.0f32; n];
+    for starved in 0..=used {
+        let live = used - starved;
+        let base = w - MIN_COL * starved as f32;
+        let pct_sum: f32 = (0..live).filter_map(|i| pct[i]).sum();
+        let dxa_cols: Vec<usize> = (0..live).filter(|&i| pct[i].is_none()).collect();
+        if live == 0 || pct_sum * base + dxa_cols.len() as f32 * MIN_COL <= base + 0.01 {
+            for i in 0..live {
+                if let Some(p) = pct[i] {
+                    widths[i] = p * base;
+                }
+            }
+            let remaining = base - pct_sum * base;
+            let dxa_pref: f32 = dxa_cols.iter().map(|&i| dxa[i].max(MIN_COL)).sum();
+            for &i in &dxa_cols {
+                widths[i] = remaining * dxa[i].max(MIN_COL) / dxa_pref;
+            }
+            for width in &mut widths[live..used] {
+                *width = MIN_COL;
+            }
+            break;
+        }
+    }
+    widths
+}
+
 /// Scale column widths so the table occupies its `w:tblW type="pct"` share
 /// of the available content width. tcW pct values are mis-read as twips at
 /// parse time, but their proportions survive — only the total needs fixing.
@@ -2545,6 +2632,71 @@ pub(super) fn find_cell_split(
 mod tests {
     use super::*;
 
+    /// A fixed-layout table parsed from its XML: a 2746…-twip grid of six
+    /// columns and the given rows of `w:tcW` (width, type) pairs.
+    fn fixed_table(tbl_w: &str, rows: &[&[(u32, &str)]]) -> Table {
+        use std::io::{Cursor, Write};
+        use zip::write::SimpleFileOptions;
+        let grid = [2746, 2770, 2869, 1409, 1410, 2744]
+            .iter()
+            .map(|w| format!(r#"<w:gridCol w:w="{w}"/>"#))
+            .collect::<String>();
+        let rows = rows
+            .iter()
+            .map(|cells| {
+                let cells = cells
+                    .iter()
+                    .map(|(w, t)| {
+                        format!(r#"<w:tc><w:tcPr><w:tcW w:w="{w}" w:type="{t}"/></w:tcPr><w:p><w:r><w:t>x</w:t></w:r></w:p></w:tc>"#)
+                    })
+                    .collect::<String>();
+                format!("<w:tr>{cells}</w:tr>")
+            })
+            .collect::<String>();
+        let xml = format!(
+            r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl><w:tblPr>{tbl_w}<w:tblLayout w:type="fixed"/></w:tblPr><w:tblGrid>{grid}</w:tblGrid>{rows}</w:tbl><w:sectPr/></w:body></w:document>"#
+        );
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file("word/document.xml", SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(xml.as_bytes()).unwrap();
+        let mut doc = crate::docx::parse_bytes(&zip.finish().unwrap().into_inner()).unwrap();
+        let Block::Table(table) = doc.sections[0].blocks.remove(0) else {
+            panic!("table");
+        };
+        table
+    }
+
+    #[test]
+    fn fixed_layout_columns_come_from_the_cells() {
+        let pct = r#"<w:tblW w:w="5000" w:type="pct"/>"#;
+        let auto = r#"<w:tblW w:w="0" w:type="auto"/>"#;
+        let six_720: &[(u32, &str)] = &[(720, "dxa"); 6];
+        let quarter_then_360: &[(u32, &str)] = &[(1250, "pct"), (360, "dxa"), (360, "dxa"), (360, "dxa"), (360, "dxa"), (360, "dxa")];
+        let five_quarters: &[(u32, &str)] = &[(1250, "pct"), (1250, "pct"), (1250, "pct"), (1250, "pct"), (1250, "pct"), (360, "dxa")];
+        let close = |got: &[f32], want: &[f32]| {
+            assert_eq!(got.len(), want.len(), "{got:?}");
+            for (g, w) in got.iter().zip(want) {
+                assert!((g - w).abs() < 0.01, "{got:?} vs {want:?}");
+            }
+        };
+        // p28d: tblW auto keeps the cells' twips, the grid is ignored.
+        close(&fixed_layout_columns(&fixed_table(auto, &[six_720, six_720]), None), &[36.0; 6]);
+        // p28a: equal cells share a 100% table equally.
+        close(&fixed_layout_columns(&fixed_table(pct, &[six_720]), Some(468.0)), &[78.0; 6]);
+        // p28c: a 25% cell takes its share, the dxa cells share the rest.
+        close(
+            &fixed_layout_columns(&fixed_table(pct, &[six_720, quarter_then_360]), Some(512.0)),
+            &[128.0, 76.8, 76.8, 76.8, 76.8, 76.8],
+        );
+        // p28e and the corpus document: five 25% cells overrun the width; the
+        // last two columns starve to 12pt and the rest share 512 − 24.
+        close(
+            &fixed_layout_columns(&fixed_table(pct, &[six_720, quarter_then_360, five_quarters]), Some(512.0)),
+            &[122.0, 122.0, 122.0, 122.0, 12.0, 12.0],
+        );
+    }
+
     #[test]
     fn nested_autofit_preserves_each_level_of_cell_padding() {
         use std::io::{Cursor, Write};
@@ -2722,6 +2874,7 @@ mod tests {
                     .into_iter()
                     .map(|width| TableCell {
                         width,
+                        width_pct: None,
                         content: vec![],
                         borders: Default::default(),
                         shading: None,
@@ -2781,6 +2934,7 @@ mod tests {
                     .into_iter()
                     .map(|width| TableCell {
                         width,
+                        width_pct: None,
                         content: vec![],
                         borders: Default::default(),
                         shading: None,

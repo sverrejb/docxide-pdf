@@ -510,10 +510,15 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
         {
             let ci = grid_col;
             let tc_pr = wml(tc, "tcPr");
-            let cell_width = tc_pr
-                .and_then(|pr| wml(pr, "tcW"))
+            let tc_w = tc_pr.and_then(|pr| wml(pr, "tcW"));
+            let cell_width = tc_w
                 .and_then(|w| twips_attr(w, "w"))
                 .unwrap_or_else(|| col_widths.get(ci).copied().unwrap_or(72.0));
+            let cell_width_pct = tc_w
+                .filter(|w| w.attribute((WML_NS, "type")) == Some("pct"))
+                .and_then(|w| w.attribute((WML_NS, "w")))
+                .and_then(|v| v.trim_end_matches('%').parse::<f32>().ok())
+                .map(|v| v / 5000.0);
 
             // Per OOXML §17.4.17, absent gridSpan defaults to 1.
             // Word strictly honours this — it never infers larger spans
@@ -971,6 +976,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
             }
             cells.push(TableCell {
                 width: cell_width,
+                width_pct: cell_width_pct,
                 content: cell_blocks,
                 borders,
                 shading,

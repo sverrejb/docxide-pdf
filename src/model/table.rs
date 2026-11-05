@@ -269,6 +269,9 @@ pub struct HatchPattern {
 
 pub struct TableCell {
     pub width: f32,
+    /// `w:tcW w:type="pct"`: the preferred width as a fraction of the table
+    /// width (`width` then holds the raw 5000ths, read as twips).
+    pub width_pct: Option<f32>,
     pub content: Vec<Block>,
     pub borders: CellBorders,
     pub shading: Option<[u8; 3]>,

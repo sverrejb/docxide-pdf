@@ -737,6 +737,7 @@ fn convert_table(
 
             cells.push(TableCell {
                 width: w_pt,
+                width_pct: None,
                 content: cell_paras.into_iter().map(Block::Paragraph).collect(),
                 borders,
                 shading: None,

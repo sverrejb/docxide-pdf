@@ -17,8 +17,9 @@ use super::table_layout::{
     CELL_START, CellContentItem, CellCursor, CellFloatingImageLayout, CellLayout,
     CellParagraphLayout, Chunk, HfSubstitution, RowLayout, RowPiece, apply_pct_width,
     auto_fit_columns, cell_span_width, cell_x_offset, chunk_space_before, compute_merge_spans,
-    compute_row_layouts, cursor_chunks, find_cell_split, item_chunk_height, keep_chain_end,
-    min_content_widths, para_block_height, partial_row_height, row_pieces, squeeze_to_width,
+    compute_row_layouts, cursor_chunks, find_cell_split, fixed_layout_columns,
+    item_chunk_height, keep_chain_end, min_content_widths, para_block_height,
+    partial_row_height, pct_target, row_pieces, squeeze_to_width,
 };
 use super::tagging::{CellTagger, TableTags, Tags};
 
@@ -1898,7 +1899,11 @@ pub(super) fn render_table(
     // only steers the window-fill path, not the nested-table shrink path.
     let fit_w = available_w.unwrap_or(sp.page_width - sp.margin_left - sp.margin_right);
     let mut col_widths = if table.fixed_layout {
-        table.col_widths.clone()
+        if (table.width_pct.is_some() || table.auto_width) && !table.cells_unsized {
+            fixed_layout_columns(table, pct_target(table, fit_w, ctx.compat_mode))
+        } else {
+            table.col_widths.clone()
+        }
     } else if let Some(col_w) = available_w {
         // A table in a newspaper column sizes like one on the page, then is
         // squeezed into the column (the nested-table path shrank it to content).

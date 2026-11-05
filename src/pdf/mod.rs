@@ -2237,7 +2237,14 @@ fn lines_kept_together(widow_control: bool, n: impl FnOnce() -> usize) -> usize 
 /// `table::render_table` sizes it.
 fn first_row_height(table: &crate::model::Table, ctx: &RenderContext, col_w: f32) -> f32 {
     let mut col_widths = if table.fixed_layout {
-        table.col_widths.clone()
+        if (table.width_pct.is_some() || table.auto_width) && !table.cells_unsized {
+            table_layout::fixed_layout_columns(
+                table,
+                table_layout::pct_target(table, col_w, ctx.compat_mode),
+            )
+        } else {
+            table.col_widths.clone()
+        }
     } else {
         table_layout::auto_fit_columns(table, ctx.fonts, Some(col_w), Some(col_w))
     };
