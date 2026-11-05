@@ -520,8 +520,8 @@ fn draw_chart_series(
     x_axis_max: f32,
     depth: Option<View3D>,
     alpha_states: &mut HashSet<u8>,
-) -> Vec<BarTop> {
-    let mut bar_tops = Vec::new();
+) -> Vec<ValueLabel> {
+    let mut labels = Vec::new();
     let PlotRect {
         x: plot_x,
         y: plot_y,
@@ -625,6 +625,18 @@ fn draw_chart_series(
                     for (series, len) in c.series.iter().zip(lens) {
                         let pos = val_origin + cumulative;
                         bar(content, series.color, group_pos, pos, len, stack);
+                        if c.show_values {
+                            let (along, across) = (pos + len / 2.0, group_pos + thick / 2.0);
+                            labels.push(ValueLabel {
+                                at: if horizontal {
+                                    (along, across)
+                                } else {
+                                    (across, along)
+                                },
+                                value: series.values.get(ci).copied().unwrap_or(0.0),
+                                place: LabelPlace::Center,
+                            });
+                        }
                         cumulative += len;
                     }
                 } else {
@@ -633,11 +645,20 @@ fn draw_chart_series(
                         let len = (val / axis_max) * val_extent;
                         let pos = group_pos + si as f32 * thick;
                         bar(content, series.color, pos, val_origin, len, len);
-                        if c.show_values && !horizontal {
-                            bar_tops.push(BarTop {
-                                x: pos + thick / 2.0,
-                                top: val_origin + len,
-                                value: val,
+                        if c.show_values {
+                            let (end, across) = (val_origin + len, pos + thick / 2.0);
+                            labels.push(if horizontal {
+                                ValueLabel {
+                                    at: (end, across),
+                                    value: val,
+                                    place: LabelPlace::After,
+                                }
+                            } else {
+                                ValueLabel {
+                                    at: (across, end),
+                                    value: val,
+                                    place: LabelPlace::Above,
+                                }
                             });
                         }
                     }
@@ -788,20 +809,31 @@ fn draw_chart_series(
         }
         ChartType::Pie | ChartType::Doughnut { .. } | ChartType::Radar => unreachable!(),
     }
-    bar_tops
+    labels
 }
 
 /// A value label's baseline above its bar's front face, 2-D and 3-D alike
 /// (Word probes: 6.63pt and 6.65pt).
 const VALUE_LABEL_RISE: f32 = 6.64;
+/// A label beside a bar's front face starts this far past its end, and a
+/// label on a bar's centre line sits its baseline this far below it
+/// (hbar3d and stacked3d probes: 6.2–6.7pt and 3.45–3.9pt over 8 labels).
+const VALUE_LABEL_GAP: f32 = 6.45;
+const VALUE_LABEL_SINK: f32 = 3.66;
 
-/// Where a bar's value label goes: above `top`, centred on `x`.
-/// ponytail: vertical clustered bars only; stacked and horizontal bars and
-/// line points do not show their values yet.
-struct BarTop {
-    x: f32,
-    top: f32,
+/// A bar's value label, placed by Word's defaults for its bar: above a
+/// column's front face, after a bar's end, centred in a stacked segment.
+/// ponytail: line, area and pie points do not show their values yet.
+struct ValueLabel {
+    at: (f32, f32),
     value: f32,
+    place: LabelPlace,
+}
+
+enum LabelPlace {
+    Above,
+    After,
+    Center,
 }
 
 /// A chart title's size and place: torture_test's 18pt title sits on a
@@ -1228,7 +1260,7 @@ pub(super) fn render_chart(
         }
     }
 
-    let bar_tops = draw_chart_series(
+    let value_labels = draw_chart_series(
         c,
         content,
         plot,
@@ -1342,10 +1374,15 @@ pub(super) fn render_chart(
             show_text(content, key, TITLE_PT, tx, ty, title, font);
         }
 
-        for bar in &bar_tops {
-            let label = data_label(bar.value, val_fmt);
+        for value_label in &value_labels {
+            let label = data_label(value_label.value, val_fmt);
             let tw = text_width(&label, font_size, label_font);
-            let (lx, ly) = (bar.x - tw / 2.0, bar.top + VALUE_LABEL_RISE);
+            let (x, y) = value_label.at;
+            let (lx, ly) = match value_label.place {
+                LabelPlace::Above => (x - tw / 2.0, y + VALUE_LABEL_RISE),
+                LabelPlace::After => (x + VALUE_LABEL_GAP, y - VALUE_LABEL_SINK),
+                LabelPlace::Center => (x - tw / 2.0, y - VALUE_LABEL_SINK),
+            };
             show_text(
                 content,
                 label_font_key,
