@@ -55,6 +55,8 @@ pub(super) struct EmbeddedImages {
 // land at 189–192 ppi, the largest kept one is at 184; case27's 1800×1200
 // photo becomes 479×320). A desktop export with picture compression off keeps
 // the source pixels instead, which is where "never downsample" came from.
+// `ConvertOptions::resample_pictures(false)` (CLI `--no-resample`,
+// `DOCXIDE_NO_RESAMPLE=1`) selects that desktop behaviour (issue #138).
 const DOWNSAMPLE_DPI_THRESHOLD: f32 = 192.0;
 const DOWNSAMPLE_DPI_TARGET: f32 = 192.0;
 // Word's online export writes every JPEG at libjpeg quality 75 (all 30 across
@@ -344,6 +346,7 @@ fn embed_single_image(
     pdf: &mut Pdf,
     alloc: &mut impl FnMut() -> Ref,
     fonts: &HashMap<String, FontEntry>,
+    resample: bool,
 ) -> String {
     let Some(src_rect) = img.src_rect else {
         let xobj_ref = embed_image_xobject(
@@ -352,6 +355,7 @@ fn embed_single_image(
             pdf,
             alloc,
             fonts,
+            resample,
         );
         return register_xobject(image_xobjects, xobj_ref);
     };
@@ -364,7 +368,7 @@ fn embed_single_image(
     );
     // ponytail: the reflection re-decodes the uncropped source and the soft-edge mask
     // rings the source's edges; crop those too if a fixture ever combines them.
-    let inner_ref = embed_image_xobject(img, source_extent, pdf, alloc, fonts);
+    let inner_ref = embed_image_xobject(img, source_extent, pdf, alloc, fonts, resample);
     // The inner image is reachable only through this form, so it is not registered on
     // the pages.
     let mut content = Content::new();
@@ -387,14 +391,19 @@ fn embed_image_xobject(
     pdf: &mut Pdf,
     alloc: &mut impl FnMut() -> Ref,
     fonts: &HashMap<String, FontEntry>,
+    resample: bool,
 ) -> Ref {
     let xobj_ref = alloc();
-    let target = downscale_target(
-        img.pixel_width,
-        img.pixel_height,
-        display_width,
-        display_height,
-    );
+    let target = if resample {
+        downscale_target(
+            img.pixel_width,
+            img.pixel_height,
+            display_width,
+            display_height,
+        )
+    } else {
+        None
+    };
 
     // Helper: create soft-edge SMask for a given pixel size
     let make_soft_edge_smask =
@@ -829,6 +838,7 @@ pub(super) fn embed_all_images(
     pdf: &mut Pdf,
     alloc: &mut impl FnMut() -> Ref,
     fonts: &HashMap<String, FontEntry>,
+    resample: bool,
 ) -> EmbeddedImages {
     let mut image_pdf_names: HashMap<usize, String> = HashMap::new();
     let mut inline_image_pdf_names: HashMap<(usize, usize), String> = HashMap::new();
@@ -845,7 +855,14 @@ pub(super) fn embed_all_images(
             for block in &section.blocks {
                 if let Block::Paragraph(para) = block {
                     if let Some(img) = &para.image {
-                        let name = embed_single_image(img, &mut image_xobjects, pdf, alloc, fonts);
+                        let name = embed_single_image(
+                            img,
+                            &mut image_xobjects,
+                            pdf,
+                            alloc,
+                            fonts,
+                            resample,
+                        );
                         image_pdf_names.insert(global_block_idx, name);
                         let fx = embed_image_effects(
                             img,
@@ -860,8 +877,14 @@ pub(super) fn embed_all_images(
                     }
                     for (run_idx, run) in para.runs.iter().enumerate() {
                         if let Some(img) = &run.inline_image {
-                            let name =
-                                embed_single_image(img, &mut image_xobjects, pdf, alloc, fonts);
+                            let name = embed_single_image(
+                                img,
+                                &mut image_xobjects,
+                                pdf,
+                                alloc,
+                                fonts,
+                                resample,
+                            );
                             inline_image_pdf_names.insert((global_block_idx, run_idx), name);
                             let fx = embed_image_effects(
                                 img,
@@ -876,8 +899,14 @@ pub(super) fn embed_all_images(
                         }
                     }
                     for (fi_idx, fi) in para.floating_images.iter().enumerate() {
-                        let name =
-                            embed_single_image(&fi.image, &mut image_xobjects, pdf, alloc, fonts);
+                        let name = embed_single_image(
+                            &fi.image,
+                            &mut image_xobjects,
+                            pdf,
+                            alloc,
+                            fonts,
+                            resample,
+                        );
                         floating_image_pdf_names.insert((global_block_idx, fi_idx), name);
                         let fx = embed_image_effects(
                             &fi.image,
@@ -918,8 +947,14 @@ pub(super) fn embed_all_images(
                     for block in &hf.blocks {
                         if let Block::Paragraph(para) = block {
                             if let Some(img) = &para.image {
-                                let name =
-                                    embed_single_image(img, &mut image_xobjects, pdf, alloc, fonts);
+                                let name = embed_single_image(
+                                    img,
+                                    &mut image_xobjects,
+                                    pdf,
+                                    alloc,
+                                    fonts,
+                                    resample,
+                                );
                                 hf_image_names.insert((si, hf_type, pi), name);
                                 let fx = embed_image_effects(
                                     img,
@@ -940,6 +975,7 @@ pub(super) fn embed_all_images(
                                         pdf,
                                         alloc,
                                         fonts,
+                                        resample,
                                     );
                                     hf_inline_image_names.insert((si, hf_type, pi, ri), name);
                                     embed_image_effects(
@@ -958,6 +994,7 @@ pub(super) fn embed_all_images(
                                     pdf,
                                     alloc,
                                     fonts,
+                                    resample,
                                 );
                                 hf_floating_image_names.insert((si, hf_type, pi, fi), name);
                                 embed_image_effects(
@@ -1021,6 +1058,7 @@ pub(super) fn embed_all_images(
                                 pdf,
                                 alloc,
                                 fonts,
+                                resample,
                             );
                         }
                     }
@@ -1061,6 +1099,7 @@ pub(super) fn embed_all_images(
                 pdf,
                 alloc,
                 fonts,
+                resample,
             );
         }
     }
@@ -1079,6 +1118,7 @@ pub(super) fn embed_all_images(
                                 pdf,
                                 alloc,
                                 fonts,
+                                resample,
                             );
                         }
                     }
@@ -1135,10 +1175,11 @@ fn embed_keyed_image(
     pdf: &mut Pdf,
     alloc: &mut impl FnMut() -> Ref,
     fonts: &HashMap<String, FontEntry>,
+    resample: bool,
 ) {
     image_names
         .entry(img.key())
-        .or_insert_with(|| embed_single_image(img, image_xobjects, pdf, alloc, fonts));
+        .or_insert_with(|| embed_single_image(img, image_xobjects, pdf, alloc, fonts, resample));
 }
 
 /// `embed_keyed_image` for a table-cell picture, with its effects.
@@ -1151,9 +1192,17 @@ fn embed_table_image(
     pdf: &mut Pdf,
     alloc: &mut impl FnMut() -> Ref,
     fonts: &HashMap<String, FontEntry>,
+    resample: bool,
 ) {
     if let std::collections::hash_map::Entry::Vacant(e) = image_names.entry(img.key()) {
-        e.insert(embed_single_image(img, image_xobjects, pdf, alloc, fonts));
+        e.insert(embed_single_image(
+            img,
+            image_xobjects,
+            pdf,
+            alloc,
+            fonts,
+            resample,
+        ));
         let fx = embed_image_effects(img, image_xobjects, effect_counter, pdf, alloc);
         if fx.has_any() {
             effect_names.insert(img.key(), fx);
@@ -1168,20 +1217,45 @@ fn embed_textbox_images(
     pdf: &mut Pdf,
     alloc: &mut impl FnMut() -> Ref,
     fonts: &HashMap<String, FontEntry>,
+    resample: bool,
 ) {
     let mut stack: Vec<&[Paragraph]> = vec![tb.content()];
     while let Some(paras) = stack.pop() {
         for para in paras {
             if let Some(img) = &para.image {
-                embed_keyed_image(img, image_names, image_xobjects, pdf, alloc, fonts);
+                embed_keyed_image(
+                    img,
+                    image_names,
+                    image_xobjects,
+                    pdf,
+                    alloc,
+                    fonts,
+                    resample,
+                );
             }
             for run in &para.runs {
                 if let Some(img) = &run.inline_image {
-                    embed_keyed_image(img, image_names, image_xobjects, pdf, alloc, fonts);
+                    embed_keyed_image(
+                        img,
+                        image_names,
+                        image_xobjects,
+                        pdf,
+                        alloc,
+                        fonts,
+                        resample,
+                    );
                 }
             }
             for fi in &para.floating_images {
-                embed_keyed_image(&fi.image, image_names, image_xobjects, pdf, alloc, fonts);
+                embed_keyed_image(
+                    &fi.image,
+                    image_names,
+                    image_xobjects,
+                    pdf,
+                    alloc,
+                    fonts,
+                    resample,
+                );
             }
             for nested in &para.textboxes {
                 stack.push(&nested.paragraphs);
@@ -1216,6 +1290,7 @@ mod tests {
                     reference
                 },
                 &std::collections::HashMap::new(),
+                true,
             );
             assert_eq!(images.table_cell_image_names.len(), 1);
             assert_eq!(images.image_xobjects.len(), 1);

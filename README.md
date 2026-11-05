@@ -122,6 +122,12 @@ docxide-pdf input.docx
 
 # Specify output path (defaults to input.pdf)
 docxide-pdf input.docx output.pdf
+
+# Keep every picture's source pixels (Word's online export resamples pictures above 192 ppi)
+docxide-pdf --no-resample input.docx
+
+# Fonts from a directory of your own first (repeatable; the first wins)
+docxide-pdf --fonts ./fonts input.docx
 ```
 
 The CLI never overwrites: if the output exists it writes `output(2).pdf`, `output(3).pdf` and so on. `RUST_LOG=info` prints timings.
@@ -150,6 +156,17 @@ To keep everything in memory, `convert_docx_bytes_to_pdf_bytes` takes the DOCX a
 let pdf: Vec<u8> = docxide_pdf::convert_docx_bytes_to_pdf_bytes(&docx_bytes)?;
 ```
 
+Each function has a `_with` variant that takes a `ConvertOptions`. The defaults reproduce Word's online export; each option moves one behaviour towards desktop Word:
+
+```rust
+use docxide_pdf::{ConvertOptions, convert_docx_to_pdf_with};
+
+let options = ConvertOptions::new().resample_pictures(false); // keep source pixels
+convert_docx_to_pdf_with("input.docx", "output.pdf", &options)?;
+```
+
+The functions without an options argument use `ConvertOptions::from_env()`, so the same settings can come from `DOCXIDE_*` environment variables (see [Configuration](#configuration)). Options passed explicitly never read the environment.
+
 ## Works well with `docxide-template`
 
 [`docxide-template`](https://github.com/sverrejb/docxide-template) is a sibling crate for type-safe MS Word templates. It scans a folder of `.docx` files at compile time and generates a Rust struct per template, with `{Placeholder}` patterns turned into snake_case fields. Pair it with `docxide-pdf` to go from template → filled DOCX → PDF in a single, fully in-memory pipeline:
@@ -177,12 +194,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Configuration
 
+Every conversion option has three equivalent spellings: a `ConvertOptions` field for library callers, a `DOCXIDE_*` environment variable read by `ConvertOptions::from_env()` (and so by the functions without an options argument), and a CLI flag, which wins over the variable. The defaults are always Word's online export, and boolean variables are on unless empty, `0` or `false`. There is no configuration file; an application that wants one fills in `ConvertOptions` from its own.
+
 ### Environment Variables
 
 | Variable | Description |
 |---|---|
-| `DOCXIDE_FONTS` | Additional font directories to search, colon-separated (`;` on Windows). Highest priority: a face found there wins over the system's copy of the same family and style, and the first directory listed wins over the ones after it. System fonts still fill in the families and styles the directories lack. |
-| `DOCXIDE_NO_FONT_CACHE` | Set to any value to disable the font index disk cache. Forces a full font scan on every conversion. Useful for debugging font resolution issues. |
+| `DOCXIDE_REVISIONS` | `markup` prints tracked changes as Word's All Markup view (insertions underlined, deletions struck through in the author's colour, change bars in the margin) instead of the final text. Same as `--markup` or `ConvertOptions::revisions(RevisionView::Markup)`. |
+| `DOCXIDE_NO_RESAMPLE` | `1` keeps every picture's source pixels instead of resampling pictures above 192 ppi down to 192 ppi like Word's online export (what a desktop export with picture compression off does). Same as `--no-resample` or `ConvertOptions::resample_pictures(false)`. |
+| `DOCXIDE_FONTS` | Additional font directories to search, colon-separated (`;` on Windows). Highest priority: a face found there wins over the system's copy of the same family and style, and the first directory listed wins over the ones after it. System fonts still fill in the families and styles the directories lack. Same as `--fonts DIR` (repeatable) or `ConvertOptions::font_dirs([...])`. |
+| `DOCXIDE_NO_FONT_CACHE` | `1` disables the font index disk cache and scans the font directories on every conversion. Useful for debugging font resolution issues. Same as `--no-font-cache` or `ConvertOptions::font_cache(false)`. |
+| `DOCXIDE_DEBUG_WRAP` | `1` draws the float wrap zones on the page. Same as `--debug-wrap` or `ConvertOptions::debug_wrap(true)`. |
 
 Font scanning results are cached to disk (per-directory, invalidated by mtime). The cache is stored at:
 - **macOS**: `~/Library/Caches/docxide-pdf/font-index.tsv`

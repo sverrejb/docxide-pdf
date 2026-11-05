@@ -666,6 +666,7 @@ mod tests {
                 used_chars: &chars.chars().collect(),
                 word_text: true,
                 extra_glyphs: None,
+                font_index: crate::fonts::discovery::test_index(),
             },
             &mut || {
                 let r = Ref::new(next);

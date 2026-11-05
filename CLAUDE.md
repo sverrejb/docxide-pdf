@@ -100,7 +100,7 @@ See `roadmap.md` for planned work prioritized by impact. **Always consult the ro
 
 ```
 src/
-  lib.rs              — public API: convert_docx_to_pdf(input, output), convert_docx_bytes_to_pdf(bytes, output) and convert_docx_bytes_to_pdf_bytes(bytes) -> Vec<u8>; paths are impl AsRef<Path>
+  lib.rs              — public API: convert_docx_to_pdf(input, output), convert_docx_bytes_to_pdf(bytes, output) and convert_docx_bytes_to_pdf_bytes(bytes) -> Vec<u8>; paths are impl AsRef<Path>. Each has a `_with(…, &ConvertOptions)` variant; the plain ones use `ConvertOptions::from_env()`. A new option gets all three spellings (field + builder method, `DOCXIDE_*` variable in `from_vars`, CLI flag in main.rs); defaults = Word's online export
   error.rs            — Error enum (InvalidDocx, Zip, Xml, Pdf, Io variants)
   main.rs             — CLI binary (behind `cli` feature)
   model/
@@ -180,9 +180,11 @@ tests/
 
 ## Environment Variables
 
-- `DOCXIDE_FONTS` — colon-separated (`;` on Windows) list of additional font directories to search (`.cargo/config.toml` points it at the repo's `fonts/` dir for cargo runs)
-- `DOCXIDE_NO_FONT_CACHE` — set to any value to disable the font index disk cache (forces full scan every time)
-- `DOCXIDE_DEBUG_WRAP` — set to draw the float wrap zones on the page
+- `DOCXIDE_FONTS` — colon-separated (`;` on Windows) list of additional font directories to search (`.cargo/config.toml` points it at the repo's `fonts/` dir for cargo runs); `--fonts DIR`, `ConvertOptions::font_dirs`
+- `DOCXIDE_NO_FONT_CACHE` — `1` disables the font index disk cache (forces full scan every time); `--no-font-cache`, `ConvertOptions::font_cache(false)`
+- `DOCXIDE_DEBUG_WRAP` — `1` draws the float wrap zones on the page; `--debug-wrap`, `ConvertOptions::debug_wrap(true)`
+- `DOCXIDE_REVISIONS` — `markup` prints the All Markup view of tracked changes instead of the final text; `--markup`, `ConvertOptions::revisions(RevisionView::Markup)`
+- `DOCXIDE_NO_RESAMPLE` — `1` keeps picture source pixels instead of the online export's 192 ppi resampling (CLI `--no-resample`, `ConvertOptions::resample_pictures(false)`)
 - Test harness: `DOCXIDE_CASE` (one fixture by name), `DOCXIDE_GROUP` (one fixture group), `DOCXIDE_IMAGES` (also save side-by-side comparison PNGs), `DOCXIDE_LO_COMPARE` (opt into the LibreOffice comparison), `DOCXIDE_A11Y_GEN` (which PDF in tests/output to score for accessibility), `LIBREOFFICE_PATH` (soffice binary)
 - `DOCX_BIN` — CLI binary for `tools/engine_compare.py`
 

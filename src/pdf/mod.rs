@@ -28,6 +28,7 @@ use std::collections::{HashMap, HashSet};
 
 use pdf_writer::{Content, Name, Pdf, Ref};
 
+use crate::ConvertOptions;
 use crate::error::Error;
 use crate::fonts::FontEntry;
 use crate::model::{
@@ -5306,8 +5307,8 @@ pub(super) struct BodyPageFields {
     total: usize,
 }
 
-pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
-    let (pdf, page_fields) = render_pass(doc, None)?;
+pub fn render(doc: &Document, options: &ConvertOptions) -> Result<Vec<u8>, Error> {
+    let (pdf, page_fields) = render_pass(doc, None, options)?;
     // Word shows body PAGE and NUMPAGES fields live, not their cached result,
     // and their values are known only once the document is paginated.
     let has_page_fields = body_runs(doc).any(|r| {
@@ -5317,7 +5318,7 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
         )
     });
     if has_page_fields {
-        return render_pass(doc, Some(&page_fields)).map(|(pdf, _)| pdf);
+        return render_pass(doc, Some(&page_fields), options).map(|(pdf, _)| pdf);
     }
     Ok(pdf)
 }
@@ -5325,8 +5326,9 @@ pub fn render(doc: &Document) -> Result<Vec<u8>, Error> {
 fn render_pass(
     doc: &Document,
     page_fields: Option<&BodyPageFields>,
+    options: &ConvertOptions,
 ) -> Result<(Vec<u8>, BodyPageFields), Error> {
-    let debug_wrap = std::env::var("DOCXIDE_DEBUG_WRAP").is_ok();
+    let debug_wrap = options.debug_wrap;
     let t0 = std::time::Instant::now();
     // Bars collected by a previous pass (headers, footers) must not leak in.
     layout::take_change_bars();
@@ -5341,7 +5343,7 @@ fn render_pass(
     let catalog_id = alloc();
     let pages_id = alloc();
 
-    let (seen_fonts, font_order) = collect_and_register_fonts(doc, &mut pdf, &mut alloc);
+    let (seen_fonts, font_order) = collect_and_register_fonts(doc, &mut pdf, &mut alloc, options);
     let smartart_font_key = font_order.first().map(|s| s.as_str()).unwrap_or("");
     let t_fonts = t0.elapsed();
 
@@ -5361,7 +5363,13 @@ fn render_pass(
         effect_inline_names,
         effect_hf_names,
         effect_table_names,
-    } = embed_all_images(doc, &mut pdf, &mut alloc, &seen_fonts);
+    } = embed_all_images(
+        doc,
+        &mut pdf,
+        &mut alloc,
+        &seen_fonts,
+        options.resample_pictures,
+    );
 
     let t_images = t0.elapsed();
 

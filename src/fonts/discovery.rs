@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::OnceLock;
+use std::sync::Mutex;
 use std::time::Instant;
 use std::{env, fs};
 
@@ -12,9 +12,35 @@ use super::cache::{CachedFace, CachedFile, FontCache, dir_mtime, load_cache, sav
 /// (lowercase family name, bold, italic) -> (file path, face index within TTC)
 type FontLookup = HashMap<(String, bool, bool), (PathBuf, u32)>;
 
-static FONT_INDEX: OnceLock<FontLookup> = OnceLock::new();
-/// Lowercase families that only Mac Roman–named macOS system faces provide.
-static MAC_ONLY_FAMILIES: OnceLock<HashSet<String>> = OnceLock::new();
+/// What a scan is built from: the directories a conversion adds to the
+/// system ones (the first listed wins) and whether the disk cache is used.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct FontSetup {
+    pub(crate) dirs: Vec<PathBuf>,
+    pub(crate) cache: bool,
+}
+
+pub(crate) struct FontIndex {
+    lookup: FontLookup,
+    /// Lowercase families that only Mac Roman–named macOS system faces provide.
+    mac_only: HashSet<String>,
+}
+
+impl FontIndex {
+    /// One scan per distinct setup for the life of the process.
+    pub(crate) fn for_setup(setup: &FontSetup) -> &'static FontIndex {
+        // ponytail: leaked once per distinct setup; a server cycling through
+        // many font-directory sets would keep an index per set.
+        static INDEXES: Mutex<Vec<(FontSetup, &'static FontIndex)>> = Mutex::new(Vec::new());
+        let mut indexes = INDEXES.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((_, index)) = indexes.iter().find(|(s, _)| s == setup) {
+            return index;
+        }
+        let index: &'static FontIndex = Box::leak(Box::new(scan_font_dirs(setup)));
+        indexes.push((setup.clone(), index));
+        index
+    }
+}
 
 /// Return all localized family names for a font face (deduplicated by lowercase),
 /// and whether they came only from Mac Roman records: macOS system faces such as
@@ -74,7 +100,7 @@ fn read_font_style(data: &[u8], face_index: u32) -> Option<(Vec<String>, bool, b
     ))
 }
 
-fn font_directories() -> Vec<PathBuf> {
+fn font_directories(extra: &[PathBuf]) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
 
     // The scan is a LIFO stack and the first-scanned face wins, so later entries
@@ -108,25 +134,15 @@ fn font_directories() -> Vec<PathBuf> {
         }
     }
 
-    // DOCXIDE_FONTS pushed last = HIGHEST priority. A directory supplied explicitly
-    // pins the font build regardless of what the host has installed (#105); the
-    // system directories still fill in the families and styles it lacks.
-    if let Ok(val) = env::var("DOCXIDE_FONTS") {
-        let sep = if cfg!(windows) { ';' } else { ':' };
-        dirs.extend(custom_font_dirs(&val, sep));
-    }
+    // The conversion's own directories (`ConvertOptions::font_dirs`) pushed last
+    // = HIGHEST priority. A directory supplied explicitly pins the font build
+    // regardless of what the host has installed (#105); the system directories
+    // still fill in the families and styles it lacks. The first directory listed
+    // is pushed last, so the scan pops it first and it wins over the ones after
+    // it (like PATH).
+    dirs.extend(extra.iter().rev().cloned());
 
     dirs
-}
-
-/// `DOCXIDE_FONTS` entries in stack order: the first directory listed is pushed
-/// last, so the scan pops it first and it wins over the ones after it (like PATH).
-fn custom_font_dirs(val: &str, sep: char) -> Vec<PathBuf> {
-    val.rsplit(sep)
-        .map(str::trim)
-        .filter(|part| !part.is_empty())
-        .map(PathBuf::from)
-        .collect()
 }
 
 #[cfg(test)]
@@ -135,9 +151,17 @@ mod tests {
 
     #[test]
     fn first_listed_custom_dir_is_popped_first() {
-        let dirs = custom_font_dirs(" a : :b:c ", ':');
-        assert_eq!(dirs, [PathBuf::from("c"), "b".into(), "a".into()]);
+        let dirs = font_directories(&["a".into(), "b".into(), "c".into()]);
+        assert_eq!(
+            dirs[dirs.len() - 3..],
+            [PathBuf::from("c"), "b".into(), "a".into()]
+        );
     }
+}
+
+#[cfg(test)]
+pub(crate) fn test_index() -> &'static FontIndex {
+    FontIndex::for_setup(&crate::ConvertOptions::from_env().font_setup())
 }
 
 fn font_ext(path: &Path) -> Option<String> {
@@ -150,7 +174,7 @@ fn is_font_file(path: &Path) -> bool {
     matches!(font_ext(path).as_deref(), Some("ttf" | "otf" | "ttc"))
 }
 
-fn scan_font_dirs() -> FontLookup {
+fn scan_font_dirs(setup: &FontSetup) -> FontIndex {
     let t0 = Instant::now();
     let mut index = FontLookup::new();
     // Mac-Roman-only faces fill in only the families nothing else provides, so
@@ -158,9 +182,9 @@ fn scan_font_dirs() -> FontLookup {
     let mut mac_roman_index = FontLookup::new();
     // Off-weight faces fill in only the styles no regular-weight face provides.
     let mut off_weight_index = FontLookup::new();
-    let dirs = font_directories();
+    let dirs = font_directories(&setup.dirs);
 
-    let no_cache = env::var("DOCXIDE_NO_FONT_CACHE").is_ok();
+    let no_cache = !setup.cache;
 
     let cache = if no_cache {
         FontCache::default()
@@ -285,7 +309,6 @@ fn scan_font_dirs() -> FontLookup {
     for (key, value) in off_weight_index {
         index.entry(key).or_insert(value);
     }
-    let _ = MAC_ONLY_FAMILIES.set(mac_only);
 
     if !no_cache {
         save_cache(&new_cache);
@@ -300,20 +323,18 @@ fn scan_font_dirs() -> FontLookup {
         index.len(),
     );
 
-    index
+    FontIndex {
+        lookup: index,
+        mac_only,
+    }
 }
 
-fn get_font_index() -> &'static FontLookup {
-    FONT_INDEX.get_or_init(scan_font_dirs)
-}
-
-/// True if only a macOS system face provides this family (Helvetica, Optima…),
-/// which Windows Word, including Mac Word's online PDF export, never has.
-pub(super) fn is_mac_only_family(name: &str) -> bool {
-    get_font_index();
-    MAC_ONLY_FAMILIES
-        .get()
-        .is_some_and(|s| s.contains(&name.to_lowercase()))
+impl FontIndex {
+    /// True if only a macOS system face provides this family (Helvetica, Optima…),
+    /// which Windows Word, including Mac Word's online PDF export, never has.
+    pub(super) fn is_mac_only_family(&self, name: &str) -> bool {
+        self.mac_only.contains(&name.to_lowercase())
+    }
 }
 
 /// Parse one face of a font file (memory-mapped, so only the tables touched are read).
@@ -323,35 +344,38 @@ pub(super) fn probe_face<T>(path: &Path, face_index: u32, f: impl FnOnce(&Face) 
     Face::parse(&data, face_index).ok().map(|face| f(&face))
 }
 
-/// Look up a font file by family name and style using the OS/2 table metadata index.
-/// Falls back to the regular variant if the requested bold/italic is not available.
-/// Returns `(path, face_index, face_bold, face_italic)`.
-pub(super) fn find_font_file(
-    font_name: &str,
-    bold: bool,
-    italic: bool,
-) -> Option<(PathBuf, u32, bool, bool)> {
-    let index = get_font_index();
-    let key = font_name.to_lowercase();
-    if let Some((path, face_index)) = index.get(&(key.clone(), bold, italic)) {
-        return Some((path.clone(), *face_index, bold, italic));
-    }
-    // A plain regular request that misses falls through to a generic family
-    // fallback rather than borrowing this family's bold/italic face, which would
-    // render unexpectedly heavy/slanted.
-    if !bold && !italic {
-        return None;
-    }
-    // A styled variant was requested but the exact (bold, italic) face is absent.
-    // Relax the style axes and accept any same-family face: keeping the family's
-    // real glyphs beats dropping to a different family, and synthetic bold/oblique
-    // covers the style gap (we report exact_match=false). Some families ship only a
-    // single styled face — e.g. Vivaldi is an italic-flagged script with no upright
-    // or bold variant, so "Vivaldi bold" only resolves once we try (regular,italic).
-    for (b, i) in [(bold, !italic), (!bold, italic), (!bold, !italic)] {
-        if let Some((path, face_index)) = index.get(&(key.clone(), b, i)) {
-            return Some((path.clone(), *face_index, b, i));
+impl FontIndex {
+    /// Look up a font file by family name and style using the OS/2 table metadata index.
+    /// Falls back to the regular variant if the requested bold/italic is not available.
+    /// Returns `(path, face_index, face_bold, face_italic)`.
+    pub(super) fn find_font_file(
+        &self,
+        font_name: &str,
+        bold: bool,
+        italic: bool,
+    ) -> Option<(PathBuf, u32, bool, bool)> {
+        let index = &self.lookup;
+        let key = font_name.to_lowercase();
+        if let Some((path, face_index)) = index.get(&(key.clone(), bold, italic)) {
+            return Some((path.clone(), *face_index, bold, italic));
         }
+        // A plain regular request that misses falls through to a generic family
+        // fallback rather than borrowing this family's bold/italic face, which would
+        // render unexpectedly heavy/slanted.
+        if !bold && !italic {
+            return None;
+        }
+        // A styled variant was requested but the exact (bold, italic) face is absent.
+        // Relax the style axes and accept any same-family face: keeping the family's
+        // real glyphs beats dropping to a different family, and synthetic bold/oblique
+        // covers the style gap (we report exact_match=false). Some families ship only a
+        // single styled face — e.g. Vivaldi is an italic-flagged script with no upright
+        // or bold variant, so "Vivaldi bold" only resolves once we try (regular,italic).
+        for (b, i) in [(bold, !italic), (!bold, italic), (!bold, !italic)] {
+            if let Some((path, face_index)) = index.get(&(key.clone(), b, i)) {
+                return Some((path.clone(), *face_index, b, i));
+            }
+        }
+        None
     }
-    None
 }

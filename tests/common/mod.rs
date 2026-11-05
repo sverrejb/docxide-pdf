@@ -262,7 +262,7 @@ pub fn convert(input: &Path, output: &Path) -> Result<(), String> {
 pub fn convert_with(input: &Path, output: &Path, markup: bool) -> Result<(), String> {
     use docxide_pdf::{ConvertOptions, RevisionView};
     let view = if markup { RevisionView::Markup } else { RevisionView::Final };
-    let options = ConvertOptions::new().revisions(view);
+    let options = ConvertOptions::from_env().revisions(view);
     match std::panic::catch_unwind(|| docxide_pdf::convert_docx_to_pdf_with(input, output, &options)) {
         Ok(r) => r.map_err(|e| e.to_string()),
         Err(payload) => {

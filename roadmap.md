@@ -405,6 +405,10 @@ Open queue from the large-corpus and focus-fixture rounds:
 
 ## Tracked changes and comments
 
+- `--markup` follows the options standard: `ConvertOptions::revisions` /
+  `DOCXIDE_REVISIONS=markup` / `--markup`. The view still reaches the parser
+  through the `docx::set_markup` thread-local (set per call from the
+  options); passing it through `docx::parse` is the remaining cleanup.
 - Revision markup (Word's inline All Markup: author colours, underline /
   strike, deleted text kept in the layout, change bars) is opt-in:
   `ConvertOptions::revisions(RevisionView::Markup)` / CLI `--markup`; the
@@ -570,9 +574,11 @@ Backlog (details in `current_focus/A11Y.md`):
 
 ## Parked
 
-- **Hyphenation**: Word's online converter never hyphenates; the 8
-  `hyphenation/` fixtures wait for desktop-Word references with proofing
-  tools.
+- **Hyphenation** (issue #39): Word's online converter never hyphenates; the
+  8 `hyphenation/` fixtures wait for desktop-Word references with proofing
+  tools. When it lands it is a `ConvertOptions` field (`hyphenation`, default
+  off; `DOCXIDE_HYPHENATION=1`, `--hyphenate`) like `resample_pictures`
+  (issue #138), honouring `w:autoHyphenation` only when switched on.
 - **Embedded-font references** (issue #139, 2026-10-30): Word online can use
   fonts embedded in the docx (case8's Feb 2026 reference draws Press Start 2P
   as `___WRD_EMBED_SUB_1437`), but nothing embedded survives

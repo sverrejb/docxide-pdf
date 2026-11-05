@@ -11,6 +11,7 @@ use pdf_writer::{Name, Pdf, Ref};
 
 use crate::model::{FontFamily, FontTable, Run};
 
+pub(crate) use discovery::{FontIndex, FontSetup};
 pub(crate) use encoding::{encode_as_gids, to_winansi_bytes};
 
 /// Metrics extracted from a font file during embedding. Does not include font resolution
@@ -213,11 +214,15 @@ impl FontEntry {
 
 /// The bytes and face index of a font the document embeds or the system has,
 /// for reading tables the PDF side lays out with (Office Math).
-pub(crate) fn font_file(name: &str, embedded: &EmbeddedFonts) -> Option<(Vec<u8>, u32)> {
+pub(crate) fn font_file(
+    name: &str,
+    embedded: &EmbeddedFonts,
+    font_index: &FontIndex,
+) -> Option<(Vec<u8>, u32)> {
     if let Some(data) = embedded.get(&(name.to_lowercase(), false, false)) {
         return Some((data.clone(), 0));
     }
-    let (path, index, ..) = discovery::find_font_file(name, false, false)?;
+    let (path, index, ..) = font_index.find_font_file(name, false, false)?;
     Some((std::fs::read(path).ok()?, index))
 }
 
@@ -274,6 +279,8 @@ pub(crate) struct FontContext<'a> {
     /// Glyphs to embed by original id, with the character each reads as
     /// (math's script-size alternates and stretched variants have none).
     pub(crate) extra_glyphs: Option<&'a BTreeMap<u16, char>>,
+    /// The installed fonts, scanned for this conversion's directories.
+    pub(crate) font_index: &'a FontIndex,
 }
 
 /// The object numbers one font occupies, allocated before resolution so every
@@ -314,7 +321,7 @@ fn try_font(
     }
 
     let (path, face_index, face_bold, face_italic) =
-        discovery::find_font_file(candidate, bold, italic)?;
+        ctx.font_index.find_font_file(candidate, bold, italic)?;
     let data = std::fs::read(&path).ok()?;
     let metrics = embed(&data, face_index)?;
     Some(ResolvedFont {
@@ -693,13 +700,13 @@ fn cjk_fallback_fonts(script: CjkScript, serif: bool) -> &'static [&'static str]
 }
 
 /// How many of `chars` the named font has glyphs for; 0 when it is not installed.
-fn glyph_coverage(name: &str, chars: &HashSet<char>) -> usize {
-    covered_chars(name, chars).len()
+fn glyph_coverage(name: &str, chars: &HashSet<char>, font_index: &FontIndex) -> usize {
+    covered_chars(name, chars, font_index).len()
 }
 
 /// The chars the named font has glyphs for; none when it is not installed.
-fn covered_chars(name: &str, chars: &HashSet<char>) -> HashSet<char> {
-    let Some((path, face_index, ..)) = discovery::find_font_file(name, false, false) else {
+fn covered_chars(name: &str, chars: &HashSet<char>, font_index: &FontIndex) -> HashSet<char> {
+    let Some((path, face_index, ..)) = font_index.find_font_file(name, false, false) else {
         return HashSet::new();
     };
     discovery::probe_face(&path, face_index, |face| {
@@ -717,13 +724,16 @@ fn covered_chars(name: &str, chars: &HashSet<char>) -> HashSet<char> {
 /// MS Mincho, and in one document ⇒ came from Cambria Math while ☑ came from
 /// Segoe UI Symbol. East Asian gaps share the best-covering CJK face; every
 /// other character takes the first face in `symbol_candidates` that has it.
-pub(crate) fn rescue_fonts(missing: &HashSet<char>) -> Vec<(String, HashSet<char>)> {
+pub(crate) fn rescue_fonts(
+    missing: &HashSet<char>,
+    font_index: &FontIndex,
+) -> Vec<(String, HashSet<char>)> {
     let (cjk, other): (HashSet<char>, HashSet<char>) = missing
         .iter()
         .partition(|&&ch| crate::docx::is_east_asian_char(ch));
     let mut groups: BTreeMap<String, HashSet<char>> = BTreeMap::new();
     if !cjk.is_empty() {
-        groups.insert(cjk_rescue_font(&cjk), cjk);
+        groups.insert(cjk_rescue_font(&cjk, font_index), cjk);
     }
     let mut covered: HashMap<&str, HashSet<char>> = HashMap::new();
     for ch in other {
@@ -731,7 +741,7 @@ pub(crate) fn rescue_fonts(missing: &HashSet<char>) -> Vec<(String, HashSet<char
             .find(|&name| {
                 covered
                     .entry(name)
-                    .or_insert_with(|| covered_chars(name, missing))
+                    .or_insert_with(|| covered_chars(name, missing, font_index))
                     .contains(&ch)
             })
             // Nothing has it: the symbol face draws its .notdef, as before.
@@ -764,7 +774,7 @@ fn symbol_candidates(ch: char) -> impl Iterator<Item = &'static str> {
 /// Font for East Asian characters the resolved fonts lack, shared by all of
 /// them. The best-covering candidate leads and the rest follow in list order,
 /// semicolon-separated so `register_font` tries each in turn.
-fn cjk_rescue_font(missing: &HashSet<char>) -> String {
+fn cjk_rescue_font(missing: &HashSet<char>, font_index: &FontIndex) -> String {
     let script = script_of_chars(missing.iter().copied());
     let has_cjk = missing
         .iter()
@@ -781,7 +791,7 @@ fn cjk_rescue_font(missing: &HashSet<char>) -> String {
 
     let mut best = (0usize, 0usize);
     for (i, name) in candidates.iter().enumerate() {
-        let coverage = glyph_coverage(name, missing);
+        let coverage = glyph_coverage(name, missing, font_index);
         if coverage > best.0 {
             best = (coverage, i);
         }
@@ -852,7 +862,7 @@ pub(crate) fn register_font(
         .split(';')
         .map(first_css_name)
         .map(|s| word_substitute(s).unwrap_or(s))
-        .filter(|c| !(has_alt && discovery::is_mac_only_family(c)))
+        .filter(|c| !(has_alt && ctx.font_index.is_mac_only_family(c)))
         .find_map(&mut try_candidate)
         .or_else(|| {
             let entry = table_entry?;
@@ -1104,7 +1114,7 @@ mod tests {
     #[test]
     fn missing_glyphs_take_words_fallback_per_character() {
         let lead = |missing: &str, ch: char| {
-            rescue_fonts(&missing.chars().collect())
+            rescue_fonts(&missing.chars().collect(), discovery::test_index())
                 .into_iter()
                 .find(|(_, chars)| chars.contains(&ch))
                 .map(|(chain, _)| chain.split(';').next().unwrap().to_string())
@@ -1161,6 +1171,7 @@ mod tests {
                 used_chars: &chars,
                 word_text: true,
                 extra_glyphs: None,
+                font_index: discovery::test_index(),
             };
             let entry = register_font(
                 &mut Pdf::new(),
