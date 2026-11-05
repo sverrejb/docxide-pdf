@@ -12,6 +12,8 @@ use super::color::fill_rgb;
 struct RadialLayout {
     cx: f32,
     cy: f32,
+    radius: f32,
+    title_band: f32,
     legend_x: f32,
     colors: Vec<[u8; 3]>,
     has_legend: bool,
@@ -72,25 +74,37 @@ fn setup_radial_chart(
 
     let colors = resolve_accent_colors(&c.accent_colors).to_vec();
 
-    let (cx, legend_x) = if has_legend && legend_on_right {
-        let legend_fs = 10.0;
-        let swatch = 5.274;
-        let spacing = 2.5;
-        let max_label_w = labels
-            .iter()
-            .map(|l| text_width(l, legend_fs, label_font))
-            .fold(0.0f32, f32::max);
-        let legend_area = (swatch + spacing + max_label_w + 10.0).max(w * 0.143);
-        let pie_area_w = w - legend_area;
-        (x + pie_area_w / 2.0, x + w - legend_area)
+    // Word's pie keeps 11pt from the chart's edges (a 30pt title band on
+    // top) and centres in what the legend leaves: a right legend ends 9.9pt
+    // from the edge, its key 8pt before its names, 15.6pt clear of the pie's
+    // area (case30, case31).
+    let max_label_w = labels
+        .iter()
+        .map(|l| text_width(l, 10.0, label_font))
+        .fold(0.0f32, f32::max);
+    let legend_x = x + w - 9.9 - max_label_w - 8.0;
+    let left = x + 11.0;
+    let right = if has_legend && legend_on_right {
+        legend_x - 15.6
     } else {
-        (x + w / 2.0, x + w)
+        x + w - 11.0
     };
-    let cy = y - h / 2.0;
+    let top = y - 11.0 - if c.title.is_some() { TITLE_BAND } else { 0.0 };
+    let bottom = y - h
+        + 11.0
+        + if has_legend && !legend_on_right {
+            23.6
+        } else {
+            0.0
+        };
+    let (cx, cy) = ((left + right) / 2.0, (top + bottom) / 2.0);
+    let radius = ((right - left).min(top - bottom) / 2.0).max(0.0);
 
     Some(RadialLayout {
         cx,
         cy,
+        radius,
+        title_band: if c.title.is_some() { TITLE_BAND } else { 0.0 },
         legend_x,
         colors,
         has_legend,
@@ -121,14 +135,16 @@ fn render_radial_legend(
         })
         .collect();
     let placement = if layout.legend_on_right {
+        // As for other charts: centred below the title, names on a baseline
+        // 11.9pt above the bottom when the legend runs along it.
         LegendPlacement::Right {
             x: layout.legend_x,
-            center_y: layout.cy,
+            center_y: y - (h + layout.title_band) / 2.0 - 4.67,
         }
     } else {
         LegendPlacement::Bottom {
             center_x: layout.cx,
-            y: y - h + 4.0,
+            y: y - h + 10.9,
         }
     };
     render_chart_legend(
@@ -158,8 +174,6 @@ pub(super) fn render_radial(
     };
     let c = &chart.chart;
     let h = chart.display_height;
-    let margin = chart.display_width * 0.05;
-    let title_band = if c.title.is_some() { TITLE_BAND } else { 0.0 };
 
     content.save_state();
     if let Some(view) = c.view_3d.filter(|_| hole_pct.is_none()) {
@@ -180,12 +194,8 @@ pub(super) fn render_radial(
         content.restore_state();
         return;
     }
-    let outer_r = (h - title_band - margin * 2.0) / 2.0;
+    let outer_r = layout.radius;
     let inner_r = hole_pct.map(|pct| outer_r * (pct / 100.0));
-    let layout = RadialLayout {
-        cy: layout.cy - title_band / 2.0,
-        ..layout
-    };
 
     let mut angle = FRAC_PI_2;
     let values = &c.series[0].values;

@@ -1274,10 +1274,23 @@ pub(super) fn render_chart(
         .map(|s| text_width(&s.label, 10.0, label_font))
         .fold(0.0f32, f32::max);
     // A right legend ends 9.9pt from the chart's edge, its key 8pt before
-    // its names, and stands 15.6pt clear of the plot (v2d_legend_r probe).
-    let legend_right_x = x + w - LEGEND_PAD_RIGHT - legend_label_w - LEGEND_KEY_W;
+    // its names (20pt for a line through the marker), and stands 15.6pt
+    // clear of the plot (v2d_legend_r probe, case30's line chart). A value
+    // axis along the bottom hangs half its last label past the plot.
+    let line_key = matches!(c.chart_type, ChartType::Line) && depth.is_none();
+    let key_w = LEGEND_KEY_W + if line_key { 12.0 } else { 0.0 };
+    let legend_right_x = x + w - LEGEND_PAD_RIGHT - legend_label_w - key_w;
+    let x_overhang = if is_scatter_like {
+        text_width(
+            &format_tick_label(x_axis_max, x_tick_step, None),
+            font_size,
+            label_font,
+        ) / 2.0
+    } else {
+        0.0
+    };
     let margin_right = if has_legend && legend_on_right {
-        LEGEND_PAD_RIGHT + legend_label_w + LEGEND_KEY_W + 15.6
+        LEGEND_PAD_RIGHT + legend_label_w + key_w + 15.6 + x_overhang
     } else if is_point_chart {
         (w * 0.06).max(20.0)
     } else if horizontal {
@@ -1695,7 +1708,9 @@ pub(super) fn render_chart(
             let items: Vec<LegendItem> = series_order
                 .iter()
                 .map(|&(si, series)| {
-                    let swatch = if is_line {
+                    let swatch = if line_key {
+                        SwatchStyle::LineMarker(resolve_marker(series.marker, si))
+                    } else if is_line {
                         SwatchStyle::Marker(if is_bubble {
                             MarkerSymbol::Circle
                         } else {
