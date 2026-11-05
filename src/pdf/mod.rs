@@ -4529,6 +4529,13 @@ fn render_paragraph_block(
             }
 
             state.global_block_idx += 1;
+            if para.page_break_after {
+                state
+                    .pb
+                    .begin_next_page(sect_idx, sp, &mut state.effective_margin_bottom, ctx);
+                state.prev_space_after = 0.0;
+                state.current_col = 0;
+            }
             return true;
         }
 
