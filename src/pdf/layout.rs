@@ -4215,6 +4215,24 @@ pub(super) fn record_change_bar(bottom: f32, top: f32) {
     CHANGE_BARS.with(|b| b.borrow_mut().push((bottom - below, top + above)));
 }
 
+pub(super) fn change_bars_len() -> usize {
+    CHANGE_BARS.with(|b| b.borrow().len())
+}
+
+/// Word bars a revised table row over the row's whole box, borders included
+/// (probe p06: one bar 638.88-680.16 over three revised rows where the cells'
+/// line boxes left 0.48pt gaps at the borders): the bars recorded since
+/// `from` become one.
+pub(super) fn collapse_change_bars_from(from: usize, bottom: f32, top: f32) {
+    CHANGE_BARS.with(|b| {
+        let mut b = b.borrow_mut();
+        if b.len() > from {
+            b.truncate(from);
+            b.push((bottom, top));
+        }
+    });
+}
+
 /// (bottom, top) of every revised line drawn since the last call.
 pub(super) fn take_change_bars() -> Vec<(f32, f32)> {
     CHANGE_BARS.with(|b| std::mem::take(&mut *b.borrow_mut()))

@@ -967,6 +967,7 @@ fn render_table_rows(
         let row_h = layout.height;
         let row_top = *cursor_y;
         let row_bottom = row_top - row_h;
+        let bars_before = super::layout::change_bars_len();
 
         for (ci, ((grid_col, span, cell), cell_layout)) in
             row.grid_cells().zip(layout.cells.iter()).enumerate()
@@ -1052,6 +1053,8 @@ fn render_table_rows(
                 true,
             );
         }
+
+        super::layout::collapse_change_bars_from(bars_before, row_bottom, row_top);
 
         *cursor_y = row_bottom;
     }
@@ -1449,6 +1452,7 @@ fn render_table_row(
     let row_h = layout.height;
     let row_top = pb.slot_top;
     let row_bottom = row_top - row_h;
+    let bars_before = super::layout::change_bars_len();
 
     for (ci, ((grid_col, span, cell), cell_layout)) in
         row.grid_cells().zip(layout.cells.iter()).enumerate()
@@ -1564,6 +1568,8 @@ fn render_table_row(
             span_below == 0.0,
         );
     }
+
+    super::layout::collapse_change_bars_from(bars_before, row_bottom, row_top);
 
     pb.slot_top = row_bottom;
 }
@@ -1714,6 +1720,7 @@ fn render_partial_row(
     let row_top = *cursor_y;
     let row_h = partial_row_height(layout, starts, ends);
     let row_bottom = row_top - row_h;
+    let bars_before = super::layout::change_bars_len();
 
     for (ci, ((grid_col, span, cell), cell_layout)) in
         row.grid_cells().zip(layout.cells.iter()).enumerate()
@@ -1804,6 +1811,8 @@ fn render_partial_row(
             true,
         );
     }
+
+    super::layout::collapse_change_bars_from(bars_before, row_bottom, row_top);
 
     *cursor_y = row_bottom;
 }
