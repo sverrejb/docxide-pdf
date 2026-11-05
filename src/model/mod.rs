@@ -548,6 +548,10 @@ pub struct Paragraph {
     /// Markup view: the item is a tracked deletion (true) or insertion
     /// (false); the label is struck or underlined in its colour.
     pub list_label_revision: Option<bool>,
+    /// Markup view: a live item whose original and final numbers differ
+    /// shows both; this many leading chars are the original, struck, the
+    /// rest underlined, in Word's numbering-change colour.
+    pub list_label_renumbered: Option<usize>,
     /// `w:lvlJc`: the label is left-, centre- or right-aligned on its position.
     pub list_label_jc: Alignment,
     pub list_label_suff: LabelSuffix,

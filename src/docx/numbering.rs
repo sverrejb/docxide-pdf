@@ -54,6 +54,8 @@ pub(super) struct ListLabelInfo {
     pub(super) color: Option<[u8; 3]>,
     /// Markup view: Some(deleted) when the item is a tracked deletion or insertion.
     pub(super) revision: Option<bool>,
+    /// Markup view: chars of the original number in a renumbered live item's label.
+    pub(super) renumbered: Option<usize>,
     pub(super) suff: String,
     pub(super) jc: Alignment,
     /// None when the paragraph shows no label.
@@ -732,6 +734,7 @@ pub(super) fn parse_list_info(
         ItemRevision::Inserted(c) => (Some(false), Some(c)),
         ItemRevision::Deleted(c) => (Some(true), Some(c)),
     };
+    let mut renumbered: Option<usize> = None;
     let (stream, current_counter) = match (final_counter, original_counter) {
         (Some(c), _) => (&*counters, c),
         (None, o) => (&*original, o.unwrap_or(start)),
@@ -789,9 +792,12 @@ pub(super) fn parse_list_info(
         if let (Some(f), Some(o)) = (final_counter, original_counter)
             && f != o
         {
-            // ponytail: Word strikes the original number and underlines the
-            // final one in its numbering-change colour; both print plain here.
-            label = expand(&def.lvl_text, original, o) + &label;
+            // Word strikes the original number and underlines the final one
+            // in its numbering-change colour (p11b: "4." struck, "2."
+            // underlined, both 0078D4 with a single author).
+            let orig = expand(&def.lvl_text, original, o);
+            renumbered = Some(orig.chars().count());
+            label = orig + &label;
         }
         (label, expand(placeholder_span(&def.lvl_text), stream, current_counter))
     };
@@ -840,8 +846,11 @@ pub(super) fn parse_list_info(
         rise: font_size.map_or(0.0, |s| s * script_rise),
         bold: def.label_bold.unwrap_or(mark.is_some_and(|m| m.bold)),
         italic: def.label_italic.unwrap_or(mark.is_some_and(|m| m.italic)),
-        color: revision_color.or(def.label_color.unwrap_or(mark.and_then(|m| m.color))),
+        color: revision_color
+            .or(renumbered.map(|_| [0x00, 0x78, 0xD4]))
+            .or(def.label_color.unwrap_or(mark.and_then(|m| m.color))),
         revision: label_revision,
+        renumbered,
         suff: def.suff.clone(),
         jc: def.jc,
         item: Some(ListItem {

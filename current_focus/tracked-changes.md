@@ -105,9 +105,11 @@ references). Exports: `inline/` (print preset, inline revisions), `print/`
   still takes a number. Four table-heavy comments-set documents print no
   pane for that reason (6.7 → 76.4 Jaccard once modelled: deleted text
   counts as text in `comment_ranges`).
-- Lists: an inserted item takes its final number; a deleted item shows a
-  number without consuming one (1, inserted 2, deleted 2, 3). The label is
-  coloured and underlined / struck like the text (we leave the label plain).
+- Lists: two counters (p11b): deleted items number by the original stream,
+  live items by the final one, both shown ("4.2.") when they differ. The
+  label is coloured and underlined / struck like the text, the tab gap after
+  a deleted label struck 0.48pt thin, a renumbered label's original number
+  struck and final underlined in 0078D4 (ours identical since 2026-11-05).
 - Headers and footers: marked the same way, bars at the same x (p09:
   742.56–756 beside the header's inserted line; ours identical since
   2026-11-05).
@@ -133,7 +135,9 @@ advance below (single, 1.15, double and exact spacing agree), and on the
 paragraph's first line the paragraph's own share of the gap above it
 (`max(0, space_before − previous space_after)`), on its last line the space
 after. Adjacent revised lines' bars join. Two columns still bar at the page's
-left margin. Table rows: the row's line boxes (= between its borders here).
+left margin. Table rows: one bar over the row's box, borders included
+(p06: 638.88–680.16 over three rows; ours abuts per row, 0.48pt lower at
+the foot, since 2026-11-05).
 
 ## Implementation (branch `tracked-changes`)
 
@@ -156,10 +160,10 @@ left margin. Table rows: the row's line boxes (= between its borders here).
 Probe parity (ours vs Word, inline export): text and reflow identical; bars
 identical where lines are the paragraph's middle lines or table rows.
 
-Known gaps (ponytail ceilings): the label's tab gap is not struck and a
-live item's two numbers print plain; footnotes and text boxes get no bars
-in markup mode (headers and footers do); moves untested; mirrored margins
-use the right-side rule only on odd pages.
+Known gaps (ponytail ceilings): footnotes and text boxes get no bars in
+markup mode (headers and footers do); moves untested; mirrored margins use
+the right-side rule only on odd pages; a renumbered item's colour 0078D4
+is the one measured with a single author (its rule with several is open).
 
 ## Testing
 
@@ -206,7 +210,7 @@ delta buckets plus an XML feature census of the worst documents).
 | set | ours, markup (J / SSIM / pages wrong) | competitor | we win / lose |
 |---|---|---|---|
 | tracking, no comments (317) | 71.5 / 85.1 / 9 (2026-11-05 evening; 67.9 / 82.1 / 11 in the morning) | 62.2 / 80.4 / 11 | 259 / 58 |
-| comments + tracking (24) | 55.5 / 72.5 / 0 | 29.3 / 48.6 / 4 | 24 / 0 |
+| comments + tracking (24) | 67.8 / 86.1 / 0 (2026-11-05 evening; 55.5 / 72.5 / 0 in the morning) | 29.3 / 48.6 / 4 | 24 / 0 |
 | comments only (1) | 70.8 / 88.4 / 0 | 60.0 | |
 
 (317 set before the page-top split fix below: 66.5 / 80.6 / 25.) 108 of the
@@ -294,9 +298,9 @@ behind, 17 of those thirty or more.
    revisions, one with 14 deleted pictures.
 7. Cosmetic, mostly done (bars over empty paragraphs and spacing, bridged
    strikes, coloured labels, bars in headers and footers, strike / underline
-   lines on deleted / inserted pictures). Still open: the label's tab gap,
-   two-number labels in the numbering-change colour, two bars per table
-   row.
+   lines on deleted / inserted pictures, one bar per revised table row,
+   the label's tab gap, two-number labels in the numbering-change
+   colour). Closed 2026-11-05.
 
 ## Out of scope
 

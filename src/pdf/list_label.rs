@@ -200,23 +200,45 @@ pub(super) fn render_list_label(
             .show(Str(&label_bytes));
     }
     content.end_text();
+    let q = |v: f32| (v * 4.0).round() / 4.0;
+    let strike = |entry: &FontEntry| {
+        super::layout::os2_strike(entry, label_fs).map(|(top, th)| (baseline_y + top - th, th))
+    };
+    let underline = |entry: &FontEntry| {
+        entry.underline.map(|(pos, th)| {
+            let th = q(th * label_fs).max(0.25);
+            (baseline_y - q(pos * label_fs) - th, th)
+        })
+    };
     if let (Some(deleted), Some(entry)) = (para.list_label_revision, entry) {
         // Struck or underlined as a run of the same font would be (Word for
         // Mac probe p11b: 0.72pt lines, 2.16 above / 1.92 below the baseline
-        // at Calibri 11), over the label's width.
+        // at Calibri 11), over the label's width; the tab gap to the text
+        // carries a 0.48pt strike after a deleted label and the full
+        // underline after an inserted one.
         let x = label_x + label_shift(para, fonts);
         let w = label_width(para, fonts);
-        let q = |v: f32| (v * 4.0).round() / 4.0;
-        let line = if deleted {
-            super::layout::os2_strike(entry, label_fs).map(|(top, th)| (baseline_y + top - th, th))
-        } else {
-            entry.underline.map(|(pos, th)| {
-                let th = q(th * label_fs).max(0.25);
-                (baseline_y - q(pos * label_fs) - th, th)
-            })
-        };
+        let line = if deleted { strike(entry) } else { underline(entry) };
         if let Some((bottom, th)) = line {
             content.rect(x, bottom, w, th).fill_nonzero();
+            let gap = para.indent_hanging - w;
+            if gap > 0.5 {
+                let gap_th = if deleted { 0.48 } else { th };
+                content.rect(x + w, bottom, gap, gap_th).fill_nonzero();
+            }
+        }
+    }
+    if let (Some(split), Some(entry)) = (para.list_label_renumbered, entry) {
+        // "4.2.": the original number struck, the final one underlined.
+        let x = label_x + label_shift(para, fonts);
+        let orig: String = para.list_label.chars().take(split).collect();
+        let w_orig = label_text_width(para, fonts, label_font_key(para), &orig);
+        let w_all = label_width(para, fonts);
+        if let Some((bottom, th)) = strike(entry) {
+            content.rect(x, bottom, w_orig, th).fill_nonzero();
+        }
+        if let Some((bottom, th)) = underline(entry) {
+            content.rect(x + w_orig, bottom, w_all - w_orig, th).fill_nonzero();
         }
     }
     if label_color.is_some() {
