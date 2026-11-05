@@ -92,13 +92,15 @@ references). Exports: `inline/` (print preset, inline revisions), `print/`
   borders keep their colour.
 - Pictures: a deleted inline picture is drawn, with a strike at the text's
   strike height across its width plus a 1.44pt line through its middle; an
-  inserted one gets the underline. (We draw the bar only.)
+  inserted one gets the underline; the bar covers the picture's height
+  (p10: 603.6–720). Implemented 2026-11-05 (strike 678.80 vs 678.96).
 - Deleted fields (`w:delInstrText`): the cached result struck through.
 - Lists: an inserted item takes its final number; a deleted item shows a
   number without consuming one (1, inserted 2, deleted 2, 3). The label is
   coloured and underlined / struck like the text (we leave the label plain).
-- Headers and footers: marked the same way, bars at the same x (we leave
-  them final for now).
+- Headers and footers: marked the same way, bars at the same x (p09:
+  742.56–756 beside the header's inserted line; ours identical since
+  2026-11-05).
 - Comments plus revisions: the page is zoomed for the comment pane as for
   comments alone; the inline marks and bars zoom with the body.
 
@@ -144,11 +146,10 @@ left margin. Table rows: the row's line boxes (= between its borders here).
 Probe parity (ours vs Word, inline export): text and reflow identical; bars
 identical where lines are the paragraph's middle lines or table rows.
 
-Known gaps (ponytail ceilings): deleted pictures get no strike lines,
-inserted ones no underline; the label's tab gap is not struck and a live
-item's two numbers print plain; headers/footers/footnotes/text boxes get no
-bars in markup mode; moves untested; mirrored margins use the right-side
-rule only on odd pages.
+Known gaps (ponytail ceilings): the label's tab gap is not struck and a
+live item's two numbers print plain; footnotes and text boxes get no bars
+in markup mode (headers and footers do); moves untested; mirrored margins
+use the right-side rule only on odd pages.
 
 ## Testing
 
@@ -281,10 +282,10 @@ behind, 17 of those thirty or more.
    revisions and deleted fields, one with 543 deleted marks and 52 row
    revisions, one with 14 deleted pictures.
 7. Cosmetic, mostly done (bars over empty paragraphs and spacing, bridged
-   strikes, coloured labels). Still open: bars in headers/footers (the marks
-   themselves print), strike/underline lines on deleted/inserted pictures,
-   the label's tab gap, two-number labels in the numbering-change colour,
-   two bars per table row.
+   strikes, coloured labels, bars in headers and footers, strike / underline
+   lines on deleted / inserted pictures). Still open: the label's tab gap,
+   two-number labels in the numbering-change colour, two bars per table
+   row.
 
 ## Out of scope
 

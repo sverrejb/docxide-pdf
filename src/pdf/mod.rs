@@ -2264,6 +2264,38 @@ fn is_empty_wrapping_frame(para: &Paragraph, sp: &SectionProperties) -> bool {
 }
 
 /// Whether a leading picture leaves no usable text strip on either side.
+/// Markup view: the change bars of one page. Word draws them in the left
+/// margin (the outside margin with mirrored margins), half an inch from the
+/// text but no deeper than halfway into the margin, 0.72pt wide, on its
+/// 0.48pt device grid (Word for Mac probes 2026-11-05: margins of 0.5, 1,
+/// 1.25 and 2 inches; two columns still bar at the page's left).
+fn draw_change_bars(
+    content: &mut Content,
+    bars: &[(f32, f32)],
+    sp: &SectionProperties,
+    mirror_margins: bool,
+    page_idx: usize,
+) {
+    if bars.is_empty() {
+        return;
+    }
+    let snap = |v: f32| (v / 0.48).round() * 0.48;
+    let x = if mirror_margins && page_idx % 2 == 0 {
+        sp.page_width - sp.margin_right + f32::min(36.0, sp.margin_right / 2.0)
+    } else {
+        sp.margin_left - f32::min(36.0, sp.margin_left / 2.0)
+    };
+    // x lands on a 0.24pt step, rounded down (27 → 26.88, 585 → 584.88).
+    let x = (x / 0.24).floor() * 0.24;
+    content.save_state();
+    content.set_fill_rgb(0.0, 0.0, 0.0);
+    for &(bottom, top) in bars {
+        let (bottom, top) = (snap(bottom), snap(top));
+        content.rect(x, bottom, 0.72, top - bottom).fill_nonzero();
+    }
+    content.restore_state();
+}
+
 /// Where a split paragraph's final fragment goes around its trailing float.
 enum FragmentPlan {
     /// Lines `from..to` sit beside the float in a narrowed box.
@@ -6156,26 +6188,8 @@ fn render_pass(
         .zip(&state.pb.all_change_bars)
         .enumerate()
     {
-        if bars.is_empty() {
-            continue;
-        }
         let (.., si) = state.pb.page_section_indices[page_idx];
-        let sp = &doc.sections[si].properties;
-        let snap = |v: f32| (v / 0.48).round() * 0.48;
-        let x = if doc.mirror_margins && page_idx % 2 == 0 {
-            sp.page_width - sp.margin_right + f32::min(36.0, sp.margin_right / 2.0)
-        } else {
-            sp.margin_left - f32::min(36.0, sp.margin_left / 2.0)
-        };
-        // x lands on a 0.24pt step, rounded down (27 → 26.88, 585 → 584.88).
-        let x = (x / 0.24).floor() * 0.24;
-        content.save_state();
-        content.set_fill_rgb(0.0, 0.0, 0.0);
-        for &(bottom, top) in bars {
-            let (bottom, top) = (snap(bottom), snap(top));
-            content.rect(x, bottom, 0.72, top - bottom).fill_nonzero();
-        }
-        content.restore_state();
+        draw_change_bars(content, bars, &doc.sections[si].properties, doc.mirror_margins, page_idx);
     }
 
     // Phase 2c: render footnotes at page bottom (above footer). Endnotes
@@ -6414,6 +6428,14 @@ fn render_pass(
             has_hf = true;
         }
 
+        // The header's and footer's own revised lines bar at the same x
+        // (Word for Mac probe p09: bars beside the header's and footer's
+        // inserted text at 54pt, like the body's).
+        let hf_bars = layout::take_change_bars();
+        if !hf_bars.is_empty() {
+            draw_change_bars(&mut hf, &hf_bars, sp, doc.mirror_margins, page_idx);
+            has_hf = true;
+        }
         if has_hf {
             *hf_content = Some(hf);
         }
