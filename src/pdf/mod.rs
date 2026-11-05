@@ -220,6 +220,31 @@ fn blocking_textbox_band(
     Some((top, top + h + tb.dist_bottom))
 }
 
+/// A paragraph-relative topAndBottom box hanging below its anchor's text
+/// keeps the following paragraphs out of its band; they fill the gap above
+/// it first (issue #148: a group 27mm below its anchor's top leaves the next
+/// three paragraphs above it). One reaching into the anchor's own text keeps
+/// the anchor's reserve.
+fn hangs_below_anchor(
+    tb: &crate::model::Textbox,
+    p: &Paragraph,
+    col_w: f32,
+    ctx: &RenderContext,
+) -> bool {
+    tb.v_relative_from == VRelativeFrom::Paragraph
+        && !tb.on_line
+        && tb.wrap_type == WrapType::TopAndBottom
+        && matches!(tb.v_position, VerticalPosition::Offset(o) if o > 0.0 && {
+            let lines = paragraph_line_count(p, col_w, ctx).max(1) as f32;
+            o >= p.space_before + lines * para_line_h(p, ctx)
+        })
+}
+
+fn para_line_h(p: &Paragraph, ctx: &RenderContext) -> f32 {
+    let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
+    resolve_line_h(p.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr)
+}
+
 /// The bands of a paragraph's blocking page- or margin-anchored floats.
 fn paragraph_bands(
     p: &Paragraph,
@@ -260,13 +285,30 @@ fn step_below_bands(
     text_width: f32,
     ctx: &RenderContext,
 ) {
-    if let Block::Paragraph(p) = block {
-        add_bands(
-            &mut state.pb.frame_bands,
-            paragraph_bands(p, sp, col, text_width, ctx),
-        );
-    }
+    let Block::Paragraph(p) = block else {
+        step_below_existing_bands(state, block, sp, col.1, ctx);
+        return;
+    };
+    add_bands(
+        &mut state.pb.frame_bands,
+        paragraph_bands(p, sp, col, text_width, ctx),
+    );
+    let anchor_y = state
+        .pb
+        .pending_float_anchor
+        .unwrap_or(state.pb.slot_top - state.prev_space_after);
     step_below_existing_bands(state, block, sp, col.1, ctx);
+    // After the anchor's own step: these bands only hold off what follows.
+    let hanging = p
+        .textboxes
+        .iter()
+        .filter(|tb| hangs_below_anchor(tb, p, col.1, ctx))
+        .map(|tb| {
+            let top = sp.page_height - anchor_y + tb.v_offset_pt;
+            (top, top + textbox_render::textbox_height(tb, ctx) + tb.dist_bottom)
+        })
+        .collect();
+    add_bands(&mut state.pb.frame_bands, hanging);
 }
 
 /// Word places all of a page's page- or margin-anchored floats before it lays
@@ -294,8 +336,7 @@ fn prescan_page_bands(
             break;
         }
         add_bands(&mut bands, paragraph_bands(p, sp, col, text_width, ctx));
-        let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
-        let line_h = resolve_line_h(p.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr);
+        let line_h = para_line_h(p, ctx);
         let lines = paragraph_line_count(p, col.1, ctx).max(1) as f32;
         y = header_footer::below_blocking_frames(y + p.space_before, line_h, &bands)
             + lines * line_h
@@ -342,8 +383,7 @@ fn step_below_existing_bands(
     {
         return;
     }
-    let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
-    let line_h = resolve_line_h(p.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr);
+    let line_h = para_line_h(p, ctx);
     // The first line fits above a band with the space before it, and a
     // one-line paragraph only with its space after too (Word probes, 12.65pt
     // line + 6pt after: an 18.0pt gap between two topAndBottom boxes is
@@ -4015,6 +4055,7 @@ fn render_paragraph_block(
     for tb in &para.textboxes {
         // A band keeps the lines out by itself (`step_below_bands`).
         let reserve = !textbox_blocks_band(tb, sp, (col_x, col_w), text_width)
+            && !hangs_below_anchor(tb, para, col_w, ctx)
             && match tb.wrap_type {
                 WrapType::TopAndBottom => true,
                 WrapType::Square => tb.width_pt >= text_width * 0.5,

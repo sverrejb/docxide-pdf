@@ -16,7 +16,7 @@ use crate::model::{
 
 use super::images::{
     RunDrawingResult, anchor_z_order, extent_dimensions, find_blip_embeds, parse_anchor_position,
-    read_image_from_zip, vml_imagedata_props, vml_z_order,
+    parse_wrap_type, read_image_from_zip, vml_imagedata_props, vml_z_order, wrap_dist_top_bottom,
 };
 use super::textbox::{
     find_sp_pr, parse_connector_shape_node, parse_vml_box_style, parse_vml_line, parse_wsp_shape,
@@ -221,6 +221,29 @@ pub(super) fn parse_canvas_or_group<R: Read + Seek>(
             wrap_type: WrapType::TopAndBottom,
             no_text_wrap: true,
             on_line: true,
+            ..Textbox::default()
+        }));
+    } else if let (wrap_type, wrap_text, _) = parse_wrap_type(container)
+        && wrap_type != WrapType::None
+    {
+        // An anchored group wraps text as one box (its shapes are placed
+        // without wrapping): an invisible box over its extent carries it.
+        let (h_position, h_relative_from, v_position, v_relative_from) =
+            parse_anchor_position(container);
+        out.push(RunDrawingResult::TextBox(Textbox {
+            width_pt: display_w,
+            height_pt: display_h,
+            h_position,
+            h_relative_from,
+            v_offset_pt: v_position.offset_or_zero(),
+            v_position,
+            v_relative_from,
+            wrap_type,
+            wrap_text,
+            dist_bottom: wrap_dist_top_bottom(container).1,
+            behind_doc: base.behind_doc,
+            z_index: base.z_index,
+            no_text_wrap: true,
             ..Textbox::default()
         }));
     }
