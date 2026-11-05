@@ -75,6 +75,8 @@ pub(super) fn parse_vml_box_style(style_str: &str) -> VmlBoxStyle {
                     s.v_relative = match val {
                         "page" => VRelativeFrom::Page,
                         "margin" => VRelativeFrom::Margin,
+                        "top-margin-area" => VRelativeFrom::TopMargin,
+                        "bottom-margin-area" => VRelativeFrom::BottomMargin,
                         _ => VRelativeFrom::Paragraph,
                     };
                 }

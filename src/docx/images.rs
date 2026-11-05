@@ -613,6 +613,7 @@ pub(super) fn parse_anchor_position(
         Some("page") => VRelativeFrom::Page,
         Some("margin") => VRelativeFrom::Margin,
         Some("topMargin") => VRelativeFrom::TopMargin,
+        Some("bottomMargin") => VRelativeFrom::BottomMargin,
         _ => VRelativeFrom::Paragraph,
     };
     let v_position = if let Some(text) = wpd_child_text(pos_v, "align") {
@@ -1123,6 +1124,7 @@ pub(super) fn parse_object_floating_image<R: Read + Seek>(
                         "page" => VRelativeFrom::Page,
                         "margin" => VRelativeFrom::Margin,
                         "top-margin-area" => VRelativeFrom::TopMargin,
+                        "bottom-margin-area" => VRelativeFrom::BottomMargin,
                         _ => VRelativeFrom::Paragraph,
                     };
                 }

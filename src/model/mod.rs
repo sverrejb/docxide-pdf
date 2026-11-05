@@ -401,7 +401,10 @@ pub enum HRelativeFrom {
 pub enum VRelativeFrom {
     Page,
     Margin,
+    /// The area between the page's top edge and the top margin.
     TopMargin,
+    /// The area between the bottom margin and the page's bottom edge.
+    BottomMargin,
     #[default]
     Paragraph,
 }

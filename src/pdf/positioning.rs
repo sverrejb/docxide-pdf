@@ -74,27 +74,32 @@ pub(crate) fn resolve_fi_y_top(fi: &FloatingImage, sp: &SectionProperties, slot_
     let img = &fi.image;
     match fi.v_position {
         VerticalPosition::Offset(v_offset) => match fi.v_relative_from {
-            VRelativeFrom::Page => sp.page_height - v_offset,
-            VRelativeFrom::Margin | VRelativeFrom::TopMargin => {
-                sp.page_height - sp.margin_top - v_offset
-            }
+            VRelativeFrom::Page | VRelativeFrom::TopMargin => sp.page_height - v_offset,
+            VRelativeFrom::Margin => sp.page_height - sp.margin_top - v_offset,
+            VRelativeFrom::BottomMargin => sp.margin_bottom - v_offset,
             VRelativeFrom::Paragraph => slot_top - v_offset,
         },
         VerticalPosition::AlignTop => match fi.v_relative_from {
-            VRelativeFrom::Page => sp.page_height,
+            VRelativeFrom::Page | VRelativeFrom::TopMargin => sp.page_height,
+            VRelativeFrom::BottomMargin => sp.margin_bottom,
             // sample500kB's picture tops its anchor paragraph, 89pt below the margin.
             VRelativeFrom::Paragraph => slot_top,
             _ => sp.page_height - sp.margin_top,
         },
         VerticalPosition::AlignCenter => match fi.v_relative_from {
             VRelativeFrom::Page => (sp.page_height + img.display_height) / 2.0,
+            VRelativeFrom::TopMargin => {
+                sp.page_height - (sp.margin_top - img.display_height) / 2.0
+            }
+            VRelativeFrom::BottomMargin => (sp.margin_bottom + img.display_height) / 2.0,
             _ => {
                 let area = sp.page_height - sp.margin_top - sp.margin_bottom;
                 sp.page_height - sp.margin_top - (area - img.display_height) / 2.0
             }
         },
         VerticalPosition::AlignBottom => match fi.v_relative_from {
-            VRelativeFrom::Page => img.display_height,
+            VRelativeFrom::Page | VRelativeFrom::BottomMargin => img.display_height,
+            VRelativeFrom::TopMargin => sp.page_height - sp.margin_top + img.display_height,
             _ => sp.margin_bottom + img.display_height,
         },
     }

@@ -614,7 +614,8 @@ fn measure_header_height(
                         // top margin made an 85-page document of 3.
                         VerticalPosition::Offset(o) => {
                             let top = match fi.v_relative_from {
-                                VRelativeFrom::Page => o,
+                                VRelativeFrom::Page | VRelativeFrom::TopMargin => o,
+                                VRelativeFrom::BottomMargin => sp.page_height - sp.margin_bottom + o,
                                 _ => sp.margin_top + o,
                             };
                             placed_extent = placed_extent.max(if is_header {
@@ -637,7 +638,7 @@ fn measure_header_height(
                             VRelativeFrom::Paragraph => {
                                 content_h = content_h.max(tb_bottom);
                             }
-                            VRelativeFrom::Page if is_header => {
+                            VRelativeFrom::Page | VRelativeFrom::TopMargin if is_header => {
                                 // tb_bottom is absolute from page top; convert to
                                 // distance relative to the current position in the header
                                 let current_pos = sp.header_margin + height;
@@ -830,9 +831,9 @@ pub(super) fn resolve_tb_y_top(
     use crate::model::VerticalPosition;
     let (region_top, region_bottom) = match v_relative_from {
         VRelativeFrom::Page => (sp.page_height, 0.0),
-        VRelativeFrom::Margin | VRelativeFrom::TopMargin => {
-            (sp.page_height - sp.margin_top, sp.margin_bottom)
-        }
+        VRelativeFrom::Margin => (sp.page_height - sp.margin_top, sp.margin_bottom),
+        VRelativeFrom::TopMargin => (sp.page_height, sp.page_height - sp.margin_top),
+        VRelativeFrom::BottomMargin => (sp.margin_bottom, 0.0),
         VRelativeFrom::Paragraph => (slot_top, slot_top - tb_height),
     };
     match v_position {
@@ -1597,7 +1598,7 @@ pub(super) fn render_header_footer(
                     for tb in &para.textboxes {
                         if matches!(tb.wrap_type, WrapType::TopAndBottom) {
                             let tb_bottom_y = match tb.v_relative_from {
-                                VRelativeFrom::Page => {
+                                VRelativeFrom::Page | VRelativeFrom::TopMargin => {
                                     sp.page_height
                                         - (tb.v_offset_pt + tb.height_pt + tb.dist_bottom)
                                 }
