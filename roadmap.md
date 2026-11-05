@@ -432,12 +432,20 @@ Open queue from the large-corpus and focus-fixture rounds:
   labels coloured and struck / underlined; the visual suite scores a
   fixture's `reference-markup.pdf` as `<case>@markup` from the `--markup`
   rendering (`cases/tracked-changes-inline` carries both references).
-- Next steps, in order: (5) `reference-markup.pdf` support in the harness so fixtures
-  can carry a markup reference; (6) cosmetic markup: bars in headers /
-  footers and over the paragraph's space before/after, continuous strikes,
-  lines on deleted / inserted pictures, coloured list labels; (7) moves
-  (`w:moveFrom` / `w:moveTo`, 3 of 317 documents) once a Word-made probe
-  exists (Word hangs on hand-written move ranges).
+- Done 2026-11-05 (comments and the rest of the cosmetics): a comment whose
+  range opens before a wholly deleted table and closes between blocks gets
+  no balloon (four table-heavy comments-set documents 6 → 72–76, the set
+  55.5 → 67.8); a deleted TOC field is never regenerated; one bar per
+  revised table row, the label's tab gap, renumbered labels in 0078D4.
+- Next steps, in order: (1) pagination drift of 1–3pt per paragraph that
+  leaves a few documents one page short (generic spacing, measured on the
+  one-page-short siblings: title −1.2, then −3.5, −6.0 by mid-page);
+  (2) a fixed-layout table with a duplicated 12-column grid and 720-twip
+  cells where Word wraps one letter per line (9 vs 17 pages, the
+  competitor fails it too); (3) paragraphs before a page-top float wrapped
+  beside it (the look-ahead narrows only the one right before the anchor);
+  (4) moves (`w:moveFrom` / `w:moveTo`, 3 of 317 documents) once a
+  Word-made probe exists (Word hangs on hand-written move ranges).
 - Final view: a deleted paragraph mark merges its paragraph into the next
   and takes its section break with it, deleted table rows are dropped (Word
   online export probes 2026-11-05).

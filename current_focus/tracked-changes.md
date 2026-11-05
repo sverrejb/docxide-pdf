@@ -209,8 +209,8 @@ delta buckets plus an XML feature census of the worst documents).
 
 | set | ours, markup (J / SSIM / pages wrong) | competitor | we win / lose |
 |---|---|---|---|
-| tracking, no comments (317) | 71.5 / 85.1 / 9 (2026-11-05 evening; 67.9 / 82.1 / 11 in the morning) | 62.2 / 80.4 / 11 | 259 / 58 |
-| comments + tracking (24) | 67.8 / 86.1 / 0 (2026-11-05 evening; 55.5 / 72.5 / 0 in the morning) | 29.3 / 48.6 / 4 | 24 / 0 |
+| tracking, no comments (317) | 71.7 / 85.4 / 9 (2026-11-05 evening; 67.9 / 82.1 / 11 in the morning) | 62.2 / 80.4 / 11 | 259 / 58 |
+| comments + tracking (24) | 67.9 / 86.2 / 0 (2026-11-05 evening; 55.5 / 72.5 / 0 in the morning) | 29.3 / 48.6 / 4 | 24 / 0 |
 | comments only (1) | 70.8 / 88.4 / 0 | 60.0 | |
 
 (317 set before the page-top split fix below: 66.5 / 80.6 / 25.) 108 of the
@@ -292,10 +292,14 @@ behind, 17 of those thirty or more.
    their comments sit on wholly deleted tables and Word prints no pane; we
    zoomed the page for one. Fixed 2026-11-05 (6.7 → 76.4 on the first);
    the deleted TOC regeneration went with it.
-6. Remaining page-count misses (11): a portrait/landscape document at 9
-   pages against Word's 17, three siblings at one page short with row
-   revisions and deleted fields, one with 543 deleted marks and 52 row
-   revisions, one with 14 deleted pictures.
+6. Remaining page-count misses (9, evening): the 9-vs-17 document is a
+   fixed-layout table with a duplicated 12-column grid and 720-twip cells
+   where Word wraps one letter per line in a narrow column (the competitor
+   fails it too); the three one-page-short siblings drift 1–3pt per
+   paragraph from page 1 (title −1.2, −3.5 by the first body paragraph,
+   −6.0 by mid-page) until a two-line bullet fits above the footnote area
+   where Word's does not: generic spacing rules, not markup. The others
+   (543 deleted marks and 52 row revisions, 14 deleted pictures) unexamined.
 7. Cosmetic, mostly done (bars over empty paragraphs and spacing, bridged
    strikes, coloured labels, bars in headers and footers, strike / underline
    lines on deleted / inserted pictures, one bar per revised table row,
