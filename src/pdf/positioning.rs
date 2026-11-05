@@ -4,7 +4,7 @@ use pdf_writer::Content;
 
 use crate::model::{
     ArrowEnd, ConnectorShape, ConnectorType, FloatingImage, HRelativeFrom, HorizontalPosition,
-    SectionProperties, VRelativeFrom, VerticalPosition,
+    SectionProperties, VRelativeFrom, VerticalPosition, WrapType,
 };
 
 use super::color::{fill_rgb, stroke_rgb};
@@ -35,7 +35,7 @@ pub(super) fn resolve_fi_x(
     col_w: f32,
     text_width: f32,
 ) -> f32 {
-    resolve_h_position(
+    let x = resolve_h_position(
         fi.h_relative_from,
         &fi.h_position,
         fi.image.display_width,
@@ -43,7 +43,16 @@ pub(super) fn resolve_fi_x(
         col_x,
         col_w,
         text_width,
-    )
+    );
+    // A wrapping picture wider than the page starts at its left edge (probe
+    // p20d, 621pt at column -71.5pt on a 612pt page: x 0; an external corpus
+    // cover's 615pt picture on A4: x 0). One that fits keeps a negative x
+    // (cyprus_ucits's 592pt banner at -2.7 on A4).
+    if fi.wrap_type != WrapType::None && fi.image.display_width > sp.page_width {
+        0.0
+    } else {
+        x
+    }
 }
 
 /// True when a float wraps text and its box (with its text distances) reaches

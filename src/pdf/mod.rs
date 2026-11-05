@@ -915,7 +915,10 @@ impl ParaAnchor {
         Self {
             float: pending.unwrap_or(line_top + own_before),
             on_line: pending.unwrap_or(line_top),
-            ceiling: (ctx.compat_mode >= 15).then_some(sp.page_height - sp.margin_top),
+            // Compat 14 keeps a negative offset only down to the page edge
+            // (Word probes p20c/p20d: -82.7pt from a page-top paragraph puts
+            // the picture at y 0).
+            ceiling: Some(if ctx.compat_mode >= 15 { sp.page_height - sp.margin_top } else { sp.page_height }),
         }
     }
 
