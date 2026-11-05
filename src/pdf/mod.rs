@@ -3949,6 +3949,21 @@ fn render_paragraph_block(
                 boxed => boxed,
             };
             let next_first_line_h = resolve_line_h(first_ls, nfs, nlhr);
+            // An inline picture sits on the baseline, so its line is the
+            // picture plus the text descent (issue #146: a heading kept with
+            // an 80pt picture under a 14pt line moves with it). A paragraph
+            // of one picture holds it in `image`, not in a run.
+            let picture_h = if next.image.is_some() {
+                next.content_height
+            } else {
+                layout::runs_max_image_h(&next.runs)
+            };
+            let next_first_line_h = if picture_h > 0.0 {
+                next_first_line_h
+                    .max(picture_h + picture_line_bottom(&next.runs, next, ctx.fonts, next_ls))
+            } else {
+                next_first_line_h
+            };
             // The chain needs as many of the next paragraph's lines as must
             // stay together on this page: all of a keepLines paragraph; else
             // one without widow control, with it two, or all of a paragraph
