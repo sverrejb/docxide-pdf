@@ -8317,6 +8317,20 @@
     "a11y_struct": 0.9492,
     "a11y_text": 0.9071
   },
+  "cases/tracked-changes-inline": {
+    "jaccard": 0.7633,
+    "ssim": 0.8899,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/tracked-changes-inline@markup": {
+    "jaccard": 0.6912,
+    "ssim": 0.8294
+  },
   "cases/trailing-anchor-prefix0-offset80-behind0": {
     "jaccard": 0.9957,
     "ssim": 1.0,
@@ -9021,7 +9035,7 @@
     "a11y_text": 0.8929
   },
   "scraped/air_pollution_permit_form": {
-    "jaccard": 0.4307,
+    "jaccard": 0.4292,
     "ssim": 0.6358,
     "text_boundary": 0.9143,
     "convert_ms": 12.0,
@@ -9029,7 +9043,7 @@
     "a11y_missing": 18,
     "ua_deficit": 0,
     "a11y_struct": 0.9735,
-    "a11y_text": 0.5821
+    "a11y_text": 0.5767
   },
   "scraped/alfies_arc_adult_safeguarding_policy": {
     "jaccard": 0.7046,
@@ -9172,14 +9186,14 @@
     "a11y_text": 0.8826
   },
   "scraped/bush_fires_act_comparison": {
-    "jaccard": 0.7321,
-    "ssim": 0.9339,
+    "jaccard": 0.7322,
+    "ssim": 0.9338,
     "text_boundary": 0.9839,
     "convert_ms": 248.6,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
-    "a11y_struct": 0.816,
+    "a11y_struct": 0.827,
     "a11y_text": 0.9985
   },
   "scraped/candidate_reference_check_form": {
@@ -9800,7 +9814,7 @@
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
-    "a11y_struct": 0.7529,
+    "a11y_struct": 0.7535,
     "a11y_text": 0.8992
   },
   "scraped/indonesian_benchmarking_guide": {
@@ -9861,7 +9875,7 @@
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
-    "a11y_struct": 0.7826,
+    "a11y_struct": 0.7874,
     "a11y_text": 0.8412
   },
   "scraped/italian_academic_cv_form": {
@@ -10061,9 +10075,9 @@
     "a11y_text": 1.0
   },
   "scraped/mandated_reporter_child_abuse": {
-    "jaccard": 0.6667,
-    "ssim": 0.9468,
-    "text_boundary": 0.9684,
+    "jaccard": 0.6739,
+    "ssim": 0.9607,
+    "text_boundary": 0.9895,
     "convert_ms": 43.3,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10627,9 +10641,9 @@
     "a11y_text": 0.8008
   },
   "scraped/swiss_materials_extraction_zone_guidance": {
-    "jaccard": 0.3384,
-    "ssim": 0.5465,
-    "text_boundary": 0.476,
+    "jaccard": 0.2941,
+    "ssim": 0.4767,
+    "text_boundary": 0.6174,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
