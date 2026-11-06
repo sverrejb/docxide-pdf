@@ -319,6 +319,8 @@ pub struct Document {
     pub east_asian_lang: bool,
     /// Word's `doNotExpandShiftReturn` (see `docx::settings`).
     pub do_not_expand_shift_return: bool,
+    /// Word's `ulTrailSpace` (see `docx::settings`).
+    pub ul_trail_space: bool,
     /// Word's `wpJustification` (see `docx::settings`).
     pub wp_justification: bool,
     /// `w:doNotUseHTMLParagraphAutoSpacing`: a paragraph's space before adds

@@ -100,6 +100,7 @@ impl MixedJustify {
                 .filter(|p| **p)
                 .count();
         }
+        points_before.push(points);
         let spaces = spaces_before.last().copied().unwrap_or(0) as f32;
         let total = spaces + points as f32;
         let bonus = chunks.first().map_or(0.0, |c| c.font_size / 9.0);
@@ -119,9 +120,9 @@ impl MixedJustify {
         }
     }
 
-    /// How far chunk `idx` moves right.
+    /// How far chunk `idx` moves right; past the last, the line's end.
     fn offset_before(&self, idx: usize) -> f32 {
-        let at = |v: &[usize]| v.get(idx).copied().unwrap_or(0) as f32;
+        let at = |v: &[usize]| v.get(idx).or(v.last()).copied().unwrap_or(0) as f32;
         at(&self.spaces_before) * (self.extra + self.space_bonus)
             + at(&self.points_before) * self.extra
     }
@@ -476,6 +477,33 @@ pub(super) const COMMENT_HIGHLIGHT_RGB: [u8; 3] = [251, 220, 217];
 
 /// A decoration rectangle (underline, strikethrough, shading): x, y, width, height, colour.
 type Decoration = (f32, f32, f32, f32, Option<[u8; 3]>);
+
+/// The lines (top, thickness) of an underline at `font_size` under the
+/// baseline `y`. Word draws a single underline from the font's post table, its
+/// offset below the baseline and its thickness each on a 0.25pt grid (online
+/// export probe: Calibri, Times New Roman, Arial, Aptos at 10/12/22pt). Double
+/// underlines keep the old geometry.
+fn underline_lines(
+    entry: Option<&FontEntry>,
+    (font_size, double, link): (f32, bool, bool),
+    y: f32,
+) -> Vec<(f32, f32)> {
+    if !double && let Some((offset, th)) = entry.and_then(|e| post_underline(e, font_size)) {
+        return vec![(y - offset - th, th)];
+    }
+    let thick = (font_size * 0.05).max(0.5);
+    let ul_y = if link {
+        y - font_size * 0.08
+    } else {
+        y - font_size * 0.12
+    };
+    let top = ul_y - thick;
+    let mut lines = vec![(top, thick)];
+    if double {
+        lines.push((top - thick - (thick * 1.5).max(1.0), thick));
+    }
+    lines
+}
 
 fn push_decoration(
     decorations: &mut Vec<Decoration>,
@@ -1146,6 +1174,19 @@ pub(super) struct TextLine {
     /// How far this line's baseline sits below where the paragraph ascent
     /// would put it (negative: above), for lines with their own `pitch`.
     pub(super) ascent_shift: f32,
+    /// The underlined spaces the line ends in (`underline_line_end`).
+    pub(super) end_spaces: Vec<EndSpace>,
+}
+
+/// A run's share of the spaces a line ends in, drawn as its underline only
+/// up to the line's right edge.
+pub(super) struct EndSpace {
+    pub(super) x_offset: f32,
+    pub(super) width: f32,
+    pub(super) pdf_font: String,
+    pub(super) font_size: f32,
+    pub(super) color: Option<[u8; 3]>,
+    pub(super) double: bool,
 }
 
 impl TextLine {
@@ -1158,6 +1199,10 @@ impl TextLine {
                 .map_or(0.0, |c| c.x_offset + c.width),
             None => self.total_width,
         }
+    }
+
+    pub(super) fn is_blank(&self) -> bool {
+        self.chunks.is_empty() && self.end_spaces.is_empty()
     }
 
     /// Leading tabs occupy a line even without printable chunks; the tabs
@@ -1364,13 +1409,11 @@ fn effective_font_size(run: &Run, entry: &FontEntry) -> f32 {
     // Note: smallCaps sizing is handled per-segment via smallcaps_segments()
 }
 
-fn effective_text(run: &Run) -> Cow<'_, str> {
-    if run.caps {
-        Cow::Owned(run.text.to_uppercase())
-    } else {
-        Cow::Borrowed(&run.text)
-    }
-    // Note: smallCaps uppercasing is handled per-segment via smallcaps_segments()
+/// The width of text on one line: a soft hyphen there shows nothing, and
+/// Word kerns no pair across it ("A", soft hyphen, "V" is as wide as "A"
+/// and "V" apart).
+pub(super) fn soft_split_width(text: &str, width: impl Fn(&str) -> f32) -> f32 {
+    text.split(SOFT_HYPHEN).map(width).sum()
 }
 
 /// A word as `w:caps` draws it (capitals); words are uppercased one by one so
@@ -1380,6 +1423,179 @@ fn caps_word<'a>(run: &Run, word: &'a str) -> Cow<'a, str> {
         Cow::Owned(word.to_uppercase())
     } else {
         Cow::Borrowed(word)
+    }
+}
+
+/// `caps_word` for a paragraph line (`soft_shown`).
+fn shown_word<'a>(run: &Run, word: &'a str) -> Cow<'a, str> {
+    let soft = soft_shown(word);
+    if run.caps {
+        Cow::Owned(soft.to_uppercase())
+    } else {
+        soft
+    }
+}
+
+/// A `w:softHyphen` (U+00AD) ends its word (UAX #14 breaks after it) and
+/// shows as a hyphen there, taken back when the next word joins it on the
+/// line (`drop_soft_hyphen`); inside a word it shows nothing.
+fn soft_shown(word: &str) -> Cow<'_, str> {
+    if !word.contains(SOFT_HYPHEN) {
+        return Cow::Borrowed(word);
+    }
+    let mut out: String = word.chars().filter(|&c| c != SOFT_HYPHEN).collect();
+    if word.ends_with(SOFT_HYPHEN) {
+        out.push('-');
+    }
+    Cow::Owned(out)
+}
+
+const SOFT_HYPHEN: char = '\u{AD}';
+
+/// The advance of the hyphen a soft hyphen ending `source` shows at the end
+/// of `word` (`shown_word`); it may be negative under condensed spacing.
+fn provisional_hyphen(source: &str, word: &str, width: impl Fn(&str) -> f32) -> Option<f32> {
+    source
+        .ends_with(SOFT_HYPHEN)
+        .then(|| width(word) - width(word.strip_suffix('-').unwrap_or(word)))
+}
+
+/// A piece of a word (`split_preserving_spaces`) as Word fits it: its width
+/// with the soft hyphen ending it hidden, and the advance of the hyphen that
+/// soft hyphen shows where the line breaks (negative under condensed
+/// spacing). The pieces of a word add up, as Word kerns no pair across a soft
+/// hyphen.
+fn soft_piece(run: &Run, piece: &str, width: impl Fn(&str) -> f32) -> (f32, Option<f32>) {
+    let body = piece.strip_suffix(SOFT_HYPHEN);
+    let w = width(&shown_word(run, body.unwrap_or(piece)));
+    (w, body.map(|_| width(&shown_word(run, piece)) - w))
+}
+
+/// The pieces (`soft_piece`) a word goes on with through `runs`, the runs
+/// after the one whose text it ends, up to the word's end.
+fn soft_pieces<'r>(
+    runs: impl IntoIterator<Item = &'r Run>,
+    seen_fonts: &HashMap<String, FontEntry>,
+) -> Vec<(f32, Option<f32>)> {
+    let mut pieces = Vec::new();
+    let mut key_buf = String::new();
+    for run in runs.into_iter().filter(|r| !r.vanish) {
+        if run.is_tab
+            || run.is_line_break
+            || run.inline_image.is_some()
+            || run.math.is_some()
+            || run.checkbox.is_some()
+        {
+            break;
+        }
+        let width = run_width(run, seen_fonts, &mut key_buf);
+        let mut after_soft = true;
+        for (spaces, piece) in split_preserving_spaces(&run.text) {
+            if spaces > 0 || !after_soft {
+                return pieces;
+            }
+            pieces.push(soft_piece(run, piece, width));
+            after_soft = piece.ends_with(SOFT_HYPHEN);
+        }
+        if run.text.ends_with(is_break_space) {
+            break;
+        }
+    }
+    pieces
+}
+
+/// A word ending in a soft hyphen whose hyphen overruns the line (`room`),
+/// grown over the pieces the soft hyphens join it to, in the run's text
+/// (`words`, no space between) and on through the later runs' `onward`
+/// pieces (`soft_pieces`), to the longest that fits: Word keeps "Veri" whole
+/// on a line too short for "Ver-", also with "i" in a run of its own. With none
+/// fitting and `whole`, it is the whole word, which Word then cuts at the
+/// margin ("Veri" | "xx", not "Ver" | "ixx"). Grown past the run's text, it
+/// is all of it, without the soft hyphen at its end: the next run goes on
+/// with the word. Returns the word as written, as shown and its width.
+fn soft_continuation<'a>(
+    run: &'a Run,
+    source: &'a str,
+    words: &mut std::collections::VecDeque<(usize, &'a str)>,
+    width: impl Fn(&str) -> f32 + Copy,
+    onward: impl FnOnce() -> Vec<(f32, Option<f32>)>,
+    room: f32,
+    whole: bool,
+) -> (&'a str, Cow<'a, str>, f32) {
+    let text = run.text.as_str();
+    let piece = |s: &str| soft_piece(run, s, width);
+    let source = 'grown: {
+        let start = source.as_ptr() as usize - text.as_ptr() as usize;
+        let mut end = start + source.len();
+        let mut w = piece(source).0;
+        // (end in `text`, width if the line ends there)
+        let mut ends: Vec<(usize, f32)> = Vec::new();
+        for &(spaces, next) in words.iter() {
+            if spaces > 0 || !text[..end].ends_with(SOFT_HYPHEN) {
+                break;
+            }
+            let (pw, hyphen) = piece(next);
+            w += pw;
+            end += next.len();
+            ends.push((end, w + hyphen.unwrap_or(0.0)));
+        }
+        let taken = ends.len();
+        let (mut goes_on, mut onward_fits) = (false, false);
+        if end == text.len() {
+            for (pw, hyphen) in onward() {
+                w += pw;
+                onward_fits |= w + hyphen.unwrap_or(0.0) <= room;
+                goes_on = true;
+            }
+        }
+        if goes_on && !text.ends_with(SOFT_HYPHEN) {
+            ends.pop();
+        }
+        let pick = ends.iter().rposition(|&(_, w)| w <= room);
+        if onward_fits || (pick.is_none() && whole && goes_on) {
+            words.drain(..taken);
+            let rest = &text[start..];
+            break 'grown rest.strip_suffix(SOFT_HYPHEN).unwrap_or(rest);
+        }
+        let pick = pick.or_else(|| ends.len().checked_sub(1).filter(|_| whole));
+        let Some(i) = pick else {
+            break 'grown source;
+        };
+        words.drain(..i + 1);
+        &text[start..ends[i].0]
+    };
+    let shown = shown_word(run, source);
+    let ww = width(&shown);
+    (source, shown, ww)
+}
+
+/// `fitting_prefix_len` for a margin cut in `run`: soft hyphens show nothing
+/// there, and a cut after one moves before it, so the line shows no hyphen.
+fn margin_cut(run: &Run, word: &str, room: f32, width: impl Fn(&str) -> f32) -> Option<usize> {
+    let hidden = |w: &str| width(&caps_word(run, &w.replace(SOFT_HYPHEN, "")));
+    let cut = fitting_prefix_len(word, room, hidden)?;
+    match word[..cut].strip_suffix(SOFT_HYPHEN) {
+        Some(before) if !before.is_empty() => Some(before.len()),
+        _ => Some(cut),
+    }
+}
+
+/// Take back the hyphen a soft hyphen showed at the end of `chunks` (`width`
+/// from `soft_tail`): only a line that breaks there shows it, not one a
+/// manual break or the paragraph's end closes.
+fn drop_soft_hyphen(chunks: &mut Vec<WordChunk>, width: Option<f32>) {
+    if let Some(w) = width
+        && let Some(c) = chunks.last_mut()
+        && c.text.ends_with('-')
+    {
+        c.text.pop();
+        c.width -= w;
+        if let Some(a) = c.actual_text.as_mut().filter(|a| a.ends_with('-')) {
+            a.pop();
+        }
+        if c.text.is_empty() {
+            chunks.pop();
+        }
     }
 }
 
@@ -1415,7 +1631,7 @@ fn word_space_width(
     } else {
         eff_fs
     };
-    entry.space_width(fs) * run.text_scale / 100.0 + run.char_spacing
+    entry.scaled_word_width(" ", fs, false, run.text_scale) + run.char_spacing
 }
 
 /// Split a word into (text, font_size, source) segments for smallCaps rendering.
@@ -1492,9 +1708,7 @@ pub(super) fn opening_word_width(runs: &[Run], fonts: &HashMap<String, FontEntry
             continue;
         };
         let eff_fs = effective_font_size(run, entry);
-        let kern = run.kerns_at(eff_fs);
-        let ts = run.text_scale / 100.0;
-        let measure = |s: &str| word_width_for_run(entry, run, s, eff_fs, kern, run.char_spacing, ts);
+        let measure = |s: &str| word_width_for_run(entry, run, s, eff_fs);
         for (i, (spaces, word)) in split_preserving_spaces(&run.text).into_iter().enumerate() {
             spaces_since += spaces;
             space_width += spaces as f32 * measure(" ");
@@ -1535,9 +1749,6 @@ pub(super) fn word_width_for_run(
     run: &Run,
     word: &str,
     eff_fs: f32,
-    kern: bool,
-    cs: f32,
-    ts: f32,
 ) -> f32 {
     if let Some(cb) = run.checkbox {
         return checkbox_cell(entry, cb).0;
@@ -1545,15 +1756,29 @@ pub(super) fn word_width_for_run(
     if run.small_caps {
         smallcaps_segments(word, eff_fs)
             .iter()
-            .map(|(seg, fs, _)| {
-                let seg_kern = run.kerns_at(*fs);
-                entry.word_width(seg, *fs, seg_kern) * ts + cs * seg.chars().count() as f32
-            })
+            .map(|(seg, fs, _)| spaced_width(entry, run, seg, *fs))
             .sum()
     } else {
-        let char_count = word.chars().count();
-        entry.word_width(word, eff_fs, kern) * ts + cs * char_count as f32
+        spaced_width(entry, run, word, eff_fs)
     }
+}
+
+fn spaced_width(entry: &FontEntry, run: &Run, text: &str, fs: f32) -> f32 {
+    entry.scaled_word_width(text, fs, run.kerns_at(fs), run.text_scale)
+        + run.char_spacing * text.chars().count() as f32
+}
+
+/// Width in the run font, size, kerning and spacing.
+fn run_width<'a>(
+    run: &'a Run,
+    seen_fonts: &'a HashMap<String, FontEntry>,
+    key_buf: &mut String,
+) -> impl Fn(&str) -> f32 + Copy + use<'a> {
+    let entry = seen_fonts
+        .get(font_key_buf(run, key_buf))
+        .expect("font registered");
+    let eff_fs = effective_font_size(run, entry);
+    move |w| word_width_for_run(entry, run, w, eff_fs)
 }
 
 /// Word sets a legacy check box in a square cell as wide and tall as one line
@@ -1682,15 +1907,14 @@ fn push_word_chunks(
     split_punct: bool,
 ) {
     let first = chunks.len();
+    let original = original.map(soft_shown);
+    let original = original.as_deref();
     let actual = |shown: &str, source: &str| (shown != source).then(|| source.to_string());
     if run.small_caps {
         let segs = smallcaps_segments(word, eff_fs);
         let mut seg_x = x_start;
         for (seg_text, seg_fs, source) in &segs {
-            let seg_kern = run.kerns_at(*seg_fs);
-            let ts = run.text_scale / 100.0;
-            let seg_w = entry.word_width(seg_text, *seg_fs, seg_kern) * ts
-                + cs * seg_text.chars().count() as f32;
+            let seg_w = spaced_width(entry, run, seg_text, *seg_fs);
             let mut chunk = WordChunk::text(entry, run, seg_text, *seg_fs, cs, y_off, seg_x, seg_w);
             // With caps on too the word is already all capitals, one segment:
             // its source is the caps original.
@@ -1712,9 +1936,7 @@ fn push_word_chunks(
         let mut seg_x = x_start;
         let segs = punct_segments(word, run.east_asia_hint);
         for (i, seg_text) in segs.iter().enumerate() {
-            let mut seg_w =
-                entry.word_width(seg_text, eff_fs, run.kerns_at(eff_fs)) * run.text_scale / 100.0
-                    + cs * seg_text.chars().count() as f32;
+            let mut seg_w = spaced_width(entry, run, seg_text, eff_fs);
             let mut chunk = WordChunk::text(entry, run, seg_text, eff_fs, cs, y_off, seg_x, seg_w);
             // Japanese: a closing mark another mark follows keeps its ink
             // half only (see `ja_adjacent_marks`).
@@ -1820,6 +2042,109 @@ fn finish_line_with_break(chunks: &mut Vec<WordChunk>) -> TextLine {
     line
 }
 
+/// One run's share of the spaces waiting to be placed before the next word,
+/// for `underline_line_end`.
+struct PendingSpaceRun<'a> {
+    run: &'a Run,
+    entry: &'a FontEntry,
+    font_size: f32,
+    width: f32,
+}
+
+/// A space is underlined when its *own* run is underlined (Word draws
+/// underline continuously across spaces inside an underlined run, but not
+/// across a space that belongs to a neighbouring non-underlined run). A struck
+/// run (a deletion): Word's strike bridges the space.
+fn underlines_space(run: &Run) -> bool {
+    run.underline || run.strikethrough
+}
+
+fn space_underline(
+    run: Option<&Run>,
+    entry: &FontEntry,
+    font_size: f32,
+    x: f32,
+    width: f32,
+) -> Option<WordChunk> {
+    let run = run.filter(|r| underlines_space(r))?;
+    let chunk = WordChunk::word_space_underline(
+        entry,
+        font_size,
+        run.color,
+        run.double_underline,
+        run.border.clone(),
+        x,
+        width,
+    );
+    Some(chunk.struck_if(run.strikethrough && !run.underline))
+}
+
+/// Record `width` of spaces from `run` and add it to `pending_w`, the space
+/// already waiting, zero when the spaces recorded before were placed.
+fn push_pending_space<'a>(
+    spaces: &mut Vec<PendingSpaceRun<'a>>,
+    pending_w: &mut f32,
+    run: &'a Run,
+    entry: &'a FontEntry,
+    font_size: f32,
+    width: f32,
+) {
+    if *pending_w == 0.0 {
+        spaces.clear();
+    }
+    *pending_w += width;
+    spaces.push(PendingSpaceRun {
+        run,
+        entry,
+        font_size,
+        width,
+    });
+}
+
+/// `w:compat/w:ulTrailSpace`: Word underlines the underlined spaces a line
+/// ends in, at a wrap, a manual break, before a wrapped picture and at the
+/// paragraph mark alike, each in its own run's underline, but never past the
+/// line's edge, so a stretched justified line or one aligned to its end shows
+/// none of them (Word examples, `ul-trail-space-on`,
+/// `ul-trail-space-runs`). A line of spaces only is underlined from its start,
+/// in a table cell too; the spaces still leave the line as tall as the
+/// paragraph mark makes it. They do not count for alignment or justification,
+/// and in a `w:bidi` paragraph, tabbed or not, they sit left of the line
+/// (`ul-trail-space-bidi`). Only spaces in
+/// the paragraph's direction trail: a `w:rtl` run's spaces in a left-to-right
+/// paragraph, or a plain run's in a `w:bidi` one, stay inside the line and
+/// are underlined with or without the flag. Without it the underline stops
+/// at the last visible character.
+fn underline_line_end(
+    line: &mut TextLine,
+    cjk: CjkLayout,
+    spaces: &[PendingSpaceRun],
+    mut x: f32,
+    pending_w: f32,
+) {
+    if !cjk.ul_trail_space || pending_w <= 0.0 {
+        return;
+    }
+    for sp in spaces {
+        if sp.run.underline && sp.run.rtl == cjk.bidi {
+            let x_offset = if cjk.bidi {
+                line.total_width - x - sp.width
+            } else {
+                x
+            };
+            line.end_spaces.push(EndSpace {
+                x_offset,
+                width: sp.width,
+                pdf_font: sp.entry.pdf_name.clone(),
+                font_size: sp.font_size,
+                color: sp.run.color,
+                double: sp.run.double_underline,
+            });
+        }
+        x += sp.width;
+    }
+}
+
 /// Paragraph line-breaking switches for `build_paragraph_lines`.
 #[derive(Clone, Copy)]
 pub(super) struct CjkLayout {
@@ -1857,6 +2182,8 @@ pub(super) struct CjkLayout {
     /// Justify a line that ends in a manual break, as Word does unless
     /// `doNotExpandShiftReturn` is set.
     pub(super) expand_shift_return: bool,
+    /// Underline the underlined spaces a line ends in (`ulTrailSpace`).
+    pub(super) ul_trail_space: bool,
     /// `w:bidi`: the paragraph's base direction is right to left.
     pub(super) bidi: bool,
     /// `enableOpenTypeFeatures`: kerned text goes through Word's shaping path
@@ -1874,16 +2201,25 @@ pub(super) struct CjkLayout {
 /// midpoint inside the margin" reproduces 94.6%; either condition alone ~90%.
 const SPACE_SQUEEZE: f32 = 0.25;
 
-/// Whether Word 2013+ keeps an overflowing word on a squeezed line. After a
-/// hyphen at most a third of the word may stick out; after a space, 0.35 of
-/// it plus a third of the space. Word probes at 12 and 14 pt in 0.1 pt steps
-/// (2026-10-26): 12 and 24 pt words after a hyphen stay to 4.0 and 8.0 pt
-/// over, after a 3 pt space to 5.2 and 9.4 pt; "half the word" kept short
-/// words 1-3 pt too long.
-fn squeeze_keeps(overflow: f32, word_w: f32, lead_space: f32) -> bool {
-    let share = if lead_space > 0.0 { 0.35 } else { 1.0 / 3.0 };
-    overflow <= share * word_w + lead_space / 3.0
+/// Whether Word 2013+ keeps an overflowing word on a squeezed line:
+/// `overflow * (3 - 2 * share) <= word_w + lead_space`, less a slack,
+/// `share` being the lead space's part of the line's `spaces` (lead space
+/// included); after a hyphen that is a third of the word. Word examples:
+/// 12 and 24 pt words after a hyphen stay to 4.0 and 8.0 pt over; Arial 11 pt
+/// "der" after 10, 20 and 30 spaces to 6.76, 6.53 and 6.44 pt, wrapping at
+/// 6.81, 6.58 and 6.49 (fixture squeeze-lead-space).
+fn squeeze_keeps(overflow: f32, word_w: f32, lead_space: f32, spaces: f32) -> bool {
+    let share = if spaces > 0.0 { lead_space / spaces } else { 0.0 };
+    (overflow - SQUEEZE_KEEP_SLACK) * (3.0 - 2.0 * share) <= word_w + lead_space
 }
+
+/// Word keeps a squeezed line's last word a little past `squeeze_keeps`'s
+/// threshold: Word examples in 0.0004pt steps (Arial 11pt "der"
+/// after 9 to 46 spaces, Times New Roman "te" and "Dále", Calibri "der")
+/// put it 0.0007 to 0.022pt further, more the more spaces the line has but
+/// not steadily, a rounding not pinned down. This much is below every example;
+/// czech_village_budget_commentary keeps "Dále" 0.00016pt past the threshold.
+const SQUEEZE_KEEP_SLACK: f32 = 0.0005;
 
 /// How far a `wpJustification` line may overflow and still keep its last
 /// word, in spaces of the word's font. Measured on three compat-14 Courier
@@ -2222,18 +2558,10 @@ pub(super) fn build_paragraph_lines(
     let mut pending_space_count: usize = 0;
     // pending_space_w minus CJK auto-spacing: a space character really occurred.
     let mut pending_real_space = false;
-    // Underline state of the run that emitted the pending whitespace. A space
-    // is underlined when its *own* run is underlined (Word draws underline
-    // continuously across spaces inside an underlined run, but not across a
-    // space that belongs to a neighbouring non-underlined run).
-    let mut pending_space_underline = false;
-    // The space's run is struck (a deletion): Word's strike bridges the space.
-    let mut pending_space_strike = false;
-    // Whether the pending spaces came from a `w:rtl` run (`WordChunk::gap_rtl`).
-    let mut space_rtl = false;
-    let mut pending_space_double = false;
-    let mut pending_space_color: Option<[u8; 3]> = None;
-    let mut pending_space_border: Option<ParagraphBorder> = None;
+    // The run that emitted the pending whitespace: its underline and its
+    // `w:rtl` (`WordChunk::gap_rtl`) apply to the spaces.
+    let mut last_space_run: Option<&Run> = None;
+    let mut pending_spaces: Vec<PendingSpaceRun> = Vec::new();
     let mut key_buf = String::new();
     // Track whether we're filling the right region on the current line
     let mut in_right_region = false;
@@ -2241,6 +2569,9 @@ pub(super) fn build_paragraph_lines(
     let mut cur_right_info: Option<(usize, f32, f32)> = None; // (first_chunk_idx, region_x, region_w)
     // Track last non-space character for CJK auto-spacing (autoSpaceDE/DN)
     let mut prev_last_char: Option<char> = None;
+    // The width of the hyphen a soft hyphen showed at the end of the word
+    // placed last (`shown_word`).
+    let mut soft_tail: Option<f32> = None;
     // Index in `current_chunks` where the word being placed began; a word can
     // span several runs.
     let mut word_start = 0usize;
@@ -2317,6 +2648,7 @@ pub(super) fn build_paragraph_lines(
         }
 
         if run.is_line_break {
+            drop_soft_hyphen(&mut current_chunks, soft_tail.take());
             mark_space_after(&mut current_chunks);
             let holds_only_break = current_chunks
                 .iter()
@@ -2326,7 +2658,7 @@ pub(super) fn build_paragraph_lines(
                 &mut in_right_region,
                 &mut cur_right_info,
             );
-            let line = TextLine {
+            let mut line = TextLine {
                 ends_with_break: true,
                 break_font_size: holds_only_break.then_some(run.font_size),
                 break_lhr: holds_only_break
@@ -2335,6 +2667,7 @@ pub(super) fn build_paragraph_lines(
                     .and_then(|e| e.line_h_ratio),
                 ..line
             };
+            underline_line_end(&mut line, cjk, &pending_spaces, current_x, pending_space_w);
             lines.push(line);
             current_x = 0.0;
             pending_space_w = 0.0;
@@ -2351,9 +2684,13 @@ pub(super) fn build_paragraph_lines(
             }
             if let Some(pdf_name) = inline_image_names.get(&run_idx) {
                 let img_w = img.layout_size().0;
+                let soft = soft_tail.take().filter(|_| {
+                    pending_space_w == 0.0
+                        && current_chunks.last().is_some_and(|c| c.text.ends_with('-'))
+                });
                 // Leading spaces indent a picture as they do a word
                 // (russian_chess: 19 spaces push the board 57pt right).
-                let proposed_x = current_x + pending_space_w;
+                let proposed_x = current_x + pending_space_w - soft.unwrap_or(0.0);
 
                 let eff_w = left_max(lines.len());
                 let line_max = if lines.is_empty() && !in_right_region {
@@ -2406,9 +2743,11 @@ pub(super) fn build_paragraph_lines(
                         line.break_lhr = entry.line_h_ratio;
                         line.leading_space_wrap = true;
                     }
+                    underline_line_end(&mut line, cjk, &pending_spaces, current_x, pending_space_w);
                     lines.push(line);
                     current_x = 0.0;
                 } else {
+                    drop_soft_hyphen(&mut current_chunks, soft);
                     current_x = proposed_x;
                 }
                 pending_space_w = 0.0;
@@ -2528,7 +2867,7 @@ pub(super) fn build_paragraph_lines(
         let y_off = vert_y_offset(run);
 
         let cs = run.char_spacing;
-        let ts = run.text_scale / 100.0;
+        let width = run_width(run, seen_fonts, &mut key_buf);
 
         let mut is_first_word_in_run = true;
         let mut prev_char = None;
@@ -2536,17 +2875,14 @@ pub(super) fn build_paragraph_lines(
         while let Some((space_count, mut source)) = words.pop_front() {
             pending_space_count += space_count;
             let literal_spaces = pending_space_count;
-            let mut shown = caps_word(run, source);
-            pending_space_w +=
+            let prev_soft_tail = soft_tail.take();
+            let mut shown = shown_word(run, source);
+            let space_w =
                 space_count as f32 * word_space_width(run, entry, eff_fs, source, &mut prev_char);
             if space_count > 0 {
+                push_pending_space(&mut pending_spaces, &mut pending_space_w, run, entry, eff_fs, space_w);
                 pending_real_space = true;
-                space_rtl = run.rtl;
-                pending_space_underline = run.underline || run.strikethrough;
-                pending_space_strike = run.strikethrough && !run.underline;
-                pending_space_double = run.double_underline;
-                pending_space_color = run.color;
-                pending_space_border = run.border.clone();
+                last_space_run = Some(run);
             }
             // current_chunks still holds what precedes this word on its line,
             // so a wrap below keeps the space at the end of the finished line.
@@ -2571,6 +2907,7 @@ pub(super) fn build_paragraph_lines(
                     |c: char| crate::docx::is_east_asian_char(c) && !is_cjk_punctuation(c);
                 let latin = |c: char| c.is_alphanumeric() && !crate::docx::is_east_asian_char(c);
                 if (ideograph(prev_ch) && latin(first_ch)) || (latin(prev_ch) && ideograph(first_ch)) {
+                    pending_spaces.clear();
                     pending_space_w += eff_fs * 0.25;
                 }
             }
@@ -2590,9 +2927,14 @@ pub(super) fn build_paragraph_lines(
                             .zip(shown.chars().next())
                             .is_some_and(|(a, b)| breaks_between(a, b))));
             is_first_word_in_run = false;
+            // A word right after a soft hyphen on this line takes its hyphen
+            // back: Word measures it from where the hyphen starts.
+            let soft = prev_soft_tail.filter(|_| {
+                pending_space_w == 0.0
+                    && !is_continuation
+                    && current_chunks.last().is_some_and(|c| c.text.ends_with('-'))
+            });
 
-            let kern = run.kerns_at(eff_fs);
-            let width = |w: &str| word_width_for_run(entry, run, w, eff_fs, kern, cs, ts);
             let mut ww = width(&shown);
             // A word wider than a whole line breaks at the margin, character
             // by character (a 280-dot leader fills two lines).
@@ -2602,6 +2944,21 @@ pub(super) fn build_paragraph_lines(
                 } else {
                     0.0
                 };
+            let room = line_room - current_x - pending_space_w;
+            let soft_room = room + soft.unwrap_or(0.0) + 0.05;
+            if ww > soft_room && !in_right_region && source.ends_with(SOFT_HYPHEN) {
+                let whole = (current_chunks.is_empty() || (is_continuation && word_start == 0))
+                    && right_region_for(lines.len()).is_none();
+                (source, shown, ww) = soft_continuation(
+                    run,
+                    source,
+                    &mut words,
+                    width,
+                    || soft_pieces(&runs[run_idx + 1..], seen_fonts),
+                    soft_room,
+                    whole,
+                );
+            }
             // A strip left of a wrapping float is no line: a word that fits
             // the strip right of it moves there whole (Word puts "Extended"
             // past a logo, not "Extend" before it).
@@ -2636,7 +2993,6 @@ pub(super) fn build_paragraph_lines(
             }
             // Under wordWrap=0 a word that overruns the rest of the line breaks
             // there too (torture_test: "…aufga" / "benübertragungsgesetz").
-            let room = line_room - current_x - pending_space_w;
             let cut_here = if current_chunks.is_empty() {
                 ww > line_room
             } else {
@@ -2645,16 +3001,17 @@ pub(super) fn build_paragraph_lines(
             if cut_here && !in_right_region && !fits_right {
                 // Cut the letters as written, not the capitals drawn (ß → SS
                 // changes length), so each half keeps its own /ActualText.
-                if let Some(cut) = fitting_prefix_len(source, room, |w| width(&caps_word(run, w))) {
+                if let Some(cut) = margin_cut(run, source, room, width) {
                     words.push_front((0, &source[cut..]));
                     source = &source[..cut];
-                    shown = caps_word(run, source);
+                    shown = shown_word(run, source);
                     ww = width(&shown);
                 }
             }
             let mut word: &str = &shown;
             let mut original = run.caps.then_some(source);
             prev_last_char = word.chars().last();
+            soft_tail = provisional_hyphen(source, word, width);
 
             // Japanese: a closing mark directly followed by another full-width
             // mark keeps only its ink half, whether the line is tight or not
@@ -2686,7 +3043,7 @@ pub(super) fn build_paragraph_lines(
                 // Leading spaces at the start of a line act as a visual indent
                 pending_space_w
             } else {
-                current_x
+                current_x - soft.unwrap_or(0.0)
             };
 
             let eff_w = left_max(lines.len());
@@ -2718,7 +3075,20 @@ pub(super) fn build_paragraph_lines(
             if overflows && (need_space || is_continuation || after_hyphen) && !in_right_region {
                 // How far the word may overflow and stay: Word 2013+ narrows
                 // the spaces, wpJustification the whole line.
-                let lead_space = if need_space { pending_space_w } else { 0.0 };
+                let lead_space = if need_space {
+                    pending_space_w
+                } else if is_continuation && word_start > 0 {
+                    current_chunks.get(word_start).map_or(0.0, |first| {
+                        let before = &current_chunks[word_start - 1];
+                        if before.word_space_bridge {
+                            before.width
+                        } else {
+                            (first.x_offset - before.x_offset - before.width).max(0.0)
+                        }
+                    })
+                } else {
+                    0.0
+                };
                 let half_mark = if cjk.punct_half_out {
                     word.chars()
                         .last()
@@ -2727,9 +3097,14 @@ pub(super) fn build_paragraph_lines(
                 } else {
                     0.0
                 };
-                let keeps = squeeze_keeps(word_x + word_w - cur_max - half_mark, word_w, lead_space);
-                let space_room = (cjk.squeeze_spaces && keeps)
-                    .then(|| SPACE_SQUEEZE * (line_space_width(&current_chunks) + pending_space_w));
+                let spaces = line_space_width(&current_chunks) + pending_space_w;
+                let keeps = squeeze_keeps(
+                    word_x + word_w - cur_max - half_mark,
+                    word_w,
+                    lead_space,
+                    spaces,
+                );
+                let space_room = (cjk.squeeze_spaces && keeps).then(|| SPACE_SQUEEZE * spaces);
                 let line_room = (cjk.squeeze_line && (need_space || is_continuation))
                     .then(|| SQUEEZE_LINE_SPACES * entry.space_width(eff_fs));
                 if [space_room, line_room]
@@ -2800,7 +3175,7 @@ pub(super) fn build_paragraph_lines(
                     y_off,
                     0.0,
                     ww,
-                    space_rtl,
+                    last_space_run.is_some_and(|r| r.rtl),
                     cjk.compress_punct,
                 );
                 current_x = ww;
@@ -2833,35 +3208,31 @@ pub(super) fn build_paragraph_lines(
                     current_x -= dx;
                     word_start = 0;
                 }
-                if pending_space_underline && pending_space_w > 0.0 {
-                    current_chunks.push(
-                        WordChunk::word_space_underline(
-                            entry,
-                            eff_fs,
-                            pending_space_color,
-                            pending_space_double,
-                            pending_space_border.clone(),
-                            current_x,
-                            pending_space_w,
-                        )
-                        .struck_if(pending_space_strike),
-                    );
+                if pending_space_w > 0.0 {
+                    current_chunks.extend(space_underline(
+                        last_space_run,
+                        entry,
+                        eff_fs,
+                        current_x,
+                        pending_space_w,
+                    ));
                 }
                 current_x += pending_space_w;
                 pending_space_w = 0.0;
                 pending_space_count = 0;
                 let room = left_max(lines.len()) - current_x;
                 if ww > room + 0.05 {
-                    let cut = fitting_prefix_len(source, room, |w| width(&caps_word(run, w)))
-                        .filter(|&c| width(&caps_word(run, &source[..c])) <= room + 0.05);
+                    let cut = margin_cut(run, source, room, width)
+                        .filter(|&c| width(&shown_word(run, &source[..c])) <= room + 0.05);
                     if let Some(cut) = cut {
                         words.push_front((0, &source[cut..]));
                         source = &source[..cut];
-                        shown = caps_word(run, source);
+                        shown = shown_word(run, source);
                         word = &shown;
                         original = run.caps.then_some(source);
                         ww = width(word);
                         prev_last_char = word.chars().last();
+                        soft_tail = None;
                     } else {
                         // Not one more character fits: the rest goes on as the
                         // next word and wraps there.
@@ -2881,10 +3252,13 @@ pub(super) fn build_paragraph_lines(
                     y_off,
                     current_x,
                     ww,
-                    space_rtl,
+                    last_space_run.is_some_and(|r| r.rtl),
                     cjk.compress_punct,
                 );
-                if literal_spaces > 1 && !pending_space_underline && chunk_start > 0 {
+                if literal_spaces > 1
+                    && !last_space_run.is_some_and(underlines_space)
+                    && chunk_start > 0
+                {
                     current_chunks[chunk_start].preceding_spaces = literal_spaces;
                 }
                 current_x += ww;
@@ -2935,7 +3309,7 @@ pub(super) fn build_paragraph_lines(
                             y_off,
                             start_x,
                             ww,
-                            space_rtl,
+                            last_space_run.is_some_and(|r| r.rtl),
                             cjk.compress_punct,
                         );
                         current_x = start_x + ww;
@@ -2944,15 +3318,17 @@ pub(super) fn build_paragraph_lines(
                 }
                 // Try hyphenation before wrapping whole word
                 // No right region or right region also full — wrap to next line
-                lines.push(TextLine {
+                let mut line = TextLine {
                     trailing_space: pending_space_w,
-                    trailing_space_rtl: space_rtl,
+                    trailing_space_rtl: last_space_run.is_some_and(|r| r.rtl),
                     ..finish_dual_line(
                         &mut current_chunks,
                         &mut in_right_region,
                         &mut cur_right_info,
                     )
-                });
+                };
+                underline_line_end(&mut line, cjk, &pending_spaces, current_x, pending_space_w);
+                lines.push(line);
                 current_x = 0.0;
                 // A word too wide for a strip beside a float goes below it
                 // whole (Word example: "charlie" beside a 40pt strip right of a
@@ -2973,18 +3349,33 @@ pub(super) fn build_paragraph_lines(
                 // A word wider than the new line breaks at its margin too.
                 let room = left_max(lines.len());
                 let right = right_region_for(lines.len());
+                if ww > room && right.is_none() && source.ends_with(SOFT_HYPHEN) {
+                    (source, shown, ww) = soft_continuation(
+                        run,
+                        source,
+                        &mut words,
+                        width,
+                        || soft_pieces(&runs[run_idx + 1..], seen_fonts),
+                        room + 0.05,
+                        true,
+                    );
+                    word = &shown;
+                    original = run.caps.then_some(source);
+                    prev_last_char = word.chars().last();
+                    soft_tail = provisional_hyphen(source, word, width);
+                }
                 if ww > room
                     && right.is_none()
-                    && let Some(cut) =
-                        fitting_prefix_len(source, room, |w| width(&caps_word(run, w)))
+                    && let Some(cut) = margin_cut(run, source, room, width)
                 {
                     words.push_front((0, &source[cut..]));
                     source = &source[..cut];
-                    shown = caps_word(run, source);
+                    shown = shown_word(run, source);
                     word = &shown;
                     original = run.caps.then_some(source);
                     ww = width(word);
                     prev_last_char = word.chars().last();
+                    soft_tail = None;
                 }
                 // If the new line's left region is zero-width, go
                 // straight to the right region for this word.
@@ -3026,7 +3417,7 @@ pub(super) fn build_paragraph_lines(
                             y_off,
                             0.0,
                             ww,
-                            space_rtl,
+                            last_space_run.is_some_and(|r| r.rtl),
                             cjk.compress_punct,
                         );
                         current_x = ww;
@@ -3034,24 +3425,20 @@ pub(super) fn build_paragraph_lines(
                     }
                 }
             } else {
+                drop_soft_hyphen(&mut current_chunks, soft);
                 current_x = proposed_x;
             }
             // Bridge the underline across the space preceding this word when the
             // space's own run is underlined, so a continuously-underlined run
             // renders as one unbroken line rather than per-word segments.
-            if pending_space_underline && !current_chunks.is_empty() && pending_space_w > 0.0 {
-                current_chunks.push(
-                    WordChunk::word_space_underline(
-                        entry,
-                        eff_fs,
-                        pending_space_color,
-                        pending_space_double,
-                        pending_space_border.clone(),
-                        current_x - pending_space_w,
-                        pending_space_w,
-                    )
-                    .struck_if(pending_space_strike),
-                );
+            if !current_chunks.is_empty() && pending_space_w > 0.0 {
+                current_chunks.extend(space_underline(
+                    last_space_run,
+                    entry,
+                    eff_fs,
+                    current_x - pending_space_w,
+                    pending_space_w,
+                ));
             }
             pending_space_w = 0.0;
             pending_space_count = 0;
@@ -3071,11 +3458,11 @@ pub(super) fn build_paragraph_lines(
                 y_off,
                 current_x,
                 ww,
-                space_rtl,
+                last_space_run.is_some_and(|r| r.rtl),
                 cjk.compress_punct,
             );
             if literal_spaces > 1
-                && !pending_space_underline
+                && !last_space_run.is_some_and(underlines_space)
                 && chunk_start > 0
                 && let Some(c) = current_chunks.get_mut(chunk_start)
             {
@@ -3092,19 +3479,17 @@ pub(super) fn build_paragraph_lines(
             .count();
         if trailing_spaces > 0 {
             pending_space_count += trailing_spaces;
-            pending_space_w +=
+            let space_w =
                 trailing_spaces as f32 * word_space_width(run, entry, eff_fs, "", &mut prev_char);
+            push_pending_space(&mut pending_spaces, &mut pending_space_w, run, entry, eff_fs, space_w);
             pending_real_space = true;
-            space_rtl = run.rtl;
-            pending_space_underline = run.underline || run.strikethrough;
-            pending_space_strike = run.strikethrough && !run.underline;
-            pending_space_double = run.double_underline;
-            pending_space_color = run.color;
-            pending_space_border = run.border.clone();
+            last_space_run = Some(run);
         }
     }
 
-    if !current_chunks.is_empty() {
+    drop_soft_hyphen(&mut current_chunks, soft_tail);
+    let ends_in_text = !current_chunks.is_empty();
+    if ends_in_text {
         lines.push(finish_dual_line(
             &mut current_chunks,
             &mut in_right_region,
@@ -3129,6 +3514,9 @@ pub(super) fn build_paragraph_lines(
 
     if lines.is_empty() {
         lines.push(TextLine::default());
+    }
+    if let Some(line) = lines.last_mut().filter(|l| ends_in_text || l.chunks.is_empty()) {
+        underline_line_end(line, cjk, &pending_spaces, current_x, pending_space_w);
     }
     // A display equation broken over lines is aligned as a group: each line
     // as wide as the widest, so centring puts every line's start (the
@@ -3169,7 +3557,16 @@ pub(super) fn build_paragraph_lines(
         skipped.append(&mut lines);
         lines = skipped;
     }
+    let starts: Option<Vec<f32>> = (!cjk.bidi && lines.iter().any(|l| !l.end_spaces.is_empty()))
+        .then(|| lines.iter().map(|l| l.total_width).collect());
     super::bidi::reorder_lines(&mut lines, cjk.bidi, seen_fonts);
+    for (line, start) in lines.iter_mut().zip(starts.into_iter().flatten()) {
+        if !line.draw_order.is_empty() {
+            for sp in &mut line.end_spaces {
+                sp.x_offset = line.total_width + (sp.x_offset - start);
+            }
+        }
+    }
     for line in lines.iter_mut() {
         line.rtl_paragraph = cjk.bidi;
         line.shaped_kerning = cjk.shaped_kerning;
@@ -3210,7 +3607,7 @@ fn leading_space_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -
         let key = font_key_buf(run, &mut key_buf);
         let entry = seen_fonts.get(key).expect("font registered");
         let eff_fs = effective_font_size(run, entry);
-        let text = effective_text(run);
+        let text = caps_word(run, &run.text);
         let spaces = text.chars().take_while(|c| c.is_whitespace()).count();
         let mut prev_char = None;
         w += spaces as f32 * word_space_width(run, entry, eff_fs, " ", &mut prev_char);
@@ -3244,9 +3641,8 @@ fn segment_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 
         let key = font_key_buf(run, &mut key_buf);
         let entry = seen_fonts.get(key).expect("font registered");
         let eff_fs = effective_font_size(run, entry);
-        let ts = run.text_scale / 100.0;
-        let cs = run.char_spacing;
-        let text = effective_text(run);
+        let width = |w: &str| word_width_for_run(entry, run, w, eff_fs);
+        let text = caps_word(run, &run.text);
         let mut prev_char = None;
         for piece in text.split(char::is_whitespace) {
             if piece.is_empty() {
@@ -3257,7 +3653,7 @@ fn segment_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 
             if !first {
                 w += space_w * spaces as f32;
             }
-            w += word_width_for_run(entry, run, piece, eff_fs, run.kerns_at(eff_fs), cs, ts);
+            w += soft_split_width(piece, width);
             first = false;
             spaces = 1;
         }
@@ -3268,30 +3664,39 @@ fn segment_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 
 }
 
 /// The text a tab takes along when it wraps: the segment's words up to its
-/// first space. Word never breaks between a tab and the word after it.
+/// first space. Word never breaks between a tab and the word after it, but
+/// does at a soft hyphen there, which then shows: the least the line must
+/// hold is the word up to a soft hyphen and its hyphen ("Diagram-" stays after
+/// the tab on a line too short for "Diagrammatically"), or the whole word
+/// where that is narrower ("x<tab>Veri" stays on a line too short for
+/// "x<tab>Ver-").
 fn first_word_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 {
-    let mut w = 0.0;
+    let (mut w, mut least) = (0.0, f32::INFINITY);
     let mut key_buf = String::new();
-    for run in runs {
+    'runs: for run in runs {
         if run.is_line_break || run.inline_image.is_some() {
             break;
         }
-        let text = effective_text(run);
-        let word = text.split(is_break_space).next().unwrap_or("");
-        let key = font_key_buf(run, &mut key_buf);
-        let entry = seen_fonts.get(key).expect("font registered");
-        let eff_fs = effective_font_size(run, entry);
-        let (cs, ts) = (run.char_spacing, run.text_scale / 100.0);
-        w += word_width_for_run(entry, run, word, eff_fs, run.kerns_at(eff_fs), cs, ts);
-        if word.len() < text.len() {
+        let width = run_width(run, seen_fonts, &mut key_buf);
+        for (spaces, piece) in split_preserving_spaces(&run.text) {
+            if spaces > 0 {
+                break 'runs;
+            }
+            let (pw, hyphen) = soft_piece(run, piece, width);
+            if let Some(h) = hyphen {
+                least = least.min(w + pw + h);
+            }
+            w += pw;
+        }
+        if run.text.ends_with(is_break_space) {
             break;
         }
     }
-    w
+    least.min(w)
 }
 
 fn decimal_before_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) -> f32 {
-    let texts: Vec<Cow<'_, str>> = runs.iter().map(|r| effective_text(r)).collect();
+    let texts: Vec<Cow<'_, str>> = runs.iter().map(|r| caps_word(r, &r.text)).collect();
     let full_text: String = texts.iter().map(|t| t.as_ref()).collect();
     let before = if let Some(dot_pos) = full_text.find('.') {
         &full_text[..dot_pos]
@@ -3305,8 +3710,6 @@ fn decimal_before_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) 
         let key = font_key_buf(run, &mut key_buf);
         let entry = seen_fonts.get(key).expect("font registered");
         let eff_fs = effective_font_size(run, entry);
-        let ts = run.text_scale / 100.0;
-        let cs = run.char_spacing;
         let text_to_measure = if text.len() <= chars_remaining {
             chars_remaining -= text.len();
             text.as_ref()
@@ -3315,9 +3718,7 @@ fn decimal_before_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) 
             chars_remaining = 0;
             s
         };
-        let kern = run.kerns_at(eff_fs);
-        w += entry.word_width(text_to_measure, eff_fs, kern) * ts
-            + cs * text_to_measure.chars().count() as f32;
+        w += soft_split_width(text_to_measure, |p| spaced_width(entry, run, p, eff_fs));
         if chars_remaining == 0 {
             break;
         }
@@ -3403,14 +3804,7 @@ pub(super) fn build_tabbed_line(
     let mut all_chunks: Vec<WordChunk> = Vec::new();
     let mut current_x: f32 = 0.0;
     let mut pending_space_w: f32 = 0.0;
-    // Underline state of the run that emitted the pending whitespace, so an
-    // underline bridges spaces inside an underlined run (see build_paragraph_lines).
-    let mut pending_space_underline = false;
-    // The space's run is struck (a deletion): Word's strike bridges the space.
-    let mut pending_space_strike = false;
-    let mut pending_space_double = false;
-    let mut pending_space_color: Option<[u8; 3]> = None;
-    let mut pending_space_border: Option<ParagraphBorder> = None;
+    let mut pending_spaces: Vec<PendingSpaceRun> = Vec::new();
     let mut key_buf = String::new();
     let mut is_first_line = true;
     // Set when tabs wrap onto a new line that has nothing drawn yet.
@@ -3421,6 +3815,9 @@ pub(super) fn build_tabbed_line(
     let mut line_reach = 0.0f32;
 
     let mut tab_line_metrics: Option<(f32, Option<f32>)> = None;
+    // The width of the hyphen a soft hyphen showed at the end of the word
+    // placed last (`shown_word`).
+    let mut soft_tail: Option<f32> = None;
     let line_max_at = |first: bool| {
         if first {
             max_width + first_line_hanging
@@ -3445,6 +3842,9 @@ pub(super) fn build_tabbed_line(
             // A tab is pure positioning here, but extraction must still see
             // the word boundary (Word's text reads "(2) If", not "(2)If").
             mark_space_after(&mut all_chunks);
+            // A soft hyphen before the tab shows only if the tab wraps.
+            let mut soft = soft_tail.take();
+            current_x -= soft.unwrap_or(0.0);
             // Trailing-space handling before a tab depends on whether an
             // explicit tab stop applies:
             // - An explicit stop AFTER current_x consumes the trailing spaces
@@ -3455,10 +3855,10 @@ pub(super) fn build_tabbed_line(
             //   for list paragraphs with long dot-leader trailing-space runs.
             let abs_x_no_spaces = current_x + line_indent;
             let has_explicit_after = tab_stops.iter().any(|s| s.position > abs_x_no_spaces + 0.5);
+            let text_end = current_x;
             if !has_explicit_after {
                 current_x += pending_space_w;
             }
-            pending_space_w = 0.0;
             // A positional tab (w:ptab) resolves against the margin box with its own
             // alignment, bypassing the paragraph's tab stops. Left→box left, Center→box
             // center, Right→box right edge. This is what produces Word's left/center/right
@@ -3549,6 +3949,10 @@ pub(super) fn build_tabbed_line(
                     &mut justify_from,
                     tab_line_metrics.take(),
                 );
+                if let Some(line) = result_lines.last_mut() {
+                    underline_line_end(line, cjk, &pending_spaces, text_end, pending_space_w);
+                }
+                soft = None;
                 tab_wrapped_line = true;
                 line_reach = 0.0;
                 current_x = 0.0;
@@ -3561,6 +3965,8 @@ pub(super) fn build_tabbed_line(
                 resolved_leader = new_stop.leader;
                 effective_tab_target = new_target;
             }
+            drop_soft_hyphen(&mut all_chunks, soft);
+            pending_space_w = 0.0;
             if stop.alignment != TabAlignment::Left {
                 line_reach = line_reach.max(effective_tab_target);
             }
@@ -3679,13 +4085,16 @@ pub(super) fn build_tabbed_line(
         // Layout text in this segment from current_x
         for (local_idx, run) in seg_runs.iter().enumerate() {
             if run.is_line_break {
+                drop_soft_hyphen(&mut all_chunks, soft_tail.take());
                 mark_space_after(&mut all_chunks);
                 let line = finish_line_with_break(&mut all_chunks);
-                result_lines.push(TextLine {
+                let mut line = TextLine {
                     justify_from: std::mem::take(&mut justify_from),
                     total_width: line.total_width.max(current_x),
                     ..line
-                });
+                };
+                underline_line_end(&mut line, cjk, &pending_spaces, current_x, pending_space_w);
+                result_lines.push(line);
                 tab_wrapped_line = false;
                 tab_line_metrics = None;
                 line_reach = 0.0;
@@ -3696,6 +4105,12 @@ pub(super) fn build_tabbed_line(
                 continue;
             }
 
+            if (run.inline_image.is_some() || run.math.is_some())
+                && let Some(w) = soft_tail.take()
+            {
+                drop_soft_hyphen(&mut all_chunks, Some(w));
+                current_x -= w;
+            }
             // Handle inline images (same pattern as build_paragraph_lines)
             if let Some(img) = &run.inline_image {
                 if let Some(pdf_name) = inline_image_names.get(&seg_indices[local_idx]) {
@@ -3747,23 +4162,18 @@ pub(super) fn build_tabbed_line(
             let text = &run.text;
 
             let cs = run.char_spacing;
-            let ts = run.text_scale / 100.0;
-            let segments = split_preserving_spaces(text);
+            let width = run_width(run, seen_fonts, &mut key_buf);
+            let mut words: std::collections::VecDeque<_> = split_preserving_spaces(text).into();
             let mut prev_char = None;
-            for (seg_idx, &(space_count, source)) in segments.iter().enumerate() {
-                let shown = caps_word(run, source);
-                let word: &str = &shown;
-                let original = run.caps.then_some(source);
-                let kern = run.kerns_at(eff_fs);
-                let ww = word_width_for_run(entry, run, word, eff_fs, kern, cs, ts);
-                pending_space_w += space_count as f32
+            let mut first_in_run = true;
+            while let Some((space_count, mut source)) = words.pop_front() {
+                let seg_first = std::mem::take(&mut first_in_run);
+                let mut shown = shown_word(run, source);
+                let mut ww = width(&shown);
+                let space_w = space_count as f32
                     * word_space_width(run, entry, eff_fs, source, &mut prev_char);
                 if space_count > 0 {
-                    pending_space_underline = run.underline || run.strikethrough;
-                    pending_space_strike = run.strikethrough && !run.underline;
-                    pending_space_double = run.double_underline;
-                    pending_space_color = run.color;
-                    pending_space_border = run.border.clone();
+                    push_pending_space(&mut pending_spaces, &mut pending_space_w, run, entry, eff_fs, space_w);
                 }
                 // Word advances over explicit spaces wherever they occur, including
                 // as the first content of a line or right after a tab. Whitespace
@@ -3775,29 +4185,42 @@ pub(super) fn build_tabbed_line(
                 let applied_space = pending_space_w > 0.0;
                 if applied_space {
                     mark_space_after(&mut all_chunks);
-                    if pending_space_underline && !all_chunks.is_empty() {
-                        all_chunks.push(
-                            WordChunk::word_space_underline(
-                                entry,
-                                eff_fs,
-                                pending_space_color,
-                                pending_space_double,
-                                pending_space_border.clone(),
-                                current_x,
-                                pending_space_w,
-                            )
-                            .struck_if(pending_space_strike),
-                        );
+                    if !all_chunks.is_empty() {
+                        all_chunks.extend(space_underline(
+                            pending_spaces.last().map(|s| s.run),
+                            entry,
+                            eff_fs,
+                            current_x,
+                            pending_space_w,
+                        ));
                     }
                     current_x += pending_space_w;
                     pending_space_w = 0.0;
                 }
+                // A word right after a soft hyphen on this line takes its
+                // hyphen back, as in `build_paragraph_lines`.
+                let soft = soft_tail.take();
                 // Word continues previous word across run boundary (no whitespace between)
-                let is_continuation = seg_idx == 0 && !applied_space && !all_chunks.is_empty();
+                let is_continuation =
+                    seg_first && !applied_space && !all_chunks.is_empty() && soft.is_none();
                 let cur_line_max = line_max_at(is_first_line);
-                let mut overflows = current_x + ww > cur_line_max.max(line_reach)
-                    && !all_chunks.is_empty()
-                    && !is_continuation;
+                let word_x = current_x - soft.unwrap_or(0.0);
+                let limit = cur_line_max.max(line_reach);
+                let may_wrap = !all_chunks.is_empty() && !is_continuation;
+                if word_x + ww > limit && may_wrap && source.ends_with(SOFT_HYPHEN) {
+                    (source, shown, ww) = soft_continuation(
+                        run,
+                        source,
+                        &mut words,
+                        width,
+                        || soft_pieces(seg_runs[local_idx + 1..].iter().copied(), seen_fonts),
+                        limit - word_x,
+                        false,
+                    );
+                }
+                let word: &str = &shown;
+                let original = run.caps.then_some(source);
+                let mut overflows = word_x + ww > limit && may_wrap;
                 // Justified compat-15 lines keep the word by narrowing the
                 // spaces after the last tab, as untabbed lines do
                 // (`SPACE_SQUEEZE`); ukrainian_municipal's "1.<tab>Надати …"
@@ -3808,8 +4231,8 @@ pub(super) fn build_tabbed_line(
                         (current_x - last.x_offset - last.width).max(0.0)
                     });
                     let spaces = line_space_width(after_tab) + lead_space;
-                    if squeeze_keeps(current_x + ww - cur_line_max, ww, lead_space)
-                        && current_x + ww - cur_line_max <= SPACE_SQUEEZE * spaces
+                    if squeeze_keeps(word_x + ww - cur_line_max, ww, lead_space, spaces)
+                        && word_x + ww - cur_line_max <= SPACE_SQUEEZE * spaces
                     {
                         overflows = false;
                         squeezed_lines.push(result_lines.len());
@@ -3831,6 +4254,9 @@ pub(super) fn build_tabbed_line(
                     // word's own end (Word keeps "Hub<tab>30<tab>$45" on the
                     // continuation line of a tab-separated inventory list).
                     tab_stop_pos = None;
+                } else {
+                    drop_soft_hyphen(&mut all_chunks, soft);
+                    current_x = word_x;
                 }
                 push_word_chunks(
                     &mut all_chunks,
@@ -3847,6 +4273,7 @@ pub(super) fn build_tabbed_line(
                     cjk.compress_punct,
                 );
                 current_x += ww;
+                soft_tail = provisional_hyphen(source, word, width);
             }
             // Accumulate trailing whitespace for the next run (or the next tab stop)
             let trailing_spaces = text
@@ -3855,13 +4282,9 @@ pub(super) fn build_tabbed_line(
                 .take_while(|c| is_break_space(*c))
                 .count();
             if trailing_spaces > 0 {
-                pending_space_w += trailing_spaces as f32
+                let space_w = trailing_spaces as f32
                     * word_space_width(run, entry, eff_fs, "", &mut prev_char);
-                pending_space_underline = run.underline || run.strikethrough;
-                pending_space_strike = run.strikethrough && !run.underline;
-                pending_space_double = run.double_underline;
-                pending_space_color = run.color;
-                pending_space_border = run.border.clone();
+                push_pending_space(&mut pending_spaces, &mut pending_space_w, run, entry, eff_fs, space_w);
             }
         }
 
@@ -3878,13 +4301,16 @@ pub(super) fn build_tabbed_line(
     // A tab ending the paragraph (or a line before a break) keeps its
     // extent: Word centres and right-aligns "Name<tab>" by where the tab
     // ends, leader or not.
+    let ends_in_spaces = all_chunks.is_empty() && pending_space_w > 0.0;
     if !all_chunks.is_empty() {
         let line = finish_line(&mut all_chunks);
-        result_lines.push(TextLine {
+        let mut line = TextLine {
             justify_from: std::mem::take(&mut justify_from),
             total_width: line.total_width.max(current_x),
             ..line
-        });
+        };
+        underline_line_end(&mut line, cjk, &pending_spaces, current_x, pending_space_w);
+        result_lines.push(line);
     } else if result_lines.is_empty() || tab_wrapped_line {
         // A wrapped tab's blank line is sized by the tabs on it, not by a
         // larger run elsewhere in the paragraph (Word examples: the tab line
@@ -3912,6 +4338,13 @@ pub(super) fn build_tabbed_line(
             break_font_size: break_fs,
             ..TextLine::default()
         });
+    }
+    if ends_in_spaces && let Some(line) = result_lines.last_mut().filter(|l| l.chunks.is_empty()) {
+        let width = std::mem::replace(&mut line.total_width, current_x);
+        underline_line_end(line, cjk, &pending_spaces, current_x, pending_space_w);
+        if line.end_spaces.is_empty() {
+            line.total_width = width;
+        }
     }
 
     for line in result_lines.iter_mut() {
@@ -3942,6 +4375,17 @@ pub(super) fn post_underline(entry: &FontEntry, font_size: f32) -> Option<(f32, 
 fn on_quarter_point_grid(offset: f32, thickness: f32) -> (f32, f32) {
     let q = |v: f32| (v * 4.0).round() / 4.0;
     (q(offset), q(thickness).max(0.25))
+}
+
+/// How a chunk's glyphs are drawn, chosen once for the face and its shadow
+/// and relief copies.
+enum GlyphDraw<'a> {
+    Placed(&'a FontEntry, Vec<(&'a FontEntry, &'a str, f32, f32)>),
+    Extras(Vec<f32>),
+    Rtl(&'a FontEntry),
+    Fallbacks,
+    Kerned(&'a FontEntry),
+    Plain,
 }
 
 /// Draws `text` with the font's pair kerning as TJ adjustments, the same pairs
@@ -3981,9 +4425,45 @@ fn show_placed(
     glyphs: &[(&str, f32, f32)],
     trailing: Option<&str>,
 ) {
+    show_placed_from(content, entry, glyphs, trailing, 0.0);
+}
+
+/// `show_placed` with each glyph in its own face (`base`, the face set, or
+/// a fallback one): one TJ per face, the pen carried across them.
+fn show_placed_faces(
+    content: &mut Content,
+    base: &FontEntry,
+    glyphs: &[(&FontEntry, &str, f32, f32)],
+    font_size: f32,
+    trailing: Option<&str>,
+) {
+    let mut pen = 0.0;
+    for run in glyphs.chunk_by(|a, b| std::ptr::eq(a.0, b.0)) {
+        let face = run[0].0;
+        let other = !std::ptr::eq(face, base);
+        if other {
+            content.set_font(Name(face.pdf_name.as_bytes()), font_size);
+        }
+        let seg: Vec<(&str, f32, f32)> = run.iter().map(|&(_, t, x, a)| (t, x, a)).collect();
+        pen = show_placed_from(content, face, &seg, None, pen);
+        if other {
+            content.set_font(Name(base.pdf_name.as_bytes()), font_size);
+        }
+    }
+    if let Some(t) = trailing {
+        content.show(Str(&base.encode(t)));
+    }
+}
+
+fn show_placed_from(
+    content: &mut Content,
+    entry: &FontEntry,
+    glyphs: &[(&str, f32, f32)],
+    trailing: Option<&str>,
+    mut pen: f32,
+) -> f32 {
     let mut tj = content.show_positioned();
     let mut items = tj.items();
-    let mut pen = 0.0f32;
     for &(text, x, advance) in glyphs {
         // TJ subtracts: moving right is a negative adjustment.
         let adjust = (pen - x).round();
@@ -3996,6 +4476,7 @@ fn show_placed(
     if let Some(t) = trailing {
         items.show(Str(&entry.encode(t)));
     }
+    pen
 }
 
 /// Each chunk's glyph x positions as Word's online export draws them
@@ -4168,25 +4649,15 @@ fn grid_eligible(chunk: &WordChunk, entry: &FontEntry) -> bool {
 }
 
 /// Each glyph's exact advance in points, letter spacing included, and the
-/// kerning in it: a kerned pair's adjustment on its first glyph.
+/// kerning in it: a kerned pair's adjustment on its first glyph. A scaled
+/// chunk's glyphs advance as layout measured them (`FontEntry::scaled_advances`).
 fn glyph_advances<'a>(
     chunk: &'a WordChunk,
     entry: &'a FontEntry,
 ) -> impl Iterator<Item = (f32, f32)> + 'a {
-    let kern = chunk.kern && entry.kern_pairs.is_some();
-    let mut chars = chunk.text.chars().peekable();
-    std::iter::from_fn(move || {
-        let ch = chars.next()?;
-        let k = match chars.peek() {
-            Some(&next) if kern => entry.kern_1000(ch, next),
-            _ => 0.0,
-        };
-        let scale = chunk.font_size / 1000.0;
-        Some((
-            (entry.char_width_1000(ch) + k) * scale + chunk.char_spacing,
-            k * scale,
-        ))
-    })
+    entry
+        .scaled_advances(&chunk.text, chunk.font_size, chunk.kern, chunk.text_scale)
+        .map(|(advance, kerning)| (advance + chunk.char_spacing, kerning))
 }
 
 /// `text` split into characters, each with its advance in thousandths;
@@ -4710,23 +5181,31 @@ pub(super) fn render_paragraph_lines(
         };
 
         // Helper: compute absolute x for a chunk, accounting for dual regions
-        let chunk_abs_x = |chunk_idx: usize, chunk: &WordChunk| -> f32 {
+        // (past the last chunk: the line's end spaces)
+        let x_at = |chunk_idx: usize, x_offset: f32| -> f32 {
             if let Some(ref rr) = line.right_region
                 && chunk_idx >= rr.first_chunk_idx
             {
                 let local_idx = chunk_idx - rr.first_chunk_idx;
-                return right_start_x + chunk.x_offset + local_idx as f32 * right_extra_per_gap;
+                return right_start_x + x_offset + local_idx as f32 * right_extra_per_gap;
             }
             if let Some(m) = &mixed {
-                line_start_x + chunk.x_offset + m.offset_before(chunk_idx)
+                line_start_x + x_offset + m.offset_before(chunk_idx)
             } else if is_char_justified {
                 // Tc adds extra space after each character; shift chunk start
                 // by the cumulative Tc of all chars in preceding chunks.
-                let chars_before = spread_chars(&line.chunks[jf.min(chunk_idx)..chunk_idx]);
-                line_start_x + chunk.x_offset + chars_before as f32 * justify_tc
+                let before = &line.chunks[jf.min(chunk_idx)..chunk_idx.min(line.chunks.len())];
+                line_start_x + x_offset + spread_chars(before) as f32 * justify_tc
             } else {
-                line_start_x + chunk.x_offset + gaps_before[chunk_idx] as f32 * extra_per_gap
+                let gaps = gaps_before.get(chunk_idx).map_or(left_gaps, |&g| g);
+                line_start_x + x_offset + gaps as f32 * extra_per_gap
             }
+        };
+        let chunk_abs_x = |chunk_idx: usize, chunk: &WordChunk| x_at(chunk_idx, chunk.x_offset);
+
+        let line_right = match &line.right_region {
+            Some(rr) => rr.region_x + rr.region_width,
+            None => eff_margin + eff_width,
         };
 
         let mut decorations: Vec<Decoration> = Vec::new();
@@ -5109,19 +5588,129 @@ pub(super) fn render_paragraph_lines(
                     Some(ref sh) if sh.relief => (x - sh.offset_x, cy - sh.offset_y),
                     _ => (x, cy),
                 };
+
+                let char_extras = mixed
+                    .as_ref()
+                    .and_then(|m| m.char_extras(chunk_idx, &chunk.text));
+                let grid_xs = leader_xs.or_else(|| grid.get(chunk_idx).and_then(|g| g.as_deref()));
+                // Scaled glyphs at their measured advances: Word's land 0.15pt
+                // from these on average in char-scale-widths and 0.20pt in a
+                // justified Calibri 85% document, 0.17 and 0.22pt from Tz's nominal
+                // ones; the device grid model fits the first, not the second.
+                let scaled_xs: Option<Vec<f32>> = primary_entry
+                    .filter(|_| grid_xs.is_none() && chunk.text_scale != 100.0 && !chunk.rtl_glyphs)
+                    .map(|e| {
+                        let mut gx = fx;
+                        glyph_advances(chunk, e)
+                            .enumerate()
+                            .map(|(i, (advance, _))| {
+                                let x = gx;
+                                let extra = char_extras.as_ref().map_or(0.0, |ex| ex[i]);
+                                gx += advance + if spreads { justify_tc } else { 0.0 } + extra;
+                                x
+                            })
+                            .collect()
+                    });
+                let grid_xs = grid_xs.or(scaled_xs.as_deref());
+                let start_x = grid_xs.map_or(fx, |g| g[0]);
+                // Per-character font fallback: if some chars are missing
+                // from the primary font, split into segments and render
+                // missing chars with the fallback font that has them.
+                let has_missing = primary_entry.is_some_and(|e| !e.missing_chars.is_empty());
+                let fallbacks: Vec<&FontEntry> = if has_missing {
+                    seen_fonts
+                        .iter()
+                        .filter(|(key, _)| key.starts_with(super::fonts::GLYPH_FALLBACK))
+                        .map(|(_, entry)| entry)
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+                // Which of `fallbacks` draws `c`; None when the primary font has it.
+                let fallback_idx = |c: char| {
+                    primary_entry.filter(|p| p.missing_chars.contains(&c))?;
+                    fallbacks
+                        .iter()
+                        .position(|f| f.char_to_gid.as_ref().is_some_and(|m| m.contains_key(&c)))
+                };
+                let leader_char = leader_xs.and(chunk.leader);
+                let leader_face = leader_char.and_then(fallback_idx).map(|k| fallbacks[k]);
+                // The pen also moves by Tc, the letter spacing.
+                let tc = effective_cs * 1000.0 / chunk.font_size;
+                let placed = grid_xs.zip(primary_entry).map(|(xs, &primary)| {
+                    let entry = leader_face.unwrap_or(primary);
+                    let chars: Vec<(usize, char)> = match leader_char {
+                        Some(c) => vec![(0, c); xs.len()],
+                        None => chunk.text.char_indices().collect(),
+                    };
+                    let glyphs: Vec<(&FontEntry, &str, f32, f32)> = chars
+                        .into_iter()
+                        .zip(xs)
+                        .map(|((i, ch), gx)| {
+                            let x = (gx - xs[0]) * 1000.0
+                                / chunk.font_size
+                                / (chunk.text_scale / 100.0);
+                            let face = leader_face
+                                .or_else(|| fallback_idx(ch).map(|k| fallbacks[k]))
+                                .unwrap_or(primary);
+                            (
+                                face,
+                                &chunk.text[i..i + ch.len_utf8()],
+                                x,
+                                face.char_width_1000(ch) + tc,
+                            )
+                        })
+                        .collect();
+                    (entry, glyphs)
+                });
+                let draw = if let Some((entry, glyphs)) = placed {
+                    GlyphDraw::Placed(entry, glyphs)
+                } else if let Some(extras) = char_extras {
+                    GlyphDraw::Extras(extras)
+                } else if let Some(entry) = primary_entry.filter(|_| chunk.rtl_glyphs) {
+                    GlyphDraw::Rtl(entry)
+                } else if !fallbacks.is_empty() {
+                    GlyphDraw::Fallbacks
+                } else if let Some(entry) =
+                    primary_entry.filter(|e| chunk.kern && e.kern_pairs.is_some())
+                {
+                    GlyphDraw::Kerned(entry)
+                } else {
+                    GlyphDraw::Plain
+                };
+                if let Some(face) = leader_face {
+                    content.set_font(Name(face.pdf_name.as_bytes()), chunk.font_size);
+                    cur_font_name.clone_from(&face.pdf_name);
+                }
+
                 if let Some(ref sh) = chunk.text_shadow {
-                    let (sx, sy) = (fx + sh.offset_x, fy + sh.offset_y);
-                    let bytes =
-                        encode_text_for_pdf(&chunk.text, &chunk.pdf_font, &pdf_name_to_entry);
-                    let (ex, ey) = (fx - sh.offset_x, fy - sh.offset_y);
+                    let (sx, sy) = (start_x + sh.offset_x, fy + sh.offset_y);
+                    let (ex, ey) = (start_x - sh.offset_x, fy - sh.offset_y);
+                    // The copies are drawn as the face is, only moved.
+                    let draw_copy = |content: &mut Content, ox: f32, oy: f32| {
+                        content.set_text_matrix([1.0, 0.0, shear, 1.0, ox, oy]);
+                        let text = &chunk.text;
+                        match &draw {
+                            GlyphDraw::Placed(e, glyphs) => {
+                                show_placed_faces(content, e, glyphs, chunk.font_size, None);
+                            }
+                            GlyphDraw::Rtl(e) => {
+                                show_rtl(content, e, text, chunk.font_size, effective_cs, false);
+                            }
+                            GlyphDraw::Kerned(e) => show_kerned(content, e, text, false),
+                            GlyphDraw::Extras(_) | GlyphDraw::Fallbacks | GlyphDraw::Plain => {
+                                let bytes =
+                                    encode_text_for_pdf(text, &chunk.pdf_font, &pdf_name_to_entry);
+                                content.show(Str(&bytes));
+                            }
+                        }
+                    };
                     let draw_shadow = |content: &mut Content| {
-                        content.set_text_matrix([1.0, 0.0, shear, 1.0, sx, sy]);
                         fill_color_or_black(content, Some(sh.color));
-                        content.show(Str(&bytes));
+                        draw_copy(content, sx, sy);
                         if sh.relief {
-                            content.set_text_matrix([1.0, 0.0, shear, 1.0, ex, ey]);
                             fill_color_or_black(content, None);
-                            content.show(Str(&bytes));
+                            draw_copy(content, ex, ey);
                         }
                         fill_color_or_black(content, current_color);
                     };
@@ -5152,189 +5741,136 @@ pub(super) fn render_paragraph_lines(
                     td_x = mx;
                     td_y = my;
                 };
+                move_to(content, start_x, fy);
 
-                let grid_xs = leader_xs.or_else(|| grid.get(chunk_idx).and_then(|g| g.as_deref()));
-                move_to(content, grid_xs.map_or(fx, |g| g[0]), fy);
-
-                // Per-character font fallback: if some chars are missing
-                // from the primary font, split into segments and render
-                // missing chars with the fallback font that has them.
-                let has_missing = primary_entry.is_some_and(|e| !e.missing_chars.is_empty());
-                let fallbacks: Vec<&FontEntry> = if has_missing {
-                    seen_fonts
-                        .iter()
-                        .filter(|(key, _)| key.starts_with(super::fonts::GLYPH_FALLBACK))
-                        .map(|(_, entry)| entry)
-                        .collect()
-                } else {
-                    Vec::new()
-                };
-                // Which of `fallbacks` draws `c`; None when the primary font has it.
-                let fallback_idx = |c: char| {
-                    primary_entry.filter(|p| p.missing_chars.contains(&c))?;
-                    fallbacks
-                        .iter()
-                        .position(|f| f.char_to_gid.as_ref().is_some_and(|m| m.contains_key(&c)))
-                };
-
-                if let (Some(xs), Some(&primary)) = (grid_xs, primary_entry) {
-                    let leader_char = leader_xs.and(chunk.leader);
-                    let entry = match leader_char.and_then(fallback_idx) {
-                        Some(k) => {
-                            let face = fallbacks[k];
-                            content.set_font(Name(face.pdf_name.as_bytes()), chunk.font_size);
-                            cur_font_name.clone_from(&face.pdf_name);
-                            face
-                        }
-                        None => primary,
-                    };
-                    let glyphs: Vec<(usize, char)> = match leader_char {
-                        Some(c) => vec![(0, c); xs.len()],
-                        None => chunk.text.char_indices().collect(),
-                    };
-                    let placed: Vec<(&str, f32, f32)> = glyphs
-                        .into_iter()
-                        .zip(xs)
-                        .map(|((i, ch), gx)| {
-                            let x = (gx - xs[0]) * 1000.0 / chunk.font_size;
-                            // The pen also moves by Tc, the letter spacing.
-                            let tc = chunk.char_spacing * 1000.0 / chunk.font_size;
-                            (
-                                &chunk.text[i..i + ch.len_utf8()],
-                                x,
-                                entry.char_width_1000(ch) + tc,
-                            )
-                        })
-                        .collect();
-                    show_placed(content, entry, &placed, boundary_space.then_some(" "));
-                } else if let Some(extras) = mixed
-                    .as_ref()
-                    .and_then(|m| m.char_extras(chunk_idx, &chunk.text))
-                {
-                    // Only the East Asian gaps widen: one Tc per segment, the
-                    // fallback font where the primary lacks the glyphs.
-                    let chars: Vec<char> = chunk.text.chars().collect();
-                    let mut i = 0;
-                    while i < chars.len() {
-                        let fb = fallback_idx(chars[i]);
-                        let mut j = i + 1;
-                        while j < chars.len()
-                            && extras[j] == extras[i]
-                            && fallback_idx(chars[j]) == fb
-                        {
-                            j += 1;
-                        }
-                        let cs = chunk.char_spacing + extras[i];
-                        if cs != cur_char_spacing {
-                            content.set_char_spacing(cs);
-                            cur_char_spacing = cs;
-                        }
-                        let seg: String = chars[i..j].iter().collect();
-                        let fb = fb.map(|k| fallbacks[k]);
-                        match fb.and_then(|f| Some((f, f.char_to_gid.as_ref()?))) {
-                            Some((fb, map)) => {
-                                content.set_font(Name(fb.pdf_name.as_bytes()), chunk.font_size);
-                                content.show(Str(&encode_as_gids(&seg, map)));
-                                content.set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size);
+                match draw {
+                    GlyphDraw::Placed(entry, glyphs) => {
+                        let trailing = boundary_space.then_some(" ");
+                        show_placed_faces(content, entry, &glyphs, chunk.font_size, trailing);
+                    }
+                    GlyphDraw::Extras(extras) => {
+                        // Only the East Asian gaps widen: one Tc per segment, the
+                        // fallback font where the primary lacks the glyphs.
+                        let chars: Vec<char> = chunk.text.chars().collect();
+                        let mut i = 0;
+                        while i < chars.len() {
+                            let fb = fallback_idx(chars[i]);
+                            let mut j = i + 1;
+                            while j < chars.len()
+                                && extras[j] == extras[i]
+                                && fallback_idx(chars[j]) == fb
+                            {
+                                j += 1;
                             }
-                            _ => {
-                                content.show(Str(&encode_text_for_pdf(
-                                    &seg,
-                                    &chunk.pdf_font,
-                                    &pdf_name_to_entry,
-                                )));
+                            let cs = chunk.char_spacing + extras[i];
+                            if cs != cur_char_spacing {
+                                content.set_char_spacing(cs);
+                                cur_char_spacing = cs;
+                            }
+                            let seg: String = chars[i..j].iter().collect();
+                            let fb = fb.map(|k| fallbacks[k]);
+                            match fb.and_then(|f| Some((f, f.char_to_gid.as_ref()?))) {
+                                Some((fb, map)) => {
+                                    content.set_font(Name(fb.pdf_name.as_bytes()), chunk.font_size);
+                                    content.show(Str(&encode_as_gids(&seg, map)));
+                                    content
+                                        .set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size);
+                                }
+                                _ => {
+                                    content.show(Str(&encode_text_for_pdf(
+                                        &seg,
+                                        &chunk.pdf_font,
+                                        &pdf_name_to_entry,
+                                    )));
+                                }
+                            }
+                            i = j;
+                        }
+                        if boundary_space {
+                            if effective_cs != cur_char_spacing {
+                                content.set_char_spacing(effective_cs);
+                                cur_char_spacing = effective_cs;
+                            }
+                            content.show(Str(&encode_text_for_pdf(
+                                " ",
+                                &chunk.pdf_font,
+                                &pdf_name_to_entry,
+                            )));
+                        }
+                    }
+                    GlyphDraw::Rtl(entry) => {
+                        // ponytail: no CJK-fallback glyphs or kerning in right-to-left chunks
+                        show_rtl(
+                            content,
+                            entry,
+                            &chunk.text,
+                            chunk.font_size,
+                            effective_cs,
+                            boundary_space,
+                        );
+                    }
+                    GlyphDraw::Fallbacks => {
+                        // A segment of the chunk in its own font, or in the fallback
+                        // font when its characters are missing from the primary one.
+                        let show_seg = |content: &mut Content, seg: &[char], fb: Option<usize>| {
+                            let seg: String = seg.iter().collect();
+                            if let Some(fallback) = fb.map(|k| fallbacks[k]) {
+                                if let Some(map) = fallback.char_to_gid.as_ref() {
+                                    content.set_font(
+                                        Name(fallback.pdf_name.as_bytes()),
+                                        chunk.font_size,
+                                    );
+                                    content.show(Str(&encode_as_gids(&seg, map)));
+                                    content
+                                        .set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size);
+                                }
+                            } else {
+                                let bytes =
+                                    encode_text_for_pdf(&seg, &chunk.pdf_font, &pdf_name_to_entry);
+                                content.show(Str(&bytes));
+                            }
+                        };
+                        // Split text into runs of primary vs fallback chars
+                        let mut seg_start = 0;
+                        let mut cur_fb = None;
+                        let chars: Vec<char> = chunk.text.chars().collect();
+                        for (i, &ch) in chars.iter().enumerate() {
+                            let fb = fallback_idx(ch);
+                            if i == 0 {
+                                cur_fb = fb;
+                            } else if fb != cur_fb {
+                                show_seg(content, &chars[seg_start..i], cur_fb);
+                                seg_start = i;
+                                cur_fb = fb;
                             }
                         }
-                        i = j;
-                    }
-                    if boundary_space {
-                        if effective_cs != cur_char_spacing {
-                            content.set_char_spacing(effective_cs);
-                            cur_char_spacing = effective_cs;
-                        }
-                        content.show(Str(&encode_text_for_pdf(
-                            " ",
-                            &chunk.pdf_font,
-                            &pdf_name_to_entry,
-                        )));
-                    }
-                } else if let Some(entry) = primary_entry.filter(|_| chunk.rtl_glyphs) {
-                    // ponytail: no CJK-fallback glyphs or kerning in right-to-left chunks
-                    show_rtl(
-                        content,
-                        entry,
-                        &chunk.text,
-                        chunk.font_size,
-                        effective_cs,
-                        boundary_space,
-                    );
-                } else if primary_entry.is_some() && !fallbacks.is_empty() {
-                    // A segment of the chunk in its own font, or in the fallback
-                    // font when its characters are missing from the primary one.
-                    let show_seg = |content: &mut Content, seg: &[char], fb: Option<usize>| {
-                        let seg: String = seg.iter().collect();
-                        if let Some(fallback) = fb.map(|k| fallbacks[k]) {
-                            if let Some(map) = fallback.char_to_gid.as_ref() {
-                                content
-                                    .set_font(Name(fallback.pdf_name.as_bytes()), chunk.font_size);
-                                content.show(Str(&encode_as_gids(&seg, map)));
-                                content.set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size);
-                            }
-                        } else {
-                            let bytes =
-                                encode_text_for_pdf(&seg, &chunk.pdf_font, &pdf_name_to_entry);
-                            content.show(Str(&bytes));
-                        }
-                    };
-                    // Split text into runs of primary vs fallback chars
-                    let mut seg_start = 0;
-                    let mut cur_fb = None;
-                    let chars: Vec<char> = chunk.text.chars().collect();
-                    for (i, &ch) in chars.iter().enumerate() {
-                        let fb = fallback_idx(ch);
-                        if i == 0 {
-                            cur_fb = fb;
-                        } else if fb != cur_fb {
-                            show_seg(content, &chars[seg_start..i], cur_fb);
-                            seg_start = i;
-                            cur_fb = fb;
+                        show_seg(content, &chars[seg_start..], cur_fb);
+                        if boundary_space {
+                            content.show(Str(&encode_text_for_pdf(
+                                " ",
+                                &chunk.pdf_font,
+                                &pdf_name_to_entry,
+                            )));
                         }
                     }
-                    show_seg(content, &chars[seg_start..], cur_fb);
-                    if boundary_space {
-                        content.show(Str(&encode_text_for_pdf(
-                            " ",
-                            &chunk.pdf_font,
-                            &pdf_name_to_entry,
-                        )));
+                    GlyphDraw::Kerned(entry) => {
+                        show_kerned(content, entry, &chunk.text, boundary_space);
                     }
-                } else if let Some(entry) = pdf_name_to_entry
-                    .get(chunk.pdf_font.as_str())
-                    .filter(|e| chunk.kern && e.kern_pairs.is_some())
-                {
-                    show_kerned(content, entry, &chunk.text, boundary_space);
-                } else {
-                    let mut text_bytes =
-                        encode_text_for_pdf(&chunk.text, &chunk.pdf_font, &pdf_name_to_entry);
-                    if boundary_space {
-                        text_bytes.extend(encode_text_for_pdf(
-                            " ",
-                            &chunk.pdf_font,
-                            &pdf_name_to_entry,
-                        ));
+                    GlyphDraw::Plain => {
+                        let mut text_bytes =
+                            encode_text_for_pdf(&chunk.text, &chunk.pdf_font, &pdf_name_to_entry);
+                        if boundary_space {
+                            text_bytes.extend(encode_text_for_pdf(
+                                " ",
+                                &chunk.pdf_font,
+                                &pdf_name_to_entry,
+                            ));
+                        }
+                        content.show(Str(&text_bytes));
                     }
-                    content.show(Str(&text_bytes));
-                };
+                }
 
                 let thick = (chunk.font_size * 0.05).max(0.5);
-                // Word draws a single underline from the font's post table, its
-                // offset below the baseline and its thickness each on a 0.25pt
-                // grid (online export probe: Calibri, Times New Roman, Arial,
-                // Aptos at 10/12/22pt). Double underlines keep the old geometry.
-                let post_ul = (!chunk.double_underline)
-                    .then(|| pdf_name_to_entry.get(chunk.pdf_font.as_str()))
-                    .flatten()
-                    .and_then(|e| post_underline(e, chunk.font_size));
                 // An underlined space spans its whole justified gap: Word's
                 // line runs unbroken under underlined-space-compat14-*.
                 let deco_w = if chunk.word_space_bridge {
@@ -5344,34 +5880,12 @@ pub(super) fn render_paragraph_lines(
                 } else {
                     chunk.width
                 };
-                if let (true, Some((offset, ul_thick))) = (chunk.underline, post_ul) {
-                    let bottom = y - offset - ul_thick;
-                    push_decoration(
-                        &mut decorations,
-                        x,
-                        bottom,
-                        deco_w,
-                        ul_thick,
-                        chunk.color,
-                    );
-                } else if chunk.underline {
-                    let ul_y = if chunk.hyperlink_url.is_some() {
-                        y - chunk.font_size * 0.08
-                    } else {
-                        y - chunk.font_size * 0.12
-                    };
-                    let ul_top = ul_y - thick;
-                    push_decoration(&mut decorations, x, ul_top, deco_w, thick, chunk.color);
-                    if chunk.double_underline {
-                        let gap = (thick * 1.5).max(1.0);
-                        push_decoration(
-                            &mut decorations,
-                            x,
-                            ul_top - thick - gap,
-                            deco_w,
-                            thick,
-                            chunk.color,
-                        );
+                if chunk.underline && deco_w > 0.0 {
+                    let entry = pdf_name_to_entry.get(chunk.pdf_font.as_str()).copied();
+                    let link = chunk.hyperlink_url.is_some();
+                    let ul = (chunk.font_size, chunk.double_underline, link);
+                    for (top, th) in underline_lines(entry, ul, y) {
+                        push_decoration(&mut decorations, x, top, deco_w, th, chunk.color);
                     }
                 }
                 if chunk.strikethrough {
@@ -5460,6 +5974,23 @@ pub(super) fn render_paragraph_lines(
                 fill_color_or_black(content, None);
                 current_color = Some([0, 0, 0]);
                 pattern_fill_active = false;
+            }
+        }
+
+        // A right-to-left line's end spaces sit left of its start.
+        for sp in &line.end_spaces {
+            let start = if sp.x_offset < 0.0 {
+                line_start_x + sp.x_offset
+            } else {
+                x_at(line.chunks.len(), sp.x_offset)
+            };
+            let left = start.max(eff_margin);
+            let w = (start + sp.width).min(line_right) - left;
+            if w > 0.0 {
+                let entry = pdf_name_to_entry.get(sp.pdf_font.as_str()).copied();
+                for (top, th) in underline_lines(entry, (sp.font_size, sp.double, false), y) {
+                    push_decoration(&mut decorations, left, top, w, th, sp.color);
+                }
             }
         }
 
@@ -6030,6 +6561,7 @@ mod tests {
             squeeze_spaces,
             squeeze_line: false,
             expand_shift_return: true,
+            ul_trail_space: false,
             bidi: false,
             shaped_kerning: false,
             break_words: false,
@@ -6075,6 +6607,7 @@ mod tests {
                     squeeze_spaces: true,
                     punct_half_out: false,
                     expand_shift_return: true,
+                    ul_trail_space: false,
                     squeeze_line: false,
                     bidi: false,
                     shaped_kerning: false,
@@ -6379,14 +6912,27 @@ mod tests {
 
     #[test]
     fn squeeze_keeps_words_to_word_probe_thresholds() {
-        for (word_w, lead, keeps_to, wraps_at) in [
-            (24.0, 3.0, 9.39, 9.5),
-            (12.0, 3.0, 5.19, 5.3),
-            (24.0, 0.0, 7.99, 8.1),
-            (12.0, 0.0, 3.99, 4.1),
+        // Arial: 11pt space 3.0562, 16pt space 4.4453; spaces before the word.
+        for (word_w, lead, count, keeps_to, wraps_at) in [
+            (24.0, 0.0, 0.0, 7.99, 8.1),
+            (12.0, 0.0, 0.0, 3.99, 4.1),
+            (11.0, 3.0562, 10.0, 5.015, 5.065),
+            (11.0, 3.0562, 30.0, 4.7451, 4.7951),
+            (15.8984, 3.0562, 10.0, 6.7635, 6.8135),
+            (15.8984, 3.0562, 20.0, 6.5285, 6.5785),
+            (15.8984, 3.0562, 30.0, 6.4436, 6.4936),
+            (25.6792, 3.0562, 30.0, 9.7743, 9.8243),
+            (40.37, 3.0562, 20.0, 14.94, 15.049),
+            (16.0, 4.4453, 14.0, 7.1406, 7.1906),
+            (23.125, 4.4453, 14.0, 9.6156, 9.6656),
+            (37.3516, 4.4453, 14.0, 14.5922, 14.6422),
+            // Times New Roman 12pt "Dále", Arial 11pt "der": the slack.
+            (22.652344, 3.0, 16.0, 8.922954, 8.928564),
+            (15.898438, 3.056152, 10.0, 6.769896, 6.770706),
         ] {
-            assert!(squeeze_keeps(keeps_to, word_w, lead), "{word_w} {lead}");
-            assert!(!squeeze_keeps(wraps_at, word_w, lead), "{word_w} {lead}");
+            let spaces = lead * count;
+            assert!(squeeze_keeps(keeps_to, word_w, lead, spaces), "{word_w} {count}");
+            assert!(!squeeze_keeps(wraps_at, word_w, lead, spaces), "{word_w} {count}");
         }
     }
 
@@ -6761,6 +7307,49 @@ mod tests {
         assert_eq!(squeezed.len(), 1);
         assert!(squeezed[0].squeezed);
         assert_eq!(lines(false).len(), 2);
+    }
+
+    #[test]
+    fn underlined_spaces_before_a_wrapping_tab_end_the_line_underlined() {
+        let run = |text: &str, underline: bool, is_tab: bool| Run {
+            text: text.to_string(),
+            underline,
+            is_tab,
+            ..make_run(10.0, VertAlign::Baseline, false)
+        };
+        let runs = [
+            run("aaaa   ", true, false),
+            run("", false, true),
+            run("aaaaaaaa", false, false),
+        ];
+        let mut fonts = HashMap::new();
+        fonts.insert("Arial".to_string(), FontEntry::stub());
+        let cjk = CjkLayout {
+            ul_trail_space: true,
+            ..plain_layout(false)
+        };
+        let lines = build_tabbed_line(
+            &runs,
+            &fonts,
+            &[],
+            0.0,
+            60.0,
+            0.0,
+            0.0,
+            &HashMap::new(),
+            &HashMap::new(),
+            36.0,
+            &[],
+            15,
+            cjk,
+        );
+        assert_eq!(lines.len(), 2);
+        let trail: Vec<(f32, f32)> = lines[0]
+            .end_spaces
+            .iter()
+            .map(|s| (s.x_offset, s.width))
+            .collect();
+        assert_eq!(trail, [(20.0, 15.0)]);
     }
 
     #[test]

@@ -820,6 +820,8 @@ pub(super) struct RenderContext<'a> {
     pub(super) east_asian_lang: bool,
     /// Word's `doNotExpandShiftReturn` (see `docx::settings`).
     pub(super) do_not_expand_shift_return: bool,
+    /// Word's `ulTrailSpace` (see `docx::settings`).
+    pub(super) ul_trail_space: bool,
     /// Word's `wpJustification` (see `docx::settings`).
     pub(super) wp_justification: bool,
     /// `Document::additive_paragraph_spacing`.
@@ -898,6 +900,7 @@ impl RenderContext<'_> {
             squeeze_line: self.wp_justification
                 && matches!(para.alignment, crate::model::Alignment::Justify),
             expand_shift_return: !self.do_not_expand_shift_return,
+            ul_trail_space: self.ul_trail_space,
             bidi: para.bidi,
             shaped_kerning: self.open_type_features,
             break_words: para.break_words,
@@ -4439,7 +4442,16 @@ fn render_paragraph_block(
     // below the paragraph top, and picture lines are sized from both (see
     // `inline_line_advance` and `picture_line_bottom`). The bottom part is only
     // read for picture lines, so most paragraphs skip its run scan.
-    let para_ascent = exact_baseline_base.unwrap_or(font_size * tallest_ar.unwrap_or(0.75));
+    let mark_ar = || {
+        lines
+            .iter()
+            .any(|l| l.chunks.is_empty() && !l.end_spaces.is_empty())
+            .then(|| para.paragraph_mark_font_name.as_deref().and_then(|n| ctx.fonts.get(n)))
+            .flatten()
+            .and_then(|e| run_line_metrics(e, "").1)
+    };
+    let para_ascent =
+        exact_baseline_base.unwrap_or(font_size * tallest_ar.or_else(mark_ar).unwrap_or(0.75));
     let first_baseline_offset =
         label_boosted_baseline_offset(para, ctx.fonts, para_ascent, font_size)
             * auto_ascent_scale(effective_ls);
@@ -6373,6 +6385,7 @@ fn render_pass(
         open_type_features: doc.open_type_features,
         east_asian_lang: doc.east_asian_lang,
         do_not_expand_shift_return: doc.do_not_expand_shift_return,
+        ul_trail_space: doc.ul_trail_space,
         wp_justification: doc.wp_justification,
         additive_paragraph_spacing: doc.additive_paragraph_spacing,
         note_separator: footnotes::NoteSeparator::new(

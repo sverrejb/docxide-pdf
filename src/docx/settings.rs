@@ -28,6 +28,9 @@ pub(super) struct DocumentSettings {
     /// `w:compat/w:doNotExpandShiftReturn`: a justified line ending in a
     /// manual break keeps its natural width.
     pub do_not_expand_shift_return: bool,
+    /// `w:compat/w:ulTrailSpace`: the underlined spaces a line ends in are
+    /// underlined too.
+    pub ul_trail_space: bool,
     /// `w:compat/w:adjustLineHeightInTable`: table cell lines snap to the
     /// document grid too (§17.15.3.1).
     pub adjust_line_height_in_table: bool,
@@ -58,6 +61,7 @@ impl Default for DocumentSettings {
             open_type_features: false,
             styles_from_normal_template: false,
             do_not_expand_shift_return: false,
+            ul_trail_space: false,
             adjust_line_height_in_table: false,
             no_html_auto_spacing: false,
             no_indent_as_num_tab: false,
@@ -119,6 +123,7 @@ pub(super) fn parse_settings<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> Do
         styles_from_normal_template: wml_bool(root, "linkStyles").unwrap_or(false)
             && wml(root, "attachedTemplate").is_none(),
         do_not_expand_shift_return: compat_flag("doNotExpandShiftReturn"),
+        ul_trail_space: compat_flag("ulTrailSpace"),
         adjust_line_height_in_table: compat_flag("adjustLineHeightInTable"),
         no_html_auto_spacing: compat_flag("doNotUseHTMLParagraphAutoSpacing"),
         no_indent_as_num_tab: compat_flag("doNotUseIndentAsNumberingTabStop"),

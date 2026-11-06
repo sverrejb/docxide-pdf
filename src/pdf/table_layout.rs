@@ -342,8 +342,9 @@ fn natural_widths(
                         } else {
                             std::borrow::Cow::Borrowed(&run.text)
                         };
-                        para_w +=
-                            word_width_for_run(entry, run, &text, fs, run.kerns_at(fs), 0.0, 1.0);
+                        para_w += super::layout::soft_split_width(&text, |t| {
+                            word_width_for_run(entry, run, t, fs)
+                        });
                     }
                     let end = (grid_col + span).min(ncols);
                     let current: f32 = natural[grid_col..end].iter().sum();
@@ -524,7 +525,7 @@ fn cell_min_content_width(
             // Same break opportunities as line layout: a CJK sentence holds
             // no spaces but may wrap after any ideograph.
             for (spaces, word) in super::layout::split_preserving_spaces(&text) {
-                let ww = word_width_for_run(entry, run, word, fs, run.kerns_at(fs), 0.0, 1.0);
+                let ww = word_width_for_run(entry, run, word, fs);
                 let continues = !table.fixed_layout
                     && spaces == 0
                     && prev_char
@@ -1340,7 +1341,9 @@ fn plain_line_width(p: &crate::model::Paragraph, fonts: &HashMap<String, FontEnt
         } else {
             std::borrow::Cow::Borrowed(run.text.as_str())
         };
-        width += word_width_for_run(font, run, &text, run.font_size, run.kerns_at(run.font_size), 0.0, 1.0);
+        width += super::layout::soft_split_width(&text, |t| {
+            word_width_for_run(font, run, t, run.font_size)
+        });
     }
     Some(width)
 }
@@ -1577,13 +1580,14 @@ pub(super) fn compute_row_layouts(
                                 // padding spaces has the paragraph mark's line
                                 // metrics in Word, not the spaces' run format.
                                 let padding_mark;
-                                let runs = if para_content_h == 0.0
+                                let space_runs = runs;
+                                let padding = para_content_h == 0.0
                                     && runs.iter().any(|run| !run.text.is_empty())
                                     && runs.iter().all(|run| !run.is_tab
                                         && !run.is_line_break && run.math.is_none()
                                         && run.inline_image.is_none()
-                                        && run.text.bytes().all(|b| b == b' '))
-                                {
+                                        && run.text.bytes().all(|b| b == b' '));
+                                let runs = if padding {
                                     padding_mark = crate::model::Run {
                                         font_size: para.paragraph_mark_font_size.unwrap_or(10.0),
                                         font_name: para.paragraph_mark_font_name.clone().unwrap_or_default(),
@@ -1891,7 +1895,7 @@ pub(super) fn compute_row_layouts(
                                     if cell.hide_mark
                                         && block_idx == block_count - 1
                                         && lines.len() > 1
-                                        && lines.last().is_some_and(|l| l.chunks.is_empty())
+                                        && lines.last().is_some_and(TextLine::is_blank)
                                         && lines[lines.len() - 2].ends_with_break
                                     {
                                         lines.pop();
@@ -1903,6 +1907,7 @@ pub(super) fn compute_row_layouts(
                                         .sum::<f32>();
                                     lines
                                 } else {
+                                    let mut end_spaces = Vec::new();
                                     if para.paragraph_mark_vanish {
                                         // vanished paragraph mark: zero height
                                     } else if mark_hidden {
@@ -1928,8 +1933,26 @@ pub(super) fn compute_row_layouts(
                                             + br_count as f32 * line_h;
                                     } else {
                                         total_h += line_h;
+                                        if padding && ctx.ul_trail_space {
+                                            let width = (cell_text_w - para.indent_left - para.indent_right).max(0.0);
+                                            let lines = build_paragraph_lines(
+                                                space_runs,
+                                                ctx.fonts,
+                                                width,
+                                                0.0,
+                                                &HashMap::new(),
+                                                &HashMap::new(),
+                                                None,
+                                                None,
+                                                None,
+                                                ctx.cjk(false, para),
+                                            );
+                                            if lines.iter().any(|l| !l.end_spaces.is_empty()) {
+                                                end_spaces = lines;
+                                            }
+                                        }
                                     }
-                                    vec![]
+                                    end_spaces
                                 };
 
                                 let image_name = para.image.as_ref().and_then(|img| {
