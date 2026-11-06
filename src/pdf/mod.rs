@@ -64,23 +64,13 @@ use layout::{
 };
 use list_label::{label_font_key, render_list_label};
 use positioning::{
-    render_connector, render_floating_images, render_foreground_floating_images_deferred,
-    image_band, image_blocks_band, resolve_fi_x, wraps_in_column,
+    image_band, image_blocks_band, render_connector, render_floating_images, resolve_fi_x,
+    wraps_in_column,
 };
 pub(super) use positioning::{resolve_fi_y_top, resolve_h_position};
 use smartart::draw_shape_path;
 use table::render_table;
 use textbox_render::render_single_textbox;
-
-/// Word stacks overlapping anchored shapes by wp:anchor relativeHeight, not
-/// document order. Stable sort keeps document order for equal values.
-fn sorted_by_z<'a>(
-    iter: impl Iterator<Item = &'a crate::model::Textbox>,
-) -> Vec<&'a crate::model::Textbox> {
-    let mut v: Vec<&crate::model::Textbox> = iter.collect();
-    v.sort_by_key(|t| t.z_index);
-    v
-}
 
 /// The paragraph a table opens with, which contextual spacing compares a
 /// paragraph before the table against: bulgarian_road_safety's empty Normal
@@ -178,6 +168,7 @@ fn side_room(wrap_text: WrapText, left: f32, right: f32) -> f32 {
 /// text on its right only, so its anchor's line and the date start below it).
 fn textbox_blocks_band(
     tb: &crate::model::Textbox,
+    para: &Paragraph,
     sp: &SectionProperties,
     (col_x, col_w): (f32, f32),
     text_width: f32,
@@ -188,31 +179,177 @@ fn textbox_blocks_band(
     match tb.wrap_type {
         WrapType::TopAndBottom => true,
         WrapType::Square | WrapType::Tight => {
-            let x = resolve_h_position(
-                tb.h_relative_from,
-                &tb.h_position,
-                tb.width_pt,
-                sp,
-                col_x,
-                col_w,
-                text_width,
-            );
-            side_room(tb.wrap_text, x - col_x, col_x + col_w - (x + tb.width_pt))
-                < MIN_EMPTY_STRIP
+            textbox_room_beside(tb, para, sp, (col_x, col_w), text_width)
+                .is_some_and(|room| room < MIN_EMPTY_STRIP)
         }
         _ => false,
     }
 }
 
+fn textbox_x(
+    tb: &crate::model::Textbox,
+    sp: &SectionProperties,
+    (col_x, col_w): (f32, f32),
+    text_width: f32,
+) -> f32 {
+    let (rel, pos) = (tb.h_relative_from, &tb.h_position);
+    resolve_h_position(rel, pos, tb.width_pt, sp, col_x, col_w, text_width)
+}
+
+/// The rectangle (left, top, width, height; y from the page bottom) a text
+/// box or shape at `x`, `y_top` keeps text off: its extent turned to the
+/// nearest quarter turn (Word examples: a 128×60pt box rotated 90° wraps as
+/// 60×128 about its centre, one rotated 30° as its unrotated extent).
+fn textbox_wrap_rect(
+    tb: &crate::model::Textbox,
+    x: f32,
+    y_top: f32,
+    h: f32,
+) -> (f32, f32, f32, f32) {
+    let quarter = (tb.rotation_deg.rem_euclid(180.0) / 90.0).round() as i32 % 2 == 1;
+    if !quarter {
+        return (x, y_top, tb.width_pt, h);
+    }
+    let (cx, cy) = (x + tb.width_pt / 2.0, y_top - h / 2.0);
+    (cx - h / 2.0, cy + tb.width_pt / 2.0, h, tb.width_pt)
+}
+
+/// A wrapping float's horizontal span with its wrap distances and its
+/// vertical extent (top, bottom; y from the page bottom, its anchor at the
+/// top margin).
+type WrapSpan = ((f32, f32), (f32, f32));
+
+fn textbox_span(
+    tb: &crate::model::Textbox,
+    sp: &SectionProperties,
+    col: (f32, f32),
+    text_width: f32,
+) -> WrapSpan {
+    let anchor = sp.page_height - sp.margin_top;
+    let x = textbox_x(tb, sp, col, text_width);
+    let (rel, pos) = (tb.v_relative_from, &tb.v_position);
+    let y = header_footer::resolve_tb_y_top(rel, pos, tb.height_pt, sp, anchor);
+    let (left, top, w, h) = textbox_wrap_rect(tb, x, y, tb.height_pt);
+    (
+        (left - tb.dist_left, left + w + tb.dist_right),
+        (top + tb.dist_top, top - h - tb.dist_bottom),
+    )
+}
+
+fn picture_span(
+    fi: &crate::model::FloatingImage,
+    sp: &SectionProperties,
+    (col_x, col_w): (f32, f32),
+    text_width: f32,
+) -> WrapSpan {
+    let x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
+    let y = resolve_fi_y_top(fi, sp, sp.page_height - sp.margin_top);
+    (
+        (x - fi.dist_left, x + fi.image.display_width + fi.dist_right),
+        (y + fi.dist_top, y - fi.image.display_height - fi.dist_bottom),
+    )
+}
+
+/// The widest strips (left, right) the column leaves beside a text box, the
+/// paragraph's other wrapping floats beside it taken out too: two boxes side
+/// by side across the column leave no room, though each alone would.
+fn textbox_side_gaps(
+    tb: &crate::model::Textbox,
+    para: &Paragraph,
+    sp: &SectionProperties,
+    (col_x, col_w): (f32, f32),
+    text_width: f32,
+) -> (f32, f32) {
+    let col = (col_x, col_w);
+    let ((own_left, own_right), (top, bottom)) = textbox_span(tb, sp, col, text_width);
+    let others = para
+        .textboxes
+        .iter()
+        .filter(|o| !std::ptr::eq(*o, tb) && !o.on_line && o.wrap_type.wraps_beside())
+        .map(|o| textbox_span(o, sp, col, text_width))
+        .chain(
+            para.floating_images
+                .iter()
+                .filter(|fi| fi.wrap_type.wraps_beside())
+                .map(|fi| picture_span(fi, sp, col, text_width)),
+        )
+        .filter(|&(_, (t, b))| t > bottom && b < top);
+    let mut free = vec![(col_x, col_x + col_w)];
+    for (l, r) in std::iter::once((own_left, own_right)).chain(others.map(|(x, _)| x)) {
+        free = free
+            .into_iter()
+            .flat_map(|(a, z)| [(a, z.min(l)), (a.max(r), z)])
+            .filter(|(a, z)| z > a)
+            .collect();
+    }
+    let widest = |keep: &dyn Fn(f32, f32) -> bool| {
+        free.iter().filter(|&&(a, z)| keep(a, z)).map(|(a, z)| z - a).fold(0.0, f32::max)
+    };
+    (
+        widest(&|_, z| z <= own_left + 0.01),
+        widest(&|a, _| a >= own_right - 0.01),
+    )
+}
+
+/// Whether text wraps beside a floating text box or shape (square, tight or
+/// through) like beside a picture: Word needs a strip of `MIN_EMPTY_STRIP`
+/// on a side its wrapText allows (examples: 20pt beside a box keeps its
+/// anchor's empty line there, 17pt moves it below the box).
+fn textbox_wraps_beside(
+    tb: &crate::model::Textbox,
+    para: &Paragraph,
+    sp: &SectionProperties,
+    col: (f32, f32),
+    text_width: f32,
+) -> bool {
+    !tb.on_line
+        && tb.wrap_type.wraps_beside()
+        && textbox_room_beside(tb, para, sp, col, text_width)
+            .is_some_and(|room| room >= MIN_EMPTY_STRIP)
+}
+
+/// The room beside a text box on the side(s) its wrapText lets text use,
+/// None for a box that stays out of the column.
+fn textbox_room_beside(
+    tb: &crate::model::Textbox,
+    para: &Paragraph,
+    sp: &SectionProperties,
+    (col_x, col_w): (f32, f32),
+    text_width: f32,
+) -> Option<f32> {
+    let ((left, right), _) = textbox_span(tb, sp, (col_x, col_w), text_width);
+    (left < col_x + col_w && right > col_x).then(|| {
+        let (left, right) = textbox_side_gaps(tb, para, sp, (col_x, col_w), text_width);
+        side_room(tb.wrap_text, left, right)
+    })
+}
+
+/// The wrap zone of a text box that `textbox_wraps_beside`, its anchor's top
+/// at `anchor_top`.
+fn textbox_zone(
+    tb: &crate::model::Textbox,
+    sp: &SectionProperties,
+    col: (f32, f32),
+    text_width: f32,
+    anchor_top: f32,
+    ctx: &RenderContext,
+) -> FloatZone {
+    let h = textbox_render::textbox_height(tb, ctx);
+    let (rel, pos) = (tb.v_relative_from, &tb.v_position);
+    let y_top = header_footer::resolve_tb_y_top(rel, pos, h, sp, anchor_top);
+    FloatZone::for_textbox(tb, textbox_x(tb, sp, col, text_width), y_top, h)
+}
+
 /// The band (down from the page top) of a textbox that `textbox_blocks_band`.
 fn blocking_textbox_band(
     tb: &crate::model::Textbox,
+    para: &Paragraph,
     sp: &SectionProperties,
     col: (f32, f32),
     text_width: f32,
     ctx: &RenderContext,
 ) -> Option<(f32, f32)> {
-    if !textbox_blocks_band(tb, sp, col, text_width) {
+    if !textbox_blocks_band(tb, para, sp, col, text_width) {
         return None;
     }
     let h = textbox_render::textbox_height(tb, ctx);
@@ -262,7 +399,7 @@ fn para_line_h(p: &Paragraph, ctx: &RenderContext) -> f32 {
 fn has_bands(p: &Paragraph, sp: &SectionProperties, col: (f32, f32), text_width: f32) -> bool {
     p.textboxes
         .iter()
-        .any(|tb| textbox_blocks_band(tb, sp, col, text_width))
+        .any(|tb| textbox_blocks_band(tb, p, sp, col, text_width))
         || p.floating_images
             .iter()
             .any(|fi| image_blocks_band(fi, sp, col.0, col.1, text_width))
@@ -279,7 +416,7 @@ fn paragraph_bands(
     let textboxes = p
         .textboxes
         .iter()
-        .filter_map(|tb| blocking_textbox_band(tb, sp, col, text_width, ctx));
+        .filter_map(|tb| blocking_textbox_band(tb, p, sp, col, text_width, ctx));
     let pictures = p
         .floating_images
         .iter()
@@ -371,6 +508,14 @@ fn prescan_page_bands(
     state.pb.frame_bands = bands;
 }
 
+/// The width of a paragraph's first word, None for one without text.
+fn first_word_width(p: &Paragraph, ctx: &RenderContext) -> Option<f32> {
+    if is_text_empty(&p.runs) {
+        return None;
+    }
+    layout::opening_word_width(&p.runs, ctx.fonts)
+}
+
 /// How many lines a paragraph takes in a column `col_w` wide.
 fn paragraph_line_count(p: &Paragraph, col_w: f32, ctx: &RenderContext) -> usize {
     build_lines(
@@ -447,6 +592,7 @@ struct SavedFlow {
     prev_space_after: f32,
     current_col: usize,
     float_zone: Option<FloatZone>,
+    more_float_zones: Vec<FloatZone>,
 }
 
 impl<'a> OpenFrame<'a> {
@@ -508,6 +654,7 @@ impl<'a> OpenFrame<'a> {
             prev_space_after: std::mem::take(&mut state.prev_space_after),
             current_col: std::mem::take(&mut state.current_col),
             float_zone: state.pb.float_zone.take(),
+            more_float_zones: std::mem::take(&mut state.pb.more_float_zones),
         };
         OpenFrame {
             props,
@@ -542,6 +689,7 @@ impl<'a> OpenFrame<'a> {
         state.prev_space_after = flow.prev_space_after;
         state.current_col = flow.current_col;
         state.pb.float_zone = flow.float_zone;
+        state.pb.more_float_zones = flow.more_float_zones;
         if paragraph_offset_frame(self.props) && !full_width {
             let top = sp.page_height - self.top;
             state.pb.float_zone.get_or_insert(FloatZone {
@@ -1189,9 +1337,12 @@ pub(super) struct FloatZone {
     pub table_on_page: bool,
 }
 
-// A table excludes part of the column; it does not reset the paragraph's
-// margin-relative left indent to the table's right edge.
-fn table_right_text_region(
+/// The text region right of a float's wrap edge `float_right`: Word starts
+/// the line at the wrap edge or at the paragraph's left indent, whichever is
+/// further right, for tables, pictures and text boxes alike (examples: a box
+/// whose wrap edge is 139pt in starts lines with a 0pt and a 129pt indent at
+/// its edge, a 200pt one at the indent).
+fn right_text_region(
     col_x: f32,
     col_right: f32,
     float_right: f32,
@@ -1201,22 +1352,20 @@ fn table_right_text_region(
     (left, (col_right - para.indent_right - left).max(0.0))
 }
 
-impl FloatZone {
-    /// The text region right of the wrap edge `float_right`.
-    // Images retain wrap-edge-relative indents (the French
-    // youth strategy's arrow list beside its logo). Tables
-    // instead intersect the margin-relative paragraph box.
-    fn right_region(&self, col_x: f32, col_right: f32, float_right: f32, para: &Paragraph) -> (f32, f32) {
-        if self.from_table {
-            table_right_text_region(col_x, col_right, float_right, para)
-        } else {
-            (
-                float_right + para.indent_left,
-                (col_right - float_right - para.indent_left - para.indent_right).max(0.0),
-            )
-        }
-    }
+/// The text region left of a float's wrap edge `float_left`: the paragraph's
+/// box cut off at the edge (example: a right indent inside the float's area
+/// takes nothing more off the line).
+fn left_text_region(
+    col_x: f32,
+    col_right: f32,
+    float_left: f32,
+    para: &Paragraph,
+) -> (f32, f32) {
+    let left = col_x + para.indent_left;
+    (left, (float_left.min(col_right - para.indent_right) - left).max(0.0))
+}
 
+impl FloatZone {
     /// The exclusion zone of a wrapping float whose frame's left edge is `fi_x`
     /// and top edge `fi_y_top` (page coordinates, y from the bottom).
     fn for_float(fi: &crate::model::FloatingImage, fi_x: f32, fi_y_top: f32) -> Self {
@@ -1234,6 +1383,30 @@ impl FloatZone {
                 .map(|verts| convert_polygon_to_page_coords(verts, fi_x, fi_y_top, w, h)),
             wrap_text: fi.wrap_text,
             para_relative: fi.v_relative_from == VRelativeFrom::Paragraph,
+            from_table: false,
+            table_on_page: false,
+        }
+    }
+
+    /// The exclusion zone of a text box or shape `h` tall whose frame's left
+    /// edge is `x` and top edge `y_top`: the same model as a picture's.
+    fn for_textbox(tb: &crate::model::Textbox, x: f32, y_top: f32, h: f32) -> Self {
+        let (left, top, w, h) = textbox_wrap_rect(tb, x, y_top, h);
+        let unturned = left == x && top == y_top;
+        FloatZone {
+            top_y: top + tb.dist_top,
+            bottom_y: top - h - tb.dist_bottom,
+            obj_left: left,
+            obj_right: left + w,
+            left_from_text: tb.dist_left,
+            right_from_text: tb.dist_right,
+            polygon_pts: tb
+                .wrap_polygon
+                .as_ref()
+                .filter(|_| unturned)
+                .map(|verts| convert_polygon_to_page_coords(verts, left, top, w, h)),
+            wrap_text: tb.wrap_text,
+            para_relative: tb.v_relative_from == VRelativeFrom::Paragraph,
             from_table: false,
             table_on_page: false,
         }
@@ -1282,6 +1455,7 @@ impl FloatZone {
         text_x: &mut f32,
         text_w: &mut f32,
         label_x: &mut f32,
+        legacy_indents: bool,
     ) {
         if !(y <= self.top_y && y > self.bottom_y) {
             return;
@@ -1291,48 +1465,99 @@ impl FloatZone {
         let space_right = col_right - (ex_right + self.right_from_text);
         let space_left = (ex_left - self.left_from_text) - col_x;
 
+        let float_left = ex_left - self.left_from_text;
+        let float_right = ex_right + self.right_from_text;
+        let (_, lw) = left_text_region(col_x, col_right, float_left, para);
+        let (rx, rw) = right_text_region(col_x, col_right, float_right, para);
+        let mut use_right_region = || {
+            *text_w = rw.max(1.0);
+            *text_x = rx;
+            let first =
+                first_line_region_x(rx, float_right, para, para.indent_hanging, legacy_indents);
+            *label_x = first - para.indent_hanging + para.indent_first_line;
+        };
         if self.wrap_text == WrapText::BothSides {
             // For bothSides, use the wider region as primary text width (dual
             // geometry handles both regions per-line).
-            let lw = (space_left - para.indent_left).max(0.0);
-            let (rx, rw) = self.right_region(col_x, col_right, ex_right + self.right_from_text, para);
             if rw > lw {
-                *text_w = rw.max(1.0);
-                *text_x = rx;
-                *label_x = rx - para.indent_hanging + para.indent_first_line;
+                use_right_region();
             } else if lw > 0.0 {
                 *text_w = lw.max(1.0);
             }
         } else {
-            let use_right = match self.wrap_text {
-                WrapText::Right => space_right >= 1.0,
-                WrapText::Left => !(space_left >= 1.0),
-                _ => space_right >= space_left && space_right >= 72.0,
-            };
-            let use_left = match self.wrap_text {
-                WrapText::Left => space_left >= 1.0,
-                WrapText::Right => false,
-                _ => space_left >= 72.0,
-            };
-            if use_right {
-                let new_left = ex_right + self.right_from_text;
-                let (x, w) = if self.from_table {
-                    table_right_text_region(col_x, col_right, new_left, para)
-                } else {
-                    (
-                        new_left + para.indent_left,
-                        col_right - new_left - para.indent_right,
-                    )
-                };
-                *text_w = w.max(1.0);
-                *text_x = x;
-                *label_x = x - para.indent_hanging + para.indent_first_line;
-            } else if use_left {
-                let avail_right = ex_left - self.left_from_text;
-                *text_w = (avail_right - col_x - para.indent_left - para.indent_right).max(1.0);
+            match wrap_side(self.wrap_text, space_left, space_right) {
+                Some(true) => use_right_region(),
+                Some(false) => *text_w = lw.max(1.0),
+                None => {}
             }
         }
     }
+}
+
+/// The side of a float a line beside it takes (true: the right), None when
+/// the side its wrapText allows (for largest, the wider) leaves less than
+/// `MIN_EMPTY_STRIP` (Word examples: a 30pt strip beside a wrapText=largest
+/// picture holds lines, a 17pt one sends them below it).
+fn wrap_side(wrap_text: WrapText, left: f32, right: f32) -> Option<bool> {
+    let right_side = match wrap_text {
+        WrapText::Left => false,
+        WrapText::Right => true,
+        WrapText::BothSides | WrapText::Largest => right >= left,
+    };
+    let room = if right_side { right } else { left };
+    (room >= MIN_EMPTY_STRIP).then_some(right_side)
+}
+
+/// Where a paragraph's first line region beside a float starts, `x` being
+/// the region's start for the other lines and `edge` the float's wrap edge:
+/// the first-line indent moves the line right of it, a hanging indent never
+/// left of the edge (Word examples: left 36pt + first line 18pt starts 18pt
+/// past the edge; left 129pt or 150pt with a 40pt hanging indent at the
+/// edge). Before compat 15 a hanging indent's first line counts its indent
+/// from the edge instead (examples: left 150pt, hanging 40pt starts 110pt past
+/// it; french_sexual_health_youth_strategy's arrows beside its logo). The
+/// renderer shifts the first line by the hanging indent, so the region
+/// starts that much further right.
+fn first_line_region_x(
+    x: f32,
+    edge: f32,
+    para: &Paragraph,
+    hanging: f32,
+    legacy: bool,
+) -> f32 {
+    if legacy && para.indent_hanging > 0.0 {
+        edge + (para.indent_left - para.indent_hanging).max(0.0) + para.indent_hanging
+    } else {
+        x.max(edge + hanging.max(0.0))
+    }
+}
+
+/// The per-line entries of the lines `blocked` does not mark.
+fn keep_open<T: Copy>(per_line: &[T], blocked: &[bool]) -> Vec<T> {
+    let blocked = blocked.iter().copied().chain(std::iter::repeat(false));
+    per_line.iter().zip(blocked).filter(|(_, b)| !b).map(|(&v, _)| v).collect()
+}
+
+/// `built`, laid out over the lines `blocked` does not mark, with an empty
+/// line (`float_skip`) at each marked one: a line beside a float with no room
+/// on a side text may take stays empty and the text goes on below it.
+fn skip_blocked_lines(blocked: &[bool], built: Vec<TextLine>) -> Vec<TextLine> {
+    let mut built = built.into_iter().peekable();
+    let mut lines = Vec::new();
+    for &b in blocked {
+        if built.peek().is_none() {
+            break;
+        }
+        lines.push(match b {
+            false => built.next().unwrap(),
+            true => TextLine {
+                float_skip: true,
+                ..TextLine::default()
+            },
+        });
+    }
+    lines.extend(built);
+    lines
 }
 
 /// Scanline intersection: find the leftmost and rightmost x where polygon edges cross y.
@@ -1590,6 +1815,9 @@ pub(super) struct PageBuilder {
     /// Floating table exclusion zone on this page; paragraph layout
     /// uses horizontal bounds to decide wrap-beside vs push-below.
     pub(super) float_zone: Option<FloatZone>,
+    /// The other wrapping floats of the paragraph that set `float_zone`,
+    /// next in line once the cursor passes it.
+    pub(super) more_float_zones: Vec<FloatZone>,
     /// The last floating table's horizontal extent, kept after its zone is
     /// consumed or lost to a page break.
     pub(super) float_table_extent: Option<FloatTableExtent>,
@@ -1613,6 +1841,10 @@ pub(super) struct PageBuilder {
     /// relativeHeight: Word stacks floating shapes in z order regardless of
     /// which paragraph anchors them.
     pub(super) deferred_shapes: Vec<(u32, Content)>,
+    /// Behind-text drawings for this page, painted under all of its body text
+    /// (shading included) sorted by relativeHeight, whatever paragraph or
+    /// table cell anchors them.
+    pub(super) behind_shapes: Vec<(u32, Content)>,
 
     // Accumulated pages
     all_contents: Vec<Content>,
@@ -1620,6 +1852,7 @@ pub(super) struct PageBuilder {
     /// Used to compute the §17.6.23 `w:vAlign` center/bottom offset.
     all_content_bottom: Vec<f32>,
     pub(super) all_deferred_shapes: Vec<Vec<(u32, Content)>>,
+    pub(super) all_behind_shapes: Vec<Vec<(u32, Content)>>,
     all_links: Vec<Vec<LinkAnnotation>>,
     pub(super) all_comment_anchors: Vec<Vec<(u32, f32, f32, f32)>>,
     all_footnote_ids: Vec<Vec<u32>>,
@@ -1675,6 +1908,24 @@ pub(super) struct PageBuilder {
 }
 
 impl PageBuilder {
+    /// The cursor left `float_zone` behind: the next of its paragraph's
+    /// floats still below the cursor takes its place.
+    fn next_float_zone(&mut self) {
+        let cursor = self.slot_top;
+        self.more_float_zones.retain(|z| z.bottom_y < cursor);
+        self.float_zone =
+            (!self.more_float_zones.is_empty()).then(|| self.more_float_zones.remove(0));
+    }
+
+    /// The wrapping floats a paragraph just placed replace the page's zones,
+    /// its last one first.
+    fn set_float_zones(&mut self, mut zones: Vec<FloatZone>) {
+        if let Some(last) = zones.pop() {
+            self.float_zone = Some(last);
+            self.more_float_zones = zones;
+        }
+    }
+
     fn new(slot_top: f32) -> Self {
         PageBuilder {
             content: tagging::artifact_content(),
@@ -1695,6 +1946,7 @@ impl PageBuilder {
             pending_section_first_page: None,
             page_hf_section: 0,
             float_zone: None,
+            more_float_zones: Vec::new(),
             float_table_extent: None,
             frame_bands: Vec::new(),
             bands_prescanned: None,
@@ -1702,9 +1954,11 @@ impl PageBuilder {
             table_extent: None,
             next_text_below_picture: None,
             deferred_shapes: Vec::new(),
+            behind_shapes: Vec::new(),
             all_contents: Vec::new(),
             all_content_bottom: Vec::new(),
             all_deferred_shapes: Vec::new(),
+            all_behind_shapes: Vec::new(),
             all_links: Vec::new(),
             all_comment_anchors: Vec::new(),
             all_footnote_ids: Vec::new(),
@@ -1824,6 +2078,9 @@ impl PageBuilder {
         self.deferred_shapes.sort_by_key(|(z, _)| *z);
         self.all_deferred_shapes
             .push(std::mem::take(&mut self.deferred_shapes));
+        self.behind_shapes.sort_by_key(|(z, _)| *z);
+        self.all_behind_shapes
+            .push(std::mem::take(&mut self.behind_shapes));
         self.all_links.push(std::mem::take(&mut self.links));
         self.all_comment_anchors
             .push(std::mem::take(&mut self.comment_anchors));
@@ -1853,6 +2110,7 @@ impl PageBuilder {
         self.all_first_styleref
             .push(std::mem::take(&mut self.styleref_page_first));
         self.float_zone = None;
+        self.more_float_zones.clear();
         self.frame_bands.clear();
         // An anchor measured on the old page must not place a float on this one
         self.pending_float_anchor = None;
@@ -1867,6 +2125,7 @@ impl PageBuilder {
         // Blank page has no body content; record top so vAlign yields no shift.
         self.all_content_bottom.push(self.slot_top);
         self.all_deferred_shapes.push(Vec::new());
+        self.all_behind_shapes.push(Vec::new());
         self.all_links.push(Vec::new());
         self.all_comment_anchors.push(Vec::new());
         self.all_footnote_ids.push(Vec::new());
@@ -2115,6 +2374,9 @@ pub(super) struct LayoutState {
     /// The keep-with-next chain being laid out is too long for a page: its
     /// paragraphs keep only their own link to the next.
     pub(super) long_keep_chain: bool,
+    /// The gap above a paragraph laid out again in the column it overflowed
+    /// into: the overflow's, not its spacing recomputed.
+    pub(super) reflow_gap: Option<f32>,
 }
 
 impl LayoutState {
@@ -2127,6 +2389,7 @@ impl LayoutState {
         pb.is_first_page_of_section = self.pb.is_first_page_of_section;
         pb.page_hf_section = self.pb.page_hf_section;
         pb.float_zone = self.pb.float_zone.clone();
+        pb.more_float_zones = self.pb.more_float_zones.clone();
         pb.pending_float_anchor = self.pb.pending_float_anchor;
         pb.next_text_below_picture = self.pb.next_text_below_picture;
         pb.footnote_ids_set = self.pb.footnote_ids_set.clone();
@@ -2146,6 +2409,7 @@ impl LayoutState {
             heading_entries: Vec::new(),
             bookmark_positions: self.bookmark_positions.clone(),
             long_keep_chain: self.long_keep_chain,
+            reflow_gap: None,
         }
     }
 }
@@ -3030,6 +3294,42 @@ fn keeps_section_mark_line(compat_mode: u32, next_continuous: bool, prev: Option
         && matches!(prev, Some(Block::Table(t)) if t.position.is_none())
 }
 
+#[allow(clippy::too_many_arguments)]
+fn render_para_textbox(
+    tb: &crate::model::Textbox,
+    para: &Paragraph,
+    anchor: ParaAnchor,
+    sp: &SectionProperties,
+    (col_x, col_w): (f32, f32),
+    text_width: f32,
+    ctx: &RenderContext,
+    pb: &mut PageBuilder,
+) {
+    let tb_x = col_x + if tb.on_line { para.indent_left } else { 0.0 };
+    let page = pb.all_contents.len();
+    // Each box renders into its own buffer; flush_page paints these behind or
+    // above the page's text layer sorted by relativeHeight (Word's z-order for
+    // floating shapes spans paragraphs).
+    let mut shape_content = tagging::artifact_content();
+    render_single_textbox(
+        tb,
+        sp,
+        tb_x,
+        col_w,
+        text_width,
+        anchor.top(tb.on_line),
+        &mut shape_content,
+        &mut pb.gradient_specs,
+        ctx,
+        &mut pb.links,
+        &mut pb.tags,
+        page,
+        &mut pb.alpha_states,
+    );
+    let shapes = if tb.behind_doc { &mut pb.behind_shapes } else { &mut pb.deferred_shapes };
+    shapes.push((tb.z_index, shape_content));
+}
+
 /// Render a single paragraph block. Returns `true` if the block was skipped
 /// (the caller should `continue` the block loop).
 #[allow(clippy::too_many_arguments)]
@@ -3056,6 +3356,7 @@ fn render_paragraph_block(
     debug_wrap: bool,
     table_connector_anchor: Option<(usize, f32)>,
 ) -> bool {
+    let reflow_gap = state.reflow_gap.take();
     if is_empty_wrapping_frame(para, sp) {
         state.global_block_idx += 1;
         return true;
@@ -3252,7 +3553,9 @@ fn render_paragraph_block(
     // Word overlaps the space after and the next space before (the larger
     // wins) under its HTML spacing rule; doNotUseHTMLParagraphAutoSpacing
     // adds them (5pt + 5pt list items step 23.76 on a 13.8pt line).
-    let mut inter_gap = if ctx.additive_paragraph_spacing {
+    let mut inter_gap = if let Some(gap) = reflow_gap {
+        gap
+    } else if ctx.additive_paragraph_spacing {
         state.prev_space_after + effective_space_before
     } else {
         f32::max(state.prev_space_after, effective_space_before)
@@ -3349,6 +3652,7 @@ fn render_paragraph_block(
             &mut para_text_x,
             &mut para_text_width,
             &mut label_x,
+            ctx.compat_mode < 15,
         );
     }
 
@@ -3433,20 +3737,36 @@ fn render_paragraph_block(
     // and has text, set up the float zone NOW so width-narrowing
     // applies to this paragraph's own lines.  Always replace any
     // previous float zone — the paragraph's own image takes priority.
-    if !para.floating_images.is_empty()
-        && !text_empty
-        && let Some(fi) = para
-            .floating_images
+    let mut own_textbox_zones: Vec<FloatZone> = if text_empty {
+        Vec::new()
+    } else {
+        para.textboxes
             .iter()
-            .filter(|fi| wraps_here(fi))
-            .find(|fi| wraps_in_column(fi, sp, col_x, col_w, text_width))
-    {
-        let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
-        // The previous paragraph may have re-wrapped around this float and
-        // grown; the float stays where that look-ahead anchored it
-        // (peeked here, taken below).
-        let fi_y_top = pre_anchor.fi_y_top(fi, sp);
-        state.pb.float_zone = Some(FloatZone::for_float(fi, fi_x, fi_y_top));
+            .filter(|tb| textbox_wraps_beside(tb, para, sp, (col_x, col_w), text_width))
+            .map(|tb| textbox_zone(tb, sp, (col_x, col_w), text_width, pre_anchor.top(false), ctx))
+            .collect()
+    };
+    let own_picture = para
+        .floating_images
+        .iter()
+        .filter(|fi| !text_empty && wraps_here(fi))
+        .find(|fi| wraps_in_column(fi, sp, col_x, col_w, text_width));
+    // The previous paragraph may have re-wrapped around this float and
+    // grown; the float stays where that look-ahead anchored it
+    // (peeked here, taken below).
+    let own_zone = match own_picture {
+        Some(fi) => Some(FloatZone::for_float(
+            fi,
+            resolve_fi_x(fi, sp, col_x, col_w, text_width),
+            pre_anchor.fi_y_top(fi, sp),
+        )),
+        None if !own_textbox_zones.is_empty() => Some(own_textbox_zones.remove(0)),
+        None => None,
+    };
+    let own_zone_set = own_zone.is_some();
+    let entry_zones = (state.pb.float_zone.clone(), state.pb.more_float_zones.clone());
+    if let Some(zone) = own_zone {
+        state.pb.float_zone = Some(zone);
         // Re-narrow para_text_x / para_text_width using the
         // new float zone (same logic as the block above).
         let fz = state.pb.float_zone.as_ref().unwrap();
@@ -3458,6 +3778,7 @@ fn render_paragraph_block(
             &mut para_text_x,
             &mut para_text_width,
             &mut label_x,
+            ctx.compat_mode < 15,
         );
     }
 
@@ -3586,27 +3907,32 @@ fn render_paragraph_block(
             .iter()
             .filter(|fi| fi.wrap_type.wraps_beside() && wraps_here(fi))
             .filter(|fi| !image_blocks_band(fi, sp, col_x, col_w, text_width))
-            .skip(1)
+            .skip(usize::from(own_picture.is_some()))
             .map(|fi| {
                 let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
                 let fi_y_top = pre_anchor.fi_y_top(fi, sp);
                 FloatZone::for_float(fi, fi_x, fi_y_top)
             })
+            .chain(own_textbox_zones)
+            .chain(if own_zone_set { Vec::new() } else { state.pb.more_float_zones.clone() })
             .collect()
     } else {
         Vec::new()
     };
 
+    // Lines beside floats with no room on a side text may take (floating
+    // tables keep their own rule).
+    let mut blocked_lines = vec![false; 0];
     // Build per-line geometry and dual-region geometry
-    let (poly_line_geom, poly_dual_geom): (Option<Vec<(f32, f32)>>, Option<Vec<DualRegion>>) =
+    let (mut poly_line_geom, mut poly_dual_geom): (Option<Vec<(f32, f32)>>, Option<Vec<DualRegion>>) =
         if let Some(fz) = state.pb.float_zone.as_ref() {
             let eff_top = state.pb.slot_top - inter_gap;
             if !extra_float_zones.is_empty() {
                 // Multiple wrapping floats on one paragraph: subtract every
-                // float's exclusion span per line and lay the text in the
-                // widest remaining gap (Word places the line between the
-                // floats). Dual regions only model a single float, so they
-                // are skipped here.
+                // float's exclusion span per line, keep to the sides each
+                // float's wrapText allows, and lay the text in the gaps left,
+                // the first two from the left as a dual region (Word example:
+                // between two boxes and right of the second).
                 let zones: Vec<&FloatZone> = std::iter::once(fz)
                     .chain(extra_float_zones.iter())
                     .collect();
@@ -3622,10 +3948,17 @@ fn render_paragraph_block(
                     let max_lines =
                         ((((eff_top - lowest_bottom) / line_h).ceil() as usize) + 5).max(50);
                     let mut geom = Vec::with_capacity(max_lines);
+                    let mut dual: Vec<DualRegion> = Vec::with_capacity(max_lines);
+                    let mut two_regions = false;
+                    let legacy = ctx.compat_mode < 15;
                     for i in 0..max_lines {
                         let line_top = eff_top - i as f32 * line_h;
                         let line_bottom = line_top - line_h;
-                        let mut intervals: Vec<(f32, f32)> = vec![(col_x, col_right)];
+                        let para_left = col_x + para.indent_left;
+                        let mut intervals: Vec<(f32, f32)> =
+                            vec![(para_left, col_right - para.indent_right)];
+                        let mut float_edges: Vec<f32> = Vec::new();
+                        let mut overlapped = false;
                         for z in &zones {
                             let partial_overlap = z.para_relative || z.polygon_pts.is_some();
                             // Require the line to dip >20% of its height below
@@ -3646,35 +3979,65 @@ fn render_paragraph_block(
                                 z.exclusion_in_band(line_top.min(z.top_y), line_bottom);
                             let sl = ex_left - z.left_from_text;
                             let sr = ex_right + z.right_from_text;
-                            let mut next = Vec::with_capacity(intervals.len() + 1);
-                            for &(a, b) in &intervals {
-                                if sr <= a || sl >= b {
-                                    next.push((a, b));
-                                    continue;
-                                }
-                                if sl > a {
-                                    next.push((a, sl));
-                                }
-                                if sr < b {
-                                    next.push((sr, b));
-                                }
-                            }
-                            intervals = next;
+                            float_edges.push(sr);
+                            overlapped |= !z.from_table;
+                            // Text keeps to the sides the float's wrapText allows.
+                            let side = (z.wrap_text != WrapText::BothSides)
+                                .then(|| wrap_side(z.wrap_text, sl - col_x, col_right - sr));
+                            let (lo, hi) = match side {
+                                None => (f32::MIN, f32::MAX),
+                                Some(Some(true)) => (sr, f32::MAX),
+                                Some(Some(false)) => (f32::MIN, sl),
+                                Some(None) => (0.0, 0.0),
+                            };
+                            intervals = intervals
+                                .into_iter()
+                                .flat_map(|(a, b)| [(a, b.min(sl)), (a.max(sr), b)])
+                                .map(|(a, b)| (a.max(lo), b.min(hi)))
+                                .filter(|(a, b)| b > a)
+                                .collect();
                         }
-                        let best = intervals
-                            .into_iter()
-                            .max_by(|x, y| (x.1 - x.0).total_cmp(&(y.1 - y.0)));
-                        match best {
-                            Some((a, b)) if b - a > para.indent_left + para.indent_right + 1.0 => {
-                                geom.push((
-                                    a + para.indent_left,
-                                    (b - a - para.indent_left - para.indent_right).max(1.0),
-                                ));
+                        let min_w = if overlapped { MIN_EMPTY_STRIP } else { 1.0 };
+                        let open: Vec<(f32, f32)> =
+                            intervals.into_iter().filter(|(a, b)| b - a >= min_w).collect();
+                        let region = |(a, b): (f32, f32)| {
+                            let edge = float_edges
+                                .iter()
+                                .copied()
+                                .filter(|&e| e <= a + 0.01)
+                                .reduce(f32::max);
+                            let a = match edge {
+                                Some(e) if i == 0 => {
+                                    first_line_region_x(a, e, para, text_hanging, legacy)
+                                }
+                                _ => a,
+                            };
+                            (a, (b - a).max(1.0))
+                        };
+                        let pick = match open.len() {
+                            n if para.bidi && n > 2 => &open[n - 2..],
+                            _ => &open[..],
+                        };
+                        let (x, w, rx, rw) = match pick {
+                            [] => {
+                                blocked_lines.resize(i, false);
+                                blocked_lines.push(overlapped);
+                                (para_left, full_w, 0.0, 0.0)
                             }
-                            _ => geom.push((col_x + para.indent_left, full_w)),
-                        }
+                            [one] => {
+                                let (x, w) = region(*one);
+                                (x, w, 0.0, 0.0)
+                            }
+                            [first, second, ..] => {
+                                two_regions = true;
+                                let ((x, w), (rx, rw)) = (region(*first), region(*second));
+                                (x, w, rx, rw)
+                            }
+                        };
+                        geom.push((x, w));
+                        dual.push((x, w, rx, rw));
                     }
-                    (Some(geom), None)
+                    (Some(geom), two_regions.then_some(dual))
                 }
             } else if eff_top <= fz.bottom_y {
                 (None, None)
@@ -3707,16 +4070,39 @@ fn render_paragraph_block(
                     if in_zone && line_top > bottom_threshold {
                         let (ex_left, ex_right) =
                             fz.exclusion_in_band(line_top.min(fz.top_y), line_bottom);
+                        let float_left = ex_left - fz.left_from_text;
                         let float_right = ex_right + fz.right_from_text;
                         let sr = col_right - float_right;
-                        let sl = (ex_left - fz.left_from_text) - col_x;
-                        let right_of_float = fz.right_region(col_x, col_right, float_right, para);
+                        let sl = float_left - col_x;
+                        let (lx, mut lw) = left_text_region(col_x, col_right, float_left, para);
+                        let mut right_of_float =
+                            right_text_region(col_x, col_right, float_right, para);
+                        if i == 0 {
+                            let (x, w) = right_of_float;
+                            let legacy = ctx.compat_mode < 15;
+                            let first = first_line_region_x(x, float_right, para, text_hanging, legacy);
+                            right_of_float = (first, (w - (first - x)).max(0.0));
+                            // The renderer widens the first line leftwards by a
+                            // hanging indent: not past a float's edge.
+                            if text_hanging > 0.0 && lw == 0.0 {
+                                lw = (float_left - lx).max(-text_hanging);
+                            }
+                        }
 
                         if is_both_sides {
+                            // A strip under the minimum stays empty on its own
+                            // (Word example: 17pt left of the box, text right only).
+                            let narrow = |room: f32| !fz.from_table && room < MIN_EMPTY_STRIP;
+                            if narrow(sl) && narrow(sr) {
+                                blocked_lines.resize(i, false);
+                                blocked_lines.push(true);
+                            }
+                            if narrow(sl) {
+                                lw = lw.min(0.0);
+                            }
                             // BothSides: provide both regions
-                            let lx = col_x + para.indent_left;
-                            let lw = (sl - para.indent_left).max(0.0);
                             let (rx, rw) = right_of_float;
+                            let rw = if narrow(sr) { 0.0 } else { rw };
                             if let Some(ref mut d) = dual {
                                 d.push((lx, lw, rx, rw));
                             }
@@ -3725,27 +4111,17 @@ fn render_paragraph_block(
                             // this for left-chunk x positioning.
                             geom.push((lx, lw));
                         } else {
-                            // Left/Right/Largest: pick one side
-                            let use_right = match fz.wrap_text {
-                                WrapText::Right => sr >= 1.0,
-                                WrapText::Left => !(sl >= 1.0),
-                                _ => sr >= sl && sr >= 72.0,
-                            };
-                            let use_left = match fz.wrap_text {
-                                WrapText::Left => sl >= 1.0,
-                                WrapText::Right => false,
-                                _ => sl >= 72.0,
-                            };
-                            if use_right {
-                                let (x, w) = right_of_float;
-                                geom.push((x, w.max(1.0)));
-                            } else if use_left {
-                                let ar = ex_left - fz.left_from_text;
-                                let w =
-                                    (ar - col_x - para.indent_left - para.indent_right).max(1.0);
-                                geom.push((col_x + para.indent_left, w));
-                            } else {
-                                geom.push((col_x + para.indent_left, full_w));
+                            match wrap_side(fz.wrap_text, sl, sr) {
+                                Some(true) => {
+                                    let (x, w) = right_of_float;
+                                    geom.push((x, w.max(1.0)));
+                                }
+                                Some(false) => geom.push((lx, lw.max(1.0))),
+                                None => {
+                                    blocked_lines.resize(i, false);
+                                    blocked_lines.push(!fz.from_table);
+                                    geom.push((col_x + para.indent_left, full_w));
+                                }
                             }
                         }
                     } else {
@@ -3760,6 +4136,75 @@ fn render_paragraph_block(
         } else {
             (None, None)
         };
+    // A paragraph whose first word fits no strip beside a float starts below
+    // it, the word whole (Word examples: "Internationalization" and "Hi" +
+    // no-break space + "Internationalization" beside a 40pt strip, the anchor's
+    // own box or an earlier one).
+    let from_table = state.pb.float_zone.iter().chain(&extra_float_zones).any(|z| z.from_table);
+    if let Some(word) = layout::opening_word_width(&effective_runs, ctx.fonts)
+        .filter(|_| !text_empty && !from_table)
+    {
+        let full_w = (col_w - para.indent_left - para.indent_right).max(1.0);
+        let room = |i: usize| match (&poly_dual_geom, &poly_line_geom) {
+            (Some(d), _) => d.get(i).map(|&(_, w, _, rw)| w.max(rw)),
+            (None, Some(g)) => g.get(i).map(|&(_, w)| w),
+            _ => None,
+        };
+        for i in 0.. {
+            let Some(room) = room(i) else { break };
+            if blocked_lines.get(i).copied().unwrap_or(false) {
+                continue;
+            }
+            if room >= word || room >= full_w - 0.5 {
+                break;
+            }
+            blocked_lines.resize(blocked_lines.len().max(i + 1), false);
+            blocked_lines[i] = true;
+        }
+    }
+    // A right-to-left paragraph fills the strips beside floats from the right
+    // (Word example: Hebrew between a wrapText=right box and a bothSides one
+    // starts in the strip right of the second).
+    if para.bidi
+        && let Some(dual) = poly_dual_geom.as_mut()
+    {
+        for (i, d) in dual.iter_mut().enumerate() {
+            if d.3 > 0.0 {
+                *d = (d.2, d.3, d.0, d.1);
+                if let Some(g) = poly_line_geom.as_mut().and_then(|g| g.get_mut(i)) {
+                    *g = (d.0, d.1);
+                }
+            }
+        }
+    }
+    // A first line with no room beside a float moves to the float's foot, not
+    // a whole line lower (Word example: a 17pt strip beside a wrapText=largest
+    // picture puts the first line right under it).
+    let blocked_top = blocked_lines.iter().take_while(|&&b| b).count();
+    let float_drop = if blocked_top > 0 {
+        let eff_top = state.pb.slot_top - inter_gap;
+        let reach = (blocked_top as f32 + 0.2) * line_h;
+        state.pb.float_zone.iter().chain(extra_float_zones.iter())
+            .map(|z| eff_top - z.bottom_y)
+            .filter(|&d| d <= reach)
+            .fold((blocked_top - 1) as f32 * line_h, f32::max)
+    } else {
+        0.0
+    };
+    blocked_lines.drain(..blocked_top);
+    if let Some(g) = poly_line_geom.as_mut() {
+        g.drain(..blocked_top.min(g.len()));
+    }
+    if let Some(d) = poly_dual_geom.as_mut() {
+        d.drain(..blocked_top.min(d.len()));
+    }
+    if blocked_top > 0 {
+        // The first line sits below the float: the lines past the per-line
+        // geometry take the whole measure, not the strip beside it.
+        para_text_x = col_x + para.indent_left;
+        para_text_width = (col_w - para.indent_left - para.indent_right).max(1.0);
+        label_x = list_label::label_x(para, col_x, col_w, ctx.fonts);
+    }
 
     let poly_line_widths: Option<Vec<f32>> = poly_line_geom
         .as_ref()
@@ -3799,23 +4244,33 @@ fn render_paragraph_block(
         } else {
             poly_line_widths.as_deref()
         };
-        build_lines(
-            &effective_runs,
-            ctx,
-            para_text_width,
-            cjk,
-            &LineOpts {
-                inline_images: Some(&block_inline_images),
-                effects: Some(&block_effect_inlines),
-                tab_stops: &para.tab_stops,
-                indent_left: para.indent_left,
-                indent_right: para.indent_right,
-                hanging: text_hanging,
-                tab_exclusions: &tab_exclusions,
-                per_line_widths: plw,
-                dual: poly_dual_geom.as_deref(),
-            },
-        )
+        let build = |per_line_widths: Option<&[f32]>, dual: Option<&[DualRegion]>| {
+            build_lines(
+                &effective_runs,
+                ctx,
+                para_text_width,
+                cjk,
+                &LineOpts {
+                    inline_images: Some(&block_inline_images),
+                    effects: Some(&block_effect_inlines),
+                    tab_stops: &para.tab_stops,
+                    indent_left: para.indent_left,
+                    indent_right: para.indent_right,
+                    hanging: text_hanging,
+                    tab_exclusions: &tab_exclusions,
+                    per_line_widths,
+                    dual,
+                },
+            )
+        };
+        if blocked_lines.contains(&true) {
+            let open = |v: &[_]| keep_open(v, &blocked_lines);
+            let widths = plw.map(open);
+            let dual = poly_dual_geom.as_deref().map(|d| keep_open(d, &blocked_lines));
+            skip_blocked_lines(&blocked_lines, build(widths.as_deref(), dual.as_deref()))
+        } else {
+            build(plw, poly_dual_geom.as_deref())
+        }
     };
     // A pure one-break anchor can be taller than a short floating table.
     // In that case its first line extends below the float and occupies flow
@@ -4063,7 +4518,8 @@ fn render_paragraph_block(
     // not for cursor advancement (text wraps beside the image).
     let mut float_overflow_h = 0.0f32;
     // How far a topAndBottom float over the first line pushes the text down.
-    let mut text_drop = 0.0f32;
+    let mut text_drop = float_drop;
+    content_h += float_drop;
 
     // A band keeps the lines out by itself (`step_below_bands`).
     for fi in para
@@ -4159,15 +4615,19 @@ fn render_paragraph_block(
 
     for tb in &para.textboxes {
         // A band keeps the lines out by itself (`step_below_bands`).
-        let reserve = !textbox_blocks_band(tb, sp, (col_x, col_w), text_width)
+        let reserve = !textbox_blocks_band(tb, para, sp, (col_x, col_w), text_width)
             && !hangs_below_anchor(tb, para, col_w, ctx)
             && match tb.wrap_type {
                 WrapType::TopAndBottom => true,
-                WrapType::Square => tb.width_pt >= text_width * 0.5,
+                WrapType::Square => {
+                    textbox_room_beside(tb, para, sp, (col_x, col_w), text_width)
+                        .is_some_and(|room| room < MIN_EMPTY_STRIP)
+                }
                 _ => false,
             };
         if reserve {
-            let tb_bottom = tb.flow_bottom();
+            let tb_bottom =
+                tb.v_offset_pt + textbox_render::textbox_height(tb, ctx) + tb.dist_bottom;
             match tb.v_relative_from {
                 // The offset counts from above the paragraph's own space
                 // before, which already sits above the content. An empty
@@ -4195,8 +4655,16 @@ fn render_paragraph_block(
                     // the logo's foot in Word, not the two stacked).
                     // Side-by-side boxes move the line below the lower one, not
                     // below their stacked heights (torture_test's linked pair).
+                    // A box over a text paragraph's first line moves its lines
+                    // below it, as a picture does (Word examples: topAndBottom,
+                    // and square with a 17pt strip beside it).
+                    let first_line_overlaps =
+                        tb.v_offset_pt < before + line_h && tb_bottom > before;
                     content_h = if text_empty && para.image.is_none() && line_overlaps {
                         content_h.max(tb_bottom + lines_h)
+                    } else if !text_empty && first_line_overlaps {
+                        text_drop = text_drop.max(tb_bottom - before);
+                        content_h.max(lines_h + text_drop)
                     } else {
                         content_h.max(tb_bottom - before)
                     };
@@ -4204,6 +4672,21 @@ fn render_paragraph_block(
                 _ => {
                     content_h += tb_bottom;
                 }
+            }
+        } else if tb.v_relative_from == VRelativeFrom::Paragraph
+            && textbox_wraps_beside(tb, para, sp, (col_x, col_w), text_width)
+        {
+            // Like a picture text wraps beside: only the page break counts
+            // it (Word example: an empty anchor 40pt above the bottom margin
+            // goes to the next page with its 180pt box).
+            let offset = match tb.v_position {
+                VerticalPosition::Offset(o) => o,
+                _ => 0.0,
+            };
+            let h = textbox_render::textbox_height(tb, ctx);
+            let tb_h = offset + tb.dist_top + h + tb.dist_bottom;
+            if tb_h <= sp.page_height - sp.margin_top - sp.margin_bottom {
+                float_overflow_h = float_overflow_h.max(tb_h);
             }
         }
     }
@@ -4442,7 +4925,7 @@ fn render_paragraph_block(
         && state.pb.slot_top - needed_with_floats - keep_next_extra + last_line_lead
             < state.effective_margin_bottom + para_fn_extra
     {
-        let available = state.pb.slot_top - inter_gap - state.effective_margin_bottom;
+        let available = state.pb.slot_top - inter_gap - text_drop - state.effective_margin_bottom;
         let first_line_h = tallest_lhr
             .map(|ratio| font_size * ratio)
             .unwrap_or(font_size);
@@ -4515,7 +4998,13 @@ fn render_paragraph_block(
             } else {
                 first_baseline_offset
             };
-            let baseline_y = state.pb.slot_top - baseline_offset;
+            let baseline_y = state.pb.slot_top - baseline_offset - text_drop;
+
+            // Its text boxes hang from its top on this page, as an unsplit
+            // paragraph's do.
+            for tb in &para.textboxes {
+                render_para_textbox(tb, para, split_anchor, sp, (col_x, col_w), text_width, ctx, &mut state.pb);
+            }
 
             // One element for both halves: its content continues on the next page.
             let tags = state.pb.para_tags(para, doc);
@@ -4561,6 +5050,7 @@ fn render_paragraph_block(
                     state.pb.all_contents.len(),
                     tag,
                 )),
+                None,
             );
             state.pb.end_tag();
 
@@ -4576,12 +5066,10 @@ fn render_paragraph_block(
             );
             if !leading.is_empty() {
                 let page = state.pb.all_contents.len();
-                render_floating_images(&leading, true, state.global_block_idx,
+                render_floating_images(&leading, state.global_block_idx,
                     &leading_names, &leading_effects, sp, col_x, col_w, text_width,
-                    split_anchor, &mut state.pb.content, &mut state.pb.tags, page);
-                render_foreground_floating_images_deferred(&leading, state.global_block_idx,
-                    &leading_names, &leading_effects, sp, col_x, col_w, text_width,
-                    split_anchor, &mut state.pb.deferred_shapes, &mut state.pb.tags, page);
+                    split_anchor, &mut state.pb.behind_shapes, &mut state.pb.deferred_shapes,
+                    &mut state.pb.tags, page);
             }
 
             // Footnotes referenced on the lines that stay here belong to this
@@ -4593,7 +5081,7 @@ fn render_paragraph_block(
             }
 
             // The column ends below the lines that stay (its separator reaches them).
-            state.pb.slot_top -= lines_height(first_part, line_h, para_metrics);
+            state.pb.slot_top -= text_drop + lines_height(first_part, line_h, para_metrics);
             state.pb.advance_column_or_page(
                 &mut state.current_col,
                 col_count,
@@ -4707,7 +5195,8 @@ fn render_paragraph_block(
                     if let Some((from, y_b)) = first_in {
                         let (mut tx, mut tw, mut lx) = (rest_text_x, rest_text_width, 0.0);
                         // The line's box meets the band though its top may sit above it.
-                        zone.narrow_paragraph(y_b.min(zone.top_y), rest_col_x, rest_col_w, para, &mut tx, &mut tw, &mut lx);
+                        let legacy = ctx.compat_mode < 15;
+                        zone.narrow_paragraph(y_b.min(zone.top_y), rest_col_x, rest_col_w, para, &mut tx, &mut tw, &mut lx, legacy);
                         plan = Some(if tw < rest_text_width - 0.5 {
                             FragmentPlan::Beside { from, to: after, text_x: tx, text_w: tw }
                         } else if zone.bottom_y - lines_height(&chunk[from..], line_h, para_metrics)
@@ -4728,12 +5217,9 @@ fn render_paragraph_block(
                 let last_fragment = last_fragment && fit >= remaining.len();
                 if last_fragment {
                     let page = state.pb.all_contents.len();
-                    render_floating_images(&trailing, true, state.global_block_idx,
+                    render_floating_images(&trailing, state.global_block_idx,
                         &trailing_names, &trailing_effects, sp, rest_col_x, rest_col_w,
-                        text_width, anchor, &mut state.pb.content, &mut state.pb.tags, page);
-                    render_foreground_floating_images_deferred(&trailing,
-                        state.global_block_idx, &trailing_names, &trailing_effects,
-                        sp, rest_col_x, rest_col_w, text_width, anchor,
+                        text_width, anchor, &mut state.pb.behind_shapes,
                         &mut state.pb.deferred_shapes, &mut state.pb.tags, page);
                 }
                 // Full-width pictures keep following visible text below them,
@@ -4822,6 +5308,7 @@ fn render_paragraph_block(
                         state.pb.all_contents.len(),
                         tag,
                     )),
+                    None,
                 );
                 }
                 state.pb.end_tag();
@@ -4866,6 +5353,7 @@ fn render_paragraph_block(
             return true;
         }
 
+        let page = state.pb.page_count();
         state.pb.overflow_column_or_page(
             &mut state.current_col,
             col_count,
@@ -4876,6 +5364,49 @@ fn render_paragraph_block(
             state.prev_space_after,
         );
         inter_gap = 0.0;
+        // Its own floats move to the new column with it, an earlier anchor's
+        // stay behind: lay it out again there, its gap the overflow's (Word
+        // examples: a 100pt box and its anchor's text start 280pt right in the
+        // second of two 200pt columns, at its top after a 24pt space after; a
+        // paragraph beside an earlier box moved on by widow control takes the
+        // next column's or page's full measure).
+        let new_page = state.pb.page_count() != page;
+        let earlier_floats = poly_line_geom.is_some() && !own_zone_set;
+        if (own_zone_set || earlier_floats)
+            && ((col_geometry[state.current_col].0 - col_x).abs() > 0.01
+                || (new_page && earlier_floats))
+            && !para.page_break_before
+            && !para.column_break_before
+            && !leading_table_clear
+        {
+            if !new_page {
+                (state.pb.float_zone, state.pb.more_float_zones) = entry_zones;
+            }
+            state.reflow_gap = Some(inter_gap);
+            return render_paragraph_block(
+                para,
+                state,
+                ctx,
+                sp,
+                col_geometry,
+                col_count,
+                text_width,
+                sect_idx,
+                block_idx,
+                section_blocks,
+                floating_image_pdf_names,
+                inline_image_pdf_names,
+                image_pdf_names,
+                effect_names,
+                effect_floating_names,
+                effect_inline_names,
+                doc,
+                smartart_font_key,
+                smartart_image_names,
+                debug_wrap,
+                table_connector_anchor,
+            );
+        }
     }
 
     // Suppress space_before at the top of a page
@@ -4926,6 +5457,7 @@ fn render_paragraph_block(
             &mut para_text_x,
             &mut para_text_width,
             &mut label_x,
+            ctx.compat_mode < 15,
         );
     }
     // A centred or right-aligned paragraph carries its label with the text:
@@ -4950,13 +5482,6 @@ fn render_paragraph_block(
         sp,
         ctx,
     );
-    let tb_col_x = |tb: &crate::model::Textbox| {
-        if tb.on_line {
-            col_x + para.indent_left
-        } else {
-            col_x
-        }
-    };
     // Hand the look-ahead float's anchor to the paragraph that actually
     // carries it only after this paragraph has taken its own.
     if let Some((anchor_top, _, anchor_block)) = lookahead {
@@ -4996,11 +5521,15 @@ fn render_paragraph_block(
         std::borrow::Cow::Borrowed(&para.floating_images)
     };
 
-    // Render behind-doc layer: floating images + textboxes
+    // Floating images + textboxes, each into a per-shape buffer on its layer:
+    // behind-doc ones paint under the page's text, the rest above it. Both
+    // layers are sorted by relativeHeight in flush_page, so foreground images
+    // interleave with foreground shapes by z-order rather than always
+    // painting beneath them (annotation #191), and Word's z-order for
+    // floating shapes spans paragraphs.
     let page = state.pb.all_contents.len();
     render_floating_images(
         &render_images,
-        true,
         state.global_block_idx,
         floating_image_pdf_names,
         effect_floating_names,
@@ -5009,26 +5538,13 @@ fn render_paragraph_block(
         col_w,
         text_width,
         anchor,
-        &mut state.pb.content,
+        &mut state.pb.behind_shapes,
+        &mut state.pb.deferred_shapes,
         &mut state.pb.tags,
         page,
     );
-    for tb in sorted_by_z(para.textboxes.iter().filter(|t| t.behind_doc)) {
-        render_single_textbox(
-            tb,
-            sp,
-            tb_col_x(tb),
-            col_w,
-            text_width,
-            anchor.top(tb.on_line),
-            &mut state.pb.content,
-            &mut state.pb.gradient_specs,
-            ctx,
-            &mut state.pb.links,
-            &mut state.pb.tags,
-            page,
-            &mut state.pb.alpha_states,
-        );
+    for tb in &para.textboxes {
+        render_para_textbox(tb, para, anchor, sp, (col_x, col_w), text_width, ctx, &mut state.pb);
     }
 
     // Draw paragraph shading (background), extending outward to match borders
@@ -5061,31 +5577,13 @@ fn render_paragraph_block(
         state.pb.content.restore_state();
     }
 
-    // Render foreground layer: floating images + textboxes. Foreground images
-    // are deferred into the page z-stack (sorted by relativeHeight in
-    // flush_page) so they interleave with foreground shapes/textboxes by
-    // z-order rather than always painting beneath them (annotation #191).
-    render_foreground_floating_images_deferred(
-        &render_images,
-        state.global_block_idx,
-        floating_image_pdf_names,
-        effect_floating_names,
-        sp,
-        col_x,
-        col_w,
-        text_width,
-        anchor,
-        &mut state.pb.deferred_shapes,
-        &mut state.pb.tags,
-        page,
-    );
-
     // Set FloatZone for wrapping floating images
     // (may already be set by self-wrapping above; overwrite
     // to ensure polygon data is included).
     // A float entirely outside the text column (e.g. a QR code in the left
     // margin) never narrows text — installing its zone would only clobber a
     // still-active in-column zone from an earlier paragraph's float.
+    let mut zones = Vec::new();
     for fi in para
         .floating_images
         .iter()
@@ -5093,7 +5591,7 @@ fn render_paragraph_block(
     {
         let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
         let fi_y_top = anchor.fi_y_top(fi, sp);
-        state.pb.float_zone = Some(FloatZone::for_float(fi, fi_x, fi_y_top));
+        zones.push(FloatZone::for_float(fi, fi_x, fi_y_top));
         if !text_empty && leading_full_width_picture(fi, sp, col_x, col_w, text_width) {
             let bottom = fi_y_top - fi.image.display_height - fi.dist_bottom;
             state.pb.next_text_below_picture = Some(
@@ -5104,32 +5602,16 @@ fn render_paragraph_block(
             );
         }
     }
+    zones.extend(
+        para.textboxes
+            .iter()
+            .filter(|tb| textbox_wraps_beside(tb, para, sp, (col_x, col_w), text_width))
+            .map(|tb| textbox_zone(tb, sp, (col_x, col_w), text_width, anchor.top(false), ctx)),
+    );
+    state.pb.set_float_zones(zones);
 
     if debug_wrap && let Some(ref fz) = state.pb.float_zone {
         draw_debug_wrap_overlay(&mut state.pb.content, fz);
-    }
-
-    for tb in para.textboxes.iter().filter(|t| !t.behind_doc) {
-        // Render into a per-shape buffer; flush_page paints these above the
-        // page's text layer sorted by relativeHeight (Word's z-order for
-        // floating shapes spans paragraphs).
-        let mut shape_content = tagging::artifact_content();
-        render_single_textbox(
-            tb,
-            sp,
-            tb_col_x(tb),
-            col_w,
-            text_width,
-            anchor.top(tb.on_line),
-            &mut shape_content,
-            &mut state.pb.gradient_specs,
-            ctx,
-            &mut state.pb.links,
-            &mut state.pb.tags,
-            page,
-            &mut state.pb.alpha_states,
-        );
-        state.pb.deferred_shapes.push((tb.z_index, shape_content));
     }
 
     for conn in &para.connectors {
@@ -5447,6 +5929,7 @@ fn render_paragraph_block(
                     state.pb.all_contents.len(),
                     tags.1,
                 )),
+                None,
             );
         }
         state.pb.end_tag();
@@ -5778,6 +6261,7 @@ fn render_pass(
         heading_entries: Vec::new(),
         bookmark_positions,
         long_keep_chain: false,
+        reflow_gap: None,
     };
     state.pb.tags.lang = document_lang(doc);
 
@@ -6071,7 +6555,7 @@ fn render_pass(
                     let clear_bottom = rect_clear.as_ref().map_or(fz.bottom_y, |rect| rect.bottom);
                     if state.pb.slot_top <= clear_bottom {
                         // Already past the zone — clear it
-                        state.pb.float_zone = None;
+                        state.pb.next_float_zone();
                     } else if match &rect_clear {
                         Some(rect) => state.pb.slot_top - rect.line_h < rect.top,
                         None => state.pb.slot_top <= fz.top_y
@@ -6131,16 +6615,31 @@ fn render_pass(
                             }
                             _ => (space_left, space_right),
                         };
-                        let min_wrap_w: f32 = 72.0;
-                        let enough_space = if fz.wrap_text == WrapText::BothSides {
-                            // For bothSides, check combined width of both regions.
-                            // A float overhanging a margin has no strip on that
-                            // side, not a negative one (an external tracked corpus
-                            // cover 71.5pt into the left margin left 147pt on the
-                            // right, and the title went below the page-tall picture).
-                            (space_left.max(0.0) + space_right.max(0.0)) >= min_wrap_w
-                        } else {
-                            side_room(fz.wrap_text, space_left, space_right) >= min_wrap_w
+                        let first_word = match block {
+                            Block::Paragraph(p) => first_word_width(p, &ctx),
+                            Block::Table(_) => None,
+                        };
+                        let enough_space = match first_word {
+                            // A line goes beside a float when its first word
+                            // fits a strip there (Word examples: "C1P0", 25pt,
+                            // holds a 30pt strip, not a 24pt one).
+                            Some(w) => {
+                                let room = if fz.wrap_text == WrapText::BothSides {
+                                    space_left.max(space_right)
+                                } else {
+                                    side_room(fz.wrap_text, space_left, space_right)
+                                };
+                                room >= w.max(MIN_EMPTY_STRIP)
+                            }
+                            None if fz.wrap_text == WrapText::BothSides => {
+                                // For bothSides, check combined width of both regions.
+                                // A float overhanging a margin has no strip on that
+                                // side, not a negative one (an external tracked corpus
+                                // cover 71.5pt into the left margin left 147pt on the
+                                // right, and the title went below the page-tall picture).
+                                (space_left.max(0.0) + space_right.max(0.0)) >= 72.0
+                            }
+                            None => side_room(fz.wrap_text, space_left, space_right) >= 72.0,
                         };
                         if !enough_space {
                             // Empty paragraphs can be absorbed within a wide
@@ -6168,7 +6667,7 @@ fn render_pass(
                                 state.pb.slot_top = rect_clear
                                     .as_ref()
                                     .map_or(fz.bottom_y, |rect| rect.cleared_y(state.pb.slot_top));
-                                state.pb.float_zone = None;
+                                state.pb.next_float_zone();
                             }
                         }
                         // Otherwise leave zone active — paragraph layout adjusts width
@@ -6331,6 +6830,16 @@ fn render_pass(
                     let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
                     let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
                     let mark_pitch = resolve_line_h(ls, fs, lhr);
+                    // It clears every float the cursor has not passed yet
+                    // (Word example: two boxes 250pt and 80pt tall, text below
+                    // the taller).
+                    let float_bottom = state
+                        .pb
+                        .more_float_zones
+                        .iter()
+                        .map(|z| z.bottom_y)
+                        .filter(|&b| b < state.pb.slot_top)
+                        .fold(fz.bottom_y, f32::min);
                     // Clear the line after a trailing break even when its end
                     // already extends below the table: its start can still be
                     // inside the table's vertical band.
@@ -6340,7 +6849,7 @@ fn render_pass(
                         && p.runs.iter().filter(|r| r.is_line_break).count() == 1
                         && p.runs.iter().all(|r| r.inline_image.is_none())
                         && p.image.is_none();
-                    if state.pb.slot_top > fz.bottom_y
+                    if state.pb.slot_top > float_bottom
                         || (fz.from_table && extra_breaks > 0)
                         || (trailing_clear && state.pb.slot_top + mark_pitch > fz.bottom_y)
                     {
@@ -6355,15 +6864,16 @@ fn render_pass(
                             && doc.sections.get(sect_idx + 1).is_some_and(|next|
                                 next.properties.break_type == SectionBreakType::Continuous);
                         let mark_lines = usize::from(!section_mark) + extra_breaks;
-                        state.pb.slot_top = fz.bottom_y - mark_pitch * mark_lines as f32;
+                        state.pb.slot_top = float_bottom - mark_pitch * mark_lines as f32;
                     }
                     state.pb.float_zone = None;
+                    state.pb.more_float_zones.clear();
                 }
                 // Clear float zone once cursor passes below it
                 if let Some(ref fz) = state.pb.float_zone
                     && state.pb.slot_top <= fz.bottom_y
                 {
-                    state.pb.float_zone = None;
+                    state.pb.next_float_zone();
                 }
 
                 last_block_consumption = (block_start.0 == state.pb.page_count())
@@ -6820,6 +7330,7 @@ fn render_pass(
         valign_offsets,
         state.pb.all_contents,
         state.pb.all_deferred_shapes,
+        state.pb.all_behind_shapes,
         &mut all_hf_contents,
         &state.pb.all_links,
         &state.pb.all_comment_anchors,
@@ -7211,22 +7722,22 @@ mod table_wrap_indent_tests {
             ..Default::default()
         };
         assert_eq!(
-            table_right_text_region(78.0, 552.0, 299.0, &para),
+            right_text_region(78.0, 552.0, 299.0, &para),
             (333.0, 207.0)
         );
         para.indent_left = 100.0;
         assert_eq!(
-            table_right_text_region(78.0, 552.0, 299.0, &para),
+            right_text_region(78.0, 552.0, 299.0, &para),
             (299.0, 241.0)
         );
         para.indent_left = -10.0;
         assert_eq!(
-            table_right_text_region(78.0, 552.0, 299.0, &para),
+            right_text_region(78.0, 552.0, 299.0, &para),
             (299.0, 241.0)
         );
         para.indent_left = 500.0;
         assert_eq!(
-            table_right_text_region(78.0, 552.0, 299.0, &para),
+            right_text_region(78.0, 552.0, 299.0, &para),
             (578.0, 0.0)
         );
     }

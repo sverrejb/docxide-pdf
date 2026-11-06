@@ -344,16 +344,70 @@ pub(super) fn reorder_lines(
     if !has_rtl(lines) {
         return;
     }
+    if lines.iter().all(|l| l.right_region.is_none()) {
+        reorder_strips(lines, bidi, fonts);
+        return;
+    }
+    // A line split around a float orders each strip as a line of its own,
+    // the second strip going on from the first.
+    let mut strips: Vec<TextLine> = Vec::new();
+    for line in lines.iter_mut() {
+        let Some(rr) = &line.right_region else {
+            strips.push(std::mem::take(line));
+            continue;
+        };
+        let mut first = std::mem::take(&mut line.chunks);
+        let second = first.split_off(rr.first_chunk_idx);
+        strips.push(TextLine {
+            total_width: first.last().map_or(0.0, |c| c.x_offset + c.width),
+            chunks: first,
+            rtl_paragraph: line.rtl_paragraph,
+            ..TextLine::default()
+        });
+        strips.push(TextLine {
+            chunks: second,
+            total_width: rr.content_width,
+            ends_with_break: line.ends_with_break,
+            trailing_space: line.trailing_space,
+            trailing_space_rtl: line.trailing_space_rtl,
+            rtl_paragraph: line.rtl_paragraph,
+            ..TextLine::default()
+        });
+    }
+    reorder_strips(&mut strips, bidi, fonts);
+    let mut strips = strips.into_iter();
+    for line in lines.iter_mut() {
+        let Some(rr) = line.right_region.as_mut() else {
+            *line = strips.next().expect("one strip per line");
+            continue;
+        };
+        let (first, second) = (strips.next().unwrap(), strips.next().unwrap());
+        let n = first.chunks.len();
+        if !first.draw_order.is_empty() || !second.draw_order.is_empty() {
+            let order = |s: &TextLine| -> Vec<usize> {
+                if s.draw_order.is_empty() {
+                    (0..s.chunks.len()).collect()
+                } else {
+                    s.draw_order.clone()
+                }
+            };
+            line.draw_order = order(&first)
+                .into_iter()
+                .chain(order(&second).into_iter().map(|i| i + n))
+                .collect();
+        }
+        rr.first_chunk_idx = n;
+        rr.content_width = second.total_width;
+        line.chunks = first.chunks.into_iter().chain(second.chunks).collect();
+    }
+}
+
+fn reorder_strips(lines: &mut [TextLine], bidi: bool, fonts: &HashMap<String, FontEntry>) {
     let base = u8::from(bidi);
     let by_pdf_name: HashMap<&str, &FontEntry> =
         fonts.values().map(|e| (e.pdf_name.as_str(), e)).collect();
     let per_line: Vec<Vec<Unit>> = lines.iter().map(|l| line_units(l, base)).collect();
     for li in 0..lines.len() {
-        // ponytail: two-region lines keep logical order; their halves are
-        // placed around a float, not by flow (tabbed lines never get here)
-        if lines[li].right_region.is_some() {
-            continue;
-        }
         // The line, then the rest of its paragraph (or manual-break segment)
         // up to the first strong character, which settles trailing neutrals.
         let mut cls: Vec<Class> = per_line[li].iter().map(|u| u.cls).collect();
