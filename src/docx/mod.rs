@@ -823,7 +823,9 @@ pub(super) fn parse_tab_stops_with_clears(ppr: roxmltree::Node) -> (Vec<TabStop>
         let leader = n.attribute((WML_NS, "leader")).and_then(|l| match l {
             "dot" => Some('.'),
             "hyphen" => Some('-'),
-            "underscore" => Some('_'),
+            // Word's export draws a heavy leader with plain underscores.
+            "underscore" | "heavy" => Some('_'),
+            "middleDot" => Some('\u{00B7}'),
             _ => None,
         });
         stops.push(TabStop {

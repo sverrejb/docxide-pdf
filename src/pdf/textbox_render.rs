@@ -12,7 +12,7 @@ use super::color::{fill_rgb, set_fill_alpha, stroke_rgb};
 use super::header_footer::resolve_tb_y_top;
 use super::helpers::align_offset;
 use super::layout::{
-    LineOpts, LinkAnnotation, LinkTagger, build_lines, lines_height, picture_line_bottom,
+    LineOpts, LinkAnnotation, LinkTagger, TextLine, build_lines, lines_height, picture_line_bottom,
     render_paragraph_lines, tallest_run_metrics,
 };
 use super::list_label::render_list_label;
@@ -71,7 +71,6 @@ fn paragraph_body_height(tp: &Paragraph, text_w: f32, ctx: &RenderContext) -> f3
     if let Some(img) = textbox_para_block_image(tp) {
         return image_block_height(img);
     }
-    let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
     let tw = (text_w - tp.indent_left - tp.indent_right).max(1.0);
     let hang = if !tp.list_label.is_empty() {
         match tp.num_level_tab_stop {
@@ -88,21 +87,92 @@ fn paragraph_body_height(tp: &Paragraph, text_w: f32, ctx: &RenderContext) -> f3
     } else {
         -tp.indent_first_line
     };
-    let lines = build_lines(
-        &tp.runs,
+    let laid = layout_box_paragraph(tp, &tp.runs, tw, hang, ctx);
+    lines_height(&laid.lines, laid.line_h, laid.metrics)
+}
+
+/// A textbox paragraph's lines as they render: a box's anchor, a shape that
+/// fits its text and a linked box measure this height.
+struct BoxParagraph {
+    lines: Vec<TextLine>,
+    line_h: f32,
+    font_size: f32,
+    first_ascent: f32,
+    /// (ascent, descent) for picture lines, see `inline_line_advance`.
+    metrics: (f32, f32),
+}
+
+fn layout_box_paragraph(
+    tp: &Paragraph,
+    runs: &[crate::model::Run],
+    text_w: f32,
+    hanging: f32,
+    ctx: &RenderContext,
+) -> BoxParagraph {
+    let ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
+    let inline_imgs = super::layout::run_image_map(runs, ctx.textbox_image_names);
+    let mut lines = build_lines(
+        runs,
         ctx,
-        tw,
+        text_w,
         ctx.cjk(true, tp),
         &LineOpts {
+            inline_images: Some(&inline_imgs),
             tab_stops: &tp.tab_stops,
             indent_left: tp.indent_left,
             indent_right: tp.indent_right,
-            hanging: hang,
+            hanging,
             ..Default::default()
         },
     );
-    let (fs, lhr, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
-    lines.len().max(1) as f32 * resolve_line_h(tp_ls, fs, lhr)
+    let (fs, lhr, ar) = tallest_run_metrics(runs, ctx.fonts);
+    // A paragraph of only tabs is sized by its break or mark, not by the
+    // tab runs (`size_unsized_lines`).
+    let (fs, (lhr, ar)) = if runs.iter().all(|r| r.is_tab || r.vanish) {
+        super::unsized_line_font(tp, fs, ctx.fonts)
+    } else {
+        (fs, (lhr, ar))
+    };
+    let line_h = resolve_line_h(ls, fs, lhr);
+    let text_ascent = fs * ar.unwrap_or(0.75);
+    let first_ascent = super::layout::boxed_line_ascent(ls, line_h, fs, lhr, ar, runs, ctx.fonts)
+        .unwrap_or(text_ascent);
+    // Each line is as tall as its own runs, as in the body: air_pollution's
+    // 10.5pt dot-leader line before a break steps 18.1 at 1.5 lines, not
+    // the 20.7 of the paragraph's 12pt text.
+    if !matches!(ls, crate::model::LineSpacing::Exact(_)) {
+        super::layout::size_lines_by_own_runs(
+            &mut lines,
+            ctx.fonts,
+            ls,
+            line_h,
+            text_ascent,
+            tp.text_alignment == crate::model::TextAlignment::Top,
+        );
+        super::size_break_lines(&mut lines, runs, ls, line_h, ctx.fonts);
+        super::size_unsized_lines(
+            &mut lines,
+            tp,
+            runs,
+            ls,
+            (line_h, fs, first_ascent),
+            ctx.fonts,
+        );
+        super::size_mark_line(&mut lines, tp, runs, ls, lhr, ctx.fonts);
+        super::size_tab_mark_line(&mut lines, tp, ls, lhr, ctx.fonts);
+    }
+    let descent = if inline_imgs.is_empty() {
+        0.0
+    } else {
+        picture_line_bottom(runs, tp, ctx.fonts, ls)
+    };
+    BoxParagraph {
+        lines,
+        line_h,
+        font_size: fs,
+        first_ascent,
+        metrics: (text_ascent, descent),
+    }
 }
 
 /// The part of its story a linked box shows: after what the boxes before it
@@ -528,7 +598,6 @@ pub(super) fn render_textbox_paragraphs(
             tags.para_nodes(&mut lists, *sect, item, !tp.list_label.is_empty(), kind)
         });
         let para_tag = tag_nodes.map(|(_, text)| text);
-        let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
         let tp_text_w = (content_w - tp.indent_left - tp.indent_right).max(1.0);
         let tp_align_w = (align_w - tp.indent_left - tp.indent_right).max(1.0);
         let text_hanging = if !tp.list_label.is_empty() {
@@ -594,59 +663,19 @@ pub(super) fn render_textbox_paragraphs(
             }
             None => &tp.runs,
         };
-        let inline_imgs = super::layout::run_image_map(runs, ctx.textbox_image_names);
-        let mut tb_lines = build_lines(
-            runs,
-            ctx,
-            tp_text_w,
-            ctx.cjk(true, tp),
-            &LineOpts {
-                inline_images: Some(&inline_imgs),
-                tab_stops: &tp.tab_stops,
-                indent_left: tp.indent_left,
-                indent_right: tp.indent_right,
-                hanging: text_hanging,
-                ..Default::default()
-            },
-        );
+        let BoxParagraph {
+            lines: tb_lines,
+            line_h: tb_line_h,
+            font_size: tb_fs,
+            first_ascent,
+            metrics: tb_metrics,
+        } = layout_box_paragraph(tp, runs, tp_text_w, text_hanging, ctx);
         if tb_lines.is_empty() {
-            let (fs, lhr, _) = tallest_run_metrics(runs, ctx.fonts);
-            let lh = resolve_line_h(tp_ls, fs, lhr);
-            cursor_y -= inter_gap + lh;
+            cursor_y -= inter_gap + tb_line_h;
             prev_space_after = tp.space_after;
             continue;
         }
-        let (tb_fs, tb_lhr, tb_ar) = tallest_run_metrics(runs, ctx.fonts);
-        let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_lhr);
-        let tb_text_ascent = tb_fs * tb_ar.unwrap_or(0.75);
-        let tb_ascent = super::layout::boxed_line_ascent(
-            tp_ls, tb_line_h, tb_fs, tb_lhr, tb_ar, runs, ctx.fonts,
-        )
-        .unwrap_or(tb_text_ascent);
-        let tb_baseline = cursor_y - inter_gap - tb_ascent - y_offset;
-        // Each line is as tall as its own runs, as in the body: air_pollution's
-        // 10.5pt dot-leader line before a break steps 18.1 at 1.5 lines, not
-        // the 20.7 of the paragraph's 12pt text.
-        if !matches!(tp_ls, crate::model::LineSpacing::Exact(_)) {
-            super::layout::size_lines_by_own_runs(
-                &mut tb_lines,
-                ctx.fonts,
-                tp_ls,
-                tb_line_h,
-                tb_text_ascent,
-                tp.text_alignment == crate::model::TextAlignment::Top,
-            );
-            super::size_break_lines(&mut tb_lines, runs, tp_ls, tb_line_h, ctx.fonts);
-            super::size_mark_line(&mut tb_lines, tp, runs, tp_ls, tb_lhr, ctx.fonts);
-        }
-        let tb_metrics = (
-            tb_text_ascent,
-            if inline_imgs.is_empty() {
-                0.0
-            } else {
-                picture_line_bottom(runs, tp, ctx.fonts, tp_ls)
-            },
-        );
+        let tb_baseline = cursor_y - inter_gap - first_ascent - y_offset;
         let tp_text_x = content_x + tp.indent_left + x_offset;
         if let Some(c) = force_color {
             fill_rgb(content, c);
