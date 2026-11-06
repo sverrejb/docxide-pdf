@@ -190,42 +190,31 @@ fn pack_bilevel(rgb: &[u8], w: u32, h: u32) -> Vec<u8> {
 
 /// Fallback PNG decoder using the `png` crate directly. The `image` crate's
 /// format-pinned reader can fail on interlaced or unusual PNGs; this handles
-/// those cases by decoding with EXPAND+ALPHA transformations.
-fn decode_png_raw(data: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
+/// those cases by decoding to 8-bit gray or color.
+///
+/// A non-interlaced PNG whose image data ends early keeps the rows that
+/// decode, and the rest of the image stays zero (black, or transparent with
+/// alpha), as in Word.
+fn decode_png_raw(data: &[u8]) -> Option<image::DynamicImage> {
+    use image::{DynamicImage, ImageBuffer};
     let mut decoder = png::Decoder::new(std::io::Cursor::new(data));
-    decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::ALPHA);
+    decoder.set_transformations(png::Transformations::normalize_to_color8());
     let mut reader = decoder.read_info().ok()?;
-    let buf_size = reader
-        .output_buffer_size()
-        .unwrap_or(reader.info().raw_bytes());
-    let mut buf = vec![0u8; buf_size];
-    let info = reader.next_frame(&mut buf).ok()?;
-    let (w, h) = (info.width, info.height);
-    let rgba = match (info.color_type, info.bit_depth) {
-        (png::ColorType::Rgba, png::BitDepth::Eight) => {
-            buf.truncate(info.buffer_size());
-            buf
+    let (w, h) = (reader.info().width, reader.info().height);
+    let mut buf = vec![0u8; reader.output_buffer_size()?];
+    let decoded = reader.next_frame(&mut buf);
+    if reader.info().interlaced {
+        decoded.ok()?;
+    }
+    Some(match reader.output_color_type().0 {
+        png::ColorType::Rgba => DynamicImage::ImageRgba8(ImageBuffer::from_raw(w, h, buf)?),
+        png::ColorType::Rgb => DynamicImage::ImageRgb8(ImageBuffer::from_raw(w, h, buf)?),
+        png::ColorType::GrayscaleAlpha => {
+            DynamicImage::ImageLumaA8(ImageBuffer::from_raw(w, h, buf)?)
         }
-        (png::ColorType::Rgb, png::BitDepth::Eight) => {
-            let rgb = &buf[..info.buffer_size()];
-            let mut rgba = Vec::with_capacity((w * h * 4) as usize);
-            for chunk in rgb.chunks_exact(3) {
-                rgba.extend_from_slice(chunk);
-                rgba.push(255);
-            }
-            rgba
-        }
-        (png::ColorType::Grayscale, png::BitDepth::Eight) => {
-            let gray = &buf[..info.buffer_size()];
-            let mut rgba = Vec::with_capacity((w * h * 4) as usize);
-            for &g in gray {
-                rgba.extend_from_slice(&[g, g, g, 255]);
-            }
-            rgba
-        }
-        _ => return None,
-    };
-    Some((w, h, rgba))
+        png::ColorType::Grayscale => DynamicImage::ImageLuma8(ImageBuffer::from_raw(w, h, buf)?),
+        png::ColorType::Indexed => return None,
+    })
 }
 
 /// Write an image XObject into the PDF with the given filter and data.
@@ -488,10 +477,7 @@ fn embed_image_xobject(
                     // Fallback: use png crate directly for PNGs the image
                     // crate's format-pinned reader can't decode
                     match decode_png_raw(&img.data) {
-                        Some((w, h, rgba_data)) => image::DynamicImage::ImageRgba8(
-                            image::RgbaImage::from_raw(w, h, rgba_data)
-                                .expect("RGBA data size matches dimensions"),
-                        ),
+                        Some(img) => img,
                         None => {
                             log::warn!("PNG decode failed — writing 1x1 placeholder");
                             let mut xobj = pdf.image_xobject(xobj_ref, &[255, 255, 255]);

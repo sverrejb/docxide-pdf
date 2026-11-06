@@ -587,6 +587,7 @@ pub(super) fn render_textbox_paragraphs(
                     &tp.runs,
                     sub.page_num,
                     sub.total_pages,
+                    sub.section_pages,
                     sub.styleref_values,
                     sub.page_num_format,
                 );

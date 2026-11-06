@@ -579,6 +579,13 @@ Backlog (details in `current_focus/A11Y.md`):
   from the bookmark pre-pass as section page labels; a table's cells count
   as its first page, so a split table's later rows point at the wrong page.
   A Word-written TOC spanning paragraphs is still drawn as cached.
+  An evaluated result takes the formatting of the instruction's first
+  character, with `\* MERGEFORMAT` that of the cached result's first
+  character, and is hidden when the instruction is
+  (`field-result-format-source`). Open: Word's MERGEFORMAT maps the cached
+  result's formatting word by word (a one-word underlined cache underlines
+  only the first word of a longer STYLEREF value); we apply the first
+  word's to all.
 - Issue #147 follow-up: an inline MathType OLE equation sits with its
   bottom on the baseline like any picture, but Word lifts it by the baseline
   offset in the equation's WMF preview (MathType's comment record), so the

@@ -24,12 +24,14 @@ pub(super) fn substitute_hf_runs(
     runs: &[Run],
     page_num: usize,
     total_pages: usize,
+    section_pages: usize,
     styleref_values: &HashMap<String, String>,
     page_num_format: Option<&str>,
 ) -> Vec<Run> {
     let values = FieldValues {
         page_num,
         total_pages,
+        section_pages,
         styleref_values,
         page_num_format,
     };
@@ -39,6 +41,10 @@ pub(super) fn substitute_hf_runs(
             if let Some(ref fc) = run.field_code {
                 r.field_code = None;
                 r.text = values.eval(fc).unwrap_or_else(|| run.text.clone());
+                if matches!(fc, FieldCode::Page(_) | FieldCode::NumPages(_)) {
+                    r.caps = false;
+                    r.small_caps = false;
+                }
             }
             r
         })
@@ -47,7 +53,7 @@ pub(super) fn substitute_hf_runs(
 
 pub(super) use crate::model::styleref_key;
 
-/// A PAGE or NUMPAGES value in its numFmt (None = decimal).
+/// A PAGE, NUMPAGES or SECTIONPAGES value in its numFmt (None = decimal).
 pub(super) fn page_field_text(n: usize, fmt: Option<&str>) -> String {
     fmt.map_or_else(
         || n.to_string(),
@@ -59,6 +65,7 @@ pub(super) fn page_field_text(n: usize, fmt: Option<&str>) -> String {
 struct FieldValues<'a> {
     page_num: usize,
     total_pages: usize,
+    section_pages: usize,
     styleref_values: &'a HashMap<String, String>,
     page_num_format: Option<&'a str>,
 }
@@ -69,6 +76,7 @@ impl FieldValues<'_> {
         Some(match fc {
             FieldCode::Page(fmt) => page_field_text(self.page_num, fmt.or(self.page_num_format)),
             FieldCode::NumPages(fmt) => page_field_text(self.total_pages, *fmt),
+            FieldCode::SectionPages(fmt) => page_field_text(self.section_pages, *fmt),
             FieldCode::StyleRef { name, form } => self
                 .styleref_values
                 .get(&styleref_key(name, *form))
@@ -876,6 +884,7 @@ impl HfFloatZone {
 pub(super) struct HfPageContext<'a> {
     pub(super) page_num: usize,
     pub(super) total_pages: usize,
+    pub(super) section_pages: usize,
     pub(super) para_image_names: &'a HashMap<usize, String>,
     pub(super) inline_image_names: &'a HashMap<(usize, usize), String>,
     pub(super) floating_image_names: &'a HashMap<(usize, usize), String>,
@@ -897,6 +906,7 @@ pub(super) fn render_header_footer(
 ) {
     let page_num = pc.page_num;
     let total_pages = pc.total_pages;
+    let section_pages = pc.section_pages;
     let para_image_names = pc.para_image_names;
     let inline_image_names = pc.inline_image_names;
     let floating_image_names = pc.floating_image_names;
@@ -934,6 +944,7 @@ pub(super) fn render_header_footer(
                     &mut cursor_y,
                     page_num,
                     total_pages,
+                    section_pages,
                     styleref_values,
                     page_num_format,
                     gradient_specs,
@@ -948,6 +959,7 @@ pub(super) fn render_header_footer(
                     &para.runs,
                     page_num,
                     total_pages,
+                    section_pages,
                     styleref_values,
                     page_num_format,
                 );
@@ -1054,6 +1066,7 @@ pub(super) fn render_header_footer(
                     &para.runs,
                     page_num,
                     total_pages,
+                    section_pages,
                     styleref_values,
                     page_num_format,
                 );
@@ -1332,6 +1345,7 @@ pub(super) fn render_header_footer(
                                             &tp.runs,
                                             page_num,
                                             total_pages,
+                                            section_pages,
                                             styleref_values,
                                             page_num_format,
                                         );
@@ -1422,6 +1436,7 @@ pub(super) fn render_header_footer(
                                     &tp.runs,
                                     page_num,
                                     total_pages,
+                                    section_pages,
                                     styleref_values,
                                     page_num_format,
                                 );
@@ -2050,6 +2065,7 @@ mod tests {
             FieldValues {
                 page_num: 1,
                 total_pages: 1,
+                section_pages: 1,
                 styleref_values: values,
                 page_num_format: None,
             }
@@ -2063,5 +2079,27 @@ mod tests {
         styleref_values.insert(key(StyleRefForm::Label), "4".to_string());
         assert_eq!(eval(&styleref_values).as_deref(), Some("Part 4"));
         assert_eq!(field_args("a<>\"b c\" 2"), ["a", "<>", "b c", "2"]);
+    }
+
+    #[test]
+    fn page_count_results_drop_caps_in_headers() {
+        let cased = |field_code| Run {
+            text: "Z".into(),
+            caps: true,
+            small_caps: true,
+            underline: true,
+            field_code: Some(field_code),
+            ..Default::default()
+        };
+        let runs = [
+            cased(FieldCode::Page(Some("lowerLetter"))),
+            cased(FieldCode::NumPages(Some("lowerLetter"))),
+            cased(FieldCode::SectionPages(Some("lowerLetter"))),
+        ];
+        let out = substitute_hf_runs(&runs, 1, 2, 2, &HashMap::new(), None);
+        assert_eq!(out.iter().map(|r| r.text.as_str()).collect::<Vec<_>>(), ["a", "b", "b"]);
+        assert!(!out[0].caps && !out[0].small_caps && out[0].underline);
+        assert!(!out[1].caps && !out[1].small_caps);
+        assert!(out[2].caps && out[2].small_caps);
     }
 }
