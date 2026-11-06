@@ -664,6 +664,11 @@ pub(super) fn parse_anchor_position(
     (h_position, h_relative, v_position, v_relative)
 }
 
+/// A `wp:anchor` placed `relativeFrom="line"` vertically.
+pub(super) fn anchored_to_line(container: roxmltree::Node) -> bool {
+    wpd(container, "positionV").and_then(|n| n.attribute("relativeFrom")) == Some("line")
+}
+
 pub(super) fn parse_wrap_type(
     container: roxmltree::Node,
 ) -> (WrapType, WrapText, Option<Vec<(i32, i32)>>) {
@@ -807,6 +812,7 @@ fn parse_placed_drawing<R: Read + Seek>(
                     dist_right,
                     behind_doc,
                     z_index,
+                    v_from_line: anchored_to_line(container),
                     ..Textbox::from(wsp)
                 }));
             }
@@ -848,6 +854,7 @@ fn parse_placed_drawing<R: Read + Seek>(
                     anchor_at_start: false,
                     anchor_run: 0,
                     on_line: false,
+                    v_from_line: anchored_to_line(container),
                 }));
             }
             // A wrapNone diagram floats at its anchor, the paragraph's text laid
@@ -1219,6 +1226,7 @@ pub(super) fn parse_object_floating_image<R: Read + Seek>(
         anchor_at_start: false,
         anchor_run: 0,
         on_line: false,
+        v_from_line: false,
     })
 }
 

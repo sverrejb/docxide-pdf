@@ -162,6 +162,9 @@ pub struct FloatingImage {
     /// Flattened from an inline canvas: its offset counts from the line top,
     /// as for `Textbox::on_line`.
     pub on_line: bool,
+    /// Positioned `relativeFrom="line"` (kept as `VRelativeFrom::Paragraph`):
+    /// see `Textbox::v_from_line`.
+    pub v_from_line: bool,
 }
 
 /// Covers all 187 OOXML preset shapes and arbitrary custom geometry (a:custGeom).
@@ -372,6 +375,11 @@ pub struct ConnectorShape {
     /// wp:anchor relativeHeight — stacking order among overlapping anchored
     /// shapes within a page (higher draws on top). 0 when unspecified.
     pub z_index: u32,
+    /// See `Textbox::v_from_line`.
+    pub v_from_line: bool,
+    /// Flattened from an inline canvas: its offset counts from the line top,
+    /// as for `Textbox::on_line`.
+    pub on_line: bool,
 }
 
 #[derive(Clone, Copy, Default)]
@@ -465,6 +473,11 @@ pub struct Textbox {
     /// the paragraph's left indent, and their offsets count from the line top
     /// below the space before. Genuine anchored floats do neither.
     pub on_line: bool,
+    /// Positioned `relativeFrom="line"`, kept as `VRelativeFrom::Paragraph`:
+    /// the offset counts from where the paragraph flowed, also when a band or
+    /// floating table pushed it down and its paragraph-relative drawings
+    /// stay where it stood.
+    pub v_from_line: bool,
     /// In-plane rotation in degrees, clockwise (OOXML / VML `rotation:`),
     /// applied about the box centre at render time.
     pub rotation_deg: f32,
