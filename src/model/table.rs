@@ -190,6 +190,8 @@ pub struct Table {
     pub grid_inferred: bool,
     /// No cell names a preferred width (`tcW` absent, auto or 0).
     pub cells_unsized: bool,
+    /// Every cell's `tcW` is in twips or auto (none absent or in percent).
+    pub cells_twip_sized: bool,
     /// `w:bidiVisual`: the columns run right to left (already mirrored in
     /// `rows` and `col_widths`), and the table starts at the right margin.
     pub bidi_visual: bool,
