@@ -594,6 +594,7 @@ pub(super) fn parse_connector_from_wsp(
     conn.width = display_w;
     conn.height = display_h;
     (conn.behind_doc, conn.z_index) = super::images::anchor_z_order(anchor);
+    conn.v_from_line = super::images::anchored_to_line(anchor);
     Some(conn)
 }
 
@@ -690,6 +691,8 @@ pub(super) fn parse_connector_shape_node(
         head_end,
         tail_end,
         z_index: 0,
+        v_from_line: false,
+        on_line: false,
     })
 }
 
@@ -946,6 +949,8 @@ pub(super) fn parse_vml_line(shape: roxmltree::Node) -> Option<ConnectorShape> {
         head_end: ArrowEnd::None,
         tail_end: ArrowEnd::None,
         z_index: 0,
+        v_from_line: false,
+        on_line: false,
     })
 }
 

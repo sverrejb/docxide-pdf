@@ -1138,6 +1138,9 @@ pub(super) struct TextLine {
     /// How far this line's baseline sits below where the paragraph ascent
     /// would put it (negative: above), for lines with their own `pitch`.
     pub(super) ascent_shift: f32,
+    /// Room skipped below this line: the next one starts below a float it
+    /// would reach into.
+    pub(super) gap_after: f32,
 }
 
 impl TextLine {
@@ -4167,11 +4170,12 @@ pub(super) fn inline_line_advance(
 ) -> f32 {
     let line_pitch = line.pitch.unwrap_or(line_pitch);
     let img_h = line_max_image_h(line);
-    if img_h > ascent {
+    let own = if img_h > ascent {
         line_pitch.max(img_h + descent)
     } else {
         line_pitch
-    }
+    };
+    own + line.gap_after
 }
 
 /// Height of a laid-out paragraph: the sum of its line advances, one pitch when

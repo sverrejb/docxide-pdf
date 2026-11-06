@@ -299,6 +299,25 @@ Open queue from the large-corpus and focus-fixture rounds:
 
 ## Tables
 
+- Done: each piece of a split at-least row is at least its
+  trHeight plus the cell margins, on every page, up to the room that page
+  has; a row whose minimum exceeds the room left starts on the next page,
+  even a minimum taller than any page (`table-row-split-lines`; Word's
+  row-break line rules held on all 28 examples, croatian_grant's evaluation
+  table included). Nested rows follow the same rules; header rows do not
+  repeat above a row whose minimum does not fit below them on a fresh page;
+  a note whose row fills the page goes to the next page; the empty end mark
+  after a nested table adds no height to split pieces or vAlign; a finished
+  nested row is skipped at any depth; notes carried past a section's or the
+  document's end fill a page of their own under the first-page header (with
+  endnotes: at its top, under the default header) before the next section
+  starts (Word examples).
+- Header rows move with the first body row: a table starting mid-page whose
+  first body row moves to the next page takes its tblHeader rows along in
+  Word (a 30pt header over a cantSplit 70pt row with 60pt left); we leave
+  the header alone at the page bottom. With 60pt of header rows suppressed
+  above a 230pt at-least piece Word still starts the next paragraph on a new
+  page, as if the headers were there.
 - **Autofit vs Word** (2026-10-05 x-drift survey): case45 (tblW 4000, tcW 4680
   per cell) keeps Word's saved grid 2091/1909, we split 100/100, and its
   tblpXSpec="right" copy sits one cell margin past the right margin in Word;
@@ -331,6 +350,34 @@ Open queue from the large-corpus and focus-fixture rounds:
 
 ## Floats, frames and wrapping
 
+- Done: a drawing positioned relativeFrom="line" follows its
+  paragraph below a band or floating table that pushed it (offset from the
+  paragraph's new top, space before included), where a paragraph-relative
+  one stays where the paragraph stood. Fixture line-anchor-follows-push.
+  It follows the line below a floating table moved whole to the next page
+  too, keeps a look-ahead float's anchor, and a topAndBottom one hanging below
+  a pushed anchor keeps the following lines out of its band where it is drawn.
+  Fixture line-anchor-overrides. A DrawingML group's shapes, pictures and
+  connectors follow too, so does the box that wraps text around the group,
+  and so does a lone connector.
+  Open: VML (mso-position-vertical-relative:line) still counts as
+  paragraph-relative; a hanging line box of a paragraph pushed below
+  a floating table reserves its band from where the paragraph stood.
+- Done (floating tables): a line reaching
+  into a floating table's wrap area (topFromText included) goes below it
+  when no strip is left, page-anchored tables too, and a later line of a
+  paragraph steps below it on its own (`TextLine::gap_after`, judged where
+  the lines land: keepLines or widow control moving them to the next page
+  drops it); a first line reaching in only below its space before goes
+  below with that space; its paragraph-relative drawings hang from where
+  the paragraph stood. A
+  floating table inside the current one's wrap area or wholly in the margin
+  keeps that zone; an empty line's strip in the margin (negative indent)
+  holds nothing. Fixtures floating-table-line-reach, floating-table-stack,
+  floating-table-line-move.
+  Still one zone per page: a later table reaching out of the current one's
+  area replaces it (example: a narrow table below a wide one's area; Word
+  wraps beside it after the wide one).
 - Done 2026-11-06 (issue #148): picture-filled shapes with an outline draw
   as pictures (header and groups too, theme outline colours); topMargin
   counts from the page top, bottomMargin from the bottom margin; a:grpFill
@@ -407,6 +454,11 @@ Open queue from the large-corpus and focus-fixture rounds:
 
 - Footnotes that don't fit: Word splits a note across pages with a
   continuation separator (uk_commercial p17/18); we move the reference line.
+- A split table row books its notes on its last page; Word books them on the
+  page carrying the reference and breaks the row earlier to make room (a
+  40-line row with a note on line 1: 29 lines and the note on page 1). A
+  page-top row whose 800pt minimum fills two pages leaves page 2 to its note
+  alone in Word and continues on page 3.
 - Notes use the hand-built `parse_notes_simple`, not `build_paragraph`
   (borders, shading, `style_id`, contextual spacing missing); note tables are
   flattened to one paragraph per row (`Footnote { paragraphs }` should become
@@ -494,6 +546,8 @@ Open queue from the large-corpus and focus-fixture rounds:
 
 ## Pagination
 
+- An empty paragraph with `pageBreakBefore` keeps its own line in Word (a
+  214pt exact spacer pushed the next table down on the new page); we skip it.
 - A multi-line paragraph that opens a page and outruns it now splits (it
   used to run off the page: one paragraph of 108 manual line breaks, double
   spaced, took one page instead of five). A single line taller than the page
@@ -629,6 +683,11 @@ Backlog (details in `current_focus/A11Y.md`):
 
 ## Fonts
 
+- macOS's own Symbol.ttf (hhea 1436/−612) is not Word's symbol.ttf
+  (2059/−450): without Word's font a Symbol bullet no longer raises a 12pt
+  Times New Roman line to 14.7pt, so croatian_grant's bullet lists run 0.9pt
+  short per item and the document is up to 117pt ahead of Word by page 30
+  (in sync on every page with Word's symbol.ttf).
 - An at-least line whose minimum wins bottom-aligns at the deepest descent
   of all its faces in Word (Arial 20pt at-least 30 with ☑: baseline 0.78pt
   higher, Segoe UI Symbol's deeper descent); `boxed_line_ascent` only looks
