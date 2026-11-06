@@ -871,6 +871,33 @@ fn parse_placed_drawing<R: Read + Seek>(
                 }
                 return Some(RunDrawingResult::SmartArt(diagram));
             }
+            // A shape with nothing to draw still wraps text: an empty
+            // unfilled, unlined letterhead box keeps the body below it.
+            if let (wrap_type, wrap_text, _) = parse_wrap_type(container)
+                && wrap_type != WrapType::None
+                && container.descendants().any(|n| n.has_tag_name((WPS_NS, "wsp")))
+            {
+                let (h_position, h_relative_from, v_position, v_relative_from) =
+                    parse_anchor_position(container);
+                let (behind_doc, z_index) = anchor_z_order(container);
+                return Some(RunDrawingResult::TextBox(Textbox {
+                    width_pt: display_w,
+                    width_pct_margin: pct_width_of_margin(container),
+                    height_pt: display_h,
+                    h_position,
+                    h_relative_from,
+                    v_offset_pt: v_position.offset_or_zero(),
+                    v_position,
+                    v_relative_from,
+                    wrap_type,
+                    wrap_text,
+                    dist_bottom: wrap_dist_top_bottom(container).1,
+                    behind_doc,
+                    z_index,
+                    no_text_wrap: true,
+                    ..Textbox::default()
+                }));
+            }
             continue;
         }
 

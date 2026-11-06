@@ -760,6 +760,7 @@ pub(super) fn parse_connector_shape_node(
         head_end,
         tail_end,
         z_index: 0,
+        on_line: false,
     })
 }
 
@@ -1034,6 +1035,7 @@ pub(super) fn parse_vml_line(shape: roxmltree::Node) -> Option<ConnectorShape> {
         head_end: ArrowEnd::None,
         tail_end: ArrowEnd::None,
         z_index: 0,
+        on_line: false,
     })
 }
 

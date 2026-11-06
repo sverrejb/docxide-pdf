@@ -3,7 +3,7 @@ use std::io::{Read, Seek};
 use std::sync::Arc;
 
 use crate::model::{
-    ConnectorShape, FieldCode, FitText, FloatingImage, FormCheckbox, HorizontalRule, IfPart,
+    ConnectorShape, EmbeddedImage, FieldCode, FitText, FloatingImage, FormCheckbox, HorizontalRule, IfPart,
     InlineChart, Ruby, Run, SeqStep, SmartArtDiagram, StyleRefForm, TabAlignment, TextFill,
     TextGlow, TextOutline, TextShadow, Textbox, VertAlign,
 };
@@ -395,6 +395,19 @@ impl Run {
             font_size: self.font_size,
             font_name: self.font_name.clone(),
             ..Run::default()
+        }
+    }
+
+    /// Build an inline picture's run: Word underlines the picture in the
+    /// run's colour and hides it with the run.
+    fn picture_run(&self, img: EmbeddedImage) -> Run {
+        Run {
+            inline_image: Some(img),
+            underline: self.underline,
+            double_underline: self.double_underline,
+            color: self.color,
+            vanish: self.vanish,
+            ..self.minimal_run()
         }
     }
 
@@ -1111,10 +1124,7 @@ macro_rules! handle_drawing_result {
      $inline_chart:expr, $smartart:expr, $connectors:expr, $pending:expr) => {
         match $result {
             Some(RunDrawingResult::Inline(img)) => {
-                $runs.push(Run {
-                    inline_image: Some(img),
-                    ..$fmt.minimal_run()
-                });
+                $runs.push($fmt.picture_run(img));
             }
             Some(RunDrawingResult::Floating(mut fi)) => {
                 fi.anchor_at_start = $pending.is_empty() && anchor_precedes_text(&$runs);
@@ -1132,10 +1142,7 @@ macro_rules! handle_drawing_result {
                 for item in items {
                     match item {
                         RunDrawingResult::Inline(img) => {
-                            $runs.push(Run {
-                                inline_image: Some(img),
-                                ..$fmt.minimal_run()
-                            });
+                            $runs.push($fmt.picture_run(img));
                         }
                         RunDrawingResult::Floating(mut fi) => {
                             fi.anchor_at_start =
@@ -1815,10 +1822,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                             fi.anchor_run = runs.len();
                             push_floating(&mut floating_images, &textboxes, fi);
                         } else if let Some(img) = parse_object_inline_image(child, ctx) {
-                            runs.push(Run {
-                                inline_image: Some(img),
-                                ..fmt.minimal_run()
-                            });
+                            runs.push(fmt.picture_run(img));
                         }
                     } else if let Some(connector) = parse_connector_from_vml(child) {
                         connectors.push(connector);
@@ -1833,10 +1837,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                             fi.anchor_run = runs.len();
                         push_floating(&mut floating_images, &textboxes, fi);
                     } else if let Some(img) = parse_object_inline_image(child, ctx) {
-                        runs.push(Run {
-                            inline_image: Some(img),
-                            ..fmt.minimal_run()
-                        });
+                        runs.push(fmt.picture_run(img));
                     }
                 }
                 "footnoteReference" if field_stack.is_empty() => {

@@ -1146,6 +1146,9 @@ pub(super) struct TextLine {
     /// How far this line's baseline sits below where the paragraph ascent
     /// would put it (negative: above), for lines with their own `pitch`.
     pub(super) ascent_shift: f32,
+    /// Room skipped below this line: the next one starts below a float it
+    /// would reach into.
+    pub(super) gap_after: f32,
 }
 
 impl TextLine {
@@ -1207,9 +1210,11 @@ pub(super) fn size_lines_by_own_runs(
         // almost no descent, so the 12pt Arial beside it sets the bottom.
         // Math faces never size a line (their operator metrics are huge).
         let (mut ascent, mut below, mut sized) = (0.0f32, 0.0f32, false);
+        let mut unraised_below = 0.0f32;
         for mb in line.chunks.iter().filter_map(|c| c.math.as_ref()) {
             ascent = ascent.max(mb.line_ascent);
             below = below.max(mb.line_descent);
+            unraised_below = unraised_below.max(mb.line_descent);
             sized = true;
         }
         for c in line
@@ -1249,6 +1254,7 @@ pub(super) fn size_lines_by_own_runs(
             } else {
                 ascent = ascent.max((c.line_font_size * ar + pad + c.raise).max(0.0));
                 below = below.max((c.line_font_size * (lhr - ar).max(0.0) + pad - c.raise).max(0.0));
+                unraised_below = unraised_below.max(c.line_font_size * (lhr - ar).max(0.0) + pad);
             }
             sized = true;
         }
@@ -1259,7 +1265,20 @@ pub(super) fn size_lines_by_own_runs(
         let pitch = super::helpers::resolve_line_h(line_spacing, 1.0, Some(ascent + below))
             + above_extra
             + below_extra;
-        if (pitch - para_pitch).abs() > 0.01
+        // A line an at-least minimum sets stands on its foot: raised or
+        // lowered text moves its baseline by the descent it changes, so a
+        // wholly raised line's glyphs stay put and a raised run beside plain
+        // text rises (Word examples, 10pt Arial under 40pt, ±1pt).
+        let min_sets_line = matches!(line_spacing, LineSpacing::AtLeast(_))
+            && !top_aligned
+            && (pitch - para_pitch).abs() <= 0.01
+            && ascent + below + above_extra + below_extra < pitch - 0.01;
+        if min_sets_line {
+            if (unraised_below - below).abs() > 0.01 {
+                line.pitch = Some(pitch);
+                line.ascent_shift = unraised_below - below;
+            }
+        } else if (pitch - para_pitch).abs() > 0.01
             || (line.chunks.iter().any(|c| c.raise != 0.0) && (ascent - para_ascent).abs() > 0.01)
         {
             line.pitch = Some(pitch);
@@ -4344,7 +4363,7 @@ pub(super) fn line_max_image_h(line: &TextLine) -> f32 {
 /// The tallest inline picture among `runs`, wrap distances included.
 pub(super) fn runs_max_image_h(runs: &[Run]) -> f32 {
     runs.iter()
-        .filter_map(|r| r.inline_image.as_ref())
+        .filter_map(Run::shown_image)
         .map(|img| img.display_height + img.layout_extra_height)
         .fold(0.0f32, f32::max)
 }
@@ -4370,11 +4389,12 @@ pub(super) fn inline_line_advance(
 ) -> f32 {
     let line_pitch = line.pitch.unwrap_or(line_pitch);
     let img_h = line_max_image_h(line);
-    if img_h > ascent {
+    let own = if img_h > ascent {
         line_pitch.max(img_h + descent)
     } else {
         line_pitch
-    }
+    };
+    own + line.gap_after
 }
 
 /// Height of a laid-out paragraph: the sum of its line advances, one pitch when
@@ -5641,14 +5661,49 @@ fn draw_ruby_guide(
 /// by picking the run that produces the tallest visual ascent (font_size * ascender_ratio).
 /// A tab never raises its line (mandated_reporter: 12pt tabs between 11pt
 /// footer text leave Word's footer baseline at the 11pt line), but sizes a
-/// line of nothing else.
+/// line of nothing else. A hidden run sizes nothing beside a shown one.
 pub(super) fn tallest_run_metrics(
     runs: &[Run],
     seen_fonts: &HashMap<String, FontEntry>,
 ) -> (f32, Option<f32>, Option<f32>) {
-    tallest_by_ascent(runs.iter().filter(|r| !r.is_tab), seen_fonts)
+    let shown = || runs.iter().filter(|r| !r.vanish);
+    tallest_by_ascent(shown().filter(|r| !r.is_tab), seen_fonts)
+        .or_else(|| tallest_by_ascent(shown(), seen_fonts))
         .or_else(|| tallest_by_ascent(runs.iter(), seen_fonts))
         .unwrap_or((runs.first().map_or(12.0, |r| r.font_size), None, None))
+}
+
+/// `tallest_run_metrics` for a paragraph's runs, its mark's when every run is
+/// hidden (Word example, fixture underlined-picture-places: a hidden picture in
+/// a 72pt run leaves a line of the 10pt mark in a table cell, a text box and
+/// a header).
+pub(super) fn shown_run_metrics(
+    runs: &[Run],
+    para: &Paragraph,
+    seen_fonts: &HashMap<String, FontEntry>,
+) -> (f32, Option<f32>, Option<f32>) {
+    if !runs.is_empty()
+        && runs.iter().all(|r| r.vanish)
+        && let Some(mark) = mark_metrics(para, seen_fonts)
+    {
+        return mark;
+    }
+    tallest_run_metrics(runs, seen_fonts)
+}
+
+/// (font_size, line_h_ratio, ascender_ratio) of the paragraph mark, None
+/// when it has no size of its own.
+pub(super) fn mark_metrics(
+    para: &Paragraph,
+    seen_fonts: &HashMap<String, FontEntry>,
+) -> Option<(f32, Option<f32>, Option<f32>)> {
+    let fs = para.paragraph_mark_font_size?;
+    let (lhr, ar) = para
+        .paragraph_mark_font_name
+        .as_deref()
+        .and_then(|n| seen_fonts.get(n))
+        .map_or((None, None), |e| run_line_metrics(e, ""));
+    Some((fs, lhr, ar))
 }
 
 /// `tallest_run_metrics` for a body paragraph, where a run of only spaces or
@@ -5775,33 +5830,21 @@ pub(super) fn picture_line_bottom(
     seen_fonts: &HashMap<String, FontEntry>,
     ls: LineSpacing,
 ) -> f32 {
-    let text_runs = || {
-        runs.iter()
-            .filter(|r| r.inline_image.is_none() && !r.vanish)
-    };
+    let shown = || runs.iter().filter(|r| !r.vanish);
+    let text_runs = || shown().filter(|r| r.inline_image.is_none());
     // With no text run the mark's font sets the leading (czech_village's
     // header logo under 1.5 lines of 12pt Times New Roman).
-    let mark = || {
-        para.paragraph_mark_font_size.map(|fs| {
-            let lhr = para
-                .paragraph_mark_font_name
-                .as_deref()
-                .and_then(|n| seen_fonts.get(n))
-                .and_then(|e| run_line_metrics(e, "").0);
-            (fs, lhr, None)
-        })
-    };
     let leading = tallest_by_ascent(text_runs(), seen_fonts)
-        .or_else(mark)
-        .map_or(0.0, |(fs, lhr, _)| {
-            super::helpers::spacing_leading(super::helpers::resolve_line_h(ls, fs, lhr), fs, lhr)
-        });
+        .or_else(|| mark_metrics(para, seen_fonts))
+        .map_or(0.0, |(fs, lhr, _)| super::helpers::picture_leading(ls, fs, lhr));
     let glyph_runs = text_runs().filter(|r| {
         r.text
             .chars()
             .any(|c| !c.is_whitespace() && c != '\u{200B}')
     });
-    let descent = tallest_by_ascent(glyph_runs, seen_fonts)
+    // An underlined picture keeps its run font's descent: the underline goes there.
+    let underlined_pictures = shown().filter(|r| r.underlined_picture());
+    let descent = tallest_by_ascent(glyph_runs.chain(underlined_pictures), seen_fonts)
         .map_or(0.0, |(fs, lhr, ar)| fs * descender_ratio(lhr, ar));
     descent.max(inserted_picture_descent(runs, seen_fonts)) + leading
 }
@@ -5859,10 +5902,12 @@ pub(super) fn east_asian_leading(entry: &FontEntry, text: &str) -> bool {
     entry.east_asian && (text.is_empty() || !text.chars().all(is_break_space))
 }
 
-/// A run whose glyphs can size its line: not a tab, and empty (a paragraph
-/// mark) or holding more than whitespace.
+/// A run whose glyphs can size its line: shown, not a tab, and empty (a
+/// paragraph mark) or holding more than whitespace. A hidden run sizes
+/// nothing (Word example, fixture underlined-picture-places: a paragraph of
+/// only a hidden 16pt picture run is a line of its 10pt mark).
 fn sizes_line(r: &Run) -> bool {
-    !r.is_tab && (r.text.is_empty() || !r.text.trim().is_empty())
+    !r.vanish && !r.is_tab && (r.text.is_empty() || !r.text.trim().is_empty())
 }
 
 /// Grid-snapped line height: Word counts docGrid cells with each font's
