@@ -4,16 +4,16 @@ use std::collections::HashSet;
 use pdf_writer::Content;
 
 use crate::model::{
-    EmbeddedImage, ImageGlow, ImageReflection, Paragraph, SectionProperties, ShapeFill,
-    ShapeGeometry, TextAnchor, Textbox,
+    EmbeddedImage, ImageGlow, ImageReflection, LineSpacing, Paragraph, Run, SectionProperties,
+    ShapeFill, ShapeGeometry, TextAlignment, TextAnchor, Textbox,
 };
 
 use super::color::{fill_rgb, set_fill_alpha, stroke_rgb};
 use super::header_footer::resolve_tb_y_top;
 use super::helpers::align_offset;
 use super::layout::{
-    LineOpts, LinkAnnotation, LinkTagger, build_lines, lines_height, picture_line_bottom,
-    render_paragraph_lines, tallest_run_metrics,
+    LineOpts, LinkAnnotation, LinkTagger, TextLine, build_lines, line_max_image_h, lines_height,
+    picture_line_bottom, render_paragraph_lines, shown_run_metrics,
 };
 use super::list_label::render_list_label;
 use super::positioning::resolve_h_position;
@@ -34,14 +34,34 @@ pub(super) fn textbox_para_block_image(tp: &Paragraph) -> Option<&EmbeddedImage>
         return Some(img);
     }
     let has_text = tp.runs.iter().any(|r| !r.text.is_empty() || r.is_tab);
-    if has_text {
+    if has_text || tp.runs.iter().any(Run::underlined_picture) {
         return None;
     }
-    tp.runs.iter().find_map(|r| r.inline_image.as_ref())
+    tp.runs.iter().find_map(Run::shown_image)
 }
 
-fn image_block_height(img: &EmbeddedImage) -> f32 {
-    img.display_height + img.layout_extra_height
+/// `textbox_para_block_image` unless the paragraph's lines are exact: an exact
+/// line keeps its height and its picture stands on the baseline above it, cut
+/// at the box (Word example: a 100pt picture in an exactly 12pt line of a
+/// shape-fitted box leaves the box 12pt tall, the picture shown inside it).
+fn box_block_image<'p>(tp: &'p Paragraph, ctx: &RenderContext) -> Option<&'p EmbeddedImage> {
+    textbox_para_block_image(tp).filter(|_| !exact_lines(tp, ctx))
+}
+
+fn exact_lines(tp: &Paragraph, ctx: &RenderContext) -> bool {
+    matches!(tp.line_spacing.unwrap_or(ctx.doc_line_spacing), LineSpacing::Exact(_))
+}
+
+fn exact_picture_line(tp: &Paragraph, ctx: &RenderContext) -> bool {
+    exact_lines(tp, ctx) && tp.runs.iter().any(|r| r.shown_image().is_some())
+}
+
+fn image_block_height(img: &EmbeddedImage, ls: crate::model::LineSpacing) -> f32 {
+    let h = img.display_height + img.layout_extra_height;
+    match ls {
+        crate::model::LineSpacing::AtLeast(min) => h.max(min),
+        _ => h,
+    }
 }
 
 /// Rendered height of a textbox: the stored height, or for `a:spAutoFit` shapes the
@@ -68,10 +88,10 @@ pub(super) fn textbox_height(tb: &Textbox, ctx: &RenderContext) -> f32 {
 
 /// A textbox paragraph's height without its spacing, at text width `text_w`.
 fn paragraph_body_height(tp: &Paragraph, text_w: f32, ctx: &RenderContext) -> f32 {
-    if let Some(img) = textbox_para_block_image(tp) {
-        return image_block_height(img);
-    }
     let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
+    if let Some(img) = box_block_image(tp, ctx) {
+        return image_block_height(img, tp_ls);
+    }
     let tw = (text_w - tp.indent_left - tp.indent_right).max(1.0);
     let hang = if !tp.list_label.is_empty() {
         match tp.num_level_tab_stop {
@@ -88,21 +108,83 @@ fn paragraph_body_height(tp: &Paragraph, text_w: f32, ctx: &RenderContext) -> f3
     } else {
         -tp.indent_first_line
     };
-    let lines = build_lines(
-        &tp.runs,
+    let laid = layout_box_paragraph(tp, &tp.runs, tw, hang, ctx);
+    lines_height(&laid.lines, laid.line_h, laid.metrics)
+}
+
+/// A textbox paragraph's lines as they render, pictures included: a
+/// shape-fitted box is as tall as they are (Word example: a box of only an
+/// underlined 100pt picture in a 16pt Tahoma run is 103.8pt tall).
+struct BoxParagraph {
+    lines: Vec<TextLine>,
+    line_h: f32,
+    font_size: f32,
+    first_ascent: f32,
+    /// (ascent, descent) for picture lines, see `inline_line_advance`.
+    metrics: (f32, f32),
+}
+
+fn layout_box_paragraph(
+    tp: &Paragraph,
+    runs: &[Run],
+    text_w: f32,
+    hanging: f32,
+    ctx: &RenderContext,
+) -> BoxParagraph {
+    let ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
+    let exact = exact_lines(tp, ctx);
+    let inline_imgs = super::layout::run_image_map(runs, ctx.textbox_image_names);
+    let mut lines = build_lines(
+        runs,
         ctx,
-        tw,
+        text_w,
         ctx.cjk(true, tp),
         &LineOpts {
+            inline_images: Some(&inline_imgs),
             tab_stops: &tp.tab_stops,
             indent_left: tp.indent_left,
             indent_right: tp.indent_right,
-            hanging: hang,
+            hanging,
             ..Default::default()
         },
     );
-    let (fs, lhr, _) = tallest_run_metrics(&tp.runs, ctx.fonts);
-    lines.len().max(1) as f32 * resolve_line_h(tp_ls, fs, lhr)
+    let (fs, lhr, ar) = shown_run_metrics(runs, tp, ctx.fonts);
+    let line_h = resolve_line_h(ls, fs, lhr);
+    let text_ascent = fs * ar.unwrap_or(0.75);
+    let first_ascent = super::layout::boxed_line_ascent(ls, line_h, fs, lhr, ar, runs, ctx.fonts)
+        .unwrap_or(text_ascent);
+    // Each line is as tall as its own runs, as in the body: air_pollution's
+    // 10.5pt dot-leader line before a break steps 18.1 at 1.5 lines, not
+    // the 20.7 of the paragraph's 12pt text.
+    if !lines.is_empty() && !exact {
+        super::layout::size_lines_by_own_runs(
+            &mut lines,
+            ctx.fonts,
+            ls,
+            line_h,
+            text_ascent,
+            tp.text_alignment == TextAlignment::Top,
+        );
+        super::size_break_lines(&mut lines, runs, ls, line_h, ctx.fonts);
+        super::size_mark_line(&mut lines, tp, runs, ls, lhr, ctx.fonts);
+    }
+    let descent = if inline_imgs.is_empty() {
+        0.0
+    } else {
+        picture_line_bottom(runs, tp, ctx.fonts, ls)
+    };
+    let picture_ascent = if exact {
+        lines.iter().map(line_max_image_h).fold(text_ascent, f32::max)
+    } else {
+        text_ascent
+    };
+    BoxParagraph {
+        lines,
+        line_h,
+        font_size: fs,
+        first_ascent,
+        metrics: (picture_ascent, descent),
+    }
 }
 
 /// The part of its story a linked box shows: after what the boxes before it
@@ -308,8 +390,10 @@ pub(super) fn render_single_textbox(
     let content_w = if tb.no_text_wrap { 10000.0 } else { natural_w };
     let align_w = natural_w;
 
-    // Clip text content to textbox bounds for fixed-size textboxes (Word clips overflow)
-    let needs_clip = !matches!(tb.auto_fit, crate::model::AutoFit::Shape);
+    // Clip text content to textbox bounds for fixed-size textboxes (Word clips overflow),
+    // and a shape-fitted one's pictures standing above their exact lines.
+    let needs_clip = !matches!(tb.auto_fit, crate::model::AutoFit::Shape)
+        || paragraphs.iter().any(|tp| exact_picture_line(tp, ctx));
     if needs_clip {
         content.save_state();
         content.rect(tb_x, tb_y_top - tb_height, tb.width_pt, tb_height);
@@ -528,7 +612,6 @@ pub(super) fn render_textbox_paragraphs(
             tags.para_nodes(&mut lists, *sect, item, !tp.list_label.is_empty(), kind)
         });
         let para_tag = tag_nodes.map(|(_, text)| text);
-        let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
         let tp_text_w = (content_w - tp.indent_left - tp.indent_right).max(1.0);
         let tp_align_w = (align_w - tp.indent_left - tp.indent_right).max(1.0);
         let text_hanging = if !tp.list_label.is_empty() {
@@ -545,13 +628,15 @@ pub(super) fn render_textbox_paragraphs(
             -tp.indent_first_line
         };
 
-        if let Some(img) = textbox_para_block_image(tp) {
+        if let Some(img) = box_block_image(tp, ctx) {
+            let block_h = image_block_height(img, tp.line_spacing.unwrap_or(ctx.doc_line_spacing));
+            let foot_drop = block_h - img.display_height - img.layout_extra_height;
             if let Some(pdf_name) = ctx.textbox_image_names.get(&img.key()) {
                 let img_x = content_x
                     + tp.indent_left
                     + x_offset
                     + align_offset(tp.alignment, (tp_align_w - img.display_width).max(0.0));
-                let img_y = cursor_y - inter_gap - img.display_height - y_offset;
+                let img_y = cursor_y - inter_gap - foot_drop - img.display_height - y_offset;
                 // The paragraph's P stays empty and the picture follows it as
                 // a Figure in the Sect, as in the body.
                 let figure = tag.as_mut().filter(|_| !img.decorative);
@@ -572,7 +657,7 @@ pub(super) fn render_textbox_paragraphs(
                     Tags::end(content);
                 }
             }
-            cursor_y -= inter_gap + img.display_height + img.layout_extra_height;
+            cursor_y -= inter_gap + block_h;
             prev_space_after = tp.space_after;
             continue;
         }
@@ -580,8 +665,8 @@ pub(super) fn render_textbox_paragraphs(
         // Header/footer page numbers may sit in a text box: evaluate the
         // field runs for this page before laying them out. The substituted
         // vector lives for the rest of the iteration.
-        let hf_runs: Vec<crate::model::Run>;
-        let runs: &[crate::model::Run] = match hf_sub {
+        let hf_runs: Vec<Run>;
+        let runs: &[Run] = match hf_sub {
             Some(sub) => {
                 hf_runs = super::header_footer::substitute_hf_runs(
                     &tp.runs,
@@ -594,59 +679,19 @@ pub(super) fn render_textbox_paragraphs(
             }
             None => &tp.runs,
         };
-        let inline_imgs = super::layout::run_image_map(runs, ctx.textbox_image_names);
-        let mut tb_lines = build_lines(
-            runs,
-            ctx,
-            tp_text_w,
-            ctx.cjk(true, tp),
-            &LineOpts {
-                inline_images: Some(&inline_imgs),
-                tab_stops: &tp.tab_stops,
-                indent_left: tp.indent_left,
-                indent_right: tp.indent_right,
-                hanging: text_hanging,
-                ..Default::default()
-            },
-        );
+        let BoxParagraph {
+            lines: tb_lines,
+            line_h: tb_line_h,
+            font_size: tb_fs,
+            first_ascent,
+            metrics: tb_metrics,
+        } = layout_box_paragraph(tp, runs, tp_text_w, text_hanging, ctx);
         if tb_lines.is_empty() {
-            let (fs, lhr, _) = tallest_run_metrics(runs, ctx.fonts);
-            let lh = resolve_line_h(tp_ls, fs, lhr);
-            cursor_y -= inter_gap + lh;
+            cursor_y -= inter_gap + tb_line_h;
             prev_space_after = tp.space_after;
             continue;
         }
-        let (tb_fs, tb_lhr, tb_ar) = tallest_run_metrics(runs, ctx.fonts);
-        let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_lhr);
-        let tb_text_ascent = tb_fs * tb_ar.unwrap_or(0.75);
-        let tb_ascent = super::layout::boxed_line_ascent(
-            tp_ls, tb_line_h, tb_fs, tb_lhr, tb_ar, runs, ctx.fonts,
-        )
-        .unwrap_or(tb_text_ascent);
-        let tb_baseline = cursor_y - inter_gap - tb_ascent - y_offset;
-        // Each line is as tall as its own runs, as in the body: air_pollution's
-        // 10.5pt dot-leader line before a break steps 18.1 at 1.5 lines, not
-        // the 20.7 of the paragraph's 12pt text.
-        if !matches!(tp_ls, crate::model::LineSpacing::Exact(_)) {
-            super::layout::size_lines_by_own_runs(
-                &mut tb_lines,
-                ctx.fonts,
-                tp_ls,
-                tb_line_h,
-                tb_text_ascent,
-                tp.text_alignment == crate::model::TextAlignment::Top,
-            );
-            super::size_break_lines(&mut tb_lines, runs, tp_ls, tb_line_h, ctx.fonts);
-            super::size_mark_line(&mut tb_lines, tp, runs, tp_ls, tb_lhr, ctx.fonts);
-        }
-        let tb_metrics = (
-            tb_text_ascent,
-            if inline_imgs.is_empty() {
-                0.0
-            } else {
-                picture_line_bottom(runs, tp, ctx.fonts, tp_ls)
-            },
-        );
+        let tb_baseline = cursor_y - inter_gap - first_ascent - y_offset;
         let tp_text_x = content_x + tp.indent_left + x_offset;
         if let Some(c) = force_color {
             fill_rgb(content, c);
