@@ -99,12 +99,46 @@ fn border_eq(a: &Option<ParagraphBorder>, b: &Option<ParagraphBorder>) -> bool {
     }
 }
 
+/// The sides that decide whether two paragraphs share a border group; their
+/// `between` borders may differ (header-footer-border-groups).
 pub(super) fn borders_match(a: &ParagraphBorders, b: &ParagraphBorders) -> bool {
     border_eq(&a.top, &b.top)
         && border_eq(&a.bottom, &b.bottom)
         && border_eq(&a.left, &b.left)
         && border_eq(&a.right, &b.right)
-        && border_eq(&a.between, &b.between)
+}
+
+/// Where a border group goes on from `para` to `next`, Word leaves the
+/// `space` of `next`'s `between` border, then draws `para`'s `between` border
+/// and its `space` (header-footer-border-groups). Returns the gap above that
+/// border and the whole band.
+pub(super) fn between_band(para: &Paragraph, next: &Paragraph) -> (f32, f32) {
+    let above = between_space(next);
+    (above, above + border_band(para.borders.between.as_ref()))
+}
+
+/// The `space` of `para`'s `between` border: the part of `between_band` below
+/// that border. Word fills it with the next paragraph's shading and the gap
+/// above the border with `para`'s, but never the border's own band: a double
+/// border's gap stays white (border-group-between-bands).
+pub(super) fn between_space(para: &Paragraph) -> f32 {
+    para.borders.between.as_ref().map_or(0.0, |b| b.space_pt)
+}
+
+/// The border drawn below `para` and its band (the gap above the border, the
+/// whole band): the `between` border and `between_band` when `next` goes on
+/// in its border group, else the bottom border, `space` above its stroke.
+pub(super) fn bottom_border<'a>(
+    para: &'a Paragraph,
+    next: Option<&Paragraph>,
+) -> (Option<&'a ParagraphBorder>, (f32, f32)) {
+    match next {
+        Some(n) => (para.borders.between.as_ref(), between_band(para, n)),
+        None => {
+            let b = para.borders.bottom.as_ref();
+            (b, b.map_or((0.0, 0.0), |b| (b.space_pt, border_band(Some(b)))))
+        }
+    }
 }
 
 /// §17.3.1.9: contextualSpacing drops a paragraph's spacing next to a paragraph
@@ -156,12 +190,22 @@ pub(super) fn effective_space_after(para: &Paragraph, next: Option<&Paragraph>) 
 /// sub-paragraphs (2070, 936) both start at 1134tw and share one box.
 pub(super) fn joins_border_group(a: &Paragraph, b: &Paragraph) -> bool {
     let same = |x: f32, y: f32| (x - y).abs() < 0.01;
-    let box_start =
-        |p: &Paragraph| p.start_indent() + (p.indent_first_line - p.indent_hanging).min(0.0);
-    let end_indent = |p: &Paragraph| p.indent_left + p.indent_right - p.start_indent();
-    borders_match(&a.borders, &b.borders)
-        && same(box_start(a), box_start(b))
-        && same(end_indent(a), end_indent(b))
+    let (al, ar) = border_box_indents(a);
+    let (bl, br) = border_box_indents(b);
+    borders_match(&a.borders, &b.borders) && same(al, bl) && same(ar, br)
+}
+
+/// How far a paragraph's border and shading box sits inside the column on
+/// the left and on the right: Word boxes the indented text, from the start
+/// indent or the first line when that hangs further out, to the end indent
+/// (paragraph-border-indents).
+pub(super) fn border_box_indents(p: &Paragraph) -> (f32, f32) {
+    let hang = (p.indent_first_line - p.indent_hanging).min(0.0);
+    if p.bidi {
+        (p.indent_left, p.indent_right + hang)
+    } else {
+        (p.indent_left + hang, p.indent_right)
+    }
 }
 
 /// The paragraph's runs and those of the paragraphs in its textboxes, at any depth.

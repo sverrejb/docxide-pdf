@@ -429,6 +429,8 @@ pub struct Textbox {
     pub shape_type: ShapeGeometry,
     pub stroke_color: Option<[u8; 3]>,
     pub stroke_width: f32,
+    /// `a:prstDash` as dash/gap lengths in line widths; empty for a solid line.
+    pub stroke_dash: &'static [f32],
     pub text_anchor: TextAnchor,
     pub margin_left: f32,
     pub margin_right: f32,

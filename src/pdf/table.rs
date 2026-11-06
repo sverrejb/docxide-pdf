@@ -456,7 +456,7 @@ fn draw_cell_paragraph_bottom(content: &mut Content, para: &CellParagraphLayout,
         // independently of the stroke width and vertical space.
         let left = cell_x + cm.left + para.indent_left - 1.5;
         let right = cell_x + col_w - cm.right - para.indent_right + 1.5;
-        let y = bottom + border.extent() / 2.0;
+        let y = bottom + para.bottom_band.1 - para.bottom_band.0 - border.extent() / 2.0;
         super::color::stroke_border(content, border, (left, y), (right, y), 1.0);
     }
 }
@@ -568,7 +568,7 @@ fn render_cell_content(
                     cursor_y -= cell_figure(content, &mut tagger, None, picture, |c| {
                         render_cell_inline_image(c, para, img_name, cell_x, col_w, cursor_y, cm)
                     });
-                    cursor_y -= super::helpers::border_band(para.bottom_border.as_ref());
+                    cursor_y -= para.bottom_band.1;
                     draw_cell_paragraph_bottom(content, para, cell_x, col_w, cm, cursor_y);
                     continue;
                 }
@@ -840,7 +840,7 @@ fn render_simple_textbox(
     tag: Option<(&mut Tags, usize, usize)>,
     hf_sub: Option<&HfSubstitution>,
 ) {
-    use super::smartart::{draw_shape_path, draw_shape_stroke_path};
+    use super::smartart::draw_shape_path;
     use super::textbox_render::render_textbox_paragraphs;
     use crate::model::ShapeFill;
 
@@ -863,26 +863,14 @@ fn render_simple_textbox(
         content.restore_state();
     }
 
-    // Stroke
-    if let Some(stroke) = tb.stroke_color
-        && tb.stroke_width > 0.0
-    {
-        content.save_state();
-        content.set_line_width(tb.stroke_width);
-        stroke_rgb(content, stroke);
-        // Honor per-subpath stroke flags (brace/bracket pairs have a
-        // fill-only outline subpath), same as body-anchored textboxes.
-        draw_shape_stroke_path(
-            content,
-            tb_x,
-            tb_y_top - tb_height,
-            tb_width,
-            tb_height,
-            &tb.shape_type,
-        );
-        content.stroke();
-        content.restore_state();
-    }
+    super::textbox_render::stroke_textbox_outline(
+        content,
+        tb,
+        tb_x,
+        tb_y_top - tb_height,
+        tb_width,
+        tb_height,
+    );
 
     // Text: route through the shared textbox renderer (same path as body
     // textboxes).
@@ -1231,7 +1219,7 @@ fn render_partial_cell_content(
                     cursor_y -= cell_figure(content, &mut tagger, None, picture, |c| {
                         render_cell_inline_image(c, para, img_name, cell_x, col_w, cursor_y, cm)
                     });
-                    cursor_y -= super::helpers::border_band(para.bottom_border.as_ref());
+                    cursor_y -= para.bottom_band.1;
                     draw_cell_paragraph_bottom(content, para, cell_x, col_w, cm, cursor_y);
                     continue;
                 }
