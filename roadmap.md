@@ -15,50 +15,11 @@ drop caps, ruby, fitText/tcFitText, bidiVisual, suppressLineNumbers,
 wordWrap=0, numbers on lines without text, picture grayscale/duotone/
 alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
 (vector approximations), chart title/frame/value labels/data table. Open:
-- **3-D charts** (branch `chart-3d`, 2026-11-05): columns and bars (box,
-  cylinder, cone, pyramid and the ToMax cuts; clustered, stacked, standard
-  rows with a series axis), pies, lines and areas. Columns: a bar is a
-  square prism `depthPercent` bar widths deep, the floor adds `gapDepth`
-  per row, depth z projects to (z sin rotY, z sin rotX); Word's 3-D plot is
-  the 2-D one inset 5.0/6.35/2.85/1.77pt and the front shrinks until the
-  box fits, centred; faces 1.0/0.76/0.63; no axis headroom step. Pies:
-  ellipse a·sin rotX tall on a rim 0.261·a·hPercent·cos rotX. Probes in
-  `tests/output/torture_test/probe3d/` (in*/out* dirs; `front.py`,
-  `barpx.py`, `piemeasure.py`, `cmp.py`). Open:
-  - rAngAx 0 (true perspective, Word's default for 3-D line/area): Word
-    rotates the scene and recedes the floor; we draw the right-angle view.
-  - Standard (several depth rows): Word's front is 103pt tall for 2 rows,
-    96 for 3 whatever the width (probes standard3d/std*); we keep the
-    one-row fit (≤12pt off; 43pt wide when the series axis is hidden).
-  - Pie: Word's default 30° perspective (~4% larger), best-fit label
-    placement (we use 70% of the radius), rotY/firstSliceAng, explosion.
-  - Stacked 3-D areas still draw a row per series; surface3D not drawn.
-- **2-D chart layout done** (2026-11-05, chart-3d): plot 10.7pt below the
-  chart top (+30pt title band), 11pt from the right (+ half the last value
-  label on bar/scatter charts), a one-row bottom legend 23.6pt under the
-  axis labels, bar charts' left edge 15pt past the widest category, data
-  table header 17pt in; right legends end 9.9pt from the edge, 15.6pt clear
-  of the plot, centred below the title, names 17.63pt apart; bottom legends
-  baseline 11.9pt up, entries 9.2pt (plain key) / 13.75pt (line key) apart,
-  centred 2pt right of the chart middle; pies keep 11pt from the edges and
-  centre in what the legend leaves; markers c:size (5) + outline (marker's,
-  series', else 2.25pt; 0.75 scatter), fill = marker's own else theme accent.
-  Probes `f_2d`, `h_2d_nodt`, in5/out5 (`h2d_bar*`, `v2d_*`) and
-  `tests/output/tt/plotrect2.py` in the chart-3d worktree. Open: a 3-D pie's
-  legend entries sit 7.2pt apart in Word, not 9.2.
-- **Office 2016 charts (chartEx) done** (2026-11-06, branch `chartex-wip`):
-  waterfall, histogram, pareto, box & whisker, funnel, treemap, sunburst in
-  `src/pdf/charts_ex.rs`, within 0.6pt of Word on 12pt and 9pt probes. Text
-  comes from the chartStyle part (sizes rounded to half points, minor font,
-  title included); one plot box 5.2–5.5pt inside the frame, 3.75pt under the
-  title, 28.75pt above a bottom legend; value axis = 5% headroom, smallest
-  1-2-5 unit with at most 10 steps; treemap rows grow while the mean tile
-  aspect falls (not plain squarify); sunburst hole = ring width, labels
-  along the radius. Probes `probe3d/inx`, `inx9` (`mkx9.py`, Word's 9/14pt
-  style + pareto), `inx9b` (no legend/title, right legend); `cx/cmp.py`
-  diffs ours against Word. Open: pareto plot 1.2pt lower in Word (cause
-  unknown); top/left legends unprobed; element `txPr` overrides and rich
-  titles not read; region maps not drawn.
+- **Charts** (3-D, 2-D layout, Office 2016 chartEx; merged 2026-11-06):
+  status, probe kit and next steps in `current_focus/3d_charts.md`. Open, in
+  order: true perspective (rAngAx 0) for 3-D line/area; standard grouping
+  with several depth rows; 3-D pie perspective, best-fit labels and legend
+  gap; surface, stock, pie-of-pie and bar-of-pie not drawn.
 - Inline `wps` shapes with text, charts and SmartArt are block boxes at the
   paragraph start, not line objects (a picture-filled shape is now a
   picture); an inline-object run kind would fix all three.
@@ -536,8 +497,8 @@ Open queue from the large-corpus and focus-fixture rounds:
   160×80 drawing (unmodelled, no online reference does it).
 - SmartArt: `dsp:grpSp` groups, `dsp:cxnSp` connectors; the layout engine for
   files without the `dsp:drawing` fallback (not planned).
-- Charts: 3D charts (pie3D drawn flat), stock, combo (only the first type),
-  data labels, titles, secondary axes; small axis-label and legend offsets.
+- Charts: surface, stock, pie-of-pie/bar-of-pie, combo (only the first
+  type), secondary axes; see `current_focus/3d_charts.md`.
 - WordArt level 5: VML gradient/pattern fills, VML shadow, shapetype →
   prstTxWarp mapping.
 
