@@ -1086,6 +1086,8 @@ pub(super) enum CellContentItem {
         space_before: f32,
         floating_offset: Option<f32>,
         floating_x_offset: Option<f32>,
+        /// Half the table's bottom outer border band, below its last row.
+        bottom_band: f32,
     },
 }
 
@@ -2156,6 +2158,15 @@ pub(super) fn compute_row_layouts(
                                         floating_x_offset = Some(nested_table.position.as_ref().unwrap().left_from_text);
                                     }
                                 }
+                                // An inline nested table's outer border bands sit inside
+                                // the cell's flow, as a top-level table's do: Word starts
+                                // autofit-cell-widths-nested's inner top band where the
+                                // host's ends, and the host's bottom band below its own.
+                                let (top_band, bottom_band) = if floating_offset.is_none() {
+                                    outer_half_bands(nested_table)
+                                } else {
+                                    (0.0, 0.0)
+                                };
                                 if let Some(offset) = floating_offset {
                                     floating_extent = floating_extent.max(total_h + space_before + offset + nested_h);
                                     if auto_left_float {
@@ -2168,14 +2179,15 @@ pub(super) fn compute_row_layouts(
                                             - nested_table.position.as_ref().unwrap().right_from_text;
                                     }
                                 } else {
-                                    total_h += space_before + nested_h;
+                                    total_h += space_before + top_band + nested_h + bottom_band;
                                 }
                                 items.push(CellContentItem::NestedTable {
                                     col_widths: nested_cw,
                                     rows: nested_layouts,
-                                    space_before,
+                                    space_before: space_before + top_band,
                                     floating_offset,
                                     floating_x_offset,
+                                    bottom_band,
                                 });
                                 if floating_offset.is_none() { prev_space_after = 0.0; }
                                 // A lone end-of-cell mark directly anchoring a
@@ -2390,12 +2402,13 @@ impl CellContentItem {
                 rows,
                 space_before,
                 floating_offset,
+                bottom_band,
                 ..
             } => {
                 if floating_offset.is_some() {
                     0.0
                 } else {
-                    space_before + rows.iter().map(|r| r.height).sum::<f32>()
+                    space_before + rows.iter().map(|r| r.height).sum::<f32>() + bottom_band
                 }
             }
         }
@@ -2474,6 +2487,20 @@ pub(super) fn row_pieces<'a>(n_rows: usize, c: &Chunk<'a>) -> Vec<RowPiece<'a>> 
     pieces
 }
 
+/// Half of the widest outer border band at the table's top (first row) and
+/// bottom (last row): the part of its outer borders inside its flow height.
+pub(super) fn outer_half_bands(table: &Table) -> (f32, f32) {
+    let band = |row: Option<&crate::model::TableRow>, top: bool| {
+        row.map_or(0.0, |r| {
+            r.cells
+                .iter()
+                .map(|c| if top { c.borders.top.band() } else { c.borders.bottom.band() })
+                .fold(0.0f32, f32::max)
+        })
+    };
+    (band(table.rows.first(), true) / 2.0, band(table.rows.last(), false) / 2.0)
+}
+
 /// Height of a chunk; items without lines use their block height.
 pub(super) fn item_chunk_height(item: &CellContentItem, c: &Chunk) -> f32 {
     match item {
@@ -2486,10 +2513,17 @@ pub(super) fn item_chunk_height(item: &CellContentItem, c: &Chunk) -> f32 {
             ..
         } => 0.0,
         CellContentItem::NestedTable {
-            rows, space_before, ..
+            rows,
+            space_before,
+            bottom_band,
+            ..
         } => {
             (if c.l0 == 0 && c.from.is_empty() {
                 *space_before
+            } else {
+                0.0
+            }) + (if c.l1.is_none() && c.to.is_empty() {
+                *bottom_band
             } else {
                 0.0
             }) + row_pieces(rows.len(), c)
@@ -3275,6 +3309,7 @@ mod floating_nested_tests {
             space_before: gap,
             floating_offset,
             floating_x_offset: None,
+            bottom_band: 0.0,
         }
     }
 

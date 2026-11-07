@@ -677,6 +677,7 @@ fn render_cell_content(
                 space_before,
                 floating_offset,
                 floating_x_offset,
+                bottom_band,
             } => {
                 // Find the corresponding Block::Table
                 let table = loop {
@@ -714,6 +715,8 @@ fn render_cell_content(
                     );
                     if floating_offset.is_some() {
                         cursor_y = saved_y;
+                    } else {
+                        cursor_y -= bottom_band;
                     }
                 } else {
                     cursor_y -= item.height();
@@ -1313,6 +1316,7 @@ fn render_partial_cell_content(
                 space_before,
                 floating_offset,
                 floating_x_offset,
+                bottom_band,
             } => {
                 let bi = item_to_block.get(pi).copied().unwrap_or(0);
                 if let Some(Block::Table(table)) = blocks.get(bi) {
@@ -1361,6 +1365,8 @@ fn render_partial_cell_content(
                     );
                     if floating_offset.is_some() {
                         cursor_y = saved_y;
+                    } else if chunk.l1.is_none() && chunk.to.is_empty() {
+                        cursor_y -= bottom_band;
                     }
                 } else {
                     cursor_y -= item_chunk_height(&items[pi], &chunk);
@@ -2750,6 +2756,7 @@ mod floating_nested_visibility_tests {
             space_before: 0.0,
             floating_offset: Some(0.0),
             floating_x_offset: None,
+            bottom_band: 0.0,
         }];
         assert_eq!(items[0].height(), 0.0);
         assert!(cell_has_visible_content(&items));
