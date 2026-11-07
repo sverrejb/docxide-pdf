@@ -194,17 +194,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Configuration
 
-Every conversion option has three equivalent spellings: a `ConvertOptions` field for library callers, a `DOCXIDE_*` environment variable read by `ConvertOptions::from_env()` (and so by the functions without an options argument), and a CLI flag, which wins over the variable. The defaults are always Word's online export, and boolean variables are on unless empty, `0` or `false`. There is no configuration file; an application that wants one fills in `ConvertOptions` from its own.
+Each setting can be given as a CLI flag, as a `ConvertOptions` method in library code, or as a `DOCXIDE_*` environment variable. All three do the same thing. Without any of them you get Word's online export.
 
-### Environment Variables
+| Setting | Default | CLI flag | Library (`ConvertOptions`) | Environment variable |
+|---|---|---|---|---|
+| Print tracked changes as Word's All Markup view: insertions underlined, deletions struck through in the author's colour, change bars in the margin | Final text, no markup | `--markup` | `.revisions(RevisionView::Markup)` | `DOCXIDE_REVISIONS=markup` |
+| Keep every picture's source pixels instead of resampling pictures above 192 ppi down to 192 ppi | Resample, like Word's online export | `--no-resample` | `.resample_pictures(false)` | `DOCXIDE_NO_RESAMPLE=1` |
+| Extra font directories, searched before the system fonts. The first one listed wins, and system fonts fill in what they lack (see [Fonts](#fonts)) | None | `--fonts DIR` (repeat for more) | `.font_dirs(["DIR", ...])` | `DOCXIDE_FONTS=DIR1:DIR2` (`;` on Windows) |
+| Scan the font directories on every conversion instead of reading the font index disk cache. Useful when debugging font resolution | Cache on | `--no-font-cache` | `.font_cache(false)` | `DOCXIDE_NO_FONT_CACHE=1` |
+| Draw the float wrap zones on the page (debugging) | Off | `--debug-wrap` | `.debug_wrap(true)` | `DOCXIDE_DEBUG_WRAP=1` |
 
-| Variable | Description |
-|---|---|
-| `DOCXIDE_REVISIONS` | `markup` prints tracked changes as Word's All Markup view (insertions underlined, deletions struck through in the author's colour, change bars in the margin) instead of the final text. Same as `--markup` or `ConvertOptions::revisions(RevisionView::Markup)`. |
-| `DOCXIDE_NO_RESAMPLE` | `1` keeps every picture's source pixels instead of resampling pictures above 192 ppi down to 192 ppi like Word's online export (what a desktop export with picture compression off does). Same as `--no-resample` or `ConvertOptions::resample_pictures(false)`. |
-| `DOCXIDE_FONTS` | Additional font directories to search, colon-separated (`;` on Windows). Highest priority: a face found there wins over the system's copy of the same family and style, and the first directory listed wins over the ones after it. System fonts still fill in the families and styles the directories lack. Same as `--fonts DIR` (repeatable) or `ConvertOptions::font_dirs([...])`. |
-| `DOCXIDE_NO_FONT_CACHE` | `1` disables the font index disk cache and scans the font directories on every conversion. Useful for debugging font resolution issues. Same as `--no-font-cache` or `ConvertOptions::font_cache(false)`. |
-| `DOCXIDE_DEBUG_WRAP` | `1` draws the float wrap zones on the page. Same as `--debug-wrap` or `ConvertOptions::debug_wrap(true)`. |
+In library code, chain the methods and pass the result to a `_with` function:
+
+```rust
+use docxide_pdf::{ConvertOptions, RevisionView, convert_docx_to_pdf_with};
+
+let options = ConvertOptions::new()
+    .revisions(RevisionView::Markup)
+    .resample_pictures(false)
+    .font_dirs(["./fonts", "/opt/company-fonts"])
+    .font_cache(false)
+    .debug_wrap(true);
+
+convert_docx_to_pdf_with("input.docx", "output.pdf", &options)?;
+```
+
+How the three ways interact:
+
+- **CLI**: a flag wins over the matching environment variable.
+- **Library, plain functions** (`convert_docx_to_pdf` and friends): read the environment variables, through `ConvertOptions::from_env()`.
+- **Library, `_with` functions**: use only the `ConvertOptions` you pass and never read the environment.
+- **On/off variables** count as on unless they are empty, `0` or `false`.
+- **No configuration file**: an application that wants one fills in `ConvertOptions` from its own.
 
 Font scanning results are cached to disk (per-directory, invalidated by mtime). The cache is stored at:
 - **macOS**: `~/Library/Caches/docxide-pdf/font-index.tsv`
