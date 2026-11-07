@@ -2534,7 +2534,7 @@ pub(super) fn render_table(
             // split path (taller-than-page tables) leaves it None, so the
             // override is skipped there rather than anchoring shapes off-page.
             if let Some(top) = flushed_page_top {
-                pb.pending_float_anchor = Some(top);
+                pb.pending_float_anchor = Some((top, pb.pending_float_anchor.and_then(|(_, b)| b)));
                 // Undo the tblpY offset applied to the render start so the flow
                 // cursor sits at the un-offset table bottom — following content
                 // (which is correctly placed) must not shift with the table.

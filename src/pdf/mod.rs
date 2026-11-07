@@ -241,9 +241,31 @@ fn hangs_below_anchor(
         })
 }
 
+/// A paragraph's line height from its runs, or from its mark when no run
+/// sizes the line.
+fn plain_line_h(p: &Paragraph, ctx: &RenderContext) -> f32 {
+    let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
+    let (fs, lhr) = if lhr.is_none() {
+        unsized_line_metrics(p, fs, ctx.fonts)
+    } else {
+        (fs, lhr)
+    };
+    resolve_line_h(p.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr)
+}
+
 fn para_line_h(p: &Paragraph, ctx: &RenderContext) -> f32 {
     let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
     resolve_line_h(p.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr)
+}
+
+/// Whether `paragraph_bands` has any, without measuring a textbox.
+fn has_bands(p: &Paragraph, sp: &SectionProperties, col: (f32, f32), text_width: f32) -> bool {
+    p.textboxes
+        .iter()
+        .any(|tb| textbox_blocks_band(tb, sp, col, text_width))
+        || p.floating_images
+            .iter()
+            .any(|fi| image_blocks_band(fi, sp, col.0, col.1, text_width))
 }
 
 /// The bands of a paragraph's blocking page- or margin-anchored floats.
@@ -297,7 +319,7 @@ fn step_below_bands(
     let anchor_y = state
         .pb
         .pending_float_anchor
-        .unwrap_or(state.pb.slot_top - state.prev_space_after);
+        .map_or(state.pb.slot_top - state.prev_space_after, |(a, _)| a);
     step_below_existing_bands(state, block, sp, col.1, ctx);
     // After the anchor's own step: these bands only hold off what follows.
     let hanging = p
@@ -398,7 +420,7 @@ fn step_below_existing_bands(
         // stood (probe: a wrapNone box at offset 0 in a paragraph pushed below
         // a band stays above the band; vaccines' circles under their banner).
         let anchor = state.pb.slot_top - state.prev_space_after;
-        state.pb.pending_float_anchor.get_or_insert(anchor);
+        state.pb.pending_float_anchor.get_or_insert((anchor, None));
         // Below a band the previous paragraph's space after is gone and this
         // one's own space before stays (probe, 6pt after and 12pt before: the
         // line starts 6pt below the box).
@@ -1056,7 +1078,7 @@ pub(super) struct ParaAnchor {
     /// The highest a wrapping paragraph-relative picture may sit: the top
     /// margin under compat 15 (Word probes: -30pt from a first paragraph
     /// lands on the margin; compat 14 and older keep the -30pt).
-    ceiling: Option<f32>,
+    ceiling: f32,
 }
 
 impl ParaAnchor {
@@ -1075,7 +1097,11 @@ impl ParaAnchor {
             // Compat 14 keeps a negative offset only down to the page edge
             // (Word probes p20c/p20d: -82.7pt from a page-top paragraph puts
             // the picture at y 0).
-            ceiling: Some(if ctx.compat_mode >= 15 { sp.page_height - sp.margin_top } else { sp.page_height }),
+            ceiling: if ctx.compat_mode >= 15 {
+                sp.page_height - sp.margin_top
+            } else {
+                sp.page_height
+            },
         }
     }
 
@@ -1101,9 +1127,10 @@ impl ParaAnchor {
         } else {
             y
         };
-        match self.ceiling {
-            Some(c) if wrapping_para => y.min(c),
-            _ => y,
+        if wrapping_para {
+            y.min(self.ceiling)
+        } else {
+            y
         }
     }
 }
@@ -1113,13 +1140,13 @@ impl PageBuilder {
     /// the next paragraph's, when no block was named).
     fn float_anchor_for(&self, block_idx: usize) -> Option<f32> {
         self.pending_float_anchor
-            .filter(|_| self.pending_float_anchor_block.is_none_or(|b| b == block_idx))
+            .filter(|&(_, b)| b.is_none_or(|b| b == block_idx))
+            .map(|(a, _)| a)
     }
 
     fn take_float_anchor_for(&mut self, block_idx: usize) -> Option<f32> {
         let anchor = self.float_anchor_for(block_idx)?;
         self.pending_float_anchor = None;
-        self.pending_float_anchor_block = None;
         Some(anchor)
     }
 }
@@ -1578,10 +1605,9 @@ pub(super) struct PageBuilder {
     /// from the top of the page body — where the anchor naturally flows — even
     /// though the flow cursor stays below the table so following text doesn't
     /// overlap it. Without this the shapes drop by the table's height.
-    pub(super) pending_float_anchor: Option<f32>,
-    /// The section block the pending anchor is for, when a look-ahead found
+    /// With it, the section block the anchor is for, when a look-ahead found
     /// its float more than one paragraph ahead; `None` means the next one.
-    pending_float_anchor_block: Option<usize>,
+    pub(super) pending_float_anchor: Option<(f32, Option<usize>)>,
     next_text_below_picture: Option<f32>,
     /// Anchored shapes for this page, painted above the text layer sorted by
     /// relativeHeight: Word stacks floating shapes in z order regardless of
@@ -1673,7 +1699,6 @@ impl PageBuilder {
             frame_bands: Vec::new(),
             bands_prescanned: None,
             pending_float_anchor: None,
-            pending_float_anchor_block: None,
             table_extent: None,
             next_text_below_picture: None,
             deferred_shapes: Vec::new(),
@@ -1831,7 +1856,6 @@ impl PageBuilder {
         self.frame_bands.clear();
         // An anchor measured on the old page must not place a float on this one
         self.pending_float_anchor = None;
-        self.pending_float_anchor_block = None;
         self.next_text_below_picture = None;
         // After flush, the new page starts with the current section
         self.page_hf_section = sect_idx;
@@ -2037,7 +2061,6 @@ impl PageBuilder {
             self.col_fn_reserved = 0.0;
             self.slot_top = self.column_top_y;
             self.pending_float_anchor = None;
-            self.pending_float_anchor_block = None;
         } else {
             *current_col = 0;
             self.begin_next_page(sect_idx, sp, effective_margin_bottom, ctx);
@@ -2105,7 +2128,6 @@ impl LayoutState {
         pb.page_hf_section = self.pb.page_hf_section;
         pb.float_zone = self.pb.float_zone.clone();
         pb.pending_float_anchor = self.pb.pending_float_anchor;
-        pb.pending_float_anchor_block = self.pb.pending_float_anchor_block;
         pb.next_text_below_picture = self.pb.next_text_below_picture;
         pb.footnote_ids_set = self.pb.footnote_ids_set.clone();
         pb.col_fn_reserved = self.pb.col_fn_reserved;
@@ -2288,15 +2310,6 @@ fn empty_frame_table_bands(
     if ctx.compat_mode < 15 {
         return Vec::new();
     }
-    let para_height = |p: &Paragraph| {
-        let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
-        let (fs, lhr) = if lhr.is_none() {
-            unsized_line_metrics(p, fs, ctx.fonts)
-        } else {
-            (fs, lhr)
-        };
-        resolve_line_h(p.line_spacing.unwrap_or(ctx.doc_line_spacing), fs, lhr)
-    };
     let mut bands = Vec::new();
     let mut i = 0;
     while i < blocks.len() {
@@ -2357,7 +2370,7 @@ fn empty_frame_table_bands(
                 break;
             }
             height += prev_after.max(q.space_before)
-                + para_height(q) * line_count(q, ctx, fp.width).max(1) as f32;
+                + plain_line_h(q, ctx) * line_count(q, ctx, fp.width).max(1) as f32;
             prev_after = q.space_after;
             i += 1;
         }
@@ -2415,7 +2428,7 @@ fn empty_frame_table_bands(
                     if !is_empty_wrapping_frame(q, sp) {
                         prefix_h += q.space_before.max(0.0)
                             + q.space_after.max(0.0)
-                            + para_height(q)
+                            + plain_line_h(q, ctx)
                                 * (1 + q.runs.iter().filter(|r| r.is_line_break).count()) as f32;
                     }
                 }
@@ -2517,10 +2530,6 @@ enum FragmentPlan {
 
 /// The float's anchor follows every run with visible text, a break, a tab or
 /// an inline picture: its line is the paragraph's last.
-fn anchor_after_text(fi: &crate::model::FloatingImage, runs: &[crate::model::Run]) -> bool {
-    blank_after(runs, fi.anchor_run)
-}
-
 /// No run from `index` on shows anything. ponytail: the index counts the
 /// runs as parsed; a run dropped since (a deleted page break) only moves it
 /// past the end.
@@ -3424,8 +3433,9 @@ fn render_paragraph_block(
     // them, set one letter per line beside a picture Word prints on page 5).
     let forced_lines = para.runs.iter().filter(|r| r.is_line_break).count() as f32 + 1.0;
     let splits_for_sure = forced_lines * line_h > first_line_top - state.effective_margin_bottom;
-    let wraps_here =
-        |fi: &crate::model::FloatingImage| !(splits_for_sure && anchor_after_text(fi, &para.runs));
+    let wraps_here = |fi: &crate::model::FloatingImage| {
+        !(splits_for_sure && blank_after(&para.runs, fi.anchor_run))
+    };
     // Self-wrapping: if this paragraph anchors a wrapping float
     // and has text, set up the float zone NOW so width-narrowing
     // applies to this paragraph's own lines.  Always replace any
@@ -3494,16 +3504,13 @@ fn render_paragraph_block(
                 // brazilian p9's caption alone above a figure with
                 // 37.5pt beside it. ponytail: 48pt threshold, two
                 // calibration points.
-                && {
-                    let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
-                    let left = fi_x - fi.dist_left - col_x;
-                    let right = col_x + col_w - (fi_x + fi.image.display_width + fi.dist_right);
-                    left.max(right) >= 48.0
-                }
+                && positioning::side_gaps(fi, sp, col_x, col_w, text_width)
+                    .is_some_and(|(left, right)| left.max(right) >= 48.0)
         };
+        // Find the anchor first: the paragraphs between are only measured when
+        // there is one, so a plain paragraph costs no line breaking ahead.
         let mut found = None;
-        let mut first_gap = 0.0f32;
-        let mut between = 0.0f32;
+        let mut gaps = [0.0f32; 3];
         let mut prev_after = para.space_after;
         for k in 1..=3 {
             let Some(Block::Paragraph(np)) = section_blocks.get(block_idx + k) else {
@@ -3512,32 +3519,32 @@ fn render_paragraph_block(
             if np.image.is_some() || np.inline_chart.is_some() || np.page_break_before {
                 break;
             }
-            let gap = if ctx.additive_paragraph_spacing {
+            gaps[k - 1] = if ctx.additive_paragraph_spacing {
                 prev_after + np.space_before
             } else {
                 prev_after.max(np.space_before)
             };
-            if k == 1 {
-                first_gap = gap;
-            }
             if let Some(fi) = np.floating_images.iter().find(|fi| qualifies(fi)) {
-                found = Some((fi, between + gap, block_idx + k));
+                found = Some((fi, k));
                 break;
             }
             if !np.floating_images.is_empty() || !np.textboxes.is_empty() || np.page_break_after {
                 break;
             }
-            let (nfs, nlhr, _) = tallest_run_metrics(&np.runs, ctx.fonts);
-            let (nfs, nlhr) = if nlhr.is_none() {
-                unsized_line_metrics(np, nfs, ctx.fonts)
-            } else {
-                (nfs, nlhr)
-            };
-            let np_ls = np.line_spacing.unwrap_or(ctx.doc_line_spacing);
-            between +=
-                gap + line_count(np, ctx, col_w).max(1) as f32 * resolve_line_h(np_ls, nfs, nlhr);
             prev_after = np.space_after;
         }
+        let first_gap = gaps[0];
+        let found = found.map(|(fi, k)| {
+            let mut between = 0.0f32;
+            for j in 1..k {
+                let Some(Block::Paragraph(np)) = section_blocks.get(block_idx + j) else {
+                    unreachable!("the scan above only passes paragraphs");
+                };
+                between +=
+                    gaps[j - 1] + line_count(np, ctx, col_w).max(1) as f32 * plain_line_h(np, ctx);
+            }
+            (fi, between + gaps[k - 1], block_idx + k)
+        });
         if let Some((fi, gap, anchor_block)) = found {
             let full_lines = build_lines(
                 &effective_runs,
@@ -4572,7 +4579,7 @@ fn render_paragraph_block(
                 floating_image_pdf_names,
                 effect_floating_names,
                 state.global_block_idx,
-                |fi| !anchor_after_text(fi, &para.runs),
+                |fi| !blank_after(&para.runs, fi.anchor_run),
             );
             if !leading.is_empty() {
                 let page = state.pb.all_contents.len();
@@ -4611,6 +4618,21 @@ fn render_paragraph_block(
             // The rest may itself outrun the column: a long paragraph spans as
             // many columns or pages as it needs (case80 probes: one paragraph
             // balanced over three columns).
+            // The trailing pictures of a split paragraph belong to its
+            // final fragment: a float goes on the page its anchor run's
+            // line lands on, hung from the paragraph's top on that page
+            // (an external tracked corpus cover: a deleted page-wide
+            // picture after five pages of inserted text prints on the
+            // fifth page). Full-width pictures also keep following visible
+            // text below them, while intervening empty marks may occupy
+            // the space above.
+            let (trailing, trailing_names, trailing_effects) = float_subset(
+                &para.floating_images,
+                floating_image_pdf_names,
+                effect_floating_names,
+                state.global_block_idx,
+                |fi| blank_after(&para.runs, fi.anchor_run),
+            );
             let mut start = lines_that_fit;
             loop {
                 let remaining = &lines[start..];
@@ -4658,21 +4680,6 @@ fn render_paragraph_block(
                 let rest_text_x = rest_col_x + para.indent_left;
                 let rest_text_width = (rest_col_w - para.indent_left - para.indent_right).max(1.0);
 
-                // The trailing pictures of a split paragraph belong to its
-                // final fragment: a float goes on the page its anchor run's
-                // line lands on, hung from the paragraph's top on that page
-                // (an external tracked corpus cover: a deleted page-wide
-                // picture after five pages of inserted text prints on the
-                // fifth page). Full-width pictures also keep following visible
-                // text below them, while intervening empty marks may occupy
-                // the space above.
-                let (trailing, trailing_names, trailing_effects) = float_subset(
-                    &para.floating_images,
-                    floating_image_pdf_names,
-                    effect_floating_names,
-                    state.global_block_idx,
-                    |fi| anchor_after_text(fi, &para.runs),
-                );
                 let last_fragment = fit >= remaining.len() && !trailing.is_empty();
                 let anchor = ParaAnchor::new(None, state.pb.slot_top, 0.0, sp, ctx);
                 // Where the fragment's lines go around the first wrapping
@@ -4960,13 +4967,15 @@ fn render_paragraph_block(
     // Hand the look-ahead float's anchor to the paragraph that actually
     // carries it only after this paragraph has taken its own.
     if let Some((anchor_top, _, anchor_block)) = lookahead {
-        state.pb.pending_float_anchor = Some(anchor_top);
-        state.pb.pending_float_anchor_block = Some(anchor_block);
-    } else if state.pb.pending_float_anchor_block.is_none_or(|b| b <= block_idx) {
+        state.pb.pending_float_anchor = Some((anchor_top, Some(anchor_block)));
+    } else if state
+        .pb
+        .pending_float_anchor
+        .is_none_or(|(_, b)| b.is_none_or(|b| b <= block_idx))
+    {
         // One-shot: an anchor meant for this paragraph (or any next one) is
         // spent; one for a later block rides through the paragraphs between.
         state.pb.pending_float_anchor = None;
-        state.pb.pending_float_anchor_block = None;
     }
 
     // Margin anchors belong to the page that already started. A continuous
@@ -5953,12 +5962,15 @@ fn render_pass(
         };
 
         // The page pre-scan lays lines out twice; most sections have no band
-        // to look for.
-        let section_has_bands = col_count == 1
-            && section.blocks.iter().any(|b| {
-                matches!(b, Block::Paragraph(p)
-                    if !paragraph_bands(p, sp, col_geometry[0], text_width, &ctx).is_empty())
-            });
+        // to look for, and past the last paragraph with one it finds nothing.
+        let last_band_block = (col_count == 1)
+            .then(|| {
+                section.blocks.iter().rposition(|b| {
+                    matches!(b, Block::Paragraph(p)
+                        if has_bands(p, sp, col_geometry[0], text_width))
+                })
+            })
+            .flatten();
         let empty_frame_anchor_page = state.pb.page_count();
         let empty_frame_bands = if col_count == 1 {
             empty_frame_table_bands(
@@ -5991,9 +6003,11 @@ fn render_pass(
                         None => {
                             let col = col_geometry[state.current_col];
                             let page = (sect_idx, state.pb.page_count());
-                            if section_has_bands && state.pb.bands_prescanned != Some(page) {
+                            if let Some(last) = last_band_block.filter(|&l| block_idx <= l)
+                                && state.pb.bands_prescanned != Some(page)
+                            {
                                 state.pb.bands_prescanned = Some(page);
-                                let rest = &section.blocks[block_idx..];
+                                let rest = &section.blocks[block_idx..=last];
                                 prescan_page_bands(state, rest, sp, col, text_width, &ctx);
                             }
                             step_below_bands(state, block, sp, col, text_width, &ctx);

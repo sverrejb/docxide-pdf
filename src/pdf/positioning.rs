@@ -71,7 +71,7 @@ pub(super) fn wraps_in_column(
 
 /// The free room left and right of a float in the column, None when the
 /// float (with its text distances) stays out of the column.
-fn side_gaps(
+pub(super) fn side_gaps(
     fi: &FloatingImage,
     sp: &SectionProperties,
     col_x: f32,
