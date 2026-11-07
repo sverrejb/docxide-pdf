@@ -2660,7 +2660,11 @@ mod tests {
         zip.start_file("word/document.xml", SimpleFileOptions::default())
             .unwrap();
         zip.write_all(xml.as_bytes()).unwrap();
-        let mut doc = crate::docx::parse_bytes(&zip.finish().unwrap().into_inner()).unwrap();
+        let mut doc = crate::docx::parse_bytes(
+            &zip.finish().unwrap().into_inner(),
+            crate::RevisionView::Final,
+        )
+        .unwrap();
         let Block::Table(table) = doc.sections[0].blocks.remove(0) else {
             panic!("table");
         };

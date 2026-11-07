@@ -6935,7 +6935,11 @@ mod tests {
             zip.start_file("word/document.xml", zip::write::SimpleFileOptions::default())
                 .unwrap();
             zip.write_all(xml.as_bytes()).unwrap();
-            let doc = crate::docx::parse_bytes(&zip.finish().unwrap().into_inner()).unwrap();
+            let doc = crate::docx::parse_bytes(
+                &zip.finish().unwrap().into_inner(),
+                crate::RevisionView::Final,
+            )
+            .unwrap();
             render_pass(&doc, None, &ConvertOptions::default()).unwrap().1.total
         };
         assert_eq!(pages(500), 3); // p29a
