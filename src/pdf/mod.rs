@@ -96,20 +96,21 @@ fn leading_para(block: &Block) -> Option<&Paragraph> {
     }
 }
 
-/// The frame Word lifts `block` out of the flow into: a page- or
-/// margin-anchored framePr (a table's is its first cell paragraph's) that
-/// keeps text off its sides, or one wholly beside the text area, which no
-/// text can wrap around (3ec631ca50's address block in the right margin),
-/// or a paragraph's wrapping frame at an explicit offset
-/// (`paragraph_offset_frame`), which text then wraps around like a float.
-/// ponytail: text-anchored frames and wrap-around ones reaching into the
-/// text stay in the flow; lift them when a fixture needs it.
-fn lifted_frame<'a>(block: &'a Block, sp: &SectionProperties) -> Option<&'a FrameProperties> {
+/// The frame Word lifts `block` out of the flow into: any page- or
+/// margin-anchored framePr (a table's is its first cell paragraph's), which
+/// keeps text off its sides or, wrapping, lets text flow on both of them
+/// (empty-frame-control), or a paragraph's wrapping frame at an explicit
+/// offset (`paragraph_offset_frame`), which text then wraps around like a float.
+/// ponytail: other text-anchored frames stay in the flow; lift them when a
+/// fixture needs it.
+fn lifted_frame(block: &Block) -> Option<&FrameProperties> {
     let fp = leading_para(block)?.frame_props.as_ref()?;
-    if matches!(block, Block::Table(_)) && fp.v_relative_from == VRelativeFrom::Paragraph {
+    if fp.v_relative_from == VRelativeFrom::Paragraph
+        && (matches!(block, Block::Table(_)) || !paragraph_offset_frame(fp))
+    {
         return None;
     }
-    frame_lifts(fp, sp).then_some(fp)
+    Some(fp)
 }
 
 /// A wrapping paragraph-anchored frame with an explicit height and a nonzero
@@ -120,27 +121,6 @@ fn paragraph_offset_frame(fp: &FrameProperties) -> bool {
             && fp.v_relative_from == VRelativeFrom::Paragraph
             && fp.height > 0.0
             && matches!(fp.v_position, VerticalPosition::Offset(y) if y != 0.0))
-}
-
-fn frame_lifts(fp: &FrameProperties, sp: &SectionProperties) -> bool {
-    let beside_text = || {
-        let (text_x, text_w) = (sp.margin_left, sp.text_width());
-        let x = resolve_h_position(
-            fp.h_relative_from,
-            &fp.h_position,
-            fp.width,
-            sp,
-            text_x,
-            text_w,
-            text_w,
-        );
-        fp.width > 0.0 && (x >= text_x + text_w || x + fp.width <= text_x)
-    };
-    if fp.v_relative_from == VRelativeFrom::Paragraph {
-        paragraph_offset_frame(fp)
-    } else {
-        fp.text_below || beside_text()
-    }
 }
 
 /// The blocks from the start of `blocks` that share the frame `props`.
@@ -637,6 +617,15 @@ impl<'a> OpenFrame<'a> {
             let next = block_para(blocks, frame_blocks(props, blocks).count());
             dc.lines as f32 * next.map_or(0.0, |p| table_layout::spacer_line_h(p, ctx))
         });
+        // Empty frames draw nothing but keep their marks' lines as their box:
+        // text wraps on both sides of it (empty-frame-control, Word online).
+        let empty_h: f32 = frame_blocks(props, blocks)
+            .filter_map(|b| match b {
+                Block::Paragraph(p) if is_empty_wrapping_frame(p) => Some(para_line_h(p, ctx)),
+                _ => None,
+            })
+            .sum();
+        let wrap_height = wrap_height.max(empty_h);
         let height = match props.v_position {
             VerticalPosition::AlignBottom | VerticalPosition::AlignCenter
                 if props.height == 0.0 =>
@@ -698,11 +687,19 @@ impl<'a> OpenFrame<'a> {
         state.current_col = flow.current_col;
         state.pb.float_zone = flow.float_zone;
         state.pb.more_float_zones = flow.more_float_zones;
-        if paragraph_offset_frame(self.props) && !full_width {
-            let top = sp.page_height - self.top;
+        let wrap_height = if self.props.height_exact {
+            self.wrap_height
+        } else {
+            self.wrap_height.max(bottom - self.top)
+        };
+        let top = sp.page_height - self.top;
+        let bottom_y = top - wrap_height - self.props.v_space;
+        // A frame the flow has already passed (one anchored at the margin top
+        // by a paragraph lower down) leaves nothing to wrap around.
+        if !self.props.text_below && !full_width && state.pb.slot_top > bottom_y {
             state.pb.float_zone.get_or_insert(FloatZone {
                 top_y: top + self.props.v_space,
-                bottom_y: top - self.wrap_height - self.props.v_space,
+                bottom_y,
                 obj_left: self.geometry.0,
                 obj_right: self.geometry.0 + self.geometry.1,
                 left_from_text: self.props.h_space,
@@ -2685,7 +2682,7 @@ fn empty_frame_table_bands(
         let Some(fp) = p
             .frame_props
             .as_ref()
-            .filter(|_| is_empty_wrapping_frame(p, sp))
+            .filter(|_| is_empty_wrapping_frame(p))
         else {
             if p.runs.iter().any(|r| {
                 r.inline_image.is_some()
@@ -2724,7 +2721,7 @@ fn empty_frame_table_bands(
         while let Some(Block::Paragraph(q)) = blocks.get(i) {
             if q.is_section_break
                 || q.paragraph_mark_vanish
-                || !is_empty_wrapping_frame(q, sp)
+                || !is_empty_wrapping_frame(q)
                 || q.frame_props.as_ref() != Some(fp)
             {
                 break;
@@ -2785,7 +2782,7 @@ fn empty_frame_table_bands(
                     }
                 }
                 Block::Paragraph(q) => {
-                    if !is_empty_wrapping_frame(q, sp) {
+                    if !is_empty_wrapping_frame(q) {
                         prefix_h += q.space_before.max(0.0)
                             + q.space_after.max(0.0)
                             + plain_line_h(q, ctx)
@@ -2806,10 +2803,10 @@ fn empty_frame_table_bands(
 /// empty paragraphs and explicit breaks retain their paragraph-mark lines.
 /// Inside a lifted frame the mark keeps its line too: Word spaces
 /// 3ec631ca50's address groups with empty frame paragraphs.
-fn is_empty_wrapping_frame(para: &Paragraph, sp: &SectionProperties) -> bool {
+fn is_empty_wrapping_frame(para: &Paragraph) -> bool {
     para.frame_props
         .as_ref()
-        .is_some_and(|fp| !fp.text_below && fp.height == 0.0 && !frame_lifts(fp, sp))
+        .is_some_and(|fp| !fp.text_below && fp.height == 0.0)
         && para
             .runs
             .iter()
@@ -3194,7 +3191,7 @@ fn compute_bookmark_positions(
                     for bm in &para.bookmarks {
                         bookmark_positions.insert(bm.clone(), (page_idx, slot_top));
                     }
-                    if is_empty_wrapping_frame(para, sp) {
+                    if is_empty_wrapping_frame(para) {
                         continue;
                     }
                     let next_continuous = doc.sections.get(si + 1).is_some_and(|next| {
@@ -3470,7 +3467,7 @@ fn render_paragraph_block(
 ) -> bool {
     let prev_between_below = std::mem::take(&mut state.prev_between_below);
     let reflowed = std::mem::take(&mut state.reflowed);
-    if is_empty_wrapping_frame(para, sp) {
+    if is_empty_wrapping_frame(para) {
         state.global_block_idx += 1;
         return true;
     }
@@ -6617,7 +6614,7 @@ fn render_pass(
             for (block_idx, block) in section.blocks.iter().enumerate() {
                 let previous_block_consumption = last_block_consumption.take();
                 let block_start = (state.pb.page_count(), state.pb.slot_top);
-                let block_frame = lifted_frame(block, sp);
+                let block_frame = lifted_frame(block);
                 if let Some(f) = frame.take_if(|f| block_frame.is_none_or(|fp| fp != f.props)) {
                     f.close(state, sp);
                 }
@@ -7633,26 +7630,26 @@ mod tests {
         let Block::Paragraph(para) = &mut section.blocks[0] else {
             panic!("frame paragraph expected");
         };
-        assert!(is_empty_wrapping_frame(para, &section.properties));
+        assert!(is_empty_wrapping_frame(para));
         para.runs[0].text = "   ".into();
-        assert!(is_empty_wrapping_frame(para, &section.properties));
+        assert!(is_empty_wrapping_frame(para));
         assert!(!is_text_empty(&para.runs)); // Ordinary paragraphs still flow.
         for text in ["\u{a0}", "\t", "x"] {
             para.runs[0].text = text.into();
-            assert!(!is_empty_wrapping_frame(para, &section.properties));
+            assert!(!is_empty_wrapping_frame(para));
         }
         para.runs[0].text = " ".into();
         para.runs[0].is_tab = true;
-        assert!(!is_empty_wrapping_frame(para, &section.properties));
+        assert!(!is_empty_wrapping_frame(para));
         para.runs[0].is_tab = false;
         para.runs[0].is_line_break = true;
-        assert!(!is_empty_wrapping_frame(para, &section.properties));
+        assert!(!is_empty_wrapping_frame(para));
         para.runs[0].is_line_break = false;
         para.frame_props.as_mut().unwrap().height = 20.0;
-        assert!(!is_empty_wrapping_frame(para, &section.properties));
+        assert!(!is_empty_wrapping_frame(para));
         para.frame_props.as_mut().unwrap().height = 0.0;
         para.frame_props.as_mut().unwrap().text_below = true;
-        assert!(!is_empty_wrapping_frame(para, &section.properties));
+        assert!(!is_empty_wrapping_frame(para));
     }
 
     #[test]
