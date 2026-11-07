@@ -257,9 +257,7 @@ fn label_width(para: &Paragraph, fonts: &HashMap<String, FontEntry>) -> f32 {
 /// 36pt indent); "(1)" in SimSun 12 is exactly 18 (probe p23: it fits an 18pt
 /// one).
 fn label_device_width(para: &Paragraph, fonts: &HashMap<String, FontEntry>) -> f32 {
-    let size = para
-        .list_label_font_size
-        .unwrap_or_else(|| para.runs.first().map_or(11.0, |r| r.font_size));
+    let size = label_font_size(para);
     label_pieces(para)
         .into_iter()
         .filter_map(|(key, text)| key.and_then(|k| fonts.get(&k)).map(|f| (f, text)))
@@ -283,10 +281,12 @@ fn label_text_width(
     text: &str,
 ) -> f32 {
     let entry = key.and_then(|k| fonts.get(&k));
-    let size = para
-        .list_label_font_size
-        .unwrap_or_else(|| para.runs.first().map_or(11.0, |r| r.font_size));
-    entry.map_or(0.0, |f| f.word_width(text, size, false))
+    entry.map_or(0.0, |f| f.word_width(text, label_font_size(para), false))
+}
+
+fn label_font_size(para: &Paragraph) -> f32 {
+    para.list_label_font_size
+        .unwrap_or_else(|| para.runs.first().map_or(11.0, |r| r.font_size))
 }
 
 /// Where the label starts relative to its position: `lvlJc` right ends it
@@ -315,7 +315,8 @@ pub(super) fn text_hanging(
         };
     }
     let start = para.start_indent();
-    let end = label_offset(para) + label_shift(para, fonts) + label_width(para, fonts);
+    let label_x = label_offset(para) + label_shift(para, fonts);
+    let end = label_x + label_width(para, fonts);
     // suff nothing/space: no tab, the text follows the label directly
     // (chinese_costume's cell items "（1）演示…").
     match para.list_label_suff {
@@ -332,8 +333,7 @@ pub(super) fn text_hanging(
     // and Word tabs on to the 1440 indent).
     let fits_hanging = para.indent_hanging > 0.0
         && !para.no_indent_num_tab
-        && start + 0.001
-            >= label_offset(para) + label_shift(para, fonts) + label_device_width(para, fonts);
+        && start + 0.001 >= label_x + label_device_width(para, fonts);
     let next = para
         .tab_stops
         .iter()

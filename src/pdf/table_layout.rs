@@ -27,14 +27,25 @@ pub(super) fn cell_span_width(col_widths: &[f32], grid_col: usize, span: usize) 
 
 /// The width a `w:tblW type="pct"` table is scaled to (`apply_pct_width`'s
 /// target); `None` for a table without a percentage width.
-pub(super) fn pct_target(table: &Table, available_w: f32, compat_mode: u32) -> Option<f32> {
+fn pct_target(table: &Table, available_w: f32, compat_mode: u32) -> Option<f32> {
     let pct = table.width_pct?;
     let basis = if compat_mode >= 15 {
         available_w
     } else {
         available_w + table.first_cell_left_margin() + table.last_cell_right_margin()
     };
+    // Word caps a table's width at the text column width.
     Some(basis * pct.min(1.0))
+}
+
+/// A `tblLayout fixed` table's columns: from the cells' preferred widths in a
+/// percentage or auto-width table whose cells all name one, else the saved grid.
+pub(super) fn fixed_columns(table: &Table, available_w: f32, compat_mode: u32) -> Vec<f32> {
+    if (table.width_pct.is_some() || table.auto_width) && !table.cells_unsized {
+        fixed_layout_columns(table, pct_target(table, available_w, compat_mode))
+    } else {
+        table.col_widths.clone()
+    }
 }
 
 /// Columns of a `tblLayout fixed` table come from the cells' preferred widths,
@@ -49,7 +60,7 @@ pub(super) fn pct_target(table: &Table, available_w: f32, compat_mode: u32) -> O
 /// (p28e, p28f and a corpus document: five 25% cells and a 360-twip one →
 /// four columns of 25% of the width less 24pt, then two 12pt slivers where
 /// Word sets one letter per line).
-pub(super) fn fixed_layout_columns(table: &Table, table_w: Option<f32>) -> Vec<f32> {
+fn fixed_layout_columns(table: &Table, table_w: Option<f32>) -> Vec<f32> {
     const MIN_COL: f32 = 12.0;
     let n = table.col_widths.len();
     let mut dxa = vec![0.0f32; n];
@@ -131,14 +142,10 @@ pub(super) fn apply_pct_width(
     available_w: f32,
     compat_mode: u32,
 ) {
-    let Some(pct) = table.width_pct else { return };
-    let basis = if compat_mode >= 15 {
-        available_w
-    } else {
-        available_w + table.first_cell_left_margin() + table.last_cell_right_margin()
+    let (Some(pct), Some(target)) = (table.width_pct, pct_target(table, available_w, compat_mode))
+    else {
+        return;
     };
-    // Word caps a table's width at the text column width.
-    let target = basis * pct.min(1.0);
     let total: f32 = widths.iter().sum();
     if total <= 0.0 || target <= 0.0 {
         return;
