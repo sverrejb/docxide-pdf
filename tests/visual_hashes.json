@@ -1,4 +1,14 @@
 {
+  "cases/autofit-cell-widths": [
+    "980b92d500a1616e88f0e1e1be77aa424af23177136534c206fcd23c8135906c"
+  ],
+  "cases/autofit-cell-widths-nested": [
+    "22e0c9c2731e31ba42ec0ba5bc44aa8278048ed2081d229bc69dca3c14607393"
+  ],
+  "cases/autofit-cell-widths-spans": [
+    "b70f1299921ef9f07e6ae7f78b6b11d10b4d31026d632c2d99098bf566445b58",
+    "934fdcfc42ad349b152bbeeae49b443ff7544ede01ee25820add7e172cde7b69"
+  ],
   "cases/autofit-indent-first-line": [
     "5d43b1af329fa3746ca2659a2270b540fd5d20144fe339fa2017580f54328b73"
   ],
