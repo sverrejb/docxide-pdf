@@ -20,6 +20,9 @@ alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
   order: true perspective (rAngAx 0) for 3-D line/area; standard grouping
   with several depth rows; 3-D pie perspective, best-fit labels and legend
   gap; surface, stock, pie-of-pie and bar-of-pie not drawn.
+  Fixtures `cases/charts_3d` and `cases/charts_ex` guard what is drawn.
+- A `keepNext` paragraph before a chart paragraph is stranded at the page
+  bottom; Word carries it to the next page with the chart.
 - Inline `wps` shapes with text, charts and SmartArt are block boxes at the
   paragraph start, not line objects (a picture-filled shape is now a
   picture); an inline-object run kind would fix all three.

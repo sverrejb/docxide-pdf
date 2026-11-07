@@ -26,6 +26,17 @@ Gitignored, in the main checkout: `tests/output/torture_test/probe3d/`.
   with no open documents, one batch at a time. A chartEx part only opens when
   its chartStyle and chartColorStyle parts come with it.
 
+## Fixtures
+
+- `cases/charts_3d`: 12 probes (bar depth/rotX variants, cylinder, cone,
+  pyramid, stacked, horizontal and horizontal stacked bars, four 3-D pies).
+  Left out until drawn right: rAngAx 0 (`persp3d`, `line3d`, `area3d`) and
+  several depth rows (`standard3d`, `in3/std*`).
+- `cases/charts_ex`: the seven `inx9` types plus the four `inx9b` variants.
+- Built by `probe3d/mkfix.py <dir>` from the probes, exported with Word.
+  The torture_test fixture has one more 3-D bar chart; case29/30/31/52/53
+  cover 2-D charts.
+
 ## Done
 
 - **3-D bars and columns** (box, cylinder, cone, pyramid, ToMax cuts;
@@ -76,6 +87,10 @@ case30 93.1%, case29 89.7%, case52 85.6%, torture_test 78.8%.
    unknown, not fitted); top/left legends unprobed; element `txPr` overrides
    and rich titles not read; region maps not drawn (ponytail comment in
    `docx/chartex.rs`).
+
+Also open: a `keepNext` paragraph followed by a chart paragraph stays at
+the page bottom in ours; Word moves it to the next page with the chart (why
+the chart fixtures carry no captions).
 
 Also open (2-D): stacked 3-D areas draw a row per series; combo charts draw
 only the first type; no secondary axes; value labels only on vertical
