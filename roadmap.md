@@ -642,9 +642,18 @@ Backlog (details in `current_focus/A11Y.md`):
   rather than a fallback; we rescue them from Segoe UI Symbol.
 - Done 2026-11-07: Bahnschrift, by name or as a missing font's altName, is
   measured with Bahnschrift's metrics (ascent 0.9965, line 1.2004 em) and drawn
-  in Calibri, like Word online, which cannot export the variable font
-  (fixture bahnschrift-heading-metrics). Open from the same probes (kit in
-  `.worktrees/issue-148/tests/output/swiss-probes/`, online export):
+  in Calibri, like Word online (fixture bahnschrift-heading-metrics). Open from
+  the same probes (kit in `.worktrees/issue-148/tests/output/swiss-probes/`,
+  online export):
+  - The constants are fitted from the PDFs, not read from the font. Office's
+    cloud copy of Bahnschrift Light (`~/Library/Group
+    Containers/UBF8T346G9.Office/FontCache/4/CloudFonts/Bahnschrift/`) has win
+    2036/422 on 2048 = ascent 0.9941, line 1.2002 em. The 0.0024 em extra
+    ascent is the same excess Calibri shows (0.9521 in the font, 0.954
+    measured), so store the font's values and let the usual rule add it.
+  - "Cannot export the variable font" is unproven: the cloud copies are static
+    fonts. The behaviour is measured; the reason is a guess, and the code
+    comment in `register_font` repeats it.
   - "Helvetica 55 Roman" with swiss's fontTable entry but no altName is still
     Bahnschrift-measured Calibri in Word; we draw Arial (the "Helv" rule). What
     makes Word pick Bahnschrift there is unknown (a "Zqx Sans" entry with
