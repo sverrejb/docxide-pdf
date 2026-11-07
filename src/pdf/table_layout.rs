@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::fonts::{FontEntry, font_key_buf};
 
 use crate::model::{
-    Alignment, Block, CellMargins, HorizontalPosition, Table, TextDirection, VMerge,
+    Alignment, Block, CellMargins, HorizontalPosition, Table, TableCell, TextDirection, VMerge,
     VerticalPosition, WrapType,
 };
 
@@ -237,23 +237,29 @@ fn hard_content_widths(table: &Table, nested_tables: bool) -> Vec<f32> {
             if grid_col >= min.len() || span > 1 {
                 continue;
             }
-            let pad = cell.cell_margins.as_ref().unwrap_or(&table.cell_margins);
-            let pad = pad.left + pad.right;
-            for block in &cell.content {
-                let w = match block {
-                    Block::Table(t) if nested_tables => t.col_widths.iter().sum(),
-                    Block::Table(_) => 0.0,
-                    Block::Paragraph(p) => p
-                        .image
-                        .iter()
-                        .chain(p.runs.iter().filter_map(|r| r.inline_image.as_ref()))
-                        .map(|i| i.layout_size().0)
-                        .fold(0.0, f32::max),
-                };
-                if w > 0.0 {
-                    min[grid_col] = min[grid_col].max(w + pad);
-                }
-            }
+            min[grid_col] = min[grid_col].max(cell_hard_content_width(table, cell, nested_tables));
+        }
+    }
+    min
+}
+
+fn cell_hard_content_width(table: &Table, cell: &TableCell, nested_tables: bool) -> f32 {
+    let pad = cell.cell_margins.as_ref().unwrap_or(&table.cell_margins);
+    let pad = pad.left + pad.right;
+    let mut min = 0.0f32;
+    for block in &cell.content {
+        let w = match block {
+            Block::Table(t) if nested_tables => t.col_widths.iter().sum(),
+            Block::Table(_) => 0.0,
+            Block::Paragraph(p) => p
+                .image
+                .iter()
+                .chain(p.runs.iter().filter_map(|r| r.inline_image.as_ref()))
+                .map(|i| i.layout_size().0)
+                .fold(0.0, f32::max),
+        };
+        if w > 0.0 {
+            min = min.max(w + pad);
         }
     }
     min
@@ -472,69 +478,171 @@ pub(super) fn squeeze_to_width(widths: &mut [f32], min: &[f32], avail: f32) {
 /// Each grid column's longest unbreakable word plus its cell padding.
 pub(super) fn min_content_widths(table: &Table, fonts: &HashMap<String, FontEntry>) -> Vec<f32> {
     let ncols = table.col_widths.len();
-    let cm = &table.cell_margins;
     let mut min_widths = vec![0.0f32; ncols];
     for row in &table.rows {
         for (grid_col, span, cell) in row.grid_cells() {
             if grid_col >= ncols || span > 1 {
                 continue;
             }
-            if cell.text_direction != TextDirection::LrTb {
-                continue;
-            }
-            let ecm = cell.cell_margins.as_ref().unwrap_or(cm);
-            let h_pad = ecm.left + ecm.right;
-            let mut key_buf = String::new();
-            for para in cell.all_paragraphs() {
-                // AutoFit reserves paragraph indents inside the cell width.
-                // Fixed layout keeps its authored grid; negative indents
-                // still expose extra text area there.
-                let inset = if table.fixed_layout {
-                    h_pad + para.indent_left.min(0.0) + para.indent_right.min(0.0)
-                } else {
-                    h_pad + para.indent_left + para.indent_right + para.indent_first_line.max(0.0)
-                };
-                // A word continued from the previous run adds to its width.
-                let mut joined_width = 0.0f32;
-                let mut prev_char = None;
-                for run in &para.runs {
-                    if run.is_tab || run.is_line_break {
-                        prev_char = None;
-                    }
-                    let key = font_key_buf(run, &mut key_buf);
-                    let Some(entry) = fonts.get(key) else {
-                        prev_char = None;
-                        continue;
-                    };
-                    let text = if run.caps {
-                        std::borrow::Cow::Owned(run.text.to_uppercase())
-                    } else {
-                        std::borrow::Cow::Borrowed(&run.text)
-                    };
-                    let fs = run.font_size;
-                    // Same break opportunities as line layout: a CJK sentence holds
-                    // no spaces but may wrap after any ideograph.
-                    for (spaces, word) in super::layout::split_preserving_spaces(&text) {
-                        let ww =
-                            word_width_for_run(entry, run, word, fs, run.kerns_at(fs), 0.0, 1.0);
-                        let continues = !table.fixed_layout
-                            && spaces == 0
-                            && prev_char
-                                .zip(word.chars().next())
-                                .is_some_and(|(a, b)| !super::layout::breaks_between(a, b));
-                        joined_width = if continues { joined_width + ww } else { ww };
-                        prev_char = word.chars().last();
-                        let required = (joined_width + inset).max(h_pad);
-                        min_widths[grid_col] = min_widths[grid_col].max(required);
-                    }
-                    if run.text.ends_with(char::is_whitespace) {
-                        prev_char = None;
-                    }
-                }
-            }
+            min_widths[grid_col] =
+                min_widths[grid_col].max(cell_min_content_width(table, cell, fonts));
         }
     }
     min_widths
+}
+
+fn cell_min_content_width(
+    table: &Table,
+    cell: &TableCell,
+    fonts: &HashMap<String, FontEntry>,
+) -> f32 {
+    if cell.text_direction != TextDirection::LrTb {
+        return 0.0;
+    }
+    let mut min = 0.0f32;
+    let ecm = cell.cell_margins.as_ref().unwrap_or(&table.cell_margins);
+    let h_pad = ecm.left + ecm.right;
+    let mut key_buf = String::new();
+    for para in cell.all_paragraphs() {
+        // AutoFit reserves paragraph indents inside the cell width.
+        // Fixed layout keeps its authored grid; negative indents
+        // still expose extra text area there.
+        let inset = if table.fixed_layout {
+            h_pad + para.indent_left.min(0.0) + para.indent_right.min(0.0)
+        } else {
+            h_pad + para.indent_left + para.indent_right + para.indent_first_line.max(0.0)
+        };
+        // A word continued from the previous run adds to its width.
+        let mut joined_width = 0.0f32;
+        let mut prev_char = None;
+        for run in &para.runs {
+            if run.is_tab || run.is_line_break {
+                prev_char = None;
+            }
+            let key = font_key_buf(run, &mut key_buf);
+            let Some(entry) = fonts.get(key) else {
+                prev_char = None;
+                continue;
+            };
+            let text = if run.caps {
+                std::borrow::Cow::Owned(run.text.to_uppercase())
+            } else {
+                std::borrow::Cow::Borrowed(&run.text)
+            };
+            let fs = run.font_size;
+            // Same break opportunities as line layout: a CJK sentence holds
+            // no spaces but may wrap after any ideograph.
+            for (spaces, word) in super::layout::split_preserving_spaces(&text) {
+                let ww = word_width_for_run(entry, run, word, fs, run.kerns_at(fs), 0.0, 1.0);
+                let continues = !table.fixed_layout
+                    && spaces == 0
+                    && prev_char
+                        .zip(word.chars().next())
+                        .is_some_and(|(a, b)| !super::layout::breaks_between(a, b));
+                joined_width = if continues { joined_width + ww } else { ww };
+                prev_char = word.chars().last();
+                let required = (joined_width + inset).max(h_pad);
+                min = min.max(required);
+            }
+            if run.text.ends_with(char::is_whitespace) {
+                prev_char = None;
+            }
+        }
+    }
+    min
+}
+
+/// An auto-width AutoFit table whose cells name their widths in twips is laid
+/// out from those widths: each column as wide as its widest cell, the table as
+/// wide as the columns, a saved grid that disagrees ignored. A column some row
+/// leaves empty (gridBefore, gridAfter) is at least its grid width; one only
+/// merged cells cover starts at zero. A merged cell wider than its columns
+/// widens the last of them (in reading order, so the leftmost in a
+/// `bidiVisual` table) by the difference, in whatever row it is. Only a
+/// longer word widens a column further; a merged cell's longest word or
+/// picture widens its columns to it together, each to its share of it in
+/// proportion to its width plus its own longest word. A nested
+/// table does the same inside its cell, its grid agreeing or not
+/// (Word examples: `autofit-cell-widths`, `autofit-cell-widths-spans`,
+/// `autofit-cell-widths-nested`). A top-level grid that agrees with the cells,
+/// and cells too wide for `avail` (the page, or the cell holding a nested
+/// table), keep the other paths: a Word-saved grid holds Word's squeeze to
+/// the page.
+fn cell_preferred_widths(
+    table: &Table,
+    fonts: &HashMap<String, FontEntry>,
+    min_widths: &[f32],
+    avail: Option<f32>,
+    nested: bool,
+) -> Option<Vec<f32>> {
+    let ncols = table.col_widths.len();
+    if !table.auto_width || !table.cells_twip_sized || table.fixed_layout {
+        return None;
+    }
+    let merged = || {
+        table
+            .rows
+            .iter()
+            .flat_map(|row| row.grid_cells())
+            .filter(|&(col, span, _)| span > 1 && col < ncols)
+            .map(|(col, span, cell)| (col..(col + span).min(ncols), cell))
+    };
+    let mut widths: Vec<Option<f32>> = vec![None; ncols];
+    for row in &table.rows {
+        let mut end = row.grid_before;
+        for (col, span, cell) in row.grid_cells() {
+            end = col + span;
+            if span == 1 && col < ncols {
+                widths[col] = Some(widths[col].unwrap_or(0.0).max(cell.width));
+            }
+        }
+        for col in (0..ncols).filter(|&c| c < row.grid_before || c >= end) {
+            widths[col] = Some(widths[col].unwrap_or(0.0).max(table.col_widths[col]));
+        }
+    }
+    if widths.iter().any(|w| w.is_some_and(|w| w <= 0.0)) {
+        return None;
+    }
+    let mut widths: Vec<f32> = widths.into_iter().map(|w| w.unwrap_or(0.0)).collect();
+    for (cols, cell) in merged() {
+        let spanned: f32 = widths[cols.clone()].iter().sum();
+        if cell.width > spanned {
+            let last = if table.bidi_visual { cols.start } else { cols.end - 1 };
+            widths[last] += cell.width - spanned;
+        }
+    }
+    if widths.iter().sum::<f32>() <= 0.0 {
+        return None;
+    }
+    let stale = widths
+        .iter()
+        .zip(&table.col_widths)
+        .any(|(cell, grid)| (cell - grid).abs() > 0.5);
+    if !stale && !nested {
+        return None;
+    }
+    for (w, min) in widths.iter_mut().zip(min_widths) {
+        *w = w.max(*min);
+    }
+    for (cols, cell) in merged() {
+        let need = cell_min_content_width(table, cell, fonts)
+            .max(cell_hard_content_width(table, cell, false));
+        if need <= widths[cols.clone()].iter().sum::<f32>() {
+            continue;
+        }
+        let weight: f32 = cols.clone().map(|c| widths[c] + min_widths[c]).sum();
+        for c in cols.clone() {
+            let share = if weight > 0.0 {
+                need * (widths[c] + min_widths[c]) / weight
+            } else {
+                need / cols.len() as f32
+            };
+            widths[c] = widths[c].max(share);
+        }
+    }
+    avail
+        .is_some_and(|avail| widths.iter().sum::<f32>() <= avail + 0.5)
+        .then_some(widths)
 }
 
 /// `fill_width`, when `Some`, is the content width a top-level AutoFit-to-Window
@@ -626,6 +734,21 @@ pub(super) fn auto_fit_columns(
             let minw: Vec<f32> = (0..ncols).map(|i| min_widths[i].max(min_cell)).collect();
             return distribute_autofit(&minw, &maxw, avail);
         }
+    }
+
+    // Uniform cells against an asymmetric grid take the rule too, as do nested
+    // tables inside their cell; only a content-derived grid around a nested
+    // table keeps its host column (`keep_saved_grid` below).
+    if (grid_uniform || !has_nested_table)
+        && let Some(widths) = cell_preferred_widths(
+            table,
+            fonts,
+            &min_widths,
+            fill_width.or(available_width),
+            fill_width.is_none(),
+        )
+    {
+        return widths;
     }
 
     // For nested auto-fit tables, Word shrinks columns to content-based widths
@@ -2927,6 +3050,7 @@ mod tests {
             width_pct: None,
             grid_inferred: false,
             cells_unsized: false,
+            cells_twip_sized: false,
             bidi_visual: false,
             header_first_row: false,
             header_first_col: false,
@@ -2987,6 +3111,7 @@ mod tests {
             width_pct: None,
             grid_inferred: false,
             cells_unsized: false,
+            cells_twip_sized: false,
             bidi_visual: false,
             header_first_row: false,
             header_first_col: false,
