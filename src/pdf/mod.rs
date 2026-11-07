@@ -251,47 +251,6 @@ fn picture_span(
     )
 }
 
-/// The widest strips (left, right) the column leaves beside a text box, the
-/// paragraph's other wrapping floats beside it taken out too: two boxes side
-/// by side across the column leave no room, though each alone would.
-fn textbox_side_gaps(
-    tb: &crate::model::Textbox,
-    para: &Paragraph,
-    sp: &SectionProperties,
-    (col_x, col_w): (f32, f32),
-    text_width: f32,
-) -> (f32, f32) {
-    let col = (col_x, col_w);
-    let ((own_left, own_right), (top, bottom)) = textbox_span(tb, sp, col, text_width);
-    let others = para
-        .textboxes
-        .iter()
-        .filter(|o| !std::ptr::eq(*o, tb) && !o.on_line && o.wrap_type.wraps_beside())
-        .map(|o| textbox_span(o, sp, col, text_width))
-        .chain(
-            para.floating_images
-                .iter()
-                .filter(|fi| fi.wrap_type.wraps_beside())
-                .map(|fi| picture_span(fi, sp, col, text_width)),
-        )
-        .filter(|&(_, (t, b))| t > bottom && b < top);
-    let mut free = vec![(col_x, col_x + col_w)];
-    for (l, r) in std::iter::once((own_left, own_right)).chain(others.map(|(x, _)| x)) {
-        free = free
-            .into_iter()
-            .flat_map(|(a, z)| [(a, z.min(l)), (a.max(r), z)])
-            .filter(|(a, z)| z > a)
-            .collect();
-    }
-    let widest = |keep: &dyn Fn(f32, f32) -> bool| {
-        free.iter().filter(|&&(a, z)| keep(a, z)).map(|(a, z)| z - a).fold(0.0, f32::max)
-    };
-    (
-        widest(&|_, z| z <= own_left + 0.01),
-        widest(&|a, _| a >= own_right - 0.01),
-    )
-}
-
 /// Whether text wraps beside a floating text box or shape (square, tight or
 /// through) like beside a picture: Word needs a strip of `MIN_EMPTY_STRIP`
 /// on a side its wrapText allows (examples: 20pt beside a box keeps its
@@ -318,11 +277,59 @@ fn textbox_room_beside(
     (col_x, col_w): (f32, f32),
     text_width: f32,
 ) -> Option<f32> {
-    let ((left, right), _) = textbox_span(tb, sp, (col_x, col_w), text_width);
-    (left < col_x + col_w && right > col_x).then(|| {
-        let (left, right) = textbox_side_gaps(tb, para, sp, (col_x, col_w), text_width);
-        side_room(tb.wrap_text, left, right)
-    })
+    let col = (col_x, col_w);
+    let ((own_left, own_right), (top, bottom)) = textbox_span(tb, sp, col, text_width);
+    if own_left >= col_x + col_w || own_right <= col_x {
+        return None;
+    }
+    // The widest strips (left, right) the column leaves beside the box, the
+    // paragraph's other wrapping floats beside it taken out too: two boxes
+    // side by side across the column leave no room, though each alone would.
+    let others = para
+        .textboxes
+        .iter()
+        .filter(|o| !std::ptr::eq(*o, tb) && !o.on_line && o.wrap_type.wraps_beside())
+        .map(|o| textbox_span(o, sp, col, text_width))
+        .chain(
+            para.floating_images
+                .iter()
+                .filter(|fi| fi.wrap_type.wraps_beside())
+                .map(|fi| picture_span(fi, sp, col, text_width)),
+        )
+        .filter(|&(_, (t, b))| t > bottom && b < top);
+    let mut free = vec![(col_x, col_x + col_w)];
+    for (l, r) in std::iter::once((own_left, own_right)).chain(others.map(|(x, _)| x)) {
+        free = free
+            .into_iter()
+            .flat_map(|(a, z)| [(a, z.min(l)), (a.max(r), z)])
+            .filter(|(a, z)| z > a)
+            .collect();
+    }
+    let widest = |keep: &dyn Fn(f32, f32) -> bool| {
+        free.iter().filter(|&&(a, z)| keep(a, z)).map(|(a, z)| z - a).fold(0.0, f32::max)
+    };
+    Some(side_room(
+        tb.wrap_text,
+        widest(&|_, z| z <= own_left + 0.01),
+        widest(&|a, _| a >= own_right - 0.01),
+    ))
+}
+
+/// The wrap zones of a paragraph's text boxes that `textbox_wraps_beside`,
+/// its drawings' anchor top at `anchor_top`.
+fn textbox_zones(
+    para: &Paragraph,
+    sp: &SectionProperties,
+    col: (f32, f32),
+    text_width: f32,
+    anchor_top: f32,
+    ctx: &RenderContext,
+) -> Vec<FloatZone> {
+    para.textboxes
+        .iter()
+        .filter(|tb| textbox_wraps_beside(tb, para, sp, col, text_width))
+        .map(|tb| textbox_zone(tb, sp, col, text_width, anchor_top, ctx))
+        .collect()
 }
 
 /// The wrap zone of a text box that `textbox_wraps_beside`, its anchor's top
@@ -2472,7 +2479,7 @@ pub(super) struct LayoutState {
     pub(super) long_keep_chain: bool,
     /// The gap above a paragraph laid out again in the column it overflowed
     /// into: the overflow's, not its spacing recomputed.
-    pub(super) reflow_gap: Option<f32>,
+    pub(super) reflowed: bool,
 }
 
 impl LayoutState {
@@ -2506,7 +2513,7 @@ impl LayoutState {
             heading_entries: Vec::new(),
             bookmark_positions: self.bookmark_positions.clone(),
             long_keep_chain: self.long_keep_chain,
-            reflow_gap: None,
+            reflowed: false,
         }
     }
 }
@@ -3463,7 +3470,7 @@ fn render_paragraph_block(
     table_connector_anchor: Option<(usize, f32)>,
 ) -> bool {
     let prev_between_below = std::mem::take(&mut state.prev_between_below);
-    let reflow_gap = state.reflow_gap.take();
+    let reflowed = std::mem::take(&mut state.reflowed);
     if is_empty_wrapping_frame(para, sp) {
         state.global_block_idx += 1;
         return true;
@@ -3660,8 +3667,8 @@ fn render_paragraph_block(
     // Word overlaps the space after and the next space before (the larger
     // wins) under its HTML spacing rule; doNotUseHTMLParagraphAutoSpacing
     // adds them (5pt + 5pt list items step 23.76 on a 13.8pt line).
-    let mut inter_gap = if let Some(gap) = reflow_gap {
-        gap
+    let mut inter_gap = if reflowed {
+        0.0
     } else if ctx.additive_paragraph_spacing {
         state.prev_space_after + effective_space_before
     } else {
@@ -3848,11 +3855,7 @@ fn render_paragraph_block(
     let mut own_textbox_zones: Vec<FloatZone> = if text_empty {
         Vec::new()
     } else {
-        para.textboxes
-            .iter()
-            .filter(|tb| textbox_wraps_beside(tb, para, sp, (col_x, col_w), text_width))
-            .map(|tb| textbox_zone(tb, sp, (col_x, col_w), text_width, pre_anchor.top(false), ctx))
-            .collect()
+        textbox_zones(para, sp, (col_x, col_w), text_width, pre_anchor.top(false), ctx)
     };
     let own_picture = para
         .floating_images
@@ -4726,7 +4729,7 @@ fn render_paragraph_block(
 
     for tb in &para.textboxes {
         // A band keeps the lines out by itself (`step_below_bands`).
-        let reserve = !textbox_blocks_band(tb, para, sp, (col_x, col_w), text_width)
+        let reserve = tb.v_relative_from == VRelativeFrom::Paragraph
             && !hangs_below_anchor(tb, para, col_w, ctx)
             && match tb.wrap_type {
                 WrapType::TopAndBottom => true,
@@ -4749,7 +4752,7 @@ fn render_paragraph_block(
                 // Drawings on the line count from it (isla_language's lesson
                 // canvas).
                 // An inline shape alone on its line is a picture there.
-                VRelativeFrom::Paragraph if tb.on_line => {
+                _ if tb.on_line => {
                     let h = if text_empty {
                         picture_line_h(tb_bottom)
                     } else {
@@ -4757,7 +4760,7 @@ fn render_paragraph_block(
                     };
                     content_h = content_h.max(h);
                 }
-                VRelativeFrom::Paragraph => {
+                _ => {
                     let before = own_space_before(inter_gap, state.prev_space_after);
                     let line_overlaps = tb.v_offset_pt < before + lines_h && tb_bottom > before;
                     // Only a mark line moves below the box: a picture-only
@@ -4779,9 +4782,6 @@ fn render_paragraph_block(
                     } else {
                         content_h.max(tb_bottom - before)
                     };
-                }
-                _ => {
-                    content_h += tb_bottom;
                 }
             }
         } else if tb.v_relative_from == VRelativeFrom::Paragraph
@@ -5483,7 +5483,7 @@ fn render_paragraph_block(
             if !new_page {
                 (state.pb.float_zone, state.pb.more_float_zones) = entry_zones;
             }
-            state.reflow_gap = Some(inter_gap);
+            state.reflowed = true;
             return render_paragraph_block(
                 para,
                 state,
@@ -5717,12 +5717,7 @@ fn render_paragraph_block(
             );
         }
     }
-    zones.extend(
-        para.textboxes
-            .iter()
-            .filter(|tb| textbox_wraps_beside(tb, para, sp, (col_x, col_w), text_width))
-            .map(|tb| textbox_zone(tb, sp, (col_x, col_w), text_width, anchor.top(false), ctx)),
-    );
+    zones.extend(textbox_zones(para, sp, (col_x, col_w), text_width, anchor.top(false), ctx));
     state.pb.set_float_zones(zones);
 
     if debug_wrap && let Some(ref fz) = state.pb.float_zone {
@@ -6396,7 +6391,7 @@ fn render_pass(
         heading_entries: Vec::new(),
         bookmark_positions,
         long_keep_chain: false,
-        reflow_gap: None,
+        reflowed: false,
     };
     state.pb.tags.lang = document_lang(doc);
 

@@ -941,18 +941,15 @@ fn render_simple_textbox(
     let anchor_offset =
         super::textbox_render::anchor_offset(tb, &story, content_w, content_w, avail_h, ctx);
     // Word clips a fixed-size box's text inside its top and bottom insets.
-    let clip = !matches!(tb.auto_fit, crate::model::AutoFit::Shape);
-    if clip {
-        content.save_state();
-        content.rect(
+    let clip = super::layout::push_clip(
+        content,
+        (!matches!(tb.auto_fit, crate::model::AutoFit::Shape)).then_some((
             tb_x,
             tb_y_top - tb_height + tb.margin_bottom,
             tb_width,
             avail_h.max(0.0),
-        );
-        content.clip_nonzero();
-        content.end_path();
-    }
+        )),
+    );
     render_textbox_paragraphs(
         &story,
         content,
