@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Side-by-side engine comparison: Word reference | docxide-pdf | LibreOffice | MiniPdf | rdocx | office2pdf | jubarte-redlines | dxpdf.
+"""Side-by-side engine comparison: Word reference | docxide-pdf | LibreOffice | MiniPdf | rdocx | office2pdf | jubarte-redlines | dxpdf | WordCraft.
 
 Reuses PNGs the test harness already produced under tests/output/<group>/<case>/ (reference/, and
 generated/ while its PDF is byte-identical to this run's conversion with the current binary). Conversions and
@@ -29,6 +29,7 @@ The .NET engine is a different implementation and is deliberately not what we co
 office2pdf: `office2pdf` on PATH (cargo install office2pdf-cli) or OFFICE2PDF_BIN.
 jubarte-redlines: `jubarte` on PATH (cargo install jubarte-redlines) or JUBARTE_BIN.
 dxpdf: `dxpdf` on PATH (cargo install dxpdf, or the .deb from its GitHub releases) or DXPDF_BIN.
+WordCraft: `wordcraft-cli` on PATH (from its GitHub release archives; not on crates.io) or WORDCRAFT_BIN.
 Accessibility scores need verapdf and pdfinfo on PATH (brew install verapdf poppler); without them the column is empty.
 
 Fonts, so every engine sees the same Word fonts: ours reads DOCXIDE_FONTS=fonts/; minipdf, rdocx,
@@ -41,7 +42,9 @@ already ranks first there, so nothing shifts. Do NOT do the same on macOS: a cop
 ~/Library/Fonts outranks the macOS system faces our references were made with (Times New Roman,
 Arial, Symbol) and collapses dozens of our fixtures. Locally, LibreOffice therefore only sees the fonts
 the OS has; its CI column is the fair one. dxpdf is the same: no font flag, it reads fontconfig on Linux
-and CoreText on macOS, so it gets fonts/ on CI only.
+and CoreText on macOS, so it gets fonts/ on CI only. WordCraft likewise has no font flag; it scans the
+OS font folders (on Linux /usr/share/fonts and ~/.local/share/fonts, without fontconfig), so it too gets
+fonts/ on CI only.
 """
 from __future__ import annotations
 
@@ -89,6 +92,7 @@ ENGINES = [
     ("office2pdf", "office2pdf"),
     ("jubarte", "jubarte-redlines"),
     ("dxpdf", "dxpdf"),
+    ("wordcraft", "WordCraft"),
 ]
 COMPETITORS = [k for k, _ in ENGINES if k != "reference"]
 
@@ -190,6 +194,14 @@ def find_dxpdf() -> Path | None:
     if env and Path(env).is_file():
         return Path(env)
     found = shutil.which("dxpdf") or str(Path.home() / ".cargo" / "bin" / "dxpdf")
+    return Path(found) if Path(found).is_file() else None
+
+
+def find_wordcraft() -> Path | None:
+    env = os.environ.get("WORDCRAFT_BIN")
+    if env and Path(env).is_file():
+        return Path(env)
+    found = shutil.which("wordcraft-cli") or str(Path.home() / ".cargo" / "bin" / "wordcraft-cli")
     return Path(found) if Path(found).is_file() else None
 
 
@@ -414,6 +426,18 @@ def convert_dxpdf(dxpdf: Path, docx: Path, pdf: Path) -> bool:
     return converted(r, pdf)
 
 
+def convert_wordcraft(wordcraft: Path, docx: Path, pdf: Path) -> bool:
+    if is_fresh(pdf, docx) and is_fresh(pdf, wordcraft):
+        return True
+    pdf.parent.mkdir(parents=True, exist_ok=True)
+    # No font flag either (see the module docstring). NO_PREFS keeps the app's own preferences and
+    # user font folder out of it, so every machine converts with the same setup.
+    env = {**os.environ, "WORDCRAFT_NO_PREFS": "1"}
+    r = subprocess.run([str(wordcraft), "convert", str(docx), str(pdf)],
+                       capture_output=True, text=True, env=env, timeout=TIMEOUT, check=False)
+    return converted(r, pdf)
+
+
 @functools.lru_cache(maxsize=None)
 def engine_id(engine: Path) -> str:
     """What identifies an engine build: our binary's bytes (rebuilt from the working tree every
@@ -499,7 +523,7 @@ def engine_versions(tools: dict) -> dict[str, str]:
     v["generated"] = f"{m.group(1) if m else '?'} @{sha}{dirty}"
     if tools.get("soffice"):
         v["libreoffice"] = " ".join(run_out([str(tools["soffice"]), "--version"]).split()[:2])  # drop the build hash
-    for key in ("minipdf", "rdocx", "office2pdf", "jubarte", "dxpdf"):
+    for key in ("minipdf", "rdocx", "office2pdf", "jubarte", "dxpdf", "wordcraft"):
         if tools.get(key):
             v[key] = run_out([str(tools[key]), "--version"]).split()[-1]
     return v
@@ -679,7 +703,7 @@ def process_fixture(fixture: Path, group: str, tools: dict, opts) -> dict | None
 
     for key, convert in (("minipdf", convert_minipdf), ("rdocx", convert_rdocx),
                          ("office2pdf", convert_office2pdf), ("jubarte", convert_jubarte),
-                         ("dxpdf", convert_dxpdf)):
+                         ("dxpdf", convert_dxpdf), ("wordcraft", convert_wordcraft)):
         if tools.get(key):
             ok, times[key] = spent(f"convert {key}", timed, convert, tools[key], docx, mine / f"{key}.pdf")
             if ok:
@@ -826,6 +850,7 @@ def main() -> None:
     ap.add_argument("--skip-office2pdf", action="store_true")
     ap.add_argument("--skip-jubarte", action="store_true")
     ap.add_argument("--skip-dxpdf", action="store_true")
+    ap.add_argument("--skip-wordcraft", action="store_true")
     ap.add_argument("--no-scores", action="store_true", help="skip Jaccard scoring")
     ap.add_argument("--fresh", action="store_true",
                     help="reconvert with every engine, ignoring cached PDFs, timeouts and the test harness's PDFs")
@@ -900,6 +925,10 @@ def main() -> None:
         tools["dxpdf"] = find_dxpdf()
         if not tools["dxpdf"]:
             print("dxpdf not found; skipping (cargo install dxpdf, or DXPDF_BIN)")
+    if not opts.skip_wordcraft:
+        tools["wordcraft"] = find_wordcraft()
+        if not tools["wordcraft"]:
+            print("WordCraft not found; skipping (wordcraft-cli from github.com/storytold/wordcraft releases, or WORDCRAFT_BIN)")
     flat_font_dir()   # built once here, before the worker threads start converting
     if not opts.no_scores:
         # Release: SSIM over a 205-page fixture is painfully slow unoptimized. Always rebuilt (a
