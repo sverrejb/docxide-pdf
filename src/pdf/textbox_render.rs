@@ -204,6 +204,35 @@ fn draw_shape_reflection(
     content.restore_state();
 }
 
+/// A text box's outline, dashed by its `a:prstDash`. Word strokes a
+/// rectangle as `re`, from its bottom-left corner, which sets where a dash
+/// pattern starts (shape-outline-dash).
+pub(super) fn stroke_textbox_outline(
+    content: &mut Content,
+    tb: &Textbox,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+) {
+    let Some(stroke) = tb.stroke_color.filter(|_| tb.stroke_width > 0.0) else {
+        return;
+    };
+    content.save_state();
+    content.set_line_width(tb.stroke_width);
+    if !tb.stroke_dash.is_empty() {
+        content.set_dash_pattern(tb.stroke_dash.iter().map(|d| d * tb.stroke_width), 0.0);
+    }
+    stroke_rgb(content, stroke);
+    if tb.shape_type.preset.as_deref() == Some("rect") && tb.shape_type.custom.is_none() {
+        content.rect(x, y, width, height);
+    } else {
+        super::smartart::draw_shape_stroke_path(content, x, y, width, height, &tb.shape_type);
+    }
+    content.stroke();
+    content.restore_state();
+}
+
 pub(super) fn render_single_textbox(
     tb: &Textbox,
     sp: &SectionProperties,
@@ -272,23 +301,7 @@ pub(super) fn render_single_textbox(
         );
     }
 
-    if let Some(stroke) = tb.stroke_color
-        && tb.stroke_width > 0.0
-    {
-        content.save_state();
-        content.set_line_width(tb.stroke_width);
-        stroke_rgb(content, stroke);
-        super::smartart::draw_shape_stroke_path(
-            content,
-            tb_x,
-            tb_y_top - tb_height,
-            tb.width_pt,
-            tb_height,
-            &tb.shape_type,
-        );
-        content.stroke();
-        content.restore_state();
-    }
+    stroke_textbox_outline(content, tb, tb_x, tb_y_top - tb_height, tb.width_pt, tb_height);
 
     // Lay text out within the shape's text rectangle (e.g. an arrow's body,
     // not its head). For plain rectangles this is the full box, so non-shape
