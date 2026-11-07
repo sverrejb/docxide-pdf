@@ -231,16 +231,20 @@ fn spacer_widths(table: &Table) -> Vec<f32> {
 /// cell padding: content that never wraps narrower. Pictures alone size the
 /// auto-fit minimum (nested tables fit their column, case51).
 fn hard_content_widths(table: &Table, nested_tables: bool) -> Vec<f32> {
-    let mut min = vec![0.0f32; table.col_widths.len()];
+    column_max(table, |cell| cell_hard_content_width(table, cell, nested_tables))
+}
+
+/// Each grid column's largest `f` over the cells that sit in it alone.
+fn column_max(table: &Table, f: impl Fn(&TableCell) -> f32) -> Vec<f32> {
+    let mut max = vec![0.0f32; table.col_widths.len()];
     for row in &table.rows {
         for (grid_col, span, cell) in row.grid_cells() {
-            if grid_col >= min.len() || span > 1 {
-                continue;
+            if grid_col < max.len() && span == 1 {
+                max[grid_col] = max[grid_col].max(f(cell));
             }
-            min[grid_col] = min[grid_col].max(cell_hard_content_width(table, cell, nested_tables));
         }
     }
-    min
+    max
 }
 
 fn cell_hard_content_width(table: &Table, cell: &TableCell, nested_tables: bool) -> f32 {
@@ -477,18 +481,7 @@ pub(super) fn squeeze_to_width(widths: &mut [f32], min: &[f32], avail: f32) {
 
 /// Each grid column's longest unbreakable word plus its cell padding.
 pub(super) fn min_content_widths(table: &Table, fonts: &HashMap<String, FontEntry>) -> Vec<f32> {
-    let ncols = table.col_widths.len();
-    let mut min_widths = vec![0.0f32; ncols];
-    for row in &table.rows {
-        for (grid_col, span, cell) in row.grid_cells() {
-            if grid_col >= ncols || span > 1 {
-                continue;
-            }
-            min_widths[grid_col] =
-                min_widths[grid_col].max(cell_min_content_width(table, cell, fonts));
-        }
-    }
-    min_widths
+    column_max(table, |cell| cell_min_content_width(table, cell, fonts))
 }
 
 fn cell_min_content_width(
