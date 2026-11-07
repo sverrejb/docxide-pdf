@@ -4338,6 +4338,16 @@
     "a11y_struct": 0.625,
     "a11y_text": 1.0
   },
+  "cases/field-result-format-source": {
+    "jaccard": 0.8705,
+    "ssim": 0.9847,
+    "text_boundary": 1.0
+  },
+  "cases/field-result-formatting": {
+    "jaccard": 0.8002,
+    "ssim": 0.9228,
+    "text_boundary": 1.0
+  },
   "cases/first-header-minimum-overflow": {
     "jaccard": 0.9329,
     "ssim": 1.0,
@@ -7587,6 +7597,16 @@
     "a11y_struct": 0.4444,
     "a11y_text": 1.0
   },
+  "cases/section-pages-continuous": {
+    "jaccard": 0.8114,
+    "ssim": 0.9987,
+    "text_boundary": 1.0
+  },
+  "cases/section-pages-field": {
+    "jaccard": 0.8297,
+    "ssim": 0.9723,
+    "text_boundary": 1.0
+  },
   "cases/seq-fields": {
     "jaccard": 0.7815,
     "ssim": 0.9956,
@@ -8510,6 +8530,11 @@
     "ua_deficit": 0,
     "a11y_struct": 0.5,
     "a11y_text": 1.0
+  },
+  "cases/truncated-png": {
+    "jaccard": 0.9748,
+    "ssim": 0.9926,
+    "text_boundary": 1.0
   },
   "cases/underlined-space-compat14-underline0-split0": {
     "jaccard": 0.7283,
