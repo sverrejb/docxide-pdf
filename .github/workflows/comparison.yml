@@ -55,6 +55,7 @@ jobs:
         shard: [0, 1, 2, 3, 4, 5, 6, 7]
     env:
       VERAPDF: "1.30.2"
+      MUPDF: "1.27.1"   # Homebrew's, so the site's screenshots match local ones
       PYTHONUNBUFFERED: "1"   # engine_compare.py's per-case lines get real timestamps in the log
     steps:
       - uses: actions/checkout@v7
@@ -66,11 +67,26 @@ jobs:
           ssh-key: ${{ secrets.ASSETS_DEPLOY_KEY }}
           path: assets
           fetch-depth: 0
-      - name: Install LibreOffice, mutool, cwebp, pdfinfo, Java
+      - name: Install LibreOffice, cwebp, pdfinfo, Java
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y -q --no-install-recommends mupdf-tools webp libreoffice-writer \
+          sudo apt-get install -y -q --no-install-recommends webp libreoffice-writer \
             poppler-utils default-jre-headless
+      - uses: actions/cache@v6
+        id: mupdf
+        with:
+          path: ~/mupdf
+          key: mupdf-${{ env.MUPDF }}-ubuntu-26.04
+      - name: Build mutool with colour management
+        # Ubuntu's mupdf-tools is built without lcms2 and draws CalRGB/ICC colours raw: our linear-light
+        # CalRGB gradients (case38, vaccines_history_chapter) came out far too dark here while Homebrew's
+        # mutool, and Word, show them right. The release source bundles lcms2; tools only, cached per version.
+        if: steps.mupdf.outputs.cache-hit != 'true'
+        run: |
+          curl -sSfL "https://mupdf.com/downloads/archive/mupdf-${MUPDF}-source.tar.gz" | tar xz -C "$RUNNER_TEMP"
+          make -C "$RUNNER_TEMP/mupdf-${MUPDF}-source" -j"$(nproc)" build=release HAVE_X11=no HAVE_GLUT=no tools
+          mkdir -p ~/mupdf && cp "$RUNNER_TEMP/mupdf-${MUPDF}-source/build/release/mutool" ~/mupdf/
+      - run: echo "$HOME/mupdf" >> "$GITHUB_PATH" && "$HOME/mupdf/mutool" -v
       - name: Install veraPDF   # not in Ubuntu's archive; the official installer of the release Homebrew ships
         run: |
           curl -sSfL "https://software.verapdf.org/rel/${VERAPDF%.*}/verapdf-greenfield-${VERAPDF}-installer.zip" -o "$RUNNER_TEMP/verapdf.zip"

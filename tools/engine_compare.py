@@ -599,7 +599,11 @@ def render_check() -> None:
     moves RENDER_EPOCH forward instead: everything rendered before it, the harness's renders that
     are reused here included, is redone in place (the site images and visual scores follow)."""
     global RENDER_EPOCH
-    if record_fingerprint(RENDER_FP_FILE, fingerprint(tool_version("mutool", "-v"), DPI)):
+    # The binary's hash, not just its banner: CI swapped Ubuntu's mutool (no colour management) for a
+    # source build of the same version, and a banner-only fingerprint kept the old dark gradients.
+    mutool = shutil.which("mutool")
+    build = file_hash(Path(mutool)) if mutool else "missing"
+    if record_fingerprint(RENDER_FP_FILE, fingerprint(tool_version("mutool", "-v"), build, DPI)):
         print("mutool or DPI changed: every screenshot is rendered again")
     RENDER_EPOCH = RENDER_FP_FILE.stat().st_mtime
 
