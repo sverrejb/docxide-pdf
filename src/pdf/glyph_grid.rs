@@ -142,6 +142,29 @@ pub(super) fn drawn_positions(x0: f32, glyphs: &[GridGlyph]) -> Vec<f32> {
     drawn
 }
 
+/// Where Word draws a tab's leader (examples of `tab-leader-fill`): each
+/// glyph advances by its own device width, and the glyphs sit on the page's
+/// grid of that pitch counted from x = 0. Every slot that starts at or after
+/// the tab's start and ends by the tab's end (both device px) gets one, so
+/// the leader is flush with neither end of the gap.
+pub(super) fn leader_positions(advance: f32, start_px: i64, end_px: i64) -> Vec<f32> {
+    let pitch = device_advance(&GridGlyph {
+        advance,
+        apart: 0.0,
+        shaped: false,
+        font_size: 0.0,
+        run_start: false,
+    });
+    if pitch <= 0 {
+        return Vec::new();
+    }
+    let first = start_px.div_euclid(pitch) + i64::from(start_px.rem_euclid(pitch) != 0);
+    let last = end_px.div_euclid(pitch);
+    (first..last)
+        .map(|k| ((k * pitch) as f64 / PX_PER_PT + PHASE_PT) as f32)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -223,5 +246,22 @@ mod tests {
         let on_grid = (drawn[20] as f64 - PHASE_PT) * 4.0;
         assert!((on_grid - on_grid.round()).abs() < 1e-3);
         assert!(drawn[19] < drawn[20]);
+    }
+
+    #[test]
+    fn leader_fills_the_page_grid_slots_inside_the_tab() {
+        // Arial 10 "_" (5.56pt) draws at a 22 px pitch: a signature line from
+        // the margin (283.6 px) to a stop at 214.9pt, 26 glyphs from 71.5pt.
+        let xs = leader_positions(5.5615, 284, 860);
+        assert_eq!(xs.len(), 26);
+        assert!((xs[0] - 71.525).abs() < 1e-4);
+        assert!((xs[25] - (71.525 + 25.0 * 5.5)).abs() < 1e-3);
+        // Arial 10 "." (11.12 px → 11): a slot starting on the tab start counts.
+        assert_eq!(leader_positions(2.78, 11 * 30, 11 * 31).len(), 1);
+        assert!(leader_positions(2.78, 11 * 30 + 1, 11 * 31).is_empty());
+        // A gap narrower than the glyph holds one when the rounded pitch fits:
+        // Arial 10 "_" from a 71.5pt margin to a stop 5.4pt on (308 px).
+        assert_eq!(leader_positions(5.5615, 286, 308), [71.525]);
+        assert!(leader_positions(5.5615, 286, 307).is_empty());
     }
 }

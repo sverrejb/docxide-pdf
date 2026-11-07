@@ -895,18 +895,85 @@ fn unsized_line_metrics(
     font_size: f32,
     fonts: &HashMap<String, FontEntry>,
 ) -> (f32, Option<f32>) {
-    if let Some(br) = para.runs.iter().find(|r| r.is_line_break) {
-        let lhr = fonts
-            .get(&font_key(br))
-            .and_then(|e| run_line_metrics(e, "").0);
-        return (br.font_size, lhr);
+    let (size, metrics) = unsized_line_font(para, font_size, fonts);
+    (size, metrics.0)
+}
+
+/// The font that sizes a line no glyph run sizes (only tabs and spaces): the
+/// first break's, else the paragraph mark's, as (size, run_line_metrics).
+fn unsized_line_font(
+    para: &Paragraph,
+    font_size: f32,
+    fonts: &HashMap<String, FontEntry>,
+) -> (f32, (Option<f32>, Option<f32>)) {
+    match para.runs.iter().find(|r| r.is_line_break) {
+        Some(br) => break_font(br, fonts),
+        None => mark_font(para, font_size, fonts),
     }
-    let lhr = para
+}
+
+fn break_font(br: &Run, fonts: &HashMap<String, FontEntry>) -> (f32, (Option<f32>, Option<f32>)) {
+    let metrics = fonts
+        .get(&font_key(br))
+        .map_or((None, None), |e| run_line_metrics(e, ""));
+    (br.font_size, metrics)
+}
+
+fn mark_font(
+    para: &Paragraph,
+    font_size: f32,
+    fonts: &HashMap<String, FontEntry>,
+) -> (f32, (Option<f32>, Option<f32>)) {
+    let metrics = para
         .paragraph_mark_font_name
         .as_deref()
         .and_then(|n| fonts.get(n))
-        .and_then(|e| run_line_metrics(e, "").0);
-    (para.paragraph_mark_font_size.unwrap_or(font_size), lhr)
+        .map_or((None, None), |e| run_line_metrics(e, ""));
+    (para.paragraph_mark_font_size.unwrap_or(font_size), metrics)
+}
+
+/// Each line no glyph sizes (only tabs and spaces) takes the font of what
+/// ends it, its ascent included: its break's, or the paragraph mark's on the
+/// last line, whatever sizes the paragraph's other lines (Word example: tab
+/// lines ended by a 20pt break and an 11pt mark sit 18.1pt and 9.96pt
+/// below their tops, beside text lines too). Under at-least spacing that is
+/// the font's baseline in the taller box (`boxed_line_ascent`), where a text
+/// line in that font would sit. `ascent` is where the paragraph puts its
+/// first baseline.
+fn size_unsized_lines(
+    lines: &mut [TextLine],
+    para: &Paragraph,
+    runs: &[Run],
+    ls: LineSpacing,
+    (line_h, font_size, ascent): (f32, f32, f32),
+    fonts: &HashMap<String, FontEntry>,
+) {
+    let mut breaks = runs.iter().filter(|r| r.is_line_break && !r.vanish);
+    let last = lines.len().saturating_sub(1);
+    for (i, line) in lines.iter_mut().enumerate() {
+        let br = if line.ends_with_break { breaks.next() } else { None };
+        if line.pitch.is_some()
+            || line.break_font_size.is_some()
+            || line.float_skip
+            || line.chunks.iter().any(|c| {
+                c.math.is_some() || c.inline_image_name.is_some() || !c.text.trim().is_empty()
+            })
+        {
+            continue;
+        }
+        let (size, (lhr, ar)) = match br {
+            Some(br) => break_font(br, fonts),
+            None if i == last => mark_font(para, font_size, fonts),
+            None => continue,
+        };
+        let pitch = resolve_line_h(ls, size, lhr);
+        let own_ascent = layout::boxed_line_ascent(ls, pitch, size, lhr, ar, &[], fonts)
+            .unwrap_or(size * ar.unwrap_or(0.75));
+        if (pitch - line_h).abs() > 0.01 || (own_ascent - ascent).abs() > 0.01 {
+            line.pitch = Some(pitch);
+            line.ascent_shift = own_ascent - ascent;
+        }
+    }
 }
 
 /// Size the shifted mark's box before applying the paragraph's line rule.
@@ -968,6 +1035,18 @@ fn size_break_lines(
     }
 }
 
+/// The pitch of a line holding only the paragraph mark.
+fn mark_line_h(
+    para: &Paragraph,
+    ls: LineSpacing,
+    fallback_lhr: Option<f32>,
+    fonts: &HashMap<String, FontEntry>,
+) -> Option<f32> {
+    let mark_size = para.paragraph_mark_font_size?;
+    let mark_lhr = mark_font(para, mark_size, fonts).1.0.or(fallback_lhr);
+    Some(resolve_line_h(ls, mark_size, mark_lhr))
+}
+
 /// A final empty line after a break holds the paragraph mark, which sizes
 /// it rather than the preceding text.
 fn size_mark_line(
@@ -980,15 +1059,29 @@ fn size_mark_line(
 ) {
     if runs.last().is_some_and(|r| r.is_line_break)
         && let Some(last) = lines.last_mut().filter(|l| l.chunks.is_empty())
-        && let Some(mark_size) = para.paragraph_mark_font_size
+        && let Some(mark_h) = mark_line_h(para, ls, fallback_lhr, fonts)
     {
-        let mark_lhr = para
-            .paragraph_mark_font_name
-            .as_deref()
-            .and_then(|name| fonts.get(name))
-            .and_then(|font| run_line_metrics(font, "").0)
-            .or(fallback_lhr);
-        last.pitch = Some(resolve_line_h(ls, mark_size, mark_lhr));
+        last.pitch = Some(mark_h);
+    }
+}
+
+/// The blank line a wrapped tab leaves at the paragraph end also holds the
+/// mark, so it is as tall as the larger of the two (geneva: a 10pt tab
+/// before an 11pt mark steps 12.65, the mark's pitch).
+fn size_tab_mark_line(
+    lines: &mut [TextLine],
+    para: &Paragraph,
+    ls: LineSpacing,
+    fallback_lhr: Option<f32>,
+    fonts: &HashMap<String, FontEntry>,
+) {
+    if let Some(last) = lines
+        .last_mut()
+        .filter(|l| l.leading_tab_wrap && l.chunks.is_empty())
+        && let Some(pitch) = last.pitch
+        && let Some(mark_h) = mark_line_h(para, ls, fallback_lhr, fonts)
+    {
+        last.pitch = Some(pitch.max(mark_h));
     }
 }
 
@@ -3268,10 +3361,12 @@ fn render_paragraph_block(
         ctx,
     );
 
-    let (mut font_size, mut tallest_lhr, tallest_ar) =
+    let (mut font_size, mut tallest_lhr, mut tallest_ar) =
         tallest_glyph_run_metrics(&para.runs, ctx.fonts);
+    // A line of only tabs and spaces sits on the mark's (or break's) font,
+    // its ascent included: an underlined tab hangs from that baseline.
     if tallest_lhr.is_none() {
-        (font_size, tallest_lhr) = unsized_line_metrics(para, font_size, ctx.fonts);
+        (font_size, (tallest_lhr, tallest_ar)) = unsized_line_font(para, font_size, ctx.fonts);
     }
     let effective_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
     let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
@@ -3882,6 +3977,15 @@ fn render_paragraph_block(
     if !grid_snapped && !matches!(effective_ls, LineSpacing::Exact(_)) {
         size_lines_by_own_runs(&mut lines, ctx.fonts, effective_ls, line_h, para_ascent, para.text_alignment == crate::model::TextAlignment::Top);
         size_break_lines(&mut lines, &effective_runs, effective_ls, line_h, ctx.fonts);
+        size_unsized_lines(
+            &mut lines,
+            para,
+            &effective_runs,
+            effective_ls,
+            (line_h, font_size, para_ascent),
+            ctx.fonts,
+        );
+        size_tab_mark_line(&mut lines, para, effective_ls, tallest_lhr, ctx.fonts);
     }
     let mut para_metrics = (
         para_ascent,

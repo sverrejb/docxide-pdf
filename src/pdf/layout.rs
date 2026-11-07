@@ -431,6 +431,9 @@ pub(super) struct WordChunk {
     pub(super) source_starts: Vec<usize>,
     /// Ordinary word-space decoration; excludes tab-stop decorations.
     pub(super) word_space_bridge: bool,
+    /// A tab's leader filling the gap `x_offset..x_offset + width`; drawn
+    /// on the page's leader grid (`glyph_grid::leader_positions`).
+    pub(super) leader: Option<char>,
     /// The math zone's spoken form, for its Formula (see `Run::formula`).
     pub(super) formula: Option<Arc<str>>,
     /// Pair kerning is on for this run at this size (`w:kern`); `width` already
@@ -580,6 +583,7 @@ impl WordChunk {
             space_after: false,
             preceding_spaces: 1,
             word_space_bridge: false,
+            leader: None,
             formula: run.formula.clone(),
             kern: run.kerns_at(eff_fs),
             checkbox: run.checkbox,
@@ -682,12 +686,14 @@ impl WordChunk {
             space_after: false,
             preceding_spaces: 1,
             word_space_bridge: false,
+            leader: None,
         }
     }
 
     fn leader(
         entry: &FontEntry,
-        text: String,
+        ch: char,
+        count: usize,
         font_size: f32,
         color: Option<[u8; 3]>,
         x_offset: f32,
@@ -696,7 +702,7 @@ impl WordChunk {
         Self {
             source_starts: Vec::new(),
             pdf_font: entry.pdf_name.clone(),
-            text,
+            text: std::iter::repeat_n(ch, count).collect(),
             font_size,
             line_font_size: font_size,
             color,
@@ -738,8 +744,8 @@ impl WordChunk {
             rtl_glyphs: false,
             gap_rtl: false,
             math: None,
-            synthetic_bold: false,
-            synthetic_italic: false,
+            synthetic_bold: entry.synthetic_bold,
+            synthetic_italic: entry.synthetic_italic,
             text_outline: None,
             text_fill: None,
             text_shadow: None,
@@ -751,6 +757,7 @@ impl WordChunk {
             space_after: false,
             preceding_spaces: 1,
             word_space_bridge: false,
+            leader: Some(ch),
         }
     }
 
@@ -856,6 +863,7 @@ impl WordChunk {
             space_after: false,
             preceding_spaces: 1,
             word_space_bridge: false,
+            leader: None,
         }
     }
 }
@@ -1149,6 +1157,18 @@ impl TextLine {
                 .last()
                 .map_or(0.0, |c| c.x_offset + c.width),
             None => self.total_width,
+        }
+    }
+
+    /// Leading tabs occupy a line even without printable chunks; the tabs
+    /// consumed on it size the otherwise blank line.
+    pub(super) fn hold_tabs(&mut self, tabs: Option<(f32, Option<f32>)>) {
+        if self.chunks.is_empty()
+            && let Some((font_size, lhr)) = tabs
+        {
+            self.break_font_size = Some(font_size);
+            self.break_lhr = lhr;
+            self.leading_tab_wrap = true;
         }
     }
 }
@@ -3301,14 +3321,17 @@ pub(super) fn build_tabbed_line(
     let mut line_reach = 0.0f32;
 
     let mut tab_line_metrics: Option<(f32, Option<f32>)> = None;
-    for (seg_idx, (seg_runs, seg_indices, tab_before, tab_run_before)) in
-        segments.iter().enumerate()
-    {
-        let line_max = if is_first_line {
+    let line_max_at = |first: bool| {
+        if first {
             max_width + first_line_hanging
         } else {
             max_width
-        };
+        }
+    };
+    for (seg_idx, (seg_runs, seg_indices, tab_before, tab_run_before)) in
+        segments.iter().enumerate()
+    {
+        let line_max = line_max_at(is_first_line);
         let line_indent = if is_first_line {
             indent_left - first_line_hanging
         } else {
@@ -3423,17 +3446,8 @@ pub(super) fn build_tabbed_line(
                     justify_from: std::mem::take(&mut justify_from),
                     ..finish_line(&mut all_chunks)
                 };
-                // Leading tabs occupy a line even without printable chunks.
-                // The overflowing tab moves with its following word; the
-                // tabs already consumed size the otherwise blank line.
-                if line.chunks.is_empty()
-                    && let Some((font_size, lhr)) = tab_line_metrics
-                {
-                    line.break_font_size = Some(font_size);
-                    line.break_lhr = lhr;
-                    line.leading_tab_wrap = true;
-                }
-                tab_line_metrics = None;
+                // The overflowing tab moves with its following word.
+                line.hold_tabs(tab_line_metrics.take());
                 result_lines.push(line);
                 tab_wrapped_line = true;
                 line_reach = 0.0;
@@ -3474,11 +3488,29 @@ pub(super) fn build_tabbed_line(
                     && tab_run.underline
                     && seg_start > current_x + 0.01
                 {
-                    let font_run: &Run = seg_runs
-                        .first()
-                        .copied()
-                        .or_else(|| runs.iter().find(|r| !r.font_name.is_empty()))
-                        .unwrap_or(tab_run);
+                    // A tab alone on its line, only tabs and spaces up to
+                    // its break or mark, underlines at its own size, not
+                    // the break's or a space run's.
+                    let alone = all_chunks.iter().all(|c| c.text.trim().is_empty())
+                        && segments[seg_idx..]
+                            .iter()
+                            .flat_map(|(runs, ..)| runs)
+                            .take_while(|r| !r.is_line_break)
+                            .all(|r| {
+                                r.text.trim().is_empty()
+                                    && r.inline_image.is_none()
+                                    && r.math.is_none()
+                                    && r.checkbox.is_none()
+                            });
+                    let font_run: &Run = if alone {
+                        tab_run
+                    } else {
+                        seg_runs
+                            .first()
+                            .copied()
+                            .or_else(|| runs.iter().find(|r| !r.font_name.is_empty()))
+                            .unwrap_or(tab_run)
+                    };
                     let key = font_key_buf(font_run, &mut key_buf);
                     let entry = seen_fonts.get(key).expect("font registered");
                     let eff_fs = effective_font_size(tab_run, entry).max(font_run.font_size);
@@ -3494,9 +3526,11 @@ pub(super) fn build_tabbed_line(
                 }
 
                 if let Some(leader_char) = leader {
-                    let font_run: Option<&Run> = seg_runs
-                        .first()
-                        .copied()
+                    // The leader takes the tab character's own font, size and
+                    // colour (example: a 20pt tab between 10pt words draws 20pt dots).
+                    let font_run: Option<&Run> = tab_run_before
+                        .filter(|r| !r.font_name.is_empty())
+                        .or_else(|| seg_runs.first().copied())
                         .or_else(|| {
                             segments[..seg_idx]
                                 .iter()
@@ -3514,22 +3548,24 @@ pub(super) fn build_tabbed_line(
                         let eff_fs = effective_font_size(run, entry);
                         let char_w = entry.char_width_1000(leader_char) * eff_fs / 1000.0;
                         let leader_gap = seg_start - current_x;
-                        if char_w > 0.0 && leader_gap > char_w * 2.0 {
-                            let count = ((leader_gap - char_w) / char_w).floor() as usize;
-                            if count > 0 {
-                                let leader_text: String =
-                                    std::iter::repeat_n(leader_char, count).collect();
-                                let leader_w = count as f32 * char_w;
-                                let leader_start = seg_start - leader_w;
-                                all_chunks.push(WordChunk::leader(
-                                    entry,
-                                    leader_text,
-                                    eff_fs,
-                                    run.color,
-                                    leader_start,
-                                    leader_w,
-                                ));
-                            }
+                        if char_w > 0.0 && leader_gap > 0.0 {
+                            // Drawing places the glyphs on the page (see
+                            // `WordChunk::leader`); the text is a stand-in.
+                            all_chunks.push(WordChunk::leader(
+                                entry,
+                                leader_char,
+                                super::glyph_grid::leader_positions(
+                                    char_w,
+                                    (current_x * 4.0).round() as i64,
+                                    (seg_start * 4.0).round() as i64,
+                                )
+                                .len()
+                                .max(1),
+                                eff_fs,
+                                run.color,
+                                current_x,
+                                leader_gap,
+                            ));
                         }
                     }
                 }
@@ -3544,9 +3580,11 @@ pub(super) fn build_tabbed_line(
         for (local_idx, run) in seg_runs.iter().enumerate() {
             if run.is_line_break {
                 mark_space_after(&mut all_chunks);
+                let line = finish_line_with_break(&mut all_chunks);
                 result_lines.push(TextLine {
                     justify_from: std::mem::take(&mut justify_from),
-                    ..finish_line_with_break(&mut all_chunks)
+                    total_width: line.total_width.max(current_x),
+                    ..line
                 });
                 tab_wrapped_line = false;
                 tab_line_metrics = None;
@@ -3561,6 +3599,26 @@ pub(super) fn build_tabbed_line(
             // Handle inline images (same pattern as build_paragraph_lines)
             if let Some(img) = &run.inline_image {
                 if let Some(pdf_name) = inline_image_names.get(&seg_indices[local_idx]) {
+                    // A picture that doesn't fit after text or a tab starts
+                    // the next line. A lone tab stays on its own line (Word
+                    // examples: a 420pt picture wraps after plain text with or
+                    // without an earlier tab in a 468pt column).
+                    let img_w = img.layout_size().0;
+                    if current_x > 0.0
+                        && current_x + img_w > line_max_at(is_first_line).max(line_reach)
+                    {
+                        let mut line = TextLine {
+                            justify_from: std::mem::take(&mut justify_from),
+                            ..finish_line(&mut all_chunks)
+                        };
+                        line.hold_tabs(tab_line_metrics.take());
+                        result_lines.push(line);
+                        tab_wrapped_line = false;
+                        line_reach = 0.0;
+                        current_x = 0.0;
+                        is_first_line = false;
+                        tab_stop_pos = None;
+                    }
                     all_chunks.push(WordChunk::image(
                         pdf_name,
                         run,
@@ -3569,7 +3627,7 @@ pub(super) fn build_tabbed_line(
                         effect_inline_names.get(&seg_indices[local_idx]).cloned(),
                         seen_fonts.get(font_key_buf(run, &mut key_buf)).map_or_else(String::new, |e| e.pdf_name.clone()),
                     ));
-                    current_x += img.layout_size().0;
+                    current_x += img_w;
                 }
                 continue;
             }
@@ -3636,11 +3694,7 @@ pub(super) fn build_tabbed_line(
                 }
                 // Word continues previous word across run boundary (no whitespace between)
                 let is_continuation = seg_idx == 0 && !applied_space && !all_chunks.is_empty();
-                let cur_line_max = if is_first_line {
-                    max_width + first_line_hanging
-                } else {
-                    max_width
-                };
+                let cur_line_max = line_max_at(is_first_line);
                 let mut overflows = current_x + ww > cur_line_max.max(line_reach)
                     && !all_chunks.is_empty()
                     && !is_continuation;
@@ -3720,13 +3774,25 @@ pub(super) fn build_tabbed_line(
     // Finalize remaining chunks into the last line. Tabs that wrapped keep
     // their line though nothing is drawn on it: bulgarian_road_safety's
     // trailing tabs after "/Зл. Атанасова/" take a second line in Word.
+    // A tab ending the paragraph (or a line before a break) keeps its
+    // extent: Word centres and right-aligns "Name<tab>" by where the tab
+    // ends, leader or not.
     if !all_chunks.is_empty() {
+        let line = finish_line(&mut all_chunks);
         result_lines.push(TextLine {
             justify_from: std::mem::take(&mut justify_from),
-            ..finish_line(&mut all_chunks)
+            total_width: line.total_width.max(current_x),
+            ..line
         });
     } else if result_lines.is_empty() || tab_wrapped_line {
-        result_lines.push(TextLine::default());
+        // A wrapped tab's blank line is sized by the tabs on it, not by a
+        // larger run elsewhere in the paragraph (Word examples: the tab line
+        // after a 20pt picture run steps 11.8pt, as after a 10.5pt one).
+        let mut line = TextLine::default();
+        if tab_wrapped_line {
+            line.hold_tabs(tab_line_metrics);
+        }
+        result_lines.push(line);
     }
     for i in squeezed_lines {
         if let Some(line) = result_lines.get_mut(i) {
@@ -3750,6 +3816,9 @@ pub(super) fn build_tabbed_line(
     for line in result_lines.iter_mut() {
         line.rtl_paragraph = cjk.bidi;
         line.shaped_kerning = cjk.shaped_kerning;
+        if !cjk.expand_shift_return && line.ends_with_break {
+            line.natural_width = true;
+        }
     }
     result_lines
 }
@@ -3947,10 +4016,40 @@ fn device_grid(
     out
 }
 
+/// Each leader chunk's glyph x positions (`glyph_grid::leader_positions`).
+/// Both ends of the tab are where Word's device pen stands: the line's
+/// device start plus the rounded exact distance from the line start (example:
+/// 552 leaders, none off by a slot; a stop 5.4pt from a 71.5pt margin ends
+/// at 308 px and holds one 22 px underscore).
+fn leader_grid(
+    line: &TextLine,
+    entries: &HashMap<&str, &FontEntry>,
+    chunk_abs_x: &dyn Fn(usize, &WordChunk) -> f32,
+    line_start: (f32, f32),
+) -> Vec<Option<Vec<f32>>> {
+    line.chunks
+        .iter()
+        .enumerate()
+        .map(|(i, chunk)| {
+            let ch = chunk.leader?;
+            let entry = entries.get(chunk.pdf_font.as_str())?;
+            let x = chunk_abs_x(i, chunk);
+            let px =
+                |v: f32| ((line_start.1 * 4.0).round() + ((v - line_start.0) * 4.0).round()) as i64;
+            Some(super::glyph_grid::leader_positions(
+                entry.char_width_1000(ch) * chunk.font_size / 1000.0,
+                px(x),
+                px(x + chunk.width),
+            ))
+        })
+        .collect()
+}
+
 /// Plain text whose drawn width is its glyphs' exact advances.
 fn grid_eligible(chunk: &WordChunk, entry: &FontEntry) -> bool {
     let exact: f32 = glyph_advances(chunk, entry).map(|(a, _)| a).sum();
     !chunk.text.is_empty()
+        && chunk.leader.is_none()
         && chunk.math.is_none()
         && chunk.text_shadow.is_none()
         && chunk.checkbox.is_none()
@@ -4384,7 +4483,7 @@ pub(super) fn render_paragraph_lines(
             .map(|rr| rr.first_chunk_idx)
             .unwrap_or(line.chunks.len());
         let gaps_before = spaces_before_each(&line.chunks[..left_chunk_count]);
-        let jf = line.justify_from.min(left_chunk_count.saturating_sub(1));
+        let jf = line.justify_from.min(left_chunk_count);
         let tab_gaps = gaps_before.get(jf).copied().unwrap_or(0);
         let gaps_before: Vec<usize> = gaps_before
             .iter()
@@ -4395,10 +4494,16 @@ pub(super) fn render_paragraph_lines(
 
         // CJK justification: distribute space between every character, not just chunks.
         // Word treats CJK inter-character gaps the same as word gaps for justify.
-        let left_char_count: usize = line.chunks[..left_chunk_count]
-            .iter()
-            .map(|c| c.text.chars().count())
-            .sum();
+        // Like the word gaps, only the text after the last tab spreads; a
+        // leader keeps its pitch (Word example, distributed lines with tabs).
+        let spread_chars = |chunks: &[WordChunk]| -> usize {
+            chunks
+                .iter()
+                .filter(|c| c.leader.is_none())
+                .map(|c| c.text.chars().count())
+                .sum()
+        };
+        let left_char_count = spread_chars(line.chunks.get(jf..left_chunk_count).unwrap_or(&[]));
         let has_cjk_content = line.chunks[..left_chunk_count]
             .iter()
             .any(|c| c.text.chars().any(crate::docx::is_east_asian_char));
@@ -4433,6 +4538,10 @@ pub(super) fn render_paragraph_lines(
             None
         } else if squeezed && line.squeeze_chars {
             Some(left_char_count.saturating_sub(1).max(1))
+        } else if line.rtl_paragraph && matches!(*alignment, Alignment::Distribute) {
+            // Word example: a distributed right-to-left paragraph spreads only
+            // its spaces, on every line, Latin and Hebrew alike.
+            None
         } else {
             char_justify_gaps(*alignment, can_justify, has_cjk_content, left_char_count)
         };
@@ -4443,9 +4552,15 @@ pub(super) fn render_paragraph_lines(
         let line_start_x = match alignment {
             Alignment::Center => eff_margin + (eff_width - left_content_width) / 2.0,
             Alignment::Right => eff_margin + eff_width - left_content_width,
+            // A distributed line with nothing to spread after its last tab
+            // (one character, a tab at the end) is centred, tabs and all, in
+            // right-to-left paragraphs too.
+            Alignment::Distribute if !is_justified => {
+                eff_margin + (eff_width - left_content_width) / 2.0
+            }
             // Word probe: a justified right-to-left paragraph's last line
             // ends at the right margin.
-            Alignment::Justify | Alignment::Distribute if line.rtl_paragraph && !is_justified => {
+            Alignment::Justify if line.rtl_paragraph && !is_justified => {
                 eff_margin + eff_width - left_content_width
             }
             Alignment::Left | Alignment::Justify | Alignment::Distribute => eff_margin,
@@ -4496,10 +4611,7 @@ pub(super) fn render_paragraph_lines(
             } else if is_char_justified {
                 // Tc adds extra space after each character; shift chunk start
                 // by the cumulative Tc of all chars in preceding chunks.
-                let chars_before: usize = line.chunks[..chunk_idx]
-                    .iter()
-                    .map(|c| c.text.chars().count())
-                    .sum();
+                let chars_before = spread_chars(&line.chunks[jf.min(chunk_idx)..chunk_idx]);
                 line_start_x + chunk.x_offset + chars_before as f32 * justify_tc
             } else {
                 line_start_x + chunk.x_offset + gaps_before[chunk_idx] as f32 * extra_per_gap
@@ -4654,15 +4766,15 @@ pub(super) fn render_paragraph_lines(
             && mixed.is_none()
             && !is_char_justified
             && extra_per_gap >= 0.0;
+        let line_start = match alignment {
+            Alignment::Left | Alignment::Justify | Alignment::Distribute
+                if line_start_x == eff_margin =>
+            {
+                (line_start_x, laid_out_margin)
+            }
+            _ => (line_start_x, line_start_x),
+        };
         let grid = if plain_line {
-            let line_start = match alignment {
-                Alignment::Left | Alignment::Justify | Alignment::Distribute
-                    if line_start_x == eff_margin =>
-                {
-                    (line_start_x, laid_out_margin)
-                }
-                _ => (line_start_x, line_start_x),
-            };
             device_grid(
                 line,
                 &pdf_name_to_entry,
@@ -4673,6 +4785,7 @@ pub(super) fn render_paragraph_lines(
         } else {
             Vec::new()
         };
+        let leaders = leader_grid(line, &pdf_name_to_entry, &chunk_abs_x, line_start);
 
         if has_text_chunks {
             content.begin_text();
@@ -4685,7 +4798,11 @@ pub(super) fn render_paragraph_lines(
             for k in 0..line.chunks.len() {
                 let chunk_idx = line.draw_order.get(k).copied().unwrap_or(k);
                 let chunk = &line.chunks[chunk_idx];
-                if chunk.inline_image_name.is_some() || chunk.checkbox.is_some() {
+                let leader_xs = leaders[chunk_idx].as_deref();
+                if chunk.inline_image_name.is_some()
+                    || chunk.checkbox.is_some()
+                    || leader_xs.is_some_and(|xs| xs.is_empty())
+                {
                     continue;
                 }
                 // A note's reference mark links to the note text (keyboard and
@@ -4776,7 +4893,8 @@ pub(super) fn render_paragraph_lines(
                     cur_synthetic_bold = chunk.synthetic_bold;
                 }
 
-                let effective_cs = chunk.char_spacing + justify_tc;
+                let spreads = chunk_idx >= jf && chunk.leader.is_none();
+                let effective_cs = chunk.char_spacing + if spreads { justify_tc } else { 0.0 };
                 if effective_cs != cur_char_spacing {
                     content.set_char_spacing(effective_cs);
                     cur_char_spacing = effective_cs;
@@ -4924,7 +5042,7 @@ pub(super) fn render_paragraph_lines(
                     td_y = my;
                 };
 
-                let grid_xs = grid.get(chunk_idx).and_then(|g| g.as_deref());
+                let grid_xs = leader_xs.or_else(|| grid.get(chunk_idx).and_then(|g| g.as_deref()));
                 move_to(content, grid_xs.map_or(fx, |g| g[0]), fy);
 
                 // Per-character font fallback: if some chars are missing
@@ -4948,10 +5066,23 @@ pub(super) fn render_paragraph_lines(
                         .position(|f| f.char_to_gid.as_ref().is_some_and(|m| m.contains_key(&c)))
                 };
 
-                if let (Some(xs), Some(entry)) = (grid_xs, primary_entry) {
-                    let placed: Vec<(&str, f32, f32)> = chunk
-                        .text
-                        .char_indices()
+                if let (Some(xs), Some(&primary)) = (grid_xs, primary_entry) {
+                    let leader_char = leader_xs.and(chunk.leader);
+                    let entry = match leader_char.and_then(fallback_idx) {
+                        Some(k) => {
+                            let face = fallbacks[k];
+                            content.set_font(Name(face.pdf_name.as_bytes()), chunk.font_size);
+                            cur_font_name.clone_from(&face.pdf_name);
+                            face
+                        }
+                        None => primary,
+                    };
+                    let glyphs: Vec<(usize, char)> = match leader_char {
+                        Some(c) => vec![(0, c); xs.len()],
+                        None => chunk.text.char_indices().collect(),
+                    };
+                    let placed: Vec<(&str, f32, f32)> = glyphs
+                        .into_iter()
                         .zip(xs)
                         .map(|((i, ch), gx)| {
                             let x = (gx - xs[0]) * 1000.0 / chunk.font_size;
