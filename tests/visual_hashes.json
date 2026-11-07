@@ -1799,6 +1799,9 @@
   "cases/list-hanging-right-only": [
     "38f574575b9a72b3394afe24958512fd72c25e1a046dc80ea5dde6ef94d50495"
   ],
+  "cases/literal-tab-in-text": [
+    "44c8c88b35a26bbe41a0a1689ca3a8d1130fe80b7d249f4d681263fadc75556c"
+  ],
   "cases/mark_large_cell_trailing_break": [
     "52a59c026d4b4ce3be2cc5f19cad1224d8f572204705e19d3247089f97d982e3"
   ],
@@ -2425,6 +2428,12 @@
   "cases/seq-heading-reset": [
     "3ea01d43b2e92d26886bdbb445eaa306ca71d8388512f43990707697e390b527"
   ],
+  "cases/shift-return-tabbed-expand": [
+    "b9cb3f22fad1f6c6f7dfc2badd09929958781a29d9b82a8a12e3426c5bb5cda4"
+  ],
+  "cases/shift-return-tabbed-noexpand": [
+    "2462c41ffe97f122f9b6420ae86d56744ee004a8907631b4e7f6c92144d469df"
+  ],
   "cases/shifted-text-position-7-mixed0-mark0": [
     "075283c57ba5d50940428cef58f86d1d276de3853239ac2922993a28c7a9fb36"
   ],
@@ -2619,6 +2628,10 @@
   "cases/tab-break": [
     "e9f9cf7d4ca87dc1daa26203c9036d88640973935dcdfed064154ebd76acf54d"
   ],
+  "cases/tab-leader-fill": [
+    "86109a3493ac857ec9ad6df1db9df491ef162bfac81df7a492963e127503b966",
+    "79f1aed5fcf894b8d9448b13e6310fc5169accb77af2316d00bdf2c2ecf8521b"
+  ],
   "cases/tab-no-break": [
     "26a8e704faf4d2862cafb17092d473612f8d4019cffc4c9232333cad7d739c3c"
   ],
@@ -2627,6 +2640,23 @@
   ],
   "cases/tab-only-cell-mark-tab": [
     "0597b9b1efe794dacc7b924e26fa044ecd7271fb57010030ba238c5db81eb4d6"
+  ],
+  "cases/tab-only-line-baseline": [
+    "1d8b55b2df27eb75bec91c6770c23bbd560124e0777b8a74909f2c1eefcb8a84",
+    "bd02ae949d902396f4a23196835469f92327352ddb94d0e7b9f363e7877015c0",
+    "b4c209867c4dccc16db4cc2b2ea5e713089bcb2ab794dbec67a299bf01c30138"
+  ],
+  "cases/tab-only-line-own-font": [
+    "c727e6e8f2dd93fc7263de2c5c1201e796863639c94e0e73bd9fdc3b13daa66e",
+    "7b59fbffbe0e39a3b3e41062b4f2f1bc0f11ffeaaaed85a7a7d783208fafff02",
+    "8ba7332b3d5493344cbdeb81073fe7af790ef3ca214d172f566754d1547aa870"
+  ],
+  "cases/tab-picture-wrap": [
+    "63653c3113f69bc5e5d3a4420b8f70e1f5cf93dd51e336c1a24ea221e9d27f26"
+  ],
+  "cases/tab-picture-wrap-containers": [
+    "518de4cd4294088e4f8eb29102df3240460ddb3bfd8a5a7b61842c7c47b6a430",
+    "079e2e4de1701ed455ff03dc9f7688921e486877f947681ea8322324a9e716b3"
   ],
   "cases/table-style-centered": [
     "ab94b2dc2e5e62cb8b8dd7ef35524d3bf86c142058f9a21996babcb95e84d265"

@@ -5570,6 +5570,11 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/literal-tab-in-text": {
+    "jaccard": 0.776,
+    "ssim": 0.9713,
+    "text_boundary": 1.0
+  },
   "cases/mark_large_cell_trailing_break": {
     "jaccard": 0.9742,
     "ssim": 0.9864,
@@ -7607,6 +7612,16 @@
     "a11y_struct": 0.9091,
     "a11y_text": 1.0
   },
+  "cases/shift-return-tabbed-expand": {
+    "jaccard": 0.5733,
+    "ssim": 0.6905,
+    "text_boundary": 1.0
+  },
+  "cases/shift-return-tabbed-noexpand": {
+    "jaccard": 0.7991,
+    "ssim": 0.9522,
+    "text_boundary": 1.0
+  },
   "cases/shifted-text-position-7-mixed0-mark0": {
     "jaccard": 0.8156,
     "ssim": 0.9839,
@@ -8207,6 +8222,11 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/tab-leader-fill": {
+    "jaccard": 0.71,
+    "ssim": 0.9649,
+    "text_boundary": 0.9655
+  },
   "cases/tab-no-break": {
     "jaccard": 0.8602,
     "ssim": 0.9516,
@@ -8236,6 +8256,26 @@
     "ua_deficit": 0,
     "a11y_struct": 1.0,
     "a11y_text": 1.0
+  },
+  "cases/tab-only-line-baseline": {
+    "jaccard": 0.8292,
+    "ssim": 0.9742,
+    "text_boundary": 1.0
+  },
+  "cases/tab-only-line-own-font": {
+    "jaccard": 0.8048,
+    "ssim": 0.9714,
+    "text_boundary": 1.0
+  },
+  "cases/tab-picture-wrap": {
+    "jaccard": 0.9798,
+    "ssim": 0.9426,
+    "text_boundary": 1.0
+  },
+  "cases/tab-picture-wrap-containers": {
+    "jaccard": 0.9944,
+    "ssim": 0.9383,
+    "text_boundary": 1.0
   },
   "cases/table-style-centered": {
     "jaccard": 0.3012,
