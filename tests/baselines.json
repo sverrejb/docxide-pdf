@@ -1,4 +1,19 @@
 {
+  "cases/autofit-cell-widths": {
+    "jaccard": 0.8843,
+    "ssim": 0.9715,
+    "text_boundary": 1.0
+  },
+  "cases/autofit-cell-widths-nested": {
+    "jaccard": 0.1357,
+    "ssim": 0.8587,
+    "text_boundary": 1.0
+  },
+  "cases/autofit-cell-widths-spans": {
+    "jaccard": 0.8393,
+    "ssim": 0.9411,
+    "text_boundary": 1.0
+  },
   "cases/autofit-indent-first-line": {
     "jaccard": 0.2841,
     "ssim": 0.4899,
