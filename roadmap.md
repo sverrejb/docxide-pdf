@@ -7,8 +7,9 @@ Open work only. Finished rounds, their rules and evidence live in git history
 
 **Engine-gap triage (2026-11-07):** cases where another engine beats us by
 ≥3pp J in the CI comparison (`git show origin/gh-pages:report.json`; same
-numbers as our baselines): 120 cases, ~104 families. Fixed (branch
-`koer-overlap`): ut_koer's compat 14 header (floats don't wrap header
+numbers as our baselines): 120 cases, ~104 families. Fixed and pushed
+2026-11-08 with baselines (mean J +1.09pp over 1,093 fixtures, 63 scores up;
+isla −3.8 accepted, see below): ut_koer's compat 14 header (floats don't wrap header
 text); the legacy table outdent (needs a style or a tblInd: case196,
 section-mark-after-table-inline-compat14, short-float-clear-inline-table);
 empty margin frames after visible body text
@@ -53,7 +54,6 @@ justified gap (underlined-space-compat14-*). Open:
   shaded cells in strips (its tcMar bands), not one rect.
 - `nested-table-picture-width` (80.2): a nested row holding a picture
   wider than its cell (166pt in ~158pt) is ~7pt taller in Word.
-- `nested-floats-spaced-text-nonzero-x` (30.8 vs 61.0): 9pt x / 32pt y off.
 - slovak_pedagogical_practice (22.8, body +2.9pt): removing its header
   o:hr run moves Word's body down 1.75pt and ours not at all; the run is
   Cambria 13 under a Korinna BT (missing) mark, so the mark font's
@@ -65,6 +65,9 @@ justified gap (underlined-space-compat14-*). Open:
   ~0.3pt in Word (0.44pt drift above + row height); no single rule.
 - romanian_candidate_declaration_form_f2 header 3.6pt high;
   scottish_fundraising_awards 1.3pt drift plus one re-wrap.
+- case60: bullets inside SmartArt shapes.
+- Rest of the 120-case gap list is untriaged: after the next CI comparison,
+  re-diff `report.json` and drop the families fixed here.
 - case140 (−2.4) and air_pollution_permit_form (−2.6) score drops since
   older baselines are not layout changes: case91's output was identical
   before and after its drop (a metric/raster change).
