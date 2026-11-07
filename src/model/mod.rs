@@ -990,14 +990,6 @@ impl FieldCode {
     pub fn is_page_count(&self) -> bool {
         matches!(self, FieldCode::Page(_) | FieldCode::NumPages(_) | FieldCode::SectionPages(_))
     }
-
-    /// A page number or count's `\*` number format.
-    pub fn num_format(&self) -> Option<&str> {
-        match self {
-            FieldCode::Page(fmt) | FieldCode::NumPages(fmt) | FieldCode::SectionPages(fmt) => *fmt,
-            _ => None,
-        }
-    }
 }
 
 /// What a SEQ field does to its counter.

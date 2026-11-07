@@ -388,11 +388,13 @@ fn collect_used_chars(
 /// the letters of its own and every section's page number format.
 fn page_number_chars(fc: &FieldCode, page_num_formats: &[&str]) -> HashSet<char> {
     let mut chars = HashSet::new();
-    if !fc.is_page_count() && !matches!(fc, FieldCode::PageRef(_)) {
-        return chars;
-    }
+    let own_format = match fc {
+        FieldCode::Page(f) | FieldCode::NumPages(f) | FieldCode::SectionPages(f) => *f,
+        FieldCode::PageRef(_) => None,
+        _ => return chars,
+    };
     chars.extend('0'..='9');
-    for fmt in fc.num_format().into_iter().chain(page_num_formats.iter().copied()) {
+    for fmt in own_format.into_iter().chain(page_num_formats.iter().copied()) {
         extend_chars_for_num_format(&mut chars, fmt);
     }
     chars
