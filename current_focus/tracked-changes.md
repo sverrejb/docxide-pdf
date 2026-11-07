@@ -306,11 +306,23 @@ first appearance.
 
 Fonts still missing for these sets (our fallback log, 341 documents): not on
 this Mac and only subset in Word's PDFs: Californian FB (9), Berlin Sans FB,
-Roboto Medium / Light, Lato SemiBold, HGPSoeiKakugothicUB. Lookup misses,
-not missing fonts: a fontTable name with its quotes kept (`"Calibri"`,
-`"Times New Roman"`, `"Open Sans"`, 11 documents) falls to Cambria where Word
-strips the quotes, and Helvetica Neue, present in `fonts/` and embedded by
-Word, resolves to Arial (1 document).
+Roboto Medium / Light, Lato SemiBold, HGPSoeiKakugothicUB.
+
+**CSS font lists** (checked 2026-11-07, 18 documents): HTML pasted into Word
+leaves CSS lists as font names, `w:rFonts w:ascii` and the fontTable both
+saying `"Calibri", Arial, sans-serif` (also `"Times New Roman", Times, serif`
+and `"Open Sans", sans-serif`), with fontTable altName Cambria. Word takes the
+whole string as one unknown name: every such run in nine references is drawn
+in Cambria (one Calibri-Italic run among them), never in Calibri, Arial or
+Open Sans. Ours matches because `first_css_name` keeps the quotes, so
+`"Calibri"` finds nothing and the altName wins. Stripping the quotes, or
+walking the list, would break it.
+
+**Helvetica Neue** (1 document): the only fallback where Word for Mac
+differs, and on purpose: a macOS-only family with an altName counts as
+missing (`src/fonts/mod.rs`), since the online export runs on Windows, which
+lacks it. This corpus's Mac references embed HelveticaNeue; ours draws the
+altName Arial, as Word online would.
 | comments only (1) | 70.8 / 88.4 / 0 | 60.0 | |
 
 (317 set before the page-top split fix below: 66.5 / 80.6 / 25.) 108 of the
