@@ -7,23 +7,36 @@ Open work only. Finished rounds, their rules and evidence live in git history
 
 **Engine-gap triage (2026-11-07):** cases where another engine beats us by
 ≥3pp J in the CI comparison (`git show origin/gh-pages:report.json`; same
-numbers as our baselines): 120 cases, ~104 families. Fixed: ut_koer's
-compat 14 header (floats don't wrap header text) and the legacy table
-outdent (needs a style or a tblInd; case196, section-mark-after-table-
-inline-compat14, short-float-clear-inline-table). Open, by size:
-- `displaced-anchor-*` (11 cases, 57.9 vs 91.4): the paragraph after two
-  overlapping floating tables lands 130pt too high (not cleared below the
-  displaced second table).
-- `empty-margin-frame-*` (2 cases, 3.5 and 46.0 vs 82–89): body text 24pt
-  too high beside an empty margin frame.
+numbers as our baselines): 120 cases, ~104 families. Fixed (branch
+`koer-overlap`): ut_koer's compat 14 header (floats don't wrap header
+text); the legacy table outdent (needs a style or a tblInd: case196,
+section-mark-after-table-inline-compat14, short-float-clear-inline-table);
+empty margin frames after visible body text
+(empty-margin-frame-visible-body-before-frame 3.5 → 81.2); an overlapping
+floating table no longer drops a taller earlier one's wrap zone
+(displaced-anchor-narrow-*-overlap1 57.9 → 95.9). Open, by size:
+- `displaced-anchor-wide-*-overlap1` (4 cases, 57.9): the anchor line
+  starting 10pt above a margin-anchored full-width table goes below it in
+  Word (narrow: beside it, even at 0.07pt overlap; page anchor and without
+  the second table alike). Conflicts with 82e94a5ad's "a line that starts
+  above a page-anchored table keeps its place" (japanese_hr probes): find
+  what separates the two before changing the reach rule in `mod.rs`.
+- `empty-margin-frame-long-prefix` (46.0): the frame's anchor is on page 2;
+  `empty_frame_table_bands` only reserves the box on the first page.
 - `autofit-cell-widths-nested` (13.6 vs 63.4): nested rows 1.4–2.4pt short.
 - `nested-table-picture-width` (59.9 vs 83.5): text below 6.9pt too high.
 - `nested-floats-spaced-text-nonzero-x` (30.8 vs 61.0): 9pt x / 32pt y off.
-- Scraped, one fault each: vaccines_history_chapter 14pt too high from the
-  top of page 1; italian_academic_cv_form Word pushes the table's empty
-  last row to a 3rd page (we fit it on page 2); slovak_pedagogical_practice
-  +2.9pt everywhere; romanian_candidate_declaration_form_f2 header 3.6pt
-  high; scottish_fundraising_awards 1.3pt drift plus one re-wrap.
+- slovak_pedagogical_practice (22.8, body +2.9pt): Word's line holding only
+  an o:hrstd rule (1.5pt) is 1.75pt shorter than an empty line (probe:
+  removing the rule moves Word's body down 1.75, ours not at all), and Word
+  draws it ~1.1pt thick, we 0.5; a further 1.2pt residual without the rule.
+- vaccines_history_chapter: page 1 fits one more line than Word (−14pt
+  after); 2.6pt lost in the anchored-textbox timeline above the body, and the
+  16pt subtitle is 11.5pt low.
+- italian_academic_cv_form: the last row fits by 0.26pt in ours, misses by
+  ~0.3pt in Word (0.44pt drift above + row height); no single rule.
+- romanian_candidate_declaration_form_f2 header 3.6pt high;
+  scottish_fundraising_awards 1.3pt drift plus one re-wrap.
 - Small regressions: case91 (−3.0) and case140 (−2.4) since the
   ad8081df7 baselines; air_pollution_permit_form (−2.6) since e16688984.
 - case140/case148 nested-table cell rules sit 0.36pt high and start 0.7pt
