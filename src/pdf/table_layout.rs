@@ -874,6 +874,24 @@ pub(super) fn auto_fit_columns(
             && (table.auto_width || stale_content_preference()))
             || (table.auto_width && saved_grid_asymmetric && stale_uniform_preferences));
     if !keep_saved_grid {
+        // A row whose cell widths add up to the table but disagree with the
+        // saved grid replaces that stale grid: Word draws case91's
+        // 1000/1517/479/1754 cells over an 851/1666/479/1754 grid as stated,
+        // where the larger of each pair, rescaled, moved columns by up to 5pt.
+        // An AutoFit-width table's saved grid is Word's own fit and stays
+        // (primary_care_safeguarding re-wrapped under its stated cells).
+        let stated_row = table.rows.iter().filter(|_| !table.auto_width).find(|row| {
+            let cells: Vec<_> = row.grid_cells().collect();
+            cells.len() == ncols
+                && cells.iter().all(|(_, span, cell)| *span == 1 && cell.width > 0.0)
+                && (cells.iter().map(|(_, _, c)| c.width).sum::<f32>() - total).abs() < 0.5
+                && cells.iter().any(|(col, _, cell)| (cell.width - table.col_widths[*col]).abs() > 0.5)
+        });
+        if let Some(row) = stated_row {
+            for (grid_col, _, cell) in row.grid_cells() {
+                preferred[grid_col] = cell.width;
+            }
+        }
         for row in &table.rows {
             for (grid_col, span, cell) in row.grid_cells() {
                 if grid_col >= ncols {
