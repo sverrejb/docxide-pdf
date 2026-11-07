@@ -3328,6 +3328,26 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/charts_3d": {
+    "jaccard": 0.8971,
+    "ssim": 0.8781,
+    "text_boundary": 0.6393,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/charts_ex": {
+    "jaccard": 0.9729,
+    "ssim": 0.9697,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 0.0
+  },
   "cases/clear-break-lines-one": {
     "jaccard": 0.9945,
     "ssim": 1.0,
