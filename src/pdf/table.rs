@@ -2632,6 +2632,7 @@ pub(super) fn render_header_footer_table(
     page_num_format: Option<&str>,
     gradient_specs: &mut Vec<super::GradientSpec>,
     links: &mut Vec<LinkAnnotation>,
+    is_header: bool,
 ) {
     let content_w = sp.page_width - sp.margin_left - sp.margin_right;
     let mut col_widths = auto_fit_columns(table, ctx.fonts, None, Some(content_w));
@@ -2669,6 +2670,16 @@ pub(super) fn render_header_footer_table(
 
     let merge_spans = compute_merge_spans(table, &row_layouts);
 
+    // A header table's outer border bands sit inside the flow, as in the
+    // body: Word starts header-autofit-table's top band at the header
+    // margin. A footer table's do not: nabl's bottom rule is centred on the
+    // footer margin and its text matched Word without them.
+    let (top_band, bottom_band) = if is_header {
+        super::table_layout::outer_half_bands(table)
+    } else {
+        (0.0, 0.0)
+    };
+    *y -= top_band;
     render_table_rows(
         table,
         &row_layouts,
@@ -2684,6 +2695,7 @@ pub(super) fn render_header_footer_table(
         0..usize::MAX,
         Some(&hf_sub),
     );
+    *y -= bottom_band;
     // ponytail: header/footer cells get no balloons (the pane anchors body text only).
     ctx.cell_comment_anchors.borrow_mut().clear();
 }

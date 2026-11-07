@@ -262,7 +262,9 @@ fn blocking_table_band(
             _ => None,
         })
         .fold(0.0f32, f32::max);
-    let height = table::compute_hf_table_height(table, ctx, text_width) - trailing_after;
+    let (top_band, bottom_band) = super::table_layout::outer_half_bands(table);
+    let height = top_band + table::compute_hf_table_height(table, ctx, text_width) + bottom_band
+        - trailing_after;
     let top = sp.page_height - fp.y;
     Some((top, top + height.max(0.0)))
 }
@@ -670,7 +672,12 @@ fn measure_header_height(
             Block::Table(table) if table.position.is_some() => {}
             Block::Table(table) => {
                 let content_w = sp.text_width();
-                height += table::compute_hf_table_height(table, ctx, content_w);
+                let (top_band, bottom_band) = if is_header {
+                    super::table_layout::outer_half_bands(table)
+                } else {
+                    (0.0, 0.0)
+                };
+                height += top_band + table::compute_hf_table_height(table, ctx, content_w) + bottom_band;
                 prev_space_after = 0.0;
                 prev_para = None;
             }
@@ -938,6 +945,7 @@ pub(super) fn render_header_footer(
                     page_num_format,
                     gradient_specs,
                     links,
+                    is_header,
                 );
                 prev_space_after = 0.0;
                 prev_para = None;
