@@ -738,13 +738,16 @@ pub(super) fn auto_fit_columns(
 
     // Uniform cells against an asymmetric grid take the rule too, as do nested
     // tables inside their cell; only a content-derived grid around a nested
-    // table keeps its host column (`keep_saved_grid` below).
+    // table keeps its host column (`keep_saved_grid` below). A top-level
+    // table's cells must fit beside its indent: uk_commercial_lease's 8720 tw
+    // of cells at tblInd 851 overflow the 9073 tw text width, and Word drew
+    // its saved 8222 tw squeeze.
     if (grid_uniform || !has_nested_table)
         && let Some(widths) = cell_preferred_widths(
             table,
             fonts,
             &min_widths,
-            fill_width.or(available_width),
+            fill_width.map(|w| w - table.table_indent).or(available_width),
             fill_width.is_none(),
         )
     {
