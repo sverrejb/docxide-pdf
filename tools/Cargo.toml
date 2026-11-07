@@ -48,7 +48,7 @@ path = "src/bin/page_metrics.rs"
 
 [dependencies]
 rayon = "1"   # page-metrics, and the harness's metrics.rs it includes by path
-zip = "9.4"
+zip = { version = "9.4", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 roxmltree = "0.21"
 image = "0.25"
 eframe = "0.31"

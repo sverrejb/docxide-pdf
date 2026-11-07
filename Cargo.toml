@@ -23,7 +23,7 @@ default = ["cli"]
 cli = ["clap", "env_logger"]
 
 [dependencies]
-zip = "9.4"
+zip = { version = "9.4", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 roxmltree = "0.21"
 pdf-writer = "0.14"
 ttf-parser = "0.25"
