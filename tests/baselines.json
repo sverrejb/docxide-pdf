@@ -249,6 +249,16 @@
     "a11y_struct": 0.6471,
     "a11y_text": 1.0
   },
+  "cases/bahnschrift-heading-metrics": {
+    "jaccard": 0.5647,
+    "ssim": 0.6838,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
   "cases/band-gap-holds-line-and-space-after": {
     "jaccard": 0.8,
     "ssim": 0.9868,
@@ -403,14 +413,14 @@
     "a11y_text": 1.0
   },
   "cases/case111": {
-    "jaccard": 0.5017,
-    "ssim": 0.823,
-    "text_boundary": 0.6667,
+    "jaccard": 0.6255,
+    "ssim": 0.9725,
+    "text_boundary": 1.0,
     "ua_fail": 2,
-    "a11y_missing": 0,
+    "a11y_missing": 1,
     "ua_deficit": 0,
     "a11y_struct": 0.6,
-    "a11y_text": 0.875
+    "a11y_text": 1.0
   },
   "cases/case112": {
     "jaccard": 0.5528,
@@ -9850,7 +9860,7 @@
   },
   "scraped/indonesian_school_admission_checklist": {
     "jaccard": 0.7589,
-    "ssim": 0.9197,
+    "ssim": 0.9174,
     "text_boundary": 0.9474,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -9930,8 +9940,8 @@
     "a11y_text": 0.9544
   },
   "scraped/italian_project_proposal": {
-    "jaccard": 0.569,
-    "ssim": 0.8613,
+    "jaccard": 0.6045,
+    "ssim": 0.8994,
     "text_boundary": 0.0,
     "convert_ms": 2.4,
     "ua_fail": 2,
@@ -10590,8 +10600,8 @@
     "a11y_text": 1.0
   },
   "scraped/slovak_pedagogical_practice_agreement": {
-    "jaccard": 0.2178,
-    "ssim": 0.8832,
+    "jaccard": 0.2281,
+    "ssim": 0.8835,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10661,9 +10671,9 @@
     "a11y_text": 0.8008
   },
   "scraped/swiss_materials_extraction_zone_guidance": {
-    "jaccard": 0.2941,
-    "ssim": 0.4767,
-    "text_boundary": 0.6174,
+    "jaccard": 0.5159,
+    "ssim": 0.7943,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,

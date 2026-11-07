@@ -74,6 +74,9 @@
   "cases/autofit-saved-grid-fixed-nested-address": [
     "08707c85da9e9b0bb95d8debff4c8d90789b2c416c612fd9e9fb7f6fe2971772"
   ],
+  "cases/bahnschrift-heading-metrics": [
+    "946b5c3c4c3318350e43613cb0b41ebb44fec767fdc8ce39f01746273bfc9884"
+  ],
   "cases/band-gap-holds-line-and-space-after": [
     "46021f9b03588ddb0a901ef8c448b0698aff10a8e7d89b0017d66371e06e539a"
   ],
@@ -123,7 +126,7 @@
     "8e8a21b63c4f61ea37ca893c95d5a8d3171ef92430060f46d3d4e3796e84bf2a"
   ],
   "cases/case111": [
-    "783d12e3f92f20e203f3f8a7abfa00daf14336b494aba580930f56c402634146"
+    "09beacbc2f78df691e3e254d45964d1d657103dce8231a69828c06bffdcacf20"
   ],
   "cases/case112": [
     "4bd4019fdeede0b7de4b5a59227c308fdef038c68dd57cd9c65afbca1fd6ec46"
@@ -3896,7 +3899,7 @@
     "12085adde2779028e2936b6006a0fe15cfb17b8ab7d4b08f988463bf156f0ec4"
   ],
   "scraped/indonesian_school_admission_checklist": [
-    "7196cc61271167457cf5d5b15482b16f0fd042b62b7ddb621ab03f3463e5e24f"
+    "45389094041b2e194026959d52605900a45a4dfbd0aa534b97c1253552aa3b0b"
   ],
   "scraped/international_terrorism_thesis": [
     "7f66c406591c7fd999ffc6e9e18cc5f54d1503dc780add9a3e0478bbe890a1d5",
@@ -3961,7 +3964,7 @@
     "7855e9826b485b180d11fe39f8f26a10b699f7767e65262c56519e6073826663"
   ],
   "scraped/italian_project_proposal": [
-    "cc0f710f2bff319173b1c459ae27fc53467c4448511651d7fc435d0656c5d313"
+    "b54cd1eb3774f202db1a308201e8ec8454d7d5b34f381a8d3d9cabb5fdff7ac2"
   ],
   "scraped/italian_teacher_hiring_preferences": [
     "e873cdc19ab114a82eaccc070f28647899d15503360b6855b1f8f12e7ec17416",
@@ -4585,7 +4588,7 @@
     "b954bd2ce2e510c6a28c71eff41b59bcfc3a4624c568796e81ad9fcea88de5c6"
   ],
   "scraped/slovak_pedagogical_practice_agreement": [
-    "913977e63e1616a3d9d858cd240146c33b79d6068ecf664b1500faaeb73f44d8"
+    "c16822051afcb4fee8cecbb7e20c9c013361ee8983a9ffb64b612e34ce79c0db"
   ],
   "scraped/spanish_constitutional_court_1985": [
     "0bd8e112e1f1ae2d80b266e12f0ee2c18a8f334b79bda3c5ff3d30ea3e3efea0",
@@ -4658,13 +4661,12 @@
     "b7baaa061ea583244df08d8dbecd9915886710734c0af18258c98e2cf057890e"
   ],
   "scraped/swiss_materials_extraction_zone_guidance": [
-    "96bc28ef3447d6546fd71905ca96aee98a6bf6e5a1f12cdd0dc323c8af3a4b7d",
-    "486c145229555352af918b42cf7b370df75e814cf56fc661f306e52af84801c3",
-    "57e7842609a316b1c8e09ec1b639bac60b0a1fc7befc3c2fd2cc0402c507caef",
-    "34ca2a1b299fcb5d35c5baf347be66573e2b31a517fb0fdc37ccca94b33f9eb4",
-    "7bc332f144f54a3969c6b0e52e3fd818cf9b55babf4b13bedfa27ebe968c9637",
-    "289b0e55038103f2a8f928dddaca751e62d5d82ebe7725b432829032b5e433b0",
-    "0e53eb2a0f6fca476e9f0edfb56b3893f98c3da96d4bf795b2892f8f08a9a9d1"
+    "7ecc14881c0a84c0bea7924eda4d361c29051aeeb3c99a5d16a72a8caa340ceb",
+    "f49ad10fa557f5a24b3761e2c4899dde9555bca62e5f8eaa6c9f7a329283cd84",
+    "093933d5868335b88fb7bb769e0df546708d942efa244eb6a88f59ed754ab3fd",
+    "a022c42f5d57099ce00baff9a776c2654be827a80b552055232cbda13a137dff",
+    "6abe2f0a389e9b05a0aa1339f9460046e7d82e4586ce5dda4e8f1fc2ecc45f16",
+    "3d27a49a524abb0bb262aad1fae26cefdedaed819e20e0b73e994567311d0723"
   ],
   "scraped/taiwanese_education_fraud_ruling": [
     "fc638246522eefda4a9f80861712330fb0a116889023602cd3f136cbfc78ae54"
