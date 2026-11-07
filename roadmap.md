@@ -142,9 +142,9 @@ alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
 - streamnet p1 agenda table rows +0.43/+0.68pt each (cell line height).
 - dental_amalgam: gained +22pp J with a max-descent marker rule but +10pp with
   the measured ascent-only rule; check what its markers are.
-- ut_koer (2026-07, unverified since): a tab-stop two-column contact header
-  beside a wrapTight header image needs tab layout aware of the float band
-  (`build_tabbed_line` has no float-zone awareness).
+- ut_koer header: FIXED 2026-11-07 — compat 14 header/footer floats don't
+  wrap header text (Word probes). Open: whether compat 14 header floats also
+  skip the full-width push in `float_text_push` (unprobed).
 - multi_font: needs Copperplate Gothic Light (in Word's cloud catalog; pick it
   in Word's font menu to download); page 1 also runs ~14pt taller than
   Word's. korean_japanese needs HY헤드라인M and New Gulim (low value).
