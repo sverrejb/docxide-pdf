@@ -3882,10 +3882,31 @@ fn render_paragraph_block(
         size_lines_by_own_runs(&mut lines, ctx.fonts, effective_ls, line_h, para_ascent, para.text_alignment == crate::model::TextAlignment::Top);
         size_break_lines(&mut lines, &effective_runs, effective_ls, line_h, ctx.fonts);
     }
+    // Only glyphs on a picture's own line hang a descent below it: when the
+    // text after leading spaces and a picture wraps to the next line, Word
+    // closes the picture line at the picture (leading-picture-image-fits).
+    let picture_lines_glyphless = lines
+        .iter()
+        .filter(|l| line_max_image_h(l) > 0.0)
+        .all(|l| {
+            l.chunks
+                .iter()
+                .all(|c| c.inline_image_name.is_some() || c.text.trim().is_empty())
+        });
+    let picture_runs: Vec<Run> = if picture_lines_glyphless {
+        effective_runs
+            .iter()
+            .filter(|r| r.inline_image.is_some() || r.text.trim().is_empty())
+            .cloned()
+            .collect()
+    } else {
+        Vec::new()
+    };
     let mut para_metrics = (
         para_ascent,
         if max_inline_img_h > 0.0 {
-            picture_line_bottom(&effective_runs, para, ctx.fonts, effective_ls)
+            let runs = if picture_lines_glyphless { &picture_runs[..] } else { &effective_runs[..] };
+            picture_line_bottom(runs, para, ctx.fonts, effective_ls)
         } else {
             0.0
         },
