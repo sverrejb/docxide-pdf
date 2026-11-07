@@ -530,7 +530,10 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
     } else {
         (None, 0.0)
     };
-    let outline_inset = outline_width / 2.0;
+    // Word halves the width in whole EMUs: a 0.25pt (3175 EMU) outline insets
+    // 1587 EMU, so text at a box edge stays on its pixel (inset probe, every
+    // width from 0.25 to 12pt at four sub-pixel box positions).
+    let outline_inset = ((outline_width as f64 * 12700.0).round() as i64 / 2) as f32 / 12700.0;
 
     let stroke_dash: &[f32] = ln_node.map_or(&[], parse_prst_dash);
 
