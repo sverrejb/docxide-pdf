@@ -651,7 +651,8 @@ pub(super) struct RenderContext<'a> {
     /// Display numbers of footnote and endnote reference marks, by note id.
     pub(super) footnote_marks: &'a HashMap<u32, String>,
     pub(super) endnote_marks: &'a HashMap<u32, String>,
-    /// Page numbers from a first pass, for PAGE and NUMPAGES fields in the body.
+    /// Page numbers from a first pass, for PAGE, NUMPAGES and SECTIONPAGES
+    /// fields in the body.
     pub(super) body_page_fields: Option<&'a BodyPageFields>,
     /// What a PAGEREF shows for each page of the bookmark pre-pass.
     pub(super) page_labels: Vec<String>,
@@ -2828,10 +2829,15 @@ fn document_lang(doc: &Document) -> String {
         .unwrap_or_else(|| "en-US".to_string())
 }
 
-/// A body PAGE or NUMPAGES field's value on page `page_idx`, from the first
-/// pass (None before it). ponytail: a paragraph that runs onto the next page
-/// shows its first page's number throughout.
-fn body_page_field_text(run: &Run, ctx: &RenderContext, page_idx: usize) -> Option<String> {
+/// A body PAGE, NUMPAGES or SECTIONPAGES field's value on page `page_idx`,
+/// from the first pass (None before it). ponytail: a paragraph that runs onto
+/// the next page shows its first page's number throughout.
+fn body_page_field_text(
+    run: &Run,
+    ctx: &RenderContext,
+    page_idx: usize,
+    sect_idx: usize,
+) -> Option<String> {
     let fields = ctx.body_page_fields?;
     match run.field_code {
         Some(FieldCode::Page(fmt)) => {
@@ -2842,6 +2848,10 @@ fn body_page_field_text(run: &Run, ctx: &RenderContext, page_idx: usize) -> Opti
             ))
         }
         Some(FieldCode::NumPages(fmt)) => Some(header_footer::page_field_text(fields.total, fmt)),
+        Some(FieldCode::SectionPages(fmt)) => Some(header_footer::page_field_text(
+            fields.section_pages[sect_idx],
+            fmt,
+        )),
         _ => None,
     }
 }
@@ -3453,10 +3463,9 @@ fn render_paragraph_block(
     let has_footnote_refs = para.runs.iter().any(|r| r.footnote_id.is_some());
     let has_endnote_refs = para.runs.iter().any(|r| r.endnote_id.is_some());
     let has_pageref = para.runs.iter().any(|r| {
-        matches!(
-            &r.field_code,
-            Some(FieldCode::PageRef(_) | FieldCode::Page(_) | FieldCode::NumPages(_))
-        )
+        r.field_code
+            .as_ref()
+            .is_some_and(|fc| fc.is_page_count() || matches!(fc, FieldCode::PageRef(_)))
     });
     let effective_runs: std::borrow::Cow<'_, Vec<Run>> =
         if has_footnote_refs || has_endnote_refs || has_pageref {
@@ -3484,7 +3493,7 @@ fn render_paragraph_block(
                         }
                         r
                     } else if let Some(text) =
-                        body_page_field_text(run, ctx, state.pb.all_contents.len())
+                        body_page_field_text(run, ctx, state.pb.all_contents.len(), sect_idx)
                     {
                         Run {
                             text,
@@ -5700,22 +5709,32 @@ fn render_paragraph_block(
     false
 }
 
-/// Each page's number and number format (None = decimal), and the page count.
+/// Each page's number and number format (None = decimal), each section's
+/// page count, and the page count.
 pub(super) struct BodyPageFields {
     pages: Vec<(usize, Option<String>)>,
+    section_pages: Vec<usize>,
     total: usize,
+}
+
+/// How many pages each section is on (SECTIONPAGES). A page where a
+/// continuous section starts counts for both sections.
+fn section_page_counts(sections: usize, pages: &[(usize, bool, usize)]) -> Vec<usize> {
+    let mut counts = vec![0; sections];
+    for &(first, _, last) in pages {
+        for count in &mut counts[first..=last] {
+            *count += 1;
+        }
+    }
+    counts
 }
 
 pub fn render(doc: &Document, options: &ConvertOptions) -> Result<Vec<u8>, Error> {
     let (pdf, page_fields) = render_pass(doc, None, options)?;
-    // Word shows body PAGE and NUMPAGES fields live, not their cached result,
+    // Word shows body PAGE, NUMPAGES and SECTIONPAGES fields live, not their cached result,
     // and their values are known only once the document is paginated.
-    let has_page_fields = body_runs(doc).any(|r| {
-        matches!(
-            r.field_code,
-            Some(FieldCode::Page(_) | FieldCode::NumPages(_))
-        )
-    });
+    let has_page_fields =
+        body_runs(doc).any(|r| r.field_code.as_ref().is_some_and(FieldCode::is_page_count));
     if has_page_fields {
         return render_pass(doc, Some(&page_fields), options).map(|(pdf, _)| pdf);
     }
@@ -6750,6 +6769,8 @@ fn render_pass(
     let empty_hf_maps: HfMaps = Default::default();
 
     let page_numbers = page_number_formats(doc, &state.pb.page_section_indices);
+    let section_page_counts =
+        section_page_counts(doc.sections.len(), &state.pb.page_section_indices);
 
     let empty_styleref: HashMap<String, String> = HashMap::new();
     // The first occurrence of each style in the document. The running values
@@ -6774,6 +6795,8 @@ fn render_pass(
         ctx.cell_grid_pitch.set(cell_grid_pitch(doc, sp));
 
         let (page_num, effective_page_num_format) = page_numbers[page_idx];
+        // Word counts the pages of the section the page starts in.
+        let section_pages = section_page_counts[si];
 
         // Per spec §17.16.5.59: in headers/footers of a printed document, STYLEREF
         // searches the current page top-to-bottom first, then backward to doc start.
@@ -6812,6 +6835,7 @@ fn render_pass(
             let pc = HfPageContext {
                 page_num,
                 total_pages,
+                section_pages,
                 para_image_names: pi_map,
                 inline_image_names: ii_map,
                 floating_image_names: fi_map,
@@ -6841,6 +6865,7 @@ fn render_pass(
             let pc = HfPageContext {
                 page_num,
                 total_pages,
+                section_pages,
                 para_image_names: pi_map,
                 inline_image_names: ii_map,
                 floating_image_names: fi_map,
@@ -6949,6 +6974,7 @@ fn render_pass(
             .into_iter()
             .map(|(n, fmt)| (n, fmt.map(str::to_string)))
             .collect(),
+        section_pages: section_page_counts,
         total: total_pages,
     };
     Ok((objstm::pack(pdf.finish()), page_fields))

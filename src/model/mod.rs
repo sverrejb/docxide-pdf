@@ -963,6 +963,8 @@ pub enum FieldCode {
     /// None keeps the section's page number format.
     Page(Option<&'static str>),
     NumPages(Option<&'static str>),
+    /// Pages in the section the field is on.
+    SectionPages(Option<&'static str>),
     StyleRef {
         name: String,
         form: StyleRefForm,
@@ -981,6 +983,21 @@ pub enum FieldCode {
     /// heads read `IF {STYLEREF X \n} = 0 "{STYLEREF X}" "Part {STYLEREF X \n}"`,
     /// so the cached result is one page's value.
     If(Vec<IfPart>),
+}
+
+impl FieldCode {
+    /// PAGE, NUMPAGES or SECTIONPAGES: a page number or count.
+    pub fn is_page_count(&self) -> bool {
+        matches!(self, FieldCode::Page(_) | FieldCode::NumPages(_) | FieldCode::SectionPages(_))
+    }
+
+    /// A page number or count's `\*` number format.
+    pub fn num_format(&self) -> Option<&str> {
+        match self {
+            FieldCode::Page(fmt) | FieldCode::NumPages(fmt) | FieldCode::SectionPages(fmt) => *fmt,
+            _ => None,
+        }
+    }
 }
 
 /// What a SEQ field does to its counter.

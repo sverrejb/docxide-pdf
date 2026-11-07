@@ -36,6 +36,8 @@ fn parse_field_code(instr: &str) -> Option<FieldCode> {
         Some(FieldCode::Page(number_format_switch(instr)))
     } else if keyword.eq_ignore_ascii_case("NUMPAGES") {
         Some(FieldCode::NumPages(number_format_switch(instr)))
+    } else if keyword.eq_ignore_ascii_case("SECTIONPAGES") {
+        Some(FieldCode::SectionPages(number_format_switch(instr)))
     } else if keyword.eq_ignore_ascii_case("STYLEREF") {
         parse_styleref_arg(instr).map(|name| FieldCode::StyleRef {
             name,
@@ -107,20 +109,47 @@ fn parse_eq_overstrike(instr: &str) -> Option<String> {
     (!base.is_empty()).then(|| base.to_string())
 }
 
+/// The words of a field instruction, each with whether it was quoted: a
+/// quoted argument is one word (without its quotes) and never a switch.
+fn field_words(instr: &str) -> impl Iterator<Item = (&str, bool)> + '_ {
+    let mut rest = instr;
+    std::iter::from_fn(move || {
+        rest = rest.trim_start();
+        if let Some(quoted) = rest.strip_prefix('"') {
+            let mut escaped = false;
+            let close = quoted.find(|c| {
+                let closes = c == '"' && !escaped;
+                escaped = c == '\\' && !escaped;
+                closes
+            });
+            let (word, after) = close.map_or((quoted, ""), |i| (&quoted[..i], &quoted[i + 1..]));
+            rest = after;
+            return Some((word, true));
+        }
+        let end = rest
+            .find(|c: char| c.is_whitespace() || c == '"')
+            .unwrap_or(rest.len());
+        let (word, after) = rest.split_at(end);
+        rest = after;
+        (!word.is_empty()).then_some((word, false))
+    })
+}
+
+fn is_switch((word, quoted): (&str, bool), switch: &str) -> bool {
+    !quoted && word.eq_ignore_ascii_case(switch)
+}
+
 pub(super) fn has_switch(instr: &str, switch: &str) -> bool {
-    instr
-        .split_whitespace()
-        .any(|s| s.eq_ignore_ascii_case(switch))
+    field_words(instr).any(|w| is_switch(w, switch))
 }
 
 /// The word after each `switch` in a field instruction (`\* ROMAN \*
 /// MERGEFORMAT` → "ROMAN", "MERGEFORMAT").
 fn switch_args<'a>(instr: &'a str, switch: &'a str) -> impl Iterator<Item = &'a str> + 'a {
-    instr
-        .split_whitespace()
-        .zip(instr.split_whitespace().skip(1))
-        .filter(move |(word, _)| word.eq_ignore_ascii_case(switch))
-        .map(|(_, arg)| arg)
+    field_words(instr)
+        .zip(field_words(instr).skip(1))
+        .filter(move |&(word, _)| is_switch(word, switch))
+        .map(|(_, (arg, _))| arg)
 }
 
 /// `\* ROMAN`, `\* alphabetic` …: the numFmt a numeric field is shown in.
@@ -163,6 +192,10 @@ struct FieldFrame {
     /// The code came as `w:delInstrText`: a deleted field keeps only its
     /// cached result (markup view), never a regenerated one.
     instr_deleted: bool,
+    /// The formatting of the instruction's first character and of the cached
+    /// result's (`FieldFrame::result_format`).
+    instr_fmt: Option<Run>,
+    result_fmt: Option<Run>,
 }
 
 /// Fields still open when a paragraph ends, carried into the next one: a
@@ -197,6 +230,22 @@ impl FieldFrame {
             checkbox: None,
             macrobutton: false,
             instr_deleted: false,
+            instr_fmt: None,
+            result_fmt: None,
+        }
+    }
+
+    /// Word lays a regenerated result out in the formatting of the
+    /// instruction's first character, or with `\* MERGEFORMAT` in that of
+    /// the cached result's; hidden when the instruction is
+    /// (field-result-format-source). `end` stands in for a missing instruction.
+    fn result_format(&self, end: &Run) -> Run {
+        let instr = self.instr_fmt.as_ref().unwrap_or(end);
+        let merge = switch_args(&self.instr, "\\*").any(|a| a.eq_ignore_ascii_case("MERGEFORMAT"));
+        let src = self.result_fmt.as_ref().filter(|_| merge).unwrap_or(instr);
+        Run {
+            vanish: src.vanish || instr.vanish,
+            ..src.clone()
         }
     }
 
@@ -1442,10 +1491,8 @@ pub(super) fn parse_runs<R: Read + Seek>(
                     .filter_map(|n| n.text())
                     .collect();
                 runs.push(Run {
-                    text: cached,
                     field_code: Some(code),
-                    hyperlink_url: hyperlink_url.clone(),
-                    ..fmt.styled_run()
+                    ..fmt.text_run(cached, hyperlink_url.clone())
                 });
             }
             continue;
@@ -1584,11 +1631,10 @@ pub(super) fn parse_runs<R: Read + Seek>(
                                 }
                                 _ => hyperlink_url.clone(),
                             };
+                            let result_fmt = f.result_format(&fmt);
                             runs.push(Run {
-                                text: f.result,
                                 field_code: Some(code),
-                                hyperlink_url: url,
-                                ..fmt.styled_run()
+                                ..result_fmt.text_run(f.result, url)
                             });
                         } else if f.result.is_empty()
                             && let Some(text) = parse_eq_overstrike(&f.instr)
@@ -1614,6 +1660,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         if f.macrobutton {
                             f.result.push_str(t);
                         } else if !f.seen_sep {
+                            f.instr_fmt.get_or_insert_with(|| fmt.clone());
                             f.push_instr(t, simple.is_some());
                             f.instr_deleted |= child.has_tag_name((WML_NS, "delInstrText"));
                             if let Some(display) = macrobutton_display(&f.instr) {
@@ -1635,7 +1682,11 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         // Cached result of a dynamic field — keep it as the
                         // field run's placeholder text (re-evaluated at render).
                         if let Some(t) = child.text() {
-                            field_stack.last_mut().unwrap().result.push_str(t);
+                            let f = field_stack.last_mut().unwrap();
+                            if !t.is_empty() {
+                                f.result_fmt.get_or_insert_with(|| fmt.clone());
+                            }
+                            f.result.push_str(t);
                         }
                     } else if visible && let Some(t) = child.text() {
                         // Word lays out a TAB character in the text like a <w:tab/>.
@@ -1992,6 +2043,15 @@ fn parse_vml_horizontal_rule(pict_node: roxmltree::Node) -> Option<HorizontalRul
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn quoted_text_holds_no_switch() {
+        let instr = r#" IF 1 = 1 "a \* MERGEFORMAT b" "\h"\* Upper \* "x" "#;
+        assert_eq!(switch_args(instr, "\\*").collect::<Vec<_>>(), ["Upper", "x"]);
+        assert!(!has_switch(instr, "\\h"));
+        let escaped = r#" IF 1 = 1 "a \" \* MERGEFORMAT \" b" "c" "#;
+        assert!(!has_switch(escaped, "\\*"));
+    }
 
     #[test]
     fn seq_field_reads_its_name_and_switches() {

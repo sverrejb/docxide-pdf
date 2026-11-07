@@ -126,27 +126,18 @@ fn collect_used_chars(
         chars.insert(' ');
         if math_font && run.math.is_some() {
             // Drawn from its box in the math font (m:nor text below).
-        } else if run.caps || run.small_caps {
-            chars.extend(run.text.to_uppercase().chars());
         } else {
-            chars.extend(run.text.chars());
+            extend_cased(chars, run, run.text.chars());
         }
         if let Some(ruby) = &run.ruby {
             chars.extend(ruby.text.chars());
         }
         if let Some(ref fc) = run.field_code {
-            match fc {
-                FieldCode::Page(_) | FieldCode::NumPages(_) | FieldCode::PageRef(_) => {
-                    chars.extend('0'..='9');
-                    if let FieldCode::Page(Some(fmt)) | FieldCode::NumPages(Some(fmt)) = fc {
-                        extend_chars_for_num_format(chars, fmt);
-                    }
-                    for fmt in &all_page_num_formats {
-                        extend_chars_for_num_format(chars, fmt);
-                    }
-                }
-                FieldCode::StyleRef { .. } | FieldCode::If(_) | FieldCode::Seq { .. } => {}
+            let page_chars = page_number_chars(fc, &all_page_num_formats);
+            if matches!(fc, FieldCode::Page(_) | FieldCode::NumPages(_)) {
+                chars.extend(page_chars.iter().copied());
             }
+            extend_cased(chars, run, page_chars);
         }
         if run.footnote_id.is_some() || run.is_footnote_ref_mark {
             chars.extend('0'..='9');
@@ -269,55 +260,41 @@ fn collect_used_chars(
         }
     }
 
-    for section in &doc.sections {
-        for hf in [
-            &section.properties.header_default,
-            &section.properties.header_first,
-            &section.properties.header_even,
-            &section.properties.footer_default,
-            &section.properties.footer_first,
-            &section.properties.footer_even,
-        ]
-        .into_iter()
-        .flatten()
-        {
-            for para in hf_paragraphs(hf) {
-                for run in &para.runs {
-                    let key = font_key_buf(run, &mut key_buf);
-                    let chars = used.entry(key.to_string()).or_default();
-                    if run.caps || run.small_caps {
-                        chars.extend(run.text.to_uppercase().chars());
-                    } else {
-                        chars.extend(run.text.chars());
-                    }
-                    if let Some(ref fc) = run.field_code {
-                        match fc {
-                            FieldCode::Page(_) | FieldCode::NumPages(_) | FieldCode::PageRef(_) => {
-                                chars.extend('0'..='9');
-                                if let FieldCode::Page(Some(fmt)) | FieldCode::NumPages(Some(fmt)) =
-                                    fc
-                                {
-                                    extend_chars_for_num_format(chars, fmt);
-                                }
-                                for fmt in &all_page_num_formats {
-                                    extend_chars_for_num_format(chars, fmt);
-                                }
-                            }
-                            FieldCode::StyleRef { .. }
-                            | FieldCode::If(_)
-                            | FieldCode::Seq { .. } => {
-                                chars.extend(styleref_chars.iter());
-                                // An IF shows its own text and nested PAGE digits too
-                                if let FieldCode::If(parts) = fc {
-                                    chars.extend('0'..='9');
-                                    for part in parts {
-                                        if let IfPart::Text(t) = part {
-                                            chars.extend(t.chars());
-                                        }
-                                    }
-                                }
-                            }
-                        }
+    let hf_paras: Vec<&Paragraph> = doc
+        .sections
+        .iter()
+        .flat_map(|s| {
+            let p = &s.properties;
+            [
+                &p.header_default,
+                &p.header_first,
+                &p.header_even,
+                &p.footer_default,
+                &p.footer_first,
+                &p.footer_even,
+            ]
+        })
+        .filter_map(|hf| hf.as_ref())
+        .flat_map(hf_paragraphs)
+        .flat_map(collect_paras)
+        .collect();
+    for para in &hf_paras {
+        for run in &para.runs {
+            let Some(fc @ (FieldCode::StyleRef { .. } | FieldCode::If(_) | FieldCode::Seq { .. })) =
+                &run.field_code
+            else {
+                continue;
+            };
+            let chars = used
+                .entry(font_key_buf(run, &mut key_buf).to_string())
+                .or_default();
+            extend_cased(chars, run, styleref_chars.iter().copied());
+            // An IF shows its own text and nested PAGE digits too
+            if let FieldCode::If(parts) = fc {
+                extend_cased(chars, run, '0'..='9');
+                for part in parts {
+                    if let IfPart::Text(t) = part {
+                        extend_cased(chars, run, t.chars());
                     }
                 }
             }
@@ -373,24 +350,7 @@ fn collect_used_chars(
         }
     }
 
-    let hf_paras = doc
-        .sections
-        .iter()
-        .flat_map(|s| {
-            let p = &s.properties;
-            [
-                &p.header_default,
-                &p.header_first,
-                &p.header_even,
-                &p.footer_default,
-                &p.footer_first,
-                &p.footer_even,
-            ]
-        })
-        .filter_map(|hf| hf.as_ref())
-        .flat_map(hf_paragraphs)
-        .flat_map(collect_paras);
-    for para in all_paras.iter().copied().chain(hf_paras) {
+    for para in all_paras.iter().chain(&hf_paras) {
         // A leader is drawn in the tab's own font, or a neighbour's for a tab
         // without one.
         let leaders: Vec<char> = para.tab_stops.iter().filter_map(|t| t.leader).collect();
@@ -422,6 +382,29 @@ fn collect_used_chars(
     }
 
     used
+}
+
+/// The characters a PAGE, NUMPAGES or PAGEREF result may show: digits and
+/// the letters of its own and every section's page number format.
+fn page_number_chars(fc: &FieldCode, page_num_formats: &[&str]) -> HashSet<char> {
+    let mut chars = HashSet::new();
+    if !fc.is_page_count() && !matches!(fc, FieldCode::PageRef(_)) {
+        return chars;
+    }
+    chars.extend('0'..='9');
+    for fmt in fc.num_format().into_iter().chain(page_num_formats.iter().copied()) {
+        extend_chars_for_num_format(&mut chars, fmt);
+    }
+    chars
+}
+
+/// Caps and small caps draw every letter as a capital.
+fn extend_cased(chars: &mut HashSet<char>, run: &Run, text: impl IntoIterator<Item = char>) {
+    if run.caps || run.small_caps {
+        chars.extend(text.into_iter().flat_map(char::to_uppercase));
+    } else {
+        chars.extend(text);
+    }
 }
 
 fn extend_chars_for_num_format(chars: &mut HashSet<char>, fmt: &str) {
