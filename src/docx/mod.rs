@@ -202,36 +202,27 @@ pub(super) fn chart_ns_children<'a>(
     find_children(parent, name, CHART_NS)
 }
 
-// ponytail: the revision view and the author colour table are per-conversion
-// state read deep inside the parser (runs, paragraphs, tables, numbering); a
-// thread-local spares threading them through every ParseContext. A conversion
-// runs on one thread, so concurrent conversions never share them.
-thread_local! {
-    static MARKUP: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
-    static AUTHORS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+/// How one document's tracked changes print. Every part (body, headers,
+/// notes) shares one, so an author keeps one colour across the document.
+#[derive(Default)]
+pub(in crate::docx) struct Revisions {
+    /// Print tracked changes as Word's All Markup view (`RevisionView::Markup`).
+    pub(in crate::docx) markup: bool,
+    authors: std::cell::RefCell<Vec<String>>,
 }
 
-/// Print tracked changes as Word's All Markup view (`RevisionView::Markup`).
-pub(crate) fn markup() -> bool {
-    MARKUP.with(|m| m.get())
-}
-
-pub(crate) fn set_markup(on: bool) {
-    MARKUP.with(|m| m.set(on));
-    AUTHORS.with(|a| a.borrow_mut().clear());
-}
-
-/// Word colours each author's revisions by the order the authors first
-/// appear (Word for Mac probes 2026-11-05; a machine that has seen an author
-/// before keeps that author's earlier colour, which no converter can know).
-pub(crate) fn author_index(author: &str) -> usize {
-    AUTHORS.with(|a| {
-        let mut a = a.borrow_mut();
-        a.iter().position(|n| n == author).unwrap_or_else(|| {
-            a.push(author.to_string());
-            a.len() - 1
-        })
-    })
+impl Revisions {
+    /// Word colours each author's revisions by the order the authors first
+    /// appear (Word for Mac probes 2026-11-05; a machine that has seen an author
+    /// before keeps that author's earlier colour, which no converter can know).
+    pub(in crate::docx) fn author_color(&self, author: &str) -> [u8; 3] {
+        let mut authors = self.authors.borrow_mut();
+        let index = authors.iter().position(|n| n == author).unwrap_or_else(|| {
+            authors.push(author.to_string());
+            authors.len() - 1
+        });
+        runs::AUTHOR_COLORS[index % runs::AUTHOR_COLORS.len()]
+    }
 }
 
 pub(in crate::docx) struct ParseContext<'a, R: std::io::Read + std::io::Seek> {
@@ -240,6 +231,7 @@ pub(in crate::docx) struct ParseContext<'a, R: std::io::Read + std::io::Seek> {
     pub(in crate::docx) rels: &'a HashMap<String, String>,
     pub(in crate::docx) zip: &'a mut zip::ZipArchive<R>,
     pub(in crate::docx) numbering: &'a numbering::NumberingInfo,
+    pub(in crate::docx) revisions: &'a Revisions,
     /// The body's comment ranges (`comment_ranges`); empty for headers,
     /// footers and notes.
     pub(in crate::docx) comments: CommentRanges,
@@ -1034,21 +1026,22 @@ fn is_fully_deleted_paragraph(node: roxmltree::Node) -> bool {
 
 pub(super) fn collect_block_nodes<'a>(
     parent: roxmltree::Node<'a, 'a>,
+    markup: bool,
 ) -> Vec<roxmltree::Node<'a, 'a>> {
     let mut nodes = Vec::new();
     for child in parent.children() {
         // The markup view keeps a deleted paragraph, struck through.
-        if !markup() && is_fully_deleted_paragraph(child) {
+        if !markup && is_fully_deleted_paragraph(child) {
             continue;
         }
         if child.has_tag_name((WML_NS, "sdt")) {
             if let Some(content) = wml(child, "sdtContent") {
-                nodes.extend(collect_block_nodes(content));
+                nodes.extend(collect_block_nodes(content, markup));
             }
         } else if child.has_tag_name((WML_NS, "customXml")) {
             // w:customXml is a transparent wrapper (block/row/cell): its children
             // ARE the content. Same descent drives tbl→tr and tr→tc unwrapping.
-            nodes.extend(collect_block_nodes(child));
+            nodes.extend(collect_block_nodes(child, markup));
         } else if child.has_tag_name((MC_NS_TOP, "AlternateContent")) {
             // mc:AlternateContent wraps block-level content in mc:Choice/mc:Fallback.
             // Use mc:Fallback for compatibility (it avoids newer namespace requirements).
@@ -1056,7 +1049,7 @@ pub(super) fn collect_block_nodes<'a>(
                 .children()
                 .find(|n| n.has_tag_name((MC_NS_TOP, "Fallback")));
             if let Some(fb) = fallback {
-                nodes.extend(collect_block_nodes(fb));
+                nodes.extend(collect_block_nodes(fb, markup));
             }
         } else {
             nodes.push(child);
@@ -1181,7 +1174,7 @@ mod relationships {
     }
 }
 
-pub fn parse(path: &std::path::Path) -> Result<Document, Error> {
+pub fn parse(path: &std::path::Path, markup: bool) -> Result<Document, Error> {
     let file = std::fs::File::open(path).map_err(|e| match e.kind() {
         std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied => Error::Io(
             std::io::Error::new(e.kind(), format!("{}: {}", e, path.display())),
@@ -1192,15 +1185,15 @@ pub fn parse(path: &std::path::Path) -> Result<Document, Error> {
     let mut zip = zip::ZipArchive::new(file)
         .map_err(|_| Error::InvalidDocx("file is not a ZIP archive".into()))?;
 
-    parse_zip(&mut zip)
+    parse_zip(&mut zip, markup)
 }
 
-pub fn parse_bytes(bytes: &[u8]) -> Result<Document, Error> {
+pub fn parse_bytes(bytes: &[u8], markup: bool) -> Result<Document, Error> {
     let cursor = std::io::Cursor::new(bytes);
     let mut zip = zip::ZipArchive::new(cursor)
         .map_err(|_| Error::InvalidDocx("data is not a valid ZIP/DOCX archive".into()))?;
 
-    parse_zip(&mut zip)
+    parse_zip(&mut zip, markup)
 }
 
 fn parse_core_props<R: Read + std::io::Seek>(
@@ -1235,7 +1228,14 @@ fn parse_core_props<R: Read + std::io::Seek>(
     )
 }
 
-fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Document, Error> {
+fn parse_zip<R: Read + std::io::Seek>(
+    zip: &mut zip::ZipArchive<R>,
+    markup: bool,
+) -> Result<Document, Error> {
+    let revisions = Revisions {
+        markup,
+        ..Default::default()
+    };
     let settings = parse_settings(zip);
     let theme = parse_theme(
         zip,
@@ -1249,8 +1249,10 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
     let rels = parse_relationships(zip);
     let ft = parse_font_table(zip);
     let (embedded_fonts, font_table) = (ft.embedded_fonts, ft.font_table);
-    let (footnotes, footnote_separator) = parse_footnotes(zip, &styles, &theme, &numbering);
-    let (endnotes, endnote_separator) = parse_endnotes(zip, &styles, &theme, &numbering);
+    let (footnotes, footnote_separator) =
+        parse_footnotes(zip, &styles, &theme, &numbering, &revisions);
+    let (endnotes, endnote_separator) =
+        parse_endnotes(zip, &styles, &theme, &numbering, &revisions);
     let mut comments = comments::parse_comments(zip);
     let (title, author, subject, keywords) = parse_core_props(zip);
 
@@ -1292,6 +1294,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
         rels: &rels,
         zip,
         numbering: &numbering,
+        revisions: &revisions,
         comments: comment_ranges,
         fields: Default::default(),
         grid_char_delta: grid_deltas.first().copied().unwrap_or(0.0),
@@ -1303,7 +1306,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
     // numId of the previous body block when it was a list paragraph.
     let mut prev_list_num_id: Option<String> = None;
 
-    for node in collect_block_nodes(body) {
+    for node in collect_block_nodes(body, markup) {
         if node.tag_name().namespace() != Some(WML_NS) {
             continue;
         }
@@ -1332,7 +1335,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                 // Final view: a deleted paragraph mark joins its text to the
                 // next paragraph, which keeps its own properties (Word online
                 // export probe 2026-11-05: "Para C, deleted mark after it.Para D.").
-                if !markup()
+                if !markup
                     && matches!(blocks.last(), Some(Block::Paragraph(prev)) if prev.mark_deleted)
                     && let Some(Block::Paragraph(prev)) = blocks.pop()
                 {
@@ -1372,7 +1375,7 @@ fn parse_zip<R: Read + std::io::Seek>(zip: &mut zip::ZipArchive<R>) -> Result<Do
                 // header, inline markup export three pages, one header each).
                 if let Some(sect_node) = ppr
                     .and_then(|ppr| wml(ppr, "sectPr"))
-                    .filter(|_| markup() || !mark_deleted)
+                    .filter(|_| markup || !mark_deleted)
                 {
                     if let Some(Block::Paragraph(last_para)) = blocks.last_mut() {
                         last_para.is_section_break = true;
@@ -2105,7 +2108,7 @@ mod tests {
         for (paragraph, deleted) in cases {
             let xml = format!("<w:body xmlns:w=\"{WML_NS}\">{paragraph}</w:body>");
             let doc = roxmltree::Document::parse(&xml).unwrap();
-            let blocks = collect_block_nodes(doc.root_element());
+            let blocks = collect_block_nodes(doc.root_element(), false);
             assert_eq!(blocks.len(), usize::from(!deleted), "{paragraph}");
         }
     }

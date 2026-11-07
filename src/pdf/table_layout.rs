@@ -2716,7 +2716,7 @@ mod tests {
             zip.start_file("word/document.xml", SimpleFileOptions::default())
                 .unwrap();
             zip.write_all(xml.as_bytes()).unwrap();
-            let doc = crate::docx::parse_bytes(&zip.finish().unwrap().into_inner()).unwrap();
+            let doc = crate::docx::parse_bytes(&zip.finish().unwrap().into_inner(), false).unwrap();
             let Block::Table(table) = &doc.sections[0].blocks[0] else {
                 panic!("table");
             };
@@ -2727,9 +2727,12 @@ mod tests {
 
     #[test]
     fn text_above_float_requires_both_horizontal_and_vertical_room() {
-        let mut doc = crate::docx::parse_bytes(include_bytes!(
-            "../../tests/fixtures/cases/cell-text-above-floats-y1200-n1-long0/input.docx"
-        ))
+        let mut doc = crate::docx::parse_bytes(
+            include_bytes!(
+                "../../tests/fixtures/cases/cell-text-above-floats-y1200-n1-long0/input.docx"
+            ),
+            false,
+        )
         .unwrap();
         let Block::Table(table) = &mut doc.sections[0].blocks[0] else {
             panic!("outer table");
@@ -2776,7 +2779,7 @@ mod tests {
         zip.start_file("word/document.xml", SimpleFileOptions::default())
             .unwrap();
         zip.write_all(xml.as_bytes()).unwrap();
-        let mut doc = crate::docx::parse_bytes(&zip.finish().unwrap().into_inner()).unwrap();
+        let mut doc = crate::docx::parse_bytes(&zip.finish().unwrap().into_inner(), false).unwrap();
         let Block::Table(table) = doc.sections[0].blocks.remove(0) else {
             panic!("table")
         };
@@ -2805,9 +2808,10 @@ mod tests {
             let mut key_buf = String::new();
             let key = crate::fonts::font_key_buf(&runs[0], &mut key_buf).to_string();
             let fonts = HashMap::from([(key, FontEntry::stub())]);
-            let mut doc = crate::docx::parse_bytes(include_bytes!(
-                "../../tests/fixtures/cases/min-width-run-whole/input.docx"
-            ))
+            let mut doc = crate::docx::parse_bytes(
+                include_bytes!("../../tests/fixtures/cases/min-width-run-whole/input.docx"),
+                false,
+            )
             .unwrap();
             let Block::Table(mut table) = doc.sections[0].blocks.remove(0) else {
                 panic!("table")
@@ -2831,7 +2835,7 @@ mod tests {
     #[test]
     fn nested_empty_reserved_cells_keep_explicit_grid_when_it_fits() {
         let bytes = include_bytes!("../../tests/fixtures/cases/case88/input.docx");
-        let doc = crate::docx::parse_bytes(bytes).unwrap();
+        let doc = crate::docx::parse_bytes(bytes, false).unwrap();
         let Block::Table(outer) = &doc.sections[0].blocks[0] else {
             panic!("outer table")
         };
@@ -2849,7 +2853,7 @@ mod tests {
     #[test]
     fn nested_explicit_width_uses_fixed_base_even_when_overflowing() {
         let bytes = include_bytes!("../../tests/fixtures/cases/case90/input.docx");
-        let doc = crate::docx::parse_bytes(bytes).unwrap();
+        let doc = crate::docx::parse_bytes(bytes, false).unwrap();
         let Block::Table(outer) = &doc.sections[0].blocks[0] else {
             panic!("outer table")
         };

@@ -149,8 +149,7 @@ pub fn convert_docx_to_pdf_with(
     options: &ConvertOptions,
 ) -> Result<(), Error> {
     reject_old_env_vars()?;
-    docx::set_markup(options.revisions == RevisionView::Markup);
-    let doc = docx::parse(input.as_ref())?;
+    let doc = docx::parse(input.as_ref(), options.revisions == RevisionView::Markup)?;
     render_and_write(&doc, path, options)
 }
 
@@ -165,8 +164,7 @@ pub fn convert_docx_bytes_to_pdf_with(
     options: &ConvertOptions,
 ) -> Result<(), Error> {
     reject_old_env_vars()?;
-    docx::set_markup(options.revisions == RevisionView::Markup);
-    let doc = docx::parse_bytes(input)?;
+    let doc = docx::parse_bytes(input, options.revisions == RevisionView::Markup)?;
     render_and_write(&doc, path, options)
 }
 
@@ -181,8 +179,8 @@ pub fn convert_docx_bytes_to_pdf_bytes_with(
     options: &ConvertOptions,
 ) -> Result<Vec<u8>, Error> {
     reject_old_env_vars()?;
-    docx::set_markup(options.revisions == RevisionView::Markup);
-    pdf::render(&docx::parse_bytes(input)?, options)
+    let doc = docx::parse_bytes(input, options.revisions == RevisionView::Markup)?;
+    pdf::render(&doc, options)
 }
 
 /// The variables lost their old `DOCXSIDE_` prefix; failing loudly beats silently

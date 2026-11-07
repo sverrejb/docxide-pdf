@@ -856,6 +856,7 @@ type RunNode<'a> = (
 fn collect_run_nodes<'a>(
     parent: roxmltree::Node<'a, 'a>,
     rels: &HashMap<String, String>,
+    markup: bool,
     out: &mut Vec<RunNode<'a>>,
     active_comments: &mut Vec<u32>,
 ) {
@@ -890,7 +891,7 @@ fn collect_run_nodes<'a>(
             if let Some(ruby) = wml(child, "ruby") {
                 let first = out.len();
                 if let Some(base) = wml(ruby, "rubyBase") {
-                    collect_run_nodes(base, rels, out, active_comments);
+                    collect_run_nodes(base, rels, markup, out, active_comments);
                 }
                 let guide = ruby_of(ruby);
                 for (.., r) in &mut out[first..] {
@@ -919,7 +920,7 @@ fn collect_run_nodes<'a>(
             // included: croatian_grant's portal URL sits in a hyperlink
             // inside a hyperlink, and the inner one wins.
             let first = out.len();
-            collect_run_nodes(child, rels, out, active_comments);
+            collect_run_nodes(child, rels, markup, out, active_comments);
             for (_, run_url, anchor_only, ..) in &mut out[first..] {
                 if run_url.is_none() {
                     *run_url = url.clone();
@@ -929,26 +930,26 @@ fn collect_run_nodes<'a>(
         } else if is_wml && matches!(name, "ins" | "moveTo" | "smartTag" | "customXml") {
             // w:customXml inline-wraps runs transparently, like w:smartTag.
             // Final mode shows moved text at its destination (moveTo).
-            collect_run_nodes(child, rels, out, active_comments);
+            collect_run_nodes(child, rels, markup, out, active_comments);
         } else if is_wml && matches!(name, "del" | "moveFrom") {
             // Final mode: skip deleted content and the source of moved text;
             // markup keeps them in the layout, struck through.
-            if super::markup() {
-                collect_run_nodes(child, rels, out, active_comments);
+            if markup {
+                collect_run_nodes(child, rels, markup, out, active_comments);
             }
         } else if is_wml && name == "sdt" {
             if let Some(content) = wml(child, "sdtContent") {
-                collect_run_nodes(content, rels, out, active_comments);
+                collect_run_nodes(content, rels, markup, out, active_comments);
             }
         } else if is_wml && name == "fldSimple" {
             // Simple field: <w:fldSimple w:instr="..."><w:r>cached</w:r></w:fldSimple>.
             // Emit the cached display runs. Dynamic field codes (PAGE/NUMPAGES/etc.)
             // are not rewritten here — the cached text matches Word's online converter
             // output for the static-PDF case.
-            collect_run_nodes(child, rels, out, active_comments);
+            collect_run_nodes(child, rels, markup, out, active_comments);
         } else if ns == Some(MC_NS_TOP) && name == "AlternateContent" {
             if let Some(branch) = mc_choice_or_fallback(child) {
-                collect_run_nodes(branch, rels, out, active_comments);
+                collect_run_nodes(branch, rels, markup, out, active_comments);
             }
         } else if ns == Some(MATH_NS) && name == "oMathPara" {
             // A math paragraph wraps one or more m:oMath; emit each in order.
@@ -1008,10 +1009,14 @@ fn revision_of<'a>(node: roxmltree::Node<'a, 'a>) -> Option<(bool, roxmltree::No
 /// underlined insertion prints one single underline, a red deletion prints in
 /// the author's colour). A run whose formatting changed (`w:rPrChange`) only
 /// gets the change bar.
-fn mark_revision(runs: &mut [Run], node: roxmltree::Node, rpr: Option<roxmltree::Node>) {
+fn mark_revision(
+    runs: &mut [Run],
+    node: roxmltree::Node,
+    rpr: Option<roxmltree::Node>,
+    revisions: &super::Revisions,
+) {
     if let Some((deleted, rev)) = revision_of(node) {
-        let author = rev.attribute((WML_NS, "author")).unwrap_or("");
-        let color = AUTHOR_COLORS[super::author_index(author) % AUTHOR_COLORS.len()];
+        let color = revisions.author_color(rev.attribute((WML_NS, "author")).unwrap_or(""));
         for r in runs.iter_mut() {
             r.revised = true;
             r.color = Some(color);
@@ -1328,7 +1333,13 @@ pub(super) fn parse_runs<R: Read + Seek>(
         .get(&para_node.range().start)
         .cloned()
         .unwrap_or_default();
-    collect_run_nodes(para_node, ctx.rels, &mut run_nodes, &mut active_comments);
+    collect_run_nodes(
+        para_node,
+        ctx.rels,
+        ctx.revisions.markup,
+        &mut run_nodes,
+        &mut active_comments,
+    );
     // Word shows only comments the text references; a range without its
     // w:commentReference gets no tint and no balloon.
     for (_, _, _, ids, _) in &mut run_nodes {
@@ -1845,8 +1856,8 @@ pub(super) fn parse_runs<R: Read + Seek>(
                 r.ruby = ruby.clone();
             }
         }
-        if super::markup() {
-            mark_revision(&mut runs[runs_before..], run_node, rpr);
+        if ctx.revisions.markup {
+            mark_revision(&mut runs[runs_before..], run_node, rpr, ctx.revisions);
         }
     }
 
@@ -2136,7 +2147,7 @@ mod tests {
         let rels = HashMap::new();
         let mut out = Vec::new();
         let mut active = Vec::new();
-        collect_run_nodes(doc.root_element(), &rels, &mut out, &mut active);
+        collect_run_nodes(doc.root_element(), &rels, false, &mut out, &mut active);
         assert_eq!(out.len(), 1, "fldSimple's inner w:r must be collected");
         let t_text = out[0]
             .0
@@ -2157,7 +2168,7 @@ mod tests {
         let doc = roxmltree::Document::parse(&xml).unwrap();
         let rels = HashMap::from([("a".into(), "outer".into()), ("b".into(), "inner".into())]);
         let mut out = Vec::new();
-        collect_run_nodes(doc.root_element(), &rels, &mut out, &mut Vec::new());
+        collect_run_nodes(doc.root_element(), &rels, false, &mut out, &mut Vec::new());
         assert_eq!(out.len(), 1);
         assert_eq!(out[0].1.as_deref(), Some("inner"));
     }
@@ -2176,6 +2187,7 @@ mod tests {
         collect_run_nodes(
             doc.root_element(),
             &HashMap::new(),
+            false,
             &mut out,
             &mut Vec::new(),
         );
@@ -2198,9 +2210,18 @@ mod tests {
             </w:p>"#
         );
         let doc = roxmltree::Document::parse(&xml).unwrap();
-        super::super::set_markup(true);
+        let revisions = super::super::Revisions {
+            markup: true,
+            ..Default::default()
+        };
         let mut out = Vec::new();
-        collect_run_nodes(doc.root_element(), &HashMap::new(), &mut out, &mut Vec::new());
+        collect_run_nodes(
+            doc.root_element(),
+            &HashMap::new(),
+            true,
+            &mut out,
+            &mut Vec::new(),
+        );
         let mut runs: Vec<Run> = out
             .iter()
             .map(|(r, ..)| Run {
@@ -2210,9 +2231,8 @@ mod tests {
             })
             .collect();
         for (i, (node, ..)) in out.iter().enumerate() {
-            mark_revision(&mut runs[i..=i], *node, wml(*node, "rPr"));
+            mark_revision(&mut runs[i..=i], *node, wml(*node, "rPr"), &revisions);
         }
-        super::super::set_markup(false);
         assert_eq!(runs.len(), 3);
         assert!(runs[0].revised && runs[0].underline && !runs[0].double_underline);
         assert_eq!(runs[0].color, Some(AUTHOR_COLORS[0]));

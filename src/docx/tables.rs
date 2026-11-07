@@ -285,7 +285,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
         .and_then(table_jc)
         .or_else(|| style_chain().find_map(|s| s.jc))
         .unwrap_or_else(|| {
-            collect_block_nodes(node)
+            collect_block_nodes(node, ctx.revisions.markup)
                 .into_iter()
                 .find(|n| n.has_tag_name((WML_NS, "tr")))
                 .and_then(|tr| wml(tr, "trPr"))
@@ -403,14 +403,12 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     let look_no_h_band = look_flag("noHBand", 0x0200);
     let look_no_v_band = look_flag("noVBand", 0x0400);
 
-    let tbl_rows: Vec<_> = collect_block_nodes(node)
+    let tbl_rows: Vec<_> = collect_block_nodes(node, ctx.revisions.markup)
         .into_iter()
         .filter(|n| n.has_tag_name((WML_NS, "tr")))
         // The final view drops a deleted row (Word online export probe
         // 2026-11-05); the markup view keeps it, struck through.
-        .filter(|n| {
-            super::markup() || wml(*n, "trPr").and_then(|pr| wml(pr, "del")).is_none()
-        })
+        .filter(|n| ctx.revisions.markup || wml(*n, "trPr").and_then(|pr| wml(pr, "del")).is_none())
         .collect();
 
     // OOXML §17.4.48 requires tblGrid, but some generators (e.g. SpecLink)
@@ -418,7 +416,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     // has real columns to work with, splitting spanned cells evenly.
     let grid_inferred = col_widths.is_empty() && !tbl_rows.is_empty();
     let cells_unsized = tbl_rows.iter().all(|tr| {
-        collect_block_nodes(*tr)
+        collect_block_nodes(*tr, ctx.revisions.markup)
             .into_iter()
             .filter(|n| n.has_tag_name((WML_NS, "tc")))
             .all(|tc| {
@@ -433,7 +431,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     if col_widths.is_empty() {
         for tr in &tbl_rows {
             let mut row_widths: Vec<f32> = Vec::new();
-            for tc in collect_block_nodes(*tr)
+            for tc in collect_block_nodes(*tr, ctx.revisions.markup)
                 .into_iter()
                 .filter(|n| n.has_tag_name((WML_NS, "tc")))
             {
@@ -504,7 +502,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
             .map(|mar| merge_cell_margins(mar, cell_margins));
         let mut cells = Vec::new();
         let mut grid_col = grid_before;
-        for tc in collect_block_nodes(*tr)
+        for tc in collect_block_nodes(*tr, ctx.revisions.markup)
             .into_iter()
             .filter(|n| n.has_tag_name((WML_NS, "tc")))
         {
@@ -733,7 +731,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                 .or(row_cell_margins);
 
             let mut cell_blocks: Vec<Block> = Vec::new();
-            let block_nodes = collect_block_nodes(tc);
+            let block_nodes = collect_block_nodes(tc, ctx.revisions.markup);
             ctx.fields = Default::default();
             for n in &block_nodes {
                 if n.has_tag_name((WML_NS, "p")) {
@@ -822,7 +820,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         ctx.numbering,
                         cell_lists,
                         Some(&mark),
-                        super::numbering::item_revision(p),
+                        super::numbering::item_revision(p, ctx.revisions),
                     );
                     let (mut indents, indent_chars) = super::paragraph::resolve_indents(
                         ppr,
@@ -1227,7 +1225,7 @@ mod border_conflict_tests {
         .unwrap();
         zip.write_all(xml.as_bytes()).unwrap();
         let bytes = zip.finish().unwrap().into_inner();
-        let doc = crate::docx::parse_bytes(&bytes).unwrap();
+        let doc = crate::docx::parse_bytes(&bytes, false).unwrap();
         let Block::Table(table) = &doc.sections[0].blocks[0] else {
             panic!("expected table")
         };
@@ -1262,7 +1260,7 @@ mod border_conflict_tests {
         .unwrap();
         zip.write_all(xml.as_bytes()).unwrap();
         let bytes = zip.finish().unwrap().into_inner();
-        let doc = crate::docx::parse_bytes(&bytes).unwrap();
+        let doc = crate::docx::parse_bytes(&bytes, false).unwrap();
         let Block::Table(table) = &doc.sections[0].blocks[0] else {
             panic!("expected table")
         };
@@ -1294,7 +1292,7 @@ mod border_conflict_tests {
                 zip.write_all(format!(r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">{s}</w:styles>"#).as_bytes()).unwrap();
             }
             let bytes = zip.finish().unwrap().into_inner();
-            let doc = crate::docx::parse_bytes(&bytes).unwrap();
+            let doc = crate::docx::parse_bytes(&bytes, false).unwrap();
             let Block::Table(table) = &doc.sections[0].blocks[0] else {
                 panic!("expected table")
             };

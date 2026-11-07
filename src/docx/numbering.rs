@@ -552,8 +552,8 @@ pub(super) enum ItemRevision {
     Deleted([u8; 3]),
 }
 
-pub(super) fn item_revision(p: roxmltree::Node) -> ItemRevision {
-    if !super::markup() {
+pub(super) fn item_revision(p: roxmltree::Node, revisions: &super::Revisions) -> ItemRevision {
+    if !revisions.markup {
         return ItemRevision::Live;
     }
     let mark = |kind: &str| {
@@ -562,8 +562,7 @@ pub(super) fn item_revision(p: roxmltree::Node) -> ItemRevision {
             .and_then(|rpr| wml(rpr, kind))
     };
     let colour = |rev: roxmltree::Node| {
-        let author = rev.attribute((WML_NS, "author")).unwrap_or("");
-        super::runs::AUTHOR_COLORS[super::author_index(author) % super::runs::AUTHOR_COLORS.len()]
+        revisions.author_color(rev.attribute((WML_NS, "author")).unwrap_or(""))
     };
     if fully_deleted_item(p) {
         return ItemRevision::Deleted(mark("del").map_or([0, 0, 0], colour));

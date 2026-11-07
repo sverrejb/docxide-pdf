@@ -6944,9 +6944,10 @@ mod tests {
 
     #[test]
     fn space_only_wrapping_frame_is_empty_but_content_controls_keep_flow() {
-        let mut doc = crate::docx::parse_bytes(include_bytes!(
-            "../../tests/fixtures/cases/space-only-frame/input.docx"
-        ))
+        let mut doc = crate::docx::parse_bytes(
+            include_bytes!("../../tests/fixtures/cases/space-only-frame/input.docx"),
+            false,
+        )
         .unwrap();
         let section = &mut doc.sections[0];
         let Block::Paragraph(para) = &mut section.blocks[0] else {

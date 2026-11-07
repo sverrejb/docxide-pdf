@@ -9,8 +9,8 @@ use super::relationships::parse_part_relationships;
 use super::runs::parse_runs;
 use super::styles::{StylesInfo, ThemeFonts};
 use super::{
-    ParseContext, WML_NS, collect_block_nodes, extract_indents, parse_paragraph_spacing, wml,
-    wml_attr,
+    ParseContext, Revisions, WML_NS, collect_block_nodes, extract_indents, parse_paragraph_spacing,
+    wml, wml_attr,
 };
 
 pub(super) fn parse_header_footer_xml<R: Read + Seek>(
@@ -21,7 +21,7 @@ pub(super) fn parse_header_footer_xml<R: Read + Seek>(
     let root = xml.root_element();
     let mut blocks = Vec::new();
 
-    let top_nodes = collect_block_nodes(root);
+    let top_nodes = collect_block_nodes(root, ctx.revisions.markup);
 
     let mut lists = ListCounters::default();
 
@@ -61,6 +61,7 @@ pub(super) fn parse_footnotes<R: Read + Seek>(
     styles: &StylesInfo,
     theme: &ThemeFonts,
     numbering: &NumberingInfo,
+    revisions: &Revisions,
 ) -> (HashMap<u32, Footnote>, Option<Paragraph>) {
     // Footnotes use the simple paragraph builder for backwards compatibility
     // with rendering tuned against the existing corpus; only list paragraphs
@@ -70,6 +71,7 @@ pub(super) fn parse_footnotes<R: Read + Seek>(
         styles,
         theme,
         numbering,
+        revisions,
         "word/footnotes.xml",
         "footnote",
         "FootnoteText",
@@ -81,12 +83,14 @@ pub(super) fn parse_endnotes<R: Read + Seek>(
     styles: &StylesInfo,
     theme: &ThemeFonts,
     numbering: &NumberingInfo,
+    revisions: &Revisions,
 ) -> (HashMap<u32, Footnote>, Option<Paragraph>) {
     parse_notes_rich(
         zip,
         styles,
         theme,
         numbering,
+        revisions,
         "word/endnotes.xml",
         "endnote",
     )
@@ -112,11 +116,13 @@ fn parse_note_separator<R: Read + Seek>(
 /// Simple parsing: paragraph runs and indents only, except that list
 /// paragraphs take the full builder for their numbering (croatian_grant's
 /// bulleted footnote). Matches the original footnote rendering behavior.
+#[allow(clippy::too_many_arguments)]
 fn parse_notes_simple<R: Read + Seek>(
     zip: &mut zip::ZipArchive<R>,
     styles: &StylesInfo,
     theme: &ThemeFonts,
     numbering: &NumberingInfo,
+    revisions: &Revisions,
     zip_path: &str,
     element_name: &str,
     default_style_id: &str,
@@ -137,6 +143,7 @@ fn parse_notes_simple<R: Read + Seek>(
         rels: &rels,
         zip,
         numbering,
+        revisions,
         comments: Default::default(),
         fields: Default::default(),
         grid_char_delta: 0.0,
@@ -332,6 +339,7 @@ fn parse_notes_rich<R: Read + Seek>(
     styles: &StylesInfo,
     theme: &ThemeFonts,
     numbering: &NumberingInfo,
+    revisions: &Revisions,
     zip_path: &str,
     element_name: &str,
 ) -> (HashMap<u32, Footnote>, Option<Paragraph>) {
@@ -352,6 +360,7 @@ fn parse_notes_rich<R: Read + Seek>(
         rels: &rels,
         zip,
         numbering,
+        revisions,
         comments: Default::default(),
         fields: Default::default(),
         grid_char_delta: 0.0,

@@ -45,7 +45,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     let mut mark = super::runs::paragraph_mark_run(ppr, para_style, ctx);
     // Markup view: a fully deleted list item keeps its number without
     // advancing the counter (`parse_list_info` reads the flag off the mark).
-    mark.revised = super::markup() && super::numbering::fully_deleted_item(node);
+    mark.revised = ctx.revisions.markup && super::numbering::fully_deleted_item(node);
     let paragraph_mark_font_size = Some(mark.font_size);
     let paragraph_mark_font_name = Some(mark.font_name.clone());
     let paragraph_mark_position = paragraph_mark_position(ppr_rpr, para_style);
@@ -114,7 +114,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         ctx.numbering,
         lists,
         Some(&mark),
-        super::numbering::item_revision(node),
+        super::numbering::item_revision(node, ctx.revisions),
     );
     let (mut indents, indent_chars) =
         resolve_indents(ppr, para_style, &numbering, &ctx.styles.defaults);
@@ -165,7 +165,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     let mark_deleted = ppr_rpr.is_some_and(|rpr| wml(rpr, "del").is_some());
     // Markup view: a revised paragraph mark or paragraph formatting
     // (`w:pPrChange`) draws no inline mark, only the change bar.
-    let mark_revised = super::markup()
+    let mark_revised = ctx.revisions.markup
         && (mark_deleted
             || ppr_rpr.is_some_and(|rpr| wml(rpr, "ins").is_some())
             || ppr.is_some_and(|p| wml(p, "pPrChange").is_some()));
@@ -713,7 +713,8 @@ mod tests {
                 zip.start_file(name, SimpleFileOptions::default()).unwrap();
                 zip.write_all(xml.as_bytes()).unwrap();
             }
-            let parsed = crate::docx::parse_bytes(&zip.finish().unwrap().into_inner()).unwrap();
+            let parsed =
+                crate::docx::parse_bytes(&zip.finish().unwrap().into_inner(), false).unwrap();
             let crate::model::Block::Paragraph(p) = &parsed.sections[0].blocks[0] else {
                 panic!("expected a paragraph");
             };
@@ -765,7 +766,7 @@ mod tests {
                 zip.write_all(xml.as_bytes()).unwrap();
             }
             let bytes = zip.finish().unwrap().into_inner();
-            let parsed = crate::docx::parse_bytes(&bytes).unwrap();
+            let parsed = crate::docx::parse_bytes(&bytes, false).unwrap();
             let crate::model::Block::Paragraph(para) = &parsed.sections[0].blocks[0] else {
                 panic!("expected a paragraph");
             };
@@ -794,7 +795,7 @@ mod tests {
             zip.write_all(xml.as_bytes()).unwrap();
         }
         let bytes = zip.finish().unwrap().into_inner();
-        let parsed = crate::docx::parse_bytes(&bytes).unwrap();
+        let parsed = crate::docx::parse_bytes(&bytes, false).unwrap();
         let crate::model::Block::Paragraph(para) = &parsed.sections[0].blocks[0] else {
             panic!("expected a paragraph");
         };
@@ -884,7 +885,7 @@ mod tests {
             zip.write_all(xml.as_bytes()).unwrap();
         }
         let bytes = zip.finish().unwrap().into_inner();
-        let parsed = crate::docx::parse_bytes(&bytes).unwrap();
+        let parsed = crate::docx::parse_bytes(&bytes, false).unwrap();
         for block in &parsed.sections[0].blocks[..2] {
             let crate::model::Block::Paragraph(para) = block else {
                 panic!("expected a paragraph");

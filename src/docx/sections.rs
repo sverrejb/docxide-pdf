@@ -263,6 +263,7 @@ fn resolve_hf<R: Read + Seek>(
         rels: &part_rels,
         zip: ctx.zip,
         numbering: ctx.numbering,
+        revisions: ctx.revisions,
         comments: Default::default(),
         fields: Default::default(),
         grid_char_delta: 0.0,
