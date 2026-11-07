@@ -53,6 +53,20 @@ pub(super) fn wrap_dist_top_bottom(container: roxmltree::Node) -> (f32, f32) {
     )
 }
 
+/// An anchor's (left, right) wrap distances: distL/distR plus, unless a wrap
+/// polygon gives the outline, the effectExtent its effects add (Word examples:
+/// a square box with effectExtent r=0.8pt puts the text beside it 0.8pt
+/// further right; a tight one's polygon at the extent edge does not).
+pub(super) fn wrap_dist_left_right(container: roxmltree::Node, polygon: bool) -> (f32, f32) {
+    let ee = wpd(container, "effectExtent").filter(|_| !polygon);
+    let ee_l = ee.map(|n| emu_attr(n, "l")).unwrap_or(0.0);
+    let ee_r = ee.map(|n| emu_attr(n, "r")).unwrap_or(0.0);
+    (
+        emu_attr(container, "distL") + ee_l,
+        emu_attr(container, "distR") + ee_r,
+    )
+}
+
 pub(super) fn extent_dimensions(container: roxmltree::Node) -> (f32, f32) {
     wpd(container, "extent").map_or((0.0, 0.0), |e| (emu_attr(e, "cx"), emu_attr(e, "cy")))
 }
@@ -109,10 +123,23 @@ pub(super) fn picture_filled_shape<R: Read + Seek>(
     let wsp = container
         .descendants()
         .find(|n| n.has_tag_name((WPS_NS, "wsp")))?;
-    let fill = dml(super::textbox::find_sp_pr(wsp)?, "blipFill")?;
     if wsp.descendants().any(|n| n.has_tag_name((WPS_NS, "txbx"))) {
         return None;
     }
+    let mut img = shape_picture_fill(super::textbox::find_sp_pr(wsp)?, ctx, display_w, display_h)?;
+    apply_pic_props(&mut img, container, ctx.theme);
+    Some(img)
+}
+
+/// The picture of a shape's `a:blipFill` (`sp_pr`) for a `display_w` x
+/// `display_h` frame. An `a:tile` fill is drawn into one raster.
+pub(super) fn shape_picture_fill<R: Read + Seek>(
+    sp_pr: roxmltree::Node,
+    ctx: &mut ParseContext<'_, R>,
+    display_w: f32,
+    display_h: f32,
+) -> Option<EmbeddedImage> {
+    let fill = dml(sp_pr, "blipFill")?;
     let mut img = find_blip_embeds(fill)
         .find_map(|id| read_image_from_zip(id, ctx.rels, ctx.zip, display_w, display_h))?;
     if let Some(tile) = dml(fill, "tile")
@@ -121,7 +148,7 @@ pub(super) fn picture_filled_shape<R: Read + Seek>(
         img.data = std::sync::Arc::new(png);
         (img.pixel_width, img.pixel_height, img.format) = (w, h, ImageFormat::Png);
     }
-    apply_pic_props(&mut img, container, ctx.theme);
+    apply_blip_props(&mut img, fill);
     Some(img)
 }
 
@@ -286,6 +313,12 @@ fn apply_pic_props(img: &mut EmbeddedImage, container: roxmltree::Node, theme: &
     img.clip_geometry = sp_pr
         .map(super::textbox::parse_shape_geometry)
         .filter(|g| g.preset.as_deref() != Some("rect") || g.custom.is_some());
+    apply_blip_props(img, container);
+}
+
+/// The `a:blip` adjustments under `container`: `a:srcRect` crop, brightness
+/// and contrast, recolouring and transparency.
+fn apply_blip_props(img: &mut EmbeddedImage, container: roxmltree::Node) {
     img.src_rect = parse_src_rect(container);
     img.lum = parse_lum(container);
     let blip = find_blip(container);
@@ -706,7 +739,21 @@ pub(super) enum RunDrawingResult {
     Group(Vec<RunDrawingResult>),
 }
 
+/// A drawing in a run. Word lays a picture anchored in a text box's story out
+/// inline where it is anchored, whatever its wrap or position.
 pub(super) fn parse_run_drawing<R: Read + Seek>(
+    drawing_node: roxmltree::Node,
+    ctx: &mut ParseContext<'_, R>,
+) -> Option<RunDrawingResult> {
+    match parse_placed_drawing(drawing_node, ctx) {
+        Some(RunDrawingResult::Floating(fi)) if ctx.in_text_box && !fi.on_line => {
+            Some(RunDrawingResult::Inline(fi.image))
+        }
+        result => result,
+    }
+}
+
+fn parse_placed_drawing<R: Read + Seek>(
     drawing_node: roxmltree::Node,
     ctx: &mut ParseContext<'_, R>,
 ) -> Option<RunDrawingResult> {
@@ -737,8 +784,11 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
         if is_anchor {
             if let Some(wsp) = parse_textbox_from_wsp(container, ctx) {
                 let (h_position, h_relative, v_pos, v_relative) = parse_anchor_position(container);
-                let (wrap_type, wrap_text, _) = parse_wrap_type(container);
+                let (wrap_type, wrap_text, wrap_polygon) = parse_wrap_type(container);
                 let (behind_doc, z_index) = anchor_z_order(container);
+                let (dist_top, dist_bottom) = wrap_dist_top_bottom(container);
+                let (dist_left, dist_right) =
+                    wrap_dist_left_right(container, wrap_polygon.is_some());
                 return Some(RunDrawingResult::TextBox(Textbox {
                     width_pt: display_w,
                     width_pct_margin: pct_width_of_margin(container),
@@ -750,7 +800,11 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                     v_relative_from: v_relative,
                     wrap_type,
                     wrap_text,
-                    dist_bottom: wrap_dist_top_bottom(container).1,
+                    wrap_polygon,
+                    dist_top,
+                    dist_bottom,
+                    dist_left,
+                    dist_right,
                     behind_doc,
                     z_index,
                     ..Textbox::from(wsp)
@@ -773,6 +827,8 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                 let (wrap_type, wrap_text, wrap_polygon) = parse_wrap_type(container);
                 let (behind_doc, z_index) = anchor_z_order(container);
                 let (dist_top, dist_bottom) = wrap_dist_top_bottom(container);
+                let (dist_left, dist_right) =
+                    wrap_dist_left_right(container, wrap_polygon.is_some());
                 return Some(RunDrawingResult::Floating(FloatingImage {
                     image: img,
                     h_position,
@@ -785,8 +841,8 @@ pub(super) fn parse_run_drawing<R: Read + Seek>(
                     behind_doc,
                     dist_top,
                     dist_bottom,
-                    dist_left: emu_attr(container, "distL"),
-                    dist_right: emu_attr(container, "distR"),
+                    dist_left,
+                    dist_right,
                     z_index,
                     anchor_seq: 0,
                     anchor_at_start: false,

@@ -1010,6 +1010,26 @@ pub(super) fn embed_all_images(
         }
     }
 
+    let mut all_textboxes: Vec<&Textbox> = Vec::new();
+    for section in &doc.sections {
+        for block in &section.blocks {
+            push_block_textboxes(block, &mut all_textboxes);
+        }
+        let hf_list: [Option<&HeaderFooter>; 6] = [
+            section.properties.header_default.as_ref(),
+            section.properties.header_first.as_ref(),
+            section.properties.footer_default.as_ref(),
+            section.properties.footer_first.as_ref(),
+            section.properties.header_even.as_ref(),
+            section.properties.footer_even.as_ref(),
+        ];
+        for hf in hf_list.into_iter().flatten() {
+            for block in &hf.blocks {
+                push_block_textboxes(block, &mut all_textboxes);
+            }
+        }
+    }
+
     let mut table_cell_image_names: HashMap<usize, String> = HashMap::new();
     let mut effect_table_names: HashMap<usize, EffectXObjs> = HashMap::new();
     {
@@ -1036,6 +1056,12 @@ pub(super) fn embed_all_images(
                 }
             }
         }
+        tables.extend(
+            all_textboxes
+                .iter()
+                .flat_map(|tb| tb.content_tables())
+                .map(|(_, t)| t),
+        );
         for table in tables {
             for row in &table.rows {
                 for cell in &row.cells {
@@ -1068,27 +1094,7 @@ pub(super) fn embed_all_images(
     // embed_image_effects and draw them in textbox_render if they matter.
     let mut textbox_image_names: HashMap<usize, String> = HashMap::new();
     {
-        let mut all_textboxes: Vec<&Textbox> = Vec::new();
-        for section in &doc.sections {
-            for block in &section.blocks {
-                push_block_textboxes(block, &mut all_textboxes);
-            }
-            let hf_list: [Option<&HeaderFooter>; 6] = [
-                section.properties.header_default.as_ref(),
-                section.properties.header_first.as_ref(),
-                section.properties.footer_default.as_ref(),
-                section.properties.footer_first.as_ref(),
-                section.properties.header_even.as_ref(),
-                section.properties.footer_even.as_ref(),
-            ];
-            for hf in hf_list.into_iter().flatten() {
-                for block in &hf.blocks {
-                    push_block_textboxes(block, &mut all_textboxes);
-                }
-            }
-        }
-
-        for tb in all_textboxes {
+        for &tb in &all_textboxes {
             embed_textbox_images(
                 tb,
                 &mut textbox_image_names,
@@ -1147,7 +1153,7 @@ fn push_block_textboxes<'a>(block: &'a Block, out: &mut Vec<&'a Textbox>) {
     match block {
         Block::Paragraph(para) => {
             for tb in &para.textboxes {
-                out.push(tb);
+                push_textbox(tb, out);
             }
         }
         Block::Table(table) => {
@@ -1155,11 +1161,21 @@ fn push_block_textboxes<'a>(block: &'a Block, out: &mut Vec<&'a Textbox>) {
                 for cell in &row.cells {
                     for para in cell.all_paragraphs() {
                         for tb in &para.textboxes {
-                            out.push(tb);
+                            push_textbox(tb, out);
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+/// The box and the boxes in the cells of its tables, at any depth.
+fn push_textbox<'a>(tb: &'a Textbox, out: &mut Vec<&'a Textbox>) {
+    out.push(tb);
+    for para in tb.table_paragraphs() {
+        for nested in &para.textboxes {
+            push_textbox(nested, out);
         }
     }
 }
@@ -1216,45 +1232,38 @@ fn embed_textbox_images(
     fonts: &HashMap<String, FontEntry>,
     resample: bool,
 ) {
+    let mut embed = |img: &EmbeddedImage| {
+        embed_keyed_image(
+            img,
+            image_names,
+            image_xobjects,
+            pdf,
+            alloc,
+            fonts,
+            resample,
+        )
+    };
+    if let Some(img) = &tb.picture_fill {
+        embed(img);
+    }
     let mut stack: Vec<&[Paragraph]> = vec![tb.content()];
     while let Some(paras) = stack.pop() {
         for para in paras {
             if let Some(img) = &para.image {
-                embed_keyed_image(
-                    img,
-                    image_names,
-                    image_xobjects,
-                    pdf,
-                    alloc,
-                    fonts,
-                    resample,
-                );
+                embed(img);
             }
             for run in &para.runs {
                 if let Some(img) = &run.inline_image {
-                    embed_keyed_image(
-                        img,
-                        image_names,
-                        image_xobjects,
-                        pdf,
-                        alloc,
-                        fonts,
-                        resample,
-                    );
+                    embed(img);
                 }
             }
             for fi in &para.floating_images {
-                embed_keyed_image(
-                    &fi.image,
-                    image_names,
-                    image_xobjects,
-                    pdf,
-                    alloc,
-                    fonts,
-                    resample,
-                );
+                embed(&fi.image);
             }
             for nested in &para.textboxes {
+                if let Some(img) = &nested.picture_fill {
+                    embed(img);
+                }
                 stack.push(&nested.paragraphs);
             }
         }

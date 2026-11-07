@@ -16,7 +16,8 @@ use crate::model::{
 
 use super::images::{
     RunDrawingResult, anchor_z_order, extent_dimensions, find_blip_embeds, parse_anchor_position,
-    parse_wrap_type, read_image_from_zip, vml_imagedata_props, vml_z_order, wrap_dist_top_bottom,
+    parse_wrap_type, read_image_from_zip, vml_imagedata_props, vml_z_order, wrap_dist_left_right,
+    wrap_dist_top_bottom,
 };
 use super::textbox::{
     find_sp_pr, parse_connector_shape_node, parse_vml_box_style, parse_vml_line, parse_wsp_shape,
@@ -223,9 +224,11 @@ pub(super) fn parse_canvas_or_group<R: Read + Seek>(
             on_line: true,
             ..Textbox::default()
         }));
-    } else if let (wrap_type, wrap_text, _) = parse_wrap_type(container)
+    } else if let (wrap_type, wrap_text, wrap_polygon) = parse_wrap_type(container)
         && wrap_type != WrapType::None
     {
+        let (dist_top, dist_bottom) = wrap_dist_top_bottom(container);
+        let (dist_left, dist_right) = wrap_dist_left_right(container, wrap_polygon.is_some());
         // An anchored group wraps text as one box (its shapes are placed
         // without wrapping): an invisible box over its extent carries it.
         let (h_position, h_relative_from, v_position, v_relative_from) =
@@ -240,7 +243,11 @@ pub(super) fn parse_canvas_or_group<R: Read + Seek>(
             v_relative_from,
             wrap_type,
             wrap_text,
-            dist_bottom: wrap_dist_top_bottom(container).1,
+            wrap_polygon,
+            dist_top,
+            dist_bottom,
+            dist_left,
+            dist_right,
             behind_doc: base.behind_doc,
             z_index: base.z_index,
             no_text_wrap: true,
@@ -249,6 +256,35 @@ pub(super) fn parse_canvas_or_group<R: Read + Seek>(
     }
     out.extend(shapes);
     Some(out)
+}
+
+/// Where a shape sits in the frame of the enclosing group whose `grpSpPr`
+/// is `group_sp_pr`, as (left, top, right, bottom) fractions of that frame.
+// ponytail: flips and rotations of the groups in between are ignored.
+pub(super) fn group_fill_window(
+    wsp: roxmltree::Node,
+    group_sp_pr: roxmltree::Node,
+) -> Option<[f32; 4]> {
+    let own = read_xfrm(find_sp_pr(wsp)?)?;
+    let (mut x0, mut y0) = own.off;
+    let (mut x1, mut y1) = (own.off.0 + own.ext.0, own.off.1 + own.ext.1);
+    for pr in wsp
+        .ancestors()
+        .filter_map(|g| g.children().find(|n| n.has_tag_name((WPG_NS, "grpSpPr"))))
+    {
+        let g = read_xfrm(pr)?;
+        if g.ch_ext.0 <= 0.0 || g.ch_ext.1 <= 0.0 {
+            return None;
+        }
+        let fx = |x: f32| (x - g.ch_off.0) / g.ch_ext.0;
+        let fy = |y: f32| (y - g.ch_off.1) / g.ch_ext.1;
+        if pr == group_sp_pr {
+            return Some([fx(x0), fy(y0), 1.0 - fx(x1), 1.0 - fy(y1)]);
+        }
+        (x0, x1) = (g.off.0 + fx(x0) * g.ext.0, g.off.0 + fx(x1) * g.ext.0);
+        (y0, y1) = (g.off.1 + fy(y0) * g.ext.1, g.off.1 + fy(y1) * g.ext.1);
+    }
+    None
 }
 
 fn find_group_xfrm(group: roxmltree::Node) -> Option<Xfrm> {
@@ -326,7 +362,7 @@ fn emit_wsp<R: Read + Seek>(
         out.push(RunDrawingResult::Floating(group_image(img, x, y, base)));
         return;
     }
-    if let Some(shape) = parse_wsp_shape(wsp, ctx) {
+    if let Some(shape) = parse_wsp_shape(wsp, ctx, (w, h)) {
         out.push(RunDrawingResult::TextBox(Textbox {
             width_pt: w,
             height_pt: h,
@@ -338,6 +374,7 @@ fn emit_wsp<R: Read + Seek>(
             behind_doc: base.behind_doc,
             z_index: base.z_index,
             on_line: base.on_line,
+            in_group: true,
             ..Textbox::from(shape)
         }));
     }
