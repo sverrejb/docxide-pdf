@@ -1927,6 +1927,15 @@ pub(super) fn render_table(
         .as_ref()
         .filter(|p| !p.allow_overlap)
         .and_then(|_| pb.float_zone.clone());
+    // An overlapping floating table drawn over an earlier one does not lift
+    // the text the earlier one holds down: Word clears displaced-anchor-*'s
+    // "After clearing" below the tall first table, wherever the second sits.
+    let overlapped_table_zone = table
+        .position
+        .as_ref()
+        .filter(|p| p.allow_overlap)
+        .and_then(|_| pb.float_zone.clone())
+        .filter(|z| z.from_table);
     let mut displaced_text_anchor = None;
     if table.position.as_ref().is_some_and(|p| !p.allow_overlap)
         && let Some(ref zone) = pb.float_zone
@@ -2584,6 +2593,11 @@ pub(super) fn render_table(
                     current.bottom_y = current.bottom_y.min(old.bottom_y);
                     current.left_from_text = current.left_from_text.max(old.left_from_text);
                     current.right_from_text = current.right_from_text.max(old.right_from_text);
+                }
+                if let Some(old) = overlapped_table_zone
+                    && pb.float_zone.as_ref().is_some_and(|z| old.bottom_y < z.bottom_y)
+                {
+                    pb.float_zone = Some(old);
                 }
             }
         }
