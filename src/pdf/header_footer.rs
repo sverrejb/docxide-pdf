@@ -1714,6 +1714,13 @@ pub(super) fn render_header_footer(
                         }
                     }
                 }
+                // Word probes on ut_koer's letterhead logo: in compat mode 14
+                // and older, header and footer text runs straight through a
+                // float (square or tight, in front or behind, at any offset);
+                // compat 15 wraps it.
+                if ctx.compat_mode < 15 {
+                    zones.clear();
+                }
 
                 {
                     let col_x = sp.margin_left;
