@@ -194,7 +194,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 ## Configuration
 
-Each setting can be given as a CLI flag, as a `ConvertOptions` method in library code, or as a `DOCXIDE_*` environment variable. All three do the same thing. Without any of them you get Word's online export.
+Each setting can be given as a CLI flag, through `ConvertOptions`, or as a `DOCXIDE_*` environment variable. Without any of them you get Word's online export.
 
 | Setting | Default | CLI flag | Library (`ConvertOptions`) | Environment variable |
 |---|---|---|---|---|
@@ -204,7 +204,7 @@ Each setting can be given as a CLI flag, as a `ConvertOptions` method in library
 | Scan the font directories on every conversion instead of reading the font index disk cache. Useful when debugging font resolution | Cache on | `--no-font-cache` | `.font_cache(false)` | `DOCXIDE_NO_FONT_CACHE=1` |
 | Draw the float wrap zones on the page (debugging) | Off | `--debug-wrap` | `.debug_wrap(true)` | `DOCXIDE_DEBUG_WRAP=1` |
 
-In library code, chain the methods and pass the result to a `_with` function:
+When you use docxide-pdf as a library, build a `ConvertOptions` and pass it to one of the `_with` functions:
 
 ```rust
 use docxide_pdf::{ConvertOptions, RevisionView, convert_docx_to_pdf_with};
@@ -221,7 +221,7 @@ convert_docx_to_pdf_with("input.docx", "output.pdf", &options)?;
 
 How the three ways interact:
 
-- **CLI**: a flag wins over the matching environment variable.
+- **CLI**: starts from the environment variables, then applies the flags. A flag can only switch its setting away from the default, so it can't undo a variable: with `DOCXIDE_NO_RESAMPLE=1` set, the CLI keeps source pixels whatever flags you pass. To get the default back, unset the variable or set it to `0`. `--fonts` is the exception: it replaces `DOCXIDE_FONTS` instead of adding to it.
 - **Library, plain functions** (`convert_docx_to_pdf` and friends): read the environment variables, through `ConvertOptions::from_env()`.
 - **Library, `_with` functions**: use only the `ConvertOptions` you pass and never read the environment.
 - **On/off variables** count as on unless they are empty, `0` or `false`.
