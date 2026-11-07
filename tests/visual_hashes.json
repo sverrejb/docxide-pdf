@@ -99,6 +99,15 @@
   "cases/band-para-relative-anchor-stays": [
     "20a2daf3d3cc508b97eb79d73f01f2e78c3df3202723f01f220cee597d039c7e"
   ],
+  "cases/border-group-between-bands": [
+    "622c3d618a9693ec979d8620236ae7e31318db1e5ba89a5ef68a2c654ece025f",
+    "a78be56db77ece38484db0b8ef0a88e4e9598d12e4828555eab58d70b5931f45",
+    "c9480fba58fc5ea4f6fb3ef2ebb03ed7c1fc9a8f072caf353e8cd1bcd2c70c4f",
+    "afb3b37dae656c7c511613eddd55bdaea5ab1fc03966fa91c3668efdd6253735"
+  ],
+  "cases/border-group-between-rule-fill": [
+    "a73e192d705a4132574df4878fded384ac3325fa77721530edd8d4690567b03b"
+  ],
   "cases/case1": [
     "1b21959ddde8b75f7c601d32f0e27c77fed67b8b30b9c1435dba23317dff725a"
   ],
@@ -1480,8 +1489,21 @@
   "cases/group-fill-inheritance": [
     "0b425e8ed16fe3584ad18fa0cdf6ec34737d2d156be9d31f7aa6a283e0461230"
   ],
+  "cases/header-anchor-line-and-wrapped-height": [
+    "2554025063ff0597c152af34beed0def46ed4c9e7b85186a17b6a38289b75793",
+    "230ea1a4c1bfbb0e221572f6d5c1efc5388d2c26137909d6c3b8ea6c973ed32e",
+    "198723e223d971c41def75de375f55b9dc62fc0883dd1e63564eac3db3df479c",
+    "944cfc42709917ebd5c7e1f5e8bd8191a87d2239d2d553732a627791eceba162",
+    "77b6105650357a3d23cb6da7d1787d75f481789d41a9caf790078bcb761ed583",
+    "84d53b6d5711aad2ee023182257f497462d62f768a6f3bcd343040b8b0877096",
+    "fa596d40dc98c98f11917baae264ee5b660b767d8c2de7b7ff8864e0dd3da0b2",
+    "9533e11f7cfaedd8bcfb1a831556b8b09f221b9e764c805813fd7dfc37ee5635"
+  ],
   "cases/header-autofit-table": [
     "96bc60e7e292e9c8f75c1b3d2177448e010bc36ad7ee3ad224b7ef014b1396ee"
+  ],
+  "cases/header-footer-border-groups": [
+    "e9547680aea2c934a98f53fa0d8a98399d59f2479650424cdd89010d14ec640b"
   ],
   "cases/header-inline-connector-behind": [
     "585e98d8236f37f425a60c97829aecbfaccddf991e24cbf47f7a77a37c72cb5e"
@@ -1494,6 +1516,15 @@
   ],
   "cases/header-inline-connector-picture-only": [
     "eaffb37e280d20fca95d4d171bc4dc6c02a514a36629d048da011ed966244c0e"
+  ],
+  "cases/header-para-anchor-above-space-before": [
+    "655dae9bb238d04a274d8ca4614d9e078ea5c53c9dc4b35eb5803432400c3c58",
+    "d4b69a77ba47c4abc4bd57f49687889b1cfc8ae05818722a3ec55d75f2e72bdb",
+    "c7843dd9f89f62caee885924cdde0c460a1a2df3d6a4065174ebb910909ce43e",
+    "d5db2e5fc449766072daf4132ef6600f3bd5e8fa33d3dc4315a8ea28e29304a7",
+    "ec81cfbf9540b5dddced427f84cc3d8fc0c8207107f40e10842ab7130c21f456",
+    "e6de4bef54f4a49808a26a93e72f1a076e6790776ecd53981bded5f3d0109333",
+    "b705dcac0c2e0747d18d9f91e12673c8226fdb44275958b170e2405d809f8249"
   ],
   "cases/header-textbox-clip-noAutofit": [
     "9145dee51267de18a2998507bfd7f45515e4b8832b72cd9d6a60f224ddaf1a27"
@@ -2146,6 +2177,9 @@
   "cases/page-header-ordinary-marker": [
     "fc540d9dce905d42e091ae6222e8bb9cd11aa0efbdca8e8163c2efe2a60dbcdc"
   ],
+  "cases/paragraph-border-indents": [
+    "06e10579252e0a9c0c4d3a678ac73a94c7f847b829ded35c55c3d148f0dfcff6"
+  ],
   "cases/paragraph-border-styles": [
     "47d18eeb84c16c3a998c5e82d5599dbe92458757879de1e3cd0d0f4480264c33"
   ],
@@ -2424,6 +2458,12 @@
   ],
   "cases/seq-heading-reset": [
     "3ea01d43b2e92d26886bdbb445eaa306ca71d8388512f43990707697e390b527"
+  ],
+  "cases/shape-outline-dash": [
+    "0c3f3640bfee39fba6df5f03bc431d5ab7b0349c646230171fd56fba6fb6824e"
+  ],
+  "cases/shape-outline-dash-cells": [
+    "b15aaf77f4bbed91fd67003018682bf36e7391618bdf97383b8b29229bde11ca"
   ],
   "cases/shifted-text-position-7-mixed0-mark0": [
     "075283c57ba5d50940428cef58f86d1d276de3853239ac2922993a28c7a9fb36"

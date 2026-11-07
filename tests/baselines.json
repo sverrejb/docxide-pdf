@@ -329,6 +329,16 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/border-group-between-bands": {
+    "jaccard": 0.8141,
+    "ssim": 0.9303,
+    "text_boundary": 0.885
+  },
+  "cases/border-group-between-rule-fill": {
+    "jaccard": 0.9922,
+    "ssim": 0.9781,
+    "text_boundary": 1.0
+  },
   "cases/case1": {
     "jaccard": 0.6739,
     "ssim": 0.9819,
@@ -4538,6 +4548,11 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/header-anchor-line-and-wrapped-height": {
+    "jaccard": 0.708,
+    "ssim": 0.9326,
+    "text_boundary": 1.0
+  },
   "cases/header-autofit-table": {
     "jaccard": 0.4845,
     "ssim": 0.9291,
@@ -4547,6 +4562,11 @@
     "ua_deficit": 0,
     "a11y_struct": 0.6875,
     "a11y_text": 1.0
+  },
+  "cases/header-footer-border-groups": {
+    "jaccard": 0.8274,
+    "ssim": 0.9565,
+    "text_boundary": 1.0
   },
   "cases/header-inline-connector-behind": {
     "jaccard": 0.9925,
@@ -4587,6 +4607,11 @@
     "ua_deficit": 0,
     "a11y_struct": 1.0,
     "a11y_text": 1.0
+  },
+  "cases/header-para-anchor-above-space-before": {
+    "jaccard": 0.7382,
+    "ssim": 0.8773,
+    "text_boundary": 1.0
   },
   "cases/header-textbox-clip-noAutofit": {
     "jaccard": 0.9196,
@@ -6679,6 +6704,11 @@
     "a11y_struct": 0.6667,
     "a11y_text": 1.0
   },
+  "cases/paragraph-border-indents": {
+    "jaccard": 0.807,
+    "ssim": 0.9483,
+    "text_boundary": 1.0
+  },
   "cases/paragraph-border-styles": {
     "jaccard": 0.8252,
     "ssim": 0.9125,
@@ -7606,6 +7636,16 @@
     "ua_deficit": 0,
     "a11y_struct": 0.9091,
     "a11y_text": 1.0
+  },
+  "cases/shape-outline-dash": {
+    "jaccard": 0.7645,
+    "ssim": 0.9036,
+    "text_boundary": 1.0
+  },
+  "cases/shape-outline-dash-cells": {
+    "jaccard": 0.6193,
+    "ssim": 0.8761,
+    "text_boundary": 1.0
   },
   "cases/shifted-text-position-7-mixed0-mark0": {
     "jaccard": 0.8156,

@@ -195,13 +195,26 @@ Open queue from the large-corpus and focus-fixture rounds:
 - **Paragraph borders** (probe 2026-10-30, `paragraph-borders-inherited`):
   pBdr merges per side through basedOn and from direct formatting, none/nil
   removing a side; boxes join when their edges line up, whatever the
-  indents. Border styles (issue #145, `paragraph-border-styles`):
+  indents (the box itself runs from the start indent, or a first line hanging
+  further out, to the end indent, shading too: `paragraph-border-indents`).
+  A differing `between` does not split a group; at a join Word leaves the
+  next paragraph's `between` space, then draws this paragraph's `between`
+  and its space; the shading above that `between` border is this
+  paragraph's, the shading below it the next one's, neither under the
+  border's own lines (a double border's gap stays white,
+  `border-group-between-rule-fill`), and table cells reserve the same band
+  (`border-group-between-bands`). Header and footer paragraphs
+  group the same way (`header-footer-border-groups`). Border styles (issue #145, `paragraph-border-styles`):
   dotted/dashed/dotDash dash arrays of 1/3/3-1-1 line widths, double = two
   lines a line apart, thinThick*Gap = full line inside, half gap, half line
   outside in the online export (desktop Word puts the thin line inside;
   medium gap measured, small/large drawn alike), wave = a 2.5-line band of
   5-line waves; the band's extent sizes the box.
-  Open: header/footer paragraphs never join a group; renewable_dispatch's
+  Open: shading without side borders still stops at the text (Word runs it
+  ~1.4pt past, like the rules); spacing between two grouped paragraphs sits
+  above the `between` band in Word (in this paragraph's shading) but below it
+  here; table cells draw neither top nor side paragraph borders nor paragraph
+  shading; renewable_dispatch's
   last blue "CBIR Process" heading bar is not drawn at all (white text on
   white); table cell borders keep their own dash arrays and draw wave and
   thin/thick pairs as one line (`pdf::table::draw_border`).
@@ -243,6 +256,10 @@ Open queue from the large-corpus and focus-fixture rounds:
 - Tab stops: decimal precision unverified; bar tabs act as left stops and draw
   no line; `middleDot`/`heavy` leaders draw nothing.
 - Underlines: dotted/dash/wave/thick draw single; underline colour ignored.
+- Text box outlines stroke their `a:prstDash` in body and table-cell boxes
+  (`shape-outline-dash`, `shape-outline-dash-cells`). Open: header and footer
+  text boxes draw no outline at all; text in a cell text box ignores a thick
+  outline (Word insets it) and a rounded rectangle's text rect.
 - `w:textAlignment`: only top is laid out; center, baseline, bottom and auto
   behave alike.
 - `w:mirrorMargins`: parsed (used only for odd/even filler pages), never
@@ -366,6 +383,22 @@ Open queue from the large-corpus and focus-fixture rounds:
   Unverified against Word.
 - Body/header flow reserves `height_pt` for TopAndBottom textboxes while
   rendering uses `textbox_height`.
+- An empty header paragraph with a topAndBottom text box: Word puts its mark
+  line below the box and the paragraph's space before (a 40pt box 4pt below
+  a 24pt-before anchor: next paragraph at box bottom + 24 + one line); we
+  stop at the box bottom, one line high. Without compatibilityMode 15 Word
+  pushes no header text below topAndBottom floats at all, which
+  `float_text_push` does not model.
+- `relativeFrom="line"` parses as Paragraph. Right for an anchor in the
+  first line, whose box starts above the space before (header example: 4pt
+  below the line of a 36pt-before paragraph = header margin + 4), wrong for
+  one in a later line: Word counts from that line's top (second line of the
+  same paragraph: margin + 36 + 11.5 + 4; we put it at margin + 4).
+- Header text beside a float with room on both sides (ut_koer's centred
+  logo between the treasurer and secretary columns): Word fills both sides,
+  `hf_line_geometry` only the wider one, and `measure_header_height` keeps
+  such lines at full width. A footer's lines beside its wrapping floats are
+  always measured at full width; the header's otherwise as rendered.
 - Word puts the anchor's own line box below a no-strip float (sample500kB p4:
   Word gap 67.7pt, ours 51.8pt).
 - Multiple floats per paragraph: the page-level zone for *following*

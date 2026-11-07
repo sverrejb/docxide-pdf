@@ -286,16 +286,53 @@ pub(super) fn anchored_frame_top(
     Some(sp.page_height - top)
 }
 
-/// The band a bottom border adds below a paragraph: its `space` and its stroke
-/// (the body path's `bdr_bottom_extent`). The next paragraph starts below it.
-fn bottom_border_band(para: &Paragraph) -> f32 {
-    super::helpers::border_band(para.borders.bottom.as_ref())
+/// Whether a header or footer paragraph shares its border group with the
+/// paragraph before and after it, as in the body (`joins_border_group`).
+#[derive(Clone, Copy, Default)]
+struct BorderGroup {
+    prev: bool,
+    next: bool,
+    /// The band a top border adds above the lines, as in the body
+    /// (`bdr_top_pad`): carbon_farming's footer rule sits 1.75pt above its
+    /// text. Inside a border group only the first paragraph has one.
+    top: f32,
+    /// `helpers::bottom_border`'s band below the lines (the body path's
+    /// `bdr_bottom_extent`); the next paragraph starts below it.
+    bottom: (f32, f32),
+    /// The part of the previous paragraph's band below its `between` border,
+    /// when `prev`; it takes this paragraph's shading.
+    below_prev: f32,
+    /// Whether the gap above shares the previous paragraph's shading too.
+    shade_gap: bool,
 }
 
-/// The band a top border adds above a paragraph's lines, as in the body
-/// (`bdr_top_pad`): carbon_farming's footer rule sits 1.75pt above its text.
-fn top_border_band(para: &Paragraph) -> f32 {
-    super::helpers::border_band(para.borders.top.as_ref())
+impl BorderGroup {
+    fn of(blocks: &[Block], i: usize) -> Self {
+        let flow_para = |j: usize| match blocks.get(j) {
+            Some(Block::Paragraph(p)) if p.frame_props.is_none() => Some(p),
+            _ => None,
+        };
+        let Some(para) = flow_para(i) else {
+            return Self::default();
+        };
+        let next = flow_para(i + 1).filter(|n| super::helpers::joins_border_group(para, n));
+        let prev = i
+            .checked_sub(1)
+            .and_then(flow_para)
+            .filter(|p| super::helpers::joins_border_group(p, para));
+        Self {
+            prev: prev.is_some(),
+            next: next.is_some(),
+            top: if prev.is_some() {
+                0.0
+            } else {
+                super::helpers::border_band(para.borders.top.as_ref())
+            },
+            bottom: super::helpers::bottom_border(para, next).1,
+            below_prev: prev.map_or(0.0, super::helpers::between_space),
+            shade_gap: prev.is_some_and(|p| p.shading == para.shading),
+        }
+    }
 }
 
 /// How far a header (footer) paragraph's text drops below its own floats:
@@ -528,15 +565,19 @@ fn measure_header_height(
     } else {
         Default::default()
     };
-    for block in &hf.blocks {
+    // The header's wrapping floats so far, placed as the render places them.
+    let mut float_zones: Vec<HfFloatZone> = Vec::new();
+    for (bi, block) in hf.blocks.iter().enumerate() {
         match block {
             Block::Paragraph(para) if para.frame_props.is_some() => {
                 // Frame paragraphs are out-of-flow; skip height contribution
             }
             Block::Paragraph(para) => {
                 let gap = hf_paragraph_gap(prev_para, prev_space_after, para);
+                let own_before = hf_own_space_before(prev_para, prev_space_after, para);
                 prev_para = Some(para);
-                let (font_size, tallest_lhr, _) = hf_run_metrics(&para.runs, para, ctx.fonts);
+                let (font_size, tallest_lhr, tallest_ar) =
+                    hf_run_metrics(&para.runs, para, ctx.fonts);
                 let effective_ls = para.line_spacing.unwrap_or(ctx.doc_line_spacing);
                 let line_h = resolve_line_h(effective_ls, font_size, tallest_lhr);
                 height = below_blocking_tables(
@@ -549,13 +590,86 @@ fn measure_header_height(
                     + gap;
                 height = below_blocking_frames(sp.header_margin + height, line_h, &bands)
                     - sp.header_margin;
+                let count_lines = |geometry: Option<&((f32, f32), Vec<(f32, f32)>)>| {
+                    let per_line_widths: Option<Vec<f32>> =
+                        geometry.map(|(_, g)| g.iter().map(|&(_, w)| w).collect());
+                    let (shift, width) = geometry.map_or(
+                        (0.0, (text_width - para.indent_left - para.indent_right).max(1.0)),
+                        |&((x, w), _)| (x - (sp.margin_left + para.indent_left), w),
+                    );
+                    build_lines(
+                        &para.runs,
+                        ctx,
+                        width,
+                        ctx.cjk(true, para),
+                        &LineOpts {
+                            tab_stops: &shifted_tab_stops(para, shift),
+                            indent_left: para.indent_left,
+                            indent_right: para.indent_right,
+                            hanging: para.indent_hanging - para.indent_first_line,
+                            per_line_widths: per_line_widths.as_deref(),
+                            ..Default::default()
+                        },
+                    )
+                    .len()
+                    .max(1)
+                };
                 // Positioned runs and marks stretch their lines as in the render.
-                let line_h = line_h
-                    + if is_text_empty(&para.runs) {
-                        super::mark_position_stretch(para, effective_ls, false, ctx.fonts)
-                    } else {
-                        position_stretch(&para.runs, effective_ls)
-                    };
+                let stretch = if is_text_empty(&para.runs) {
+                    super::mark_position_stretch(para, effective_ls, false, ctx.fonts)
+                } else {
+                    position_stretch(&para.runs, effective_ls)
+                };
+                // Header lines flow beside the wrapping floats their boxes
+                // overlap, as rendered, and Word reserves all of them.
+                // ponytail: a footer's floats are placed from where it ends up,
+                // which its height decides; its lines keep the full width here.
+                let geometry = if is_header {
+                    let slot_top = sp.page_height - sp.header_margin - height;
+                    let top = slot_top - BorderGroup::of(&hf.blocks, bi).top - float_text_push(para, text_width);
+                    let baseline = top
+                        - super::layout::boxed_line_ascent(
+                            effective_ls,
+                            line_h,
+                            font_size,
+                            tallest_lhr,
+                            tallest_ar,
+                            &para.runs,
+                            ctx.fonts,
+                        )
+                        .unwrap_or(font_size * tallest_ar.unwrap_or(0.75));
+                    float_zones.extend(
+                        para.floating_images
+                            .iter()
+                            .filter(|fi| fi.wrap_type.wraps_beside())
+                            .map(|fi| hf_float_zone(fi, sp, slot_top, own_before)),
+                    );
+                    let zones = hf_float_zones(
+                        hf,
+                        bi,
+                        para,
+                        &para.runs,
+                        &float_zones,
+                        top,
+                        line_h,
+                        sp,
+                        ctx,
+                    );
+                    // ponytail: Word fills both sides of a float with room
+                    // on each (ut_koer's centred logo between two
+                    // columns), the render only the wider side; such
+                    // lines are measured at full width.
+                    hf_line_geometry(&zones, para, sp, (top, baseline), line_h).filter(|g| {
+                        let bottom = top - count_lines(Some(g)) as f32 * (line_h + stretch);
+                        zones.iter().filter(|z| top > z.bottom && bottom < z.top).all(|z| {
+                            let (left, right) = z.side_room(sp);
+                            left < MIN_WRAP_ROOM || right < MIN_WRAP_ROOM
+                        })
+                    })
+                } else {
+                    None
+                };
+                let line_h = line_h + stretch;
                 // Mirrors the render loop's advance: a picture line is the
                 // picture plus the text descent (`inline_line_advance`).
                 let picture_h = runs_max_image_h(&para.runs);
@@ -564,23 +678,8 @@ fn measure_header_height(
                 // aligns a nine-line footer at the footer margin; one line per
                 // paragraph put it 100pt low, off the page); its w:br breaks
                 // are among those lines.
-                let text_lines = (wrapped_h.is_none() && picture_h <= 0.0).then(|| {
-                    build_lines(
-                        &para.runs,
-                        ctx,
-                        (text_width - para.indent_left - para.indent_right).max(1.0),
-                        ctx.cjk(true, para),
-                        &LineOpts {
-                            tab_stops: &para.tab_stops,
-                            indent_left: para.indent_left,
-                            indent_right: para.indent_right,
-                            hanging: para.indent_hanging - para.indent_first_line,
-                            ..Default::default()
-                        },
-                    )
-                    .len()
-                    .max(1)
-                });
+                let text_lines = (wrapped_h.is_none() && picture_h <= 0.0)
+                    .then(|| count_lines(geometry.as_ref()));
                 let mut content_h = if let Some(h) = wrapped_h {
                     h
                 } else if picture_h > 0.0 {
@@ -668,7 +767,8 @@ fn measure_header_height(
                     content_h += br_count as f32 * line_h;
                 }
 
-                height += top_border_band(para) + content_h + bottom_border_band(para);
+                let group = BorderGroup::of(&hf.blocks, bi);
+                height += group.top + content_h + group.bottom.1;
                 prev_space_after = para.space_after;
             }
             // A floating table takes no room in the header's flow
@@ -851,6 +951,8 @@ pub(super) fn resolve_tb_y_top(
     }
 }
 
+const MIN_WRAP_ROOM: f32 = 36.0;
+
 /// A wrapping float in a header or footer: its box (PDF coordinates) and the
 /// distances text keeps from its sides.
 #[derive(Clone, Copy)]
@@ -874,6 +976,161 @@ impl HfFloatZone {
             dist_right: fi.dist_right,
         }
     }
+
+    /// The room text has on its left and right in the margins' column.
+    fn side_room(&self, sp: &SectionProperties) -> (f32, f32) {
+        (
+            (self.left - self.dist_left) - sp.margin_left,
+            sp.margin_left + sp.text_width() - (self.right + self.dist_right),
+        )
+    }
+}
+
+fn shifted_tab_stops(para: &Paragraph, shift: f32) -> Vec<crate::model::TabStop> {
+    para.tab_stops
+        .iter()
+        .map(|t| crate::model::TabStop {
+            position: t.position - shift,
+            ..t.clone()
+        })
+        .collect()
+}
+
+/// The wrapping floats a header (footer) paragraph's lines flow beside: its
+/// own and those of the paragraphs before it (`earlier`), and those the next
+/// paragraph raises above its own top. `cursor_y` is the top of the
+/// paragraph's first line.
+fn hf_float_zones(
+    hf: &HeaderFooter,
+    bi: usize,
+    para: &Paragraph,
+    runs: &[Run],
+    earlier: &[HfFloatZone],
+    cursor_y: f32,
+    line_h: f32,
+    sp: &SectionProperties,
+    ctx: &RenderContext,
+) -> Vec<HfFloatZone> {
+    let text_width = sp.text_width();
+    let mut zones = earlier.to_vec();
+    // A wrapping float the next paragraph raises above its own top
+    // wraps this paragraph too, as the body's look-ahead does:
+    // bulgarian_farmland's emblem, anchored in the letterhead's
+    // second line, sits beside the first. ponytail: the next
+    // paragraph's top assumes this one keeps its full-width lines.
+    if let Some(Block::Paragraph(next)) = hf.blocks.get(bi + 1) {
+        let raised: Vec<_> = next
+            .floating_images
+            .iter()
+            .filter(|fi| {
+                fi.wrap_type.wraps_beside()
+                    && fi.v_relative_from == VRelativeFrom::Paragraph
+                    && matches!(fi.v_position, VerticalPosition::Offset(o) if o < 0.0)
+            })
+            .collect();
+        if !raised.is_empty() {
+            let full_lines = build_lines(
+                runs,
+                ctx,
+                (text_width - para.indent_left - para.indent_right).max(1.0),
+                ctx.cjk(true, para),
+                &LineOpts {
+                    tab_stops: &para.tab_stops,
+                    ..Default::default()
+                },
+            );
+            let next_top = cursor_y
+                - full_lines.len() as f32 * line_h
+                - hf_paragraph_gap(Some(para), para.space_after, next);
+            let next_own_before = hf_own_space_before(Some(para), para.space_after, next);
+            zones.extend(
+                raised
+                    .into_iter()
+                    .map(|fi| hf_float_zone(fi, sp, next_top, next_own_before)),
+            );
+        }
+    }
+    zones
+}
+
+/// Where a header (footer) paragraph's drawings hang from: its `slot_top`
+/// above its `own_before`, or the line top when on the line.
+fn hf_anchor_top(slot_top: f32, own_before: f32, on_line: bool) -> f32 {
+    slot_top + if on_line { 0.0 } else { own_before }
+}
+
+fn hf_float_zone(
+    fi: &crate::model::FloatingImage,
+    sp: &SectionProperties,
+    slot_top: f32,
+    own_before: f32,
+) -> HfFloatZone {
+    let text_width = sp.text_width();
+    let fi_x = super::resolve_h_position(
+        fi.h_relative_from,
+        &fi.h_position,
+        fi.image.display_width,
+        sp,
+        sp.margin_left,
+        text_width,
+        text_width,
+    );
+    let top = hf_anchor_top(slot_top, own_before, fi.on_line);
+    HfFloatZone::for_float(fi, fi_x, super::resolve_fi_y_top(fi, sp, top))
+}
+
+/// Where a header (footer) paragraph's lines go when a float in `zones`
+/// overlaps its first line (`top` down to its `baseline`): the first line's
+/// (x, width) and each line's, a line flowing beside every float its box
+/// overlaps (Word example: a picture ending 4pt into a header's first line
+/// narrows it). Paragraph indents count from the column edge and the float
+/// bounds clip them, they do not add up.
+fn hf_line_geometry(
+    zones: &[HfFloatZone],
+    para: &Paragraph,
+    sp: &SectionProperties,
+    (top, baseline): (f32, f32),
+    line_h: f32,
+) -> Option<((f32, f32), Vec<(f32, f32)>)> {
+    let col_x = sp.margin_left;
+    let text_width = sp.text_width();
+    let col_right = sp.margin_left + text_width;
+    // Combined text bounds over [y_lo, y_hi]: a float with more room on its
+    // right raises the left bound, otherwise it lowers the right bound.
+    let bounds_at = |y_hi: f32, y_lo: f32| -> Option<(f32, f32)> {
+        let mut left = col_x;
+        let mut right = col_right;
+        let mut hit = false;
+        for z in zones {
+            if y_hi > z.bottom && y_lo < z.top {
+                hit = true;
+                let (space_left, space_right) = z.side_room(sp);
+                if space_right >= space_left && space_right >= MIN_WRAP_ROOM {
+                    left = left.max(z.right + z.dist_right);
+                } else if space_left >= MIN_WRAP_ROOM {
+                    right = right.min(z.left - z.dist_left);
+                }
+            }
+        }
+        hit.then_some((left, right))
+    };
+    let indented = |(lb, rb): (f32, f32)| -> (f32, f32) {
+        let tx = (col_x + para.indent_left).max(lb);
+        let tr = (col_right - para.indent_right).min(rb);
+        (tx, (tr - tx).max(1.0))
+    };
+    let first = indented(bounds_at(top, baseline)?);
+    let full_w = (text_width - para.indent_left - para.indent_right).max(1.0);
+    let deepest_bottom = zones.iter().map(|z| z.bottom).fold(f32::INFINITY, f32::min);
+    let max_lines = (((top - deepest_bottom) / line_h).ceil() as usize + 10).max(20);
+    let geom = (0..max_lines)
+        .map(|i| {
+            let line_top = top - i as f32 * line_h;
+            bounds_at(line_top, line_top - line_h)
+                .map_or((col_x + para.indent_left, full_w), indented)
+        })
+        .collect();
+    Some((first, geom))
 }
 
 /// Per-page context for header/footer rendering: field substitution values
@@ -1057,6 +1314,7 @@ pub(super) fn render_header_footer(
                 let text_empty = !has_field_code && is_text_empty(&para.runs);
 
                 let gap = hf_paragraph_gap(prev_para, prev_space_after, para);
+                let own_before = hf_own_space_before(prev_para, prev_space_after, para);
                 prev_para = Some(para);
 
                 let substituted_runs = substitute_hf_runs(
@@ -1087,7 +1345,11 @@ pub(super) fn render_header_footer(
                 cursor_y = sp.page_height
                     - below_blocking_frames(sp.page_height - cursor_y, line_h, &bands);
                 let slot_top = cursor_y;
-                cursor_y -= top_border_band(para) + float_text_push(para, text_width);
+                let group = BorderGroup::of(&hf.blocks, bi);
+                // Drawings hang from above the paragraph's own space before,
+                // those on the line from the line top.
+                let anchor_top = |on_line: bool| hf_anchor_top(slot_top, own_before, on_line);
+                cursor_y -= group.top + float_text_push(para, text_width);
 
                 // Foreground anchored lines must cover an inline picture's white
                 // background, so they wait for the late pass; behind-document
@@ -1106,7 +1368,7 @@ pub(super) fn render_header_footer(
                             sp.margin_left,
                             text_width,
                             text_width,
-                            slot_top,
+                            anchor_top(false),
                         );
                         super::positioning::render_connector(connector, content, x, y);
                     }
@@ -1117,8 +1379,12 @@ pub(super) fn render_header_footer(
                 // draws them once it knows it (ut_koer: a header staff image
                 // with a bottom border); empty bordered paragraphs render too.
                 let bdr = &para.borders;
-                let (box_left, box_right, box_top) =
-                    (sp.margin_left, sp.margin_left + text_width, slot_top);
+                let (box_left_in, box_right_in) = super::helpers::border_box_indents(para);
+                let (box_left, box_right, box_top) = (
+                    sp.margin_left + box_left_in,
+                    sp.margin_left + text_width - box_right_in,
+                    slot_top,
+                );
                 let draw_para_borders = |content: &mut Content, box_bottom: f32| {
                     // Side borders as in the body: their inner edge `space`
                     // plus Word's 1.47 / 1.73pt outside the text, and the
@@ -1127,23 +1393,31 @@ pub(super) fn render_header_footer(
                     let (l_ext, r_ext) = super::horizontal_border_ext(bdr);
                     let h_left = box_left - left_x - l_ext;
                     let h_right = box_right + right_x + r_ext;
-                    if let Some(b) = &bdr.top {
+                    if !group.prev
+                        && let Some(b) = &bdr.top
+                    {
                         let y = box_top - b.extent() / 2.0;
                         stroke_border(content, b, (h_left, y), (h_right, y), -1.0);
                     }
-                    if let Some(b) = &bdr.bottom {
-                        // The stroke sits `space` below the box, outside it,
-                        // as the body path's bottom pad places it.
-                        let y = box_bottom - b.space_pt - b.extent() / 2.0;
+                    // The stroke sits `space` below the box, outside it,
+                    // as the body path's bottom pad places it.
+                    if let Some(b) = if group.next { &bdr.between } else { &bdr.bottom } {
+                        let y = box_bottom - group.bottom.0 - b.extent() / 2.0;
                         stroke_border(content, b, (h_left, y), (h_right, y), 1.0);
                     }
-                    let v_bottom = box_bottom - bdr.bottom.as_ref().map_or(0.0, |b| b.space_pt);
+                    let v_top = box_top + if group.prev { gap } else { 0.0 };
+                    let v_bottom = box_bottom
+                        - if group.next {
+                            group.bottom.1
+                        } else {
+                            group.bottom.0
+                        };
                     for (b, x, inward) in [
                         (&bdr.left, box_left - left_x, 1.0),
                         (&bdr.right, box_right + right_x, -1.0),
                     ] {
                         if let Some(b) = b {
-                            stroke_border(content, b, (x, box_top), (x, v_bottom), inward);
+                            stroke_border(content, b, (x, v_top), (x, v_bottom), inward);
                         }
                     }
                 };
@@ -1154,10 +1428,17 @@ pub(super) fn render_header_footer(
                     let Some(color) = para.shading else { return };
                     let (left_out, right_out) = super::side_border_outsets(bdr, false);
                     let (left, right) = (box_left - left_out, box_right + right_out);
-                    let bottom = box_bottom - bdr.bottom.as_ref().map_or(0.0, |b| b.space_pt);
+                    let bottom = box_bottom - group.bottom.0;
+                    let top = box_top
+                        + group.below_prev
+                        + if group.shade_gap {
+                            gap
+                        } else {
+                            0.0
+                        };
                     content.save_state();
                     super::color::fill_rgb(content, color);
-                    content.rect(left, bottom, right - left, box_top - bottom);
+                    content.rect(left, bottom, right - left, top - bottom);
                     content.fill_nonzero();
                     content.restore_state();
                 };
@@ -1192,21 +1473,12 @@ pub(super) fn render_header_footer(
                         for (fi_idx, fi) in by_z {
                             if let Some(pdf_name) = floating_image_names.get(&(pi, fi_idx)) {
                                 let img = &fi.image;
-                                let fi_x = super::resolve_h_position(
-                                    fi.h_relative_from,
-                                    &fi.h_position,
-                                    img.display_width,
-                                    sp,
-                                    sp.margin_left,
-                                    text_width,
-                                    text_width,
-                                );
-                                let fi_y_top = super::resolve_fi_y_top(fi, sp, slot_top);
+                                let zone = hf_float_zone(fi, sp, slot_top, own_before);
                                 super::smartart::render_image_with_clip(
                                     content,
                                     pdf_name,
-                                    fi_x,
-                                    fi_y_top - img.display_height,
+                                    zone.left,
+                                    zone.bottom,
                                     img.display_width,
                                     img.display_height,
                                     img.clip_geometry.as_ref(),
@@ -1214,8 +1486,8 @@ pub(super) fn render_header_footer(
                                 if let Some(sc) = img.stroke_color {
                                     super::smartart::stroke_image_border(
                                         content,
-                                        fi_x,
-                                        fi_y_top - img.display_height,
+                                        zone.left,
+                                        zone.bottom,
                                         img.display_width,
                                         img.display_height,
                                         sc,
@@ -1225,7 +1497,7 @@ pub(super) fn render_header_footer(
                                 }
                                 // Register float zone for wrapping images
                                 if fi.wrap_type.wraps_beside() {
-                                    hdr_fz.push(HfFloatZone::for_float(fi, fi_x, fi_y_top));
+                                    hdr_fz.push(zone);
                                 }
                             }
                         }
@@ -1247,7 +1519,7 @@ pub(super) fn render_header_footer(
                                 &tb.v_position,
                                 tb_height,
                                 sp,
-                                slot_top,
+                                anchor_top(tb.on_line),
                             );
                             let rotated = super::textbox_render::rotate_about_center(
                                 content,
@@ -1574,7 +1846,7 @@ pub(super) fn render_header_footer(
                     }
                     draw_connectors(content, true);
                     draw_para_borders(content, cursor_y - line_h);
-                    cursor_y -= line_h + bottom_border_band(para);
+                    cursor_y -= line_h + group.bottom.1;
                     prev_space_after = para.space_after;
                     pi += 1;
                     continue;
@@ -1605,7 +1877,7 @@ pub(super) fn render_header_footer(
                 if text_empty {
                     let mut advance = line_h
                         + super::mark_position_stretch(para, effective_ls, false, ctx.fonts)
-                        + bottom_border_band(para);
+                        + group.bottom.1;
                     // TopAndBottom textboxes push content below them
                     for tb in &para.textboxes {
                         if matches!(tb.wrap_type, WrapType::TopAndBottom) {
@@ -1659,131 +1931,24 @@ pub(super) fn render_header_footer(
                     -para.indent_first_line
                 };
 
-                // Narrow text width when wrapping floating images overlap this paragraph.
-                // Combine same-paragraph floats and cross-paragraph float zones so a
-                // logo on each side of a centered letterhead constrains both edges.
-                let mut hdr_line_geom: Option<Vec<(f32, f32)>> = None;
-                let mut zones: Vec<HfFloatZone> = para
-                    .floating_images
-                    .iter()
-                    .filter(|fi| fi.wrap_type.wraps_beside())
-                    .map(|fi| {
-                        let fi_x = super::resolve_h_position(
-                            fi.h_relative_from,
-                            &fi.h_position,
-                            fi.image.display_width,
-                            sp,
-                            sp.margin_left,
-                            text_width,
-                            text_width,
-                        );
-                        let fi_y_top = super::resolve_fi_y_top(fi, sp, slot_top);
-                        HfFloatZone::for_float(fi, fi_x, fi_y_top)
-                    })
-                    .collect();
-                zones.extend(hdr_fz.iter().copied());
-                // A wrapping float the next paragraph raises above its own top
-                // wraps this paragraph too, as the body's look-ahead does:
-                // bulgarian_farmland's emblem, anchored in the letterhead's
-                // second line, sits beside the first. ponytail: the next
-                // paragraph's top assumes this one keeps its full-width lines.
-                if let Some(Block::Paragraph(next)) = hf.blocks.get(bi + 1) {
-                    let raised: Vec<_> = next
-                        .floating_images
-                        .iter()
-                        .filter(|fi| {
-                            fi.wrap_type.wraps_beside()
-                                && fi.v_relative_from == VRelativeFrom::Paragraph
-                                && matches!(fi.v_position, VerticalPosition::Offset(o) if o < 0.0)
-                        })
-                        .collect();
-                    if !raised.is_empty() {
-                        let full_lines = build_lines(
-                            &substituted_runs,
-                            ctx,
-                            (text_width - para.indent_left - para.indent_right).max(1.0),
-                            ctx.cjk(true, para),
-                            &LineOpts {
-                                tab_stops: &para.tab_stops,
-                                ..Default::default()
-                            },
-                        );
-                        let next_top = cursor_y
-                            - full_lines.len() as f32 * line_h
-                            - hf_paragraph_gap(Some(para), para.space_after, next);
-                        for fi in raised {
-                            let fi_x = super::resolve_h_position(
-                                fi.h_relative_from,
-                                &fi.h_position,
-                                fi.image.display_width,
-                                sp,
-                                sp.margin_left,
-                                text_width,
-                                text_width,
-                            );
-                            let fi_y_top = super::resolve_fi_y_top(fi, sp, next_top);
-                            zones.push(HfFloatZone::for_float(fi, fi_x, fi_y_top));
-                        }
-                    }
-                }
-
-                {
-                    let col_x = sp.margin_left;
-                    let col_right = sp.margin_left + text_width;
-
-                    // Combined text bounds over [y_lo, y_hi]: a float with more room
-                    // on its right raises the left bound, otherwise it lowers the
-                    // right bound. Returns None when no zone overlaps.
-                    let bounds_at = |y_hi: f32, y_lo: f32| -> Option<(f32, f32)> {
-                        let mut left = col_x;
-                        let mut right = col_right;
-                        let mut hit = false;
-                        for z in &zones {
-                            if y_hi > z.bottom && y_lo < z.top {
-                                hit = true;
-                                let space_right = col_right - (z.right + z.dist_right);
-                                let space_left = (z.left - z.dist_left) - col_x;
-                                if space_right >= space_left && space_right >= 36.0 {
-                                    left = left.max(z.right + z.dist_right);
-                                } else if space_left >= 36.0 {
-                                    right = right.min(z.left - z.dist_left);
-                                }
-                            }
-                        }
-                        hit.then_some((left, right))
-                    };
-
-                    // Word measures paragraph indents from the column edge and lets
-                    // float bounds clip the region — indents are NOT added on top of
-                    // the float edges.
-                    let indented = |lb: f32, rb: f32| -> (f32, f32) {
-                        let tx = (col_x + para.indent_left).max(lb);
-                        let tr = (col_right - para.indent_right).min(rb);
-                        (tx, (tr - tx).max(1.0))
-                    };
-
-                    if let Some((lb, rb)) = bounds_at(cursor_y, baseline_y) {
-                        (para_text_x, para_text_width) = indented(lb, rb);
-
-                        // Build per-line geometry for multi-line paragraphs that may
-                        // span above and through the float zones
-                        let ascender_ratio_e = tallest_ar.unwrap_or(0.75);
-                        let full_w = (text_width - para.indent_left - para.indent_right).max(1.0);
-                        let deepest_bottom =
-                            zones.iter().map(|z| z.bottom).fold(f32::INFINITY, f32::min);
-                        let max_lines = ((cursor_y - deepest_bottom) / line_h).ceil() as usize + 10;
-                        let max_lines = max_lines.max(20);
-                        let mut geom = Vec::with_capacity(max_lines);
-                        for i in 0..max_lines {
-                            let y = cursor_y - font_size * ascender_ratio_e - i as f32 * line_h;
-                            match bounds_at(y, y) {
-                                Some((lb, rb)) => geom.push(indented(lb, rb)),
-                                None => geom.push((col_x + para.indent_left, full_w)),
-                            }
-                        }
-                        hdr_line_geom = Some(geom);
-                    }
-                }
+                let zones = hf_float_zones(
+                    hf,
+                    bi,
+                    para,
+                    &substituted_runs,
+                    &hdr_fz,
+                    cursor_y,
+                    line_h,
+                    sp,
+                    ctx,
+                );
+                let hdr_line_geom =
+                    hf_line_geometry(&zones, para, sp, (cursor_y, baseline_y), line_h).map(
+                        |(first, geom)| {
+                            (para_text_x, para_text_width) = first;
+                            geom
+                        },
+                    );
 
                 let per_line_widths: Option<Vec<f32>> = hdr_line_geom
                     .as_ref()
@@ -1794,15 +1959,8 @@ pub(super) fn render_header_footer(
                 // sees them that much nearer: bulgarian_farmland's letterhead
                 // tabs to 63.8pt from the margin, not from the emblem's edge.
                 // ponytail: default-interval stops are not shifted.
-                let tab_shift = para_text_x - (sp.margin_left + para.indent_left);
-                let shifted_stops: Vec<crate::model::TabStop> = para
-                    .tab_stops
-                    .iter()
-                    .map(|t| crate::model::TabStop {
-                        position: t.position - tab_shift,
-                        ..t.clone()
-                    })
-                    .collect();
+                let shifted_stops =
+                    shifted_tab_stops(para, para_text_x - (sp.margin_left + para.indent_left));
 
                 let mut lines = build_lines(
                     &substituted_runs,
@@ -1917,7 +2075,7 @@ pub(super) fn render_header_footer(
                 }
                 draw_connectors(content, true);
                 draw_para_borders(content, cursor_y - para_h);
-                cursor_y -= para_h + bottom_border_band(para);
+                cursor_y -= para_h + group.bottom.1;
                 prev_space_after = para.space_after;
                 pi += 1;
             }
@@ -2026,12 +2184,32 @@ pub(super) fn hf_paragraph_gap(
     prev_space_after: f32,
     para: &Paragraph,
 ) -> f32 {
+    let (after, before) = hf_spacing(prev, prev_space_after, para);
+    after.max(before)
+}
+
+/// How far above its first line a header/footer paragraph's drawings hang
+/// from: its own space before, the part of the gap above the previous
+/// paragraph's space after (`ParaAnchor` in the body). Word examples: a
+/// letterhead logo 4pt below a first paragraph with 36pt before sits at
+/// header margin + 4; after a paragraph with 12pt after, 24pt before puts it
+/// 12pt below the previous line.
+fn hf_own_space_before(
+    prev: Option<&Paragraph>,
+    prev_space_after: f32,
+    para: &Paragraph,
+) -> f32 {
+    let (after, before) = hf_spacing(prev, prev_space_after, para);
+    (before - after).max(0.0)
+}
+
+fn hf_spacing(prev: Option<&Paragraph>, prev_space_after: f32, para: &Paragraph) -> (f32, f32) {
     let after = if prev.is_some_and(|p| super::helpers::drops_space_after(p, Some(para))) {
         0.0
     } else {
         prev_space_after
     };
-    after.max(super::helpers::effective_space_before(para, prev))
+    (after, super::helpers::effective_space_before(para, prev))
 }
 
 #[cfg(test)]

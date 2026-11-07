@@ -49,8 +49,9 @@ use header_footer::{
 };
 pub(super) use helpers::resolve_line_h;
 use helpers::{
-    align_offset, auto_ascent_scale, border_band, collect_paras, draw_horizontal_rule,
-    joins_border_group, para_runs_with_textboxes, spacing_leading,
+    align_offset, auto_ascent_scale, between_space, border_band, bottom_border,
+    border_box_indents, collect_paras, draw_horizontal_rule, joins_border_group,
+    para_runs_with_textboxes, spacing_leading,
 };
 use images::{EffectXObjs, EmbeddedImages, embed_all_images};
 use layout::{
@@ -2201,6 +2202,7 @@ impl PageBuilder {
 pub(super) struct LayoutState {
     pub(super) pb: PageBuilder,
     pub(super) prev_space_after: f32,
+    pub(super) prev_between_below: f32,
     pub(super) effective_margin_bottom: f32,
     pub(super) current_col: usize,
     pub(super) global_block_idx: usize,
@@ -2234,6 +2236,7 @@ impl LayoutState {
         LayoutState {
             pb,
             prev_space_after: self.prev_space_after,
+            prev_between_below: self.prev_between_below,
             effective_margin_bottom: bottom,
             current_col: self.current_col,
             global_block_idx: self.global_block_idx,
@@ -3159,6 +3162,7 @@ fn render_paragraph_block(
     debug_wrap: bool,
     table_connector_anchor: Option<(usize, f32)>,
 ) -> bool {
+    let prev_between_below = std::mem::take(&mut state.prev_between_below);
     if is_empty_wrapping_frame(para, sp) {
         state.global_block_idx += 1;
         return true;
@@ -4341,21 +4345,11 @@ fn render_paragraph_block(
     } else {
         para.borders.top.as_ref().map_or(0.0, |b| b.extent() / 2.0)
     };
-    let bdr_bottom_pad = if bottom_collapses {
-        0.0
-    } else {
-        para.borders
-            .bottom
-            .as_ref()
-            .map(|b| b.space_pt + b.extent() / 2.0)
-            .unwrap_or(0.0)
-    };
+    let (bottom_bdr, bottom_band) =
+        bottom_border(para, next_para.filter(|_| bottom_collapses));
+    let bdr_bottom_pad = bottom_band.0 + bottom_bdr.map_or(0.0, |b| b.extent() / 2.0);
     // Full extent of bottom border below content (to border bottom edge)
-    let bdr_bottom_extent = if bottom_collapses {
-        0.0
-    } else {
-        border_band(para.borders.bottom.as_ref())
-    };
+    let bdr_bottom_extent = bottom_band.1;
 
     // Word measures the bottom border `space` attribute from
     // the full line-height content bottom, not from the text
@@ -4995,6 +4989,13 @@ fn render_paragraph_block(
     }
 
     let applied_inter_gap = inter_gap;
+    // The part of the band above that lies below the previous paragraph's
+    // `between` border takes this paragraph's shading.
+    let prev_band_below = if prev_borders_match && !state.pb.is_at_page_top(sp) {
+        prev_between_below
+    } else {
+        0.0
+    };
     state.pb.slot_top -= inter_gap;
 
     for bookmark in &para.bookmarks {
@@ -5143,8 +5144,9 @@ fn render_paragraph_block(
         // Up to the side borders' inner edges: stopping at their space left a
         // white seam inside english_town_council's blue section bars.
         let (shd_left_outset, shd_right_outset) = side_border_outsets(&para.borders, false);
-        let shd_left = col_x - shd_left_outset;
-        let shd_right = col_x + col_w + shd_right_outset;
+        let (box_left_in, box_right_in) = border_box_indents(para);
+        let shd_left = col_x + box_left_in - shd_left_outset;
+        let shd_right = col_x + col_w - box_right_in + shd_right_outset;
         // Only a group member with the same fill closes the gap above:
         // renewable_dispatch's blue headings join the unshaded list item
         // above them in a (borderless) group, and Word leaves that gap white.
@@ -5153,9 +5155,15 @@ fn render_paragraph_block(
                 applied_inter_gap
             } else {
                 0.0
-            };
+            }
+            + prev_band_below;
         // min: a vanished paragraph mark zeroes content_h after `lines_h`.
-        let shd_bottom = state.pb.slot_top - bdr_top_pad - content_h.min(lines_h) - bdr_bottom_pad;
+        let shd_bottom_pad = if bottom_collapses {
+            bottom_band.0
+        } else {
+            bdr_bottom_pad
+        };
+        let shd_bottom = state.pb.slot_top - bdr_top_pad - content_h.min(lines_h) - shd_bottom_pad;
         state.pb.content.save_state();
         fill_rgb(&mut state.pb.content, shd_color);
         state.pb.content.rect(
@@ -5572,8 +5580,9 @@ fn render_paragraph_block(
         // 1.73pt (right) outside the text, whatever its width (online export
         // probes: sz 4/12/24 × space 0/4/12, with and without indents).
         let (bdr_left_outset, bdr_right_outset) = side_border_outsets(bdr, true);
-        let box_left = col_x - bdr_left_outset;
-        let box_right = col_x + col_w + bdr_right_outset;
+        let (box_left_in, box_right_in) = border_box_indents(para);
+        let box_left = col_x + box_left_in - bdr_left_outset;
+        let box_right = col_x + col_w - box_right_in + bdr_right_outset;
 
         // Extend horizontal borders past the corners so they cover the
         // corner gap left by butt-capped vertical border strokes.
@@ -5593,18 +5602,21 @@ fn render_paragraph_block(
                 0.0
             };
         // `inward`: +1 for the left border, -1 for the right.
+        // Down through the band of a `between` border the group goes on below.
+        let v_border_bottom = box_bottom
+            - if bottom_collapses {
+                bdr_bottom_extent - bdr_bottom_pad
+            } else {
+                0.0
+            };
         let draw_v_border = |content: &mut Content, b: &ParagraphBorder, x: f32, inward: f32| {
-            stroke_border(content, b, (x, v_border_top), (x, box_bottom), inward);
+            stroke_border(content, b, (x, v_border_top), (x, v_border_bottom), inward);
         };
 
         if !prev_borders_match && let Some(b) = &bdr.top {
             draw_h_border(&mut state.pb.content, b, box_top, -1.0);
         }
-        if bottom_collapses {
-            if let Some(b) = &bdr.between {
-                draw_h_border(&mut state.pb.content, b, box_bottom, 1.0);
-            }
-        } else if let Some(b) = &bdr.bottom {
+        if let Some(b) = bottom_bdr {
             draw_h_border(&mut state.pb.content, b, box_bottom, 1.0);
         }
         if let Some(b) = &bdr.left {
@@ -5657,6 +5669,11 @@ fn render_paragraph_block(
     }
 
     state.pb.slot_top -= content_h + bdr_top_pad + bdr_bottom_extent;
+    state.prev_between_below = if bottom_collapses {
+        between_space(para)
+    } else {
+        0.0
+    };
     if state.pb.slot_top < state.effective_margin_bottom - 1.0 {
         log::warn!(
             "Body overflow: slot_top={:.2} < eff_margin_bottom={:.2} after paragraph on page {}",
@@ -5889,6 +5906,7 @@ fn render_pass(
     let mut state = LayoutState {
         pb: PageBuilder::new(initial_slot_top),
         prev_space_after: 0.0,
+        prev_between_below: 0.0,
         effective_margin_bottom: compute_effective_margin_bottom(cur_sp, true, 0, &ctx),
         current_col: 0,
         global_block_idx: 0,

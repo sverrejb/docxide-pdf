@@ -379,6 +379,7 @@ pub(super) struct WspResult {
     pub(super) shape_type: ShapeGeometry,
     pub(super) stroke_color: Option<[u8; 3]>,
     pub(super) stroke_width: f32,
+    pub(super) stroke_dash: &'static [f32],
     pub(super) text_anchor: TextAnchor,
     pub(super) margin_top: f32,
     pub(super) margin_left: f32,
@@ -402,6 +403,7 @@ impl From<WspResult> for Textbox {
             shape_type: wsp.shape_type,
             stroke_color: wsp.stroke_color,
             stroke_width: wsp.stroke_width,
+            stroke_dash: wsp.stroke_dash,
             text_anchor: wsp.text_anchor,
             margin_left: wsp.margin_left,
             margin_right: wsp.margin_right,
@@ -489,6 +491,8 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
         (None, 0.0)
     };
 
+    let stroke_dash: &[f32] = ln_node.map_or(&[], parse_prst_dash);
+
     let shape_type = sp_pr.map(parse_shape_geometry).unwrap_or_default();
 
     let (mut margin_top, mut margin_left, mut margin_bottom, mut margin_right) =
@@ -561,6 +565,7 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
         shape_type,
         stroke_color,
         stroke_width,
+        stroke_dash,
         text_anchor,
         margin_top,
         margin_left,
@@ -691,6 +696,24 @@ pub(super) fn parse_connector_shape_node(
         tail_end,
         z_index: 0,
     })
+}
+
+/// An outline's `a:prstDash` as dash/gap lengths in line widths (empty for
+/// solid), the DrawingML preset patterns Word strokes (shape-outline-dash).
+fn parse_prst_dash(ln: roxmltree::Node) -> &'static [f32] {
+    match find_dml(ln, "prstDash").and_then(|n| n.attribute("val")) {
+        Some("dot") => &[1.0, 3.0],
+        Some("dash") => &[4.0, 3.0],
+        Some("lgDash") => &[8.0, 3.0],
+        Some("dashDot") => &[4.0, 3.0, 1.0, 3.0],
+        Some("lgDashDot") => &[8.0, 3.0, 1.0, 3.0],
+        Some("lgDashDotDot") => &[8.0, 3.0, 1.0, 3.0, 1.0, 3.0],
+        Some("sysDash") => &[3.0, 1.0],
+        Some("sysDot") => &[1.0, 1.0],
+        Some("sysDashDot") => &[3.0, 1.0, 1.0, 1.0],
+        Some("sysDashDotDot") => &[3.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+        _ => &[],
+    }
 }
 
 fn parse_style_stroke(wsp: roxmltree::Node, theme: &ThemeFonts) -> Option<[u8; 3]> {
