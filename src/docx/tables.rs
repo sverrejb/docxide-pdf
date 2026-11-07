@@ -3,7 +3,7 @@ use std::io::{Read, Seek};
 use crate::model::{
     Alignment, Block, BorderStyle, CellBorder, CellBorders, CellMargins, CellVAlign, FitText,
     HatchPattern, HorizontalPosition, LineSpacing, Paragraph, Table, TableAlignment, TableCell,
-    TablePosition, TableRow, TextDirection, VMerge,
+    Run, TablePosition, TableRow, TextDirection, VMerge,
 };
 
 use super::numbering::{ListCounters, ListLabelInfo, parse_list_info};
@@ -787,15 +787,22 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                             has_inline_images = true;
                         }
                     }
-                    let (para_image, content_height) = if has_inline_images && !has_text {
-                        let idx = runs.iter().position(|r| r.inline_image.is_some());
-                        let img = idx.and_then(|i| runs[i].inline_image.take());
+                    // Underlined pictures stay picture runs and hidden ones
+                    // are not shown, as in a body paragraph.
+                    let (para_image, content_height) = if !has_text
+                        && runs.iter().any(|r| r.shown_image().is_some())
+                        && !runs.iter().any(Run::underlined_picture)
+                    {
+                        let img = runs
+                            .iter_mut()
+                            .find(|r| r.shown_image().is_some())
+                            .and_then(|r| r.inline_image.take());
                         let h = img
                             .as_ref()
                             .map(|i| i.display_height + i.layout_extra_height)
                             .unwrap_or(0.0);
                         (img, h)
-                    } else if !has_text {
+                    } else if !has_text && !has_inline_images {
                         (None, super::images::inline_drawing_height(p))
                     } else {
                         (None, 0.0)

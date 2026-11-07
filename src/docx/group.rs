@@ -399,6 +399,7 @@ fn place_connector(conn: &mut ConnectorShape, x: f32, y: f32, base: &BaseAnchor)
     conn.v_relative_from = base.v_rel;
     conn.behind_doc = base.behind_doc;
     conn.z_index = base.z_index;
+    conn.on_line = base.on_line;
 }
 
 /// Flatten legacy VML groups, whose children use coordorigin/coordsize units.

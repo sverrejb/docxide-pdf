@@ -1,4 +1,9 @@
 {
+  "cases/atleast-picture-line": {
+    "jaccard": 0.9387,
+    "ssim": 0.9653,
+    "text_boundary": 0.9897
+  },
   "cases/autofit-cell-widths": {
     "jaccard": 0.8843,
     "ssim": 0.9715,
@@ -4338,6 +4343,11 @@
     "a11y_struct": 0.625,
     "a11y_text": 1.0
   },
+  "cases/empty-shape-wraps": {
+    "jaccard": 0.9054,
+    "ssim": 1.0,
+    "text_boundary": 1.0
+  },
   "cases/first-header-minimum-overflow": {
     "jaccard": 0.9329,
     "ssim": 1.0,
@@ -4677,6 +4687,21 @@
     "ua_deficit": 0,
     "a11y_struct": 1.0,
     "a11y_text": 1.0
+  },
+  "cases/hf-floating-table-band": {
+    "jaccard": 0.8579,
+    "ssim": 0.9558,
+    "text_boundary": 1.0
+  },
+  "cases/hf-floating-table-band-flow": {
+    "jaccard": 0.8476,
+    "ssim": 0.9691,
+    "text_boundary": 1.0
+  },
+  "cases/hf-table-band-even-page": {
+    "jaccard": 0.9194,
+    "ssim": 0.9788,
+    "text_boundary": 1.0
   },
   "cases/hyphen-opening-guillemet-explicit-space": {
     "jaccard": 0.9093,
@@ -8327,6 +8352,26 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/through-picture-band": {
+    "jaccard": 0.9626,
+    "ssim": 0.9195,
+    "text_boundary": 1.0
+  },
+  "cases/through-picture-columns": {
+    "jaccard": 0.8451,
+    "ssim": 0.9594,
+    "text_boundary": 1.0
+  },
+  "cases/through-picture-moves": {
+    "jaccard": 0.9038,
+    "ssim": 0.9446,
+    "text_boundary": 1.0
+  },
+  "cases/through-picture-wide-polygon": {
+    "jaccard": 0.8583,
+    "ssim": 0.9554,
+    "text_boundary": 1.0
+  },
   "cases/toc-placeholder": {
     "jaccard": 0.6001,
     "ssim": 0.7473,
@@ -8510,6 +8555,16 @@
     "ua_deficit": 0,
     "a11y_struct": 0.5,
     "a11y_text": 1.0
+  },
+  "cases/underlined-inline-picture": {
+    "jaccard": 0.9849,
+    "ssim": 0.9916,
+    "text_boundary": 1.0
+  },
+  "cases/underlined-picture-places": {
+    "jaccard": 0.9,
+    "ssim": 0.978,
+    "text_boundary": 1.0
   },
   "cases/underlined-space-compat14-underline0-split0": {
     "jaccard": 0.7283,

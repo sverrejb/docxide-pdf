@@ -161,6 +161,26 @@ Open queue from the large-corpus and focus-fixture rounds:
 
 ## Line and paragraph layout
 
+- Done: an underlined inline picture is underlined under the
+  picture at its run font's underline position, and its line keeps that
+  font's descent below the picture. Fixture underlined-inline-picture.
+  Also in table cells (body and header), text boxes, wrapped header picture
+  lines (the last keeps its descent) and for VML pictures; the underline takes
+  the run's colour, and a hidden picture run is not shown and sizes no line
+  (a paragraph of only hidden runs is a line of its mark, in cells, text
+  boxes and headers too). A shape-fitted text box measures its paragraphs as
+  they render, pictures and their descent included; an exact line keeps its
+  height there, its picture standing above it on the baseline, cut at the box.
+  Fixture underlined-picture-places.
+  Open: a double underline under a picture draws one stroke (Word two); a
+  header's wrapped picture lines without underline keep the mark's descent
+  between them where Word keeps none (example: two 30pt Tahoma 16pt pictures
+  under a Tahoma 16pt mark take 60.1pt, docxide 63.3pt). Exact lines still
+  grow to their pictures in the body (Word example: a 100pt picture, underlined
+  or not, in an exactly 12pt paragraph takes 12pt and stands above it), and
+  so does a table cell's picture without underline (40pt picture: Word's row
+  12.5pt, docxide 40.5); a header text box draws such a picture below the
+  box top instead of above the baseline.
 - **compressPunctuation** (issue #139, probed through Word online 2026-10-27,
   rules in `pdf/layout.rs` `PUNCT_SQUEEZE`/`PUNCT_PULL_FREE`): every mark on
   the line gives the same cut; compat 15 squeezes only justified paragraphs,
@@ -331,6 +351,58 @@ Open queue from the large-corpus and focus-fixture rounds:
 
 ## Floats, frames and wrapping
 
+- Done: a header or footer floating table placed against the
+  page or margin that leaves no strip beside it in the column is a band the
+  body keeps out of, like a body table's; one reaching the bottom margin in
+  every column ends the page at its top (topFromText included), as does one
+  crossing that raised foot; in fewer columns it ends only those. Each line
+  keeps out, on every page the header or footer is drawn on (a continuous
+  section's own header only from its next page; the even header by the
+  number the page shows), in each column the table leaves no strip in,
+  judged by the widths the table is drawn with. Bands over every column
+  of a page from its top past its foot leave one line a page, its top on the
+  foot of column one. Fixtures hf-floating-table-band,
+  hf-floating-table-band-flow, hf-table-band-even-page.
+  Open (Word examples): body lines also wrap beside a narrow header/footer
+  table, and around header/footer pictures (square and topAndBottom alike);
+  we ignore the first and push the body below header pictures / shrink the
+  footer for footer ones. A footer's own lines go below its floating table,
+  and beside one over a column; ours overlap it.
+  Header tables are drawn at their grid width where Word widens them to a
+  100% or wider dxa tblW (grid 2000 twips: Word draws the column's width and
+  keeps body lines out of it, we draw 100pt and let them run through).
+  One page-wide table from the top margin past the bottom one also leaves
+  one line a page at the bottom margin in Word; ours raises the foot to the
+  page top and puts a line at the top of each column (37 pages for Word's 73).
+- Done: a page-anchored tight or through picture with no usable
+  strip beside it keeps lines out of its band like square wrapping, but a
+  line reaching into it steps down by whole line heights until clear, where
+  square starts it at the picture's bottom; later lines of a paragraph that
+  reach into a band step the same way (`TextLine::gap_after`, judged where
+  the lines land), and a paragraph running on into the next column starts
+  below the bands there, as does a paragraph moved whole there (keepLines,
+  keepNext, widow control) or onto a new page; a page's band pre-scan skips
+  a paragraph that can't start on the page and runs again for a page a
+  paragraph moves or runs on to. A band holds only in the columns its picture
+  reaches and leaves no strip in, judged by its wrap polygon for tight and
+  through (an edited polygon may reach past the picture, into the next
+  column). Tight and through pictures whose wrap polygon leaves a strip at
+  some height wrap per line beside it instead.
+  Fixtures through-picture-band, through-picture-columns,
+  through-picture-moves, through-picture-wide-polygon. Open: lines don't
+  wrap beside a polygon reaching past its picture (Word examples: column two
+  beside a column-one picture's polygon leaving it 47.8pt, a 467.7pt column
+  beside a 388pt picture's 427pt polygon); tight/through textboxes still jump to the
+  bottom (not checked); a line reaching less than 20% of its height into a
+  polygon zone stays full width (annotation #120's threshold) where Word
+  already puts it beside a half-width polygon (example: 1.7pt into it).
+- Done: an anchored shape with nothing to draw (no text, fill or
+  outline) still wraps text, like an anchored group's invisible box: an
+  empty page-wide letterhead box keeps the body below it; its width follows
+  wp14:pctWidth over a stale extent, like a text box's. Fixture
+  empty-shape-wraps. Open: a square-wrapped text box with room beside it
+  does not wrap lines beside it (Word puts them right of a 40%-wide box at
+  the left margin; we run them through it).
 - Done 2026-11-06 (issue #148): picture-filled shapes with an outline draw
   as pictures (header and groups too, theme outline colours); topMargin
   counts from the page top, bottomMargin from the bottom margin; a:grpFill

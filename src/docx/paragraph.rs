@@ -1,4 +1,4 @@
-use crate::model::{Block, Paragraph, TabAlignment, TabStop};
+use crate::model::{Block, Paragraph, Run, TabAlignment, TabStop};
 
 use super::images::compute_drawing_info;
 use super::numbering::{ListCounters, ListLabelInfo, parse_list_info};
@@ -199,32 +199,33 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     }
 
     let has_text = runs.iter().any(|r| !r.text.is_empty() || r.is_tab);
-    let inline_image_count = runs.iter().filter(|r| r.inline_image.is_some()).count();
-    let has_inline_images = inline_image_count > 0;
+    // A hidden picture is not shown (Word example: a paragraph of only a hidden
+    // picture is an empty line of its mark).
+    let shown_images = runs.iter().filter(|r| r.shown_image().is_some()).count();
+    let has_inline_images = runs.iter().any(|r| r.inline_image.is_some());
 
     let floating_images = parsed.floating_images;
 
     let (para_image, mut content_height) = if !opts.resolve_drawings {
         (None, 0.0)
-    } else if inline_image_count == 1 && !has_text {
-        let img_run_idx = runs.iter().position(|r| r.inline_image.is_some());
-        let img = img_run_idx.and_then(|i| runs[i].inline_image.take());
+    } else if !has_text && shown_images == 1 && !runs.iter().any(Run::underlined_picture) {
+        let img = runs
+            .iter_mut()
+            .find(|r| r.shown_image().is_some())
+            .and_then(|r| r.inline_image.take());
         let h = img
             .as_ref()
             .map(|i| i.display_height + i.layout_extra_height)
             .unwrap_or(0.0);
         (img, h)
-    } else if has_inline_images && !has_text {
-        // Multi-image-only paragraph: keep images in runs so the
-        // line builder can lay them out side-by-side. Expose the
-        // tallest image height for vertical sizing.
+    } else if !has_text && shown_images > 0 {
+        // Picture-only paragraph laid out as runs (several pictures, or an
+        // underlined one, whose line keeps the run font's descent for the
+        // underline): expose the tallest picture height for vertical sizing.
         let max_h = runs
             .iter()
-            .filter_map(|r| {
-                r.inline_image
-                    .as_ref()
-                    .map(|i| i.display_height + i.layout_extra_height)
-            })
+            .filter_map(Run::shown_image)
+            .map(|i| i.display_height + i.layout_extra_height)
             .fold(0.0f32, f32::max);
         (None, max_h)
     } else if has_inline_images {
