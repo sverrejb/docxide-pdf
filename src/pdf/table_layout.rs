@@ -1844,6 +1844,7 @@ pub(super) fn compute_row_layouts(
                                             para.text_alignment == crate::model::TextAlignment::Top,
                                         );
                                         super::size_mark_line(&mut lines, para, runs, effective_ls, tallest_lhr, ctx.fonts);
+                                        super::size_tab_mark_line(&mut lines, para, effective_ls, tallest_lhr, ctx.fonts);
                                     }
                                     // hideMark also hides the mark left alone on the
                                     // line after the cell's closing break, with its

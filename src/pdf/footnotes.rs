@@ -87,6 +87,7 @@ fn layout_paragraph(
     let ascender_ratio = tallest_ar.unwrap_or(0.75);
     if !matches!(line_spacing, LineSpacing::Exact(_)) {
         size_lines_by_own_runs(&mut lines, ctx.fonts, line_spacing, lh, fs * ascender_ratio, para.text_alignment == crate::model::TextAlignment::Top);
+        super::size_tab_mark_line(&mut lines, para, line_spacing, tallest_lhr, ctx.fonts);
     }
     if lines.is_empty() {
         return None;

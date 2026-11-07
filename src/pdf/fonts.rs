@@ -213,12 +213,36 @@ fn collect_used_chars(
                 }
             }
         }
+    }
+
+    let hf_paras: Vec<&Paragraph> = doc
+        .sections
+        .iter()
+        .flat_map(|s| {
+            let p = &s.properties;
+            [
+                &p.header_default,
+                &p.header_first,
+                &p.header_even,
+                &p.footer_default,
+                &p.footer_first,
+                &p.footer_even,
+            ]
+        })
+        .filter_map(|hf| hf.as_ref())
+        .flat_map(hf_paragraphs)
+        .flat_map(collect_paras)
+        .collect();
+
+    for para in all_paras.iter().chain(&hf_paras) {
         for stop in &para.tab_stops {
-            if let Some(leader_char) = stop.leader
-                && let Some(run) = para.runs.first()
-            {
-                let key = font_key_buf(run, &mut key_buf).to_string();
-                used.entry(key).or_default().insert(leader_char);
+            if let Some(leader_char) = stop.leader {
+                // Drawn in the tab's own font, or a neighbour's for a tab
+                // without one.
+                for run in &para.runs {
+                    let key = font_key_buf(run, &mut key_buf).to_string();
+                    used.entry(key).or_default().insert(leader_char);
+                }
             }
         }
     }
@@ -383,24 +407,7 @@ fn collect_used_chars(
 
     // Text inside EMF pictures draws with the fonts the metafile selects
     // (`pdf::emf`), registered under the same keys as SmartArt fonts.
-    let hf_paras = doc
-        .sections
-        .iter()
-        .flat_map(|s| {
-            let p = &s.properties;
-            [
-                &p.header_default,
-                &p.header_first,
-                &p.header_even,
-                &p.footer_default,
-                &p.footer_first,
-                &p.footer_even,
-            ]
-        })
-        .filter_map(|hf| hf.as_ref())
-        .flat_map(hf_paragraphs)
-        .flat_map(collect_paras);
-    for para in all_paras.iter().copied().chain(hf_paras) {
+    for para in all_paras.iter().chain(&hf_paras) {
         let images = para
             .image
             .iter()

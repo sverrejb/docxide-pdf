@@ -351,10 +351,13 @@ impl Run {
 
     /// Build a tab run that retains underline + color so a `<w:tab/>` with
     /// `<w:u w:val="single"/>` renders an underlined span across the tab gap —
-    /// Word uses this to draw horizontal rules in signature lines etc.
+    /// Word uses this to draw horizontal rules in signature lines etc. Its
+    /// leader is drawn in its face too (a bold tab draws bold dots).
     fn tab_run(&self) -> Run {
         Run {
             is_tab: true,
+            bold: self.bold,
+            italic: self.italic,
             underline: self.underline,
             double_underline: self.double_underline,
             color: self.color,
@@ -1635,7 +1638,14 @@ pub(super) fn parse_runs<R: Read + Seek>(
                             field_stack.last_mut().unwrap().result.push_str(t);
                         }
                     } else if visible && let Some(t) = child.text() {
-                        pending_text.push_str(&t.replace('\n', " "));
+                        // Word lays out a TAB character in the text like a <w:tab/>.
+                        for (i, part) in t.split('\t').enumerate() {
+                            if i > 0 && !fmt.vanish {
+                                flush_pending(&mut pending_text, &mut runs);
+                                runs.push(fmt.tab_run());
+                            }
+                            pending_text.push_str(&part.replace('\n', " "));
+                        }
                     }
                 }
                 "noBreakHyphen" => {
@@ -1646,7 +1656,8 @@ pub(super) fn parse_runs<R: Read + Seek>(
                     let dyn_result = field_stack
                         .last()
                         .is_some_and(|f| f.seen_sep && f.dynamic());
-                    if visible && !dyn_result {
+                    // A hidden tab takes no space and doesn't make the line tabbed.
+                    if visible && !dyn_result && !fmt.vanish {
                         flush_pending(&mut pending_text, &mut runs);
                         runs.push(fmt.tab_run());
                     }

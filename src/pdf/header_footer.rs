@@ -410,6 +410,7 @@ fn wrapped_header_picture_height(para: &Paragraph, ctx: &RenderContext, width: f
     );
     if !matches!(spacing, LineSpacing::Exact(_)) {
         size_lines_by_own_runs(&mut lines, ctx.fonts, spacing, line_h, metrics.0, para.text_alignment == crate::model::TextAlignment::Top);
+        super::size_tab_mark_line(&mut lines, para, spacing, lhr, ctx.fonts);
     }
     let trailing_descent = wrapped_picture_trailing_descent(para, font_size, metrics.1, spacing);
     Some(lines_height(&lines, line_h, metrics) - trailing_descent)
@@ -1862,6 +1863,7 @@ pub(super) fn render_header_footer(
                 // Each line as tall as its own runs, as in the body.
                 if !matches!(effective_ls, LineSpacing::Exact(_)) {
                     size_lines_by_own_runs(&mut lines, ctx.fonts, effective_ls, line_h, metrics.0, para.text_alignment == crate::model::TextAlignment::Top);
+                    super::size_tab_mark_line(&mut lines, para, effective_ls, tallest_lhr, ctx.fonts);
                 }
                 draw_para_shading(content, cursor_y - lines_height(&lines, line_h, metrics));
                 render_paragraph_lines(
