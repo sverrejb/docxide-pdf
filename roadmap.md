@@ -420,9 +420,8 @@ Open queue from the large-corpus and focus-fixture rounds:
 ## Tracked changes and comments
 
 - `--markup` follows the options standard: `ConvertOptions::revisions` /
-  `DOCXIDE_REVISIONS=markup` / `--markup`. The view still reaches the parser
-  through the `docx::set_markup` thread-local (set per call from the
-  options); passing it through `docx::parse` is the remaining cleanup.
+  `DOCXIDE_REVISIONS=markup` / `--markup`, and `docx::parse` takes the view
+  (39730d4ba, eb01c36b9: the thread-local is gone).
 - Revision markup (Word's inline All Markup: author colours, underline /
   strike, deleted text kept in the layout, change bars) is opt-in:
   `ConvertOptions::revisions(RevisionView::Markup)` / CLI `--markup`; the
@@ -679,8 +678,15 @@ Backlog (details in `current_focus/A11Y.md`):
 - Cell and footnote paragraphs bypass `paragraph::build_paragraph`
   (`docx/tables.rs`, `parse_notes_simple`): cells default most pPr fields
   (keep_next, widow_control, borders, shading, outline level) and never get
-  auto spacing; one shared pPr resolver would close it.
-- One per-line height model shared by body, cells and headers; one
+  auto spacing; one shared pPr resolver would close it. The markup view paid
+  for it twice: `item_revision` and the two list-label fields are wired into
+  both builders, and cell paragraphs never get `mark_revised` (no change bar
+  for a cell paragraph whose mark alone is revised; `paragraph.rs` sets it,
+  `tables.rs` does not).
+- One per-line height model shared by body, cells and headers (`pdf/mod.rs`
+  alone computes a paragraph's line height six ways, with and without the
+  `unsized_line_metrics` fallback, and counts lines two ways:
+  `paragraph_line_count` vs `line_count`; merging them moves output); one
   widow/orphan split helper for body split, keep-with-next and cell splits;
   run-boundary breaks from UAX #14 over the paragraph's joined text (a URL
   split across runs can still break after `/`); one table-left-x function
@@ -697,7 +703,102 @@ Backlog (details in `current_focus/A11Y.md`):
   picture effects, the triplicated `table.rs` row renderers.
 - `pdf/images.rs`: one global image registry to dedupe XObjects across maps;
   `build_paragraph_lines` taking `&HashMap<usize, &str>`; pair `image_names` +
-  `effect_names`.
+  `effect_names`. `--no-resample` (d30c79ba3) threads `resample: bool` beside
+  `fonts` through 6 functions and ~17 calls; an `ImageEnv { fonts, options }`
+  passed instead puts the calls back on one line and makes the next image
+  option (interpolation, JPEG quality) a field, not another parameter.
+
+### Restructurings found by the v0.20.2 simplify review (2026-11-07)
+
+The behaviour-preserving cleanups were merged (branch `simplify-0202`, all
+1090 visual hashes unchanged). These were left because each is a larger
+change; every entry says what it buys and what it risks. All are meant to
+keep output identical unless the entry says otherwise.
+
+- **Change bars out of thread-local state** (`pdf/layout.rs` `CHANGE_BARS` /
+  `BAR_EXTENSION`). Today `mod.rs` sets and clears the extension around each
+  paragraph (4 set sites, 2 clears), bars are flushed by `take_change_bars` at
+  render start, after footnotes and after headers/footers, and `table.rs`
+  brackets each row with `change_bars_len` / `collapse_change_bars_from`
+  (3 copies). Forgetting a pair fails silently (bars on the wrong page or
+  none). Change: a `ChangeBars { bars, extension }` on `PageBuilder`, or
+  `&mut` into `render_paragraph_lines` (11 callers). The ponytail note's own
+  trigger ("until headers want bars") has fired: 75e8b967b added them.
+  Medium size, markup view only, low risk; do it before the next markup
+  feature.
+- **Split paragraphs share the paragraph ending** (`pdf/mod.rs`, the split
+  path returns early around line 4860). It copies page-break-after handling
+  and leading/trailing float rendering, and does not run the shared ending's
+  `column_break_after` (line ~5590): check whether a split paragraph with a
+  column break after loses it. `FragmentPlan` (Beside/Below/NextPage)
+  re-does wrapping by hand instead of installing the trailing float as a
+  `float_zone`. Change: let the split path fall through to the common ending
+  and route the trailing float through the float-zone machinery. Large,
+  touches the hottest pagination code; worth it because every new
+  end-of-paragraph rule otherwise needs a second copy. Expect a few fixtures
+  to move if the hand-rolled wrap differs from the zone's.
+- **One page-end estimator and per-section bands** (`pdf/mod.rs`
+  `paragraph_bands`, `prescan_page_bands`, `empty_frame_table_bands`,
+  `splits_for_sure`, the 3-paragraph float look-ahead). Four separate guesses
+  at where a page ends, and `paragraph_bands` (which lays out each blocking
+  textbox) runs per paragraph in the section scan, again per page in the
+  pre-scan and again in `step_below_bands`. Change: compute bands once per
+  single-column section as a per-block `Vec` and one
+  `estimate_para_height(p, col_w)` that the band collectors and the
+  look-ahead read; the look-ahead's "three paragraphs" limit becomes
+  "anchor estimated on this page". Large; the estimator merge moves output
+  (the two line counters differ), the band cache alone does not. Part of the
+  Paginator extraction above.
+- **One float-blocks-band rule** (`pdf/mod.rs` `textbox_blocks_band` vs
+  `positioning.rs` `image_blocks_band`; `hangs_below_anchor` exists for
+  textboxes only). The two already differ: `side_room(wrap_text)` for
+  textboxes, `left.max(right)` for pictures. Change: one predicate over a
+  shared float-box view (x, w, wrap type, wrap text, v_rel). Medium; decide
+  first which side-room rule is Word's, since unifying picks one.
+- **One vertical region resolver** (`positioning.rs` `resolve_fi_y_top`,
+  `header_footer.rs` `resolve_tb_y_top` and two header copies at ~617 and
+  ~1601). TopMargin/BottomMargin (837485a50) was patched into all four.
+  Change: `VRelativeFrom::region(sp) -> (top, bottom)` used by every
+  non-paragraph anchor. Small to medium; `(H+h)/2` vs `H-(H-h)/2` can differ
+  in the last f32 bit, so check the visual hashes.
+- **`render_floating_images` by `(index, &fi)`** (`pdf/mod.rs` `float_subset`).
+  The split path clones its floats and re-keys two name maps only because
+  the renderer keys XObject names by position. Change: take index/float
+  pairs or a predicate. Small to medium, output identical.
+- **Per-line layout state with one reset** (`pdf/layout.rs` line builders).
+  Each new-line site resets ~6 fields by hand (`current_x`, `line_reach`,
+  `is_first_line`, `tab_line_metrics`, …) and the tab-wrap site a different
+  set; 1e8567bf3 had to add `tab_stop_pos = None` at two sites. Change: a
+  `LineState` struct with `new_line()`. Medium, output identical; prevents
+  the next forgotten field.
+- **Typed cell width** (`docx/tables.rs` `tcW`, `model/table.rs`). `width`
+  holds pct values misread as twips ("25%" → 0.005) next to the new
+  `width_pct`; `apply_pct_width`'s proportional scaling relies on the
+  misread values. Change: parse `tcW` into `Dxa | Pct | Auto`. Large and
+  output-moving (cells written as `NN%` start reading right); worth it when
+  pct-width tables next misbehave.
+- **chartEx as one chart-type variant** (`model/chart.rs`, `pdf/charts.rs`,
+  `pdf/fonts.rs`). chartEx is detected by `ex_text.is_some()`, the six chartEx
+  variants are `unreachable!()` in the 2-D renderer, and histograms are typed
+  as `Bar` (they never reach the bar renderer). Change:
+  `ChartType::Ex { kind, text }` dispatched like Pie and Radar; `fonts.rs`
+  then reads the title font and waterfall legend names from the model
+  instead of re-deriving them. Medium, output identical.
+- **chartEx legend through `render_chart_legend`** (`pdf/charts_ex.rs`
+  ~198–271 is a second legend engine: own key/gap constants, row centring,
+  right column). Change: let `render_chart_legend` take the text style and
+  key/entry gaps, give 2-D charts a 10pt-black style. Large-ish; worth it
+  the next time either legend changes.
+- **List label as styled segments** (`pdf/list_label.rs`, `Paragraph`'s
+  `list_label_revision` / `list_label_renumbered`). The markup view draws the
+  label's strike/underline and the renumbered "4.2." by special-case code.
+  Change: segments of (text, strike, underline, colour). Large for a
+  markup-only gain; only if labels grow more styling.
+- **Bahnschrift as a table row** (`fonts/mod.rs` `register_font`: the rule
+  sits in five places — primary filter, altName reject, Helv skip,
+  hard-coded "Calibri", metric override). Change: one
+  `[(prefix, drawn_face, ascent, line_h)]` table; see Fonts for the open
+  trigger and constants questions, which should be settled first.
 
 ## Performance
 
