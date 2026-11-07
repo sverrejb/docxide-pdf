@@ -575,6 +575,7 @@ fn measure_header_height(
             Block::Paragraph(para) => {
                 let gap = hf_paragraph_gap(prev_para, prev_space_after, para);
                 let own_before = hf_own_space_before(prev_para, prev_space_after, para);
+                let group = BorderGroup::of(&hf.blocks, bi);
                 prev_para = Some(para);
                 let (font_size, tallest_lhr, tallest_ar) =
                     hf_run_metrics(&para.runs, para, ctx.fonts);
@@ -626,7 +627,7 @@ fn measure_header_height(
                 // which its height decides; its lines keep the full width here.
                 let geometry = if is_header {
                     let slot_top = sp.page_height - sp.header_margin - height;
-                    let top = slot_top - BorderGroup::of(&hf.blocks, bi).top - float_text_push(para, text_width);
+                    let top = slot_top - group.top - float_text_push(para, text_width);
                     let baseline = top
                         - super::layout::boxed_line_ascent(
                             effective_ls,
@@ -767,7 +768,6 @@ fn measure_header_height(
                     content_h += br_count as f32 * line_h;
                 }
 
-                let group = BorderGroup::of(&hf.blocks, bi);
                 height += group.top + content_h + group.bottom.1;
                 prev_space_after = para.space_after;
             }
@@ -2200,7 +2200,7 @@ fn hf_own_space_before(
     para: &Paragraph,
 ) -> f32 {
     let (after, before) = hf_spacing(prev, prev_space_after, para);
-    (before - after).max(0.0)
+    super::own_space_before(before, after)
 }
 
 fn hf_spacing(prev: Option<&Paragraph>, prev_space_after: f32, para: &Paragraph) -> (f32, f32) {
