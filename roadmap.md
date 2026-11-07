@@ -20,7 +20,11 @@ case91, case90); nested tables' outer border bands count in their cell
 (autofit-cell-widths-nested 13.6 → 79.4, nested-percent-*, case148,
 case51, case88); Flate pictures are no longer interpolated
 (picture-mark-leading-* → 100); header (not footer) tables keep their
-outer bands inside the flow (header-autofit-table 48.4 → 81.8). Open:
+outer bands inside the flow (header-autofit-table 48.4 → 81.8);
+registration floats at a small positive tblpX (nested-floats-spaced-text-
+nonzero-x 30.8 → 64.1); a picture line's descent only from glyphs on that
+line (leading-picture-image-* ~90 → ~100); underlined spaces span their
+justified gap (underlined-space-compat14-*). Open:
 - isla_language_lesson_plan (−3.85 from the header-band change): its o:hr
   paragraph below a header table lands 0.4pt low; Word draws the rule
   ~1.4pt lower relative to the table than we do, while body probes
@@ -35,6 +39,18 @@ outer bands inside the flow (header-autofit-table 48.4 → 81.8). Open:
   what separates the two before changing the reach rule in `mod.rs`.
 - `empty-margin-frame-long-prefix` (46.0): the frame's anchor is on page 2;
   `empty_frame_table_bands` only reserves the box on the first page.
+- Double underline (scraped/double-underline 50.7): Word probes
+  (`tests/output/koer/du/`, 2026-11-07) give each line ≈ q(0.6 × post
+  thickness) (fits 8/8, factor unexplained), the first line at the single
+  underline's post offset or less, a 1.0–1.25pt gap; Word also underlines
+  a line's trailing space. We use 0.05 × size lines 0.12 × size down.
+- nested-floats-spaced-text-bottom-cell (40.4): the same two registration
+  tables in a vAlign=bottom cell still lay out inline (the float filter
+  wants top/centre alignment).
+- Header inline picture at 1.5 spacing (czech_village_budget, 0.6pt body
+  drift): Word's picture line is 1.13pt taller than ours.
+- candidate_reference_check_form: rows drift 0.6pt then 1.6pt; Word paints
+  shaded cells in strips (its tcMar bands), not one rect.
 - `nested-table-picture-width` (80.2): a nested row holding a picture
   wider than its cell (166pt in ~158pt) is ~7pt taller in Word.
 - `nested-floats-spaced-text-nonzero-x` (30.8 vs 61.0): 9pt x / 32pt y off.
