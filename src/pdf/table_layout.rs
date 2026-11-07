@@ -1143,15 +1143,24 @@ fn registration_table_extent(table: &Table, cell_text_w: f32, ctx: &RenderContex
     if table.rows.len() != 1
         || pos.v_anchor != "text"
         || pos.h_anchor != "margin"
-        || !matches!(pos.h_position, HorizontalPosition::Offset(x) if x == 0.0)
         || table.table_indent != 0.0
         || table.alignment != crate::model::TableAlignment::Left
     {
         return None;
     }
+    // A small offset from the margin keeps it a registration table
+    // (nested-floats-spaced-text-nonzero-x's 1pt tblpX); the offset eats
+    // into the strip beside it.
+    let HorizontalPosition::Offset(x) = pos.h_position else {
+        return None;
+    };
+    if x < 0.0 {
+        return None;
+    }
     let mut widths = auto_fit_columns(table, ctx.fonts, Some(cell_text_w), None);
     apply_nested_pct_width(table, &mut widths, cell_text_w);
-    let strip = cell_text_w - widths.iter().sum::<f32>() - pos.left_from_text - pos.right_from_text;
+    let strip =
+        cell_text_w - x - widths.iter().sum::<f32>() - pos.left_from_text - pos.right_from_text;
     if strip < MIN_NESTED_FLOAT_STRIP {
         return None;
     }
@@ -2147,7 +2156,7 @@ pub(super) fn compute_row_layouts(
                                 let space_before = prev_space_after;
                                 let mut floating_x_offset = None;
                                 let auto_left_float = nested_table.position.as_ref().is_some_and(|p|
-                                    matches!(p.h_position, crate::model::HorizontalPosition::Offset(v) if (p.h_anchor == "margin" && v <= 0.0 && v + nested_cw.iter().sum::<f32>() > 0.0)
+                                    matches!(p.h_position, crate::model::HorizontalPosition::Offset(v) if (p.h_anchor == "margin" && v + nested_cw.iter().sum::<f32>() > 0.0)
                                         || (p.h_anchor == "column" && plain_side_text && v == 0.0)))
                                     && nested_table.alignment == crate::model::TableAlignment::Left
                                     && nested_table.table_indent == 0.0;
