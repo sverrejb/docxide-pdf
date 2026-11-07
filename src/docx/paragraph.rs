@@ -713,8 +713,11 @@ mod tests {
                 zip.start_file(name, SimpleFileOptions::default()).unwrap();
                 zip.write_all(xml.as_bytes()).unwrap();
             }
-            let parsed =
-                crate::docx::parse_bytes(&zip.finish().unwrap().into_inner(), false).unwrap();
+            let parsed = crate::docx::parse_bytes(
+                &zip.finish().unwrap().into_inner(),
+                crate::RevisionView::Final,
+            )
+            .unwrap();
             let crate::model::Block::Paragraph(p) = &parsed.sections[0].blocks[0] else {
                 panic!("expected a paragraph");
             };
@@ -766,7 +769,7 @@ mod tests {
                 zip.write_all(xml.as_bytes()).unwrap();
             }
             let bytes = zip.finish().unwrap().into_inner();
-            let parsed = crate::docx::parse_bytes(&bytes, false).unwrap();
+            let parsed = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
             let crate::model::Block::Paragraph(para) = &parsed.sections[0].blocks[0] else {
                 panic!("expected a paragraph");
             };
@@ -795,7 +798,7 @@ mod tests {
             zip.write_all(xml.as_bytes()).unwrap();
         }
         let bytes = zip.finish().unwrap().into_inner();
-        let parsed = crate::docx::parse_bytes(&bytes, false).unwrap();
+        let parsed = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
         let crate::model::Block::Paragraph(para) = &parsed.sections[0].blocks[0] else {
             panic!("expected a paragraph");
         };
@@ -885,7 +888,7 @@ mod tests {
             zip.write_all(xml.as_bytes()).unwrap();
         }
         let bytes = zip.finish().unwrap().into_inner();
-        let parsed = crate::docx::parse_bytes(&bytes, false).unwrap();
+        let parsed = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
         for block in &parsed.sections[0].blocks[..2] {
             let crate::model::Block::Paragraph(para) = block else {
                 panic!("expected a paragraph");

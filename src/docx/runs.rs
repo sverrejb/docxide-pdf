@@ -1016,7 +1016,7 @@ fn mark_revision(
     revisions: &super::Revisions,
 ) {
     if let Some((deleted, rev)) = revision_of(node) {
-        let color = revisions.author_color(rev.attribute((WML_NS, "author")).unwrap_or(""));
+        let color = revisions.author_color(rev);
         for r in runs.iter_mut() {
             r.revised = true;
             r.color = Some(color);
@@ -2210,10 +2210,7 @@ mod tests {
             </w:p>"#
         );
         let doc = roxmltree::Document::parse(&xml).unwrap();
-        let revisions = super::super::Revisions {
-            markup: true,
-            ..Default::default()
-        };
+        let revisions = super::super::Revisions::default();
         let mut out = Vec::new();
         collect_run_nodes(
             doc.root_element(),

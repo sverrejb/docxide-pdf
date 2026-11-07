@@ -627,7 +627,7 @@ mod tests {
     fn page_anchored_connector_ignores_its_paragraph() {
         let bytes =
             include_bytes!("../../tests/fixtures/scraped/education_consultant_posting/input.docx");
-        let doc = crate::docx::parse_bytes(bytes, false).unwrap();
+        let doc = crate::docx::parse_bytes(bytes, crate::RevisionView::Final).unwrap();
         let sp = &doc.sections[0].properties;
         let conn = sp
             .header_default

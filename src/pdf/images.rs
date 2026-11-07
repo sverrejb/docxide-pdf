@@ -1278,7 +1278,7 @@ mod tests {
             include_bytes!("../../tests/fixtures/cases/cell-inline-exact/input.docx"),
         ];
         for input in inputs {
-            let doc = crate::docx::parse_bytes(input, false).unwrap();
+            let doc = crate::docx::parse_bytes(input, crate::RevisionView::Final).unwrap();
             let mut pdf = pdf_writer::Pdf::new();
             let mut next = 1;
             let images = super::embed_all_images(

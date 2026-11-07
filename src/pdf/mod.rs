@@ -6946,7 +6946,7 @@ mod tests {
     fn space_only_wrapping_frame_is_empty_but_content_controls_keep_flow() {
         let mut doc = crate::docx::parse_bytes(
             include_bytes!("../../tests/fixtures/cases/space-only-frame/input.docx"),
-            false,
+            crate::RevisionView::Final,
         )
         .unwrap();
         let section = &mut doc.sections[0];

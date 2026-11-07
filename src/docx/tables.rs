@@ -1225,7 +1225,7 @@ mod border_conflict_tests {
         .unwrap();
         zip.write_all(xml.as_bytes()).unwrap();
         let bytes = zip.finish().unwrap().into_inner();
-        let doc = crate::docx::parse_bytes(&bytes, false).unwrap();
+        let doc = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
         let Block::Table(table) = &doc.sections[0].blocks[0] else {
             panic!("expected table")
         };
@@ -1260,7 +1260,7 @@ mod border_conflict_tests {
         .unwrap();
         zip.write_all(xml.as_bytes()).unwrap();
         let bytes = zip.finish().unwrap().into_inner();
-        let doc = crate::docx::parse_bytes(&bytes, false).unwrap();
+        let doc = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
         let Block::Table(table) = &doc.sections[0].blocks[0] else {
             panic!("expected table")
         };
@@ -1292,7 +1292,7 @@ mod border_conflict_tests {
                 zip.write_all(format!(r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">{s}</w:styles>"#).as_bytes()).unwrap();
             }
             let bytes = zip.finish().unwrap().into_inner();
-            let doc = crate::docx::parse_bytes(&bytes, false).unwrap();
+            let doc = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
             let Block::Table(table) = &doc.sections[0].blocks[0] else {
                 panic!("expected table")
             };

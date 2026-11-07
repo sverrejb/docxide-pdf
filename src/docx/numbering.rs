@@ -561,14 +561,13 @@ pub(super) fn item_revision(p: roxmltree::Node, revisions: &super::Revisions) ->
             .and_then(|ppr| wml(ppr, "rPr"))
             .and_then(|rpr| wml(rpr, kind))
     };
-    let colour = |rev: roxmltree::Node| {
-        revisions.author_color(rev.attribute((WML_NS, "author")).unwrap_or(""))
-    };
     if fully_deleted_item(p) {
-        return ItemRevision::Deleted(mark("del").map_or([0, 0, 0], colour));
+        return ItemRevision::Deleted(
+            mark("del").map_or([0, 0, 0], |rev| revisions.author_color(rev)),
+        );
     }
     match mark("ins") {
-        Some(rev) => ItemRevision::Inserted(colour(rev)),
+        Some(rev) => ItemRevision::Inserted(revisions.author_color(rev)),
         None => ItemRevision::Live,
     }
 }

@@ -149,7 +149,7 @@ pub fn convert_docx_to_pdf_with(
     options: &ConvertOptions,
 ) -> Result<(), Error> {
     reject_old_env_vars()?;
-    let doc = docx::parse(input.as_ref(), options.revisions == RevisionView::Markup)?;
+    let doc = docx::parse(input.as_ref(), options.revisions)?;
     render_and_write(&doc, path, options)
 }
 
@@ -164,7 +164,7 @@ pub fn convert_docx_bytes_to_pdf_with(
     options: &ConvertOptions,
 ) -> Result<(), Error> {
     reject_old_env_vars()?;
-    let doc = docx::parse_bytes(input, options.revisions == RevisionView::Markup)?;
+    let doc = docx::parse_bytes(input, options.revisions)?;
     render_and_write(&doc, path, options)
 }
 
@@ -179,7 +179,7 @@ pub fn convert_docx_bytes_to_pdf_bytes_with(
     options: &ConvertOptions,
 ) -> Result<Vec<u8>, Error> {
     reject_old_env_vars()?;
-    let doc = docx::parse_bytes(input, options.revisions == RevisionView::Markup)?;
+    let doc = docx::parse_bytes(input, options.revisions)?;
     pdf::render(&doc, options)
 }
 

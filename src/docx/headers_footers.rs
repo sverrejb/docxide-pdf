@@ -72,9 +72,6 @@ pub(super) fn parse_footnotes<R: Read + Seek>(
         theme,
         numbering,
         revisions,
-        "word/footnotes.xml",
-        "footnote",
-        "FootnoteText",
     )
 }
 
@@ -85,15 +82,7 @@ pub(super) fn parse_endnotes<R: Read + Seek>(
     numbering: &NumberingInfo,
     revisions: &Revisions,
 ) -> (HashMap<u32, Footnote>, Option<Paragraph>) {
-    parse_notes_rich(
-        zip,
-        styles,
-        theme,
-        numbering,
-        revisions,
-        "word/endnotes.xml",
-        "endnote",
-    )
+    parse_notes_rich(zip, styles, theme, numbering, revisions)
 }
 
 fn parse_note_separator<R: Read + Seek>(
@@ -116,17 +105,15 @@ fn parse_note_separator<R: Read + Seek>(
 /// Simple parsing: paragraph runs and indents only, except that list
 /// paragraphs take the full builder for their numbering (croatian_grant's
 /// bulleted footnote). Matches the original footnote rendering behavior.
-#[allow(clippy::too_many_arguments)]
 fn parse_notes_simple<R: Read + Seek>(
     zip: &mut zip::ZipArchive<R>,
     styles: &StylesInfo,
     theme: &ThemeFonts,
     numbering: &NumberingInfo,
     revisions: &Revisions,
-    zip_path: &str,
-    element_name: &str,
-    default_style_id: &str,
 ) -> (HashMap<u32, Footnote>, Option<Paragraph>) {
+    let (zip_path, element_name, default_style_id) =
+        ("word/footnotes.xml", "footnote", "FootnoteText");
     let mut footnotes = HashMap::new();
     let mut separator = None;
     let Some(xml_text) = super::read_zip_text(zip, zip_path) else {
@@ -340,9 +327,8 @@ fn parse_notes_rich<R: Read + Seek>(
     theme: &ThemeFonts,
     numbering: &NumberingInfo,
     revisions: &Revisions,
-    zip_path: &str,
-    element_name: &str,
 ) -> (HashMap<u32, Footnote>, Option<Paragraph>) {
+    let (zip_path, element_name) = ("word/endnotes.xml", "endnote");
     let mut footnotes = HashMap::new();
     let mut separator = None;
     let Some(xml_text) = super::read_zip_text(zip, zip_path) else {

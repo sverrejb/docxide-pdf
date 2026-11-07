@@ -215,7 +215,8 @@ impl Revisions {
     /// Word colours each author's revisions by the order the authors first
     /// appear (Word for Mac probes 2026-11-05; a machine that has seen an author
     /// before keeps that author's earlier colour, which no converter can know).
-    pub(in crate::docx) fn author_color(&self, author: &str) -> [u8; 3] {
+    pub(in crate::docx) fn author_color(&self, revision: roxmltree::Node) -> [u8; 3] {
+        let author = revision.attribute((WML_NS, "author")).unwrap_or("");
         let mut authors = self.authors.borrow_mut();
         let index = authors.iter().position(|n| n == author).unwrap_or_else(|| {
             authors.push(author.to_string());
@@ -1174,7 +1175,7 @@ mod relationships {
     }
 }
 
-pub fn parse(path: &std::path::Path, markup: bool) -> Result<Document, Error> {
+pub fn parse(path: &std::path::Path, view: crate::RevisionView) -> Result<Document, Error> {
     let file = std::fs::File::open(path).map_err(|e| match e.kind() {
         std::io::ErrorKind::NotFound | std::io::ErrorKind::PermissionDenied => Error::Io(
             std::io::Error::new(e.kind(), format!("{}: {}", e, path.display())),
@@ -1185,15 +1186,15 @@ pub fn parse(path: &std::path::Path, markup: bool) -> Result<Document, Error> {
     let mut zip = zip::ZipArchive::new(file)
         .map_err(|_| Error::InvalidDocx("file is not a ZIP archive".into()))?;
 
-    parse_zip(&mut zip, markup)
+    parse_zip(&mut zip, view)
 }
 
-pub fn parse_bytes(bytes: &[u8], markup: bool) -> Result<Document, Error> {
+pub fn parse_bytes(bytes: &[u8], view: crate::RevisionView) -> Result<Document, Error> {
     let cursor = std::io::Cursor::new(bytes);
     let mut zip = zip::ZipArchive::new(cursor)
         .map_err(|_| Error::InvalidDocx("data is not a valid ZIP/DOCX archive".into()))?;
 
-    parse_zip(&mut zip, markup)
+    parse_zip(&mut zip, view)
 }
 
 fn parse_core_props<R: Read + std::io::Seek>(
@@ -1230,8 +1231,9 @@ fn parse_core_props<R: Read + std::io::Seek>(
 
 fn parse_zip<R: Read + std::io::Seek>(
     zip: &mut zip::ZipArchive<R>,
-    markup: bool,
+    view: crate::RevisionView,
 ) -> Result<Document, Error> {
+    let markup = view == crate::RevisionView::Markup;
     let revisions = Revisions {
         markup,
         ..Default::default()
