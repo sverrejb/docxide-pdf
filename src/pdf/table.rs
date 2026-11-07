@@ -1091,12 +1091,12 @@ fn render_nested_table(
         Some(crate::model::HorizontalPosition::AlignRight) => TableAlignment::Right,
         _ => table.alignment,
     };
-    // Word 2013+ positions a fully over-wide, left-anchored nested float
-    // against its host cell edge rather than adding the host's left padding.
+    // Word positions a fully over-wide, left-anchored nested float against
+    // its host cell edge rather than adding the host's left padding, in
+    // compat 14 as in 15 (wide-nested-float-edge-wide-m14-left-o108-*).
     let edge_shift = floating_host
         .filter(|m| {
-            ctx.compat_mode >= 15
-                && table.table_indent == 0.0
+            table.table_indent == 0.0
                 && table_total_w > available_w + m.left + m.right
                 && anchored.is_some_and(|p| {
                     matches!(p.h_position, crate::model::HorizontalPosition::Offset(x) if x == 0.0)
@@ -1864,9 +1864,13 @@ fn aligned_table_left(
         // the edge sits one cell margin further out, even for an explicit
         // tblInd of 0 (chinese_costume). Word 2013+ (compat 15) never outdents:
         // the border sits at the margin and the text inside it. Nor does any
-        // layout outdent a table without a style or tblCellMar (case131's
-        // second column at the margin + 300pt + its 0.5pt cell margin).
-        TableAlignment::Left if compat_mode >= 15 || !table.has_style_or_cell_mar => {
+        // layout outdent a table with neither a style nor a tblInd, even with
+        // its own tblCellMar (Word probes on section-mark-after-table-inline-
+        // compat14: adding tblInd 0 moves the text from 77.5 to the margin;
+        // case131's second column at the margin + 300pt + its 0.5pt margin).
+        TableAlignment::Left
+            if compat_mode >= 15 || !(table.has_table_style || table.table_indent_explicit) =>
+        {
             area_left + table.table_indent + word2013_border_shift(table)
         }
         TableAlignment::Left => area_left + table.table_indent - table.first_cell_left_margin(),
