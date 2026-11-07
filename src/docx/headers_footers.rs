@@ -56,35 +56,6 @@ pub(super) fn parse_header_footer_xml<R: Read + Seek>(
     (!blocks.is_empty()).then_some(HeaderFooter { blocks })
 }
 
-pub(super) fn parse_footnotes<R: Read + Seek>(
-    zip: &mut zip::ZipArchive<R>,
-    styles: &StylesInfo,
-    theme: &ThemeFonts,
-    numbering: &NumberingInfo,
-    revisions: &Revisions,
-) -> (HashMap<u32, Footnote>, Option<Paragraph>) {
-    // Footnotes use the simple paragraph builder for backwards compatibility
-    // with rendering tuned against the existing corpus; only list paragraphs
-    // take the full builder.
-    parse_notes_simple(
-        zip,
-        styles,
-        theme,
-        numbering,
-        revisions,
-    )
-}
-
-pub(super) fn parse_endnotes<R: Read + Seek>(
-    zip: &mut zip::ZipArchive<R>,
-    styles: &StylesInfo,
-    theme: &ThemeFonts,
-    numbering: &NumberingInfo,
-    revisions: &Revisions,
-) -> (HashMap<u32, Footnote>, Option<Paragraph>) {
-    parse_notes_rich(zip, styles, theme, numbering, revisions)
-}
-
 fn parse_note_separator<R: Read + Seek>(
     node: roxmltree::Node,
     ctx: &mut ParseContext<'_, R>,
@@ -105,7 +76,10 @@ fn parse_note_separator<R: Read + Seek>(
 /// Simple parsing: paragraph runs and indents only, except that list
 /// paragraphs take the full builder for their numbering (croatian_grant's
 /// bulleted footnote). Matches the original footnote rendering behavior.
-fn parse_notes_simple<R: Read + Seek>(
+// Footnotes use the simple paragraph builder for backwards compatibility
+// with rendering tuned against the existing corpus; only list paragraphs
+// take the full builder.
+pub(super) fn parse_footnotes<R: Read + Seek>(
     zip: &mut zip::ZipArchive<R>,
     styles: &StylesInfo,
     theme: &ThemeFonts,
@@ -321,7 +295,7 @@ fn parse_notes_simple<R: Read + Seek>(
 /// Rich parsing: full paragraph builder with numbering, list labels,
 /// hyperlinks resolved against the notes' own relationships file. Used for
 /// endnotes which can contain bulleted lists and hyperlinked URLs.
-fn parse_notes_rich<R: Read + Seek>(
+pub(super) fn parse_endnotes<R: Read + Seek>(
     zip: &mut zip::ZipArchive<R>,
     styles: &StylesInfo,
     theme: &ThemeFonts,

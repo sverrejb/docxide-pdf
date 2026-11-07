@@ -2468,7 +2468,6 @@ fn is_empty_wrapping_frame(para: &Paragraph, sp: &SectionProperties) -> bool {
         && !para.column_break_after
 }
 
-/// Whether a leading picture leaves no usable text strip on either side.
 /// Markup view: the change bars of one page. Word draws them in the left
 /// margin (the outside margin with mirrored margins), half an inch from the
 /// text but no deeper than halfway into the margin, 0.72pt wide, on its
@@ -2563,6 +2562,7 @@ fn float_subset(
     (sub, names, effects)
 }
 
+/// Whether a leading picture leaves no usable text strip on either side.
 fn leading_full_width_picture(
     fi: &crate::model::FloatingImage,
     sp: &SectionProperties,
@@ -5348,10 +5348,11 @@ fn render_paragraph_block(
             // post-table geometry on a 0.25pt grid like the text path's.
             if inserted_descent > 0.0
                 && let Some(run) = para.runs.iter().find(|r| r.revised && r.underline)
-                && let Some((pos, th)) = ctx.fonts.get(&font_key(run)).and_then(|e| e.underline)
+                && let Some((offset, thick)) = ctx
+                    .fonts
+                    .get(&font_key(run))
+                    .and_then(|e| layout::post_underline(e, run.font_size))
             {
-                let q = |v: f32| (v * 4.0).round() / 4.0;
-                let (offset, thick) = (q(pos * run.font_size), q(th * run.font_size).max(0.25));
                 color::fill_color_or_black(&mut state.pb.content, run.color);
                 state
                     .pb

@@ -200,15 +200,12 @@ pub(super) fn render_list_label(
             .show(Str(&label_bytes));
     }
     content.end_text();
-    let q = |v: f32| (v * 4.0).round() / 4.0;
     let strike = |entry: &FontEntry| {
         super::layout::os2_strike(entry, label_fs).map(|(top, th)| (baseline_y + top - th, th))
     };
     let underline = |entry: &FontEntry| {
-        entry.underline.map(|(pos, th)| {
-            let th = q(th * label_fs).max(0.25);
-            (baseline_y - q(pos * label_fs) - th, th)
-        })
+        super::layout::post_underline(entry, label_fs)
+            .map(|(offset, th)| (baseline_y - offset - th, th))
     };
     if let (Some(deleted), Some(entry)) = (para.list_label_revision, entry) {
         // Struck or underlined as a run of the same font would be (Word for

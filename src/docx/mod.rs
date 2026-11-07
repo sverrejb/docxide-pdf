@@ -468,6 +468,16 @@ pub(super) fn wml_attr<'a>(node: roxmltree::Node<'a, 'a>, child: &str) -> Option
     wml(node, child).and_then(|n| n.attribute((WML_NS, "val")))
 }
 
+/// A paragraph mark's tracked change of `kind` ("ins" or "del").
+pub(super) fn mark_revision<'a>(
+    p: roxmltree::Node<'a, 'a>,
+    kind: &str,
+) -> Option<roxmltree::Node<'a, 'a>> {
+    wml(p, "pPr")
+        .and_then(|ppr| wml(ppr, "rPr"))
+        .and_then(|rpr| wml(rpr, kind))
+}
+
 /// First math-namespace child element with the given local name.
 pub(super) fn math_child<'a>(
     parent: roxmltree::Node<'a, 'a>,
@@ -1010,13 +1020,7 @@ pub(super) fn extract_indents(
 // the deleted mark goes with it (Word online export probe 2026-11-05: three
 // sections whose break marks are deleted print as one, with the last header).
 fn is_fully_deleted_paragraph(node: roxmltree::Node) -> bool {
-    if !node.has_tag_name((WML_NS, "p")) {
-        return false;
-    }
-    let Some(ppr) = wml(node, "pPr") else {
-        return false;
-    };
-    if wml(ppr, "rPr").and_then(|rpr| wml(rpr, "del")).is_none() {
+    if !node.has_tag_name((WML_NS, "p")) || mark_revision(node, "del").is_none() {
         return false;
     }
     node.children().filter(|n| n.is_element()).all(|n| {
@@ -1341,7 +1345,10 @@ fn parse_zip<R: Read + std::io::Seek>(
                     && matches!(blocks.last(), Some(Block::Paragraph(prev)) if prev.mark_deleted)
                     && let Some(Block::Paragraph(prev)) = blocks.pop()
                 {
-                    para.runs.splice(0..0, prev.runs);
+                    // Appending to prev's runs keeps a chain of merges linear.
+                    let mut runs = prev.runs;
+                    runs.append(&mut para.runs);
+                    para.runs = runs;
                 }
 
                 // HTML auto spacing drops between items of one list:

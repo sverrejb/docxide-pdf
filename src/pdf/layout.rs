@@ -754,6 +754,15 @@ impl WordChunk {
         }
     }
 
+    /// Markup view: a deletion's strike bridges its spaces instead of an underline.
+    fn struck_if(mut self, strike: bool) -> Self {
+        if strike {
+            self.underline = false;
+            self.strikethrough = true;
+        }
+        self
+    }
+
     fn word_space_underline(
         entry: &FontEntry,
         font_size: f32,
@@ -2740,21 +2749,18 @@ pub(super) fn build_paragraph_lines(
                     word_start = 0;
                 }
                 if pending_space_underline && pending_space_w > 0.0 {
-                    current_chunks.push(WordChunk::word_space_underline(
-                        entry,
-                        eff_fs,
-                        pending_space_color,
-                        pending_space_double,
-                        pending_space_border.clone(),
-                        current_x,
-                        pending_space_w,
-                    ));
-                    if pending_space_strike
-                        && let Some(c) = current_chunks.last_mut()
-                    {
-                        c.underline = false;
-                        c.strikethrough = true;
-                    }
+                    current_chunks.push(
+                        WordChunk::word_space_underline(
+                            entry,
+                            eff_fs,
+                            pending_space_color,
+                            pending_space_double,
+                            pending_space_border.clone(),
+                            current_x,
+                            pending_space_w,
+                        )
+                        .struck_if(pending_space_strike),
+                    );
                 }
                 current_x += pending_space_w;
                 pending_space_w = 0.0;
@@ -2929,21 +2935,18 @@ pub(super) fn build_paragraph_lines(
             // space's own run is underlined, so a continuously-underlined run
             // renders as one unbroken line rather than per-word segments.
             if pending_space_underline && !current_chunks.is_empty() && pending_space_w > 0.0 {
-                current_chunks.push(WordChunk::word_space_underline(
-                    entry,
-                    eff_fs,
-                    pending_space_color,
-                    pending_space_double,
-                    pending_space_border.clone(),
-                    current_x - pending_space_w,
-                    pending_space_w,
-                ));
-                if pending_space_strike
-                    && let Some(c) = current_chunks.last_mut()
-                {
-                    c.underline = false;
-                    c.strikethrough = true;
-                }
+                current_chunks.push(
+                    WordChunk::word_space_underline(
+                        entry,
+                        eff_fs,
+                        pending_space_color,
+                        pending_space_double,
+                        pending_space_border.clone(),
+                        current_x - pending_space_w,
+                        pending_space_w,
+                    )
+                    .struck_if(pending_space_strike),
+                );
             }
             pending_space_w = 0.0;
             pending_space_count = 0;
@@ -3615,21 +3618,18 @@ pub(super) fn build_tabbed_line(
                 if applied_space {
                     mark_space_after(&mut all_chunks);
                     if pending_space_underline && !all_chunks.is_empty() {
-                        all_chunks.push(WordChunk::word_space_underline(
-                            entry,
-                            eff_fs,
-                            pending_space_color,
-                            pending_space_double,
-                            pending_space_border.clone(),
-                            current_x,
-                            pending_space_w,
-                        ));
-                        if pending_space_strike
-                            && let Some(c) = all_chunks.last_mut()
-                        {
-                            c.underline = false;
-                            c.strikethrough = true;
-                        }
+                        all_chunks.push(
+                            WordChunk::word_space_underline(
+                                entry,
+                                eff_fs,
+                                pending_space_color,
+                                pending_space_double,
+                                pending_space_border.clone(),
+                                current_x,
+                                pending_space_w,
+                            )
+                            .struck_if(pending_space_strike),
+                        );
                     }
                     current_x += pending_space_w;
                     pending_space_w = 0.0;
@@ -3759,8 +3759,19 @@ pub(super) fn build_tabbed_line(
 /// underline's 12 cases). The footnote separator's rule is one too.
 pub(super) fn os2_strike(entry: &FontEntry, font_size: f32) -> Option<(f32, f32)> {
     let (pos, th) = entry.strikeout?;
+    Some(on_quarter_point_grid(pos * font_size, th * font_size))
+}
+
+/// A font's post-table underline as Word draws it: its offset below the
+/// baseline and its thickness, on the same 0.25pt grid as `os2_strike`.
+pub(super) fn post_underline(entry: &FontEntry, font_size: f32) -> Option<(f32, f32)> {
+    let (pos, th) = entry.underline?;
+    Some(on_quarter_point_grid(pos * font_size, th * font_size))
+}
+
+fn on_quarter_point_grid(offset: f32, thickness: f32) -> (f32, f32) {
     let q = |v: f32| (v * 4.0).round() / 4.0;
-    Some((q(pos * font_size), q(th * font_size).max(0.25)))
+    (q(offset), q(thickness).max(0.25))
 }
 
 /// Draws `text` with the font's pair kerning as TJ adjustments, the same pairs
@@ -5081,11 +5092,7 @@ pub(super) fn render_paragraph_lines(
                 let post_ul = (!chunk.double_underline)
                     .then(|| pdf_name_to_entry.get(chunk.pdf_font.as_str()))
                     .flatten()
-                    .and_then(|e| e.underline)
-                    .map(|(pos, th)| {
-                        let q = |v: f32| (v * 4.0).round() / 4.0;
-                        (q(pos * chunk.font_size), q(th * chunk.font_size).max(0.25))
-                    });
+                    .and_then(|e| post_underline(e, chunk.font_size));
                 if let (true, Some((offset, ul_thick))) = (chunk.underline, post_ul) {
                     let bottom = y - offset - ul_thick;
                     push_decoration(
@@ -5235,13 +5242,12 @@ pub(super) fn render_paragraph_lines(
                     push_decoration(&mut decorations, box_x, st_y, chunk.width, st_thick, chunk.color);
                 }
                 if chunk.underline {
-                    let q = |v: f32| (v * 4.0).round() / 4.0;
                     let (bottom, th) = entry
-                        .and_then(|e| e.underline)
-                        .map_or((y - chunk.font_size * 0.12 - thick, thick), |(pos, th)| {
-                            let th = q(th * chunk.font_size).max(0.25);
-                            (y - q(pos * chunk.font_size) - th, th)
-                        });
+                        .and_then(|e| post_underline(e, chunk.font_size))
+                        .map_or(
+                            (y - chunk.font_size * 0.12 - thick, thick),
+                            |(offset, th)| (y - offset - th, th),
+                        );
                     push_decoration(&mut decorations, box_x, bottom, chunk.width, th, chunk.color);
                 }
                 let turned = chunk.inline_image_rotation_deg.abs() > 0.01;

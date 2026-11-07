@@ -556,38 +556,28 @@ pub(super) fn item_revision(p: roxmltree::Node, revisions: &super::Revisions) ->
     if !revisions.markup {
         return ItemRevision::Live;
     }
-    let mark = |kind: &str| {
-        wml(p, "pPr")
-            .and_then(|ppr| wml(ppr, "rPr"))
-            .and_then(|rpr| wml(rpr, kind))
-    };
-    if fully_deleted_item(p) {
-        return ItemRevision::Deleted(
-            mark("del").map_or([0, 0, 0], |rev| revisions.author_color(rev)),
-        );
+    if let Some(rev) = fully_deleted_item(p) {
+        return ItemRevision::Deleted(revisions.author_color(rev));
     }
-    match mark("ins") {
+    match super::mark_revision(p, "ins") {
         Some(rev) => ItemRevision::Inserted(revisions.author_color(rev)),
         None => ItemRevision::Live,
     }
 }
 
-/// A list paragraph whose mark and every run are tracked deletions.
-pub(super) fn fully_deleted_item(p: roxmltree::Node) -> bool {
-    let mark_deleted = wml(p, "pPr")
-        .and_then(|ppr| wml(ppr, "rPr"))
-        .and_then(|rpr| wml(rpr, "del"))
-        .is_some();
-    mark_deleted
-        && p
-            .descendants()
-            .filter(|n| n.has_tag_name((WML_NS, "r")))
-            .all(|r| {
-                r.ancestors().skip(1).take_while(|a| *a != p).any(|a| {
-                    a.tag_name().namespace() == Some(WML_NS)
-                        && matches!(a.tag_name().name(), "del" | "moveFrom")
-                })
+/// A list paragraph whose mark and every run are tracked deletions: the
+/// mark's `w:del`.
+fn fully_deleted_item<'a>(p: roxmltree::Node<'a, 'a>) -> Option<roxmltree::Node<'a, 'a>> {
+    let del = super::mark_revision(p, "del")?;
+    p.descendants()
+        .filter(|n| n.has_tag_name((WML_NS, "r")))
+        .all(|r| {
+            r.ancestors().skip(1).take_while(|a| *a != p).any(|a| {
+                a.tag_name().namespace() == Some(WML_NS)
+                    && matches!(a.tag_name().name(), "del" | "moveFrom")
             })
+        })
+        .then_some(del)
 }
 
 pub(super) fn parse_list_info(

@@ -42,10 +42,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
 
     let (para_style_id, para_style) = ctx.styles.paragraph_style_of(ppr);
 
-    let mut mark = super::runs::paragraph_mark_run(ppr, para_style, ctx);
-    // Markup view: a fully deleted list item keeps its number without
-    // advancing the counter (`parse_list_info` reads the flag off the mark).
-    mark.revised = ctx.revisions.markup && super::numbering::fully_deleted_item(node);
+    let mark = super::runs::paragraph_mark_run(ppr, para_style, ctx);
     let paragraph_mark_font_size = Some(mark.font_size);
     let paragraph_mark_font_name = Some(mark.font_name.clone());
     let paragraph_mark_position = paragraph_mark_position(ppr_rpr, para_style);
