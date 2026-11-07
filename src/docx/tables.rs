@@ -1097,12 +1097,20 @@ pub(super) fn settle_row_borders(rows: &mut [TableRow], cell_margins: CellMargin
     // starts where the content ends. Borders are drawn centred on the row edge,
     // so each side's inset grows by half its band (measured in reference PDFs:
     // rehab_centre 2.25pt rows pitch 3×12.07 + 2.25, case6 0.5pt rows 14.65 + 0.5).
+    // Sideways the band doesn't add: the margin only grows to half the band
+    // when it is narrower (table probe 6, compat 14 and 15, margins 0/0.5/1/5.4pt
+    // under 0.5–6pt borders: text at max(margin, band/2) from the border's
+    // centre line, each cell by its own left/right border).
     for cell in rows.iter_mut().flat_map(|r| r.cells.iter_mut()) {
-        let (top, bottom) = (cell.borders.top.band(), cell.borders.bottom.band());
-        if top > 0.0 || bottom > 0.0 {
+        let b = &cell.borders;
+        let (top, bottom, left, right) =
+            (b.top.band(), b.bottom.band(), b.left.band(), b.right.band());
+        if top > 0.0 || bottom > 0.0 || left > 0.0 || right > 0.0 {
             let mut m = cell.cell_margins.unwrap_or(cell_margins);
             m.top += top / 2.0;
             m.bottom += bottom / 2.0;
+            m.left = m.left.max(left / 2.0);
+            m.right = m.right.max(right / 2.0);
             cell.cell_margins = Some(m);
         }
     }
@@ -1319,6 +1327,41 @@ mod border_conflict_tests {
         assert_eq!(
             left(None, r#"<w:tblCellMar><w:left w:w="108"/></w:tblCellMar>"#),
             (5.4, 5.4)
+        );
+    }
+
+    #[test]
+    fn side_insets_grow_to_half_the_border_band() {
+        use std::io::{Cursor, Write};
+        let lefts = |tbl_cell_mar: &str| {
+            let b = |tag: &str, sz: u32| format!(r#"<w:{tag} w:val="single" w:sz="{sz}"/>"#);
+            let borders = [b("left", 48), b("right", 4), b("insideV", 4)].concat();
+            let cell = r#"<w:tc><w:p/></w:tc>"#;
+            let xml = format!(
+                r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl><w:tblPr><w:tblBorders>{borders}</w:tblBorders>{tbl_cell_mar}</w:tblPr><w:tblGrid><w:gridCol w:w="1000"/><w:gridCol w:w="1000"/></w:tblGrid><w:tr>{cell}{cell}</w:tr></w:tbl><w:sectPr/></w:body></w:document>"#
+            );
+            let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+            let opts = zip::write::SimpleFileOptions::default();
+            zip.start_file("word/document.xml", opts).unwrap();
+            zip.write_all(xml.as_bytes()).unwrap();
+            let bytes = zip.finish().unwrap().into_inner();
+            let doc = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
+            let Block::Table(table) = &doc.sections[0].blocks[0] else {
+                panic!("expected table")
+            };
+            let cells = &table.rows[0].cells;
+            let m = |i: usize| cells[i].cell_margins.unwrap_or(table.cell_margins);
+            (m(0).left, m(1).left, m(1).right)
+        };
+        // 6pt left border: 3pt beats the 0.5pt default; the 0.5pt insideV doesn't.
+        assert_eq!(lefts(""), (3.0, 0.5, 0.5));
+        assert_eq!(
+            lefts(r#"<w:tblCellMar><w:left w:w="0"/><w:right w:w="0"/></w:tblCellMar>"#),
+            (3.0, 0.25, 0.25)
+        );
+        assert_eq!(
+            lefts(r#"<w:tblCellMar><w:left w:w="108"/><w:right w:w="108"/></w:tblCellMar>"#),
+            (5.4, 5.4, 5.4)
         );
     }
 

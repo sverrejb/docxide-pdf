@@ -1976,10 +1976,13 @@ fn aligned_table_left(
         // its own tblCellMar (Word probes on section-mark-after-table-inline-
         // compat14: adding tblInd 0 moves the text from 77.5 to the margin;
         // case131's second column at the margin + 300pt + its 0.5pt margin).
-        TableAlignment::Left
-            if compat_mode >= 15 || !(table.has_table_style || table.table_indent_explicit) =>
-        {
+        TableAlignment::Left if compat_mode >= 15 => {
             area_left + table.table_indent + word2013_border_shift(table)
+        }
+        // Before compat 15 the left border is centred on the indent (table
+        // probe 6: a 1.5pt band spans 71.25–72.75 from a 72pt margin).
+        TableAlignment::Left if !(table.has_table_style || table.table_indent_explicit) => {
+            area_left + table.table_indent
         }
         TableAlignment::Left => area_left + table.table_indent - table.first_cell_left_margin(),
     };
