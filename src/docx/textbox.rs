@@ -3,14 +3,12 @@ use std::io::Read;
 use crate::geometry::{FormulaOp, PathFill};
 use crate::model::{
     ArrowEnd, AutoFit, ConnectorShape, ConnectorType, CustomGeometry, CustomGuideDef,
-    CustomPathCommand, CustomPathDef, HRelativeFrom, HorizontalPosition, ImageGlow,
-    ImageReflection, Paragraph, ShapeFill, ShapeGeometry, TextAnchor, TextWarp, Textbox,
+    CustomPathCommand, CustomPathDef, EmbeddedImage, HRelativeFrom, HorizontalPosition, ImageGlow,
+    ImageReflection, Paragraph, ShapeFill, ShapeGeometry, Table, TextAnchor, TextWarp, Textbox,
     TextboxLink, VRelativeFrom, VerticalPosition,
 };
 
-use super::color::{
-    apply_color_transforms, parse_line_stroke, parse_solid_fill, resolve_dml_color,
-};
+use super::color::{apply_color_transforms, parse_solid_fill, resolve_dml_color};
 use super::images::{extent_dimensions, parse_anchor_position, vml_z_order};
 use super::styles::{ThemeFillStyle, ThemeFonts};
 use super::{
@@ -111,30 +109,54 @@ fn find_wps_style_ref<'a>(
     find_dml(style, ref_name)
 }
 
-pub(super) fn parse_txbx_content_paragraphs<R: Read + std::io::Seek>(
+#[derive(Default)]
+pub(super) struct TxbxContent {
+    pub(super) paragraphs: Vec<Paragraph>,
+    pub(super) tables: Vec<(usize, Table)>,
+}
+
+pub(super) fn parse_txbx_content<R: Read + std::io::Seek>(
     txbx_content: roxmltree::Node,
     ctx: &mut ParseContext<'_, R>,
-) -> Vec<Paragraph> {
+) -> TxbxContent {
+    let outer = std::mem::replace(&mut ctx.in_text_box, true);
     let mut paragraphs = Vec::new();
+    let mut tables = Vec::new();
     let mut lists = super::numbering::ListCounters::default();
     // Outline levels only tag headings here; the outline itself comes from the body.
     let opts = super::paragraph::ParagraphOptions {
         resolve_outline_level: true,
         ..Default::default()
     };
-    for p in txbx_content
-        .children()
-        .filter(|n| n.has_tag_name((WML_NS, "p")))
-    {
-        let mut para = super::paragraph::build_paragraph(p, ctx, &mut lists, &opts);
+    for node in txbx_content.children() {
+        if node.has_tag_name((WML_NS, "tbl")) {
+            let table = super::parse_table_node(node, ctx, &mut lists);
+            tables.push((paragraphs.len(), table));
+            continue;
+        }
+        if !node.has_tag_name((WML_NS, "p")) {
+            continue;
+        }
+        let mut para = super::paragraph::build_paragraph(node, ctx, &mut lists, &opts);
         // Auto spacing opens no story, as at the top of the body (air_pollution's
         // Normal (Web) text box starts at its inset, not 14pt below it).
-        if paragraphs.is_empty() && para.space_before_auto {
+        if paragraphs.is_empty() && tables.is_empty() && para.space_before_auto {
             para.space_before = 0.0;
         }
         paragraphs.push(para);
     }
-    paragraphs
+    // A story ending in a table keeps a final paragraph mark below it, in the
+    // default paragraph style: it counts for the box's anchor and autofit.
+    if tables.last().is_some_and(|&(at, _)| at == paragraphs.len()) {
+        let mark = format!(r#"<w:p xmlns:w="{WML_NS}"/>"#);
+        if let Ok(mark) = roxmltree::Document::parse(&mark) {
+            let para =
+                super::paragraph::build_paragraph(mark.root_element(), ctx, &mut lists, &opts);
+            paragraphs.push(para);
+        }
+    }
+    ctx.in_text_box = outer;
+    TxbxContent { paragraphs, tables }
 }
 
 fn parse_gradient_fill(sp_pr: roxmltree::Node, theme: &ThemeFonts) -> Option<ShapeFill> {
@@ -375,11 +397,17 @@ fn parse_wordart_body_margins(wsp: roxmltree::Node) -> (f32, f32, f32, f32) {
 
 pub(super) struct WspResult {
     pub(super) paragraphs: Vec<Paragraph>,
+    pub(super) tables: Vec<(usize, Table)>,
     pub(super) fill: Option<ShapeFill>,
+    pub(super) picture_fill: Option<EmbeddedImage>,
     pub(super) shape_type: ShapeGeometry,
     pub(super) stroke_color: Option<[u8; 3]>,
     pub(super) stroke_width: f32,
     pub(super) stroke_dash: &'static [f32],
+    /// Half the outline width from `w` or the style's `lnRef`, visible or not
+    /// (`a:noFill`): Word measures the body insets from the outline's inner
+    /// edge. A drawn outline with neither (Word's default 0.75pt) adds none.
+    pub(super) outline_inset: f32,
     pub(super) text_anchor: TextAnchor,
     pub(super) margin_top: f32,
     pub(super) margin_left: f32,
@@ -394,21 +422,26 @@ pub(super) struct WspResult {
 }
 
 /// The shape's own properties; size, anchoring and wrapping stay at their
-/// defaults for the caller to fill in.
+/// defaults for the caller to fill in. Word measures the body insets from the
+/// outline's inner edge, so an outline moves the text in by half its width
+/// on every side (textbox-outline-inset).
 impl From<WspResult> for Textbox {
     fn from(wsp: WspResult) -> Textbox {
+        let ln_inset = wsp.outline_inset;
         Textbox {
             paragraphs: wsp.paragraphs,
+            tables: wsp.tables,
             fill: wsp.fill,
+            picture_fill: wsp.picture_fill,
             shape_type: wsp.shape_type,
             stroke_color: wsp.stroke_color,
             stroke_width: wsp.stroke_width,
             stroke_dash: wsp.stroke_dash,
             text_anchor: wsp.text_anchor,
-            margin_left: wsp.margin_left,
-            margin_right: wsp.margin_right,
-            margin_top: wsp.margin_top,
-            margin_bottom: wsp.margin_bottom,
+            margin_left: wsp.margin_left + ln_inset,
+            margin_right: wsp.margin_right + ln_inset,
+            margin_top: wsp.margin_top + ln_inset,
+            margin_bottom: wsp.margin_bottom + ln_inset,
             no_text_wrap: wsp.no_text_wrap,
             text_warp: wsp.text_warp,
             auto_fit: wsp.auto_fit,
@@ -427,14 +460,16 @@ pub(super) fn parse_textbox_from_wsp<R: Read + std::io::Seek>(
     let wsp = anchor
         .descendants()
         .find(|n| n.has_tag_name((WPS_NS, "wsp")))?;
-    parse_wsp_shape(wsp, ctx)
+    parse_wsp_shape(wsp, ctx, extent_dimensions(anchor))
 }
 
 /// Parse a single `wps:wsp` node into a shape result. Used both for the
-/// single-shape drawing path and for children of canvases/groups.
+/// single-shape drawing path and for children of canvases/groups. `display`
+/// is the size the shape is shown at, which its picture fill is read for.
 pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
     wsp: roxmltree::Node,
     ctx: &mut ParseContext<'_, R>,
+    display: (f32, f32),
 ) -> Option<WspResult> {
     let sp_pr = find_sp_pr(wsp);
     let (glow, reflection) = super::images::parse_glow_reflection(sp_pr);
@@ -461,8 +496,9 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
         sp_pr
     };
     let has_no_fill = fill_pr.is_some_and(|sp| find_dml(sp, "noFill").is_some());
-    // Explicit a:noFill overrides any style-ref (fillRef) fill
-    let fill: Option<ShapeFill> = if has_no_fill {
+    let has_picture_fill = fill_pr.is_some_and(|sp| find_dml(sp, "blipFill").is_some());
+    // Explicit a:noFill or a picture fill overrides any style-ref (fillRef) fill
+    let fill: Option<ShapeFill> = if has_no_fill || has_picture_fill {
         None
     } else {
         fill_pr
@@ -477,19 +513,24 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
     let ln_node = sp_pr.and_then(|sp| find_dml(sp, "ln"));
     let ln_no_fill = ln_node.is_some_and(|ln| find_dml(ln, "noFill").is_some());
     let explicit_ln_width = ln_node.and_then(|ln| emu_attr_opt(ln, "w"));
+    let outline_width =
+        explicit_ln_width.unwrap_or_else(|| parse_style_stroke_width(wsp, ctx.theme));
     let (stroke_color, stroke_width) = if ln_no_fill {
         (None, 0.0)
-    } else if let Some((color, width)) = ln_node.and_then(|ln| parse_line_stroke(ln, ctx.theme)) {
+    } else if let Some(color) = ln_node.and_then(|ln| parse_solid_fill(ln, ctx.theme)) {
+        let width = if explicit_ln_width.is_none() && outline_width == 0.0 {
+            0.75
+        } else {
+            outline_width
+        };
         (Some(color), width)
     } else if let Some(color) = parse_style_stroke(wsp, ctx.theme) {
         // No explicit line color: fall back to the shape style's lnRef stroke
-        (
-            Some(color),
-            explicit_ln_width.unwrap_or_else(|| parse_style_stroke_width(wsp, ctx.theme)),
-        )
+        (Some(color), outline_width)
     } else {
         (None, 0.0)
     };
+    let outline_inset = outline_width / 2.0;
 
     let stroke_dash: &[f32] = ln_node.map_or(&[], parse_prst_dash);
 
@@ -541,31 +582,44 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
             ..Default::default()
         })
     });
-    let paragraphs = txbx
+    let TxbxContent { paragraphs, tables } = txbx
         .and_then(|txbx| {
             txbx.children()
                 .find(|n| n.has_tag_name((WML_NS, "txbxContent")))
         })
-        .map(|tc| parse_txbx_content_paragraphs(tc, ctx))
+        .map(|tc| parse_txbx_content(tc, ctx))
         .unwrap_or_default();
 
-    // A text-less picture-filled shape is a picture with the shape's outline
-    // (`picture_filled_shape`), not an outline around nothing.
-    let picture_fill = sp_pr.is_some_and(|sp| find_dml(sp, "blipFill").is_some());
+    // A text-less shape with its own picture fill is a picture with the
+    // shape's outline (`picture_filled_shape`), not an outline around nothing.
+    let own_picture_fill = !group_fill && has_picture_fill;
     if paragraphs.is_empty()
         && link.is_none()
-        && (picture_fill || ((has_no_fill || fill.is_none()) && stroke_color.is_none()))
+        && (own_picture_fill
+            || (fill.is_none() && !has_picture_fill && stroke_color.is_none()))
     {
         return None;
     }
+    let picture_fill = fill_pr.and_then(|pr| {
+        let mut img = super::images::shape_picture_fill(pr, ctx, display.0, display.1)?;
+        // A group's picture spans the group: each shape taking it shows its
+        // own part (Word example: three children side by side split it).
+        if group_fill && let Some(window) = super::group::group_fill_window(wsp, pr) {
+            img.src_rect = Some(crop_within(img.src_rect, window));
+        }
+        Some(img)
+    });
 
     Some(WspResult {
         paragraphs,
+        tables,
         fill,
+        picture_fill,
         shape_type,
         stroke_color,
         stroke_width,
         stroke_dash,
+        outline_inset,
         text_anchor,
         margin_top,
         margin_left,
@@ -578,6 +632,14 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
         glow,
         reflection,
     })
+}
+
+/// The `window` (left, top, right, bottom fractions) of a picture already
+/// cropped to `crop`.
+fn crop_within(crop: Option<[f32; 4]>, window: [f32; 4]) -> [f32; 4] {
+    let [l, t, r, b] = crop.unwrap_or_default();
+    let (w, h) = (1.0 - l - r, 1.0 - t - b);
+    [l + w * window[0], t + h * window[1], r + w * window[2], b + h * window[3]]
 }
 
 pub(super) fn parse_connector_from_wsp(
@@ -1040,12 +1102,13 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         (None, 0.0)
     };
 
-    let paragraphs = parse_txbx_content_paragraphs(txbx_content, ctx);
+    let TxbxContent { paragraphs, tables } = parse_txbx_content(txbx_content, ctx);
     if paragraphs.is_empty() {
         return None;
     }
     Some(Textbox {
         paragraphs,
+        tables,
         width_pt: width,
         height_pt: height,
         h_position: HorizontalPosition::Offset(margin_left),
@@ -1097,10 +1160,15 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                         if let Some(wsp) = parse_textbox_from_wsp(container, ctx) {
                             let (h_position, h_relative, v_pos, v_relative) =
                                 parse_anchor_position(container);
-                            let (wrap_type, wrap_text, _) =
+                            let (wrap_type, wrap_text, wrap_polygon) =
                                 super::images::parse_wrap_type(container);
                             let (behind_doc, z_index) = super::images::anchor_z_order(container);
-                            let (_, dist_bottom) = super::images::wrap_dist_top_bottom(container);
+                            let (dist_top, dist_bottom) =
+                                super::images::wrap_dist_top_bottom(container);
+                            let (dist_left, dist_right) = super::images::wrap_dist_left_right(
+                                container,
+                                wrap_polygon.is_some(),
+                            );
                             textboxes.push(Textbox {
                                 width_pt: display_w,
                                 height_pt: display_h,
@@ -1111,7 +1179,11 @@ pub(super) fn collect_textboxes_from_paragraph<R: Read + std::io::Seek>(
                                 v_relative_from: v_relative,
                                 wrap_type,
                                 wrap_text,
+                                wrap_polygon,
+                                dist_top,
                                 dist_bottom,
+                                dist_left,
+                                dist_right,
                                 behind_doc,
                                 z_index,
                                 ..Textbox::from(wsp)

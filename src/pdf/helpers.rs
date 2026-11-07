@@ -208,22 +208,24 @@ pub(super) fn border_box_indents(p: &Paragraph) -> (f32, f32) {
     }
 }
 
-/// The paragraph's runs and those of the paragraphs in its textboxes, at any depth.
+/// The paragraph's runs and those of the paragraphs in its textboxes (and
+/// their tables), at any depth.
 pub(super) fn para_runs_with_textboxes(para: &Paragraph) -> Vec<&Run> {
     let mut out: Vec<&Run> = para.runs.iter().collect();
     for tb in &para.textboxes {
-        for tp in tb.content() {
+        for tp in tb.content().iter().chain(tb.table_paragraphs()) {
             out.extend(para_runs_with_textboxes(tp));
         }
     }
     out
 }
 
-/// The paragraph and the paragraphs of its textboxes, at any depth.
+/// The paragraph and the paragraphs of its textboxes (and their tables), at
+/// any depth.
 pub(super) fn collect_paras(para: &Paragraph) -> Vec<&Paragraph> {
     let mut out = vec![para];
     for tb in &para.textboxes {
-        for tp in tb.content() {
+        for tp in tb.content().iter().chain(tb.table_paragraphs()) {
             out.extend(collect_paras(tp));
         }
     }

@@ -1304,6 +1304,7 @@ pub(super) fn render_header_footer(
                     None,
                     None,
                     None,
+                    None,
                 );
                 // Frame paragraphs are out-of-flow: do not advance cursor_y
                 pi += 1;
@@ -1356,7 +1357,9 @@ pub(super) fn render_header_footer(
                 // lines (and all lines when there is no picture) paint early.
                 let defer_connectors = has_para_image
                     || para.runs.iter().any(|run| run.inline_image.is_some())
-                    || para.textboxes.iter().any(|tb| tb.fill.is_some() && tb.behind_doc);
+                    || para.textboxes.iter().any(|tb| {
+                        (tb.fill.is_some() || tb.picture_fill.is_some()) && tb.behind_doc
+                    });
                 let draw_connectors = |content: &mut Content, late_pass: bool| {
                     for connector in &para.connectors {
                         if (defer_connectors && !connector.behind_doc) != late_pass {
@@ -1542,10 +1545,26 @@ pub(super) fn render_header_footer(
                                     gradient_specs,
                                 );
                             }
+                            super::textbox_render::render_picture_fill(
+                                content,
+                                tb,
+                                (tb_x, tb_y_top - tb_height, tb.width_pt, tb_height),
+                                ctx,
+                            );
 
                             let content_x = tb_x + tb.margin_left;
                             let content_w =
                                 (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0);
+                            let hf_sub = super::table_layout::HfSubstitution {
+                                page_num,
+                                total_pages,
+                                section_pages,
+                                styleref_values,
+                                page_num_format,
+                            };
+                            let hf_table = |t| {
+                                super::table::TextboxTable::layout(t, content_w, ctx, Some(&hf_sub))
+                            };
 
                             // WordArt (a header watermark) draws its glyphs as warped
                             // outlines, as the body path does.
@@ -1638,7 +1657,12 @@ pub(super) fn render_header_footer(
                                             + tb_lines.len().max(1) as f32 * line_h
                                             + tp.space_after
                                     };
-                                    let total_h: f32 = tb.paragraphs.iter().map(tp_height).sum();
+                                    let tables: f32 = tb.tables
+                                        .iter()
+                                        .map(|(_, t)| hf_table(t).height())
+                                        .sum();
+                                    let total_h: f32 =
+                                        tb.paragraphs.iter().map(tp_height).sum::<f32>() + tables;
                                     let available =
                                         (tb_height - tb.margin_top - tb.margin_bottom).max(0.0);
                                     let gap = (available - total_h).max(0.0);
@@ -1650,7 +1674,22 @@ pub(super) fn render_header_footer(
                                 }
                             };
                             let mut tb_cursor = tb_y_top - tb.margin_top - anchor_offset;
-                            for tp in &tb.paragraphs {
+                            for (tp_idx, tp) in tb.paragraphs.iter().enumerate() {
+                                for (_, table) in tb.tables
+                                    .iter()
+                                    .filter(|(at, _)| *at == tp_idx)
+                                {
+                                    hf_table(table).render(
+                                        (content_x, content_w),
+                                        &mut tb_cursor,
+                                        content,
+                                        ctx,
+                                        gradient_specs,
+                                        links,
+                                        None,
+                                        Some(&hf_sub),
+                                    );
+                                }
                                 let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
                                 let tp_text_w =
                                     (content_w - tp.indent_left - tp.indent_right).max(1.0);
@@ -1765,6 +1804,7 @@ pub(super) fn render_header_footer(
                                     ctx.fonts,
                                     None,
                                     gradient_specs,
+                                    None,
                                     None,
                                     None,
                                     None,
@@ -2052,6 +2092,7 @@ pub(super) fn render_header_footer(
                     ctx.fonts,
                     hdr_line_geom.as_deref(),
                     gradient_specs,
+                    None,
                     None,
                     None,
                     None,

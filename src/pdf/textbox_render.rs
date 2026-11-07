@@ -5,7 +5,7 @@ use pdf_writer::Content;
 
 use crate::model::{
     EmbeddedImage, ImageGlow, ImageReflection, Paragraph, SectionProperties, ShapeFill,
-    ShapeGeometry, TextAnchor, Textbox,
+    ShapeGeometry, Table, TextAnchor, Textbox,
 };
 
 use super::color::{fill_rgb, set_fill_alpha, stroke_rgb};
@@ -17,6 +17,7 @@ use super::layout::{
 };
 use super::list_label::render_list_label;
 use super::positioning::resolve_h_position;
+use super::table::TextboxTable;
 use super::tagging::{Lists, Tags};
 use super::smartart::draw_shape_path;
 use super::wordart;
@@ -40,8 +41,15 @@ pub(super) fn textbox_para_block_image(tp: &Paragraph) -> Option<&EmbeddedImage>
     tp.runs.iter().find_map(|r| r.inline_image.as_ref())
 }
 
-fn image_block_height(img: &EmbeddedImage) -> f32 {
-    img.display_height + img.layout_extra_height
+/// A picture-only paragraph's height: the picture plus the leading its
+/// mark's font gets from multiple line spacing (Word: a 50pt picture in 10pt
+/// Calibri steps 50, 51.6 and 56.1 at 1, 1.13 and 1.5 lines).
+fn image_block_height(img: &EmbeddedImage, tp: &Paragraph, ctx: &RenderContext) -> f32 {
+    let leading = match tp.line_spacing.unwrap_or(ctx.doc_line_spacing) {
+        ls @ crate::model::LineSpacing::Auto(_) => picture_line_bottom(&tp.runs, tp, ctx.fonts, ls),
+        _ => 0.0,
+    };
+    img.display_height + img.layout_extra_height + leading
 }
 
 /// Rendered height of a textbox: the stored height, or for `a:spAutoFit` shapes the
@@ -50,26 +58,125 @@ fn image_block_height(img: &EmbeddedImage) -> f32 {
 /// 110.6pt default and paint over neighbouring shapes (japanese_land_development p1).
 pub(super) fn textbox_height(tb: &Textbox, ctx: &RenderContext) -> f32 {
     if matches!(tb.auto_fit, crate::model::AutoFit::Shape) {
-        let tmp_w = if tb.no_text_wrap {
-            10000.0
-        } else {
-            tb.text_area(0.0).0.max(0.0)
-        };
-        let h: f32 = tb
-            .paragraphs
-            .iter()
-            .map(|tp| tp.space_before + paragraph_body_height(tp, tmp_w, ctx) + tp.space_after)
-            .sum();
+        let area_w = tb.text_area(0.0).0.max(0.0);
+        let tmp_w = if tb.no_text_wrap { 10000.0 } else { area_w };
+        let h = StoryPart::whole(tb).height(tmp_w, area_w, ctx);
         h + tb.margin_top + tb.margin_bottom
     } else {
         tb.height_pt
     }
 }
 
+/// The part of a story a box shows: its paragraphs and the tables among
+/// them, each with the index of the shown paragraph it comes before (the
+/// paragraph count for tables whose paragraph a later box shows).
+pub(super) struct StoryPart<'t> {
+    pub(super) paragraphs: &'t [Paragraph],
+    tables: Vec<(usize, &'t Table)>,
+}
+
+#[derive(Clone, Copy)]
+enum Block<'t> {
+    Table(usize, &'t Table),
+    Para(usize),
+}
+
+/// A story's tables and paragraphs in reading order, each table before the
+/// paragraph whose index it carries.
+fn story_blocks<'t>(
+    paragraphs: &'t [Paragraph],
+    tables: &'t [(usize, Table)],
+) -> impl Iterator<Item = Block<'t>> {
+    (0..paragraphs.len()).flat_map(move |i| {
+        tables
+            .iter()
+            .filter(move |(at, _)| *at == i)
+            .map(|(at, t)| Block::Table(*at, t))
+            .chain(std::iter::once(Block::Para(i)))
+    })
+}
+
+impl<'t> StoryPart<'t> {
+    /// The box's own paragraphs and tables.
+    pub(super) fn whole(tb: &'t Textbox) -> Self {
+        Self::slice(&tb.paragraphs, &tb.tables, 0..usize::MAX)
+    }
+
+    /// The blocks in `range` of the story's `story_blocks`.
+    fn slice(
+        paragraphs: &'t [Paragraph],
+        tables: &'t [(usize, Table)],
+        range: std::ops::Range<usize>,
+    ) -> Self {
+        let mut first = None;
+        let mut end = 0;
+        let mut shown = Vec::new();
+        for block in story_blocks(paragraphs, tables)
+            .skip(range.start)
+            .take(range.len())
+        {
+            let at = match block {
+                Block::Table(at, t) => {
+                    shown.push((at, t));
+                    at
+                }
+                Block::Para(i) => {
+                    end = i + 1;
+                    i
+                }
+            };
+            first.get_or_insert(at);
+        }
+        let start = first.unwrap_or(0);
+        Self {
+            tables: shown.into_iter().map(|(at, t)| (at - start, t)).collect(),
+            paragraphs: &paragraphs[start..end.max(start)],
+        }
+    }
+
+    pub(super) fn is_empty(&self) -> bool {
+        self.paragraphs.is_empty() && self.tables.is_empty()
+    }
+
+    /// The story's height: its paragraphs with their spacing at text width
+    /// `text_w`, and its tables in a text area `area_w` wide.
+    fn height(&self, text_w: f32, area_w: f32, ctx: &RenderContext) -> f32 {
+        let paras: f32 = self
+            .paragraphs
+            .iter()
+            .map(|tp| tp.space_before + paragraph_body_height(tp, text_w, ctx) + tp.space_after)
+            .sum();
+        let tables: f32 = self
+            .tables
+            .iter()
+            .map(|(_, t)| TextboxTable::layout(t, area_w, ctx, None).height())
+            .sum();
+        paras + tables
+    }
+}
+
+/// How far a box's story starts below the top of its text area: Word centres
+/// or bottom-aligns it (anchor ctr/b) in the room it leaves in `avail_h`.
+pub(super) fn anchor_offset(
+    tb: &Textbox,
+    story: &StoryPart,
+    text_w: f32,
+    area_w: f32,
+    avail_h: f32,
+    ctx: &RenderContext,
+) -> f32 {
+    let gap = || (avail_h - story.height(text_w, area_w, ctx)).max(0.0);
+    match tb.text_anchor {
+        TextAnchor::Top => 0.0,
+        TextAnchor::Middle => gap() / 2.0,
+        TextAnchor::Bottom => gap(),
+    }
+}
+
 /// A textbox paragraph's height without its spacing, at text width `text_w`.
 fn paragraph_body_height(tp: &Paragraph, text_w: f32, ctx: &RenderContext) -> f32 {
     if let Some(img) = textbox_para_block_image(tp) {
-        return image_block_height(img);
+        return image_block_height(img, tp, ctx);
     }
     let tw = (text_w - tp.indent_left - tp.indent_right).max(1.0);
     let hang = if !tp.list_label.is_empty() {
@@ -91,8 +198,9 @@ fn paragraph_body_height(tp: &Paragraph, text_w: f32, ctx: &RenderContext) -> f3
     lines_height(&laid.lines, laid.line_h, laid.metrics)
 }
 
-/// A textbox paragraph's lines as they render: a box's anchor, a shape that
-/// fits its text and a linked box measure this height.
+/// A textbox paragraph's lines as they render, pictures included: the box's
+/// anchor centres or bottom-aligns this height (an oversized picture leaves
+/// nothing to share out, so the content starts at the top).
 struct BoxParagraph {
     lines: Vec<TextLine>,
     line_h: f32,
@@ -140,7 +248,7 @@ fn layout_box_paragraph(
     // Each line is as tall as its own runs, as in the body: air_pollution's
     // 10.5pt dot-leader line before a break steps 18.1 at 1.5 lines, not
     // the 20.7 of the paragraph's 12pt text.
-    if !matches!(ls, crate::model::LineSpacing::Exact(_)) {
+    if !lines.is_empty() && !matches!(ls, crate::model::LineSpacing::Exact(_)) {
         super::layout::size_lines_by_own_runs(
             &mut lines,
             ctx.fonts,
@@ -177,37 +285,59 @@ fn layout_box_paragraph(
 
 /// The part of its story a linked box shows: after what the boxes before it
 /// hold, and only what fits when a later box takes the rest (torture_test's
-/// second paragraph opens the right-hand box). ponytail: whole paragraphs;
-/// Word splits a story between lines.
-fn story_window<'t>(tb: &'t Textbox, height: f32, ctx: &RenderContext) -> &'t [Paragraph] {
+/// second paragraph opens the right-hand box). A box always keeps its first
+/// table or paragraph, also one taller than the box, and what follows moves
+/// on (text-box-table-linked-tall). ponytail: whole paragraphs and tables;
+/// Word splits a story between lines and table rows.
+pub(super) fn story_window<'t>(
+    tb: &'t Textbox,
+    height: f32,
+    ctx: &RenderContext,
+) -> StoryPart<'t> {
     let Some(link) = &tb.link else {
-        return &tb.paragraphs;
+        return StoryPart::whole(tb);
     };
     // A chain outside the body was never linked: its first box keeps the text.
-    let mut rest = if link.story.is_empty() {
-        &tb.paragraphs[..]
+    let (paras, tables) = if link.story.is_empty() {
+        (&tb.paragraphs[..], &tb.tables[..])
     } else {
-        &link.story[..]
+        (&link.story[..], &link.tables[..])
     };
+    let mut start = 0;
     for &area in &link.before {
-        rest = &rest[paragraphs_fitting(rest, area, ctx)..];
+        start += blocks_fitting(paras, tables, start, area, ctx);
     }
-    if !link.continues {
-        return rest;
-    }
-    &rest[..paragraphs_fitting(rest, tb.text_area(height), ctx)]
+    let end = if link.continues {
+        start + blocks_fitting(paras, tables, start, tb.text_area(height), ctx)
+    } else {
+        usize::MAX
+    };
+    StoryPart::slice(paras, tables, start..end)
 }
 
-/// How many of `paras` a text area holds, at least one when there are any.
-fn paragraphs_fitting(paras: &[Paragraph], (w, h): (f32, f32), ctx: &RenderContext) -> usize {
+/// How many of the story's blocks from `start` on a text area holds, at
+/// least one when there are any.
+fn blocks_fitting(
+    paras: &[Paragraph],
+    tables: &[(usize, Table)],
+    start: usize,
+    (w, h): (f32, f32),
+    ctx: &RenderContext,
+) -> usize {
     let mut used = 0.0;
     let mut n = 0;
-    for tp in paras {
-        let bottom = used + tp.space_before + paragraph_body_height(tp, w, ctx);
-        if n > 0 && bottom > h + 0.01 {
+    for block in story_blocks(paras, tables).skip(start) {
+        let (height, after) = match block {
+            Block::Table(_, t) => (TextboxTable::layout(t, w, ctx, None).height(), 0.0),
+            Block::Para(i) => (
+                paras[i].space_before + paragraph_body_height(&paras[i], w, ctx),
+                paras[i].space_after,
+            ),
+        };
+        if n > 0 && used + height > h + 0.01 {
             break;
         }
-        used = bottom + tp.space_after;
+        used += height + after;
         n += 1;
     }
     n
@@ -303,6 +433,23 @@ pub(super) fn stroke_textbox_outline(
     content.restore_state();
 }
 
+/// A text box's picture fill, stretched over `frame` (x, bottom, w, h) and
+/// clipped to the shape.
+pub(super) fn render_picture_fill(
+    content: &mut Content,
+    tb: &Textbox,
+    (x, y, w, h): (f32, f32, f32, f32),
+    ctx: &RenderContext,
+) {
+    if let Some(name) = tb
+        .picture_fill
+        .as_ref()
+        .and_then(|img| ctx.textbox_image_names.get(&img.key()))
+    {
+        super::smartart::render_image_with_clip(content, name, x, y, w, h, Some(&tb.shape_type));
+    }
+}
+
 pub(super) fn render_single_textbox(
     tb: &Textbox,
     sp: &SectionProperties,
@@ -324,6 +471,7 @@ pub(super) fn render_single_textbox(
     if tb.paragraphs.is_empty()
         && tb.link.is_none()
         && tb.fill.is_none()
+        && tb.picture_fill.is_none()
         && tb.stroke_color.is_none()
     {
         return;
@@ -339,13 +487,13 @@ pub(super) fn render_single_textbox(
         text_width,
     );
     let tb_height = textbox_height(tb, ctx);
-    let paragraphs = story_window(tb, tb_height, ctx);
+    let story = story_window(tb, tb_height, ctx);
     let tb_y_top = resolve_tb_y_top(tb.v_relative_from, &tb.v_position, tb_height, sp, slot_top);
     log::debug!(
         "TEXTBOX x={tb_x:.1} top={tb_y_top:.1} w={:.1} h={tb_height:.1} rot={} paras={}",
         tb.width_pt,
         tb.rotation_deg,
-        paragraphs.len()
+        story.paragraphs.len()
     );
     let rotated =
         rotate_about_center(content, tb.rotation_deg, tb_x, tb_y_top, tb.width_pt, tb_height);
@@ -370,6 +518,7 @@ pub(super) fn render_single_textbox(
             gradient_specs,
         );
     }
+    render_picture_fill(content, tb, frame, ctx);
 
     stroke_textbox_outline(content, tb, tb_x, tb_y_top - tb_height, tb.width_pt, tb_height);
 
@@ -391,7 +540,7 @@ pub(super) fn render_single_textbox(
     let content_w = if tb.no_text_wrap { 10000.0 } else { natural_w };
     let align_w = natural_w;
 
-    // Clip text content to textbox bounds for fixed-size textboxes (Word clips overflow)
+    // WordArt uses the full frame height, including the vertical insets.
     let needs_clip = !matches!(tb.auto_fit, crate::model::AutoFit::Shape);
     if needs_clip {
         content.save_state();
@@ -426,24 +575,22 @@ pub(super) fn render_single_textbox(
         }
     }
 
-    let anchor_offset = match tb.text_anchor {
-        TextAnchor::Top => 0.0,
-        TextAnchor::Middle | TextAnchor::Bottom => {
-            let total_h: f32 = paragraphs
-                .iter()
-                .map(|tp| {
-                    tp.space_before + paragraph_body_height(tp, content_w, ctx) + tp.space_after
-                })
-                .sum();
-            let available = txt_h - tb.margin_top - tb.margin_bottom;
-            let gap = (available - total_h).max(0.0);
-            match tb.text_anchor {
-                TextAnchor::Middle => gap / 2.0,
-                TextAnchor::Bottom => gap,
-                TextAnchor::Top => 0.0,
-            }
-        }
-    };
+    // Word clips a box's text to its height inside the top and bottom insets,
+    // and a standalone box's pictures to the text area, insets on all sides
+    // (a group draws them out to the box's left and right edges).
+    let inner_bottom = tb_y_top - tb_height + txt_b + tb.margin_bottom;
+    let inner_h = (text_top - tb.margin_top - inner_bottom).max(0.0);
+    if needs_clip {
+        content.rect(tb_x, inner_bottom, tb.width_pt, inner_h);
+        content.clip_nonzero();
+        content.end_path();
+    }
+    let picture_clip =
+        (needs_clip && !tb.in_group).then_some((content_x, inner_bottom, natural_w, inner_h));
+
+    let available = txt_h - tb.margin_top - tb.margin_bottom;
+    let anchor_offset = anchor_offset(tb, &story, content_w, natural_w, available, ctx);
+
 
     // For fixed-size textboxes, stop rendering content below the textbox bounds
     let clip_bottom = if needs_clip {
@@ -461,7 +608,7 @@ pub(super) fn render_single_textbox(
         content.set_text_rendering_mode(pdf_writer::types::TextRenderingMode::Stroke);
         let mut discard_links: Vec<LinkAnnotation> = Vec::new();
         render_textbox_paragraphs(
-            paragraphs,
+            &story,
             content,
             content_x,
             content_w,
@@ -477,6 +624,7 @@ pub(super) fn render_single_textbox(
             gradient_specs,
             None,
             None,
+            picture_clip,
         );
         content.restore_state();
     }
@@ -492,7 +640,7 @@ pub(super) fn render_single_textbox(
         ];
         let mut discard_links: Vec<LinkAnnotation> = Vec::new();
         render_textbox_paragraphs(
-            paragraphs,
+            &story,
             content,
             content_x,
             content_w,
@@ -508,12 +656,13 @@ pub(super) fn render_single_textbox(
             gradient_specs,
             None,
             None,
+            picture_clip,
         );
         content.restore_state();
     }
 
     render_textbox_paragraphs(
-        paragraphs,
+        &story,
         content,
         content_x,
         content_w,
@@ -527,8 +676,9 @@ pub(super) fn render_single_textbox(
         ctx,
         clip_bottom,
         gradient_specs,
-        Some((tags, page, sect)),
+        Some(StoryTag { tags, page, sect }),
         None,
+        picture_clip,
     );
 
     if needs_clip {
@@ -559,11 +709,17 @@ pub(super) fn rotate_about_center(
     true
 }
 
+pub(super) struct StoryTag<'a> {
+    pub(super) tags: &'a mut Tags,
+    pub(super) page: usize,
+    pub(super) sect: usize,
+}
+
 /// Shared paragraph iteration loop used by the glow, shadow, and normal text passes
 /// within a textbox. Each pass differs only in positional offsets, forced color override,
 /// and whether list labels are rendered.
 pub(super) fn render_textbox_paragraphs(
-    paragraphs: &[Paragraph],
+    story: &StoryPart,
     content: &mut Content,
     content_x: f32,
     content_w: f32,
@@ -579,13 +735,46 @@ pub(super) fn render_textbox_paragraphs(
     gradient_specs: &mut Vec<GradientSpec>,
     // As in `render_single_textbox`; each paragraph becomes a P or H1–H6
     // (a list paragraph an LI) in the Sect.
-    mut tag: Option<(&mut Tags, usize, usize)>,
+    mut tag: Option<StoryTag>,
     hf_sub: Option<&super::table_layout::HfSubstitution>,
+    // (x, y, w, h) a paragraph holding a picture is clipped to.
+    picture_clip: Option<(f32, f32, f32, f32)>,
 ) {
     let mut cursor_y = start_y;
     let mut prev_space_after = 0.0f32;
     let mut lists = Lists::default();
-    for (tp_idx, tp) in paragraphs.iter().enumerate() {
+    for tp_idx in 0..=story.paragraphs.len() {
+        for (_, table) in story.tables.iter().filter(|(at, _)| *at == tp_idx) {
+            cursor_y -= prev_space_after;
+            prev_space_after = 0.0;
+            if clip_bottom.is_some_and(|bottom| cursor_y < bottom) {
+                return;
+            }
+            let layout = TextboxTable::layout(table, align_w, ctx, hf_sub);
+            if render_labels {
+                let mut y = cursor_y - y_offset;
+                let tag = tag.as_mut().map(|t| StoryTag {
+                    tags: &mut *t.tags,
+                    page: t.page,
+                    sect: t.sect,
+                });
+                layout.render(
+                    (content_x + x_offset, align_w),
+                    &mut y,
+                    content,
+                    ctx,
+                    gradient_specs,
+                    links,
+                    tag,
+                    hf_sub,
+                );
+                lists = Lists::default();
+            }
+            cursor_y -= layout.height();
+        }
+        let Some(tp) = story.paragraphs.get(tp_idx) else {
+            break;
+        };
         // Collapse adjacent spacing: use max(prev_after, current_before) like body text
         let inter_gap = if tp_idx == 0 {
             tp.space_before
@@ -600,7 +789,7 @@ pub(super) fn render_textbox_paragraphs(
         }
         // Word keeps empty and picture-only paragraphs as empty P elements.
         // (Lbl, text element) as in the body: see `para_tags`.
-        let tag_nodes = tag.as_mut().map(|(tags, _, sect)| {
+        let tag_nodes = tag.as_mut().map(|StoryTag { tags, sect, .. }| {
             let item = tp.list_item.filter(|_| tp.outline_level.is_none());
             // Word tags headings in textboxes too (never in table cells).
             let style_name = tp
@@ -637,10 +826,11 @@ pub(super) fn render_textbox_paragraphs(
                 // The paragraph's P stays empty and the picture follows it as
                 // a Figure in the Sect, as in the body.
                 let figure = tag.as_mut().filter(|_| !img.decorative);
-                if let Some((tags, page, sect)) = figure {
+                if let Some(StoryTag { tags, page, sect }) = figure {
                     let figure = tags.add_figure(*sect, img.alt.as_deref());
                     tags.begin(content, *page, figure);
                 }
+                let clipped = super::layout::push_clip(content, picture_clip);
                 super::smartart::render_image_with_clip(
                     content,
                     pdf_name,
@@ -650,11 +840,14 @@ pub(super) fn render_textbox_paragraphs(
                     img.display_height,
                     img.clip_geometry.as_ref(),
                 );
+                if clipped {
+                    content.restore_state();
+                }
                 if tag.is_some() && !img.decorative {
                     Tags::end(content);
                 }
             }
-            cursor_y -= inter_gap + img.display_height + img.layout_extra_height;
+            cursor_y -= inter_gap + image_block_height(img, tp, ctx);
             prev_space_after = tp.space_after;
             continue;
         }
@@ -701,7 +894,9 @@ pub(super) fn render_textbox_paragraphs(
             }
         };
         match tag.as_mut().zip(tag_nodes) {
-            Some(((tags, page, _), nodes)) => tags.begin_para(content, *page, nodes, draw_label),
+            Some((StoryTag { tags, page, .. }, nodes)) => {
+                tags.begin_para(content, *page, nodes, draw_label)
+            }
             None => draw_label(content),
         }
         render_paragraph_lines(
@@ -727,7 +922,8 @@ pub(super) fn render_textbox_paragraphs(
             None,
             tag.as_mut()
                 .zip(para_tag)
-                .map(|((tags, page, _), p)| LinkTagger::new(tags, *page, p)),
+                .map(|(StoryTag { tags, page, .. }, p)| LinkTagger::new(tags, *page, p)),
+            picture_clip,
         );
         if para_tag.is_some() {
             Tags::end(content);

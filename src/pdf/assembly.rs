@@ -136,6 +136,7 @@ pub(super) fn assemble_pdf_pages(
     valign_offsets: Vec<f32>,
     all_contents: Vec<Content>,
     all_deferred_shapes: Vec<Vec<(u32, Content)>>,
+    all_behind_shapes: Vec<Vec<(u32, Content)>>,
     all_hf_contents: &mut [Option<Content>],
     all_page_links: &[Vec<LinkAnnotation>],
     all_page_comment_anchors: &[Vec<(u32, f32, f32, f32)>],
@@ -316,8 +317,13 @@ pub(super) fn assemble_pdf_pages(
         .collect();
 
     let mut all_deferred_shapes = all_deferred_shapes.into_iter();
+    let mut all_behind_shapes = all_behind_shapes.into_iter();
     for (i, c) in all_contents.into_iter().enumerate() {
-        let mut body_raw = super::tagging::finish_artifact_content(c);
+        let mut body_raw = Vec::new();
+        for (_, shape) in all_behind_shapes.next().into_iter().flatten() {
+            body_raw.extend_from_slice(&super::tagging::finish_artifact_content(shape));
+        }
+        body_raw.extend_from_slice(&super::tagging::finish_artifact_content(c));
         // Anchored shapes paint above the page's text layer, pre-sorted by
         // relativeHeight at flush time
         // Each buffer opens inside an artifact (tagging::artifact_content) so

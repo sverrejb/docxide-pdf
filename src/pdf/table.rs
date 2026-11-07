@@ -16,12 +16,16 @@ use super::layout::{LinkAnnotation, LinkTagger, encode_text_for_pdf, render_para
 use super::table_layout::{
     CELL_START, CellContentItem, CellCursor, CellFloatingImageLayout, CellLayout,
     CellParagraphLayout, Chunk, HfSubstitution, RowLayout, RowPiece, apply_pct_width,
-    auto_fit_columns, cell_span_width, cell_x_offset, chunk_space_before, compute_merge_spans,
-    compute_row_layouts, cursor_chunks, find_cell_split, fixed_columns,
+    auto_fit_columns, autofit_min_widths, cell_span_width, cell_x_offset, chunk_space_before,
+    compute_merge_spans, compute_row_layouts, cursor_chunks, find_cell_split, fixed_columns,
     item_chunk_height, keep_chain_end, min_content_widths, para_block_height,
     partial_row_height, row_pieces, squeeze_to_width,
 };
 use super::tagging::{CellTagger, TableTags, Tags};
+
+/// The page's behind-text layer when a table draws into the body: its cells'
+/// behind-text drawings go there instead of in place.
+type BehindLayer<'a> = Option<&'a mut Vec<(u32, Content)>>;
 
 fn draw_border(content: &mut Content, border: &CellBorder, x1: f32, y1: f32, x2: f32, y2: f32) {
     if !border.present {
@@ -189,6 +193,9 @@ fn draw_hatch(
     content.restore_state();
 }
 
+/// Word shades a cell up to the inner edge of each of its own borders (a thick
+/// top border does not thin the shading at the other edges); the neighbours'
+/// borders paint over it.
 fn draw_cell_shading(
     content: &mut Content,
     shading: Option<[u8; 3]>,
@@ -199,17 +206,17 @@ fn draw_cell_shading(
     w: f32,
     h: f32,
 ) {
-    let bw = |b: &crate::model::CellBorder| if b.present { b.width } else { 0.0 };
-    let inset =
-        (bw(&borders.top) + bw(&borders.bottom) + bw(&borders.left) + bw(&borders.right)) / 8.0;
+    let half = |b: &crate::model::CellBorder| if b.present { b.width / 2.0 } else { 0.0 };
+    let (top, bottom) = (half(&borders.top), half(&borders.bottom));
+    let (left, right) = (half(&borders.left), half(&borders.right));
     paint_cell_background(
         content,
         shading,
         hatch,
-        x + inset,
-        y + inset,
-        w - 2.0 * inset,
-        h - 2.0 * inset,
+        x + left,
+        y + bottom,
+        w - left - right,
+        h - top - bottom,
     );
 }
 
@@ -478,6 +485,7 @@ fn render_cell_content(
     links: &mut Vec<LinkAnnotation>,
     mut tagger: Option<CellTagger<'_>>,
     hf_sub: Option<&HfSubstitution>,
+    mut behind: BehindLayer<'_>,
 ) {
     let mut cursor_y = cursor_y_start;
     let mut block_idx = 0;
@@ -546,12 +554,27 @@ fn render_cell_content(
                         .chain(p.textboxes.iter().map(|t| t.z_index))
                         .max()
                 });
-                let above_shapes =
-                    |fi: &&CellFloatingImageLayout| shape_z.is_some_and(|z| fi.z_index > z);
-                for fi in para.floating_images.iter().filter(|fi| !above_shapes(fi)) {
-                    cell_figure(content, &mut tagger, cell_para, fi.tagging(), |c| {
-                        draw_cell_float(c, fi, cell_x, float_y)
-                    });
+                let layered = behind.is_some();
+                let above_shapes = |fi: &&CellFloatingImageLayout| {
+                    !(layered && fi.behind_doc) && shape_z.is_some_and(|z| fi.z_index > z)
+                };
+                // Tag the behind layer first, preserving the cell's reading
+                // order even when a front picture comes first in the paragraph.
+                let behind_floats = para.floating_images.iter().filter(|fi| layered && fi.behind_doc);
+                let front_floats = para
+                    .floating_images
+                    .iter()
+                    .filter(|fi| !(layered && fi.behind_doc) && !above_shapes(fi));
+                for fi in behind_floats.chain(front_floats) {
+                    place_cell_float(
+                        content,
+                        &mut behind,
+                        &mut tagger,
+                        cell_para,
+                        fi,
+                        cell_x,
+                        float_y,
+                    );
                 }
 
                 if let Some(ref img_name) = para.image_name {
@@ -641,6 +664,7 @@ fn render_cell_content(
                     Some(&mut ctx.cell_comment_anchors.borrow_mut()),
                     None,
                     cell_link_tagger(&mut tagger, cell_para),
+                    None,
                 );
                 if picture_clip {
                     content.restore_state();
@@ -663,6 +687,7 @@ fn render_cell_content(
                         links,
                         &mut tagger,
                         hf_sub,
+                        behind.as_deref_mut(),
                     );
                 }
                 for fi in para.floating_images.iter().filter(above_shapes) {
@@ -711,6 +736,7 @@ fn render_cell_content(
                             from: &[],
                             to: &[],
                         },
+                        behind.as_deref_mut(),
                     );
                     if floating_offset.is_some() {
                         cursor_y = saved_y;
@@ -775,6 +801,28 @@ fn draw_cell_float(content: &mut Content, fi: &CellFloatingImageLayout, cell_x: 
     content.restore_state();
 }
 
+/// A picture floating in a cell: a behind-text one drawn on its own for the
+/// page's behind-text layer, any other in place.
+fn place_cell_float(
+    content: &mut Content,
+    behind: &mut BehindLayer<'_>,
+    tagger: &mut Option<CellTagger<'_>>,
+    cell_para: Option<usize>,
+    fi: &CellFloatingImageLayout,
+    cell_x: f32,
+    para_y: f32,
+) {
+    let draw = |c: &mut Content| draw_cell_float(c, fi, cell_x, para_y);
+    match behind.as_deref_mut().filter(|_| fi.behind_doc) {
+        Some(layer) => {
+            let mut shape = super::tagging::artifact_content();
+            cell_figure(&mut shape, tagger, None, fi.tagging(), draw);
+            layer.push((fi.z_index, shape));
+        }
+        None => cell_figure(content, tagger, cell_para, fi.tagging(), draw),
+    }
+}
+
 /// Render floating textboxes and connectors anchored to a cell paragraph.
 fn render_cell_floating_shapes(
     content: &mut Content,
@@ -787,6 +835,7 @@ fn render_cell_floating_shapes(
     links: &mut Vec<LinkAnnotation>,
     tagger: &mut Option<CellTagger<'_>>,
     hf_sub: Option<&HfSubstitution>,
+    mut behind: BehindLayer<'_>,
 ) {
     use super::positioning::render_connector;
 
@@ -805,24 +854,22 @@ fn render_cell_floating_shapes(
         let h_off = tb.h_position.place(0.0, col_w, tb.width_pt);
         let tb_x = cell_x + h_off;
         let tb_y_top = para_top - tb.v_offset_pt;
-        let tag = tagger
-            .as_mut()
-            .filter(|_| !tb.paragraphs.is_empty())
-            .map(|t| {
-                let sect = t.sect();
-                (&mut *t.tags, t.page, sect)
-            });
+        let layer = behind.as_deref_mut().filter(|_| tb.behind_doc);
+        let mut shape = layer.is_some().then(super::tagging::artifact_content);
         render_simple_textbox(
-            content,
+            shape.as_mut().unwrap_or(&mut *content),
             tb,
             tb_x,
             tb_y_top,
             ctx,
             gradient_specs,
             links,
-            tag,
+            tagger.as_mut(),
             hf_sub,
         );
+        if let Some((layer, shape)) = layer.zip(shape) {
+            layer.push((tb.z_index, shape));
+        }
     }
 }
 
@@ -836,8 +883,8 @@ fn render_simple_textbox(
     ctx: &RenderContext,
     gradient_specs: &mut Vec<super::GradientSpec>,
     links: &mut Vec<LinkAnnotation>,
-    // As in `render_textbox_paragraphs`: the Sect the text is tagged in.
-    tag: Option<(&mut Tags, usize, usize)>,
+    // Tags the box's part of its story in a Sect of the cell.
+    tagger: Option<&mut CellTagger<'_>>,
     hf_sub: Option<&HfSubstitution>,
 ) {
     use super::smartart::draw_shape_path;
@@ -862,6 +909,12 @@ fn render_simple_textbox(
         content.fill_nonzero();
         content.restore_state();
     }
+    super::textbox_render::render_picture_fill(
+        content,
+        tb,
+        (tb_x, tb_y_top - tb_height, tb_width, tb_height),
+        ctx,
+    );
 
     super::textbox_render::stroke_textbox_outline(
         content,
@@ -873,27 +926,55 @@ fn render_simple_textbox(
     );
 
     // Text: route through the shared textbox renderer (same path as body
-    // textboxes).
+    // textboxes), anchored and clipped like a body box.
+    let story = super::textbox_render::story_window(tb, tb_height, ctx);
+    let tag = tagger
+        .filter(|_| !story.is_empty())
+        .map(|t| super::textbox_render::StoryTag {
+            sect: t.sect(),
+            tags: &mut *t.tags,
+            page: t.page,
+        });
     let content_x = tb_x + tb.margin_left;
     let content_w = (tb_width - tb.margin_left - tb.margin_right).max(0.0);
+    let avail_h = tb_height - tb.margin_top - tb.margin_bottom;
+    let anchor_offset =
+        super::textbox_render::anchor_offset(tb, &story, content_w, content_w, avail_h, ctx);
+    // Word clips a fixed-size box's text inside its top and bottom insets.
+    let clip = !matches!(tb.auto_fit, crate::model::AutoFit::Shape);
+    if clip {
+        content.save_state();
+        content.rect(
+            tb_x,
+            tb_y_top - tb_height + tb.margin_bottom,
+            tb_width,
+            avail_h.max(0.0),
+        );
+        content.clip_nonzero();
+        content.end_path();
+    }
     render_textbox_paragraphs(
-        &tb.paragraphs,
+        &story,
         content,
         content_x,
         content_w,
         content_w,
-        tb_y_top - tb.margin_top,
+        tb_y_top - tb.margin_top - anchor_offset,
         0.0,
         0.0,
         None,
         true,
         links,
         ctx,
-        None,
+        clip.then_some(tb_y_top - tb_height),
         gradient_specs,
         tag,
         hf_sub,
+        None,
     );
+    if clip {
+        content.restore_state();
+    }
 }
 
 /// Per-line (x, width) for a cell paragraph whose first lines run beside a
@@ -938,6 +1019,7 @@ fn render_table_rows(
     mut tag: Option<(&mut Tags, &mut TableTags, usize)>,
     rows: std::ops::Range<usize>,
     hf_sub: Option<&HfSubstitution>,
+    mut behind: BehindLayer<'_>,
 ) {
     for (ri, (row, layout)) in table
         .rows
@@ -976,14 +1058,15 @@ fn render_table_rows(
             let merge_extra = merge_spans.get(&(ri, grid_col)).copied().unwrap_or(0.0);
             let effective_h = row_h + merge_extra;
 
-            paint_cell_background(
+            draw_cell_shading(
                 content,
                 cell.shading,
                 cell.hatch,
+                &cell.borders,
                 cx,
-                row_bottom,
+                row_top - effective_h,
                 col_w,
-                row_h,
+                effective_h,
             );
 
             if cell_has_visible_content(&cell_layout.items) {
@@ -1008,6 +1091,7 @@ fn render_table_rows(
                     links,
                     tagger,
                     hf_sub,
+                    behind.as_deref_mut(),
                 );
             } else if let Some(t) = tagger {
                 t.empty_para(content);
@@ -1067,6 +1151,7 @@ fn render_nested_table(
     tagger: &mut Option<CellTagger<'_>>,
     (col_widths, row_layouts): (&[f32], &[RowLayout]),
     chunk: &Chunk,
+    mut behind: BehindLayer<'_>,
 ) {
     let table_total_w: f32 = col_widths.iter().sum();
     // A margin/text-anchored float's centre or right position overrides jc.
@@ -1117,6 +1202,7 @@ fn render_nested_table(
                 reborrow(&mut tag),
                 range,
                 None,
+                behind.as_deref_mut(),
             ),
             RowPiece::Partial { row, starts, ends } => render_partial_row(
                 &table.rows[row],
@@ -1132,6 +1218,7 @@ fn render_nested_table(
                 starts,
                 ends,
                 row,
+                behind.as_deref_mut(),
             ),
         }
     }
@@ -1154,6 +1241,7 @@ fn render_partial_cell_content(
     gradient_specs: &mut Vec<super::GradientSpec>,
     links: &mut Vec<LinkAnnotation>,
     mut tagger: Option<CellTagger<'_>>,
+    mut behind: BehindLayer<'_>,
 ) {
     let mut cursor_y = cursor_y_start;
     let mut reanchor_shift = 0.0;
@@ -1208,9 +1296,15 @@ fn render_partial_cell_content(
                 // paragraph's first line; a continuation chunk has neither.
                 if l0 == 0 {
                     for fi in &para.floating_images {
-                        cell_figure(content, &mut tagger, cell_para, fi.tagging(), |c| {
-                            draw_cell_float(c, fi, cell_x, cursor_y)
-                        });
+                        place_cell_float(
+                            content,
+                            &mut behind,
+                            &mut tagger,
+                            cell_para,
+                            fi,
+                            cell_x,
+                            cursor_y,
+                        );
                     }
                 }
 
@@ -1280,6 +1374,7 @@ fn render_partial_cell_content(
                     Some(&mut ctx.cell_comment_anchors.borrow_mut()),
                     None,
                     cell_link_tagger(&mut tagger, cell_para),
+                    None,
                 );
                 if picture_clip {
                     content.restore_state();
@@ -1346,6 +1441,7 @@ fn render_partial_cell_content(
                         &mut tagger,
                         (col_widths, rows),
                         &chunk,
+                        behind.as_deref_mut(),
                     );
                     if floating_offset.is_some() {
                         cursor_y = saved_y;
@@ -1524,6 +1620,7 @@ fn render_table_row(
                 },
                 tagger,
                 None,
+                Some(&mut pb.behind_shapes),
             );
             move_cell_comment_anchors(ctx, &mut pb.comment_anchors);
         }
@@ -1699,6 +1796,7 @@ fn render_partial_row(
     starts: &[CellCursor],
     ends: &[CellCursor],
     row_idx: usize,
+    mut behind: BehindLayer<'_>,
 ) {
     let row_top = *cursor_y;
     let row_h = partial_row_height(layout, starts, ends);
@@ -1763,6 +1861,7 @@ fn render_partial_row(
                 gradient_specs,
                 links,
                 tagger,
+                behind.as_deref_mut(),
             );
         } else if let Some(t) = tagger.filter(|_| *start == CELL_START) {
             t.empty_para(content);
@@ -1835,6 +1934,24 @@ pub(super) fn word2013_border_shift(table: &Table) -> f32 {
     table
         .first_cell()
         .map_or(0.0, |c| c.borders.left.band() / 2.0)
+}
+
+/// The outer border bands sit inside a table's flow height: the top band
+/// starts where the previous text ends and the next paragraph starts below
+/// the bottom band. The row insets hold the inner halves (docx::tables).
+fn outer_band(row: Option<&TableRow>, top: bool) -> f32 {
+    row.map_or(0.0, |r| {
+        r.cells
+            .iter()
+            .map(|c| {
+                if top {
+                    c.borders.top.band()
+                } else {
+                    c.borders.bottom.band()
+                }
+            })
+            .fold(0.0f32, f32::max)
+    })
 }
 
 /// A non-floating table's left edge in the area it is aligned in.
@@ -2016,23 +2133,6 @@ pub(super) fn render_table(
             pb.float_zone = None;
         }
     }
-    // The outer border bands sit inside the table's flow height: the top band
-    // starts where the previous text ends and the next paragraph starts below
-    // the bottom band. The row insets hold the inner halves (docx::tables).
-    let outer_band = |row: Option<&crate::model::TableRow>, top: bool| {
-        row.map_or(0.0, |r| {
-            r.cells
-                .iter()
-                .map(|c| {
-                    if top {
-                        c.borders.top.band()
-                    } else {
-                        c.borders.bottom.band()
-                    }
-                })
-                .fold(0.0f32, f32::max)
-        })
-    };
     pb.slot_top -= outer_band(table.rows.first(), true) / 2.0;
 
     // Count contiguous header rows from the start of the table (per OOXML spec,
@@ -2155,6 +2255,7 @@ pub(super) fn render_table(
                 &starts,
                 &ends,
                 ri,
+                Some(&mut pb.behind_shapes),
             );
             move_cell_comment_anchors(ctx, &mut pb.comment_anchors);
 
@@ -2649,9 +2750,110 @@ pub(super) fn render_header_footer_table(
         None,
         0..usize::MAX,
         Some(&hf_sub),
+        None,
     );
     // ponytail: header/footer cells get no balloons (the pane anchors body text only).
     ctx.cell_comment_anchors.borrow_mut().clear();
+}
+
+/// A table in a text box lays out like a top-level one in a text column as
+/// wide as the box's text area: Word fits auto and percentage widths to that
+/// area, squeezing an auto-width table's wider grid into it down to its
+/// longest words, and lets a fixed or dxa grid run past it.
+pub(super) struct TextboxTable<'t> {
+    table: &'t Table,
+    col_widths: Vec<f32>,
+    rows: Vec<RowLayout>,
+}
+
+impl<'t> TextboxTable<'t> {
+    pub(super) fn layout(
+        table: &'t Table,
+        area_w: f32,
+        ctx: &RenderContext,
+        hf_sub: Option<&HfSubstitution>,
+    ) -> Self {
+        let mut col_widths = if table.fixed_layout {
+            table.col_widths.clone()
+        } else {
+            let mut widths = auto_fit_columns(table, ctx.fonts, None, Some(area_w));
+            if table.auto_width {
+                // Columns keep their longest word and widest picture: a table
+                // that cannot shrink enough runs past the area.
+                let min = autofit_min_widths(table, ctx.fonts);
+                for (w, m) in widths.iter_mut().zip(&min) {
+                    *w = w.max(*m);
+                }
+                let floor: f32 = min.iter().sum();
+                squeeze_to_width(&mut widths, &min, area_w.max(floor));
+            }
+            widths
+        };
+        apply_pct_width(table, &mut col_widths, area_w, ctx.compat_mode);
+        let rows = compute_row_layouts(table, &col_widths, ctx, hf_sub);
+        Self {
+            table,
+            col_widths,
+            rows,
+        }
+    }
+
+    pub(super) fn height(&self) -> f32 {
+        let rows: f32 = self.rows.iter().map(|r| r.height).sum();
+        rows + (outer_band(self.table.rows.first(), true)
+            + outer_band(self.table.rows.last(), false))
+            / 2.0
+    }
+
+    /// Draws the table from `cursor_y` down in the text area `area`, tagged
+    /// as a Table in `tag`'s Sect.
+    pub(super) fn render(
+        &self,
+        area: (f32, f32),
+        cursor_y: &mut f32,
+        content: &mut Content,
+        ctx: &RenderContext,
+        gradient_specs: &mut Vec<super::GradientSpec>,
+        links: &mut Vec<LinkAnnotation>,
+        tag: Option<super::textbox_render::StoryTag>,
+        hf_sub: Option<&HfSubstitution>,
+    ) {
+        let total_w: f32 = self.col_widths.iter().sum();
+        let left = aligned_table_left(self.table, area, total_w, ctx.compat_mode);
+        let merge_spans = compute_merge_spans(self.table, &self.rows);
+        *cursor_y -= outer_band(self.table.rows.first(), true) / 2.0;
+        // ponytail: no comment balloons for text box cells; an enclosing
+        // table keeps the anchors it collected.
+        let anchors = ctx.cell_comment_anchors.borrow().len();
+        let mut draw = |tag| {
+            render_table_rows(
+                self.table,
+                &self.rows,
+                &self.col_widths,
+                left,
+                &merge_spans,
+                content,
+                cursor_y,
+                ctx,
+                gradient_specs,
+                links,
+                tag,
+                0..usize::MAX,
+                hf_sub,
+                None,
+            )
+        };
+        match tag {
+            Some(super::textbox_render::StoryTag { tags, page, sect }) => {
+                let mut table_tags = TableTags::for_table(tags, sect, self.table);
+                draw(Some((&mut *tags, &mut table_tags, page)));
+                table_tags.finish(tags);
+            }
+            None => draw(None),
+        }
+        ctx.cell_comment_anchors.borrow_mut().truncate(anchors);
+        *cursor_y -= outer_band(self.table.rows.last(), false) / 2.0;
+    }
 }
 
 /// Moves the anchors the cell renderers collected onto the page, merging a

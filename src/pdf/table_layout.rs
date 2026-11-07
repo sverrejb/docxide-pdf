@@ -636,6 +636,17 @@ fn cell_preferred_widths(
         .then_some(widths)
 }
 
+/// Each grid column's narrowest auto-fit width: its longest word, and at
+/// least its widest picture, since a picture never wraps (advocacy's nested
+/// picture table collapsed to its padding, the picture clipped away).
+pub(super) fn autofit_min_widths(table: &Table, fonts: &HashMap<String, FontEntry>) -> Vec<f32> {
+    min_content_widths(table, fonts)
+        .iter()
+        .zip(hard_content_widths(table, false))
+        .map(|(text, hard)| text.max(hard))
+        .collect()
+}
+
 /// `fill_width`, when `Some`, is the content width a top-level AutoFit-to-Window
 /// table should fill. It is kept separate from `available_width` (which drives
 /// the nested-table shrink path) so passing a fill target does not accidentally
@@ -663,13 +674,7 @@ pub(super) fn auto_fit_columns(
     }
 
     let cm = &table.cell_margins;
-    // A picture never wraps: its column is at least that wide (advocacy's
-    // nested picture table collapsed to its padding, the picture clipped away).
-    let min_widths: Vec<f32> = min_content_widths(table, fonts)
-        .iter()
-        .zip(hard_content_widths(table, false))
-        .map(|(text, hard)| text.max(hard))
-        .collect();
+    let min_widths = autofit_min_widths(table, fonts);
 
     // Word's AutoFit (tblLayout=autofit, the default) ignores the stored
     // gridCol widths for a `tblW type="auto"` table and re-derives column
@@ -960,6 +965,7 @@ pub(super) struct CellFloatingImageLayout {
     /// wp:anchor relativeHeight, so a cell picture can paint over a
     /// connector/textbox anchored in the same paragraph (annotation #241).
     pub(super) z_index: u32,
+    pub(super) behind_doc: bool,
     /// The picture's `docPr@descr` and decorative flag, for tagging.
     pub(super) alt: Option<String>,
     pub(super) decorative: bool,
@@ -1954,6 +1960,7 @@ pub(super) fn compute_row_layouts(
                                             v_offset,
                                             rotation_deg: fi.image.rotation_deg,
                                             z_index: fi.z_index,
+                                            behind_doc: fi.behind_doc,
                                             alt: fi.image.alt.clone(),
                                             decorative: fi.image.decorative,
                                         })

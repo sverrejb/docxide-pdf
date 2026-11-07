@@ -377,6 +377,7 @@ fn render_notes_downward(
                     None,
                     None,
                     Some(LinkTagger::new(notes.tags, notes.page, p)),
+                    None,
                 );
                 super::tagging::Tags::end(content);
 

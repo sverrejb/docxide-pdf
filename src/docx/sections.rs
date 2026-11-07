@@ -267,6 +267,7 @@ fn resolve_hf<R: Read + Seek>(
         comments: Default::default(),
         fields: Default::default(),
         grid_char_delta: 0.0,
+        in_text_box: false,
     };
     parse_header_footer_xml(&xml_text, &mut hf_ctx)
 }

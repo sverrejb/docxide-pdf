@@ -149,51 +149,14 @@ pub(crate) fn resolve_fi_y_top(fi: &FloatingImage, sp: &SectionProperties, slot_
     }
 }
 
-pub(super) fn render_floating_images(
-    floating_images: &[FloatingImage],
-    behind_doc: bool,
-    global_block_idx: usize,
-    pdf_names: &HashMap<(usize, usize), String>,
-    effect_pdf_names: &HashMap<(usize, usize), super::images::EffectXObjs>,
-    sp: &SectionProperties,
-    col_x: f32,
-    col_w: f32,
-    text_width: f32,
-    anchor: super::ParaAnchor,
-    content: &mut Content,
-    tags: &mut Tags,
-    page: usize,
-) {
-    for (fi_idx, fi) in floating_images.iter().enumerate() {
-        if fi.behind_doc != behind_doc {
-            continue;
-        }
-        render_one_floating_image(
-            fi,
-            fi_idx,
-            global_block_idx,
-            pdf_names,
-            effect_pdf_names,
-            sp,
-            col_x,
-            col_w,
-            text_width,
-            anchor,
-            content,
-            tags,
-            page,
-        );
-    }
-}
-
-/// Render foreground (non-behind-doc) floating images into per-image content
-/// buffers pushed onto the page's deferred z-stack, tagged with their
-/// relativeHeight. Matches how foreground textboxes/connectors are deferred so
-/// that a floating image with a higher relativeHeight paints above a shape with
-/// a lower one (annotation #191 — a cursor icon was hidden behind a bar shape
+/// Render floating images into per-image content buffers pushed onto their
+/// layer's page z-stack (`behind` or `front`), tagged with their
+/// relativeHeight. Matches how textboxes/connectors are deferred so that a
+/// floating image with a higher relativeHeight paints above a shape with a
+/// lower one (annotation #191 — a cursor icon was hidden behind a bar shape
 /// because images painted into the page content stream, always below deferred
 /// shapes).
-pub(super) fn render_foreground_floating_images_deferred(
+pub(super) fn render_floating_images(
     floating_images: &[FloatingImage],
     global_block_idx: usize,
     pdf_names: &HashMap<(usize, usize), String>,
@@ -203,14 +166,12 @@ pub(super) fn render_foreground_floating_images_deferred(
     col_w: f32,
     text_width: f32,
     anchor: super::ParaAnchor,
-    deferred: &mut Vec<(u32, Content)>,
+    behind: &mut Vec<(u32, Content)>,
+    front: &mut Vec<(u32, Content)>,
     tags: &mut Tags,
     page: usize,
 ) {
     for (fi_idx, fi) in floating_images.iter().enumerate() {
-        if fi.behind_doc {
-            continue;
-        }
         let mut buf = super::tagging::artifact_content();
         if render_one_floating_image(
             fi,
@@ -227,7 +188,12 @@ pub(super) fn render_foreground_floating_images_deferred(
             tags,
             page,
         ) {
-            deferred.push((fi.z_index, buf));
+            let layer = if fi.behind_doc {
+                &mut *behind
+            } else {
+                &mut *front
+            };
+            layer.push((fi.z_index, buf));
         }
     }
 }

@@ -241,6 +241,8 @@ pub(in crate::docx) struct ParseContext<'a, R: std::io::Read + std::io::Seek> {
     /// What the current section's character grid adds to one character
     /// (`sections::grid_char_delta`), the unit of `w:ind` `*Chars` values.
     pub(in crate::docx) grid_char_delta: f32,
+    /// Parsing a text box's story (`images::parse_run_drawing`).
+    pub(in crate::docx) in_text_box: bool,
 }
 
 #[derive(Default)]
@@ -1306,6 +1308,7 @@ fn parse_zip<R: Read + std::io::Seek>(
         comments: comment_ranges,
         fields: Default::default(),
         grid_char_delta: grid_deltas.first().copied().unwrap_or(0.0),
+        in_text_box: false,
     };
 
     let mut sections: Vec<Section> = Vec::new();
@@ -1871,7 +1874,9 @@ fn body_paragraphs<'a>(blocks: &'a mut [Block], out: &mut Vec<&'a mut crate::mod
 
 /// Each box of a linked chain shares the story its first box holds and
 /// learns the text areas of the boxes before it, from which the renderer works
-/// out the part it shows. ponytail: body text boxes only, not headers or groups.
+/// out the part it shows. A box alone in its chain (a standalone `wps:txbx`
+/// with an id) keeps its story as an unlinked box. ponytail: body text boxes
+/// only, not headers or groups.
 fn link_textbox_stories(doc: &mut Document) {
     let mut paras = Vec::new();
     for section in &mut doc.sections {
@@ -1884,12 +1889,18 @@ fn link_textbox_stories(doc: &mut Document) {
         .collect();
     boxes.sort_by_key(|&(id, seq, _)| (id, seq));
     for chain in boxes.chunk_by_mut(|a, b| a.0 == b.0) {
+        if let [(_, _, tb)] = chain {
+            tb.link = None;
+            continue;
+        }
         let story = std::sync::Arc::new(std::mem::take(&mut chain[0].2.paragraphs));
+        let tables = std::sync::Arc::new(std::mem::take(&mut chain[0].2.tables));
         let mut before = Vec::new();
         for (_, _, tb) in chain.iter_mut() {
             let area = tb.text_area(tb.height_pt);
             if let Some(link) = &mut tb.link {
                 link.story = story.clone();
+                link.tables = tables.clone();
                 link.before = before.clone();
                 link.continues = true;
             }

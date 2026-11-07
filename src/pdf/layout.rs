@@ -1465,6 +1465,71 @@ fn fitting_prefix_len(word: &str, room: f32, width: impl Fn(&str) -> f32) -> Opt
     Some(ends[fits.saturating_sub(1)])
 }
 
+/// The width of the first word of `runs`, up to its first break opportunity
+/// as the line breaker sees it, across run boundaries (a bold "I" before
+/// "nternationalization" is one word, and so is "Hi" + no-break space +
+/// "Internationalization"), None before any word.
+pub(super) fn opening_word_width(runs: &[Run], fonts: &HashMap<String, FontEntry>) -> Option<f32> {
+    let mut width: Option<f32> = None;
+    let mut prev_char = None;
+    let mut spaces_since = 0usize;
+    let mut space_width = 0.0;
+    let mut key_buf = String::new();
+    for run in runs.iter().filter(|r| !r.vanish) {
+        if run.is_tab || run.is_line_break || run.math.is_some() {
+            if width.is_some() {
+                break;
+            }
+            continue;
+        }
+        if let Some(img) = &run.inline_image {
+            if width.is_some() && spaces_since > 0 {
+                break;
+            }
+            return Some(width.unwrap_or(0.0) + img.layout_size().0);
+        }
+        let Some(entry) = fonts.get(font_key_buf(run, &mut key_buf)) else {
+            continue;
+        };
+        let eff_fs = effective_font_size(run, entry);
+        let kern = run.kerns_at(eff_fs);
+        let ts = run.text_scale / 100.0;
+        let measure = |s: &str| word_width_for_run(entry, run, s, eff_fs, kern, run.char_spacing, ts);
+        for (i, (spaces, word)) in split_preserving_spaces(&run.text).into_iter().enumerate() {
+            spaces_since += spaces;
+            space_width += spaces as f32 * measure(" ");
+            let shown = caps_word(run, word);
+            if let Some(w) = width {
+                let joins = if spaces_since > 0 {
+                    prev_char == Some('\u{00a0}') || shown.starts_with('\u{00a0}')
+                } else {
+                    i == 0
+                        && prev_char
+                            .zip(shown.chars().next())
+                            .is_some_and(|(a, b)| !breaks_between(a, b))
+                };
+                if !joins {
+                    return Some(w);
+                }
+                width = Some(w + space_width);
+            }
+            spaces_since = 0;
+            space_width = 0.0;
+            if word.is_empty() {
+                continue;
+            }
+            width = Some(width.unwrap_or(0.0) + measure(&shown));
+            prev_char = shown.chars().last();
+        }
+        let trailing = run.text.chars().rev().take_while(|&c| is_break_space(c)).count();
+        if width.is_some() {
+            spaces_since += trailing;
+            space_width += trailing as f32 * measure(" ");
+        }
+    }
+    width
+}
+
 pub(super) fn word_width_for_run(
     entry: &FontEntry,
     run: &Run,
@@ -2838,8 +2903,12 @@ pub(super) fn build_paragraph_lines(
             {
                 // Word doesn't fit in current region
                 if !in_right_region {
-                    // Try spilling to the right region on the same line
-                    if let Some((rx, rw, _)) = right_region_for(lines.len()) {
+                    // Try spilling to the right region on the same line; a
+                    // word too wide for it starts the next line instead (Word
+                    // example: "november" beside a 40pt strip right of a box).
+                    if let Some((rx, rw, _)) = right_region_for(lines.len())
+                        .filter(|&(_, rw, _)| current_chunks.is_empty() || ww <= rw + 0.05)
+                    {
                         cur_right_info = Some((current_chunks.len(), rx, rw));
                         in_right_region = true;
                         // Leading spaces on a line that starts in the right
@@ -2885,6 +2954,22 @@ pub(super) fn build_paragraph_lines(
                     )
                 });
                 current_x = 0.0;
+                // A word too wide for a strip beside a float goes below it
+                // whole (Word example: "charlie" beside a 40pt strip right of a
+                // wrapText=right picture).
+                if let Some(widths) = per_line_widths.filter(|_| per_line_dual.is_none()) {
+                    let widest = widths.iter().copied().fold(max_width, f32::max);
+                    while ww <= widest
+                        && lines.len() + skip.get() < widths.len()
+                        && ww > left_max(lines.len())
+                        && left_max(lines.len()) < widest - 0.05
+                    {
+                        lines.push(TextLine {
+                            float_skip: true,
+                            ..TextLine::default()
+                        });
+                    }
+                }
                 // A word wider than the new line breaks at its margin too.
                 let room = left_max(lines.len());
                 let right = right_region_for(lines.len());
@@ -4394,6 +4479,8 @@ pub(super) fn render_paragraph_lines(
     mut comment_anchors: Option<&mut Vec<(u32, f32, f32, f32)>>,
     mut line_numbering: Option<LineNumberArg<'_>>,
     mut link_tags: Option<LinkTagger<'_>>,
+    // (x, y, w, h) the inline pictures are clipped to.
+    picture_clip: Option<(f32, f32, f32, f32)>,
 ) {
     let mut current_color: Option<[u8; 3]> = None;
     let mut pattern_fill_active = false;
@@ -4568,19 +4655,24 @@ pub(super) fn render_paragraph_lines(
         let is_justified =
             mixed.is_some() || is_char_justified || (can_justify && left_gaps > 0);
 
+        // A line wider than the measure (a picture too wide for it) starts at
+        // the left edge and overflows to the right, whatever the alignment.
+        let slack = if line.rtl_paragraph {
+            eff_width - left_content_width
+        } else {
+            (eff_width - left_content_width).max(0.0)
+        };
         let line_start_x = match alignment {
-            Alignment::Center => eff_margin + (eff_width - left_content_width) / 2.0,
-            Alignment::Right => eff_margin + eff_width - left_content_width,
+            Alignment::Center => eff_margin + slack / 2.0,
+            Alignment::Right => eff_margin + slack,
             // A distributed line with nothing to spread after its last tab
             // (one character, a tab at the end) is centred, tabs and all, in
             // right-to-left paragraphs too.
-            Alignment::Distribute if !is_justified => {
-                eff_margin + (eff_width - left_content_width) / 2.0
-            }
+            Alignment::Distribute if !is_justified => eff_margin + slack / 2.0,
             // Word probe: a justified right-to-left paragraph's last line
             // ends at the right margin.
             Alignment::Justify if line.rtl_paragraph && !is_justified => {
-                eff_margin + eff_width - left_content_width
+                eff_margin + slack
             }
             Alignment::Left | Alignment::Justify | Alignment::Distribute => eff_margin,
         };
@@ -5400,6 +5492,7 @@ pub(super) fn render_paragraph_lines(
                         );
                     push_decoration(&mut decorations, box_x, bottom, chunk.width, th, chunk.color);
                 }
+                let clipped = push_clip(content, picture_clip);
                 let turned = chunk.inline_image_rotation_deg.abs() > 0.01;
                 if turned {
                     content.save_state();
@@ -5461,6 +5554,9 @@ pub(super) fn render_paragraph_lines(
                     );
                 }
                 if turned {
+                    content.restore_state();
+                }
+                if clipped {
                     content.restore_state();
                 }
                 if let Some(lt) = link_tags.as_mut() {
@@ -5661,7 +5757,9 @@ fn tallest_by_ascent<'a>(
 /// single spacing → +2.2 (italian_evaluation_minutes p7); 149pt logo after a
 /// 14pt tab at 1.15 → +2.6 (english_town_council p1); 177pt picture after a run
 /// of spaces at 1.5 → +7.6 (family_kinship p4); four 48pt chord diagrams alone
-/// → +0 (old_blue_truck p1).
+/// → +0 (old_blue_truck p1). A zero width space draws nothing and adds no
+/// descent (textbox-oversized-inline-image: 50pt picture after U+200B at
+/// 1.13 lines steps the same 51.6 as the picture alone).
 pub(super) fn picture_line_bottom(
     runs: &[Run],
     para: &Paragraph,
@@ -5689,7 +5787,11 @@ pub(super) fn picture_line_bottom(
         .map_or(0.0, |(fs, lhr, _)| {
             super::helpers::spacing_leading(super::helpers::resolve_line_h(ls, fs, lhr), fs, lhr)
         });
-    let glyph_runs = text_runs().filter(|r| !r.text.trim().is_empty());
+    let glyph_runs = text_runs().filter(|r| {
+        r.text
+            .chars()
+            .any(|c| !c.is_whitespace() && c != '\u{200B}')
+    });
     let descent = tallest_by_ascent(glyph_runs, seen_fonts)
         .map_or(0.0, |(fs, lhr, ar)| fs * descender_ratio(lhr, ar));
     descent.max(inserted_picture_descent(runs, seen_fonts)) + leading
@@ -5803,6 +5905,18 @@ pub(super) fn grid_baseline_offset(
         })
         .reduce(f32::max)
         .map(|shift| cell_h / 2.0 + shift)
+}
+
+/// Clip to `rect` (x, y, w, h) in a saved state; returns whether one was saved.
+pub(super) fn push_clip(content: &mut Content, rect: Option<(f32, f32, f32, f32)>) -> bool {
+    let Some((x, y, w, h)) = rect else {
+        return false;
+    };
+    content.save_state();
+    content.rect(x, y, w, h);
+    content.clip_nonzero();
+    content.end_path();
+    true
 }
 
 #[cfg(test)]

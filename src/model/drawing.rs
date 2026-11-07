@@ -3,8 +3,8 @@ use std::sync::Arc;
 use crate::geometry::{FormulaOp, PathFill};
 
 use super::{
-    HRelativeFrom, HorizontalPosition, Paragraph, VRelativeFrom, VerticalPosition, WrapText,
-    WrapType,
+    HRelativeFrom, HorizontalPosition, Paragraph, Table, VRelativeFrom, VerticalPosition,
+    WrapText, WrapType,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -407,6 +407,9 @@ pub enum AutoFit {
 #[derive(Default)]
 pub struct Textbox {
     pub paragraphs: Vec<Paragraph>,
+    /// The tables of the box's story, each with the index of the paragraph
+    /// it comes before.
+    pub tables: Vec<(usize, Table)>,
     pub width_pt: f32,
     /// `wp14:sizeRelH relativeFrom="margin"` pctWidth as a fraction: the
     /// width is that share of the section's text width (resolved into
@@ -426,6 +429,8 @@ pub struct Textbox {
     pub v_position: VerticalPosition,
     pub v_relative_from: VRelativeFrom,
     pub fill: Option<ShapeFill>,
+    /// `a:blipFill`: the picture stretched over the shape, under its text.
+    pub picture_fill: Option<EmbeddedImage>,
     pub shape_type: ShapeGeometry,
     pub stroke_color: Option<[u8; 3]>,
     pub stroke_width: f32,
@@ -438,7 +443,13 @@ pub struct Textbox {
     pub margin_bottom: f32,
     pub wrap_type: WrapType,
     pub wrap_text: WrapText,
+    /// Vertices in 1/21600 of extent (wrapTight / wrapThrough polygon).
+    pub wrap_polygon: Option<Vec<(i32, i32)>>,
+    /// Wrap distances (points), effectExtent included like a picture's.
+    pub dist_top: f32,
     pub dist_bottom: f32,
+    pub dist_left: f32,
+    pub dist_right: f32,
     pub behind_doc: bool,
     pub no_text_wrap: bool,
     pub text_warp: Option<TextWarp>,
@@ -465,16 +476,45 @@ pub struct Textbox {
     /// `a:effectLst` glow and reflection on the shape.
     pub glow: Option<ImageGlow>,
     pub reflection: Option<ImageReflection>,
+    /// A shape of a DrawingML group or drawing canvas: Word clips its pictures
+    /// to the box's left and right edges, not to the text area inside the
+    /// insets as for a standalone box.
+    pub in_group: bool,
 }
 
 impl Textbox {
     /// The paragraphs this box carries: a linked chain's story belongs to its
     /// first box.
     pub fn content(&self) -> &[crate::model::Paragraph] {
-        match &self.link {
-            Some(link) if link.before.is_empty() && !link.story.is_empty() => &link.story,
-            _ => &self.paragraphs,
+        match self.first_of_chain() {
+            Some(link) => &link.story,
+            None => &self.paragraphs,
         }
+    }
+
+    /// The tables among `content()`, each with the index of the paragraph it
+    /// comes before.
+    pub fn content_tables(&self) -> &[(usize, Table)] {
+        match self.first_of_chain() {
+            Some(link) => &link.tables,
+            None => &self.tables,
+        }
+    }
+
+    fn first_of_chain(&self) -> Option<&TextboxLink> {
+        self.link
+            .as_ref()
+            .filter(|link| link.before.is_empty() && !link.story.is_empty())
+    }
+
+    /// The paragraphs in the cells of the box's tables, at any depth.
+    pub fn table_paragraphs(&self) -> Vec<&Paragraph> {
+        self.content_tables()
+            .iter()
+            .flat_map(|(_, t)| &t.rows)
+            .flat_map(|r| &r.cells)
+            .flat_map(|c| c.all_paragraphs())
+            .collect()
     }
 
     /// How far below its anchor's top the box reaches, with its wrap distance.
@@ -499,6 +539,8 @@ pub struct TextboxLink {
     pub seq: u32,
     /// The chain's paragraphs (filled in once the document is parsed).
     pub story: Arc<Vec<crate::model::Paragraph>>,
+    /// The story's tables, each with the index of the paragraph it comes before.
+    pub tables: Arc<Vec<(usize, Table)>>,
     /// The text areas (width, height) of the boxes before this one.
     pub before: Vec<(f32, f32)>,
     /// A later box takes the overflow, so this one shows only what fits.
