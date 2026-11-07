@@ -276,8 +276,8 @@ delta buckets plus an XML feature census of the worst documents).
 
 | set | ours, markup (J / SSIM / pages wrong) | competitor | we win / lose |
 |---|---|---|---|
-| tracking, no comments (317) | 73.0 / 86.4 / 4 (2026-11-06, round 4; 72.9 / 86.3 / 4 after round 3, 71.7 / 85.4 / 9 in the evening, 67.9 / 82.1 / 11 in the morning) | 62.2 / 80.4 / 11 | 259 / 58 |
-| comments + tracking (24) | 68.0 / 86.2 / 0 (2026-11-06, round 4 unchanged; 2026-11-05 night; 67.9 in the evening, 55.5 / 72.5 / 0 in the morning) | 29.3 / 48.6 / 4 | 24 / 0 |
+| tracking, no comments (317) | 73.2 / 86.5 / 4 (2026-11-07, Microsoft PhagsPa added to the fonts; 73.0 / 86.4 / 4 after round 4, 72.9 / 86.3 / 4 after round 3, 71.7 / 85.4 / 9 in the evening, 67.9 / 82.1 / 11 in the morning) | 62.2 / 80.4 / 11 | 259 / 58 |
+| comments + tracking (24) | 68.0 / 86.2 / 0 (2026-11-07 unchanged; 2026-11-06, round 4 unchanged; 2026-11-05 night; 67.9 in the evening, 55.5 / 72.5 / 0 in the morning) | 29.3 / 48.6 / 4 | 24 / 0 |
 
 Round 3 (labels `tc-gap8` → `tc-gap9`, `tc-comments9` → `tc-comments10`):
 317 set 71.7 → 72.6 → 72.9 Jaccard; eight documents +14 to +48 (deleted
@@ -289,6 +289,28 @@ Round 4 (labels `tc-gap9` → `tc-gap12`, `tc-comments11`): 317 set 72.89
 → 72.98; the 9-vs-17-page document 18.7 → 48.5 (16/17 pages: the
 fixed-layout columns, then the break line that leaves Word's blank page),
 one document −0.9 from the fixed-layout columns.
+2026-11-07: Microsoft PhagsPa (6.00;O365, Office's cloud font cache) added to
+`fonts/` and the assets repo: 317 set 72.98 → 73.18 (labels `tc-gap13`,
+`tc-comments12`), the two 3-vs-4 siblings +19 and +40.
+
+The competitor's current release, rescored locally with the same scorer and
+Word's markup palette (`--revisions word --compress`), reads Word's own font
+folders (Word.app's DFonts, Office's cloud font cache) and resolves the same
+faces with or without ours (byte-identical output): 66.9 / 85.6 / 3 on the
+317 set (we lead 240, it leads 66, more than 1 point; 33 ten or more behind,
+9 thirty or more), 58.1 / 83.3 / 0 on the comments set (19 / 5). The table
+above keeps their published scores. Its leads are mostly text on another
+line or page than Word's (the press-release header family among them); its
+markup colours also follow Word's per-author memory where ours cycle by
+first appearance.
+
+Fonts still missing for these sets (our fallback log, 341 documents): not on
+this Mac and only subset in Word's PDFs: Californian FB (9), Berlin Sans FB,
+Roboto Medium / Light, Lato SemiBold, HGPSoeiKakugothicUB. Lookup misses,
+not missing fonts: a fontTable name with its quotes kept (`"Calibri"`,
+`"Times New Roman"`, `"Open Sans"`, 11 documents) falls to Cambria where Word
+strips the quotes, and Helvetica Neue, present in `fonts/` and embedded by
+Word, resolves to Arial (1 document).
 | comments only (1) | 70.8 / 88.4 / 0 | 60.0 | |
 
 (317 set before the page-top split fix below: 66.5 / 80.6 / 25.) 108 of the

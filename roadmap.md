@@ -483,8 +483,12 @@ Open queue from the large-corpus and focus-fixture rounds:
   auto table whose cells' `tcW` sum to twice the column (Word centres it off
   both page edges); (4) moves (`w:moveFrom` / `w:moveTo`, 3 of 317) once a
   Word-made probe exists (Word hangs on hand-written move ranges); (5) text
-  boxes' change bars (unprobed). Environment: Berlin Sans FB missing (one
-  document 5 vs 6 pages).
+  boxes' change bars (unprobed); (6) font lookup: a fontTable name with its
+  quotes kept (`"Calibri"`, 11 documents) falls to Cambria where Word strips
+  the quotes, and Helvetica Neue in `fonts/` resolves to Arial.
+  Environment: Berlin Sans FB and Californian FB missing (only subsets in
+  Word's PDFs).
+- Done 2026-11-07: Microsoft PhagsPa added to the fonts (317 set 73.2).
 - Final view: a deleted paragraph mark merges its paragraph into the next
   and takes its section break with it, deleted table rows are dropped (Word
   online export probes 2026-11-05).
