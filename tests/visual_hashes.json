@@ -1414,6 +1414,14 @@
   "cases/empty-margin-frame-visible-body-before-frame": [
     "932b4a3014c4b2d70a536275c8cc2e9e0208c6b85f7ce8047836a643b5049d71"
   ],
+  "cases/field-result-format-source": [
+    "8a0174ec891a3d56e3165cc5c34305c276cfbb854b8e1f91b860a494d878619f",
+    "12bd84783ca639f2045e70394f252bce24834f07fb1912ec996261248db34187"
+  ],
+  "cases/field-result-formatting": [
+    "bc3256348d07d34f02607e2d0a9d6e91ecf9389b12b2ce0591fc555a5877768c",
+    "43ba74f92248699c0e99b987b09da752d39946d26997a1075ca064f02d3516f4"
+  ],
   "cases/first-header-minimum-overflow": [
     "0336511b71d0837c362d720c9232bb1b29a591b65731d229d06f21201d603115",
     "6e8dd66c61d9541dc0c310ea60ad53f06cf1d6884c150b75cbfd66ac9e3761bd",
@@ -2419,6 +2427,20 @@
   "cases/section-mark-legacy-full-width-float": [
     "31d358bfc099fdd643ba55cdd5515f5ca7d0216553177fae3419ddf5f5b58a83"
   ],
+  "cases/section-pages-continuous": [
+    "52dc458f99d15f95a1eb494be653aab4114c640c4510695de77c090fb58cd8b8",
+    "542e37b1ea9179958a3ff4f888a8b56516c494f9adcc24a06004c0d6fd9137c7",
+    "ee40e04130f652bea3cd5aebbcabff7937c22e54804b9859cc70ae29f56f6f66",
+    "d55971c872d1dd80ffc5ddbc5cc15de1c70ff6ab33223026eacbbf7777549b78"
+  ],
+  "cases/section-pages-field": [
+    "68f55f8728a80691cfc4c0413c0a6b003a33fc8e5067acddf7f3e3a40fa88c7a",
+    "de5522d32f4ffc89bb5ad8b81bb0a2ae45c8e289ba2b62d1930cb53c03130750",
+    "1a9208529a0c4d6eae0013905f188888433ce5208bb8cab56338db93b74e8792",
+    "097a25407fc5c4cc9a5788d6a06e524657b33a0ab31fd23f35336c78cf6d31e7",
+    "4530f69b83ae237fce84ea491ea0b22e05028db908e547e5136e8e895dafde3b",
+    "249d16130c03ff3f3bdbd370951e72119c2089ee9c323d16f8d86230493729cd"
+  ],
   "cases/seq-fields": [
     "c530ecc4fbd0735fd43e4c0749c26f44b856529f1fd24b93dd5d98d11253b788"
   ],
@@ -2715,6 +2737,9 @@
   ],
   "cases/trailing-table-clear-s28-h800-y1": [
     "b1a398ba664aa3a0c54c571b8339854a5810162c31b3c9d1d97e20620fd062b6"
+  ],
+  "cases/truncated-png": [
+    "9496ac1e9193ebc2a30b54514dbf8a300d63f731cdf4874c9d611600d91a2956"
   ],
   "cases/underlined-space-compat14-underline0-split0": [
     "defe05f61b636dd6278b822c674a499a3d535c7d771c298de650f75977583b22"

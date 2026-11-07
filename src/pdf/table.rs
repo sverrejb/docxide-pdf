@@ -2604,6 +2604,7 @@ pub(super) fn render_header_footer_table(
     cursor_y: &mut f32,
     page_num: usize,
     total_pages: usize,
+    section_pages: usize,
     styleref_values: &HashMap<String, String>,
     page_num_format: Option<&str>,
     gradient_specs: &mut Vec<super::GradientSpec>,
@@ -2615,6 +2616,7 @@ pub(super) fn render_header_footer_table(
     let hf_sub = HfSubstitution {
         page_num,
         total_pages,
+        section_pages,
         styleref_values,
         page_num_format,
     };

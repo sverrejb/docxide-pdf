@@ -1112,6 +1112,7 @@ pub(super) fn keep_chain_end(rows: &[RowLayout], start: usize) -> usize {
 pub(super) struct HfSubstitution<'a> {
     pub(super) page_num: usize,
     pub(super) total_pages: usize,
+    pub(super) section_pages: usize,
     pub(super) styleref_values: &'a HashMap<String, String>,
     pub(super) page_num_format: Option<&'a str>,
 }
@@ -1523,6 +1524,7 @@ pub(super) fn compute_row_layouts(
                                         &para.runs,
                                         sub.page_num,
                                         sub.total_pages,
+                                        sub.section_pages,
                                         sub.styleref_values,
                                         sub.page_num_format,
                                     );
