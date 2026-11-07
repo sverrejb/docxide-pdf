@@ -267,27 +267,15 @@ pub(super) fn parse_chartex_space(
         _ => return None,
     };
     let legend = cx(chart, "legend").map(|l| ChartLegend {
-        position: match l.attribute("pos") {
-            Some("r") => LegendPosition::Right,
-            Some("l") => LegendPosition::Left,
-            Some("t") => LegendPosition::Top,
-            _ => LegendPosition::Bottom,
-        },
+        position: super::charts::legend_position(l.attribute("pos"), LegendPosition::Bottom),
     });
     Some(Chart {
         chart_type,
         series: vec![ChartSeries {
             label,
-            color: None,
-            fill_alpha: None,
             values,
             x_values: box_index,
-            bubble_sizes: None,
-            marker: None,
-            line_width: None,
-            marker_size: None,
-            marker_color: None,
-            marker_line_width: None,
+            ..Default::default()
         }],
         cat_axis: Some(ChartAxis {
             labels,

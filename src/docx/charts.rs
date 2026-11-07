@@ -193,13 +193,20 @@ fn parse_axis(ax_node: roxmltree::Node) -> ChartAxis {
 }
 
 fn parse_legend(legend_node: roxmltree::Node) -> ChartLegend {
-    let position = match chart_attr(legend_node, "legendPos") {
+    ChartLegend {
+        position: legend_position(chart_attr(legend_node, "legendPos"), LegendPosition::Right),
+    }
+}
+
+/// `legendPos` (charts) and `pos` (chartEx) share the codes; only the default differs.
+pub(super) fn legend_position(code: Option<&str>, default: LegendPosition) -> LegendPosition {
+    match code {
         Some("b") => LegendPosition::Bottom,
         Some("t") => LegendPosition::Top,
         Some("l") => LegendPosition::Left,
-        _ => LegendPosition::Right,
-    };
-    ChartLegend { position }
+        Some("r") => LegendPosition::Right,
+        _ => default,
+    }
 }
 
 fn collect_series(type_node: roxmltree::Node) -> (Vec<ChartSeries>, Vec<String>, Option<String>) {

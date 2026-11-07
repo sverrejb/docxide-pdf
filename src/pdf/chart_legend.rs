@@ -18,9 +18,22 @@ pub(super) struct LegendItem<'a> {
     pub swatch: SwatchStyle,
 }
 
+#[derive(Clone, Copy)]
 pub(super) enum LegendPlacement {
     Right { x: f32, center_y: f32 },
     Bottom { center_x: f32, y: f32 },
+}
+
+impl LegendPlacement {
+    /// Names on a baseline 11.9pt above the chart's bottom, the entries
+    /// centred 2pt right of the chart's middle (1.4–2.85 on the h2d_bar,
+    /// pie3d and case31 radar legends).
+    pub(super) fn bottom(x: f32, y: f32, w: f32, h: f32) -> Self {
+        LegendPlacement::Bottom {
+            center_x: x + w / 2.0 + 2.0,
+            y: y - h + 10.9,
+        }
+    }
 }
 
 pub(super) fn render_chart_legend(

@@ -443,11 +443,7 @@ fn draw_ribbons(
     let (group, thick) = bar_slot(c, rect.w, num_categories);
     let row = thick * view.depth;
     let back = view.project(row);
-    let shade = |color: Option<[u8; 3]>, k: f32| {
-        color
-            .unwrap_or([0, 0, 0])
-            .map(|v| (v as f32 * k).round() as u8)
-    };
+    let shade = |color: Option<[u8; 3]>, k: f32| shade(color.unwrap_or([0, 0, 0]), k);
     for (si, series) in c.series.iter().enumerate().rev() {
         let (ox, oy) = view.project(si as f32 * view.row_pitch(thick) + row * view.gap_depth / 2.0);
         let pts: Vec<(f32, f32)> = series
@@ -509,9 +505,8 @@ fn draw_bar_3d(
     (bottom, top): (f32, f32),
 ) {
     let base = color.unwrap_or([0, 0, 0]);
-    let shade = |k: f32| base.map(|v| (v as f32 * k).round().min(255.0) as u8);
     let fill = |content: &mut Content, k: f32, pts: &[(f32, f32)]| {
-        fill_rgb(content, shade(k));
+        fill_rgb(content, shade(base, k));
         polygon(content, pts);
         content.fill_nonzero();
     };
@@ -582,25 +577,13 @@ fn draw_bar_3d(
             let (y0, y1) = body
                 .iter()
                 .fold((f32::MAX, f32::MIN), |(a, b), p| (a.min(p.1), b.max(p.1)));
-            content.save_state();
-            polygon(content, &body);
-            content.clip_nonzero();
-            content.end_path();
-            const STRIPS: usize = 24;
-            let sw = (x1 - x0) / STRIPS as f32;
-            for i in 0..STRIPS {
-                let t = (i as f32 + 0.5) / STRIPS as f32;
-                let k = if t < 0.45 {
+            fill_strips(content, &body, (x0, y0, x1, y1), 24, base, |t| {
+                if t < 0.45 {
                     0.72 + 0.35 * t / 0.45
                 } else {
                     1.07 - 0.27 * (t - 0.45) / 0.55
-                };
-                fill_rgb(content, shade(k));
-                // Each strip runs to the right edge so the next covers the join.
-                content.rect(x0 + i as f32 * sw, y0, x1 - x0 - i as f32 * sw, y1 - y0);
-                content.fill_nonzero();
-            }
-            content.restore_state();
+                }
+            });
             if top > 0.0 {
                 fill(content, 0.76, &cap);
             }
@@ -608,7 +591,37 @@ fn draw_bar_3d(
     }
 }
 
-fn polygon(content: &mut Content, pts: &[(f32, f32)]) {
+/// `base` scaled by `k`, per channel.
+pub(super) fn shade(base: [u8; 3], k: f32) -> [u8; 3] {
+    base.map(|v| (v as f32 * k).round().min(255.0) as u8)
+}
+
+/// Shades the inside of `outline` in `n` vertical strips across
+/// `(x0, y0, x1, y1)`, strip `t` (0..1, at its centre) in `base` scaled by `k(t)`.
+pub(super) fn fill_strips(
+    content: &mut Content,
+    outline: &[(f32, f32)],
+    (x0, y0, x1, y1): (f32, f32, f32, f32),
+    n: usize,
+    base: [u8; 3],
+    k: impl Fn(f32) -> f32,
+) {
+    content.save_state();
+    polygon(content, outline);
+    content.clip_nonzero();
+    content.end_path();
+    let sw = (x1 - x0) / n as f32;
+    for i in 0..n {
+        let t = (i as f32 + 0.5) / n as f32;
+        fill_rgb(content, shade(base, k(t)));
+        // Each strip runs to the right edge so the next covers the join.
+        content.rect(x0 + i as f32 * sw, y0, x1 - x0 - i as f32 * sw, y1 - y0);
+        content.fill_nonzero();
+    }
+    content.restore_state();
+}
+
+pub(super) fn polygon(content: &mut Content, pts: &[(f32, f32)]) {
     if let Some(&(x, y)) = pts.first() {
         content.move_to(x, y);
         for &(x, y) in &pts[1..] {
@@ -1008,7 +1021,7 @@ const VALUE_LABEL_RISE: f32 = 6.64;
 /// label on a bar's centre line sits its baseline this far below it
 /// (hbar3d and stacked3d probes: 6.2–6.7pt and 3.45–3.9pt over 8 labels).
 const VALUE_LABEL_GAP: f32 = 6.45;
-const VALUE_LABEL_SINK: f32 = 3.66;
+pub(super) const VALUE_LABEL_SINK: f32 = 3.66;
 
 /// A bar's value label, placed by Word's defaults for its bar: above a
 /// column's front face, after a bar's end, centred in a stacked segment.
@@ -1029,7 +1042,12 @@ enum LabelPlace {
 /// baseline 24.6pt under the chart's top, in a 30pt band above the plot.
 const TITLE_PT: f32 = 18.0;
 const TITLE_BASELINE: f32 = 24.6;
-pub(super) const TITLE_BAND: f32 = 30.0;
+const TITLE_BAND: f32 = 30.0;
+
+/// The band a chart's title takes above its plot.
+pub(super) fn title_band(c: &Chart) -> f32 {
+    if c.title.is_some() { TITLE_BAND } else { 0.0 }
+}
 /// The plot area's distance from the chart's top and right edges, and the
 /// band a one-row legend takes under it. Word, 252pt-high probes: 10.55
 /// top (11.0 on case53's 216pt charts, so not a share of the height), 11.0
@@ -1047,7 +1065,7 @@ pub(super) const TITLE_FONT: &str = "Arial";
 
 /// A data label's text: the value as the number format shows it, or as
 /// written when the format is General.
-fn data_label(val: f32, format_code: Option<&str>) -> String {
+pub(super) fn data_label(val: f32, format_code: Option<&str>) -> String {
     match format_code.filter(|f| *f != "General") {
         Some(fmt) => apply_number_format(val, fmt),
         None => format!("{val}"),
@@ -1359,7 +1377,7 @@ pub(super) fn render_chart(
     } else {
         CHART_PAD_RIGHT
     };
-    let margin_top = CHART_PAD_TOP + if c.title.is_some() { TITLE_BAND } else { 0.0 };
+    let margin_top = CHART_PAD_TOP + title_band(c);
 
     // Estimate plot_w for label wrapping and thinning calculations
     let plot_w_est = w - margin_left - margin_right;
@@ -1790,17 +1808,9 @@ pub(super) fn render_chart(
                 // Centred on the chart below its title; names 17.63pt apart.
                 LegendPosition::Right => LegendPlacement::Right {
                     x: legend_right_x,
-                    center_y: y
-                        - (h + if c.title.is_some() { TITLE_BAND } else { 0.0 }) / 2.0
-                        - 4.67,
+                    center_y: y - (h + title_band(c)) / 2.0 - 4.67,
                 },
-                // Names on a baseline 11.9pt above the chart's bottom, the
-                // entries centred 2pt right of the chart's middle (1.4–2.85
-                // on the h2d_bar, pie3d and case31 radar legends).
-                _ => LegendPlacement::Bottom {
-                    center_x: x + w / 2.0 + 2.0,
-                    y: y - h + 10.9,
-                },
+                _ => LegendPlacement::bottom(x, y, w, h),
             };
             render_chart_legend(
                 content,
@@ -2042,10 +2052,7 @@ fn render_radar(
                     center_y: cy,
                 }
             } else {
-                LegendPlacement::Bottom {
-                    center_x: x + w / 2.0 + 2.0,
-                    y: y - h + 10.9,
-                }
+                LegendPlacement::bottom(x, y, w, h)
             };
             render_chart_legend(
                 content,

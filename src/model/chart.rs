@@ -12,6 +12,7 @@ pub enum MarkerSymbol {
     None,
 }
 
+#[derive(Default)]
 pub struct ChartSeries {
     pub label: String,
     pub color: Option<[u8; 3]>,
