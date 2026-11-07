@@ -1,4 +1,9 @@
 {
+  "cases/anchor-below-own-hanging-box": {
+    "jaccard": 0.8752,
+    "ssim": 0.9887,
+    "text_boundary": 1.0
+  },
   "cases/autofit-cell-widths": {
     "jaccard": 0.8843,
     "ssim": 0.9715,
@@ -4388,6 +4393,26 @@
     "a11y_struct": 0.5,
     "a11y_text": 1.0
   },
+  "cases/float-table-band-before": {
+    "jaccard": 0.8397,
+    "ssim": 0.9854,
+    "text_boundary": 1.0
+  },
+  "cases/floating-table-line-move": {
+    "jaccard": 0.818,
+    "ssim": 0.986,
+    "text_boundary": 1.0
+  },
+  "cases/floating-table-line-reach": {
+    "jaccard": 0.8387,
+    "ssim": 0.9375,
+    "text_boundary": 1.0
+  },
+  "cases/floating-table-stack": {
+    "jaccard": 0.9268,
+    "ssim": 0.9855,
+    "text_boundary": 1.0
+  },
   "cases/frame-float-clearance-f0-y400-h400": {
     "jaccard": 0.6638,
     "ssim": 0.9416,
@@ -5489,6 +5514,16 @@
     "ua_deficit": 0,
     "a11y_struct": 0.6154,
     "a11y_text": 1.0
+  },
+  "cases/line-anchor-follows-push": {
+    "jaccard": 0.9171,
+    "ssim": 0.9857,
+    "text_boundary": 1.0
+  },
+  "cases/line-anchor-overrides": {
+    "jaccard": 0.7686,
+    "ssim": 0.9702,
+    "text_boundary": 1.0
   },
   "cases/line_numbering_restart": {
     "jaccard": 0.8232,
@@ -6678,6 +6713,16 @@
     "ua_deficit": 0,
     "a11y_struct": 0.6667,
     "a11y_text": 1.0
+  },
+  "cases/page-table-line-reach": {
+    "jaccard": 0.9109,
+    "ssim": 0.9927,
+    "text_boundary": 1.0
+  },
+  "cases/page-table-line-reach-compat14": {
+    "jaccard": 0.9344,
+    "ssim": 0.9932,
+    "text_boundary": 1.0
   },
   "cases/paragraph-border-styles": {
     "jaccard": 0.8252,
@@ -8236,6 +8281,11 @@
     "ua_deficit": 0,
     "a11y_struct": 1.0,
     "a11y_text": 1.0
+  },
+  "cases/table-row-split-lines": {
+    "jaccard": 0.7347,
+    "ssim": 0.8776,
+    "text_boundary": 1.0
   },
   "cases/table-style-centered": {
     "jaccard": 0.3012,
