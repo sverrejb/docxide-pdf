@@ -5,6 +5,33 @@ Open work only. Finished rounds, their rules and evidence live in git history
 
 ## Open fixture leads
 
+**Engine-gap triage (2026-11-07):** cases where another engine beats us by
+≥3pp J in the CI comparison (`git show origin/gh-pages:report.json`; same
+numbers as our baselines): 120 cases, ~104 families. Fixed: ut_koer's
+compat 14 header (floats don't wrap header text) and the legacy table
+outdent (needs a style or a tblInd; case196, section-mark-after-table-
+inline-compat14, short-float-clear-inline-table). Open, by size:
+- `displaced-anchor-*` (11 cases, 57.9 vs 91.4): the paragraph after two
+  overlapping floating tables lands 130pt too high (not cleared below the
+  displaced second table).
+- `empty-margin-frame-*` (2 cases, 3.5 and 46.0 vs 82–89): body text 24pt
+  too high beside an empty margin frame.
+- `autofit-cell-widths-nested` (13.6 vs 63.4): nested rows 1.4–2.4pt short.
+- `nested-table-picture-width` (59.9 vs 83.5): text below 6.9pt too high.
+- `nested-floats-spaced-text-nonzero-x` (30.8 vs 61.0): 9pt x / 32pt y off.
+- Scraped, one fault each: vaccines_history_chapter 14pt too high from the
+  top of page 1; italian_academic_cv_form Word pushes the table's empty
+  last row to a 3rd page (we fit it on page 2); slovak_pedagogical_practice
+  +2.9pt everywhere; romanian_candidate_declaration_form_f2 header 3.6pt
+  high; scottish_fundraising_awards 1.3pt drift plus one re-wrap.
+- Small regressions: case91 (−3.0) and case140 (−2.4) since the
+  ad8081df7 baselines; air_pollution_permit_form (−2.6) since e16688984.
+- case140/case148 nested-table cell rules sit 0.36pt high and start 0.7pt
+  right of Word's (rules present, not missing).
+- Not worth chasing: sparse probe fixtures whose text is within 0.5pt and
+  whose gap is 1–2px (connector-paragraph-anchor, picture-mark-leading-*,
+  nested-percent-*, dutch_council_member_resignation).
+
 **torture_test round (2026-10-29/30, branch `torture-test`):** a two-page
 fixture built only from features absent from `src/` (kit with generator in
 `tests/output/torture_test/`; Word online reference). 2.8% J / 26.7% SSIM
