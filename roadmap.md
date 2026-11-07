@@ -14,7 +14,19 @@ section-mark-after-table-inline-compat14, short-float-clear-inline-table);
 empty margin frames after visible body text
 (empty-margin-frame-visible-body-before-frame 3.5 → 81.2); an overlapping
 floating table no longer drops a taller earlier one's wrap zone
-(displaced-anchor-narrow-*-overlap1 57.9 → 95.9). Open, by size:
+(displaced-anchor-narrow-*-overlap1 57.9 → 95.9); a fixed-width table's
+cells that fill it replace a stale grid (autofit-indent-* ~30 → ~78,
+case91, case90); nested tables' outer border bands count in their cell
+(autofit-cell-widths-nested 13.6 → 79.4, nested-percent-*, case148,
+case51, case88); Flate pictures are no longer interpolated
+(picture-mark-leading-* → 100); header (not footer) tables keep their
+outer bands inside the flow (header-autofit-table 48.4 → 81.8). Open:
+- isla_language_lesson_plan (−3.85 from the header-band change): its o:hr
+  paragraph below a header table lands 0.4pt low; Word draws the rule
+  ~1.4pt lower relative to the table than we do, while body probes
+  (`tests/output/koer/hr/` on branch koer-overlap, 2026-11-07) put our rule
+  0.45pt too LOW and show a rule-only body line as tall as a text line.
+  Word also draws o:hrstd rules ~0.75pt thick, we 0.5.
 - `displaced-anchor-wide-*-overlap1` (4 cases, 57.9): the anchor line
   starting 10pt above a margin-anchored full-width table goes below it in
   Word (narrow: beside it, even at 0.07pt overlap; page anchor and without
@@ -23,13 +35,13 @@ floating table no longer drops a taller earlier one's wrap zone
   what separates the two before changing the reach rule in `mod.rs`.
 - `empty-margin-frame-long-prefix` (46.0): the frame's anchor is on page 2;
   `empty_frame_table_bands` only reserves the box on the first page.
-- `autofit-cell-widths-nested` (13.6 vs 63.4): nested rows 1.4–2.4pt short.
-- `nested-table-picture-width` (59.9 vs 83.5): text below 6.9pt too high.
+- `nested-table-picture-width` (80.2): a nested row holding a picture
+  wider than its cell (166pt in ~158pt) is ~7pt taller in Word.
 - `nested-floats-spaced-text-nonzero-x` (30.8 vs 61.0): 9pt x / 32pt y off.
-- slovak_pedagogical_practice (22.8, body +2.9pt): Word's line holding only
-  an o:hrstd rule (1.5pt) is 1.75pt shorter than an empty line (probe:
-  removing the rule moves Word's body down 1.75, ours not at all), and Word
-  draws it ~1.1pt thick, we 0.5; a further 1.2pt residual without the rule.
+- slovak_pedagogical_practice (22.8, body +2.9pt): removing its header
+  o:hr run moves Word's body down 1.75pt and ours not at all; the run is
+  Cambria 13 under a Korinna BT (missing) mark, so the mark font's
+  substitute probably sets the empty line; a further 1.2pt residual.
 - vaccines_history_chapter: page 1 fits one more line than Word (−14pt
   after); 2.6pt lost in the anchored-textbox timeline above the body, and the
   16pt subtitle is 11.5pt low.
@@ -37,8 +49,9 @@ floating table no longer drops a taller earlier one's wrap zone
   ~0.3pt in Word (0.44pt drift above + row height); no single rule.
 - romanian_candidate_declaration_form_f2 header 3.6pt high;
   scottish_fundraising_awards 1.3pt drift plus one re-wrap.
-- Small regressions: case91 (−3.0) and case140 (−2.4) since the
-  ad8081df7 baselines; air_pollution_permit_form (−2.6) since e16688984.
+- case140 (−2.4) and air_pollution_permit_form (−2.6) score drops since
+  older baselines are not layout changes: case91's output was identical
+  before and after its drop (a metric/raster change).
 - case140/case148 nested-table cell rules sit 0.36pt high and start 0.7pt
   right of Word's (rules present, not missing).
 - Not worth chasing: sparse probe fixtures whose text is within 0.5pt and
