@@ -123,7 +123,11 @@ alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
   "Open Sans" in Segoe UI, by name: charset 00/01, family roman/swiss/auto and
   removing Open Sans' altName Arial change nothing (probes 2026-10-27). Needs
   Sylfaen and Segoe UI in the assets; DejaVu Sans in ~/Library/Fonts wins
-  locally anyway. Its page-4 picture now sits at its anchor paragraph's top
+  locally anyway. Word's cloud cache has both (FontCache/4/CloudFonts:
+  Sylfaen 5.08, Segoe UI 5.67 regular/bold/italic/bold-italic); vendoring them
+  alone moves no fixture (A/B 2026-11-08). FOLLOW-UP: decide whether to treat
+  fonts Word online lacks (DejaVu, Open Sans) as missing even when installed,
+  and find Word's rule for which names fall to Sylfaen (also "Helvetica Neue"). Its page-4 picture now sits at its anchor paragraph's top
   as in Word, but lower than Word's because our text above runs seven lines
   longer.
 - **uk_commercial_lease (27.6, 78 pages vs 79)**: on page 64 we fit 4 lines
