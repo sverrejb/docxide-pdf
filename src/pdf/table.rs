@@ -681,6 +681,7 @@ fn render_cell_content(
                         src,
                         cell_x,
                         col_w,
+                        cm.left,
                         para_top + valign_off,
                         ctx,
                         gradient_specs,
@@ -832,6 +833,7 @@ fn render_cell_floating_shapes(
     para: &Paragraph,
     cell_x: f32,
     col_w: f32,
+    text_inset: f32,
     para_top: f32,
     ctx: &RenderContext,
     gradient_specs: &mut Vec<super::GradientSpec>,
@@ -854,7 +856,13 @@ fn render_cell_floating_shapes(
     }
 
     for tb in &para.textboxes {
-        let h_off = tb.h_position.place(0.0, col_w, tb.width_pt);
+        // An offset counts from where the cell's text starts, not its edge
+        // (table probe 7, compat 14 and 15: a 6pt offset lands 6pt right of
+        // the text for every margin and border width).
+        let h_off = match tb.h_position {
+            crate::model::HorizontalPosition::Offset(o) => text_inset + o,
+            p => p.place(0.0, col_w, tb.width_pt),
+        };
         let tb_x = cell_x + h_off;
         let tb_y_top = para_top - tb.v_offset_pt;
         let layer = behind.as_deref_mut().filter(|_| tb.behind_doc);
