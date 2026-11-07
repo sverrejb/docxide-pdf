@@ -1510,10 +1510,11 @@ pub(super) fn compute_row_layouts(
                     let mut prev_was_nested_table = false;
                     let mut negative_anchor_shift = 0.0f32;
                     let mut final_float_mark_hidden = false;
+                    // Bottom-aligned cells place text-anchored nested floats like
+                    // centred ones (nested_table_bottom_positive).
                     let top_aligned = matches!(cell.v_align, crate::model::CellVAlign::Top);
                     let text_above_floats =
                         text_fits_above_nested_floats(cell, cell_text_w, ctx.fonts, ctx.doc_line_spacing, hf_sub);
-                    let centered = matches!(cell.v_align, crate::model::CellVAlign::Center);
 
                     let block_count = cell.content.len();
                     // Modern Word drops the relocated anchor line only when
@@ -2142,7 +2143,7 @@ pub(super) fn compute_row_layouts(
                                 // text: the text flows beside it (advocacy's picture
                                 // tables with their stories to the right).
                                 let mut floating_offset = nested_table.position.as_ref()
-                                    .filter(|pos| pos.v_anchor == "text" && (nested_table.rows.len() == 1 || plain_side_text) && (top_aligned || (centered && pos.v_offset_pt < 0.0) || (centered && block_idx == 0 && pos.v_offset_pt > 0.0)))
+                                    .filter(|pos| pos.v_anchor == "text" && (nested_table.rows.len() == 1 || plain_side_text) && (top_aligned || pos.v_offset_pt < 0.0 || (block_idx == 0 && pos.v_offset_pt > 0.0)))
                                     .filter(|pos| {
                                         let at_left_edge = matches!(pos.h_position, HorizontalPosition::Offset(v) if v == 0.0);
                                         let next_is_blank = matches!(
@@ -2217,7 +2218,7 @@ pub(super) fn compute_row_layouts(
                                     && floating_offset.is_some_and(|offset| offset >= 0.0)
                                     && matches!(cell.content.get(block_idx+1),Some(Block::Paragraph(p)) if is_text_empty(&p.runs));
                                 // Positive offsets suppress the centered cell's trailing mark; negative offsets displace its anchor line.
-                                prev_was_nested_table = final_float_mark_hidden || floating_offset.is_none() || (centered && floating_offset.is_some_and(|offset| offset > 0.0))
+                                prev_was_nested_table = final_float_mark_hidden || floating_offset.is_none() || (!top_aligned && floating_offset.is_some_and(|offset| offset > 0.0))
                                     || suppress_negative_mark(block_idx, floating_offset)
                                     || (negative_anchor_shift > 0.0 && floating_offset.is_some());
                                 para_idx += 1;
@@ -2232,7 +2233,7 @@ pub(super) fn compute_row_layouts(
                     // already suppressed above via prev_was_nested_table.
                     let trailing_mark_after_table = items.len() >= 2
                         && matches!(items.get(items.len() - 2), Some(CellContentItem::NestedTable { floating_offset, .. })
-                            if final_float_mark_hidden || floating_offset.is_none() || (centered && floating_offset.is_some_and(|offset| offset > 0.0))
+                            if final_float_mark_hidden || floating_offset.is_none() || (!top_aligned && floating_offset.is_some_and(|offset| offset > 0.0))
                                 || suppress_negative_mark(block_count.saturating_sub(2), *floating_offset)
                                 || (negative_anchor_shift > 0.0 && floating_offset.is_some()))
                         && matches!(items.last(), Some(CellContentItem::Paragraph(p)) if p.lines.is_empty() && p.image_name.is_none() && p.floating_images.is_empty());
