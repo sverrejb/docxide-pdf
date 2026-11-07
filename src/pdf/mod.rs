@@ -2659,8 +2659,9 @@ fn line_count(para: &Paragraph, ctx: &RenderContext, col_w: f32) -> usize {
 
 /// Modern Word keeps a margin-anchored empty frame's box even though its
 /// paragraphs consume no body flow. A full-width inline table cannot wrap
-/// beside that box. Only introductory boxes whose anchor fits this page are
-/// collected; frames after visible body text or forced breaks are left alone.
+/// beside that box, nor can body text above the anchor (Word probes:
+/// empty-margin-frame-visible-body-before-frame). Only boxes whose anchor
+/// fits this page are collected; frames after forced breaks are left alone.
 fn empty_frame_table_bands(
     blocks: &[Block],
     sp: &SectionProperties,
@@ -2687,9 +2688,7 @@ fn empty_frame_table_bands(
             .filter(|_| is_empty_wrapping_frame(p, sp))
         else {
             if p.runs.iter().any(|r| {
-                (!r.vanish && !r.text.trim().is_empty())
-                    || r.is_tab
-                    || r.inline_image.is_some()
+                r.inline_image.is_some()
                     || r.field_code.is_some()
                     || r.checkbox.is_some()
                     || r.footnote_id.is_some()
@@ -2790,7 +2789,7 @@ fn empty_frame_table_bands(
                         prefix_h += q.space_before.max(0.0)
                             + q.space_after.max(0.0)
                             + plain_line_h(q, ctx)
-                                * (1 + q.runs.iter().filter(|r| r.is_line_break).count()) as f32;
+                                * line_count(q, ctx, sp.text_width()).max(1) as f32;
                     }
                 }
             }
@@ -4458,10 +4457,31 @@ fn render_paragraph_block(
         );
         size_tab_mark_line(&mut lines, para, effective_ls, tallest_lhr, ctx.fonts);
     }
+    // Only glyphs on a picture's own line hang a descent below it: when the
+    // text after leading spaces and a picture wraps to the next line, Word
+    // closes the picture line at the picture (leading-picture-image-fits).
+    let picture_lines_glyphless = lines
+        .iter()
+        .filter(|l| line_max_image_h(l) > 0.0)
+        .all(|l| {
+            l.chunks
+                .iter()
+                .all(|c| c.inline_image_name.is_some() || c.text.trim().is_empty())
+        });
+    let picture_runs: Vec<Run> = if picture_lines_glyphless {
+        effective_runs
+            .iter()
+            .filter(|r| r.inline_image.is_some() || r.text.trim().is_empty())
+            .cloned()
+            .collect()
+    } else {
+        Vec::new()
+    };
     let mut para_metrics = (
         para_ascent,
         if max_inline_img_h > 0.0 {
-            picture_line_bottom(&effective_runs, para, ctx.fonts, effective_ls)
+            let runs = if picture_lines_glyphless { &picture_runs[..] } else { &effective_runs[..] };
+            picture_line_bottom(runs, para, ctx.fonts, effective_ls)
         } else {
             0.0
         },

@@ -234,7 +234,11 @@ fn write_image_xobject(
     xobj.height(h as i32);
     xobj.color_space().device_rgb();
     xobj.bits_per_component(8);
-    xobj.interpolate(true);
+    // Word smooths only its JPEGs: every Flate picture in the fixture
+    // references has /Interpolate false (118 against 7 DCT ones).
+    if matches!(filter, Filter::DctDecode) {
+        xobj.interpolate(true);
+    }
     if let Some(mask_ref) = smask {
         xobj.s_mask(mask_ref);
     }

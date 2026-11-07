@@ -174,9 +174,8 @@ pub struct Table {
     pub table_indent: f32,
     pub table_indent_explicit: bool,
     /// The table has a table style (its own `w:tblStyle` or the document's
-    /// default table style) or its own `w:tblCellMar`. Without either Word
-    /// gives it 0.5pt side margins and never outdents it.
-    pub has_style_or_cell_mar: bool,
+    /// default table style).
+    pub has_table_style: bool,
     pub cell_margins: CellMargins,
     pub position: Option<TablePosition>,
     pub alignment: TableAlignment,

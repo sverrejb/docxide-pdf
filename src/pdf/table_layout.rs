@@ -877,6 +877,24 @@ pub(super) fn auto_fit_columns(
             && (table.auto_width || stale_content_preference()))
             || (table.auto_width && saved_grid_asymmetric && stale_uniform_preferences));
     if !keep_saved_grid {
+        // A row whose cell widths add up to the table but disagree with the
+        // saved grid replaces that stale grid: Word draws case91's
+        // 1000/1517/479/1754 cells over an 851/1666/479/1754 grid as stated,
+        // where the larger of each pair, rescaled, moved columns by up to 5pt.
+        // An AutoFit-width table's saved grid is Word's own fit and stays
+        // (primary_care_safeguarding re-wrapped under its stated cells).
+        let stated_row = table.rows.iter().filter(|_| !table.auto_width).find(|row| {
+            let cells: Vec<_> = row.grid_cells().collect();
+            cells.len() == ncols
+                && cells.iter().all(|(_, span, cell)| *span == 1 && cell.width > 0.0)
+                && (cells.iter().map(|(_, _, c)| c.width).sum::<f32>() - total).abs() < 0.5
+                && cells.iter().any(|(col, _, cell)| (cell.width - table.col_widths[*col]).abs() > 0.5)
+        });
+        if let Some(row) = stated_row {
+            for (grid_col, _, cell) in row.grid_cells() {
+                preferred[grid_col] = cell.width;
+            }
+        }
         for row in &table.rows {
             for (grid_col, span, cell) in row.grid_cells() {
                 if grid_col >= ncols {
@@ -1075,6 +1093,8 @@ pub(super) enum CellContentItem {
         space_before: f32,
         floating_offset: Option<f32>,
         floating_x_offset: Option<f32>,
+        /// Half the table's bottom outer border band, below its last row.
+        bottom_band: f32,
     },
 }
 
@@ -1131,15 +1151,24 @@ fn registration_table_extent(table: &Table, cell_text_w: f32, ctx: &RenderContex
     if table.rows.len() != 1
         || pos.v_anchor != "text"
         || pos.h_anchor != "margin"
-        || !matches!(pos.h_position, HorizontalPosition::Offset(x) if x == 0.0)
         || table.table_indent != 0.0
         || table.alignment != crate::model::TableAlignment::Left
     {
         return None;
     }
+    // A small offset from the margin keeps it a registration table
+    // (nested-floats-spaced-text-nonzero-x's 1pt tblpX); the offset eats
+    // into the strip beside it.
+    let HorizontalPosition::Offset(x) = pos.h_position else {
+        return None;
+    };
+    if x < 0.0 {
+        return None;
+    }
     let mut widths = auto_fit_columns(table, ctx.fonts, Some(cell_text_w), None);
     apply_nested_pct_width(table, &mut widths, cell_text_w);
-    let strip = cell_text_w - widths.iter().sum::<f32>() - pos.left_from_text - pos.right_from_text;
+    let strip =
+        cell_text_w - x - widths.iter().sum::<f32>() - pos.left_from_text - pos.right_from_text;
     if strip < MIN_NESTED_FLOAT_STRIP {
         return None;
     }
@@ -2138,7 +2167,7 @@ pub(super) fn compute_row_layouts(
                                 let space_before = prev_space_after;
                                 let mut floating_x_offset = None;
                                 let auto_left_float = nested_table.position.as_ref().is_some_and(|p|
-                                    matches!(p.h_position, crate::model::HorizontalPosition::Offset(v) if (p.h_anchor == "margin" && v <= 0.0 && v + nested_cw.iter().sum::<f32>() > 0.0)
+                                    matches!(p.h_position, crate::model::HorizontalPosition::Offset(v) if (p.h_anchor == "margin" && v + nested_cw.iter().sum::<f32>() > 0.0)
                                         || (p.h_anchor == "column" && plain_side_text && v == 0.0)))
                                     && nested_table.alignment == crate::model::TableAlignment::Left
                                     && nested_table.table_indent == 0.0;
@@ -2149,6 +2178,15 @@ pub(super) fn compute_row_layouts(
                                         floating_x_offset = Some(nested_table.position.as_ref().unwrap().left_from_text);
                                     }
                                 }
+                                // An inline nested table's outer border bands sit inside
+                                // the cell's flow, as a top-level table's do: Word starts
+                                // autofit-cell-widths-nested's inner top band where the
+                                // host's ends, and the host's bottom band below its own.
+                                let (top_band, bottom_band) = if floating_offset.is_none() {
+                                    outer_half_bands(nested_table)
+                                } else {
+                                    (0.0, 0.0)
+                                };
                                 if let Some(offset) = floating_offset {
                                     floating_extent = floating_extent.max(total_h + space_before + offset + nested_h);
                                     if auto_left_float {
@@ -2161,14 +2199,15 @@ pub(super) fn compute_row_layouts(
                                             - nested_table.position.as_ref().unwrap().right_from_text;
                                     }
                                 } else {
-                                    total_h += space_before + nested_h;
+                                    total_h += space_before + top_band + nested_h + bottom_band;
                                 }
                                 items.push(CellContentItem::NestedTable {
                                     col_widths: nested_cw,
                                     rows: nested_layouts,
-                                    space_before,
+                                    space_before: space_before + top_band,
                                     floating_offset,
                                     floating_x_offset,
+                                    bottom_band,
                                 });
                                 if floating_offset.is_none() { prev_space_after = 0.0; }
                                 // A lone end-of-cell mark directly anchoring a
@@ -2383,12 +2422,13 @@ impl CellContentItem {
                 rows,
                 space_before,
                 floating_offset,
+                bottom_band,
                 ..
             } => {
                 if floating_offset.is_some() {
                     0.0
                 } else {
-                    space_before + rows.iter().map(|r| r.height).sum::<f32>()
+                    space_before + rows.iter().map(|r| r.height).sum::<f32>() + bottom_band
                 }
             }
         }
@@ -2467,6 +2507,20 @@ pub(super) fn row_pieces<'a>(n_rows: usize, c: &Chunk<'a>) -> Vec<RowPiece<'a>> 
     pieces
 }
 
+/// Half of the widest outer border band at the table's top (first row) and
+/// bottom (last row): the part of its outer borders inside its flow height.
+pub(super) fn outer_half_bands(table: &Table) -> (f32, f32) {
+    let band = |row: Option<&crate::model::TableRow>, top: bool| {
+        row.map_or(0.0, |r| {
+            r.cells
+                .iter()
+                .map(|c| if top { c.borders.top.band() } else { c.borders.bottom.band() })
+                .fold(0.0f32, f32::max)
+        })
+    };
+    (band(table.rows.first(), true) / 2.0, band(table.rows.last(), false) / 2.0)
+}
+
 /// Height of a chunk; items without lines use their block height.
 pub(super) fn item_chunk_height(item: &CellContentItem, c: &Chunk) -> f32 {
     match item {
@@ -2479,10 +2533,17 @@ pub(super) fn item_chunk_height(item: &CellContentItem, c: &Chunk) -> f32 {
             ..
         } => 0.0,
         CellContentItem::NestedTable {
-            rows, space_before, ..
+            rows,
+            space_before,
+            bottom_band,
+            ..
         } => {
             (if c.l0 == 0 && c.from.is_empty() {
                 *space_before
+            } else {
+                0.0
+            }) + (if c.l1.is_none() && c.to.is_empty() {
+                *bottom_band
             } else {
                 0.0
             }) + row_pieces(rows.len(), c)
@@ -3048,7 +3109,7 @@ mod tests {
             }],
             table_indent: 0.0,
             table_indent_explicit: false,
-            has_style_or_cell_mar: true,
+            has_table_style: true,
             cell_margins: Default::default(),
             position: None,
             alignment: Default::default(),
@@ -3109,7 +3170,7 @@ mod tests {
             }],
             table_indent: 0.0,
             table_indent_explicit: false,
-            has_style_or_cell_mar: true,
+            has_table_style: true,
             cell_margins: Default::default(),
             position: None,
             alignment: Default::default(),
@@ -3268,6 +3329,7 @@ mod floating_nested_tests {
             space_before: gap,
             floating_offset,
             floating_x_offset: None,
+            bottom_band: 0.0,
         }
     }
 

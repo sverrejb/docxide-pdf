@@ -5335,13 +5335,22 @@ pub(super) fn render_paragraph_lines(
                     .then(|| pdf_name_to_entry.get(chunk.pdf_font.as_str()))
                     .flatten()
                     .and_then(|e| post_underline(e, chunk.font_size));
+                // An underlined space spans its whole justified gap: Word's
+                // line runs unbroken under underlined-space-compat14-*.
+                let deco_w = if chunk.word_space_bridge {
+                    line.chunks.get(chunk_idx + 1).map_or(chunk.width, |next| {
+                        (chunk_abs_x(chunk_idx + 1, next) - x).max(chunk.width)
+                    })
+                } else {
+                    chunk.width
+                };
                 if let (true, Some((offset, ul_thick))) = (chunk.underline, post_ul) {
                     let bottom = y - offset - ul_thick;
                     push_decoration(
                         &mut decorations,
                         x,
                         bottom,
-                        chunk.width,
+                        deco_w,
                         ul_thick,
                         chunk.color,
                     );
@@ -5352,14 +5361,14 @@ pub(super) fn render_paragraph_lines(
                         y - chunk.font_size * 0.12
                     };
                     let ul_top = ul_y - thick;
-                    push_decoration(&mut decorations, x, ul_top, chunk.width, thick, chunk.color);
+                    push_decoration(&mut decorations, x, ul_top, deco_w, thick, chunk.color);
                     if chunk.double_underline {
                         let gap = (thick * 1.5).max(1.0);
                         push_decoration(
                             &mut decorations,
                             x,
                             ul_top - thick - gap,
-                            chunk.width,
+                            deco_w,
                             thick,
                             chunk.color,
                         );
@@ -5376,7 +5385,7 @@ pub(super) fn render_paragraph_lines(
                         &mut decorations,
                         x,
                         st_y,
-                        chunk.width,
+                        deco_w,
                         st_thick,
                         chunk.color,
                     );

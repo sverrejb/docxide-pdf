@@ -702,6 +702,7 @@ fn render_cell_content(
                 space_before,
                 floating_offset,
                 floating_x_offset,
+                bottom_band,
             } => {
                 // Find the corresponding Block::Table
                 let table = loop {
@@ -740,6 +741,8 @@ fn render_cell_content(
                     );
                     if floating_offset.is_some() {
                         cursor_y = saved_y;
+                    } else {
+                        cursor_y -= bottom_band;
                     }
                 } else {
                     cursor_y -= item.height();
@@ -1161,12 +1164,12 @@ fn render_nested_table(
         Some(crate::model::HorizontalPosition::AlignRight) => TableAlignment::Right,
         _ => table.alignment,
     };
-    // Word 2013+ positions a fully over-wide, left-anchored nested float
-    // against its host cell edge rather than adding the host's left padding.
+    // Word positions a fully over-wide, left-anchored nested float against
+    // its host cell edge rather than adding the host's left padding, in
+    // compat 14 as in 15 (wide-nested-float-edge-wide-m14-left-o108-*).
     let edge_shift = floating_host
         .filter(|m| {
-            ctx.compat_mode >= 15
-                && table.table_indent == 0.0
+            table.table_indent == 0.0
                 && table_total_w > available_w + m.left + m.right
                 && anchored.is_some_and(|p| {
                     matches!(p.h_position, crate::model::HorizontalPosition::Offset(x) if x == 0.0)
@@ -1393,6 +1396,7 @@ fn render_partial_cell_content(
                 space_before,
                 floating_offset,
                 floating_x_offset,
+                bottom_band,
             } => {
                 let bi = item_to_block.get(pi).copied().unwrap_or(0);
                 if let Some(Block::Table(table)) = blocks.get(bi) {
@@ -1442,6 +1446,8 @@ fn render_partial_cell_content(
                     );
                     if floating_offset.is_some() {
                         cursor_y = saved_y;
+                    } else if chunk.l1.is_none() && chunk.to.is_empty() {
+                        cursor_y -= bottom_band;
                     }
                 } else {
                     cursor_y -= item_chunk_height(&items[pi], &chunk);
@@ -1966,9 +1972,13 @@ fn aligned_table_left(
         // the edge sits one cell margin further out, even for an explicit
         // tblInd of 0 (chinese_costume). Word 2013+ (compat 15) never outdents:
         // the border sits at the margin and the text inside it. Nor does any
-        // layout outdent a table without a style or tblCellMar (case131's
-        // second column at the margin + 300pt + its 0.5pt cell margin).
-        TableAlignment::Left if compat_mode >= 15 || !table.has_style_or_cell_mar => {
+        // layout outdent a table with neither a style nor a tblInd, even with
+        // its own tblCellMar (Word probes on section-mark-after-table-inline-
+        // compat14: adding tblInd 0 moves the text from 77.5 to the margin;
+        // case131's second column at the margin + 300pt + its 0.5pt margin).
+        TableAlignment::Left
+            if compat_mode >= 15 || !(table.has_table_style || table.table_indent_explicit) =>
+        {
             area_left + table.table_indent + word2013_border_shift(table)
         }
         TableAlignment::Left => area_left + table.table_indent - table.first_cell_left_margin(),
@@ -2025,6 +2035,15 @@ pub(super) fn render_table(
         .as_ref()
         .filter(|p| !p.allow_overlap)
         .and_then(|_| pb.float_zone.clone());
+    // An overlapping floating table drawn over an earlier one does not lift
+    // the text the earlier one holds down: Word clears displaced-anchor-*'s
+    // "After clearing" below the tall first table, wherever the second sits.
+    let overlapped_table_zone = table
+        .position
+        .as_ref()
+        .filter(|p| p.allow_overlap)
+        .and_then(|_| pb.float_zone.clone())
+        .filter(|z| z.from_table);
     let mut displaced_text_anchor = None;
     if table.position.as_ref().is_some_and(|p| !p.allow_overlap)
         && let Some(ref zone) = pb.float_zone
@@ -2667,6 +2686,11 @@ pub(super) fn render_table(
                     current.left_from_text = current.left_from_text.max(old.left_from_text);
                     current.right_from_text = current.right_from_text.max(old.right_from_text);
                 }
+                if let Some(old) = overlapped_table_zone
+                    && pb.float_zone.as_ref().is_some_and(|z| old.bottom_y < z.bottom_y)
+                {
+                    pb.float_zone = Some(old);
+                }
             }
         }
     }
@@ -2695,6 +2719,7 @@ pub(super) fn render_header_footer_table(
     page_num_format: Option<&str>,
     gradient_specs: &mut Vec<super::GradientSpec>,
     links: &mut Vec<LinkAnnotation>,
+    is_header: bool,
 ) {
     let content_w = sp.page_width - sp.margin_left - sp.margin_right;
     let mut col_widths = auto_fit_columns(table, ctx.fonts, None, Some(content_w));
@@ -2733,6 +2758,16 @@ pub(super) fn render_header_footer_table(
 
     let merge_spans = compute_merge_spans(table, &row_layouts);
 
+    // A header table's outer border bands sit inside the flow, as in the
+    // body: Word starts header-autofit-table's top band at the header
+    // margin. A footer table's do not: nabl's bottom rule is centred on the
+    // footer margin and its text matched Word without them.
+    let (top_band, bottom_band) = if is_header {
+        super::table_layout::outer_half_bands(table)
+    } else {
+        (0.0, 0.0)
+    };
+    *y -= top_band;
     render_table_rows(
         table,
         &row_layouts,
@@ -2749,6 +2784,7 @@ pub(super) fn render_header_footer_table(
         Some(&hf_sub),
         None,
     );
+    *y -= bottom_band;
     // ponytail: header/footer cells get no balloons (the pane anchors body text only).
     ctx.cell_comment_anchors.borrow_mut().clear();
 }
@@ -2921,6 +2957,7 @@ mod floating_nested_visibility_tests {
             space_before: 0.0,
             floating_offset: Some(0.0),
             floating_x_offset: None,
+            bottom_band: 0.0,
         }];
         assert_eq!(items[0].height(), 0.0);
         assert!(cell_has_visible_content(&items));

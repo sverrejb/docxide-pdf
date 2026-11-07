@@ -1016,7 +1016,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
         rows,
         table_indent,
         table_indent_explicit,
-        has_style_or_cell_mar,
+        has_table_style: tbl_style.is_some() || ctx.styles.has_default_table_style,
         cell_margins,
         position: table_position,
         alignment,

@@ -5,6 +5,78 @@ Open work only. Finished rounds, their rules and evidence live in git history
 
 ## Open fixture leads
 
+**Engine-gap triage (2026-11-07):** cases where another engine beats us by
+≥3pp J in the CI comparison (`git show origin/gh-pages:report.json`; same
+numbers as our baselines): 120 cases, ~104 families. Fixed and pushed
+2026-11-08 with baselines (mean J +1.09pp over 1,093 fixtures, 63 scores up;
+isla −3.8 accepted, see below): ut_koer's compat 14 header (floats don't wrap header
+text); the legacy table outdent (needs a style or a tblInd: case196,
+section-mark-after-table-inline-compat14, short-float-clear-inline-table);
+empty margin frames after visible body text
+(empty-margin-frame-visible-body-before-frame 3.5 → 81.2); an overlapping
+floating table no longer drops a taller earlier one's wrap zone
+(displaced-anchor-narrow-*-overlap1 57.9 → 95.9); a fixed-width table's
+cells that fill it replace a stale grid (autofit-indent-* ~30 → ~78,
+case91, case90); nested tables' outer border bands count in their cell
+(autofit-cell-widths-nested 13.6 → 79.4, nested-percent-*, case148,
+case51, case88); Flate pictures are no longer interpolated
+(picture-mark-leading-* → 100); header (not footer) tables keep their
+outer bands inside the flow (header-autofit-table 48.4 → 81.8);
+registration floats at a small positive tblpX (nested-floats-spaced-text-
+nonzero-x 30.8 → 64.1); a picture line's descent only from glyphs on that
+line (leading-picture-image-* ~90 → ~100); underlined spaces span their
+justified gap (underlined-space-compat14-*). Open:
+- isla_language_lesson_plan (−3.85 from the header-band change): its o:hr
+  paragraph below a header table lands 0.4pt low; Word draws the rule
+  ~1.4pt lower relative to the table than we do, while body probes
+  (`tests/output/koer/hr/` on branch koer-overlap, 2026-11-07) put our rule
+  0.45pt too LOW and show a rule-only body line as tall as a text line.
+  Word also draws o:hrstd rules ~0.75pt thick, we 0.5.
+- `displaced-anchor-wide-*-overlap1` (4 cases, 57.9): the anchor line
+  starting 10pt above a margin-anchored full-width table goes below it in
+  Word (narrow: beside it, even at 0.07pt overlap; page anchor and without
+  the second table alike). Conflicts with 82e94a5ad's "a line that starts
+  above a page-anchored table keeps its place" (japanese_hr probes): find
+  what separates the two before changing the reach rule in `mod.rs`.
+- `empty-margin-frame-long-prefix` (46.0): the frame's anchor is on page 2;
+  `empty_frame_table_bands` only reserves the box on the first page.
+- Double underline (scraped/double-underline 50.7): Word probes
+  (`tests/output/koer/du/`, 2026-11-07) give each line ≈ q(0.6 × post
+  thickness) (fits 8/8, factor unexplained), the first line at the single
+  underline's post offset or less, a 1.0–1.25pt gap; Word also underlines
+  a line's trailing space. We use 0.05 × size lines 0.12 × size down.
+- nested-floats-spaced-text-bottom-cell (40.4): the same two registration
+  tables in a vAlign=bottom cell still lay out inline (the float filter
+  wants top/centre alignment).
+- Header inline picture at 1.5 spacing (czech_village_budget, 0.6pt body
+  drift): Word's picture line is 1.13pt taller than ours.
+- candidate_reference_check_form: rows drift 0.6pt then 1.6pt; Word paints
+  shaded cells in strips (its tcMar bands), not one rect.
+- `nested-table-picture-width` (80.2): a nested row holding a picture
+  wider than its cell (166pt in ~158pt) is ~7pt taller in Word.
+- slovak_pedagogical_practice (22.8, body +2.9pt): removing its header
+  o:hr run moves Word's body down 1.75pt and ours not at all; the run is
+  Cambria 13 under a Korinna BT (missing) mark, so the mark font's
+  substitute probably sets the empty line; a further 1.2pt residual.
+- vaccines_history_chapter: page 1 fits one more line than Word (−14pt
+  after); 2.6pt lost in the anchored-textbox timeline above the body, and the
+  16pt subtitle is 11.5pt low.
+- italian_academic_cv_form: the last row fits by 0.26pt in ours, misses by
+  ~0.3pt in Word (0.44pt drift above + row height); no single rule.
+- romanian_candidate_declaration_form_f2 header 3.6pt high;
+  scottish_fundraising_awards 1.3pt drift plus one re-wrap.
+- case60: bullets inside SmartArt shapes.
+- Rest of the 120-case gap list is untriaged: after the next CI comparison,
+  re-diff `report.json` and drop the families fixed here.
+- case140 (−2.4) and air_pollution_permit_form (−2.6) score drops since
+  older baselines are not layout changes: case91's output was identical
+  before and after its drop (a metric/raster change).
+- case140/case148 nested-table cell rules sit 0.36pt high and start 0.7pt
+  right of Word's (rules present, not missing).
+- Not worth chasing: sparse probe fixtures whose text is within 0.5pt and
+  whose gap is 1–2px (connector-paragraph-anchor, picture-mark-leading-*,
+  nested-percent-*, dutch_council_member_resignation).
+
 **torture_test round (2026-10-29/30, branch `torture-test`):** a two-page
 fixture built only from features absent from `src/` (kit with generator in
 `tests/output/torture_test/`; Word online reference). 2.8% J / 26.7% SSIM
@@ -142,9 +214,9 @@ alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
 - streamnet p1 agenda table rows +0.43/+0.68pt each (cell line height).
 - dental_amalgam: gained +22pp J with a max-descent marker rule but +10pp with
   the measured ascent-only rule; check what its markers are.
-- ut_koer (2026-07, unverified since): a tab-stop two-column contact header
-  beside a wrapTight header image needs tab layout aware of the float band
-  (`build_tabbed_line` has no float-zone awareness).
+- ut_koer header: FIXED 2026-11-07 — compat 14 header/footer floats don't
+  wrap header text (Word probes). Open: whether compat 14 header floats also
+  skip the full-width push in `float_text_push` (unprobed).
 - multi_font: needs Copperplate Gothic Light (in Word's cloud catalog; pick it
   in Word's font menu to download); page 1 also runs ~14pt taller than
   Word's. korean_japanese needs HY헤드라인M and New Gulim (low value).

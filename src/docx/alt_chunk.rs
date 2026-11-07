@@ -777,7 +777,7 @@ fn convert_table(
         table_indent: 0.0,
         table_indent_explicit: false,
         // Word's HTML import writes each table's cell margins as tblCellMar.
-        has_style_or_cell_mar: true,
+        has_table_style: true,
         cell_margins,
         position: None,
         alignment: TableAlignment::default(),
