@@ -23,7 +23,7 @@ default = ["cli"]
 cli = ["clap", "env_logger"]
 
 [dependencies]
-zip = "8.1.0"
+zip = "9.4"
 roxmltree = "0.21"
 pdf-writer = "0.14"
 ttf-parser = "0.25"

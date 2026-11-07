@@ -190,7 +190,7 @@ tests/
 
 ## Dependencies
 
-- `zip = "8.1"` — DOCX is a ZIP container
+- `zip = "9.4"` — DOCX is a ZIP container
 - `roxmltree = "0.21"` — read-only XML tree parser
 - `pdf-writer = "0.14"` — low-level PDF generation
 - `ttf-parser = "0.25"`, `subsetter = "0.2"`, `memmap2` — font parsing, subsetting, memory-mapped font files

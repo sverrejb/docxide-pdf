@@ -122,7 +122,7 @@ fn collect_xml_names(archive: &mut zip::ZipArchive<fs::File>) -> Vec<String> {
     let mut names = Vec::new();
     for i in 0..archive.len() {
         if let Ok(entry) = archive.by_index(i) {
-            let name = entry.name().to_string();
+            let name = entry.name().unwrap_or_default().into_owned();
             if name == "word/document.xml"
                 || name.starts_with("word/header")
                 || name.starts_with("word/footer")

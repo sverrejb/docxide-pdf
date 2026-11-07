@@ -48,14 +48,14 @@ path = "src/bin/page_metrics.rs"
 
 [dependencies]
 rayon = "1"   # page-metrics, and the harness's metrics.rs it includes by path
-zip = "2"
+zip = "9.4"
 roxmltree = "0.21"
 image = "0.25"
 eframe = "0.31"
 egui_extras = { version = "0.31", features = ["image"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-lopdf = "0.34"
+lopdf = "0.47"
 rustybuzz = "0.20"
 ttf-parser = "0.25"
 memmap2 = "0.9"

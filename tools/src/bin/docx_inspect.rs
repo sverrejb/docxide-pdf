@@ -49,7 +49,7 @@ fn list_entries(archive: &mut ZipArchive<fs::File>) {
     for i in 0..archive.len() {
         let entry = archive.by_index(i).unwrap();
         if !entry.is_dir() {
-            println!("{:>9}  {}", entry.size(), entry.name());
+            println!("{:>9}  {}", entry.size(), entry.name().unwrap_or_default());
         }
     }
 }
@@ -89,7 +89,7 @@ fn grep_entries(archive: &mut ZipArchive<fs::File>, pattern: &str) {
     let mut found = 0;
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i).unwrap();
-        let name = entry.name().to_owned();
+        let name = entry.name().unwrap_or_default().into_owned();
         if name.ends_with(".xml") || name.ends_with(".rels") {
             let mut content = String::new();
             entry.read_to_string(&mut content).unwrap_or(0);

@@ -580,7 +580,10 @@ pub(super) fn parse_theme<R: Read + Seek>(
     let script = east_asia_lang.and_then(lang_to_script).unwrap_or("Jpan");
     let bidi_script = bidi_lang.and_then(lang_to_script);
 
-    let names: Vec<String> = zip.file_names().map(|s| s.to_string()).collect();
+    let names: Vec<String> = zip
+        .file_names()
+        .filter_map(|s| s.ok().map(|s| s.into_owned()))
+        .collect();
     let xml_content = names
         .iter()
         .find(|n| n.starts_with("word/theme/") && n.ends_with(".xml"))
