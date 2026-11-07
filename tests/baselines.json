@@ -279,11 +279,6 @@
     "a11y_struct": 0.6471,
     "a11y_text": 1.0
   },
-  "cases/autofit-textbox-wrap": {
-    "jaccard": 0.8282,
-    "ssim": 0.999,
-    "text_boundary": 1.0
-  },
   "cases/bahnschrift-heading-metrics": {
     "jaccard": 0.5647,
     "ssim": 0.6838,
@@ -333,11 +328,6 @@
     "ua_deficit": 0,
     "a11y_struct": 1.0,
     "a11y_text": 1.0
-  },
-  "cases/behind-text-layer": {
-    "jaccard": 0.815,
-    "ssim": 0.9414,
-    "text_boundary": 1.0
   },
   "cases/case1": {
     "jaccard": 0.6739,
@@ -8247,11 +8237,6 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
-  "cases/table-cell-shading-edges": {
-    "jaccard": 0.8059,
-    "ssim": 0.8228,
-    "text_boundary": 1.0
-  },
   "cases/table-style-centered": {
     "jaccard": 0.3012,
     "ssim": 0.7054,
@@ -8331,116 +8316,6 @@
     "ua_deficit": 0,
     "a11y_struct": 0.5,
     "a11y_text": 1.0
-  },
-  "cases/text-box-cell-anchor": {
-    "jaccard": 0.4871,
-    "ssim": 0.7046,
-    "text_boundary": 1.0
-  },
-  "cases/text-box-cell-clip": {
-    "jaccard": 0.647,
-    "ssim": 0.8027,
-    "text_boundary": 1.0
-  },
-  "cases/text-box-cell-linked": {
-    "jaccard": 0.6511,
-    "ssim": 0.782,
-    "text_boundary": 1.0
-  },
-  "cases/text-box-picture-fill": {
-    "jaccard": 0.989,
-    "ssim": 0.9917,
-    "text_boundary": 1.0
-  },
-  "cases/text-box-picture-fill-group": {
-    "jaccard": 0.9662,
-    "ssim": 0.9811,
-    "text_boundary": 1.0
-  },
-  "cases/text-box-story-pictures": {
-    "jaccard": 0.9082,
-    "ssim": 0.8642,
-    "text_boundary": 1.0
-  },
-  "cases/text-box-table-anchor": {
-    "jaccard": 0.7733,
-    "ssim": 0.9567,
-    "text_boundary": 1.0
-  },
-  "cases/text-box-table-autofit-pictures": {
-    "jaccard": 0.8974,
-    "ssim": 0.9402,
-    "text_boundary": 1.0
-  },
-  "cases/text-box-table-autofit-wide": {
-    "jaccard": 0.837,
-    "ssim": 0.9736,
-    "text_boundary": 1.0
-  },
-  "cases/text-box-table-compat14": {
-    "jaccard": 0.9444,
-    "ssim": 0.9845,
-    "text_boundary": 1.0
-  },
-  "cases/text-box-table-group": {
-    "jaccard": 0.6939,
-    "ssim": 0.8992,
-    "text_boundary": 1.0
-  },
-  "cases/text-box-table-header": {
-    "jaccard": 0.7498,
-    "ssim": 0.95,
-    "text_boundary": 1.0
-  },
-  "cases/text-box-table-linked": {
-    "jaccard": 0.8765,
-    "ssim": 0.966,
-    "text_boundary": 1.0
-  },
-  "cases/text-box-table-linked-tall": {
-    "jaccard": 0.8532,
-    "ssim": 0.959,
-    "text_boundary": 1.0
-  },
-  "cases/text-box-table-widths": {
-    "jaccard": 0.897,
-    "ssim": 0.973,
-    "text_boundary": 1.0
-  },
-  "cases/textbox-inline-image-text-clip": {
-    "jaccard": 0.8687,
-    "ssim": 0.9098,
-    "text_boundary": 1.0
-  },
-  "cases/textbox-outline-inset": {
-    "jaccard": 0.9651,
-    "ssim": 0.9952,
-    "text_boundary": 1.0
-  },
-  "cases/textbox-outline-inset-style": {
-    "jaccard": 0.9649,
-    "ssim": 0.9842,
-    "text_boundary": 1.0
-  },
-  "cases/textbox-outline-style-width": {
-    "jaccard": 0.9986,
-    "ssim": 0.956,
-    "text_boundary": 1.0
-  },
-  "cases/textbox-oversized-inline-image": {
-    "jaccard": 0.8964,
-    "ssim": 0.8892,
-    "text_boundary": 1.0
-  },
-  "cases/textbox-wrap-beside": {
-    "jaccard": 0.8916,
-    "ssim": 0.9758,
-    "text_boundary": 0.9744
-  },
-  "cases/textbox-wrap-beside-compat14": {
-    "jaccard": 0.865,
-    "ssim": 0.962,
-    "text_boundary": 1.0
   },
   "cases/three-wrapping-floats-one-page": {
     "jaccard": 0.9849,

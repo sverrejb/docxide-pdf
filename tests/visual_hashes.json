@@ -84,9 +84,6 @@
   "cases/autofit-saved-grid-fixed-nested-address": [
     "08707c85da9e9b0bb95d8debff4c8d90789b2c416c612fd9e9fb7f6fe2971772"
   ],
-  "cases/autofit-textbox-wrap": [
-    "879d13816e3e288de1ccb7f5b084fdf022b70c2a7e59fcc361e9bf87c01655ba"
-  ],
   "cases/bahnschrift-heading-metrics": [
     "946b5c3c4c3318350e43613cb0b41ebb44fec767fdc8ce39f01746273bfc9884"
   ],
@@ -101,12 +98,6 @@
   ],
   "cases/band-para-relative-anchor-stays": [
     "20a2daf3d3cc508b97eb79d73f01f2e78c3df3202723f01f220cee597d039c7e"
-  ],
-  "cases/behind-text-layer": [
-    "84ab15f4ae2126695eefdb20f6cc614defd83f15d6843ad5fe017f192bc4ea40",
-    "b96b3fbf61e1d183ef4cadff089affd791dd789b92becfca73db150aa3923435",
-    "d489bce48578dc196c7ad1f499de7276d04c3d37436acf1801ab5882e902ff6b",
-    "4d8696f3c953a0399d27939e3294d5d757eb9175123ff0e6bdfd40ef3965ea6b"
   ],
   "cases/case1": [
     "1b21959ddde8b75f7c601d32f0e27c77fed67b8b30b9c1435dba23317dff725a"
@@ -2637,9 +2628,6 @@
   "cases/tab-only-cell-mark-tab": [
     "0597b9b1efe794dacc7b924e26fa044ecd7271fb57010030ba238c5db81eb4d6"
   ],
-  "cases/table-cell-shading-edges": [
-    "b6c0ac8bcef362aa8fc4dbf6cb63dbe8746bdbca4cf77945edf1dc6906bb2ac6"
-  ],
   "cases/table-style-centered": [
     "ab94b2dc2e5e62cb8b8dd7ef35524d3bf86c142058f9a21996babcb95e84d265"
   ],
@@ -2663,106 +2651,6 @@
   ],
   "cases/table-wrap-indent-w4200-i5100-r240": [
     "77e04cd24f8ca96676deb4006096277bc413658cf055509ed2509a26184407bf"
-  ],
-  "cases/text-box-cell-anchor": [
-    "4e2a22a38067f8dbe9ee693575bbb9ee5b8ca963f706c0a5200df516d128221e"
-  ],
-  "cases/text-box-cell-clip": [
-    "333c309cf371fd55ad84bf020416dfe02b1bc9ecd0e2fc3eaa341ea09a52105c"
-  ],
-  "cases/text-box-cell-linked": [
-    "e482ea2e40e4fba539c61ae630b70fc7b701ee715aceace793608be0cc78ab5d"
-  ],
-  "cases/text-box-picture-fill": [
-    "6b9bf3d2ed7a03ecef9260936af0c1021cf76d18051de270606303cb3690ca14"
-  ],
-  "cases/text-box-picture-fill-group": [
-    "523aa21f7a0547e1f66e7420665a6d9ac21149a879583949e6bab73b11a1d366"
-  ],
-  "cases/text-box-story-pictures": [
-    "b41e635d80edcde4e88889317c19bd0bb727bc10ffc6e0b019e7dd1d1e2ecadd",
-    "6bd6ce4e19d3723d525b7cb6a6dc1ec13db6fb2ec355a79401bc03c54c5cfce5"
-  ],
-  "cases/text-box-table-anchor": [
-    "7813978a821c79405cd86df66b69efc3e1f62c594b0e765ea538a550b368c658"
-  ],
-  "cases/text-box-table-autofit-pictures": [
-    "03c7da2207ad7021c6b28bbc361d4d7960296649b0e0239a2551faf1db2ccc61"
-  ],
-  "cases/text-box-table-autofit-wide": [
-    "8a6f254b1c73bcdb8511463ec6ca29bd7e69407c2fb626bd158833f4e18d60c7"
-  ],
-  "cases/text-box-table-compat14": [
-    "c505d61f2cc3b87e45d0efc0d995d8a78929c4507b749470e8d21cf89312ad7b"
-  ],
-  "cases/text-box-table-group": [
-    "6c1492d30bbeb18a6489d6885a5fa55b63233e882506ac6dcf0e4df797519667"
-  ],
-  "cases/text-box-table-header": [
-    "669706f3e7e07ddbad29bb185011984b41408a51f3d6f10f947e8d289157580f",
-    "bff044a1d6833e7ca0eeb335c23b50f854e6f4c018df5bf7ce53937ce392e5c1"
-  ],
-  "cases/text-box-table-linked": [
-    "07fcbf5a8078e0624e055625b10c0f731c3250ef8ce12c5adbf34fd319948927"
-  ],
-  "cases/text-box-table-linked-tall": [
-    "83306a87ce5d894c161fa55a44ab7bcc8b7ffee96471f3a6e7cefc07ae03d284"
-  ],
-  "cases/text-box-table-widths": [
-    "ee12bf1cecf7a4261e3ea857b877b955cf9c80ad10eedee19d0f1d1b98dbc52f"
-  ],
-  "cases/textbox-inline-image-text-clip": [
-    "0687cf8bd8a5dc40f052d313247a0200747cc48754648008817cbf45d0b6f7b0"
-  ],
-  "cases/textbox-outline-inset": [
-    "0e1a0647c56fa0006781330cdc0050de63cabb69114c03b170dbee25b7c7bdd9"
-  ],
-  "cases/textbox-outline-inset-style": [
-    "7628499289b4d16a609fd85fc2b2067555cd3a215b36e63055c09c13ed9144e8"
-  ],
-  "cases/textbox-outline-style-width": [
-    "12a5dd83b53bfe78a8f450475e011616f252d1ce4d562c02a3ce283a000216c4"
-  ],
-  "cases/textbox-oversized-inline-image": [
-    "a1a00bbd0911a6c1fcf6b86d455877fdd09361b212871382c2107ee3dee234f4",
-    "af7181e558b2309392afa510c0d90a4d90ae4557ba1d7780d58121d20070dc08",
-    "97841d17484e59d289a22a3385df4a28c4280ad5b8ab04d7d70280cbb0c4b4c7",
-    "7ed4097638bcece29f53fcee0ff78812d15a240e99de69c03377e530cbe99366"
-  ],
-  "cases/textbox-wrap-beside": [
-    "1b7378d1bc5e292fa042262b86d6c1ecced44feca4c0232ee84543733194bac2",
-    "75c58574f21155d84d3296da0df1d8234a25a9a55f3631733e4139eedd8c80d9",
-    "ed6330df0cebf1dc8647c16c435487b4caa294b6e08e38c0251afe15f2ca6964",
-    "61f587ab955b6b639136f30f2a92831c5f4f50d88e845bb1b0883d40b302bec2",
-    "69b6a51c96146173c53c030b0d53ac97cbb3a775bf301db76db3b99d37fde17c",
-    "1e18e0c4589672b0021083e2ee3dec9f89aba0c29742ba740a35f36d1b2cfcea",
-    "647f6a180032d067d920a6cedd16b2043999b89ab3acffb5feb5a54c9f1c34c6",
-    "4f906b5cb1033c8d24ab74c928db72e7df07cd47ad351cc92c39eae8cfff30dc",
-    "4fd714aa42a5e95731cc8dd6d7e7d8dadc780c858eb675a73fc24e4e37e2eb33",
-    "6c309e14248e39c9b2f301520085ea43101e7471d3b614dc81e982162bc768dd",
-    "ef15f690004e57e0250493f310fcbd1bd2e6a2161e80ceef8ccf85afd53fc8a2",
-    "dc7b46c4f7ae249d659908bd6542a0a959a5ba2a392ee3711033fa90bdc0f50b",
-    "9e27138b12c28f2233adbbc3098786d9a4fb663b7b50278f2a8e647a78e9a6dd",
-    "97ca06b941e7d829359665bb54e57e2445b6049b2312e27184ad8b23af193afa",
-    "bce4dd6cdaeee7fa8b3edfac62a96bd34976b3c86c7c0769dd664a3f3289f3b5",
-    "03b4fdb88cf17f9222c5cd18d9052de0d8c3f466345e63564dece3500948a74b",
-    "99b1de97798889b52451a35b781c9b0dab14b9cf2d8125448fcc80c1e4c15ed6",
-    "2ded1724917d7ed1e40f24ea0b1d4666a8a191affa02b9abc409e0d416f86c83",
-    "1621c792829ddd2aac167df7d4a70aefe0544e5022a3e0d29a40ebb0b8ec6a7e",
-    "75ecd45f509c709d8341a49277c7c28c5d66bf7e7121961d2895796c0c1d2b93",
-    "1fc0b6c44ac21fed6729a16e9f61fc5cd3d730e688ef441b0d8aeac564ab408c",
-    "ed1ecb8a8f94eee7c4756a44c569310d119b39be950b8a3663f74286e583b9a4",
-    "5841ff1bb7a63638ffdb0bed4253482e339c8d4656ef7d146b7db001ee1e56e5",
-    "6940deef4c0e0509347e73807f54c23a0463cd47b74092e61ef44cd6bb350a82",
-    "361ea7e4567a0ae539c67eb3df39280c14fcfaf3a16dd11609bdcef961ba1043",
-    "e8bdbf97f3326e2225f44e81347726281dd2786c1c5ae1e25abd97cd18c13e9f",
-    "b8085b4c97bf829ed1b202a93532d332e5871ccb46bf2f7bb0cf26cce2c1bb6f",
-    "56986e882c297dd68c7a3e64c0d90309774f47787c946a0e80339a678ad6926c",
-    "661068ca2721c86a7afb2aa35b25c98c99ff9d716d83ef5ac17851c6ceca5f52"
-  ],
-  "cases/textbox-wrap-beside-compat14": [
-    "16c1548991098bb1ffe92b321e72851ac3b7d97e29373cf08f4a8acbc6d51931",
-    "5aad984fd45d238dd004440f21978dd6e9170c7ca6f919f32288a187e6181768"
   ],
   "cases/three-wrapping-floats-one-page": [
     "5d956b4e5e63b3256ffe6e8dd0e6684fe55a397ce868c2b26f661552b8deeac3"

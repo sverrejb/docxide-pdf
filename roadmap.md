@@ -328,47 +328,9 @@ Open queue from the large-corpus and focus-fixture rounds:
 - Vertical CJK cell text: `render_vertical_cjk_cell` sizes by chars ×
   font_size, ignoring paragraph spacing (misaligned in merged cells).
 - Labels hanging outside a cell (probe Word first).
-- Tables inside text boxes are dropped: `parse_txbx_content_paragraphs`
-  keeps only `w:p` children of `w:txbxContent` (a details box, a table in a
-  rounded-rectangle text box inside an inline group, prints as the empty
-  rectangle).
 
 ## Floats, frames and wrapping
 
-- Done: text wraps beside square, tight and through text boxes,
-  shapes and groups like beside pictures (one `FloatZone` model), wherever
-  a strip of 18pt is left on a side the wrapText allows, the paragraph's
-  other floats beside the box counted (two boxes across the column leave
-  none: text below them). Word examples fixed the line start beside any
-  float: the wrap edge (extent + effectExtent + distL/distR; a tight
-  polygon without the effectExtent) or the left indent, whichever is
-  further right, for pictures too (they kept indents from the edge); a
-  first-line indent adds to it, a hanging one never takes the first line
-  left of the edge, but before compat 15 a hanging indent's first line
-  counts from the edge (french_sexual_health_youth_strategy's arrows). A
-  right indent inside the float's area takes nothing more off. A paragraph
-  starts beside a float when its first word fits a strip (was: 72pt).
-  All of a paragraph's floats stay zones for the following ones. Fixtures
-  textbox-wrap-beside, textbox-wrap-beside-compat14. Open: DrawingML
-  `a:xfrm rot` of text boxes is not parsed (Word wraps a box turned 45-135°
-  as its extent turned a quarter, under 45° as its extent; VML rotation
-  works); lines after one whose first word misses a strip step by line
-  heights where Word moves them to the float's bottom (square); a line
-  reaching under 20% of its height into a float stays full width where
-  Word wraps it beside (example: 1.7pt); text boxes reaching up into the
-  paragraph before their anchor do not wrap it (look-back, as pictures).
-  Round 2: an anchor pushed to the next column is laid out again there
-  with its floats; a split paragraph keeps the clearance below a float
-  over its first line and draws its text boxes; a first word (no-break
-  spaces join, as in the line breaker) too wide for every strip starts the
-  paragraph below the float, its own or an earlier one's; a w:bidi
-  paragraph fills the strips beside floats from the right, each strip
-  ordered as a line. Open: per-line float geometry covers 50 lines at
-  least, past it lines take the first line's narrowed measure (a long
-  paragraph beside a page-top float rewraps narrow on line 51).
-- Done: text after a wrapping text box with spAutoFit flows
-  around the box's fitted height, not its stored extent (larger or smaller).
-  Fixture autofit-textbox-wrap.
 - Done 2026-11-06 (issue #148): picture-filled shapes with an outline draw
   as pictures (header and groups too, theme outline colours); topMargin
   counts from the page top, bottomMargin from the bottom margin; a:grpFill
@@ -387,13 +349,14 @@ Open queue from the large-corpus and focus-fixture rounds:
   the issue-148 worktree's tests/output/i148/probe). Paragraph heights
   don't all go through `inline_line_advance`, so a per-line drop needs
   care. Bands live beside `FloatZone`; one mechanism with a full-width flag
-  would be cleaner.
+  would be cleaner. Textbox `reserve` still uses "width ≥ half the column"
+  where images and bands use the side-strip test.
 - The page pre-scan estimates where the page ends from plain line counts and
   stops at the first table; an anchor that lands on the next page anyway
   keeps its band on this one too.
 - Paragraph-relative topAndBottom pictures below their anchor's text still
   reserve in the anchor (textboxes and groups are bands); topAndBottom
-  `distT` is ignored for textbox bands.
+  `distT` is ignored for textboxes (no field).
 - Group `positionV` alignment (top/center/bottom) is lost like the
   horizontal one was: children get `offset_or_zero`.
 - Text-anchored body frames, and wrap-around frames reaching into the text
@@ -401,13 +364,12 @@ Open queue from the large-corpus and focus-fixture rounds:
 - `content_h` in `render_paragraph_block` includes the room reserved for a
   topAndBottom float below the lines; borders still use it (shading doesn't).
   Unverified against Word.
-- Header flow reserves `height_pt` for TopAndBottom textboxes while
-  rendering uses `textbox_height` (the body uses the fitted height since
-  fixture autofit-textbox-wrap).
+- Body/header flow reserves `height_pt` for TopAndBottom textboxes while
+  rendering uses `textbox_height`.
 - Word puts the anchor's own line box below a no-strip float (sample500kB p4:
   Word gap 67.7pt, ours 51.8pt).
-- Floats of different paragraphs: a paragraph's floats replace the page's
-  zones, so an earlier paragraph's float still beside the text is dropped.
+- Multiple floats per paragraph: the page-level zone for *following*
+  paragraphs tracks only the first float.
 - pendulum: Word places the 144pt-tall images on pages 2 and 6 14.8pt higher
   than the others despite identical `posOffset=0`.
 - Look-back wrapping beyond the paragraph directly before an anchor needs a
@@ -421,10 +383,8 @@ Open queue from the large-corpus and focus-fixture rounds:
   stem_partnerships.
 - Truncated PNGs fall back to a 1x1 placeholder; Word renders them partially
   (learning_cultures image1.png).
-- Behind-text drawings paint in one page layer under the body text, by
-  relativeHeight (behind-text-layer); behindDoc connectors still draw in front,
-  and text boxes in a table row that breaks across pages are not drawn.
-  Group-level flipH/flipV/rot are ignored except for linear
+- behindDoc shapes from later paragraphs can paint over earlier text (needs a
+  pre-pass). Group-level flipH/flipV/rot are ignored except for linear
   connectors; image/text/arc mirroring in groups is open. Canvas/group inside
   paragraph-level `mc:AlternateContent` grabs only the first wsp.
 - Wrapped running-head pictures: tall final pictures and three-picture
@@ -565,39 +525,6 @@ Open queue from the large-corpus and focus-fixture rounds:
   type), secondary axes; see `current_focus/3d_charts.md`.
 - WordArt level 5: VML gradient/pattern fills, VML shadow, shapetype →
   prstTxWarp mapping.
-- Tables in text boxes (`text-box-table-*`): a linked chain moves a table
-  that does not fit whole into the next box (Word splits it between rows).
-  A table taller than the box it opens stays there, clipped at the box
-  frame; Word ends its last row at the bottom inset and draws the row's
-  bottom border there (`text-box-table-linked-tall`). Header/footer text boxes keep their own paragraph loop (no outline stroke,
-  no spacing collapse) beside the body one.
-- A layoutInCell text box positioned relativeFrom column sits that far from
-  the cell's text edge in Word, past the cell's left margin; ours measures
-  from the cell edge, 5.4pt too far left (`text-box-cell-linked`).
-- Word clips a fixed-size text box's text inside its top and bottom insets
-  (a 60pt box with bIns 20pt hides the line starting 40pt down); body boxes
-  still clip at the box frame, table-cell boxes at the insets.
-- A top-level body table with tblW auto and a saved grid wider than the text
-  column keeps that grid here; Word fits it into the column like a text box
-  table (`text-box-table-autofit-wide`'s tables in a 235.6pt body column).
-- Word draws a row's horizontal borders inside the row, below its top (an 8pt
-  top border starts the cell shading 8pt down and grows the row), where ours
-  centres them on the row line (`table-cell-shading-edges`).
-- Text box pictures (textbox-oversized-inline-image): a picture line's
-  descent comes from the whole paragraph's text, where Word takes only the
-  text on that line (a picture wrapped below "Code" gets no descent; the body
-  has the same gap: 2.7pt too low after such a line). Header/footer text boxes
-  keep their own layout and still centre text-only heights; VML group boxes
-  clip pictures like standalone ones (unchecked).
-- Text box picture fills (`a:blipFill` under a wps text box) draw under the
-  text; the VML fallback's `v:fill type="frame"` does not. An inline
-  picture-filled text box (`wp:inline` with `wps:txbx`) drops the text
-  before and after it on its line and sits at the paragraph's left edge
-  (Word example: "Inline: [box] after the box." keeps both runs beside the
-  box, its bottom on the baseline).
-- A group's picture fill (`a:grpFill` children) is cropped to each child's
-  part of the group frame, ignoring flips and rotations of the groups in
-  between; a tiled group fill is tiled per child.
 
 ## RTL / BiDi
 
