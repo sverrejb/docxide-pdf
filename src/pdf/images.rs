@@ -394,16 +394,13 @@ fn embed_image_xobject(
     resample: bool,
 ) -> Ref {
     let xobj_ref = alloc();
-    let target = if resample {
-        downscale_target(
-            img.pixel_width,
-            img.pixel_height,
-            display_width,
-            display_height,
-        )
-    } else {
-        None
-    };
+    let target = downscale_target(
+        img.pixel_width,
+        img.pixel_height,
+        display_width,
+        display_height,
+    )
+    .filter(|_| resample);
 
     // Helper: create soft-edge SMask for a given pixel size
     let make_soft_edge_smask =

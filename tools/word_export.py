@@ -88,7 +88,6 @@ on run argv
 end run
 """
 
-REVISIONS: str | None = None  # --revisions, passed to EXPORT as its 4th argument
 PING = 'tell application "Microsoft Word" to get name'
 QUIT = 'tell application "Microsoft Word" to quit saving no'
 
@@ -232,7 +231,7 @@ class Watchdog(threading.Thread):
             self.stop.wait(0.5)
 
 
-def export_one(src: Path, dst: Path, stage: Path, timeout: float) -> None:
+def export_one(src: Path, dst: Path, stage: Path, timeout: float, revisions: str | None = None) -> None:
     # A broken zip makes Word ask to repair it, and that prompt needs a human
     # whenever the watchdog lacks Accessibility access.
     try:
@@ -250,7 +249,7 @@ def export_one(src: Path, dst: Path, stage: Path, timeout: float) -> None:
     shutil.copy2(src, s_docx)
     subprocess.run(["xattr", "-d", "com.apple.quarantine", str(s_docx)], capture_output=True)
     try:
-        r = osa(EXPORT, str(s_docx), str(s_pdf), s_docx.name, *([REVISIONS] if REVISIONS else []), timeout=timeout)
+        r = osa(EXPORT, str(s_docx), str(s_pdf), s_docx.name, *([revisions] if revisions else []), timeout=timeout)
         if r.returncode != 0:
             raise RuntimeError(r.stderr.strip() or f"osascript exit {r.returncode}")
         if not s_pdf.exists():
@@ -285,8 +284,6 @@ def main() -> int:
                     help="tracked changes: inline (All Markup in the text, as the corpus references) or balloon; "
                          "default = Word's current setting")
     a = ap.parse_args()
-    global REVISIONS
-    REVISIONS = a.revisions
 
     problems = preflight()
     for p in problems:
@@ -329,7 +326,7 @@ def main() -> int:
         for src, dst in jobs:
             t0 = time.monotonic()
             try:
-                export_one(src, dst, stage, a.timeout)
+                export_one(src, dst, stage, a.timeout, a.revisions)
                 streak = 0
                 print(f"OK   {src.name} -> {dst} ({time.monotonic() - t0:.1f}s)")
             except subprocess.TimeoutExpired:

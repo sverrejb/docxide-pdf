@@ -294,17 +294,17 @@ pub fn failed_conversions() -> Vec<String> {
 /// beside the PDF records which inputs it was last converted against, so an unchanged PDF is
 /// not reconverted on every run either.
 pub fn ensure_generated_pdf(fixture_dir: &Path) -> Result<PathBuf, String> {
+    ensure_generated(fixture_dir, output_dir(fixture_dir), false)
+}
+
+fn ensure_generated(fixture_dir: &Path, out: PathBuf, markup: bool) -> Result<PathBuf, String> {
     // The suites start on the same fixtures at the same time: the first to reach a fixture
     // converts it, the others wait for that result instead of racing it on the same files.
+    // Keyed by the output dir, which differs per view.
     static MEMO: Mutex<BTreeMap<PathBuf, Arc<OnceLock<Result<PathBuf, String>>>>> =
         Mutex::new(BTreeMap::new());
-    let cell = MEMO
-        .lock()
-        .unwrap()
-        .entry(fixture_dir.to_path_buf())
-        .or_default()
-        .clone();
-    cell.get_or_init(|| convert_generated_pdf(fixture_dir, output_dir(fixture_dir), false))
+    let cell = MEMO.lock().unwrap().entry(out.clone()).or_default().clone();
+    cell.get_or_init(|| convert_generated_pdf(fixture_dir, out, markup))
         .clone()
 }
 
@@ -315,16 +315,7 @@ pub fn markup_reference(fixture_dir: &Path) -> Option<PathBuf> {
 
 /// `ensure_generated_pdf` in the markup view: tests/output/<group>/<case>/markup/generated.pdf.
 pub fn ensure_generated_markup_pdf(fixture_dir: &Path) -> Result<PathBuf, String> {
-    static MEMO: Mutex<BTreeMap<PathBuf, Arc<OnceLock<Result<PathBuf, String>>>>> =
-        Mutex::new(BTreeMap::new());
-    let cell = MEMO
-        .lock()
-        .unwrap()
-        .entry(fixture_dir.to_path_buf())
-        .or_default()
-        .clone();
-    cell.get_or_init(|| convert_generated_pdf(fixture_dir, markup_output_dir(fixture_dir), true))
-        .clone()
+    ensure_generated(fixture_dir, markup_output_dir(fixture_dir), true)
 }
 
 /// Output directory of a fixture's markup entry: tests/output/<group>/<case>/markup/
@@ -370,7 +361,12 @@ fn convert_generated_pdf(fixture_dir: &Path, out: PathBuf, markup: bool) -> Resu
 /// `ensure_generated_pdf` for a test that prints a `[SKIP]` row and drops the fixture
 /// when the conversion fails.
 pub fn generated_pdf_or_skip(fixture_dir: &Path, name: &str) -> Option<PathBuf> {
-    match ensure_generated_pdf(fixture_dir) {
+    ok_or_skip(ensure_generated_pdf(fixture_dir), name)
+}
+
+/// A conversion's PDF, or a `[SKIP]` row when it failed.
+pub fn ok_or_skip(generated: Result<PathBuf, String>, name: &str) -> Option<PathBuf> {
+    match generated {
         Ok(p) => Some(p),
         Err(e) => {
             println!("  [SKIP] {name}: conversion failed: {e}");

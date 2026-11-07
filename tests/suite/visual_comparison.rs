@@ -104,13 +104,7 @@ fn prepare_entry(
             return None;
         }
     };
-    let generated_pdf = match generated {
-        Ok(p) => p,
-        Err(e) => {
-            println!("  [SKIP] {name}: conversion failed: {e}");
-            return None;
-        }
-    };
+    let generated_pdf = common::ok_or_skip(generated, &name)?;
     // An unchanged generated.pdf keeps its screenshots (see ensure_generated_pdf).
     let gen_fresh = match common::ensure_screenshots(&generated_pdf, &generated_screenshots) {
         Ok(fresh) => fresh,
