@@ -372,6 +372,13 @@ const SYMBOL_FALLBACK_FONTS: &[&str] = &[
     "DejaVu Sans",
 ];
 
+const BAHNSCHRIFT_ASCENT: f32 = 0.9965;
+const BAHNSCHRIFT_LINE_H: f32 = 1.2004;
+
+fn is_bahnschrift(name: &str) -> bool {
+    name.starts_with("Bahnschrift")
+}
+
 /// Word's face for a missing font with no usable altName: Cambria for a roman
 /// family or no fontTable entry at all, Calibri for every other family. Panose,
 /// pitch and the theme fonts play no part; local and online exports agree
@@ -858,11 +865,16 @@ pub(crate) fn register_font(
     // BT") has enormous win ascent/descent metrics that balloon every line; Word
     // substitutes body text with a normal family fallback instead.
     let has_alt = table_entry.is_some_and(|e| e.alt_name.is_some());
+    let bahnschrift = is_bahnschrift(primary)
+        || table_entry
+            .and_then(|e| e.alt_name.as_deref())
+            .is_some_and(is_bahnschrift);
     let result = font_name
         .split(';')
         .map(first_css_name)
         .map(|s| word_substitute(s).unwrap_or(s))
         .filter(|c| !(has_alt && ctx.font_index.is_mac_only_family(c)))
+        .filter(|c| !is_bahnschrift(c))
         .find_map(&mut try_candidate)
         .or_else(|| {
             let entry = table_entry?;
@@ -870,7 +882,7 @@ pub(crate) fn register_font(
             // "SignPainter-HouseScript": Word-for-Mac writes this cursive face as
             // altName for fonts missing on the authoring machine (e.g. Merriweather);
             // it never reflects what the reference render used.
-            if alt.contains("Math") || alt == "SignPainter-HouseScript" {
+            if alt.contains("Math") || alt == "SignPainter-HouseScript" || is_bahnschrift(alt) {
                 return None;
             }
             let m = try_candidate(alt)?;
@@ -904,9 +916,6 @@ pub(crate) fn register_font(
             // variable font but cannot export it and falls to the family fallback
             // (Helvetica 55 Roman -> Calibri). "Zqx Helvetica" is not a match, and
             // "Helvetica Neue" alone is Sylfaen.
-            let bahnschrift = table_entry
-                .and_then(|e| e.alt_name.as_deref())
-                .is_some_and(|a| a.starts_with("Bahnschrift"));
             if bahnschrift || !primary.to_ascii_lowercase().starts_with("helv") {
                 return None;
             }
@@ -929,7 +938,11 @@ pub(crate) fn register_font(
                 return None;
             }
             let family = table_entry.map(|e| e.family);
-            let fallback = family_fallback(family);
+            let fallback = if bahnschrift {
+                "Calibri"
+            } else {
+                family_fallback(family)
+            };
             let m = try_candidate(fallback)?;
             log::info!("Font substitution: {primary} → family {family:?} fallback \"{fallback}\"");
             substituted.set(true);
@@ -955,7 +968,7 @@ pub(crate) fn register_font(
         })
         .collect();
 
-    let entry = match result {
+    let mut entry = match result {
         Some(r) => FontEntry {
             pdf_name,
             font_ref: refs.font,
@@ -1039,6 +1052,18 @@ pub(crate) fn register_font(
             }
         }
     };
+
+    // Word online measures Bahnschrift lines with Bahnschrift's own metrics but
+    // cannot export the variable font, so it draws Calibri glyphs on them (100pt
+    // probes 2026-11-07: baseline 0.9965 em below the line top, 1.2004 em lines, for
+    // "Bahnschrift" and for swiss_materials' Helvetica 55 Roman with altName
+    // Bahnschrift Light; real Calibri lines are 0.954/1.221).
+    if bahnschrift && entry.font_path.is_some() {
+        entry.line_h_ratio = Some(BAHNSCHRIFT_LINE_H);
+        entry.plain_line_h_ratio = Some(BAHNSCHRIFT_LINE_H);
+        entry.ascender_ratio = Some(BAHNSCHRIFT_ASCENT);
+        entry.plain_ascender_ratio = Some(BAHNSCHRIFT_ASCENT);
+    }
 
     log::debug!(
         "register_font: {font_name} bold={bold} italic={italic} → {:.1}ms",

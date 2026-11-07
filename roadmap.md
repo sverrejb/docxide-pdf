@@ -82,13 +82,11 @@ alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
   Word; page 6's table bottom border is solid grey in Word, dotted in ours.
 
 **New fixtures round 2 (2026-10-23):**
-- **swiss_materials (33.3)**: Word keeps a 3-line list item at the foot of
-  page 2 (last baseline 783.5, its 2pt descender past the 785.3 margin) where
-  we break the page before it; our fit test is 0.46pt over. Letting the last
-  line's descent hang (`last_line_lead = line_h - ascent`) regressed 27
-  fixtures and was reverted; Word's exact tolerance (its 0.25pt line grid
-  makes the item 3 x 11.0 = exactly the margin) is unknown. The rest of the
-  gap is the page-3 reflow; its `›` bullet sits 3pt low.
+- **swiss_materials (51.6)**: page 2's foot fixed 2026-11-07. Word's page-bottom
+  fit is strict (probes: Arial, Calibri, Times New Roman, <0.01pt tolerance);
+  the drift was the "Helvetica 55 Roman" headings (altName Bahnschrift Light),
+  which Word measures with Bahnschrift's metrics and draws in Calibri. Left:
+  page 1's `›` bullet sits 3pt low.
 - **bulgarian_farmland (71.5)**: the letterhead's first line is not wrapped
   beside the emblem, which is anchored to the *next* paragraph with a negative
   offset (header float zones only start at their anchor).
@@ -177,8 +175,7 @@ Open queue from the large-corpus and focus-fixture rounds:
   local). Residuals it explains: greensboro (Arial 11pt at 1.5 lines: ours
   18.97, Word 19.0), romanian_candidate_declaration (borders drift 0.1-0.3pt
   per row, SSIM 91.5), case69 (last line 15.00 vs 14.83 under
-  `vAlign=center`), case33's list lines (16.115 vs 16.0), swiss_materials'
-  page-2 break (0.46pt over: our pitches 11.47/10.92, Word 11.50/11.00),
+  `vAlign=center`), case33's list lines (16.115 vs 16.0),
   uk_commercial page 11's notes block (0.67pt short).
 - **Mixed Latin/East Asian justification** (issue #142, Word online probes
   2026-10-28, `MixedJustify` in `pdf/layout.rs`): the slack spreads over every
@@ -643,6 +640,23 @@ Backlog (details in `current_focus/A11Y.md`):
   embedded face; untested against Word.
 - ※ ‥ ‧ ‵ in a Latin run come from MS Gothic in Word, the East Asian slot
   rather than a fallback; we rescue them from Segoe UI Symbol.
+- Done 2026-11-07: Bahnschrift, by name or as a missing font's altName, is
+  measured with Bahnschrift's metrics (ascent 0.9965, line 1.2004 em) and drawn
+  in Calibri, like Word online, which cannot export the variable font
+  (fixture bahnschrift-heading-metrics). Open from the same probes (kit in
+  `.worktrees/issue-148/tests/output/swiss-probes/`, online export):
+  - "Helvetica 55 Roman" with swiss's fontTable entry but no altName is still
+    Bahnschrift-measured Calibri in Word; we draw Arial (the "Helv" rule). What
+    makes Word pick Bahnschrift there is unknown (a "Zqx Sans" entry with
+    Bahnschrift's panose gets plain Calibri).
+  - A missing font Word draws in Calibri puts its baseline 0.9715 em down
+    (hhea ascent + lineGap), not real Calibri's 0.954; the line stays 1.221 em.
+    We use 0.952.
+  - "Zqx Sans" with no fontTable entry draws Calibri in Word (python-docx's
+    template, Calibri theme), where `family_fallback` says Cambria; check
+    whether the theme's minor font decides.
+- `w:afterLines` alone is ignored (we fall back to the style's `after`); Word
+  counts a line as 12pt (afterLines 80 = 9.6pt, same as after 192).
 - Bundle metric-compatible open fonts behind a feature flag (Liberation
   Sans/Serif/Mono, Carlito, Caladea) for servers and Docker; today only
   installed fonts and the assets repo count (Carlito/Caladea are used when
