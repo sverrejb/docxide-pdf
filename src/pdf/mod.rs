@@ -2291,8 +2291,9 @@ fn line_count(para: &Paragraph, ctx: &RenderContext, col_w: f32) -> usize {
 
 /// Modern Word keeps a margin-anchored empty frame's box even though its
 /// paragraphs consume no body flow. A full-width inline table cannot wrap
-/// beside that box. Only introductory boxes whose anchor fits this page are
-/// collected; frames after visible body text or forced breaks are left alone.
+/// beside that box, nor can body text above the anchor (Word probes:
+/// empty-margin-frame-visible-body-before-frame). Only boxes whose anchor
+/// fits this page are collected; frames after forced breaks are left alone.
 fn empty_frame_table_bands(
     blocks: &[Block],
     sp: &SectionProperties,
@@ -2319,9 +2320,7 @@ fn empty_frame_table_bands(
             .filter(|_| is_empty_wrapping_frame(p, sp))
         else {
             if p.runs.iter().any(|r| {
-                (!r.vanish && !r.text.trim().is_empty())
-                    || r.is_tab
-                    || r.inline_image.is_some()
+                r.inline_image.is_some()
                     || r.field_code.is_some()
                     || r.checkbox.is_some()
                     || r.footnote_id.is_some()
@@ -2422,7 +2421,7 @@ fn empty_frame_table_bands(
                         prefix_h += q.space_before.max(0.0)
                             + q.space_after.max(0.0)
                             + plain_line_h(q, ctx)
-                                * (1 + q.runs.iter().filter(|r| r.is_line_break).count()) as f32;
+                                * line_count(q, ctx, sp.text_width()).max(1) as f32;
                     }
                 }
             }
