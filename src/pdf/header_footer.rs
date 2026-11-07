@@ -169,11 +169,7 @@ fn hf_run_metrics(
             tallest_run_metrics(runs, fonts)
         };
     };
-    let (lhr, ar) = para
-        .paragraph_mark_font_name
-        .as_deref()
-        .and_then(|n| fonts.get(n))
-        .map_or((None, None), |e| super::layout::run_line_metrics(e, ""));
+    let (fs, (lhr, ar)) = super::mark_font(para, fs, fonts);
     (fs, lhr, ar)
 }
 

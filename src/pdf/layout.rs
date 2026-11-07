@@ -3240,6 +3240,21 @@ fn decimal_before_width(runs: &[&Run], seen_fonts: &HashMap<String, FontEntry>) 
     w
 }
 
+/// Ends a tabbed line at a wrap; `tabs` sizes it if only tabs are on it.
+fn wrap_tabbed_line(
+    result_lines: &mut Vec<TextLine>,
+    chunks: &mut Vec<WordChunk>,
+    justify_from: &mut usize,
+    tabs: Option<(f32, Option<f32>)>,
+) {
+    let mut line = TextLine {
+        justify_from: std::mem::take(justify_from),
+        ..finish_line(chunks)
+    };
+    line.hold_tabs(tabs);
+    result_lines.push(line);
+}
+
 /// Build TextLines for a paragraph that contains tab characters.
 /// Wraps to new lines when content exceeds `max_width`.
 pub(super) fn build_tabbed_line(
@@ -3442,13 +3457,13 @@ pub(super) fn build_tabbed_line(
                 // tabs take two lines in Word); one tab on an empty line stays.
                 && (!all_chunks.is_empty() || current_x > 0.0)
             {
-                let mut line = TextLine {
-                    justify_from: std::mem::take(&mut justify_from),
-                    ..finish_line(&mut all_chunks)
-                };
                 // The overflowing tab moves with its following word.
-                line.hold_tabs(tab_line_metrics.take());
-                result_lines.push(line);
+                wrap_tabbed_line(
+                    &mut result_lines,
+                    &mut all_chunks,
+                    &mut justify_from,
+                    tab_line_metrics.take(),
+                );
                 tab_wrapped_line = true;
                 line_reach = 0.0;
                 current_x = 0.0;
@@ -3607,12 +3622,12 @@ pub(super) fn build_tabbed_line(
                     if current_x > 0.0
                         && current_x + img_w > line_max_at(is_first_line).max(line_reach)
                     {
-                        let mut line = TextLine {
-                            justify_from: std::mem::take(&mut justify_from),
-                            ..finish_line(&mut all_chunks)
-                        };
-                        line.hold_tabs(tab_line_metrics.take());
-                        result_lines.push(line);
+                        wrap_tabbed_line(
+                            &mut result_lines,
+                            &mut all_chunks,
+                            &mut justify_from,
+                            tab_line_metrics.take(),
+                        );
                         tab_wrapped_line = false;
                         line_reach = 0.0;
                         current_x = 0.0;
@@ -3716,12 +3731,13 @@ pub(super) fn build_tabbed_line(
                     }
                 }
                 if overflows {
-                    result_lines.push(TextLine {
-                        justify_from: std::mem::take(&mut justify_from),
-                        ..finish_line(&mut all_chunks)
-                    });
+                    wrap_tabbed_line(
+                        &mut result_lines,
+                        &mut all_chunks,
+                        &mut justify_from,
+                        tab_line_metrics.take(),
+                    );
                     tab_wrapped_line = false;
-                    tab_line_metrics = None;
                     line_reach = 0.0;
                     current_x = 0.0;
                     is_first_line = false;
@@ -4027,6 +4043,9 @@ fn leader_grid(
     chunk_abs_x: &dyn Fn(usize, &WordChunk) -> f32,
     line_start: (f32, f32),
 ) -> Vec<Option<Vec<f32>>> {
+    if line.chunks.iter().all(|c| c.leader.is_none()) {
+        return Vec::new();
+    }
     line.chunks
         .iter()
         .enumerate()
@@ -4503,7 +4522,7 @@ pub(super) fn render_paragraph_lines(
                 .map(|c| c.text.chars().count())
                 .sum()
         };
-        let left_char_count = spread_chars(line.chunks.get(jf..left_chunk_count).unwrap_or(&[]));
+        let left_char_count = spread_chars(&line.chunks[jf..left_chunk_count]);
         let has_cjk_content = line.chunks[..left_chunk_count]
             .iter()
             .any(|c| c.text.chars().any(crate::docx::is_east_asian_char));
@@ -4798,7 +4817,7 @@ pub(super) fn render_paragraph_lines(
             for k in 0..line.chunks.len() {
                 let chunk_idx = line.draw_order.get(k).copied().unwrap_or(k);
                 let chunk = &line.chunks[chunk_idx];
-                let leader_xs = leaders[chunk_idx].as_deref();
+                let leader_xs = leaders.get(chunk_idx).and_then(|l| l.as_deref());
                 if chunk.inline_image_name.is_some()
                     || chunk.checkbox.is_some()
                     || leader_xs.is_some_and(|xs| xs.is_empty())

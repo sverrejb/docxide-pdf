@@ -4119,17 +4119,11 @@ fn render_paragraph_block(
                     // paragraph mark, whose rPr sizes it — the break char
                     // sizes the line it terminates, not this one (samtale:
                     // 26pt br before a 12pt mark, annotation #121).
-                    let mark_fs = (i == last && line.chunks.is_empty())
-                        .then_some(para.paragraph_mark_font_size)
+                    let mark_h = (i == last && line.chunks.is_empty())
+                        .then(|| mark_line_h(para, effective_ls, tallest_lhr, ctx.fonts))
                         .flatten();
-                    if let Some(mfs) = mark_fs {
-                        let mlhr = para
-                            .paragraph_mark_font_name
-                            .as_deref()
-                            .and_then(|n| ctx.fonts.get(n))
-                            .and_then(|e| run_line_metrics(e, "").0)
-                            .or(tallest_lhr);
-                        h += resolve_line_h(effective_ls, mfs, mlhr);
+                    if let Some(mark_h) = mark_h {
+                        h += mark_h;
                     } else {
                         let blhr = break_run_lhr(&effective_runs, bfs, ctx.fonts);
                         h += resolve_line_h(effective_ls, bfs, blhr);
