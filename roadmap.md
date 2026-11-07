@@ -161,15 +161,6 @@ Open queue from the large-corpus and focus-fixture rounds:
 
 ## Line and paragraph layout
 
-- Done: an inline picture that does not fit after text or a tab
-  starts the next line, including plain text in a paragraph with an earlier
-  tab. A lone tab stays on its own line sized by the tab's font; a trailing
-  tab that wraps leaves a blank line sized by the larger of
-  the tab's and the paragraph mark's font, in table cells, text boxes,
-  headers, footers and notes too. Fixtures tab-picture-wrap,
-  tab-picture-wrap-containers. Open: the line after a picture in a 20pt run
-  lands ~1pt low (case 5); in a table cell the picture line after a wrapped
-  tab is 2pt taller than Word's (page 1 of the containers fixture).
 - **compressPunctuation** (issue #139, probed through Word online 2026-10-27,
   rules in `pdf/layout.rs` `PUNCT_SQUEEZE`/`PUNCT_PULL_FREE`): every mark on
   the line gives the same cut; compat 15 squeezes only justified paragraphs,
@@ -250,14 +241,7 @@ Open queue from the large-corpus and focus-fixture rounds:
   own and the text at the margin below (probes P1, P6, P7); we wrap to the far
   stop.
 - Tab stops: decimal precision unverified; bar tabs act as left stops and draw
-  no line.
-- Tab leaders (branch `tab-leader-fill`): Word places the text after a right
-  tab at the stop minus the text's device width (one glyph: stop minus its
-  device advance, 493 of 515 examples), we at the stop minus its exact width;
-  the leader's last slot then differs in ~1-3% of right/centre/decimal tabs.
-  A hanging first line starts on device px round(margin) + round(left −
-  hanging) in Word (99.30 for 1418/1134/567 twips), ours rounds left and
-  hanging apart (99.53), which can move its leader by a slot.
+  no line; `middleDot`/`heavy` leaders draw nothing.
 - Underlines: dotted/dash/wave/thick draw single; underline colour ignored.
 - `w:textAlignment`: only top is laid out; center, baseline, bottom and auto
   behave alike.
