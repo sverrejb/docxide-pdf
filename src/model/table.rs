@@ -127,6 +127,10 @@ pub struct CellBorders {
     /// resolved into `top` (None when unchanged): a row continued on a new
     /// page draws this one at the page top.
     pub own_top: Option<CellBorder>,
+    /// A vertical merge that runs to the table's last row keeps its first
+    /// cell's own bottom here while `bottom` takes the table's to draw (None
+    /// otherwise): the row it starts in is sized by its own.
+    pub own_bottom: Option<CellBorder>,
 }
 
 #[derive(Clone, Copy, Debug)]

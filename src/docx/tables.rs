@@ -581,6 +581,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     tb.inside_v
                 },
                 own_top: None,
+                own_bottom: None,
             });
 
             // Apply conditional formatting overrides from tblStylePr.
@@ -685,6 +686,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     left: border_or_fallback(parse_cell_border_left(bdr), cond.borders.left),
                     right: border_or_fallback(parse_cell_border_right(bdr), cond.borders.right),
                     own_top: None,
+                    own_bottom: None,
                 })
                 .unwrap_or(cond.borders);
 
@@ -1199,11 +1201,17 @@ fn propagate_vmerge_borders(rows: &mut [TableRow]) {
                     cell_at(&rows[n], grid_col).is_some_and(|c| c.v_merge == VMerge::Continue)
                 })
                 .last();
+            // The table's bottom border sizes only its last row (`own_bottom`).
+            let at_table_end = last_ri == Some(rows.len() - 1);
             if let Some(bottom) = last_ri
                 .and_then(|n| cell_at(&rows[n], grid_col))
                 .map(|c| c.borders.bottom)
             {
-                rows[ri].cells[ci].borders.bottom = bottom;
+                let borders = &mut rows[ri].cells[ci].borders;
+                if at_table_end {
+                    borders.own_bottom = Some(borders.bottom);
+                }
+                borders.bottom = bottom;
             }
         }
     }
