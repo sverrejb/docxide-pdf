@@ -151,8 +151,10 @@ alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
   18.0); Word puts the wrapNone box's empty anchor paragraph below the table
   (all six 10pt paragraphs follow it); `w:spacing w:val="-10"` in 7pt Meiryo
   draws -1.0pt per character in Word (-1 Tc), ours -0.5;
-  `balanceSingleByteDoubleByteWidth` is unimplemented (Meiryo spaces 0.507
-  em, ours 0.332; 10 fixtures set it); a paragraph bottom border ignores
+  `balanceSingleByteDoubleByteWidth`: its doubled `w:spacing` on full-width
+  characters is done for all-East-Asian body runs (2026-11-08); the half-width
+  space it widens is not (Meiryo spaces 0.507 em, ours 0.332; 10 fixtures set
+  it); a paragraph bottom border ignores
   `w:ind w:right="-903"`; the banner title sits 8.8pt high.
 - **swiss_materials (32.6)**: besides the page-2 break below, the VML
   watermark draws ~24% heavier and ~4pt left of Word's; the "Helvetica 55

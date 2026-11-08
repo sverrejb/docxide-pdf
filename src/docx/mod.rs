@@ -1594,7 +1594,27 @@ fn parse_zip<R: Read + std::io::Seek>(
     resolve_seq_fields(&mut doc);
     resolve_body_stylerefs(&mut doc);
     link_textbox_stories(&mut doc);
+    if settings.balance_sbdb_width {
+        double_wide_char_spacing(&mut doc);
+    }
     Ok(doc)
+}
+
+/// Under `balanceSingleByteDoubleByteWidth` Word spaces a full-width
+/// character as two bytes: its run's `w:spacing` counts twice
+/// (chinese_student_union: −1.6pt in 14pt text draws 10.75pt ideographs,
+/// 12.5 without the flag; Word probes 2026-11-08). ponytail: body runs of
+/// East Asian characters only; mixed runs and headers keep single spacing.
+fn double_wide_char_spacing(doc: &mut Document) {
+    let mut paras = Vec::new();
+    for section in &mut doc.sections {
+        body_paragraphs(&mut section.blocks, &mut paras);
+    }
+    for run in paras.into_iter().flat_map(|p| p.runs.iter_mut()) {
+        if !run.text.is_empty() && run.text.chars().all(is_east_asian_char) {
+            run.char_spacing *= 2.0;
+        }
+    }
 }
 
 /// Number the body's SEQ fields in document order, one counter per name
