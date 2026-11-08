@@ -46,8 +46,11 @@ justified gap (underlined-space-compat14-*). Open:
   underline's post offset or less, a 1.0–1.25pt gap; Word also underlines
   a line's trailing space. We use 0.05 × size lines 0.12 × size down.
 - nested-floats-spaced-text-bottom-cell (40.4): the same two registration
-  tables in a vAlign=bottom cell still lay out inline (the float filter
-  wants top/centre alignment).
+  tables in a vAlign=bottom cell. Bottom cells now float like centred ones,
+  but Word sets the 12 spacer marks beside the floats (topic 2 lines higher)
+  and the second float 9pt right (its leftFromText); ungating
+  `spacers_clear_nested_registration` for bottom cells overlaps the floats
+  (tried 2026-11-08).
 - Header inline picture at 1.5 spacing (czech_village_budget, 0.6pt body
   drift): Word's picture line is 1.13pt taller than ours.
 - candidate_reference_check_form: rows drift 0.6pt then 1.6pt; Word paints
@@ -200,7 +203,12 @@ alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
   between two floating tables Word stacks the second below the first
   (`tblOverlap="never"`, cell 13.75pt taller); we let them overlap. Cell
   bottom borders start 0.7pt left of the text in Word (tblCellMar left=0).
-- **case113/114**: "Body marker" 1.3pt left of Word's.
+- **case113/114**: "Body marker" 1.3pt left of Word's. Word probe
+  2026-11-08 (borders added): the floating table spans 71.8–431.4, the
+  text beside it starts at 432.42 (unbordered 432.93), ours at the table
+  edge; the offset follows the table width (60pt narrower → 60pt left). The
+  same ~1pt shows in advocacy's story text beside its picture tables. Find
+  the rule (device grid? border band?) before adding a gap.
 - **Documents without styles.xml**: our built-in defaults match desktop Word,
   not online (case135's cell line: desktop 633.22, us 633.20, online 633.70).
   Probe Word online's defaults for a docx without styles.xml.
@@ -221,7 +229,8 @@ alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
   wrap header text (Word probes). Open: whether compat 14 header floats also
   skip the full-width push in `float_text_push` (unprobed).
 - multi_font: needs Copperplate Gothic Light (in Word's cloud catalog; pick it
-  in Word's font menu to download); page 1 also runs ~14pt taller than
+  in Word's font menu to download; not on this Mac as of 2026-11-08, Word's
+  DFonts only ships the Bold); page 1 also runs ~14pt taller than
   Word's. korean_japanese needs HY헤드라인M and New Gulim (low value).
 - case37's reference shows five black boxes where its shapes are: re-export.
 - case58 (3D effects) and case65 lack a reference.
