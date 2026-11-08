@@ -1491,6 +1491,10 @@ pub(super) fn compute_row_layouts(
                 (top.max(margins.top - cell.borders.top.band() / 2.0),
                  bottom.max(margins.bottom - cell.borders.bottom.band() / 2.0))
             });
+            // Every cell gets the row's widest band: master_thesis's arrow
+            // cell, unbordered beside a boxed "yes/no", shares its baseline and
+            // a two-line row grows by the box's 0.5pt (Word reference).
+            let (top_band, bottom_band) = row_half_bands(row);
             let cells: Vec<CellLayout> = row
                 .grid_cells()
                 .map(|(grid_col, span, cell)| {
@@ -1517,8 +1521,8 @@ pub(super) fn compute_row_layouts(
                     }
 
                     let effective_margins = CellMargins {
-                        top: row_top + cell.borders.top.band() / 2.0,
-                        bottom: row_bottom + cell.borders.bottom.band() / 2.0,
+                        top: row_top + top_band,
+                        bottom: row_bottom + bottom_band,
                         ..*cell.cell_margins.as_ref().unwrap_or(cm)
                     };
                     let ecm = &effective_margins;
@@ -2336,10 +2340,10 @@ pub(super) fn compute_row_layouts(
                 // margins is 35.0, with only a 5pt top margin 30.0 (Word probes).
                 // The inset's half band is already in the exact pitch.
                 (Some(h), true) => {
+                    let bottom_band = row_half_bands(row).1;
                     h + cells
                         .iter()
-                        .zip(row.grid_cells())
-                        .map(|(l, (_, _, c))| l.cm.bottom - c.borders.bottom.band() / 2.0)
+                        .map(|l| l.cm.bottom - bottom_band)
                         .fold(0.0f32, f32::max)
                 }
                 (Some(h), false) => content_h.max(h + insets),
@@ -2567,18 +2571,20 @@ pub(super) fn row_pieces<'a>(n_rows: usize, c: &Chunk<'a>) -> Vec<RowPiece<'a>> 
     pieces
 }
 
+/// Half of the widest top and bottom border band among a row's cells.
+fn row_half_bands(row: &crate::model::TableRow) -> (f32, f32) {
+    row.cells.iter().fold((0.0f32, 0.0f32), |(t, b), c| {
+        (t.max(c.borders.top.band() / 2.0), b.max(c.borders.bottom.band() / 2.0))
+    })
+}
+
 /// Half of the widest outer border band at the table's top (first row) and
 /// bottom (last row): the part of its outer borders inside its flow height.
 pub(super) fn outer_half_bands(table: &Table) -> (f32, f32) {
-    let band = |row: Option<&crate::model::TableRow>, top: bool| {
-        row.map_or(0.0, |r| {
-            r.cells
-                .iter()
-                .map(|c| if top { c.borders.top.band() } else { c.borders.bottom.band() })
-                .fold(0.0f32, f32::max)
-        })
-    };
-    (band(table.rows.first(), true) / 2.0, band(table.rows.last(), false) / 2.0)
+    (
+        table.rows.first().map_or(0.0, |r| row_half_bands(r).0),
+        table.rows.last().map_or(0.0, |r| row_half_bands(r).1),
+    )
 }
 
 /// Height of a chunk; items without lines use their block height.
