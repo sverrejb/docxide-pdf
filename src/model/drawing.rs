@@ -77,13 +77,19 @@ impl EmbeddedImage {
         self.lum.is_some() || self.recolor.is_some()
     }
 
+    /// The width Word lays the picture out at: the drawn width plus its
+    /// whole-twip trim.
+    pub fn box_width(&self) -> f32 {
+        self.display_width + self.trimmed_width
+    }
+
     /// Size of the box an inline picture occupies in the line: the bounding box of
     /// the rotated frame. Word gives the 56×108pt signature turned -90° on
     /// italian_evaluation_minutes p7 a 56pt line, not 108pt.
     pub fn layout_size(&self) -> (f32, f32) {
         let (sin, cos) = self.rotation_deg.to_radians().sin_cos();
         let (s, c) = (sin.abs(), cos.abs());
-        let w = self.display_width + self.trimmed_width;
+        let w = self.box_width();
         (w * c + self.display_height * s, w * s + self.display_height * c)
     }
 }

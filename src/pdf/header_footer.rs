@@ -1921,7 +1921,7 @@ pub(super) fn render_header_footer(
                         let x = sp.margin_left
                             + align_offset(
                                 para.alignment,
-                                (text_width - img.display_width - img.trimmed_width).max(0.0),
+                                (text_width - img.box_width()).max(0.0),
                             );
                         let hf_fx = pc.effect_para_names.get(&pi);
                         if let Some(ref shadow) = img.shadow {

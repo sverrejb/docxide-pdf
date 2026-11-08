@@ -1269,7 +1269,7 @@ fn auto_frame_width(
                         + p.indent_left
                         + p.indent_right
                 },
-                |img| img.display_width + img.trimmed_width,
+                |img| img.box_width(),
             ),
             Block::Table(t) => t.col_widths.iter().sum(),
         })
@@ -5254,15 +5254,16 @@ fn render_paragraph_block(
     };
     let para_ascent =
         exact_baseline_base.unwrap_or(font_size * tallest_ar.or_else(mark_ar).unwrap_or(0.75));
+    let ascent_scale = auto_ascent_scale(effective_ls);
     let first_baseline_offset =
         label_boosted_baseline_offset(para, ctx.fonts, para_ascent, font_size)
-            * auto_ascent_scale(effective_ls);
+            * ascent_scale;
     let line_grid = |ascent: f32, page: usize| {
         let text_h = font_size * tallest_lhr.unwrap_or(1.2);
         Some(layout::LineGrid {
             snapped: grid_snapped,
             shift: ctx.valign_offsets.get(page).copied().unwrap_or(0.0),
-            label_boost: (ascent - para_ascent * auto_ascent_scale(effective_ls)).max(0.0),
+            label_boost: (ascent - para_ascent * ascent_scale).max(0.0),
             ..layout::LineGrid::new(
                 sp.page_height,
                 ascent,
@@ -5276,7 +5277,7 @@ fn render_paragraph_block(
     };
     // A grid or an exact rule gives every line the same box.
     if !grid_snapped && !matches!(effective_ls, LineSpacing::Exact(_)) {
-        size_lines_by_own_runs(&mut lines, ctx.fonts, effective_ls, line_h, para_ascent, auto_ascent_scale(effective_ls), para.text_alignment == crate::model::TextAlignment::Top);
+        size_lines_by_own_runs(&mut lines, ctx.fonts, effective_ls, line_h, para_ascent, ascent_scale, para.text_alignment == crate::model::TextAlignment::Top);
         size_break_lines(&mut lines, &effective_runs, effective_ls, line_h, ctx.fonts);
         size_unsized_lines(
             &mut lines,

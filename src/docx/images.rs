@@ -15,7 +15,7 @@ use super::textbox::{parse_connector_from_wsp, parse_textbox_from_wsp};
 use super::{
     CHART_NS, DML_NS, PIC_NS, ParseContext, REL_NS, VML_NS, W10_NS, WML_NS, WPD_NS, WPS_NS,
     angle_attr, dml, emu_attr, emu_attr_opt, emu_to_pts, f32_attr, frac_attr, parse_hex_color,
-    parse_on_off, parse_pt, part_path, read_zip_bytes, twips_attr, wml, wpd,
+    parse_on_off, parse_pt, part_path, read_zip_bytes, twips_attr, twips_to_pts, wml, wpd,
 };
 
 fn parse_emu_text(text: &str) -> f32 {
@@ -76,7 +76,7 @@ pub(super) fn extent_dimensions(container: roxmltree::Node) -> (f32, f32) {
 /// 2493.9 twips all step 124.65pt lines and draw 124.65pt tall, a 72pt wide
 /// one 71.98pt wide; 1000.75 twips step 50pt).
 fn inline_picture_extent(w: f32, h: f32) -> (f32, f32) {
-    let cut = (h * 20.0 + 1e-3).floor() / 20.0;
+    let cut = twips_to_pts((h * 20.0 + 1e-3).floor());
     if cut <= 0.0 {
         return (w, h);
     }

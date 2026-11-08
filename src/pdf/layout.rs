@@ -1258,7 +1258,7 @@ pub(super) fn size_lines_by_own_runs(
                 let drop = by_pdf_name
                     .get(c.pdf_font.as_str())
                     .map_or((-c.raise).max(0.0), |e| top_aligned_drop(e, c.line_font_size, c.raise));
-                c.y_offset -= c.raise + (to_grid(drop as f64) as f32 - 0.25).max(0.0);
+                c.y_offset -= c.raise + (quarter_pt(drop) - 0.25).max(0.0);
                 c.raise = -drop;
             }
         }
@@ -4462,13 +4462,16 @@ pub(super) fn os2_strike(entry: &FontEntry, font_size: f32) -> Option<(f32, f32)
 pub(super) fn post_underline(entry: &FontEntry, font_size: f32) -> Option<(f32, f32)> {
     let (pos, th, descent) = entry.underline?;
     let (offset, thickness) = on_quarter_point_grid(pos * font_size, th * font_size);
-    let (descent, _) = on_quarter_point_grid(descent * font_size, 0.0);
+    let descent = quarter_pt(descent * font_size);
     Some((offset.min(descent - thickness), thickness))
 }
 
 fn on_quarter_point_grid(offset: f32, thickness: f32) -> (f32, f32) {
-    let q = |v: f32| (v * 4.0).round() / 4.0;
-    (q(offset), q(thickness).max(0.25))
+    (quarter_pt(offset), quarter_pt(thickness).max(0.25))
+}
+
+fn quarter_pt(v: f32) -> f32 {
+    (v * 4.0).round() / 4.0
 }
 
 /// How a chunk's glyphs are drawn, chosen once for the face and its shadow
@@ -4584,7 +4587,7 @@ fn device_grid(
                  seq: &mut Vec<GridGlyph>,
                  members: &mut Vec<(usize, usize)>,
                  out: &mut [Option<Vec<f32>>]| {
-        let px = |v: f32| (v * 4.0).round() / 4.0;
+        let px = quarter_pt;
         let shift = if (x0 - line_start.0).abs() < 1e-3 {
             px(line_start.1) - px(x0)
         } else {
@@ -5005,7 +5008,7 @@ impl LineGrid {
     }
 }
 
-pub(super) fn baseline_drop(line: &TextLine, ascent: f32) -> f32 {
+fn baseline_drop(line: &TextLine, ascent: f32) -> f32 {
     line.ascent_shift + inline_image_line_extra(line, ascent)
 }
 
@@ -5038,7 +5041,7 @@ fn to_grid(v: f64) -> f64 {
 /// spill into it (Word for Mac probes, fixture line-grid: Arial, Times New
 /// Roman, Calibri and Verdana 6-24pt at single, 0.9 to 2 lines, at-least and
 /// exact spacing, top margins in twip steps).
-pub(super) fn grid_baseline(
+fn grid_baseline(
     top: f32,
     ascent: f32,
     natural: f32,
@@ -5067,8 +5070,8 @@ pub(super) fn grid_baseline(
 /// height, the page first rounded to the grid (A4's 841.9pt box is 842), so a
 /// line 700pt down an A4 page lands 0.21pt lower (Word for Mac probes, fixture
 /// line-grid: 1pt lines down pages 500-1000pt tall).
-pub(super) fn writer_stretched(y: f32, page_height: f32) -> f32 {
-    let page = (page_height * 4.0).round() / 4.0;
+fn writer_stretched(y: f32, page_height: f32) -> f32 {
+    let page = quarter_pt(page_height);
     if page <= 0.25 {
         return y;
     }
@@ -5286,7 +5289,7 @@ pub(super) fn render_paragraph_lines(
         // Word lays a line out from its frame or margin, left indent and
         // first-line indent each rounded to device pixels on their own
         // (paragraph-offset-frame-*: 261 − 284 + 312 px, not 289.6 → 290).
-        let px = |v: f32| (v * 4.0).round() / 4.0;
+        let px = quarter_pt;
         let laid_out_margin = px(base_margin - indent_left) + px(indent_left) + px(-shift);
 
         // §17.6.8 margin line number: every counted body line advances the
