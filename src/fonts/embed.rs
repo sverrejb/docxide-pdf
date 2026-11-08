@@ -567,7 +567,7 @@ fn is_east_asian_font(face: &Face) -> bool {
 /// Whitespace-only runs keep the plain values. Measurements: roadmap, "CJK
 /// Rendering Polish" item 3.
 fn compute_line_metrics(face: &Face, units: f32) -> LineMetrics {
-    let (plain_line_h_ratio, plain_ascender_ratio, typo_ratio) = plain_line_metrics(face, units);
+    let (plain_line_h_ratio, plain_ascender_ratio) = plain_line_metrics(face, units);
     let hhea = face.tables().hhea;
     let east_asian = (face.tables().os2.is_some() && is_east_asian_font(face)).then(|| {
         let desc = -(hhea.descender as f32) / units;
@@ -640,15 +640,14 @@ fn external_leading(face: &Face, os2: ttf_parser::os2::Table) -> i16 {
     (hhea_box - win_box).max(0) as i16
 }
 
-/// Returns (line_h_ratio, ascender_ratio, typo_line_ratio) by the Latin rules.
-fn plain_line_metrics(face: &Face, units: f32) -> (f32, f32, Option<f32>) {
+/// Returns (line_h_ratio, ascender_ratio) by the Latin rules.
+fn plain_line_metrics(face: &Face, units: f32) -> (f32, f32) {
     if let Some(os2) = face.tables().os2 {
-        let t_asc = os2.typographic_ascender() as f32;
-        let t_desc = os2.typographic_descender() as f32;
-        let t_gap = os2.typographic_line_gap() as f32;
-        let typo_ratio = Some((t_asc - t_desc + t_gap) / units);
         if os2.use_typographic_metrics() {
-            return ((t_asc - t_desc + t_gap) / units, t_asc / units, typo_ratio);
+            let t_asc = os2.typographic_ascender() as f32;
+            let t_desc = os2.typographic_descender() as f32;
+            let t_gap = os2.typographic_line_gap() as f32;
+            return ((t_asc - t_desc + t_gap) / units, t_asc / units);
         }
         let win_asc = os2.windows_ascender() as f32;
         let win_desc = os2.windows_descender() as f32;
@@ -656,18 +655,13 @@ fn plain_line_metrics(face: &Face, units: f32) -> (f32, f32, Option<f32>) {
         // provides external leading that Word includes in both line spacing
         // and baseline positioning (ascender offset from slot top)
         let gap = external_leading(face, os2) as f32;
-        return (
-            (win_asc - win_desc + gap) / units,
-            (win_asc + gap) / units,
-            typo_ratio,
-        );
+        return ((win_asc - win_desc + gap) / units, (win_asc + gap) / units);
     }
 
     let line_gap = face.line_gap() as f32;
     (
         (face.ascender() as f32 - face.descender() as f32 + line_gap) / units,
         face.ascender() as f32 / units,
-        None,
     )
 }
 
