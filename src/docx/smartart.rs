@@ -4,7 +4,7 @@ use std::io::{Read, Seek};
 use crate::model::{EmbeddedImage, SmartArtDiagram, SmartArtShape};
 
 use super::color::{parse_line_stroke, parse_solid_fill, resolve_dml_color};
-use super::images::{MediaParts, find_blip_embed, read_image_from_zip};
+use super::images::{find_blip_embed, read_image_from_zip};
 use super::styles::ThemeFonts;
 use super::textbox::parse_shape_geometry;
 use super::{
@@ -108,9 +108,7 @@ pub(super) fn parse_smartart_drawing<R: Read + Seek>(
                 shapes = tree
                     .children()
                     .filter(|n| n.has_tag_name((DSP_NS, "sp")))
-                    .filter_map(|sp| {
-                        parse_dsp_shape(sp, ctx.theme, &diagram_rels, ctx.zip, ctx.media)
-                    })
+                    .filter_map(|sp| parse_dsp_shape(sp, ctx, &diagram_rels))
                     .collect();
             }
         }
@@ -125,11 +123,10 @@ pub(super) fn parse_smartart_drawing<R: Read + Seek>(
 
 fn parse_dsp_shape<R: Read + Seek>(
     sp: roxmltree::Node,
-    theme: &ThemeFonts,
+    ctx: &mut ParseContext<'_, R>,
     diagram_rels: &HashMap<String, String>,
-    zip: &mut zip::ZipArchive<R>,
-    media: &mut MediaParts,
 ) -> Option<SmartArtShape> {
+    let theme = ctx.theme;
     let sp_pr = dsp(sp, "spPr")?;
     let xfrm = dml(sp_pr, "xfrm")?;
     let off = dml(xfrm, "off")?;
@@ -154,7 +151,7 @@ fn parse_dsp_shape<R: Read + Seek>(
 
     let image_fill: Option<EmbeddedImage> = dml(sp_pr, "blipFill").and_then(|bf| {
         let embed_id = find_blip_embed(bf)?;
-        read_image_from_zip(embed_id, diagram_rels, zip, media, w, h)
+        read_image_from_zip(embed_id, diagram_rels, ctx.zip, ctx.media, w, h)
     });
 
     let (stroke_color, stroke_width) = dml(sp_pr, "ln")

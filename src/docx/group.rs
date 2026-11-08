@@ -15,7 +15,7 @@ use crate::model::{
 };
 
 use super::images::{
-    RunDrawingResult, anchor_z_order, extent_dimensions, find_blip_embeds, parse_anchor_position,
+    RunDrawingResult, anchor_z_order, extent_dimensions, parse_anchor_position,
     parse_wrap_type, read_image_from_zip, vml_imagedata_props, vml_z_order, wrap_dist_left_right,
     wrap_dist_top_bottom,
 };
@@ -394,9 +394,7 @@ fn emit_pic<R: Read + Seek>(
     let (x, y) = t.apply(xfrm.off.0, xfrm.off.1);
     let (w, h) = t.scale(xfrm.ext.0, xfrm.ext.1);
 
-    if let Some(img) = find_blip_embeds(pic)
-        .find_map(|id| read_image_from_zip(id, ctx.rels, ctx.zip, ctx.media, w, h))
-    {
+    if let Some(img) = super::images::blip_image(pic, ctx, w, h) {
         // ponytail: pics flattened from an *inline* canvas don't pick up the
         // paragraph's left indent (FloatingImage::on_line only moves the
         // vertical anchor).

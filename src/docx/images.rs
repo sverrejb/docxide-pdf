@@ -140,9 +140,7 @@ pub(super) fn shape_picture_fill<R: Read + Seek>(
     display_h: f32,
 ) -> Option<EmbeddedImage> {
     let fill = dml(sp_pr, "blipFill")?;
-    let mut img = find_blip_embeds(fill).find_map(|id| {
-        read_image_from_zip(id, ctx.rels, ctx.zip, ctx.media, display_w, display_h)
-    })?;
+    let mut img = blip_image(fill, ctx, display_w, display_h)?;
     if let Some(tile) = dml(fill, "tile")
         && let Some((png, w, h)) = tile_picture(&img.data, tile, display_w, display_h)
     {
@@ -526,6 +524,29 @@ pub(super) struct MediaParts {
     pictures: usize,
 }
 
+/// The first picture a drawing element's blips point to.
+pub(super) fn blip_image<R: Read + Seek>(
+    node: roxmltree::Node,
+    ctx: &mut ParseContext<'_, R>,
+    w: f32,
+    h: f32,
+) -> Option<EmbeddedImage> {
+    find_blip_embeds(node).find_map(|id| read_image_from_zip(id, ctx.rels, ctx.zip, ctx.media, w, h))
+}
+
+/// An inline drawing's picture with its effect extent and picture properties.
+fn inline_picture<R: Read + Seek>(
+    container: roxmltree::Node,
+    ctx: &mut ParseContext<'_, R>,
+    w: f32,
+    h: f32,
+) -> Option<EmbeddedImage> {
+    let mut img = blip_image(container, ctx, w, h)?;
+    (img.layout_extra_height, img.layout_extra_top) = inline_extra_height(container);
+    apply_pic_props(&mut img, container, ctx.theme);
+    Some(img)
+}
+
 pub(super) fn read_image_from_zip<R: Read + Seek>(
     embed_id: &str,
     rels: &HashMap<String, String>,
@@ -830,9 +851,7 @@ fn parse_placed_drawing<R: Read + Seek>(
             }
             if let Some(img) = picture_filled_shape(container, ctx, display_w, display_h)
                 .or_else(|| {
-                    let mut img = find_blip_embeds(container).find_map(|id| {
-                        read_image_from_zip(id, ctx.rels, ctx.zip, ctx.media, display_w, display_h)
-                    })?;
+                    let mut img = blip_image(container, ctx, display_w, display_h)?;
                     apply_pic_props(&mut img, container, ctx.theme);
                     Some(img)
                 })
@@ -932,12 +951,7 @@ fn parse_placed_drawing<R: Read + Seek>(
             }));
         }
 
-        let (extra_h, extra_top) = inline_extra_height(container);
-        if let Some(mut img) = find_blip_embeds(container).find_map(|id| {
-            read_image_from_zip(id, ctx.rels, ctx.zip, ctx.media, display_w, display_h)
-        }) {
-            (img.layout_extra_height, img.layout_extra_top) = (extra_h, extra_top);
-            apply_pic_props(&mut img, container, ctx.theme);
+        if let Some(img) = inline_picture(container, ctx, display_w, display_h) {
             return Some(RunDrawingResult::Inline(img));
         }
 
@@ -1028,17 +1042,11 @@ pub(super) fn compute_drawing_info<R: Read + Seek>(
             }
 
             let (display_w, display_h) = extent_dimensions(container);
-            let (extra_h, extra_top) = inline_extra_height(container);
+            let (extra_h, _) = inline_extra_height(container);
             max_height = max_height.max(display_h + extra_h);
 
             if image.is_none() {
-                image = find_blip_embeds(container).find_map(|id| {
-                    read_image_from_zip(id, ctx.rels, ctx.zip, ctx.media, display_w, display_h)
-                });
-                if let Some(ref mut img) = image {
-                    (img.layout_extra_height, img.layout_extra_top) = (extra_h, extra_top);
-                    apply_pic_props(img, container, ctx.theme);
-                }
+                image = inline_picture(container, ctx, display_w, display_h);
             }
         }
     }
