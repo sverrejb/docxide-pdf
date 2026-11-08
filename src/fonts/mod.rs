@@ -1026,6 +1026,19 @@ pub(crate) fn register_font(
             log::info!("Font substitution: {primary} → Helvetica family \"Arial\"");
             Some(m)
         })
+        .or_else(|| {
+            // Likewise a missing name starting with "Times" is Times New Roman
+            // (Word for Mac probe panose: "TimesLT" and "TimesXY" with any
+            // panose; "Zorblax" with Times New Roman's panose is still Cambria).
+            // A Lithuanian decree in "TimesLT" wrapped a word early on every
+            // line in Cambria and ran a page over.
+            if !primary.to_ascii_lowercase().starts_with("times") {
+                return None;
+            }
+            let m = try_candidate("Times New Roman")?;
+            log::info!("Font substitution: {primary} → Times family \"Times New Roman\"");
+            Some(m)
+        })
         // CJK fallback before Word's Latin defaults, which lack CJK glyphs and
         // would produce squares
         .or_else(|| {
