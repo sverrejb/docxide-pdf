@@ -2172,6 +2172,7 @@ pub(super) fn render_table(
     // For floating tables, it was already consumed into the saved cursor position.
     // At a page top a table follows the paragraphs' rule with no space before:
     // radiographer's section 2 table starts at its header's bottom, not 10pt below.
+    let cursor_before = pb.slot_top;
     pb.slot_top -= if is_floating {
         float_space_after
     } else {
@@ -2200,6 +2201,7 @@ pub(super) fn render_table(
         }
     }
     pb.slot_top -= outer_band(table.rows.first(), true) / 2.0;
+    pb.keep_pending_first_page(cursor_before);
 
     // Count contiguous header rows from the start of the table (per OOXML spec,
     // only contiguous header rows starting from row 0 are repeated).

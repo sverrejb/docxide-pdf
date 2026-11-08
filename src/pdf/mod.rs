@@ -3170,6 +3170,18 @@ impl PageBuilder {
             })
     }
 
+    /// A table opening the section's pending first page moves the cursor
+    /// from `from` by its space before and top border; nothing has flowed yet.
+    pub(super) fn keep_pending_first_page(&mut self, from: f32) {
+        let (open_page, top) = (self.page_count(), self.slot_top);
+        if let Some((_, page, y)) = &mut self.pending_section_first_page
+            && *page == open_page
+            && (*y - from).abs() < 0.01
+        {
+            *y = top;
+        }
+    }
+
     /// Footnotes carried past the end of a section get a page of their own
     /// under the first-page header before the next section starts (Word
     /// examples: a 630pt row whose note does not fit ends section 1;
@@ -3192,7 +3204,10 @@ impl PageBuilder {
         ctx: &RenderContext,
     ) {
         let first_page = self.take_pending_first_page(sect_idx);
-        self.flush_page(sect_idx);
+        // A section that moved off the page in full leaves it to the one before:
+        // the page neither counts for it nor starts its numbering.
+        self.flush_page(sect_idx - first_page as usize);
+        self.page_hf_section = sect_idx;
         if first_page {
             self.flush_note_page(sect_idx);
         }
@@ -7435,23 +7450,30 @@ fn render_pass(
         }
 
         cur_sp = sp;
-        // If the first ordinary paragraph itself moves to the next sheet,
-        // that sheet is the continuous section's first page. Once it flows
-        // here, a later break gets the default variant as before. Tables,
-        // lifted frames and drawing paragraphs keep their existing handling.
-        state.pb.pending_section_first_page =
-            (matches!(sp.break_type, SectionBreakType::Continuous)
-                && sp.columns.as_ref().is_none_or(|c| c.columns.len() <= 1)
-                && state.pb.float_zone.is_none()
-                && section.blocks.first().is_some_and(|b| {
-                    matches!(b,
-                        Block::Paragraph(p) if p.frame_props.is_none()
-                            && p.image.is_none() && p.inline_chart.is_none()
-                            && p.floating_images.is_empty() && p.textboxes.is_empty()
-                            && p.smartart.is_empty() && p.connectors.is_empty()
-                            && p.runs.iter().all(|r| r.inline_image.is_none())
-                    )
-                }))
+        // If the first ordinary paragraph or table itself moves to the next
+        // sheet, that sheet is the continuous section's first page (Word
+        // examples: a 100pt table row or a kept 6-line paragraph below a page
+        // of section 1 opens page 2 under the first-page footer, numbered 1).
+        // Once it flows here, a later break gets the default variant as
+        // before. Floating tables, lifted frames and drawing paragraphs keep
+        // their existing handling.
+        state.pb.pending_section_first_page = (sect_idx > 0
+            && matches!(sp.break_type, SectionBreakType::Continuous)
+            && sp.columns.as_ref().is_none_or(|c| c.columns.len() <= 1)
+            && state.pb.float_zone.is_none()
+            && section.blocks.first().is_some_and(|b| match b {
+                Block::Paragraph(p) => {
+                    p.frame_props.is_none()
+                        && p.image.is_none()
+                        && p.inline_chart.is_none()
+                        && p.floating_images.is_empty()
+                        && p.textboxes.is_empty()
+                        && p.smartart.is_empty()
+                        && p.connectors.is_empty()
+                        && p.runs.iter().all(|r| r.inline_image.is_none())
+                }
+                Block::Table(t) => t.position.is_none(),
+            }))
             .then_some((sect_idx, state.pb.page_count(), state.pb.slot_top));
         let text_width = sp.text_width();
 
