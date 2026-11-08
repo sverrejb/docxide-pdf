@@ -5415,7 +5415,21 @@ fn render_paragraph_block(
         // Compared in whole twips: a picture sized to the column (8616.99
         // twips from its EMU extent against an 8617 twip column) fits.
         let twips = |pt: f32| (pt * 20.0).round();
-        if img.is_ole_preview && twips(img.layout_size().0) > twips(col_w) {
+        // A line break after the picture leaves the mark on a line of its own
+        // too, sized by the mark's rPr like any trailing break's empty line
+        // (a corpus logo paragraph: 7pt mark under a 16pt break run, Word's
+        // next paragraph 8.54pt lower). ponytail: one line however many
+        // breaks follow the picture; extra ones would be break-run lines.
+        let trailing_break = effective_runs
+            .iter()
+            .rev()
+            .find(|r| !r.text.is_empty() || r.is_line_break || r.inline_image.is_some())
+            .is_some_and(|r| r.is_line_break);
+        if trailing_break {
+            picture_h
+                + mark_line_h(para, effective_ls, tallest_lhr, ctx.fonts)
+                    .unwrap_or_else(|| mark_line().0)
+        } else if img.is_ole_preview && twips(img.layout_size().0) > twips(col_w) {
             picture_h + mark_line().0
         } else {
             picture_h
