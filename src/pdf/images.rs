@@ -59,7 +59,7 @@ struct ImageXObjects {
 
 #[derive(Hash, PartialEq, Eq)]
 struct ImageKey {
-    data: usize,
+    data: Arc<Vec<u8>>,
     target: Option<(u32, u32)>,
     soft_edge: Option<(u32, u32)>,
     lum: Option<(u32, u32)>,
@@ -74,7 +74,7 @@ impl ImageKey {
         resample: bool,
     ) -> Self {
         Self {
-            data: Arc::as_ptr(&img.data).addr(),
+            data: Arc::clone(&img.data),
             target: downscale_target(
                 img.pixel_width,
                 img.pixel_height,
@@ -1328,7 +1328,7 @@ mod tests {
     }
 
     #[test]
-    fn pictures_of_one_media_part_share_their_image_xobject() {
+    fn identical_pictures_share_their_image_xobject() {
         use std::io::{Cursor, Write};
         let picture = |blip: &str, crop: &str| {
             format!(
@@ -1349,9 +1349,9 @@ mod tests {
             cell(&[right]),
         );
         let header = format!(r#"<w:hdr {ns}>{}</w:hdr>"#, para(&[plain]));
-        let rels = |extra: &str| {
+        let rels = |media: &str, extra: &str| {
             format!(
-                r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdImg" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>{extra}</Relationships>"#
+                r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdImg" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/{media}"/>{extra}</Relationships>"#
             )
         };
         let mut png = Vec::new();
@@ -1362,9 +1362,10 @@ mod tests {
         for (name, bytes) in [
             ("word/document.xml", document.into_bytes()),
             ("word/header1.xml", header.into_bytes()),
-            ("word/_rels/document.xml.rels", rels(r#"<Relationship Id="rIdHdr" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>"#).into_bytes()),
-            ("word/_rels/header1.xml.rels", rels("").into_bytes()),
-            ("word/media/image1.png", png),
+            ("word/_rels/document.xml.rels", rels("image1.png", r#"<Relationship Id="rIdHdr" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>"#).into_bytes()),
+            ("word/_rels/header1.xml.rels", rels("image2.png", "").into_bytes()),
+            ("word/media/image1.png", png.clone()),
+            ("word/media/image2.png", png),
         ] {
             zip.start_file(name, zip::write::SimpleFileOptions::default())
                 .unwrap();

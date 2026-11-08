@@ -133,11 +133,17 @@ pub(super) fn embed_truetype(
 
     let data_len = i32::try_from(subset_data.len()).ok()?;
     let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&subset_data, 6);
-    {
-        let mut stream = pdf.stream(refs.data, &compressed);
-        stream.filter(Filter::FlateDecode);
-        stream.pair(Name(b"Length1"), data_len);
-    }
+    let font_file = *ctx
+        .font_files
+        .borrow_mut()
+        .entry(compressed)
+        .or_insert_with_key(|compressed| {
+            let reference = alloc();
+            let mut stream = pdf.stream(reference, compressed);
+            stream.filter(Filter::FlateDecode);
+            stream.pair(Name(b"Length1"), data_len);
+            reference
+        });
 
     let ps_name = font_name.replace(' ', "");
     let ps_name_ref = Name(ps_name.as_bytes());
@@ -156,7 +162,7 @@ pub(super) fn embed_truetype(
         .descent(descent)
         .cap_height(cap_height)
         .stem_v(80.0)
-        .font_file2(refs.data);
+        .font_file2(font_file);
 
     let cid_to_gid_ref = hyphen_alias.map(|(cid, gid)| {
         let mapping: Vec<u8> = (0..cid).chain([gid]).flat_map(u16::to_be_bytes).collect();
@@ -657,9 +663,8 @@ mod tests {
         let refs = FontRefs {
             font: Ref::new(1),
             descriptor: Ref::new(2),
-            data: Ref::new(3),
         };
-        let mut next = 4;
+        let mut next = 3;
         let metrics = embed_truetype(
             &mut pdf,
             refs,
@@ -673,6 +678,7 @@ mod tests {
                 word_text: true,
                 extra_glyphs: None,
                 font_index: crate::fonts::discovery::test_index(),
+                font_files: &Default::default(),
             },
             &mut || {
                 let r = Ref::new(next);
