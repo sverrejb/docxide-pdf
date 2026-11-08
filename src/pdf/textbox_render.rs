@@ -4,16 +4,16 @@ use std::collections::HashSet;
 use pdf_writer::Content;
 
 use crate::model::{
-    EmbeddedImage, ImageGlow, ImageReflection, Paragraph, SectionProperties, ShapeFill,
-    ShapeGeometry, Table, TextAnchor, Textbox,
+    EmbeddedImage, ImageGlow, ImageReflection, LineSpacing, Paragraph, Run, SectionProperties,
+    ShapeFill, ShapeGeometry, Table, TextAlignment, TextAnchor, Textbox,
 };
 
 use super::color::{fill_rgb, set_fill_alpha, stroke_rgb};
 use super::header_footer::resolve_tb_y_top;
 use super::helpers::align_offset;
 use super::layout::{
-    LineOpts, LinkAnnotation, LinkTagger, TextLine, build_lines, lines_height, picture_line_bottom,
-    render_paragraph_lines, tallest_run_metrics,
+    LineOpts, LinkAnnotation, LinkTagger, TextLine, build_lines, line_max_image_h, lines_height,
+    picture_line_bottom, render_paragraph_lines, tallest_run_metrics,
 };
 use super::list_label::render_list_label;
 use super::positioning::resolve_h_position;
@@ -35,21 +35,38 @@ pub(super) fn textbox_para_block_image(tp: &Paragraph) -> Option<&EmbeddedImage>
         return Some(img);
     }
     let has_text = tp.runs.iter().any(|r| !r.text.is_empty() || r.is_tab);
-    if has_text {
+    if has_text || tp.runs.iter().any(Run::underlined_picture) {
         return None;
     }
-    tp.runs.iter().find_map(|r| r.inline_image.as_ref())
+    tp.runs.iter().find_map(Run::shown_image)
+}
+
+/// `textbox_para_block_image` unless the paragraph's lines are exact: an exact
+/// line keeps its height and its picture stands on the baseline above it, cut
+/// at the box (Word example: a 100pt picture in an exactly 12pt line of a
+/// shape-fitted box leaves the box 12pt tall, the picture shown inside it).
+fn box_block_image<'p>(tp: &'p Paragraph, ctx: &RenderContext) -> Option<&'p EmbeddedImage> {
+    textbox_para_block_image(tp).filter(|_| !exact_lines(tp, ctx))
+}
+
+fn exact_lines(tp: &Paragraph, ctx: &RenderContext) -> bool {
+    matches!(tp.line_spacing.unwrap_or(ctx.doc_line_spacing), LineSpacing::Exact(_))
+}
+
+fn exact_picture_line(tp: &Paragraph, ctx: &RenderContext) -> bool {
+    exact_lines(tp, ctx) && tp.runs.iter().any(|r| r.shown_image().is_some())
 }
 
 /// A picture-only paragraph's height: the picture plus the leading its
 /// mark's font gets from multiple line spacing (Word: a 50pt picture in 10pt
 /// Calibri steps 50, 51.6 and 56.1 at 1, 1.13 and 1.5 lines).
 fn image_block_height(img: &EmbeddedImage, tp: &Paragraph, ctx: &RenderContext) -> f32 {
-    let leading = match tp.line_spacing.unwrap_or(ctx.doc_line_spacing) {
-        ls @ crate::model::LineSpacing::Auto(_) => picture_line_bottom(&tp.runs, tp, ctx.fonts, ls),
-        _ => 0.0,
-    };
-    img.display_height + img.layout_extra_height + leading
+    let h = img.display_height + img.layout_extra_height;
+    match tp.line_spacing.unwrap_or(ctx.doc_line_spacing) {
+        ls @ LineSpacing::Auto(_) => h + picture_line_bottom(&tp.runs, tp, ctx.fonts, ls),
+        LineSpacing::AtLeast(min) => h.max(min),
+        LineSpacing::Exact(_) => h,
+    }
 }
 
 /// Rendered height of a textbox: the stored height, or for `a:spAutoFit` shapes the
@@ -175,7 +192,7 @@ pub(super) fn anchor_offset(
 
 /// A textbox paragraph's height without its spacing, at text width `text_w`.
 fn paragraph_body_height(tp: &Paragraph, text_w: f32, ctx: &RenderContext) -> f32 {
-    if let Some(img) = textbox_para_block_image(tp) {
+    if let Some(img) = box_block_image(tp, ctx) {
         return image_block_height(img, tp, ctx);
     }
     let tw = (text_w - tp.indent_left - tp.indent_right).max(1.0);
@@ -198,9 +215,9 @@ fn paragraph_body_height(tp: &Paragraph, text_w: f32, ctx: &RenderContext) -> f3
     lines_height(&laid.lines, laid.line_h, laid.metrics)
 }
 
-/// A textbox paragraph's lines as they render, pictures included: the box's
-/// anchor centres or bottom-aligns this height (an oversized picture leaves
-/// nothing to share out, so the content starts at the top).
+/// A textbox paragraph's lines as they render, pictures included: a
+/// shape-fitted box is as tall as they are (Word example: a box of only an
+/// underlined 100pt picture in a 16pt Tahoma run is 103.8pt tall).
 struct BoxParagraph {
     lines: Vec<TextLine>,
     line_h: f32,
@@ -212,12 +229,13 @@ struct BoxParagraph {
 
 fn layout_box_paragraph(
     tp: &Paragraph,
-    runs: &[crate::model::Run],
+    runs: &[Run],
     text_w: f32,
     hanging: f32,
     ctx: &RenderContext,
 ) -> BoxParagraph {
     let ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
+    let exact = matches!(ls, LineSpacing::Exact(_));
     let inline_imgs = super::layout::run_image_map(runs, ctx.textbox_image_names);
     let mut lines = build_lines(
         runs,
@@ -248,14 +266,14 @@ fn layout_box_paragraph(
     // Each line is as tall as its own runs, as in the body: air_pollution's
     // 10.5pt dot-leader line before a break steps 18.1 at 1.5 lines, not
     // the 20.7 of the paragraph's 12pt text.
-    if !lines.is_empty() && !matches!(ls, crate::model::LineSpacing::Exact(_)) {
+    if !lines.is_empty() && !exact {
         super::layout::size_lines_by_own_runs(
             &mut lines,
             ctx.fonts,
             ls,
             line_h,
             text_ascent,
-            tp.text_alignment == crate::model::TextAlignment::Top,
+            tp.text_alignment == TextAlignment::Top,
         );
         super::size_break_lines(&mut lines, runs, ls, line_h, ctx.fonts);
         super::size_unsized_lines(
@@ -274,12 +292,17 @@ fn layout_box_paragraph(
     } else {
         picture_line_bottom(runs, tp, ctx.fonts, ls)
     };
+    let picture_ascent = if exact {
+        lines.iter().map(line_max_image_h).fold(text_ascent, f32::max)
+    } else {
+        text_ascent
+    };
     BoxParagraph {
         lines,
         line_h,
         font_size: fs,
         first_ascent,
-        metrics: (text_ascent, descent),
+        metrics: (picture_ascent, descent),
     }
 }
 
@@ -541,7 +564,8 @@ pub(super) fn render_single_textbox(
     let align_w = natural_w;
 
     // WordArt uses the full frame height, including the vertical insets.
-    let needs_clip = !matches!(tb.auto_fit, crate::model::AutoFit::Shape);
+    let needs_clip = !matches!(tb.auto_fit, crate::model::AutoFit::Shape)
+        || story.paragraphs.iter().any(|tp| exact_picture_line(tp, ctx));
     if needs_clip {
         content.save_state();
         content.rect(tb_x, tb_y_top - tb_height, tb.width_pt, tb_height);
@@ -816,13 +840,18 @@ pub(super) fn render_textbox_paragraphs(
             -tp.indent_first_line
         };
 
-        if let Some(img) = textbox_para_block_image(tp) {
+        if let Some(img) = box_block_image(tp, ctx) {
+            let block_h = image_block_height(img, tp, ctx);
+            let foot_drop = match tp.line_spacing.unwrap_or(ctx.doc_line_spacing) {
+                LineSpacing::AtLeast(_) => block_h - img.display_height - img.layout_extra_height,
+                _ => 0.0,
+            };
             if let Some(pdf_name) = ctx.textbox_image_names.get(&img.id) {
                 let img_x = content_x
                     + tp.indent_left
                     + x_offset
                     + align_offset(tp.alignment, (tp_align_w - img.display_width).max(0.0));
-                let img_y = cursor_y - inter_gap - img.display_height - y_offset;
+                let img_y = cursor_y - inter_gap - foot_drop - img.display_height - y_offset;
                 // The paragraph's P stays empty and the picture follows it as
                 // a Figure in the Sect, as in the body.
                 let figure = tag.as_mut().filter(|_| !img.decorative);
@@ -847,7 +876,7 @@ pub(super) fn render_textbox_paragraphs(
                     Tags::end(content);
                 }
             }
-            cursor_y -= inter_gap + image_block_height(img, tp, ctx);
+            cursor_y -= inter_gap + block_h;
             prev_space_after = tp.space_after;
             continue;
         }
@@ -855,8 +884,8 @@ pub(super) fn render_textbox_paragraphs(
         // Header/footer page numbers may sit in a text box: evaluate the
         // field runs for this page before laying them out. The substituted
         // vector lives for the rest of the iteration.
-        let hf_runs: Vec<crate::model::Run>;
-        let runs: &[crate::model::Run] = match hf_sub {
+        let hf_runs: Vec<Run>;
+        let runs: &[Run] = match hf_sub {
             Some(sub) => {
                 hf_runs = super::header_footer::substitute_hf_runs(
                     &tp.runs,

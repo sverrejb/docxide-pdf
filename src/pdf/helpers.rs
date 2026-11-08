@@ -73,6 +73,18 @@ pub(crate) fn spacing_leading(line_h: f32, font_size: f32, tallest_lhr: Option<f
     (line_h - font_size * tallest_lhr.unwrap_or(1.2)).max(0.0)
 }
 
+/// What line spacing adds below a picture taller than its line's text. An
+/// at-least minimum adds nothing: the picture line only grows to it, the
+/// picture at its foot (Word examples: a 26.2pt picture or inline text box
+/// under 15 and 24pt minimums keeps a 26.2pt line, under 40pt fills it,
+/// whatever the mark's size).
+pub(crate) fn picture_leading(ls: LineSpacing, font_size: f32, tallest_lhr: Option<f32>) -> f32 {
+    if matches!(ls, LineSpacing::AtLeast(_)) {
+        return 0.0;
+    }
+    spacing_leading(resolve_line_h(ls, font_size, tallest_lhr), font_size, tallest_lhr)
+}
+
 /// How much of its ascent a line's first baseline sits below the line top.
 /// Below single spacing Word shrinks the whole line box, ascent and descent
 /// alike; at or above it the extra leading all goes below the baseline (Word

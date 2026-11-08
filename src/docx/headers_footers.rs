@@ -111,6 +111,7 @@ pub(super) fn parse_footnotes<R: Read + Seek>(
         comments: Default::default(),
         fields: Default::default(),
         grid_char_delta: 0.0,
+        text_width: 0.0,
         in_text_box: false,
     };
     let mut lists = ListCounters::default();
@@ -330,6 +331,7 @@ pub(super) fn parse_endnotes<R: Read + Seek>(
         comments: Default::default(),
         fields: Default::default(),
         grid_char_delta: 0.0,
+        text_width: 0.0,
         in_text_box: false,
     };
 

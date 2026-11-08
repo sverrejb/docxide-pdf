@@ -242,6 +242,9 @@ pub(in crate::docx) struct ParseContext<'a, R: std::io::Read + std::io::Seek> {
     /// What the current section's character grid adds to one character
     /// (`sections::grid_char_delta`), the unit of `w:ind` `*Chars` values.
     pub(in crate::docx) grid_char_delta: f32,
+    /// The current section's text width (`sections::text_width`), read ahead
+    /// like `grid_char_delta`; 0 where no kashida reserve applies.
+    pub(in crate::docx) text_width: f32,
     /// Parsing a text box's story (`images::parse_run_drawing`).
     pub(in crate::docx) in_text_box: bool,
 }
@@ -1074,7 +1077,18 @@ pub(super) fn read_zip_text<R: Read + std::io::Seek>(
 ) -> Option<String> {
     let mut content = String::new();
     zip.by_name(name).ok()?.read_to_string(&mut content).ok()?;
-    Some(strict_to_transitional(content))
+    Some(join_split_run_properties(strict_to_transitional(content)))
+}
+
+/// Word reads a run's properties split over two adjacent `w:rPr` elements as
+/// one: french_sexual_health's URLs carry the Hyperlink style in the first
+/// and `sz` 18 in the second, and Word draws them blue, underlined and 9pt.
+fn join_split_run_properties(xml: String) -> String {
+    if xml.contains("</w:rPr><w:rPr>") {
+        xml.replace("</w:rPr><w:rPr>", "")
+    } else {
+        xml
+    }
 }
 
 /// Strict OOXML (ISO/IEC 29500 Strict) names its namespaces and relationship
@@ -1272,7 +1286,7 @@ fn parse_zip<R: Read + std::io::Seek>(
     zip.by_name("word/document.xml")
         .map_err(|_| Error::InvalidDocx("missing word/document.xml (is this a DOCX file?)".into()))?
         .read_to_string(&mut xml_content)?;
-    let xml_content = strict_to_transitional(xml_content);
+    let xml_content = join_split_run_properties(strict_to_transitional(xml_content));
 
     let xml = roxmltree::Document::parse(&xml_content)?;
     let root = xml.root_element();
@@ -1294,11 +1308,12 @@ fn parse_zip<R: Read + std::io::Seek>(
     // measure by is read ahead (tokyo_welfare: firstLineChars=1000 is 2217
     // twips at 11pt under charSpace 339; Word probes 2026-10-28: 13pt per
     // character under charSpace 4096 at 12pt, 12 under a lines-only grid).
-    let grid_deltas: Vec<f32> = body
+    let sect_prs: Vec<_> = body
         .descendants()
         .filter(|n| n.has_tag_name((WML_NS, "sectPr")))
-        .map(sections::grid_char_delta)
         .collect();
+    let grid_deltas: Vec<f32> = sect_prs.iter().map(|&n| sections::grid_char_delta(n)).collect();
+    let text_widths: Vec<f32> = sect_prs.iter().map(|&n| sections::text_width(n)).collect();
     let mut sect_idx = 0;
     let mut ctx = ParseContext {
         styles: &styles,
@@ -1311,6 +1326,7 @@ fn parse_zip<R: Read + std::io::Seek>(
         comments: comment_ranges,
         fields: Default::default(),
         grid_char_delta: grid_deltas.first().copied().unwrap_or(0.0),
+        text_width: text_widths.first().copied().unwrap_or(0.0),
         in_text_box: false,
     };
 
@@ -1414,6 +1430,7 @@ fn parse_zip<R: Read + std::io::Seek>(
                     });
                     sect_idx += 1;
                     ctx.grid_char_delta = grid_deltas.get(sect_idx).copied().unwrap_or(0.0);
+                    ctx.text_width = text_widths.get(sect_idx).copied().unwrap_or(0.0);
                 }
             }
             "altChunk" => {
@@ -1588,6 +1605,7 @@ fn parse_zip<R: Read + std::io::Seek>(
                 .as_deref()
                 .is_some_and(crate::fonts::is_cjk_family),
         do_not_expand_shift_return: settings.do_not_expand_shift_return,
+        ul_trail_space: settings.ul_trail_space,
         wp_justification: settings.wp_justification,
         additive_paragraph_spacing: settings.no_html_auto_spacing,
         adjust_line_height_in_table: settings.adjust_line_height_in_table,
@@ -1597,7 +1615,49 @@ fn parse_zip<R: Read + std::io::Seek>(
     resolve_seq_fields(&mut doc);
     resolve_body_stylerefs(&mut doc);
     link_textbox_stories(&mut doc);
+    if settings.balance_sbdb_width {
+        double_wide_char_spacing(&mut doc);
+    }
+    grid_char_pitch(&mut doc, &grid_deltas);
     Ok(doc)
+}
+
+/// A `linesAndChars` grid adds its `charSpace` to every character a run
+/// snapped to it draws, Latin or East Asian, at any size (Word probes
+/// 2026-11-08: +1pt under 4096, −0.49 under −2000; tokyo_welfare's 10.5pt
+/// ideographs step 10.58). ponytail: body only; `snapToChars` snaps to
+/// whole cells instead and is not modelled.
+fn grid_char_pitch(doc: &mut Document, grid_deltas: &[f32]) {
+    for (section, &delta) in doc.sections.iter_mut().zip(grid_deltas) {
+        let grid = section.properties.grid_type;
+        if delta == 0.0 || grid != crate::model::DocGridType::LinesAndChars {
+            continue;
+        }
+        let mut paras = Vec::new();
+        body_paragraphs(&mut section.blocks, &mut paras);
+        for run in paras.into_iter().flat_map(|p| p.runs.iter_mut()) {
+            if run.snap_to_grid {
+                run.char_spacing += delta;
+            }
+        }
+    }
+}
+
+/// Under `balanceSingleByteDoubleByteWidth` Word spaces a full-width
+/// character as two bytes: its run's `w:spacing` counts twice
+/// (chinese_student_union: −1.6pt in 14pt text draws 10.75pt ideographs,
+/// 12.5 without the flag; Word probes 2026-11-08). ponytail: body runs of
+/// East Asian characters only; mixed runs and headers keep single spacing.
+fn double_wide_char_spacing(doc: &mut Document) {
+    let mut paras = Vec::new();
+    for section in &mut doc.sections {
+        body_paragraphs(&mut section.blocks, &mut paras);
+    }
+    for run in paras.into_iter().flat_map(|p| p.runs.iter_mut()) {
+        if !run.text.is_empty() && run.text.chars().all(is_east_asian_char) {
+            run.char_spacing *= 2.0;
+        }
+    }
 }
 
 /// Number the body's SEQ fields in document order, one counter per name

@@ -584,7 +584,7 @@ fn split_chunk(
         .collect();
     let measure = |s: &str| match fonts.get(chunk.pdf_font.as_str()) {
         Some(e) => {
-            e.word_width(s, chunk.font_size, chunk.kern) * chunk.text_scale / 100.0
+            e.scaled_word_width(s, chunk.font_size, chunk.kern, chunk.text_scale)
                 + chunk.char_spacing * s.chars().count() as f32
         }
         None => s.chars().count() as f32,

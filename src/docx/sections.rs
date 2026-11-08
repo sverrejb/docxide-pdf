@@ -24,6 +24,14 @@ pub(super) fn grid_char_delta(sect_node: roxmltree::Node) -> f32 {
         .map_or(0.0, |v| v / 4096.0)
 }
 
+/// A section's text width in points: page width less side margins and gutter.
+pub(super) fn text_width(sect_node: roxmltree::Node) -> f32 {
+    let page = wml(sect_node, "pgSz").and_then(|n| twips_attr(n, "w")).unwrap_or(612.0);
+    let mar = wml(sect_node, "pgMar");
+    let side = |a: &str| mar.and_then(|n| twips_attr(n, a)).unwrap_or(0.0);
+    page - side("left") - side("right") - side("gutter")
+}
+
 pub(super) fn parse_section_properties<R: Read + Seek>(
     sect_node: roxmltree::Node,
     ctx: &mut ParseContext<'_, R>,
@@ -268,6 +276,7 @@ fn resolve_hf<R: Read + Seek>(
         comments: Default::default(),
         fields: Default::default(),
         grid_char_delta: 0.0,
+        text_width: 0.0,
         in_text_box: false,
     };
     parse_header_footer_xml(&xml_text, &mut hf_ctx)

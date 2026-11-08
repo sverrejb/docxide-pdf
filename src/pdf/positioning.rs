@@ -78,15 +78,70 @@ pub(super) fn side_gaps(
     col_w: f32,
     text_width: f32,
 ) -> Option<(f32, f32)> {
+    let (left, right) = raw_side_gaps(fi, sp, col_x, col_w, text_width);
+    (left < col_w && right < col_w).then_some((left, right))
+}
+
+fn raw_side_gaps(
+    fi: &FloatingImage,
+    sp: &SectionProperties,
+    col_x: f32,
+    col_w: f32,
+    text_width: f32,
+) -> (f32, f32) {
     let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
     let left = fi_x - fi.dist_left - col_x;
     let right = col_x + col_w - (fi_x + fi.image.display_width + fi.dist_right);
-    (left < col_w && right < col_w).then_some((left, right))
+    (left, right)
+}
+
+/// A picture leaves no usable strip beside it at any height:
+/// beside its wrap polygon for tight and through, as Word runs lines right
+/// of a column-wide picture whose wrap points enclose only its left half
+/// (example: x 314 beside a 468pt picture, 330 beside a 500pt one).
+pub(super) fn no_strip_beside(
+    fi: &FloatingImage,
+    sp: &SectionProperties,
+    col_x: f32,
+    col_w: f32,
+    text_width: f32,
+) -> bool {
+    let (left, right) = raw_side_gaps(fi, sp, col_x, col_w, text_width);
+    let (l, r) = polygon_edges(fi);
+    (left + l).max(right + fi.image.display_width - r) < super::MIN_EMPTY_STRIP
+}
+
+/// The innermost left and right edges of a picture's wrap polygon over its
+/// height, from the picture's left edge; it may reach past the picture (Word
+/// examples: a 388pt picture whose polygon spans 485pt keeps a 468pt column's
+/// lines out of its band, one in column one whose polygon covers column two
+/// steps column two's lines too). Without a polygon, the picture's edges.
+pub(super) fn polygon_edges(fi: &FloatingImage) -> (f32, f32) {
+    let w = fi.image.display_width;
+    let Some(verts) = fi.wrap_polygon.as_ref().filter(|v| v.len() >= 3) else {
+        return (0.0, w);
+    };
+    let pts: Vec<(f32, f32)> = verts
+        .iter()
+        .map(|&(x, y)| (x as f32 / 21600.0 * w, y as f32))
+        .collect();
+    let mut ys: Vec<f32> = pts.iter().map(|p| p.1).collect();
+    ys.sort_by(f32::total_cmp);
+    ys.dedup();
+    let (l, r) = ys
+        .windows(2)
+        .flat_map(|y| [y[0] + 0.5, (y[0] + y[1]) / 2.0, y[1] - 0.5])
+        .filter_map(|y| super::poly_scanline(&pts, y))
+        .fold((f32::NEG_INFINITY, f32::INFINITY), |(l, r), s| {
+            (l.max(s.0), r.min(s.1))
+        });
+    if l.is_finite() { (l, r) } else { (0.0, w) }
 }
 
 /// A page- or margin-anchored picture that keeps body lines out of its whole
 /// band (`frame_bands`) like the matching textboxes: topAndBottom, or
-/// square/tight with no usable strip beside it.
+/// square/tight/through with no usable strip beside it (beside the wrap
+/// polygon for tight and through).
 pub(super) fn image_blocks_band(
     fi: &FloatingImage,
     sp: &SectionProperties,
@@ -94,15 +149,16 @@ pub(super) fn image_blocks_band(
     col_w: f32,
     text_width: f32,
 ) -> bool {
-    if fi.v_relative_from == VRelativeFrom::Paragraph {
+    if fi.v_relative_from == VRelativeFrom::Paragraph
+        || side_gaps(fi, sp, col_x, col_w, text_width).is_none()
+    {
         return false;
     }
-    let Some((left, right)) = side_gaps(fi, sp, col_x, col_w, text_width) else {
-        return false;
-    };
     match fi.wrap_type {
         WrapType::TopAndBottom => true,
-        WrapType::Square | WrapType::Tight => left.max(right) < super::MIN_EMPTY_STRIP,
+        WrapType::Square | WrapType::Tight | WrapType::Through => {
+            no_strip_beside(fi, sp, col_x, col_w, text_width)
+        }
         _ => false,
     }
 }
