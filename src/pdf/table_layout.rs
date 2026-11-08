@@ -2133,6 +2133,11 @@ pub(super) fn compute_row_layouts(
                                     compute_row_layouts(nested_table, &nested_cw, ctx, hf_sub);
                                 let nested_h = nested_layouts.iter().map(|rl| rl.height).sum::<f32>();
                                 let plain_side_text = plain_text_fits_nested_strip(cell, block_idx, nested_table, &nested_cw, cell_text_w, ctx);
+                                // The room a float leaves on its right.
+                                let gap_beside = nested_table.position.as_ref().map_or(0.0, |pos| {
+                                    let float_x = match pos.h_position { HorizontalPosition::Offset(x) => x, _ => 0.0 };
+                                    cell_text_w - float_x - nested_cw.iter().sum::<f32>() - pos.right_from_text
+                                });
                                 let blank = |p: &crate::model::Paragraph| {
                                     p.runs.iter().all(|r| r.text.trim().is_empty()
                                         && !r.is_tab && !r.is_line_break && r.inline_image.is_none() && r.field_code.is_none())
@@ -2150,11 +2155,12 @@ pub(super) fn compute_row_layouts(
                                             cell.content.get(block_idx + 1),
                                             Some(Block::Paragraph(p)) if blank(p) && p.frame_props.is_none() && !p.paragraph_mark_vanish
                                         );
-                                        cell.content[block_idx + 1..].iter().all(|b| match b {
+                                        cell.content[block_idx + 1..].iter().enumerate().all(|(i, b)| match b {
                                             Block::Paragraph(p) => blank(p),
                                             Block::Table(t) => t.rows.len() == 1 && (
                                                 t.position.as_ref().is_some_and(|p| p.v_anchor == "text")
                                                 || (at_left_edge && t.position.is_none() && next_is_blank)
+                                                || (i == 0 && t.position.is_none() && t.col_widths.iter().sum::<f32>() <= gap_beside)
                                             ),
                                         }) || plain_side_text
                                             || text_above_floats
@@ -2179,6 +2185,17 @@ pub(super) fn compute_row_layouts(
                                         floating_x_offset = Some(nested_table.position.as_ref().unwrap().left_from_text);
                                     }
                                 }
+                                // An inline table straight after a left float that
+                                // leaves it room sits beside the float, level with its
+                                // top (nested-float-no-spacer-inline).
+                                if nested_table.position.is_none()
+                                    && matches!(items.last(), Some(CellContentItem::NestedTable { floating_offset: Some(_), .. }))
+                                    && left_float_bottom > total_h
+                                    && nested_cw.iter().sum::<f32>() <= left_float_right_gap
+                                {
+                                    floating_offset = Some(left_float_top - total_h - space_before);
+                                    floating_x_offset = Some(cell_text_w - left_float_right_gap);
+                                }
                                 // An inline nested table's outer border bands sit inside
                                 // the cell's flow, as a top-level table's do: Word starts
                                 // autofit-cell-widths-nested's inner top band where the
@@ -2195,9 +2212,7 @@ pub(super) fn compute_row_layouts(
                                         left_float_top = total_h + space_before + offset;
                                         left_float_indent = if plain_side_text { nested_cw.iter().sum::<f32>() + nested_table.position.as_ref().unwrap().right_from_text } else { 0.0 };
                                         first_positive_float = block_idx == 0 && nested_table.position.as_ref().is_some_and(|p| p.v_offset_pt >= 0.0);
-                                        let float_x = match nested_table.position.as_ref().unwrap().h_position { crate::model::HorizontalPosition::Offset(x) => x, _ => 0.0 };
-                                        left_float_right_gap = cell_text_w - float_x - nested_cw.iter().sum::<f32>()
-                                            - nested_table.position.as_ref().unwrap().right_from_text;
+                                        left_float_right_gap = gap_beside;
                                     }
                                 } else {
                                     total_h += space_before + top_band + nested_h + bottom_band;
