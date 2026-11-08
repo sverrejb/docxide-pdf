@@ -151,6 +151,33 @@ fn is_all_notdef(bytes: &[u8]) -> bool {
     !bytes.is_empty() && bytes.chunks_exact(2).all(|c| c == [0, 0])
 }
 
+/// Under `textAlignment="center"` Word centres the marker on the first
+/// run's box: a 14pt Symbol bullet beside Times New Roman sits 0.75pt below
+/// the text's baseline (center-body-list-height-center-*).
+fn centred_label_drop(para: &Paragraph, fonts: &HashMap<String, FontEntry>, text_fs: f32) -> f32 {
+    if para.text_alignment != crate::model::TextAlignment::Center {
+        return 0.0;
+    }
+    // The glyph box, without the line gap our ascent carries.
+    let centre = |e: &FontEntry, fs: f32| {
+        let ar = e.ascender_ratio.unwrap_or(0.75);
+        let descent = super::layout::descender_ratio(e.line_h_ratio, Some(ar));
+        fs * (ar - e.leading_ratio.unwrap_or(0.0) - descent) / 2.0
+    };
+    let label = label_font_key(para).and_then(|k| fonts.get(&k));
+    let text = para
+        .runs
+        .iter()
+        .find(|r| !r.text.trim().is_empty())
+        .and_then(|r| fonts.get(&crate::fonts::font_key(r)).map(|e| (e, r.font_size)));
+    match (label, text) {
+        (Some(l), Some((t, fs))) => {
+            centre(l, para.list_label_font_size.unwrap_or(text_fs)) - centre(t, fs)
+        }
+        _ => 0.0,
+    }
+}
+
 pub(super) fn render_list_label(
     content: &mut Content,
     para: &Paragraph,
@@ -162,7 +189,8 @@ pub(super) fn render_list_label(
     if para.list_label.is_empty() {
         return;
     }
-    let baseline_y = baseline_y + para.list_label_rise;
+    let baseline_y =
+        baseline_y + para.list_label_rise - centred_label_drop(para, fonts, fallback_font_size);
     let pieces = label_pieces(para);
     if pieces.len() > 1 && !para.bidi {
         let label_fs = para.list_label_font_size.unwrap_or(fallback_font_size);
