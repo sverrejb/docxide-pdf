@@ -1073,7 +1073,18 @@ pub(super) fn read_zip_text<R: Read + std::io::Seek>(
 ) -> Option<String> {
     let mut content = String::new();
     zip.by_name(name).ok()?.read_to_string(&mut content).ok()?;
-    Some(strict_to_transitional(content))
+    Some(join_split_run_properties(strict_to_transitional(content)))
+}
+
+/// Word reads a run's properties split over two adjacent `w:rPr` elements as
+/// one: french_sexual_health's URLs carry the Hyperlink style in the first
+/// and `sz` 18 in the second, and Word draws them blue, underlined and 9pt.
+fn join_split_run_properties(xml: String) -> String {
+    if xml.contains("</w:rPr><w:rPr>") {
+        xml.replace("</w:rPr><w:rPr>", "")
+    } else {
+        xml
+    }
 }
 
 /// Strict OOXML (ISO/IEC 29500 Strict) names its namespaces and relationship
@@ -1270,7 +1281,7 @@ fn parse_zip<R: Read + std::io::Seek>(
     zip.by_name("word/document.xml")
         .map_err(|_| Error::InvalidDocx("missing word/document.xml (is this a DOCX file?)".into()))?
         .read_to_string(&mut xml_content)?;
-    let xml_content = strict_to_transitional(xml_content);
+    let xml_content = join_split_run_properties(strict_to_transitional(xml_content));
 
     let xml = roxmltree::Document::parse(&xml_content)?;
     let root = xml.root_element();
