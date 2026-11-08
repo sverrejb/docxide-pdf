@@ -1184,10 +1184,16 @@ fn render_nested_table(
                 })
         })
         .map_or(0.0, |m| m.left);
+    // A positive tblpX moves it right of the cell's text start; a negative one
+    // leaves it there (negative-x-nested-x142-* vs x-142-*).
+    let x_offset = anchored.map_or(0.0, |p| match p.h_position {
+        crate::model::HorizontalPosition::Offset(x) => x.max(0.0),
+        _ => 0.0,
+    });
     let table_left = match alignment {
         TableAlignment::Center => available_x + (available_w - table_total_w) / 2.0,
         TableAlignment::Right => available_x + available_w - table_total_w,
-        TableAlignment::Left => available_x + table.table_indent - edge_shift,
+        TableAlignment::Left => available_x + table.table_indent + x_offset - edge_shift,
     };
 
     let merge_spans = compute_merge_spans(table, row_layouts);
