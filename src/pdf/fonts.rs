@@ -124,6 +124,10 @@ fn collect_used_chars(
         // Word boundaries are drawn with the preceding word's font, which may
         // not be the font of the run that holds the space.
         chars.insert(' ');
+        // A soft hyphen ending a line shows as a hyphen.
+        if run.text.contains('\u{AD}') {
+            chars.insert('-');
+        }
         if math_font && run.math.is_some() {
             // Drawn from its box in the math font (m:nor text below).
         } else {
@@ -707,6 +711,9 @@ pub(super) fn collect_and_register_fonts(
                 for &ch in &primary.missing_chars {
                     if let Some(&w) = fb_widths.get(&ch) {
                         widths.insert(ch, w);
+                        primary
+                            .fallback_avg_char_width
+                            .insert(ch, entry.avg_char_width);
                     }
                 }
             }

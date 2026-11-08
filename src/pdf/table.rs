@@ -319,7 +319,7 @@ fn valign_offset(v_align: CellVAlign, available: f32, content_h: f32) -> f32 {
 
 fn para_has_visible_content(para: &CellParagraphLayout) -> bool {
     !para.list_label.is_empty()
-        || (!para.lines.is_empty() && para.lines.iter().any(|l| !l.chunks.is_empty()))
+        || para.lines.iter().any(|l| !l.is_blank())
         || !para.floating_images.is_empty()
         || para.image_name.is_some()
         || para.has_textboxes

@@ -667,8 +667,7 @@ impl ParagraphRunDefaults {
             snap_to_grid: rpr.and_then(|n| wml_bool(n, "snapToGrid")) != Some(false),
             text_scale: rpr
                 .and_then(|n| wml_attr(n, "w"))
-                .and_then(|v| v.trim_end_matches('%').parse::<f32>().ok())
-                .unwrap_or(100.0),
+                .map_or(100.0, text_scale),
             caps: own.caps.or_else(|| cs(|c| c.caps)).unwrap_or(self.caps),
             small_caps: own
                 .small_caps
@@ -781,6 +780,48 @@ fn legacy_text_shadow(
         alpha: 1.0,
         relief: emboss || imprint,
     })
+}
+
+/// A soft hyphen is a break point only before text: one a space, a manual
+/// break or the paragraph's end follows never shows nor takes room (Word
+/// keeps "Wasser" on a line too short for "Wasser-"). Runs it leaves empty
+/// at the paragraph's end go, so a paragraph holding only them stays empty.
+fn drop_idle_soft_hyphens(runs: &mut Vec<Run>) {
+    let mut idle = true;
+    let mut tail = true;
+    for i in (0..runs.len()).rev() {
+        let run = &mut runs[i];
+        if run.vanish {
+            continue;
+        }
+        let had_soft = run.text.contains('\u{AD}');
+        if had_soft {
+            let mut kept: Vec<char> = Vec::with_capacity(run.text.len());
+            for c in run.text.chars().rev() {
+                if c == '\u{AD}' && idle {
+                    continue;
+                }
+                idle = c == ' ';
+                kept.push(c);
+            }
+            run.text = kept.into_iter().rev().collect();
+        } else if let Some(c) = run.text.chars().next() {
+            idle = c == ' ';
+        } else if run.is_line_break {
+            idle = true;
+        } else if run.is_tab || run.inline_image.is_some() {
+            idle = false;
+        }
+        let content = !run.text.is_empty()
+            || run.is_tab
+            || run.is_line_break
+            || run.inline_image.is_some()
+            || run.field_code.is_some();
+        if tail && had_soft && !content {
+            runs.remove(i);
+        }
+        tail &= !content;
+    }
 }
 
 /// Create synthetic runs for empty paragraphs so the renderer computes the
@@ -1256,6 +1297,7 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
                 && prev.bold == run.bold
                 && prev.italic == run.italic
                 && prev.underline == run.underline
+                && prev.double_underline == run.double_underline
                 && prev.strikethrough == run.strikethrough
                 && prev.dstrike == run.dstrike
                 && prev.char_spacing == run.char_spacing
@@ -1711,17 +1753,39 @@ pub(super) fn parse_runs<R: Read + Seek>(
                         }
                     } else if visible && let Some(t) = child.text() {
                         // Word lays out a TAB character in the text like a <w:tab/>.
+                        // A literal U+00AD is no soft hyphen to Word: it draws
+                        // it as a hyphen wherever it falls.
                         for (i, part) in t.split('\t').enumerate() {
                             if i > 0 && !fmt.vanish {
                                 flush_pending(&mut pending_text, &mut runs);
                                 runs.push(fmt.tab_run());
                             }
-                            pending_text.push_str(&part.replace('\n', " "));
+                            pending_text.push_str(&part.replace('\n', " ").replace('\u{AD}', "-"));
                         }
                     }
                 }
                 "noBreakHyphen" => {
                     pending_text.push('-');
+                }
+                "softHyphen" => {
+                    // Word draws one in a w:caps run right after capitals
+                    // as a plain hyphen.
+                    let after_caps = match pending_text.chars().last() {
+                        Some(c) => c.is_alphanumeric(),
+                        None => runs.last().is_some_and(|r| {
+                            r.caps && !r.vanish && r.text.ends_with(char::is_alphanumeric)
+                        }),
+                    };
+                    let c = if fmt.caps && after_caps {
+                        '-'
+                    } else {
+                        '\u{AD}'
+                    };
+                    if let Some(f) = field_stack.last_mut().filter(|f| f.seen_sep && f.dynamic()) {
+                        f.result.push(c);
+                    } else if fields_visible(&field_stack) {
+                        pending_text.push(c);
+                    }
                 }
                 "tab" => {
                     let visible = fields_visible(&field_stack);
@@ -1945,6 +2009,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
         .unwrap_or(false)
         || page_break_before_content;
 
+    drop_idle_soft_hyphens(&mut runs);
     ensure_nonempty_paragraph(
         &mut runs,
         ppr,
@@ -2055,6 +2120,16 @@ fn parse_vml_horizontal_rule(pict_node: roxmltree::Node) -> Option<HorizontalRul
     })
 }
 
+/// A `w:w` value in percent. Word scales by 1 to 600% and draws anything
+/// else at 100%: examples drew 0, 601, 700 and 1000 like 100.
+fn text_scale(val: &str) -> f32 {
+    val.trim_end_matches('%')
+        .parse::<f32>()
+        .ok()
+        .filter(|v| (1.0..=600.0).contains(v))
+        .unwrap_or(100.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2066,6 +2141,34 @@ mod tests {
         assert!(!has_switch(instr, "\\h"));
         let escaped = r#" IF 1 = 1 "a \" \* MERGEFORMAT \" b" "c" "#;
         assert!(!has_switch(escaped, "\\*"));
+    }
+
+    #[test]
+    fn idle_soft_hyphen_keeps_a_field_run() {
+        let mut runs = vec![Run {
+            text: "\u{AD}".into(),
+            field_code: Some(FieldCode::Page(None)),
+            ..Run::default()
+        }];
+        drop_idle_soft_hyphens(&mut runs);
+        assert!(runs[0].field_code.is_some());
+    }
+
+    #[test]
+    fn text_scale_outside_word_range_is_unscaled() {
+        for (val, scale) in [
+            ("0", 100.0),
+            ("1", 1.0),
+            ("85", 85.0),
+            ("600", 600.0),
+            ("601", 100.0),
+            ("1000", 100.0),
+            ("-5", 100.0),
+            ("90%", 90.0),
+            ("x", 100.0),
+        ] {
+            assert_eq!(text_scale(val), scale, "{val}");
+        }
     }
 
     #[test]

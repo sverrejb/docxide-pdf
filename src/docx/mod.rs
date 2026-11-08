@@ -1602,6 +1602,7 @@ fn parse_zip<R: Read + std::io::Seek>(
                 .as_deref()
                 .is_some_and(crate::fonts::is_cjk_family),
         do_not_expand_shift_return: settings.do_not_expand_shift_return,
+        ul_trail_space: settings.ul_trail_space,
         wp_justification: settings.wp_justification,
         additive_paragraph_spacing: settings.no_html_auto_spacing,
         adjust_line_height_in_table: settings.adjust_line_height_in_table,
