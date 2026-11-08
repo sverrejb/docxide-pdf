@@ -468,6 +468,11 @@ pub(super) struct TableStyleDef {
     pub(super) space_before: Option<f32>,
     pub(super) space_after: Option<f32>,
     pub(super) line_spacing: Option<LineSpacing>,
+    /// The style's `w:pPr/w:jc`: cell paragraphs that set no alignment of
+    /// their own or through their paragraph style take it (a two-column
+    /// letter in a "Table Grid" whose style justifies: Word's lines reach
+    /// the column edge, ours stopped short by a word).
+    pub(super) alignment: Option<Alignment>,
     pub(super) based_on: Option<String>,
 }
 
@@ -1330,6 +1335,9 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         space_before: style_spacing.and_then(|n| twips_attr(n, "before")),
                         space_after: style_spacing.and_then(|n| twips_attr(n, "after")),
                         line_spacing: style_line_spacing,
+                        alignment: wml(style_node, "pPr")
+                            .and_then(|p| wml_attr(p, "jc"))
+                            .map(parse_alignment),
                         based_on: wml_attr(style_node, "basedOn").map(str::to_string),
                     },
                 );

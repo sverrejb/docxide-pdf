@@ -323,6 +323,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     let style_space_before = style_chain().find_map(|s| s.space_before);
     let style_space_after = style_chain().find_map(|s| s.space_after);
     let style_line_spacing = style_chain().find_map(|s| s.line_spacing);
+    let style_alignment = style_chain().find_map(|s| s.alignment);
     let style_v_align = style_chain().find_map(|s| s.v_align);
 
     let table_position = tbl_pr.and_then(|pr| wml(pr, "tblpPr")).map(|tblp| {
@@ -806,6 +807,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     let ppr = wml(p, "pPr");
                     let (para_style_id, para_style) = ctx.styles.paragraph_style_of(ppr);
                     let alignment = super::runs::paragraph_alignment(p, ppr, para_style)
+                        .or(style_alignment)
                         .unwrap_or(Alignment::Left);
                     let (sp_before, sp_after, ls) =
                         parse_paragraph_spacing(ppr, para_style, &ctx.styles.defaults);
