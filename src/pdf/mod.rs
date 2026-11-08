@@ -1363,6 +1363,10 @@ pub(super) struct RenderContext<'a> {
     /// snap to it like body text; physical_therapy (no flag) keeps natural
     /// cell lines on its 18pt grid.
     pub(super) cell_grid_pitch: std::cell::Cell<f32>,
+    /// The current section's page height: Word draws baselines and rules on
+    /// a grid from the page top, which the table renderers reach through
+    /// `ctx` only.
+    pub(super) page_height: std::cell::Cell<f32>,
     /// Comment anchors of table-cell text, which the cell renderers reach
     /// through `ctx` only; the body table code moves them onto the page.
     pub(super) cell_comment_anchors: std::cell::RefCell<Vec<(u32, f32, f32, f32)>>,
@@ -6981,7 +6985,10 @@ fn render_paragraph_block(
         // corner gap left by butt-capped vertical border strokes.
         let (h_left_ext, h_right_ext) = horizontal_border_ext(bdr);
         // `inward`: +1 for a border below the text, -1 for one above.
+        let page_top = sp.page_height
+            + ctx.valign_offsets.get(state.pb.all_contents.len()).copied().unwrap_or(0.0);
         let draw_h_border = |content: &mut Content, b: &ParagraphBorder, y: f32, inward: f32| {
+            let y = layout::rule_on_grid(y, page_top, b.extent());
             let (x0, x1) = (box_left - h_left_ext, box_right + h_right_ext);
             stroke_border(content, b, (x0, y), (x1, y), inward);
         };
@@ -7003,7 +7010,11 @@ fn render_paragraph_block(
                 0.0
             };
         let draw_v_border = |content: &mut Content, b: &ParagraphBorder, x: f32, inward: f32| {
-            stroke_border(content, b, (x, v_border_top), (x, v_border_bottom), inward);
+            let (top, bottom) = (
+                layout::rule_on_grid(v_border_top, page_top, 0.0),
+                layout::rule_on_grid(v_border_bottom, page_top, 0.0),
+            );
+            stroke_border(content, b, (x, top), (x, bottom), inward);
         };
 
         if !prev_borders_match && let Some(b) = &bdr.top {
@@ -7297,6 +7308,7 @@ fn render_pass(
                 .first()
                 .map_or(0.0, |s| cell_grid_pitch(doc, &s.properties)),
         ),
+        page_height: std::cell::Cell::new(doc.sections.first().map_or(0.0, |s| s.properties.page_height)),
         cell_comment_anchors: Default::default(),
         hf_heights: Default::default(),
     };
@@ -7335,6 +7347,7 @@ fn render_pass(
     for (sect_idx, section) in doc.sections.iter().enumerate() {
         let sp = &section.properties;
         ctx.cell_grid_pitch.set(cell_grid_pitch(doc, sp));
+        ctx.page_height.set(sp.page_height);
 
         // §17.6.8 restart="newPage": set before the break handling so the
         // flush that opens this section's first page already resets the count.
@@ -8261,6 +8274,7 @@ fn render_pass(
         }
         let sp = &doc.sections[si].properties;
         ctx.cell_grid_pitch.set(cell_grid_pitch(doc, sp));
+        ctx.page_height.set(sp.page_height);
 
         let (page_num, effective_page_num_format) = page_numbers[page_idx];
         // Word counts the pages of the section the page starts in.

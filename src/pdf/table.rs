@@ -27,10 +27,25 @@ use super::tagging::{CellTagger, TableTags, Tags};
 /// behind-text drawings go there instead of in place.
 type BehindLayer<'a> = Option<&'a mut Vec<(u32, Content)>>;
 
-fn draw_border(content: &mut Content, border: &CellBorder, x1: f32, y1: f32, x2: f32, y2: f32) {
+// ponytail: `page_top` ignores w:vAlign's shift of the page body.
+fn draw_border(
+    content: &mut Content,
+    border: &CellBorder,
+    page_top: f32,
+    x1: f32,
+    y1: f32,
+    x2: f32,
+    y2: f32,
+) {
     if !border.present {
         return;
     }
+    // A horizontal border is a band; a vertical one's ends are points.
+    let band = if (y1 - y2).abs() < 0.01 { border.width } else { 0.0 };
+    let (y1, y2) = (
+        super::layout::rule_on_grid(y1, page_top, band),
+        super::layout::rule_on_grid(y2, page_top, band),
+    );
     let w = border.width;
     content.save_state();
     content.set_line_width(w);
@@ -93,6 +108,7 @@ fn draw_border(content: &mut Content, border: &CellBorder, x1: f32, y1: f32, x2:
 fn draw_cell_borders(
     content: &mut Content,
     borders: &crate::model::CellBorders,
+    page_top: f32,
     bx: f32,
     top: f32,
     bottom: f32,
@@ -101,13 +117,13 @@ fn draw_cell_borders(
     draw_bottom: bool,
 ) {
     if draw_top {
-        draw_border(content, &borders.top, bx, top, bx + col_w, top);
+        draw_border(content, &borders.top, page_top, bx, top, bx + col_w, top);
     }
     if draw_bottom {
-        draw_border(content, &borders.bottom, bx, bottom, bx + col_w, bottom);
+        draw_border(content, &borders.bottom, page_top, bx, bottom, bx + col_w, bottom);
     }
-    draw_border(content, &borders.left, bx, top, bx, bottom);
-    draw_border(content, &borders.right, bx + col_w, top, bx + col_w, bottom);
+    draw_border(content, &borders.left, page_top, bx, top, bx, bottom);
+    draw_border(content, &borders.right, page_top, bx + col_w, top, bx + col_w, bottom);
 }
 
 /// Paint a cell background: hatching when a line/cross pattern is present,
@@ -1122,6 +1138,7 @@ fn render_table_rows(
             draw_cell_borders(
                 content,
                 &cell.borders,
+                ctx.page_height.get(),
                 bx,
                 row_top,
                 effective_bottom,
@@ -1664,6 +1681,7 @@ fn render_table_row(
         draw_cell_borders(
             &mut pb.content,
             &cell.borders,
+            ctx.page_height.get(),
             bx,
             row_top,
             row_bottom,
@@ -1911,6 +1929,7 @@ fn render_partial_row(
         draw_cell_borders(
             content,
             &borders,
+            ctx.page_height.get(),
             bx,
             row_top,
             row_bottom,
@@ -2599,7 +2618,7 @@ pub(super) fn render_table(
                         let bx = cell_x_offset(&col_widths, table_left, grid_col);
                         let right = bx + cell_span_width(&col_widths, grid_col, span);
                         let y = pb.slot_top;
-                        draw_border(&mut pb.content, &cell.borders.bottom, bx, y, right, y);
+                        draw_border(&mut pb.content, &cell.borders.bottom, ctx.page_height.get(), bx, y, right, y);
                     }
                 }
             }

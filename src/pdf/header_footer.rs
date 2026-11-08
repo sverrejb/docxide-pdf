@@ -1469,6 +1469,7 @@ pub(super) fn render_header_footer(
                     sp.margin_left + text_width - box_right_in,
                     slot_top,
                 );
+                let on_grid = |y, band| super::layout::rule_on_grid(y, sp.page_height, band);
                 let draw_para_borders = |content: &mut Content, box_bottom: f32| {
                     // Side borders as in the body: their inner edge `space`
                     // plus Word's 1.47 / 1.73pt outside the text, and the
@@ -1480,22 +1481,25 @@ pub(super) fn render_header_footer(
                     if !group.prev
                         && let Some(b) = &bdr.top
                     {
-                        let y = box_top - b.extent() / 2.0;
+                        let y = on_grid(box_top - b.extent() / 2.0, b.extent());
                         stroke_border(content, b, (h_left, y), (h_right, y), -1.0);
                     }
                     // The stroke sits `space` below the box, outside it,
                     // as the body path's bottom pad places it.
                     if let Some(b) = if group.next { &bdr.between } else { &bdr.bottom } {
-                        let y = box_bottom - group.bottom.0 - b.extent() / 2.0;
+                        let y = on_grid(box_bottom - group.bottom.0 - b.extent() / 2.0, b.extent());
                         stroke_border(content, b, (h_left, y), (h_right, y), 1.0);
                     }
-                    let v_top = box_top + if group.prev { gap } else { 0.0 };
-                    let v_bottom = box_bottom
-                        - if group.next {
-                            group.bottom.1
-                        } else {
-                            group.bottom.0
-                        };
+                    let v_top = on_grid(box_top + if group.prev { gap } else { 0.0 }, 0.0);
+                    let v_bottom = on_grid(
+                        box_bottom
+                            - if group.next {
+                                group.bottom.1
+                            } else {
+                                group.bottom.0
+                            },
+                        0.0,
+                    );
                     for (b, x, inward) in [
                         (&bdr.left, box_left - left_x, 1.0),
                         (&bdr.right, box_right + right_x, -1.0),

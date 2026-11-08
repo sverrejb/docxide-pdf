@@ -5065,11 +5065,22 @@ fn grid_baseline(
     (r(top) + o).min(r(top + adv) - (r(adv) - o)) as f32
 }
 
-/// How far below the page top Word's PDF writer puts what the layout drew
-/// `y` below it: it stretches the page by one grid cell (0.25pt) over its
-/// height, the page first rounded to the grid (A4's 841.9pt box is 842), so a
-/// line 700pt down an A4 page lands 0.21pt lower (Word for Mac probes, fixture
-/// line-grid: 1pt lines down pages 500-1000pt tall).
+/// Where Word draws a rule whose `band` is centred on PDF `y`: the band's
+/// top edge on the 0.25pt grid from `page_top`, then stretched like a
+/// baseline, so a 0.75pt band's centre sits between grid lines
+/// (alpharetta_school_governance_council's 0.5pt and paragraph-border-indents'
+/// 0.75pt table and paragraph rules within 0.02pt). A zero band snaps the point.
+pub(super) fn rule_on_grid(y: f32, page_top: f32, band: f32) -> f32 {
+    let top_edge = to_grid((page_top - y - band / 2.0) as f64) as f32;
+    page_top - writer_stretched(top_edge + band / 2.0, page_top)
+}
+
+/// How far below the page top Word's PDF writer puts a baseline or rule the
+/// layout drew `y` below it: it stretches the page by one grid cell (0.25pt)
+/// over its height, the page first rounded to the grid (A4's 841.9pt box is
+/// 842), so a line 700pt down an A4 page lands 0.21pt lower (Word for Mac
+/// probes, fixture line-grid: 1pt lines down pages 500-1000pt tall). Pictures
+/// keep their place (case181's header pictures).
 fn writer_stretched(y: f32, page_height: f32) -> f32 {
     let page = quarter_pt(page_height);
     if page <= 0.25 {
@@ -7364,6 +7375,17 @@ mod tests {
         let h2 = |ls| grid_snapped_line_h(&big, &fonts, ls, 25.3, 15.6);
         assert_eq!(h2(crate::model::LineSpacing::Auto(1.5)), 31.2);
         assert_eq!(h2(crate::model::LineSpacing::Auto(3.0)), 15.6 * 3.0);
+    }
+
+    /// Word's rules in paragraph-border-indents (Letter) and
+    /// alpharetta_school_governance_council: layout centre below the page top
+    /// → drawn centre.
+    #[test]
+    fn rules_snap_their_top_edge_then_stretch() {
+        let drawn = |below: f32, band: f32| 792.0 - rule_on_grid(792.0 - below, 792.0, band);
+        assert!((drawn(84.87, 0.75) - 84.90).abs() < 0.01);
+        assert!((drawn(388.01, 0.75) - 388.25).abs() < 0.01);
+        assert!((drawn(174.88, 0.5) - 175.05).abs() < 0.01);
     }
 
     #[test]
