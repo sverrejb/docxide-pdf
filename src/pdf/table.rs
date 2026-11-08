@@ -2146,6 +2146,7 @@ pub(super) fn render_table(
     } else {
         0.0
     };
+    let cursor_before = pb.slot_top;
     let (table_left, saved_slot_top, text_margins) = if let Some(ref fp) = override_pos {
         // The float zone starts at the table's drawn top.
         let saved = Some((
@@ -2172,7 +2173,6 @@ pub(super) fn render_table(
     // For floating tables, it was already consumed into the saved cursor position.
     // At a page top a table follows the paragraphs' rule with no space before:
     // radiographer's section 2 table starts at its header's bottom, not 10pt below.
-    let cursor_before = pb.slot_top;
     pb.slot_top -= if is_floating {
         float_space_after
     } else {

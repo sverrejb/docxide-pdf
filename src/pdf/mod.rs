@@ -485,27 +485,6 @@ fn step_lines_below_bands(
     gaps
 }
 
-/// A first block that moves to the next sheet makes it the continuous
-/// section's first page (Word examples: a 100pt table row or a kept 6-line
-/// paragraph below a page of section 1 opens page 2 under the first-page
-/// footer, numbered 1). Floating tables, lifted frames and drawing paragraphs
-/// keep their existing handling.
-fn can_open_moved_first_page(b: &Block) -> bool {
-    match b {
-        Block::Paragraph(p) => {
-            p.frame_props.is_none()
-                && p.image.is_none()
-                && p.inline_chart.is_none()
-                && p.floating_images.is_empty()
-                && p.textboxes.is_empty()
-                && p.smartart.is_empty()
-                && p.connectors.is_empty()
-                && p.runs.iter().all(|r| r.inline_image.is_none())
-        }
-        Block::Table(t) => t.position.is_none(),
-    }
-}
-
 /// Gives the current page to section `sect_idx` as its first page: its
 /// first-page header and footer, their margins and bands.
 fn open_section_first_page(
@@ -3192,7 +3171,8 @@ impl PageBuilder {
     }
 
     /// A table opening the section's pending first page moves the cursor
-    /// from `from` by its space before and top border; nothing has flowed yet.
+    /// from `from` to its position, space before and top border; nothing has
+    /// flowed yet.
     pub(super) fn keep_pending_first_page(&mut self, from: f32) {
         if let Some((_, _, y)) = &mut self.pending_section_first_page
             && (*y - from).abs() < 0.01
@@ -7471,14 +7451,16 @@ fn render_pass(
 
         cur_sp = sp;
         // If the first block itself moves to the next sheet, that sheet is the
-        // continuous section's first page. Once it flows here, or when the
+        // continuous section's first page, whatever the block is (Word
+        // examples: a 100pt table row, floating table, inline picture or kept
+        // 6-line paragraph, also one with an anchored picture or text box, or
+        // in two columns, below a page of section 1 opens page 2 under the
+        // first-page footer, numbered 1). Once it flows here, or when the
         // section already owns this page, a later break gets the default
         // variant as before.
         state.pb.pending_section_first_page = (state.pb.page_hf_section != sect_idx
             && matches!(sp.break_type, SectionBreakType::Continuous)
-            && sp.columns.as_ref().is_none_or(|c| c.columns.len() <= 1)
-            && state.pb.float_zone.is_none()
-            && section.blocks.first().is_some_and(can_open_moved_first_page))
+            && state.pb.float_zone.is_none())
             .then_some((sect_idx, state.pb.page_count(), state.pb.slot_top));
         let text_width = sp.text_width();
 
