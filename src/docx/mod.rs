@@ -241,6 +241,9 @@ pub(in crate::docx) struct ParseContext<'a, R: std::io::Read + std::io::Seek> {
     /// What the current section's character grid adds to one character
     /// (`sections::grid_char_delta`), the unit of `w:ind` `*Chars` values.
     pub(in crate::docx) grid_char_delta: f32,
+    /// The current section's text width (`sections::text_width`), read ahead
+    /// like `grid_char_delta`; 0 where no kashida reserve applies.
+    pub(in crate::docx) text_width: f32,
     /// Parsing a text box's story (`images::parse_run_drawing`).
     pub(in crate::docx) in_text_box: bool,
 }
@@ -1308,6 +1311,11 @@ fn parse_zip<R: Read + std::io::Seek>(
         .filter(|n| n.has_tag_name((WML_NS, "sectPr")))
         .map(sections::grid_char_delta)
         .collect();
+    let text_widths: Vec<f32> = body
+        .descendants()
+        .filter(|n| n.has_tag_name((WML_NS, "sectPr")))
+        .map(sections::text_width)
+        .collect();
     let mut sect_idx = 0;
     let mut ctx = ParseContext {
         styles: &styles,
@@ -1319,6 +1327,7 @@ fn parse_zip<R: Read + std::io::Seek>(
         comments: comment_ranges,
         fields: Default::default(),
         grid_char_delta: grid_deltas.first().copied().unwrap_or(0.0),
+        text_width: text_widths.first().copied().unwrap_or(0.0),
         in_text_box: false,
     };
 
@@ -1422,6 +1431,7 @@ fn parse_zip<R: Read + std::io::Seek>(
                     });
                     sect_idx += 1;
                     ctx.grid_char_delta = grid_deltas.get(sect_idx).copied().unwrap_or(0.0);
+                    ctx.text_width = text_widths.get(sect_idx).copied().unwrap_or(0.0);
                 }
             }
             "altChunk" => {

@@ -255,13 +255,10 @@ alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
   footer); tool fixed, refs not re-exported.
 - case77's on-page label claims thaiDistribute gets distribute's treatment;
   Word disproved it. Fixing it means regenerating DOCX and reference.
-- **Kashida justification on Latin text** (case77 para 5, Word probes
-  2026-11-08): `mediumKashida` breaks lines as if 10% of the section's text
-  width were taken off the line, `highKashida` 20%, `lowKashida` nothing;
-  paragraph indents and font size don't change the amount (letter and 842pt
-  pages, 12/20pt, right indents 0–150pt). Lines still justify to the full
-  measure. We parse all three as `both`; needs the level kept through style
-  inheritance. Arabic text not probed.
+- **Kashida justification on Latin text** (case77 para 5): done 2026-11-08,
+  mediumKashida/highKashida break lines 10%/20% of the section's text width
+  short and still justify to the full measure (body paragraphs; header and
+  footnote contexts carry no reserve). Arabic text not probed.
 
 Open queue from the large-corpus and focus-fixture rounds:
 `current_focus/layout-accuracy.md` §5.

@@ -902,6 +902,7 @@ impl RenderContext<'_> {
             punct_half_out: self.east_asian_lang,
             squeeze_line: self.wp_justification
                 && matches!(para.alignment, crate::model::Alignment::Justify),
+            line_reserve: para.kashida_reserve,
             expand_shift_return: !self.do_not_expand_shift_return,
             bidi: para.bidi,
             shaped_kerning: self.open_type_features,

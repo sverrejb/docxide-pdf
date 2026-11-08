@@ -1313,6 +1313,15 @@ pub(super) fn paragraph_alignment(
         .or_else(|| para_style.and_then(|s| s.alignment))
 }
 
+/// The line width a kashida `jc` keeps free, as a share of the section's
+/// text width (`styles::kashida_fraction`).
+pub(super) fn paragraph_kashida(ppr: Option<roxmltree::Node>, para_style: Option<&ParagraphStyle>) -> f32 {
+    ppr.and_then(|ppr| wml_attr(ppr, "jc"))
+        .map(super::styles::kashida_fraction)
+        .or_else(|| para_style.and_then(|s| s.kashida))
+        .unwrap_or(0.0)
+}
+
 /// The alignment of a paragraph holding display math (`m:oMathPara`): its
 /// own `m:oMathParaPr/m:jc`, centred by default (`centerGroup`), whatever the
 /// paragraph's `w:jc` says. A math paragraph has its own justification (ISO

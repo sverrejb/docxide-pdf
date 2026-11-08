@@ -278,6 +278,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     let (space_before_auto, space_after_auto) =
         super::autospacing(ppr, para_style, &ctx.styles.defaults);
     Paragraph {
+        kashida_reserve: ctx.text_width * super::runs::paragraph_kashida(ppr, para_style),
         runs,
         mark_deleted,
         mark_revised,

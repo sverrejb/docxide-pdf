@@ -1854,6 +1854,8 @@ pub(super) struct CjkLayout {
     /// at most two spaces' width stays, and the whole line is squeezed
     /// (`SQUEEZE_LINE_SPACES`).
     pub(super) squeeze_line: bool,
+    /// `Paragraph::kashida_reserve`: taken off the width lines are broken to.
+    pub(super) line_reserve: f32,
     /// Justify a line that ends in a manual break, as Word does unless
     /// `doNotExpandShiftReturn` is set.
     pub(super) expand_shift_return: bool,
@@ -2159,6 +2161,7 @@ pub(super) fn build_lines(
 ) -> Vec<TextLine> {
     let inline_images = opts.inline_images.unwrap_or(&EMPTY_INLINE_IMAGES);
     let effects = opts.effects.unwrap_or(&EMPTY_EFFECTS);
+    let width = (width - cjk.line_reserve).max(1.0);
     if runs.iter().any(|r| r.is_tab) {
         build_tabbed_line(
             runs,
@@ -6059,6 +6062,7 @@ mod tests {
             punct_pull_free_em: 0.0,
             squeeze_spaces,
             squeeze_line: false,
+            line_reserve: 0.0,
             expand_shift_return: true,
             bidi: false,
             shaped_kerning: false,
@@ -6106,6 +6110,7 @@ mod tests {
                     punct_half_out: false,
                     expand_shift_return: true,
                     squeeze_line: false,
+                    line_reserve: 0.0,
                     bidi: false,
                     shaped_kerning: false,
                     break_words: false,
