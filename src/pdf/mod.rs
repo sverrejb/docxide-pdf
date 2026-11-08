@@ -7523,6 +7523,11 @@ fn render_pass(
                 if let Some(f) = frame.take_if(|f| block_frame.is_none_or(|fp| fp != f.props)) {
                     f.close(state, sp);
                 }
+                // The first block stayed on this page, so a later break opens an
+                // ordinary one, even from where the first block started.
+                if block_idx > 0 {
+                    state.pb.pending_section_first_page = None;
+                }
                 state.band_prescan = last_band_block.is_some_and(|l| block_idx <= l)
                     && frame.is_none()
                     && block_frame.is_none();
