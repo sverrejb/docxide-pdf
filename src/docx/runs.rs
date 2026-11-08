@@ -1124,16 +1124,19 @@ fn mark_revision(
     revisions: &super::Revisions,
 ) {
     if let Some((deleted, rev)) = revision_of(node) {
-        let color = revisions.author_color(rev);
+        // Moves print with double lines (corpus redlines: moved-from text
+        // double struck, moved-to text double underlined).
+        let moved = super::is_move(rev);
+        let color = revisions.revision_color(rev);
         for r in runs.iter_mut() {
             r.revised = true;
             r.color = Some(color);
             if deleted {
-                r.strikethrough = true;
-                r.dstrike = false;
+                r.strikethrough = !moved;
+                r.dstrike = moved;
             } else {
                 r.underline = true;
-                r.double_underline = false;
+                r.double_underline = moved;
             }
         }
     } else if rpr.is_some_and(|rpr| wml(rpr, "rPrChange").is_some()) {
@@ -2400,6 +2403,8 @@ mod tests {
               <w:ins w:id="1" w:author="Zoe"><w:r><w:rPr><w:u w:val="double"/></w:rPr><w:t>new</w:t></w:r></w:ins>
               <w:del w:id="2" w:author="Ann"><w:r><w:delText>old</w:delText></w:r></w:del>
               <w:r><w:t>plain</w:t></w:r>
+              <w:moveFrom w:id="3" w:author="Zoe"><w:r><w:t>from</w:t></w:r></w:moveFrom>
+              <w:moveTo w:id="4" w:author="Zoe"><w:r><w:t>to</w:t></w:r></w:moveTo>
             </w:p>"#
         );
         let doc = roxmltree::Document::parse(&xml).unwrap();
@@ -2423,12 +2428,15 @@ mod tests {
         for (i, (node, ..)) in out.iter().enumerate() {
             mark_revision(&mut runs[i..=i], *node, wml(*node, "rPr"), &revisions);
         }
-        assert_eq!(runs.len(), 3);
+        assert_eq!(runs.len(), 5);
         assert!(runs[0].revised && runs[0].underline && !runs[0].double_underline);
         assert_eq!(runs[0].color, Some(AUTHOR_COLORS[0]));
         assert!(runs[1].revised && runs[1].strikethrough && !runs[1].underline);
         assert_eq!(runs[1].color, Some(AUTHOR_COLORS[1]));
         assert!(!runs[2].revised && runs[2].color.is_none());
+        let green = Some([0x2C, 0x62, 0x34]);
+        assert!(runs[3].dstrike && !runs[3].strikethrough && runs[3].color == green);
+        assert!(runs[4].underline && runs[4].double_underline && runs[4].color == green);
     }
 
     #[test]

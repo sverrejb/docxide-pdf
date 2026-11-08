@@ -215,7 +215,12 @@ impl Revisions {
     /// Word colours each author's revisions by the order the authors first
     /// appear (Word for Mac probes 2026-11-05; a machine that has seen an author
     /// before keeps that author's earlier colour, which no converter can know).
-    pub(in crate::docx) fn author_color(&self, revision: roxmltree::Node) -> [u8; 3] {
+    /// Moves print in Word's move colour whatever the author (11 corpus
+    /// redlines with eleven author colours, every move 2C6234).
+    pub(in crate::docx) fn revision_color(&self, revision: roxmltree::Node) -> [u8; 3] {
+        if is_move(revision) {
+            return [0x2C, 0x62, 0x34];
+        }
         let author = revision.attribute((WML_NS, "author")).unwrap_or("");
         let mut authors = self.authors.borrow_mut();
         let index = authors.iter().position(|n| n == author).unwrap_or_else(|| {
@@ -474,14 +479,28 @@ pub(super) fn wml_attr<'a>(node: roxmltree::Node<'a, 'a>, child: &str) -> Option
     wml(node, child).and_then(|n| n.attribute((WML_NS, "val")))
 }
 
-/// A paragraph mark's tracked change of `kind` ("ins" or "del").
+/// A paragraph mark's tracked change of `kind` ("ins" or "del"); a moved
+/// mark counts as the insertion (`moveTo`) or deletion (`moveFrom`) it is.
 pub(super) fn mark_revision<'a>(
     p: roxmltree::Node<'a, 'a>,
     kind: &str,
 ) -> Option<roxmltree::Node<'a, 'a>> {
     wml(p, "pPr")
         .and_then(|ppr| wml(ppr, "rPr"))
-        .and_then(|rpr| wml(rpr, kind))
+        .and_then(|rpr| revised_mark(rpr, kind))
+}
+
+/// The `w:ins`/`w:moveTo` or `w:del`/`w:moveFrom` in a mark's `w:rPr`.
+pub(super) fn revised_mark<'a>(
+    rpr: roxmltree::Node<'a, 'a>,
+    kind: &str,
+) -> Option<roxmltree::Node<'a, 'a>> {
+    let moved = if kind == "del" { "moveFrom" } else { "moveTo" };
+    wml(rpr, kind).or_else(|| wml(rpr, moved))
+}
+
+pub(super) fn is_move(revision: roxmltree::Node) -> bool {
+    matches!(revision.tag_name().name(), "moveFrom" | "moveTo")
 }
 
 /// First math-namespace child element with the given local name.

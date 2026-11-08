@@ -159,12 +159,12 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     let (indent_left, indent_right, indent_hanging, indent_first_line) = indents;
     let mut runs = parsed.runs;
 
-    let mark_deleted = ppr_rpr.is_some_and(|rpr| wml(rpr, "del").is_some());
+    let mark_deleted = ppr_rpr.is_some_and(|rpr| super::revised_mark(rpr, "del").is_some());
     // Markup view: a revised paragraph mark or paragraph formatting
     // (`w:pPrChange`) draws no inline mark, only the change bar.
     let mark_revised = ctx.revisions.markup
         && (mark_deleted
-            || ppr_rpr.is_some_and(|rpr| wml(rpr, "ins").is_some())
+            || ppr_rpr.is_some_and(|rpr| super::revised_mark(rpr, "ins").is_some())
             || ppr.is_some_and(|p| wml(p, "pPrChange").is_some()));
     if mark_revised {
         for run in &mut runs {

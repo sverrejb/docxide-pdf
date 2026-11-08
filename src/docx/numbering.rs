@@ -557,10 +557,10 @@ pub(super) fn item_revision(p: roxmltree::Node, revisions: &super::Revisions) ->
         return ItemRevision::Live;
     }
     if let Some(rev) = fully_deleted_item(p) {
-        return ItemRevision::Deleted(revisions.author_color(rev));
+        return ItemRevision::Deleted(revisions.revision_color(rev));
     }
     match super::mark_revision(p, "ins") {
-        Some(rev) => ItemRevision::Inserted(revisions.author_color(rev)),
+        Some(rev) => ItemRevision::Inserted(revisions.revision_color(rev)),
         None => ItemRevision::Live,
     }
 }
