@@ -2657,8 +2657,13 @@ pub(super) fn build_paragraph_lines(
             // Under wordWrap=0 a word that overruns the rest of the line breaks
             // there too (torture_test: "…aufga" / "benübertragungsgesetz").
             let room = line_room - current_x - pending_space_w;
+            // Leading spaces before a word wider than the line keep a line of
+            // their own and the word breaks on the next (traditional_skills'
+            // " DD/MM/YY" cell; Word probes 2026-11-08): see below.
+            let spaces_wrap_first =
+                pending_space_w > 0.0 && !in_right_region && right_region_for(lines.len()).is_none();
             let cut_here = if current_chunks.is_empty() {
-                ww > line_room
+                ww > line_room && !spaces_wrap_first
             } else {
                 cjk.break_words && ww > room
             };
@@ -2810,6 +2815,10 @@ pub(super) fn build_paragraph_lines(
                 pending_space_w = 0.0;
                 pending_space_count = 0;
                 word_start = 0;
+                if ww > left_max(lines.len()) {
+                    words.push_front((0, source));
+                    continue;
+                }
                 push_word_chunks(
                     &mut current_chunks,
                     entry,
