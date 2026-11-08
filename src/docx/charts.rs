@@ -322,6 +322,10 @@ fn parse_view_3d(
         gap_depth: num(Some(type_node), "gapDepth", 150.0) / 100.0,
         series_axis: chart_child(plot_area, "serAx")
             .is_some_and(|ax| chart_attr(ax, "delete") != Some("1")),
+        // ponytail: lying bars keep the oblique view with rAngAx 0; no probe.
+        perspective: (view.and_then(|v| chart_attr(v, "rAngAx")) == Some("0")
+            && chart_attr(type_node, "barDir") != Some("bar"))
+        .then(|| num(view, "perspective", 30.0)),
         shape: match chart_attr(type_node, "shape") {
             Some("cylinder") => BarShape::Cylinder,
             Some("cone") => BarShape::Cone,

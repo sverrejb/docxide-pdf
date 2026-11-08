@@ -152,6 +152,10 @@ pub struct View3D {
     pub shape: BarShape,
     /// `c:serAx` shown: series names along the floor's right edge.
     pub series_axis: bool,
+    /// `perspective` when `rAngAx` is 0: the scene seen through a camera
+    /// whose vertical field of view is half this many degrees. `None` with
+    /// right-angle axes, where depth draws obliquely.
+    pub perspective: Option<f32>,
 }
 
 /// `c:shape`: a 3-D bar's solid. The `ToMax` kinds are cut from a cone or

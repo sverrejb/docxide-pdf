@@ -395,14 +395,13 @@ impl View3D {
         plot: PlotRect,
         num_categories: usize,
         reserve: f32,
-    ) -> (PlotRect, (f32, f32)) {
+    ) -> (PlotRect, f32) {
         let inner = PlotRect {
             x: plot.x + 5.0,
             y: plot.y + 1.77,
             w: plot.w - (5.0 + 6.35),
             h: plot.h - (2.85 + 1.77),
         };
-        // The floor: a bar's depth plus the gap between depth rows, per row.
         let horizontal = matches!(
             c.chart_type,
             ChartType::Bar {
@@ -411,8 +410,8 @@ impl View3D {
             }
         );
         let cat_extent = if horizontal { inner.h } else { inner.w };
-        let thick = bar_slot(c, cat_extent, num_categories).1;
-        let (dx, dy) = self.project(self.row_pitch(thick) * depth_rows(c) as f32);
+        let depth = self.floor_depth(c, cat_extent, num_categories);
+        let (dx, dy) = self.project(depth);
         let avail_w = inner.w - reserve;
         let s = (inner.h / (inner.h + dy)).min(avail_w / (inner.w + dx));
         let front = PlotRect {
@@ -421,7 +420,166 @@ impl View3D {
             w: s * inner.w,
             h: s * inner.h,
         };
-        (front, (s * dx, s * dy))
+        (front, s * depth)
+    }
+
+    /// The floor's depth: a bar's depth plus the gap between depth rows, per
+    /// row, with the categories spread over `cat_extent`.
+    fn floor_depth(self, c: &Chart, cat_extent: f32, num_categories: usize) -> f32 {
+        let thick = bar_slot(c, cat_extent, num_categories).1;
+        self.row_pitch(thick) * depth_rows(c) as f32
+    }
+
+    /// The world's front face, the floor's depth and how they reach the page.
+    fn space(
+        self,
+        c: &Chart,
+        plot: PlotRect,
+        num_categories: usize,
+        reserve: f32,
+    ) -> (PlotRect, f32, Space) {
+        match self.perspective {
+            None => {
+                let (front, depth) = self.front(c, plot, num_categories, reserve);
+                let space = Space {
+                    view: self,
+                    camera: None,
+                };
+                (front, depth, space)
+            }
+            Some(perspective) => {
+                // Word's box is as wide against its height as the plot, or
+                // 4/3 of that with 2 to 3 depth rows over 4 categories
+                // (probe3d inp/, inb/, inr/, inr2/: one row, or as many rows
+                // as categories, 1.00 ±0.005; else 1.33 ±0.003).
+                // ponytail: 3 rows over 6 categories measured 1.50 and 2 over
+                // 8 1.60 (inr2/s3c6, s2c8); the rule behind those is open.
+                let rows = depth_rows(c);
+                let widen = if rows > 1 && rows < num_categories {
+                    4.0 / 3.0
+                } else {
+                    1.0
+                };
+                let front = PlotRect {
+                    w: plot.w * widen,
+                    ..plot
+                };
+                let depth = self.floor_depth(c, front.w, num_categories);
+                let camera = Camera::fit(plot, front, depth, self, perspective);
+                let space = Space {
+                    view: self,
+                    camera: Some(camera),
+                };
+                (front, depth, space)
+            }
+        }
+    }
+}
+
+/// Where a 3-D chart's world lands on the page. World x and y are a front
+/// face's, in page points like a 2-D plot's; z runs back from the front,
+/// drawn obliquely with right-angle axes, else through the camera.
+#[derive(Clone, Copy)]
+struct Space {
+    view: View3D,
+    camera: Option<Camera>,
+}
+
+impl Space {
+    fn at(self, x: f32, y: f32, z: f32) -> (f32, f32) {
+        match self.camera {
+            Some(camera) => camera.at(x, y, z),
+            None => {
+                let (dx, dy) = self.view.project(z);
+                (x + dx, y + dy)
+            }
+        }
+    }
+}
+
+/// A world point on the page; a 2-D chart has no depth.
+fn on_page(space: Option<Space>, x: f32, y: f32, z: f32) -> (f32, f32) {
+    space.map_or((x, y), |s| s.at(x, y, z))
+}
+
+/// Word's camera for `rAngAx` 0, fitted to the edges of its rasters of
+/// probes varying rotX, rotY, perspective and the plot's size (probe3d
+/// line3d, persp3d and inp/): it orbits the box's centre by rotY, then tilts
+/// down by rotX, its axis through the plot's centre, with a vertical field of
+/// view of perspective/2 degrees spanning the plot's height.
+#[derive(Clone, Copy)]
+struct Camera {
+    centre: [f32; 3],
+    /// (sin, cos) of rotX and rotY.
+    tilt: (f32, f32),
+    turn: (f32, f32),
+    focal: f32,
+    /// The box centre's distance from the eye and its offset off the axis,
+    /// world units, in the camera's frame.
+    dist: f32,
+    offset: (f32, f32),
+    /// The page point on the camera's axis.
+    eye: (f32, f32),
+}
+
+impl Camera {
+    /// The world box `front` × `depth` seen in `plot`: Word stands it off
+    /// until its eight corners fill the plot inset 5.7pt each side and 2.3
+    /// above and below, centred (the right-angle insets 5.0/6.35/2.85/1.77pt,
+    /// split evenly).
+    /// ponytail: the corners land 0.7–1.5pt from Word's at the default view
+    /// and up to 3pt at rotX 0 or rotY 40 and perspective 60 (inp/ probes,
+    /// mean); its true fitting rule is not recovered.
+    fn fit(plot: PlotRect, front: PlotRect, depth: f32, view: View3D, perspective: f32) -> Self {
+        const MARGIN_X: f32 = (5.0 + 6.35) / 2.0;
+        const MARGIN_Y: f32 = (2.85 + 1.77) / 2.0;
+        let rad = |deg: f32| deg.to_radians().sin_cos();
+        let eye = (plot.x + plot.w / 2.0, plot.y + plot.h / 2.0);
+        let mut camera = Camera {
+            centre: [
+                front.x + front.w / 2.0,
+                front.y + front.h / 2.0,
+                depth / 2.0,
+            ],
+            tilt: rad(view.rot_x),
+            turn: rad(view.rot_y),
+            focal: plot.h / 2.0 / (perspective / 4.0).to_radians().tan(),
+            dist: 6.0 * front.h,
+            offset: (0.0, 0.0),
+            eye,
+        };
+        let corners: [[f32; 3]; 8] = std::array::from_fn(|i| {
+            let pick = |bit: usize, lo: f32, len: f32| lo + if i & bit != 0 { len } else { 0.0 };
+            [
+                pick(1, front.x, front.w),
+                pick(2, front.y, front.h),
+                pick(4, 0.0, depth),
+            ]
+        });
+        for _ in 0..50 {
+            let (x0, x1, y0, y1) = corners.iter().map(|p| camera.at(p[0], p[1], p[2])).fold(
+                (f32::MAX, f32::MIN, f32::MAX, f32::MIN),
+                |(a, b, c, d), p| (a.min(p.0), b.max(p.0), c.min(p.1), d.max(p.1)),
+            );
+            let k = camera.focal / camera.dist;
+            camera.offset.0 += (eye.0 - (x0 + x1) / 2.0) / k;
+            camera.offset.1 += (eye.1 - (y0 + y1) / 2.0) / k;
+            camera.dist *=
+                ((x1 - x0) / (plot.w - 2.0 * MARGIN_X)).max((y1 - y0) / (plot.h - 2.0 * MARGIN_Y));
+        }
+        camera
+    }
+
+    fn at(self, x: f32, y: f32, z: f32) -> (f32, f32) {
+        let (px, py, pz) = (x - self.centre[0], y - self.centre[1], z - self.centre[2]);
+        let ((sy, cy), (sx, cx)) = (self.turn, self.tilt);
+        let (vx, vz) = (px * cy + pz * sy, pz * cy - px * sy);
+        let (vy, vz) = (py * cx + vz * sx, vz * cx - py * sx);
+        let k = self.focal / (self.dist + vz);
+        (
+            self.eye.0 + k * (vx + self.offset.0),
+            self.eye.1 + k * (vy + self.offset.1),
+        )
     }
 }
 
@@ -429,31 +587,31 @@ impl View3D {
 /// a line a ribbon one bar depth deep through the category centres, an area
 /// a slab under it. Fronts take the series colour, ribbons and slab tops
 /// 0.82× and a slab's end 0.63× (line3d/area3d probes).
-/// ponytail: Word draws these with rAngAx 0 in true perspective (receding
-/// floor, slanted front); we use the right-angle projection.
 fn draw_ribbons(
     c: &Chart,
     content: &mut Content,
     rect: PlotRect,
     num_categories: usize,
     axis_max: f32,
-    view: View3D,
+    space: Space,
     area: bool,
 ) {
+    let view = space.view;
     let (group, thick) = bar_slot(c, rect.w, num_categories);
     let row = thick * view.depth;
-    let back = view.project(row);
     let shade = |color: Option<[u8; 3]>, k: f32| shade(color.unwrap_or([0, 0, 0]), k);
     for (si, series) in c.series.iter().enumerate().rev() {
-        let (ox, oy) = view.project(si as f32 * view.row_pitch(thick) + row * view.gap_depth / 2.0);
+        let z = si as f32 * view.row_pitch(thick) + row * view.gap_depth / 2.0;
         let pts: Vec<(f32, f32)> = series
             .values
             .iter()
             .take(num_categories)
             .enumerate()
             .map(|(ci, &v)| {
-                let x = rect.x + (ci as f32 + 0.5) * group + ox;
-                (x, rect.y + oy + v / axis_max * rect.h)
+                (
+                    rect.x + (ci as f32 + 0.5) * group,
+                    rect.y + v / axis_max * rect.h,
+                )
             })
             .collect();
         let (Some(&first), Some(&last)) = (pts.first(), pts.last()) else {
@@ -463,10 +621,10 @@ fn draw_ribbons(
             polygon(
                 content,
                 &[
-                    a,
-                    b,
-                    (b.0 + back.0, b.1 + back.1),
-                    (a.0 + back.0, a.1 + back.1),
+                    space.at(a.0, a.1, z),
+                    space.at(b.0, b.1, z),
+                    space.at(b.0, b.1, z + row),
+                    space.at(a.0, a.1, z + row),
                 ],
             );
             content.fill_nonzero();
@@ -476,12 +634,13 @@ fn draw_ribbons(
             quad(content, pair[0], pair[1]);
         }
         if area {
-            let base = rect.y + oy;
             fill_rgb(content, shade(series.color, 0.63));
-            quad(content, last, (last.0, base));
-            let mut front = vec![(first.0, base)];
-            front.extend(&pts);
-            front.push((last.0, base));
+            quad(content, last, (last.0, rect.y));
+            let front: Vec<(f32, f32)> = std::iter::once((first.0, rect.y))
+                .chain(pts.iter().copied())
+                .chain(std::iter::once((last.0, rect.y)))
+                .map(|p| space.at(p.0, p.1, z))
+                .collect();
             fill_rgb(content, shade(series.color, 1.0));
             polygon(content, &front);
             content.fill_nonzero();
@@ -490,9 +649,9 @@ fn draw_ribbons(
 }
 
 /// A 3-D bar standing on its front face's bottom edge (x, y), `w` wide, `h`
-/// tall and (dx, dy) deep, its bottom and top sections scaled by `taper`
-/// about the bar's axis (1 for a box or cylinder, 0 at a cone's or
-/// pyramid's tip). Faces take the
+/// tall and from z0 to z1 deep in the world `map` puts on the page, its
+/// bottom and top sections scaled by `taper` about the bar's axis (1 for a
+/// box or cylinder, 0 at a cone's or pyramid's tip). Faces take the
 /// series colour shaded as Word's lighting draws them, sampled at every
 /// probed rotation: box front 1.0, right 0.63, top 0.76; pyramid front 1.06,
 /// right 0.69; round solids run 0.72 → 1.07 (at 45%) → 0.80 left to right.
@@ -500,8 +659,9 @@ fn draw_bar_3d(
     content: &mut Content,
     color: Option<[u8; 3]>,
     shape: BarShape,
+    map: impl Fn(f32, f32, f32) -> (f32, f32),
     (x, y, w, h): (f32, f32, f32, f32),
-    (dx, dy): (f32, f32),
+    (z0, z1): (f32, f32),
     (bottom, top): (f32, f32),
 ) {
     let base = color.unwrap_or([0, 0, 0]);
@@ -515,7 +675,7 @@ fn draw_bar_3d(
     let at = |u: f32, v: f32, z: f32| {
         let s = if z > 0.0 { top } else { bottom };
         let (u, v) = (0.5 + (u - 0.5) * s, 0.5 + (v - 0.5) * s);
-        (x + u * w + v * dx, y + v * dy + z)
+        map(x + u * w, y + z, z0 + v * (z1 - z0))
     };
     match shape {
         BarShape::Box | BarShape::Pyramid | BarShape::PyramidToMax => {
@@ -622,12 +782,19 @@ pub(super) fn fill_strips(
 }
 
 pub(super) fn polygon(content: &mut Content, pts: &[(f32, f32)]) {
+    if !pts.is_empty() {
+        polyline(content, pts);
+        content.close_path();
+    }
+}
+
+/// An open path through `pts`.
+fn polyline(content: &mut Content, pts: &[(f32, f32)]) {
     if let Some(&(x, y)) = pts.first() {
         content.move_to(x, y);
         for &(x, y) in &pts[1..] {
             content.line_to(x, y);
         }
-        content.close_path();
     }
 }
 
@@ -676,9 +843,11 @@ fn draw_chart_series(
     num_categories: usize,
     axis_max: f32,
     x_axis_max: f32,
-    depth: Option<View3D>,
+    space: Option<Space>,
     alpha_states: &mut HashSet<u8>,
 ) -> Vec<ValueLabel> {
+    let at = |x: f32, y: f32, z: f32| on_page(space, x, y, z);
+    let depth = space.map(|s| s.view);
     let mut labels = Vec::new();
     let PlotRect {
         x: plot_x,
@@ -703,15 +872,8 @@ fn draw_chart_series(
             let gap = c.gap_width_pct / 100.0 * thick;
             // A 3-D bar is `depth` bar widths deep and its front face sits half
             // the depth rows' gap into the floor.
-            let (shift_x, shift_y) = depth.map_or((0.0, 0.0), |d| {
-                d.project(thick * d.depth * d.gap_depth / 2.0)
-            });
-            let (cat_origin, val_origin) = if horizontal {
-                (cat_origin + shift_y, val_origin + shift_x)
-            } else {
-                (cat_origin + shift_x, val_origin + shift_y)
-            };
-            let solid = depth.map(|d| (d.shape, d.project(thick * d.depth)));
+            let z_front = depth.map_or(0.0, |d| thick * d.depth * d.gap_depth / 2.0);
+            let solid = space.map(|s| (s, thick * s.view.depth));
             // `stack` is the whole column's length: a cone or pyramid narrows
             // over the stack, a `ToMax` one over the value axis.
             let bar = |content: &mut Content,
@@ -719,8 +881,10 @@ fn draw_chart_series(
                        cat_pos: f32,
                        val_pos: f32,
                        len: f32,
-                       stack: f32| {
-                if let Some((shape, back)) = solid {
+                       stack: f32,
+                       z: f32| {
+                if let Some((space, deep)) = solid {
+                    let shape = space.view.shape;
                     let span = match shape {
                         BarShape::Cone | BarShape::Pyramid => stack,
                         BarShape::ConeToMax | BarShape::PyramidToMax => val_extent,
@@ -728,19 +892,25 @@ fn draw_chart_series(
                     };
                     let lo = val_pos - val_origin;
                     let taper = (1.0 - lo / span, 1.0 - (lo + len) / span);
+                    let map = |x, y, z| space.at(x, y, z);
+                    let zs = (z, z + deep);
                     if !horizontal {
                         let rect = (cat_pos, val_pos, thick, len);
-                        draw_bar_3d(content, color, shape, rect, back, taper);
+                        draw_bar_3d(content, color, shape, map, rect, zs, taper);
                     } else if shape == BarShape::Box {
                         // A box lights by screen direction: top 0.76, end 0.63.
                         let rect = (val_pos, cat_pos, len, thick);
-                        draw_bar_3d(content, color, shape, rect, back, taper);
+                        draw_bar_3d(content, color, shape, map, rect, zs, taper);
                     } else {
                         // A lying solid is a standing one mirrored about y = x.
                         content.save_state();
                         content.transform([0.0, 1.0, 1.0, 0.0, 0.0, 0.0]);
                         let rect = (cat_pos, val_pos, thick, len);
-                        draw_bar_3d(content, color, shape, rect, (back.1, back.0), taper);
+                        let mirrored = |x: f32, y: f32, z: f32| {
+                            let (a, b) = space.at(y, x, z);
+                            (b, a)
+                        };
+                        draw_bar_3d(content, color, shape, mirrored, rect, zs, taper);
                         content.restore_state();
                     }
                     return;
@@ -755,19 +925,17 @@ fn draw_chart_series(
             };
 
             // A label past a bar's end: after a lying bar, above a column.
-            let end_label = |pos: f32, len: f32, value: f32, (rx, ry): (f32, f32)| {
+            let end_label = |pos: f32, len: f32, value: f32, z: f32| {
                 let (end, across) = (val_origin + len, pos + thick / 2.0);
                 if horizontal {
-                    let at = (end + rx, across + ry);
                     ValueLabel {
-                        at,
+                        at: at(end, across, z),
                         value,
                         place: LabelPlace::After,
                     }
                 } else {
-                    let at = (across + rx, end + ry);
                     ValueLabel {
-                        at,
+                        at: at(across, end, z),
                         value,
                         place: LabelPlace::Above,
                     }
@@ -777,21 +945,18 @@ fn draw_chart_series(
             if grouping == BarGrouping::Standard {
                 // Each series a row further back, the first in front: draw
                 // the back row first.
-                let pitch = depth.map_or((0.0, 0.0), |d| d.project(d.row_pitch(thick)));
+                let pitch = depth.map_or(0.0, |d| d.row_pitch(thick));
                 for (si, series) in c.series.iter().enumerate().rev() {
-                    let row = (pitch.0 * si as f32, pitch.1 * si as f32);
-                    content.save_state();
-                    content.transform([1.0, 0.0, 0.0, 1.0, row.0, row.1]);
+                    let z = z_front + pitch * si as f32;
                     for ci in 0..num_categories {
                         let val = series.values.get(ci).copied().unwrap_or(0.0);
                         let len = (val / axis_max) * val_extent;
                         let pos = cat_origin + ci as f32 * group + gap / 2.0;
-                        bar(content, series.color, pos, val_origin, len, len);
+                        bar(content, series.color, pos, val_origin, len, len, z);
                         if c.show_values {
-                            labels.push(end_label(pos, len, val, row));
+                            labels.push(end_label(pos, len, val, z));
                         }
                     }
-                    content.restore_state();
                 }
                 return labels;
             }
@@ -824,14 +989,14 @@ fn draw_chart_series(
                     let mut cumulative = 0.0;
                     for (series, len) in c.series.iter().zip(lens) {
                         let pos = val_origin + cumulative;
-                        bar(content, series.color, group_pos, pos, len, stack);
+                        bar(content, series.color, group_pos, pos, len, stack, z_front);
                         if c.show_values {
                             let (along, across) = (pos + len / 2.0, group_pos + thick / 2.0);
                             labels.push(ValueLabel {
                                 at: if horizontal {
-                                    (along, across)
+                                    at(along, across, z_front)
                                 } else {
-                                    (across, along)
+                                    at(across, along, z_front)
                                 },
                                 value: series.values.get(ci).copied().unwrap_or(0.0),
                                 place: LabelPlace::Center,
@@ -844,17 +1009,17 @@ fn draw_chart_series(
                         let val = series.values.get(ci).copied().unwrap_or(0.0);
                         let len = (val / axis_max) * val_extent;
                         let pos = group_pos + si as f32 * thick;
-                        bar(content, series.color, pos, val_origin, len, len);
+                        bar(content, series.color, pos, val_origin, len, len, z_front);
                         if c.show_values {
-                            labels.push(end_label(pos, len, val, (0.0, 0.0)));
+                            labels.push(end_label(pos, len, val, z_front));
                         }
                     }
                 }
             }
         }
-        ChartType::Line | ChartType::Area if let Some(view) = depth => {
+        ChartType::Line | ChartType::Area if let Some(space) = space => {
             let area = matches!(c.chart_type, ChartType::Area);
-            draw_ribbons(c, content, rect, num_categories, axis_max, view, area);
+            draw_ribbons(c, content, rect, num_categories, axis_max, space, area);
         }
         ChartType::Line => {
             let accents = resolve_accent_colors(&c.accent_colors);
@@ -1414,16 +1579,28 @@ pub(super) fn render_chart(
         cat_label_h + 8.0
     };
 
-    // Series names along the floor's right edge start 12pt past it.
     let series_axis = depth.is_some_and(|d| d.series_axis && depth_rows(c) > 1);
     let series_axis_w = if series_axis {
         c.series
             .iter()
             .map(|s| text_width(&s.label, font_size, label_font))
             .fold(0.0f32, f32::max)
-            + 12.0
     } else {
         0.0
+    };
+    // With rAngAx 0 Word's plot runs to the chart's right pad, short of the
+    // series names by their width and 1.2pt (line3d against noser and
+    // persp3d probes).
+    let perspective = depth.is_some_and(|d| d.perspective.is_some());
+    let margin_right = if perspective && !(has_legend && legend_on_right) {
+        CHART_PAD_RIGHT
+            + if series_axis {
+                series_axis_w + 1.2
+            } else {
+                0.0
+            }
+    } else {
+        margin_right
     };
     let plot_2d = PlotRect {
         x: x + margin_left,
@@ -1431,9 +1608,25 @@ pub(super) fn render_chart(
         w: w - margin_left - margin_right,
         h: h - margin_top - margin_bottom,
     };
-    let (plot, (back_dx, back_dy)) = depth.map_or((plot_2d, (0.0, 0.0)), |d| {
-        d.front(c, plot_2d, num_categories, series_axis_w)
-    });
+    // Series names along the floor's right edge start 12pt past it.
+    let reserve = if series_axis {
+        series_axis_w + 12.0
+    } else {
+        0.0
+    };
+    let (plot, floor_depth, space) = match depth {
+        Some(d) => {
+            let (front, floor_depth, space) = d.space(c, plot_2d, num_categories, reserve);
+            (front, floor_depth, Some(space))
+        }
+        None => (plot_2d, 0.0, None),
+    };
+    let at = |x: f32, y: f32, z: f32| on_page(space, x, y, z);
+    let stroke_world = |content: &mut Content, pts: &[(f32, f32, f32)]| {
+        let pts: Vec<(f32, f32)> = pts.iter().map(|&(x, y, z)| at(x, y, z)).collect();
+        polyline(content, &pts);
+        content.stroke();
+    };
     let PlotRect {
         x: plot_x,
         y: plot_y,
@@ -1455,33 +1648,34 @@ pub(super) fn render_chart(
         );
         for i in 0..=num_ticks {
             let frac = (i as f32 * tick_step) / axis_max;
-            if !horizontal {
-                // In 3-D along the left wall to the back, then across it.
+            // In 3-D along the left wall (a lying bar's floor) to the back,
+            // then across the back.
+            let (a, b) = if !horizontal {
                 let gy = plot_y + frac * plot_h;
-                content.move_to(plot_x, gy);
-                if depth.is_some() {
-                    content.line_to(plot_x + back_dx, gy + back_dy);
-                }
-                content.line_to(plot_x + plot_w + back_dx, gy + back_dy);
+                ((plot_x, gy), (plot_x + plot_w, gy))
             } else {
-                // In 3-D along the floor to the back, then up it.
                 let gx = plot_x + frac * plot_w;
-                content.move_to(gx, plot_y);
-                if depth.is_some() {
-                    content.line_to(gx + back_dx, plot_y + back_dy);
-                }
-                content.line_to(gx + back_dx, plot_y + plot_h + back_dy);
+                ((gx, plot_y), (gx, plot_y + plot_h))
+            };
+            let line = [
+                (a.0, a.1, 0.0),
+                (a.0, a.1, floor_depth),
+                (b.0, b.1, floor_depth),
+            ];
+            if depth.is_some() {
+                stroke_world(content, &line);
+            } else {
+                stroke_world(content, &[line[0], line[2]]);
             }
-            content.stroke();
         }
 
         stroke_rgb(content, val_axis.line_color.unwrap_or(DEFAULT_AXIS_COLOR));
         for i in 0..=num_ticks {
             let frac = (i as f32 * tick_step) / axis_max;
             if !horizontal {
-                let gy = plot_y + frac * plot_h;
-                content.move_to(plot_x - tick_len, gy);
-                content.line_to(plot_x, gy);
+                let (ax, ay) = at(plot_x, plot_y + frac * plot_h, 0.0);
+                content.move_to(ax - tick_len, ay);
+                content.line_to(ax, ay);
             } else {
                 let gx = plot_x + frac * plot_w;
                 content.move_to(gx, plot_y - tick_len);
@@ -1513,8 +1707,9 @@ pub(super) fn render_chart(
         } else if !horizontal {
             for ci in 0..=num_categories {
                 let gx = plot_x + (ci as f32 / num_categories as f32) * plot_w;
-                content.move_to(gx, plot_y - tick_len);
-                content.line_to(gx, plot_y);
+                let (ax, ay) = at(gx, plot_y, 0.0);
+                content.move_to(ax, ay - tick_len);
+                content.line_to(ax, ay);
                 content.stroke();
             }
         }
@@ -1541,7 +1736,7 @@ pub(super) fn render_chart(
         num_categories,
         axis_max,
         x_axis_max,
-        depth,
+        space,
         alpha_states,
     );
 
@@ -1558,19 +1753,18 @@ pub(super) fn render_chart(
             .and_then(|a| a.line_color)
             .unwrap_or(DEFAULT_AXIS_COLOR);
         stroke_rgb(content, axis_color);
-        content.move_to(plot_x, plot_y);
-        content.line_to(plot_x, plot_y + plot_h);
         // The category wall's free edge recedes from the far end of its axis.
-        if depth.is_some() && horizontal {
-            content.line_to(plot_x + back_dx, plot_y + plot_h + back_dy);
+        let top = (plot_x, plot_y + plot_h);
+        let end = (plot_x + plot_w, plot_y);
+        for (far, recedes) in [(top, horizontal), (end, !horizontal)] {
+            let edge = [
+                (plot_x, plot_y, 0.0),
+                (far.0, far.1, 0.0),
+                (far.0, far.1, floor_depth),
+            ];
+            let n = if recedes && depth.is_some() { 3 } else { 2 };
+            stroke_world(content, &edge[..n]);
         }
-        content.stroke();
-        content.move_to(plot_x, plot_y);
-        content.line_to(plot_x + plot_w, plot_y);
-        if depth.is_some() && !horizontal {
-            content.line_to(plot_x + plot_w + back_dx, plot_y + back_dy);
-        }
-        content.stroke();
     }
 
     // Axis labels
@@ -1590,8 +1784,8 @@ pub(super) fn render_chart(
             let frac = val / axis_max;
 
             if !horizontal {
-                let ly = plot_y + frac * plot_h - font_size * 0.3;
-                let lx = plot_x - tw - 9.0;
+                let (ax, ay) = at(plot_x, plot_y + frac * plot_h, 0.0);
+                let (lx, ly) = (ax - tw - 9.0, ay - font_size * 0.3);
                 show_text(
                     content,
                     label_font_key,
@@ -1660,8 +1854,13 @@ pub(super) fn render_chart(
 
         // Series names beside the floor's right edge, one per depth row
         // (standard3d probe: 12pt right of a row's middle, baseline 3.9pt
-        // below it).
+        // below it; in perspective 8.25pt and 3pt, line3d probe).
         if series_axis {
+            let (gap, sink) = if perspective {
+                (8.25, 3.0)
+            } else {
+                (12.0, 3.9)
+            };
             let rows = depth_rows(c) as f32;
             let (corner_x, corner_y) = if horizontal {
                 (plot_x, plot_y + plot_h)
@@ -1669,8 +1868,8 @@ pub(super) fn render_chart(
                 (plot_x + plot_w, plot_y)
             };
             for (si, series) in c.series.iter().enumerate() {
-                let k = (si as f32 + 0.5) / rows;
-                let (lx, ly) = (corner_x + k * back_dx + 12.0, corner_y + k * back_dy - 3.9);
+                let (ax, ay) = at(corner_x, corner_y, (si as f32 + 0.5) / rows * floor_depth);
+                let (lx, ly) = (ax + gap, ay - sink);
                 show_text(
                     content,
                     label_font_key,
@@ -1731,19 +1930,22 @@ pub(super) fn render_chart(
                 if !horizontal {
                     let group_w = plot_w / num_categories as f32;
                     let slot_w = group_w * label_skip as f32;
-                    let cx_center = plot_x + (ci as f32 + 0.5) * group_w;
+                    let (cx_center, edge_y) = at(plot_x + (ci as f32 + 0.5) * group_w, plot_y, 0.0);
+                    // In perspective the baseline sits 16.6pt under the
+                    // front edge's projected middle (line3d probe).
+                    let drop = if perspective { 16.6 } else { font_size + 8.0 };
                     let lines = wrap_label(label, slot_w * 0.9, font_size, label_font);
                     for (li, line) in lines.iter().enumerate() {
                         let tw = text_width(line, font_size, label_font);
                         let lx = cx_center - tw / 2.0;
-                        let ly = plot_y - font_size - 8.0 - (li as f32 * line_h);
+                        let ly = edge_y - drop - (li as f32 * line_h);
                         show_text(content, label_font_key, font_size, lx, ly, line, label_font);
                     }
                 } else {
                     let tw = text_width(label, font_size, label_font);
                     let group_h = plot_h / num_categories as f32;
-                    let cy = plot_y + ci as f32 * group_h + group_h / 2.0 - font_size * 0.3;
-                    let cx = plot_x - tw - 9.0;
+                    let (ax, ay) = at(plot_x, plot_y + ci as f32 * group_h + group_h / 2.0, 0.0);
+                    let (cx, cy) = (ax - tw - 9.0, ay - font_size * 0.3);
                     show_text(
                         content,
                         label_font_key,
@@ -2104,6 +2306,48 @@ mod tests {
         let (step, max) = compute_axis_range(100.0, 5, 0.9);
         assert_eq!(step, 20.0);
         assert_eq!(max, 120.0);
+    }
+
+    #[test]
+    fn test_perspective_camera_meets_word_corners() {
+        // probe3d line3d: Word's raster of the plot and the box corners found
+        // on it, page points from the bottom.
+        let plot = PlotRect {
+            x: 98.5,
+            y: 792.0 - 137.5 - 163.06,
+            w: 350.06,
+            h: 163.06,
+        };
+        let front = PlotRect {
+            w: plot.w * 4.0 / 3.0,
+            ..plot
+        };
+        let depth = front.w / 2.0;
+        let view = View3D {
+            rot_x: 15.0,
+            rot_y: 20.0,
+            depth: 1.0,
+            gap_depth: 1.5,
+            height: 1.0,
+            shape: BarShape::Box,
+            series_axis: true,
+            perspective: Some(30.0),
+        };
+        let camera = Camera::fit(plot, front, depth, view, 30.0);
+        let (x1, y1) = (front.x + front.w, front.y + front.h);
+        for ((x, y, z), word) in [
+            ((front.x, front.y, 0.0), (116.49, 531.94)),
+            ((front.x, y1, 0.0), (109.52, 633.22)),
+            ((front.x, y1, depth), (182.11, 652.56)),
+            ((x1, front.y, 0.0), (411.96, 494.04)),
+            ((x1, front.y, depth), (431.32, 543.17)),
+        ] {
+            let (px, py) = camera.at(x, y, z);
+            assert!(
+                (px - word.0).hypot(py - word.1) < 2.0,
+                "({px}, {py}) vs Word's {word:?}"
+            );
+        }
     }
 
     #[test]

@@ -14,12 +14,20 @@ Gitignored, in the main checkout: `tests/output/torture_test/probe3d/`.
     rAngAx 0 ones); `in3`: standard grouping with several depth rows;
     `in4`: 3-D pie variants (height, perspective, rotX/rotY); `in5`: 2-D
     layout.
+  - `inp` (`mkp.py`): rAngAx 0 lines varying rotX, rotY, perspective,
+    size; `inb` (`mkb.py`): rAngAx 0 bars and depthPercent; `inr`, `inr2`
+    (`mkr.py`, `mkr2.py`): 3–6 series and 2–8 categories.
   - `inx`: chartEx with PowerPoint's 133% chartStyle; `inx9`: Word's own
     9/14pt style plus pareto (`mkx9.py`); `inx9b`: no legend, no title, right
     legend (`mkx9b.py`).
 - `tools/`: `plotrect2.py` (plot rect from gridlines), `front.py` (3-D front
   face), `barpx.py` (faces from Word's raster), `piemeasure.py`, `cmp.py`.
   Run from a worktree root; they call `tools/pdf_lines.py`.
+- `tools/persp/`: the rAngAx 0 camera fit. `fit4.py <probe>` fits box
+  width, distance and aim to the raster's wall and floor edges (focal length
+  and axis fixed); `model.py` is the layout rule; `forced.py` compares width
+  factors. Run from a worktree's `scratch/` holding `segs.py` and the
+  extracted rasters (`flat_<probe>.png`, see `mutool extract`).
 - `cx/`: `m.py` (text, fills, strokes, y from the top), `cmp.py <set/name>`
   (ours vs Word, run from probe3d), `render.sh`.
 - Export: `python3 tools/word_export.py <dir> --out <dir>`, sandbox off, Word
@@ -30,8 +38,9 @@ Gitignored, in the main checkout: `tests/output/torture_test/probe3d/`.
 
 - `cases/charts_3d`: 12 probes (bar depth/rotX variants, cylinder, cone,
   pyramid, stacked, horizontal and horizontal stacked bars, four 3-D pies).
-  Left out until drawn right: rAngAx 0 (`persp3d`, `line3d`, `area3d`) and
-  several depth rows (`standard3d`, `in3/std*`).
+  Left out until drawn right: several depth rows (`standard3d`,
+  `in3/std*`). No fixture has a rAngAx 0 column, line or area yet: candidates
+  are `in2/persp3d`, `line3d`, `area3d` (`mkfix.py`).
 - `cases/charts_ex`: the seven `inx9` types plus the four `inx9b` variants.
 - Built by `probe3d/mkfix.py <dir>` from the probes, exported with Word.
   The torture_test fixture has one more 3-D bar chart; case29/30/31/52/53
@@ -46,7 +55,27 @@ Gitignored, in the main checkout: `tests/output/torture_test/probe3d/`.
   5.0/6.35/2.85/1.77pt; the front shrinks until the box fits, centred. Faces
   shade 1.0/0.76/0.63.
 - **3-D pies**: ellipse a·sin rotX tall on a rim 0.261·a·hPercent·cos rotX.
-- **3-D lines and areas**, drawn in the right-angle (oblique) view.
+- **3-D lines and areas**, as ribbons and slabs, one depth row per series.
+- **True perspective (`rAngAx` 0)** for columns, lines and areas
+  (2026-11-08). Word draws the plot as a raster; the box edges on it fit a
+  camera to 0.06–0.09pt rms on 18 probes:
+  - It orbits the box's centre by rotY, then tilts down by rotX (both exact).
+  - The camera's axis meets the centre of the plot rect. The focal length is
+    (plot height / 2) / tan(perspective / 4 degrees): the vertical field of
+    view is perspective/2 degrees.
+  - The plot rect is the 2-D one, but its right edge runs to the 11pt pad,
+    short of the series names by their width + 1.2pt.
+  - The box's width over its height is the plot's aspect, × 4/3 with 2–3
+    depth rows over 4 categories (1.00 with one row or rows ≥ categories).
+    depthPercent and chart size don't change it.
+  - The box backs off until its 8 corners fill the plot inset 5.7pt each
+    side and 2.3pt above and below, centred. This gives Word's corners within
+    0.7–1.5pt at the default view, up to 3pt elsewhere. Word aims slightly
+    off the box centre (fitted offset 0.00–0.26 box heights), which we don't
+    model.
+  - Labels: category baselines 16.6pt under the projected front edge, series
+    names 8.25pt right of and 3pt under a row's middle. Word's ticks are
+    3.2pt here and in the right-angle view (ours are 4).
 - **2-D layout**: plot margins, legend placement and spacing, pie layout,
   markers (rules in `charts.rs`/`chart_legend.rs`).
 - **Office 2016 charts** (2026-11-06): waterfall, histogram, pareto, box &
@@ -64,12 +93,18 @@ case30 93.1%, case29 89.7%, case52 85.6%, torture_test 78.8%.
 
 ## Next steps, in order
 
-1. **True perspective (`rAngAx` 0).** Word's default for 3-D line and area:
-   it rotates the scene and the floor recedes; we draw the oblique view
-   (ponytail comment above the 3-D line/area code in `charts.rs`). Fit the
-   camera (rotX, rotY, perspective angle) to the raster corners of
-   `in2/persp3d`, `line3d`, `area3d`. Word draws the plot as a raster, so
-   use `tools/barpx.py`-style corner finding. 2–4 hours.
+1. **Perspective leftovers.**
+   - The box width rule beyond 4 categories: 3 rows over 6 categories measure
+     1.50 × aspect, 2 over 8 1.60, 4 over 8 1.33 (`inr2/s3c6`, `s2c8`,
+     `s4c8`). Find the rule (`tools/persp/fit4.py`, `forced.py`). The
+     right-angle "several depth rows" item below may share it.
+   - Word's aim point off the box centre. With it, the fits reach 0.07pt
+     against 1–3pt for our centring rule.
+   - Rotated and thinned labels at rotY ≥ 40 (`inp/x15y40`, `x15y60`); the
+     plot rect shrinks for them; a short plot gets fewer value ticks
+     (`inp/wide`); lying bars stay oblique (no probe).
+   - Ribbon faces take one shade in ours; Word lights each by its slope.
+   - Tick length: 3.2pt in Word (both views), 4 in ours.
 2. **Standard grouping, several depth rows** (`in3/std*`). Word's front is
    103pt tall for 2 rows, 96 for 3, whatever the width; we keep the one-row
    fit (≤ 12pt off; 43pt wide when the series axis is hidden). Find the rule
