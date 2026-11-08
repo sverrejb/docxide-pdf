@@ -65,17 +65,17 @@ Gitignored, in the main checkout: `tests/output/torture_test/probe3d/`.
     view is perspective/2 degrees.
   - The plot rect is the 2-D one, but its right edge runs to the 11pt pad,
     short of the series names by their width + 1.2pt.
-  - The box's width over its height is the plot's aspect, × 4/3 with 2–3
-    depth rows over 4 categories (1.00 with one row or rows ≥ categories).
-    depthPercent and chart size don't change it.
+  - The box's width over its height is the plot's aspect, × 2n/(n + 2) for
+    n categories over 2 or more (but fewer) depth rows: 1.33, 1.50, 1.60 at
+    4, 6, 8 categories; 1.00 with one row or rows ≥ categories. depthPercent
+    and chart size don't change it.
   - The box backs off until its 8 corners fill the plot inset 5.7pt each
     side and 2.3pt above and below, centred. This gives Word's corners within
     0.7–1.5pt at the default view, up to 3pt elsewhere. Word aims slightly
     off the box centre (fitted offset 0.00–0.26 box heights), which we don't
     model.
   - Labels: category baselines 16.6pt under the projected front edge, series
-    names 8.25pt right of and 3pt under a row's middle. Word's ticks are
-    3.2pt here and in the right-angle view (ours are 4).
+    names 8.25pt right of and 3pt under a row's middle.
 - **2-D layout**: plot margins, legend placement and spacing, pie layout,
   markers (rules in `charts.rs`/`chart_legend.rs`).
 - **Office 2016 charts** (2026-11-06): waterfall, histogram, pareto, box &
@@ -94,10 +94,11 @@ case30 93.1%, case29 89.7%, case52 85.6%, torture_test 78.8%.
 ## Next steps, in order
 
 1. **Perspective leftovers.**
-   - The box width rule beyond 4 categories: 3 rows over 6 categories measure
-     1.50 × aspect, 2 over 8 1.60, 4 over 8 1.33 (`inr2/s3c6`, `s2c8`,
-     `s4c8`). Find the rule (`tools/persp/fit4.py`, `forced.py`). The
-     right-angle "several depth rows" item below may share it.
+   - The box width rule: 2n/(n + 2) fits every probe but 4 rows over 8
+     categories, which measures 1.33, not 1.6 (`inr2/s4c8`). More probes
+     (rows 2–6 over 6–10 categories) would pin it down (`tools/persp/fit4.py`,
+     `forced.py`). The right-angle "several depth rows" item below may share
+     it.
    - Word's aim point off the box centre. With it, the fits reach 0.07pt
      against 1–3pt for our centring rule.
    - Rotated and thinned labels at rotY ≥ 40 (`inp/x15y40`, `x15y60`); the
