@@ -372,6 +372,8 @@ pub struct ConnectorShape {
     /// wp:anchor relativeHeight — stacking order among overlapping anchored
     /// shapes within a page (higher draws on top). 0 when unspecified.
     pub z_index: u32,
+    /// Flattened from an inline canvas, as for `Textbox::on_line`.
+    pub on_line: bool,
 }
 
 #[derive(Clone, Copy, Default)]

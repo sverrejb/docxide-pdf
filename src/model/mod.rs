@@ -834,6 +834,16 @@ impl Run {
         self.kern_threshold
             .is_some_and(|t| t > 0.0 && font_size >= t)
     }
+
+    /// The run's inline picture, unless the run is hidden.
+    pub fn shown_image(&self) -> Option<&EmbeddedImage> {
+        self.inline_image.as_ref().filter(|_| !self.vanish)
+    }
+
+    /// An underlined inline picture, hidden or not: it is laid out as a run.
+    pub fn underlined_picture(&self) -> bool {
+        self.underline && self.inline_image.is_some()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -1603,6 +1603,7 @@ pub(super) fn compute_row_layouts(
                                 // "                g" where g is larger).
                                 let metric_run = runs
                                     .iter()
+                                    .filter(|r| !r.vanish)
                                     .find(|r| {
                                         r.is_tab
                                             || r.text.is_empty()
@@ -1612,10 +1613,12 @@ pub(super) fn compute_row_layouts(
                                 // A tab-only empty cell paragraph is sized by its
                                 // paragraph mark, as in body text. Do not let an
                                 // inherited tab font enlarge a smaller explicit mark.
+                                // So is one of only hidden runs (`shown_run_metrics`).
                                 let mark_run;
                                 let metric_run = if !runs.is_empty()
-                                    && runs.iter().all(|r| r.is_tab)
-                                    && para.tab_stops.iter().all(|tab| tab.leader.is_none())
+                                    && (runs.iter().all(|r| r.vanish)
+                                        || runs.iter().all(|r| r.is_tab)
+                                            && para.tab_stops.iter().all(|tab| tab.leader.is_none()))
                                     && let Some(size) = para.paragraph_mark_font_size
                                     && let Some(name) = &para.paragraph_mark_font_name
                                 {
@@ -1743,8 +1746,11 @@ pub(super) fn compute_row_layouts(
                                 // ascender_ratio = usWinDescent/units. Fallback
                                 // 0.2 pairs with the 1.2 default line ratio so
                                 // standard fonts get zero trailing leading.
+                                // A picture-only line keeps no descent unless a
+                                // picture is underlined (`picture_line_bottom`).
                                 let descender_ratio = if runs.iter().any(|r| r.inline_image.is_some())
-                                    && runs.iter().all(|r| !r.is_tab && r.text.trim().is_empty()) {
+                                    && runs.iter().all(|r| !r.is_tab && r.text.trim().is_empty())
+                                    && !runs.iter().any(|r| !r.vanish && r.underlined_picture()) {
                                     0.0
                                 } else {
                                     tallest_lhr.zip(tallest_ar)
