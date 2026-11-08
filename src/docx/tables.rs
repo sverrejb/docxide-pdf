@@ -296,7 +296,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     // Each side: the table's own, then its style's (estonian_community's
     // TableGrid zeroes them), then Word's default.
     let own_mar = tbl_pr.and_then(|pr| wml(pr, "tblCellMar"));
-    let has_style_or_cell_mar = ctx.styles.has_default_table_style || own_mar.is_some();
+    let word_default_margins = ctx.styles.has_default_table_style || own_mar.is_some();
     // Word's 5.4pt default comes with a table style: a table with neither a
     // style nor its own tblCellMar gets 0.5pt side margins and so no visible
     // outdent (Word probes on case200/case213 with cell borders: the border
@@ -307,7 +307,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     // It is the document's default table style that brings it, not the
     // table's own: table-style-centered's "Centered" style, without
     // tblCellMar in a document without a default table style, gets 0.5pt.
-    let default_side = if has_style_or_cell_mar { 5.4 } else { 0.5 };
+    let default_side = if word_default_margins { 5.4 } else { 0.5 };
     let side = |i: usize, a: &str, b: &str, default: f32| {
         own_mar
             .and_then(|mar| margin_twips(mar, a, b))
