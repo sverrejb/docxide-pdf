@@ -878,6 +878,33 @@ fn parse_placed_drawing<R: Read + Seek>(
                 }
                 return Some(RunDrawingResult::SmartArt(diagram));
             }
+            // A shape with nothing to draw still wraps text: an empty
+            // unfilled, unlined letterhead box keeps the body below it.
+            if let (wrap_type, wrap_text, _) = parse_wrap_type(container)
+                && wrap_type != WrapType::None
+                && container.descendants().any(|n| n.has_tag_name((WPS_NS, "wsp")))
+            {
+                let (h_position, h_relative_from, v_position, v_relative_from) =
+                    parse_anchor_position(container);
+                let (behind_doc, z_index) = anchor_z_order(container);
+                return Some(RunDrawingResult::TextBox(Textbox {
+                    width_pt: display_w,
+                    width_pct_margin: pct_width_of_margin(container),
+                    height_pt: display_h,
+                    h_position,
+                    h_relative_from,
+                    v_offset_pt: v_position.offset_or_zero(),
+                    v_position,
+                    v_relative_from,
+                    wrap_type,
+                    wrap_text,
+                    dist_bottom: wrap_dist_top_bottom(container).1,
+                    behind_doc,
+                    z_index,
+                    no_text_wrap: true,
+                    ..Textbox::default()
+                }));
+            }
             continue;
         }
 
@@ -1146,6 +1173,9 @@ pub(super) fn parse_object_floating_image<R: Read + Seek>(
     let mut z_index: i64 = 0;
     let mut h_relative = HRelativeFrom::Column;
     let mut v_relative = VRelativeFrom::Paragraph;
+    // Word's VML wrap distances default to 9pt at the sides, 0 above and below
+    // (slovak_pedagogical's header logo: centred text stops 9pt short of it).
+    let [mut dist_left, mut dist_right, mut dist_top, mut dist_bottom] = [9.0, 9.0, 0.0, 0.0];
     for part in style.split(';') {
         if let Some((key, val)) = part.trim().split_once(':') {
             let val = val.trim();
@@ -1153,6 +1183,10 @@ pub(super) fn parse_object_floating_image<R: Read + Seek>(
                 "margin-left" => margin_left = parse_pt(val).unwrap_or(0.0),
                 "margin-top" => margin_top = parse_pt(val).unwrap_or(0.0),
                 "z-index" => z_index = val.parse().unwrap_or(0),
+                "mso-wrap-distance-left" => dist_left = parse_pt(val).unwrap_or(dist_left),
+                "mso-wrap-distance-right" => dist_right = parse_pt(val).unwrap_or(dist_right),
+                "mso-wrap-distance-top" => dist_top = parse_pt(val).unwrap_or(dist_top),
+                "mso-wrap-distance-bottom" => dist_bottom = parse_pt(val).unwrap_or(dist_bottom),
                 // "absolute" (or no value) means the margin offsets place it.
                 "mso-position-horizontal" => {
                     h_align = match val {
@@ -1217,10 +1251,10 @@ pub(super) fn parse_object_floating_image<R: Read + Seek>(
         wrap_text: WrapText::BothSides,
         wrap_polygon: None,
         behind_doc,
-        dist_top: 0.0,
-        dist_bottom: 0.0,
-        dist_left: 0.0,
-        dist_right: 0.0,
+        dist_top,
+        dist_bottom,
+        dist_left,
+        dist_right,
         z_index,
         anchor_seq: 0,
         anchor_at_start: false,

@@ -164,21 +164,16 @@ fn hf_run_metrics(
     fonts: &HashMap<String, crate::fonts::FontEntry>,
 ) -> (f32, Option<f32>, Option<f32>) {
     let glyphs = super::layout::tallest_glyph_run_metrics(runs, fonts);
-    let nothing_sizes = glyphs.1.is_none()
-        && runs.iter().any(|r| !r.vanish)
-        && !runs
-            .iter()
-            .any(|r| r.is_line_break || r.inline_image.is_some());
-    let mark = para.paragraph_mark_font_size.filter(|_| nothing_sizes);
-    let Some(fs) = mark else {
-        return if glyphs.1.is_some() {
-            glyphs
-        } else {
-            tallest_run_metrics(runs, fonts)
-        };
-    };
-    let (fs, (lhr, ar)) = super::mark_font(para, fs, fonts);
-    (fs, lhr, ar)
+    if glyphs.1.is_some() {
+        return glyphs;
+    }
+    let mark_sizes = !runs.is_empty()
+        && (runs.iter().all(|r| r.vanish)
+            || !runs.iter().any(|r| r.is_line_break || r.inline_image.is_some()));
+    if mark_sizes && let Some(mark) = super::layout::mark_metrics(para, fonts) {
+        return mark;
+    }
+    super::layout::tallest_run_metrics(runs, fonts)
 }
 
 /// Vertical bands (top, bottom from the page top) of the header's page- or
@@ -377,8 +372,9 @@ pub(super) fn below_blocking_frames(mut top: f32, line_h: f32, bands: &[(f32, f3
 }
 
 /// The mark's descent separates automatically wrapped picture lines, but is
-/// not retained again below the final line. A differently sized paragraph mark
-/// requires its own line metrics; keep that existing path until it is resolved.
+/// not retained again below the final line unless a picture is underlined.
+/// A differently sized paragraph mark requires its own line metrics; keep that
+/// existing path until it is resolved.
 fn wrapped_picture_trailing_descent(
     para: &Paragraph,
     font_size: f32,
@@ -387,6 +383,7 @@ fn wrapped_picture_trailing_descent(
 ) -> f32 {
     if matches!(spacing, LineSpacing::Exact(_))
         || para.runs.iter().any(|r| r.is_line_break)
+        || para.runs.iter().any(|r| !r.vanish && r.underlined_picture())
         || para
             .paragraph_mark_font_size
             .is_some_and(|mark| (mark - font_size).abs() > 0.01)
@@ -791,15 +788,15 @@ fn measure_header_height(
     (height + prev_space_after).max(placed_extent)
 }
 
-/// The body top of a section's page; `page_idx` (0-based) picks the even
-/// header where the document has them.
+/// The body top of a section's page; `page_num`, the number the page shows,
+/// picks the even header where the document has them.
 pub(super) fn effective_slot_top(
     sp: &SectionProperties,
     is_first: bool,
-    page_idx: usize,
+    page_num: usize,
     ctx: &RenderContext,
 ) -> f32 {
-    let header = layout_hf(sp, is_first, page_idx, true, ctx);
+    let header = layout_hf(sp, is_first, page_num, true, ctx);
     let base = sp.page_height - sp.margin_top;
     match header {
         Some(_) if sp.margin_top_fixed => base,
@@ -816,11 +813,11 @@ pub(super) fn effective_slot_top(
 pub(super) fn flow_slot_top(
     sp: &SectionProperties,
     is_first: bool,
-    page_idx: usize,
+    page_num: usize,
     ctx: &RenderContext,
 ) -> f32 {
     let base = sp.page_height - sp.margin_top;
-    match layout_hf(sp, is_first, page_idx, true, ctx) {
+    match layout_hf(sp, is_first, page_num, true, ctx) {
         Some(hf) if !sp.margin_top_fixed => {
             base.min(sp.page_height - sp.header_margin - header_height(hf, ctx, sp, true, false))
         }
@@ -838,12 +835,12 @@ pub(super) fn flow_slot_top(
 pub(super) fn header_float_floor(
     sp: &SectionProperties,
     is_first: bool,
-    page_idx: usize,
+    page_num: usize,
     ctx: &RenderContext,
     left: f32,
     right: f32,
 ) -> Option<f32> {
-    let hf = layout_hf(sp, is_first, page_idx, true, ctx)?;
+    let hf = layout_hf(sp, is_first, page_num, true, ctx)?;
     let text_width = sp.text_width();
     let slot_top = sp.page_height - sp.header_margin;
     hf.blocks
@@ -875,23 +872,90 @@ pub(super) fn header_float_floor(
 pub(super) fn compute_effective_margin_bottom(
     sp: &SectionProperties,
     is_first: bool,
-    page_idx: usize,
+    page_num: usize,
     ctx: &RenderContext,
 ) -> f32 {
-    let footer = layout_hf(sp, is_first, page_idx, false, ctx);
+    let footer = layout_hf(sp, is_first, page_num, false, ctx);
     let base = sp.margin_bottom;
-    match footer {
+    let mut bottom = match footer {
         Some(_) if sp.margin_bottom_fixed => base,
         Some(hf) => base.max(sp.footer_margin + compute_header_height(hf, ctx, sp, false)),
         None => base,
+    };
+    let cols = super::column_geometry(sp);
+    let bands: Vec<_> = hf_table_bands(sp, is_first, page_num, ctx)
+        .into_iter()
+        .filter(|b| cols.iter().all(|&col| b.in_column(col)))
+        .collect();
+    while let Some(top) = bands
+        .iter()
+        .filter(|b| b.top < sp.page_height - bottom && b.bottom > sp.page_height - bottom)
+        .map(|b| b.top)
+        .reduce(f32::min)
+    {
+        bottom = sp.page_height - top;
     }
+    bottom
+}
+
+/// The bands, down from the page top, of the page header's and footer's
+/// floating tables placed against the page or margin, text distances
+/// included, holding in the columns they leave no strip beside them in
+/// (`Band::in_column`). Body lines keep out of them as out of a body table's:
+/// a line reaching into one goes below it, or on when the band reaches the
+/// bottom margin (Word examples, fixture hf-floating-table-band: a footer
+/// table 704.25pt down with its 28.35pt topFromText ends the page after a
+/// line ending at 692.7pt; without topFromText the lines run to 728.7pt).
+/// Each of a page's lines keeps out, judged by the widths the table is drawn
+/// with; a table over one of two columns moves only that column's lines
+/// (fixture hf-floating-table-band-flow). A band reaching the bottom margin
+/// in every column ends the page above it, and so does one crossing that
+/// raised foot (`compute_effective_margin_bottom`; Word example: footer bands
+/// 550-650 and 600-750pt end the page at 550pt).
+// ponytail: tables anchored to the header's text, and tables with a strip
+// beside the text column, which Word wraps text around, take no part.
+pub(super) fn hf_table_bands(
+    sp: &SectionProperties,
+    is_first: bool,
+    page_num: usize,
+    ctx: &RenderContext,
+) -> Vec<super::Band> {
+    let col = (sp.margin_left, sp.text_width());
+    [true, false]
+        .into_iter()
+        .filter_map(|is_header| layout_hf(sp, is_first, page_num, is_header, ctx))
+        .flat_map(|hf| &hf.blocks)
+        .filter_map(|block| match block {
+            Block::Table(t) => Some(t),
+            Block::Paragraph(_) => None,
+        })
+        .filter_map(|t| {
+            let pos = t.position.as_ref().filter(|pos| pos.v_anchor != "text")?;
+            let fp = super::FloatingTablePos::resolve(t, pos, sp, col.0, col.1, 0.0, ctx);
+            let widths = table::hf_col_widths(t, ctx, col.1);
+            let width: f32 = widths.iter().sum();
+            let top = sp.page_height - fp.y;
+            let (top_band, bottom_band) = super::table_layout::outer_half_bands(t);
+            let height = top_band + table::hf_rows_height(t, &widths, ctx) + bottom_band;
+            Some(super::Band {
+                x: (fp.x - fp.left_from_text, fp.x + width + fp.right_from_text),
+                beside: true,
+                ..super::Band::new(top - fp.top_from_text, top + height + fp.bottom_from_text)
+            })
+        })
+        .collect()
 }
 
 /// The top of the footer's line boxes, from the page bottom (the footer
 /// margin when the page has no footer): where Word stops the lines a
 /// page-wide float pushes past the bottom margin.
-pub(super) fn footer_top(sp: &SectionProperties, is_first: bool, page_idx: usize, ctx: &RenderContext) -> f32 {
-    match layout_hf(sp, is_first, page_idx, false, ctx) {
+pub(super) fn footer_top(
+    sp: &SectionProperties,
+    is_first: bool,
+    page_num: usize,
+    ctx: &RenderContext,
+) -> f32 {
+    match layout_hf(sp, is_first, page_num, false, ctx) {
         Some(hf) => sp.footer_margin + compute_header_height(hf, ctx, sp, false),
         None => sp.footer_margin,
     }
@@ -900,16 +964,17 @@ pub(super) fn footer_top(sp: &SectionProperties, is_first: bool, page_idx: usize
 /// The header (or footer) whose extent a section's page lays out around: its
 /// own, else the one it inherits, as drawn (radiographer's later sections
 /// inherit a two-line empty header that starts their body 27pt below the
-/// header), and on an even page (0-based `page_idx` odd) the even header.
-/// ponytail: physical parity; the drawn header follows the displayed number.
+/// header), and on a page showing an even number the even header, as drawn
+/// (Word example: numbering from 2, the first sheet keeps body lines out of a
+/// table only its even header holds).
 fn layout_hf<'a>(
     sp: &'a SectionProperties,
     is_first: bool,
-    page_idx: usize,
+    page_num: usize,
     is_header: bool,
     ctx: &RenderContext<'a>,
 ) -> Option<&'a HeaderFooter> {
-    let variant = hf_variant(ctx.even_and_odd_headers, sp, is_first, page_idx + 1);
+    let variant = hf_variant(ctx.even_and_odd_headers, sp, is_first, page_num);
     // `sp` is always one of the document's sections
     let idx = ctx
         .sections
@@ -1461,17 +1526,17 @@ pub(super) fn render_header_footer(
                     content.restore_state();
                 };
 
-                let mut baseline_y = cursor_y
-                    - super::layout::boxed_line_ascent(
-                        effective_ls,
-                        line_h,
-                        font_size,
-                        tallest_lhr,
-                        tallest_ar,
-                        &substituted_runs,
-                        ctx.fonts,
-                    )
-                    .unwrap_or(font_size * ascender_ratio);
+                let line_ascent = super::layout::boxed_line_ascent(
+                    effective_ls,
+                    line_h,
+                    font_size,
+                    tallest_lhr,
+                    tallest_ar,
+                    &substituted_runs,
+                    ctx.fonts,
+                )
+                .unwrap_or(font_size * ascender_ratio);
+                let mut baseline_y = cursor_y - line_ascent;
 
                 // Paint in z-order: the shapes above the pictures after them
                 // (a white "Agenda" title box over a banner picture).
@@ -1845,8 +1910,11 @@ pub(super) fn render_header_footer(
                         let bottom_depth = if para.content_height > line_h {
                             img.layout_extra_top + img.display_height
                         } else {
-                            para.content_height.max(natural_line_h)
-                                - (img.layout_extra_height - img.layout_extra_top)
+                            let foot = match effective_ls {
+                                LineSpacing::AtLeast(_) => line_h,
+                                _ => para.content_height.max(natural_line_h),
+                            };
+                            foot - (img.layout_extra_height - img.layout_extra_top)
                         };
                         let y_bottom = cursor_y - bottom_depth;
                         let x = sp.margin_left
@@ -2037,6 +2105,10 @@ pub(super) fn render_header_footer(
                 // line baseline, like the body path, with its bottom effect
                 // extent below that baseline. An empty tab can keep the picture
                 // in runs instead of Paragraph.image, so handle that slot too.
+                // The picture then hangs from that baseline as it is: it lowers
+                // the line no further (Word examples: 10.5pt at single spacing
+                // and 40pt under a 40pt minimum end at the line foot).
+                let mut picture_ascent = None;
                 if lines.len() == 1 && substituted_runs.iter().all(|r| r.text.trim().is_empty()) {
                     let mut images = substituted_runs
                         .iter()
@@ -2045,9 +2117,13 @@ pub(super) fn render_header_footer(
                         && images.next().is_none()
                         && image.display_height + image.layout_extra_height <= line_h
                     {
-                        baseline_y = cursor_y - font_size * tallest_lhr.unwrap_or(1.2)
-                            + image.layout_extra_height
+                        let foot = match effective_ls {
+                            LineSpacing::AtLeast(_) => line_h,
+                            _ => font_size * tallest_lhr.unwrap_or(1.2),
+                        };
+                        baseline_y = cursor_y - foot + image.layout_extra_height
                             - image.layout_extra_top;
+                        picture_ascent = Some(cursor_y - baseline_y);
                     }
                 }
                 let wrapped_pictures = lines.len() > 1
@@ -2083,10 +2159,10 @@ pub(super) fn render_header_footer(
                 } else {
                     picture_bottom
                 };
-                let metrics = (font_size * ascender_ratio, wrapped_picture_bottom);
+                let metrics = (picture_ascent.unwrap_or(line_ascent), wrapped_picture_bottom);
                 // Each line as tall as its own runs, as in the body.
                 if !matches!(effective_ls, LineSpacing::Exact(_)) {
-                    size_lines_by_own_runs(&mut lines, ctx.fonts, effective_ls, line_h, metrics.0, para.text_alignment == crate::model::TextAlignment::Top);
+                    size_lines_by_own_runs(&mut lines, ctx.fonts, effective_ls, line_h, line_ascent, para.text_alignment == crate::model::TextAlignment::Top);
                     super::size_tab_mark_line(&mut lines, para, effective_ls, tallest_lhr, ctx.fonts);
                 }
                 draw_para_shading(content, cursor_y - lines_height(&lines, line_h, metrics));

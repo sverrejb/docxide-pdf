@@ -278,15 +278,16 @@ Ordered roughly by expected gain. Corpus counts are clean documents.
 25. Mac Word's synthetic bold: stroke 0.02 · size + 0.12pt and a 1/1.02
     vertical squash (6 Mac references).
 
-**Undiagnosed low fixtures** (J now; scraped/ unless noted):
-scraped/sample500kB 14.7, pendulum_mechanics_oscillation_lab 18.3,
-chinese_costume_design_course 20.5, cases/case82 21.2 (3 vs 4 pages),
-slovak_pedagogical_practice_agreement 21.6, cases/case37 23.2,
-indonesian_school_admission_checklist 27.3, dutch_government_budget_letter
-28.7, czech_municipal_grant_form 34.5, scottish_fundraising_awards_campaign
-34.9, fonts/multi_font 34.9, japanese_land_development_sign_form 35.7,
-uk_commercial_lease_template 37.9 (78 vs 79 pages),
-polish_ministry_accessibility_report 37.9.
+**Lowest fixtures** (J 2026-11-08 after the worst-fixtures rounds; scraped/
+unless noted; blockers in roadmap.md): sample500kB 13.0 (fonts),
+cases/case82 21.6 (4 vs 3 pages), slovak_pedagogical_practice_agreement
+27.1, uk_commercial_lease_template 30.8 (79 vs 78 pages, baseline grid),
+chinese_costume_design_course 36.2, advocacy_initiative_newsletter_2013
+36.6, cases/case113 38.2, fonts/missing_font_substitution 40.3,
+cases/nested-floats-spaced-text-bottom-cell 40.4,
+japanese_land_development_sign_form 41.2, fonts/multi_font 42.5 (font).
+cases/case37 is skipped (broken input SmartArt). italian_project_proposal's
+"every line differs" is caps ActualText in extraction, not layout.
 
 **Out of this topic:** tracked changes (redline markup, roadmap item; tracked
 corpus states score 15–30), vector WMFs without an embedded EMF (no WMF

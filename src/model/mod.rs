@@ -319,6 +319,8 @@ pub struct Document {
     pub east_asian_lang: bool,
     /// Word's `doNotExpandShiftReturn` (see `docx::settings`).
     pub do_not_expand_shift_return: bool,
+    /// Word's `ulTrailSpace` (see `docx::settings`).
+    pub ul_trail_space: bool,
     /// Word's `wpJustification` (see `docx::settings`).
     pub wp_justification: bool,
     /// `w:doNotUseHTMLParagraphAutoSpacing`: a paragraph's space before adds
@@ -649,6 +651,9 @@ pub struct Paragraph {
     /// `w:textAlignment`: how glyphs of different heights sit in their line.
     pub text_alignment: TextAlignment,
     pub snap_to_grid: bool,
+    /// Points a kashida `jc` keeps free when lines are broken (not when they
+    /// are justified).
+    pub kashida_reserve: f32,
     pub auto_space_de: bool,
     pub auto_space_dn: bool,
     pub frame_props: Option<FrameProperties>,
@@ -793,6 +798,8 @@ pub struct Run {
     /// `w:fitText` (or the cell's `w:tcFitText`): the text is spread or
     /// squeezed to this width.
     pub fit_text: Option<FitText>,
+    /// `w:snapToGrid`: a `linesAndChars` grid's extra pitch applies.
+    pub snap_to_grid: bool,
 }
 
 /// A fitText region: the runs sharing an `id` fill `width` points together,
@@ -834,6 +841,27 @@ impl Run {
         self.kern_threshold
             .is_some_and(|t| t > 0.0 && font_size >= t)
     }
+
+    /// The run's inline picture, unless the run is hidden.
+    pub fn shown_image(&self) -> Option<&EmbeddedImage> {
+        self.inline_image.as_ref().filter(|_| !self.vanish)
+    }
+
+    /// An underlined inline picture, hidden or not: it is laid out as a run.
+    pub fn underlined_picture(&self) -> bool {
+        self.underline && self.inline_image.is_some()
+    }
+}
+
+/// Takes the first shown picture out of `runs` to lay it out as the
+/// paragraph's block image, with the height it takes.
+pub fn take_shown_image(runs: &mut [Run]) -> (Option<EmbeddedImage>, f32) {
+    let img = runs
+        .iter_mut()
+        .find(|r| r.shown_image().is_some())
+        .and_then(|r| r.inline_image.take());
+    let h = img.as_ref().map_or(0.0, |i| i.display_height + i.layout_extra_height);
+    (img, h)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -931,6 +959,7 @@ impl Default for Run {
             math: None,
             ruby: None,
             fit_text: None,
+            snap_to_grid: true,
         }
     }
 }

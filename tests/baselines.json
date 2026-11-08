@@ -389,11 +389,11 @@
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 0.9512,
-    "a11y_text": 0.5672
+    "a11y_text": 0.6532
   },
   "cases/case100": {
-    "jaccard": 0.4456,
-    "ssim": 0.6693,
+    "jaccard": 0.6983,
+    "ssim": 0.9649,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -402,8 +402,8 @@
     "a11y_text": 1.0
   },
   "cases/case101": {
-    "jaccard": 0.6014,
-    "ssim": 0.762,
+    "jaccard": 0.7728,
+    "ssim": 0.9722,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -452,8 +452,8 @@
     "a11y_text": 1.0
   },
   "cases/case109": {
-    "jaccard": 0.566,
-    "ssim": 0.8852,
+    "jaccard": 0.608,
+    "ssim": 0.9449,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -493,8 +493,8 @@
     "a11y_text": 1.0
   },
   "cases/case112": {
-    "jaccard": 0.5528,
-    "ssim": 0.8767,
+    "jaccard": 0.5977,
+    "ssim": 0.9489,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -1921,8 +1921,8 @@
     "a11y_text": 1.0
   },
   "cases/case40": {
-    "jaccard": 0.5273,
-    "ssim": 0.6916,
+    "jaccard": 0.7436,
+    "ssim": 0.9138,
     "text_boundary": 0.7,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -1971,8 +1971,8 @@
     "a11y_text": 0.6202
   },
   "cases/case45": {
-    "jaccard": 0.5321,
-    "ssim": 0.7099,
+    "jaccard": 0.5775,
+    "ssim": 0.7474,
     "text_boundary": 0.7541,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2297,8 +2297,8 @@
     "a11y_text": 1.0
   },
   "cases/case77": {
-    "jaccard": 0.5317,
-    "ssim": 0.7142,
+    "jaccard": 0.652,
+    "ssim": 0.8279,
     "text_boundary": 0.8421,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -2338,8 +2338,8 @@
     "a11y_text": 1.0
   },
   "cases/case80": {
-    "jaccard": 0.7094,
-    "ssim": 0.8582,
+    "jaccard": 0.7095,
+    "ssim": 0.8584,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -3369,7 +3369,7 @@
     "a11y_text": 1.0
   },
   "cases/center-body-list-height-center-space0": {
-    "jaccard": 0.5286,
+    "jaccard": 0.532,
     "ssim": 0.975,
     "text_boundary": 1.0,
     "ua_fail": 2,
@@ -3379,7 +3379,7 @@
     "a11y_text": 1.0
   },
   "cases/center-body-list-height-center-space1": {
-    "jaccard": 0.5069,
+    "jaccard": 0.5101,
     "ssim": 0.9265,
     "text_boundary": 1.0,
     "ua_fail": 2,
@@ -4249,8 +4249,8 @@
     "a11y_text": 1.0
   },
   "cases/empty-frame-control": {
-    "jaccard": 0.3119,
-    "ssim": 0.5157,
+    "jaccard": 0.7406,
+    "ssim": 0.8525,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -5951,8 +5951,8 @@
     "a11y_text": 1.0
   },
   "cases/negative-x-nested-x142-y-33-w4820-n0": {
-    "jaccard": 0.5531,
-    "ssim": 0.7047,
+    "jaccard": 0.9531,
+    "ssim": 0.9892,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -6351,8 +6351,9 @@
     "a11y_text": 1.0
   },
   "cases/nested-float-no-spacer-inline": {
-    "jaccard": 0.3019,
-    "ssim": 0.4597,
+    "jaccard": 0.6395,
+    "ssim": 0.8234,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -6420,8 +6421,8 @@
     "a11y_text": 1.0
   },
   "cases/nested-floats-spaced-text-nonzero-x": {
-    "jaccard": 0.6406,
-    "ssim": 0.8579,
+    "jaccard": 0.7644,
+    "ssim": 0.9492,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -6600,8 +6601,8 @@
     "a11y_text": 1.0
   },
   "cases/nested-table-picture-width": {
-    "jaccard": 0.8021,
-    "ssim": 0.8929,
+    "jaccard": 0.9498,
+    "ssim": 0.9622,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -6610,8 +6611,8 @@
     "a11y_text": 1.0
   },
   "cases/nested_table_bottom_positive": {
-    "jaccard": 0.0325,
-    "ssim": 0.2091,
+    "jaccard": 0.975,
+    "ssim": 0.9885,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -8038,8 +8039,8 @@
     "a11y_text": 1.0
   },
   "cases/space-only-frame": {
-    "jaccard": 0.3119,
-    "ssim": 0.5157,
+    "jaccard": 0.7406,
+    "ssim": 0.8525,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -8338,8 +8339,8 @@
     "a11y_text": 1.0
   },
   "cases/styleref-number-only": {
-    "jaccard": 0.637,
-    "ssim": 0.8099,
+    "jaccard": 0.7258,
+    "ssim": 0.9251,
     "text_boundary": 0.6667,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -8448,7 +8449,7 @@
     "a11y_text": 1.0
   },
   "cases/tab-picture-wrap-containers": {
-    "jaccard": 0.9944,
+    "jaccard": 0.9962,
     "ssim": 0.9984,
     "text_boundary": 1.0,
     "ua_fail": 3,
@@ -8458,8 +8459,8 @@
     "a11y_text": 1.0
   },
   "cases/table-cell-shading-edges": {
-    "jaccard": 0.8303,
-    "ssim": 0.8977,
+    "jaccard": 0.9091,
+    "ssim": 0.9565,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -8468,8 +8469,8 @@
     "a11y_text": 1.0
   },
   "cases/table-style-centered": {
-    "jaccard": 0.539,
-    "ssim": 0.7213,
+    "jaccard": 0.7465,
+    "ssim": 0.8553,
     "text_boundary": 0.7,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -8618,8 +8619,8 @@
     "a11y_text": 1.0
   },
   "cases/text-box-table-autofit-pictures": {
-    "jaccard": 0.8974,
-    "ssim": 0.9548,
+    "jaccard": 0.8994,
+    "ssim": 0.9552,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -8628,8 +8629,8 @@
     "a11y_text": 1.0
   },
   "cases/text-box-table-autofit-wide": {
-    "jaccard": 0.837,
-    "ssim": 0.9736,
+    "jaccard": 0.8543,
+    "ssim": 0.9813,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -8678,8 +8679,8 @@
     "a11y_text": 1.0
   },
   "cases/text-box-table-linked-tall": {
-    "jaccard": 0.8532,
-    "ssim": 0.959,
+    "jaccard": 0.8711,
+    "ssim": 0.9759,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -9563,7 +9564,7 @@
     "a11y_missing": 18,
     "ua_deficit": 0,
     "a11y_struct": 0.9735,
-    "a11y_text": 0.5767
+    "a11y_text": 0.7585
   },
   "scraped/alfies_arc_adult_safeguarding_policy": {
     "jaccard": 0.708,
@@ -9605,7 +9606,7 @@
     "a11y_text": 0.0
   },
   "scraped/arizona_physical_education_standards": {
-    "jaccard": 0.7325,
+    "jaccard": 0.7331,
     "ssim": 0.9159,
     "text_boundary": 1.0,
     "ua_fail": 3,
@@ -9632,7 +9633,7 @@
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 0.7577,
-    "a11y_text": 0.9209
+    "a11y_text": 0.9941
   },
   "scraped/bahamas_sustainable_development_hosting": {
     "jaccard": 0.8117,
@@ -9778,9 +9779,9 @@
     "a11y_text": 0.7054
   },
   "scraped/chinese_student_union_nomination_form": {
-    "jaccard": 0.4052,
-    "ssim": 0.7954,
-    "text_boundary": 0.8197,
+    "jaccard": 0.4759,
+    "ssim": 0.8948,
+    "text_boundary": 0.9344,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -9816,7 +9817,7 @@
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 0.9281,
-    "a11y_text": 0.8976
+    "a11y_text": 0.8985
   },
   "scraped/construction_bathroom_accessories_spec": {
     "jaccard": 0.7628,
@@ -9849,8 +9850,8 @@
     "a11y_text": 1.0
   },
   "scraped/covid_insomnia_mental_health": {
-    "jaccard": 0.4977,
-    "ssim": 0.7418,
+    "jaccard": 0.5409,
+    "ssim": 0.7422,
     "text_boundary": 0.5735,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -9867,7 +9868,7 @@
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 0.9117,
-    "a11y_text": 0.9209
+    "a11y_text": 0.921
   },
   "scraped/croatian_military_burial_request": {
     "jaccard": 0.6662,
@@ -9983,14 +9984,14 @@
     "a11y_text": 1.0
   },
   "scraped/czech_maturita_oral_reading_list": {
-    "jaccard": 0.7042,
-    "ssim": 0.8721,
+    "jaccard": 0.7108,
+    "ssim": 0.8779,
     "text_boundary": 0.9767,
     "ua_fail": 0,
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 1.0,
-    "a11y_text": 0.8411
+    "a11y_text": 0.9446
   },
   "scraped/czech_municipal_grant_form": {
     "jaccard": 0.7984,
@@ -10153,7 +10154,7 @@
     "a11y_text": 1.0
   },
   "scraped/education_consultant_posting": {
-    "jaccard": 0.5629,
+    "jaccard": 0.563,
     "ssim": 0.886,
     "text_boundary": 0.8683,
     "convert_ms": 47.1,
@@ -10164,8 +10165,8 @@
     "a11y_text": 0.7072
   },
   "scraped/english_town_council_report": {
-    "jaccard": 0.853,
-    "ssim": 0.9259,
+    "jaccard": 0.8543,
+    "ssim": 0.9269,
     "text_boundary": 0.9657,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10175,7 +10176,7 @@
   },
   "scraped/environmental_law_clinic_china": {
     "jaccard": 0.6745,
-    "ssim": 0.9339,
+    "ssim": 0.9338,
     "text_boundary": 0.9877,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10184,8 +10185,8 @@
     "a11y_text": 0.9917
   },
   "scraped/erasmus_plus_staff_mobility_agreement": {
-    "jaccard": 0.7796,
-    "ssim": 0.9426,
+    "jaccard": 0.7683,
+    "ssim": 0.9325,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -10224,8 +10225,8 @@
     "a11y_text": 1.0
   },
   "scraped/federal_procurement_terms": {
-    "jaccard": 0.7527,
-    "ssim": 0.9222,
+    "jaccard": 0.7578,
+    "ssim": 0.9268,
     "text_boundary": 0.9296,
     "convert_ms": 57.1,
     "ua_fail": 3,
@@ -10256,8 +10257,8 @@
     "a11y_text": 1.0
   },
   "scraped/french_sexual_health_youth_strategy": {
-    "jaccard": 0.5315,
-    "ssim": 0.7711,
+    "jaccard": 0.6156,
+    "ssim": 0.8274,
     "text_boundary": 0.8269,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10266,8 +10267,8 @@
     "a11y_text": 1.0
   },
   "scraped/geneva_waste_facility_permit_request": {
-    "jaccard": 0.5966,
-    "ssim": 0.8588,
+    "jaccard": 0.6498,
+    "ssim": 0.8603,
     "text_boundary": 0.9474,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10334,7 +10335,7 @@
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
-    "a11y_struct": 0.7529,
+    "a11y_struct": 0.7535,
     "a11y_text": 0.8992
   },
   "scraped/indonesian_benchmarking_guide": {
@@ -10379,8 +10380,8 @@
     "a11y_text": 1.0
   },
   "scraped/irish_school_enrollment_form": {
-    "jaccard": 0.8247,
-    "ssim": 0.9546,
+    "jaccard": 0.8234,
+    "ssim": 0.9533,
     "text_boundary": 0.823,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -10395,7 +10396,7 @@
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
-    "a11y_struct": 0.7826,
+    "a11y_struct": 0.7874,
     "a11y_text": 0.8412
   },
   "scraped/italian_academic_cv_form": {
@@ -10451,8 +10452,8 @@
     "a11y_text": 1.0
   },
   "scraped/japanese_hr_consultation_application": {
-    "jaccard": 0.4254,
-    "ssim": 0.5812,
+    "jaccard": 0.6376,
+    "ssim": 0.7263,
     "text_boundary": 0.1778,
     "ua_fail": 0,
     "a11y_missing": 0,
@@ -10502,7 +10503,7 @@
     "a11y_text": 1.0
   },
   "scraped/learning_cultures_dissertation": {
-    "jaccard": 0.6191,
+    "jaccard": 0.6192,
     "ssim": 0.7666,
     "text_boundary": 0.846,
     "convert_ms": 1027.5,
@@ -10616,8 +10617,8 @@
     "a11y_text": 1.0
   },
   "scraped/master_thesis_learning_agreement": {
-    "jaccard": 0.4994,
-    "ssim": 0.7036,
+    "jaccard": 0.6371,
+    "ssim": 0.8199,
     "text_boundary": 0.9773,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10667,8 +10668,8 @@
     "a11y_text": 1.0
   },
   "scraped/parish_housing_data_profile": {
-    "jaccard": 0.7609,
-    "ssim": 0.8568,
+    "jaccard": 0.7622,
+    "ssim": 0.858,
     "text_boundary": 1.0,
     "convert_ms": 97.8,
     "ua_fail": 3,
@@ -10761,8 +10762,8 @@
     "a11y_text": 0.9562
   },
   "scraped/polish_ministry_accessibility_report": {
-    "jaccard": 0.6006,
-    "ssim": 0.9091,
+    "jaccard": 0.6098,
+    "ssim": 0.9105,
     "text_boundary": 0.8427,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10771,8 +10772,8 @@
     "a11y_text": 0.9892
   },
   "scraped/polish_municipal_letter": {
-    "jaccard": 0.48,
-    "ssim": 0.8838,
+    "jaccard": 0.778,
+    "ssim": 0.8915,
     "text_boundary": 1.0,
     "convert_ms": 11.8,
     "ua_fail": 3,
@@ -10823,8 +10824,8 @@
     "a11y_text": 0.9896
   },
   "scraped/primary_care_safeguarding_annual_review": {
-    "jaccard": 0.7156,
-    "ssim": 0.9226,
+    "jaccard": 0.7115,
+    "ssim": 0.9168,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -10843,8 +10844,8 @@
     "a11y_text": 0.9645
   },
   "scraped/rehab_centre_physio_posting": {
-    "jaccard": 0.8519,
-    "ssim": 0.9719,
+    "jaccard": 0.854,
+    "ssim": 0.9738,
     "text_boundary": 1.0,
     "convert_ms": 9.8,
     "ua_fail": 2,
@@ -10884,9 +10885,9 @@
     "a11y_text": 0.9785
   },
   "scraped/run-borders": {
-    "jaccard": 0.4622,
-    "ssim": 0.5912,
-    "text_boundary": 0.3429,
+    "jaccard": 0.6643,
+    "ssim": 0.8202,
+    "text_boundary": 0.8656,
     "ua_fail": 0,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -11018,8 +11019,8 @@
     "a11y_text": 1.0
   },
   "scraped/scottish_fundraising_awards_campaign": {
-    "jaccard": 0.3611,
-    "ssim": 0.9198,
+    "jaccard": 0.699,
+    "ssim": 0.9195,
     "text_boundary": 0.9552,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -11090,8 +11091,8 @@
     "a11y_text": 1.0
   },
   "scraped/slovak_pedagogical_practice_agreement": {
-    "jaccard": 0.2281,
-    "ssim": 0.8835,
+    "jaccard": 0.2709,
+    "ssim": 0.9389,
     "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -11141,8 +11142,8 @@
     "a11y_text": 1.0
   },
   "scraped/strategi_pengembangan_information_center_resort": {
-    "jaccard": 0.7236,
-    "ssim": 0.9327,
+    "jaccard": 0.7435,
+    "ssim": 0.9328,
     "text_boundary": 0.9965,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -11181,8 +11182,8 @@
     "a11y_text": 1.0
   },
   "scraped/tokyo_welfare_infrastructure_briefing": {
-    "jaccard": 0.4558,
-    "ssim": 0.6669,
+    "jaccard": 0.5065,
+    "ssim": 0.7568,
     "text_boundary": 0.9091,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -11191,9 +11192,9 @@
     "a11y_text": 1.0
   },
   "scraped/traditional_skills_job_form": {
-    "jaccard": 0.4726,
-    "ssim": 0.765,
-    "text_boundary": 0.9773,
+    "jaccard": 0.4782,
+    "ssim": 0.8144,
+    "text_boundary": 1.0,
     "convert_ms": 22.0,
     "ua_fail": 2,
     "a11y_missing": 0,
@@ -11265,8 +11266,8 @@
     "a11y_text": 1.0
   },
   "scraped/uk_commercial_lease_template": {
-    "jaccard": 0.3018,
-    "ssim": 0.4614,
+    "jaccard": 0.308,
+    "ssim": 0.4698,
     "text_boundary": 0.3394,
     "convert_ms": 326.3,
     "ua_fail": 0,
@@ -11346,7 +11347,7 @@
     "a11y_missing": 0,
     "ua_deficit": 0,
     "a11y_struct": 0.981,
-    "a11y_text": 0.9452
+    "a11y_text": 0.949
   },
   "scraped/waste_management_request": {
     "jaccard": 0.7853,
@@ -11360,8 +11361,8 @@
     "a11y_text": 1.0
   },
   "scraped/welsh_palliative_care_abstract_form": {
-    "jaccard": 0.5538,
-    "ssim": 0.7677,
+    "jaccard": 0.7269,
+    "ssim": 0.9359,
     "text_boundary": 0.8506,
     "ua_fail": 4,
     "a11y_missing": 0,

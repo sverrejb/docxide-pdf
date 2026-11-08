@@ -263,6 +263,12 @@ pub(super) fn embed_truetype(
             .map(|m| (m.position as f32 / units, m.thickness as f32 / units))
             .filter(|&(_, t)| t > 0.0),
         east_asian: lm.east_asian,
+        avg_char_width: face
+            .raw_face()
+            .table(ttf_parser::Tag::from_bytes(b"OS/2"))
+            .and_then(|os2| Some(i16::from_be_bytes([*os2.get(2)?, *os2.get(3)?])))
+            .filter(|&w| w > 0)
+            .map(|w| (face.units_per_em(), w as u16)),
         plain_ascender_ratio: lm.plain_ascender_ratio,
         leading_ratio: lm.leading_ratio,
         char_to_gid,

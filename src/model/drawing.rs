@@ -377,8 +377,7 @@ pub struct ConnectorShape {
     pub z_index: u32,
     /// See `Textbox::v_from_line`.
     pub v_from_line: bool,
-    /// Flattened from an inline canvas: its offset counts from the line top,
-    /// as for `Textbox::on_line`.
+    /// Flattened from an inline canvas, as for `Textbox::on_line`.
     pub on_line: bool,
 }
 
