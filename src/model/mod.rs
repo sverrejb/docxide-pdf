@@ -846,6 +846,17 @@ impl Run {
     }
 }
 
+/// Takes the first shown picture out of `runs` to lay it out as the
+/// paragraph's block image, with the height it takes.
+pub fn take_shown_image(runs: &mut [Run]) -> (Option<EmbeddedImage>, f32) {
+    let img = runs
+        .iter_mut()
+        .find(|r| r.shown_image().is_some())
+        .and_then(|r| r.inline_image.take());
+    let h = img.as_ref().map_or(0.0, |i| i.display_height + i.layout_extra_height);
+    (img, h)
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct TextOutline {
     pub width_pt: f32,

@@ -13,7 +13,7 @@ use super::header_footer::resolve_tb_y_top;
 use super::helpers::align_offset;
 use super::layout::{
     LineOpts, LinkAnnotation, LinkTagger, TextLine, build_lines, line_max_image_h, lines_height,
-    picture_line_bottom, render_paragraph_lines, shown_run_metrics,
+    picture_line_bottom, render_paragraph_lines, tallest_run_metrics,
 };
 use super::list_label::render_list_label;
 use super::positioning::resolve_h_position;
@@ -235,7 +235,7 @@ fn layout_box_paragraph(
     ctx: &RenderContext,
 ) -> BoxParagraph {
     let ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
-    let exact = exact_lines(tp, ctx);
+    let exact = matches!(ls, LineSpacing::Exact(_));
     let inline_imgs = super::layout::run_image_map(runs, ctx.textbox_image_names);
     let mut lines = build_lines(
         runs,
@@ -251,7 +251,7 @@ fn layout_box_paragraph(
             ..Default::default()
         },
     );
-    let (fs, lhr, ar) = shown_run_metrics(runs, tp, ctx.fonts);
+    let (fs, lhr, ar) = tallest_run_metrics(runs, ctx.fonts);
     // A paragraph of only tabs is sized by its break or mark, not by the
     // tab runs (`size_unsized_lines`).
     let (fs, (lhr, ar)) = if runs.iter().all(|r| r.is_tab || r.vanish) {

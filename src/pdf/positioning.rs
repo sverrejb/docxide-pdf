@@ -65,25 +65,34 @@ pub(super) fn wraps_in_column(
     text_width: f32,
 ) -> bool {
     fi.wrap_type.wraps_beside()
-        && side_gaps(fi, sp, col_x, col_w, text_width, true).is_some()
+        && side_gaps(fi, sp, col_x, col_w, text_width).is_some()
         && !image_blocks_band(fi, sp, col_x, col_w, text_width)
 }
 
 /// The free room left and right of a float in the column, None when the
-/// float (with its text distances) stays out of the column and intersection
-/// is required.
+/// float (with its text distances) stays out of the column.
 pub(super) fn side_gaps(
     fi: &FloatingImage,
     sp: &SectionProperties,
     col_x: f32,
     col_w: f32,
     text_width: f32,
-    require_intersection: bool,
 ) -> Option<(f32, f32)> {
+    let (left, right) = raw_side_gaps(fi, sp, col_x, col_w, text_width);
+    (left < col_w && right < col_w).then_some((left, right))
+}
+
+fn raw_side_gaps(
+    fi: &FloatingImage,
+    sp: &SectionProperties,
+    col_x: f32,
+    col_w: f32,
+    text_width: f32,
+) -> (f32, f32) {
     let fi_x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
     let left = fi_x - fi.dist_left - col_x;
     let right = col_x + col_w - (fi_x + fi.image.display_width + fi.dist_right);
-    (!require_intersection || (left < col_w && right < col_w)).then_some((left, right))
+    (left, right)
 }
 
 /// A picture leaves no usable strip beside it at any height:
@@ -97,10 +106,9 @@ pub(super) fn no_strip_beside(
     col_w: f32,
     text_width: f32,
 ) -> bool {
-    side_gaps(fi, sp, col_x, col_w, text_width, false).is_some_and(|(left, right)| {
-        let (l, r) = polygon_edges(fi);
-        (left + l).max(right + fi.image.display_width - r) < super::MIN_EMPTY_STRIP
-    })
+    let (left, right) = raw_side_gaps(fi, sp, col_x, col_w, text_width);
+    let (l, r) = polygon_edges(fi);
+    (left + l).max(right + fi.image.display_width - r) < super::MIN_EMPTY_STRIP
 }
 
 /// The innermost left and right edges of a picture's wrap polygon over its
@@ -142,7 +150,7 @@ pub(super) fn image_blocks_band(
     text_width: f32,
 ) -> bool {
     if fi.v_relative_from == VRelativeFrom::Paragraph
-        || side_gaps(fi, sp, col_x, col_w, text_width, true).is_none()
+        || side_gaps(fi, sp, col_x, col_w, text_width).is_none()
     {
         return false;
     }

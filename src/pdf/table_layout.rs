@@ -1613,7 +1613,7 @@ pub(super) fn compute_row_layouts(
                                 // A tab-only empty cell paragraph is sized by its
                                 // paragraph mark, as in body text. Do not let an
                                 // inherited tab font enlarge a smaller explicit mark.
-                                // So is one of only hidden runs (`shown_run_metrics`).
+                                // So is one of only hidden runs (`unsized_line_font`).
                                 let mark_run;
                                 let metric_run = if !runs.is_empty()
                                     && (runs.iter().all(|r| r.vanish)

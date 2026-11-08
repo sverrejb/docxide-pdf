@@ -2708,12 +2708,6 @@ pub(super) fn render_table(
     }
 }
 
-/// Half the outer top and bottom border bands together: what a table's
-/// borders add to its rows' height in the flow (see `render_table`).
-pub(super) fn outer_border_half_bands(table: &Table) -> f32 {
-    (outer_band(table.rows.first(), true) + outer_band(table.rows.last(), false)) / 2.0
-}
-
 /// The column widths a header or footer table is drawn with in a text column
 /// `content_w` wide. A header's auto-fit table sizes to its content like a
 /// body table (issue #142: Word shrinks the same two-word table to 64pt in

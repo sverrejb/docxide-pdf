@@ -474,6 +474,10 @@ fn step_lines_below_bands(
     line_h: f32,
     metrics: (f32, f32),
 ) -> f32 {
+    if bands.is_empty() {
+        lines.iter_mut().for_each(|l| l.gap_after = 0.0);
+        return 0.0;
+    }
     let mut top = page_height - first_top;
     let mut gaps = 0.0;
     for i in 0..lines.len() {
@@ -488,6 +492,24 @@ fn step_lines_below_bands(
         top += advance;
     }
     gaps
+}
+
+/// Gives the current page to section `sect_idx` as its first page: its
+/// first-page header and footer, their margins and bands.
+fn open_section_first_page(
+    state: &mut LayoutState,
+    sect_idx: usize,
+    sp: &SectionProperties,
+    ctx: &RenderContext,
+) {
+    state.pb.page_hf_section = sect_idx;
+    state.pb.is_first_page_of_section = true;
+    let page = state.pb.page_num(ctx.sections);
+    state.pb.slot_top = effective_slot_top(sp, true, page, ctx);
+    state.pb.column_top_y = state.pb.slot_top;
+    state.pb.page_top_y = state.pb.slot_top;
+    state.effective_margin_bottom = compute_effective_margin_bottom(sp, true, page, ctx);
+    state.pb.frame_bands = hf_page_bands(sp, true, page, state.effective_margin_bottom, ctx);
 }
 
 /// Whether `paragraph_bands` has any, without measuring a textbox.
@@ -4279,7 +4301,7 @@ fn render_paragraph_block(
                 // brazilian p9's caption alone above a figure with
                 // 37.5pt beside it. ponytail: 48pt threshold, two
                 // calibration points.
-                && positioning::side_gaps(fi, sp, col_x, col_w, text_width, true)
+                && positioning::side_gaps(fi, sp, col_x, col_w, text_width)
                     .is_some_and(|(left, right)| left.max(right) >= 48.0)
         };
         // Find the anchor first: the paragraphs between are only measured when
@@ -5429,15 +5451,13 @@ fn render_paragraph_block(
     {
         if moved {
             let col = col_geometry[state.current_col];
+            let rest = &section_blocks[block_idx..];
             let page = (sect_idx, state.pb.page_count());
             if state.pb.bands_prescanned != Some(page) {
                 state.pb.bands_prescanned = Some(page);
-                prescan_page_bands(state, &section_blocks[block_idx..], sp, col, text_width, ctx);
+                prescan_page_bands(state, rest, sp, col, text_width, ctx);
             }
-            let first = lines.first().map_or(line_h, |l| {
-                layout::inline_line_advance(l, line_h, para_metrics) - l.gap_after
-            });
-            let rest = &section_blocks[block_idx..];
+            let first = lines.first().map_or(line_h, |l| layout::line_own_advance(l, line_h, para_metrics));
             place_moved_first_line(state, first, 0.0, rest, sect_idx, sp, col_geometry, text_width, ctx);
             step_below_bands(state, &section_blocks[block_idx], sp, col, text_width, Some(first), ctx);
             let gaps = step_lines_below_bands(
@@ -5620,7 +5640,7 @@ fn render_paragraph_block(
             let mut start = lines_that_fit;
             loop {
                 let line = &lines[start];
-                let first = layout::inline_line_advance(line, line_h, para_metrics) - line.gap_after;
+                let first = layout::line_own_advance(line, line_h, para_metrics);
                 let rest = &section_blocks[block_idx + 1..];
                 let at_foot = place_first_line(
                     state,
@@ -5954,9 +5974,7 @@ fn render_paragraph_block(
     };
     state.pb.slot_top -= inter_gap;
     if moved {
-        let first = lines.first().map_or(line_h, |l| {
-            layout::inline_line_advance(l, line_h, para_metrics) - l.gap_after
-        });
+        let first = lines.first().map_or(line_h, |l| layout::line_own_advance(l, line_h, para_metrics));
         let rest = &section_blocks[block_idx..];
         place_moved_first_line(state, first, applied_inter_gap, rest, sect_idx, sp, col_geometry, text_width, ctx);
     }
@@ -6923,16 +6941,7 @@ fn render_pass(
                         }
                     }
 
-                    state.pb.page_hf_section = sect_idx;
-                    let page = state.pb.page_num(ctx.sections);
-                    state.pb.slot_top = effective_slot_top(sp, true, page, &ctx);
-                    state.pb.column_top_y = state.pb.slot_top;
-                    state.pb.page_top_y = state.pb.slot_top;
-                    state.effective_margin_bottom =
-                        compute_effective_margin_bottom(sp, true, page, &ctx);
-                    state.pb.is_first_page_of_section = true;
-                    state.pb.frame_bands =
-                        hf_page_bands(sp, true, page, state.effective_margin_bottom, &ctx);
+                    open_section_first_page(&mut state, sect_idx, sp, &ctx);
                 }
                 SectionBreakType::Continuous => {
                     if state.pb.is_at_page_top(cur_sp)
@@ -6943,16 +6952,7 @@ fn render_pass(
                         // No content on this page belongs to the preceding
                         // section. The continuous section therefore owns this
                         // sheet, including its first-page header/footer variant.
-                        state.pb.page_hf_section = sect_idx;
-                        state.pb.is_first_page_of_section = true;
-                        let page = state.pb.page_num(ctx.sections);
-                        state.pb.slot_top = effective_slot_top(sp, true, page, &ctx);
-                        state.pb.column_top_y = state.pb.slot_top;
-                        state.pb.page_top_y = state.pb.slot_top;
-                        state.effective_margin_bottom =
-                            compute_effective_margin_bottom(sp, true, page, &ctx);
-                        state.pb.frame_bands =
-                            hf_page_bands(sp, true, page, state.effective_margin_bottom, &ctx);
+                        open_section_first_page(&mut state, sect_idx, sp, &ctx);
                     }
                     // Mid-page, the sheet keeps the section that started it;
                     // geometry updates on the next page without a forced break.
@@ -7617,11 +7617,11 @@ fn render_pass(
     // its space_after.
     let last_page_idx = state.pb.all_contents.len().saturating_sub(1);
     let endnote_top_y = state.pb.slot_top - state.prev_space_after;
-    let page_nums = page_numbers(&doc.sections, &state.pb.page_section_indices);
+    let page_numbers = page_number_formats(doc, &state.pb.page_section_indices);
     for (page_idx, content) in state.pb.all_contents.iter_mut().enumerate() {
         let (hf_si, is_first, si) = state.pb.page_section_indices[page_idx];
         let sp = &doc.sections[hf_si].properties;
-        let eff_bottom = compute_effective_margin_bottom(sp, is_first, page_nums[page_idx], &ctx);
+        let eff_bottom = compute_effective_margin_bottom(sp, is_first, page_numbers[page_idx].0, &ctx);
         let content_sp = &doc.sections[si].properties;
         let text_width = content_sp.text_width();
         let bottom = eff_bottom;
@@ -7738,7 +7738,6 @@ fn render_pass(
     }
     let empty_hf_maps: HfMaps = Default::default();
 
-    let page_numbers = page_number_formats(doc, &state.pb.page_section_indices);
     let section_page_counts =
         section_page_counts(doc.sections.len(), &state.pb.page_section_indices);
 

@@ -170,10 +170,10 @@ fn hf_run_metrics(
     let mark_sizes = !runs.is_empty()
         && (runs.iter().all(|r| r.vanish)
             || !runs.iter().any(|r| r.is_line_break || r.inline_image.is_some()));
-    mark_sizes
-        .then(|| super::layout::mark_metrics(para, fonts))
-        .flatten()
-        .unwrap_or_else(|| super::layout::tallest_run_metrics(runs, fonts))
+    if mark_sizes && let Some(mark) = super::layout::mark_metrics(para, fonts) {
+        return mark;
+    }
+    super::layout::tallest_run_metrics(runs, fonts)
 }
 
 /// Vertical bands (top, bottom from the page top) of the header's page- or
@@ -935,7 +935,8 @@ pub(super) fn hf_table_bands(
             let widths = table::hf_col_widths(t, ctx, col.1);
             let width: f32 = widths.iter().sum();
             let top = sp.page_height - fp.y;
-            let height = table::hf_rows_height(t, &widths, ctx) + table::outer_border_half_bands(t);
+            let (top_band, bottom_band) = super::table_layout::outer_half_bands(t);
+            let height = top_band + table::hf_rows_height(t, &widths, ctx) + bottom_band;
             Some(super::Band {
                 x: (fp.x - fp.left_from_text, fp.x + width + fp.right_from_text),
                 beside: true,

@@ -209,15 +209,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     let (para_image, mut content_height) = if !opts.resolve_drawings {
         (None, 0.0)
     } else if !has_text && shown_images == 1 && !runs.iter().any(Run::underlined_picture) {
-        let img = runs
-            .iter_mut()
-            .find(|r| r.shown_image().is_some())
-            .and_then(|r| r.inline_image.take());
-        let h = img
-            .as_ref()
-            .map(|i| i.display_height + i.layout_extra_height)
-            .unwrap_or(0.0);
-        (img, h)
+        crate::model::take_shown_image(&mut runs)
     } else if !has_text && shown_images > 0 {
         // Picture-only paragraph laid out as runs (several pictures, or an
         // underlined one, whose line keeps the run font's descent for the

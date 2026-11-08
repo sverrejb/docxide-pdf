@@ -4382,19 +4382,23 @@ pub(super) fn inline_image_line_extra(line: &TextLine, ascent: f32) -> f32 {
 /// spacing-multiplier leading (italian_evaluation_minutes p7: a 36pt signature in
 /// 10pt Arial makes a 38.2pt line; english_town_council p1: 149pt logo with a 48pt
 /// run makes 159pt, annotation #230).
-pub(super) fn inline_line_advance(
+pub(super) fn inline_line_advance(line: &TextLine, line_pitch: f32, metrics: (f32, f32)) -> f32 {
+    line_own_advance(line, line_pitch, metrics) + line.gap_after
+}
+
+/// `inline_line_advance` without the line's `gap_after`.
+pub(super) fn line_own_advance(
     line: &TextLine,
     line_pitch: f32,
     (ascent, descent): (f32, f32),
 ) -> f32 {
     let line_pitch = line.pitch.unwrap_or(line_pitch);
     let img_h = line_max_image_h(line);
-    let own = if img_h > ascent {
+    if img_h > ascent {
         line_pitch.max(img_h + descent)
     } else {
         line_pitch
-    };
-    own + line.gap_after
+    }
 }
 
 /// Height of a laid-out paragraph: the sum of its line advances, one pitch when
@@ -5673,36 +5677,13 @@ pub(super) fn tallest_run_metrics(
         .unwrap_or((runs.first().map_or(12.0, |r| r.font_size), None, None))
 }
 
-/// `tallest_run_metrics` for a paragraph's runs, its mark's when every run is
-/// hidden (Word example, fixture underlined-picture-places: a hidden picture in
-/// a 72pt run leaves a line of the 10pt mark in a table cell, a text box and
-/// a header).
-pub(super) fn shown_run_metrics(
-    runs: &[Run],
-    para: &Paragraph,
-    seen_fonts: &HashMap<String, FontEntry>,
-) -> (f32, Option<f32>, Option<f32>) {
-    if !runs.is_empty()
-        && runs.iter().all(|r| r.vanish)
-        && let Some(mark) = mark_metrics(para, seen_fonts)
-    {
-        return mark;
-    }
-    tallest_run_metrics(runs, seen_fonts)
-}
-
 /// (font_size, line_h_ratio, ascender_ratio) of the paragraph mark, None
 /// when it has no size of its own.
 pub(super) fn mark_metrics(
     para: &Paragraph,
     seen_fonts: &HashMap<String, FontEntry>,
 ) -> Option<(f32, Option<f32>, Option<f32>)> {
-    let fs = para.paragraph_mark_font_size?;
-    let (lhr, ar) = para
-        .paragraph_mark_font_name
-        .as_deref()
-        .and_then(|n| seen_fonts.get(n))
-        .map_or((None, None), |e| run_line_metrics(e, ""));
+    let (fs, (lhr, ar)) = super::mark_font(para, para.paragraph_mark_font_size?, seen_fonts);
     Some((fs, lhr, ar))
 }
 

@@ -793,15 +793,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         && runs.iter().any(|r| r.shown_image().is_some())
                         && !runs.iter().any(Run::underlined_picture)
                     {
-                        let img = runs
-                            .iter_mut()
-                            .find(|r| r.shown_image().is_some())
-                            .and_then(|r| r.inline_image.take());
-                        let h = img
-                            .as_ref()
-                            .map(|i| i.display_height + i.layout_extra_height)
-                            .unwrap_or(0.0);
-                        (img, h)
+                        crate::model::take_shown_image(&mut runs)
                     } else if !has_text && !has_inline_images {
                         (None, super::images::inline_drawing_height(p))
                     } else {
