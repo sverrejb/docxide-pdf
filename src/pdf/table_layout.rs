@@ -2000,8 +2000,7 @@ pub(super) fn compute_row_layouts(
                                 };
 
                                 let image_name = para.image.as_ref().and_then(|img| {
-                                    let key = std::sync::Arc::as_ptr(&img.data) as usize;
-                                    ctx.table_cell_image_names.get(&key).cloned()
+                                    ctx.table_cell_image_names.get(&img.id).cloned()
                                 });
                                 let (image_width, image_height, img_stroke_color, img_stroke_width, img_shadow) = para
                                     .image
@@ -2009,8 +2008,7 @@ pub(super) fn compute_row_layouts(
                                     .map(|img| (img.display_width, img.display_height, img.stroke_color, img.stroke_width, img.shadow.clone()))
                                     .unwrap_or((0.0, 0.0, None, 0.0, None));
                                 let table_fx = para.image.as_ref().and_then(|img| {
-                                    let key = std::sync::Arc::as_ptr(&img.data) as usize;
-                                    ctx.effect_table_names.get(&key)
+                                    ctx.effect_table_names.get(&img.id)
                                 });
                                 let img_shadow_xobj = table_fx.and_then(|fx| fx.shadow.clone());
                                 let img_glow = para.image.as_ref().and_then(|img| img.glow.clone());
@@ -2020,10 +2018,8 @@ pub(super) fn compute_row_layouts(
                                     .floating_images
                                     .iter()
                                     .filter_map(|fi| {
-                                        let key =
-                                            std::sync::Arc::as_ptr(&fi.image.data) as usize;
                                         let pdf_name =
-                                            ctx.table_cell_image_names.get(&key)?.clone();
+                                            ctx.table_cell_image_names.get(&fi.image.id)?.clone();
                                         let h_offset = match fi.h_position {
                                             HorizontalPosition::Offset(o) => o,
                                             HorizontalPosition::AlignCenter => {

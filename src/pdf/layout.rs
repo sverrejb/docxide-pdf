@@ -29,7 +29,7 @@ pub(super) fn run_image_map<V: Clone>(
 ) -> HashMap<usize, V> {
     runs.iter()
         .enumerate()
-        .filter_map(|(ri, run)| Some((ri, names.get(&run.inline_image.as_ref()?.key())?.clone())))
+        .filter_map(|(ri, run)| Some((ri, names.get(&run.inline_image.as_ref()?.id)?.clone())))
         .collect()
 }
 

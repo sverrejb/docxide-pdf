@@ -270,6 +270,7 @@ fn resolve_hf<R: Read + Seek>(
         theme: ctx.theme,
         rels: &part_rels,
         zip: ctx.zip,
+        media: ctx.media,
         numbering: ctx.numbering,
         revisions: ctx.revisions,
         comments: Default::default(),

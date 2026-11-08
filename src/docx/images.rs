@@ -152,8 +152,7 @@ pub(super) fn shape_picture_fill<R: Read + Seek>(
     display_h: f32,
 ) -> Option<EmbeddedImage> {
     let fill = dml(sp_pr, "blipFill")?;
-    let mut img = find_blip_embeds(fill)
-        .find_map(|id| read_image_from_zip(id, ctx.rels, ctx.zip, display_w, display_h))?;
+    let mut img = blip_image(fill, ctx, display_w, display_h)?;
     if let Some(tile) = dml(fill, "tile")
         && let Some((png, w, h)) = tile_picture(&img.data, tile, display_w, display_h)
     {
@@ -531,26 +530,64 @@ fn parse_pic_effects(sp_pr: Option<roxmltree::Node>) -> PicEffects {
     fx
 }
 
+#[derive(Default)]
+pub(super) struct MediaParts {
+    parts: HashMap<String, Option<EmbeddedImage>>,
+    pictures: usize,
+}
+
+/// The first picture a drawing element's blips point to.
+pub(super) fn blip_image<R: Read + Seek>(
+    node: roxmltree::Node,
+    ctx: &mut ParseContext<'_, R>,
+    w: f32,
+    h: f32,
+) -> Option<EmbeddedImage> {
+    find_blip_embeds(node).find_map(|id| read_image_from_zip(id, ctx.rels, ctx.zip, ctx.media, w, h))
+}
+
+/// An inline drawing's picture with its effect extent and picture properties.
+fn inline_picture<R: Read + Seek>(
+    container: roxmltree::Node,
+    ctx: &mut ParseContext<'_, R>,
+    w: f32,
+    h: f32,
+) -> Option<EmbeddedImage> {
+    let (pic_w, pic_h) = inline_picture_extent(w, h);
+    let mut img = blip_image(container, ctx, pic_w, pic_h)?;
+    img.trimmed_width = w - pic_w;
+    (img.layout_extra_height, img.layout_extra_top) = inline_extra_height(container);
+    apply_pic_props(&mut img, container, ctx.theme);
+    Some(img)
+}
+
 pub(super) fn read_image_from_zip<R: Read + Seek>(
     embed_id: &str,
     rels: &HashMap<String, String>,
     zip: &mut zip::ZipArchive<R>,
+    media: &mut MediaParts,
     display_w: f32,
     display_h: f32,
 ) -> Option<EmbeddedImage> {
-    read_image_from_zip_extra(embed_id, rels, zip, display_w, display_h, 0.0, 0.0)
+    let part = media
+        .parts
+        .entry(part_path(rels.get(embed_id)?))
+        .or_insert_with_key(|path| read_media_part(zip, path))
+        .clone()?;
+    media.pictures += 1;
+    Some(EmbeddedImage {
+        id: media.pictures,
+        display_width: display_w,
+        display_height: display_h,
+        ..part
+    })
 }
 
-pub(super) fn read_image_from_zip_extra<R: Read + Seek>(
-    embed_id: &str,
-    rels: &HashMap<String, String>,
+fn read_media_part<R: Read + Seek>(
     zip: &mut zip::ZipArchive<R>,
-    display_w: f32,
-    display_h: f32,
-    layout_extra_height: f32,
-    layout_extra_top: f32,
+    path: &str,
 ) -> Option<EmbeddedImage> {
-    let mut data = read_zip_bytes(zip, &part_path(rels.get(embed_id)?))?;
+    let mut data = read_zip_bytes(zip, path)?;
     if super::wmf::is_wmf(&data) {
         data = match super::wmf::embedded_emf(&data) {
             Some(emf) => emf,
@@ -565,6 +602,7 @@ pub(super) fn read_image_from_zip_extra<R: Read + Seek>(
     }
     let (pw, ph, fmt, components) = image_dimensions(&data)?;
     Some(EmbeddedImage {
+        id: 0,
         is_ole_preview: false,
         alt: None,
         decorative: false,
@@ -572,12 +610,12 @@ pub(super) fn read_image_from_zip_extra<R: Read + Seek>(
         format: fmt,
         pixel_width: pw,
         pixel_height: ph,
-        display_width: display_w,
-        display_height: display_h,
+        display_width: 0.0,
+        display_height: 0.0,
         trimmed_width: 0.0,
         jpeg_components: components,
-        layout_extra_height,
-        layout_extra_top,
+        layout_extra_height: 0.0,
+        layout_extra_top: 0.0,
         rotation_deg: 0.0,
         stroke_color: None,
         stroke_width: 0.0,
@@ -828,9 +866,7 @@ fn parse_placed_drawing<R: Read + Seek>(
             }
             if let Some(img) = picture_filled_shape(container, ctx, display_w, display_h)
                 .or_else(|| {
-                    let mut img = find_blip_embeds(container).find_map(|id| {
-                        read_image_from_zip(id, ctx.rels, ctx.zip, display_w, display_h)
-                    })?;
+                    let mut img = blip_image(container, ctx, display_w, display_h)?;
                     apply_pic_props(&mut img, container, ctx.theme);
                     Some(img)
                 })
@@ -868,8 +904,7 @@ fn parse_placed_drawing<R: Read + Seek>(
             // ponytail: other wraps are laid out inline; add wrap zones with a
             // fixture that has one.
             if display_h > 0.0 && has_diagram_ref(container) {
-                let mut diagram =
-                    parse_smartart_drawing(container, ctx.rels, ctx.zip, ctx.theme, display_h);
+                let mut diagram = parse_smartart_drawing(container, ctx, display_h);
                 if parse_wrap_type(container).0 == WrapType::None {
                     let (h_position, h_relative_from, v_position, v_relative_from) =
                         parse_anchor_position(container);
@@ -931,13 +966,7 @@ fn parse_placed_drawing<R: Read + Seek>(
             }));
         }
 
-        let (extra_h, extra_top) = inline_extra_height(container);
-        let (pic_w, pic_h) = inline_picture_extent(display_w, display_h);
-        if let Some(mut img) = find_blip_embeds(container).find_map(|id| {
-            read_image_from_zip_extra(id, ctx.rels, ctx.zip, pic_w, pic_h, extra_h, extra_top)
-        }) {
-            img.trimmed_width = display_w - pic_w;
-            apply_pic_props(&mut img, container, ctx.theme);
+        if let Some(img) = inline_picture(container, ctx, display_w, display_h) {
             return Some(RunDrawingResult::Inline(img));
         }
 
@@ -950,8 +979,7 @@ fn parse_placed_drawing<R: Read + Seek>(
         }
 
         if display_h > 0.0 && has_diagram_ref(container) {
-            let diagram =
-                parse_smartart_drawing(container, ctx.rels, ctx.zip, ctx.theme, display_h);
+            let diagram = parse_smartart_drawing(container, ctx, display_h);
             return Some(RunDrawingResult::SmartArt(diagram));
         }
     }
@@ -1007,9 +1035,7 @@ pub(super) fn inline_drawing_height(node: roxmltree::Node) -> f32 {
 
 pub(super) fn compute_drawing_info<R: Read + Seek>(
     para_node: roxmltree::Node,
-    rels: &HashMap<String, String>,
-    zip: &mut zip::ZipArchive<R>,
-    theme: &ThemeFonts,
+    ctx: &mut ParseContext<'_, R>,
 ) -> DrawingInfo {
     let mut max_height: f32 = 0.0;
     let mut image: Option<EmbeddedImage> = None;
@@ -1031,22 +1057,16 @@ pub(super) fn compute_drawing_info<R: Read + Seek>(
             }
 
             let (display_w, display_h) = extent_dimensions(container);
-            let (extra_h, extra_top) = inline_extra_height(container);
-            let (pic_w, pic_h) = if find_blip_embeds(container).next().is_some() {
-                inline_picture_extent(display_w, display_h)
+            let (extra_h, _) = inline_extra_height(container);
+            let pic_h = if find_blip_embeds(container).next().is_some() {
+                inline_picture_extent(display_w, display_h).1
             } else {
-                (display_w, display_h)
+                display_h
             };
             max_height = max_height.max(pic_h + extra_h);
 
             if image.is_none() {
-                image = find_blip_embeds(container).find_map(|id| {
-                    read_image_from_zip_extra(id, rels, zip, pic_w, pic_h, extra_h, extra_top)
-                });
-                if let Some(ref mut img) = image {
-                    img.trimmed_width = display_w - pic_w;
-                    apply_pic_props(img, container, theme);
-                }
+                image = inline_picture(container, ctx, display_w, display_h);
             }
         }
     }
@@ -1074,7 +1094,7 @@ pub(super) fn parse_object_inline_image<R: Read + Seek>(
         .find(|n| n.has_tag_name((VML_NS, "imagedata")))?;
     let embed_id = imagedata.attribute((REL_NS, "id"))?;
     let (w, h) = object_dimensions(obj)?;
-    let mut img = read_image_from_zip(embed_id, ctx.rels, ctx.zip, w, h)?;
+    let mut img = read_image_from_zip(embed_id, ctx.rels, ctx.zip, ctx.media, w, h)?;
     (img.src_rect, img.lum) = vml_imagedata_props(imagedata);
     Some(with_object_alt(obj, img))
 }

@@ -7,7 +7,10 @@ use super::color::{parse_line_stroke, parse_solid_fill, resolve_dml_color};
 use super::images::{find_blip_embed, read_image_from_zip};
 use super::styles::ThemeFonts;
 use super::textbox::parse_shape_geometry;
-use super::{DIAGRAM_NS, DML_NS, DSP_NS, dml, dsp, emu_attr, frac_attr, part_path, read_zip_text};
+use super::{
+    DIAGRAM_NS, DML_NS, DSP_NS, ParseContext, dml, dsp, emu_attr, frac_attr, part_path,
+    read_zip_text,
+};
 
 /// Load the OPC relationship file for a given part and resolve relative targets
 /// to full zip paths (e.g. `../media/image1.jpg` relative to `word/diagrams/`
@@ -80,24 +83,23 @@ fn find_diagram_drawing(
 
 pub(super) fn parse_smartart_drawing<R: Read + Seek>(
     container: roxmltree::Node,
-    rels: &HashMap<String, String>,
-    zip: &mut zip::ZipArchive<R>,
-    theme: &ThemeFonts,
+    ctx: &mut ParseContext<'_, R>,
     display_h: f32,
 ) -> SmartArtDiagram {
     let mut shapes = Vec::new();
 
-    let drawing_target = find_diagram_drawing(container, rels).or_else(|| {
-        rels.values()
+    let drawing_target = find_diagram_drawing(container, ctx.rels).or_else(|| {
+        ctx.rels
+            .values()
             .find(|t| t.contains("diagrams/drawing"))
             .cloned()
     });
     if let Some(target) = drawing_target {
         let zip_path = part_path(&target);
 
-        let diagram_rels = load_part_rels(zip, &zip_path);
+        let diagram_rels = load_part_rels(ctx.zip, &zip_path);
 
-        if let Some(xml) = read_zip_text(zip, &zip_path)
+        if let Some(xml) = read_zip_text(ctx.zip, &zip_path)
             && let Ok(doc) = roxmltree::Document::parse(&xml)
         {
             let sp_tree = dsp(doc.root(), "drawing").and_then(|d| dsp(d, "spTree"));
@@ -106,7 +108,7 @@ pub(super) fn parse_smartart_drawing<R: Read + Seek>(
                 shapes = tree
                     .children()
                     .filter(|n| n.has_tag_name((DSP_NS, "sp")))
-                    .filter_map(|sp| parse_dsp_shape(sp, theme, &diagram_rels, zip))
+                    .filter_map(|sp| parse_dsp_shape(sp, ctx, &diagram_rels))
                     .collect();
             }
         }
@@ -121,10 +123,10 @@ pub(super) fn parse_smartart_drawing<R: Read + Seek>(
 
 fn parse_dsp_shape<R: Read + Seek>(
     sp: roxmltree::Node,
-    theme: &ThemeFonts,
+    ctx: &mut ParseContext<'_, R>,
     diagram_rels: &HashMap<String, String>,
-    zip: &mut zip::ZipArchive<R>,
 ) -> Option<SmartArtShape> {
+    let theme = ctx.theme;
     let sp_pr = dsp(sp, "spPr")?;
     let xfrm = dml(sp_pr, "xfrm")?;
     let off = dml(xfrm, "off")?;
@@ -149,7 +151,7 @@ fn parse_dsp_shape<R: Read + Seek>(
 
     let image_fill: Option<EmbeddedImage> = dml(sp_pr, "blipFill").and_then(|bf| {
         let embed_id = find_blip_embed(bf)?;
-        read_image_from_zip(embed_id, diagram_rels, zip, w, h)
+        read_image_from_zip(embed_id, diagram_rels, ctx.zip, ctx.media, w, h)
     });
 
     let (stroke_color, stroke_width) = dml(sp_pr, "ln")

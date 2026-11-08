@@ -28,6 +28,8 @@ pub struct Baselines {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub convert_ms: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub pdf_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub ref_pages: Option<usize>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gen_pages: Option<usize>,
@@ -172,6 +174,9 @@ pub fn write_latest_scores(updates: &HashMap<String, Baselines>) {
         }
         if let Some(v) = new.convert_ms {
             entry.convert_ms = Some(round4(v));
+        }
+        if let Some(v) = new.pdf_bytes {
+            entry.pdf_bytes = Some(v);
         }
         if let Some(v) = new.ref_pages {
             entry.ref_pages = Some(v);
