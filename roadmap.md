@@ -389,9 +389,10 @@ Open queue from the large-corpus and focus-fixture rounds:
 ## Tables
 
 - **Autofit vs Word** (2026-10-05 x-drift survey): case45 (tblW 4000, tcW 4680
-  per cell) keeps Word's saved grid 2091/1909, we split 100/100, and its
-  tblpXSpec="right" copy sits one cell margin past the right margin in Word;
-  case61's 200-twip column is widened to fit its text by Word, and its table 2
+  per cell) keeps Word's saved grid 2091/1909, we split 100/100 (its
+  tblpXSpec="right" overhang is done, 2026-11-08);
+  case61's 200-twip column is widened to fit its text by Word (its "merged"
+  cells carry no gridSpan), and its table 2
   first column is 9.6pt too wide in ours; case6 and case52/53 whole columns
   shifted 7–11pt; air_pollution's dot lines fit 42 dots in Word, 41 in ours.
 - **Over-wide AutoFit cells** (2026-11-08, case100 probes): squeezed by room

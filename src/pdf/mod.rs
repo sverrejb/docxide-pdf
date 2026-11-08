@@ -1853,10 +1853,13 @@ impl FloatingTablePos {
         // From compat 15 the offset places the left border's outer edge, as
         // tblInd does inline (Word probe: 0.5/1.5/6pt borders put floating and
         // inline tables' first-column text at the same x).
-        use crate::model::HorizontalPosition::Offset;
+        // A right-aligned one mirrors it: its last cell's text ends at the
+        // margin and its border a cell margin past (case40, case45).
+        use crate::model::HorizontalPosition::{AlignRight, Offset};
         let x = match pos.h_position {
             Offset(_) if ctx.compat_mode < 15 => x - table.first_cell_left_margin(),
             Offset(_) => x + table::word2013_border_shift(table),
+            AlignRight if ctx.compat_mode < 15 => x + table.last_cell_right_margin(),
             _ => x,
         };
         let y = match pos.v_anchor {
