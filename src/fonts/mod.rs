@@ -1260,10 +1260,11 @@ mod tests {
             "arial.ttf"
         );
         assert_eq!(resolve("Liberation Sans", None), "arial.ttf");
-        // A face's full name resolves to its family, not to the missing-font fallback.
+        // A face's full name resolves to that face of its family, not to the
+        // missing-font fallback.
         assert_eq!(
             resolve("Arial Bold", Some(("Arial Bold", Roman, None))),
-            "arial.ttf"
+            "arialbd.ttf"
         );
         assert_eq!(
             resolve(

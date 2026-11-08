@@ -1300,7 +1300,7 @@ mod border_conflict_tests {
     }
 
     #[test]
-    fn default_side_margins_need_a_style_or_tbl_cell_mar() {
+    fn default_side_margins_need_a_default_style_or_tbl_cell_mar() {
         use std::io::{Cursor, Write};
         let left = |styles: Option<&str>, tbl_pr: &str| {
             let xml = format!(
@@ -1331,7 +1331,7 @@ mod border_conflict_tests {
         assert_eq!(left(Some(named_style), ""), (0.5, 0.5));
         assert_eq!(
             left(Some(named_style), r#"<w:tblStyle w:val="Plain"/>"#),
-            (5.4, 5.4)
+            (0.5, 0.5)
         );
         assert_eq!(left(Some(default_style), ""), (5.4, 5.4));
         assert_eq!(
