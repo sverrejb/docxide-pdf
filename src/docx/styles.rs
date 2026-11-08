@@ -594,7 +594,10 @@ pub(super) fn parse_theme<R: Read + Seek>(
     let mut line_widths = Vec::new();
 
     let script = east_asia_lang.and_then(lang_to_script).unwrap_or("Jpan");
-    let bidi_script = bidi_lang.and_then(lang_to_script);
+    // No themeFontLang bidi: Word's default complex-script language is Arabic
+    // (a Chinese template's majorBidi runs print in the theme's Arab font,
+    // Times New Roman, not in a missing font's substitute).
+    let bidi_script = bidi_lang.and_then(lang_to_script).or(Some("Arab"));
 
     let names: Vec<String> = zip
         .file_names()
