@@ -690,10 +690,7 @@ Backlog (details in `current_focus/A11Y.md`):
   "(1)" labels of `rust.docx` sit 12pt below Word's. The MathType-generated
   WMF previews of its `both.docx` draw nothing in our output, where Word
   paints each as a picture (a bitmap record our WMF reader skips).
-- Issue #145 follow-ups: `table-style-centered`'s tables are 22pt narrower in
-  Word: a table style without `tblCellMar` in a document without a default
-  table style gets Word's 0.5pt side margins, we give the 5.4pt that come
-  with a style (`has_style_or_cell_mar`); a table style's `tblStylePr` (firstRow…) `vAlign`
+- Issue #145 follow-ups: a table style's `tblStylePr` (firstRow…) `vAlign`
   is not read (base `tcPr` and `jc` are); table styles are still walked per
   table (`style_chain`) instead of flattened at load like paragraph styles;
   the row-split predictor (`first_chunks_fit`) and `find_cell_split` encode
