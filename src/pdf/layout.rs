@@ -6696,14 +6696,72 @@ pub(super) fn grid_snapped_line_h(
             grid_h = grid_h.max(effective_font_size(run, e) * t);
         }
     }
-    // Tolerance so an exact fit stays one cell despite f32 error.
-    let cells = |h: f32| ((h / pitch) - 0.02).ceil().max(1.0) * pitch;
     // A line-spacing multiple is a floor of m unsnapped pitches under the cells
     // the glyphs need: 1.5 lines of one 18pt cell is 27pt (case79), while text
     // needing two 15.6pt cells stays 31.2pt at 1.25, 1.5 or 2 lines (Word probes).
     match effective_ls {
-        crate::model::LineSpacing::Auto(m) if grid_h > 0.0 => cells(grid_h).max(m * pitch),
-        _ => cells(line_h),
+        crate::model::LineSpacing::Auto(m) if grid_h > 0.0 => grid_cells(grid_h, pitch).max(m * pitch),
+        _ => grid_cells(line_h, pitch),
+    }
+}
+
+/// Whole docGrid cells for a line `h` tall, at least one. Tolerance so an
+/// exact fit stays one cell despite f32 error.
+fn grid_cells(h: f32, pitch: f32) -> f32 {
+    ((h / pitch) - 0.02).ceil().max(1.0) * pitch
+}
+
+/// Word counts a grid-snapped paragraph's cells line by line, from the runs on
+/// each line: an English paper in a Chinese template (Times New Roman 12 under
+/// a 312-twip grid, DengXian for its one CJK word) takes two cells for the
+/// line holding that word and one cell for every other, where the paragraph's
+/// tallest run (`grid_snapped_line_h`) would make them all two (a corpus
+/// document: Word's lines step 15.6pt, ours 31.2). A line whose cells differ
+/// from the paragraph's gets its own `pitch` and sits in its own cell
+/// (`grid_baseline_offset` of its runs, relative to the paragraph's).
+/// ponytail: body paragraphs under a line-spacing multiple only; tables,
+/// headers and footers keep one box per paragraph.
+pub(super) fn size_grid_lines(
+    lines: &mut [TextLine],
+    fonts: &HashMap<String, FontEntry>,
+    effective_ls: crate::model::LineSpacing,
+    para_cells: f32,
+    pitch: f32,
+    para_baseline: f32,
+) {
+    let crate::model::LineSpacing::Auto(m) = effective_ls else {
+        return;
+    };
+    let by_pdf_name = super::fonts::by_pdf_name(fonts);
+    for line in lines.iter_mut() {
+        if line.chunks.iter().any(|c| c.inline_image_name.is_some()) {
+            continue;
+        }
+        let (mut grid_h, mut shift) = (0.0f32, None::<f32>);
+        for c in line
+            .chunks
+            .iter()
+            .filter(|c| c.math.is_none() && !c.text.trim().is_empty())
+        {
+            let Some(e) = by_pdf_name.get(c.pdf_font.as_str()) else {
+                continue;
+            };
+            if let Some(t) = e.grid_line_ratio {
+                grid_h = grid_h.max(c.line_font_size * t);
+            }
+            if let Some(s) = e.grid_baseline_shift {
+                let s = s * c.line_font_size;
+                shift = Some(shift.map_or(s, |v: f32| v.max(s)));
+            }
+        }
+        if grid_h <= 0.0 {
+            continue;
+        }
+        let own = grid_cells(grid_h, pitch).max(m * pitch);
+        if (own - para_cells).abs() > 0.01 {
+            line.pitch = Some(own);
+            line.ascent_shift = own / 2.0 + shift.unwrap_or(0.0) - para_baseline;
+        }
     }
 }
 

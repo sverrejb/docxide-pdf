@@ -5307,6 +5307,8 @@ fn render_paragraph_block(
             ctx.fonts,
         );
         size_tab_mark_line(&mut lines, para, effective_ls, tallest_lhr, ctx.fonts);
+    } else if grid_snapped {
+        layout::size_grid_lines(&mut lines, ctx.fonts, effective_ls, line_h, sp.line_pitch, grid_baseline);
     }
     // Only glyphs on a picture's own line hang a descent below it: when the
     // text after leading spaces and a picture wraps to the next line, Word
