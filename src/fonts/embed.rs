@@ -612,7 +612,11 @@ fn compute_line_metrics(face: &Face, units: f32) -> LineMetrics {
         leading_ratio,
         line_h_ratio: east_asian.map_or(plain_line_h_ratio, |(h, _)| h),
         ascender_ratio: east_asian.map_or(plain_ascender_ratio, |(_, a)| a),
-        grid_line_ratio: east_asian.map(|(h, _)| h).or(typo_ratio),
+        // A Latin face fills its docGrid cells with its normal line (the hhea
+        // box and gap), not its sTypo box: Times New Roman 14 under a 312-twip
+        // grid takes two cells in Word (16.1pt > 15.6), where sTypo's 14.8
+        // would be one; 12pt (13.8) is one (Word for Mac probe hint_grid).
+        grid_line_ratio: east_asian.map(|(h, _)| h).or(Some(plain_line_h_ratio)),
         plain_line_h_ratio,
         plain_ascender_ratio,
         grid_baseline_shift,
