@@ -36,6 +36,7 @@ pub struct EmbeddedImage {
     pub pixel_height: u32,
     pub display_width: f32,
     pub display_height: f32,
+    pub trimmed_width: f32,
     pub jpeg_components: u8,
     /// effectExtent + distT/distB combined (points)
     pub layout_extra_height: f32,
@@ -76,16 +77,20 @@ impl EmbeddedImage {
         self.lum.is_some() || self.recolor.is_some()
     }
 
+    /// The width Word lays the picture out at: the drawn width plus its
+    /// whole-twip trim.
+    pub fn box_width(&self) -> f32 {
+        self.display_width + self.trimmed_width
+    }
+
     /// Size of the box an inline picture occupies in the line: the bounding box of
     /// the rotated frame. Word gives the 56×108pt signature turned -90° on
     /// italian_evaluation_minutes p7 a 56pt line, not 108pt.
     pub fn layout_size(&self) -> (f32, f32) {
         let (sin, cos) = self.rotation_deg.to_radians().sin_cos();
         let (s, c) = (sin.abs(), cos.abs());
-        (
-            self.display_width * c + self.display_height * s,
-            self.display_width * s + self.display_height * c,
-        )
+        let w = self.box_width();
+        (w * c + self.display_height * s, w * s + self.display_height * c)
     }
 }
 
@@ -159,6 +164,9 @@ pub struct FloatingImage {
     /// Flattened from an inline canvas: its offset counts from the line top,
     /// as for `Textbox::on_line`.
     pub on_line: bool,
+    /// Positioned `relativeFrom="line"` (kept as `VRelativeFrom::Paragraph`):
+    /// see `Textbox::v_from_line`.
+    pub v_from_line: bool,
 }
 
 /// Covers all 187 OOXML preset shapes and arbitrary custom geometry (a:custGeom).
@@ -369,6 +377,8 @@ pub struct ConnectorShape {
     /// wp:anchor relativeHeight — stacking order among overlapping anchored
     /// shapes within a page (higher draws on top). 0 when unspecified.
     pub z_index: u32,
+    /// See `Textbox::v_from_line`.
+    pub v_from_line: bool,
     /// Flattened from an inline canvas, as for `Textbox::on_line`.
     pub on_line: bool,
 }
@@ -464,6 +474,11 @@ pub struct Textbox {
     /// the paragraph's left indent, and their offsets count from the line top
     /// below the space before. Genuine anchored floats do neither.
     pub on_line: bool,
+    /// Positioned `relativeFrom="line"`, kept as `VRelativeFrom::Paragraph`:
+    /// the offset counts from where the paragraph flowed, also when a band or
+    /// floating table pushed it down and its paragraph-relative drawings
+    /// stay where it stood.
+    pub v_from_line: bool,
     /// In-plane rotation in degrees, clockwise (OOXML / VML `rotation:`),
     /// applied about the box centre at render time.
     pub rotation_deg: f32,

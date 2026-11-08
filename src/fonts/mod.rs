@@ -28,12 +28,16 @@ pub(crate) struct FontMetrics {
     pub(crate) plain_ascender_ratio: f32,
     /// External leading per em, above the win box (`embed::external_leading`).
     pub(crate) leading_ratio: f32,
+    /// How far a lowered run can drop in a top-aligned line before the line
+    /// grows, per em (`embed::compute_line_metrics`).
+    pub(crate) drop_slack_ratio: f32,
     pub(crate) grid_baseline_shift: f32,
     /// OS/2 ySuperscriptYSize / ySubscriptYSize per em (`pdf::layout::effective_font_size`).
     pub(crate) superscript_ratio: Option<f32>,
     pub(crate) subscript_ratio: Option<f32>,
-    /// post underlinePosition (below the baseline) and underlineThickness, per em.
-    pub(crate) underline: Option<(f32, f32)>,
+    /// post underlinePosition (below the baseline), underlineThickness and the
+    /// descent the underline stays inside, per em.
+    pub(crate) underline: Option<(f32, f32, f32)>,
     /// OS/2 yStrikeoutPosition (above the baseline) and yStrikeoutSize, per em.
     pub(crate) strikeout: Option<(f32, f32)>,
     pub(crate) east_asian: bool,
@@ -73,14 +77,16 @@ pub(crate) struct FontEntry {
     pub(crate) plain_line_h_ratio: Option<f32>,
     pub(crate) plain_ascender_ratio: Option<f32>,
     pub(crate) leading_ratio: Option<f32>,
+    pub(crate) drop_slack_ratio: Option<f32>,
     /// See `embed::LineMetrics::grid_baseline_shift`.
     pub(crate) grid_baseline_shift: Option<f32>,
     /// OS/2 ySuperscriptYSize / ySubscriptYSize per em, sizing raised and
     /// lowered runs (`pdf::layout::effective_font_size`).
     pub(crate) superscript_ratio: Option<f32>,
     pub(crate) subscript_ratio: Option<f32>,
-    /// post underlinePosition (below the baseline) and underlineThickness, per em.
-    pub(crate) underline: Option<(f32, f32)>,
+    /// post underlinePosition (below the baseline), underlineThickness and the
+    /// descent the underline stays inside, per em.
+    pub(crate) underline: Option<(f32, f32, f32)>,
     /// OS/2 yStrikeoutPosition (above the baseline) and yStrikeoutSize, per em.
     pub(crate) strikeout: Option<(f32, f32)>,
     /// See `embed::LineMetrics::east_asian`.
@@ -138,6 +144,7 @@ impl FontEntry {
             fallback_avg_char_width: Default::default(),
             plain_ascender_ratio: None,
             leading_ratio: None,
+            drop_slack_ratio: None,
             char_to_gid: None,
             char_widths_1000: None,
             char_ink_1000: None,
@@ -1083,6 +1090,7 @@ pub(crate) fn register_font(
             fallback_avg_char_width: Default::default(),
             plain_ascender_ratio: Some(r.metrics.plain_ascender_ratio),
             leading_ratio: Some(r.metrics.leading_ratio),
+            drop_slack_ratio: Some(r.metrics.drop_slack_ratio),
             char_to_gid: Some(r.metrics.char_to_gid),
             char_widths_1000: Some(r.metrics.char_widths_1000),
             char_ink_1000: Some(r.metrics.char_ink_1000),
@@ -1136,6 +1144,7 @@ pub(crate) fn register_font(
                 fallback_avg_char_width: Default::default(),
                 plain_ascender_ratio: None,
                 leading_ratio: None,
+                drop_slack_ratio: None,
                 char_to_gid: None,
                 char_widths_1000: None,
                 char_ink_1000: None,

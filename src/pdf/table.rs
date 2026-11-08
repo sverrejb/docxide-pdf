@@ -19,7 +19,7 @@ use super::table_layout::{
     auto_fit_columns, autofit_min_widths, cell_span_width, cell_x_offset, chunk_space_before,
     compute_merge_spans, compute_row_layouts, cursor_chunks, find_cell_split, fixed_columns,
     item_chunk_height, keep_chain_end, min_content_widths, para_block_height,
-    partial_row_height, row_pieces, squeeze_to_width,
+    partial_row_height, row_pieces, skip_finished_row, squeeze_to_width,
 };
 use super::tagging::{CellTagger, TableTags, Tags};
 
@@ -240,8 +240,8 @@ fn render_cell_inline_image(
     let img_x = cell_x
         + left
         + match para.alignment {
-            Alignment::Center => (text_w - para.image_width) / 2.0,
-            Alignment::Right => text_w - para.image_width,
+            Alignment::Center => (text_w - para.image_width - para.image_trim) / 2.0,
+            Alignment::Right => text_w - para.image_width - para.image_trim,
             _ => 0.0,
         };
     let img_y = cursor_y - para.image_height;
@@ -665,6 +665,7 @@ fn render_cell_content(
                     None,
                     cell_link_tagger(&mut tagger, cell_para),
                     None,
+                    None,
                 );
                 if picture_clip {
                     content.restore_state();
@@ -739,6 +740,7 @@ fn render_cell_content(
                             to: &[],
                         },
                         behind.as_deref_mut(),
+                        f32::NEG_INFINITY,
                     );
                     if floating_offset.is_some() {
                         cursor_y = saved_y;
@@ -1160,6 +1162,7 @@ fn render_nested_table(
     (col_widths, row_layouts): (&[f32], &[RowLayout]),
     chunk: &Chunk,
     mut behind: BehindLayer<'_>,
+    floor: f32,
 ) {
     let table_total_w: f32 = col_widths.iter().sum();
     // A margin/text-anchored float's centre or right position overrides jc.
@@ -1233,6 +1236,7 @@ fn render_nested_table(
                 ends,
                 row,
                 behind.as_deref_mut(),
+                floor,
             ),
         }
     }
@@ -1256,6 +1260,7 @@ fn render_partial_cell_content(
     links: &mut Vec<LinkAnnotation>,
     mut tagger: Option<CellTagger<'_>>,
     mut behind: BehindLayer<'_>,
+    floor: f32,
 ) {
     let mut cursor_y = cursor_y_start;
     let mut reanchor_shift = 0.0;
@@ -1389,6 +1394,7 @@ fn render_partial_cell_content(
                     None,
                     cell_link_tagger(&mut tagger, cell_para),
                     None,
+                    None,
                 );
                 if picture_clip {
                     content.restore_state();
@@ -1457,6 +1463,7 @@ fn render_partial_cell_content(
                         (col_widths, rows),
                         &chunk,
                         behind.as_deref_mut(),
+                        floor,
                     );
                     if floating_offset.is_some() {
                         cursor_y = saved_y;
@@ -1464,7 +1471,7 @@ fn render_partial_cell_content(
                         cursor_y -= bottom_band;
                     }
                 } else {
-                    cursor_y -= item_chunk_height(&items[pi], &chunk);
+                    cursor_y -= item_chunk_height(&items[pi], &chunk, cursor_y - floor);
                 }
             }
         }
@@ -1814,9 +1821,10 @@ fn render_partial_row(
     ends: &[CellCursor],
     row_idx: usize,
     mut behind: BehindLayer<'_>,
+    floor: f32,
 ) {
     let row_top = *cursor_y;
-    let row_h = partial_row_height(layout, starts, ends);
+    let row_h = partial_row_height(layout, starts, ends, row_top - floor);
     let row_bottom = row_top - row_h;
     let bars_before = super::layout::change_bars_len();
 
@@ -1879,6 +1887,7 @@ fn render_partial_row(
                 links,
                 tagger,
                 behind.as_deref_mut(),
+                floor + cell_layout.cm.bottom,
             );
         } else if let Some(t) = tagger.filter(|_| *start == CELL_START) {
             t.empty_para(content);
@@ -2008,19 +2017,14 @@ fn aligned_table_left(
     }
 }
 
-/// `override_pos`: positioning info for floating tables.
-pub(super) fn render_table(
+/// The column widths a body table renders with: AutoFit and percentage
+/// widths resolved against the page or newspaper column.
+pub(super) fn resolved_col_widths(
     table: &Table,
     sp: &SectionProperties,
     ctx: &RenderContext,
-    pb: &mut super::PageBuilder,
-    sect_idx: usize,
-    prev_space_after: f32,
-    mut override_pos: Option<super::FloatingTablePos>,
-    footnotes: &std::collections::HashMap<u32, crate::model::Footnote>,
-    effective_margin_bottom: &mut f32,
     column_bounds: Option<(f32, f32)>,
-) {
+) -> Vec<f32> {
     let available_w = column_bounds.map(|(_, w)| w);
     // Top-level table: an AutoFit-to-Window table fills the available width
     // (page text column or newspaper column), so feed the content width even
@@ -2050,14 +2054,27 @@ pub(super) fn render_table(
             table.autofit_overhang(ctx.compat_mode),
         )
     };
-    apply_pct_width(
-        table,
-        &mut col_widths,
-        available_w.unwrap_or(sp.page_width - sp.margin_left - sp.margin_right),
-        ctx.compat_mode,
-    );
+    apply_pct_width(table, &mut col_widths, fit_w, ctx.compat_mode);
+    col_widths
+}
+
+/// `override_pos`: positioning info for floating tables.
+pub(super) fn render_table(
+    table: &Table,
+    sp: &SectionProperties,
+    ctx: &RenderContext,
+    pb: &mut super::PageBuilder,
+    sect_idx: usize,
+    prev_space_after: f32,
+    mut override_pos: Option<super::FloatingTablePos>,
+    footnotes: &std::collections::HashMap<u32, crate::model::Footnote>,
+    effective_margin_bottom: &mut f32,
+    column_bounds: Option<(f32, f32)>,
+) {
+    let col_widths = resolved_col_widths(table, sp, ctx, column_bounds);
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     let merge_spans = compute_merge_spans(table, &row_layouts);
+    let area = column_bounds.unwrap_or((sp.margin_left, sp.text_width()));
 
     let preceding_float_zone = table
         .position
@@ -2086,16 +2103,17 @@ pub(super) fn render_table(
             && fp.y - height < zone.top_y
         {
             fp.y = zone.bottom_y - fp.top_from_text;
-            let (column_left, column_width) = column_bounds.unwrap_or((sp.margin_left, fit_w));
-            let side_room = (zone.obj_left - zone.left_from_text - column_left)
-                .max(column_left + column_width - zone.obj_right - zone.right_from_text);
+            let side_room = zone.side_strip(area);
             if zone.from_table && fp.v_anchor_text && fp.v_offset_pt >= 0.0
                 && side_room < super::MIN_EMPTY_STRIP
             {
                 // The preceding wide float blocks the anchor paragraph too.
                 // Keep the relocated anchor rather than restoring it above both
                 // tables; otherwise a later clearing break loses occupied lines.
-                displaced_text_anchor = Some(fp.y + fp.v_offset_pt);
+                // The table keeps its tblpY below the moved anchor (Word for Mac
+                // probes: tblpY 1, 100 and 300 under a full-width float).
+                displaced_text_anchor = Some(fp.y);
+                fp.y -= fp.v_offset_pt;
             }
             if let Some(pos) = table.position.as_ref() {
                 fp.constrain_nonoverlap_left(
@@ -2119,16 +2137,20 @@ pub(super) fn render_table(
         .as_ref()
         .is_some_and(|fp| fp.v_anchor_text && fp.v_offset_pt >= 0.0);
     let keep_with_anchor = is_floating && !flows_inline;
-    let area = column_bounds.unwrap_or((
-        sp.margin_left,
-        sp.page_width - sp.margin_left - sp.margin_right,
-    ));
+    // A text-anchored table counts from below the previous paragraph's space
+    // after; one placed against the page or margin keeps its place (Word
+    // examples, fixture float-table-band-before: 24pt after the paragraph above
+    // a page-top or margin-top table, 20pt above one 300pt down).
+    let float_space_after = if override_pos.as_ref().is_some_and(|fp| fp.v_anchor_text) {
+        prev_space_after
+    } else {
+        0.0
+    };
     let (table_left, saved_slot_top, text_margins) = if let Some(ref fp) = override_pos {
-        // The float zone starts at the table's drawn top, which sits below fp.y
-        // by the space after the previous paragraph (see below).
+        // The float zone starts at the table's drawn top.
         let saved = Some((
             displaced_text_anchor.unwrap_or(pb.slot_top - prev_space_after),
-            fp.y - prev_space_after,
+            fp.y - float_space_after,
         ));
         pb.slot_top = fp.y;
         (fp.x, saved, (fp.top_from_text, fp.bottom_from_text))
@@ -2151,7 +2173,7 @@ pub(super) fn render_table(
     // At a page top a table follows the paragraphs' rule with no space before:
     // radiographer's section 2 table starts at its header's bottom, not 10pt below.
     pb.slot_top -= if is_floating {
-        prev_space_after
+        float_space_after
     } else {
         pb.page_top_gap(sp, 0.0, prev_space_after)
             .unwrap_or(prev_space_after)
@@ -2164,13 +2186,12 @@ pub(super) fn render_table(
         let total_height: f32 = row_layouts.iter().map(|row| row.height).sum();
         if let Some(zone) = pb.float_zone.as_ref()
             && zone.from_table
-            && table_left < zone.obj_right + zone.right_from_text
-            && table_left + total_width > zone.obj_left - zone.left_from_text
+            && table_left < zone.wrap_right()
+            && table_left + total_width > zone.wrap_left()
             // A float whose wrap area stays in the margin pushes nothing, even a
             // table running onto its box (dutch_government_budget_letter; Word
             // probes 2026-10-28: 1pt outside the column stays beside, 1pt inside clears).
-            && zone.obj_left - zone.left_from_text < area.0 + area.1
-            && zone.obj_right + zone.right_from_text > area.0
+            && !zone.outside_column(area)
             && pb.slot_top > zone.bottom_y
             && pb.slot_top - total_height < zone.top_y
         {
@@ -2229,9 +2250,18 @@ pub(super) fn render_table(
     ));
     let fn_text_width = fn_col.1;
 
+    // Word repeats no header rows above a row whose minimum does not fit
+    // below them on a fresh page (examples: a 30pt header over a
+    // 250pt at-least row on a 260pt body).
+    let header_h: f32 = row_layouts[..header_count].iter().map(|r| r.height).sum();
     let flush_and_render_headers = |pb: &mut super::PageBuilder, ri: usize, emb: &mut f32| {
         pb.begin_next_page(sect_idx, sp, emb, ctx);
-        if header_count > 0 && ri >= header_count {
+        if header_count > 0
+            && ri >= header_count
+            && row_layouts[ri]
+                .split_min
+                .is_none_or(|m| header_h + m <= pb.slot_top - *emb)
+        {
             render_header_rows(
                 table,
                 &row_layouts,
@@ -2301,6 +2331,7 @@ pub(super) fn render_table(
                 &ends,
                 ri,
                 Some(&mut pb.behind_shapes),
+                *emb,
             );
             move_cell_comment_anchors(ctx, &mut pb.comment_anchors);
 
@@ -2308,7 +2339,11 @@ pub(super) fn render_table(
                 break;
             }
 
-            starts = ends;
+            starts = ends
+                .into_iter()
+                .zip(&layout.cells)
+                .map(|(e, c)| skip_finished_row(c, e))
+                .collect();
             if is_floating {
                 *did_flush = true;
             }
@@ -2375,19 +2410,22 @@ pub(super) fn render_table(
         }
     }
 
+    let row_notes_extra = |pb: &super::PageBuilder, ri: usize| {
+        let h: f32 = row_footnote_ids[ri]
+            .iter()
+            .filter(|id| !pb.footnote_ids_set.contains(id))
+            .map(|&id| super::footnotes::footnote_height(id, footnotes, ctx, fn_text_width))
+            .sum();
+        if h > 0.0 && pb.col_fn_reserved == 0.0 {
+            h + ctx.note_separator.height
+        } else {
+            h
+        }
+    };
     for (ri, (row, layout)) in table.rows.iter().zip(row_layouts.iter()).enumerate() {
         // Pre-compute extra footnote space this row introduces, so the
         // page-break check below accounts for it before rendering.
-        let mut row_fn_extra = 0.0f32;
-        for &fn_id in &row_footnote_ids[ri] {
-            if !pb.footnote_ids_set.contains(&fn_id) {
-                row_fn_extra +=
-                    super::footnotes::footnote_height(fn_id, footnotes, ctx, fn_text_width);
-            }
-        }
-        if row_fn_extra > 0.0 && pb.col_fn_reserved == 0.0 {
-            row_fn_extra += ctx.note_separator.height;
-        }
+        let row_fn_extra = row_notes_extra(pb, ri);
 
         let row_h = layout.height;
         log::debug!(
@@ -2478,6 +2516,7 @@ pub(super) fn render_table(
                             from: &[],
                             to: &[],
                         },
+                        f32::INFINITY,
                     )
                     <= available_h
             })
@@ -2492,7 +2531,7 @@ pub(super) fn render_table(
             let ends: Vec<CellCursor> = layout.cells.iter()
                 .map(|c| find_cell_split(c, &CELL_START, available_h, false)).collect();
             ends.iter().any(|e| *e != CELL_START)
-                && partial_row_height(layout, &[], &ends) <= available_h
+                && partial_row_height(layout, &[], &ends, f32::INFINITY) <= available_h
         });
         // Word splits with one line of room: nabl's "Remarks" row breaks
         // between its paragraphs with 30pt left. ponytail: 14pt (a line) guard
@@ -2528,13 +2567,12 @@ pub(super) fn render_table(
             && taller_than_page && !row.height_exact;
         // Even when the content needs multiple pages, an explicit minimum
         // must fit before the row starts. Retry at the next page top, where
-        // oversized rows can split without repeatedly moving forward.
-        let minimum_fits_later = !at_page_top
-            && layout.split_min.is_some_and(|minimum| {
-                minimum > available_h && minimum <= next_page_room()
-            });
+        // oversized rows can split without repeatedly moving forward; a
+        // minimum taller than any page moves too (Word examples: an
+        // 810pt minimum leaves 348pt free and starts on the next 648pt page).
+        let minimum_moves = !at_page_top && layout.split_min.is_some_and(|m| m > available_h);
         let must_split = (taller_than_page || keep_with_anchor)
-            && !minimum_fits_later
+            && !minimum_moves
             && (!row.cant_split || (oversized_cant_split && at_page_top))
             && (at_page_top || first_chunks_fit);
         if row_h > available_h && (must_split || can_meaningfully_split) && !chain_moves {
@@ -2615,18 +2653,27 @@ pub(super) fn render_table(
             );
         }
 
-        // Register footnotes from this row and reserve space for them.
+        // Register footnotes from this row and reserve space for them. Notes
+        // the row leaves no room for go to the next page (Word examples: a
+        // page-top row with an 800pt minimum fills the 648pt body and its note
+        // starts the next page).
+        let notes_fit =
+            pb.slot_top - *effective_margin_bottom >= row_notes_extra(pb, ri) - 0.5;
         for &fn_id in &row_footnote_ids[ri] {
             let fn_h = footnotes
                 .contains_key(&fn_id)
                 .then(|| super::footnotes::footnote_height(fn_id, footnotes, ctx, fn_text_width));
-            pb.book_footnote(
-                fn_id,
-                fn_col,
-                fn_h,
-                ctx.note_separator.height,
-                effective_margin_bottom,
-            );
+            if notes_fit {
+                pb.book_footnote(
+                    fn_id,
+                    fn_col,
+                    fn_h,
+                    ctx.note_separator.height,
+                    effective_margin_bottom,
+                );
+            } else {
+                pb.carry_footnote(fn_id, fn_col, fn_h, ctx.note_separator.height);
+            }
         }
 
         // Register endnotes from this row; they render at end of document
@@ -2665,7 +2712,10 @@ pub(super) fn render_table(
             // split path (taller-than-page tables) leaves it None, so the
             // override is skipped there rather than anchoring shapes off-page.
             if let Some(top) = flushed_page_top {
-                pb.pending_float_anchor = Some((top, pb.pending_float_anchor.and_then(|(_, b)| b)));
+                pb.pending_float_anchor = Some((
+                    super::PendingAnchor { top, kind: super::AnchorKind::TableMoved },
+                    pb.pending_float_anchor.and_then(|(_, b)| b),
+                ));
                 // Undo the tblpY offset applied to the render start so the flow
                 // cursor sits at the un-offset table bottom — following content
                 // (which is correctly placed) must not shift with the table.
@@ -2693,7 +2743,7 @@ pub(super) fn render_table(
                 } else {
                     crate::model::WrapText::Largest
                 };
-                pb.float_zone = Some(super::FloatZone {
+                let zone = super::FloatZone {
                     top_y: table_top_y + top_margin,
                     bottom_y: table_bottom - bottom_margin,
                     obj_left: table_left,
@@ -2704,8 +2754,13 @@ pub(super) fn render_table(
                     wrap_text,
                     para_relative: false,
                     from_table: true,
-                    table_on_page: !fp.v_anchor_text,
+                };
+                let keeps_previous = pb.float_zone.as_ref().is_some_and(|prev| {
+                    prev.from_table && (zone.outside_column(area) || prev.covers(&zone))
                 });
+                if !keeps_previous {
+                    pb.float_zone = Some(zone);
+                }
                 if let Some(old) = preceding_float_zone
                     && let Some(ref mut current) = pb.float_zone
                     && (old.obj_left - current.obj_left).abs() < 0.5

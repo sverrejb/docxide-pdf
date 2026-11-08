@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Compare two score files (latest_scores.json format): per-group mean Jaccard
-and SSIM, the total size of our PDFs, then every case that moved by more than
-the threshold.
+and SSIM, then every case that moved by more than the threshold.
 
     python3 tools/compare_scores.py <before.json> <after.json> [threshold]
 
@@ -27,12 +26,6 @@ def main() -> None:
     for g, ks in sorted(groups.items()):
         print(f"{g:11s} n={len(ks):3d}  J {mean(a, ks, 'jaccard'):5.2f} -> {mean(b, ks, 'jaccard'):5.2f}   "
               f"SSIM {mean(a, ks, 'ssim'):5.2f} -> {mean(b, ks, 'ssim'):5.2f}")
-    sized = [k for k in keys if a[k].get('pdf_bytes') and b[k].get('pdf_bytes')]
-    if sized:
-        sa, sb = (sum(d[k]['pdf_bytes'] for k in sized) for d in (a, b))
-        print(f"pdf_bytes   n={len(sized):3d}  {sa:,} -> {sb:,} ({sb - sa:+,}, {(sb - sa) / sa * 100:+.2f}%)  "
-              f"{sum(b[k]['pdf_bytes'] < a[k]['pdf_bytes'] for k in sized)} smaller, "
-              f"{sum(b[k]['pdf_bytes'] > a[k]['pdf_bytes'] for k in sized)} larger")
     changes = []
     for k in keys:
         dj = (b[k].get('jaccard') or 0) - (a[k].get('jaccard') or 0)

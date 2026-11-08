@@ -98,9 +98,10 @@ wordWrap=0, numbers on lines without text, picture grayscale/duotone/
 alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
 (vector approximations), chart title/frame/value labels/data table. Open:
 - **Charts** (3-D, 2-D layout, Office 2016 chartEx; merged 2026-11-06):
-  status, probe kit and next steps in `current_focus/3d_charts.md`. Open, in
-  order: true perspective (rAngAx 0) for 3-D line/area; standard grouping
-  with several depth rows; 3-D pie perspective, best-fit labels and legend
+  status, probe kit and next steps in `current_focus/3d_charts.md`. True
+  perspective (rAngAx 0) drawn 2026-11-08 for columns, lines and areas.
+  Open, in order: its box-width rule at 4 rows over 8 categories and Word's
+  off-centre aim; standard grouping with several depth rows; 3-D pie perspective, best-fit labels and legend
   gap; surface, stock, pie-of-pie and bar-of-pie not drawn.
   Fixtures `cases/charts_3d` and `cases/charts_ex` guard what is drawn.
 - A `keepNext` paragraph before a chart paragraph is stranded at the page

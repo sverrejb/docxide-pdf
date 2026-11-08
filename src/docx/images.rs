@@ -15,7 +15,7 @@ use super::textbox::{parse_connector_from_wsp, parse_textbox_from_wsp};
 use super::{
     CHART_NS, DML_NS, PIC_NS, ParseContext, REL_NS, VML_NS, W10_NS, WML_NS, WPD_NS, WPS_NS,
     angle_attr, dml, emu_attr, emu_attr_opt, emu_to_pts, f32_attr, frac_attr, parse_hex_color,
-    parse_on_off, parse_pt, part_path, read_zip_bytes, twips_attr, wml, wpd,
+    parse_on_off, parse_pt, part_path, read_zip_bytes, twips_attr, twips_to_pts, wml, wpd,
 };
 
 fn parse_emu_text(text: &str) -> f32 {
@@ -69,6 +69,18 @@ pub(super) fn wrap_dist_left_right(container: roxmltree::Node, polygon: bool) ->
 
 pub(super) fn extent_dimensions(container: roxmltree::Node) -> (f32, f32) {
     wpd(container, "extent").map_or((0.0, 0.0), |e| (emu_attr(e, "cx"), emu_attr(e, "cy")))
+}
+
+/// An inline picture's size as Word lays it out: the height cut to whole
+/// twips, the width scaled with it (Word for Mac probes: extents of 2493.2 to
+/// 2493.9 twips all step 124.65pt lines and draw 124.65pt tall, a 72pt wide
+/// one 71.98pt wide; 1000.75 twips step 50pt).
+fn inline_picture_extent(w: f32, h: f32) -> (f32, f32) {
+    let cut = twips_to_pts((h * 20.0 + 1e-3).floor());
+    if cut <= 0.0 {
+        return (w, h);
+    }
+    (w * cut / h, cut)
 }
 
 /// `wp14:sizeRelH relativeFrom="margin"` with a non-zero pctWidth, as a
@@ -140,9 +152,7 @@ pub(super) fn shape_picture_fill<R: Read + Seek>(
     display_h: f32,
 ) -> Option<EmbeddedImage> {
     let fill = dml(sp_pr, "blipFill")?;
-    let mut img = find_blip_embeds(fill).find_map(|id| {
-        read_image_from_zip(id, ctx.rels, ctx.zip, ctx.media, display_w, display_h)
-    })?;
+    let mut img = blip_image(fill, ctx, display_w, display_h)?;
     if let Some(tile) = dml(fill, "tile")
         && let Some((png, w, h)) = tile_picture(&img.data, tile, display_w, display_h)
     {
@@ -526,6 +536,31 @@ pub(super) struct MediaParts {
     pictures: usize,
 }
 
+/// The first picture a drawing element's blips point to.
+pub(super) fn blip_image<R: Read + Seek>(
+    node: roxmltree::Node,
+    ctx: &mut ParseContext<'_, R>,
+    w: f32,
+    h: f32,
+) -> Option<EmbeddedImage> {
+    find_blip_embeds(node).find_map(|id| read_image_from_zip(id, ctx.rels, ctx.zip, ctx.media, w, h))
+}
+
+/// An inline drawing's picture with its effect extent and picture properties.
+fn inline_picture<R: Read + Seek>(
+    container: roxmltree::Node,
+    ctx: &mut ParseContext<'_, R>,
+    w: f32,
+    h: f32,
+) -> Option<EmbeddedImage> {
+    let (pic_w, pic_h) = inline_picture_extent(w, h);
+    let mut img = blip_image(container, ctx, pic_w, pic_h)?;
+    img.trimmed_width = w - pic_w;
+    (img.layout_extra_height, img.layout_extra_top) = inline_extra_height(container);
+    apply_pic_props(&mut img, container, ctx.theme);
+    Some(img)
+}
+
 pub(super) fn read_image_from_zip<R: Read + Seek>(
     embed_id: &str,
     rels: &HashMap<String, String>,
@@ -577,6 +612,7 @@ fn read_media_part<R: Read + Seek>(
         pixel_height: ph,
         display_width: 0.0,
         display_height: 0.0,
+        trimmed_width: 0.0,
         jpeg_components: components,
         layout_extra_height: 0.0,
         layout_extra_top: 0.0,
@@ -677,6 +713,11 @@ pub(super) fn parse_anchor_position(
     };
 
     (h_position, h_relative, v_position, v_relative)
+}
+
+/// A `wp:anchor` placed `relativeFrom="line"` vertically.
+pub(super) fn anchored_to_line(container: roxmltree::Node) -> bool {
+    wpd(container, "positionV").and_then(|n| n.attribute("relativeFrom")) == Some("line")
 }
 
 pub(super) fn parse_wrap_type(
@@ -822,6 +863,7 @@ fn parse_placed_drawing<R: Read + Seek>(
                     dist_right,
                     behind_doc,
                     z_index,
+                    v_from_line: anchored_to_line(container),
                     ..Textbox::from(wsp)
                 }));
             }
@@ -830,9 +872,7 @@ fn parse_placed_drawing<R: Read + Seek>(
             }
             if let Some(img) = picture_filled_shape(container, ctx, display_w, display_h)
                 .or_else(|| {
-                    let mut img = find_blip_embeds(container).find_map(|id| {
-                        read_image_from_zip(id, ctx.rels, ctx.zip, ctx.media, display_w, display_h)
-                    })?;
+                    let mut img = blip_image(container, ctx, display_w, display_h)?;
                     apply_pic_props(&mut img, container, ctx.theme);
                     Some(img)
                 })
@@ -863,6 +903,7 @@ fn parse_placed_drawing<R: Read + Seek>(
                     anchor_at_start: false,
                     anchor_run: 0,
                     on_line: false,
+                    v_from_line: anchored_to_line(container),
                 }));
             }
             // A wrapNone diagram floats at its anchor, the paragraph's text laid
@@ -932,12 +973,7 @@ fn parse_placed_drawing<R: Read + Seek>(
             }));
         }
 
-        let (extra_h, extra_top) = inline_extra_height(container);
-        if let Some(mut img) = find_blip_embeds(container).find_map(|id| {
-            read_image_from_zip(id, ctx.rels, ctx.zip, ctx.media, display_w, display_h)
-        }) {
-            (img.layout_extra_height, img.layout_extra_top) = (extra_h, extra_top);
-            apply_pic_props(&mut img, container, ctx.theme);
+        if let Some(img) = inline_picture(container, ctx, display_w, display_h) {
             return Some(RunDrawingResult::Inline(img));
         }
 
@@ -1028,17 +1064,16 @@ pub(super) fn compute_drawing_info<R: Read + Seek>(
             }
 
             let (display_w, display_h) = extent_dimensions(container);
-            let (extra_h, extra_top) = inline_extra_height(container);
-            max_height = max_height.max(display_h + extra_h);
+            let (extra_h, _) = inline_extra_height(container);
+            let pic_h = if find_blip_embeds(container).next().is_some() {
+                inline_picture_extent(display_w, display_h).1
+            } else {
+                display_h
+            };
+            max_height = max_height.max(pic_h + extra_h);
 
             if image.is_none() {
-                image = find_blip_embeds(container).find_map(|id| {
-                    read_image_from_zip(id, ctx.rels, ctx.zip, ctx.media, display_w, display_h)
-                });
-                if let Some(ref mut img) = image {
-                    (img.layout_extra_height, img.layout_extra_top) = (extra_h, extra_top);
-                    apply_pic_props(img, container, ctx.theme);
-                }
+                image = inline_picture(container, ctx, display_w, display_h);
             }
         }
     }
@@ -1262,6 +1297,7 @@ pub(super) fn parse_object_floating_image<R: Read + Seek>(
         anchor_at_start: false,
         anchor_run: 0,
         on_line: false,
+        v_from_line: false,
     })
 }
 

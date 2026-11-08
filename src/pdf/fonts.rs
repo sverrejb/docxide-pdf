@@ -6,9 +6,9 @@ use crate::ConvertOptions;
 use crate::fonts::{FontContext, FontEntry, FontFiles, FontIndex, font_key_buf, register_font};
 use crate::model::{Block, Document, FieldCode, IfPart, ImageFormat, Paragraph, Run};
 
+use super::collect_paras;
 use super::header_footer::hf_paragraphs;
 use super::list_label::label_pieces;
-use super::{collect_paras, para_runs_with_textboxes};
 
 /// The font keys the comment pane draws with: the comment text in the body
 /// font, the "Commented [Rn]:" label in its bold variant. Aptos or Calibri
@@ -29,8 +29,10 @@ pub(super) fn by_pdf_name(fonts: &HashMap<String, FontEntry>) -> HashMap<&str, &
     fonts.values().map(|e| (e.pdf_name.as_str(), e)).collect()
 }
 
-pub(super) fn collect_all_runs(doc: &Document) -> Vec<&Run> {
-    let hf_runs = doc.sections.iter().flat_map(|s| {
+/// Every paragraph: body, table cells, headers and footers, notes, and the
+/// paragraphs of their textboxes at any depth.
+fn collect_all_paras(doc: &Document) -> Vec<&Paragraph> {
+    let hf_paras = doc.sections.iter().flat_map(|s| {
         [
             &s.properties.header_default,
             &s.properties.header_first,
@@ -42,39 +44,33 @@ pub(super) fn collect_all_runs(doc: &Document) -> Vec<&Run> {
         .into_iter()
         .filter_map(|hf| hf.as_ref())
         .flat_map(|hf| hf_paragraphs(hf))
-        .flat_map(|p| para_runs_with_textboxes(p))
+        .flat_map(|p| collect_paras(p))
     });
 
-    let footnote_runs = doc
+    let note_paras = doc
         .footnotes
         .values()
-        .flat_map(|fn_| fn_.paragraphs.iter())
-        .flat_map(|p| para_runs_with_textboxes(p));
-
-    let endnote_runs = doc
-        .endnotes
-        .values()
-        .flat_map(|en| en.paragraphs.iter())
-        .flat_map(|p| para_runs_with_textboxes(p));
+        .flat_map(|n| n.paragraphs.iter())
+        .chain(doc.endnotes.values().flat_map(|n| n.paragraphs.iter()))
+        .flat_map(|p| collect_paras(p));
 
     doc.sections
         .iter()
         .flat_map(|s| s.blocks.iter())
-        .flat_map(|block| -> Vec<&Run> {
+        .flat_map(|block| -> Vec<&Paragraph> {
             match block {
-                Block::Paragraph(para) => para_runs_with_textboxes(para),
+                Block::Paragraph(para) => collect_paras(para),
                 Block::Table(table) => table
                     .rows
                     .iter()
                     .flat_map(|row| row.cells.iter())
                     .flat_map(|cell| cell.all_paragraphs())
-                    .flat_map(|para| para_runs_with_textboxes(para))
+                    .flat_map(|para| collect_paras(para))
                     .collect(),
             }
         })
-        .chain(hf_runs)
-        .chain(footnote_runs)
-        .chain(endnote_runs)
+        .chain(hf_paras)
+        .chain(note_paras)
         .collect()
 }
 
@@ -550,7 +546,8 @@ pub(super) fn collect_and_register_fonts(
     let font_files = &FontFiles::default();
     let mut seen_fonts: HashMap<String, FontEntry> = HashMap::new();
     let mut font_order: Vec<String> = Vec::new();
-    let all_runs = collect_all_runs(doc);
+    let all_paras = collect_all_paras(doc);
+    let all_runs: Vec<&Run> = all_paras.iter().flat_map(|p| &p.runs).collect();
     let math_font = math_font_file(doc, &all_runs, font_index);
     let mut used_chars_per_font = collect_used_chars(doc, &all_runs, math_font.is_some());
 
@@ -582,8 +579,25 @@ pub(super) fn collect_and_register_fonts(
     }
 
     let mut key_buf = String::new();
+    // A line of only spaces and tabs, and the line a clearing break resumes
+    // with below a float, take their height from the paragraph mark's font,
+    // which no run may draw with (a Consolas mark after a Times New Roman
+    // space steps Consolas's 11.71pt at 10pt, not 12pt).
+    let sizing_marks: Vec<Run> = all_paras
+        .iter()
+        .filter(|p| {
+            p.clears_floats
+                || (p.runs.iter().all(|r| r.text.trim().is_empty())
+                    && p.runs.iter().any(|r| r.is_tab || !r.text.is_empty()))
+        })
+        .filter_map(|p| p.paragraph_mark_font_name.clone())
+        .map(|font_name| Run {
+            font_name,
+            ..Default::default()
+        })
+        .collect();
 
-    for run in &all_runs {
+    for run in all_runs.iter().copied().chain(&sizing_marks) {
         let key = font_key_buf(run, &mut key_buf);
         if !seen_fonts.contains_key(key) {
             let key_owned = key.to_string();

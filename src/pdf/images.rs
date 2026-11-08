@@ -373,6 +373,13 @@ fn register_xobject(image_xobjects: &mut ImageXObjects, xobj_ref: Ref) -> String
     pdf_name
 }
 
+fn register_effect(image_xobjects: &mut ImageXObjects, counter: &mut usize, xobj_ref: Ref) -> String {
+    *counter += 1;
+    let name = format!("Sh{}", *counter);
+    image_xobjects.named.push((name.clone(), xobj_ref));
+    name
+}
+
 /// Embed one image and return its XObject name. A cropped picture (`a:srcRect`) is
 /// wrapped in a Form XObject whose unit-square BBox clips the scaled and offset source,
 /// so every draw site keeps its plain `w 0 0 h x y cm /Im Do` and EMF forms nest as-is.
@@ -684,10 +691,7 @@ fn embed_shadow(
         mask_h,
     );
 
-    *shadow_counter += 1;
-    let name = format!("Sh{}", *shadow_counter);
-    image_xobjects.named.push((name.clone(), color_ref));
-    name
+    register_effect(image_xobjects, shadow_counter, color_ref)
 }
 
 /// Embed a reflection: re-embed the image data with a vertical gradient SMask.
@@ -776,10 +780,7 @@ fn embed_reflection(
         }
     }
 
-    *effect_counter += 1;
-    let name = format!("Sh{}", *effect_counter);
-    image_xobjects.named.push((name.clone(), refl_ref));
-    Some(name)
+    Some(register_effect(image_xobjects, effect_counter, refl_ref))
 }
 
 /// Build all effect XObjects for one image (shadow, glow, etc.).
@@ -843,10 +844,7 @@ fn embed_image_effects(
             mask_h,
         );
 
-        *effect_counter += 1;
-        let name = format!("Sh{}", *effect_counter);
-        image_xobjects.named.push((name.clone(), color_ref));
-        fx.inner_shadow = Some(name);
+        fx.inner_shadow = Some(register_effect(image_xobjects, effect_counter, color_ref));
     }
     if let Some(refl) = img.reflection.as_ref() {
         fx.reflection = embed_reflection(img, refl, image_xobjects, effect_counter, pdf, alloc);
