@@ -291,6 +291,14 @@ Open queue from the large-corpus and focus-fixture rounds:
   §2) gains but regresses 63 fixtures: the layout cursor itself has to sit
   on the grid, per page, cell and text box. Most remaining sub-point drift in
   the worst fixtures is this.
+  2026-11-08 (later): table and paragraph rules (band top edge on the grid, then the
+  writer stretch; body, header, footer, cells) and table-cell baselines now
+  follow it too; pictures are not stretched (case181). Open: text-box and
+  footnote text get neither grid nor stretch; table rules ignore w:vAlign's
+  shift; japanese_interlibrary_loan's cell rows are 0.25pt multiples in Word
+  (27.5, 28, 39.25) but 27.45, 27.85, 39.5 in ours, so the layout may quantize
+  row heights; hyphen-opening-guillemet's U+2011 falls back to Cambria Math
+  because our Times New Roman 5.01 lacks it (Word's has it).
 - **Mixed Latin/East Asian justification** (issue #142, Word online probes
   2026-10-28, `MixedJustify` in `pdf/layout.rs`): the slack spreads over every
   space and the gap after every East Asian character alike, each space +1/9
