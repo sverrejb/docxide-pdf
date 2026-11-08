@@ -5,6 +5,31 @@ Open work only. Finished rounds, their rules and evidence live in git history
 
 ## Open fixture leads
 
+**Regressions accepted with the PRs #154–#158 baselines (2026-11-09):** 827
+scores accepted (739 J up, 16 down, 39 new fixtures). The drops of 1pt J or
+more, with the cause where known. "Positions better" means the fixture now
+hits more of Word's baselines and rules within 0.05pt than before, but the
+lines fall differently on the 150 dpi pixel grid.
+- hyphen-opening-guillemet-nonbreaking-hyphen 84.6 → 70.8: our Times New
+  Roman 5.01 has no U+2011, so the line falls back to Cambria Math and grows;
+  Word's TNR has it. Environment font, not a rule.
+- toc-section-page-labels 80.6 → 73.0, case63 55.7 → 52.6 (SSIM 74.8),
+  door_air_cooling_unit_spec 75.2 → 72.2: desktop Word / Quartz references,
+  which use the 0.24pt local grid and no writer stretch. Not tuned for.
+- japanese_interlibrary_loan 71.8 → 66.6: Word's cell rows are 0.25pt
+  multiples (27.5, 28, 39.25), ours 27.45, 27.85, 39.5; everything below
+  y≈170 sits one grid step low. Does Word quantize row heights?
+- symbol-fallback-per-character 79.2 → 77.3: from the third line down we
+  sit one grid step (0.25pt) low. Word draws some fallback glyphs with plain
+  Cambria, which our chain (Arial → Cambria Math → Segoe UI Symbol) never
+  uses, so those lines get another height.
+- case146 83.8 → 77.1: positions better (3/7 vs 1/7); the rule at y 187
+  is 0.24pt high, a layout error that predates the grid work.
+- Positions better: nested-first-row-prefix300/330-cant1 99.9 → 95.3 (6/6
+  exact), text-box-table-compat14 94.4 → 90.8, autofit-cell-widths 88.4 →
+  85.6 (27/27 exact), japanese_medical_consultation_form 64.9 → 62.2,
+  isla_language_lesson_plan 69.5 → 67.4, polish_municipal_letter 77.8 → 76.2.
+
 **Engine-gap triage (2026-11-07):** cases where another engine beats us by
 ≥3pp J in the CI comparison (`git show origin/gh-pages:report.json`; same
 numbers as our baselines): 120 cases, ~104 families. Fixed and pushed
