@@ -1531,7 +1531,14 @@ pub(super) fn parse_runs<R: Read + Seek>(
         let rpr = wml(run_node, "rPr");
 
         let char_style_id_str = rpr.and_then(|n| wml_attr(n, "rStyle"));
-        let char_style = if is_anchor_hyperlink {
+        // A run styled with the character half of its paragraph's own linked
+        // style takes nothing from it: a PDF-converted heading whose
+        // character half says b=0 i=0 under a bold italic paragraph half
+        // prints bold italic in Word (and wraps a word earlier than ours did).
+        let linked = para_style
+            .and_then(|s| s.link.as_deref())
+            .is_some_and(|l| Some(l) == char_style_id_str);
+        let char_style = if is_anchor_hyperlink || linked {
             None
         } else {
             char_style_id_str.and_then(|id| ctx.styles.character_styles.get(id))

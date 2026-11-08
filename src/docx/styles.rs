@@ -220,6 +220,10 @@ pub(super) struct ParagraphStyle {
     pub(super) borders: super::ParagraphBorderSides,
     pub(super) shading: Option<[u8; 3]>,
     pub(super) based_on: Option<String>,
+    /// `w:link`: the character half of a linked style. A run in this
+    /// paragraph style whose rStyle names it takes nothing from it (own, never
+    /// inherited).
+    pub(super) link: Option<String>,
     pub(super) kern_threshold: Option<f32>,
     pub(super) position: Option<f32>,
     pub(super) tab_stops: Vec<TabStop>,
@@ -1174,6 +1178,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                 let frame_attrs = ppr.and_then(|ppr| wml(ppr, "framePr")).map(frame_attrs);
 
                 let based_on = wml_attr(style_node, "basedOn").map(|s| s.to_string());
+                let link = wml_attr(style_node, "link").map(str::to_string);
 
                 paragraph_styles.insert(
                     style_id.to_string(),
@@ -1220,6 +1225,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         borders,
                         shading,
                         based_on,
+                        link,
                         kern_threshold,
                         position,
                         tab_stops,
@@ -1541,6 +1547,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
             // field can be left behind (#144). Only the uninherited ones stay.
             inh.ind_over_numbering = ind_over_numbering;
             inh.based_on = s.based_on.take();
+            inh.link = s.link.take();
             inh.clear_tab_positions = std::mem::take(&mut s.clear_tab_positions);
             *s = inh;
         }
