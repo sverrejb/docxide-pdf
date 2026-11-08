@@ -454,22 +454,18 @@ fn below_bands(mut top: f32, need: f32, step: f32, bands: &[Band], col: (f32, f3
 /// examples, a paragraph starting above a page-wide picture keeps its first
 /// line there and moves the second below it (square) or by whole lines
 /// (tight, through). Judged where the lines are placed: the bands are the
-/// page's and column's they land on. A line also steps below a floating
-/// table `zone` (`below_zone`), until neither moves it: a line moved below
-/// the table can land in a band. Sets each line's `gap_after` and returns
-/// their sum.
-#[allow(clippy::too_many_arguments)]
+/// page's and column's they land on. Sets each line's `gap_after` and
+/// returns their sum.
 fn step_lines_below_bands(
     lines: &mut [TextLine],
     bands: &[Band],
-    zone: Option<&FloatZone>,
     col: (f32, f32),
     page_height: f32,
     first_top: f32,
     line_h: f32,
     metrics: (f32, f32),
 ) -> f32 {
-    if bands.is_empty() && zone.is_none() {
+    if bands.is_empty() {
         lines.iter_mut().for_each(|l| l.gap_after = 0.0);
         return 0.0;
     }
@@ -479,16 +475,7 @@ fn step_lines_below_bands(
         lines[i].gap_after = 0.0;
         let advance = layout::inline_line_advance(&lines[i], line_h, metrics);
         if i > 0 {
-            let mut clear = top;
-            loop {
-                let below = below_bands(clear, advance, advance, bands, col);
-                let below = zone.map_or(below, |z| below_zone(below, advance, z, page_height));
-                if below == clear {
-                    break;
-                }
-                clear = below;
-            }
-            let gap = clear - top;
+            let gap = below_bands(top, advance, advance, bands, col) - top;
             lines[i - 1].gap_after = gap;
             gaps += gap;
             top += gap;
@@ -2313,20 +2300,9 @@ fn table_blocks_lines(zone: &FloatZone, (col_x, col_w): (f32, f32)) -> bool {
 /// below it, exact and auto spacing alike). The block start is cleared
 /// before layout, so only a later line can cross the top here. Judged where
 /// the lines are placed: a paragraph moved to the next page by keepLines or
-/// widow control keeps its lines together there. Where a line `need` tall
-/// starting at `top` (from the page top) clears `zone`.
-fn below_zone(top: f32, need: f32, zone: &FloatZone, page_height: f32) -> f32 {
-    let bottom = page_height - zone.bottom_y;
-    if top < bottom && top + need > page_height - zone.top_y - 0.1 {
-        bottom
-    } else {
-        top
-    }
-}
-
-/// Steps a paragraph's later lines below the page's bands and below a
-/// floating table leaving no room beside them (`step_lines_below_bands`).
-/// Returns the sum of the lines' gaps.
+/// widow control keeps its lines together there. The table is one more band
+/// after the page's (`step_lines_below_bands`): a line moved below it can
+/// land in a band. Returns the sum of the lines' gaps.
 fn step_lines_below_floats(
     lines: &mut [TextLine],
     pb: &PageBuilder,
@@ -2336,8 +2312,13 @@ fn step_lines_below_floats(
     line_h: f32,
     metrics: (f32, f32),
 ) -> f32 {
-    let zone = pb.float_zone.as_ref().filter(|z| table_blocks_lines(z, col));
-    step_lines_below_bands(lines, &pb.frame_bands, zone, col, page_height, first_top, line_h, metrics)
+    let table = pb
+        .float_zone
+        .as_ref()
+        .filter(|z| table_blocks_lines(z, col))
+        .map(|z| Band::new(page_height - z.top_y - 0.1, page_height - z.bottom_y));
+    let bands: Vec<Band> = pb.frame_bands.iter().copied().chain(table).collect();
+    step_lines_below_bands(lines, &bands, col, page_height, first_top, line_h, metrics)
 }
 
 /// Scanline intersection: find the leftmost and rightmost x where polygon edges cross y.
