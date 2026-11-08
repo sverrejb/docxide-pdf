@@ -1023,6 +1023,9 @@ impl CellFloatingImageLayout {
 pub(super) struct CellParagraphLayout {
     pub(super) lines: Vec<TextLine>,
     pub(super) line_h: f32,
+    /// Draws the baselines on Word's grid; its page height is the drawing
+    /// page's.
+    pub(super) line_grid: Option<super::layout::LineGrid>,
     pub(super) font_size: f32,
     pub(super) ascender_ratio: f32,
     /// Picture-line ascent; exact spacing keeps the fixed baseline and pitch.
@@ -2065,9 +2068,39 @@ pub(super) fn compute_row_layouts(
                                 let (bottom_border, bottom_band) = super::helpers::bottom_border(para, next);
                                 total_h += bottom_band.1;
 
+                                let first_ascent = grid_snapped
+                                    .then(|| super::layout::grid_baseline_offset(runs, ctx.fonts, line_h))
+                                    .flatten()
+                                    .or_else(|| super::layout::boxed_line_ascent(
+                                        effective_ls,
+                                        line_h,
+                                        font_size,
+                                        tallest_lhr,
+                                        tallest_ar,
+                                        runs,
+                                        ctx.fonts,
+                                    ))
+                                    .unwrap_or(
+                                        font_size
+                                            * ascender_ratio
+                                            * super::helpers::auto_ascent_scale(effective_ls),
+                                    );
+                                let line_grid = super::layout::LineGrid {
+                                    snapped: grid_snapped,
+                                    ..super::layout::LineGrid::new(
+                                        0.0,
+                                        first_ascent,
+                                        effective_ls,
+                                        line_h,
+                                        font_size * tallest_lhr.unwrap_or(1.2),
+                                        image_line_ascent,
+                                        space_after,
+                                    )
+                                };
                                 items.push(CellContentItem::Paragraph(CellParagraphLayout {
                                     lines,
                                     line_h,
+                                    line_grid: Some(line_grid),
                                     font_size,
                                     // Places the first baseline only, which rises
                                     // with a box shrunk below single spacing.
@@ -2078,23 +2111,7 @@ pub(super) fn compute_row_layouts(
                                     // Grid-snapped lines centre in their cells as
                                     // in the body (japanese_hr's 9pt lines sit
                                     // 2.9pt into a 17.5pt cell).
-                                    ascender_ratio: grid_snapped
-                                        .then(|| super::layout::grid_baseline_offset(runs, ctx.fonts, line_h))
-                                        .flatten()
-                                        .or_else(|| super::layout::boxed_line_ascent(
-                                            effective_ls,
-                                            line_h,
-                                            font_size,
-                                            tallest_lhr,
-                                            tallest_ar,
-                                            runs,
-                                            ctx.fonts,
-                                        ))
-                                        .map_or(
-                                            ascender_ratio
-                                                * super::helpers::auto_ascent_scale(effective_ls),
-                                            |a| a / font_size,
-                                        ),
+                                    ascender_ratio: first_ascent / font_size,
                                     descender_ratio,
                                     picture_descent,
                                     image_line_ascent,

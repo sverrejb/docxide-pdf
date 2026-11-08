@@ -681,7 +681,10 @@ fn render_cell_content(
                     None,
                     cell_link_tagger(&mut tagger, cell_para),
                     None,
-                    None,
+                    para.line_grid.map(|g| super::layout::LineGrid {
+                        page_height: ctx.page_height.get(),
+                        ..g
+                    }),
                 );
                 if picture_clip {
                     content.restore_state();
@@ -1411,7 +1414,10 @@ fn render_partial_cell_content(
                     None,
                     cell_link_tagger(&mut tagger, cell_para),
                     None,
-                    None,
+                    para.line_grid.map(|g| super::layout::LineGrid {
+                        page_height: ctx.page_height.get(),
+                        ..g
+                    }),
                 );
                 if picture_clip {
                     content.restore_state();
