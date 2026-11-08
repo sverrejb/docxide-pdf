@@ -571,6 +571,7 @@ fn first_line_reach(
             ls,
             line_h,
             ascent,
+            auto_ascent_scale(ls),
             top_aligned,
         );
         first.pitch.unwrap_or(line_h)
