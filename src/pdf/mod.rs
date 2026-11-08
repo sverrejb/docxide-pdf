@@ -693,10 +693,7 @@ fn floating_table_band(
         return None;
     }
     let top = sp.page_height - fp.y;
-    let height: f32 = table_layout::compute_row_layouts(t, &col_widths, ctx, None)
-        .iter()
-        .map(|r| r.height)
-        .sum();
+    let height = table::hf_rows_height(t, &col_widths, ctx);
     Some(Band::new(
         top - fp.top_from_text,
         top + height + fp.bottom_from_text,
@@ -974,11 +971,7 @@ fn place_moved_first_line(
     let stood = (state.current_col, state.pb.page_count(), state.pb.slot_top);
     place_first_line(state, first, rest, sect_idx, sp, cols, text_width, ctx);
     if (state.current_col, state.pb.page_count()) == (stood.0, stood.1) && state.pb.slot_top != stood.2 {
-        let top = stood.2 + gap;
-        state
-            .pb
-            .pending_float_anchor
-            .get_or_insert((PendingAnchor { top, kind: AnchorKind::Floats }, None));
+        state.pb.pin_float_anchor(stood.2 + gap);
     }
 }
 
@@ -1076,7 +1069,7 @@ fn step_below_existing_bands(
             .pb
             .page_top_gap(sp, p.space_before, laid_out_after)
             .unwrap_or(laid_out_gap);
-        let own = (p.space_before - state.prev_space_after).max(0.0);
+        let own = own_space_before(p.space_before, state.prev_space_after);
         (
             line_h + if one_line { p.space_after } else { 0.0 },
             top + gap,
@@ -1090,7 +1083,7 @@ fn step_below_existing_bands(
         // pushed below a band stays above the band; vaccines' circles under
         // their banner); inline ones go with its line (Word examples: an inline
         // text box above a page band or a page-top table).
-        state.pb.pin_float_anchor_here(laid_out_after);
+        state.pb.pin_float_anchor(state.pb.slot_top - laid_out_after);
         // Below a band the previous paragraph's space after is gone and this
         // one's own space before stays (probe, 6pt after and 12pt before: the
         // line starts 6pt below the box), even across a page break (Word
@@ -2317,7 +2310,10 @@ fn step_lines_below_floats(
         .as_ref()
         .filter(|z| table_blocks_lines(z, col))
         .map(|z| Band::new(page_height - z.top_y - 0.1, page_height - z.bottom_y));
-    let bands: Vec<Band> = pb.frame_bands.iter().copied().chain(table).collect();
+    let Some(table) = table else {
+        return step_lines_below_bands(lines, &pb.frame_bands, col, page_height, first_top, line_h, metrics);
+    };
+    let bands: Vec<Band> = pb.frame_bands.iter().copied().chain([table]).collect();
     step_lines_below_bands(lines, &bands, col, page_height, first_top, line_h, metrics)
 }
 
@@ -2696,8 +2692,7 @@ impl PageBuilder {
     /// A paragraph moved below a band or a floating table: its floating
     /// paragraph-relative drawings still hang from where it stood, while inline
     /// ones go with its line.
-    fn pin_float_anchor_here(&mut self, prev_space_after: f32) {
-        let top = self.slot_top - prev_space_after;
+    fn pin_float_anchor(&mut self, top: f32) {
         self.pending_float_anchor
             .get_or_insert((PendingAnchor { top, kind: AnchorKind::Floats }, None));
     }
@@ -4364,6 +4359,7 @@ fn render_paragraph_block(
     // Only before a continuous section: before a new page the line could only
     // push itself onto a blank page, which Word doesn't do (indigenous_innovation
     // ends a page with its signature table and starts Schedule A on the next).
+    let after_float_table = follows_floating_table(section_blocks, block_idx);
     let keeps_line = block_idx == 0
         || keeps_section_mark_line(
             ctx.compat_mode,
@@ -4373,8 +4369,7 @@ fn render_paragraph_block(
         // A modern continuous section mark can occupy a side strip beside
         // a floating table. Full-width floats still absorb that mark line.
         || (ctx.compat_mode >= 15 && next_continuous
-            && block_idx.checked_sub(1).and_then(|i| section_blocks.get(i))
-                .is_some_and(|b| matches!(b, Block::Table(t) if t.position.is_some()))
+            && after_float_table
             && state.pb.float_zone.as_ref().is_some_and(|zone| {
                 zone.side_strip(col_geometry[state.current_col]) >= MIN_EMPTY_STRIP
             }));
@@ -4466,7 +4461,7 @@ fn render_paragraph_block(
     // document's ordinary first paragraph retains its own before-spacing.
     let empty_anchor_after_float = is_text_empty(&para.runs)
         && state.pb.is_at_page_top(sp)
-        && follows_floating_table(section_blocks, block_idx);
+        && after_float_table;
     let effective_space_before = if empty_anchor_after_float {
         0.0
     } else {
@@ -4528,15 +4523,11 @@ fn render_paragraph_block(
         ctx.fonts,
     );
 
-    let follows_floating_table = block_idx
-        .checked_sub(1)
-        .and_then(|i| section_blocks.get(i))
-        .is_some_and(|b| matches!(b, Block::Table(t) if t.position.is_some()));
     // A single leading clearing break keeps its empty anchor line beside the
     // immediately preceding floating table, but its visible text resumes below.
     // Clearing only after painting the paragraph misplaces that first text line.
     let leading_table_clear = if para.clears_floats
-        && follows_floating_table
+        && after_float_table
         && matches!(para.runs.as_slice(), [first, rest @ ..]
             if first.is_line_break && !rest.iter().any(|r| r.is_line_break))
         && para
@@ -4749,11 +4740,7 @@ fn render_paragraph_block(
             if np.image.is_some() || np.inline_chart.is_some() || np.page_break_before {
                 break;
             }
-            gaps[k - 1] = if ctx.additive_paragraph_spacing {
-                prev_after + np.space_before
-            } else {
-                prev_after.max(np.space_before)
-            };
+            gaps[k - 1] = self::inter_gap(prev_after, np.space_before, ctx);
             if let Some(fi) = np.floating_images.iter().find(|fi| qualifies(fi)) {
                 found = Some((fi, k));
                 break;
@@ -5218,7 +5205,7 @@ fn render_paragraph_block(
     // own extent.
     if (leading_table_clear
         || para.clears_floats
-            && follows_floating_table
+            && after_float_table
             && !short_empty_clear()
             && state.pb.float_table_extent.as_ref().is_some_and(|t| {
                 side_strip(
@@ -7543,10 +7530,7 @@ fn render_pass(
                 // With no side strip, the whole empty clearing paragraph sits
                 // below the floating table, including the line ended by br.
                 if matches!(block, Block::Paragraph(p) if p.clears_floats && p.runs.iter().all(|r| r.is_line_break || (r.text.is_empty() && !r.is_tab && r.inline_image.is_none())))
-                    && block_idx
-                        .checked_sub(1)
-                        .and_then(|i| section.blocks.get(i))
-                        .is_some_and(|b| matches!(b, Block::Table(t) if t.position.is_some()))
+                    && follows_floating_table(&section.blocks, block_idx)
                     && let Some(ref zone) = state.pb.float_zone
                 {
                     if zone.side_strip(col_geometry[state.current_col]) < MIN_EMPTY_STRIP
@@ -7692,7 +7676,7 @@ fn render_pass(
                                     .as_ref()
                                     .map_or(fz.bottom_y, |rect| rect.cleared_y(state.pb.slot_top));
                                 if fz.from_table && matches!(block, Block::Paragraph(_)) {
-                                    state.pb.pin_float_anchor_here(state.prev_space_after);
+                                    state.pb.pin_float_anchor(state.pb.slot_top - state.prev_space_after);
                                     // Below the table the previous paragraph's space
                                     // after is gone, as below a band; the paragraph
                                     // right after a floating table keeps all of its

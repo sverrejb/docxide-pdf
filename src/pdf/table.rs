@@ -2072,6 +2072,7 @@ pub(super) fn render_table(
     let col_widths = resolved_col_widths(table, sp, ctx, column_bounds);
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     let merge_spans = compute_merge_spans(table, &row_layouts);
+    let area = column_bounds.unwrap_or((sp.margin_left, sp.text_width()));
 
     let preceding_float_zone = table
         .position
@@ -2100,10 +2101,7 @@ pub(super) fn render_table(
             && fp.y - height < zone.top_y
         {
             fp.y = zone.bottom_y - fp.top_from_text;
-            let side_room = zone.side_strip(
-                column_bounds
-                    .unwrap_or((sp.margin_left, sp.page_width - sp.margin_left - sp.margin_right)),
-            );
+            let side_room = zone.side_strip(area);
             if zone.from_table && fp.v_anchor_text && fp.v_offset_pt >= 0.0
                 && side_room < super::MIN_EMPTY_STRIP
             {
@@ -2134,10 +2132,6 @@ pub(super) fn render_table(
         .as_ref()
         .is_some_and(|fp| fp.v_anchor_text && fp.v_offset_pt >= 0.0);
     let keep_with_anchor = is_floating && !flows_inline;
-    let area = column_bounds.unwrap_or((
-        sp.margin_left,
-        sp.page_width - sp.margin_left - sp.margin_right,
-    ));
     // A text-anchored table counts from below the previous paragraph's space
     // after; one placed against the page or margin keeps its place (Word
     // examples, fixture float-table-band-before: 24pt after the paragraph above

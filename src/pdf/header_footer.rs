@@ -930,7 +930,7 @@ pub(super) fn hf_table_bands(
             Block::Paragraph(_) => None,
         })
         .filter_map(|t| {
-            let pos = t.position.as_ref().filter(|pos| pos.v_anchor != "text")?;
+            let pos = super::page_anchored(t)?;
             let fp = super::FloatingTablePos::resolve(t, pos, sp, col.0, col.1, 0.0, ctx);
             let widths = table::hf_col_widths(t, ctx, col.1);
             let width: f32 = widths.iter().sum();
