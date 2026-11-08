@@ -2571,10 +2571,15 @@ pub(super) fn row_pieces<'a>(n_rows: usize, c: &Chunk<'a>) -> Vec<RowPiece<'a>> 
     pieces
 }
 
-/// Half of the widest top and bottom border band among a row's cells.
+/// Half of the widest top and bottom border band among a row's cells. A
+/// vertical merge's bottom border lies under its last row, not its first
+/// (polish_municipal's logo cell carries the table's double bottom border
+/// and must not deepen the title row).
 fn row_half_bands(row: &crate::model::TableRow) -> (f32, f32) {
     row.cells.iter().fold((0.0f32, 0.0f32), |(t, b), c| {
-        (t.max(c.borders.top.band() / 2.0), b.max(c.borders.bottom.band() / 2.0))
+        let top = if c.v_merge == VMerge::Continue { 0.0 } else { c.borders.top.band() };
+        let bottom = if c.v_merge == VMerge::Restart { 0.0 } else { c.borders.bottom.band() };
+        (t.max(top / 2.0), b.max(bottom / 2.0))
     })
 }
 
