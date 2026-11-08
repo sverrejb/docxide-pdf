@@ -60,6 +60,7 @@ struct FixturePages {
     gen_pages: Vec<PathBuf>,
     output_base: PathBuf,
     diffs_fresh: bool,
+    pdf_bytes: Option<u64>,
 }
 
 fn prepare_fixture(fixture_dir: &Path) -> Option<FixturePages> {
@@ -133,6 +134,7 @@ fn prepare_entry(
         gen_pages,
         output_base,
         diffs_fresh,
+        pdf_bytes: fs::metadata(&generated_pdf).ok().map(|m| m.len()),
     })
 }
 
@@ -291,6 +293,10 @@ fn visual_comparison() {
     let mut results: Vec<FixtureResult> = fixtures.par_iter().filter_map(score_fixture).collect();
     results.sort_by(|a, b| a.name.cmp(&b.name));
 
+    let pdf_bytes: HashMap<&str, Option<u64>> = fixtures
+        .iter()
+        .map(|f| (f.name.as_str(), f.pdf_bytes))
+        .collect();
     let mut baseline_updates: HashMap<String, common::Baselines> = HashMap::new();
     for r in &results {
         baseline_updates.insert(
@@ -300,6 +306,7 @@ fn visual_comparison() {
                 ssim: Some(r.ssim),
                 ref_pages: Some(r.ref_pages),
                 gen_pages: Some(r.gen_pages),
+                pdf_bytes: pdf_bytes[r.name.as_str()],
                 ..Default::default()
             },
         );

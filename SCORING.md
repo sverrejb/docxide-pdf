@@ -260,7 +260,7 @@ the handcrafted `cases/` fixtures.
 | Check | What it reports |
 |---|---|
 | Font validation | Fonts the DOCX asks for vs fonts in our PDF. A font that isn't installed is tolerated. It fails when the Helvetica fallback shows up although every requested font was found. |
-| File size | Our PDF's size ÷ Word's. Labelled a pass up to 10×. We also check size by hand on every change, because we aim to be no bigger than Word. |
+| File size | Our PDF's size ÷ Word's. Labelled a pass up to 10×. We also check size by hand on every change, because we aim to be no bigger than Word: the visual suite records each PDF's size as `pdf_bytes` in `latest_scores.json`, and `tools/compare_scores.py` totals it between two runs. |
 | Image count | Number of images per page, ours vs Word's. |
 | Page geometry | Page size, ours vs Word's, within 1 point. |
 | Speed (`convert_ms`) | Conversion time per fixture. Opt-in (`#[ignore]`). Flags a fixture 1.5× slower than its baseline, or a total 1.3× slower. |
