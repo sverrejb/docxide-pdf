@@ -39,21 +39,30 @@ justified gap (underlined-space-compat14-*). Open:
   above a page-anchored table keeps its place" (japanese_hr probes): find
   what separates the two before changing the reach rule in `mod.rs`.
 - `empty-margin-frame-long-prefix` (46.0): the frame's anchor is on page 2;
-  `empty_frame_table_bands` only reserves the box on the first page.
+  `empty_frame_table_bands` only reserves the box on the first page. Word
+  reserves it on the page where the anchor lands (2026-11-08), so the fix
+  needs to know which page the preceding table ends on before layout.
 - Double underline (scraped/double-underline 50.7): Word probes
   (`tests/output/koer/du/`, 2026-11-07) give each line ≈ q(0.6 × post
   thickness) (fits 8/8, factor unexplained), the first line at the single
   underline's post offset or less, a 1.0–1.25pt gap; Word also underlines
   a line's trailing space. We use 0.05 × size lines 0.12 × size down.
+  2026-11-08: 36 more points (Calibri/TNR/Arial, 8–48pt, regular and bold)
+  break the 0.6 factor; the best fit, ceil(round(post thickness)/2) on the
+  0.25pt grid, hits 31/36 (misses Calibri 48, Arial 16, TNR bold 8).
 - nested-floats-spaced-text-bottom-cell (40.4): the same two registration
-  tables in a vAlign=bottom cell still lay out inline (the float filter
-  wants top/centre alignment).
+  tables in a vAlign=bottom cell. Bottom cells now float like centred ones,
+  but Word sets the 12 spacer marks beside the floats (topic 2 lines higher)
+  and the second float 9pt right (its leftFromText); ungating
+  `spacers_clear_nested_registration` for bottom cells overlaps the floats
+  (tried 2026-11-08).
+- nested-floats-spaced-text-short-spacers: Word starts text in the narrow
+  strip beside the cell's floating tables; same special-case tangle as the
+  bottom-cell variant above (looked at 2026-11-08, not changed).
 - Header inline picture at 1.5 spacing (czech_village_budget, 0.6pt body
   drift): Word's picture line is 1.13pt taller than ours.
 - candidate_reference_check_form: rows drift 0.6pt then 1.6pt; Word paints
   shaded cells in strips (its tcMar bands), not one rect.
-- `nested-table-picture-width` (80.2): a nested row holding a picture
-  wider than its cell (166pt in ~158pt) is ~7pt taller in Word.
 - slovak_pedagogical_practice (22.8, body +2.9pt): removing its header
   o:hr run moves Word's body down 1.75pt and ours not at all; the run is
   Cambria 13 under a Korinna BT (missing) mark, so the mark font's
@@ -64,7 +73,8 @@ justified gap (underlined-space-compat14-*). Open:
 - italian_academic_cv_form: the last row fits by 0.26pt in ours, misses by
   ~0.3pt in Word (0.44pt drift above + row height); no single rule.
 - romanian_candidate_declaration_form_f2 header 3.6pt high;
-  scottish_fundraising_awards 1.3pt drift plus one re-wrap.
+  scottish_fundraising_awards (69.9 since cell picture lines take their
+  multiple-spacing leading): 0.3pt residual plus one re-wrap.
 - case60: bullets inside SmartArt shapes.
 - Rest of the 120-case gap list is untriaged: after the next CI comparison,
   re-diff `report.json` and drop the families fixed here.
@@ -113,6 +123,12 @@ alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
   online with left/justified paragraphs, a plain character versus a closing
   mark at the line end, and a quarter versus half em. This is
   chinese_costume's extra page.
+- **tokyo_welfare (50.6)**: the `linesAndChars` pitch is in (2026-11-08);
+  `snapToChars` (whole grid cells, 12pt text takes two) is not. Under
+  the char grid, a compat-14 left-aligned list line wraps 認 with 6pt free
+  where our squeeze of （ ） 、 keeps it, yet Word does squeeze the 「す。）」
+  line above (both kept under a plain `lines` grid). Turning the pull off
+  for the grid broke the second line; probe what separates them.
 - **japanese_land_development (35.6)**: Word puts no gap between "、" and a
   digit ("2、3", 10.5pt step), which our autospace rule now matches. But
   Word's text after "　2　" plus a plain half-width space starts 2.6pt
@@ -123,7 +139,11 @@ alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
   "Open Sans" in Segoe UI, by name: charset 00/01, family roman/swiss/auto and
   removing Open Sans' altName Arial change nothing (probes 2026-10-27). Needs
   Sylfaen and Segoe UI in the assets; DejaVu Sans in ~/Library/Fonts wins
-  locally anyway. Its page-4 picture now sits at its anchor paragraph's top
+  locally anyway. Word's cloud cache has both (FontCache/4/CloudFonts:
+  Sylfaen 5.08, Segoe UI 5.67 regular/bold/italic/bold-italic); vendoring them
+  alone moves no fixture (A/B 2026-11-08). FOLLOW-UP: decide whether to treat
+  fonts Word online lacks (DejaVu, Open Sans) as missing even when installed,
+  and find Word's rule for which names fall to Sylfaen (also "Helvetica Neue"). Its page-4 picture now sits at its anchor paragraph's top
   as in Word, but lower than Word's because our text above runs seven lines
   longer.
 - **uk_commercial_lease (27.6, 78 pages vs 79)**: on page 64 we fit 4 lines
@@ -145,8 +165,10 @@ alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
   18.0); Word puts the wrapNone box's empty anchor paragraph below the table
   (all six 10pt paragraphs follow it); `w:spacing w:val="-10"` in 7pt Meiryo
   draws -1.0pt per character in Word (-1 Tc), ours -0.5;
-  `balanceSingleByteDoubleByteWidth` is unimplemented (Meiryo spaces 0.507
-  em, ours 0.332; 10 fixtures set it); a paragraph bottom border ignores
+  `balanceSingleByteDoubleByteWidth`: its doubled `w:spacing` on full-width
+  characters is done for all-East-Asian body runs (2026-11-08); the half-width
+  space it widens is not (Meiryo spaces 0.507 em, ours 0.332; 10 fixtures set
+  it); a paragraph bottom border ignores
   `w:ind w:right="-903"`; the banner title sits 8.8pt high.
 - **swiss_materials (32.6)**: besides the page-2 break below, the VML
   watermark draws ~24% heavier and ~4pt left of Word's; the "Helvetica 55
@@ -197,7 +219,12 @@ alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
   between two floating tables Word stacks the second below the first
   (`tblOverlap="never"`, cell 13.75pt taller); we let them overlap. Cell
   bottom borders start 0.7pt left of the text in Word (tblCellMar left=0).
-- **case113/114**: "Body marker" 1.3pt left of Word's.
+- **case113/114**: "Body marker" 1.3pt left of Word's. Word probe
+  2026-11-08 (borders added): the floating table spans 71.8–431.4, the
+  text beside it starts at 432.42 (unbordered 432.93), ours at the table
+  edge; the offset follows the table width (60pt narrower → 60pt left). The
+  same ~1pt shows in advocacy's story text beside its picture tables. Find
+  the rule (device grid? border band?) before adding a gap.
 - **Documents without styles.xml**: our built-in defaults match desktop Word,
   not online (case135's cell line: desktop 633.22, us 633.20, online 633.70).
   Probe Word online's defaults for a docx without styles.xml.
@@ -218,15 +245,25 @@ alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
   wrap header text (Word probes). Open: whether compat 14 header floats also
   skip the full-width push in `float_text_push` (unprobed).
 - multi_font: needs Copperplate Gothic Light (in Word's cloud catalog; pick it
-  in Word's font menu to download); page 1 also runs ~14pt taller than
+  in Word's font menu to download; not on this Mac as of 2026-11-08, Word's
+  DFonts only ships the Bold); page 1 also runs ~14pt taller than
   Word's. korean_japanese needs HY헤드라인M and New Gulim (low value).
-- case37's reference shows five black boxes where its shapes are: re-export.
+- case37's reference shows five black boxes where its shapes are, and a fresh
+  export does too (2026-11-08): the fixture's SmartArt is hand-built, with an
+  empty data model and an empty layoutDef beside a full drawing cache. Word
+  rebuilds from data and layout (linking the cache via dsp:dataModelExt
+  changes nothing), so it draws its default five unstyled blocks. Rebuild the
+  fixture from a real Word SmartArt; re-exporting won't help.
 - case58 (3D effects) and case65 lack a reference.
 - The first 10 fixtures of the 2026-10-03 round were exported as
   `<stem>_<hex>.docx`, so FILENAME fields print that name (massachusetts
   footer); tool fixed, refs not re-exported.
 - case77's on-page label claims thaiDistribute gets distribute's treatment;
   Word disproved it. Fixing it means regenerating DOCX and reference.
+- **Kashida justification on Latin text** (case77 para 5): done 2026-11-08,
+  mediumKashida/highKashida break lines 10%/20% of the section's text width
+  short and still justify to the full measure (body paragraphs; header and
+  footnote contexts carry no reserve). Arabic text not probed.
 
 Open queue from the large-corpus and focus-fixture rounds:
 `current_focus/layout-accuracy.md` §5.
@@ -249,6 +286,10 @@ Open queue from the large-corpus and focus-fixture rounds:
   per row, SSIM 91.5), case69 (last line 15.00 vs 14.83 under
   `vAlign=center`), case33's list lines (16.115 vs 16.0),
   uk_commercial page 11's notes block (0.67pt short).
+  Snapping only the drawn baselines (2026-11-08, `current_focus/fundamentals.md`
+  §2) gains but regresses 63 fixtures: the layout cursor itself has to sit
+  on the grid, per page, cell and text box. Most remaining sub-point drift in
+  the worst fixtures is this.
 - **Mixed Latin/East Asian justification** (issue #142, Word online probes
   2026-10-28, `MixedJustify` in `pdf/layout.rs`): the slack spreads over every
   space and the gap after every East Asian character alike, each space +1/9
@@ -284,9 +325,6 @@ Open queue from the large-corpus and focus-fixture rounds:
   `.` only; `, ; : ! ?` assumed. Issue #142's "introduction." still wraps: with
   Word's glyph advances the line sits 0.4pt inside the cap, with ours 0.4pt
   outside — the glyph device-grid work decides it.
-- **Each space character is a justification stretch point**: polish_municipal's
-  double space is 7.44pt in Word = 2 × (3.0 + 0.72 slack); we add one slot for
-  the gap. Find justified lines with consecutive spaces across fixtures first.
 - **Mixed East Asian + Latin line height**: usep_handbook's checkbox lines (☐
   in MS Gothic, text in Calibri) are 1.53pt taller than Word's: we put
   Calibri's win descent under MS Gothic's ascent, which already carries the
@@ -330,8 +368,8 @@ Open queue from the large-corpus and focus-fixture rounds:
   U+2011 if a fixture shows it.
 - Distributed alignment: Latin lines with spaces spread across one gap too few
   (Word counts spaces as distributable characters; see the `ponytail:` note on
-  `char_justify_gaps`). Kashida justification changes Word's line breaks
-  (needs kashida metrics). thaiDistribute on Thai text is untested.
+  `char_justify_gaps`). Kashida on Arabic text is unprobed (Latin
+  kashida reserve done, see above). thaiDistribute on Thai text is untested.
 - `eastAsiaTheme="minorHAnsi"` (997 runs in the corpus) is ignored by
   `resolve_east_asia_font`. Resolving every slot (tried 2026-10-31 and again
   on top of the cs-font writer restart, 2026-11-03) changes 3–4 fixtures
@@ -372,11 +410,17 @@ Open queue from the large-corpus and focus-fixture rounds:
 ## Tables
 
 - **Autofit vs Word** (2026-10-05 x-drift survey): case45 (tblW 4000, tcW 4680
-  per cell) keeps Word's saved grid 2091/1909, we split 100/100, and its
-  tblpXSpec="right" copy sits one cell margin past the right margin in Word;
-  case61's 200-twip column is widened to fit its text by Word, and its table 2
+  per cell) keeps Word's saved grid 2091/1909, we split 100/100 (its
+  tblpXSpec="right" overhang is done, 2026-11-08);
+  case61's 200-twip column is widened to fit its text by Word (its "merged"
+  cells carry no gridSpan), and its table 2
   first column is 9.6pt too wide in ours; case6 and case52/53 whole columns
   shifted 7–11pt; air_pollution's dot lines fit 42 dots in Word, 41 in ours.
+- **Over-wide AutoFit cells** (2026-11-08, case100 probes): squeezed by room
+  above each column's longest word. erasmus_plus's three slightly-over tables
+  (cells ~446pt on 439pt) come out up to 1.6pt per column off Word's grid,
+  which spares some columns that rule would cut (−1.1 J); federal_procurement's
+  merged-cell table is within 1.5pt.
 - Some rows run slightly short (slovak_eu_directive ~0.03pt per row); a
   vMerge/colspan test table gets a far too narrow column.
 - Nested tables use neither compat rule for the outdent
@@ -657,10 +701,7 @@ Backlog (details in `current_focus/A11Y.md`):
   "(1)" labels of `rust.docx` sit 12pt below Word's. The MathType-generated
   WMF previews of its `both.docx` draw nothing in our output, where Word
   paints each as a picture (a bitmap record our WMF reader skips).
-- Issue #145 follow-ups: `table-style-centered`'s tables are 22pt narrower in
-  Word: a table style without `tblCellMar` in a document without a default
-  table style gets Word's 0.5pt side margins, we give the 5.4pt that come
-  with a style (`has_style_or_cell_mar`); a table style's `tblStylePr` (firstRow…) `vAlign`
+- Issue #145 follow-ups: a table style's `tblStylePr` (firstRow…) `vAlign`
   is not read (base `tcPr` and `jc` are); table styles are still walked per
   table (`style_chain`) instead of flattened at load like paragraph styles;
   the row-split predictor (`first_chunks_fit`) and `find_cell_split` encode

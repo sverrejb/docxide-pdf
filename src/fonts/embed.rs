@@ -275,7 +275,14 @@ pub(super) fn embed_truetype(
             .map(|m| (m.position as f32 / units, m.thickness as f32 / units))
             .filter(|&(_, t)| t > 0.0),
         east_asian: lm.east_asian,
+        avg_char_width: face
+            .raw_face()
+            .table(ttf_parser::Tag::from_bytes(b"OS/2"))
+            .and_then(|os2| Some(i16::from_be_bytes([*os2.get(2)?, *os2.get(3)?])))
+            .filter(|&w| w > 0)
+            .map(|w| (face.units_per_em(), w as u16)),
         plain_ascender_ratio: lm.plain_ascender_ratio,
+        leading_ratio: lm.leading_ratio,
         drop_slack_ratio: lm.drop_slack_ratio,
         char_to_gid,
         char_widths_1000,
@@ -527,6 +534,7 @@ pub(super) struct LineMetrics {
     /// in an East Asian font (`pdf::layout::run_line_metrics`).
     pub(super) plain_line_h_ratio: f32,
     pub(super) plain_ascender_ratio: f32,
+    pub(super) leading_ratio: f32,
     pub(super) drop_slack_ratio: f32,
     /// How far below a docGrid cell's centre Word puts the baseline, per em.
     pub(super) grid_baseline_shift: f32,
@@ -596,6 +604,7 @@ fn compute_line_metrics(face: &Face, units: f32) -> LineMetrics {
     };
     let drop_slack_ratio = (leading + 1.0) / units;
     LineMetrics {
+        leading_ratio: leading / units,
         drop_slack_ratio,
         line_h_ratio: east_asian.map_or(plain_line_h_ratio, |(h, _)| h),
         ascender_ratio: east_asian.map_or(plain_ascender_ratio, |(_, a)| a),

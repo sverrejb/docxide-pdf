@@ -5,6 +5,11 @@ q# Fixtures to skip during testing.
 # Too slow (many pages, dominates test runtime)
 case13
 
+# Hand-built SmartArt with empty data and layout parts: Word draws its five
+# default blocks, not the cached drawing (see roadmap). Until rebuilt from a
+# real Word SmartArt.
+case37
+
 # Scraped fixtures below Jaccard 20% or SSIM 75% thresholds
 #air_pollution_permit_form
 #brazilian_logistics_study

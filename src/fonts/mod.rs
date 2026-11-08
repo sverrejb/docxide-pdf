@@ -25,6 +25,8 @@ pub(crate) struct FontMetrics {
     /// Latin-rule metrics without the East Asian 1.3× leading (`embed::compute_line_metrics`).
     pub(crate) plain_line_h_ratio: f32,
     pub(crate) plain_ascender_ratio: f32,
+    /// External leading per em, above the win box (`embed::external_leading`).
+    pub(crate) leading_ratio: f32,
     /// How far a lowered run can drop in a top-aligned line before the line
     /// grows, per em (`embed::compute_line_metrics`).
     pub(crate) drop_slack_ratio: f32,
@@ -38,6 +40,8 @@ pub(crate) struct FontMetrics {
     /// OS/2 yStrikeoutPosition (above the baseline) and yStrikeoutSize, per em.
     pub(crate) strikeout: Option<(f32, f32)>,
     pub(crate) east_asian: bool,
+    /// See `FontEntry::avg_char_width`.
+    pub(crate) avg_char_width: Option<(u16, u16)>,
     pub(crate) char_to_gid: HashMap<char, u16>,
     pub(crate) char_widths_1000: HashMap<char, f32>,
     /// Each used character's ink above and below the baseline, per 1000 em.
@@ -71,6 +75,7 @@ pub(crate) struct FontEntry {
     /// empty paragraph marks (`pdf::layout::run_line_metrics`).
     pub(crate) plain_line_h_ratio: Option<f32>,
     pub(crate) plain_ascender_ratio: Option<f32>,
+    pub(crate) leading_ratio: Option<f32>,
     pub(crate) drop_slack_ratio: Option<f32>,
     /// See `embed::LineMetrics::grid_baseline_shift`.
     pub(crate) grid_baseline_shift: Option<f32>,
@@ -85,6 +90,11 @@ pub(crate) struct FontEntry {
     pub(crate) strikeout: Option<(f32, f32)>,
     /// See `embed::LineMetrics::east_asian`.
     pub(crate) east_asian: bool,
+    /// Units per em and OS/2 xAvgCharWidth, what Word scales a `w:w` run's
+    /// advances by (`FontEntry::scaled_word_width`).
+    pub(crate) avg_char_width: Option<(u16, u16)>,
+    /// The same for each character a fallback face draws, that face's.
+    pub(crate) fallback_avg_char_width: HashMap<char, Option<(u16, u16)>>,
     pub(crate) char_to_gid: Option<HashMap<char, u16>>,
     pub(crate) char_widths_1000: Option<HashMap<char, f32>>,
     /// See `FontMetrics::char_ink_1000`.
@@ -129,7 +139,10 @@ impl FontEntry {
             underline: None,
             strikeout: None,
             east_asian: false,
+            avg_char_width: None,
+            fallback_avg_char_width: Default::default(),
             plain_ascender_ratio: None,
+            leading_ratio: None,
             drop_slack_ratio: None,
             char_to_gid: None,
             char_widths_1000: None,
@@ -190,6 +203,73 @@ impl FontEntry {
             prev = Some(ch);
         }
         w
+    }
+
+    /// Width of `word` in a run Word scales horizontally (`w:w`, `text_scale`
+    /// in percent). Word scales each face by its average character width
+    /// rounded down to whole font units, ⌊text_scale × xAvgCharWidth / 100⌋ /
+    /// xAvgCharWidth, and rounds each scaled advance to whole font units.
+    /// Word examples (60-glyph words, left-aligned, 0.0025pt steps):
+    /// Arial "n" at 66, 80, 85, 90, 95, 120 and 150% is 751, 911, 968, 1024,
+    /// 1081, 1366 and 1709 units wide, Calibri at 85 and 90% 914 and 968,
+    /// Times New Roman 869 and 920, the same at 8, 11 and 14pt and in bold
+    /// and italic faces; scaling the advance alone is up to 1.15 units off.
+    /// Arial Bold (xAvgCharWidth 980) at 90 and 95% scales by exactly 882 and
+    /// 931, and a fallback glyph by its own face's metrics: Arial "⇒" from
+    /// Cambria Math at 85% is 1507 units, not Arial's 1506 (examples).
+    pub(crate) fn scaled_word_width(
+        &self,
+        word: &str,
+        font_size: f32,
+        kern: bool,
+        text_scale: f32,
+    ) -> f32 {
+        if text_scale == 100.0 {
+            return self.word_width(word, font_size, kern);
+        }
+        self.scaled_advances(word, font_size, kern, text_scale)
+            .map(|(advance, _)| advance)
+            .sum()
+    }
+
+    /// Each glyph's advance in points in a run scaled to `text_scale`
+    /// percent (`scaled_word_width`) and the kerning in it, a kerned pair's
+    /// adjustment on its first glyph.
+    pub(crate) fn scaled_advances<'a>(
+        &'a self,
+        word: &'a str,
+        font_size: f32,
+        kern: bool,
+        text_scale: f32,
+    ) -> impl Iterator<Item = (f32, f32)> + 'a {
+        let scale = text_scale / 100.0;
+        let percent = text_scale.round() as u64;
+        let mut chars = word.chars().peekable();
+        std::iter::from_fn(move || {
+            let ch = chars.next()?;
+            let k = match chars.peek() {
+                Some(&next) if kern => self.kern_1000(ch, next),
+                _ => 0.0,
+            };
+            let kerning = k * (font_size / 1000.0);
+            let metrics = if text_scale != 100.0 {
+                self.fallback_avg_char_width.get(&ch).copied().unwrap_or(self.avg_char_width)
+            } else {
+                None
+            };
+            let advance = match metrics {
+                Some((units, avg)) => {
+                    let avg = u64::from(avg);
+                    let scaled_avg = percent * avg / 100;
+                    let adv = (f64::from(self.char_width_1000(ch)) * f64::from(units) / 1000.0)
+                        .round() as u64;
+                    let scaled = (2 * adv * scaled_avg + avg) / (2 * avg);
+                    scaled as f32 * font_size / f32::from(units) + kerning * scale
+                }
+                None => (self.char_width_1000(ch) + k) * (font_size / 1000.0) * scale,
+            };
+            Some((advance, kerning))
+        })
     }
 
     pub(crate) fn kern_1000(&self, left: char, right: char) -> f32 {
@@ -435,10 +515,18 @@ fn word_substitute(name: &str) -> Option<&'static str> {
 /// own weight, ArialMT for the 37 plain runs of welsh_palliative_care_abstract_form
 /// and Arial-BoldMT for its one w:b run. An altName comes first: "Bradley Hand
 /// Bold" with altName Courier New is Courier New (pendulum_mechanics_oscillation_lab).
-fn family_of_face_name(name: &str) -> Option<&str> {
-    ["Bold Italic", "Bold", "Italic", "Regular"]
-        .iter()
-        .find_map(|style| name.strip_suffix(style)?.strip_suffix(' '))
+// The online export takes the face's weight and slant too: since the
+// welsh_palliative reference was re-exported online, its plain "Arial Bold"
+// runs draw in Arial-BoldMT (the desktop export had ArialMT).
+fn family_of_face_name(name: &str) -> Option<(&str, bool, bool)> {
+    [
+        ("Bold Italic", true, true),
+        ("Bold", true, false),
+        ("Italic", false, true),
+        ("Regular", false, false),
+    ]
+    .iter()
+    .find_map(|&(style, b, i)| Some((name.strip_suffix(style)?.strip_suffix(' ')?, b, i)))
 }
 
 fn known_font_alias(name: &str) -> Option<&'static str> {
@@ -834,7 +922,11 @@ pub(crate) fn register_font(
 
     let primary = primary_font_name(font_name);
 
-    let mut try_candidate = |name: &str| try_font(pdf, name, bold, italic, refs, alloc, ctx);
+    let style = std::cell::Cell::new((bold, italic));
+    let mut try_candidate = |name: &str| {
+        let (bold, italic) = style.get();
+        try_font(pdf, name, bold, italic, refs, alloc, ctx)
+    };
 
     // Word looks the run's whole name up: "Archivo;sans-serif" has no entry
     // even when "Archivo" has one.
@@ -904,7 +996,13 @@ pub(crate) fn register_font(
             log::info!("Font substitution: {primary} → altName \"{alt}\"");
             Some(m)
         })
-        .or_else(|| try_candidate(family_of_face_name(primary)?))
+        .or_else(|| {
+            let (family, b, i) = family_of_face_name(primary)?;
+            style.set((bold || b, italic || i));
+            let m = try_candidate(family);
+            style.set((bold, italic));
+            m
+        })
         .or_else(|| {
             let alias = known_font_alias(primary)?;
             let m = try_candidate(alias)?;
@@ -986,7 +1084,10 @@ pub(crate) fn register_font(
             underline: r.metrics.underline,
             strikeout: r.metrics.strikeout,
             east_asian: r.metrics.east_asian,
+            avg_char_width: r.metrics.avg_char_width,
+            fallback_avg_char_width: Default::default(),
             plain_ascender_ratio: Some(r.metrics.plain_ascender_ratio),
+            leading_ratio: Some(r.metrics.leading_ratio),
             drop_slack_ratio: Some(r.metrics.drop_slack_ratio),
             char_to_gid: Some(r.metrics.char_to_gid),
             char_widths_1000: Some(r.metrics.char_widths_1000),
@@ -1037,7 +1138,10 @@ pub(crate) fn register_font(
                 underline: None,
                 strikeout: None,
                 east_asian: false,
+                avg_char_width: None,
+                fallback_avg_char_width: Default::default(),
                 plain_ascender_ratio: None,
+                leading_ratio: None,
                 drop_slack_ratio: None,
                 char_to_gid: None,
                 char_widths_1000: None,
@@ -1086,6 +1190,56 @@ mod tests {
         assert_eq!(known_font_alias("Carlito"), Some("Calibri"));
     }
     use super::*;
+
+    #[test]
+    fn scaled_widths_match_word_probes() {
+        // "n" advances (units per 2048 em) and OS/2 xAvgCharWidth of Arial,
+        // Calibri, Times New Roman and Arial Bold; Word's scaled advances
+        // from examples.
+        for (adv, avg, scale, word_units) in [
+            (1139.0, 904, 66.0, 751),
+            (1139.0, 904, 80.0, 911),
+            (1139.0, 904, 85.0, 968),
+            (1139.0, 904, 90.0, 1024),
+            (1139.0, 904, 95.0, 1081),
+            (1139.0, 904, 120.0, 1366),
+            (1139.0, 904, 150.0, 1709),
+            (1076.0, 1067, 85.0, 914),
+            (1076.0, 1067, 90.0, 968),
+            (1024.0, 821, 85.0, 869),
+            (1024.0, 821, 90.0, 920),
+            (1251.0, 980, 90.0, 1126),
+            (1251.0, 980, 95.0, 1188),
+        ] {
+            let entry = FontEntry {
+                char_widths_1000: Some(HashMap::from([('n', adv * 1000.0 / 2048.0)])),
+                avg_char_width: Some((2048, avg)),
+                ..FontEntry::stub()
+            };
+            let w = entry.scaled_word_width("nnnn", 11.0, false, scale);
+            assert!((w - 4.0 * word_units as f32 * 11.0 / 2048.0).abs() < 1e-4, "{adv} {scale}");
+        }
+    }
+
+    #[test]
+    fn a_fallback_glyph_scales_by_its_own_face() {
+        // Arial text, "⇒" from Cambria Math (1773 units, xAvgCharWidth 1260):
+        // Word draws it 1507 units wide at 85%, by Arial's 904 it would be 1506.
+        let entry = FontEntry {
+            char_widths_1000: Some(HashMap::from([
+                ('n', 1139.0 * 1000.0 / 2048.0),
+                ('⇒', 1773.0 * 1000.0 / 2048.0),
+            ])),
+            avg_char_width: Some((2048, 904)),
+            fallback_avg_char_width: HashMap::from([('⇒', Some((2048, 1260)))]),
+            ..FontEntry::stub()
+        };
+        let w = entry.scaled_word_width("n⇒⇒", 11.0, false, 85.0);
+        assert!(
+            (w - (968.0 + 2.0 * 1507.0) * 11.0 / 2048.0).abs() < 1e-4,
+            "{w}"
+        );
+    }
 
     #[test]
     fn cjk_script_from_charset_then_name_then_text() {
@@ -1245,10 +1399,11 @@ mod tests {
             "arial.ttf"
         );
         assert_eq!(resolve("Liberation Sans", None), "arial.ttf");
-        // A face's full name resolves to its family, not to the missing-font fallback.
+        // A face's full name resolves to that face of its family, not to the
+        // missing-font fallback.
         assert_eq!(
             resolve("Arial Bold", Some(("Arial Bold", Roman, None))),
-            "arial.ttf"
+            "arialbd.ttf"
         );
         assert_eq!(
             resolve(

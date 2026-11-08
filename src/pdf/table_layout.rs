@@ -337,13 +337,10 @@ fn natural_widths(
                             continue;
                         };
                         let fs = run.font_size;
-                        let text = if run.caps {
-                            std::borrow::Cow::Owned(run.text.to_uppercase())
-                        } else {
-                            std::borrow::Cow::Borrowed(&run.text)
-                        };
-                        para_w +=
-                            word_width_for_run(entry, run, &text, fs, run.kerns_at(fs), 0.0, 1.0);
+                        let text = super::layout::caps_word(run, &run.text);
+                        para_w += super::layout::soft_split_width(&text, |t| {
+                            word_width_for_run(entry, run, t, fs)
+                        });
                     }
                     let end = (grid_col + span).min(ncols);
                     let current: f32 = natural[grid_col..end].iter().sum();
@@ -515,16 +512,12 @@ fn cell_min_content_width(
                 prev_char = None;
                 continue;
             };
-            let text = if run.caps {
-                std::borrow::Cow::Owned(run.text.to_uppercase())
-            } else {
-                std::borrow::Cow::Borrowed(&run.text)
-            };
+            let text = super::layout::caps_word(run, &run.text);
             let fs = run.font_size;
             // Same break opportunities as line layout: a CJK sentence holds
             // no spaces but may wrap after any ideograph.
             for (spaces, word) in super::layout::split_preserving_spaces(&text) {
-                let ww = word_width_for_run(entry, run, word, fs, run.kerns_at(fs), 0.0, 1.0);
+                let ww = word_width_for_run(entry, run, word, fs);
                 let continues = !table.fixed_layout
                     && spaces == 0
                     && prev_char
@@ -594,6 +587,17 @@ fn cell_preferred_widths(
     if widths.iter().any(|w| w.is_some_and(|w| w <= 0.0)) {
         return None;
     }
+    // A merged cell whose other columns are known settles its last unknown
+    // one first: federal_procurement's 3192 tw span over two unsized columns
+    // waits for the 5256 tw span beside a 3084 tw cell to fix the first.
+    while let Some((col, w)) = merged().find_map(|(cols, cell)| {
+        let mut unknown = cols.clone().filter(|&c| widths[c].is_none());
+        let col = unknown.next().filter(|_| unknown.next().is_none())?;
+        let known: f32 = cols.filter_map(|c| widths[c]).sum();
+        Some((col, (cell.width - known).max(0.0)))
+    }) {
+        widths[col] = Some(w);
+    }
     let mut widths: Vec<f32> = widths.into_iter().map(|w| w.unwrap_or(0.0)).collect();
     for (cols, cell) in merged() {
         let spanned: f32 = widths[cols.clone()].iter().sum();
@@ -609,7 +613,9 @@ fn cell_preferred_widths(
         .iter()
         .zip(&table.col_widths)
         .any(|(cell, grid)| (cell - grid).abs() > 0.5);
-    if !stale && !nested {
+    let avail = avail?;
+    let overflows = |widths: &[f32]| widths.iter().sum::<f32>() > avail + 0.5;
+    if !stale && !nested && !overflows(&widths) {
         return None;
     }
     for (w, min) in widths.iter_mut().zip(min_widths) {
@@ -631,9 +637,23 @@ fn cell_preferred_widths(
             widths[c] = widths[c].max(share);
         }
     }
-    avail
-        .is_some_and(|avail| widths.iter().sum::<f32>() <= avail + 0.5)
-        .then_some(widths)
+    // Cells too wide for the page give up width in proportion to their room
+    // above their longest word, nested table or cell margins (Word probes on
+    // case100: 9889 tw of cells on a 9357 tw page, every column within
+    // 0.6pt; autofit-saved-grid-auto-nested-address's empty column keeps
+    // its 10.8pt of margins).
+    if overflows(&widths) {
+        if nested {
+            return None;
+        }
+        let floor: Vec<f32> = min_widths
+            .iter()
+            .zip(hard_content_widths(table, true))
+            .map(|(m, h)| m.max(h).max(table.cell_margins.left + table.cell_margins.right))
+            .collect();
+        squeeze_to_width(&mut widths, &floor, avail);
+    }
+    Some(widths)
 }
 
 /// Each grid column's narrowest auto-fit width: its longest word, and at
@@ -656,6 +676,7 @@ pub(super) fn auto_fit_columns(
     fonts: &HashMap<String, FontEntry>,
     available_width: Option<f32>,
     fill_width: Option<f32>,
+    overhang: f32,
 ) -> Vec<f32> {
     let ncols = table.col_widths.len();
     if ncols == 0 {
@@ -670,7 +691,7 @@ pub(super) fn auto_fit_columns(
         && !table.fixed_layout
         && !table.grid_inferred
     {
-        return auto_fit_columns(table, fonts, None, None);
+        return auto_fit_columns(table, fonts, None, None, 0.0);
     }
 
     let cm = &table.cell_margins;
@@ -738,15 +759,17 @@ pub(super) fn auto_fit_columns(
     // table's cells must fit beside its indent: uk_commercial_lease's 8720 tw
     // of cells at tblInd 851 overflow the 9073 tw text width, and Word drew
     // its saved 8222 tw squeeze.
-    if (grid_uniform || !has_nested_table)
-        && let Some(widths) = cell_preferred_widths(
-            table,
-            fonts,
-            &min_widths,
-            fill_width.map(|w| w - table.table_indent).or(available_width),
-            fill_width.is_none(),
-        )
-    {
+    // A top-level table holding a nested one takes it as well: Word sized
+    // case100's host from its 5036/340/340/4173 tw cells, not its grid.
+    if let Some(widths) = cell_preferred_widths(
+        table,
+        fonts,
+        &min_widths,
+        fill_width
+            .map(|w| w - table.table_indent + overhang)
+            .or(available_width),
+        fill_width.is_none(),
+    ) {
         return widths;
     }
 
@@ -1006,6 +1029,8 @@ pub(super) struct CellParagraphLayout {
     pub(super) image_line_ascent: f32,
     pub(super) clip_inline_pictures: bool,
     pub(super) descender_ratio: f32,
+    /// What a picture line hangs below its picture (`picture_line_bottom`).
+    pub(super) picture_descent: f32,
     pub(super) font_substituted: bool,
     pub(super) alignment: Alignment,
     pub(super) space_before: f32,
@@ -1074,7 +1099,7 @@ impl CellParagraphLayout {
     pub(super) fn picture_metrics(&self) -> (f32, f32) {
         (
             self.image_line_ascent,
-            self.font_size * self.descender_ratio,
+            self.picture_descent,
         )
     }
 }
@@ -1166,7 +1191,7 @@ fn registration_table_extent(table: &Table, cell_text_w: f32, ctx: &RenderContex
     if x < 0.0 {
         return None;
     }
-    let mut widths = auto_fit_columns(table, ctx.fonts, Some(cell_text_w), None);
+    let mut widths = auto_fit_columns(table, ctx.fonts, Some(cell_text_w), None, 0.0);
     apply_nested_pct_width(table, &mut widths, cell_text_w);
     let strip =
         cell_text_w - x - widths.iter().sum::<f32>() - pos.left_from_text - pos.right_from_text;
@@ -1336,12 +1361,10 @@ fn plain_line_width(p: &crate::model::Paragraph, fonts: &HashMap<String, FontEnt
     let mut key = String::new();
     for run in &p.runs {
         let font = fonts.get(font_key_buf(run, &mut key))?;
-        let text = if run.caps {
-            std::borrow::Cow::Owned(run.text.to_uppercase())
-        } else {
-            std::borrow::Cow::Borrowed(run.text.as_str())
-        };
-        width += word_width_for_run(font, run, &text, run.font_size, run.kerns_at(run.font_size), 0.0, 1.0);
+        let text = super::layout::caps_word(run, &run.text);
+        width += super::layout::soft_split_width(&text, |t| {
+            word_width_for_run(font, run, t, run.font_size)
+        });
     }
     Some(width)
 }
@@ -1448,8 +1471,7 @@ pub(super) fn compute_row_layouts(
     let mut layouts: Vec<RowLayout> = table
         .rows
         .iter()
-        .enumerate()
-        .map(|(ri, row)| {
+        .map(|row| {
             let mut max_h: f32 = 0.0;
             let row_keeps_next = row.cells.iter().flat_map(|cell| &cell.content)
                 .any(|block| matches!(block, Block::Paragraph(p) if p.keep_next));
@@ -1461,6 +1483,10 @@ pub(super) fn compute_row_layouts(
                 (top.max(margins.top - cell.borders.top.band() / 2.0),
                  bottom.max(margins.bottom - cell.borders.bottom.band() / 2.0))
             });
+            // Every cell gets the row's widest band: master_thesis's arrow
+            // cell, unbordered beside a boxed "yes/no", shares its baseline and
+            // a two-line row grows by the box's 0.5pt (Word reference).
+            let (top_band, bottom_band) = row_half_bands(row);
             let cells: Vec<CellLayout> = row
                 .grid_cells()
                 .map(|(grid_col, span, cell)| {
@@ -1487,8 +1513,8 @@ pub(super) fn compute_row_layouts(
                     }
 
                     let effective_margins = CellMargins {
-                        top: row_top + cell.borders.top.band() / 2.0,
-                        bottom: row_bottom + cell.borders.bottom.band() / 2.0,
+                        top: row_top + top_band,
+                        bottom: row_bottom + bottom_band,
                         ..*cell.cell_margins.as_ref().unwrap_or(cm)
                     };
                     let ecm = &effective_margins;
@@ -1512,10 +1538,11 @@ pub(super) fn compute_row_layouts(
                     let mut prev_was_nested_table = false;
                     let mut negative_anchor_shift = 0.0f32;
                     let mut final_float_mark_hidden = false;
+                    // Bottom-aligned cells place text-anchored nested floats like
+                    // centred ones (nested_table_bottom_positive).
                     let top_aligned = matches!(cell.v_align, crate::model::CellVAlign::Top);
                     let text_above_floats =
                         text_fits_above_nested_floats(cell, cell_text_w, ctx.fonts, ctx.doc_line_spacing, hf_sub);
-                    let centered = matches!(cell.v_align, crate::model::CellVAlign::Center);
 
                     let block_count = cell.content.len();
                     // Modern Word drops the relocated anchor line only when
@@ -1579,13 +1606,14 @@ pub(super) fn compute_row_layouts(
                                 // padding spaces has the paragraph mark's line
                                 // metrics in Word, not the spaces' run format.
                                 let padding_mark;
-                                let runs = if para_content_h == 0.0
+                                let space_runs = runs;
+                                let padding = para_content_h == 0.0
                                     && runs.iter().any(|run| !run.text.is_empty())
                                     && runs.iter().all(|run| !run.is_tab
                                         && !run.is_line_break && run.math.is_none()
                                         && run.inline_image.is_none()
-                                        && run.text.bytes().all(|b| b == b' '))
-                                {
+                                        && run.text.bytes().all(|b| b == b' '));
+                                let runs = if padding {
                                     padding_mark = crate::model::Run {
                                         font_size: para.paragraph_mark_font_size.unwrap_or(10.0),
                                         font_name: para.paragraph_mark_font_name.clone().unwrap_or_default(),
@@ -1605,6 +1633,7 @@ pub(super) fn compute_row_layouts(
                                 // "                g" where g is larger).
                                 let metric_run = runs
                                     .iter()
+                                    .filter(|r| !r.vanish)
                                     .find(|r| {
                                         r.is_tab
                                             || r.text.is_empty()
@@ -1614,10 +1643,12 @@ pub(super) fn compute_row_layouts(
                                 // A tab-only empty cell paragraph is sized by its
                                 // paragraph mark, as in body text. Do not let an
                                 // inherited tab font enlarge a smaller explicit mark.
+                                // So is one of only hidden runs (`unsized_line_font`).
                                 let mark_run;
                                 let metric_run = if !runs.is_empty()
-                                    && runs.iter().all(|r| r.is_tab)
-                                    && para.tab_stops.iter().all(|tab| tab.leader.is_none())
+                                    && (runs.iter().all(|r| r.vanish)
+                                        || runs.iter().all(|r| r.is_tab)
+                                            && para.tab_stops.iter().all(|tab| tab.leader.is_none()))
                                     && let Some(size) = para.paragraph_mark_font_size
                                     && let Some(name) = &para.paragraph_mark_font_name
                                 {
@@ -1745,12 +1776,25 @@ pub(super) fn compute_row_layouts(
                                 // ascender_ratio = usWinDescent/units. Fallback
                                 // 0.2 pairs with the 1.2 default line ratio so
                                 // standard fonts get zero trailing leading.
+                                // A picture-only line keeps no descent unless a
+                                // picture is underlined (`picture_line_bottom`).
                                 let descender_ratio = if runs.iter().any(|r| r.inline_image.is_some())
-                                    && runs.iter().all(|r| !r.is_tab && r.text.trim().is_empty()) {
+                                    && runs.iter().all(|r| !r.is_tab && r.text.trim().is_empty())
+                                    && !runs.iter().any(|r| !r.vanish && r.underlined_picture()) {
                                     0.0
                                 } else {
                                     tallest_lhr.zip(tallest_ar)
                                         .map(|(lh, ar)| (lh - ar).max(0.0)).unwrap_or(0.2)
+                                };
+                                // Multiple spacing leads a picture line as in the body,
+                                // glyphless or not (scottish_fundraising's header logo);
+                                // an at-least minimum below the picture adds nothing
+                                // (dutch_government's logo cell).
+                                let multiple_spacing = matches!(effective_ls, crate::model::LineSpacing::Auto(_));
+                                let picture_descent = if multiple_spacing {
+                                    super::layout::picture_line_bottom(runs, para, ctx.fonts, effective_ls)
+                                } else {
+                                    font_size * descender_ratio
                                 };
                                 let exact_spacing =
                                     matches!(effective_ls, crate::model::LineSpacing::Exact(_));
@@ -1894,7 +1938,7 @@ pub(super) fn compute_row_layouts(
                                     if cell.hide_mark
                                         && block_idx == block_count - 1
                                         && lines.len() > 1
-                                        && lines.last().is_some_and(|l| l.chunks.is_empty())
+                                        && lines.last().is_some_and(TextLine::is_blank)
                                         && lines[lines.len() - 2].ends_with_break
                                     {
                                         lines.pop();
@@ -1902,10 +1946,11 @@ pub(super) fn compute_row_layouts(
                                     }
                                     total_h += lines
                                         .iter()
-                                        .map(|l| super::layout::inline_line_advance(l, line_h, (image_line_ascent, font_size * descender_ratio)))
+                                        .map(|l| super::layout::inline_line_advance(l, line_h, (image_line_ascent, picture_descent)))
                                         .sum::<f32>();
                                     lines
                                 } else {
+                                    let mut end_spaces = Vec::new();
                                     if para.paragraph_mark_vanish {
                                         // vanished paragraph mark: zero height
                                     } else if mark_hidden {
@@ -1928,11 +1973,30 @@ pub(super) fn compute_row_layouts(
                                             .filter(|r| r.is_line_break)
                                             .count();
                                         total_h += para_content_h
+                                            + if multiple_spacing { picture_descent } else { 0.0 }
                                             + br_count as f32 * line_h;
                                     } else {
                                         total_h += line_h;
+                                        if padding && ctx.ul_trail_space {
+                                            let width = (cell_text_w - para.indent_left - para.indent_right).max(0.0);
+                                            let lines = build_paragraph_lines(
+                                                space_runs,
+                                                ctx.fonts,
+                                                width,
+                                                0.0,
+                                                &HashMap::new(),
+                                                &HashMap::new(),
+                                                None,
+                                                None,
+                                                None,
+                                                ctx.cjk(false, para),
+                                            );
+                                            if lines.iter().any(|l| !l.end_spaces.is_empty()) {
+                                                end_spaces = lines;
+                                            }
+                                        }
                                     }
-                                    vec![]
+                                    end_spaces
                                 };
 
                                 let image_name = para.image.as_ref().and_then(|img| {
@@ -2035,6 +2099,7 @@ pub(super) fn compute_row_layouts(
                                             |a| a / font_size,
                                         ),
                                     descender_ratio,
+                                    picture_descent,
                                     image_line_ascent,
                                     clip_inline_pictures: exact_spacing,
                                     font_substituted,
@@ -2130,12 +2195,17 @@ pub(super) fn compute_row_layouts(
                                 }
                                 // The widths the nested table is drawn at, so a split's
                                 // line cursors index the lines it draws.
-                                let mut nested_cw = auto_fit_columns(nested_table, ctx.fonts, Some(cell_text_w), None);
+                                let mut nested_cw = auto_fit_columns(nested_table, ctx.fonts, Some(cell_text_w), None, 0.0);
                                 apply_nested_pct_width(nested_table, &mut nested_cw, cell_text_w);
                                 let nested_layouts =
                                     compute_row_layouts(nested_table, &nested_cw, ctx, hf_sub);
                                 let nested_h = nested_layouts.iter().map(|rl| rl.height).sum::<f32>();
                                 let plain_side_text = plain_text_fits_nested_strip(cell, block_idx, nested_table, &nested_cw, cell_text_w, ctx);
+                                // The room a float leaves on its right.
+                                let gap_beside = nested_table.position.as_ref().map_or(0.0, |pos| {
+                                    let float_x = match pos.h_position { HorizontalPosition::Offset(x) => x, _ => 0.0 };
+                                    cell_text_w - float_x - nested_cw.iter().sum::<f32>() - pos.right_from_text
+                                });
                                 let blank = |p: &crate::model::Paragraph| {
                                     p.runs.iter().all(|r| r.text.trim().is_empty()
                                         && !r.is_tab && !r.is_line_break && r.inline_image.is_none() && r.field_code.is_none())
@@ -2146,18 +2216,19 @@ pub(super) fn compute_row_layouts(
                                 // text: the text flows beside it (advocacy's picture
                                 // tables with their stories to the right).
                                 let mut floating_offset = nested_table.position.as_ref()
-                                    .filter(|pos| pos.v_anchor == "text" && (nested_table.rows.len() == 1 || plain_side_text) && (top_aligned || (centered && pos.v_offset_pt < 0.0) || (centered && block_idx == 0 && pos.v_offset_pt > 0.0)))
+                                    .filter(|pos| pos.v_anchor == "text" && (nested_table.rows.len() == 1 || plain_side_text) && (top_aligned || pos.v_offset_pt < 0.0 || (block_idx == 0 && pos.v_offset_pt > 0.0)))
                                     .filter(|pos| {
                                         let at_left_edge = matches!(pos.h_position, HorizontalPosition::Offset(v) if v == 0.0);
                                         let next_is_blank = matches!(
                                             cell.content.get(block_idx + 1),
                                             Some(Block::Paragraph(p)) if blank(p) && p.frame_props.is_none() && !p.paragraph_mark_vanish
                                         );
-                                        cell.content[block_idx + 1..].iter().all(|b| match b {
+                                        cell.content[block_idx + 1..].iter().enumerate().all(|(i, b)| match b {
                                             Block::Paragraph(p) => blank(p),
                                             Block::Table(t) => t.rows.len() == 1 && (
                                                 t.position.as_ref().is_some_and(|p| p.v_anchor == "text")
                                                 || (at_left_edge && t.position.is_none() && next_is_blank)
+                                                || (i == 0 && t.position.is_none() && t.col_widths.iter().sum::<f32>() <= gap_beside)
                                             ),
                                         }) || plain_side_text
                                             || text_above_floats
@@ -2182,6 +2253,17 @@ pub(super) fn compute_row_layouts(
                                         floating_x_offset = Some(nested_table.position.as_ref().unwrap().left_from_text);
                                     }
                                 }
+                                // An inline table straight after a left float that
+                                // leaves it room sits beside the float, level with its
+                                // top (nested-float-no-spacer-inline).
+                                if nested_table.position.is_none()
+                                    && matches!(items.last(), Some(CellContentItem::NestedTable { floating_offset: Some(_), .. }))
+                                    && left_float_bottom > total_h
+                                    && nested_cw.iter().sum::<f32>() <= left_float_right_gap
+                                {
+                                    floating_offset = Some(left_float_top - total_h - space_before);
+                                    floating_x_offset = Some(cell_text_w - left_float_right_gap);
+                                }
                                 // An inline nested table's outer border bands sit inside
                                 // the cell's flow, as a top-level table's do: Word starts
                                 // autofit-cell-widths-nested's inner top band where the
@@ -2198,9 +2280,7 @@ pub(super) fn compute_row_layouts(
                                         left_float_top = total_h + space_before + offset;
                                         left_float_indent = if plain_side_text { nested_cw.iter().sum::<f32>() + nested_table.position.as_ref().unwrap().right_from_text } else { 0.0 };
                                         first_positive_float = block_idx == 0 && nested_table.position.as_ref().is_some_and(|p| p.v_offset_pt >= 0.0);
-                                        let float_x = match nested_table.position.as_ref().unwrap().h_position { crate::model::HorizontalPosition::Offset(x) => x, _ => 0.0 };
-                                        left_float_right_gap = cell_text_w - float_x - nested_cw.iter().sum::<f32>()
-                                            - nested_table.position.as_ref().unwrap().right_from_text;
+                                        left_float_right_gap = gap_beside;
                                     }
                                 } else {
                                     total_h += space_before + top_band + nested_h + bottom_band;
@@ -2221,7 +2301,7 @@ pub(super) fn compute_row_layouts(
                                     && floating_offset.is_some_and(|offset| offset >= 0.0)
                                     && matches!(cell.content.get(block_idx+1),Some(Block::Paragraph(p)) if is_text_empty(&p.runs));
                                 // Positive offsets suppress the centered cell's trailing mark; negative offsets displace its anchor line.
-                                prev_was_nested_table = final_float_mark_hidden || floating_offset.is_none() || (centered && floating_offset.is_some_and(|offset| offset > 0.0))
+                                prev_was_nested_table = final_float_mark_hidden || floating_offset.is_none() || (!top_aligned && floating_offset.is_some_and(|offset| offset > 0.0))
                                     || suppress_negative_mark(block_idx, floating_offset)
                                     || (negative_anchor_shift > 0.0 && floating_offset.is_some());
                                 para_idx += 1;
@@ -2236,7 +2316,7 @@ pub(super) fn compute_row_layouts(
                     // already suppressed above via prev_was_nested_table.
                     let trailing_mark_after_table = items.len() >= 2
                         && matches!(items.get(items.len() - 2), Some(CellContentItem::NestedTable { floating_offset, .. })
-                            if final_float_mark_hidden || floating_offset.is_none() || (centered && floating_offset.is_some_and(|offset| offset > 0.0))
+                            if final_float_mark_hidden || floating_offset.is_none() || (!top_aligned && floating_offset.is_some_and(|offset| offset > 0.0))
                                 || suppress_negative_mark(block_count.saturating_sub(2), *floating_offset)
                                 || (negative_anchor_shift > 0.0 && floating_offset.is_some()))
                         && matches!(items.last(), Some(CellContentItem::Paragraph(p)) if p.lines.is_empty() && p.image_name.is_none() && p.floating_images.is_empty());
@@ -2270,28 +2350,20 @@ pub(super) fn compute_row_layouts(
             // border-to-border pitch (case15: 36.0).
             // The cells' top and bottom margins sit on top of it too, like the
             // bands in their insets: a 30pt row with 5pt margins is 40.5 in
-            // Word, and 33.15pt rows with 1.4pt margins are 36.25pt.
-            // A merged cell's bottom border closes its last row, not this one
-            // (a 1.5pt double bottom under a cell spanning two rows leaves
-            // the first row at its 28.35pt trHeight).
+            // Word, and polish_ministry's 33.15pt rows with 1.4pt ones 36.25.
             let insets = cells
                 .iter()
-                .zip(row.grid_cells())
-                .map(|(l, (grid_col, _, c))| {
-                    let continues = c.v_merge == VMerge::Restart && continues_below(table, ri, grid_col);
-                    let band = if continues { c.borders.bottom.band() / 2.0 } else { 0.0 };
-                    l.cm.top + l.cm.bottom - band
-                })
+                .map(|c| c.cm.top + c.cm.bottom)
                 .fold(0.0f32, f32::max);
             let height = match (row.height, row.height_exact) {
                 // An exact one gains only the bottom margin: 30pt with 5pt
                 // margins is 35.0, with only a 5pt top margin 30.0 (Word probes).
                 // The inset's half band is already in the exact pitch.
                 (Some(h), true) => {
+                    let bottom_band = row_half_bands(row).1;
                     h + cells
                         .iter()
-                        .zip(row.grid_cells())
-                        .map(|(l, (_, _, c))| l.cm.bottom - c.borders.bottom.band() / 2.0)
+                        .map(|l| l.cm.bottom - bottom_band)
                         .fold(0.0f32, f32::max)
                 }
                 (Some(h), false) => content_h.max(h + insets),
@@ -2322,7 +2394,10 @@ pub(super) fn compute_row_layouts(
                 continue;
             }
             let mut last = ri;
-            while continues_below(table, last, grid_col) {
+            while table.rows.get(last + 1).is_some_and(|next| {
+                next.grid_cells()
+                    .any(|(c, _, n)| c == grid_col && n.v_merge == VMerge::Continue)
+            }) {
                 last += 1;
             }
             let spanned: f32 = layouts[ri..=last].iter().map(|l| l.height).sum();
@@ -2335,14 +2410,6 @@ pub(super) fn compute_row_layouts(
         }
     }
     layouts
-}
-
-/// Whether the row below `ri` continues the merged cell in `grid_col`.
-fn continues_below(table: &Table, ri: usize, grid_col: usize) -> bool {
-    table.rows.get(ri + 1).is_some_and(|next| {
-        next.grid_cells()
-            .any(|(c, _, n)| c == grid_col && n.v_merge == VMerge::Continue)
-    })
 }
 
 /// Pre-compute how much extra height each vMerge Restart cell spans beyond its own row.
@@ -2524,18 +2591,25 @@ pub(super) fn row_pieces<'a>(n_rows: usize, c: &Chunk<'a>) -> Vec<RowPiece<'a>> 
     pieces
 }
 
+/// Half of the widest top and bottom border band among a row's cells. A
+/// vertical merge's first cell counts the merge's bottom border, except the
+/// table's own (polish_municipal's logo cell draws the table's double bottom
+/// border under row 2, which must not deepen the title row; covid_insomnia's
+/// and geneva's merges ending mid-table do count theirs).
+fn row_half_bands(row: &crate::model::TableRow) -> (f32, f32) {
+    row.cells.iter().fold((0.0f32, 0.0f32), |(t, b), c| {
+        let bottom = c.borders.own_bottom.unwrap_or(c.borders.bottom);
+        (t.max(c.borders.top.band() / 2.0), b.max(bottom.band() / 2.0))
+    })
+}
+
 /// Half of the widest outer border band at the table's top (first row) and
 /// bottom (last row): the part of its outer borders inside its flow height.
 pub(super) fn outer_half_bands(table: &Table) -> (f32, f32) {
-    let band = |row: Option<&crate::model::TableRow>, top: bool| {
-        row.map_or(0.0, |r| {
-            r.cells
-                .iter()
-                .map(|c| if top { c.borders.top.band() } else { c.borders.bottom.band() })
-                .fold(0.0f32, f32::max)
-        })
-    };
-    (band(table.rows.first(), true) / 2.0, band(table.rows.last(), false) / 2.0)
+    (
+        table.rows.first().map_or(0.0, |r| row_half_bands(r).0),
+        table.rows.last().map_or(0.0, |r| row_half_bands(r).1),
+    )
 }
 
 /// Height of a chunk; items without lines use their block height.
@@ -2943,7 +3017,7 @@ mod tests {
             let Block::Table(table) = &doc.sections[0].blocks[0] else {
                 panic!("table");
             };
-            let width = auto_fit_columns(table, &fonts, Some(150.0), None)[0];
+            let width = auto_fit_columns(table, &fonts, Some(150.0), None, 0.0)[0];
             assert!((width - (35.0 + 10.0 * levels as f32)).abs() < 0.001);
         }
     }
@@ -3070,10 +3144,10 @@ mod tests {
             panic!("nested table")
         };
         let fonts = HashMap::new();
-        let kept = auto_fit_columns(nested, &fonts, Some(260.0), None);
+        let kept = auto_fit_columns(nested, &fonts, Some(260.0), None, 0.0);
         assert_eq!(kept, nested.col_widths);
         assert!(kept.iter().sum::<f32>() > 230.0);
-        let squeezed = auto_fit_columns(nested, &fonts, Some(80.0), None);
+        let squeezed = auto_fit_columns(nested, &fonts, Some(80.0), None, 0.0);
         assert!(squeezed.iter().sum::<f32>() <= 80.001);
     }
 
@@ -3088,10 +3162,10 @@ mod tests {
             panic!("nested table")
         };
         let fonts = HashMap::new();
-        let kept = auto_fit_columns(nested, &fonts, Some(260.0), None);
-        assert_eq!(kept, auto_fit_columns(nested, &fonts, None, None));
+        let kept = auto_fit_columns(nested, &fonts, Some(260.0), None, 0.0);
+        assert_eq!(kept, auto_fit_columns(nested, &fonts, None, None, 0.0));
         assert!(kept.iter().sum::<f32>() > 230.0);
-        let squeezed = auto_fit_columns(nested, &fonts, Some(80.0), None);
+        let squeezed = auto_fit_columns(nested, &fonts, Some(80.0), None, 0.0);
         assert_eq!(squeezed, kept);
     }
 
@@ -3146,14 +3220,14 @@ mod tests {
             .push(Block::Table(make(vec![230.0], vec![230.0])));
         let fonts = HashMap::new();
         assert_eq!(
-            auto_fit_columns(&parent, &fonts, None, None),
+            auto_fit_columns(&parent, &fonts, None, None, 0.0),
             vec![250.0, 150.0]
         );
         parent.fixed_layout = true;
-        assert!(auto_fit_columns(&parent, &fonts, None, None)[0] < 240.0);
+        assert!(auto_fit_columns(&parent, &fonts, None, None, 0.0)[0] < 240.0);
         parent.fixed_layout = false;
         parent.auto_width = false;
-        assert!(auto_fit_columns(&parent, &fonts, None, None)[0] < 240.0);
+        assert!(auto_fit_columns(&parent, &fonts, None, None, 0.0)[0] < 240.0);
     }
 
     #[test]
@@ -3204,31 +3278,31 @@ mod tests {
         let mut table = make(vec![250.0, 150.0], vec![300.0, 300.0]);
         let fonts = HashMap::new();
         assert_eq!(
-            auto_fit_columns(&table, &fonts, None, None),
+            auto_fit_columns(&table, &fonts, None, None, 0.0),
             vec![250.0, 150.0]
         );
         table.col_widths = vec![235.6, 232.25];
         assert_eq!(
-            auto_fit_columns(&table, &fonts, None, None),
+            auto_fit_columns(&table, &fonts, None, None, 0.0),
             vec![235.6, 232.25]
         );
         table.col_widths = vec![250.0, 150.0];
         table.fixed_layout = true;
         assert_eq!(
-            auto_fit_columns(&table, &fonts, None, None),
+            auto_fit_columns(&table, &fonts, None, None, 0.0),
             vec![200.0, 200.0]
         );
         table.fixed_layout = false;
         table.auto_width = false;
         assert_eq!(
-            auto_fit_columns(&table, &fonts, None, None),
+            auto_fit_columns(&table, &fonts, None, None, 0.0),
             vec![200.0, 200.0]
         );
         table.auto_width = true;
         table.rows[0].cells[0].width = 250.0;
         table.rows[0].cells[1].width = 150.0;
         assert_eq!(
-            auto_fit_columns(&table, &fonts, None, None),
+            auto_fit_columns(&table, &fonts, None, None, 0.0),
             vec![250.0, 150.0]
         );
     }

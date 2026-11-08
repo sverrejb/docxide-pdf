@@ -319,7 +319,7 @@ fn valign_offset(v_align: CellVAlign, available: f32, content_h: f32) -> f32 {
 
 fn para_has_visible_content(para: &CellParagraphLayout) -> bool {
     !para.list_label.is_empty()
-        || (!para.lines.is_empty() && para.lines.iter().any(|l| !l.chunks.is_empty()))
+        || para.lines.iter().any(|l| !l.is_blank())
         || !para.floating_images.is_empty()
         || para.image_name.is_some()
         || para.has_textboxes
@@ -1185,10 +1185,16 @@ fn render_nested_table(
                 })
         })
         .map_or(0.0, |m| m.left);
+    // A positive tblpX moves it right of the cell's text start; a negative one
+    // leaves it there (negative-x-nested-x142-* vs x-142-*).
+    let x_offset = anchored.map_or(0.0, |p| match p.h_position {
+        crate::model::HorizontalPosition::Offset(x) => x.max(0.0),
+        _ => 0.0,
+    });
     let table_left = match alignment {
         TableAlignment::Center => available_x + (available_w - table_total_w) / 2.0,
         TableAlignment::Right => available_x + available_w - table_total_w,
-        TableAlignment::Left => available_x + table.table_indent - edge_shift,
+        TableAlignment::Left => available_x + table.table_indent + x_offset - edge_shift,
     };
 
     let merge_spans = compute_merge_spans(table, row_layouts);
@@ -2028,11 +2034,23 @@ pub(super) fn render_table(
     } else if let Some(col_w) = available_w {
         // A table in a newspaper column sizes like one on the page, then is
         // squeezed into the column (the nested-table path shrank it to content).
-        let mut w = auto_fit_columns(table, ctx.fonts, None, Some(fit_w));
+        let mut w = auto_fit_columns(
+            table,
+            ctx.fonts,
+            None,
+            Some(fit_w),
+            table.autofit_overhang(ctx.compat_mode),
+        );
         squeeze_to_width(&mut w, &min_content_widths(table, ctx.fonts), col_w);
         w
     } else {
-        auto_fit_columns(table, ctx.fonts, available_w, Some(fit_w))
+        auto_fit_columns(
+            table,
+            ctx.fonts,
+            available_w,
+            Some(fit_w),
+            table.autofit_overhang(ctx.compat_mode),
+        )
     };
     apply_pct_width(
         table,
@@ -2314,7 +2332,12 @@ pub(super) fn render_table(
     // (Pendulum #172/#173: the data table was landing on page 1 over list
     // item 10, which also pushed the following illustration off-page.)
     if keep_with_anchor && !row_layouts.is_empty() {
-        let eff_top = effective_slot_top(sp, pb.is_first_page_of_section, pb.page_count(), ctx);
+        let eff_top = effective_slot_top(
+            sp,
+            pb.is_first_page_of_section,
+            pb.page_num(ctx.sections),
+            ctx,
+        );
         let at_page_top = (pb.slot_top - eff_top).abs() < 1.0;
         let available = pb.slot_top - *effective_margin_bottom;
         let total_h: f32 = row_layouts.iter().map(|r| r.height).sum();
@@ -2379,7 +2402,12 @@ pub(super) fn render_table(
             layout.cells.len(),
             pb.slot_top
         );
-        let eff_top = effective_slot_top(sp, pb.is_first_page_of_section, pb.page_count(), ctx);
+        let eff_top = effective_slot_top(
+            sp,
+            pb.is_first_page_of_section,
+            pb.page_num(ctx.sections),
+            ctx,
+        );
         let eff_bottom = *effective_margin_bottom + row_fn_extra;
         let at_page_top = (pb.slot_top - eff_top).abs() < 1.0;
         let available_h = pb.slot_top - eff_bottom;
@@ -2492,17 +2520,13 @@ pub(super) fn render_table(
         // A large first-page header can leave less body room than the next
         // page. Do not override trHeight's split minimum just because the
         // row is taller than this page when it fits intact on the next one.
-        let taller_than_page = row_h > page_content_h
-            && (at_page_top
-                || row_h
-                    > effective_slot_top(sp, false, pb.page_count() + 1, ctx)
-                        - super::header_footer::compute_effective_margin_bottom(
-                            sp,
-                            false,
-                            pb.page_count() + 1,
-                            ctx,
-                        )
-                        - row_fn_extra);
+        let next_page_room = || {
+            let page = pb.page_num(ctx.sections) + 1;
+            effective_slot_top(sp, false, page, ctx)
+                - super::header_footer::compute_effective_margin_bottom(sp, false, page, ctx)
+                - row_fn_extra
+        };
+        let taller_than_page = row_h > page_content_h && (at_page_top || row_h > next_page_room());
         // Modern Word retries cantSplit rows at a fresh page, then splits
         // content taller than that page. Legacy Word clips such rows instead.
         let oversized_cant_split = ctx.compat_mode >= 15
@@ -2512,16 +2536,7 @@ pub(super) fn render_table(
         // oversized rows can split without repeatedly moving forward.
         let minimum_fits_later = !at_page_top
             && layout.split_min.is_some_and(|minimum| {
-                minimum > available_h
-                    && minimum
-                        <= effective_slot_top(sp, false, pb.page_count() + 1, ctx)
-                            - super::header_footer::compute_effective_margin_bottom(
-                                sp,
-                                false,
-                                pb.page_count() + 1,
-                                ctx,
-                            )
-                            - row_fn_extra
+                minimum > available_h && minimum <= next_page_room()
             });
         let must_split = (taller_than_page || keep_with_anchor)
             && !minimum_fits_later
@@ -2560,8 +2575,12 @@ pub(super) fn render_table(
             // fits on the fresh page.  If repeating headers consumed enough
             // space that the row no longer fits, split it across pages
             // instead of rendering blindly (which would overflow the footer).
-            let new_eff_top =
-                effective_slot_top(sp, pb.is_first_page_of_section, pb.page_count(), ctx);
+            let new_eff_top = effective_slot_top(
+                sp,
+                pb.is_first_page_of_section,
+                pb.page_num(ctx.sections),
+                ctx,
+            );
             let new_eff_bot = *effective_margin_bottom;
             let new_available = pb.slot_top - new_eff_bot;
             let new_page_h = new_eff_top - new_eff_bot;
@@ -2712,14 +2731,32 @@ pub(super) fn render_table(
     }
 }
 
-pub(super) fn compute_hf_table_height(table: &Table, ctx: &RenderContext, content_w: f32) -> f32 {
-    // A header's auto-fit table sizes to its content like a body table
-    // (issue #142: Word shrinks the same two-word table to 64pt in both
-    // places; without the fill target the header one kept its 396pt grid).
-    let mut col_widths = auto_fit_columns(table, ctx.fonts, None, Some(content_w));
+/// The column widths a header or footer table is drawn with in a text column
+/// `content_w` wide. A header's auto-fit table sizes to its content like a
+/// body table (issue #142: Word shrinks the same two-word table to 64pt in
+/// both places; without the fill target the header one kept its 396pt grid).
+pub(super) fn hf_col_widths(table: &Table, ctx: &RenderContext, content_w: f32) -> Vec<f32> {
+    let mut col_widths = auto_fit_columns(
+        table,
+        ctx.fonts,
+        None,
+        Some(content_w),
+        table.autofit_overhang(ctx.compat_mode),
+    );
     apply_pct_width(table, &mut col_widths, content_w, ctx.compat_mode);
-    let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
-    row_layouts.iter().map(|r| r.height).sum()
+    col_widths
+}
+
+pub(super) fn compute_hf_table_height(table: &Table, ctx: &RenderContext, content_w: f32) -> f32 {
+    hf_rows_height(table, &hf_col_widths(table, ctx, content_w), ctx)
+}
+
+/// A header or footer table's rows' height at its `col_widths`.
+pub(super) fn hf_rows_height(table: &Table, col_widths: &[f32], ctx: &RenderContext) -> f32 {
+    compute_row_layouts(table, col_widths, ctx, None)
+        .iter()
+        .map(|r| r.height)
+        .sum()
 }
 
 pub(super) fn render_header_footer_table(
@@ -2737,9 +2774,7 @@ pub(super) fn render_header_footer_table(
     links: &mut Vec<LinkAnnotation>,
     is_header: bool,
 ) {
-    let content_w = sp.page_width - sp.margin_left - sp.margin_right;
-    let mut col_widths = auto_fit_columns(table, ctx.fonts, None, Some(content_w));
-    apply_pct_width(table, &mut col_widths, content_w, ctx.compat_mode);
+    let col_widths = hf_col_widths(table, ctx, sp.text_width());
     let hf_sub = HfSubstitution {
         page_num,
         total_pages,
@@ -2825,7 +2860,13 @@ impl<'t> TextboxTable<'t> {
         let mut col_widths = if table.fixed_layout {
             table.col_widths.clone()
         } else {
-            let mut widths = auto_fit_columns(table, ctx.fonts, None, Some(area_w));
+            let mut widths = auto_fit_columns(
+                table,
+                ctx.fonts,
+                None,
+                Some(area_w),
+                table.autofit_overhang(ctx.compat_mode),
+            );
             if table.auto_width {
                 // Columns keep their longest word and widest picture: a table
                 // that cannot shrink enough runs past the area.
