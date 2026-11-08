@@ -243,7 +243,12 @@ alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
   in Word's font menu to download; not on this Mac as of 2026-11-08, Word's
   DFonts only ships the Bold); page 1 also runs ~14pt taller than
   Word's. korean_japanese needs HY헤드라인M and New Gulim (low value).
-- case37's reference shows five black boxes where its shapes are: re-export.
+- case37's reference shows five black boxes where its shapes are, and a fresh
+  export does too (2026-11-08): the fixture's SmartArt is hand-built, with an
+  empty data model and an empty layoutDef beside a full drawing cache. Word
+  rebuilds from data and layout (linking the cache via dsp:dataModelExt
+  changes nothing), so it draws its default five unstyled blocks. Rebuild the
+  fixture from a real Word SmartArt; re-exporting won't help.
 - case58 (3D effects) and case65 lack a reference.
 - The first 10 fixtures of the 2026-10-03 round were exported as
   `<stem>_<hex>.docx`, so FILENAME fields print that name (massachusetts
