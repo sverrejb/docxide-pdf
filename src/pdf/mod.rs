@@ -113,6 +113,14 @@ fn lifted_frame(block: &Block) -> Option<&FrameProperties> {
     Some(fp)
 }
 
+/// A frame wholly beside the text area, which no text can wrap around
+/// (3ec631ca50's address block in the right margin).
+fn frame_beside_text(fp: &FrameProperties, sp: &SectionProperties) -> bool {
+    let (text_x, text_w) = (sp.margin_left, sp.text_width());
+    let x = resolve_h_position(fp.h_relative_from, &fp.h_position, fp.width, sp, text_x, text_w, text_w);
+    fp.width > 0.0 && (x >= text_x + text_w || x + fp.width <= text_x)
+}
+
 /// A wrapping paragraph-anchored frame with an explicit height and a nonzero
 /// offset, or a drop cap: it keeps its own coordinates, and text wraps around it.
 fn paragraph_offset_frame(fp: &FrameProperties) -> bool {
@@ -3467,7 +3475,11 @@ fn render_paragraph_block(
 ) -> bool {
     let prev_between_below = std::mem::take(&mut state.prev_between_below);
     let reflowed = std::mem::take(&mut state.reflowed);
-    if is_empty_wrapping_frame(para) {
+    // One wholly beside the text keeps its (empty) paragraph, which Word
+    // tags (empty-margin-frame-off-page).
+    if is_empty_wrapping_frame(para)
+        && !para.frame_props.as_ref().is_some_and(|fp| frame_beside_text(fp, sp))
+    {
         state.global_block_idx += 1;
         return true;
     }
