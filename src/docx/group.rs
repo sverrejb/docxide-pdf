@@ -15,9 +15,9 @@ use crate::model::{
 };
 
 use super::images::{
-    RunDrawingResult, anchor_z_order, anchored_to_line, extent_dimensions, find_blip_embeds,
-    parse_anchor_position, parse_wrap_type, read_image_from_zip, vml_imagedata_props, vml_z_order,
-    wrap_dist_left_right, wrap_dist_top_bottom,
+    RunDrawingResult, anchor_z_order, anchored_to_line, extent_dimensions, parse_anchor_position,
+    parse_wrap_type, read_image_from_zip, vml_imagedata_props, vml_z_order, wrap_dist_left_right,
+    wrap_dist_top_bottom,
 };
 use super::textbox::{
     find_sp_pr, parse_connector_shape_node, parse_vml_box_style, parse_vml_line, parse_wsp_shape,
@@ -400,9 +400,7 @@ fn emit_pic<R: Read + Seek>(
     let (x, y) = t.apply(xfrm.off.0, xfrm.off.1);
     let (w, h) = t.scale(xfrm.ext.0, xfrm.ext.1);
 
-    if let Some(img) =
-        find_blip_embeds(pic).find_map(|id| read_image_from_zip(id, ctx.rels, ctx.zip, w, h))
-    {
+    if let Some(img) = super::images::blip_image(pic, ctx, w, h) {
         // ponytail: pics flattened from an *inline* canvas don't pick up the
         // paragraph's left indent (FloatingImage::on_line only moves the
         // vertical anchor).
@@ -542,7 +540,7 @@ fn walk_vml_group<R: Read + Seek>(
             .find(|n| n.has_tag_name((VML_NS, "imagedata")))
             && let Some(mut img) = data
                 .attribute((REL_NS, "id"))
-                .and_then(|id| read_image_from_zip(id, ctx.rels, ctx.zip, w, h))
+                .and_then(|id| read_image_from_zip(id, ctx.rels, ctx.zip, ctx.media, w, h))
         {
             (img.src_rect, img.lum) = vml_imagedata_props(data);
             out.push(RunDrawingResult::Floating(group_image(img, x, y, base)));

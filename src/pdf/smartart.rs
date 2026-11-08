@@ -220,8 +220,7 @@ pub(super) fn render_smartart(
         }
 
         if let Some(ref img) = shape.image_fill {
-            let key = std::sync::Arc::as_ptr(&img.data) as usize;
-            if let Some(pdf_name) = image_names.get(&key) {
+            if let Some(pdf_name) = image_names.get(&img.id) {
                 content.save_state();
                 draw_shape_path(
                     content,
