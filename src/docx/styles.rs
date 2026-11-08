@@ -199,6 +199,9 @@ pub(super) struct ParagraphStyle {
     pub(super) space_before_autospacing: Option<bool>,
     pub(super) space_after_autospacing: Option<bool>,
     pub(super) alignment: Option<Alignment>,
+    /// `kashida_fraction` of the `jc` that sets `alignment`, so the two
+    /// inherit together.
+    pub(super) kashida: Option<f32>,
     pub(super) contextual_spacing: Option<bool>,
     pub(super) keep_next: Option<bool>,
     pub(super) keep_lines: Option<bool>,
@@ -498,6 +501,19 @@ impl StylesInfo {
             .filter(|id| self.paragraph_styles.contains_key(*id))
             .unwrap_or(&self.default_paragraph_style_id);
         (id, self.paragraph_styles.get(id))
+    }
+}
+
+/// The share of the section's text width a kashida `jc` keeps free when
+/// breaking lines (Word probes 2026-11-08, Latin text: mediumKashida breaks
+/// as if 10% of the text width were gone, highKashida 20%, lowKashida none;
+/// indents and font size don't change it, and lines still justify to the
+/// full measure). ponytail: Arabic text not probed.
+pub(super) fn kashida_fraction(val: &str) -> f32 {
+    match val {
+        "mediumKashida" => 0.1,
+        "highKashida" => 0.2,
+        _ => 0.0,
     }
 }
 
@@ -1103,6 +1119,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                     .unwrap_or_default();
 
                 let alignment = ppr.and_then(|ppr| wml_attr(ppr, "jc")).map(parse_alignment);
+                let kashida = ppr.and_then(|ppr| wml_attr(ppr, "jc")).map(kashida_fraction);
 
                 // Kept as Option so a basedOn chain inherits them and an explicit
                 // w:val="0" still turns an ancestor's off.
@@ -1178,6 +1195,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         space_before_autospacing,
                         space_after_autospacing,
                         alignment,
+                        kashida,
                         contextual_spacing,
                         keep_next,
                         keep_lines,
@@ -1435,6 +1453,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     color,
                     char_spacing,
                     alignment,
+                    kashida,
                     space_before,
                     space_after,
                     space_before_autospacing,

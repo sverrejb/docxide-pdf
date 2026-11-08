@@ -127,6 +127,10 @@ pub struct CellBorders {
     /// resolved into `top` (None when unchanged): a row continued on a new
     /// page draws this one at the page top.
     pub own_top: Option<CellBorder>,
+    /// A vertical merge that runs to the table's last row keeps its first
+    /// cell's own bottom here while `bottom` takes the table's to draw (None
+    /// otherwise): the row it starts in is sized by its own.
+    pub own_bottom: Option<CellBorder>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -204,6 +208,31 @@ pub struct Table {
 impl Table {
     pub fn first_cell(&self) -> Option<&TableCell> {
         self.rows.first()?.cells.first()
+    }
+
+    /// How far an AutoFit table may reach past the text area before Word
+    /// squeezes it: before compat 15 by its outdent on the left and its last
+    /// cell's right margin on the right (parish_housing's 9854 tw tables on a
+    /// 9639 tw page stay whole; Word probes on case100 squeeze its 0-margin
+    /// table to the text width, a 108 tw margin lets it 5.4pt past). Word
+    /// 2013+ keeps the outer border bands inside the text area instead
+    /// (cote_dazur: 0.5pt borders, 9062 tw of table on a 9072 tw page).
+    pub fn autofit_overhang(&self, compat_mode: u32) -> f32 {
+        if compat_mode >= 15 {
+            let left = self.first_cell().map_or(0.0, |c| c.borders.left.band());
+            let right = self
+                .rows
+                .first()
+                .and_then(|r| r.cells.last())
+                .map_or(0.0, |c| c.borders.right.band());
+            return -(left + right) / 2.0;
+        }
+        let outdent = if self.has_table_style || self.table_indent_explicit {
+            self.first_cell_left_margin()
+        } else {
+            0.0
+        };
+        outdent + self.last_cell_right_margin()
     }
 
     /// The left margin of the first row's first cell, its own or the table's:

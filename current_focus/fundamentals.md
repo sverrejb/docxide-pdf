@@ -26,6 +26,15 @@ Fitted on one or two documents, or never probed, ranked by expected gain:
    0.25pt (with a phase); ours are exact floats. uk_commercial's note block
    is 0.67pt short from 0.05–0.25pt per-line residues, swiss_materials misses
    a page bottom by 0.46pt. `snap_baseline_288` never reached main.
+   Render-time experiment 2026-11-08 (snap only the drawn body baselines,
+   cursor untouched, vs HEAD bd15fd48c): nearest with +0.03 phase gives cases
+   +0.68 J, hyphenation +4.9, scraped +0.05, fonts −0.4; ceil gives scraped
+   +1.27, fonts +1.5, hyphenation +6.1, cases −0.34, with ±30 J swings on
+   one-line probes (header-textbox-line-metrics-*, dot-open-*). Ceil winning
+   says our raw baselines run ~0.1pt above Word's; snapping cells and text
+   boxes against the page lost (they need their own origin). Next: quantize
+   the layout cursor (line tops) so nearest rounding holds, per section,
+   cell and box.
 3. **Float-wrap thresholds**, each from one or two documents or unsourced:
    18pt minimum strip for empty paragraphs (`pdf/mod.rs` `MIN_EMPTY_STRIP`),
    48pt "text can sit beside" (`pdf/mod.rs`, the paragraph look-ahead), 72pt

@@ -34,6 +34,9 @@ pub(super) struct DocumentSettings {
     /// `w:doNotUseHTMLParagraphAutoSpacing`: before/afterAutospacing is
     /// ignored and the written before/after values apply.
     pub no_html_auto_spacing: bool,
+    /// `w:compat/w:balanceSingleByteDoubleByteWidth`: see
+    /// `double_wide_char_spacing`.
+    pub balance_sbdb_width: bool,
     /// `w:compat/w:doNotUseIndentAsNumberingTabStop`: a list label's tab runs
     /// to the next default or custom tab stop, never to the hanging indent.
     pub no_indent_as_num_tab: bool,
@@ -60,6 +63,7 @@ impl Default for DocumentSettings {
             do_not_expand_shift_return: false,
             adjust_line_height_in_table: false,
             no_html_auto_spacing: false,
+            balance_sbdb_width: false,
             no_indent_as_num_tab: false,
             wp_justification: false,
             math: Default::default(),
@@ -121,6 +125,7 @@ pub(super) fn parse_settings<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> Do
         do_not_expand_shift_return: compat_flag("doNotExpandShiftReturn"),
         adjust_line_height_in_table: compat_flag("adjustLineHeightInTable"),
         no_html_auto_spacing: compat_flag("doNotUseHTMLParagraphAutoSpacing"),
+        balance_sbdb_width: compat_flag("balanceSingleByteDoubleByteWidth"),
         no_indent_as_num_tab: compat_flag("doNotUseIndentAsNumberingTabStop"),
         wp_justification: compat_flag("wpJustification"),
         math: super::math::parse_math_settings(root),

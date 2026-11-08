@@ -663,6 +663,8 @@ impl ParagraphRunDefaults {
                     id: wml_attr(ft, "id").and_then(|v| v.parse().ok()).unwrap_or(0),
                 })
             }),
+            // ponytail: direct formatting only, as in tokyo_welfare.
+            snap_to_grid: rpr.and_then(|n| wml_bool(n, "snapToGrid")) != Some(false),
             text_scale: rpr
                 .and_then(|n| wml_attr(n, "w"))
                 .and_then(|v| v.trim_end_matches('%').parse::<f32>().ok())
@@ -1316,6 +1318,18 @@ pub(super) fn paragraph_alignment(
                 .map(super::styles::parse_alignment)
         })
         .or_else(|| para_style.and_then(|s| s.alignment))
+}
+
+/// The line width a kashida `jc` keeps free, as a share of the section's
+/// text width (`styles::kashida_fraction`).
+pub(super) fn paragraph_kashida(
+    ppr: Option<roxmltree::Node>,
+    para_style: Option<&ParagraphStyle>,
+) -> f32 {
+    ppr.and_then(|ppr| wml_attr(ppr, "jc"))
+        .map(super::styles::kashida_fraction)
+        .or_else(|| para_style.and_then(|s| s.kashida))
+        .unwrap_or(0.0)
 }
 
 /// The alignment of a paragraph holding display math (`m:oMathPara`): its

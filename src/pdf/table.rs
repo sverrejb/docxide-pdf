@@ -1184,10 +1184,16 @@ fn render_nested_table(
                 })
         })
         .map_or(0.0, |m| m.left);
+    // A positive tblpX moves it right of the cell's text start; a negative one
+    // leaves it there (negative-x-nested-x142-* vs x-142-*).
+    let x_offset = anchored.map_or(0.0, |p| match p.h_position {
+        crate::model::HorizontalPosition::Offset(x) => x.max(0.0),
+        _ => 0.0,
+    });
     let table_left = match alignment {
         TableAlignment::Center => available_x + (available_w - table_total_w) / 2.0,
         TableAlignment::Right => available_x + available_w - table_total_w,
-        TableAlignment::Left => available_x + table.table_indent - edge_shift,
+        TableAlignment::Left => available_x + table.table_indent + x_offset - edge_shift,
     };
 
     let merge_spans = compute_merge_spans(table, row_layouts);
@@ -2026,11 +2032,23 @@ pub(super) fn render_table(
     } else if let Some(col_w) = available_w {
         // A table in a newspaper column sizes like one on the page, then is
         // squeezed into the column (the nested-table path shrank it to content).
-        let mut w = auto_fit_columns(table, ctx.fonts, None, Some(fit_w));
+        let mut w = auto_fit_columns(
+            table,
+            ctx.fonts,
+            None,
+            Some(fit_w),
+            table.autofit_overhang(ctx.compat_mode),
+        );
         squeeze_to_width(&mut w, &min_content_widths(table, ctx.fonts), col_w);
         w
     } else {
-        auto_fit_columns(table, ctx.fonts, available_w, Some(fit_w))
+        auto_fit_columns(
+            table,
+            ctx.fonts,
+            available_w,
+            Some(fit_w),
+            table.autofit_overhang(ctx.compat_mode),
+        )
     };
     apply_pct_width(
         table,
@@ -2713,7 +2731,13 @@ pub(super) fn render_table(
 /// body table (issue #142: Word shrinks the same two-word table to 64pt in
 /// both places; without the fill target the header one kept its 396pt grid).
 pub(super) fn hf_col_widths(table: &Table, ctx: &RenderContext, content_w: f32) -> Vec<f32> {
-    let mut col_widths = auto_fit_columns(table, ctx.fonts, None, Some(content_w));
+    let mut col_widths = auto_fit_columns(
+        table,
+        ctx.fonts,
+        None,
+        Some(content_w),
+        table.autofit_overhang(ctx.compat_mode),
+    );
     apply_pct_width(table, &mut col_widths, content_w, ctx.compat_mode);
     col_widths
 }
@@ -2831,7 +2855,13 @@ impl<'t> TextboxTable<'t> {
         let mut col_widths = if table.fixed_layout {
             table.col_widths.clone()
         } else {
-            let mut widths = auto_fit_columns(table, ctx.fonts, None, Some(area_w));
+            let mut widths = auto_fit_columns(
+                table,
+                ctx.fonts,
+                None,
+                Some(area_w),
+                table.autofit_overhang(ctx.compat_mode),
+            );
             if table.auto_width {
                 // Columns keep their longest word and widest picture: a table
                 // that cannot shrink enough runs past the area.

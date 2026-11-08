@@ -432,10 +432,18 @@ fn word_substitute(name: &str) -> Option<&'static str> {
 /// own weight, ArialMT for the 37 plain runs of welsh_palliative_care_abstract_form
 /// and Arial-BoldMT for its one w:b run. An altName comes first: "Bradley Hand
 /// Bold" with altName Courier New is Courier New (pendulum_mechanics_oscillation_lab).
-fn family_of_face_name(name: &str) -> Option<&str> {
-    ["Bold Italic", "Bold", "Italic", "Regular"]
-        .iter()
-        .find_map(|style| name.strip_suffix(style)?.strip_suffix(' '))
+// The online export takes the face's weight and slant too: since the
+// welsh_palliative reference was re-exported online, its plain "Arial Bold"
+// runs draw in Arial-BoldMT (the desktop export had ArialMT).
+fn family_of_face_name(name: &str) -> Option<(&str, bool, bool)> {
+    [
+        ("Bold Italic", true, true),
+        ("Bold", true, false),
+        ("Italic", false, true),
+        ("Regular", false, false),
+    ]
+    .iter()
+    .find_map(|&(style, b, i)| Some((name.strip_suffix(style)?.strip_suffix(' ')?, b, i)))
 }
 
 fn known_font_alias(name: &str) -> Option<&'static str> {
@@ -831,7 +839,11 @@ pub(crate) fn register_font(
 
     let primary = primary_font_name(font_name);
 
-    let mut try_candidate = |name: &str| try_font(pdf, name, bold, italic, refs, alloc, ctx);
+    let style = std::cell::Cell::new((bold, italic));
+    let mut try_candidate = |name: &str| {
+        let (bold, italic) = style.get();
+        try_font(pdf, name, bold, italic, refs, alloc, ctx)
+    };
 
     // Word looks the run's whole name up: "Archivo;sans-serif" has no entry
     // even when "Archivo" has one.
@@ -901,7 +913,13 @@ pub(crate) fn register_font(
             log::info!("Font substitution: {primary} → altName \"{alt}\"");
             Some(m)
         })
-        .or_else(|| try_candidate(family_of_face_name(primary)?))
+        .or_else(|| {
+            let (family, b, i) = family_of_face_name(primary)?;
+            style.set((bold || b, italic || i));
+            let m = try_candidate(family);
+            style.set((bold, italic));
+            m
+        })
         .or_else(|| {
             let alias = known_font_alias(primary)?;
             let m = try_candidate(alias)?;
@@ -1242,10 +1260,11 @@ mod tests {
             "arial.ttf"
         );
         assert_eq!(resolve("Liberation Sans", None), "arial.ttf");
-        // A face's full name resolves to its family, not to the missing-font fallback.
+        // A face's full name resolves to that face of its family, not to the
+        // missing-font fallback.
         assert_eq!(
             resolve("Arial Bold", Some(("Arial Bold", Roman, None))),
-            "arial.ttf"
+            "arialbd.ttf"
         );
         assert_eq!(
             resolve(

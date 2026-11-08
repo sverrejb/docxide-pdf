@@ -1873,6 +1873,8 @@ pub(super) struct CjkLayout {
     /// at most two spaces' width stays, and the whole line is squeezed
     /// (`SQUEEZE_LINE_SPACES`).
     pub(super) squeeze_line: bool,
+    /// `Paragraph::kashida_reserve`: taken off the width lines are broken to.
+    pub(super) line_reserve: f32,
     /// Justify a line that ends in a manual break, as Word does unless
     /// `doNotExpandShiftReturn` is set.
     pub(super) expand_shift_return: bool,
@@ -2178,6 +2180,7 @@ pub(super) fn build_lines(
 ) -> Vec<TextLine> {
     let inline_images = opts.inline_images.unwrap_or(&EMPTY_INLINE_IMAGES);
     let effects = opts.effects.unwrap_or(&EMPTY_EFFECTS);
+    let width = (width - cjk.line_reserve).max(1.0);
     if runs.iter().any(|r| r.is_tab) {
         build_tabbed_line(
             runs,
@@ -2239,6 +2242,7 @@ pub(super) fn build_paragraph_lines(
     let mut current_x: f32 = 0.0;
     let mut pending_space_w: f32 = 0.0;
     let mut pending_space_count: usize = 0;
+    let mut prev_border: Option<&crate::model::ParagraphBorder> = None;
     // pending_space_w minus CJK auto-spacing: a space character really occurred.
     let mut pending_real_space = false;
     // Underline state of the run that emitted the pending whitespace. A space
@@ -2549,6 +2553,25 @@ pub(super) fn build_paragraph_lines(
         let cs = run.char_spacing;
         let ts = run.text_scale / 100.0;
 
+        // A run border's box takes its width and space on each side of the
+        // bordered text (run-borders: a 1.5pt Emphasis box opens 1.5pt after
+        // the space before it and closes 1.5pt before the next glyph).
+        // A bordered word wrapping to a new line opens its box there again
+        // (run-borders p8: such lines start 1.5pt in).
+        let pad = |b: Option<&crate::model::ParagraphBorder>| b.map_or(0.0, |b| b.width_pt + b.space_pt);
+        let line_start_pad = pad(run.border.as_ref());
+        if !text.is_empty() && run.border.as_ref() != prev_border {
+            current_x += pad(prev_border) + line_start_pad;
+            prev_border = run.border.as_ref();
+        }
+        // The box closes after the run's last word unless the next run
+        // continues it; a word ending the line needs that room too.
+        let closing_pad = if runs.get(run_idx + 1).is_some_and(|r| r.border == run.border) {
+            0.0
+        } else {
+            line_start_pad
+        };
+
         let mut is_first_word_in_run = true;
         let mut prev_char = None;
         let mut words: std::collections::VecDeque<_> = split_preserving_spaces(text).into();
@@ -2656,8 +2679,13 @@ pub(super) fn build_paragraph_lines(
             // Under wordWrap=0 a word that overruns the rest of the line breaks
             // there too (torture_test: "…aufga" / "benübertragungsgesetz").
             let room = line_room - current_x - pending_space_w;
+            // Leading spaces before a word wider than the line keep a line of
+            // their own and the word breaks on the next (traditional_skills'
+            // " DD/MM/YY" cell; Word probes 2026-11-08): see below.
+            let spaces_wrap_first =
+                pending_space_w > 0.0 && !in_right_region && right_region_for(lines.len()).is_none();
             let cut_here = if current_chunks.is_empty() {
-                ww > line_room
+                ww > line_room && !spaces_wrap_first
             } else {
                 cjk.break_words && ww > room
             };
@@ -2721,7 +2749,8 @@ pub(super) fn build_paragraph_lines(
             };
 
             // Small tolerance for floating-point width accumulation over many glyphs
-            let mut overflows = proposed_x + ww > cur_max + 0.05;
+            let word_closing_pad = if words.is_empty() { closing_pad } else { 0.0 };
+            let mut overflows = proposed_x + ww + word_closing_pad > cur_max + 0.05;
             // The segment after a hyphen break may stay by narrowing the
             // line's spaces, judged like a word after a space: Word 2013+ keeps
             // "x", "12-", "based", "and/or" and "12345/2026" alike, within the
@@ -2754,7 +2783,7 @@ pub(super) fn build_paragraph_lines(
                 if [space_room, line_room]
                     .into_iter()
                     .flatten()
-                    .any(|room| proposed_x + ww - cur_max <= room)
+                    .any(|room| proposed_x + ww + word_closing_pad - cur_max <= room)
                 {
                     overflows = false;
                     squeezed_lines.push(lines.len());
@@ -2808,6 +2837,10 @@ pub(super) fn build_paragraph_lines(
                 pending_space_w = 0.0;
                 pending_space_count = 0;
                 word_start = 0;
+                if ww > left_max(lines.len()) {
+                    words.push_front((0, source));
+                    continue;
+                }
                 push_word_chunks(
                     &mut current_chunks,
                     entry,
@@ -2817,12 +2850,12 @@ pub(super) fn build_paragraph_lines(
                     eff_fs,
                     cs,
                     y_off,
-                    0.0,
+                    line_start_pad,
                     ww,
                     space_rtl,
                     cjk.compress_punct,
                 );
-                current_x = ww;
+                current_x = line_start_pad + ww;
                 continue;
             }
 
@@ -2972,7 +3005,7 @@ pub(super) fn build_paragraph_lines(
                         &mut cur_right_info,
                     )
                 });
-                current_x = 0.0;
+                current_x = line_start_pad;
                 // A word too wide for a strip beside a float goes below it
                 // whole (Word example: "charlie" beside a 40pt strip right of a
                 // wrapText=right picture).
@@ -6055,6 +6088,7 @@ mod tests {
             punct_pull_free_em: 0.0,
             squeeze_spaces,
             squeeze_line: false,
+            line_reserve: 0.0,
             expand_shift_return: true,
             bidi: false,
             shaped_kerning: false,
@@ -6102,6 +6136,7 @@ mod tests {
                     punct_half_out: false,
                     expand_shift_return: true,
                     squeeze_line: false,
+                    line_reserve: 0.0,
                     bidi: false,
                     shaped_kerning: false,
                     break_words: false,

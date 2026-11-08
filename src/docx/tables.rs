@@ -296,8 +296,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     // Each side: the table's own, then its style's (estonian_community's
     // TableGrid zeroes them), then Word's default.
     let own_mar = tbl_pr.and_then(|pr| wml(pr, "tblCellMar"));
-    let has_style_or_cell_mar =
-        tbl_style.is_some() || ctx.styles.has_default_table_style || own_mar.is_some();
+    let word_default_margins = ctx.styles.has_default_table_style || own_mar.is_some();
     // Word's 5.4pt default comes with a table style: a table with neither a
     // style nor its own tblCellMar gets 0.5pt side margins and so no visible
     // outdent (Word probes on case200/case213 with cell borders: the border
@@ -305,7 +304,10 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     // ending ~0.5pt short of the right border; case131's nested table text
     // 1.0pt inside the parent's, its second column 0.58pt inside; an empty
     // default table style brings the 5.4pt back).
-    let default_side = if has_style_or_cell_mar { 5.4 } else { 0.5 };
+    // It is the document's default table style that brings it, not the
+    // table's own: table-style-centered's "Centered" style, without
+    // tblCellMar in a document without a default table style, gets 0.5pt.
+    let default_side = if word_default_margins { 5.4 } else { 0.5 };
     let side = |i: usize, a: &str, b: &str, default: f32| {
         own_mar
             .and_then(|mar| margin_twips(mar, a, b))
@@ -581,6 +583,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     tb.inside_v
                 },
                 own_top: None,
+                own_bottom: None,
             });
 
             // Apply conditional formatting overrides from tblStylePr.
@@ -685,6 +688,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     left: border_or_fallback(parse_cell_border_left(bdr), cond.borders.left),
                     right: border_or_fallback(parse_cell_border_right(bdr), cond.borders.right),
                     own_top: None,
+                    own_bottom: None,
                 })
                 .unwrap_or(cond.borders);
 
@@ -1198,11 +1202,17 @@ fn propagate_vmerge_borders(rows: &mut [TableRow]) {
                     cell_at(&rows[n], grid_col).is_some_and(|c| c.v_merge == VMerge::Continue)
                 })
                 .last();
+            // The table's bottom border sizes only its last row (`own_bottom`).
+            let at_table_end = last_ri == Some(rows.len() - 1);
             if let Some(bottom) = last_ri
                 .and_then(|n| cell_at(&rows[n], grid_col))
                 .map(|c| c.borders.bottom)
             {
-                rows[ri].cells[ci].borders.bottom = bottom;
+                let borders = &mut rows[ri].cells[ci].borders;
+                if at_table_end {
+                    borders.own_bottom = Some(borders.bottom);
+                }
+                borders.bottom = bottom;
             }
         }
     }
@@ -1289,7 +1299,7 @@ mod border_conflict_tests {
     }
 
     #[test]
-    fn default_side_margins_need_a_style_or_tbl_cell_mar() {
+    fn default_side_margins_need_a_default_style_or_tbl_cell_mar() {
         use std::io::{Cursor, Write};
         let left = |styles: Option<&str>, tbl_pr: &str| {
             let xml = format!(
@@ -1320,7 +1330,7 @@ mod border_conflict_tests {
         assert_eq!(left(Some(named_style), ""), (0.5, 0.5));
         assert_eq!(
             left(Some(named_style), r#"<w:tblStyle w:val="Plain"/>"#),
-            (5.4, 5.4)
+            (0.5, 0.5)
         );
         assert_eq!(left(Some(default_style), ""), (5.4, 5.4));
         assert_eq!(

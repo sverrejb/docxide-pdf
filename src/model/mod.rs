@@ -649,6 +649,9 @@ pub struct Paragraph {
     /// `w:textAlignment`: how glyphs of different heights sit in their line.
     pub text_alignment: TextAlignment,
     pub snap_to_grid: bool,
+    /// Points a kashida `jc` keeps free when lines are broken (not when they
+    /// are justified).
+    pub kashida_reserve: f32,
     pub auto_space_de: bool,
     pub auto_space_dn: bool,
     pub frame_props: Option<FrameProperties>,
@@ -793,6 +796,8 @@ pub struct Run {
     /// `w:fitText` (or the cell's `w:tcFitText`): the text is spread or
     /// squeezed to this width.
     pub fit_text: Option<FitText>,
+    /// `w:snapToGrid`: a `linesAndChars` grid's extra pitch applies.
+    pub snap_to_grid: bool,
 }
 
 /// A fitText region: the runs sharing an `id` fill `width` points together,
@@ -952,6 +957,7 @@ impl Default for Run {
             math: None,
             ruby: None,
             fit_text: None,
+            snap_to_grid: true,
         }
     }
 }
