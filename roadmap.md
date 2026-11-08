@@ -45,6 +45,9 @@ justified gap (underlined-space-compat14-*). Open:
   thickness) (fits 8/8, factor unexplained), the first line at the single
   underline's post offset or less, a 1.0–1.25pt gap; Word also underlines
   a line's trailing space. We use 0.05 × size lines 0.12 × size down.
+  2026-11-08: 36 more points (Calibri/TNR/Arial, 8–48pt, regular and bold)
+  break the 0.6 factor; the best fit, ceil(round(post thickness)/2) on the
+  0.25pt grid, hits 31/36 (misses Calibri 48, Arial 16, TNR bold 8).
 - nested-floats-spaced-text-bottom-cell (40.4): the same two registration
   tables in a vAlign=bottom cell. Bottom cells now float like centred ones,
   but Word sets the 12 spacer marks beside the floats (topic 2 lines higher)
