@@ -39,7 +39,9 @@ justified gap (underlined-space-compat14-*). Open:
   above a page-anchored table keeps its place" (japanese_hr probes): find
   what separates the two before changing the reach rule in `mod.rs`.
 - `empty-margin-frame-long-prefix` (46.0): the frame's anchor is on page 2;
-  `empty_frame_table_bands` only reserves the box on the first page.
+  `empty_frame_table_bands` only reserves the box on the first page. Word
+  reserves it on the page where the anchor lands (2026-11-08), so the fix
+  needs to know which page the preceding table ends on before layout.
 - Double underline (scraped/double-underline 50.7): Word probes
   (`tests/output/koer/du/`, 2026-11-07) give each line ≈ q(0.6 × post
   thickness) (fits 8/8, factor unexplained), the first line at the single
@@ -54,6 +56,9 @@ justified gap (underlined-space-compat14-*). Open:
   and the second float 9pt right (its leftFromText); ungating
   `spacers_clear_nested_registration` for bottom cells overlaps the floats
   (tried 2026-11-08).
+- nested-floats-spaced-text-short-spacers: Word starts text in the narrow
+  strip beside the cell's floating tables; same special-case tangle as the
+  bottom-cell variant above (looked at 2026-11-08, not changed).
 - Header inline picture at 1.5 spacing (czech_village_budget, 0.6pt body
   drift): Word's picture line is 1.13pt taller than ours.
 - candidate_reference_check_form: rows drift 0.6pt then 1.6pt; Word paints
@@ -281,6 +286,10 @@ Open queue from the large-corpus and focus-fixture rounds:
   per row, SSIM 91.5), case69 (last line 15.00 vs 14.83 under
   `vAlign=center`), case33's list lines (16.115 vs 16.0),
   uk_commercial page 11's notes block (0.67pt short).
+  Snapping only the drawn baselines (2026-11-08, `current_focus/fundamentals.md`
+  §2) gains but regresses 63 fixtures: the layout cursor itself has to sit
+  on the grid, per page, cell and text box. Most remaining sub-point drift in
+  the worst fixtures is this.
 - **Mixed Latin/East Asian justification** (issue #142, Word online probes
   2026-10-28, `MixedJustify` in `pdf/layout.rs`): the slack spreads over every
   space and the gap after every East Asian character alike, each space +1/9
@@ -359,8 +368,8 @@ Open queue from the large-corpus and focus-fixture rounds:
   U+2011 if a fixture shows it.
 - Distributed alignment: Latin lines with spaces spread across one gap too few
   (Word counts spaces as distributable characters; see the `ponytail:` note on
-  `char_justify_gaps`). Kashida justification changes Word's line breaks
-  (needs kashida metrics). thaiDistribute on Thai text is untested.
+  `char_justify_gaps`). Kashida on Arabic text is unprobed (Latin
+  kashida reserve done, see above). thaiDistribute on Thai text is untested.
 - `eastAsiaTheme="minorHAnsi"` (997 runs in the corpus) is ignored by
   `resolve_east_asia_font`. Resolving every slot (tried 2026-10-31 and again
   on top of the cs-font writer restart, 2026-11-03) changes 3–4 fixtures
