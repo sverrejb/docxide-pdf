@@ -133,7 +133,7 @@ pub(super) fn assemble_pdf_pages(
     pages_id: Ref,
     // Per-page §17.6.23 vertical-align offset: shift the body block down by this
     // many points (0 = top-aligned, the default).
-    valign_offsets: Vec<f32>,
+    valign_offsets: &[f32],
     all_contents: Vec<Content>,
     all_deferred_shapes: Vec<Vec<(u32, Content)>>,
     all_behind_shapes: Vec<Vec<(u32, Content)>>,

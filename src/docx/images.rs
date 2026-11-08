@@ -71,6 +71,18 @@ pub(super) fn extent_dimensions(container: roxmltree::Node) -> (f32, f32) {
     wpd(container, "extent").map_or((0.0, 0.0), |e| (emu_attr(e, "cx"), emu_attr(e, "cy")))
 }
 
+/// An inline picture's size as Word lays it out: the height cut to whole
+/// twips, the width scaled with it (Word for Mac probes: extents of 2493.2 to
+/// 2493.9 twips all step 124.65pt lines and draw 124.65pt tall, a 72pt wide
+/// one 71.98pt wide; 1000.75 twips step 50pt).
+fn inline_picture_extent(w: f32, h: f32) -> (f32, f32) {
+    let cut = (h * 20.0 + 1e-3).floor() / 20.0;
+    if cut <= 0.0 {
+        return (w, h);
+    }
+    (w * cut / h, cut)
+}
+
 /// `wp14:sizeRelH relativeFrom="margin"` with a non-zero pctWidth, as a
 /// fraction of the text width.
 fn pct_width_of_margin(anchor: roxmltree::Node) -> Option<f32> {
@@ -541,7 +553,9 @@ fn inline_picture<R: Read + Seek>(
     w: f32,
     h: f32,
 ) -> Option<EmbeddedImage> {
-    let mut img = blip_image(container, ctx, w, h)?;
+    let (pic_w, pic_h) = inline_picture_extent(w, h);
+    let mut img = blip_image(container, ctx, pic_w, pic_h)?;
+    img.trimmed_width = w - pic_w;
     (img.layout_extra_height, img.layout_extra_top) = inline_extra_height(container);
     apply_pic_props(&mut img, container, ctx.theme);
     Some(img)
@@ -598,6 +612,7 @@ fn read_media_part<R: Read + Seek>(
         pixel_height: ph,
         display_width: 0.0,
         display_height: 0.0,
+        trimmed_width: 0.0,
         jpeg_components: components,
         layout_extra_height: 0.0,
         layout_extra_top: 0.0,
@@ -1050,7 +1065,12 @@ pub(super) fn compute_drawing_info<R: Read + Seek>(
 
             let (display_w, display_h) = extent_dimensions(container);
             let (extra_h, _) = inline_extra_height(container);
-            max_height = max_height.max(display_h + extra_h);
+            let pic_h = if find_blip_embeds(container).next().is_some() {
+                inline_picture_extent(display_w, display_h).1
+            } else {
+                display_h
+            };
+            max_height = max_height.max(pic_h + extra_h);
 
             if image.is_none() {
                 image = inline_picture(container, ctx, display_w, display_h);

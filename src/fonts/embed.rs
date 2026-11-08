@@ -256,8 +256,20 @@ pub(super) fn embed_truetype(
             .filter(|r| *r > 0.0),
         underline: face
             .underline_metrics()
-            .map(|m| (-(m.position as f32) / units, m.thickness as f32 / units))
-            .filter(|&(_, t)| t > 0.0),
+            .map(|m| {
+                let descent = face
+                    .tables()
+                    .os2
+                    .map(|os2| -os2.windows_descender())
+                    .filter(|&d| d > 0)
+                    .unwrap_or(-face.descender());
+                (
+                    -(m.position as f32) / units,
+                    m.thickness as f32 / units,
+                    descent as f32 / units,
+                )
+            })
+            .filter(|&(_, t, _)| t > 0.0),
         strikeout: face
             .strikeout_metrics()
             .map(|m| (m.position as f32 / units, m.thickness as f32 / units))
@@ -271,6 +283,12 @@ pub(super) fn embed_truetype(
             .map(|w| (face.units_per_em(), w as u16)),
         plain_ascender_ratio: lm.plain_ascender_ratio,
         leading_ratio: lm.leading_ratio,
+        // A top-aligned line's lowered run drops into the external leading
+        // and one font unit before the line grows (Word for Mac probes:
+        // Calibri 11 and 14pt lowered 0.5pt step 13.92 and 17.58, not 13.93
+        // and 17.59; Arial 11 lowered 0.5pt 12.78, its 67-unit leading spent
+        // first).
+        drop_slack_ratio: lm.leading_ratio + 1.0 / units,
         char_to_gid,
         char_widths_1000,
         char_ink_1000,

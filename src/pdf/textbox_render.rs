@@ -273,6 +273,7 @@ fn layout_box_paragraph(
             ls,
             line_h,
             text_ascent,
+            1.0,
             tp.text_alignment == TextAlignment::Top,
         );
         super::size_break_lines(&mut lines, runs, ls, line_h, ctx.fonts);
@@ -850,7 +851,7 @@ pub(super) fn render_textbox_paragraphs(
                 let img_x = content_x
                     + tp.indent_left
                     + x_offset
-                    + align_offset(tp.alignment, (tp_align_w - img.display_width).max(0.0));
+                    + align_offset(tp.alignment, (tp_align_w - img.display_width - img.trimmed_width).max(0.0));
                 let img_y = cursor_y - inter_gap - foot_drop - img.display_height - y_offset;
                 // The paragraph's P stays empty and the picture follows it as
                 // a Figure in the Sect, as in the body.
@@ -953,6 +954,7 @@ pub(super) fn render_textbox_paragraphs(
                 .zip(para_tag)
                 .map(|(StoryTag { tags, page, .. }, p)| LinkTagger::new(tags, *page, p)),
             picture_clip,
+            None,
         );
         if para_tag.is_some() {
             Tags::end(content);

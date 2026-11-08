@@ -1069,6 +1069,7 @@ pub(super) struct CellParagraphLayout {
     pub(super) image_alt: Option<String>,
     pub(super) image_decorative: bool,
     pub(super) image_width: f32,
+    pub(super) image_trim: f32,
     pub(super) image_height: f32,
     pub(super) image_stroke_color: Option<[u8; 3]>,
     pub(super) image_stroke_width: f32,
@@ -1928,6 +1929,7 @@ pub(super) fn compute_row_layouts(
                                             effective_ls,
                                             line_h,
                                             font_size * ascender_ratio,
+                                            super::helpers::auto_ascent_scale(effective_ls),
                                             para.text_alignment == crate::model::TextAlignment::Top,
                                         );
                                         super::size_mark_line(&mut lines, para, runs, effective_ls, tallest_lhr, ctx.fonts);
@@ -2135,6 +2137,7 @@ pub(super) fn compute_row_layouts(
                                         .as_ref()
                                         .is_some_and(|i| i.decorative),
                                     image_width,
+                                    image_trim: para.image.as_ref().map_or(0.0, |i| i.trimmed_width),
                                     image_height,
                                     image_stroke_color: img_stroke_color,
                                     image_stroke_width: img_stroke_width,

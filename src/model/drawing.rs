@@ -36,6 +36,7 @@ pub struct EmbeddedImage {
     pub pixel_height: u32,
     pub display_width: f32,
     pub display_height: f32,
+    pub trimmed_width: f32,
     pub jpeg_components: u8,
     /// effectExtent + distT/distB combined (points)
     pub layout_extra_height: f32,
@@ -82,10 +83,8 @@ impl EmbeddedImage {
     pub fn layout_size(&self) -> (f32, f32) {
         let (sin, cos) = self.rotation_deg.to_radians().sin_cos();
         let (s, c) = (sin.abs(), cos.abs());
-        (
-            self.display_width * c + self.display_height * s,
-            self.display_width * s + self.display_height * c,
-        )
+        let w = self.display_width + self.trimmed_width;
+        (w * c + self.display_height * s, w * s + self.display_height * c)
     }
 }
 

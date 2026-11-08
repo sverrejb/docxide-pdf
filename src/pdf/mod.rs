@@ -51,15 +51,15 @@ pub(super) use helpers::resolve_line_h;
 use helpers::{
     align_offset, auto_ascent_scale, between_space, border_band, bottom_border,
     border_box_indents, collect_paras, draw_horizontal_rule, joins_border_group,
-    para_runs_with_textboxes, spacing_leading,
+    spacing_leading,
 };
 use images::{EffectXObjs, EmbeddedImages, embed_all_images};
 use layout::{
     CjkLayout, DualRegion, EMPTY_EFFECTS, EMPTY_INLINE_IMAGES, LineNumberArg, LineOpts,
     LinkAnnotation, LinkTagger, PUNCT_PULL_FREE, PUNCT_SQUEEZE, TextLine, build_lines,
     build_paragraph_lines, descender_ratio, grid_baseline_offset, grid_snapped_line_h,
-    inline_image_line_extra, inserted_picture_descent, is_text_empty, line_h_with_picture,
-    line_max_image_h, lines_height, picture_line_bottom,
+    inserted_picture_descent, is_text_empty, line_h_with_picture, line_max_image_h,
+    lines_height, picture_line_bottom,
     render_paragraph_lines, run_line_metrics, size_lines_by_own_runs, tallest_glyph_run_metrics,
     tallest_run_metrics,
 };
@@ -1268,7 +1268,7 @@ fn auto_frame_width(
                         + p.indent_left
                         + p.indent_right
                 },
-                |img| img.display_width,
+                |img| img.display_width + img.trimmed_width,
             ),
             Block::Table(t) => t.col_widths.iter().sum(),
         })
@@ -1338,6 +1338,9 @@ pub(super) struct RenderContext<'a> {
     /// Page numbers from a first pass, for PAGE, NUMPAGES and SECTIONPAGES
     /// fields in the body.
     pub(super) body_page_fields: Option<&'a BodyPageFields>,
+    /// Each page's w:vAlign displacement from a first pass, which Word applies
+    /// before it rounds and stretches the baselines.
+    pub(super) valign_offsets: &'a [f32],
     /// What a PAGEREF shows for each page of the bookmark pre-pass.
     pub(super) page_labels: Vec<String>,
     /// Word's `compatibilityMode` (see `docx::settings`).
@@ -2512,9 +2515,18 @@ impl FloatingTablePos {
             AlignRight if ctx.compat_mode < 15 => x + table.last_cell_right_margin(),
             _ => x,
         };
+        // Word puts a page or margin anchored table one twip above a
+        // positive tblpY, and never above the page (Word for Mac probes:
+        // tblpY 1, 3, 946 and 957 put the first line 0, 0.1, 47.25 and 47.8pt
+        // down, tblpY −100 at the page top; text anchors are exact).
+        let anchored = if pos.v_offset_pt > 0.0 {
+            pos.v_offset_pt - 0.05
+        } else {
+            pos.v_offset_pt
+        };
         let y = match pos.v_anchor {
-            "page" => sp.page_height - pos.v_offset_pt,
-            "margin" => sp.page_height - sp.margin_top - pos.v_offset_pt,
+            "page" => sp.page_height - anchored.max(0.0),
+            "margin" => sp.page_height - sp.margin_top - anchored,
             _ => text_y - pos.v_offset_pt,
         };
         FloatingTablePos {
@@ -5244,9 +5256,26 @@ fn render_paragraph_block(
     let first_baseline_offset =
         label_boosted_baseline_offset(para, ctx.fonts, para_ascent, font_size)
             * auto_ascent_scale(effective_ls);
+    let line_grid = |ascent: f32, page: usize| {
+        let text_h = font_size * tallest_lhr.unwrap_or(1.2);
+        Some(layout::LineGrid {
+            snapped: grid_snapped,
+            shift: ctx.valign_offsets.get(page).copied().unwrap_or(0.0),
+            label_boost: (ascent - para_ascent * auto_ascent_scale(effective_ls)).max(0.0),
+            ..layout::LineGrid::new(
+                sp.page_height,
+                ascent,
+                effective_ls,
+                line_h,
+                text_h,
+                para_ascent,
+                effective_space_after,
+            )
+        })
+    };
     // A grid or an exact rule gives every line the same box.
     if !grid_snapped && !matches!(effective_ls, LineSpacing::Exact(_)) {
-        size_lines_by_own_runs(&mut lines, ctx.fonts, effective_ls, line_h, para_ascent, para.text_alignment == crate::model::TextAlignment::Top);
+        size_lines_by_own_runs(&mut lines, ctx.fonts, effective_ls, line_h, para_ascent, auto_ascent_scale(effective_ls), para.text_alignment == crate::model::TextAlignment::Top);
         size_break_lines(&mut lines, &effective_runs, effective_ls, line_h, ctx.fonts);
         size_unsized_lines(
             &mut lines,
@@ -5443,13 +5472,6 @@ fn render_paragraph_block(
     {
         content_h += legacy_picture_leading;
     }
-
-    // A tall inline picture on the first line lowers that line's baseline; the
-    // list label sits on the lowered one (render_paragraph_lines drops the text
-    // lines itself).
-    let first_line_drop = lines
-        .first()
-        .map_or(0.0, |l| inline_image_line_extra(l, para_ascent));
 
     // The shading covers the lines, not the room reserved below them for a
     // float: indonesian_school's "Format 12" box shows between its anchor's
@@ -5959,15 +5981,10 @@ fn render_paragraph_block(
             // One element for both halves: its content continues on the next page.
             let tags = state.pb.para_tags(para, doc);
             let tag = tags.1;
+            let grid = line_grid(baseline_offset, state.pb.all_contents.len());
+            let label_y = layout::first_drawn_baseline(baseline_y, first_part, para_ascent, grid, false);
             state.pb.begin_para_tags(tags, |content| {
-                render_list_label(
-                    content,
-                    para,
-                    ctx.fonts,
-                    label_x,
-                    baseline_y - first_line_drop,
-                    font_size,
-                )
+                render_list_label(content, para, ctx.fonts, label_x, label_y, font_size)
             });
 
             render_paragraph_lines(
@@ -6001,6 +6018,7 @@ fn render_paragraph_block(
                     tag,
                 )),
                 None,
+                grid,
             );
             state.pb.end_tag();
 
@@ -6274,6 +6292,7 @@ fn render_paragraph_block(
                         tag,
                     )),
                     None,
+                    line_grid(baseline_offset2, state.pb.all_contents.len()),
                 );
                 }
                 state.pb.end_tag();
@@ -6718,10 +6737,11 @@ fn render_paragraph_block(
             let turned = img.rotation_deg.abs() > 0.01;
             let swap_axes = ctx.compat_mode >= 15
                 && (img.rotation_deg.rem_euclid(360.0) + 45.0).rem_euclid(180.0) >= 90.0;
+            let trim = if swap_axes { 0.0 } else { img.trimmed_width };
             let (box_w, box_h) = if swap_axes {
                 (img.display_height, img.display_width)
             } else {
-                (img.display_width, img.display_height)
+                (img.display_width + trim, img.display_height)
             };
             let image_height = box_h + img.layout_extra_height;
             let bottom_depth = if image_height + inserted_descent > line_h {
@@ -6745,7 +6765,7 @@ fn render_paragraph_block(
             let start = para.indent_left + first;
             let room = col_w - start - para.indent_right - box_w;
             let box_x = col_x + start + align_offset(para.alignment, room.max(0.0));
-            let x = box_x + (box_w - img.display_width) / 2.0;
+            let x = box_x + (box_w - trim - img.display_width) / 2.0;
             let y_bottom = box_bottom + (box_h - img.display_height) / 2.0;
             if turned {
                 state.pb.content.save_state();
@@ -6894,15 +6914,10 @@ fn render_paragraph_block(
         );
 
         let tags = state.pb.para_tags(para, doc);
+        let grid = line_grid(baseline_offset, state.pb.all_contents.len());
+        let label_y = layout::first_drawn_baseline(baseline_y, &lines, para_ascent, grid, lines.len() <= 1);
         state.pb.begin_para_tags(tags, |content| {
-            render_list_label(
-                content,
-                para,
-                ctx.fonts,
-                label_x,
-                baseline_y - first_line_drop,
-                font_size,
-            )
+            render_list_label(content, para, ctx.fonts, label_x, label_y, font_size)
         });
 
         if !lines.is_empty() {
@@ -6937,6 +6952,7 @@ fn render_paragraph_block(
                     tags.1,
                 )),
                 None,
+                grid,
             );
         }
         state.pb.end_tag();
@@ -7122,22 +7138,32 @@ fn section_page_counts(sections: usize, pages: &[(usize, bool, usize)]) -> Vec<u
 }
 
 pub fn render(doc: &Document, options: &ConvertOptions) -> Result<Vec<u8>, Error> {
-    let (pdf, page_fields) = render_pass(doc, None, options)?;
+    let (pdf, page_fields, valign_offsets) = render_pass(doc, None, &[], options)?;
     // Word shows body PAGE, NUMPAGES and SECTIONPAGES fields live, not their cached result,
     // and their values are known only once the document is paginated.
     let has_page_fields =
         body_runs(doc).any(|r| r.field_code.as_ref().is_some_and(FieldCode::is_page_count));
-    if has_page_fields {
-        return render_pass(doc, Some(&page_fields), options).map(|(pdf, _)| pdf);
+    if !has_page_fields && !valign_offsets.iter().any(|&off| off > 0.0) {
+        return Ok(pdf);
     }
-    Ok(pdf)
+    // The fields keep the first pass's numbers even where their new text
+    // moves the pages (Word for Mac: NUMPAGES shows 3 on a page its own
+    // shorter result pulled into a two-page document), but the vAlign offsets
+    // the lines are rounded with must come from the pass they are drawn in.
+    let page_fields = has_page_fields.then_some(&page_fields);
+    let (pdf, _, measured) = render_pass(doc, page_fields, &valign_offsets, options)?;
+    if measured == valign_offsets {
+        return Ok(pdf);
+    }
+    render_pass(doc, page_fields, &measured, options).map(|(pdf, ..)| pdf)
 }
 
 fn render_pass(
     doc: &Document,
     page_fields: Option<&BodyPageFields>,
+    valign_offsets: &[f32],
     options: &ConvertOptions,
-) -> Result<(Vec<u8>, BodyPageFields), Error> {
+) -> Result<(Vec<u8>, BodyPageFields, Vec<f32>), Error> {
     let debug_wrap = options.debug_wrap;
     let t0 = std::time::Instant::now();
     // Bars collected by a previous pass (headers, footers) must not leak in.
@@ -7245,6 +7271,7 @@ fn render_pass(
         footnote_marks: &footnote_display_order,
         endnote_marks: &endnote_display_order,
         body_page_fields: page_fields,
+        valign_offsets,
         page_labels: Vec::new(),
         compat_mode: doc.compat_mode,
         open_type_features: doc.open_type_features,
@@ -7852,7 +7879,20 @@ fn render_pass(
                     };
                     let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
                     let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                    let mark_pitch = resolve_line_h(ls, fs, lhr);
+                    let (_, break_lhr) = unsized_line_metrics(p, fs, ctx.fonts);
+                    let mark_pitch = mark_line_h(p, ls, break_lhr.or(lhr), ctx.fonts)
+                        .unwrap_or_else(|| resolve_line_h(ls, fs, lhr.or(break_lhr)));
+                    let break_lines: f32 = p
+                        .runs
+                        .iter()
+                        .filter(|r| r.is_line_break)
+                        .skip(1)
+                        .take(extra_breaks)
+                        .map(|br| {
+                            let (size, (br_lhr, _)) = break_font(br, ctx.fonts);
+                            resolve_line_h(ls, size, br_lhr.or(lhr))
+                        })
+                        .sum();
                     // It clears every float the cursor has not passed yet
                     // (Word example: two boxes 250pt and 80pt tall, text below
                     // the taller).
@@ -7886,8 +7926,8 @@ fn render_pass(
                             && empty_clear && p.is_section_break && block_idx > 0
                             && doc.sections.get(sect_idx + 1).is_some_and(|next|
                                 next.properties.break_type == SectionBreakType::Continuous);
-                        let mark_lines = usize::from(!section_mark) + extra_breaks;
-                        state.pb.slot_top = float_bottom - mark_pitch * mark_lines as f32;
+                        let mark_lines = if section_mark { 0.0 } else { mark_pitch };
+                        state.pb.slot_top = float_bottom - mark_lines - break_lines;
                     }
                     state.pb.float_zone = None;
                     state.pb.more_float_zones.clear();
@@ -8358,7 +8398,7 @@ fn render_pass(
             let region_bottom =
                 compute_effective_margin_bottom(sp, is_first, page_numbers[page_idx].0, &ctx);
             let slack = state.pb.all_content_bottom[page_idx] - region_bottom;
-            if slack > 0.0 { slack * frac } else { 0.0 }
+            if slack * frac > 0.01 { slack * frac } else { 0.0 }
         })
         .collect();
 
@@ -8367,7 +8407,7 @@ fn render_pass(
         &mut alloc,
         catalog_id,
         pages_id,
-        valign_offsets,
+        &valign_offsets,
         state.pb.all_contents,
         state.pb.all_deferred_shapes,
         state.pb.all_behind_shapes,
@@ -8405,7 +8445,7 @@ fn render_pass(
         section_pages: section_page_counts,
         total: total_pages,
     };
-    Ok((objstm::pack(pdf.finish()), page_fields))
+    Ok((objstm::pack(pdf.finish()), page_fields, valign_offsets))
 }
 
 #[cfg(test)]
@@ -8500,7 +8540,7 @@ mod tests {
                 crate::RevisionView::Final,
             )
             .unwrap();
-            render_pass(&doc, None, &ConvertOptions::default()).unwrap().1.total
+            render_pass(&doc, None, &[], &ConvertOptions::default()).unwrap().1.total
         };
         assert_eq!(pages(500), 3); // p29a
         assert_eq!(pages(300), 2); // p29c
