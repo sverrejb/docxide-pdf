@@ -39,9 +39,18 @@ pub(super) fn label_pieces(para: &Paragraph) -> Vec<(Option<String>, &str)> {
     let piece_key = |is_ea: bool| if is_ea { ea_key.clone() } else { key.clone() };
     let mut pieces = Vec::new();
     let (mut start, mut in_ea) = (0, false);
+    // A label's space beside an East Asian character on either side takes
+    // that font: Word sets both spaces of "第 %1 章" 6pt wide in 12pt text
+    // (styleref-number-only), where the same text in a body run gets 3pt ones.
+    let next_is_ea = |i: usize| {
+        label[i..]
+            .chars()
+            .find(|c| !c.is_whitespace())
+            .is_some_and(crate::docx::is_east_asian_char)
+    };
     for (i, c) in label.char_indices() {
         let is_ea = if c.is_whitespace() {
-            in_ea
+            in_ea || next_is_ea(i)
         } else {
             crate::docx::is_east_asian_char(c)
         };
