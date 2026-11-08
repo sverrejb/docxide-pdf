@@ -851,7 +851,7 @@ pub(super) fn render_textbox_paragraphs(
                 let img_x = content_x
                     + tp.indent_left
                     + x_offset
-                    + align_offset(tp.alignment, (tp_align_w - img.display_width).max(0.0));
+                    + align_offset(tp.alignment, (tp_align_w - img.display_width - img.trimmed_width).max(0.0));
                 let img_y = cursor_y - inter_gap - foot_drop - img.display_height - y_offset;
                 // The paragraph's P stays empty and the picture follows it as
                 // a Figure in the Sect, as in the body.

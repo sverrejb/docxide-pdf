@@ -1003,7 +1003,7 @@ fn auto_frame_width(
                         + p.indent_left
                         + p.indent_right
                 },
-                |img| img.display_width,
+                |img| img.display_width + img.trimmed_width,
             ),
             Block::Table(t) => t.col_widths.iter().sum(),
         })

@@ -2099,8 +2099,8 @@ pub(super) fn render_table(
                 // tables; otherwise a later clearing break loses occupied lines.
                 // The table keeps its tblpY below the moved anchor (Word for Mac
                 // probes: tblpY 1, 100 and 300 under a full-width float).
+                displaced_text_anchor = Some(fp.y);
                 fp.y -= fp.v_offset_pt;
-                displaced_text_anchor = Some(fp.y + fp.v_offset_pt);
             }
             if let Some(pos) = table.position.as_ref() {
                 fp.constrain_nonoverlap_left(
