@@ -304,9 +304,6 @@ Open queue from the large-corpus and focus-fixture rounds:
   `.` only; `, ; : ! ?` assumed. Issue #142's "introduction." still wraps: with
   Word's glyph advances the line sits 0.4pt inside the cap, with ours 0.4pt
   outside — the glyph device-grid work decides it.
-- **Each space character is a justification stretch point**: polish_municipal's
-  double space is 7.44pt in Word = 2 × (3.0 + 0.72 slack); we add one slot for
-  the gap. Find justified lines with consecutive spaces across fixtures first.
 - **Mixed East Asian + Latin line height**: usep_handbook's checkbox lines (☐
   in MS Gothic, text in Calibri) are 1.53pt taller than Word's: we put
   Calibri's win descent under MS Gothic's ascent, which already carries the
