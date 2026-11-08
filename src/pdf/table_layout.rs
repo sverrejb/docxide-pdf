@@ -1044,6 +1044,7 @@ pub(super) struct CellParagraphLayout {
     pub(super) image_alt: Option<String>,
     pub(super) image_decorative: bool,
     pub(super) image_width: f32,
+    pub(super) image_trim: f32,
     pub(super) image_height: f32,
     pub(super) image_stroke_color: Option<[u8; 3]>,
     pub(super) image_stroke_width: f32,
@@ -1447,7 +1448,8 @@ pub(super) fn compute_row_layouts(
     let mut layouts: Vec<RowLayout> = table
         .rows
         .iter()
-        .map(|row| {
+        .enumerate()
+        .map(|(ri, row)| {
             let mut max_h: f32 = 0.0;
             let row_keeps_next = row.cells.iter().flat_map(|cell| &cell.content)
                 .any(|block| matches!(block, Block::Paragraph(p) if p.keep_next));
@@ -1879,6 +1881,7 @@ pub(super) fn compute_row_layouts(
                                             effective_ls,
                                             line_h,
                                             font_size * ascender_ratio,
+                                            super::helpers::auto_ascent_scale(effective_ls),
                                             para.text_alignment == crate::model::TextAlignment::Top,
                                         );
                                         super::size_mark_line(&mut lines, para, runs, effective_ls, tallest_lhr, ctx.fonts);
@@ -2072,6 +2075,7 @@ pub(super) fn compute_row_layouts(
                                         .as_ref()
                                         .is_some_and(|i| i.decorative),
                                     image_width,
+                                    image_trim: para.image.as_ref().map_or(0.0, |i| i.trimmed_width),
                                     image_height,
                                     image_stroke_color: img_stroke_color,
                                     image_stroke_width: img_stroke_width,
@@ -2266,10 +2270,18 @@ pub(super) fn compute_row_layouts(
             // border-to-border pitch (case15: 36.0).
             // The cells' top and bottom margins sit on top of it too, like the
             // bands in their insets: a 30pt row with 5pt margins is 40.5 in
-            // Word, and polish_ministry's 33.15pt rows with 1.4pt ones 36.25.
+            // Word, and 33.15pt rows with 1.4pt margins are 36.25pt.
+            // A merged cell's bottom border closes its last row, not this one
+            // (a 1.5pt double bottom under a cell spanning two rows leaves
+            // the first row at its 28.35pt trHeight).
             let insets = cells
                 .iter()
-                .map(|c| c.cm.top + c.cm.bottom)
+                .zip(row.grid_cells())
+                .map(|(l, (grid_col, _, c))| {
+                    let continues = c.v_merge == VMerge::Restart && continues_below(table, ri, grid_col);
+                    let band = if continues { c.borders.bottom.band() / 2.0 } else { 0.0 };
+                    l.cm.top + l.cm.bottom - band
+                })
                 .fold(0.0f32, f32::max);
             let height = match (row.height, row.height_exact) {
                 // An exact one gains only the bottom margin: 30pt with 5pt
@@ -2310,10 +2322,7 @@ pub(super) fn compute_row_layouts(
                 continue;
             }
             let mut last = ri;
-            while table.rows.get(last + 1).is_some_and(|next| {
-                next.grid_cells()
-                    .any(|(c, _, n)| c == grid_col && n.v_merge == VMerge::Continue)
-            }) {
+            while continues_below(table, last, grid_col) {
                 last += 1;
             }
             let spanned: f32 = layouts[ri..=last].iter().map(|l| l.height).sum();
@@ -2326,6 +2335,14 @@ pub(super) fn compute_row_layouts(
         }
     }
     layouts
+}
+
+/// Whether the row below `ri` continues the merged cell in `grid_col`.
+fn continues_below(table: &Table, ri: usize, grid_col: usize) -> bool {
+    table.rows.get(ri + 1).is_some_and(|next| {
+        next.grid_cells()
+            .any(|(c, _, n)| c == grid_col && n.v_merge == VMerge::Continue)
+    })
 }
 
 /// Pre-compute how much extra height each vMerge Restart cell spans beyond its own row.

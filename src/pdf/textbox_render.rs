@@ -255,6 +255,7 @@ fn layout_box_paragraph(
             ls,
             line_h,
             text_ascent,
+            1.0,
             tp.text_alignment == crate::model::TextAlignment::Top,
         );
         super::size_break_lines(&mut lines, runs, ls, line_h, ctx.fonts);
@@ -924,6 +925,7 @@ pub(super) fn render_textbox_paragraphs(
                 .zip(para_tag)
                 .map(|(StoryTag { tags, page, .. }, p)| LinkTagger::new(tags, *page, p)),
             picture_clip,
+            None,
         );
         if para_tag.is_some() {
             Tags::end(content);

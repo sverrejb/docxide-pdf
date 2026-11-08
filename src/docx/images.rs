@@ -71,6 +71,18 @@ pub(super) fn extent_dimensions(container: roxmltree::Node) -> (f32, f32) {
     wpd(container, "extent").map_or((0.0, 0.0), |e| (emu_attr(e, "cx"), emu_attr(e, "cy")))
 }
 
+/// An inline picture's size as Word lays it out: the height cut to whole
+/// twips, the width scaled with it (Word for Mac probes: extents of 2493.2 to
+/// 2493.9 twips all step 124.65pt lines and draw 124.65pt tall, a 72pt wide
+/// one 71.98pt wide; 1000.75 twips step 50pt).
+fn inline_picture_extent(w: f32, h: f32) -> (f32, f32) {
+    let cut = (h * 20.0 + 1e-3).floor() / 20.0;
+    if cut <= 0.0 {
+        return (w, h);
+    }
+    (w * cut / h, cut)
+}
+
 /// `wp14:sizeRelH relativeFrom="margin"` with a non-zero pctWidth, as a
 /// fraction of the text width.
 fn pct_width_of_margin(anchor: roxmltree::Node) -> Option<f32> {
@@ -562,6 +574,7 @@ pub(super) fn read_image_from_zip_extra<R: Read + Seek>(
         pixel_height: ph,
         display_width: display_w,
         display_height: display_h,
+        trimmed_width: 0.0,
         jpeg_components: components,
         layout_extra_height,
         layout_extra_top,
@@ -892,11 +905,11 @@ fn parse_placed_drawing<R: Read + Seek>(
         }
 
         let (extra_h, extra_top) = inline_extra_height(container);
+        let (pic_w, pic_h) = inline_picture_extent(display_w, display_h);
         if let Some(mut img) = find_blip_embeds(container).find_map(|id| {
-            read_image_from_zip_extra(
-                id, ctx.rels, ctx.zip, display_w, display_h, extra_h, extra_top,
-            )
+            read_image_from_zip_extra(id, ctx.rels, ctx.zip, pic_w, pic_h, extra_h, extra_top)
         }) {
+            img.trimmed_width = display_w - pic_w;
             apply_pic_props(&mut img, container, ctx.theme);
             return Some(RunDrawingResult::Inline(img));
         }
@@ -992,15 +1005,19 @@ pub(super) fn compute_drawing_info<R: Read + Seek>(
 
             let (display_w, display_h) = extent_dimensions(container);
             let (extra_h, extra_top) = inline_extra_height(container);
-            max_height = max_height.max(display_h + extra_h);
+            let (pic_w, pic_h) = if find_blip_embeds(container).next().is_some() {
+                inline_picture_extent(display_w, display_h)
+            } else {
+                (display_w, display_h)
+            };
+            max_height = max_height.max(pic_h + extra_h);
 
             if image.is_none() {
                 image = find_blip_embeds(container).find_map(|id| {
-                    read_image_from_zip_extra(
-                        id, rels, zip, display_w, display_h, extra_h, extra_top,
-                    )
+                    read_image_from_zip_extra(id, rels, zip, pic_w, pic_h, extra_h, extra_top)
                 });
                 if let Some(ref mut img) = image {
+                    img.trimmed_width = display_w - pic_w;
                     apply_pic_props(img, container, theme);
                 }
             }
