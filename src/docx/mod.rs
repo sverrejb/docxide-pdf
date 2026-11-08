@@ -231,6 +231,7 @@ pub(in crate::docx) struct ParseContext<'a, R: std::io::Read + std::io::Seek> {
     pub(in crate::docx) theme: &'a styles::ThemeFonts,
     pub(in crate::docx) rels: &'a HashMap<String, String>,
     pub(in crate::docx) zip: &'a mut zip::ZipArchive<R>,
+    pub(in crate::docx) media: &'a mut images::MediaParts,
     pub(in crate::docx) numbering: &'a numbering::NumberingInfo,
     pub(in crate::docx) revisions: &'a Revisions,
     /// The body's comment ranges (`comment_ranges`); empty for headers,
@@ -1273,10 +1274,11 @@ fn parse_zip<R: Read + std::io::Seek>(
     let rels = parse_relationships(zip);
     let ft = parse_font_table(zip);
     let (embedded_fonts, font_table) = (ft.embedded_fonts, ft.font_table);
+    let mut media = images::MediaParts::default();
     let (footnotes, footnote_separator) =
-        parse_footnotes(zip, &styles, &theme, &numbering, &revisions);
+        parse_footnotes(zip, &mut media, &styles, &theme, &numbering, &revisions);
     let (endnotes, endnote_separator) =
-        parse_endnotes(zip, &styles, &theme, &numbering, &revisions);
+        parse_endnotes(zip, &mut media, &styles, &theme, &numbering, &revisions);
     let mut comments = comments::parse_comments(zip);
     let (title, author, subject, keywords) = parse_core_props(zip);
 
@@ -1318,6 +1320,7 @@ fn parse_zip<R: Read + std::io::Seek>(
         theme: &theme,
         rels: &rels,
         zip,
+        media: &mut media,
         numbering: &numbering,
         revisions: &revisions,
         comments: comment_ranges,
