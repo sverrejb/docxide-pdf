@@ -594,6 +594,17 @@ fn cell_preferred_widths(
     if widths.iter().any(|w| w.is_some_and(|w| w <= 0.0)) {
         return None;
     }
+    // A merged cell whose other columns are known settles its last unknown
+    // one first: federal_procurement's 3192 tw span over two unsized columns
+    // waits for the 5256 tw span beside a 3084 tw cell to fix the first.
+    while let Some((col, w)) = merged().find_map(|(cols, cell)| {
+        let mut unknown = cols.clone().filter(|&c| widths[c].is_none());
+        let col = unknown.next().filter(|_| unknown.next().is_none())?;
+        let known: f32 = cols.filter_map(|c| widths[c]).sum();
+        Some((col, (cell.width - known).max(0.0)))
+    }) {
+        widths[col] = Some(w);
+    }
     let mut widths: Vec<f32> = widths.into_iter().map(|w| w.unwrap_or(0.0)).collect();
     for (cols, cell) in merged() {
         let spanned: f32 = widths[cols.clone()].iter().sum();
@@ -609,7 +620,9 @@ fn cell_preferred_widths(
         .iter()
         .zip(&table.col_widths)
         .any(|(cell, grid)| (cell - grid).abs() > 0.5);
-    if !stale && !nested {
+    let avail = avail?;
+    let overflows = |widths: &[f32]| widths.iter().sum::<f32>() > avail + 0.5;
+    if !stale && !nested && !overflows(&widths) {
         return None;
     }
     for (w, min) in widths.iter_mut().zip(min_widths) {
@@ -631,9 +644,23 @@ fn cell_preferred_widths(
             widths[c] = widths[c].max(share);
         }
     }
-    avail
-        .is_some_and(|avail| widths.iter().sum::<f32>() <= avail + 0.5)
-        .then_some(widths)
+    // Cells too wide for the page give up width in proportion to their room
+    // above their longest word, nested table or cell margins (Word probes on
+    // case100: 9889 tw of cells on a 9357 tw page, every column within
+    // 0.6pt; autofit-saved-grid-auto-nested-address's empty column keeps
+    // its 10.8pt of margins).
+    if overflows(&widths) {
+        if nested {
+            return None;
+        }
+        let floor: Vec<f32> = min_widths
+            .iter()
+            .zip(hard_content_widths(table, true))
+            .map(|(m, h)| m.max(h).max(table.cell_margins.left + table.cell_margins.right))
+            .collect();
+        squeeze_to_width(&mut widths, &floor, avail);
+    }
+    Some(widths)
 }
 
 /// Each grid column's narrowest auto-fit width: its longest word, and at
@@ -656,6 +683,7 @@ pub(super) fn auto_fit_columns(
     fonts: &HashMap<String, FontEntry>,
     available_width: Option<f32>,
     fill_width: Option<f32>,
+    overhang: f32,
 ) -> Vec<f32> {
     let ncols = table.col_widths.len();
     if ncols == 0 {
@@ -670,7 +698,7 @@ pub(super) fn auto_fit_columns(
         && !table.fixed_layout
         && !table.grid_inferred
     {
-        return auto_fit_columns(table, fonts, None, None);
+        return auto_fit_columns(table, fonts, None, None, 0.0);
     }
 
     let cm = &table.cell_margins;
@@ -738,15 +766,17 @@ pub(super) fn auto_fit_columns(
     // table's cells must fit beside its indent: uk_commercial_lease's 8720 tw
     // of cells at tblInd 851 overflow the 9073 tw text width, and Word drew
     // its saved 8222 tw squeeze.
-    if (grid_uniform || !has_nested_table)
-        && let Some(widths) = cell_preferred_widths(
-            table,
-            fonts,
-            &min_widths,
-            fill_width.map(|w| w - table.table_indent).or(available_width),
-            fill_width.is_none(),
-        )
-    {
+    // A top-level table holding a nested one takes it as well: Word sized
+    // case100's host from its 5036/340/340/4173 tw cells, not its grid.
+    if let Some(widths) = cell_preferred_widths(
+        table,
+        fonts,
+        &min_widths,
+        fill_width
+            .map(|w| w - table.table_indent + overhang)
+            .or(available_width),
+        fill_width.is_none(),
+    ) {
         return widths;
     }
 
@@ -1167,7 +1197,7 @@ fn registration_table_extent(table: &Table, cell_text_w: f32, ctx: &RenderContex
     if x < 0.0 {
         return None;
     }
-    let mut widths = auto_fit_columns(table, ctx.fonts, Some(cell_text_w), None);
+    let mut widths = auto_fit_columns(table, ctx.fonts, Some(cell_text_w), None, 0.0);
     apply_nested_pct_width(table, &mut widths, cell_text_w);
     let strip =
         cell_text_w - x - widths.iter().sum::<f32>() - pos.left_from_text - pos.right_from_text;
@@ -2141,7 +2171,7 @@ pub(super) fn compute_row_layouts(
                                 }
                                 // The widths the nested table is drawn at, so a split's
                                 // line cursors index the lines it draws.
-                                let mut nested_cw = auto_fit_columns(nested_table, ctx.fonts, Some(cell_text_w), None);
+                                let mut nested_cw = auto_fit_columns(nested_table, ctx.fonts, Some(cell_text_w), None, 0.0);
                                 apply_nested_pct_width(nested_table, &mut nested_cw, cell_text_w);
                                 let nested_layouts =
                                     compute_row_layouts(nested_table, &nested_cw, ctx, hf_sub);
@@ -2956,7 +2986,7 @@ mod tests {
             let Block::Table(table) = &doc.sections[0].blocks[0] else {
                 panic!("table");
             };
-            let width = auto_fit_columns(table, &fonts, Some(150.0), None)[0];
+            let width = auto_fit_columns(table, &fonts, Some(150.0), None, 0.0)[0];
             assert!((width - (35.0 + 10.0 * levels as f32)).abs() < 0.001);
         }
     }
@@ -3083,10 +3113,10 @@ mod tests {
             panic!("nested table")
         };
         let fonts = HashMap::new();
-        let kept = auto_fit_columns(nested, &fonts, Some(260.0), None);
+        let kept = auto_fit_columns(nested, &fonts, Some(260.0), None, 0.0);
         assert_eq!(kept, nested.col_widths);
         assert!(kept.iter().sum::<f32>() > 230.0);
-        let squeezed = auto_fit_columns(nested, &fonts, Some(80.0), None);
+        let squeezed = auto_fit_columns(nested, &fonts, Some(80.0), None, 0.0);
         assert!(squeezed.iter().sum::<f32>() <= 80.001);
     }
 
@@ -3101,10 +3131,10 @@ mod tests {
             panic!("nested table")
         };
         let fonts = HashMap::new();
-        let kept = auto_fit_columns(nested, &fonts, Some(260.0), None);
-        assert_eq!(kept, auto_fit_columns(nested, &fonts, None, None));
+        let kept = auto_fit_columns(nested, &fonts, Some(260.0), None, 0.0);
+        assert_eq!(kept, auto_fit_columns(nested, &fonts, None, None, 0.0));
         assert!(kept.iter().sum::<f32>() > 230.0);
-        let squeezed = auto_fit_columns(nested, &fonts, Some(80.0), None);
+        let squeezed = auto_fit_columns(nested, &fonts, Some(80.0), None, 0.0);
         assert_eq!(squeezed, kept);
     }
 
@@ -3159,14 +3189,14 @@ mod tests {
             .push(Block::Table(make(vec![230.0], vec![230.0])));
         let fonts = HashMap::new();
         assert_eq!(
-            auto_fit_columns(&parent, &fonts, None, None),
+            auto_fit_columns(&parent, &fonts, None, None, 0.0),
             vec![250.0, 150.0]
         );
         parent.fixed_layout = true;
-        assert!(auto_fit_columns(&parent, &fonts, None, None)[0] < 240.0);
+        assert!(auto_fit_columns(&parent, &fonts, None, None, 0.0)[0] < 240.0);
         parent.fixed_layout = false;
         parent.auto_width = false;
-        assert!(auto_fit_columns(&parent, &fonts, None, None)[0] < 240.0);
+        assert!(auto_fit_columns(&parent, &fonts, None, None, 0.0)[0] < 240.0);
     }
 
     #[test]
@@ -3217,31 +3247,31 @@ mod tests {
         let mut table = make(vec![250.0, 150.0], vec![300.0, 300.0]);
         let fonts = HashMap::new();
         assert_eq!(
-            auto_fit_columns(&table, &fonts, None, None),
+            auto_fit_columns(&table, &fonts, None, None, 0.0),
             vec![250.0, 150.0]
         );
         table.col_widths = vec![235.6, 232.25];
         assert_eq!(
-            auto_fit_columns(&table, &fonts, None, None),
+            auto_fit_columns(&table, &fonts, None, None, 0.0),
             vec![235.6, 232.25]
         );
         table.col_widths = vec![250.0, 150.0];
         table.fixed_layout = true;
         assert_eq!(
-            auto_fit_columns(&table, &fonts, None, None),
+            auto_fit_columns(&table, &fonts, None, None, 0.0),
             vec![200.0, 200.0]
         );
         table.fixed_layout = false;
         table.auto_width = false;
         assert_eq!(
-            auto_fit_columns(&table, &fonts, None, None),
+            auto_fit_columns(&table, &fonts, None, None, 0.0),
             vec![200.0, 200.0]
         );
         table.auto_width = true;
         table.rows[0].cells[0].width = 250.0;
         table.rows[0].cells[1].width = 150.0;
         assert_eq!(
-            auto_fit_columns(&table, &fonts, None, None),
+            auto_fit_columns(&table, &fonts, None, None, 0.0),
             vec![250.0, 150.0]
         );
     }

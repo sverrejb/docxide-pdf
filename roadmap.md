@@ -391,6 +391,11 @@ Open queue from the large-corpus and focus-fixture rounds:
   case61's 200-twip column is widened to fit its text by Word, and its table 2
   first column is 9.6pt too wide in ours; case6 and case52/53 whole columns
   shifted 7–11pt; air_pollution's dot lines fit 42 dots in Word, 41 in ours.
+- **Over-wide AutoFit cells** (2026-11-08, case100 probes): squeezed by room
+  above each column's longest word. erasmus_plus's three slightly-over tables
+  (cells ~446pt on 439pt) come out up to 1.6pt per column off Word's grid,
+  which spares some columns that rule would cut (−1.1 J); federal_procurement's
+  merged-cell table is within 1.5pt.
 - Some rows run slightly short (slovak_eu_directive ~0.03pt per row); a
   vMerge/colspan test table gets a far too narrow column.
 - Nested tables use neither compat rule for the outdent

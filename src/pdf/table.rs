@@ -2026,11 +2026,23 @@ pub(super) fn render_table(
     } else if let Some(col_w) = available_w {
         // A table in a newspaper column sizes like one on the page, then is
         // squeezed into the column (the nested-table path shrank it to content).
-        let mut w = auto_fit_columns(table, ctx.fonts, None, Some(fit_w));
+        let mut w = auto_fit_columns(
+            table,
+            ctx.fonts,
+            None,
+            Some(fit_w),
+            table.autofit_overhang(ctx.compat_mode),
+        );
         squeeze_to_width(&mut w, &min_content_widths(table, ctx.fonts), col_w);
         w
     } else {
-        auto_fit_columns(table, ctx.fonts, available_w, Some(fit_w))
+        auto_fit_columns(
+            table,
+            ctx.fonts,
+            available_w,
+            Some(fit_w),
+            table.autofit_overhang(ctx.compat_mode),
+        )
     };
     apply_pct_width(
         table,
@@ -2711,7 +2723,13 @@ pub(super) fn compute_hf_table_height(table: &Table, ctx: &RenderContext, conten
     // A header's auto-fit table sizes to its content like a body table
     // (issue #142: Word shrinks the same two-word table to 64pt in both
     // places; without the fill target the header one kept its 396pt grid).
-    let mut col_widths = auto_fit_columns(table, ctx.fonts, None, Some(content_w));
+    let mut col_widths = auto_fit_columns(
+        table,
+        ctx.fonts,
+        None,
+        Some(content_w),
+        table.autofit_overhang(ctx.compat_mode),
+    );
     apply_pct_width(table, &mut col_widths, content_w, ctx.compat_mode);
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     row_layouts.iter().map(|r| r.height).sum()
@@ -2733,7 +2751,13 @@ pub(super) fn render_header_footer_table(
     is_header: bool,
 ) {
     let content_w = sp.page_width - sp.margin_left - sp.margin_right;
-    let mut col_widths = auto_fit_columns(table, ctx.fonts, None, Some(content_w));
+    let mut col_widths = auto_fit_columns(
+        table,
+        ctx.fonts,
+        None,
+        Some(content_w),
+        table.autofit_overhang(ctx.compat_mode),
+    );
     apply_pct_width(table, &mut col_widths, content_w, ctx.compat_mode);
     let hf_sub = HfSubstitution {
         page_num,
@@ -2820,7 +2844,13 @@ impl<'t> TextboxTable<'t> {
         let mut col_widths = if table.fixed_layout {
             table.col_widths.clone()
         } else {
-            let mut widths = auto_fit_columns(table, ctx.fonts, None, Some(area_w));
+            let mut widths = auto_fit_columns(
+                table,
+                ctx.fonts,
+                None,
+                Some(area_w),
+                table.autofit_overhang(ctx.compat_mode),
+            );
             if table.auto_width {
                 // Columns keep their longest word and widest picture: a table
                 // that cannot shrink enough runs past the area.

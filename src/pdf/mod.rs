@@ -2634,7 +2634,13 @@ fn first_row_height(table: &crate::model::Table, ctx: &RenderContext, col_w: f32
     let mut col_widths = if table.fixed_layout {
         table_layout::fixed_columns(table, col_w, ctx.compat_mode)
     } else {
-        table_layout::auto_fit_columns(table, ctx.fonts, Some(col_w), Some(col_w))
+        table_layout::auto_fit_columns(
+            table,
+            ctx.fonts,
+            Some(col_w),
+            Some(col_w),
+            table.autofit_overhang(ctx.compat_mode),
+        )
     };
     table_layout::apply_pct_width(table, &mut col_widths, col_w, ctx.compat_mode);
     table_layout::compute_row_layouts(table, &col_widths, ctx, None)
@@ -2778,7 +2784,13 @@ fn empty_frame_table_bands(
                         return false;
                     }
                     let widths =
-                        table_layout::auto_fit_columns(t, ctx.fonts, None, Some(sp.text_width()));
+                        table_layout::auto_fit_columns(
+                            t,
+                            ctx.fonts,
+                            None,
+                            Some(sp.text_width()),
+                            t.autofit_overhang(ctx.compat_mode),
+                        );
                     prefix_h += table_layout::compute_row_layouts(t, &widths, ctx, None)
                         .iter()
                         .map(|r| r.height)
