@@ -793,6 +793,8 @@ pub struct Run {
     /// `w:fitText` (or the cell's `w:tcFitText`): the text is spread or
     /// squeezed to this width.
     pub fit_text: Option<FitText>,
+    /// `w:snapToGrid`: a `linesAndChars` grid's extra pitch applies.
+    pub snap_to_grid: bool,
 }
 
 /// A fitText region: the runs sharing an `id` fill `width` points together,
@@ -931,6 +933,7 @@ impl Default for Run {
             math: None,
             ruby: None,
             fit_text: None,
+            snap_to_grid: true,
         }
     }
 }

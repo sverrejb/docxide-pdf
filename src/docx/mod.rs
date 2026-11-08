@@ -1597,7 +1597,29 @@ fn parse_zip<R: Read + std::io::Seek>(
     if settings.balance_sbdb_width {
         double_wide_char_spacing(&mut doc);
     }
+    grid_char_pitch(&mut doc, &grid_deltas);
     Ok(doc)
+}
+
+/// A `linesAndChars` grid adds its `charSpace` to every character a run
+/// snapped to it draws, Latin or East Asian, at any size (Word probes
+/// 2026-11-08: +1pt under 4096, −0.49 under −2000; tokyo_welfare's 10.5pt
+/// ideographs step 10.58). ponytail: body only; `snapToChars` snaps to
+/// whole cells instead and is not modelled.
+fn grid_char_pitch(doc: &mut Document, grid_deltas: &[f32]) {
+    for (section, &delta) in doc.sections.iter_mut().zip(grid_deltas) {
+        let grid = section.properties.grid_type;
+        if delta == 0.0 || grid != crate::model::DocGridType::LinesAndChars {
+            continue;
+        }
+        let mut paras = Vec::new();
+        body_paragraphs(&mut section.blocks, &mut paras);
+        for run in paras.into_iter().flat_map(|p| p.runs.iter_mut()) {
+            if run.snap_to_grid {
+                run.char_spacing += delta;
+            }
+        }
+    }
 }
 
 /// Under `balanceSingleByteDoubleByteWidth` Word spaces a full-width

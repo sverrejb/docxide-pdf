@@ -115,6 +115,12 @@ alphaModFix, picture-filled inline shapes (tiled), shape glow/reflection
   online with left/justified paragraphs, a plain character versus a closing
   mark at the line end, and a quarter versus half em. This is
   chinese_costume's extra page.
+- **tokyo_welfare (50.6)**: the `linesAndChars` pitch is in (2026-11-08);
+  `snapToChars` (whole grid cells, 12pt text takes two) is not. Under
+  the char grid, a compat-14 left-aligned list line wraps 認 with 6pt free
+  where our squeeze of （ ） 、 keeps it, yet Word does squeeze the 「す。）」
+  line above (both kept under a plain `lines` grid). Turning the pull off
+  for the grid broke the second line; probe what separates them.
 - **japanese_land_development (35.6)**: Word puts no gap between "、" and a
   digit ("2、3", 10.5pt step), which our autospace rule now matches. But
   Word's text after "　2　" plus a plain half-width space starts 2.6pt

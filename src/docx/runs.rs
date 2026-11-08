@@ -650,6 +650,8 @@ impl ParagraphRunDefaults {
                     id: wml_attr(ft, "id").and_then(|v| v.parse().ok()).unwrap_or(0),
                 })
             }),
+            // ponytail: direct formatting only, as in tokyo_welfare.
+            snap_to_grid: rpr.and_then(|n| wml_bool(n, "snapToGrid")) != Some(false),
             text_scale: rpr
                 .and_then(|n| wml_attr(n, "w"))
                 .and_then(|v| v.trim_end_matches('%').parse::<f32>().ok())
