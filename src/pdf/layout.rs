@@ -2220,6 +2220,7 @@ pub(super) fn build_paragraph_lines(
     let mut current_x: f32 = 0.0;
     let mut pending_space_w: f32 = 0.0;
     let mut pending_space_count: usize = 0;
+    let mut prev_border: Option<&crate::model::ParagraphBorder> = None;
     // pending_space_w minus CJK auto-spacing: a space character really occurred.
     let mut pending_real_space = false;
     // Underline state of the run that emitted the pending whitespace. A space
@@ -2530,6 +2531,25 @@ pub(super) fn build_paragraph_lines(
         let cs = run.char_spacing;
         let ts = run.text_scale / 100.0;
 
+        // A run border's box takes its width and space on each side of the
+        // bordered text (run-borders: a 1.5pt Emphasis box opens 1.5pt after
+        // the space before it and closes 1.5pt before the next glyph).
+        // A bordered word wrapping to a new line opens its box there again
+        // (run-borders p8: such lines start 1.5pt in).
+        let pad = |b: Option<&crate::model::ParagraphBorder>| b.map_or(0.0, |b| b.width_pt + b.space_pt);
+        let line_start_pad = pad(run.border.as_ref());
+        if !text.is_empty() && run.border.as_ref() != prev_border {
+            current_x += pad(prev_border) + line_start_pad;
+            prev_border = run.border.as_ref();
+        }
+        // The box closes after the run's last word unless the next run
+        // continues it; a word ending the line needs that room too.
+        let closing_pad = if runs.get(run_idx + 1).is_some_and(|r| r.border == run.border) {
+            0.0
+        } else {
+            line_start_pad
+        };
+
         let mut is_first_word_in_run = true;
         let mut prev_char = None;
         let mut words: std::collections::VecDeque<_> = split_preserving_spaces(text).into();
@@ -2702,7 +2722,8 @@ pub(super) fn build_paragraph_lines(
             };
 
             // Small tolerance for floating-point width accumulation over many glyphs
-            let mut overflows = proposed_x + ww > cur_max + 0.05;
+            let word_closing_pad = if words.is_empty() { closing_pad } else { 0.0 };
+            let mut overflows = proposed_x + ww + word_closing_pad > cur_max + 0.05;
             // The segment after a hyphen break may stay by narrowing the
             // line's spaces, judged like a word after a space: Word 2013+ keeps
             // "x", "12-", "based", "and/or" and "12345/2026" alike, within the
@@ -2735,7 +2756,7 @@ pub(super) fn build_paragraph_lines(
                 if [space_room, line_room]
                     .into_iter()
                     .flatten()
-                    .any(|room| proposed_x + ww - cur_max <= room)
+                    .any(|room| proposed_x + ww + word_closing_pad - cur_max <= room)
                 {
                     overflows = false;
                     squeezed_lines.push(lines.len());
@@ -2798,12 +2819,12 @@ pub(super) fn build_paragraph_lines(
                     eff_fs,
                     cs,
                     y_off,
-                    0.0,
+                    line_start_pad,
                     ww,
                     space_rtl,
                     cjk.compress_punct,
                 );
-                current_x = ww;
+                current_x = line_start_pad + ww;
                 continue;
             }
 
@@ -2953,7 +2974,7 @@ pub(super) fn build_paragraph_lines(
                         &mut cur_right_info,
                     )
                 });
-                current_x = 0.0;
+                current_x = line_start_pad;
                 // A word too wide for a strip beside a float goes below it
                 // whole (Word example: "charlie" beside a 40pt strip right of a
                 // wrapText=right picture).
