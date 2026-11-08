@@ -1760,7 +1760,11 @@ pub(super) fn parse_runs<R: Read + Seek>(
                                 flush_pending(&mut pending_text, &mut runs);
                                 runs.push(fmt.tab_run());
                             }
-                            pending_text.push_str(&part.replace('\n', " ").replace('\u{AD}', "-"));
+                            pending_text.extend(part.chars().map(|c| match c {
+                                '\n' => ' ',
+                                '\u{AD}' => '-',
+                                c => c,
+                            }));
                         }
                     }
                 }

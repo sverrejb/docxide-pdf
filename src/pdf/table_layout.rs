@@ -337,11 +337,7 @@ fn natural_widths(
                             continue;
                         };
                         let fs = run.font_size;
-                        let text = if run.caps {
-                            std::borrow::Cow::Owned(run.text.to_uppercase())
-                        } else {
-                            std::borrow::Cow::Borrowed(&run.text)
-                        };
+                        let text = super::layout::caps_word(run, &run.text);
                         para_w += super::layout::soft_split_width(&text, |t| {
                             word_width_for_run(entry, run, t, fs)
                         });
@@ -516,11 +512,7 @@ fn cell_min_content_width(
                 prev_char = None;
                 continue;
             };
-            let text = if run.caps {
-                std::borrow::Cow::Owned(run.text.to_uppercase())
-            } else {
-                std::borrow::Cow::Borrowed(&run.text)
-            };
+            let text = super::layout::caps_word(run, &run.text);
             let fs = run.font_size;
             // Same break opportunities as line layout: a CJK sentence holds
             // no spaces but may wrap after any ideograph.
@@ -1368,11 +1360,7 @@ fn plain_line_width(p: &crate::model::Paragraph, fonts: &HashMap<String, FontEnt
     let mut key = String::new();
     for run in &p.runs {
         let font = fonts.get(font_key_buf(run, &mut key))?;
-        let text = if run.caps {
-            std::borrow::Cow::Owned(run.text.to_uppercase())
-        } else {
-            std::borrow::Cow::Borrowed(run.text.as_str())
-        };
+        let text = super::layout::caps_word(run, &run.text);
         width += super::layout::soft_split_width(&text, |t| {
             word_width_for_run(font, run, t, run.font_size)
         });

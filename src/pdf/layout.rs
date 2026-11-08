@@ -485,7 +485,9 @@ type Decoration = (f32, f32, f32, f32, Option<[u8; 3]>);
 /// underlines keep the old geometry.
 fn underline_lines(
     entry: Option<&FontEntry>,
-    (font_size, double, link): (f32, bool, bool),
+    font_size: f32,
+    double: bool,
+    link: bool,
     y: f32,
 ) -> Vec<(f32, f32)> {
     if !double && let Some((offset, th)) = entry.and_then(|e| post_underline(e, font_size)) {
@@ -1437,7 +1439,7 @@ pub(super) fn soft_split_width(text: &str, width: impl Fn(&str) -> f32) -> f32 {
 
 /// A word as `w:caps` draws it (capitals); words are uppercased one by one so
 /// the word as written stays at hand for `/ActualText`.
-fn caps_word<'a>(run: &Run, word: &'a str) -> Cow<'a, str> {
+pub(super) fn caps_word<'a>(run: &Run, word: &'a str) -> Cow<'a, str> {
     if run.caps {
         Cow::Owned(word.to_uppercase())
     } else {
@@ -2891,6 +2893,7 @@ pub(super) fn build_paragraph_lines(
 
         let cs = run.char_spacing;
         let width = run_width(run, seen_fonts, &mut key_buf);
+        let onward = || soft_pieces(&runs[run_idx + 1..], seen_fonts);
 
         // A run border's box takes its width and space on each side of the
         // bordered text (run-borders: a 1.5pt Emphasis box opens 1.5pt after
@@ -2926,6 +2929,8 @@ pub(super) fn build_paragraph_lines(
                 pending_real_space = true;
                 last_space_run = Some(run);
             }
+            let space_rtl = last_space_run.is_some_and(|r| r.rtl);
+            let space_underlined = last_space_run.is_some_and(underlines_space);
             // current_chunks still holds what precedes this word on its line,
             // so a wrap below keeps the space at the end of the finished line.
             if std::mem::take(&mut pending_real_space) {
@@ -2996,7 +3001,7 @@ pub(super) fn build_paragraph_lines(
                     source,
                     &mut words,
                     width,
-                    || soft_pieces(&runs[run_idx + 1..], seen_fonts),
+                    onward,
                     soft_room,
                     whole,
                 );
@@ -3227,7 +3232,7 @@ pub(super) fn build_paragraph_lines(
                     y_off,
                     line_start_pad,
                     ww,
-                    last_space_run.is_some_and(|r| r.rtl),
+                    space_rtl,
                     cjk.compress_punct,
                 );
                 current_x = line_start_pad + ww;
@@ -3304,11 +3309,11 @@ pub(super) fn build_paragraph_lines(
                     y_off,
                     current_x,
                     ww,
-                    last_space_run.is_some_and(|r| r.rtl),
+                    space_rtl,
                     cjk.compress_punct,
                 );
                 if literal_spaces > 1
-                    && !last_space_run.is_some_and(underlines_space)
+                    && !space_underlined
                     && chunk_start > 0
                 {
                     current_chunks[chunk_start].preceding_spaces = literal_spaces;
@@ -3361,7 +3366,7 @@ pub(super) fn build_paragraph_lines(
                             y_off,
                             start_x,
                             ww,
-                            last_space_run.is_some_and(|r| r.rtl),
+                            space_rtl,
                             cjk.compress_punct,
                         );
                         current_x = start_x + ww;
@@ -3372,7 +3377,7 @@ pub(super) fn build_paragraph_lines(
                 // No right region or right region also full — wrap to next line
                 let mut line = TextLine {
                     trailing_space: pending_space_w,
-                    trailing_space_rtl: last_space_run.is_some_and(|r| r.rtl),
+                    trailing_space_rtl: space_rtl,
                     ..finish_dual_line(
                         &mut current_chunks,
                         &mut in_right_region,
@@ -3407,7 +3412,7 @@ pub(super) fn build_paragraph_lines(
                         source,
                         &mut words,
                         width,
-                        || soft_pieces(&runs[run_idx + 1..], seen_fonts),
+                        onward,
                         room + 0.05,
                         true,
                     );
@@ -3469,7 +3474,7 @@ pub(super) fn build_paragraph_lines(
                             y_off,
                             0.0,
                             ww,
-                            last_space_run.is_some_and(|r| r.rtl),
+                            space_rtl,
                             cjk.compress_punct,
                         );
                         current_x = ww;
@@ -3510,11 +3515,11 @@ pub(super) fn build_paragraph_lines(
                 y_off,
                 current_x,
                 ww,
-                last_space_run.is_some_and(|r| r.rtl),
+                space_rtl,
                 cjk.compress_punct,
             );
             if literal_spaces > 1
-                && !last_space_run.is_some_and(underlines_space)
+                && !space_underlined
                 && chunk_start > 0
                 && let Some(c) = current_chunks.get_mut(chunk_start)
             {
@@ -4471,43 +4476,8 @@ fn show_kerned(content: &mut Content, entry: &FontEntry, text: &str, boundary_sp
 /// scale alike with Tz, so all of this is in thousandths of the font size.
 /// Whole thousandths keep the numbers short; the pen follows the rounded
 /// moves, so the error never adds up. `trailing` is shown last, unplaced.
+/// Starts with the pen at `pen` and returns where it ends.
 fn show_placed(
-    content: &mut Content,
-    entry: &FontEntry,
-    glyphs: &[(&str, f32, f32)],
-    trailing: Option<&str>,
-) {
-    show_placed_from(content, entry, glyphs, trailing, 0.0);
-}
-
-/// `show_placed` with each glyph in its own face (`base`, the face set, or
-/// a fallback one): one TJ per face, the pen carried across them.
-fn show_placed_faces(
-    content: &mut Content,
-    base: &FontEntry,
-    glyphs: &[(&FontEntry, &str, f32, f32)],
-    font_size: f32,
-    trailing: Option<&str>,
-) {
-    let mut pen = 0.0;
-    for run in glyphs.chunk_by(|a, b| std::ptr::eq(a.0, b.0)) {
-        let face = run[0].0;
-        let other = !std::ptr::eq(face, base);
-        if other {
-            content.set_font(Name(face.pdf_name.as_bytes()), font_size);
-        }
-        let seg: Vec<(&str, f32, f32)> = run.iter().map(|&(_, t, x, a)| (t, x, a)).collect();
-        pen = show_placed_from(content, face, &seg, None, pen);
-        if other {
-            content.set_font(Name(base.pdf_name.as_bytes()), font_size);
-        }
-    }
-    if let Some(t) = trailing {
-        content.show(Str(&base.encode(t)));
-    }
-}
-
-fn show_placed_from(
     content: &mut Content,
     entry: &FontEntry,
     glyphs: &[(&str, f32, f32)],
@@ -4529,6 +4499,33 @@ fn show_placed_from(
         items.show(Str(&entry.encode(t)));
     }
     pen
+}
+
+/// `show_placed` with each glyph in its own face (`base`, the face set, or
+/// a fallback one): one TJ per face, the pen carried across them.
+fn show_placed_faces(
+    content: &mut Content,
+    base: &FontEntry,
+    glyphs: &[(&FontEntry, &str, f32, f32)],
+    font_size: f32,
+    trailing: Option<&str>,
+) {
+    let mut pen = 0.0;
+    for run in glyphs.chunk_by(|a, b| std::ptr::eq(a.0, b.0)) {
+        let face = run[0].0;
+        let other = !std::ptr::eq(face, base);
+        if other {
+            content.set_font(Name(face.pdf_name.as_bytes()), font_size);
+        }
+        let seg: Vec<(&str, f32, f32)> = run.iter().map(|&(_, t, x, a)| (t, x, a)).collect();
+        pen = show_placed(content, face, &seg, None, pen);
+        if other {
+            content.set_font(Name(base.pdf_name.as_bytes()), font_size);
+        }
+    }
+    if let Some(t) = trailing {
+        content.show(Str(&base.encode(t)));
+    }
 }
 
 /// Each chunk's glyph x positions as Word's online export draws them
@@ -4762,7 +4759,7 @@ fn show_rtl(
             (s, right, w)
         })
         .collect();
-    show_placed(content, entry, &placed, boundary_space.then_some(" "));
+    show_placed(content, entry, &placed, boundary_space.then_some(" "), 0.0);
 }
 
 /// `text`'s glyphs in logical order, each at the place its right-to-left
@@ -4780,7 +4777,7 @@ pub(super) fn show_visual(content: &mut Content, entry: &FontEntry, text: &str) 
     }
     let placed: Vec<(&str, f32, f32)> =
         glyphs.iter().zip(x).map(|(&(s, w), x)| (s, x, w)).collect();
-    show_placed(content, entry, &placed, None);
+    show_placed(content, entry, &placed, None, 0.0);
 }
 
 pub(super) fn encode_text_for_pdf(
@@ -5940,8 +5937,7 @@ pub(super) fn render_paragraph_lines(
                 if chunk.underline && deco_w > 0.0 {
                     let entry = pdf_name_to_entry.get(chunk.pdf_font.as_str()).copied();
                     let link = chunk.hyperlink_url.is_some();
-                    let ul = (chunk.font_size, chunk.double_underline, link);
-                    for (top, th) in underline_lines(entry, ul, y) {
+                    for (top, th) in underline_lines(entry, chunk.font_size, chunk.double_underline, link, y) {
                         push_decoration(&mut decorations, x, top, deco_w, th, chunk.color);
                     }
                 }
@@ -6045,7 +6041,7 @@ pub(super) fn render_paragraph_lines(
             let w = (start + sp.width).min(line_right) - left;
             if w > 0.0 {
                 let entry = pdf_name_to_entry.get(sp.pdf_font.as_str()).copied();
-                for (top, th) in underline_lines(entry, (sp.font_size, sp.double, false), y) {
+                for (top, th) in underline_lines(entry, sp.font_size, sp.double, false, y) {
                     push_decoration(&mut decorations, left, top, w, th, sp.color);
                 }
             }
@@ -6081,13 +6077,9 @@ pub(super) fn render_paragraph_lines(
                     push_decoration(&mut decorations, box_x, st_y, chunk.width, st_thick, chunk.color);
                 }
                 if chunk.underline {
-                    let (bottom, th) = entry
-                        .and_then(|e| post_underline(e, chunk.font_size))
-                        .map_or(
-                            (y - chunk.font_size * 0.12 - thick, thick),
-                            |(offset, th)| (y - offset - th, th),
-                        );
-                    push_decoration(&mut decorations, box_x, bottom, chunk.width, th, chunk.color);
+                    for (bottom, th) in underline_lines(entry.copied(), chunk.font_size, false, false, y) {
+                        push_decoration(&mut decorations, box_x, bottom, chunk.width, th, chunk.color);
+                    }
                 }
                 let clipped = push_clip(content, picture_clip);
                 let turned = chunk.inline_image_rotation_deg.abs() > 0.01;

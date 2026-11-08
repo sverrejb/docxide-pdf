@@ -4844,9 +4844,8 @@ fn render_paragraph_block(
         lines
             .iter()
             .any(|l| l.chunks.is_empty() && !l.end_spaces.is_empty())
-            .then(|| para.paragraph_mark_font_name.as_deref().and_then(|n| ctx.fonts.get(n)))
+            .then(|| mark_font(para, font_size, ctx.fonts).1.1)
             .flatten()
-            .and_then(|e| run_line_metrics(e, "").1)
     };
     let para_ascent =
         exact_baseline_base.unwrap_or(font_size * tallest_ar.or_else(mark_ar).unwrap_or(0.75));

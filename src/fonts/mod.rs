@@ -245,12 +245,12 @@ impl FontEntry {
                 _ => 0.0,
             };
             let kerning = k * (font_size / 1000.0);
-            let metrics = self
-                .fallback_avg_char_width
-                .get(&ch)
-                .copied()
-                .unwrap_or(self.avg_char_width);
-            let advance = match metrics.filter(|_| text_scale != 100.0) {
+            let metrics = if text_scale != 100.0 {
+                self.fallback_avg_char_width.get(&ch).copied().unwrap_or(self.avg_char_width)
+            } else {
+                None
+            };
+            let advance = match metrics {
                 Some((units, avg)) => {
                     let avg = u64::from(avg);
                     let scaled_avg = percent * avg / 100;
