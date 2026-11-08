@@ -1315,7 +1315,10 @@ pub(super) fn paragraph_alignment(
 
 /// The line width a kashida `jc` keeps free, as a share of the section's
 /// text width (`styles::kashida_fraction`).
-pub(super) fn paragraph_kashida(ppr: Option<roxmltree::Node>, para_style: Option<&ParagraphStyle>) -> f32 {
+pub(super) fn paragraph_kashida(
+    ppr: Option<roxmltree::Node>,
+    para_style: Option<&ParagraphStyle>,
+) -> f32 {
     ppr.and_then(|ppr| wml_attr(ppr, "jc"))
         .map(super::styles::kashida_fraction)
         .or_else(|| para_style.and_then(|s| s.kashida))

@@ -1306,16 +1306,12 @@ fn parse_zip<R: Read + std::io::Seek>(
     // measure by is read ahead (tokyo_welfare: firstLineChars=1000 is 2217
     // twips at 11pt under charSpace 339; Word probes 2026-10-28: 13pt per
     // character under charSpace 4096 at 12pt, 12 under a lines-only grid).
-    let grid_deltas: Vec<f32> = body
+    let sect_prs: Vec<_> = body
         .descendants()
         .filter(|n| n.has_tag_name((WML_NS, "sectPr")))
-        .map(sections::grid_char_delta)
         .collect();
-    let text_widths: Vec<f32> = body
-        .descendants()
-        .filter(|n| n.has_tag_name((WML_NS, "sectPr")))
-        .map(sections::text_width)
-        .collect();
+    let grid_deltas: Vec<f32> = sect_prs.iter().map(|&n| sections::grid_char_delta(n)).collect();
+    let text_widths: Vec<f32> = sect_prs.iter().map(|&n| sections::text_width(n)).collect();
     let mut sect_idx = 0;
     let mut ctx = ParseContext {
         styles: &styles,
