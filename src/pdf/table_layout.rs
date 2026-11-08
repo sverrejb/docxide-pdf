@@ -1863,6 +1863,10 @@ pub(super) fn compute_row_layouts(
                                 let image_only = para_content_h > 0.0
                                     && runs.iter().all(|r| r.text.is_empty() && !r.is_tab);
                                 let mut break_mark_hidden = false;
+                                let end_mark_after_table = prev_was_nested_table
+                                    && block_idx == block_count - 1
+                                    && para_content_h == 0.0
+                                    && is_text_empty(runs);
                                 let lines = if !is_text_empty(runs) && !image_only {
                                     let para_text_w = (cell_text_w
                                         - para.indent_left
@@ -1954,10 +1958,7 @@ pub(super) fn compute_row_layouts(
                                     } else if mark_hidden {
                                         // hideMark: last empty paragraph in cell
                                         // contributes no height
-                                    } else if prev_was_nested_table
-                                        && block_idx == block_count - 1
-                                        && para_content_h == 0.0
-                                    {
+                                    } else if end_mark_after_table {
                                         // End-of-cell mark directly after a nested
                                         // table: Word hides it; space_after is
                                         // suppressed in the trailing-space block
@@ -2145,7 +2146,8 @@ pub(super) fn compute_row_layouts(
                                     content_height: para_content_h,
                                     bottom_border: bottom_border.cloned(),
                                     bottom_band,
-                                    paragraph_mark_vanish: para.paragraph_mark_vanish,
+                                    paragraph_mark_vanish: para.paragraph_mark_vanish
+                                        || end_mark_after_table,
                                     floating_images: cell_floats,
                                     space_after,
                                     has_textboxes: !para.textboxes.is_empty(),
@@ -2605,8 +2607,9 @@ pub(super) fn outer_half_bands(table: &Table) -> (f32, f32) {
     )
 }
 
-/// Height of a chunk; items without lines use their block height.
-pub(super) fn item_chunk_height(item: &CellContentItem, c: &Chunk) -> f32 {
+/// Height of a chunk with `room` left for it on its page; items without
+/// lines use their block height.
+pub(super) fn item_chunk_height(item: &CellContentItem, c: &Chunk, room: f32) -> f32 {
     match item {
         CellContentItem::Paragraph(p) if !p.lines.is_empty() => {
             cell_lines_h(p, c.l0..c.l1.unwrap_or(p.lines.len()))
@@ -2622,23 +2625,23 @@ pub(super) fn item_chunk_height(item: &CellContentItem, c: &Chunk) -> f32 {
             bottom_band,
             ..
         } => {
-            (if c.l0 == 0 && c.from.is_empty() {
+            let mut h = if c.l0 == 0 && c.from.is_empty() {
                 *space_before
             } else {
                 0.0
-            }) + (if c.l1.is_none() && c.to.is_empty() {
-                *bottom_band
-            } else {
-                0.0
-            }) + row_pieces(rows.len(), c)
-                .into_iter()
-                .map(|piece| match piece {
+            };
+            for piece in row_pieces(rows.len(), c) {
+                h += match piece {
                     RowPiece::Rows(range) => rows[range].iter().map(|rl| rl.height).sum::<f32>(),
                     RowPiece::Partial { row, starts, ends } => {
-                        partial_row_height(&rows[row], starts, ends)
+                        partial_row_height(&rows[row], starts, ends, room - h)
                     }
-                })
-                .sum::<f32>()
+                };
+            }
+            if c.l1.is_none() && c.to.is_empty() {
+                h += *bottom_band;
+            }
+            h
         }
     }
 }
@@ -2661,13 +2664,18 @@ pub(super) fn floating_anchor_gap(
 
 /// Height of a row's piece from `starts` to `ends` (one cursor per cell; a
 /// missing start is the cell's beginning, a missing end its finish): its
-/// tallest cell's content.
+/// tallest cell's content, but no less than an at-least row's trHeight with
+/// its cell margins on every page the row spans, up to the `room` left on
+/// that page (Word examples: a 45pt row split 2/2 lines draws two
+/// 55.5pt pieces, a 19.5pt row's one-line continuation 30pt; a 410pt row's
+/// 190pt continuation fills a 350pt page body and ends there).
 pub(super) fn partial_row_height(
     layout: &RowLayout,
     starts: &[CellCursor],
     ends: &[CellCursor],
+    room: f32,
 ) -> f32 {
-    let mut max_h: f32 = 0.0;
+    let mut max_h: f32 = layout.split_min.map_or(0.0, |m| m.min(room));
     for (ci, cell_layout) in layout.cells.iter().enumerate() {
         let cm = &cell_layout.cm;
         let start = starts.get(ci).unwrap_or(&CELL_START);
@@ -2696,7 +2704,8 @@ pub(super) fn partial_row_height(
                 floating_extent = floating_extent
                     .max(h + anchor_gap + rows.iter().map(|r| r.height).sum::<f32>());
             }
-            let mut piece_h = item_chunk_height(item, &c);
+            let sb = chunk_space_before(item, c.item, start);
+            let mut piece_h = item_chunk_height(item, &c, room - h - sb);
             if c.item == start.item
                 && start.item > 0
                 && start.line == 0
@@ -2709,7 +2718,7 @@ pub(super) fn partial_row_height(
             {
                 piece_h -= space_before;
             }
-            h += chunk_space_before(item, c.item, start) + piece_h;
+            h += sb + piece_h;
         }
         // The chunk that finishes the cell keeps its last paragraph's space
         // after, as an unsplit row does.
@@ -2735,6 +2744,37 @@ pub(super) fn chunk_space_before(item: &CellContentItem, pi: usize, start: &Cell
         }
         CellContentItem::Paragraph(p) if pi != start.item || start.line == 0 => p.space_before,
         _ => 0.0,
+    }
+}
+
+/// `cursor` moved past every nested row it has finished in every cell, at
+/// any depth, so the next page does not open with an empty piece of one.
+pub(super) fn skip_finished_row(cell: &CellLayout, mut cursor: CellCursor) -> CellCursor {
+    let Some(CellContentItem::NestedTable { rows, .. }) = cell.items.get(cursor.item) else {
+        return cursor;
+    };
+    let Some(row) = rows.get(cursor.line) else {
+        return cursor;
+    };
+    if cursor.nested.is_empty() || row.cells.len() != cursor.nested.len() {
+        return cursor;
+    }
+    cursor.nested = std::mem::take(&mut cursor.nested)
+        .into_iter()
+        .zip(&row.cells)
+        .map(|(n, c)| skip_finished_row(c, n))
+        .collect();
+    let finished = row
+        .cells
+        .iter()
+        .zip(&cursor.nested)
+        .all(|(c, n)| n.item >= c.items.len());
+    if !finished {
+        cursor
+    } else if cursor.line + 1 < rows.len() {
+        CellCursor::at(cursor.item, cursor.line + 1)
+    } else {
+        CellCursor::at(cursor.item + 1, 0)
     }
 }
 
@@ -2776,7 +2816,7 @@ pub(super) fn find_cell_split(
             from,
             to: &[],
         };
-        let mut item_h = sb + item_chunk_height(item, &rest);
+        let mut item_h = sb + item_chunk_height(item, &rest, available_h - h - sb);
         if first
             && start.item > 0
             && l0 == 0
@@ -2852,7 +2892,7 @@ pub(super) fn find_cell_split(
                 let rest = if row_start.is_empty() {
                     rows[r].height
                 } else {
-                    partial_row_height(&rows[r], row_start, &[])
+                    partial_row_height(&rows[r], row_start, &[], available_h - used)
                 };
                 if used + rest > available_h {
                     break;
@@ -2876,7 +2916,9 @@ pub(super) fn find_cell_split(
             }
             if r == fits
                 && r < rows.len()
-                && rows[r].split_min.is_some_and(|m| available_h - used >= m)
+                && rows[r]
+                    .split_min
+                    .is_some_and(|m| available_h - used >= m || (first && r == l0))
             {
                 let starts: Vec<CellCursor> = (0..rows[r].cells.len())
                     .map(|ci| row_start.get(ci).unwrap_or(&CELL_START).clone())
@@ -2888,7 +2930,8 @@ pub(super) fn find_cell_split(
                     .map(|(c, s)| find_cell_split(c, s, available_h - used, force))
                     .collect();
                 if ends != starts
-                    && used + partial_row_height(&rows[r], &starts, &ends) <= available_h
+                    && used + partial_row_height(&rows[r], &starts, &ends, available_h - used)
+                        <= available_h
                 {
                     return CellCursor {
                         item: pi,
@@ -3435,9 +3478,13 @@ mod floating_nested_tests {
         };
         let split = find_cell_split(&row.cells[0], &CELL_START, 30.0, false);
         assert_eq!(split.item, 1);
-        assert!((partial_row_height(&row, &[], &[split.clone()]) - 12.0).abs() < 0.001);
-        assert!((partial_row_height(&row, &[split.clone()], &[]) - 48.0).abs() < 0.001);
-        assert!((partial_row_height(&row, &[], &[]) - 66.35).abs() < 0.001);
+        assert!(
+            (partial_row_height(&row, &[], &[split.clone()], f32::INFINITY) - 12.0).abs() < 0.001
+        );
+        assert!(
+            (partial_row_height(&row, &[split.clone()], &[], f32::INFINITY) - 48.0).abs() < 0.001
+        );
+        assert!((partial_row_height(&row, &[], &[], f32::INFINITY) - 66.35).abs() < 0.001);
         assert_eq!(find_cell_split(&row.cells[0], &split, 48.0, false).item, 2);
     }
 
@@ -3468,7 +3515,9 @@ mod floating_nested_tests {
             keeps_next: false,
         };
         let start = CellCursor::at(1, 0);
-        assert!((partial_row_height(&row, &[start.clone()], &[]) - 70.0).abs() < 0.001);
+        assert!(
+            (partial_row_height(&row, &[start.clone()], &[], f32::INFINITY) - 70.0).abs() < 0.001
+        );
         assert_eq!(find_cell_split(&row.cells[0], &start, 70.01, false).item, 4);
         assert_eq!(find_cell_split(&row.cells[0], &start, 69.9, false).item, 3);
     }

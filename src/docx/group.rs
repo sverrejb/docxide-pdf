@@ -15,7 +15,7 @@ use crate::model::{
 };
 
 use super::images::{
-    RunDrawingResult, anchor_z_order, extent_dimensions, parse_anchor_position,
+    RunDrawingResult, anchor_z_order, anchored_to_line, extent_dimensions, parse_anchor_position,
     parse_wrap_type, read_image_from_zip, vml_imagedata_props, vml_z_order, wrap_dist_left_right,
     wrap_dist_top_bottom,
 };
@@ -137,6 +137,8 @@ struct BaseAnchor {
     /// True for inline canvases — their flattened children flow at the
     /// paragraph text-start and so must pick up the paragraph's left indent.
     on_line: bool,
+    /// See `Textbox::v_from_line`.
+    v_from_line: bool,
 }
 
 impl BaseAnchor {
@@ -179,6 +181,7 @@ pub(super) fn parse_canvas_or_group<R: Read + Seek>(
             behind_doc,
             z_index,
             on_line: false,
+            v_from_line: anchored_to_line(container),
         }
     } else {
         BaseAnchor {
@@ -190,6 +193,7 @@ pub(super) fn parse_canvas_or_group<R: Read + Seek>(
             behind_doc: false,
             z_index: 0,
             on_line: true,
+            v_from_line: false,
         }
     };
 
@@ -251,6 +255,7 @@ pub(super) fn parse_canvas_or_group<R: Read + Seek>(
             behind_doc: base.behind_doc,
             z_index: base.z_index,
             no_text_wrap: true,
+            v_from_line: base.v_from_line,
             ..Textbox::default()
         }));
     }
@@ -375,6 +380,7 @@ fn emit_wsp<R: Read + Seek>(
             z_index: base.z_index,
             on_line: base.on_line,
             in_group: true,
+            v_from_line: base.v_from_line,
             ..Textbox::from(shape)
         }));
     }
@@ -424,6 +430,7 @@ fn group_image(image: EmbeddedImage, x: f32, y: f32, base: &BaseAnchor) -> Float
         anchor_at_start: false,
         anchor_run: 0,
         on_line: base.on_line,
+        v_from_line: base.v_from_line,
     }
 }
 
@@ -434,6 +441,7 @@ fn place_connector(conn: &mut ConnectorShape, x: f32, y: f32, base: &BaseAnchor)
     conn.v_relative_from = base.v_rel;
     conn.behind_doc = base.behind_doc;
     conn.z_index = base.z_index;
+    conn.v_from_line = base.v_from_line;
     conn.on_line = base.on_line;
 }
 
@@ -458,6 +466,7 @@ pub(super) fn parse_vml_group<R: Read + Seek>(
         behind_doc,
         z_index,
         on_line: false,
+        v_from_line: false,
     };
     let mut out = Vec::new();
     walk_vml_group(group, GroupTransform::IDENTITY, &base, 0, ctx, &mut out);
