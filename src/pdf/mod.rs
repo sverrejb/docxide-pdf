@@ -7454,10 +7454,10 @@ fn render_pass(
         // sheet, that sheet is the continuous section's first page (Word
         // examples: a 100pt table row or a kept 6-line paragraph below a page
         // of section 1 opens page 2 under the first-page footer, numbered 1).
-        // Once it flows here, a later break gets the default variant as
-        // before. Floating tables, lifted frames and drawing paragraphs keep
-        // their existing handling.
-        state.pb.pending_section_first_page = (sect_idx > 0
+        // Once it flows here, or when the section already owns this page,
+        // a later break gets the default variant as before. Floating tables,
+        // lifted frames and drawing paragraphs keep their existing handling.
+        state.pb.pending_section_first_page = (state.pb.page_hf_section != sect_idx
             && matches!(sp.break_type, SectionBreakType::Continuous)
             && sp.columns.as_ref().is_none_or(|c| c.columns.len() <= 1)
             && state.pb.float_zone.is_none()
