@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use crate::fonts::FontEntry;
 
@@ -36,11 +37,11 @@ pub(super) struct EmbeddedImages {
     pub(super) hf_image_names: HashMap<(usize, u8, usize), String>,
     pub(super) hf_inline_image_names: HashMap<(usize, u8, usize, usize), String>,
     pub(super) hf_floating_image_names: HashMap<(usize, u8, usize, usize), String>,
-    /// Images in table cell paragraphs, keyed by Arc data pointer address.
+    /// Images in table cell paragraphs, keyed by `EmbeddedImage::id`.
     pub(super) table_cell_image_names: HashMap<usize, String>,
-    /// Images in textbox paragraphs (any depth), keyed by Arc data pointer address.
+    /// Images in textbox paragraphs (any depth), keyed by `EmbeddedImage::id`.
     pub(super) textbox_image_names: HashMap<usize, String>,
-    /// SmartArt image fills, keyed by Arc data pointer address.
+    /// SmartArt image fills, keyed by `EmbeddedImage::id`.
     pub(super) smartart_image_names: HashMap<usize, String>,
     // Effect XObject names (parallel to image name maps)
     pub(super) effect_names: HashMap<usize, EffectXObjs>,
@@ -48,6 +49,48 @@ pub(super) struct EmbeddedImages {
     pub(super) effect_inline_names: HashMap<(usize, usize), EffectXObjs>,
     pub(super) effect_hf_names: HashMap<(usize, u8, usize), EffectXObjs>,
     pub(super) effect_table_names: HashMap<usize, EffectXObjs>,
+}
+
+#[derive(Default)]
+struct ImageXObjects {
+    named: Vec<(String, Ref)>,
+    shared: HashMap<ImageKey, Ref>,
+}
+
+#[derive(Hash, PartialEq, Eq)]
+struct ImageKey {
+    data: usize,
+    target: Option<(u32, u32)>,
+    soft_edge: Option<(u32, u32)>,
+    lum: Option<(u32, u32)>,
+    recolor: Option<([u8; 3], [u8; 3])>,
+    alpha: Option<u32>,
+}
+
+impl ImageKey {
+    fn new(
+        img: &EmbeddedImage,
+        (display_width, display_height): (f32, f32),
+        resample: bool,
+    ) -> Self {
+        Self {
+            data: Arc::as_ptr(&img.data).addr(),
+            target: downscale_target(
+                img.pixel_width,
+                img.pixel_height,
+                display_width,
+                display_height,
+            )
+            .filter(|_| resample),
+            soft_edge: img
+                .soft_edge
+                .as_ref()
+                .map(|se| (se.radius.to_bits(), display_width.to_bits())),
+            lum: img.lum.map(|(b, c)| (b.to_bits(), c.to_bits())),
+            recolor: img.recolor,
+            alpha: img.alpha.map(f32::to_bits),
+        }
+    }
 }
 
 // Word's online export resamples any picture shown above ~192 ppi down to
@@ -324,9 +367,9 @@ fn crop_matrix([l, t, r, b]: [f32; 4]) -> [f32; 6] {
 }
 
 /// Register a written XObject under the next `Im{n}` page-resource name.
-fn register_xobject(image_xobjects: &mut Vec<(String, Ref)>, xobj_ref: Ref) -> String {
-    let pdf_name = format!("Im{}", image_xobjects.len() + 1);
-    image_xobjects.push((pdf_name.clone(), xobj_ref));
+fn register_xobject(image_xobjects: &mut ImageXObjects, xobj_ref: Ref) -> String {
+    let pdf_name = format!("Im{}", image_xobjects.named.len() + 1);
+    image_xobjects.named.push((pdf_name.clone(), xobj_ref));
     pdf_name
 }
 
@@ -335,35 +378,32 @@ fn register_xobject(image_xobjects: &mut Vec<(String, Ref)>, xobj_ref: Ref) -> S
 /// so every draw site keeps its plain `w 0 0 h x y cm /Im Do` and EMF forms nest as-is.
 fn embed_single_image(
     img: &EmbeddedImage,
-    image_xobjects: &mut Vec<(String, Ref)>,
+    image_xobjects: &mut ImageXObjects,
     pdf: &mut Pdf,
     alloc: &mut impl FnMut() -> Ref,
     fonts: &HashMap<String, FontEntry>,
     resample: bool,
 ) -> String {
-    let Some(src_rect) = img.src_rect else {
-        let xobj_ref = embed_image_xobject(
-            img,
-            (img.display_width, img.display_height),
-            pdf,
-            alloc,
-            fonts,
-            resample,
-        );
-        return register_xobject(image_xobjects, xobj_ref);
-    };
     // The frame shows only the crop window, so the whole source is drawn at
     // frame / visible fraction; downscaling and soft-edge radii must see that extent.
-    let [l, t, r, b] = src_rect;
-    let source_extent = (
-        img.display_width / (1.0 - l - r),
-        img.display_height / (1.0 - t - b),
-    );
+    let display = match img.src_rect {
+        Some([l, t, r, b]) => (
+            img.display_width / (1.0 - l - r),
+            img.display_height / (1.0 - t - b),
+        ),
+        None => (img.display_width, img.display_height),
+    };
+    let key = ImageKey::new(img, display, resample);
+    let target = key.target;
     // ponytail: the reflection re-decodes the uncropped source and the soft-edge mask
     // rings the source's edges; crop those too if a fixture ever combines them.
-    let inner_ref = embed_image_xobject(img, source_extent, pdf, alloc, fonts, resample);
-    // The inner image is reachable only through this form, so it is not registered on
-    // the pages.
+    let inner_ref = *image_xobjects
+        .shared
+        .entry(key)
+        .or_insert_with(|| embed_image_xobject(img, display.0, target, pdf, alloc, fonts));
+    let Some(src_rect) = img.src_rect else {
+        return register_xobject(image_xobjects, inner_ref);
+    };
     let mut content = Content::new();
     content.transform(crop_matrix(src_rect));
     content.x_object(Name(b"Src"));
@@ -376,24 +416,18 @@ fn embed_single_image(
     register_xobject(image_xobjects, form_ref)
 }
 
-/// Write the image (or EMF form) XObject and return its ref. `display` is the extent in
-/// points the whole source is drawn at; it drives downscaling and soft-edge radii.
+/// Write the image (or EMF form) XObject, downscaled to `target`, and return its ref.
+/// `display_width` is the width in points the whole source is drawn at; it scales
+/// soft-edge radii.
 fn embed_image_xobject(
     img: &EmbeddedImage,
-    (display_width, display_height): (f32, f32),
+    display_width: f32,
+    target: Option<(u32, u32)>,
     pdf: &mut Pdf,
     alloc: &mut impl FnMut() -> Ref,
     fonts: &HashMap<String, FontEntry>,
-    resample: bool,
 ) -> Ref {
     let xobj_ref = alloc();
-    let target = downscale_target(
-        img.pixel_width,
-        img.pixel_height,
-        display_width,
-        display_height,
-    )
-    .filter(|_| resample);
 
     // Helper: create soft-edge SMask for a given pixel size
     let make_soft_edge_smask =
@@ -622,7 +656,7 @@ fn embed_shadow(
     shadow: &ImageShadow,
     display_width: f32,
     display_height: f32,
-    image_xobjects: &mut Vec<(String, Ref)>,
+    image_xobjects: &mut ImageXObjects,
     shadow_counter: &mut usize,
     pdf: &mut Pdf,
     alloc: &mut impl FnMut() -> Ref,
@@ -652,7 +686,7 @@ fn embed_shadow(
 
     *shadow_counter += 1;
     let name = format!("Sh{}", *shadow_counter);
-    image_xobjects.push((name.clone(), color_ref));
+    image_xobjects.named.push((name.clone(), color_ref));
     name
 }
 
@@ -661,7 +695,7 @@ fn embed_shadow(
 fn embed_reflection(
     img: &EmbeddedImage,
     refl: &crate::model::ImageReflection,
-    image_xobjects: &mut Vec<(String, Ref)>,
+    image_xobjects: &mut ImageXObjects,
     effect_counter: &mut usize,
     pdf: &mut Pdf,
     alloc: &mut impl FnMut() -> Ref,
@@ -744,14 +778,14 @@ fn embed_reflection(
 
     *effect_counter += 1;
     let name = format!("Sh{}", *effect_counter);
-    image_xobjects.push((name.clone(), refl_ref));
+    image_xobjects.named.push((name.clone(), refl_ref));
     Some(name)
 }
 
 /// Build all effect XObjects for one image (shadow, glow, etc.).
 fn embed_image_effects(
     img: &EmbeddedImage,
-    image_xobjects: &mut Vec<(String, Ref)>,
+    image_xobjects: &mut ImageXObjects,
     effect_counter: &mut usize,
     pdf: &mut Pdf,
     alloc: &mut impl FnMut() -> Ref,
@@ -811,7 +845,7 @@ fn embed_image_effects(
 
         *effect_counter += 1;
         let name = format!("Sh{}", *effect_counter);
-        image_xobjects.push((name.clone(), color_ref));
+        image_xobjects.named.push((name.clone(), color_ref));
         fx.inner_shadow = Some(name);
     }
     if let Some(refl) = img.reflection.as_ref() {
@@ -829,7 +863,7 @@ pub(super) fn embed_all_images(
 ) -> EmbeddedImages {
     let mut image_pdf_names: HashMap<usize, String> = HashMap::new();
     let mut inline_image_pdf_names: HashMap<(usize, usize), String> = HashMap::new();
-    let mut image_xobjects: Vec<(String, Ref)> = Vec::new();
+    let mut image_xobjects = ImageXObjects::default();
     let mut floating_image_pdf_names: HashMap<(usize, usize), String> = HashMap::new();
     let mut effect_counter = 0usize;
     let mut effect_names: HashMap<usize, EffectXObjs> = HashMap::new();
@@ -1124,7 +1158,7 @@ pub(super) fn embed_all_images(
         image_pdf_names,
         inline_image_pdf_names,
         floating_image_pdf_names,
-        image_xobjects,
+        image_xobjects: image_xobjects.named,
         hf_image_names,
         hf_inline_image_names,
         hf_floating_image_names,
@@ -1170,18 +1204,18 @@ fn push_textbox<'a>(tb: &'a Textbox, out: &mut Vec<&'a Textbox>) {
     }
 }
 
-/// Embed a picture once per data `Arc` (see `EmbeddedImage::key`).
+/// Embed a picture once per drawing (see `EmbeddedImage::id`).
 fn embed_keyed_image(
     img: &EmbeddedImage,
     image_names: &mut HashMap<usize, String>,
-    image_xobjects: &mut Vec<(String, Ref)>,
+    image_xobjects: &mut ImageXObjects,
     pdf: &mut Pdf,
     alloc: &mut impl FnMut() -> Ref,
     fonts: &HashMap<String, FontEntry>,
     resample: bool,
 ) {
     image_names
-        .entry(img.key())
+        .entry(img.id)
         .or_insert_with(|| embed_single_image(img, image_xobjects, pdf, alloc, fonts, resample));
 }
 
@@ -1190,14 +1224,14 @@ fn embed_table_image(
     img: &EmbeddedImage,
     image_names: &mut HashMap<usize, String>,
     effect_names: &mut HashMap<usize, EffectXObjs>,
-    image_xobjects: &mut Vec<(String, Ref)>,
+    image_xobjects: &mut ImageXObjects,
     effect_counter: &mut usize,
     pdf: &mut Pdf,
     alloc: &mut impl FnMut() -> Ref,
     fonts: &HashMap<String, FontEntry>,
     resample: bool,
 ) {
-    if let std::collections::hash_map::Entry::Vacant(e) = image_names.entry(img.key()) {
+    if let std::collections::hash_map::Entry::Vacant(e) = image_names.entry(img.id) {
         e.insert(embed_single_image(
             img,
             image_xobjects,
@@ -1208,7 +1242,7 @@ fn embed_table_image(
         ));
         let fx = embed_image_effects(img, image_xobjects, effect_counter, pdf, alloc);
         if fx.has_any() {
-            effect_names.insert(img.key(), fx);
+            effect_names.insert(img.id, fx);
         }
     }
 }
@@ -1216,7 +1250,7 @@ fn embed_table_image(
 fn embed_textbox_images(
     tb: &Textbox,
     image_names: &mut HashMap<usize, String>,
-    image_xobjects: &mut Vec<(String, Ref)>,
+    image_xobjects: &mut ImageXObjects,
     pdf: &mut Pdf,
     alloc: &mut impl FnMut() -> Ref,
     fonts: &HashMap<String, FontEntry>,
@@ -1291,6 +1325,80 @@ mod tests {
             assert_eq!(images.table_cell_image_names.len(), 1);
             assert_eq!(images.image_xobjects.len(), 1);
         }
+    }
+
+    #[test]
+    fn pictures_of_one_media_part_share_their_image_xobject() {
+        use std::io::{Cursor, Write};
+        let picture = |blip: &str, crop: &str| {
+            format!(
+                r#"<w:r><w:drawing><wp:inline><wp:extent cx="914400" cy="914400"/><wp:docPr id="1" name="P"/><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic><pic:blipFill><a:blip r:embed="rIdImg">{blip}</a:blip>{crop}</pic:blipFill><pic:spPr/></pic:pic></a:graphicData></a:graphic></wp:inline></w:drawing></w:r>"#
+            )
+        };
+        let ns = r#"xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture""#;
+        let para = |runs: &[String]| format!("<w:p>{}</w:p>", runs.concat());
+        let cell = |runs: &[String]| format!("<w:tc>{}</w:tc>", para(runs));
+        let plain = picture("", "");
+        let left = picture("", r#"<a:srcRect r="50000"/>"#);
+        let right = picture("", r#"<a:srcRect l="50000"/>"#);
+        let document = format!(
+            r#"<w:document {ns}><w:body>{}{}<w:tbl><w:tr>{}{}</w:tr></w:tbl><w:sectPr><w:headerReference w:type="default" r:id="rIdHdr"/></w:sectPr></w:body></w:document>"#,
+            para(&[plain.clone(), plain.clone(), left.clone()]),
+            para(&[picture("<a:grayscl/>", "")]),
+            cell(&[left]),
+            cell(&[right]),
+        );
+        let header = format!(r#"<w:hdr {ns}>{}</w:hdr>"#, para(&[plain]));
+        let rels = |extra: &str| {
+            format!(
+                r#"<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdImg" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>{extra}</Relationships>"#
+            )
+        };
+        let mut png = Vec::new();
+        image::RgbImage::from_fn(8, 8, |x, y| image::Rgb([x as u8 * 30, y as u8 * 30, 90]))
+            .write_to(&mut Cursor::new(&mut png), image::ImageFormat::Png)
+            .unwrap();
+        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+        for (name, bytes) in [
+            ("word/document.xml", document.into_bytes()),
+            ("word/header1.xml", header.into_bytes()),
+            ("word/_rels/document.xml.rels", rels(r#"<Relationship Id="rIdHdr" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/>"#).into_bytes()),
+            ("word/_rels/header1.xml.rels", rels("").into_bytes()),
+            ("word/media/image1.png", png),
+        ] {
+            zip.start_file(name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(&bytes).unwrap();
+        }
+        let doc = crate::docx::parse_bytes(
+            &zip.finish().unwrap().into_inner(),
+            crate::RevisionView::Final,
+        )
+        .unwrap();
+        let mut pdf = pdf_writer::Pdf::new();
+        let mut next = 1;
+        let images = super::embed_all_images(
+            &doc,
+            &mut pdf,
+            &mut || {
+                next += 1;
+                pdf_writer::Ref::new(next)
+            },
+            &std::collections::HashMap::new(),
+            true,
+        );
+        let bytes = pdf.finish();
+        let image_xobjects = bytes
+            .windows(b"/Subtype /Image".len())
+            .filter(|w| *w == b"/Subtype /Image")
+            .count();
+        assert_eq!(
+            image_xobjects, 2,
+            "the plain and cropped pictures share one source"
+        );
+        assert_eq!(images.image_xobjects.len(), 7);
+        let cells: std::collections::HashSet<_> = images.table_cell_image_names.values().collect();
+        assert_eq!(cells.len(), 2, "each cell keeps its own crop");
     }
 
     #[test]

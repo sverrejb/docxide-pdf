@@ -3,6 +3,7 @@ use std::io::{Read, Seek};
 
 use crate::model::{Alignment, Block, Footnote, HeaderFooter, LineSpacing, Paragraph, Run};
 
+use super::images::MediaParts;
 use super::numbering::{ListCounters, NumberingInfo};
 use super::parse_table_node;
 use super::relationships::parse_part_relationships;
@@ -81,6 +82,7 @@ fn parse_note_separator<R: Read + Seek>(
 // take the full builder.
 pub(super) fn parse_footnotes<R: Read + Seek>(
     zip: &mut zip::ZipArchive<R>,
+    media: &mut MediaParts,
     styles: &StylesInfo,
     theme: &ThemeFonts,
     numbering: &NumberingInfo,
@@ -103,6 +105,7 @@ pub(super) fn parse_footnotes<R: Read + Seek>(
         theme,
         rels: &rels,
         zip,
+        media,
         numbering,
         revisions,
         comments: Default::default(),
@@ -298,6 +301,7 @@ pub(super) fn parse_footnotes<R: Read + Seek>(
 /// endnotes which can contain bulleted lists and hyperlinked URLs.
 pub(super) fn parse_endnotes<R: Read + Seek>(
     zip: &mut zip::ZipArchive<R>,
+    media: &mut MediaParts,
     styles: &StylesInfo,
     theme: &ThemeFonts,
     numbering: &NumberingInfo,
@@ -320,6 +324,7 @@ pub(super) fn parse_endnotes<R: Read + Seek>(
         theme,
         rels: &rels,
         zip,
+        media,
         numbering,
         revisions,
         comments: Default::default(),

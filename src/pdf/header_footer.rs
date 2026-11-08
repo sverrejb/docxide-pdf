@@ -1723,8 +1723,7 @@ pub(super) fn render_header_footer(
                                 if let Some(img) =
                                     super::textbox_render::textbox_para_block_image(tp)
                                 {
-                                    if let Some(pdf_name) = ctx.textbox_image_names.get(&img.key())
-                                    {
+                                    if let Some(pdf_name) = ctx.textbox_image_names.get(&img.id) {
                                         let img_x = content_x
                                             + tp.indent_left
                                             + align_offset(

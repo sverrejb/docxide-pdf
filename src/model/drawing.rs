@@ -21,6 +21,9 @@ pub enum ImageFormat {
 
 #[derive(Clone)]
 pub struct EmbeddedImage {
+    /// Identity of the drawing, the key of the image name maps. Drawings of one
+    /// media part share their `data`, so it is not the data pointer.
+    pub id: usize,
     /// Preview of an actual Office OLE object, not an ordinary or static VML picture.
     pub is_ole_preview: bool,
     /// `wp:docPr/@descr`, which Word exports as the Figure's /Alt.
@@ -71,12 +74,6 @@ impl EmbeddedImage {
     /// Whether `lum` or `recolor` change the decoded colours.
     pub fn recolored(&self) -> bool {
         self.lum.is_some() || self.recolor.is_some()
-    }
-
-    /// Identity of the picture bytes, the key of the image name maps: pictures
-    /// sharing one `Arc` of data are embedded once.
-    pub fn key(&self) -> usize {
-        Arc::as_ptr(&self.data) as usize
     }
 
     /// Size of the box an inline picture occupies in the line: the bounding box of
