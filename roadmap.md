@@ -30,6 +30,37 @@ lines fall differently on the 150 dpi pixel grid.
   85.6 (27/27 exact), japanese_medical_consultation_form 64.9 → 62.2,
   isla_language_lesson_plan 69.5 → 67.4, polish_municipal_letter 77.8 → 76.2.
 
+**Benchmark-gap round (2026-11-08/09, branch `jub-gap`):** the external
+benchmark's published per-document scores (its own scorer is our metrics)
+against ours on its full clean corpus: ours 66.8 J, theirs 74.4, 1742 of
+2478 documents behind. Of the 60 worst, two thirds are the references'
+platform (Word for Mac: Helvetica, Futura, Gill Sans, Helvetica Neue and
+Barlow substitutes; hhea line metrics for Roboto, Palatino and Century
+Gothic where the online export uses win; Mac glyph rounding) and stay as
+they are. Rules fixed, one commit each, no fixture moves: the mark's line
+after a lone picture ended by a `w:br` (31.8 → 84.8); docGrid cells counted
+per line from the runs on it (an English paper in a Chinese template, 7.7 →
+53.2) and with a Latin face's normal line height, not its sTypo box (Word
+for Mac probe `hint_grid`: Times New Roman 14 takes two 15.6pt cells; a
+`w:hint="eastAsia"` run changes nothing); a theme whose `a:cs` typeface is
+empty with no themeFontLang bidi takes the Arab script font (majorBidi runs
+fell back to Cambria, 19.5 → 51.3); a missing font named "Times…" draws as
+Times New Roman (probe `panose`: the name prefix decides, panose never, 4.4
+→ 59.7); a table style's own `w:pPr/w:jc` justifies its cell paragraphs; a
+run styled with the character half of its paragraph's linked style takes
+nothing from it (20.6 → 67.5). Fonts: Lato Bold/Italic/BoldItalic and
+Roboto Light/Medium from Office's cloud cache (`fonts/CloudFonts`, assets
+repo). Open, diagnosed:
+- A 100%-width autofit table whose first column's longest unbreakable word
+  does not fit its pct share: Word widens that column and shrinks the rest
+  ("Indicator" wraps to "Indicato|r" in ours, 2 pages for Word's 1).
+- An empty "No Spacing" paragraph under a 10pt Verdana heading is 12.2pt in
+  Word (a 10pt line) although its mark inherits docDefaults' 11pt; ours 14.0.
+  Several Verdana/Cambria documents drift 2–5pt per such gap.
+- A calendar's table rows come out 1.5pt shorter than Word's per row
+  (Century Gothic cells, 4–5 lines each); a header table's shaded row 5pt
+  taller. Measure against an online export before chasing (Mac metrics).
+
 **Engine-gap triage (2026-11-07):** cases where another engine beats us by
 ≥3pp J in the CI comparison (`git show origin/gh-pages:report.json`; same
 numbers as our baselines): 120 cases, ~104 families. Fixed and pushed

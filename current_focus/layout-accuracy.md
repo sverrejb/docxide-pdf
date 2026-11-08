@@ -218,8 +218,12 @@ Ordered roughly by expected gain. Corpus counts are clean documents.
    online exports first.
 6. croatian_grant (71 vs 65 pages): page 28 starts with an extra line in Word.
 7. Inline picture `distT`/`distB` are ignored by Word (8 corpus documents, +9
-   and +18pt shifts); a trailing `w:br` after an inline picture keeps a line
-   sized by the mark (5 documents).
+   and +18pt shifts). ~~A trailing `w:br` after an inline picture keeps a line
+   sized by the mark (5 documents).~~ Done 2026-11-08 (branch `jub-gap`,
+   with per-line docGrid cells, the Latin grid ratio, the theme's Arab
+   script font, "Times…" substitution, table-style jc and linked character
+   styles; see the roadmap's benchmark-gap round for the open items it left:
+   pct-autofit first columns, the 10pt empty "No Spacing" line, row heights).
 
 **Tables**
 8. Tables and content controls inside text boxes are dropped
