@@ -1006,6 +1006,8 @@ pub(super) struct CellParagraphLayout {
     pub(super) image_line_ascent: f32,
     pub(super) clip_inline_pictures: bool,
     pub(super) descender_ratio: f32,
+    /// What a picture line hangs below its picture (`picture_line_bottom`).
+    pub(super) picture_descent: f32,
     pub(super) font_substituted: bool,
     pub(super) alignment: Alignment,
     pub(super) space_before: f32,
@@ -1073,7 +1075,7 @@ impl CellParagraphLayout {
     pub(super) fn picture_metrics(&self) -> (f32, f32) {
         (
             self.image_line_ascent,
-            self.font_size * self.descender_ratio,
+            self.picture_descent,
         )
     }
 }
@@ -1751,6 +1753,16 @@ pub(super) fn compute_row_layouts(
                                     tallest_lhr.zip(tallest_ar)
                                         .map(|(lh, ar)| (lh - ar).max(0.0)).unwrap_or(0.2)
                                 };
+                                // Multiple spacing leads a picture line as in the body,
+                                // glyphless or not (scottish_fundraising's header logo);
+                                // an at-least minimum below the picture adds nothing
+                                // (dutch_government's logo cell).
+                                let multiple_spacing = matches!(effective_ls, crate::model::LineSpacing::Auto(_));
+                                let picture_descent = if multiple_spacing {
+                                    super::layout::picture_line_bottom(runs, para, ctx.fonts, effective_ls)
+                                } else {
+                                    font_size * descender_ratio
+                                };
                                 let exact_spacing =
                                     matches!(effective_ls, crate::model::LineSpacing::Exact(_));
                                 let image_line_ascent = if exact_spacing {
@@ -1900,7 +1912,7 @@ pub(super) fn compute_row_layouts(
                                     }
                                     total_h += lines
                                         .iter()
-                                        .map(|l| super::layout::inline_line_advance(l, line_h, (image_line_ascent, font_size * descender_ratio)))
+                                        .map(|l| super::layout::inline_line_advance(l, line_h, (image_line_ascent, picture_descent)))
                                         .sum::<f32>();
                                     lines
                                 } else {
@@ -1926,6 +1938,7 @@ pub(super) fn compute_row_layouts(
                                             .filter(|r| r.is_line_break)
                                             .count();
                                         total_h += para_content_h
+                                            + if multiple_spacing { picture_descent } else { 0.0 }
                                             + br_count as f32 * line_h;
                                     } else {
                                         total_h += line_h;
@@ -2033,6 +2046,7 @@ pub(super) fn compute_row_layouts(
                                             |a| a / font_size,
                                         ),
                                     descender_ratio,
+                                    picture_descent,
                                     image_line_ascent,
                                     clip_inline_pictures: exact_spacing,
                                     font_substituted,

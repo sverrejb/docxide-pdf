@@ -52,8 +52,6 @@ justified gap (underlined-space-compat14-*). Open:
   drift): Word's picture line is 1.13pt taller than ours.
 - candidate_reference_check_form: rows drift 0.6pt then 1.6pt; Word paints
   shaded cells in strips (its tcMar bands), not one rect.
-- `nested-table-picture-width` (80.2): a nested row holding a picture
-  wider than its cell (166pt in ~158pt) is ~7pt taller in Word.
 - slovak_pedagogical_practice (22.8, body +2.9pt): removing its header
   o:hr run moves Word's body down 1.75pt and ours not at all; the run is
   Cambria 13 under a Korinna BT (missing) mark, so the mark font's
@@ -64,7 +62,8 @@ justified gap (underlined-space-compat14-*). Open:
 - italian_academic_cv_form: the last row fits by 0.26pt in ours, misses by
   ~0.3pt in Word (0.44pt drift above + row height); no single rule.
 - romanian_candidate_declaration_form_f2 header 3.6pt high;
-  scottish_fundraising_awards 1.3pt drift plus one re-wrap.
+  scottish_fundraising_awards (69.9 since cell picture lines take their
+  multiple-spacing leading): 0.3pt residual plus one re-wrap.
 - case60: bullets inside SmartArt shapes.
 - Rest of the 120-case gap list is untriaged: after the next CI comparison,
   re-diff `report.json` and drop the families fixed here.
