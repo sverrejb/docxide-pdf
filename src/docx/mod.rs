@@ -1297,11 +1297,9 @@ fn parse_zip<R: Read + std::io::Seek>(
     let mut comments = comments::parse_comments(zip);
     let (title, author, subject, keywords) = parse_core_props(zip);
 
-    let mut xml_content = String::new();
-    zip.by_name("word/document.xml")
-        .map_err(|_| Error::InvalidDocx("missing word/document.xml (is this a DOCX file?)".into()))?
-        .read_to_string(&mut xml_content)?;
-    let xml_content = join_split_run_properties(strict_to_transitional(xml_content));
+    let xml_content = read_zip_text(zip, "word/document.xml").ok_or_else(|| {
+        Error::InvalidDocx("missing word/document.xml (is this a DOCX file?)".into())
+    })?;
 
     let xml = roxmltree::Document::parse(&xml_content)?;
     let root = xml.root_element();
