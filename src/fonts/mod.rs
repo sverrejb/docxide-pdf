@@ -825,11 +825,6 @@ fn cjk_fallback_fonts(script: CjkScript, serif: bool) -> &'static [&'static str]
     }
 }
 
-/// How many of `chars` the named font has glyphs for; 0 when it is not installed.
-fn glyph_coverage(name: &str, chars: &HashSet<char>, font_index: &FontIndex) -> usize {
-    covered_chars(name, chars, font_index).len()
-}
-
 /// The chars the named font has glyphs for; none when it is not installed.
 fn covered_chars(name: &str, chars: &HashSet<char>, font_index: &FontIndex) -> HashSet<char> {
     let Some((path, face_index, ..)) = font_index.find_font_file(name, false, false) else {
@@ -902,22 +897,17 @@ fn symbol_candidates(ch: char) -> impl Iterator<Item = &'static str> {
 /// semicolon-separated so `register_font` tries each in turn.
 fn cjk_rescue_font(missing: &HashSet<char>, font_index: &FontIndex) -> String {
     let script = script_of_chars(missing.iter().copied());
-    let has_cjk = missing
-        .iter()
-        .any(|&ch| crate::docx::is_east_asian_char(ch));
-    let mut candidates: Vec<&str> = Vec::new();
-    if has_cjk || script != CjkScript::Unknown {
-        // Hangul/kana gaps take the sans default (맑은 고딕 / MS Gothic); Han-only
-        // gaps lead with MS Mincho, see `cjk_fallback_fonts`.
-        candidates.extend(cjk_fallback_fonts(script, script == CjkScript::Unknown));
-    }
+    // Hangul/kana gaps take the sans default (맑은 고딕 / MS Gothic); Han-only
+    // gaps lead with MS Mincho, see `cjk_fallback_fonts`.
+    let mut candidates: Vec<&str> =
+        cjk_fallback_fonts(script, script == CjkScript::Unknown).to_vec();
     // Symbols (☑, □, ✓) are not CJK: Word draws them from the linked symbol
     // face, so give them their own candidates instead of the Han list.
     candidates.extend(SYMBOL_FALLBACK_FONTS);
 
     let mut best = (0usize, 0usize);
     for (i, name) in candidates.iter().enumerate() {
-        let coverage = glyph_coverage(name, missing, font_index);
+        let coverage = covered_chars(name, missing, font_index).len();
         if coverage > best.0 {
             best = (coverage, i);
         }
