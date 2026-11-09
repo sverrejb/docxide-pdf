@@ -632,14 +632,10 @@ fn take_page_break_before(
 ) {
     let at_top = state.pb.is_at_page_top(sp);
     if !at_top && break_line_misses_page(para, state, ctx) {
-        state
-            .pb
-            .begin_next_page(sect_idx, sp, &mut state.effective_margin_bottom, ctx);
+        state.begin_next_page(sect_idx, sp, ctx);
     }
     if !at_top || para.page_break_before_explicit {
-        state
-            .pb
-            .begin_next_page(sect_idx, sp, &mut state.effective_margin_bottom, ctx);
+        state.begin_next_page(sect_idx, sp, ctx);
         state.current_col = 0;
     }
 }
@@ -964,14 +960,7 @@ fn place_first_line(
             state.pb.slot_top = state.effective_margin_bottom;
             return true;
         }
-        state.pb.advance_column_or_page(
-            &mut state.current_col,
-            cols.len(),
-            sect_idx,
-            sp,
-            &mut state.effective_margin_bottom,
-            ctx,
-        );
+        state.advance_column_or_page(cols.len(), sect_idx, sp, ctx);
     }
 }
 
@@ -3319,6 +3308,42 @@ pub(super) struct LayoutState {
 }
 
 impl LayoutState {
+    fn advance_column_or_page(
+        &mut self,
+        col_count: usize,
+        sect_idx: usize,
+        sp: &SectionProperties,
+        ctx: &RenderContext,
+    ) {
+        self.pb.advance_column_or_page(
+            &mut self.current_col,
+            col_count,
+            sect_idx,
+            sp,
+            &mut self.effective_margin_bottom,
+            ctx,
+        );
+    }
+
+    fn begin_next_page(&mut self, sect_idx: usize, sp: &SectionProperties, ctx: &RenderContext) {
+        self.pb
+            .begin_next_page(sect_idx, sp, &mut self.effective_margin_bottom, ctx);
+    }
+
+    fn take_page_break_after(
+        &mut self,
+        para: &Paragraph,
+        sect_idx: usize,
+        sp: &SectionProperties,
+        ctx: &RenderContext,
+    ) {
+        if para.page_break_after {
+            self.begin_next_page(sect_idx, sp, ctx);
+            self.prev_space_after = 0.0;
+            self.current_col = 0;
+        }
+    }
+
     /// A throwaway copy for laying out a column region again with its
     /// columns ending at `bottom`; its output is discarded.
     fn trial(&self, bottom: f32) -> LayoutState {
@@ -4522,14 +4547,7 @@ fn render_paragraph_block(
         if col_count > 1 {
             state.pb.slot_top -= state.prev_space_after;
         }
-        state.pb.advance_column_or_page(
-            &mut state.current_col,
-            col_count,
-            sect_idx,
-            sp,
-            &mut state.effective_margin_bottom,
-            ctx,
-        );
+        state.advance_column_or_page(col_count, sect_idx, sp, ctx);
         state.prev_space_after = 0.0;
     }
 
@@ -6287,14 +6305,7 @@ fn render_paragraph_block(
 
             // The column ends below the lines that stay (its separator reaches them).
             state.pb.slot_top -= text_drop + lines_height(first_part, line_h, para_metrics);
-            state.pb.advance_column_or_page(
-                &mut state.current_col,
-                col_count,
-                sect_idx,
-                sp,
-                &mut state.effective_margin_bottom,
-                ctx,
-            );
+            state.advance_column_or_page(col_count, sect_idx, sp, ctx);
 
             let baseline_offset2 = if grid_snapped {
                 grid_baseline
@@ -6375,14 +6386,7 @@ fn render_paragraph_block(
                 }
                 let fresh_page = at_foot || state.pb.takes_a_line(sp);
                 if fit == 0 && !fresh_page {
-                    state.pb.advance_column_or_page(
-                        &mut state.current_col,
-                        col_count,
-                        sect_idx,
-                        sp,
-                        &mut state.effective_margin_bottom,
-                        ctx,
-                    );
+                    state.advance_column_or_page(col_count, sect_idx, sp, ctx);
                     continue;
                 }
                 let chunk = &remaining[..fit.clamp(1, remaining.len())];
@@ -6607,14 +6611,7 @@ fn render_paragraph_block(
                 if last_chunk {
                     break;
                 }
-                state.pb.advance_column_or_page(
-                    &mut state.current_col,
-                    col_count,
-                    sect_idx,
-                    sp,
-                    &mut state.effective_margin_bottom,
-                    ctx,
-                );
+                state.advance_column_or_page(col_count, sect_idx, sp, ctx);
             }
             state.prev_space_after = effective_space_after;
             layout::set_change_bar_extension(0.0, 0.0);
@@ -6624,13 +6621,7 @@ fn render_paragraph_block(
             }
 
             state.global_block_idx += 1;
-            if para.page_break_after {
-                state
-                    .pb
-                    .begin_next_page(sect_idx, sp, &mut state.effective_margin_bottom, ctx);
-                state.prev_space_after = 0.0;
-                state.current_col = 0;
-            }
+            state.take_page_break_after(para, sect_idx, sp, ctx);
             return true;
         }
 
@@ -7413,22 +7404,9 @@ fn render_paragraph_block(
         &doc.style_id_to_name,
     );
 
-    if para.page_break_after {
-        state
-            .pb
-            .begin_next_page(sect_idx, sp, &mut state.effective_margin_bottom, ctx);
-        state.prev_space_after = 0.0;
-        state.current_col = 0;
-    }
+    state.take_page_break_after(para, sect_idx, sp, ctx);
     if para.column_break_after {
-        state.pb.advance_column_or_page(
-            &mut state.current_col,
-            col_count,
-            sect_idx,
-            sp,
-            &mut state.effective_margin_bottom,
-            ctx,
-        );
+        state.advance_column_or_page(col_count, sect_idx, sp, ctx);
         state.prev_space_after = 0.0;
     }
 
