@@ -112,18 +112,21 @@ impl MathBox {
             .iter()
             .map(|&(x, a, d)| (x - start, a, d))
             .collect();
-        let part = |items, width, breaks, atoms: Vec<(f32, f32, f32)>| MathBox {
-            width,
-            items,
-            breaks,
-            ascent: extent(&atoms).0,
-            descent: extent(&atoms).1,
-            atoms,
-            display: self.display,
-            wrap_indent: self.wrap_indent,
-            leading: self.leading,
-            line_ascent: self.line_ascent,
-            line_descent: self.line_descent,
+        let part = |items, width, breaks, atoms: Vec<(f32, f32, f32)>| {
+            let (ascent, descent) = extent(&atoms);
+            MathBox {
+                width,
+                items,
+                breaks,
+                ascent,
+                descent,
+                atoms,
+                display: self.display,
+                wrap_indent: self.wrap_indent,
+                leading: self.leading,
+                line_ascent: self.line_ascent,
+                line_descent: self.line_descent,
+            }
         };
         let tail = tail.into_iter().map(|it| shift(it, -start, 0.0)).collect();
         let tail_breaks = self
@@ -447,7 +450,7 @@ impl<'a> Ctx<'a> {
         let mut atoms: Vec<B> = Vec::new();
         for node in row {
             match node {
-                MathNode::Run(run) => atoms.extend(self.run(run, st)),
+                MathNode::Run(run) => atoms.extend(self.run_text(&run.text, run, st)),
                 _ => atoms.push(self.node(node, st)),
             }
         }
@@ -503,12 +506,7 @@ impl<'a> Ctx<'a> {
         (xs, w)
     }
 
-    /// A math run: one atom per character.
-    fn run(&self, run: &MathRun, st: St) -> Vec<B> {
-        self.run_text(&run.text, run, st)
-    }
-
-    /// `text` set in `run`'s style.
+    /// `text` set in `run`'s style: one atom per character.
     fn run_text(&self, text: &str, run: &MathRun, st: St) -> Vec<B> {
         let size = self.size(st);
         // Word sets m:nor text in the run's own font, upright whatever m:sty
@@ -564,7 +562,7 @@ impl<'a> Ctx<'a> {
 
     fn node(&self, node: &MathNode, st: St) -> B {
         match node {
-            MathNode::Run(run) => self.hbox(self.run(run, st), st),
+            MathNode::Run(run) => self.hbox(self.run_text(&run.text, run, st), st),
             MathNode::Frac { kind, num, den } => self.frac(*kind, num, den, st),
             MathNode::Scripts {
                 base,
