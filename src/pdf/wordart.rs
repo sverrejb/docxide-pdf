@@ -645,13 +645,11 @@ impl ArcLengthPath {
         self.samples.last().map(|s| s.2).unwrap_or(0.0)
     }
 
-    fn position_at(&self, s: f64) -> (f64, f64) {
+    /// The index of the sample at or past arc length `s` (clamped to the
+    /// path), with that clamped `s`; None when the path has no segment.
+    fn segment(&self, s: f64) -> Option<(usize, f64)> {
         if self.samples.len() < 2 {
-            return self
-                .samples
-                .first()
-                .map(|p| (p.0, p.1))
-                .unwrap_or((0.0, 0.0));
+            return None;
         }
         let s = s.clamp(0.0, self.total_length());
         let idx = self
@@ -659,6 +657,17 @@ impl ArcLengthPath {
             .partition_point(|p| p.2 < s)
             .min(self.samples.len() - 1)
             .max(1);
+        Some((idx, s))
+    }
+
+    fn position_at(&self, s: f64) -> (f64, f64) {
+        let Some((idx, s)) = self.segment(s) else {
+            return self
+                .samples
+                .first()
+                .map(|p| (p.0, p.1))
+                .unwrap_or((0.0, 0.0));
+        };
         let (x0, y0, s0) = self.samples[idx - 1];
         let (x1, y1, s1) = self.samples[idx];
         let ds = s1 - s0;
@@ -670,15 +679,9 @@ impl ArcLengthPath {
     }
 
     fn tangent_at(&self, s: f64) -> f64 {
-        if self.samples.len() < 2 {
+        let Some((idx, _)) = self.segment(s) else {
             return 0.0;
-        }
-        let s = s.clamp(0.0, self.total_length());
-        let idx = self
-            .samples
-            .partition_point(|p| p.2 < s)
-            .min(self.samples.len() - 1)
-            .max(1);
+        };
         let (x0, y0, _) = self.samples[idx - 1];
         let (x1, y1, _) = self.samples[idx];
         (y1 - y0).atan2(x1 - x0)
