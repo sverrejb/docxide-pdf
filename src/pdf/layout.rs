@@ -4807,11 +4807,13 @@ fn glyph_clusters<'a>(
     out
 }
 
-/// A right-to-left chunk's glyphs in logical order, each placed left of the
-/// one before (the pen starts at the chunk's left edge), so text extraction
-/// and tags read the word as written. A letter's combining marks follow it
-/// with no move: they hang back over it from its end, as in left-to-right
-/// text.
+/// A right-to-left chunk's glyphs left to right as they sit on the page, the
+/// pen starting at the chunk's left edge, as Word writes them: MuPDF reads a
+/// line in content order and applies the bidi algorithm to it as visual text,
+/// so logical order with leftward moves came out reversed ("صنلا" for "النص").
+/// The boundary space goes first, left of the chunk, where Word puts it. A
+/// letter's combining marks follow it with no move: they hang back over it
+/// from its end, as in left-to-right text.
 fn show_rtl(
     content: &mut Content,
     entry: &FontEntry,
@@ -4823,19 +4825,24 @@ fn show_rtl(
     let tc = char_spacing * 1000.0 / font_size.max(0.01);
     let clusters = glyph_clusters(entry, text, tc, true);
     let mut right: f32 = clusters.iter().map(|&(_, w)| w).sum();
-    let placed: Vec<(&str, f32, f32)> = clusters
+    let mut placed: Vec<(&str, f32, f32)> = clusters
         .into_iter()
         .map(|(s, w)| {
             right -= w;
             (s, right, w)
         })
         .collect();
-    show_placed(content, entry, &placed, boundary_space.then_some(" "), 0.0);
+    placed.reverse();
+    if boundary_space {
+        let w = entry.char_width_1000(' ') + tc;
+        placed.insert(0, (" ", -w, w));
+    }
+    show_placed(content, entry, &placed, None, 0.0);
 }
 
-/// `text`'s glyphs in logical order, each at the place its right-to-left
-/// layout (bidi, paragraph level 1) gives it, the pen starting at the left
-/// end: a list label that reads "3." draws ".3".
+/// `text`'s glyphs left to right (see `show_rtl`), each at the place its
+/// right-to-left layout (bidi, paragraph level 1) gives it, the pen starting
+/// at the left end: a list label that reads "3." draws ".3".
 pub(super) fn show_visual(content: &mut Content, entry: &FontEntry, text: &str) {
     let glyphs = glyph_clusters(entry, text, 0.0, false);
     let cls: Vec<_> = text.chars().map(super::bidi::class).collect();
@@ -4846,8 +4853,9 @@ pub(super) fn show_visual(content: &mut Content, entry: &FontEntry, text: &str) 
         x[i] = left;
         left += glyphs[i].1;
     }
-    let placed: Vec<(&str, f32, f32)> =
+    let mut placed: Vec<(&str, f32, f32)> =
         glyphs.iter().zip(x).map(|(&(s, w), x)| (s, x, w)).collect();
+    placed.sort_by(|a, b| a.1.total_cmp(&b.1));
     show_placed(content, entry, &placed, None, 0.0);
 }
 

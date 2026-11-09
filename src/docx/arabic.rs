@@ -220,18 +220,6 @@ pub(crate) fn source_letters(ch: char) -> Option<(char, Option<char>)> {
         .map(|&(letter, _)| (letter, None))
 }
 
-/// `text` with presentation forms back as the letters they were shaped from.
-pub(crate) fn unshape(text: &str) -> String {
-    let mut out = String::with_capacity(text.len());
-    for ch in text.chars() {
-        match source_letters(ch) {
-            Some((letter, alef)) => out.extend(std::iter::once(letter).chain(alef)),
-            None => out.push(ch),
-        }
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -274,6 +262,5 @@ mod tests {
         assert_eq!(source_letters('\u{FBFE}'), Some(('\u{06CC}', None)));
         assert_eq!(source_letters('\u{0628}'), None);
         assert_eq!(source_letters('a'), None);
-        assert_eq!(unshape(&shape("(الأرز)")), "(الأرز)");
     }
 }

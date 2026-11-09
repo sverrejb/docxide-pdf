@@ -544,13 +544,11 @@ fn reorder_line(
         chunk.x_offset = x;
         if p.level % 2 == 1 {
             chunk.rtl_glyphs = true;
-            // Extraction reads mirrored brackets as written, as in Word's PDF.
-            if chunk.rtl && chunk.text.chars().any(|c| mirrored(c) != c) {
-                let shown = chunk.text.chars().map(mirrored).collect();
-                let source = std::mem::replace(&mut chunk.text, shown);
-                chunk
-                    .actual_text
-                    .get_or_insert_with(|| crate::docx::arabic::unshape(&source));
+            // No ActualText: drawn left to right (`show_rtl`), the mirrored
+            // glyph extracts as written once the reader's bidi mirrors it back,
+            // as in Word's PDF.
+            if chunk.rtl {
+                chunk.text = chunk.text.chars().map(mirrored).collect();
             }
         }
         x += chunk.width;
@@ -562,8 +560,22 @@ fn reorder_line(
         .map(|(i, (k, _))| (i, *k))
         .collect();
     keys.sort_by_key(|&(_, k)| k);
-    line.draw_order = keys.into_iter().map(|(i, _)| i).collect();
     line.chunks = placed.into_iter().map(|(_, c)| c).collect();
+    let mut draw: Vec<usize> = keys.into_iter().map(|(i, _)| i).collect();
+    // Word draws a right-to-left run as one stretch from its left end (see
+    // `show_rtl`): MuPDF starts a new text line wherever the pen jumps back
+    // left, so word-by-word logical order split every Arabic line.
+    let rtl = |i: usize| line.chunks[i].rtl_glyphs;
+    let mut start = 0;
+    for k in 1..=draw.len() {
+        let leftwards =
+            k < draw.len() && draw[k] + 1 == draw[k - 1] && rtl(draw[k]) && rtl(draw[k - 1]);
+        if !leftwards {
+            draw[start..k].reverse();
+            start = k;
+        }
+    }
+    line.draw_order = draw;
     // A wrap space that landed inside the line widens it.
     line.total_width = x;
 }

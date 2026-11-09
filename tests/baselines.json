@@ -8987,7 +8987,7 @@
   "cases/textbox-wrap-beside": {
     "jaccard": 0.9615,
     "ssim": 0.9758,
-    "text_boundary": 0.9744,
+    "text_boundary": 0.9955,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -9229,8 +9229,14 @@
     "a11y_text": 1.0
   },
   "cases/ul-trail-space-bidi": {
-    "jaccard": 0.7475,
-    "ssim": 0.8265
+    "jaccard": 0.7496,
+    "ssim": 0.8286,
+    "text_boundary": 0.2105,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 0.0
   },
   "cases/ul-trail-space-off": {
     "jaccard": 0.9129,
@@ -9877,8 +9883,9 @@
     "a11y_text": 0.8895
   },
   "scraped/arabic_rice_benefits_article": {
-    "jaccard": 0.7805,
-    "ssim": 0.877,
+    "jaccard": 0.781,
+    "ssim": 0.8771,
+    "text_boundary": 0.0769,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,

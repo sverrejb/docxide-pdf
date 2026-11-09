@@ -751,7 +751,9 @@ Open queue from the large-corpus and focus-fixture rounds:
 ## RTL / BiDi
 
 GPOS mark anchors (harakat off-centre); mirrored brackets extract as the
-mirrored character; Arabic in a face without Arabic glyphs draws `.notdef`
+mirrored character (since 2026-11-09 glyphs are drawn left to right as Word
+does, so MuPDF and pdfinfo -struct-text read Word's text; Word maps the
+mirrored glyph to the logical character through a second font subset); Arabic in a face without Arabic glyphs draws `.notdef`
 (Word rescues from another font); no joining across runs that differ in
 formatting; lines with tabs or float regions keep logical order; tab stops
 and `bidiVisual` not mirrored; Arabic letters in a plain run whose font has
