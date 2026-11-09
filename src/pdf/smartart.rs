@@ -350,7 +350,7 @@ pub(super) fn render_smartart(
             if let Some(b) = para.bullet.as_deref() {
                 let bullet_text = format!("{b} ");
                 if let Some(first_run) = para.runs.first() {
-                    let (fe, _) = resolve_run_font(first_run, seen_fonts, sa_font_entry);
+                    let fe = resolve_run_font(first_run, seen_fonts, sa_font_entry);
                     let bw = charts::text_width(&bullet_text, first_run.font_size, fe);
                     words.push(WordSeg {
                         text: bullet_text,
@@ -363,7 +363,7 @@ pub(super) fn render_smartart(
             }
 
             for run in &para.runs {
-                let (fe, _) = resolve_run_font(run, seen_fonts, sa_font_entry);
+                let fe = resolve_run_font(run, seen_fonts, sa_font_entry);
                 let efs = effective_font_size(run);
                 let space_w = charts::text_width(" ", efs, fe);
 
@@ -542,23 +542,20 @@ pub(super) fn render_smartart(
     }
 }
 
-/// Resolve the font entry and PDF name for a SmartArt run, falling back to the
+/// Resolve the font entry for a SmartArt run, falling back to the
 /// diagram-level default font when the run has no per-shape font.
 fn resolve_run_font<'a>(
     run: &crate::model::SmartArtRun,
     seen_fonts: &'a HashMap<String, FontEntry>,
     fallback: Option<&'a FontEntry>,
-) -> (Option<&'a FontEntry>, Option<&'a str>) {
-    let fe = run
-        .font_name
+) -> Option<&'a FontEntry> {
+    run.font_name
         .as_ref()
         .and_then(|n| {
             let key = crate::fonts::font_key_for(n, run.bold, run.italic);
             seen_fonts.get(&key)
         })
-        .or(fallback);
-    let pdf_name = fe.map(|e| e.pdf_name.as_str());
-    (fe, pdf_name)
+        .or(fallback)
 }
 
 fn effective_font_size(run: &crate::model::SmartArtRun) -> f32 {
