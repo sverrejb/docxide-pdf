@@ -93,7 +93,7 @@ a run is one). Open, diagnosed:
   leads on 1829 of 2478 (1741 by more than a point), we lead on 645; the
   rules moved the mean only. Its tracking sets (3393 + 410 + 116 documents)
   have no baseline run of ours yet. The probe generators, the per-document
-  join (`gap.py`) and the paired rescore script live in the worktree's
+  join (`gap.py`) and the paired rescore script live in the main checkout's
   untracked `tests/output/jub/`.
 
 **Engine-gap triage (2026-11-07):** cases where another engine beats us by
