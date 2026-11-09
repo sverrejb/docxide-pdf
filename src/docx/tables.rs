@@ -605,78 +605,52 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                 let is_last_col = span_end >= num_cols;
                 let is_first_row = ri == 0;
                 let is_last_row = ri == num_rows - 1;
+                // The first/last regions the cell is in and the tblLook turns on.
+                let first_row = look_first_row && is_first_row;
+                let last_row = look_last_row && is_last_row;
+                let first_col = look_first_col && is_first_col;
+                let last_col = look_last_col && is_last_col;
                 // Row banding — skip rows consumed by firstRow/lastRow
-                if !look_no_h_band {
-                    let skip_first = look_first_row && is_first_row;
-                    let skip_last = look_last_row && is_last_row;
-                    if !skip_first && !skip_last {
-                        let band_row = if look_first_row { ri - 1 } else { ri };
-                        let key = if band_row % 2 == 0 {
-                            "band1Horz"
-                        } else {
-                            "band2Horz"
-                        };
-                        // Row bands: single row, so top/bottom are always edges
-                        cond.apply(style_def, key, (true, true, is_first_col, is_last_col));
-                    }
+                if !look_no_h_band && !first_row && !last_row {
+                    let band_row = if look_first_row { ri - 1 } else { ri };
+                    let key = if band_row % 2 == 0 {
+                        "band1Horz"
+                    } else {
+                        "band2Horz"
+                    };
+                    // Row bands: single row, so top/bottom are always edges
+                    cond.apply(style_def, key, (true, true, is_first_col, is_last_col));
                 }
                 // Column banding — skip cols consumed by firstCol/lastCol
-                if !look_no_v_band {
-                    let skip_first = look_first_col && is_first_col;
-                    let skip_last = look_last_col && is_last_col;
-                    if !skip_first && !skip_last {
-                        let band_col = if look_first_col { ci - 1 } else { ci };
-                        let key = if band_col % 2 == 0 {
-                            "band1Vert"
-                        } else {
-                            "band2Vert"
-                        };
-                        // Column bands: single column, so left/right are always edges
-                        cond.apply(style_def, key, (is_first_row, is_last_row, true, true));
+                if !look_no_v_band && !first_col && !last_col {
+                    let band_col = if look_first_col { ci - 1 } else { ci };
+                    let key = if band_col % 2 == 0 {
+                        "band1Vert"
+                    } else {
+                        "band2Vert"
+                    };
+                    // Column bands: single column, so left/right are always edges
+                    cond.apply(style_def, key, (is_first_row, is_last_row, true, true));
+                }
+                // Row regions: top/bottom are edges, left/right depend on the
+                // column; column regions the other way round; a corner cell
+                // is a single cell, all edges. Spec order, later ones winning.
+                let row = (true, true, is_first_col, is_last_col);
+                let col = (is_first_row, is_last_row, true, true);
+                let all = (true, true, true, true);
+                for (on, key, edges) in [
+                    (first_row, "firstRow", row),
+                    (last_row, "lastRow", row),
+                    (first_col, "firstCol", col),
+                    (last_col, "lastCol", col),
+                    (first_row && first_col, "nwCell", all),
+                    (first_row && last_col, "neCell", all),
+                    (last_row && first_col, "swCell", all),
+                    (last_row && last_col, "seCell", all),
+                ] {
+                    if on {
+                        cond.apply(style_def, key, edges);
                     }
-                }
-                // First/last row — row region: top/bottom are edges, left/right depend on col
-                if look_first_row && is_first_row {
-                    cond.apply(
-                        style_def,
-                        "firstRow",
-                        (true, true, is_first_col, is_last_col),
-                    );
-                }
-                if look_last_row && is_last_row {
-                    cond.apply(
-                        style_def,
-                        "lastRow",
-                        (true, true, is_first_col, is_last_col),
-                    );
-                }
-                // First/last column — column region: left/right are edges, top/bottom depend on row
-                if look_first_col && is_first_col {
-                    cond.apply(
-                        style_def,
-                        "firstCol",
-                        (is_first_row, is_last_row, true, true),
-                    );
-                }
-                if look_last_col && is_last_col {
-                    cond.apply(
-                        style_def,
-                        "lastCol",
-                        (is_first_row, is_last_row, true, true),
-                    );
-                }
-                // Corner cells — single cell, all edges
-                if look_first_row && is_first_row && look_first_col && is_first_col {
-                    cond.apply(style_def, "nwCell", (true, true, true, true));
-                }
-                if look_first_row && is_first_row && look_last_col && is_last_col {
-                    cond.apply(style_def, "neCell", (true, true, true, true));
-                }
-                if look_last_row && is_last_row && look_first_col && is_first_col {
-                    cond.apply(style_def, "swCell", (true, true, true, true));
-                }
-                if look_last_row && is_last_row && look_last_col && is_last_col {
-                    cond.apply(style_def, "seCell", (true, true, true, true));
                 }
             }
 
