@@ -99,18 +99,35 @@ fn leading_para(block: &Block) -> Option<&Paragraph> {
 /// The frame Word lifts `block` out of the flow into: any page- or
 /// margin-anchored framePr (a table's is its first cell paragraph's), which
 /// keeps text off its sides or, wrapping, lets text flow on both of them
-/// (empty-frame-control), or a paragraph's wrapping frame at an explicit
-/// offset (`paragraph_offset_frame`), which text then wraps around like a float.
+/// (empty-frame-control), or a paragraph's wrapping frame at an offset
+/// (`wrapping_text_frame`), which text then wraps around like a float.
 /// ponytail: other text-anchored frames stay in the flow; lift them when a
 /// fixture needs it.
 fn lifted_frame(block: &Block) -> Option<&FrameProperties> {
     let fp = leading_para(block)?.frame_props.as_ref()?;
-    if fp.v_relative_from == VRelativeFrom::Paragraph
-        && (matches!(block, Block::Table(_)) || !paragraph_offset_frame(fp))
+    if matches!(block, Block::Table(_)) && fp.v_relative_from == VRelativeFrom::Paragraph
+        || flow_frame(fp)
     {
         return None;
     }
     Some(fp)
+}
+
+/// A paragraph frame laid out in the flow: anchored to the text, neither
+/// wrapping at an offset nor a drop cap.
+fn flow_frame(fp: &FrameProperties) -> bool {
+    fp.v_relative_from == VRelativeFrom::Paragraph && !wrapping_text_frame(fp)
+}
+
+/// Whether `p` stays on the page with the block after it: keepNext, or the
+/// two share a frame in the flow, which never splits (Word example, fixture
+/// frame-moves-shared: both paragraphs move to page 2).
+fn keeps_with_next(p: &Paragraph, next: Option<&Block>) -> bool {
+    p.keep_next
+        || p.frame_props.as_ref().is_some_and(|fp| {
+            flow_frame(fp)
+                && matches!(next, Some(Block::Paragraph(q)) if q.frame_props.as_ref() == Some(fp))
+        })
 }
 
 /// A frame wholly beside the text area, which no text can wrap around
@@ -121,14 +138,14 @@ fn frame_beside_text(fp: &FrameProperties, sp: &SectionProperties) -> bool {
     fp.width > 0.0 && (x >= text_x + text_w || x + fp.width <= text_x)
 }
 
-/// A wrapping paragraph-anchored frame with an explicit height and a nonzero
-/// offset, or a drop cap: it keeps its own coordinates, and text wraps around it.
-fn paragraph_offset_frame(fp: &FrameProperties) -> bool {
+/// A wrapping paragraph-anchored frame at an offset, zero or not, with or
+/// without w:h (fixtures frame-moves-*), or a drop cap: it keeps its own
+/// coordinates, and text wraps around it.
+fn wrapping_text_frame(fp: &FrameProperties) -> bool {
     fp.drop_cap.is_some()
         || (!fp.text_below
             && fp.v_relative_from == VRelativeFrom::Paragraph
-            && fp.height > 0.0
-            && matches!(fp.v_position, VerticalPosition::Offset(y) if y != 0.0))
+            && matches!(fp.v_position, VerticalPosition::Offset(_)))
 }
 
 /// The blocks from the start of `blocks` that share the frame `props`.
@@ -1262,6 +1279,39 @@ impl<'a> OpenFrame<'a> {
                 from_table: false,
             });
         }
+    }
+}
+
+/// A frame text stays above and below, laid out in the flow: its w:h holds
+/// the text after it off (Word example, fixture frame-not-beside-height: the
+/// next line starts 100pt below a 100pt exact frame's top, not under its
+/// 72pt of lines).
+struct FlowFrame<'a> {
+    props: &'a FrameProperties,
+    start: (usize, usize, f32),
+}
+
+impl<'a> FlowFrame<'a> {
+    fn open(props: &'a FrameProperties, state: &LayoutState) -> Self {
+        FlowFrame {
+            props,
+            start: (state.pb.page_count(), state.current_col, state.pb.slot_top),
+        }
+    }
+
+    fn close(self, state: &mut LayoutState) {
+        let (page, col, y) = self.start;
+        let top = if (page, col) == (state.pb.page_count(), state.current_col) {
+            y
+        } else {
+            state.pb.column_top_y
+        };
+        let bottom = top - self.props.height;
+        state.pb.slot_top = if self.props.height_exact {
+            bottom
+        } else {
+            state.pb.slot_top.min(bottom)
+        };
     }
 }
 
@@ -5822,7 +5872,7 @@ fn render_paragraph_block(
         0.0
     };
 
-    let keep_next_extra = if para.keep_next && !at_page_top {
+    let keep_next_extra = if keeps_with_next(para, section_blocks.get(block_idx + 1)) && !at_page_top {
         let mut extra = 0.0;
         // Footnotes the kept paragraphs bring come along too
         // (uk_commercial_lease's "Break Date" moves with its definition's note 8).
@@ -5890,7 +5940,7 @@ fn render_paragraph_block(
             let mut count = || {
                 *n.get_or_insert_with(|| line_count(next, ctx, col_geometry[state.current_col].1))
             };
-            let needed = if next.keep_lines {
+            let needed = if next.keep_lines || next.frame_props.as_ref().is_some_and(flow_frame) {
                 count()
             } else {
                 lines_kept_together(next.widow_control, &mut count)
@@ -5899,7 +5949,7 @@ fn render_paragraph_block(
                 + next_first_line_h
                 + needed.saturating_sub(1) as f32 * resolve_line_h(next_ls, nfs, nlhr);
             first_link.get_or_insert(extra);
-            if !next.keep_next || needed < count() {
+            if !keeps_with_next(next, section_blocks.get(i + 1)) || needed < count() {
                 break;
             }
             if next.page_break_after {
@@ -5931,7 +5981,7 @@ fn render_paragraph_block(
         let inside_chain = block_idx
             .checked_sub(1)
             .and_then(|i| section_blocks.get(i))
-            .is_some_and(|b| matches!(b, Block::Paragraph(p) if p.keep_next));
+            .is_some_and(|b| matches!(b, Block::Paragraph(p) if keeps_with_next(p, section_blocks.get(block_idx))));
         // Judged once, where the chain starts: from a later member the rest
         // may fit a page and would move again.
         if !inside_chain {
@@ -5967,8 +6017,12 @@ fn render_paragraph_block(
             0
         }
     };
+    // A frame in the flow never splits: one taller than the page stays whole
+    // on its page, running past the bottom, and the next block opens the
+    // next page (Word example, fixture frame-taller-than-page).
+    let in_flow_frame = para.frame_props.as_ref().is_some_and(flow_frame);
     let mut moved = false;
-    while (!at_page_top || lines.len() > 1)
+    while (!at_page_top || (lines.len() > 1 && !in_flow_frame))
         && (moved
             || state.pb.slot_top - needed_with_floats - keep_next_extra + last_line_lead
                 < state.effective_margin_bottom + para_fn_extra)
@@ -6000,7 +6054,7 @@ fn render_paragraph_block(
         let available = state.pb.slot_top - inter_gap - text_drop - state.effective_margin_bottom;
         let mut lines_that_fit =
             fit_in(&lines, &line_fn_extra, available, state.pb.col_fn_reserved > 0.0);
-        if moved && lines_that_fit >= lines.len() {
+        if moved && (lines_that_fit >= lines.len() || in_flow_frame) {
             break;
         }
 
@@ -6020,11 +6074,7 @@ fn render_paragraph_block(
                 .floating_images
                 .iter()
                 .any(|fi| leading_full_width_picture(fi, sp, col_x, col_w, text_width));
-        // A frame never splits unless it is taller than the page (Word
-        // example, fixture frame-moves-not-beside).
-        let frame_kept = para.frame_props.is_some()
-            && content_h <= sp.page_height - sp.margin_top - sp.margin_bottom;
-        if para.keep_lines || frame_kept || leading_picture_keeps_text {
+        if para.keep_lines || in_flow_frame || leading_picture_keeps_text {
             lines_that_fit = 0;
         }
 
@@ -7585,6 +7635,7 @@ fn render_pass(
 
         let layout_blocks = |state: &mut LayoutState| {
             let mut frame: Option<OpenFrame> = None;
+            let mut flow_frame: Option<FlowFrame> = None;
             let mut last_block_consumption = None;
             for (block_idx, block) in section.blocks.iter().enumerate() {
                 let previous_block_consumption = last_block_consumption.take();
@@ -7592,6 +7643,15 @@ fn render_pass(
                 let block_frame = lifted_frame(block);
                 if let Some(f) = frame.take_if(|f| block_frame.is_none_or(|fp| fp != f.props)) {
                     f.close(state, sp);
+                }
+                let block_flow_frame = leading_para(block)
+                    .and_then(|p| p.frame_props.as_ref())
+                    .filter(|fp| block_frame.is_none() && fp.text_below && fp.height > 0.0);
+                if let Some(f) = flow_frame.take_if(|f| block_flow_frame != Some(f.props)) {
+                    f.close(state);
+                }
+                if flow_frame.is_none() {
+                    flow_frame = block_flow_frame.map(|props| FlowFrame::open(props, state));
                 }
                 // The first block stayed on this page, so a later break opens an
                 // ordinary one, even from where the first block started.
@@ -7604,6 +7664,14 @@ fn render_pass(
                 if frame.is_none() {
                     match block_frame {
                         Some(fp) => {
+                            // Its page break comes first: the frame opens on the new page.
+                            if let Block::Paragraph(p) = block
+                                && p.page_break_before
+                                && !lays_out_nothing(p)
+                            {
+                                take_page_break_before(state, p, sect_idx, sp, &ctx);
+                                state.page_break_taken = true;
+                            }
                             let blocks = &section.blocks[block_idx..];
                             frame = Some(OpenFrame::open(fp, blocks, state, &ctx, sp, (sect_idx, &col_geometry)));
                         }
@@ -8031,6 +8099,9 @@ fn render_pass(
             }
             if let Some(f) = frame {
                 f.close(state, sp);
+            }
+            if let Some(f) = flow_frame {
+                f.close(state);
             }
         };
 
