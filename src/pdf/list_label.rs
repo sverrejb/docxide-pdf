@@ -240,8 +240,22 @@ pub(super) fn render_list_label(
     let strike = |entry: &FontEntry| {
         super::layout::os2_strike(entry, label_fs).map(|(top, th)| (baseline_y + top - th, th))
     };
-    let underline = |entry: &FontEntry| {
-        super::layout::post_underline(entry, label_fs)
+    // Underlines follow the item's text font, strikes the label's own (Word
+    // for Mac probe: a Symbol bullet before Calibri 12 text is underlined
+    // 0.72pt like Calibri but struck 0.48pt like Symbol).
+    let text_font = para
+        .runs
+        .iter()
+        .find(|r| !r.text.trim().is_empty())
+        .and_then(|r| {
+            fonts
+                .get(&crate::fonts::font_key(r))
+                .map(|e| (e, r.font_size))
+        });
+    let underline_font = text_font.or(entry.map(|e| (e, label_fs)));
+    let underline = |_: &FontEntry| {
+        let (entry, size) = underline_font?;
+        super::layout::post_underline(entry, size)
             .map(|(offset, th)| (baseline_y - offset - th, th))
     };
     if let (Some(rev), Some(entry)) = (para.list_label_revision, entry) {
@@ -264,9 +278,9 @@ pub(super) fn render_list_label(
             let lines = match (rev.deleted, line) {
                 (true, Some((bottom, th))) => vec![(bottom - th, th), (bottom + th, th)],
                 (true, None) => vec![],
-                (false, _) => {
-                    super::layout::underline_lines(Some(entry), label_fs, true, false, baseline_y)
-                }
+                (false, _) => underline_font.map_or(vec![], |(entry, size)| {
+                    super::layout::underline_lines(Some(entry), size, true, false, baseline_y)
+                }),
             };
             for (bottom, th) in lines {
                 let w_all = w.max(para.indent_hanging);
