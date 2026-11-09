@@ -963,17 +963,10 @@ pub(super) fn embed_all_images(
     // ponytail: the effects of header/footer inline and floating pictures are
     // embedded (keeping the XObject numbering) but never drawn.
     {
-        let hf_variants: [(u8, fn(&SectionProperties) -> Option<&HeaderFooter>); 6] = [
-            (0, |sp| sp.header_default.as_ref()),
-            (1, |sp| sp.header_first.as_ref()),
-            (2, |sp| sp.footer_default.as_ref()),
-            (3, |sp| sp.footer_first.as_ref()),
-            (4, |sp| sp.header_even.as_ref()),
-            (5, |sp| sp.footer_even.as_ref()),
-        ];
         for (si, section) in doc.sections.iter().enumerate() {
-            for &(hf_type, accessor) in &hf_variants {
-                if let Some(hf) = accessor(&section.properties) {
+            for (hf_type, hf) in section_hfs(&section.properties).into_iter().enumerate() {
+                if let Some(hf) = hf {
+                    let hf_type = hf_type as u8;
                     let mut pi = 0usize;
                     for block in &hf.blocks {
                         if let Block::Paragraph(para) = block {
@@ -1007,15 +1000,7 @@ pub(super) fn embed_all_images(
         for block in &section.blocks {
             push_block_textboxes(block, &mut all_textboxes);
         }
-        let hf_list: [Option<&HeaderFooter>; 6] = [
-            section.properties.header_default.as_ref(),
-            section.properties.header_first.as_ref(),
-            section.properties.footer_default.as_ref(),
-            section.properties.footer_first.as_ref(),
-            section.properties.header_even.as_ref(),
-            section.properties.footer_even.as_ref(),
-        ];
-        for hf in hf_list.into_iter().flatten() {
+        for hf in section_hfs(&section.properties).into_iter().flatten() {
             for block in &hf.blocks {
                 push_block_textboxes(block, &mut all_textboxes);
             }
@@ -1032,15 +1017,7 @@ pub(super) fn embed_all_images(
                     tables.push(table);
                 }
             }
-            let hf_list: [Option<&HeaderFooter>; 6] = [
-                section.properties.header_default.as_ref(),
-                section.properties.header_first.as_ref(),
-                section.properties.footer_default.as_ref(),
-                section.properties.footer_first.as_ref(),
-                section.properties.header_even.as_ref(),
-                section.properties.footer_even.as_ref(),
-            ];
-            for hf in hf_list.into_iter().flatten() {
+            for hf in section_hfs(&section.properties).into_iter().flatten() {
                 for block in &hf.blocks {
                     if let Block::Table(table) = block {
                         tables.push(table);
@@ -1115,6 +1092,18 @@ pub(super) fn embed_all_images(
         effect_hf_names,
         effect_table_names,
     }
+}
+
+/// A section's header and footer parts, in the order the `hf_type` keys number them.
+fn section_hfs(sp: &SectionProperties) -> [Option<&HeaderFooter>; 6] {
+    [
+        sp.header_default.as_ref(),
+        sp.header_first.as_ref(),
+        sp.footer_default.as_ref(),
+        sp.footer_first.as_ref(),
+        sp.header_even.as_ref(),
+        sp.footer_even.as_ref(),
+    ]
 }
 
 fn push_block_textboxes<'a>(block: &'a Block, out: &mut Vec<&'a Textbox>) {
