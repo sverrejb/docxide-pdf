@@ -511,47 +511,48 @@ pub(super) fn paragraph_mark_run<R: Read + Seek>(
 
 impl ParagraphRunDefaults {
     fn from_style(para_style: Option<&ParagraphStyle>, defaults: &StyleDefaults) -> Self {
-        let para_font_size = para_style.and_then(|s| s.font_size);
-        let para_font_name = para_style.and_then(|s| s.font_name.as_deref());
-        let style_or = |f: fn(&ParagraphStyle) -> Option<bool>, default: bool| {
-            para_style.and_then(f).unwrap_or(default)
+        let run = para_style.map(|s| &s.run);
+        let para_font_size = run.and_then(|r| r.font_size);
+        let para_font_name = run.and_then(|r| r.font_name.as_deref());
+        let style_or = |f: fn(&RunProps) -> Option<bool>, default: bool| {
+            run.and_then(f).unwrap_or(default)
         };
-        let style_or_clone = |f: fn(&ParagraphStyle) -> Option<&String>,
-                              default: &Option<String>| {
-            para_style.and_then(f).or(default.as_ref()).cloned()
-        };
+        let style_or_clone =
+            |f: fn(&RunProps) -> Option<&String>, default: &Option<String>| {
+                run.and_then(f).or(default.as_ref()).cloned()
+            };
         Self {
             font_size: para_font_size.unwrap_or(defaults.font_size),
             font_name: para_font_name.unwrap_or(&defaults.font_name).to_string(),
             font_size_is_doc_default: para_font_size.is_none(),
             font_name_is_doc_default: para_font_name.is_none(),
-            bold: style_or(|s| s.bold, defaults.bold),
-            italic: style_or(|s| s.italic, defaults.italic),
-            caps: style_or(|s| s.caps, defaults.caps),
-            small_caps: style_or(|s| s.small_caps, defaults.small_caps),
-            vanish: style_or(|s| s.vanish, defaults.vanish),
-            underline: style_or(|s| s.underline, defaults.underline),
-            double_underline: style_or(|s| s.double_underline, defaults.double_underline),
-            strikethrough: style_or(|s| s.strikethrough, defaults.strikethrough),
-            dstrike: style_or(|s| s.dstrike, defaults.dstrike),
-            color: para_style.and_then(|s| s.color).or(defaults.color),
-            char_spacing: para_style
-                .and_then(|s| s.char_spacing)
+            bold: style_or(|r| r.bold, defaults.bold),
+            italic: style_or(|r| r.italic, defaults.italic),
+            caps: style_or(|r| r.caps, defaults.caps),
+            small_caps: style_or(|r| r.small_caps, defaults.small_caps),
+            vanish: style_or(|r| r.vanish, defaults.vanish),
+            underline: style_or(|r| r.underline, defaults.underline),
+            double_underline: style_or(|r| r.double_underline, defaults.double_underline),
+            strikethrough: style_or(|r| r.strikethrough, defaults.strikethrough),
+            dstrike: style_or(|r| r.dstrike, defaults.dstrike),
+            color: run.and_then(|r| r.color).or(defaults.color),
+            char_spacing: run
+                .and_then(|r| r.char_spacing)
                 .unwrap_or(defaults.char_spacing),
-            lang: style_or_clone(|s| s.lang.as_ref(), &defaults.lang),
-            lang_east_asia: style_or_clone(|s| s.lang_east_asia.as_ref(), &defaults.lang_east_asia),
-            lang_bidi: style_or_clone(|s| s.lang_bidi.as_ref(), &defaults.lang_bidi),
-            complex: para_style.map_or(defaults.complex, |s| s.complex.or(defaults.complex)),
-            kern_threshold: para_style
-                .and_then(|s| s.kern_threshold)
+            lang: style_or_clone(|r| r.lang.as_ref(), &defaults.lang),
+            lang_east_asia: style_or_clone(|r| r.lang_east_asia.as_ref(), &defaults.lang_east_asia),
+            lang_bidi: style_or_clone(|r| r.lang_bidi.as_ref(), &defaults.lang_bidi),
+            complex: run.map_or(defaults.complex, |r| r.complex.or(defaults.complex)),
+            kern_threshold: run
+                .and_then(|r| r.kern_threshold)
                 .or(defaults.kern_threshold),
-            position: para_style.and_then(|s| s.position).or(defaults.position),
-            east_asia_font: style_or_clone(|s| s.east_asia_font.as_ref(), &defaults.east_asia_font),
-            cs_font: style_or_clone(|s| s.cs_font.as_ref(), &defaults.cs_font),
-            text_outline: para_style.and_then(|s| s.text_outline.clone()),
-            text_fill: para_style.and_then(|s| s.text_fill.clone()),
-            text_shadow: para_style.and_then(|s| s.text_shadow.clone()),
-            text_glow: para_style.and_then(|s| s.text_glow.clone()),
+            position: run.and_then(|r| r.position).or(defaults.position),
+            east_asia_font: style_or_clone(|r| r.east_asia_font.as_ref(), &defaults.east_asia_font),
+            cs_font: style_or_clone(|r| r.cs_font.as_ref(), &defaults.cs_font),
+            text_outline: run.and_then(|r| r.text_outline.clone()),
+            text_fill: run.and_then(|r| r.text_fill.clone()),
+            text_shadow: run.and_then(|r| r.text_shadow.clone()),
+            text_glow: run.and_then(|r| r.text_glow.clone()),
         }
     }
 

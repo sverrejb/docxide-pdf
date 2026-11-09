@@ -172,27 +172,10 @@ pub(super) struct StyleDefaults {
 
 #[derive(Default)]
 pub(super) struct ParagraphStyle {
-    pub(super) font_size: Option<f32>,
-    pub(super) font_name: Option<String>,
-    pub(super) east_asia_font: Option<String>,
-    pub(super) cs_font: Option<String>,
-    pub(super) bold: Option<bool>,
-    pub(super) italic: Option<bool>,
-    pub(super) caps: Option<bool>,
-    pub(super) small_caps: Option<bool>,
-    pub(super) lang: Option<String>,
-    pub(super) lang_east_asia: Option<String>,
-    pub(super) lang_bidi: Option<String>,
-    pub(super) complex: ComplexProps,
+    /// The style's own `w:rPr`, inherited field by field along basedOn.
+    pub(super) run: RunProps,
     /// `w:bidi`: a right-to-left paragraph.
     pub(super) bidi: Option<bool>,
-    pub(super) vanish: Option<bool>,
-    pub(super) underline: Option<bool>,
-    pub(super) double_underline: Option<bool>,
-    pub(super) strikethrough: Option<bool>,
-    pub(super) dstrike: Option<bool>,
-    pub(super) color: Option<[u8; 3]>,
-    pub(super) char_spacing: Option<f32>,
     pub(super) space_before: Option<f32>,
     pub(super) space_after: Option<f32>,
     pub(super) space_before_autospacing: Option<bool>,
@@ -223,8 +206,6 @@ pub(super) struct ParagraphStyle {
     /// paragraph style whose rStyle names it takes nothing from it (own, never
     /// inherited).
     pub(super) link: Option<String>,
-    pub(super) kern_threshold: Option<f32>,
-    pub(super) position: Option<f32>,
     pub(super) tab_stops: Vec<TabStop>,
     pub(super) clear_tab_positions: Vec<f32>,
     pub(super) num_id: Option<String>,
@@ -236,10 +217,6 @@ pub(super) struct ParagraphStyle {
     pub(super) snap_to_grid: Option<bool>,
     pub(super) auto_space_de: Option<bool>,
     pub(super) auto_space_dn: Option<bool>,
-    pub(super) text_outline: Option<TextOutline>,
-    pub(super) text_fill: Option<TextFill>,
-    pub(super) text_shadow: Option<TextShadow>,
-    pub(super) text_glow: Option<TextGlow>,
     /// The style's framePr attributes; ponytail: basedOn passes the closest
     /// one on whole, merge per attribute if a chain ever splits them.
     pub(super) frame_attrs: Option<super::FrameAttrs>,
@@ -1098,34 +1075,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
                 let borders = ppr.map(parse_paragraph_borders).unwrap_or_default();
                 let shading = ppr.and_then(|n| wml(n, "shd")).and_then(super::shd_color);
 
-                let RunProps {
-                    font_size,
-                    font_name,
-                    east_asia_font,
-                    cs_font,
-                    bold,
-                    italic,
-                    caps,
-                    small_caps,
-                    lang,
-                    lang_east_asia,
-                    lang_bidi,
-                    vanish,
-                    underline,
-                    double_underline,
-                    strikethrough,
-                    dstrike,
-                    char_spacing,
-                    kern_threshold,
-                    position,
-                    color,
-                    text_outline,
-                    text_fill,
-                    text_shadow,
-                    text_glow,
-                    complex,
-                    ..
-                } = wml(style_node, "rPr")
+                let run = wml(style_node, "rPr")
                     .map(|rpr| parse_run_props(rpr, theme))
                     .unwrap_or_default();
 
@@ -1185,26 +1135,8 @@ pub(super) fn parse_styles<R: Read + Seek>(
                 paragraph_styles.insert(
                     style_id.to_string(),
                     ParagraphStyle {
-                        font_size,
-                        font_name,
-                        east_asia_font,
-                        cs_font,
-                        bold,
-                        italic,
-                        caps,
-                        small_caps,
-                        lang,
-                        lang_east_asia,
-                        lang_bidi,
-                        complex,
+                        run,
                         bidi,
-                        vanish,
-                        underline,
-                        double_underline,
-                        strikethrough,
-                        dstrike,
-                        color,
-                        char_spacing,
                         space_before,
                         space_after,
                         space_before_autospacing,
@@ -1228,8 +1160,6 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         shading,
                         based_on,
                         link,
-                        kern_threshold,
-                        position,
                         tab_stops,
                         clear_tab_positions,
                         num_id,
@@ -1239,10 +1169,6 @@ pub(super) fn parse_styles<R: Read + Seek>(
                         snap_to_grid,
                         auto_space_de,
                         auto_space_dn,
-                        text_outline,
-                        text_fill,
-                        text_shadow,
-                        text_glow,
                         frame_attrs,
                     },
                 );
@@ -1362,7 +1288,7 @@ pub(super) fn parse_styles<R: Read + Seek>(
     if defaults.kern_threshold.is_none()
         && let Some(default_para) = paragraph_styles.get(&default_paragraph_style_id)
     {
-        defaults.kern_threshold = default_para.kern_threshold;
+        defaults.kern_threshold = default_para.run.kern_threshold;
     }
 
     StylesInfo {
@@ -1452,25 +1378,7 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     @fields
                     $dst,
                     $src,
-                    font_name,
-                    east_asia_font,
-                    cs_font,
-                    font_size,
-                    bold,
-                    italic,
-                    caps,
-                    small_caps,
-                    lang,
-                    lang_east_asia,
-                    lang_bidi,
                     bidi,
-                    vanish,
-                    underline,
-                    double_underline,
-                    strikethrough,
-                    dstrike,
-                    color,
-                    char_spacing,
                     alignment,
                     kashida,
                     space_before,
@@ -1482,8 +1390,6 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     indent_right,
                     indent_hanging,
                     indent_first_line,
-                    kern_threshold,
-                    position,
                     widow_control,
                     text_alignment,
                     contextual_spacing,
@@ -1498,10 +1404,6 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
                     auto_space_de,
                     auto_space_dn,
                     shading,
-                    text_outline,
-                    text_fill,
-                    text_shadow,
-                    text_glow,
                     frame_attrs,
                 )
             };
@@ -1512,7 +1414,13 @@ fn resolve_based_on(styles: &mut HashMap<String, ParagraphStyle>) {
         for ancestor_id in chain.iter().rev() {
             if let Some(s) = styles.get(ancestor_id) {
                 inherit!(inh, s);
-                inh.complex = s.complex.or(inh.complex);
+                // The closer style wins, so it fills its gaps from what the
+                // farther ancestors accumulated.
+                inh.run = {
+                    let mut r = s.run.clone();
+                    r.inherit(&inh.run);
+                    r
+                };
                 // firstLine and hanging are one value: a style setting either
                 // replaces both of its parent's.
                 if s.indent_hanging.is_some() || s.indent_first_line.is_some() {
@@ -1705,8 +1613,11 @@ mod tests {
         styles.insert(
             "Normal".to_string(),
             ParagraphStyle {
-                lang: Some("lt-LT".into()),
-                lang_east_asia: Some("ja-JP".into()),
+                run: RunProps {
+                    lang: Some("lt-LT".into()),
+                    lang_east_asia: Some("ja-JP".into()),
+                    ..Default::default()
+                },
                 ..Default::default()
             },
         );
@@ -1718,8 +1629,11 @@ mod tests {
             },
         );
         resolve_based_on(&mut styles);
-        assert_eq!(styles["BodyText3"].lang.as_deref(), Some("lt-LT"));
-        assert_eq!(styles["BodyText3"].lang_east_asia.as_deref(), Some("ja-JP"));
+        assert_eq!(styles["BodyText3"].run.lang.as_deref(), Some("lt-LT"));
+        assert_eq!(
+            styles["BodyText3"].run.lang_east_asia.as_deref(),
+            Some("ja-JP")
+        );
     }
 
     #[test]

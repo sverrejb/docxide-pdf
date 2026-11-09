@@ -1585,15 +1585,17 @@ fn parse_zip<R: Read + std::io::Seek>(
     // face, bold, the comment text in its own face, both at its size.
     let balloon_style = styles.paragraph_styles.get("BalloonText");
     let comment_label_font = balloon_style
-        .and_then(|s| s.font_name.clone())
+        .and_then(|s| s.run.font_name.clone())
         .unwrap_or_else(|| "Times New Roman".into());
-    let comment_font_size = balloon_style.and_then(|s| s.font_size).unwrap_or(9.0);
+    let comment_font_size = balloon_style
+        .and_then(|s| s.run.font_size)
+        .unwrap_or(9.0);
     // With no CommentText style the text takes Normal's face, as the built-in
     // CommentText would: case63's Aptos Normal over a Cambria theme draws its
     // comments in Aptos (whose "✓" Cambria lacks).
     let comment_body_font = ["CommentText", styles.default_paragraph_style_id.as_str()]
         .iter()
-        .find_map(|id| styles.paragraph_styles.get(*id)?.font_name.clone())
+        .find_map(|id| styles.paragraph_styles.get(*id)?.run.font_name.clone())
         .unwrap_or_else(|| styles.defaults.font_name.clone());
 
     let mut doc = Document {

@@ -62,7 +62,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         para_style.and_then(|s| s.shading)
     };
 
-    let style_color = para_style.and_then(|s| s.color);
+    let style_color = para_style.and_then(|s| s.run.color);
 
     let alignment = super::runs::paragraph_alignment(node, ppr, para_style)
         .unwrap_or(ctx.styles.defaults.alignment);
@@ -456,7 +456,7 @@ pub(super) fn paragraph_mark_position(
 ) -> f32 {
     ppr_rpr
         .and_then(|rpr| half_points(rpr, "position"))
-        .or_else(|| para_style.and_then(|s| s.position))
+        .or_else(|| para_style.and_then(|s| s.run.position))
         .unwrap_or(0.0)
 }
 
@@ -556,11 +556,11 @@ pub(super) fn indent_char_widths(
     let normal = styles
         .paragraph_styles
         .get(&styles.default_paragraph_style_id)
-        .and_then(|s| s.font_size)
+        .and_then(|s| s.run.font_size)
         .unwrap_or(defaults.font_size);
     let first_run = runs.first().map(|r| r.font_size).unwrap_or_else(|| {
         para_style
-            .and_then(|s| s.font_size)
+            .and_then(|s| s.run.font_size)
             .unwrap_or(defaults.font_size)
     });
     (normal + grid_char_delta, first_run + grid_char_delta)
