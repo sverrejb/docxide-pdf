@@ -17,9 +17,9 @@ use super::table_layout::{
     CELL_START, CellContentItem, CellCursor, CellFloatingImageLayout, CellLayout,
     CellParagraphLayout, Chunk, HfSubstitution, RowLayout, RowPiece, apply_pct_width,
     auto_fit_columns, autofit_min_widths, cell_span_width, cell_x_offset, chunk_space_before,
-    compute_merge_spans, compute_row_layouts, cursor_chunks, find_cell_split, fixed_columns,
-    item_chunk_height, keep_chain_end, min_content_widths, para_block_height, partial_row_height,
-    row_pieces, skip_finished_row, squeeze_to_width,
+    compute_merge_spans, compute_row_layouts, continues_whole, cursor_chunks, find_cell_split,
+    fixed_columns, item_chunk_height, keep_chain_end, min_content_widths, para_block_height,
+    partial_row_height, row_pieces, skip_finished_row, squeeze_to_width,
 };
 use super::tagging::{CellTagger, TableTags, Tags};
 
@@ -826,8 +826,8 @@ fn render_cell_content(
             } => {
                 if let Some(Block::Table(table)) = blocks.get(pi) {
                     let saved_y = cursor_y;
+                    let drop_anchor = continues_whole(&chunk, start);
                     if chunk.l0 == 0 && chunk.from.is_empty() {
-                        let drop_anchor = pi == start.item && start.item > 0 && start.line == 0;
                         let gap = if let Some(offset) = floating_offset {
                             super::table_layout::floating_anchor_gap(
                                 *space_before,
@@ -848,12 +848,7 @@ fn render_cell_content(
                         content,
                         cell_x
                             + cm.left
-                            + if chunk.l0 == 0
-                                && chunk.from.is_empty()
-                                && pi == start.item
-                                && start.item > 0
-                                && start.line == 0
-                            {
+                            + if drop_anchor {
                                 0.0
                             } else {
                                 floating_x_offset.unwrap_or(0.0)
@@ -876,7 +871,7 @@ fn render_cell_content(
                         cursor_y -= bottom_band;
                     }
                 } else {
-                    cursor_y -= item_chunk_height(&items[pi], &chunk, cursor_y - floor);
+                    cursor_y -= item_chunk_height(&items[pi], &chunk, start, cursor_y - floor);
                 }
             }
         }
@@ -2472,6 +2467,7 @@ pub(super) fn render_table(
                             from: &[],
                             to: &[],
                         },
+                        &CELL_START,
                         f32::INFINITY,
                     )
                     <= available_h

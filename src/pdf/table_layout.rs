@@ -2677,9 +2677,22 @@ pub(super) fn outer_half_bands(table: &Table) -> (f32, f32) {
     )
 }
 
-/// Height of a chunk with `room` left for it on its page; items without
-/// lines use their block height.
-pub(super) fn item_chunk_height(item: &CellContentItem, c: &Chunk, room: f32) -> f32 {
+/// Whether chunk `c` opens the continuation `start` (past the cell's first
+/// item) with its item whole: a nested table there starts flush at the
+/// piece's top, without its space before, and its anchor gap moves with it
+/// (`floating_anchor_gap`).
+pub(super) fn continues_whole(c: &Chunk, start: &CellCursor) -> bool {
+    c.item == start.item && start.item > 0 && start.line == 0 && c.from.is_empty()
+}
+
+/// Height of a chunk with `room` left for it on its page, in a cell drawn
+/// from `start`; items without lines use their block height.
+pub(super) fn item_chunk_height(
+    item: &CellContentItem,
+    c: &Chunk,
+    start: &CellCursor,
+    room: f32,
+) -> f32 {
     match item {
         CellContentItem::Paragraph(p) if !p.lines.is_empty() => {
             cell_lines_h(p, c.l0..c.l1.unwrap_or(p.lines.len()))
@@ -2695,7 +2708,7 @@ pub(super) fn item_chunk_height(item: &CellContentItem, c: &Chunk, room: f32) ->
             bottom_band,
             ..
         } => {
-            let mut h = if c.l0 == 0 && c.from.is_empty() {
+            let mut h = if c.l0 == 0 && c.from.is_empty() && !continues_whole(c, start) {
                 *space_before
             } else {
                 0.0
@@ -2768,27 +2781,14 @@ pub(super) fn partial_row_height(
                     *space_before,
                     *offset,
                     floating_x_offset.is_some(),
-                    c.item == start.item && start.item > 0 && start.line == 0 && c.from.is_empty(),
+                    continues_whole(&c, start),
                     &mut reanchor_shift,
                 );
                 floating_extent = floating_extent
                     .max(h + anchor_gap + rows.iter().map(|r| r.height).sum::<f32>());
             }
             let sb = chunk_space_before(item, c.item, start);
-            let mut piece_h = item_chunk_height(item, &c, room - h - sb);
-            if c.item == start.item
-                && start.item > 0
-                && start.line == 0
-                && c.from.is_empty()
-                && let CellContentItem::NestedTable {
-                    space_before,
-                    floating_offset: None,
-                    ..
-                } = item
-            {
-                piece_h -= space_before;
-            }
-            h += sb + piece_h;
+            h += sb + item_chunk_height(item, &c, start, room - h - sb);
         }
         // The chunk that finishes the cell keeps its last paragraph's space
         // after, as an unsplit row does.
@@ -2886,19 +2886,7 @@ pub(super) fn find_cell_split(
             from,
             to: &[],
         };
-        let mut item_h = sb + item_chunk_height(item, &rest, available_h - h - sb);
-        if first
-            && start.item > 0
-            && l0 == 0
-            && from.is_empty()
-            && let CellContentItem::NestedTable {
-                space_before,
-                floating_offset: None,
-                ..
-            } = item
-        {
-            item_h -= space_before;
-        }
+        let item_h = sb + item_chunk_height(item, &rest, start, available_h - h - sb);
         if let CellContentItem::NestedTable {
             rows,
             space_before,
@@ -2911,7 +2899,7 @@ pub(super) fn find_cell_split(
                 *space_before,
                 *offset,
                 floating_x_offset.is_some(),
-                first && start.item > 0 && l0 == 0 && from.is_empty(),
+                continues_whole(&rest, start),
                 &mut reanchor_shift,
             );
             let required = (anchor_gap + rows.iter().map(|r| r.height).sum::<f32>()).max(0.0);
