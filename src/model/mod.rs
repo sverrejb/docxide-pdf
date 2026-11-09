@@ -79,6 +79,12 @@ pub enum LineSpacing {
     AtLeast(f32), // minimum height in points
 }
 
+impl Default for LineSpacing {
+    fn default() -> Self {
+        LineSpacing::Auto(1.0)
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub enum DocGridType {
     #[default]

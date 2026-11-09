@@ -127,6 +127,7 @@ impl ThemeFonts {
     }
 }
 
+#[derive(Default)]
 pub(super) struct StyleDefaults {
     /// The document has no pPrDefault: paragraphs take Word's built-in
     /// 8pt-after, 1.158-line defaults (`space_after`, `line_spacing`).
@@ -891,43 +892,11 @@ pub(super) fn parse_styles<R: Read + Seek>(
     from_normal_template: bool,
 ) -> StylesInfo {
     let mut defaults = StyleDefaults {
-        builtin_para_defaults: false,
-        no_html_auto_spacing: false,
-        no_indent_as_num_tab: false,
         font_size: 10.0,
         font_name: theme.minor.clone(),
-        east_asia_font: None,
-        cs_font: None,
-        space_before: 0.0,
-        space_after: 0.0,
-        before_autospacing: false,
-        after_autospacing: false,
         line_spacing: LineSpacing::Auto(1.0),
-        kern_threshold: None,
-        position: None,
-        bold: false,
-        italic: false,
-        caps: false,
-        small_caps: false,
-        vanish: false,
-        strikethrough: false,
-        dstrike: false,
-        underline: false,
-        double_underline: false,
-        color: None,
-        char_spacing: 0.0,
-        lang: None,
-        lang_east_asia: None,
-        lang_bidi: None,
-        complex: ComplexProps::default(),
-        bidi: false,
         widow_control: true,
-        text_alignment: crate::model::TextAlignment::Auto,
-        indent_left: 0.0,
-        indent_right: 0.0,
-        indent_hanging: 0.0,
-        indent_first_line: 0.0,
-        alignment: Alignment::Left,
+        ..Default::default()
     };
     let mut paragraph_styles = HashMap::new();
     let mut character_styles = HashMap::new();
