@@ -2019,6 +2019,8 @@ pub(super) fn render_table(
     let total_w: f32 = col_widths.iter().sum();
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     let merge_spans = compute_merge_spans(table, &row_layouts);
+    // The table's column (the page's text area in one column): where it
+    // aligns and where its footnotes go.
     let area = column_bounds.unwrap_or((sp.margin_left, sp.text_width()));
 
     let preceding_float_zone = table
@@ -2169,14 +2171,6 @@ pub(super) fn render_table(
     };
     let row_footnote_ids = note_ids(|run| run.footnote_id);
     let row_endnote_ids = note_ids(|run| run.endnote_id);
-
-    // Text width for footnote height computation (same as paragraph layout uses).
-    // A table's notes go to the foot of its column (the page in one column).
-    let fn_col = column_bounds.unwrap_or((
-        sp.margin_left,
-        sp.page_width - sp.margin_left - sp.margin_right,
-    ));
-    let fn_text_width = fn_col.1;
 
     // Word repeats no header rows above a row whose minimum does not fit
     // below them on a fresh page (examples: a 30pt header over a
@@ -2342,7 +2336,7 @@ pub(super) fn render_table(
         let h: f32 = row_footnote_ids[ri]
             .iter()
             .filter(|id| !pb.footnote_ids_set.contains(id))
-            .map(|&id| super::footnotes::footnote_height(id, footnotes, ctx, fn_text_width))
+            .map(|&id| super::footnotes::footnote_height(id, footnotes, ctx, area.1))
             .sum();
         if h > 0.0 && pb.col_fn_reserved == 0.0 {
             h + ctx.note_separator.height
@@ -2608,17 +2602,17 @@ pub(super) fn render_table(
         for &fn_id in &row_footnote_ids[ri] {
             let fn_h = footnotes
                 .contains_key(&fn_id)
-                .then(|| super::footnotes::footnote_height(fn_id, footnotes, ctx, fn_text_width));
+                .then(|| super::footnotes::footnote_height(fn_id, footnotes, ctx, area.1));
             if notes_fit {
                 pb.book_footnote(
                     fn_id,
-                    fn_col,
+                    area,
                     fn_h,
                     ctx.note_separator.height,
                     effective_margin_bottom,
                 );
             } else {
-                pb.carry_footnote(fn_id, fn_col, fn_h, ctx.note_separator.height);
+                pb.carry_footnote(fn_id, area, fn_h, ctx.note_separator.height);
             }
         }
 
