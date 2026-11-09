@@ -39,7 +39,7 @@ use styles::{ParagraphStyle, StyleDefaults, parse_line_spacing, parse_styles, pa
 use embedded_fonts::parse_font_table;
 use headers_footers::{parse_endnotes, parse_footnotes};
 use numbering::parse_numbering;
-use relationships::parse_relationships;
+use relationships::parse_part_relationships;
 use sections::parse_section_properties;
 use settings::parse_settings;
 use tables::parse_table_node;
@@ -1175,15 +1175,6 @@ mod relationships {
             .collect()
     }
 
-    pub(in crate::docx) fn parse_relationships<R: Read + std::io::Seek>(
-        zip: &mut zip::ZipArchive<R>,
-    ) -> HashMap<String, String> {
-        let Some(xml_content) = read_zip_text(zip, "word/_rels/document.xml.rels") else {
-            return HashMap::new();
-        };
-        parse_rels_xml(&xml_content)
-    }
-
     pub(in crate::docx) fn parse_part_relationships<R: Read + std::io::Seek>(
         zip: &mut zip::ZipArchive<R>,
         part_path: &str,
@@ -1297,7 +1288,7 @@ fn parse_zip<R: Read + std::io::Seek>(
     styles.defaults.no_html_auto_spacing = settings.no_html_auto_spacing;
     styles.defaults.no_indent_as_num_tab = settings.no_indent_as_num_tab;
     let numbering = parse_numbering(zip);
-    let rels = parse_relationships(zip);
+    let rels = parse_part_relationships(zip, "word/document.xml");
     let ft = parse_font_table(zip);
     let (embedded_fonts, font_table) = (ft.embedded_fonts, ft.font_table);
     let mut media = images::MediaParts::default();
