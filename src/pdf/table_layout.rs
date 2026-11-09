@@ -1914,17 +1914,17 @@ pub(super) fn compute_row_layouts(
                                     && block_idx == block_count - 1
                                     && para_content_h == 0.0
                                     && is_text_empty(runs);
+                                // Match the rendering's first_line_hanging: when a
+                                // list label is present, the label is drawn separately
+                                // and the text starts at indent_left, so the first
+                                // line has no extra hanging width.
+                                let hanging = super::list_label::text_hanging(para, ctx.default_tab_stop, ctx.fonts);
                                 let lines = if !is_text_empty(runs) && !image_only {
                                     let para_text_w = (cell_text_w
                                         - para.indent_left
                                         - para.indent_right
                                         - float_indent_left)
                                         .max(0.0);
-                                    // Match the rendering's first_line_hanging: when a
-                                    // list label is present, the label is drawn separately
-                                    // and the text starts at indent_left, so the first
-                                    // line has no extra hanging width.
-                                    let hanging = super::list_label::text_hanging(para, ctx.default_tab_stop, ctx.fonts);
                                     let has_tabs = runs.iter().any(|r| r.is_tab);
                                     let inline_images = super::layout::run_image_map(runs, ctx.table_cell_image_names);
                                     let inline_effects = super::layout::run_image_map(runs, ctx.effect_table_names);
@@ -2167,7 +2167,7 @@ pub(super) fn compute_row_layouts(
                                     indent_right: para.indent_right,
                                     indent_hanging: para.indent_hanging,
                                     indent_first_line: para.indent_first_line,
-                                    text_hanging: super::list_label::text_hanging(para, ctx.default_tab_stop, ctx.fonts),
+                                    text_hanging: hanging,
                                     label_shift: super::list_label::label_shift(para, ctx.fonts),
                                     float_indent_left,
                                     beside_indent,
@@ -2418,7 +2418,6 @@ pub(super) fn compute_row_layouts(
                 // margins is 35.0, with only a 5pt top margin 30.0 (Word probes).
                 // The inset's half band is already in the exact pitch.
                 (Some(h), true) => {
-                    let bottom_band = row_half_bands(row).1;
                     h + cells
                         .iter()
                         .map(|l| l.cm.bottom - bottom_band)

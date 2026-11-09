@@ -2021,6 +2021,7 @@ pub(super) fn render_table(
     column_bounds: Option<(f32, f32)>,
 ) {
     let col_widths = resolved_col_widths(table, sp, ctx, column_bounds);
+    let total_w: f32 = col_widths.iter().sum();
     let row_layouts = compute_row_layouts(table, &col_widths, ctx, None);
     let merge_spans = compute_merge_spans(table, &row_layouts);
     let area = column_bounds.unwrap_or((sp.margin_left, sp.text_width()));
@@ -2044,10 +2045,9 @@ pub(super) fn render_table(
         && let Some(ref zone) = pb.float_zone
         && let Some(ref mut fp) = override_pos
     {
-        let width: f32 = col_widths.iter().sum();
         let height: f32 = row_layouts.iter().map(|r| r.height).sum();
         if fp.x < zone.obj_right
-            && fp.x + width > zone.obj_left
+            && fp.x + total_w > zone.obj_left
             && fp.y > zone.bottom_y
             && fp.y - height < zone.top_y
         {
@@ -2107,14 +2107,13 @@ pub(super) fn render_table(
         pb.slot_top = fp.y;
         (fp.x, saved, (fp.top_from_text, fp.bottom_from_text))
     } else {
-        let total_w: f32 = col_widths.iter().sum();
         let left = aligned_table_left(table, area, total_w, ctx.compat_mode);
         (left, None, (0.0, 0.0))
     };
     if let Some(fp) = &override_pos {
         pb.float_table_extent = Some(super::FloatTableExtent {
             left: table_left,
-            right: table_left + col_widths.iter().sum::<f32>(),
+            right: table_left + total_w,
             left_from_text: fp.left_from_text,
             right_from_text: fp.right_from_text,
         });
@@ -2134,12 +2133,11 @@ pub(super) fn render_table(
     // paragraph's narrow wrapping strip. Clear a preceding floating table
     // when the actual table rectangles intersect.
     if !is_floating {
-        let total_width: f32 = col_widths.iter().sum();
         let total_height: f32 = row_layouts.iter().map(|row| row.height).sum();
         if let Some(zone) = pb.float_zone.as_ref()
             && zone.from_table
             && table_left < zone.wrap_right()
-            && table_left + total_width > zone.wrap_left()
+            && table_left + total_w > zone.wrap_left()
             // A float whose wrap area stays in the margin pushes nothing, even a
             // table running onto its box (dutch_government_budget_letter; Word
             // probes 2026-10-28: 1pt outside the column stays beside, 1pt inside clears).
@@ -2695,7 +2693,6 @@ pub(super) fn render_table(
                 pb.slot_top += text_anchor_offset;
             }
         } else {
-            let table_total_w: f32 = col_widths.iter().sum();
             let (top_margin, bottom_margin) = text_margins;
             let table_bottom = pb.slot_top;
 
@@ -2710,7 +2707,7 @@ pub(super) fn render_table(
                 let text_area_left = sp.margin_left;
                 let text_area_right = sp.page_width - sp.margin_right;
                 let space_left = table_left - text_area_left;
-                let space_right = text_area_right - (table_left + table_total_w);
+                let space_right = text_area_right - (table_left + total_w);
                 let wrap_text = if space_left >= 72.0 && space_right >= 72.0 {
                     crate::model::WrapText::BothSides
                 } else {
@@ -2720,7 +2717,7 @@ pub(super) fn render_table(
                     top_y: table_top_y + top_margin,
                     bottom_y: table_bottom - bottom_margin,
                     obj_left: table_left,
-                    obj_right: table_left + table_total_w,
+                    obj_right: table_left + total_w,
                     left_from_text: fp.left_from_text,
                     right_from_text: fp.right_from_text,
                     polygon_pts: None,
