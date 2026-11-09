@@ -3423,7 +3423,7 @@
   "cases/charts_3d": {
     "jaccard": 0.8971,
     "ssim": 0.8781,
-    "text_boundary": 0.959,
+    "text_boundary": 0.9836,
     "ua_fail": 3,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -8847,7 +8847,7 @@
   "cases/text-box-table-anchor": {
     "jaccard": 0.9349,
     "ssim": 0.9856,
-    "text_boundary": 0.9,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -10000,7 +10000,7 @@
   "scraped/candidate_reference_check_form": {
     "jaccard": 0.7385,
     "ssim": 0.8707,
-    "text_boundary": 0.9048,
+    "text_boundary": 0.9545,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -10632,7 +10632,7 @@
   "scraped/indonesian_school_admission_checklist": {
     "jaccard": 0.8273,
     "ssim": 0.9204,
-    "text_boundary": 0.973,
+    "text_boundary": 1.0,
     "ua_fail": 2,
     "a11y_missing": 0,
     "ua_deficit": 0,
@@ -10744,7 +10744,7 @@
   "scraped/japanese_interlibrary_loan": {
     "jaccard": 0.6662,
     "ssim": 0.7955,
-    "text_boundary": 0.8571,
+    "text_boundary": 1.0,
     "convert_ms": 4.5,
     "ua_fail": 2,
     "a11y_missing": 0,
