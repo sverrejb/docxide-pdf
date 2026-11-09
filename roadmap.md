@@ -82,6 +82,19 @@ a run is one). Open, diagnosed:
 - A calendar's table rows come out 1.5pt shorter than Word's per row
   (Century Gothic cells, 4–5 lines each); a header table's shaded row 5pt
   taller. Measure against an online export before chasing (Mac metrics).
+- Remaining, in the CI comparison of 2026-11-09 (main 695efa1b against the
+  benchmark's engine, `report.json` on gh-pages): it leads on 15 of 1176
+  fixtures, we lead on 1149. By five points or more only case64 (72.0 vs
+  85.1) and case63 (52.6 vs 60.9), both comment-pane references,
+  hyphen-opening-guillemet-nonbreaking-hyphen (70.8 vs 83.5) and case37
+  (23.2 vs 30.0); then double-underline (+4.5), go_math_grade4_guide (+4.1),
+  case125, slovak_pedagogical_practice_agreement and text-box-table-compat14
+  (+2 each). On its clean corpus this round changed no document's side: it
+  leads on 1829 of 2478 (1741 by more than a point), we lead on 645; the
+  rules moved the mean only. Its tracking sets (3393 + 410 + 116 documents)
+  have no baseline run of ours yet. The probe generators, the per-document
+  join (`gap.py`) and the paired rescore script live in the worktree's
+  untracked `tests/output/jub/`.
 
 **Engine-gap triage (2026-11-07):** cases where another engine beats us by
 ≥3pp J in the CI comparison (`git show origin/gh-pages:report.json`; same
