@@ -1092,6 +1092,29 @@ pub(super) fn collect_block_nodes<'a>(
     nodes
 }
 
+/// A document parsed from `(zip path, XML)` parts.
+#[cfg(test)]
+pub(crate) fn parse_parts(parts: &[(&str, &str)]) -> Document {
+    use std::io::Write;
+    let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+    for (name, xml) in parts {
+        zip.start_file(*name, zip::write::SimpleFileOptions::default())
+            .unwrap();
+        zip.write_all(xml.as_bytes()).unwrap();
+    }
+    parse_bytes(
+        &zip.finish().unwrap().into_inner(),
+        crate::RevisionView::Final,
+    )
+    .unwrap()
+}
+
+/// `parse_parts` with only a word/document.xml.
+#[cfg(test)]
+pub(crate) fn parse_document_xml(xml: &str) -> Document {
+    parse_parts(&[("word/document.xml", xml)])
+}
+
 pub(super) fn read_zip_text<R: Read + std::io::Seek>(
     zip: &mut zip::ZipArchive<R>,
     name: &str,

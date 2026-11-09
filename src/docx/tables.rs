@@ -1161,7 +1161,6 @@ mod border_conflict_tests {
 
     #[test]
     fn row_margin_exceptions_inherit_per_side_and_do_not_leak() {
-        use std::io::{Cursor, Write};
         let xml = r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl>
           <w:tblPr><w:tblCellMar><w:top w:w="20"/><w:left w:w="100"/><w:bottom w:w="40"/><w:right w:w="120"/></w:tblCellMar></w:tblPr>
           <w:tblGrid><w:gridCol w:w="1000"/><w:gridCol w:w="1000"/></w:tblGrid>
@@ -1169,15 +1168,7 @@ mod border_conflict_tests {
             <w:tc><w:p/></w:tc><w:tc><w:tcPr><w:tcMar><w:left w:w="0"/><w:bottom w:w="60"/></w:tcMar></w:tcPr><w:p/></w:tc>
           </w:tr><w:tr><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr>
         </w:tbl><w:sectPr/></w:body></w:document>"#;
-        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-        zip.start_file(
-            "word/document.xml",
-            zip::write::SimpleFileOptions::default(),
-        )
-        .unwrap();
-        zip.write_all(xml.as_bytes()).unwrap();
-        let bytes = zip.finish().unwrap().into_inner();
-        let doc = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
+        let doc = crate::docx::parse_document_xml(xml);
         let Block::Table(table) = &doc.sections[0].blocks[0] else {
             panic!("expected table")
         };
@@ -1195,7 +1186,6 @@ mod border_conflict_tests {
 
     #[test]
     fn cell_spacing_widens_insets_double_at_the_table_edge() {
-        use std::io::{Cursor, Write};
         // 20 twips = 1pt spacing on the table, 0 on the second row.
         let xml = r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl>
           <w:tblPr><w:tblCellSpacing w:w="20" w:type="dxa"/><w:tblCellMar><w:left w:w="0"/><w:right w:w="0"/></w:tblCellMar></w:tblPr>
@@ -1204,15 +1194,7 @@ mod border_conflict_tests {
           <w:tr><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr>
           <w:tr><w:trPr><w:tblCellSpacing w:w="0" w:type="dxa"/></w:trPr><w:tc><w:p/></w:tc><w:tc><w:p/></w:tc></w:tr>
         </w:tbl><w:sectPr/></w:body></w:document>"#;
-        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-        zip.start_file(
-            "word/document.xml",
-            zip::write::SimpleFileOptions::default(),
-        )
-        .unwrap();
-        zip.write_all(xml.as_bytes()).unwrap();
-        let bytes = zip.finish().unwrap().into_inner();
-        let doc = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
+        let doc = crate::docx::parse_document_xml(xml);
         let Block::Table(table) = &doc.sections[0].blocks[0] else {
             panic!("expected table")
         };
@@ -1230,21 +1212,16 @@ mod border_conflict_tests {
 
     #[test]
     fn default_side_margins_need_a_default_style_or_tbl_cell_mar() {
-        use std::io::{Cursor, Write};
         let left = |styles: Option<&str>, tbl_pr: &str| {
             let xml = format!(
                 r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl><w:tblPr>{tbl_pr}</w:tblPr><w:tblGrid><w:gridCol w:w="1000"/></w:tblGrid><w:tr><w:tc><w:tcPr><w:tcMar><w:right w:w="108"/></w:tcMar></w:tcPr><w:p/></w:tc></w:tr></w:tbl><w:sectPr/></w:body></w:document>"#
             );
-            let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-            let opts = zip::write::SimpleFileOptions::default();
-            zip.start_file("word/document.xml", opts).unwrap();
-            zip.write_all(xml.as_bytes()).unwrap();
-            if let Some(s) = styles {
-                zip.start_file("word/styles.xml", opts).unwrap();
-                zip.write_all(format!(r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">{s}</w:styles>"#).as_bytes()).unwrap();
-            }
-            let bytes = zip.finish().unwrap().into_inner();
-            let doc = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
+            let styles = styles.map(|s| {
+                format!(r#"<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">{s}</w:styles>"#)
+            });
+            let mut parts = vec![("word/document.xml", xml.as_str())];
+            parts.extend(styles.as_deref().map(|s| ("word/styles.xml", s)));
+            let doc = crate::docx::parse_parts(&parts);
             let Block::Table(table) = &doc.sections[0].blocks[0] else {
                 panic!("expected table")
             };
@@ -1271,7 +1248,6 @@ mod border_conflict_tests {
 
     #[test]
     fn side_insets_grow_to_half_the_border_band() {
-        use std::io::{Cursor, Write};
         let lefts = |tbl_cell_mar: &str| {
             let b = |tag: &str, sz: u32| format!(r#"<w:{tag} w:val="single" w:sz="{sz}"/>"#);
             let borders = [b("left", 48), b("right", 4), b("insideV", 4)].concat();
@@ -1279,12 +1255,7 @@ mod border_conflict_tests {
             let xml = format!(
                 r#"<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl><w:tblPr><w:tblBorders>{borders}</w:tblBorders>{tbl_cell_mar}</w:tblPr><w:tblGrid><w:gridCol w:w="1000"/><w:gridCol w:w="1000"/></w:tblGrid><w:tr>{cell}{cell}</w:tr></w:tbl><w:sectPr/></w:body></w:document>"#
             );
-            let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-            let opts = zip::write::SimpleFileOptions::default();
-            zip.start_file("word/document.xml", opts).unwrap();
-            zip.write_all(xml.as_bytes()).unwrap();
-            let bytes = zip.finish().unwrap().into_inner();
-            let doc = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
+            let doc = crate::docx::parse_document_xml(&xml);
             let Block::Table(table) = &doc.sections[0].blocks[0] else {
                 panic!("expected table")
             };

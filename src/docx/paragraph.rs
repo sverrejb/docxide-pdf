@@ -665,9 +665,6 @@ mod tests {
 
     #[test]
     fn list_level_hanging_survives_direct_left_or_right() {
-        use std::io::{Cursor, Write};
-        use zip::write::SimpleFileOptions;
-
         for (ind, left, hanging, first) in [
             (r#"w:left="1418""#, 70.9, 18.0, 0.0),
             (r#"w:right="100""#, 98.95, 18.0, 0.0),
@@ -684,20 +681,11 @@ mod tests {
             let numbering = format!(
                 r#"<w:numbering xmlns:w="{WML_NS}"><w:abstractNum w:abstractNumId="1"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/><w:pPr><w:ind w:left="1979" w:hanging="360"/></w:pPr></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="1"/></w:num></w:numbering>"#
             );
-            let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-            for (name, xml) in [
-                ("word/document.xml", document),
-                ("word/styles.xml", styles),
-                ("word/numbering.xml", numbering),
-            ] {
-                zip.start_file(name, SimpleFileOptions::default()).unwrap();
-                zip.write_all(xml.as_bytes()).unwrap();
-            }
-            let parsed = crate::docx::parse_bytes(
-                &zip.finish().unwrap().into_inner(),
-                crate::RevisionView::Final,
-            )
-            .unwrap();
+            let parsed = crate::docx::parse_parts(&[
+                ("word/document.xml", &document),
+                ("word/styles.xml", &styles),
+                ("word/numbering.xml", &numbering),
+            ]);
             let crate::model::Block::Paragraph(p) = &parsed.sections[0].blocks[0] else {
                 panic!("expected a paragraph");
             };
@@ -720,9 +708,6 @@ mod tests {
 
     #[test]
     fn paragraph_mark_inherits_character_style_with_direct_overrides() {
-        use std::io::{Cursor, Write};
-        use zip::write::SimpleFileOptions;
-
         for (mark, font, size) in [
             (r#"<w:rStyle w:val="Child"/>"#, "Times New Roman", 11.0),
             (
@@ -743,13 +728,10 @@ mod tests {
             let styles = format!(
                 r#"<w:styles xmlns:w="{WML_NS}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri"/><w:sz w:val="24"/></w:rPr></w:rPrDefault></w:docDefaults><w:style w:type="character" w:styleId="Base"><w:name w:val="Base"/><w:rPr><w:rFonts w:ascii="Times New Roman"/><w:sz w:val="22"/></w:rPr></w:style><w:style w:type="character" w:styleId="Child"><w:name w:val="Child"/><w:basedOn w:val="Base"/></w:style></w:styles>"#
             );
-            let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-            for (name, xml) in [("word/document.xml", document), ("word/styles.xml", styles)] {
-                zip.start_file(name, SimpleFileOptions::default()).unwrap();
-                zip.write_all(xml.as_bytes()).unwrap();
-            }
-            let bytes = zip.finish().unwrap().into_inner();
-            let parsed = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
+            let parsed = crate::docx::parse_parts(&[
+                ("word/document.xml", &document),
+                ("word/styles.xml", &styles),
+            ]);
             let crate::model::Block::Paragraph(para) = &parsed.sections[0].blocks[0] else {
                 panic!("expected a paragraph");
             };
@@ -762,9 +744,6 @@ mod tests {
 
     #[test]
     fn rtl_and_cs_runs_take_the_complex_script_formatting() {
-        use std::io::{Cursor, Write};
-        use zip::write::SimpleFileOptions;
-
         let rpr = r#"<w:rFonts w:ascii="Courier New" w:cs="Times New Roman"/><w:b/><w:sz w:val="24"/><w:szCs w:val="40"/>"#;
         let document = format!(
             r#"<w:document xmlns:w="{WML_NS}"><w:body><w:p><w:pPr><w:pStyle w:val="Rtl"/></w:pPr><w:r><w:rPr>{rpr}</w:rPr><w:t>plain</w:t></w:r><w:r><w:rPr>{rpr}<w:rtl/></w:rPr><w:t>rtl</w:t></w:r><w:r><w:rPr>{rpr}<w:iCs/><w:cs/></w:rPr><w:t>cs</w:t></w:r></w:p><w:p><w:pPr><w:pStyle w:val="Sub"/></w:pPr><w:r><w:rPr><w:rtl/></w:rPr><w:t>sub</w:t></w:r></w:p><w:sectPr/></w:body></w:document>"#
@@ -772,13 +751,10 @@ mod tests {
         let styles = format!(
             r#"<w:styles xmlns:w="{WML_NS}"><w:style w:type="paragraph" w:styleId="Rtl"><w:name w:val="Rtl"/><w:pPr><w:bidi/></w:pPr><w:rPr><w:bCs/><w:szCs w:val="30"/></w:rPr></w:style><w:style w:type="paragraph" w:styleId="Sub"><w:name w:val="Sub"/><w:basedOn w:val="Rtl"/></w:style></w:styles>"#
         );
-        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-        for (name, xml) in [("word/document.xml", document), ("word/styles.xml", styles)] {
-            zip.start_file(name, SimpleFileOptions::default()).unwrap();
-            zip.write_all(xml.as_bytes()).unwrap();
-        }
-        let bytes = zip.finish().unwrap().into_inner();
-        let parsed = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
+        let parsed = crate::docx::parse_parts(&[
+            ("word/document.xml", &document),
+            ("word/styles.xml", &styles),
+        ]);
         let crate::model::Block::Paragraph(para) = &parsed.sections[0].blocks[0] else {
             panic!("expected a paragraph");
         };
@@ -853,22 +829,16 @@ mod tests {
 
     #[test]
     fn a_pstyle_naming_a_character_style_falls_back_to_normal() {
-        use std::io::{Cursor, Write};
-        use zip::write::SimpleFileOptions;
-
         let document = format!(
             r#"<w:document xmlns:w="{WML_NS}"><w:body><w:p><w:pPr><w:pStyle w:val="BodyChar"/></w:pPr><w:r><w:t>x</w:t></w:r></w:p><w:p><w:pPr><w:pStyle w:val="Missing"/></w:pPr></w:p><w:sectPr/></w:body></w:document>"#
         );
         let styles = format!(
             r#"<w:styles xmlns:w="{WML_NS}"><w:docDefaults><w:rPrDefault><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/><w:sz w:val="22"/></w:rPr></w:rPrDefault><w:pPrDefault><w:pPr><w:spacing w:after="160" w:line="259" w:lineRule="auto"/></w:pPr></w:pPrDefault></w:docDefaults><w:style w:type="paragraph" w:default="1" w:styleId="Normal"><w:name w:val="Normal"/><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:rPr><w:rFonts w:ascii="Arial" w:hAnsi="Arial"/><w:sz w:val="18"/></w:rPr></w:style><w:style w:type="character" w:styleId="BodyChar"><w:name w:val="Body Char"/><w:rPr><w:sz w:val="40"/></w:rPr></w:style></w:styles>"#
         );
-        let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
-        for (name, xml) in [("word/document.xml", document), ("word/styles.xml", styles)] {
-            zip.start_file(name, SimpleFileOptions::default()).unwrap();
-            zip.write_all(xml.as_bytes()).unwrap();
-        }
-        let bytes = zip.finish().unwrap().into_inner();
-        let parsed = crate::docx::parse_bytes(&bytes, crate::RevisionView::Final).unwrap();
+        let parsed = crate::docx::parse_parts(&[
+            ("word/document.xml", &document),
+            ("word/styles.xml", &styles),
+        ]);
         for block in &parsed.sections[0].blocks[..2] {
             let crate::model::Block::Paragraph(para) = block else {
                 panic!("expected a paragraph");
