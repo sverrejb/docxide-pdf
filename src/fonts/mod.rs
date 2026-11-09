@@ -163,6 +163,15 @@ impl FontEntry {
 }
 
 impl FontEntry {
+    /// Lay lines out with another face's box: Word measures some faces with
+    /// metrics other than the file's (`register_font`, `pdf::fonts`).
+    pub(crate) fn set_line_box(&mut self, ascent: f32, line_h: f32) {
+        self.line_h_ratio = Some(line_h);
+        self.plain_line_h_ratio = Some(line_h);
+        self.ascender_ratio = Some(ascent);
+        self.plain_ascender_ratio = Some(ascent);
+    }
+
     /// Width of a single character in 1000-units. Uses the per-char cache (covers
     /// all Unicode chars seen in the document), falls back to the WinAnsi table.
     pub(crate) fn char_width_1000(&self, ch: char) -> f32 {
@@ -1190,10 +1199,7 @@ pub(crate) fn register_font(
     // "Bahnschrift" and for swiss_materials' Helvetica 55 Roman with altName
     // Bahnschrift Light; real Calibri lines are 0.954/1.221).
     if bahnschrift && entry.font_path.is_some() {
-        entry.line_h_ratio = Some(BAHNSCHRIFT_LINE_H);
-        entry.plain_line_h_ratio = Some(BAHNSCHRIFT_LINE_H);
-        entry.ascender_ratio = Some(BAHNSCHRIFT_ASCENT);
-        entry.plain_ascender_ratio = Some(BAHNSCHRIFT_ASCENT);
+        entry.set_line_box(BAHNSCHRIFT_ASCENT, BAHNSCHRIFT_LINE_H);
     }
 
     log::debug!(
