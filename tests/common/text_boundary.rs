@@ -30,9 +30,8 @@ fn extract_all_pages(pdf: &Path) -> Vec<Vec<String>> {
     pages
 }
 
-/// Text lines per page from one `mutool draw -F stext` run over the whole document, each page
-/// parsed by [`stext_lines`].
-fn extract_all_page_lines(pdf: &Path) -> Vec<Vec<String>> {
+/// Text-line fragments per page from one `mutool draw -F stext` run over the whole document.
+fn extract_all_page_fragments(pdf: &Path) -> Vec<Vec<Fragment>> {
     let output = Command::new("mutool")
         .args(["draw", "-F", "stext", pdf.to_str().unwrap()])
         .output()
@@ -42,25 +41,37 @@ fn extract_all_page_lines(pdf: &Path) -> Vec<Vec<String>> {
         "mutool draw -F stext failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    parse_stext_pages(&String::from_utf8_lossy(&output.stdout))
+    parse_stext_fragments(&String::from_utf8_lossy(&output.stdout))
         .expect("mutool returned invalid structured-text XML")
+}
+
+/// One mutool `line`: its left and right edge, top and text.
+#[derive(Clone)]
+struct Fragment {
+    x0: f64,
+    x1: f64,
+    top: f64,
+    text: String,
 }
 
 /// MuPDF emits character nodes inside each line. Also accept the compact
 /// line-level text attribute used by older metric inputs.
-fn parse_stext_pages(xml: &str) -> Result<Vec<Vec<String>>, roxmltree::Error> {
+fn parse_stext_fragments(xml: &str) -> Result<Vec<Vec<Fragment>>, roxmltree::Error> {
     let doc = roxmltree::Document::parse(xml)?;
     Ok(doc
         .descendants()
         .filter(|n| n.has_tag_name("page"))
         .map(|page| {
-            let lines = page
-                .descendants()
+            page.descendants()
                 .filter(|n| n.has_tag_name("line"))
                 .filter_map(|line| {
-                    let mut bbox = line.attribute("bbox").unwrap_or("").split_whitespace();
-                    let x = bbox.next().and_then(|v| v.parse().ok()).unwrap_or(0.0);
-                    let y = bbox.next().and_then(|v| v.parse().ok()).unwrap_or(0.0);
+                    let bbox: Vec<f64> = line
+                        .attribute("bbox")
+                        .unwrap_or("")
+                        .split_whitespace()
+                        .filter_map(|v| v.parse().ok())
+                        .collect();
+                    let at = |i: usize| bbox.get(i).copied().unwrap_or(0.0);
                     let text = line
                         .attribute("text")
                         .map(str::to_owned)
@@ -71,39 +82,124 @@ fn parse_stext_pages(xml: &str) -> Result<Vec<Vec<String>>, roxmltree::Error> {
                                 .collect()
                         });
                     let text = text.trim();
-                    (!text.is_empty()).then(|| (x, y, text.to_owned()))
+                    (!text.is_empty()).then(|| Fragment {
+                        x0: at(0),
+                        x1: at(2),
+                        top: at(1),
+                        text: text.to_owned(),
+                    })
                 })
-                .collect();
-            merge_stext_lines(lines)
+                .collect()
         })
         .collect())
 }
 
-/// Sort line fragments by y, cluster within 8pt, then order each cluster by x
-/// so superscripts/subscripts and adjacent font runs retain reading order.
-fn merge_stext_lines(mut lines: Vec<(f64, f64, String)>) -> Vec<String> {
-    lines.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-    let mut clusters: Vec<Vec<(f64, f64, String)>> = Vec::new();
-    for item in lines {
+/// Sort fragments by top and cluster within 8pt of each cluster's first fragment, so
+/// superscripts/subscripts and side-by-side runs of one visual line stay together.
+fn group_by_top(mut frags: Vec<Fragment>) -> Vec<Vec<Fragment>> {
+    frags.sort_by(|a, b| a.top.total_cmp(&b.top));
+    let mut clusters: Vec<Vec<Fragment>> = Vec::new();
+    for frag in frags {
         if let Some(last) = clusters.last_mut()
-            && (item.1 - last[0].1).abs() < 8.0
+            && frag.top - last[0].top < 8.0
         {
-            last.push(item);
+            last.push(frag);
             continue;
         }
-        clusters.push(vec![item]);
+        clusters.push(vec![frag]);
     }
     clusters
+}
+
+/// A line's fragments in x order (reading order for superscripts and adjacent font runs).
+fn line_text(mut line: Vec<Fragment>) -> String {
+    line.sort_by(|a, b| a.x0.total_cmp(&b.x0));
+    line.into_iter()
+        .map(|f| f.text)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// 1pt slack so touching runs don't overlap.
+fn overlap_x(a: &Fragment, b: &Fragment) -> bool {
+    a.x0.max(b.x0) + 1.0 < a.x1.min(b.x1)
+}
+
+/// Overlapping in x at different tops: two lines one above the other, never one visual line.
+/// 1pt slack for text drawn twice at one top (simulated bold).
+fn stack(a: &Fragment, b: &Fragment) -> bool {
+    overlap_x(a, b) && (a.top - b.top).abs() > 1.0
+}
+
+/// How far (pt) a generated fragment's top may sit from a reference fragment's and still join it.
+const ASSIGN_TOLERANCE: f64 = 3.0;
+
+/// Our fragments grouped into the reference's lines, so a sub-point shift can't carry a fragment
+/// across the 8pt cluster limit (text-box-table-anchor: Word's two lines 8.00pt apart, ours 7.84pt
+/// apart would merge). Each fragment joins the line of the reference fragment whose top is
+/// nearest, within [`ASSIGN_TOLERANCE`], preferring one it overlaps in x: Word's own 8pt grouping
+/// can split one table row (label 7.95pt below the header joins it, the row's numbers 8.15pt
+/// below don't), and ours halfway between must follow its own counterpart. Two of ours that
+/// [`stack`] can't both be that one reference fragment, so the farther (a reflowed extra line)
+/// stays unassigned. An unassigned fragment (side-by-side content drifted off Word's row: a right
+/// cell, a comment pane) joins the nearest assigned line within 8pt unless it stacks with one of
+/// that line's fragments; the rest group by the 8pt rule.
+fn group_like_reference(reference: &[Vec<Fragment>], generated: Vec<Fragment>) -> Vec<String> {
+    let targets: Vec<(&Fragment, usize)> = reference
+        .iter()
+        .enumerate()
+        .flat_map(|(line, frags)| frags.iter().map(move |f| (f, line)))
+        .collect();
+    let mut candidates = Vec::new();
+    let mut unassigned = Vec::new();
+    for frag in generated {
+        let nearest = targets
+            .iter()
+            .map(|&(r, _)| (!overlap_x(r, &frag), (r.top - frag.top).abs()))
+            .enumerate()
+            .filter(|(_, (_, d))| *d <= ASSIGN_TOLERANCE)
+            .min_by(|a, b| a.1.0.cmp(&b.1.0).then(a.1.1.total_cmp(&b.1.1)));
+        match nearest {
+            Some((target, (_, d))) => candidates.push((d, target, frag)),
+            None => unassigned.push(frag),
+        }
+    }
+    candidates.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut slots: Vec<Vec<Fragment>> = vec![Vec::new(); targets.len()];
+    for (_, target, frag) in candidates {
+        if slots[target].iter().any(|kept| stack(&frag, kept)) {
+            unassigned.push(frag);
+        } else {
+            slots[target].push(frag);
+        }
+    }
+    let mut assigned: Vec<Vec<Fragment>> = vec![Vec::new(); reference.len()];
+    for (slot, &(_, line)) in slots.into_iter().zip(&targets) {
+        assigned[line].extend(slot);
+    }
+    let mut loose = Vec::new();
+    for frag in unassigned {
+        let nearest = assigned
+            .iter()
+            .enumerate()
+            .flat_map(|(line, frags)| frags.iter().map(move |f| ((f.top - frag.top).abs(), line)))
+            .min_by(|a, b| a.0.total_cmp(&b.0));
+        match nearest {
+            Some((d, line)) if d < 8.0 && !assigned[line].iter().any(|f| stack(&frag, f)) => {
+                assigned[line].push(frag)
+            }
+            _ => loose.push(frag),
+        }
+    }
+    let mut lines: Vec<(f64, Vec<Fragment>)> = assigned
         .into_iter()
-        .map(|mut cluster| {
-            cluster.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
-            cluster
-                .into_iter()
-                .map(|(_, _, t)| t)
-                .collect::<Vec<_>>()
-                .join(" ")
-        })
-        .collect()
+        .zip(reference)
+        .filter(|(frags, _)| !frags.is_empty())
+        .map(|(frags, line)| (line[0].top, frags))
+        .chain(group_by_top(loose).into_iter().map(|c| (c[0].top, c)))
+        .collect();
+    lines.sort_by(|a, b| a.0.total_cmp(&b.0));
+    lines.into_iter().map(|(_, line)| line_text(line)).collect()
 }
 
 fn break_positions(pages: &[Vec<String>]) -> Vec<usize> {
@@ -207,8 +303,19 @@ pub fn analyze(reference_pdf: &Path, generated_pdf: &Path) -> TextBoundary {
         .max_by_key(|d| d.unsigned_abs())
         .unwrap_or(0);
 
-    let ref_line_pages = extract_all_page_lines(reference_pdf);
-    let gen_line_pages = extract_all_page_lines(generated_pdf);
+    let ref_line_groups: Vec<_> = extract_all_page_fragments(reference_pdf)
+        .into_iter()
+        .map(group_by_top)
+        .collect();
+    let gen_line_pages: Vec<Vec<String>> = ref_line_groups
+        .iter()
+        .zip(extract_all_page_fragments(generated_pdf))
+        .map(|(reference, generated)| group_like_reference(reference, generated))
+        .collect();
+    let ref_line_pages: Vec<Vec<String>> = ref_line_groups
+        .into_iter()
+        .map(|page| page.into_iter().map(line_text).collect())
+        .collect();
     let mut total_lines = 0;
     let mut matching_lines = 0;
     for p in 0..common_pages {
@@ -239,7 +346,76 @@ pub fn analyze(reference_pdf: &Path, generated_pdf: &Path) -> TextBoundary {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_stext_pages;
+    use super::{Fragment, group_by_top, group_like_reference, line_text, parse_stext_fragments};
+
+    fn parse_stext_pages(xml: &str) -> Result<Vec<Vec<String>>, roxmltree::Error> {
+        Ok(parse_stext_fragments(xml)?
+            .into_iter()
+            .map(|page| group_by_top(page).into_iter().map(line_text).collect())
+            .collect())
+    }
+
+    fn frag(x0: f64, x1: f64, top: f64, text: &str) -> Fragment {
+        Fragment {
+            x0,
+            x1,
+            top,
+            text: text.to_owned(),
+        }
+    }
+
+    #[test]
+    fn sub_point_shift_across_8pt_keeps_reference_lines() {
+        let reference = group_by_top(vec![
+            frag(53.0, 78.0, 291.94, "Date:"),
+            frag(327.6, 380.0, 299.94, "3pt borders"),
+        ]);
+        let generated = vec![
+            frag(53.0, 78.0, 291.95, "Date:"),
+            frag(327.6, 380.0, 299.79, "3pt borders"),
+        ];
+        assert_eq!(group_by_top(generated.clone()).len(), 1);
+        assert_eq!(
+            group_like_reference(&reference, generated),
+            ["Date:", "3pt borders"]
+        );
+    }
+
+    #[test]
+    fn side_by_side_cell_drifted_past_the_tolerance_stays_on_its_line() {
+        let reference = group_by_top(vec![
+            frag(70.0, 100.0, 200.0, "(PPT)"),
+            frag(150.0, 300.0, 200.0, "[yes, no]"),
+        ]);
+        let generated = vec![
+            frag(70.0, 100.0, 200.0, "(PPT)"),
+            frag(150.0, 300.0, 195.0, "[yes, no]"),
+        ];
+        assert_eq!(
+            group_like_reference(&reference, generated),
+            ["(PPT) [yes, no]"]
+        );
+    }
+
+    #[test]
+    fn reflowed_extra_line_is_not_glued_to_the_reference_line() {
+        let reference = group_by_top(vec![
+            frag(0.0, 300.0, 100.0, "a b c"),
+            frag(0.0, 50.0, 130.0, "next"),
+        ]);
+        let wrapped = vec![
+            frag(0.0, 200.0, 99.0, "a b"),
+            frag(0.0, 100.0, 106.0, "c"),
+            frag(0.0, 50.0, 130.0, "next"),
+        ];
+        assert_eq!(
+            group_like_reference(&reference, wrapped),
+            ["a b", "c", "next"]
+        );
+        // Both within the tolerance of the one reference line: the closer keeps it.
+        let squeezed = vec![frag(0.0, 200.0, 102.5, "a b"), frag(0.0, 100.0, 99.5, "c")];
+        assert_eq!(group_like_reference(&reference, squeezed), ["c", "a b"]);
+    }
 
     #[test]
     fn character_nodes_decode_entities_and_font_fragments() {

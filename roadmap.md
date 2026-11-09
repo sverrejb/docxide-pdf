@@ -1048,3 +1048,7 @@ keep output identical unless the entry says otherwise.
   7.84pt = one, 100 → 90%). LCS pairing (2026-11-09) stops one bad group
   failing the rest of the page; the grouping itself should come from the
   reference, with our fragments assigned to the nearest reference line.
+  Done 2026-11-09: our fragments join the line of the nearest Word fragment
+  within 3pt (x-overlapping one first), stacked fragments never share a line,
+  leftovers join the nearest line within 8pt; open: a page shifted by reflow
+  above (sample500kB p1, 18pt) lands on whichever Word lines sit at its tops.
