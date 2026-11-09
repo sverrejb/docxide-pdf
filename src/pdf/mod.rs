@@ -119,17 +119,6 @@ fn flow_frame(fp: &FrameProperties) -> bool {
     fp.v_relative_from == VRelativeFrom::Paragraph && !wrapping_text_frame(fp)
 }
 
-/// Whether `p` stays on the page with the block after it: keepNext, or the
-/// two share a frame in the flow, which never splits (Word example, fixture
-/// frame-moves-shared: both paragraphs move to page 2).
-fn keeps_with_next(p: &Paragraph, next: Option<&Block>) -> bool {
-    p.keep_next
-        || p.frame_props.as_ref().is_some_and(|fp| {
-            flow_frame(fp)
-                && matches!(next, Some(Block::Paragraph(q)) if q.frame_props.as_ref() == Some(fp))
-        })
-}
-
 /// A frame wholly beside the text area, which no text can wrap around
 /// (3ec631ca50's address block in the right margin).
 fn frame_beside_text(fp: &FrameProperties, sp: &SectionProperties) -> bool {
@@ -1282,37 +1271,87 @@ impl<'a> OpenFrame<'a> {
     }
 }
 
-/// A frame text stays above and below, laid out in the flow: its w:h holds
-/// the text after it off (Word example, fixture frame-not-beside-height: the
-/// next line starts 100pt below a 100pt exact frame's top, not under its
-/// 72pt of lines).
+/// A frame in the flow, over the paragraphs that share it. Its w:h holds
+/// the text after it off (Word examples, fixture frame-not-beside-height:
+/// the next line starts 100pt below a 100pt exact frame's top, not under
+/// its 72pt of lines; frame-exact-box-overflows: a 24pt exact box with 72pt
+/// of lines stays in 44pt). It never splits: a box (w:h if exact, else at
+/// least its content) that runs past the bottom moves to the next column or
+/// page whole, and one taller than the page stays where it is
+/// (frame-moves-shared, frame-taller-than-page). Moved, its space before is
+/// suppressed and still counts toward w:h (frame-moved-space-before: a
+/// 100pt exact frame with 20pt before holds the next line 80pt below the
+/// new page's top).
+/// An exact box clips what overflows it.
 struct FlowFrame<'a> {
     props: &'a FrameProperties,
-    start: (usize, usize, f32),
+    top: f32,
+    clipped: bool,
 }
 
 impl<'a> FlowFrame<'a> {
-    fn open(props: &'a FrameProperties, state: &LayoutState) -> Self {
-        FlowFrame {
-            props,
-            start: (state.pb.page_count(), state.current_col, state.pb.slot_top),
+    fn open(
+        props: &'a FrameProperties,
+        blocks: &[Block],
+        state: &mut LayoutState,
+        ctx: &RenderContext,
+        sp: &SectionProperties,
+        (sect_idx, col_geometry): (usize, &[(f32, f32)]),
+    ) -> Self {
+        if let Some(Block::Paragraph(p)) = blocks.first()
+            && p.page_break_before
+            && !lays_out_nothing(p)
+        {
+            take_page_break_before(state, p, sect_idx, sp, ctx);
+            state.page_break_taken = true;
         }
+        let box_h = flow_frame_box(props, blocks, ctx, col_geometry[state.current_col].1);
+        let mut top = state.pb.slot_top;
+        if top - box_h < state.effective_margin_bottom && !state.pb.is_at_page_top(sp) {
+            state.pb.advance_column_or_page(
+                &mut state.current_col,
+                col_geometry.len(),
+                sect_idx,
+                sp,
+                &mut state.effective_margin_bottom,
+                ctx,
+            );
+            top = state.pb.slot_top + leading_para(&blocks[0]).map_or(0.0, |p| p.space_before);
+        }
+        let clipped = props.height_exact
+            && props.height > 0.0
+            && layout::push_clip(
+                &mut state.pb.content,
+                Some((0.0, top - props.height, sp.page_width, props.height)),
+            );
+        FlowFrame { props, top, clipped }
     }
 
     fn close(self, state: &mut LayoutState) {
-        let (page, col, y) = self.start;
-        let top = if (page, col) == (state.pb.page_count(), state.current_col) {
-            y
-        } else {
-            state.pb.column_top_y
-        };
-        let bottom = top - self.props.height;
+        if self.clipped {
+            state.pb.content.restore_state();
+        }
+        let bottom = self.top - self.props.height;
         state.pb.slot_top = if self.props.height_exact {
             bottom
         } else {
             state.pb.slot_top.min(bottom)
         };
     }
+}
+
+/// The height a frame in the flow takes on the page: w:h if exact, else at
+/// least its content.
+fn flow_frame_box(props: &FrameProperties, blocks: &[Block], ctx: &RenderContext, col_w: f32) -> f32 {
+    if props.height_exact {
+        return props.height;
+    }
+    let width = if props.width > 0.0 {
+        props.width
+    } else {
+        auto_frame_width(props, blocks, ctx, col_w)
+    };
+    props.height.max(frame_content_height(props, blocks, ctx, width))
 }
 
 /// A frame without w:w is as wide as its widest block: a paragraph's picture
@@ -1367,8 +1406,18 @@ fn frame_content_height(
                 let lines = build_lines(&p.runs, ctx, line_w, ctx.cjk(true, p), &opts);
                 let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
                 let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                let lines_h = lines.len().max(1) as f32 * resolve_line_h(ls, fs, lhr);
-                height += p.image.as_ref().map_or(lines_h, |img| lines_h.max(img.layout_size().1));
+                let line_h = resolve_line_h(ls, fs, lhr);
+                // A picture makes its line as tall as itself, unless the
+                // spacing is exact.
+                let picture_h = p.image.as_ref().map_or_else(
+                    || layout::runs_max_image_h(&p.runs),
+                    |img| img.layout_size().1,
+                );
+                let picture_extra = match ls {
+                    LineSpacing::Exact(_) => 0.0,
+                    _ => (picture_h - line_h).max(0.0),
+                };
+                height += lines.len().max(1) as f32 * line_h + picture_extra;
                 prev = Some(p);
                 prev_space_after = p.space_after;
             }
@@ -5872,7 +5921,7 @@ fn render_paragraph_block(
         0.0
     };
 
-    let keep_next_extra = if keeps_with_next(para, section_blocks.get(block_idx + 1)) && !at_page_top {
+    let keep_next_extra = if para.keep_next && !at_page_top {
         let mut extra = 0.0;
         // Footnotes the kept paragraphs bring come along too
         // (uk_commercial_lease's "Break Date" moves with its definition's note 8).
@@ -5892,6 +5941,15 @@ fn render_paragraph_block(
                 }
                 _ => break,
             };
+            // A frame in the flow comes along whole (Word example, fixture
+            // frame-keep-with-next: a heading kept with a 100pt exact frame
+            // moves with it).
+            if let Some(fp) = next.frame_props.as_ref().filter(|fp| flow_frame(fp)) {
+                let col_w = col_geometry[state.current_col].1;
+                extra += f32::max(prev_sa, next.space_before)
+                    + flow_frame_box(fp, &section_blocks[i..], ctx, col_w);
+                break;
+            }
             if next.page_break_before {
                 // A page break opening the next paragraph, a `<w:br>` or
                 // pageBreakBefore, ends the chain where it is: Word keeps the
@@ -5940,7 +5998,7 @@ fn render_paragraph_block(
             let mut count = || {
                 *n.get_or_insert_with(|| line_count(next, ctx, col_geometry[state.current_col].1))
             };
-            let needed = if next.keep_lines || next.frame_props.as_ref().is_some_and(flow_frame) {
+            let needed = if next.keep_lines {
                 count()
             } else {
                 lines_kept_together(next.widow_control, &mut count)
@@ -5949,7 +6007,7 @@ fn render_paragraph_block(
                 + next_first_line_h
                 + needed.saturating_sub(1) as f32 * resolve_line_h(next_ls, nfs, nlhr);
             first_link.get_or_insert(extra);
-            if !keeps_with_next(next, section_blocks.get(i + 1)) || needed < count() {
+            if !next.keep_next || needed < count() {
                 break;
             }
             if next.page_break_after {
@@ -5981,7 +6039,7 @@ fn render_paragraph_block(
         let inside_chain = block_idx
             .checked_sub(1)
             .and_then(|i| section_blocks.get(i))
-            .is_some_and(|b| matches!(b, Block::Paragraph(p) if keeps_with_next(p, section_blocks.get(block_idx))));
+            .is_some_and(|b| matches!(b, Block::Paragraph(p) if p.keep_next));
         // Judged once, where the chain starts: from a later member the rest
         // may fit a page and would move again.
         if !inside_chain {
@@ -6017,12 +6075,13 @@ fn render_paragraph_block(
             0
         }
     };
-    // A frame in the flow never splits: one taller than the page stays whole
-    // on its page, running past the bottom, and the next block opens the
-    // next page (Word example, fixture frame-taller-than-page).
+    // A frame in the flow never splits: `FlowFrame` has placed it, and it
+    // runs past the bottom if it must (Word example, fixture
+    // frame-taller-than-page: the next block opens the next page).
     let in_flow_frame = para.frame_props.as_ref().is_some_and(flow_frame);
     let mut moved = false;
-    while (!at_page_top || (lines.len() > 1 && !in_flow_frame))
+    while !in_flow_frame
+        && (!at_page_top || lines.len() > 1)
         && (moved
             || state.pb.slot_top - needed_with_floats - keep_next_extra + last_line_lead
                 < state.effective_margin_bottom + para_fn_extra)
@@ -6054,7 +6113,7 @@ fn render_paragraph_block(
         let available = state.pb.slot_top - inter_gap - text_drop - state.effective_margin_bottom;
         let mut lines_that_fit =
             fit_in(&lines, &line_fn_extra, available, state.pb.col_fn_reserved > 0.0);
-        if moved && (lines_that_fit >= lines.len() || in_flow_frame) {
+        if moved && lines_that_fit >= lines.len() {
             break;
         }
 
@@ -6074,7 +6133,7 @@ fn render_paragraph_block(
                 .floating_images
                 .iter()
                 .any(|fi| leading_full_width_picture(fi, sp, col_x, col_w, text_width));
-        if para.keep_lines || in_flow_frame || leading_picture_keeps_text {
+        if para.keep_lines || leading_picture_keeps_text {
             lines_that_fit = 0;
         }
 
@@ -7635,7 +7694,7 @@ fn render_pass(
 
         let layout_blocks = |state: &mut LayoutState| {
             let mut frame: Option<OpenFrame> = None;
-            let mut flow_frame: Option<FlowFrame> = None;
+            let mut open_flow_frame: Option<FlowFrame> = None;
             let mut last_block_consumption = None;
             for (block_idx, block) in section.blocks.iter().enumerate() {
                 let previous_block_consumption = last_block_consumption.take();
@@ -7646,12 +7705,16 @@ fn render_pass(
                 }
                 let block_flow_frame = leading_para(block)
                     .and_then(|p| p.frame_props.as_ref())
-                    .filter(|fp| block_frame.is_none() && fp.text_below && fp.height > 0.0);
-                if let Some(f) = flow_frame.take_if(|f| block_flow_frame != Some(f.props)) {
+                    .filter(|fp| block_frame.is_none() && flow_frame(fp));
+                if let Some(f) = open_flow_frame.take_if(|f| block_flow_frame != Some(f.props)) {
                     f.close(state);
                 }
-                if flow_frame.is_none() {
-                    flow_frame = block_flow_frame.map(|props| FlowFrame::open(props, state));
+                if open_flow_frame.is_none()
+                    && let Some(fp) = block_flow_frame
+                {
+                    let blocks = &section.blocks[block_idx..];
+                    open_flow_frame =
+                        Some(FlowFrame::open(fp, blocks, state, &ctx, sp, (sect_idx, &col_geometry)));
                 }
                 // The first block stayed on this page, so a later break opens an
                 // ordinary one, even from where the first block started.
@@ -8100,7 +8163,7 @@ fn render_pass(
             if let Some(f) = frame {
                 f.close(state, sp);
             }
-            if let Some(f) = flow_frame {
+            if let Some(f) = open_flow_frame {
                 f.close(state);
             }
         };
