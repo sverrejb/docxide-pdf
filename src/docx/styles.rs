@@ -6,7 +6,7 @@ use crate::model::{
     TextOutline, TextShadow,
 };
 
-pub(super) use super::color::{ColorTransforms, parse_color_transforms};
+use super::color::{ColorTransforms, parse_color_transforms};
 use super::wordart::{parse_text_fill, parse_text_glow, parse_text_outline, parse_text_shadow};
 use super::{
     DML_NS, WML_NS, angle_attr, dml, emu_attr, extract_indent_chars, extract_indents, frac_attr,

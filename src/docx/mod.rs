@@ -945,13 +945,6 @@ pub(in crate::docx) fn parse_paragraph_spacing(
     (space_before, space_after, line_spacing)
 }
 
-/// Convert a character-unit indent attribute (hundredths of character width) to points.
-fn chars_to_pts(ind: roxmltree::Node, attr: &str, char_width: f32) -> Option<f32> {
-    ind.attribute((WML_NS, attr))
-        .and_then(|v| v.parse::<f32>().ok())
-        .map(|hundredths| hundredths / 100.0 * char_width)
-}
-
 /// A `w:ind`'s character-unit attributes, in characters (the attributes are
 /// hundredths). An explicit zero switches the value off, also over a style's
 /// (taiwanese_education_fraud_ruling: `leftChars="0" left="0"` under a
@@ -1036,7 +1029,11 @@ pub(super) fn extract_indents(
         twips
             .iter()
             .find_map(|t| twips_attr(ind, t))
-            .or_else(|| char_width.and_then(|cw| chars_to_pts(ind, chars, cw)))
+            // The `*Chars` attributes are hundredths of a character width.
+            .or_else(|| {
+                let hundredths: f32 = ind.attribute((WML_NS, chars))?.parse().ok()?;
+                Some(hundredths / 100.0 * char_width?)
+            })
     };
     (
         side("leftChars", &["start", "left"]),
