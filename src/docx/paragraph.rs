@@ -69,9 +69,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
 
     let contextual_spacing = contextual_spacing(ppr, para_style);
 
-    let keep_next = ppr
-        .and_then(|ppr| wml_bool(ppr, "keepNext"))
-        .unwrap_or_else(|| para_style.and_then(|s| s.keep_next).unwrap_or(false));
+    let keep_next = keep_next(ppr, para_style);
 
     // Word never splits display math over pages: a wrapped equation that
     // doesn't fit moves whole (probe `mp20_relpos`).
@@ -87,10 +85,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         .or_else(|| para_style.and_then(|s| s.word_wrap))
         == Some(false);
 
-    let snap_to_grid = ppr
-        .and_then(|ppr| wml_bool(ppr, "snapToGrid"))
-        .or_else(|| para_style.and_then(|s| s.snap_to_grid))
-        .unwrap_or(true);
+    let snap_to_grid = snap_to_grid(ppr, para_style);
 
     let (auto_space_de, auto_space_dn) = auto_space(ppr, para_style);
 
@@ -115,40 +110,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     );
     let (mut indents, indent_chars) =
         resolve_indents(ppr, para_style, &numbering, &ctx.styles.defaults);
-    let ListLabelInfo {
-        indent_left: _,
-        indent_hanging: _,
-        tab_stop: mut num_tab_stop,
-        label: list_label,
-        number: list_number,
-        font: list_label_font,
-        east_asia_font: list_label_east_asia_font,
-        font_size: list_label_font_size,
-        rise: list_label_rise,
-        bold: list_label_bold,
-        italic: list_label_italic,
-        color: list_label_color,
-        revision: list_label_revision,
-        renumbered: list_label_renumbered,
-        suff: list_label_suff,
-        jc: list_label_jc,
-        item: list_item,
-    } = numbering;
-    // Paragraph-level `<w:tab val="num" pos="..."/>` overrides the numbering
-    // level's num tab (paired with a `clear` of the inherited value when
-    // Word-authored). `pos="0"` is a Word sentinel meaning "disable the num
-    // tab for this paragraph" — ignore it so we don't collapse text onto the
-    // label.
-    if let Some(tabs) = ppr.and_then(|ppr| wml(ppr, "tabs")) {
-        for t in tabs.children().filter(|n| n.has_tag_name((WML_NS, "tab"))) {
-            if t.attribute((WML_NS, "val")) == Some("num")
-                && let Some(pos) = super::twips_attr(t, "pos")
-                && pos > 0.0
-            {
-                num_tab_stop = Some(pos);
-            }
-        }
-    }
+    let num_tab_stop = num_tab_override(ppr).or(numbering.tab_stop);
 
     let parsed = parse_runs(node, ctx);
     apply_indent_chars(
@@ -292,20 +254,6 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         indent_right: if bidi { indent_left } else { indent_right },
         indent_hanging,
         indent_first_line,
-        list_label,
-        list_number,
-        list_label_font,
-        list_label_east_asia_font,
-        list_label_font_size,
-        list_label_rise,
-        list_label_bold,
-        list_label_italic,
-        list_label_color,
-        list_label_revision,
-        list_label_renumbered,
-        list_label_jc,
-        list_label_suff: super::numbering::label_suffix(&list_label_suff),
-        list_item,
         starts_toc_field: node.descendants().any(|n| {
             n.has_tag_name((WML_NS, "instrText")) && n.text().is_some_and(super::runs::is_toc_instr)
         }),
@@ -361,6 +309,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         auto_space_dn,
         bidi,
         frame_props: parse_frame_props(ppr, para_style.and_then(|s| s.frame_attrs.as_ref())),
+        ..numbering.into_paragraph()
     }
 }
 
@@ -481,6 +430,37 @@ pub(super) fn borders(
         None => own,
     }
     .resolve()
+}
+
+/// `w:keepNext`, direct or from the style.
+pub(super) fn keep_next(ppr: Option<roxmltree::Node>, para_style: Option<&ParagraphStyle>) -> bool {
+    ppr.and_then(|ppr| wml_bool(ppr, "keepNext"))
+        .or_else(|| para_style.and_then(|s| s.keep_next))
+        .unwrap_or(false)
+}
+
+/// `w:snapToGrid`, on unless the paragraph or its style turns it off.
+pub(super) fn snap_to_grid(
+    ppr: Option<roxmltree::Node>,
+    para_style: Option<&ParagraphStyle>,
+) -> bool {
+    ppr.and_then(|ppr| wml_bool(ppr, "snapToGrid"))
+        .or_else(|| para_style.and_then(|s| s.snap_to_grid))
+        .unwrap_or(true)
+}
+
+/// A paragraph-level `<w:tab val="num" pos="..."/>` overrides the numbering
+/// level's num tab (paired with a `clear` of the inherited value when
+/// Word-authored). `pos="0"` is a Word sentinel meaning "disable the num
+/// tab for this paragraph" — ignore it so we don't collapse text onto the
+/// label.
+pub(super) fn num_tab_override(ppr: Option<roxmltree::Node>) -> Option<f32> {
+    ppr.and_then(|ppr| wml(ppr, "tabs"))?
+        .children()
+        .filter(|t| t.has_tag_name((WML_NS, "tab")) && t.attribute((WML_NS, "val")) == Some("num"))
+        .filter_map(|t| super::twips_attr(t, "pos"))
+        .filter(|&pos| pos > 0.0)
+        .last()
 }
 
 /// `w:keepLines`, direct or from the style.

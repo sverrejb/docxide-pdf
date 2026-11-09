@@ -6,7 +6,7 @@ use crate::model::{
     TableCell, TablePosition, TableRow, TextDirection, VMerge,
 };
 
-use super::numbering::{ListCounters, ListLabelInfo, parse_list_info};
+use super::numbering::{ListCounters, parse_list_info};
 use super::runs::parse_runs;
 use super::styles::{TableBordersDef, TableStyleDef, parse_table_borders_def};
 use super::{
@@ -851,25 +851,8 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         ),
                     );
                     let (indent_left, indent_right, indent_hanging, indent_first_line) = indents;
-                    let ListLabelInfo {
-                        indent_left: _,
-                        indent_hanging: _,
-                        tab_stop: mut num_tab_stop,
-                        label: list_label,
-                        number: list_number,
-                        font: list_label_font,
-                        east_asia_font: list_label_east_asia_font,
-                        font_size: list_label_font_size,
-                        rise: list_label_rise,
-                        bold: list_label_bold,
-                        italic: list_label_italic,
-                        color: list_label_color,
-                        revision: list_label_revision,
-                        renumbered: list_label_renumbered,
-                        suff: list_label_suff,
-                        jc: list_label_jc,
-                        item: list_item,
-                    } = numbering;
+                    let num_tab_stop =
+                        super::paragraph::num_tab_override(ppr).or(numbering.tab_stop);
                     let (auto_space_de, auto_space_dn) =
                         super::paragraph::auto_space(ppr, para_style);
                     let space_before =
@@ -897,16 +880,6 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     } else {
                         space_after
                     };
-                    if let Some(tabs) = ppr.and_then(|ppr| wml(ppr, "tabs")) {
-                        for t in tabs.children().filter(|n| n.has_tag_name((WML_NS, "tab"))) {
-                            if t.attribute((WML_NS, "val")) == Some("num")
-                                && let Some(pos) = super::twips_attr(t, "pos")
-                                && pos > 0.0
-                            {
-                                num_tab_stop = Some(pos);
-                            }
-                        }
-                    }
                     let tab_stops = super::resolve_tab_stops(ppr, para_style);
                     cell_blocks.push(Block::Paragraph(Paragraph {
                         widow_control: super::paragraph::widow_control(
@@ -924,33 +897,16 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         indent_right,
                         indent_hanging,
                         indent_first_line,
-                        list_label,
-                        list_number,
                         num_level_tab_stop: num_tab_stop,
                         no_indent_num_tab: ctx.styles.defaults.no_indent_as_num_tab,
                         horizontal_rule: parsed.horizontal_rule,
                         field_code_mark: parsed.mark_in_field_code,
-                        list_label_font,
-                        list_label_east_asia_font,
-                        list_label_font_size,
-                        list_label_rise,
-                        list_label_bold,
-                        list_label_italic,
-                        list_label_color,
-                        list_label_revision,
-                        list_label_renumbered,
-                        list_label_jc,
-                        list_label_suff: super::numbering::label_suffix(&list_label_suff),
-                        list_item,
                         line_spacing,
                         space_before,
                         space_after,
                         image: para_image,
                         content_height,
-                        snap_to_grid: ppr
-                            .and_then(|ppr| wml_bool(ppr, "snapToGrid"))
-                            .or_else(|| para_style.and_then(|s| s.snap_to_grid))
-                            .unwrap_or(true),
+                        snap_to_grid: super::paragraph::snap_to_grid(ppr, para_style),
                         text_alignment: super::paragraph::text_alignment(
                             ppr,
                             para_style,
@@ -965,10 +921,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         connectors: parsed.connectors,
                         style_id: Some(para_style_id.to_string()),
                         contextual_spacing,
-                        keep_next: ppr
-                            .and_then(|ppr| wml_bool(ppr, "keepNext"))
-                            .or_else(|| para_style.and_then(|s| s.keep_next))
-                            .unwrap_or(false),
+                        keep_next: super::paragraph::keep_next(ppr, para_style),
                         paragraph_mark_font_size: Some(mark.font_size),
                         paragraph_mark_font_name: Some(mark.font_name),
                         paragraph_mark_position: super::paragraph::paragraph_mark_position(
@@ -980,7 +933,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                             ppr,
                             para_style.and_then(|s| s.frame_attrs.as_ref()),
                         ),
-                        ..Paragraph::default()
+                        ..numbering.into_paragraph()
                     }));
                     super::paragraph::merge_field_code_paragraphs(&mut cell_blocks);
                 } else if n.has_tag_name((WML_NS, "tbl")) {
