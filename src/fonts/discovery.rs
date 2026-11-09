@@ -167,14 +167,10 @@ pub(crate) fn test_index() -> &'static FontIndex {
     FontIndex::for_setup(&crate::ConvertOptions::from_env().font_setup())
 }
 
-fn font_ext(path: &Path) -> Option<String> {
-    path.extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.to_ascii_lowercase())
-}
-
 fn is_font_file(path: &Path) -> bool {
-    matches!(font_ext(path).as_deref(), Some("ttf" | "otf" | "ttc"))
+    path.extension()
+        .and_then(std::ffi::OsStr::to_str)
+        .is_some_and(|e| ["ttf", "otf", "ttc"].iter().any(|x| e.eq_ignore_ascii_case(x)))
 }
 
 fn scan_font_dirs(setup: &FontSetup) -> FontIndex {
