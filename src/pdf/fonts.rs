@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use pdf_writer::{Pdf, Ref};
 
 use crate::ConvertOptions;
-use crate::fonts::{FontContext, FontEntry, FontIndex, font_key_buf, register_font};
+use crate::fonts::{FontContext, FontEntry, FontFiles, FontIndex, font_key_buf, register_font};
 use crate::model::{Block, Document, FieldCode, IfPart, ImageFormat, Paragraph, Run};
 
 use super::collect_paras;
@@ -471,6 +471,7 @@ fn register_math_font(
     seen_fonts: &mut HashMap<String, FontEntry>,
     font_order: &mut Vec<String>,
     font_index: &FontIndex,
+    font_files: &FontFiles,
 ) {
     // A zone and its size (the run's), once each.
     let mut zones: Vec<(&std::sync::Arc<crate::model::MathZone>, f32)> = Vec::new();
@@ -518,6 +519,7 @@ fn register_math_font(
         word_text: false,
         extra_glyphs: Some(&glyphs),
         font_index,
+        font_files,
     };
     let mut entry = register_font(pdf, name, false, false, pdf_name, alloc, &ctx);
     for item in boxes.iter_mut().flat_map(|b| &mut b.items) {
@@ -541,6 +543,7 @@ pub(super) fn collect_and_register_fonts(
     options: &ConvertOptions,
 ) -> (HashMap<String, FontEntry>, Vec<String>) {
     let font_index = FontIndex::for_setup(&options.font_setup());
+    let font_files = &FontFiles::default();
     let mut seen_fonts: HashMap<String, FontEntry> = HashMap::new();
     let mut font_order: Vec<String> = Vec::new();
     let all_paras = collect_all_paras(doc);
@@ -610,6 +613,7 @@ pub(super) fn collect_and_register_fonts(
                 word_text: true,
                 extra_glyphs: None,
                 font_index,
+                font_files,
             };
             let entry = register_font(
                 pdf,
@@ -648,6 +652,7 @@ pub(super) fn collect_and_register_fonts(
             word_text: false,
             extra_glyphs: None,
             font_index,
+            font_files,
         };
         let entry = register_font(pdf, base, bold, italic, pdf_name, alloc, &ctx);
         seen_fonts.insert(key.clone(), entry);
@@ -664,6 +669,7 @@ pub(super) fn collect_and_register_fonts(
             &mut seen_fonts,
             &mut font_order,
             font_index,
+            font_files,
         );
     }
 
@@ -687,6 +693,7 @@ pub(super) fn collect_and_register_fonts(
             word_text: false,
             extra_glyphs: None,
             font_index,
+            font_files,
         };
         let mut entry = register_font(
             pdf,
@@ -745,6 +752,7 @@ pub(super) fn collect_and_register_fonts(
             word_text: false,
             extra_glyphs: None,
             font_index,
+            font_files,
         };
         let entry = register_font(pdf, "Helvetica", false, false, pdf_name, alloc, &ctx);
         seen_fonts.insert("Helvetica".to_string(), entry);
