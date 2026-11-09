@@ -99,14 +99,14 @@ fn leading_para(block: &Block) -> Option<&Paragraph> {
 /// The frame Word lifts `block` out of the flow into: any page- or
 /// margin-anchored framePr (a table's is its first cell paragraph's), which
 /// keeps text off its sides or, wrapping, lets text flow on both of them
-/// (empty-frame-control), or a paragraph's wrapping frame at an explicit
-/// offset (`paragraph_offset_frame`), which text then wraps around like a float.
+/// (empty-frame-control), or a paragraph's wrapping frame at an offset
+/// (`wrapping_text_frame`), which text then wraps around like a float.
 /// ponytail: other text-anchored frames stay in the flow; lift them when a
 /// fixture needs it.
 fn lifted_frame(block: &Block) -> Option<&FrameProperties> {
     let fp = leading_para(block)?.frame_props.as_ref()?;
     if fp.v_relative_from == VRelativeFrom::Paragraph
-        && (matches!(block, Block::Table(_)) || !paragraph_offset_frame(fp))
+        && (matches!(block, Block::Table(_)) || !wrapping_text_frame(fp))
     {
         return None;
     }
@@ -121,14 +121,14 @@ fn frame_beside_text(fp: &FrameProperties, sp: &SectionProperties) -> bool {
     fp.width > 0.0 && (x >= text_x + text_w || x + fp.width <= text_x)
 }
 
-/// A wrapping paragraph-anchored frame with an explicit height and a nonzero
-/// offset, or a drop cap: it keeps its own coordinates, and text wraps around it.
-fn paragraph_offset_frame(fp: &FrameProperties) -> bool {
+/// A wrapping paragraph-anchored frame at an offset, zero or not, with or
+/// without w:h (fixtures frame-moves-*), or a drop cap: it keeps its own
+/// coordinates, and text wraps around it.
+fn wrapping_text_frame(fp: &FrameProperties) -> bool {
     fp.drop_cap.is_some()
         || (!fp.text_below
             && fp.v_relative_from == VRelativeFrom::Paragraph
-            && fp.height > 0.0
-            && matches!(fp.v_position, VerticalPosition::Offset(y) if y != 0.0))
+            && matches!(fp.v_position, VerticalPosition::Offset(_)))
 }
 
 /// The blocks from the start of `blocks` that share the frame `props`.
@@ -1123,6 +1123,7 @@ impl<'a> OpenFrame<'a> {
         state: &mut LayoutState,
         ctx: &RenderContext,
         sp: &SectionProperties,
+        (sect_idx, col_count): (usize, usize),
     ) -> Self {
         let width = if props.width > 0.0 {
             props.width
@@ -1167,14 +1168,32 @@ impl<'a> OpenFrame<'a> {
             }
             _ => props.height,
         };
-        let top = sp.page_height
-            - header_footer::resolve_tb_y_top(
-                props.v_relative_from,
-                &props.v_position,
-                height,
-                sp,
-                state.pb.slot_top,
-            );
+        let top_y = |slot_top| {
+            header_footer::resolve_tb_y_top(props.v_relative_from, &props.v_position, height, sp, slot_top)
+        };
+        // A frame never splits: one anchored to the text that runs past the
+        // bottom moves to the next column or page with its anchor (Word example,
+        // fixture frame-moves-exact-height: a 100pt frame with 54pt left opens page 2).
+        if props.v_relative_from == VRelativeFrom::Paragraph && props.drop_cap.is_none() {
+            let box_h = if props.height_exact {
+                props.height
+            } else {
+                props.height.max(frame_content_height(props, blocks, ctx, width))
+            };
+            if top_y(state.pb.slot_top) - box_h < state.effective_margin_bottom
+                && !state.pb.is_at_page_top(sp)
+            {
+                state.pb.advance_column_or_page(
+                    &mut state.current_col,
+                    col_count,
+                    sect_idx,
+                    sp,
+                    &mut state.effective_margin_bottom,
+                    ctx,
+                );
+            }
+        }
+        let top = sp.page_height - top_y(state.pb.slot_top);
         let flow = SavedFlow {
             slot_top: std::mem::replace(&mut state.pb.slot_top, sp.page_height - top),
             // A frame never breaks across pages: 3ec631ca50's bottom-aligned
@@ -6000,7 +6019,8 @@ fn render_paragraph_block(
                 .floating_images
                 .iter()
                 .any(|fi| leading_full_width_picture(fi, sp, col_x, col_w, text_width));
-        if para.keep_lines || leading_picture_keeps_text {
+        // A frame never splits (Word example, fixture frame-moves-not-beside).
+        if para.keep_lines || para.frame_props.is_some() || leading_picture_keeps_text {
             lines_that_fit = 0;
         }
 
@@ -7581,7 +7601,7 @@ fn render_pass(
                     match block_frame {
                         Some(fp) => {
                             let blocks = &section.blocks[block_idx..];
-                            frame = Some(OpenFrame::open(fp, blocks, state, &ctx, sp));
+                            frame = Some(OpenFrame::open(fp, blocks, state, &ctx, sp, (sect_idx, col_count)));
                         }
                         None => {
                             // The break comes first: the bands are those of the
