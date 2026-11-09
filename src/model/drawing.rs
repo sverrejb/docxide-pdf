@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::geometry::{FormulaOp, PathFill};
+use crate::geometry::PathFill;
 
 use super::{
     HRelativeFrom, HorizontalPosition, Paragraph, Table, VRelativeFrom, VerticalPosition, WrapText,
@@ -197,14 +197,7 @@ pub struct CustomGeometry {
     pub paths: Vec<CustomPathDef>,
 }
 
-#[derive(Clone, Debug)]
-pub struct CustomGuideDef {
-    pub name: String,
-    pub op: FormulaOp,
-    pub x: String,
-    pub y: String,
-    pub z: String,
-}
+pub type CustomGuideDef = crate::geometry::GuideDef<String>;
 
 #[derive(Clone, Debug)]
 pub struct CustomPathDef {
@@ -215,38 +208,7 @@ pub struct CustomPathDef {
     pub stroke: bool,
 }
 
-#[derive(Clone, Debug)]
-pub enum CustomPathCommand {
-    MoveTo {
-        x: String,
-        y: String,
-    },
-    LineTo {
-        x: String,
-        y: String,
-    },
-    ArcTo {
-        wr: String,
-        hr: String,
-        st_ang: String,
-        sw_ang: String,
-    },
-    CubicBezTo {
-        x1: String,
-        y1: String,
-        x2: String,
-        y2: String,
-        x3: String,
-        y3: String,
-    },
-    QuadBezTo {
-        x1: String,
-        y1: String,
-        x2: String,
-        y2: String,
-    },
-    Close,
-}
+pub type CustomPathCommand = crate::geometry::PathCommandDef<String>;
 
 #[derive(Clone, Copy, Default)]
 pub enum SmartArtTextAnchor {

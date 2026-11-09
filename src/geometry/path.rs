@@ -1,8 +1,7 @@
 use super::formulas::{GuideEnv, ang_to_rad};
-use crate::model::CustomPathCommand;
 
 /// A path command whose arguments are guide names or literals: `&'static str`
-/// in the preset tables, borrowed from the document for custom geometry.
+/// in the preset tables, `String` for custom geometry parsed from the document.
 #[derive(Clone, Copy, Debug)]
 pub enum PathCommandDef<S = &'static str> {
     MoveTo {
@@ -66,51 +65,14 @@ pub enum ResolvedCommand {
     Close,
 }
 
-impl<'a> From<&'a CustomPathCommand> for PathCommandDef<&'a str> {
-    fn from(c: &'a CustomPathCommand) -> Self {
-        match c {
-            CustomPathCommand::MoveTo { x, y } => Self::MoveTo { x, y },
-            CustomPathCommand::LineTo { x, y } => Self::LineTo { x, y },
-            CustomPathCommand::ArcTo {
-                wr,
-                hr,
-                st_ang,
-                sw_ang,
-            } => Self::ArcTo {
-                wr,
-                hr,
-                st_ang,
-                sw_ang,
-            },
-            CustomPathCommand::CubicBezTo {
-                x1,
-                y1,
-                x2,
-                y2,
-                x3,
-                y3,
-            } => Self::CubicBezTo {
-                x1,
-                y1,
-                x2,
-                y2,
-                x3,
-                y3,
-            },
-            CustomPathCommand::QuadBezTo { x1, y1, x2, y2 } => Self::QuadBezTo { x1, y1, x2, y2 },
-            CustomPathCommand::Close => Self::Close,
-        }
-    }
-}
-
 /// Resolve a path's commands into concrete ones.
 ///
 /// Coordinates are transformed: OOXML y-down -> PDF y-up via `pdf_y = shape_h - ooxml_y`.
 /// Guide values are in the `path_w`/`path_h` coordinate space (the path's own, or the
 /// shape's EMU-scaled one), which gets mapped to the `shape_w`/`shape_h` output space
 /// (points).
-pub fn resolve_path<'a>(
-    commands: impl Iterator<Item = PathCommandDef<&'a str>>,
+pub fn resolve_path<'a, S: AsRef<str> + 'a>(
+    commands: impl Iterator<Item = &'a PathCommandDef<S>>,
     env: &GuideEnv,
     shape_w: f64,
     shape_h: f64,
@@ -132,8 +94,8 @@ pub fn resolve_path<'a>(
         };
         shape_h - scaled
     };
-    let rx = |arg: &str| -> f64 { scale_x(env.resolve(arg) as f64) };
-    let ry = |arg: &str| -> f64 { scale_y(env.resolve(arg) as f64) };
+    let rx = |arg: &S| -> f64 { scale_x(env.resolve(arg.as_ref()) as f64) };
+    let ry = |arg: &S| -> f64 { scale_y(env.resolve(arg.as_ref()) as f64) };
 
     let mut result = Vec::new();
     let mut cur_x = 0.0_f64;
@@ -186,15 +148,15 @@ pub fn resolve_path<'a>(
                 st_ang,
                 sw_ang,
             } => {
-                let wr_val = scale_x(env.resolve(wr) as f64).abs();
-                let hr_raw = env.resolve(hr) as f64;
+                let wr_val = scale_x(env.resolve(wr.as_ref()) as f64).abs();
+                let hr_raw = env.resolve(hr.as_ref()) as f64;
                 let hr_val = if path_h > 0.0 {
                     (hr_raw / path_h * shape_h).abs()
                 } else {
                     hr_raw.abs()
                 };
-                let st = env.resolve(st_ang) as f64;
-                let sw = env.resolve(sw_ang) as f64;
+                let st = env.resolve(st_ang.as_ref()) as f64;
+                let sw = env.resolve(sw_ang.as_ref()) as f64;
                 arc_to_cubics(&mut result, &mut cur_x, &mut cur_y, wr_val, hr_val, st, sw);
             }
             PathCommandDef::Close => {
@@ -301,7 +263,7 @@ mod tests {
                 y2: "0",
             },
         ];
-        let resolved = resolve_path(CMDS.iter().copied(), &env, 100.0, 100.0, 100.0, 100.0);
+        let resolved = resolve_path(CMDS.iter(), &env, 100.0, 100.0, 100.0, 100.0);
         assert_eq!(resolved.len(), 2);
         // MoveTo(0, 100) — y-flipped from (0,0)
         assert!(
@@ -326,7 +288,7 @@ mod tests {
             PathCommandDef::LineTo { x: "l", y: "b" },
             PathCommandDef::Close,
         ];
-        let resolved = resolve_path(CMDS.iter().copied(), &env, 200.0, 100.0, 200.0, 100.0);
+        let resolved = resolve_path(CMDS.iter(), &env, 200.0, 100.0, 200.0, 100.0);
         assert_eq!(resolved.len(), 5);
         // (l,t) = (0,0) -> PDF (0, 100)
         assert!(matches!(&resolved[0], ResolvedCommand::MoveTo(x, y) if *x == 0.0 && *y == 100.0));
@@ -351,7 +313,7 @@ mod tests {
             PathCommandDef::LineTo { x: "1", y: "2" },
             PathCommandDef::Close,
         ];
-        let resolved = resolve_path(CMDS.iter().copied(), &env, 100.0, 50.0, 2.0, 2.0);
+        let resolved = resolve_path(CMDS.iter(), &env, 100.0, 50.0, 2.0, 2.0);
         // (0,0) -> scaled (0,0) -> y-flip (0, 50)
         assert!(matches!(&resolved[0], ResolvedCommand::MoveTo(x, y) if *x == 0.0 && *y == 50.0));
         // (2,0) -> scaled (100,0) -> y-flip (100, 50)
@@ -365,7 +327,7 @@ mod tests {
         // Test a 90-degree arc (quarter circle) top-right corner of a roundRect
         let mut env = GuideEnv::new(1_000_000, 1_000_000);
         env.set_adjustments(&[("r1", 100_000)], &[]);
-        env.evaluate_guides(&[]);
+        env.evaluate_guides::<&str>(&[]);
 
         // Arc starting from top of corner: stAng=3cd4 (270 deg = top), swAng=cd4 (90 deg CW)
         // This should sweep from top to right of the corner
@@ -383,7 +345,7 @@ mod tests {
             },
         ];
         let resolved = resolve_path(
-            CMDS.iter().copied(),
+            CMDS.iter(),
             &env,
             100.0,
             100.0,

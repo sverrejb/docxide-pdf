@@ -47,13 +47,15 @@ impl FormulaOp {
     }
 }
 
+/// A guide formula: `&'static str` names in the preset tables, `String` for
+/// custom geometry parsed from the document.
 #[derive(Clone, Debug)]
-pub struct GuideDef {
-    pub name: &'static str,
+pub struct GuideDef<S = &'static str> {
+    pub name: S,
     pub op: FormulaOp,
-    pub x: &'static str,
-    pub y: &'static str,
-    pub z: &'static str,
+    pub x: S,
+    pub y: S,
+    pub z: S,
 }
 
 const ANG_UNIT: f64 = 60000.0;
@@ -137,17 +139,13 @@ impl GuideEnv {
         })
     }
 
-    pub fn evaluate_guides(&mut self, guides: &[GuideDef]) {
+    pub fn evaluate_guides<S: AsRef<str> + Clone + Into<Cow<'static, str>>>(
+        &mut self,
+        guides: &[GuideDef<S>],
+    ) {
         for g in guides {
-            let val = self.eval_op(g.op, g.x, g.y, g.z);
-            self.values.insert(Cow::Borrowed(g.name), val);
-        }
-    }
-
-    pub fn evaluate_custom_guides(&mut self, guides: &[crate::model::CustomGuideDef]) {
-        for g in guides {
-            let val = self.eval_op(g.op, &g.x, &g.y, &g.z);
-            self.values.insert(Cow::Owned(g.name.clone()), val);
+            let val = self.eval_op(g.op, g.x.as_ref(), g.y.as_ref(), g.z.as_ref());
+            self.values.insert(g.name.clone().into(), val);
         }
     }
 

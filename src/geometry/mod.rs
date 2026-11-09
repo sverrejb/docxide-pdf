@@ -6,10 +6,9 @@ pub mod text_warp_definitions;
 use crate::model::CustomGeometry;
 
 use definitions::PresetDef;
-pub use formulas::FormulaOp;
+pub use formulas::{FormulaOp, GuideDef};
 use formulas::GuideEnv;
-use path::PathCommandDef;
-pub use path::{PathFill, ResolvedCommand};
+pub use path::{PathCommandDef, PathFill, ResolvedCommand};
 
 pub struct EvaluatedPath {
     pub commands: Vec<ResolvedCommand>,
@@ -50,9 +49,9 @@ impl Frame {
     }
 
     /// Resolve one path; its own w/h, when given, replace the shape's coordinate space.
-    fn path<'a>(
+    fn path<'a, S: AsRef<str> + 'a>(
         &self,
-        commands: impl Iterator<Item = PathCommandDef<&'a str>>,
+        commands: impl Iterator<Item = &'a PathCommandDef<S>>,
         (w, h): (Option<i64>, Option<i64>),
         fill: PathFill,
         stroke: bool,
@@ -92,7 +91,7 @@ pub fn evaluate_def(
     let paths = def
         .paths
         .iter()
-        .map(|p| frame.path(p.commands.iter().copied(), (p.w, p.h), p.fill, p.stroke))
+        .map(|p| frame.path(p.commands.iter(), (p.w, p.h), p.fill, p.stroke))
         .collect();
 
     let text_rect = def.text_rect.as_ref().map(|tr| {
@@ -115,19 +114,12 @@ pub fn evaluate_custom(
     let mut frame = Frame::new(w, h);
     frame.env.set_adjustments(&[], &custom.adjust_defaults);
     frame.env.set_adjustments(&[], adj_overrides);
-    frame.env.evaluate_custom_guides(&custom.guides);
+    frame.env.evaluate_guides(&custom.guides);
 
     let paths = custom
         .paths
         .iter()
-        .map(|p| {
-            frame.path(
-                p.commands.iter().map(PathCommandDef::from),
-                (p.w, p.h),
-                p.fill,
-                p.stroke,
-            )
-        })
+        .map(|p| frame.path(p.commands.iter(), (p.w, p.h), p.fill, p.stroke))
         .collect();
 
     EvaluatedShape {
