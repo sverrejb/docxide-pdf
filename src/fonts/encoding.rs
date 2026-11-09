@@ -1,36 +1,21 @@
 use std::collections::HashMap;
 
+/// The Unicode code points of WinAnsi (Windows-1252) bytes 0x80..=0x9F, the
+/// only bytes that differ from Latin-1; 0 for the five undefined bytes.
+const HIGH: [u16; 32] = [
+    0x20AC, 0, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021, // 0x80..=0x87
+    0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0, 0x017D, 0, // 0x88..=0x8F
+    0, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, // 0x90..=0x97
+    0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0, 0x017E, 0x0178, // 0x98..=0x9F
+];
+
 /// Windows-1252 (WinAnsi) byte to Unicode char mapping.
 /// Bytes 0x80-0x9F are remapped; all others map directly to their Unicode codepoint.
 pub(super) fn winansi_to_char(byte: u8) -> char {
     match byte {
-        0x80 => '\u{20AC}',
-        0x82 => '\u{201A}',
-        0x83 => '\u{0192}',
-        0x84 => '\u{201E}',
-        0x85 => '\u{2026}',
-        0x86 => '\u{2020}',
-        0x87 => '\u{2021}',
-        0x88 => '\u{02C6}',
-        0x89 => '\u{2030}',
-        0x8A => '\u{0160}',
-        0x8B => '\u{2039}',
-        0x8C => '\u{0152}',
-        0x8E => '\u{017D}',
-        0x91 => '\u{2018}',
-        0x92 => '\u{2019}',
-        0x93 => '\u{201C}',
-        0x94 => '\u{201D}',
-        0x95 => '\u{2022}', // bullet
-        0x96 => '\u{2013}',
-        0x97 => '\u{2014}',
-        0x98 => '\u{02DC}',
-        0x99 => '\u{2122}',
-        0x9A => '\u{0161}',
-        0x9B => '\u{203A}',
-        0x9C => '\u{0153}',
-        0x9E => '\u{017E}',
-        0x9F => '\u{0178}',
+        0x80..=0x9F => char::from_u32(HIGH[(byte - 0x80) as usize] as u32)
+            .filter(|&c| c != '\0')
+            .unwrap_or(byte as char),
         _ => byte as char,
     }
 }
@@ -39,34 +24,11 @@ pub(super) fn winansi_to_char(byte: u8) -> char {
 pub(super) fn char_to_winansi(c: char) -> u8 {
     match c as u32 {
         0x0020..=0x007F | 0x00A0..=0x00FF => c as u8,
-        0x20AC => 0x80,
-        0x201A => 0x82,
-        0x0192 => 0x83,
-        0x201E => 0x84,
-        0x2026 => 0x85,
-        0x2020 => 0x86,
-        0x2021 => 0x87,
-        0x02C6 => 0x88,
-        0x2030 => 0x89,
-        0x0160 => 0x8A,
-        0x2039 => 0x8B,
-        0x0152 => 0x8C,
-        0x017D => 0x8E,
-        0x2018 => 0x91,
-        0x2019 => 0x92,
-        0x201C => 0x93,
-        0x201D => 0x94,
-        0x2022 => 0x95,
-        0x2013 => 0x96,
-        0x2014 => 0x97,
-        0x02DC => 0x98,
-        0x2122 => 0x99,
-        0x0161 => 0x9A,
-        0x203A => 0x9B,
-        0x0153 => 0x9C,
-        0x017E => 0x9E,
-        0x0178 => 0x9F,
-        _ => 0,
+        u => u16::try_from(u)
+            .ok()
+            .filter(|&u| u != 0)
+            .and_then(|u| HIGH.iter().position(|&h| h == u))
+            .map_or(0, |i| 0x80 + i as u8),
     }
 }
 
@@ -122,4 +84,26 @@ pub(super) fn helvetica_widths() -> Vec<f32> {
             _ => 556.0,
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn high_bytes_round_trip() {
+        for byte in 0x80u8..=0x9F {
+            let c = winansi_to_char(byte);
+            if HIGH[(byte - 0x80) as usize] == 0 {
+                assert_eq!(c, byte as char);
+                assert_eq!(char_to_winansi(c), 0);
+            } else {
+                assert_eq!(char_to_winansi(c), byte);
+            }
+        }
+        assert_eq!(char_to_winansi('\0'), 0);
+        assert_eq!(char_to_winansi('\u{2011}'), 0);
+        assert_eq!(char_to_winansi('\u{20AC}'), 0x80);
+        assert_eq!(char_to_winansi('\u{00E9}'), 0xE9);
+    }
 }
