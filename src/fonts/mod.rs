@@ -3,6 +3,7 @@ mod discovery;
 mod embed;
 mod encoding;
 
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::Instant;
@@ -351,6 +352,8 @@ pub(crate) fn font_key_for(font_name: &str, bold: bool, italic: bool) -> String 
 
 pub(crate) type EmbeddedFonts = HashMap<(String, bool, bool), Vec<u8>>;
 
+pub(crate) type FontFiles = RefCell<HashMap<Vec<u8>, Ref>>;
+
 /// What a font is resolved against: the document's embedded fonts and
 /// fontTable, the characters the font has to cover, and whether it is for Word
 /// text (DrawingML text with no fontTable entry keeps the last resort).
@@ -364,6 +367,7 @@ pub(crate) struct FontContext<'a> {
     pub(crate) extra_glyphs: Option<&'a BTreeMap<u16, char>>,
     /// The installed fonts, scanned for this conversion's directories.
     pub(crate) font_index: &'a FontIndex,
+    pub(crate) font_files: &'a FontFiles,
 }
 
 /// The object numbers one font occupies, allocated before resolution so every
@@ -372,7 +376,6 @@ pub(crate) struct FontContext<'a> {
 struct FontRefs {
     font: Ref,
     descriptor: Ref,
-    data: Ref,
 }
 
 fn try_font(
@@ -917,7 +920,6 @@ pub(crate) fn register_font(
     let refs = FontRefs {
         font: alloc(),
         descriptor: alloc(),
-        data: alloc(),
     };
 
     let primary = primary_font_name(font_name);
@@ -1242,6 +1244,54 @@ mod tests {
     }
 
     #[test]
+    fn a_face_used_under_two_styles_embeds_one_font_file() {
+        let face = include_bytes!("testdata/nb-hyphen-native.ttf").to_vec();
+        let embedded: EmbeddedFonts = [false, true]
+            .map(|bold| (("synthetic hyphen".to_string(), bold, false), face.clone()))
+            .into();
+        let chars: HashSet<char> = "-\u{2011}".chars().collect();
+        let ctx = FontContext {
+            embedded_fonts: &embedded,
+            font_table: &FontTable::new(),
+            used_chars: &chars,
+            word_text: true,
+            extra_glyphs: None,
+            font_index: discovery::test_index(),
+            font_files: &FontFiles::default(),
+        };
+        let mut pdf = Pdf::new();
+        let mut next = 0;
+        let mut alloc = || {
+            next += 1;
+            Ref::new(next)
+        };
+        for (bold, name) in [(false, "F1"), (true, "F2")] {
+            let entry = register_font(
+                &mut pdf,
+                "Synthetic Hyphen",
+                bold,
+                false,
+                name.into(),
+                &mut alloc,
+                &ctx,
+            );
+            assert!(entry.font_path.is_none(), "{name} uses the embedded face");
+        }
+        let pdf = String::from_utf8_lossy(&pdf.finish()).into_owned();
+        let font_files: Vec<&str> = pdf
+            .split("/FontFile2 ")
+            .skip(1)
+            .map(|rest| rest.split_once(" R").expect("indirect reference").0)
+            .collect();
+        assert_eq!(font_files.len(), 2);
+        assert_eq!(font_files[0], font_files[1]);
+        let stream = format!("{} obj", font_files[0]);
+        assert!(pdf.contains(&stream), "{stream} is written");
+        assert_eq!(pdf.matches("/Length1").count(), 1);
+        assert!(!pdf.contains(" 00000 f"), "no object number is left unused");
+    }
+
+    #[test]
     fn cjk_script_from_charset_then_name_then_text() {
         let none = HashSet::new();
         assert_eq!(
@@ -1354,6 +1404,7 @@ mod tests {
                 word_text: true,
                 extra_glyphs: None,
                 font_index: discovery::test_index(),
+                font_files: &FontFiles::default(),
             };
             let entry = register_font(
                 &mut Pdf::new(),
