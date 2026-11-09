@@ -1263,7 +1263,7 @@ impl<'a> OpenFrame<'a> {
 /// of lines stays in 44pt). It never splits: a box (w:h if exact, else at
 /// least its content) that runs past the bottom moves to the next column or
 /// page whole, and one taller than the page stays where it is
-/// (frame-moves-shared, frame-taller-than-page). Moved, its space before is
+/// (frame-moves-shared-tall). Moved, its space before is
 /// suppressed and still counts toward w:h (frame-moved-space-before: a
 /// 100pt exact frame with 20pt before holds the next line 80pt below the
 /// new page's top).
@@ -6153,7 +6153,7 @@ fn render_paragraph_block(
     };
     // A frame in the flow never splits: `FlowFrame` has placed it, and it
     // runs past the bottom if it must (Word example, fixture
-    // frame-taller-than-page: the next block opens the next page).
+    // frame-moves-shared-tall: the next block opens the next page).
     let in_flow_frame = para.frame_props.as_ref().is_some_and(flow_frame);
     let mut moved = false;
     while !in_flow_frame
