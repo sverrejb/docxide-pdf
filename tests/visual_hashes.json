@@ -1759,6 +1759,9 @@
   "cases/hyphen-squeeze-single-letter": [
     "e6f1ece53123309ade117027b20c1d5105681982f29f31406dd17da92e13085b"
   ],
+  "cases/identical-parts-and-fonts": [
+    "5e181db90713a5cf3e437211e2abf5a4a13310eb670f3ea1e7cead947f43d715"
+  ],
   "cases/indent-chars-hanging": [
     "a940a17e91a618cbba0c737676e199c8fbb5dcedbb68146771ae3c7720365c36"
   ],

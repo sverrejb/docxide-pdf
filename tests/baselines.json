@@ -4940,6 +4940,10 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/identical-parts-and-fonts": {
+    "jaccard": 0.9871,
+    "ssim": 0.9844
+  },
   "cases/indent-chars-hanging": {
     "jaccard": 0.9427,
     "ssim": 0.9804,
