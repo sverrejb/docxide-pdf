@@ -7097,8 +7097,8 @@
     "a11y_text": 1.0
   },
   "cases/picture-part-reuse": {
-    "jaccard": 0.9918,
-    "ssim": 0.9774
+    "jaccard": 0.9942,
+    "ssim": 0.9806
   },
   "cases/raised-empty-size12-position-7-count1": {
     "jaccard": 0.9974,
@@ -10505,8 +10505,8 @@
     "a11y_text": 1.0
   },
   "scraped/federal_procurement_terms": {
-    "jaccard": 0.8066,
-    "ssim": 0.9284,
+    "jaccard": 0.8057,
+    "ssim": 0.9278,
     "text_boundary": 0.9648,
     "convert_ms": 57.1,
     "ua_fail": 3,
@@ -11299,7 +11299,7 @@
     "a11y_text": 1.0
   },
   "scraped/scottish_fundraising_awards_campaign": {
-    "jaccard": 0.8309,
+    "jaccard": 0.8308,
     "ssim": 0.9267,
     "text_boundary": 0.9552,
     "ua_fail": 2,
