@@ -391,31 +391,35 @@ fn try_font(
         embed::embed_truetype(pdf, refs, candidate, data, face_index, ctx, alloc)
     };
 
-    let embedded_key = (candidate.to_lowercase(), bold, italic);
-    if let Some(metrics) = ctx
-        .embedded_fonts
-        .get(&embedded_key)
-        .and_then(|d| embed(d, 0))
-    {
-        return Some(ResolvedFont {
+    // An installed family wins over the document's embedded copy; the copy
+    // only stands in for a font the machine lacks (online and Mac probe
+    // 2026-11-09: Courier New embedded as "Times New Roman" prints in the
+    // installed Times New Roman, embedded as an unknown name in Courier).
+    let installed = ctx
+        .font_index
+        .find_font_file(candidate, bold, italic)
+        .and_then(|(path, face_index, face_bold, face_italic)| {
+            let data = std::fs::read(&path).ok()?;
+            Some(ResolvedFont {
+                metrics: embed(&data, face_index)?,
+                synthetic_bold: bold && !face_bold,
+                synthetic_italic: italic && !face_italic,
+                font_path: Some(path),
+                face_index,
+            })
+        });
+    installed.or_else(|| {
+        let metrics = ctx
+            .embedded_fonts
+            .get(&(candidate.to_lowercase(), bold, italic))
+            .and_then(|d| embed(d, 0))?;
+        Some(ResolvedFont {
             metrics,
             synthetic_bold: false,
             synthetic_italic: false,
             font_path: None,
             face_index: 0,
-        });
-    }
-
-    let (path, face_index, face_bold, face_italic) =
-        ctx.font_index.find_font_file(candidate, bold, italic)?;
-    let data = std::fs::read(&path).ok()?;
-    let metrics = embed(&data, face_index)?;
-    Some(ResolvedFont {
-        metrics,
-        synthetic_bold: bold && !face_bold,
-        synthetic_italic: italic && !face_italic,
-        font_path: Some(path),
-        face_index,
+        })
     })
 }
 
