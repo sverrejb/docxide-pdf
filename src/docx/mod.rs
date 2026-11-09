@@ -29,9 +29,9 @@ use std::io::Read;
 
 use crate::error::Error;
 use crate::model::{
-    Block, BorderStyle, CellBorder, DocGridType, Document, DropCap, FrameProperties, HRelativeFrom,
+    Block, BorderStyle, CellBorder, Document, DropCap, FrameProperties, HRelativeFrom,
     HorizontalPosition, LineSpacing, ParagraphBorder, ParagraphBorders, Section, SectionBreakType,
-    SectionProperties, TabAlignment, TabStop, VRelativeFrom, VerticalPosition,
+    TabAlignment, TabStop, VRelativeFrom, VerticalPosition,
 };
 
 use styles::{ParagraphStyle, StyleDefaults, parse_line_spacing, parse_styles, parse_theme};
@@ -1479,46 +1479,23 @@ fn parse_zip<R: Read + std::io::Seek>(
         blocks.push(Block::Paragraph(crate::model::Paragraph::default()));
     }
 
-    // Final section: body-level sectPr
-    let final_props = if let Some(sect_node) = wml(body, "sectPr") {
-        parse_section_properties(
-            sect_node,
-            &mut ctx,
-            default_line_pitch,
-            settings.gutter_at_top,
-        )
-    } else {
-        SectionProperties {
-            page_width: 612.0,
-            page_height: 792.0,
-            margin_top: 72.0,
-            margin_bottom: 72.0,
-            margin_top_fixed: false,
-            margin_bottom_fixed: false,
-            margin_left: 72.0,
-            margin_right: 72.0,
-            header_margin: 36.0,
-            footer_margin: 36.0,
-            header_default: None,
-            header_first: None,
-            header_even: None,
-            footer_default: None,
-            footer_first: None,
-            footer_even: None,
-            different_first_page: false,
-            line_pitch: default_line_pitch,
-            grid_type: DocGridType::Default,
-            break_type: SectionBreakType::NextPage,
-            columns: None,
-            page_num_start: None,
-            page_num_format: None,
-            page_borders: None,
-            vertical_align: crate::model::PageVerticalAlign::Top,
-            line_numbering: None,
-            footnote_num_fmt: None,
-            endnote_num_fmt: None,
+    // Final section: body-level sectPr. A body without one takes what an
+    // empty sectPr parses to, so the defaults live in one place.
+    let (empty_xml, empty_sect_pr);
+    let sect_node = match wml(body, "sectPr") {
+        Some(node) => node,
+        None => {
+            empty_xml = format!(r#"<w:sectPr xmlns:w="{WML_NS}"/>"#);
+            empty_sect_pr = roxmltree::Document::parse(&empty_xml).expect("constant XML");
+            empty_sect_pr.root_element()
         }
     };
+    let final_props = parse_section_properties(
+        sect_node,
+        &mut ctx,
+        default_line_pitch,
+        settings.gutter_at_top,
+    );
     sections.push(Section {
         properties: final_props,
         blocks,
