@@ -3302,10 +3302,10 @@ mod tests {
         assert_eq!(squeezed, kept);
     }
 
-    #[test]
-    fn asymmetric_autofit_parent_keeps_saved_grid_with_nested_table() {
+    /// A one-row auto-width table over `grid` whose cells prefer `preferred`.
+    fn one_row_table(grid: Vec<f32>, preferred: Vec<f32>) -> Table {
         use crate::model::{CellVAlign, TableCell, TableRow, VMerge};
-        let make = |grid: Vec<f32>, preferred: Vec<f32>| Table {
+        Table {
             col_widths: grid,
             rows: vec![TableRow {
                 cells: preferred
@@ -3346,11 +3346,15 @@ mod tests {
             bidi_visual: false,
             header_first_row: false,
             header_first_col: false,
-        };
-        let mut parent = make(vec![250.0, 150.0], vec![250.0, 180.0]);
+        }
+    }
+
+    #[test]
+    fn asymmetric_autofit_parent_keeps_saved_grid_with_nested_table() {
+        let mut parent = one_row_table(vec![250.0, 150.0], vec![250.0, 180.0]);
         parent.rows[0].cells[0]
             .content
-            .push(Block::Table(make(vec![230.0], vec![230.0])));
+            .push(Block::Table(one_row_table(vec![230.0], vec![230.0])));
         let fonts = HashMap::new();
         assert_eq!(
             auto_fit_columns(&parent, &fonts, None, None, 0.0),
@@ -3365,50 +3369,7 @@ mod tests {
 
     #[test]
     fn asymmetric_autofit_keeps_grid_with_uniform_stale_cell_widths() {
-        use crate::model::{CellVAlign, TableCell, TableRow, VMerge};
-        let make = |grid: Vec<f32>, preferred: Vec<f32>| Table {
-            col_widths: grid,
-            rows: vec![TableRow {
-                cells: preferred
-                    .into_iter()
-                    .map(|width| TableCell {
-                        width,
-                        width_pct: None,
-                        content: vec![],
-                        borders: Default::default(),
-                        shading: None,
-                        hatch: None,
-                        grid_span: 1,
-                        v_merge: VMerge::None,
-                        v_align: CellVAlign::Top,
-                        text_direction: Default::default(),
-                        cell_margins: None,
-                        hide_mark: false,
-                    })
-                    .collect(),
-                grid_before: 0,
-                height: None,
-                height_exact: false,
-                is_header: false,
-                cant_split: false,
-            }],
-            table_indent: 0.0,
-            table_indent_explicit: false,
-            has_table_style: true,
-            cell_margins: Default::default(),
-            position: None,
-            alignment: Default::default(),
-            fixed_layout: false,
-            auto_width: true,
-            width_pct: None,
-            grid_inferred: false,
-            cells_unsized: false,
-            cells_twip_sized: false,
-            bidi_visual: false,
-            header_first_row: false,
-            header_first_col: false,
-        };
-        let mut table = make(vec![250.0, 150.0], vec![300.0, 300.0]);
+        let mut table = one_row_table(vec![250.0, 150.0], vec![300.0, 300.0]);
         let fonts = HashMap::new();
         assert_eq!(
             auto_fit_columns(&table, &fonts, None, None, 0.0),
