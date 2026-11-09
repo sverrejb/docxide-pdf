@@ -392,10 +392,8 @@ pub(super) fn parse_hex_color(val: &str) -> Option<[u8; 3]> {
     if val == "auto" || val.len() != 6 {
         return None;
     }
-    let r = u8::from_str_radix(&val[0..2], 16).ok()?;
-    let g = u8::from_str_radix(&val[2..4], 16).ok()?;
-    let b = u8::from_str_radix(&val[4..6], 16).ok()?;
-    Some([r, g, b])
+    let v = u32::from_str_radix(val, 16).ok()?;
+    Some([(v >> 16) as u8, (v >> 8) as u8, v as u8])
 }
 
 pub(super) fn parse_text_color(val: &str) -> Option<[u8; 3]> {
