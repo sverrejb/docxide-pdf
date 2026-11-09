@@ -49,40 +49,22 @@ pub(super) struct DocumentSettings {
     pub math: crate::model::MathSettings,
 }
 
-impl Default for DocumentSettings {
-    fn default() -> Self {
-        Self {
-            even_and_odd_headers: false,
-            mirror_margins: false,
-            default_tab_stop: 36.0, // 0.5 inches = 720 twips = 36pt
-            gutter_at_top: false,
-            east_asia_lang: None,
-            bidi_lang: None,
-            default_lang: None,
-            compress_punctuation: false,
-            compat_mode: 0,
-            open_type_features: false,
-            styles_from_normal_template: false,
-            do_not_expand_shift_return: false,
-            ul_trail_space: false,
-            adjust_line_height_in_table: false,
-            no_html_auto_spacing: false,
-            balance_sbdb_width: false,
-            no_indent_as_num_tab: false,
-            wp_justification: false,
-            math: Default::default(),
-        }
-    }
-}
-
 pub(super) fn parse_settings<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> DocumentSettings {
-    let Some(xml_text) = read_zip_text(zip, "word/settings.xml") else {
-        return DocumentSettings::default();
+    let xml_text = read_zip_text(zip, "word/settings.xml");
+    let doc = xml_text
+        .as_deref()
+        .and_then(|xml| roxmltree::Document::parse(xml).ok());
+    // A missing or unreadable part is an empty one, so each default is
+    // spelled once, at its field.
+    let (empty_xml, empty_doc);
+    let root = match &doc {
+        Some(doc) => doc.root_element(),
+        None => {
+            empty_xml = format!(r#"<w:settings xmlns:w="{WML_NS}"/>"#);
+            empty_doc = roxmltree::Document::parse(&empty_xml).expect("constant XML");
+            empty_doc.root_element()
+        }
     };
-    let Ok(doc) = roxmltree::Document::parse(&xml_text) else {
-        return DocumentSettings::default();
-    };
-    let root = doc.root_element();
 
     let default_tab_stop = wml(root, "defaultTabStop")
         .and_then(|n| twips_attr(n, "val"))
@@ -100,6 +82,13 @@ pub(super) fn parse_settings<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> Do
 
     let compat = wml(root, "compat");
     let compat_flag = |name| compat.and_then(|c| wml_bool(c, name)).unwrap_or(false);
+    let compat_setting = |name: &str| {
+        compat
+            .into_iter()
+            .flat_map(|c| c.children())
+            .find(|n| n.attribute((WML_NS, "name")) == Some(name))
+            .and_then(|n| n.attribute((WML_NS, "val")))
+    };
 
     DocumentSettings {
         even_and_odd_headers: wml_bool(root, "evenAndOddHeaders").unwrap_or(false),
@@ -111,18 +100,10 @@ pub(super) fn parse_settings<R: Read + Seek>(zip: &mut zip::ZipArchive<R>) -> Do
         default_lang,
         compress_punctuation: wml_attr(root, "characterSpacingControl")
             .is_some_and(|v| v.starts_with("compressPunctuation")),
-        compat_mode: compat
-            .into_iter()
-            .flat_map(|c| c.children())
-            .find(|n| n.attribute((WML_NS, "name")) == Some("compatibilityMode"))
-            .and_then(|n| n.attribute((WML_NS, "val")))
+        compat_mode: compat_setting("compatibilityMode")
             .and_then(|v| v.parse().ok())
             .unwrap_or(0),
-        open_type_features: compat
-            .into_iter()
-            .flat_map(|c| c.children())
-            .find(|n| n.attribute((WML_NS, "name")) == Some("enableOpenTypeFeatures"))
-            .and_then(|n| n.attribute((WML_NS, "val")))
+        open_type_features: compat_setting("enableOpenTypeFeatures")
             .is_some_and(super::parse_on_off),
         styles_from_normal_template: wml_bool(root, "linkStyles").unwrap_or(false)
             && wml(root, "attachedTemplate").is_none(),
