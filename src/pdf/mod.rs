@@ -2583,7 +2583,7 @@ pub(super) struct PageBuilder {
     /// margin, not at the margin (`is_at_page_top`).
     pub(super) page_top_y: f32,
     pub(super) is_first_page_of_section: bool,
-    /// A continuous section whose first ordinary paragraph or table has not flowed yet.
+    /// A continuous section whose first block has not flowed yet.
     pending_section_first_page: Option<(usize, usize, f32)>,
     /// Section that owns the current page for header/footer purposes.
     /// For continuous section breaks, this stays as the section that started
@@ -8610,7 +8610,7 @@ mod tests {
     }
 
     #[test]
-    fn continuous_first_page_is_pending_only_before_any_paragraph_flow() {
+    fn continuous_first_page_is_pending_only_before_the_first_block_flows() {
         let mut page = PageBuilder::new(97.9);
         page.pending_section_first_page = Some((2, 0, 97.9));
         assert!(page.take_pending_first_page(2));
