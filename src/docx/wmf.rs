@@ -328,7 +328,7 @@ mod tests {
 /// Translate a vector WMF (polygons, pens and brushes) into an EMF byte
 /// stream for the EMF translator: the stamp in swiss_materials' header is 47
 /// `META_POLYPOLYGON`s, which Word rasterises. Returns `None` when no record
-/// paints. ponytail: text, arcs and bitmaps in vector WMFs stay undrawn.
+/// paints. ponytail: arcs and bitmaps in vector WMFs stay undrawn.
 pub(super) fn wmf_to_emf(data: &[u8]) -> Option<Vec<u8>> {
     let i16_at = |o: usize| i16::from_le_bytes(data[o..o + 2].try_into().unwrap()) as i32;
     let (skip, bbox, units_per_inch) = if data.starts_with(&PLACEABLE_MAGIC) {
@@ -427,7 +427,7 @@ pub(super) fn wmf_to_emf(data: &[u8]) -> Option<Vec<u8>> {
                 recs.push(rec(38, &[h, style as u32, width as u32, pi(2)? as u32, pu32(6)?]));
             }
             // Other object kinds still take a slot.
-            0x02fb | 0x0142 | 0x01f9 | 0x0322 | 0x0b23 => {
+            0x0142 | 0x01f9 | 0x0322 | 0x0b23 => {
                 alloc(&mut slots);
             }
             0x012d => {
@@ -466,6 +466,42 @@ pub(super) fn wmf_to_emf(data: &[u8]) -> Option<Vec<u8>> {
                     .map(|k| Some((pi(1 + 2 * k)?, pi(2 + 2 * k)?)))
                     .collect::<Option<Vec<_>>>()?;
                 path(&mut recs, &[pts.as_slice()], func == 0x0324);
+                painted = true;
+            }
+            // META_MOVETO / LINETO, parameters (y, x): a chart's axes and ticks.
+            0x0214 => recs.push(rec(27, &[pi(1)? as u32, pi(0)? as u32])),
+            0x0213 if rop2_nop => {}
+            0x0213 => {
+                recs.push(rec(54, &[pi(1)? as u32, pi(0)? as u32]));
+                painted = true;
+            }
+            0x001e => recs.push(rec(33, &[])),
+            0x0127 => recs.push(rec(34, &[pi(0)? as u32])),
+            0x0209 => recs.push(rec(24, &[pu32(0)?])),
+            0x012e => recs.push(rec(22, &[pi(0)? as u16 as u32])),
+            0x02fb => {
+                let h = alloc(&mut slots);
+                recs.push(emf_font(h, p)?);
+            }
+            // META_EXTTEXTOUT: y, x, count, options, [clip rect], string, [dx].
+            0x0a32 => {
+                let (y, x, n, opts) = (pi(0)?, pi(1)?, pi(2)?.max(0) as usize, pi(3)? as u16);
+                let at = if opts & 0x0006 != 0 { 16 } else { 8 };
+                let text = p.get(at..at + n)?;
+                let dx_at = at + n + (n & 1);
+                let dx: Vec<i32> = (0..n)
+                    .map_while(|k| p.get(dx_at + 2 * k..dx_at + 2 * k + 2))
+                    .map(|s| i16::from_le_bytes(s.try_into().unwrap()) as i32)
+                    .collect();
+                recs.push(emf_text(x, y, text, if dx.len() == n { &dx } else { &[] }));
+                painted = true;
+            }
+            // META_TEXTOUT: count, string, y, x.
+            0x0521 => {
+                let n = pi(0)?.max(0) as usize;
+                let text = p.get(2..2 + n)?;
+                let k = (2 + n + (n & 1)) / 2;
+                recs.push(emf_text(pi(k + 1)?, pi(k)?, text, &[]));
                 painted = true;
             }
             _ => {}
@@ -532,4 +568,57 @@ pub(super) fn wmf_to_emf(data: &[u8]) -> Option<Vec<u8>> {
         out.extend_from_slice(&r);
     }
     Some(out)
+}
+
+/// EMR_EXTCREATEFONTINDIRECTW for a WMF LogFont (16-bit height, width,
+/// escapement, orientation and weight, eight flag bytes, an ANSI face name).
+fn emf_font(handle: u32, logfont: &[u8]) -> Option<Vec<u8>> {
+    let words = (0..5)
+        .map(|k| logfont.get(2 * k..2 * k + 2).map(|s| i16::from_le_bytes(s.try_into().unwrap()) as i32))
+        .collect::<Option<Vec<i32>>>()?;
+    let mut body = handle.to_le_bytes().to_vec();
+    for w in words {
+        body.extend_from_slice(&w.to_le_bytes());
+    }
+    body.extend_from_slice(logfont.get(10..18)?);
+    let face: Vec<u16> = logfont[18..]
+        .iter()
+        .take_while(|&&b| b != 0)
+        .take(31)
+        .map(|&b| b as u16) // Latin-1: the face names WMF writers use
+        .collect();
+    for k in 0..32 {
+        body.extend_from_slice(&face.get(k).copied().unwrap_or(0).to_le_bytes());
+    }
+    Some(emf_record(82, &body))
+}
+
+/// EMR_EXTTEXTOUTW at (x, y) for Latin-1 `text`, with its advances if given.
+fn emf_text(x: i32, y: i32, text: &[u8], dx: &[i32]) -> Vec<u8> {
+    let mut body = Vec::new();
+    body.extend_from_slice(&[0u8; 16]); // bounds
+    body.extend_from_slice(&1u32.to_le_bytes()); // GM_COMPATIBLE
+    body.extend_from_slice(&[0u8; 8]); // exScale, eyScale
+    let off_string = 8 + 68;
+    let string_len = (text.len() * 2).next_multiple_of(4);
+    for v in [x as u32, y as u32, text.len() as u32, off_string as u32, 0] {
+        body.extend_from_slice(&v.to_le_bytes());
+    }
+    body.extend_from_slice(&[0u8; 16]); // clip rectangle
+    let off_dx = if dx.is_empty() { 0 } else { off_string + string_len };
+    body.extend_from_slice(&(off_dx as u32).to_le_bytes());
+    let mut string: Vec<u8> = text.iter().flat_map(|&b| (b as u16).to_le_bytes()).collect();
+    string.resize(string_len, 0);
+    body.extend_from_slice(&string);
+    for d in dx {
+        body.extend_from_slice(&d.to_le_bytes());
+    }
+    emf_record(84, &body)
+}
+
+fn emf_record(ty: u32, body: &[u8]) -> Vec<u8> {
+    let mut v = ty.to_le_bytes().to_vec();
+    v.extend_from_slice(&((8 + body.len()) as u32).to_le_bytes());
+    v.extend_from_slice(body);
+    v
 }
