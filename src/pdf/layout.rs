@@ -562,194 +562,14 @@ impl WordChunk {
         self.space_after && entry.is_none_or(|e| e.has_char(' '))
     }
 
-    fn text(
-        entry: &FontEntry,
-        run: &Run,
-        word: &str,
-        eff_fs: f32,
-        char_spacing: f32,
-        y_offset: f32,
-        x_offset: f32,
-        width: f32,
-    ) -> Self {
+    /// Every field at its default; the constructors override what they set.
+    fn blank(pdf_font: String, font_size: f32, x_offset: f32, width: f32) -> Self {
         Self {
-            pdf_font: entry.pdf_name.clone(),
-            source_starts: source_starts(run, word),
-            text: word.to_string(),
-            font_size: eff_fs,
-            line_font_size: run.font_size,
-            color: run.color,
-            highlight: run.highlight,
-            shading: if run.shading.is_none() && !run.comment_ids.is_empty() {
-                Some(COMMENT_HIGHLIGHT_RGB)
-            } else {
-                run.shading
-            },
-            border: run.border.clone(),
-            x_offset,
-            width,
-            underline: run.underline,
-            double_underline: run.double_underline,
-            strikethrough: run.strikethrough,
-            dstrike: run.dstrike,
-            revised: run.revised,
-            char_spacing,
-            text_scale: run.text_scale,
-            y_offset,
-            raise: run.position,
-            hyperlink_url: run.hyperlink_url.clone(),
-            inline_image_name: None,
-            inline_image_height: 0.0,
-            inline_image_extra_height: 0.0,
-            inline_image_stroke_color: None,
-            inline_image_stroke_width: 0.0,
-            inline_image_shadow: None,
-            inline_image_glow: None,
-            inline_image_effect_xobjs: None,
-            inline_image_clip: None,
-            inline_image_size: (0.0, 0.0),
-            inline_image_trim: 0.0,
-            inline_image_rotation_deg: 0.0,
-            inline_image_alt: None,
-            inline_image_decorative: false,
-            punct_compressed: 0.0,
-            synthetic_bold: entry.synthetic_bold,
-            synthetic_italic: entry.synthetic_italic,
-            text_outline: run.text_outline.clone(),
-            text_fill: run.text_fill.clone(),
-            text_shadow: run.text_shadow.clone(),
-            comment_ids: [&run.comment_ids[..], &run.comment_anchor_ids[..]].concat(),
-            footnote_id: run.footnote_id,
-            endnote_id: run.endnote_id,
-            actual_text: None,
-            lang: chunk_lang(run, word),
-            space_after: false,
-            preceding_spaces: 1,
-            word_space_bridge: false,
-            leader: None,
-            formula: run.formula.clone(),
-            kern: run.kerns_at(eff_fs),
-            checkbox: run.checkbox,
-            ruby: run.ruby.clone(),
-            rtl: run.rtl,
-            east_asia_hint: run.east_asia_hint,
-            rtl_glyphs: false,
-            gap_rtl: false,
-            math: None,
-        }
-    }
-
-    /// A laid-out Office Math zone at `x_offset`, drawn in the math font.
-    fn math(entry: &FontEntry, run: &Run, mb: &Arc<crate::math::MathBox>, x_offset: f32) -> Self {
-        let mut chunk = Self::text(
-            entry,
-            run,
-            &run.text,
-            run.font_size,
-            0.0,
-            0.0,
-            x_offset,
-            mb.width,
-        );
-        chunk.math = Some(mb.clone());
-        chunk
-    }
-
-    fn image(
-        pdf_name: &str,
-        run: &Run,
-        x_offset: f32,
-        img: &crate::model::EmbeddedImage,
-        effect_xobjs: Option<super::images::EffectXObjs>,
-        // The run's registered font: its metrics place a revised picture's
-        // strike and underline.
-        pdf_font: String,
-    ) -> Self {
-        let font_size = run.font_size;
-        let (width, height) = img.layout_size();
-        Self {
-            source_starts: Vec::new(),
             pdf_font,
             text: String::new(),
             font_size,
             line_font_size: font_size,
-            color: run.color,
-            highlight: None,
-            shading: None,
-            border: None,
-            x_offset,
-            width,
-            // Markup view: a deleted picture is struck at the text's strike
-            // height across its width (plus a 1.44pt line through its middle,
-            // drawn with the picture), an inserted one underlined (Word for
-            // Mac probe p10).
-            underline: run.underline,
-            double_underline: false,
-            strikethrough: run.strikethrough,
-            dstrike: false,
-            revised: run.revised,
-            char_spacing: 0.0,
-            text_scale: 100.0,
-            y_offset: 0.0,
-            raise: 0.0,
-            hyperlink_url: None,
-            inline_image_name: Some(pdf_name.to_string()),
-            inline_image_height: height,
-            inline_image_extra_height: 0.0,
-            inline_image_stroke_color: img.stroke_color,
-            inline_image_stroke_width: img.stroke_width,
-            inline_image_shadow: img.shadow.clone(),
-            inline_image_glow: img.glow.clone(),
-            inline_image_effect_xobjs: effect_xobjs,
-            inline_image_clip: img.clip_geometry.clone(),
-            inline_image_size: (img.display_width, img.display_height),
-            inline_image_trim: img.trimmed_width,
-            inline_image_rotation_deg: img.rotation_deg,
-            inline_image_alt: img.alt.clone(),
-            inline_image_decorative: img.decorative,
-            punct_compressed: 0.0,
-            formula: None,
-            kern: false,
-            checkbox: None,
-            ruby: None,
-            rtl: false,
-            east_asia_hint: false,
-            rtl_glyphs: false,
-            gap_rtl: false,
-            math: None,
-            synthetic_bold: false,
-            synthetic_italic: false,
-            text_outline: None,
-            text_fill: None,
-            text_shadow: None,
-            comment_ids: Vec::new(),
-            footnote_id: None,
-            endnote_id: None,
-            actual_text: None,
-            lang: None,
-            space_after: false,
-            preceding_spaces: 1,
-            word_space_bridge: false,
-            leader: None,
-        }
-    }
-
-    fn leader(
-        entry: &FontEntry,
-        ch: char,
-        count: usize,
-        font_size: f32,
-        color: Option<[u8; 3]>,
-        x_offset: f32,
-        width: f32,
-    ) -> Self {
-        Self {
-            source_starts: Vec::new(),
-            pdf_font: entry.pdf_name.clone(),
-            text: std::iter::repeat_n(ch, count).collect(),
-            font_size,
-            line_font_size: font_size,
-            color,
+            color: None,
             highlight: None,
             shading: None,
             border: None,
@@ -779,7 +599,22 @@ impl WordChunk {
             inline_image_rotation_deg: 0.0,
             inline_image_alt: None,
             inline_image_decorative: false,
+            synthetic_bold: false,
+            synthetic_italic: false,
+            text_outline: None,
+            text_fill: None,
+            text_shadow: None,
+            comment_ids: Vec::new(),
+            footnote_id: None,
+            endnote_id: None,
+            actual_text: None,
+            lang: None,
             punct_compressed: 0.0,
+            space_after: false,
+            preceding_spaces: 1,
+            source_starts: Vec::new(),
+            word_space_bridge: false,
+            leader: None,
             formula: None,
             kern: false,
             checkbox: None,
@@ -789,20 +624,129 @@ impl WordChunk {
             rtl_glyphs: false,
             gap_rtl: false,
             math: None,
+        }
+    }
+
+    fn text(
+        entry: &FontEntry,
+        run: &Run,
+        word: &str,
+        eff_fs: f32,
+        char_spacing: f32,
+        y_offset: f32,
+        x_offset: f32,
+        width: f32,
+    ) -> Self {
+        Self {
+            source_starts: source_starts(run, word),
+            text: word.to_string(),
+            line_font_size: run.font_size,
+            color: run.color,
+            highlight: run.highlight,
+            shading: if run.shading.is_none() && !run.comment_ids.is_empty() {
+                Some(COMMENT_HIGHLIGHT_RGB)
+            } else {
+                run.shading
+            },
+            border: run.border.clone(),
+            underline: run.underline,
+            double_underline: run.double_underline,
+            strikethrough: run.strikethrough,
+            dstrike: run.dstrike,
+            revised: run.revised,
+            char_spacing,
+            text_scale: run.text_scale,
+            y_offset,
+            raise: run.position,
+            hyperlink_url: run.hyperlink_url.clone(),
             synthetic_bold: entry.synthetic_bold,
             synthetic_italic: entry.synthetic_italic,
-            text_outline: None,
-            text_fill: None,
-            text_shadow: None,
-            comment_ids: Vec::new(),
-            footnote_id: None,
-            endnote_id: None,
-            actual_text: None,
-            lang: None,
-            space_after: false,
-            preceding_spaces: 1,
-            word_space_bridge: false,
+            text_outline: run.text_outline.clone(),
+            text_fill: run.text_fill.clone(),
+            text_shadow: run.text_shadow.clone(),
+            comment_ids: [&run.comment_ids[..], &run.comment_anchor_ids[..]].concat(),
+            footnote_id: run.footnote_id,
+            endnote_id: run.endnote_id,
+            lang: chunk_lang(run, word),
+            formula: run.formula.clone(),
+            kern: run.kerns_at(eff_fs),
+            checkbox: run.checkbox,
+            ruby: run.ruby.clone(),
+            rtl: run.rtl,
+            east_asia_hint: run.east_asia_hint,
+            ..Self::blank(entry.pdf_name.clone(), eff_fs, x_offset, width)
+        }
+    }
+
+    /// A laid-out Office Math zone at `x_offset`, drawn in the math font.
+    fn math(entry: &FontEntry, run: &Run, mb: &Arc<crate::math::MathBox>, x_offset: f32) -> Self {
+        let mut chunk = Self::text(
+            entry,
+            run,
+            &run.text,
+            run.font_size,
+            0.0,
+            0.0,
+            x_offset,
+            mb.width,
+        );
+        chunk.math = Some(mb.clone());
+        chunk
+    }
+
+    fn image(
+        pdf_name: &str,
+        run: &Run,
+        x_offset: f32,
+        img: &crate::model::EmbeddedImage,
+        effect_xobjs: Option<super::images::EffectXObjs>,
+        // The run's registered font: its metrics place a revised picture's
+        // strike and underline.
+        pdf_font: String,
+    ) -> Self {
+        let (width, height) = img.layout_size();
+        Self {
+            color: run.color,
+            // Markup view: a deleted picture is struck at the text's strike
+            // height across its width (plus a 1.44pt line through its middle,
+            // drawn with the picture), an inserted one underlined (Word for
+            // Mac probe p10).
+            underline: run.underline,
+            strikethrough: run.strikethrough,
+            revised: run.revised,
+            inline_image_name: Some(pdf_name.to_string()),
+            inline_image_height: height,
+            inline_image_stroke_color: img.stroke_color,
+            inline_image_stroke_width: img.stroke_width,
+            inline_image_shadow: img.shadow.clone(),
+            inline_image_glow: img.glow.clone(),
+            inline_image_effect_xobjs: effect_xobjs,
+            inline_image_clip: img.clip_geometry.clone(),
+            inline_image_size: (img.display_width, img.display_height),
+            inline_image_trim: img.trimmed_width,
+            inline_image_rotation_deg: img.rotation_deg,
+            inline_image_alt: img.alt.clone(),
+            inline_image_decorative: img.decorative,
+            ..Self::blank(pdf_font, run.font_size, x_offset, width)
+        }
+    }
+
+    fn leader(
+        entry: &FontEntry,
+        ch: char,
+        count: usize,
+        font_size: f32,
+        color: Option<[u8; 3]>,
+        x_offset: f32,
+        width: f32,
+    ) -> Self {
+        Self {
+            text: std::iter::repeat_n(ch, count).collect(),
+            color,
+            synthetic_bold: entry.synthetic_bold,
+            synthetic_italic: entry.synthetic_italic,
             leader: Some(ch),
+            ..Self::blank(entry.pdf_name.clone(), font_size, x_offset, width)
         }
     }
 
@@ -851,67 +795,13 @@ impl WordChunk {
         width: f32,
     ) -> Self {
         Self {
-            source_starts: Vec::new(),
-            pdf_font: entry.pdf_name.clone(),
-            text: String::new(),
-            font_size,
-            line_font_size: font_size,
             color,
-            highlight: None,
-            shading: None,
             // Carry the run's border so a bridged space keeps the border span
             // contiguous (otherwise a None-border space chunk splits the box).
             border,
-            x_offset,
-            width,
             underline: true,
             double_underline,
-            strikethrough: false,
-            dstrike: false,
-            revised: false,
-            char_spacing: 0.0,
-            text_scale: 100.0,
-            y_offset: 0.0,
-            raise: 0.0,
-            hyperlink_url: None,
-            inline_image_name: None,
-            inline_image_height: 0.0,
-            inline_image_extra_height: 0.0,
-            inline_image_stroke_color: None,
-            inline_image_stroke_width: 0.0,
-            inline_image_shadow: None,
-            inline_image_glow: None,
-            inline_image_effect_xobjs: None,
-            inline_image_clip: None,
-            inline_image_size: (0.0, 0.0),
-            inline_image_trim: 0.0,
-            inline_image_rotation_deg: 0.0,
-            inline_image_alt: None,
-            inline_image_decorative: false,
-            punct_compressed: 0.0,
-            formula: None,
-            kern: false,
-            checkbox: None,
-            ruby: None,
-            rtl: false,
-            east_asia_hint: false,
-            rtl_glyphs: false,
-            gap_rtl: false,
-            math: None,
-            synthetic_bold: false,
-            synthetic_italic: false,
-            text_outline: None,
-            text_fill: None,
-            text_shadow: None,
-            comment_ids: Vec::new(),
-            footnote_id: None,
-            endnote_id: None,
-            actual_text: None,
-            lang: None,
-            space_after: false,
-            preceding_spaces: 1,
-            word_space_bridge: false,
-            leader: None,
+            ..Self::blank(entry.pdf_name.clone(), font_size, x_offset, width)
         }
     }
 }
