@@ -5417,7 +5417,15 @@ fn render_paragraph_block(
         } else {
             para.content_height
         };
-        let picture_h = picture_line_h(image_height);
+        // Under a lines grid a lone picture takes the cells its own height
+        // needs, whatever its run's font: a Taiwanese press release's 17.8pt
+        // logo in a Times New Roman 16 run (an 18.4pt line, two 18pt cells)
+        // takes one cell in Word.
+        let picture_h = if grid_snapped {
+            layout::grid_cells(image_height + inserted_descent, sp.line_pitch)
+        } else {
+            picture_line_h(image_height)
+        };
         // An OLE preview wider than the column leaves its line no room for the
         // paragraph mark, which wraps onto a line of its own (alfies_arc: an
         // 11pt line follows a 1014pt-wide OLE logo strip, annotation #186).

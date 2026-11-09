@@ -6707,7 +6707,7 @@ pub(super) fn grid_snapped_line_h(
 
 /// Whole docGrid cells for a line `h` tall, at least one. Tolerance so an
 /// exact fit stays one cell despite f32 error.
-fn grid_cells(h: f32, pitch: f32) -> f32 {
+pub(super) fn grid_cells(h: f32, pitch: f32) -> f32 {
     ((h / pitch) - 0.02).ceil().max(1.0) * pitch
 }
 
