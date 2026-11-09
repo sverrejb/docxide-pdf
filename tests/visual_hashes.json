@@ -2668,6 +2668,65 @@
   "cases/section-clear-mark-ordinary": [
     "81e89f68b94fcbc91e268d73dda7cd53ba3cf626e7d63f6c0133bc38fcd7760c"
   ],
+  "cases/section-first-page-anchored-picture": [
+    "c6bd7cb282a6208acf0ad7c3775569ea49e1ee6b6eeada4b699e9747c326d488",
+    "7481cb938e8fe661a61e1fa53cbaab0ded7835ea38a7a77a3efd9ba13e4a1f33",
+    "2944670ac17083086c41818489a34dbf9fbbdbb7d7de9a093e51aa79edf729bb"
+  ],
+  "cases/section-first-page-column-stays": [
+    "a25cc12df79b4e8c447a60b444f4170b89aeffa6188aaedf2262fd4edc40215f",
+    "aa6d3947c8907cd0953281e65f6a6c747e7f4863864c25cf5073798f004ffb05"
+  ],
+  "cases/section-first-page-floating-table": [
+    "c6bd7cb282a6208acf0ad7c3775569ea49e1ee6b6eeada4b699e9747c326d488",
+    "46c211595a5bd370a65751854e857386a0a5704e46469dbc0dce7df91955b761",
+    "e7d2ee2f57939050ef6ccbd1c996b0e8fe2e5ff22239a1bcacc764591b92cf87"
+  ],
+  "cases/section-first-page-floating-table-stays": [
+    "3d1c1a9007a8427de9cf9d4de96211050de35170c41db0510dfb792f6e68f98c",
+    "b26720abe1bef61f67e4beaf1d7e4f99bd2a8fd4d41fc868f8283b5bd6be545a",
+    "0c26a2de6b5f2996efa8bfa7add4f6c416b3e35924ad94e56e6be9c99cf65556"
+  ],
+  "cases/section-first-page-frame-stays": [
+    "0e5277d6be43f1693cf254c1973f2c2adabfcb6730d6be3a208f7ef2c45a21f7",
+    "b26720abe1bef61f67e4beaf1d7e4f99bd2a8fd4d41fc868f8283b5bd6be545a",
+    "0c26a2de6b5f2996efa8bfa7add4f6c416b3e35924ad94e56e6be9c99cf65556"
+  ],
+  "cases/section-first-page-inline-picture": [
+    "c6bd7cb282a6208acf0ad7c3775569ea49e1ee6b6eeada4b699e9747c326d488",
+    "34a31c71d26c25be8ec1f8cea84b2e475f49a297c890df0e0519632e9ea9a775",
+    "5a0f82d7fa14801124e9d8977289fdded8f47b69f742e3bb1fa07bc30acae2a3"
+  ],
+  "cases/section-first-page-owned-break": [
+    "88ad70db3cc6e1ff4372db6e9e2eb852431da046515e84ab65118077781f9ca9",
+    "d4cbd03dad81910faa9ae184cdf85ed4e0e125dc047e82ba7c6a2c07bd1ad0bc",
+    "a91373c6e7c5382aeca382b0107ac16356cd4f398efe745234bb877d18c74151",
+    "0c26a2de6b5f2996efa8bfa7add4f6c416b3e35924ad94e56e6be9c99cf65556"
+  ],
+  "cases/section-first-page-paragraph-moves": [
+    "c6bd7cb282a6208acf0ad7c3775569ea49e1ee6b6eeada4b699e9747c326d488",
+    "6e18dd62c9e7a5622d18328640d5539a0e52f66334a112fbb8dfe4292583869c",
+    "2944670ac17083086c41818489a34dbf9fbbdbb7d7de9a093e51aa79edf729bb"
+  ],
+  "cases/section-first-page-table-fits": [
+    "4ef07d119397e08defd6f4453386b2c5553cf5ebedbba5396d1d01a707e4ea4d",
+    "401b377b4a10ea44f4abc19661405b0974ae204227b7203d72bcce92e233299c",
+    "e6b161fb734d257c2665c8874f8ff7e804715a7d086baef02f552944b2afa20b"
+  ],
+  "cases/section-first-page-table-moves": [
+    "c6bd7cb282a6208acf0ad7c3775569ea49e1ee6b6eeada4b699e9747c326d488",
+    "7c6aad05a306eaa084aae49eb833b7258e9ba701a38b103e87bec966a2dbe911",
+    "5a0f82d7fa14801124e9d8977289fdded8f47b69f742e3bb1fa07bc30acae2a3"
+  ],
+  "cases/section-first-page-textbox": [
+    "c6bd7cb282a6208acf0ad7c3775569ea49e1ee6b6eeada4b699e9747c326d488",
+    "9d4dcaf8ab81595face1d80fabf52c492451450623c56b8a59128adfd9f30592",
+    "2944670ac17083086c41818489a34dbf9fbbdbb7d7de9a093e51aa79edf729bb"
+  ],
+  "cases/section-first-page-two-columns": [
+    "c6bd7cb282a6208acf0ad7c3775569ea49e1ee6b6eeada4b699e9747c326d488",
+    "2216f8a65c037069f654f52535aed2b9dbc9691d14443dca9e83e215197144ab"
+  ],
   "cases/section-mark-after-table-float-compat14": [
     "dfc92ee5fe5a4f6e4c9e2892ec7f97cceb553548c4985012a0ff2682925516fb"
   ],

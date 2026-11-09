@@ -7720,6 +7720,126 @@
     "a11y_struct": 0.4444,
     "a11y_text": 1.0
   },
+  "cases/section-first-page-anchored-picture": {
+    "jaccard": 0.7784,
+    "ssim": 0.9093,
+    "text_boundary": 0.974,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/section-first-page-column-stays": {
+    "jaccard": 0.8126,
+    "ssim": 0.9304,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/section-first-page-floating-table": {
+    "jaccard": 0.7124,
+    "ssim": 0.9315,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/section-first-page-floating-table-stays": {
+    "jaccard": 0.8164,
+    "ssim": 0.9312,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9673,
+    "a11y_text": 1.0
+  },
+  "cases/section-first-page-frame-stays": {
+    "jaccard": 0.7993,
+    "ssim": 0.9182,
+    "text_boundary": 0.9799,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/section-first-page-inline-picture": {
+    "jaccard": 0.8376,
+    "ssim": 0.9343,
+    "text_boundary": 1.0,
+    "ua_fail": 3,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/section-first-page-owned-break": {
+    "jaccard": 0.8358,
+    "ssim": 0.9331,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 0.9898,
+    "a11y_text": 1.0
+  },
+  "cases/section-first-page-paragraph-moves": {
+    "jaccard": 0.8105,
+    "ssim": 0.9315,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/section-first-page-table-fits": {
+    "jaccard": 0.8178,
+    "ssim": 0.9318,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/section-first-page-table-moves": {
+    "jaccard": 0.7413,
+    "ssim": 0.9266,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/section-first-page-textbox": {
+    "jaccard": 0.7258,
+    "ssim": 0.8845,
+    "text_boundary": 0.3775,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
+  "cases/section-first-page-two-columns": {
+    "jaccard": 0.7981,
+    "ssim": 0.9212,
+    "text_boundary": 1.0,
+    "ua_fail": 2,
+    "a11y_missing": 0,
+    "ua_deficit": 0,
+    "a11y_struct": 1.0,
+    "a11y_text": 1.0
+  },
   "cases/section-mark-after-table-float-compat14": {
     "jaccard": 0.9547,
     "ssim": 0.9836,
