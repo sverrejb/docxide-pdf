@@ -4396,15 +4396,9 @@ fn render_paragraph_block(
     sect_idx: usize,
     block_idx: usize,
     section_blocks: &[Block],
-    floating_image_pdf_names: &HashMap<(usize, usize), String>,
-    inline_image_pdf_names: &HashMap<(usize, usize), String>,
-    image_pdf_names: &HashMap<usize, String>,
-    effect_names: &HashMap<usize, EffectXObjs>,
-    effect_floating_names: &HashMap<(usize, usize), EffectXObjs>,
-    effect_inline_names: &HashMap<(usize, usize), EffectXObjs>,
+    images: &EmbeddedImages,
     doc: &Document,
     smartart_font_key: &str,
-    smartart_image_names: &HashMap<usize, String>,
     debug_wrap: bool,
     table_connector_anchor: Option<(usize, f32)>,
 ) -> bool {
@@ -4730,12 +4724,14 @@ fn render_paragraph_block(
 
     let text_empty = is_text_empty(&effective_runs);
     let has_tabs = effective_runs.iter().any(|r| r.is_tab);
-    let block_inline_images: HashMap<usize, String> = inline_image_pdf_names
+    let block_inline_images: HashMap<usize, String> = images
+        .inline_image_pdf_names
         .iter()
         .filter(|((bi, _), _)| *bi == state.global_block_idx)
         .map(|((_, ri), name)| (*ri, name.clone()))
         .collect();
-    let block_effect_inlines: HashMap<usize, images::EffectXObjs> = effect_inline_names
+    let block_effect_inlines: HashMap<usize, images::EffectXObjs> = images
+        .effect_inline_names
         .iter()
         .filter(|((bi, _), _)| *bi == state.global_block_idx)
         .map(|((_, ri), fx)| (*ri, fx.clone()))
@@ -6236,8 +6232,8 @@ fn render_paragraph_block(
             // returns before the ordinary float rendering below).
             let (leading, leading_names, leading_effects) = float_subset(
                 &para.floating_images,
-                floating_image_pdf_names,
-                effect_floating_names,
+                &images.floating_image_pdf_names,
+                &images.effect_floating_names,
                 state.global_block_idx,
                 |fi| !blank_after(&para.runs, fi.anchor_run),
             );
@@ -6296,8 +6292,8 @@ fn render_paragraph_block(
             // the space above.
             let (trailing, trailing_names, trailing_effects) = float_subset(
                 &para.floating_images,
-                floating_image_pdf_names,
-                effect_floating_names,
+                &images.floating_image_pdf_names,
+                &images.effect_floating_names,
                 state.global_block_idx,
                 |fi| blank_after(&para.runs, fi.anchor_run),
             );
@@ -6681,15 +6677,9 @@ fn render_paragraph_block(
                 sect_idx,
                 block_idx,
                 section_blocks,
-                floating_image_pdf_names,
-                inline_image_pdf_names,
-                image_pdf_names,
-                effect_names,
-                effect_floating_names,
-                effect_inline_names,
+                images,
                 doc,
                 smartart_font_key,
-                smartart_image_names,
                 debug_wrap,
                 table_connector_anchor,
             );
@@ -6865,8 +6855,8 @@ fn render_paragraph_block(
     render_floating_images(
         &render_images,
         state.global_block_idx,
-        floating_image_pdf_names,
-        effect_floating_names,
+        &images.floating_image_pdf_names,
+        &images.effect_floating_names,
         sp,
         col_x,
         col_w,
@@ -7015,7 +7005,7 @@ fn render_paragraph_block(
             y,
             ctx.fonts,
             smartart_font_key,
-            smartart_image_names,
+            &images.smartart_image_names,
         );
         state
             .pb
@@ -7049,14 +7039,14 @@ fn render_paragraph_block(
                 state.pb.slot_top,
                 ctx.fonts,
                 smartart_font_key,
-                smartart_image_names,
+                &images.smartart_image_names,
             );
         }
     } else if let Some(ref hr) = para.horizontal_rule {
         let line_bottom = state.pb.slot_top - content_h;
         draw_horizontal_rule(&mut state.pb.content, para, hr, col_x, col_w, line_bottom);
     } else if para.image.is_some() && para.content_height > 0.0 {
-        if let Some(pdf_name) = image_pdf_names.get(&state.global_block_idx) {
+        if let Some(pdf_name) = images.image_pdf_names.get(&state.global_block_idx) {
             let img = para.image.as_ref().unwrap();
             // Decorative pictures stay artifacts, as in Word's export.
             if img.decorative {
@@ -7120,7 +7110,7 @@ fn render_paragraph_block(
                     img.rotation_deg,
                 );
             }
-            let img_fx = effect_names.get(&state.global_block_idx);
+            let img_fx = images.effect_names.get(&state.global_block_idx);
             if let Some(ref shadow) = img.shadow {
                 color::draw_image_shadow(
                     &mut state.pb.content,
@@ -7530,23 +7520,7 @@ fn render_pass(
     let smartart_font_key = font_order.first().map(|s| s.as_str()).unwrap_or("");
     let t_fonts = t0.elapsed();
 
-    let EmbeddedImages {
-        image_pdf_names,
-        inline_image_pdf_names,
-        floating_image_pdf_names,
-        image_xobjects,
-        hf_image_names,
-        hf_inline_image_names,
-        hf_floating_image_names,
-        table_cell_image_names,
-        textbox_image_names,
-        smartart_image_names,
-        effect_names,
-        effect_floating_names,
-        effect_inline_names,
-        effect_hf_names,
-        effect_table_names,
-    } = embed_all_images(
+    let images = embed_all_images(
         doc,
         &mut pdf,
         &mut alloc,
@@ -7610,9 +7584,9 @@ fn render_pass(
         style_id_to_name: &doc.style_id_to_name,
         doc_line_spacing: doc.line_spacing,
         default_tab_stop: doc.default_tab_stop,
-        table_cell_image_names: &table_cell_image_names,
-        effect_table_names: &effect_table_names,
-        textbox_image_names: &textbox_image_names,
+        table_cell_image_names: &images.table_cell_image_names,
+        effect_table_names: &images.effect_table_names,
+        textbox_image_names: &images.textbox_image_names,
         chart_font_name: &doc.theme_minor_font,
         compress_punctuation: doc.compress_punctuation,
         footnote_marks: &footnote_display_order,
@@ -8108,15 +8082,9 @@ fn render_pass(
                             sect_idx,
                             block_idx,
                             &section.blocks,
-                            &floating_image_pdf_names,
-                            &inline_image_pdf_names,
-                            &image_pdf_names,
-                            &effect_names,
-                            &effect_floating_names,
-                            &effect_inline_names,
+                            &images,
                             doc,
                             smartart_font_key,
-                            &smartart_image_names,
                             debug_wrap,
                             table_connector_anchor,
                         );
@@ -8594,28 +8562,28 @@ fn render_pass(
         HashMap<usize, EffectXObjs>,
     );
     let mut hf_maps_index: HashMap<(usize, u8), HfMaps> = HashMap::new();
-    for ((s, t, pi), name) in &hf_image_names {
+    for ((s, t, pi), name) in &images.hf_image_names {
         hf_maps_index
             .entry((*s, *t))
             .or_default()
             .0
             .insert(*pi, name.clone());
     }
-    for ((s, t, pi, ri), name) in &hf_inline_image_names {
+    for ((s, t, pi, ri), name) in &images.hf_inline_image_names {
         hf_maps_index
             .entry((*s, *t))
             .or_default()
             .1
             .insert((*pi, *ri), name.clone());
     }
-    for ((s, t, pi, fi), name) in &hf_floating_image_names {
+    for ((s, t, pi, fi), name) in &images.hf_floating_image_names {
         hf_maps_index
             .entry((*s, *t))
             .or_default()
             .2
             .insert((*pi, *fi), name.clone());
     }
-    for ((s, t, pi), fx) in &effect_hf_names {
+    for ((s, t, pi), fx) in &images.effect_hf_names {
         hf_maps_index
             .entry((*s, *t))
             .or_default()
@@ -8813,7 +8781,7 @@ fn render_pass(
         &state.pb.page_section_indices,
         ctx.fonts,
         &font_order,
-        &image_xobjects,
+        &images.image_xobjects,
         doc,
         &state.bookmark_positions,
         &state.heading_entries,
