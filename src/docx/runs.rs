@@ -1168,45 +1168,30 @@ pub(super) fn push_textbox(fis: &[FloatingImage], tbs: &mut Vec<Textbox>, mut tb
 macro_rules! handle_drawing_result {
     ($result:expr, $fmt:expr, $runs:expr, $floating_images:expr, $textboxes:expr,
      $inline_chart:expr, $smartart:expr, $connectors:expr, $pending:expr) => {
-        match $result {
-            Some(RunDrawingResult::Inline(img)) => {
-                $runs.push($fmt.picture_run(img));
-            }
-            Some(RunDrawingResult::Floating(mut fi)) => {
-                fi.anchor_at_start = $pending.is_empty() && anchor_precedes_text(&$runs);
-                fi.anchor_run = $runs.len();
-                push_floating(&mut $floating_images, &$textboxes, fi)
-            }
-            Some(RunDrawingResult::TextBox(tb)) => {
-                push_textbox(&$floating_images, &mut $textboxes, tb)
-            }
-            Some(RunDrawingResult::Chart(ic)) => $inline_chart = Some(ic),
-            Some(RunDrawingResult::SmartArt(diagram)) => $smartart.push(diagram),
-            Some(RunDrawingResult::Connector(c)) => $connectors.push(c),
-            Some(RunDrawingResult::Group(items)) => {
-                // Flattened groups contain only leaf shapes, never nested Groups
-                for item in items {
-                    match item {
-                        RunDrawingResult::Inline(img) => {
-                            $runs.push($fmt.picture_run(img));
-                        }
-                        RunDrawingResult::Floating(mut fi) => {
-                            fi.anchor_at_start =
-                                $pending.is_empty() && anchor_precedes_text(&$runs);
-                            fi.anchor_run = $runs.len();
-                            push_floating(&mut $floating_images, &$textboxes, fi)
-                        }
-                        RunDrawingResult::TextBox(tb) => {
-                            push_textbox(&$floating_images, &mut $textboxes, tb)
-                        }
-                        RunDrawingResult::Chart(ic) => $inline_chart = Some(ic),
-                        RunDrawingResult::SmartArt(diagram) => $smartart.push(diagram),
-                        RunDrawingResult::Connector(c) => $connectors.push(c),
-                        RunDrawingResult::Group(_) => {}
-                    }
+        // Flattened groups contain only leaf shapes, never nested Groups
+        let items = match $result {
+            Some(RunDrawingResult::Group(items)) => items,
+            Some(item) => vec![item],
+            None => Vec::new(),
+        };
+        for item in items {
+            match item {
+                RunDrawingResult::Inline(img) => {
+                    $runs.push($fmt.picture_run(img));
                 }
+                RunDrawingResult::Floating(mut fi) => {
+                    fi.anchor_at_start = $pending.is_empty() && anchor_precedes_text(&$runs);
+                    fi.anchor_run = $runs.len();
+                    push_floating(&mut $floating_images, &$textboxes, fi)
+                }
+                RunDrawingResult::TextBox(tb) => {
+                    push_textbox(&$floating_images, &mut $textboxes, tb)
+                }
+                RunDrawingResult::Chart(ic) => $inline_chart = Some(ic),
+                RunDrawingResult::SmartArt(diagram) => $smartart.push(diagram),
+                RunDrawingResult::Connector(c) => $connectors.push(c),
+                RunDrawingResult::Group(_) => {}
             }
-            None => {}
         }
     };
 }
