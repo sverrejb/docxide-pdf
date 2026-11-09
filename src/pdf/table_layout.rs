@@ -1602,6 +1602,16 @@ pub(super) fn compute_row_layouts(
                                         && matches!(p.line_spacing.unwrap_or(ctx.doc_line_spacing),
                                             crate::model::LineSpacing::Auto(factor) if factor > 1.0)))
                     };
+                    // Whether the end-of-cell mark after the nested table at `idx` is
+                    // hidden: always after an inline one; after a float when the mark
+                    // is the lone anchor of a wide one, when a positive offset
+                    // suppresses the centered cell's trailing mark, when a negative
+                    // offset displaces its anchor line, or when the anchor shifted.
+                    let mark_after_nested_hidden = |idx: usize, offset: Option<f32>, final_mark_hidden: bool, anchor_shift: f32| {
+                        final_mark_hidden || offset.is_none() || (!top_aligned && offset.is_some_and(|y| y > 0.0))
+                            || suppress_negative_mark(idx, offset)
+                            || (anchor_shift > 0.0 && offset.is_some())
+                    };
                     for (block_idx, block) in cell.content.iter().enumerate() {
                         match block {
                             Block::Paragraph(para) => {
@@ -2358,10 +2368,7 @@ pub(super) fn compute_row_layouts(
                                     && auto_left_float && left_float_right_gap < MIN_NESTED_FLOAT_STRIP
                                     && floating_offset.is_some_and(|offset| offset >= 0.0)
                                     && matches!(cell.content.get(block_idx+1),Some(Block::Paragraph(p)) if is_text_empty(&p.runs));
-                                // Positive offsets suppress the centered cell's trailing mark; negative offsets displace its anchor line.
-                                prev_was_nested_table = final_float_mark_hidden || floating_offset.is_none() || (!top_aligned && floating_offset.is_some_and(|offset| offset > 0.0))
-                                    || suppress_negative_mark(block_idx, floating_offset)
-                                    || (negative_anchor_shift > 0.0 && floating_offset.is_some());
+                                prev_was_nested_table = mark_after_nested_hidden(block_idx, floating_offset, final_float_mark_hidden, negative_anchor_shift);
                                 para_idx += 1;
                             }
                         }
@@ -2374,9 +2381,7 @@ pub(super) fn compute_row_layouts(
                     // already suppressed above via prev_was_nested_table.
                     let trailing_mark_after_table = items.len() >= 2
                         && matches!(items.get(items.len() - 2), Some(CellContentItem::NestedTable { floating_offset, .. })
-                            if final_float_mark_hidden || floating_offset.is_none() || (!top_aligned && floating_offset.is_some_and(|offset| offset > 0.0))
-                                || suppress_negative_mark(block_count.saturating_sub(2), *floating_offset)
-                                || (negative_anchor_shift > 0.0 && floating_offset.is_some()))
+                            if mark_after_nested_hidden(block_count.saturating_sub(2), *floating_offset, final_float_mark_hidden, negative_anchor_shift))
                         && matches!(items.last(), Some(CellContentItem::Paragraph(p)) if p.lines.is_empty() && p.image_name.is_none() && p.floating_images.is_empty());
                     let trailing_space_after =
                         if trailing_mark_after_table { 0.0 } else { prev_space_after };
