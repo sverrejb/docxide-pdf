@@ -597,9 +597,7 @@ pub(super) fn render_single_textbox(
         .as_ref()
         .is_some_and(|w| w.preset != "textNoShape")
     {
-        if wordart::render_warped_textbox(tb, content, ctx.fonts, tb_x, tb_y_top, align_w)
-            || wordart::render_text_on_path(tb, content, ctx.fonts, tb_x, tb_y_top, align_w)
-        {
+        if wordart::render_wordart(tb, content, ctx.fonts, tb_x, tb_y_top, align_w) {
             // The outlines stay artifacts; the text reads as one P (Word:
             // Sect > P with the text).
             let p = tags.add(sect, "P");

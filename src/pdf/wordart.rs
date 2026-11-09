@@ -461,6 +461,39 @@ fn warp_point(
     (boundary_x, warped_y)
 }
 
+/// The text, its formatting and the font file both WordArt renderers start
+/// from; None when the box has no text or its font is not on disk.
+fn prepare(
+    tb: &Textbox,
+    seen_fonts: &HashMap<String, FontEntry>,
+) -> Option<(WordArtTextInfo, Vec<u8>, u32)> {
+    let info = collect_text_info(tb)?;
+    let (font_data, face_index) =
+        load_font_data(&info.font_name, info.bold, info.italic, seen_fonts)?;
+    Some((info, font_data, face_index))
+}
+
+/// Draw a text-warp preset's text as glyph outlines: through the envelope for
+/// two-boundary presets, along the path for arch and circle presets. Returns
+/// false (having drawn nothing) when the text is to be laid out flat instead.
+pub(super) fn render_wordart(
+    tb: &Textbox,
+    content: &mut Content,
+    seen_fonts: &HashMap<String, FontEntry>,
+    tb_x: f32,
+    tb_y_top: f32,
+    content_w: f32,
+) -> bool {
+    let Some((info, font_data, face_index)) = prepare(tb, seen_fonts) else {
+        return false;
+    };
+    let Some(face) = ttf_parser::Face::parse(&font_data, face_index).ok() else {
+        return false;
+    };
+    render_warped(tb, &info, &face, content, tb_x, tb_y_top, content_w)
+        || render_on_path(tb, &info, &face, content, tb_x, tb_y_top, content_w)
+}
+
 /// Render a warped textbox: extract glyph outlines, warp them through the envelope,
 /// and emit as filled PDF paths. Returns true if rendering succeeded, false to fall back to flat.
 pub(super) fn render_warped_textbox(
@@ -471,20 +504,25 @@ pub(super) fn render_warped_textbox(
     tb_y_top: f32,
     content_w: f32,
 ) -> bool {
-    let Some(warp) = &tb.text_warp else {
-        return false;
-    };
-
-    let Some(info) = collect_text_info(tb) else {
-        return false;
-    };
-
-    let Some((font_data, face_index)) =
-        load_font_data(&info.font_name, info.bold, info.italic, seen_fonts)
-    else {
+    let Some((info, font_data, face_index)) = prepare(tb, seen_fonts) else {
         return false;
     };
     let Some(face) = ttf_parser::Face::parse(&font_data, face_index).ok() else {
+        return false;
+    };
+    render_warped(tb, &info, &face, content, tb_x, tb_y_top, content_w)
+}
+
+fn render_warped(
+    tb: &Textbox,
+    info: &WordArtTextInfo,
+    face: &ttf_parser::Face,
+    content: &mut Content,
+    tb_x: f32,
+    tb_y_top: f32,
+    content_w: f32,
+) -> bool {
+    let Some(warp) = &tb.text_warp else {
         return false;
     };
 
@@ -495,7 +533,7 @@ pub(super) fn render_warped_textbox(
     let ascender = face.ascender() as f64 / units_per_em * info.font_size as f64;
     let glyph_extent = ascender - descender;
 
-    let char_advances = compute_char_advances(&face, &info.total_text, scale);
+    let char_advances = compute_char_advances(face, &info.total_text, scale);
     let total_advance: f64 = char_advances.iter().map(|(_, a)| a).sum();
 
     let text_w = total_advance.max(1.0);
@@ -546,7 +584,7 @@ pub(super) fn render_warped_textbox(
     };
 
     let emit = |content: &mut Content| {
-        emit_all_glyphs(&face, &char_advances, content, transform);
+        emit_all_glyphs(face, &char_advances, content, transform);
     };
 
     emit(content);
@@ -667,10 +705,11 @@ impl ArcLengthPath {
 
 /// Render text along a single path (for arch/circle presets).
 /// Returns true if rendering succeeded.
-pub(super) fn render_text_on_path(
+fn render_on_path(
     tb: &Textbox,
+    info: &WordArtTextInfo,
+    face: &ttf_parser::Face,
     content: &mut Content,
-    seen_fonts: &HashMap<String, FontEntry>,
     tb_x: f32,
     tb_y_top: f32,
     content_w: f32,
@@ -679,29 +718,10 @@ pub(super) fn render_text_on_path(
         return false;
     };
 
-    let Some(info) = collect_text_info(tb) else {
-        log::debug!("WARP: no text info");
-        return false;
-    };
-
-    let Some((font_data, face_index)) =
-        load_font_data(&info.font_name, info.bold, info.italic, seen_fonts)
-    else {
-        log::debug!(
-            "WARP: no font data for {} bold={}",
-            info.font_name,
-            info.bold
-        );
-        return false;
-    };
-    let Some(face) = ttf_parser::Face::parse(&font_data, face_index).ok() else {
-        return false;
-    };
-
     let units_per_em = face.units_per_em() as f64;
     let scale = info.font_size as f64 / units_per_em;
 
-    let char_advances = compute_char_advances(&face, &info.total_text, scale);
+    let char_advances = compute_char_advances(face, &info.total_text, scale);
     let total_advance: f64 = char_advances.iter().map(|(_, a)| a).sum();
 
     let Some(def) = geometry::text_warp_definitions::lookup_text_warp(&warp.preset) else {
@@ -731,7 +751,7 @@ pub(super) fn render_text_on_path(
     let emit_on_path = |content: &mut Content| {
         let mut cursor_s = start_s;
         for &(ch, advance) in &char_advances {
-            let Some(glyph) = extract_glyph_path(&face, ch) else {
+            let Some(glyph) = extract_glyph_path(face, ch) else {
                 cursor_s += advance;
                 continue;
             };
