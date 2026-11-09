@@ -511,6 +511,105 @@ fn draw_cell_paragraph_bottom(
     }
 }
 
+/// A picture paragraph's inline picture and its bottom rule; returns the
+/// cursor below them.
+fn draw_cell_picture_para(
+    content: &mut Content,
+    para: &CellParagraphLayout,
+    img_name: &str,
+    cell_x: f32,
+    col_w: f32,
+    mut cursor_y: f32,
+    cm: &CellMargins,
+    tagger: &mut Option<CellTagger<'_>>,
+) -> f32 {
+    // distT/distB in layout_extra_height contribute to row
+    // height but don't add spacing between image and text.
+    // The paragraph's P stays empty and the picture follows
+    // it as a Figure, as in the body.
+    let picture = (para.image_alt.as_deref(), para.image_decorative);
+    cursor_y -= cell_figure(content, tagger, None, picture, |c| {
+        render_cell_inline_image(c, para, img_name, cell_x, col_w, cursor_y, cm)
+    });
+    cursor_y -= para.bottom_band.1;
+    draw_cell_paragraph_bottom(content, para, cell_x, col_w, cm, cursor_y);
+    cursor_y
+}
+
+/// Lines `l0..l1` of a cell paragraph whose top is at `cursor_y`, with the
+/// list label when they start the paragraph; `clip_h` bounds tall pictures on
+/// a fixed baseline. The cell tag stays open for the caller to close.
+fn draw_cell_text(
+    content: &mut Content,
+    para: &CellParagraphLayout,
+    l0: usize,
+    l1: usize,
+    clip_h: f32,
+    cell_x: f32,
+    col_w: f32,
+    cursor_y: f32,
+    cm: &CellMargins,
+    ctx: &RenderContext,
+    gradient_specs: &mut Vec<super::GradientSpec>,
+    links: &mut Vec<LinkAnnotation>,
+    tagger: &mut Option<CellTagger<'_>>,
+    cell_nodes: Option<(Option<usize>, usize)>,
+) {
+    let text_x = cell_x + cm.left + para.indent_left + para.float_indent_left;
+    // Must match the wrap width in table_layout.rs (incl. indent_right),
+    // or centered text shifts right and justify overshoots the border.
+    let text_w = (col_w
+        - cm.left
+        - cm.right
+        - para.indent_left
+        - para.indent_right
+        - para.float_indent_left)
+        .max(0.0);
+    let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
+
+    // Anchored pictures and the list label belong to the paragraph's first
+    // line; a continuation chunk has neither.
+    if l0 == 0 && !para.list_label.is_empty() {
+        let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging
+            + para.indent_first_line
+            + cell_label_alignment_offset(para, col_w - cm.left - cm.right);
+        draw_tagged_cell_label(
+            content, tagger, cell_nodes, para, label_x, baseline_y, ctx.fonts,
+        );
+    }
+
+    let picture_clip = clip_fixed_cell_pictures(content, para, cell_x, col_w, cursor_y, clip_h);
+    render_paragraph_lines(
+        content,
+        &para.lines[l0..l1],
+        &para.alignment,
+        text_x,
+        para.indent_left,
+        text_w,
+        baseline_y,
+        para.line_h,
+        para.picture_metrics(),
+        para.lines.len(),
+        l0,
+        links,
+        para.text_hanging,
+        ctx.fonts,
+        beside_float_geometry(para, text_x, text_w).as_deref(),
+        gradient_specs,
+        Some(&mut ctx.cell_comment_anchors.borrow_mut()),
+        None,
+        cell_link_tagger(tagger, cell_nodes.map(|(_, body)| body)),
+        None,
+        para.line_grid.map(|g| super::layout::LineGrid {
+            page_height: ctx.page_height.get(),
+            ..g
+        }),
+    );
+    if picture_clip {
+        content.restore_state();
+    }
+}
+
 fn render_cell_content(
     content: &mut Content,
     items: &[CellContentItem],
@@ -629,30 +728,18 @@ fn render_cell_content(
                             draw_cell_float(c, fi, cell_x, float_y)
                         });
                     }
-                    // distT/distB in layout_extra_height contribute to row
-                    // height but don't add spacing between image and text.
-                    // The paragraph's P stays empty and the picture follows
-                    // it as a Figure, as in the body.
-                    let picture = (para.image_alt.as_deref(), para.image_decorative);
-                    cursor_y -= cell_figure(content, &mut tagger, None, picture, |c| {
-                        render_cell_inline_image(c, para, img_name, cell_x, col_w, cursor_y, cm)
-                    });
-                    cursor_y -= para.bottom_band.1;
-                    draw_cell_paragraph_bottom(content, para, cell_x, col_w, cm, cursor_y);
+                    cursor_y = draw_cell_picture_para(
+                        content,
+                        para,
+                        img_name,
+                        cell_x,
+                        col_w,
+                        cursor_y,
+                        cm,
+                        &mut tagger,
+                    );
                     continue;
                 }
-
-                let text_x = cell_x + cm.left + para.indent_left + para.float_indent_left;
-                // Must match the wrap width in table_layout.rs (incl. indent_right),
-                // or centered text shifts right and justify overshoots the border.
-                let text_w = (col_w
-                    - cm.left
-                    - cm.right
-                    - para.indent_left
-                    - para.indent_right
-                    - para.float_indent_left)
-                    .max(0.0);
-                let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
 
                 // Word clips cell text at the cell's horizontal edges, even
                 // when a negative paragraph indent puts a glyph outside it.
@@ -669,56 +756,23 @@ fn render_cell_content(
                     .clip_nonzero()
                     .end_path();
 
-                let first_line_hanging = if para.list_label.is_empty() {
-                    para.text_hanging
-                } else {
-                    let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging
-                        + para.indent_first_line
-                        + cell_label_alignment_offset(para, col_w - cm.left - cm.right);
-                    draw_tagged_cell_label(
-                        content,
-                        &mut tagger,
-                        cell_nodes,
-                        para,
-                        label_x,
-                        baseline_y,
-                        ctx.fonts,
-                    );
-                    para.text_hanging
-                };
-
                 let block_h = para_block_height(para);
-                let picture_clip =
-                    clip_fixed_cell_pictures(content, para, cell_x, col_w, cursor_y, block_h);
-                render_paragraph_lines(
+                draw_cell_text(
                     content,
-                    &para.lines,
-                    &para.alignment,
-                    text_x,
-                    para.indent_left,
-                    text_w,
-                    baseline_y,
-                    para.line_h,
-                    para.picture_metrics(),
-                    para.lines.len(),
+                    para,
                     0,
-                    links,
-                    first_line_hanging,
-                    ctx.fonts,
-                    beside_float_geometry(para, text_x, text_w).as_deref(),
+                    para.lines.len(),
+                    block_h,
+                    cell_x,
+                    col_w,
+                    cursor_y,
+                    cm,
+                    ctx,
                     gradient_specs,
-                    Some(&mut ctx.cell_comment_anchors.borrow_mut()),
-                    None,
-                    cell_link_tagger(&mut tagger, cell_para),
-                    None,
-                    para.line_grid.map(|g| super::layout::LineGrid {
-                        page_height: ctx.page_height.get(),
-                        ..g
-                    }),
+                    links,
+                    &mut tagger,
+                    cell_nodes,
                 );
-                if picture_clip {
-                    content.restore_state();
-                }
                 content.restore_state();
                 end_cell_tag(content, &tagger);
 
@@ -1378,80 +1432,37 @@ fn render_partial_cell_content(
                 }
 
                 if let Some(ref img_name) = para.image_name {
-                    let picture = (para.image_alt.as_deref(), para.image_decorative);
-                    cursor_y -= cell_figure(content, &mut tagger, None, picture, |c| {
-                        render_cell_inline_image(c, para, img_name, cell_x, col_w, cursor_y, cm)
-                    });
-                    cursor_y -= para.bottom_band.1;
-                    draw_cell_paragraph_bottom(content, para, cell_x, col_w, cm, cursor_y);
+                    cursor_y = draw_cell_picture_para(
+                        content,
+                        para,
+                        img_name,
+                        cell_x,
+                        col_w,
+                        cursor_y,
+                        cm,
+                        &mut tagger,
+                    );
                     continue;
                 }
 
-                let text_x = cell_x + cm.left + para.indent_left + para.float_indent_left;
-                // Must match the wrap width in table_layout.rs (incl. indent_right),
-                // or centered text shifts right and justify overshoots the border.
-                let text_w = (col_w
-                    - cm.left
-                    - cm.right
-                    - para.indent_left
-                    - para.indent_right
-                    - para.float_indent_left)
-                    .max(0.0);
-                let baseline_y = cursor_y - para.font_size * para.ascender_ratio;
-
-                let first_line_hanging = if para.list_label.is_empty() {
-                    para.text_hanging
-                } else {
-                    if l0 == 0 {
-                        let label_x = cell_x + cm.left + para.indent_left - para.indent_hanging
-                            + para.indent_first_line
-                            + cell_label_alignment_offset(para, col_w - cm.left - cm.right);
-                        draw_tagged_cell_label(
-                            content,
-                            &mut tagger,
-                            cell_nodes,
-                            para,
-                            label_x,
-                            baseline_y,
-                            ctx.fonts,
-                        );
-                    }
-                    para.text_hanging
-                };
-
                 let l1 = l1.unwrap_or(para.lines.len());
                 let lines_h = super::table_layout::cell_lines_h(para, l0..l1);
-                let picture_clip =
-                    clip_fixed_cell_pictures(content, para, cell_x, col_w, cursor_y, lines_h);
-                render_paragraph_lines(
+                draw_cell_text(
                     content,
-                    &para.lines[l0..l1],
-                    &para.alignment,
-                    text_x,
-                    para.indent_left,
-                    text_w,
-                    baseline_y,
-                    para.line_h,
-                    para.picture_metrics(),
-                    para.lines.len(),
+                    para,
                     l0,
-                    links,
-                    first_line_hanging,
-                    ctx.fonts,
-                    beside_float_geometry(para, text_x, text_w).as_deref(),
+                    l1,
+                    lines_h,
+                    cell_x,
+                    col_w,
+                    cursor_y,
+                    cm,
+                    ctx,
                     gradient_specs,
-                    Some(&mut ctx.cell_comment_anchors.borrow_mut()),
-                    None,
-                    cell_link_tagger(&mut tagger, cell_para),
-                    None,
-                    para.line_grid.map(|g| super::layout::LineGrid {
-                        page_height: ctx.page_height.get(),
-                        ..g
-                    }),
+                    links,
+                    &mut tagger,
+                    cell_nodes,
                 );
-                if picture_clip {
-                    content.restore_state();
-                }
                 end_cell_tag(content, &tagger);
 
                 cursor_y -= if para.lines.is_empty() {
