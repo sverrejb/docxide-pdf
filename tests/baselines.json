@@ -9241,8 +9241,8 @@
     "ssim": 0.9565
   },
   "cases/ul-trail-space-runs": {
-    "jaccard": 0.9107,
-    "ssim": 0.9487
+    "jaccard": 0.9121,
+    "ssim": 0.9491
   },
   "cases/underlined-inline-picture": {
     "jaccard": 0.9917,
@@ -10373,8 +10373,8 @@
     "a11y_missing": 0
   },
   "scraped/double-underline": {
-    "jaccard": 0.5582,
-    "ssim": 0.8688,
+    "jaccard": 0.8089,
+    "ssim": 0.8911,
     "text_boundary": 1.0,
     "ua_fail": 3,
     "a11y_missing": 0,
@@ -11165,8 +11165,8 @@
     "a11y_text": 0.9785
   },
   "scraped/run-borders": {
-    "jaccard": 0.6985,
-    "ssim": 0.824,
+    "jaccard": 0.7456,
+    "ssim": 0.84,
     "text_boundary": 0.9753,
     "ua_fail": 0,
     "a11y_missing": 0,

@@ -133,14 +133,15 @@ justified gap (underlined-space-compat14-*). Open:
   `empty_frame_table_bands` only reserves the box on the first page. Word
   reserves it on the page where the anchor lands (2026-11-08), so the fix
   needs to know which page the preceding table ends on before layout.
-- Double underline (scraped/double-underline 50.7): Word probes
-  (`tests/output/koer/du/`, 2026-11-07) give each line ≈ q(0.6 × post
-  thickness) (fits 8/8, factor unexplained), the first line at the single
-  underline's post offset or less, a 1.0–1.25pt gap; Word also underlines
-  a line's trailing space. We use 0.05 × size lines 0.12 × size down.
-  2026-11-08: 36 more points (Calibri/TNR/Arial, 8–48pt, regular and bold)
-  break the 0.6 factor; the best fit, ceil(round(post thickness)/2) on the
-  0.25pt grid, hits 31/36 (misses Calibri 48, Arial 16, TNR bold 8).
+- Double underline: DONE 2026-11-09 (scraped/double-underline 55.8 →
+  80.9, run-borders +4.7). From the single underline's grid offset `s` and
+  thickness `w`: lines `R↑(w/2)` thick, the upper from `R↑(s/2)`, the
+  lower ending at `max(s + w, upper + 2·line + 1pt)`, the pair pushed up
+  to `R(winDescent)` (upper line never above the baseline). Online probe,
+  Arial / Calibri / TNR / Courier New at every size 6–48pt: 170/172 exact,
+  the two misses half-step ties that depend on the baseline's page grid
+  position. `layout.rs` `double_underline`. Still unchecked: the 2026-11-07
+  note that Word also underlines a line's trailing space.
 - nested-floats-spaced-text-bottom-cell (40.4): the same two registration
   tables in a vAlign=bottom cell. Bottom cells now float like centred ones,
   but Word sets the 12 spacer marks beside the floats (topic 2 lines higher)

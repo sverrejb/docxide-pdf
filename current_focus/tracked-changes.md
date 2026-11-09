@@ -77,11 +77,13 @@ references). Exports: `inline/` (print preset, inline revisions), `print/`
   Arial 11 / Calibri 12 / TNR 16: the label font's strike pair, the text's
   double underline). Word opens hand-written moves when each range ends at
   the start of the next paragraph, so the moved mark lies inside it; a mark
-  outside its range prints as a plain deletion / insertion. Open: a
-  moved-from numbered item shows "2.1." (original struck, "1." underlined
-  in the numbering colour), we show "2."; our double underline sits ~1pt
-  low (Word: two 0.48 lines, 0.48–0.96 and 1.92–2.40 below the baseline at
-  Arial 11; we draw 1.32–1.87 and 2.87–3.42).
+  outside its range prints as a plain deletion / insertion. A moved-away
+  numbered item shows its original number then the level's start, "3.1."
+  ("7.5." in a list starting at 5), struck whole in green, the start
+  underlined in 0078D4 through the tab gap. Label underlines take the
+  item's text font, label strikes the label's own font (a Symbol bullet
+  before Calibri 12: Calibri's 0.72pt underline, Symbol's 0.48pt strike).
+  Double underlines follow Word's measured geometry (roadmap).
   A moved paragraph mark is a deleted / inserted mark (final view merges or
   drops it). A double strike, moves or `w:dstrike` alike, is two lines as
   thick as the font's OS/2 strikeout, one thickness apart, centred on the
