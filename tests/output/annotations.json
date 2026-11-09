@@ -1,5 +1,5 @@
 {
-  "next_id": 272,
+  "next_id": 274,
   "annotations": [
     {
       "id": 208,
@@ -945,6 +945,28 @@
       "y_pt": 744.1875,
       "note": "Top text line starts too far to the left",
       "fixed": true,
+      "cleared": false
+    },
+    {
+      "id": 272,
+      "case": "scraped/ut_koer_annual_meeting_minutes",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 69.34296,
+      "y_pt": 693.41235,
+      "note": "We print text over text here.",
+      "fixed": false,
+      "cleared": false
+    },
+    {
+      "id": 273,
+      "case": "autofit-indent-first-line",
+      "page": 0,
+      "source": "Generated",
+      "x_pt": 168.24297,
+      "y_pt": 759.7038,
+      "note": "List seem too indented or something? Poor visual match to the word reference.",
+      "fixed": false,
       "cleared": false
     }
   ]
