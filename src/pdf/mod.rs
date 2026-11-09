@@ -4907,7 +4907,9 @@ fn render_paragraph_block(
                             } else {
                                 line_top <= z.top_y
                             };
-                            if !(in_zone && line_top > z.bottom_y + line_h * 0.2) {
+                            let bottom_threshold =
+                                if z.from_table { z.bottom_y + line_h * 0.2 } else { z.bottom_y };
+                            if !(in_zone && line_top > bottom_threshold) {
                                 continue;
                             }
                             let (ex_left, ex_right) =
@@ -4988,9 +4990,16 @@ fn render_paragraph_block(
                 } else {
                     None
                 };
-                // Bottom threshold of 0.2 * line_h excludes lines
-                // barely overlapping the zone, matching Word's behavior.
-                let bottom_threshold = fz.bottom_y + line_h * 0.2;
+                // A line whose box reaches into a picture's band wraps however
+                // little: Word for Mac probe wrap_h* (a 24pt at-least heading
+                // whose line top the band undercuts by 0.5pt wraps beside the
+                // picture, one it clears by 1.5pt does not; a corpus title the
+                // band undercut by 3.3pt wrapped in Word and ran full width in
+                // ours under a 20% threshold). Floating tables keep that
+                // threshold: probe tblwrap_d* wraps a line the band (margin
+                // included) enters by 0.8pt, yet case40's line 1.6pt into a
+                // right table's margin runs full width in Word — unresolved.
+                let bottom_threshold = if fz.from_table { fz.bottom_y + line_h * 0.2 } else { fz.bottom_y };
                 // A line starting just above a float can still intersect it.
                 // Apply the same overlap threshold to rectangular table zones
                 // as to paragraph-relative images and polygon zones.
