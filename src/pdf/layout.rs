@@ -795,11 +795,13 @@ impl WordChunk {
         }
     }
 
-    /// Markup view: a deletion's strike bridges its spaces instead of an underline.
-    fn struck_if(mut self, strike: bool) -> Self {
-        if strike {
+    /// A struck run that is not underlined (a deletion in the markup view):
+    /// its single or double strike bridges its spaces instead of an underline.
+    fn struck_like(mut self, run: &Run) -> Self {
+        if !run.underline {
             self.underline = false;
-            self.strikethrough = true;
+            self.strikethrough = run.strikethrough;
+            self.dstrike = run.dstrike;
         }
         self
     }
@@ -2112,7 +2114,7 @@ struct PendingSpaceRun<'a> {
 /// across a space that belongs to a neighbouring non-underlined run). A struck
 /// run (a deletion): Word's strike bridges the space.
 fn underlines_space(run: &Run) -> bool {
-    run.underline || run.strikethrough
+    run.underline || run.strikethrough || run.dstrike
 }
 
 fn space_underline(
@@ -2132,7 +2134,7 @@ fn space_underline(
         x,
         width,
     );
-    Some(chunk.struck_if(run.strikethrough && !run.underline))
+    Some(chunk.struck_like(run))
 }
 
 /// Record `width` of spaces from `run` and add it to `pending_w`, the space
@@ -6164,27 +6166,27 @@ pub(super) fn render_paragraph_lines(
                         push_decoration(&mut decorations, x, top, deco_w, th, chunk.color);
                     }
                 }
-                if chunk.strikethrough {
+                if chunk.strikethrough || chunk.dstrike {
                     let strike = pdf_name_to_entry
                         .get(chunk.pdf_font.as_str())
                         .and_then(|e| os2_strike(e, chunk.font_size))
                         .map(|(top, th)| (y + top - th, th));
                     let (st_y, st_thick) = strike.unwrap_or((y + chunk.font_size * 0.3, thick));
                     // One line across the spaces of a struck run, like Word's.
-                    push_decoration(
-                        &mut decorations,
-                        x,
-                        st_y,
-                        deco_w,
-                        st_thick,
-                        chunk.color,
-                    );
-                }
-                if chunk.dstrike {
-                    let gap = thick * 1.5;
-                    let mid_y = y + chunk.font_size * 0.3;
-                    decorations.push((x, mid_y - gap / 2.0, chunk.width, thick, chunk.color));
-                    decorations.push((x, mid_y + gap / 2.0, chunk.width, thick, chunk.color));
+                    // A double strike is two such lines one thickness apart,
+                    // centred on the single strike (17 corpus redlines, TNR,
+                    // Arial, Calibri, Aptos, Gill Sans at 9.6–12pt).
+                    let offsets: &[f32] = if chunk.dstrike { &[-1.0, 1.0] } else { &[0.0] };
+                    for k in offsets {
+                        push_decoration(
+                            &mut decorations,
+                            x,
+                            st_y + k * st_thick,
+                            deco_w,
+                            st_thick,
+                            chunk.color,
+                        );
+                    }
                 }
 
                 if let Some(url) = link_url {
