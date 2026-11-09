@@ -1306,12 +1306,10 @@ impl<'a> FlowFrame<'a> {
         take_frame_break(blocks, state, sp, ctx, (sect_idx, col_geometry.len()));
         let box_h = flow_frame_box(props, blocks, ctx, col_geometry[state.current_col].1);
         let mut top = state.pb.slot_top;
-        let bottom = |state: &LayoutState| {
-            state
-                .unbalanced_bottom
-                .map_or(state.effective_margin_bottom, |b| b.min(state.effective_margin_bottom))
-        };
-        while state.pb.slot_top - box_h < bottom(state) && !state.pb.is_at_page_top(sp) {
+        let fits = |state: &LayoutState| state.pb.slot_top - box_h >= state.effective_margin_bottom;
+        let (page, col) = (state.pb.page_count(), state.current_col);
+        let left = state.pb.column_top_y - state.pb.slot_top;
+        while !fits(state) && !state.pb.is_at_page_top(sp) {
             state.pb.advance_column_or_page(
                 &mut state.current_col,
                 col_geometry.len(),
@@ -1322,6 +1320,10 @@ impl<'a> FlowFrame<'a> {
             );
             top = state.pb.slot_top + leading_para(&blocks[0]).map_or(0.0, |p| p.space_before);
         }
+        let moved_column = state.pb.page_count() == page && state.current_col != col;
+        state.frame_overflow |= !fits(state)
+            || moved_column
+                && flow_frame_content(props, blocks, ctx, col_geometry[state.current_col].1) > left;
         let holds_table = frame_blocks(props, blocks).any(|b| matches!(b, Block::Table(_)));
         state.pb.frame_clip = props.height_exact
             && props.height > 0.0
@@ -1383,14 +1385,20 @@ fn take_frame_break(
 /// least its content.
 fn flow_frame_box(props: &FrameProperties, blocks: &[Block], ctx: &RenderContext, col_w: f32) -> f32 {
     if props.height_exact {
-        return props.height;
+        props.height
+    } else {
+        props.height.max(flow_frame_content(props, blocks, ctx, col_w))
     }
+}
+
+/// The height of a frame's blocks laid out at its width.
+fn flow_frame_content(props: &FrameProperties, blocks: &[Block], ctx: &RenderContext, col_w: f32) -> f32 {
     let width = if props.width > 0.0 {
         props.width
     } else {
         auto_frame_width(props, blocks, ctx, col_w)
     };
-    props.height.max(frame_content_height(props, blocks, ctx, width))
+    frame_content_height(props, blocks, ctx, width)
 }
 
 /// A frame without w:w is as wide as its widest block: a paragraph's picture
@@ -3427,10 +3435,12 @@ pub(super) struct LayoutState {
     /// The next paragraph's page break before was taken ahead of the page's
     /// float bands, which may have moved it off the page top since.
     pub(super) page_break_taken: bool,
-    /// The page bottom while columns are balanced above it: a frame in the
-    /// flow fits against this, not the balancing height (Word example: an
-    /// unsplittable frame stays in column 1 of a balanced region).
-    pub(super) unbalanced_bottom: Option<f32>,
+    /// A frame in the flow runs past the bottom, or moved on to a column
+    /// with more lines than it left in the one before: a balancing trial at
+    /// this height fails (Word examples: a frame of four lines after one
+    /// stays in column 1, fixture frame-balanced-columns; six lines after
+    /// seven open column 2, frame-balanced-opens-column).
+    pub(super) frame_overflow: bool,
 }
 
 impl LayoutState {
@@ -3468,7 +3478,7 @@ impl LayoutState {
             reflowed: false,
             band_prescan: self.band_prescan,
             page_break_taken: false,
-            unbalanced_bottom: self.unbalanced_bottom,
+            frame_overflow: false,
         }
     }
 }
@@ -7576,7 +7586,7 @@ fn render_pass(
         reflowed: false,
         band_prescan: false,
         page_break_taken: false,
-        unbalanced_bottom: None,
+        frame_overflow: false,
     };
     state.pb.tags.lang = document_lang(doc);
     state.pb.frame_bands = hf_page_bands(
@@ -8241,7 +8251,6 @@ fn render_pass(
         let base = state.pb.page_count().min(1);
         let trial_at = |state: &LayoutState, flushes: usize, bottom: f32| {
             let mut trial = state.trial(state.effective_margin_bottom);
-            trial.unbalanced_bottom = Some(state.effective_margin_bottom);
             if flushes == 0 {
                 trial.effective_margin_bottom = bottom;
             } else {
@@ -8253,12 +8262,12 @@ fn render_pass(
             let total = trial.pb.col_heights + trial.pb.column_top_y
                 - (trial.pb.slot_top - trial.prev_space_after)
                 + trial.pb.top_suppressed;
-            (trial.pb.page_count() - base, total)
+            (trial.pb.page_count() - base, total, trial.frame_overflow)
         };
         let natural = balance.then(|| trial_at(&state, 0, state.effective_margin_bottom));
         // ponytail: every trial lays the whole region out again, so a long
         // region costs a few full layouts; start trials at its last page if slow.
-        let balanced_h = if let Some((flushes, total)) = natural {
+        let balanced_h = if let Some((flushes, total, _)) = natural {
             let (floor_page, page_bottom, top) = if flushes == 0 {
                 (0, state.effective_margin_bottom, state.pb.column_top_y)
             } else {
@@ -8291,7 +8300,8 @@ fn render_pass(
             let step = step.max(1.0);
             let mut h = total / col_count as f32;
             while h < top - page_bottom {
-                if trial_at(&state, flushes, top - h + lead + 0.01).0 == flushes {
+                let (pages, _, overflow) = trial_at(&state, flushes, top - h + lead + 0.01);
+                if pages == flushes && !overflow {
                     break;
                 }
                 h += step;
@@ -8301,7 +8311,6 @@ fn render_pass(
             } else {
                 page_bottom
             };
-            state.unbalanced_bottom = Some(state.effective_margin_bottom);
             if flushes == 0 {
                 state.effective_margin_bottom = lo;
             } else {
@@ -8309,7 +8318,6 @@ fn render_pass(
             }
             layout_blocks(&mut state);
             state.pb.balance_floor = None;
-            state.unbalanced_bottom = None;
             // Keep footnote space booked while the region was laid out.
             state.effective_margin_bottom += page_bottom - lo;
             Some(h.min(top - page_bottom))
