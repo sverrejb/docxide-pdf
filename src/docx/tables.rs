@@ -406,11 +406,19 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     // omit it. Infer the grid from the widest row's cell widths so layout
     // has real columns to work with, splitting spanned cells evenly.
     let grid_inferred = col_widths.is_empty() && !tbl_rows.is_empty();
-    let cell_widths: Vec<_> = tbl_rows
+    let row_cells: Vec<Vec<_>> = tbl_rows
         .iter()
-        .flat_map(|tr| collect_block_nodes(*tr, ctx.revisions.markup))
-        .filter(|n| n.has_tag_name((WML_NS, "tc")))
-        .map(|tc| wml(tc, "tcPr").and_then(|pr| wml(pr, "tcW")))
+        .map(|tr| {
+            collect_block_nodes(*tr, ctx.revisions.markup)
+                .into_iter()
+                .filter(|n| n.has_tag_name((WML_NS, "tc")))
+                .collect()
+        })
+        .collect();
+    let cell_widths: Vec<_> = row_cells
+        .iter()
+        .flatten()
+        .map(|tc| wml(*tc, "tcPr").and_then(|pr| wml(pr, "tcW")))
         .collect();
     let cells_unsized = cell_widths.iter().all(|w| {
         w.is_none_or(|w| {
@@ -427,13 +435,10 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
         })
     });
     if col_widths.is_empty() {
-        for tr in &tbl_rows {
+        for cells in &row_cells {
             let mut row_widths: Vec<f32> = Vec::new();
-            for tc in collect_block_nodes(*tr, ctx.revisions.markup)
-                .into_iter()
-                .filter(|n| n.has_tag_name((WML_NS, "tc")))
-            {
-                let tc_pr = wml(tc, "tcPr");
+            for tc in cells {
+                let tc_pr = wml(*tc, "tcPr");
                 let w = tc_pr
                     .and_then(|pr| wml(pr, "tcW"))
                     .and_then(|n| twips_attr(n, "w"))
@@ -500,10 +505,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
             .map(|mar| merge_cell_margins(mar, cell_margins));
         let mut cells = Vec::new();
         let mut grid_col = grid_before;
-        for tc in collect_block_nodes(*tr, ctx.revisions.markup)
-            .into_iter()
-            .filter(|n| n.has_tag_name((WML_NS, "tc")))
-        {
+        for &tc in &row_cells[ri] {
             let ci = grid_col;
             let tc_pr = wml(tc, "tcPr");
             let tc_w = tc_pr.and_then(|pr| wml(pr, "tcW"));
