@@ -1005,17 +1005,20 @@ fn paragraph_line_count(p: &Paragraph, col_w: f32, ctx: &RenderContext) -> usize
     paragraph_lines(p, col_w, ctx, false).len()
 }
 
+/// Names only mark the pictures, so their lines measure as tall.
+fn picture_marks(p: &Paragraph) -> HashMap<usize, String> {
+    p.runs
+        .iter()
+        .enumerate()
+        .filter(|(_, r)| r.inline_image.is_some())
+        .map(|(i, _)| (i, String::new()))
+        .collect()
+}
+
 /// A paragraph's lines in a column `col_w` wide, with its inline pictures
 /// when `with_pictures`.
 fn paragraph_lines(p: &Paragraph, col_w: f32, ctx: &RenderContext, with_pictures: bool) -> Vec<TextLine> {
-    let pictures: Option<HashMap<usize, String>> = with_pictures.then(|| {
-        p.runs
-            .iter()
-            .enumerate()
-            .filter(|(_, r)| r.inline_image.is_some())
-            .map(|(i, _)| (i, String::new()))
-            .collect()
-    });
+    let pictures = with_pictures.then(|| picture_marks(p));
     build_lines(
         &p.runs,
         ctx,
@@ -1288,19 +1291,18 @@ impl<'a> FlowFrame<'a> {
         (sect_idx, col_geometry): (usize, &[(f32, f32)]),
     ) -> Self {
         take_frame_break(blocks, state, sp, ctx, (sect_idx, col_geometry.len()));
-        let width = frame_width(props, blocks, ctx, col_geometry[state.current_col].1);
-        let box_h = frame_box_h(props, blocks, ctx, width);
-        let (page, col) = (state.pb.page_count(), state.current_col);
+        let col_width = |state: &LayoutState| frame_width(props, blocks, ctx, col_geometry[state.current_col].1);
+        let box_h = frame_box_h(props, blocks, ctx, col_width(state));
+        let (start_page, col) = (state.pb.page_count(), state.current_col);
         let left = state.pb.column_top_y - state.pb.slot_top;
         let fits = |state: &LayoutState| state.pb.slot_top - box_h >= state.effective_margin_bottom;
         advance_until_fits(state, sp, ctx, (sect_idx, col_geometry.len()), fits);
-        let moved = (state.pb.page_count(), state.current_col) != (page, col);
+        let moved = (state.pb.page_count(), state.current_col) != (start_page, col);
         let space_before = leading_para(&blocks[0]).map_or(0.0, |p| p.space_before);
         let top = state.pb.slot_top + if moved { space_before } else { 0.0 };
-        let moved_column = moved && state.pb.page_count() == page;
-        let moved_width = || frame_width(props, blocks, ctx, col_geometry[state.current_col].1);
+        let moved_column = moved && state.pb.page_count() == start_page;
         state.frame_overflow |= !fits(state)
-            || (moved_column && frame_content_height(props, blocks, ctx, moved_width()) > left);
+            || (moved_column && frame_content_height(props, blocks, ctx, col_width(state)) > left);
         let exact = props.height_exact
             && props.height > 0.0
             && !frame_blocks(props, blocks).any(|b| matches!(b, Block::Table(_)));
@@ -1313,9 +1315,7 @@ impl<'a> FlowFrame<'a> {
     }
 
     fn close(self, state: &mut LayoutState) {
-        if std::mem::take(&mut state.pb.frame_clip) {
-            state.pb.content.restore_state();
-        }
+        state.pb.end_frame_clip();
         // ponytail: a frame that changed pages (a table splitting) holds no
         // room on the new one.
         if self.page != state.pb.page_count() {
@@ -1400,9 +1400,9 @@ fn frame_box_h(props: &FrameProperties, blocks: &[Block], ctx: &RenderContext, w
     }
 }
 
-/// The frame a block opens in the flow (`flow_frame`).
-fn flow_frame_of(block: &Block) -> Option<&FrameProperties> {
-    leading_para(block)?.frame_props.as_ref().filter(|fp| flow_frame(fp))
+/// The frame a paragraph opens in the flow (`flow_frame`).
+fn flow_frame_of(p: &Paragraph) -> Option<&FrameProperties> {
+    p.frame_props.as_ref().filter(|fp| flow_frame(fp))
 }
 
 /// A frame without w:w is as wide as its widest block: a paragraph's picture
@@ -1450,14 +1450,7 @@ fn frame_content_height(
             Block::Paragraph(p) if p.paragraph_mark_vanish && lays_out_nothing(p) => {}
             Block::Paragraph(p) => {
                 height += header_footer::hf_paragraph_gap(prev, prev_space_after, p);
-                // Names only mark the pictures, so their lines measure as tall.
-                let pictures: HashMap<usize, String> = p
-                    .runs
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, r)| r.inline_image.is_some())
-                    .map(|(i, _)| (i, String::new()))
-                    .collect();
+                let pictures = picture_marks(p);
                 let opts = LineOpts {
                     inline_images: Some(&pictures),
                     tab_stops: &p.tab_stops,
@@ -3038,11 +3031,15 @@ impl PageBuilder {
             .begin_para(&mut self.content, page, nodes, draw_label);
     }
 
-    pub(super) fn flush_page(&mut self, sect_idx: usize) {
-        // A frame's clip ends with its page.
+    fn end_frame_clip(&mut self) {
         if std::mem::take(&mut self.frame_clip) {
             self.content.restore_state();
         }
+    }
+
+    pub(super) fn flush_page(&mut self, sect_idx: usize) {
+        // A frame's clip ends with its page.
+        self.end_frame_clip();
         self.all_contents.push(std::mem::replace(
             &mut self.content,
             tagging::artifact_content(),
@@ -6054,7 +6051,7 @@ fn render_paragraph_block(
             // its first line (Word examples, fixture frame-keep-with-next: a
             // heading kept with a 100pt exact frame moves with it; two kept
             // headings before a frame taller than the page stay together).
-            if let Some(fp) = next.frame_props.as_ref().filter(|fp| flow_frame(fp)) {
+            if let Some(fp) = flow_frame_of(next) {
                 first_link.get_or_insert(extra + next_inter + next_first_line_h);
                 let col_w = col_geometry[state.current_col].1;
                 let blocks = &section_blocks[i..];
@@ -6154,7 +6151,7 @@ fn render_paragraph_block(
     // A frame in the flow never splits: `FlowFrame` has placed it, and it
     // runs past the bottom if it must (Word example, fixture
     // frame-moves-shared-tall: the next block opens the next page).
-    let in_flow_frame = para.frame_props.as_ref().is_some_and(flow_frame);
+    let in_flow_frame = flow_frame_of(para).is_some();
     let mut moved = false;
     while !in_flow_frame
         && (!at_page_top || lines.len() > 1)
@@ -7780,7 +7777,7 @@ fn render_pass(
                 if let Some(f) = frame.take_if(|f| block_frame.is_none_or(|fp| fp != f.props)) {
                     f.close(state, sp);
                 }
-                let block_flow_frame = flow_frame_of(block);
+                let block_flow_frame = leading_para(block).and_then(flow_frame_of);
                 if let Some(f) = open_flow_frame.take_if(|f| block_flow_frame != Some(f.props)) {
                     f.close(state);
                 }
