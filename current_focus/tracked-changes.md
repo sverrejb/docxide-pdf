@@ -70,10 +70,18 @@ references). Exports: `inline/` (print preset, inline revisions), `print/`
   **replaces** the run's own underline style (a double-underlined insertion
   prints one single underline, a struck deletion one strike). Highlight
   stays.
-- Moves (measured on 20 corpus redlines, 2026-11-09; Word hangs on
-  hand-written move ranges, p05): moved-from text double struck, moved-to
+- Moves (measured on 20 corpus redlines, 2026-11-09): moved-from text double struck, moved-to
   text double underlined, both in 2C6234 whatever the author (11 documents,
-  eleven author colours); a moved list item's bullet is double struck too.
+  eleven author colours); a moved list item's label and tab gap carry the
+  same double lines, one rule with the text (Word for Mac probe 2026-11-09,
+  Arial 11 / Calibri 12 / TNR 16: the label font's strike pair, the text's
+  double underline). Word opens hand-written moves when each range ends at
+  the start of the next paragraph, so the moved mark lies inside it; a mark
+  outside its range prints as a plain deletion / insertion. Open: a
+  moved-from numbered item shows "2.1." (original struck, "1." underlined
+  in the numbering colour), we show "2."; our double underline sits ~1pt
+  low (Word: two 0.48 lines, 0.48–0.96 and 1.92–2.40 below the baseline at
+  Arial 11; we draw 1.32–1.87 and 2.87–3.42).
   A moved paragraph mark is a deleted / inserted mark (final view merges or
   drops it). A double strike, moves or `w:dstrike` alike, is two lines as
   thick as the font's OS/2 strikeout, one thickness apart, centred on the
@@ -236,8 +244,7 @@ Probe parity (ours vs Word, inline export): text and reflow identical; bars
 identical where lines are the paragraph's middle lines or table rows.
 
 Known gaps (ponytail ceilings): footnotes and text boxes get no bars in
-markup mode (headers and footers do); a moved list item's label is struck
-once, not twice (green is right); mirrored margins use
+markup mode (headers and footers do); mirrored margins use
 the right-side rule only on odd pages; a renumbered item's colour 0078D4
 is the one measured with a single author (its rule with several is open).
 

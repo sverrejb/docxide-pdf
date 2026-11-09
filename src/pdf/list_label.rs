@@ -244,7 +244,7 @@ pub(super) fn render_list_label(
         super::layout::post_underline(entry, label_fs)
             .map(|(offset, th)| (baseline_y - offset - th, th))
     };
-    if let (Some(deleted), Some(entry)) = (para.list_label_revision, entry) {
+    if let (Some(rev), Some(entry)) = (para.list_label_revision, entry) {
         // Struck or underlined as a run of the same font would be (Word for
         // Mac probe p11b: 0.72pt lines, 2.16 above / 1.92 below the baseline
         // at Calibri 11), over the label's width; the tab gap to the text
@@ -252,12 +252,31 @@ pub(super) fn render_list_label(
         // underline after an inserted one.
         let x = label_x + label_shift(para, fonts);
         let w = label_width(para, fonts);
-        let line = if deleted { strike(entry) } else { underline(entry) };
-        if let Some((bottom, th)) = line {
+        let line = if rev.deleted {
+            strike(entry)
+        } else {
+            underline(entry)
+        };
+        if rev.moved {
+            // Doubled like the moved text, one rule over label and tab gap
+            // (Word for Mac probe, Arial 11 / Calibri 12 / TNR 16: the label
+            // font's strike pair, the text's double underline).
+            let lines = match (rev.deleted, line) {
+                (true, Some((bottom, th))) => vec![(bottom - th, th), (bottom + th, th)],
+                (true, None) => vec![],
+                (false, _) => {
+                    super::layout::underline_lines(Some(entry), label_fs, true, false, baseline_y)
+                }
+            };
+            for (bottom, th) in lines {
+                let w_all = w.max(para.indent_hanging);
+                content.rect(x, bottom, w_all, th).fill_nonzero();
+            }
+        } else if let Some((bottom, th)) = line {
             content.rect(x, bottom, w, th).fill_nonzero();
             let gap = para.indent_hanging - w;
             if gap > 0.5 {
-                let gap_th = if deleted { 0.48 } else { th };
+                let gap_th = if rev.deleted { 0.48 } else { th };
                 content.rect(x + w, bottom, gap, gap_th).fill_nonzero();
             }
         }

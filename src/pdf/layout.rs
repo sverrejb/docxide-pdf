@@ -484,7 +484,7 @@ type Decoration = (f32, f32, f32, f32, Option<[u8; 3]>);
 /// offset below the baseline and its thickness each on a 0.25pt grid (online
 /// export probe: Calibri, Times New Roman, Arial, Aptos at 10/12/22pt). Double
 /// underlines keep the old geometry.
-fn underline_lines(
+pub(super) fn underline_lines(
     entry: Option<&FontEntry>,
     font_size: f32,
     double: bool,

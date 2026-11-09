@@ -3,7 +3,7 @@ use std::io::{Read, Seek};
 
 use super::styles::{ParagraphStyle, parse_font_size, rfonts_ascii_name};
 use super::{WML_NS, parse_hex_color, twips_attr, wml, wml_attr, wml_bool};
-use crate::model::{Alignment, LabelSuffix, ListItem, Run};
+use crate::model::{Alignment, LabelRevision, LabelSuffix, ListItem, Run};
 use pdf_writer::types::ListNumbering;
 
 #[derive(Clone)]
@@ -52,8 +52,8 @@ pub(super) struct ListLabelInfo {
     pub(super) bold: bool,
     pub(super) italic: bool,
     pub(super) color: Option<[u8; 3]>,
-    /// Markup view: Some(deleted) when the item is a tracked deletion or insertion.
-    pub(super) revision: Option<bool>,
+    /// Markup view: the item is a tracked deletion or insertion.
+    pub(super) revision: Option<LabelRevision>,
     /// Markup view: chars of the original number in a renumbered live item's label.
     pub(super) renumbered: Option<usize>,
     pub(super) suff: String,
@@ -546,10 +546,11 @@ pub(super) enum ItemRevision {
     /// Plain, or any item outside the markup view.
     Live,
     /// Its paragraph mark is a tracked insertion (in the author's colour):
-    /// not in the original numbering.
-    Inserted([u8; 3]),
+    /// not in the original numbering. `true` when moved here.
+    Inserted([u8; 3], bool),
     /// Mark and every run are tracked deletions: not in the final numbering.
-    Deleted([u8; 3]),
+    /// `true` when moved away.
+    Deleted([u8; 3], bool),
 }
 
 pub(super) fn item_revision(p: roxmltree::Node, revisions: &super::Revisions) -> ItemRevision {
@@ -557,10 +558,10 @@ pub(super) fn item_revision(p: roxmltree::Node, revisions: &super::Revisions) ->
         return ItemRevision::Live;
     }
     if let Some(rev) = fully_deleted_item(p) {
-        return ItemRevision::Deleted(revisions.revision_color(rev));
+        return ItemRevision::Deleted(revisions.revision_color(rev), super::is_move(rev));
     }
     match super::mark_revision(p, "ins") {
-        Some(rev) => ItemRevision::Inserted(revisions.revision_color(rev)),
+        Some(rev) => ItemRevision::Inserted(revisions.revision_color(rev), super::is_move(rev)),
         None => ItemRevision::Live,
     }
 }
@@ -711,16 +712,18 @@ pub(super) fn parse_list_info(
     };
     let (final_counter, original_counter) = match revision {
         ItemRevision::Live => (Some(advance(counters)), Some(advance(original))),
-        ItemRevision::Inserted(_) => (Some(advance(counters)), None),
-        ItemRevision::Deleted(_) => (None, Some(advance(original))),
+        ItemRevision::Inserted(..) => (Some(advance(counters)), None),
+        ItemRevision::Deleted(..) => (None, Some(advance(original))),
     };
     // The label is coloured and struck or underlined like the item's text
     // (probe p11b: "2." struck in the author's colour before "B deleted",
     // "3." underlined before "E inserted").
     let (label_revision, revision_color) = match revision {
         ItemRevision::Live => (None, None),
-        ItemRevision::Inserted(c) => (Some(false), Some(c)),
-        ItemRevision::Deleted(c) => (Some(true), Some(c)),
+        ItemRevision::Inserted(c, moved) | ItemRevision::Deleted(c, moved) => {
+            let deleted = matches!(revision, ItemRevision::Deleted(..));
+            (Some(LabelRevision { deleted, moved }), Some(c))
+        }
     };
     let mut renumbered: Option<usize> = None;
     let (stream, current_counter) = match (final_counter, original_counter) {
@@ -1298,7 +1301,7 @@ mod tests {
             .label
         };
         use ItemRevision::{Deleted, Inserted, Live};
-        let (d, i) = (Deleted([0; 3]), Inserted([0; 3]));
+        let (d, i) = (Deleted([0; 3], false), Inserted([0; 3], false));
         // Word for Mac probe p11b: plain, deleted, deleted, plain, inserted,
         // inserted, deleted, plain.
         let got: Vec<String> = [Live, d, d, Live, i, i, d, Live]
@@ -1306,5 +1309,35 @@ mod tests {
                 .map(&mut label)
                 .collect();
         assert_eq!(got, ["1.", "2.", "3.", "4.2.", "3.", "4.", "5.", "6.5."]);
+    }
+
+    #[test]
+    fn moved_items_keep_the_move_on_their_label() {
+        let ns = WML_NS;
+        let xml = format!(
+            r#"<w:body xmlns:w="{ns}">
+              <w:p><w:pPr><w:rPr><w:moveFrom w:id="1" w:author="A"/></w:rPr></w:pPr>
+                <w:moveFrom w:id="2" w:author="A"><w:r><w:t>x</w:t></w:r></w:moveFrom></w:p>
+              <w:p><w:pPr><w:rPr><w:moveTo w:id="3" w:author="A"/></w:rPr></w:pPr>
+                <w:moveTo w:id="4" w:author="A"><w:r><w:t>x</w:t></w:r></w:moveTo></w:p>
+              <w:p><w:pPr><w:rPr><w:del w:id="5" w:author="A"/></w:rPr></w:pPr>
+                <w:del w:id="6" w:author="A"><w:r><w:delText>x</w:delText></w:r></w:del></w:p>
+            </w:body>"#
+        );
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        let revisions = super::super::Revisions {
+            markup: true,
+            ..Default::default()
+        };
+        let got: Vec<ItemRevision> = doc
+            .root_element()
+            .children()
+            .filter(|n| n.is_element())
+            .map(|p| item_revision(p, &revisions))
+            .collect();
+        let green = [0x2C, 0x62, 0x34];
+        assert_eq!(got[0], ItemRevision::Deleted(green, true));
+        assert_eq!(got[1], ItemRevision::Inserted(green, true));
+        assert!(matches!(got[2], ItemRevision::Deleted(_, false)));
     }
 }

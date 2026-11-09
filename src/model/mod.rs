@@ -536,6 +536,13 @@ pub struct ListItem {
     pub numbering: pdf_writer::types::ListNumbering,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LabelRevision {
+    pub deleted: bool,
+    /// A move: the label's lines are doubled like the moved text's.
+    pub moved: bool,
+}
+
 #[derive(Default)]
 pub struct Paragraph {
     pub runs: Vec<Run>,
@@ -572,9 +579,9 @@ pub struct Paragraph {
     pub list_label_bold: bool,
     pub list_label_italic: bool,
     pub list_label_color: Option<[u8; 3]>,
-    /// Markup view: the item is a tracked deletion (true) or insertion
-    /// (false); the label is struck or underlined in its colour.
-    pub list_label_revision: Option<bool>,
+    /// Markup view: the item is a tracked deletion or insertion; the label
+    /// is struck or underlined in its colour.
+    pub list_label_revision: Option<LabelRevision>,
     /// Markup view: a live item whose original and final numbers differ
     /// shows both; this many leading chars are the original, struck, the
     /// rest underlined, in Word's numbering-change colour.
