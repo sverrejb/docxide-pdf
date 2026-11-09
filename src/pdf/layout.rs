@@ -3502,20 +3502,7 @@ pub(super) fn build_paragraph_lines(
         ));
     }
 
-    // A trailing line break creates an empty line after it (Word adds a blank
-    // line for each w:br at the end of a paragraph).  Store the break run's
-    // font size so the caller can compute the correct height for this line.
-    if lines.last().is_some_and(|l| l.ends_with_break) {
-        let break_fs = runs
-            .iter()
-            .rev()
-            .find(|r| r.is_line_break)
-            .map(|r| r.font_size);
-        lines.push(TextLine {
-            break_font_size: break_fs,
-            ..TextLine::default()
-        });
-    }
+    push_trailing_break_line(&mut lines, runs);
 
     if lines.is_empty() {
         lines.push(TextLine::default());
@@ -3550,11 +3537,6 @@ pub(super) fn build_paragraph_lines(
             line.squeeze_chars = cjk.squeeze_line;
         }
     }
-    if !cjk.expand_shift_return {
-        for line in lines.iter_mut().filter(|l| l.ends_with_break) {
-            line.natural_width = true;
-        }
-    }
     if skip.get() > 0 {
         let mut skipped: Vec<TextLine> = (0..skip.get())
             .map(|_| TextLine {
@@ -3575,11 +3557,36 @@ pub(super) fn build_paragraph_lines(
             }
         }
     }
+    finish_lines(&mut lines, &cjk);
+    lines
+}
+
+/// A trailing line break creates an empty line after it (Word adds a blank
+/// line for each w:br at the end of a paragraph).  Store the break run's
+/// font size so the caller can compute the correct height for this line.
+fn push_trailing_break_line(lines: &mut Vec<TextLine>, runs: &[Run]) {
+    if lines.last().is_some_and(|l| l.ends_with_break) {
+        let break_fs = runs
+            .iter()
+            .rev()
+            .find(|r| r.is_line_break)
+            .map(|r| r.font_size);
+        lines.push(TextLine {
+            break_font_size: break_fs,
+            ..TextLine::default()
+        });
+    }
+}
+
+/// The paragraph-wide flags every line carries (see `TextLine`).
+fn finish_lines(lines: &mut [TextLine], cjk: &CjkLayout) {
     for line in lines.iter_mut() {
         line.rtl_paragraph = cjk.bidi;
         line.shaped_kerning = cjk.shaped_kerning;
+        if !cjk.expand_shift_return && line.ends_with_break {
+            line.natural_width = true;
+        }
     }
-    lines
 }
 
 fn find_next_tab_stop(
@@ -4339,18 +4346,7 @@ pub(super) fn build_tabbed_line(
         }
     }
 
-    // Trailing break creates an empty line (same as build_paragraph_lines)
-    if result_lines.last().is_some_and(|l| l.ends_with_break) {
-        let break_fs = runs
-            .iter()
-            .rev()
-            .find(|r| r.is_line_break)
-            .map(|r| r.font_size);
-        result_lines.push(TextLine {
-            break_font_size: break_fs,
-            ..TextLine::default()
-        });
-    }
+    push_trailing_break_line(&mut result_lines, runs);
     if ends_in_spaces && let Some(line) = result_lines.last_mut().filter(|l| l.chunks.is_empty()) {
         let width = std::mem::replace(&mut line.total_width, current_x);
         underline_line_end(line, cjk, &pending_spaces, current_x, pending_space_w);
@@ -4359,13 +4355,7 @@ pub(super) fn build_tabbed_line(
         }
     }
 
-    for line in result_lines.iter_mut() {
-        line.rtl_paragraph = cjk.bidi;
-        line.shaped_kerning = cjk.shaped_kerning;
-        if !cjk.expand_shift_return && line.ends_with_break {
-            line.natural_width = true;
-        }
-    }
+    finish_lines(&mut result_lines, &cjk);
     result_lines
 }
 
