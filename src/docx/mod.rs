@@ -1778,18 +1778,12 @@ impl TocSpec {
     }
 }
 
-/// The argument after a TOC switch (`\o "1-3"`), if the switch is present.
-fn toc_switch_arg<'a>(instr: &'a str, switch: &str) -> Option<&'a str> {
-    let lower = instr.to_ascii_lowercase();
-    let after = lower
-        .match_indices(&switch.to_ascii_lowercase())
-        .map(|(start, m)| (start, start + m.len()))
-        .find(|&(start, end)| {
-            (start == 0 || lower.as_bytes()[start - 1].is_ascii_whitespace())
-                && lower[end..].chars().next().is_none_or(char::is_whitespace)
-        })
-        .map(|(_, end)| end)?;
-    runs::quoted_or_word(&instr[after..])
+/// The argument after a TOC switch (`\o "1-3"`), if the switch is present
+/// and followed by one (not by the next switch).
+fn toc_switch_arg<'a>(instr: &'a str, switch: &'a str) -> Option<&'a str> {
+    runs::switch_args(instr, switch)
+        .next()
+        .filter(|arg| !arg.starts_with('\\'))
 }
 
 fn xml_text(s: &str) -> String {

@@ -145,7 +145,10 @@ pub(super) fn has_switch(instr: &str, switch: &str) -> bool {
 
 /// The word after each `switch` in a field instruction (`\* ROMAN \*
 /// MERGEFORMAT` → "ROMAN", "MERGEFORMAT").
-fn switch_args<'a>(instr: &'a str, switch: &'a str) -> impl Iterator<Item = &'a str> + 'a {
+pub(super) fn switch_args<'a>(
+    instr: &'a str,
+    switch: &'a str,
+) -> impl Iterator<Item = &'a str> + 'a {
     field_words(instr)
         .zip(field_words(instr).skip(1))
         .filter(move |&(word, _)| is_switch(word, switch))
