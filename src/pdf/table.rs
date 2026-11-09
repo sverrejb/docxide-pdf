@@ -1100,6 +1100,71 @@ fn beside_float_geometry(
 /// Render a nested table inline within a parent cell at the given cursor position.
 /// Render every row of `table` — cell backgrounds and content, then borders —
 /// advancing `cursor_y`. Shared by nested and header/footer table rendering.
+/// The tagger of cell `ci` (grid column `grid_col`, `span` wide) of `row`,
+/// when the table is tagged.
+fn cell_tagger<'a>(
+    tag: Option<(&'a mut Tags, &'a mut TableTags, usize)>,
+    row: &TableRow,
+    row_idx: usize,
+    ci: usize,
+    span: usize,
+    col_widths: &[f32],
+    grid_col: usize,
+) -> Option<CellTagger<'a>> {
+    tag.map(|(tags, table, page)| CellTagger {
+        tags,
+        table,
+        page,
+        row: row_idx,
+        cell: ci,
+        col_span: row_tag_span(row, ci, span, col_widths.len(), grid_col + span),
+    })
+}
+
+/// A cell's content from its top margin down, shifted for vAlign; an empty
+/// cell still gets its tagged empty paragraph.
+fn render_cell_box(
+    content: &mut Content,
+    cell: &crate::model::TableCell,
+    cell_layout: &CellLayout,
+    cell_x: f32,
+    row_top: f32,
+    effective_h: f32,
+    col_w: f32,
+    ctx: &RenderContext,
+    gradient_specs: &mut Vec<super::GradientSpec>,
+    links: &mut Vec<LinkAnnotation>,
+    tagger: Option<CellTagger<'_>>,
+    hf_sub: Option<&HfSubstitution>,
+    behind: BehindLayer<'_>,
+) {
+    if cell_has_visible_content(&cell_layout.items) {
+        let ecm = &cell_layout.cm;
+        let content_h = cell_content_h_for_valign(&cell_layout.items);
+        let avail = effective_h - ecm.top - ecm.bottom;
+        let v_offset = valign_offset(cell.v_align, avail, content_h);
+        let cell_cursor_y = row_top - ecm.top - v_offset;
+        render_cell_content(
+            content,
+            &cell_layout.items,
+            &cell.content,
+            cell_x,
+            col_w,
+            cell_cursor_y,
+            v_offset,
+            ecm,
+            ctx,
+            gradient_specs,
+            links,
+            tagger,
+            hf_sub,
+            behind,
+        );
+    } else if let Some(t) = tagger {
+        t.empty_para(content);
+    }
+}
+
 fn render_table_rows(
     table: &Table,
     row_layouts: &[RowLayout],
@@ -1136,14 +1201,7 @@ fn render_table_rows(
         {
             let col_w = cell_span_width(col_widths, grid_col, span);
             let cx = cell_x_offset(col_widths, table_left, grid_col);
-            let tagger = tag.as_mut().map(|(tags, table_tags, page)| CellTagger {
-                tags,
-                table: table_tags,
-                page: *page,
-                row: ri,
-                cell: ci,
-                col_span: row_tag_span(row, ci, span, col_widths.len(), grid_col + span),
-            });
+            let tagger = cell_tagger(reborrow(&mut tag), row, ri, ci, span, col_widths, grid_col);
 
             if cell.v_merge == VMerge::Continue {
                 if let Some(mut t) = tagger {
@@ -1165,34 +1223,21 @@ fn render_table_rows(
                 col_w,
                 effective_h,
             );
-
-            if cell_has_visible_content(&cell_layout.items) {
-                let ecm = &cell_layout.cm;
-                let content_h = cell_content_h_for_valign(&cell_layout.items);
-
-                let avail = effective_h - ecm.top - ecm.bottom;
-                let v_offset = valign_offset(cell.v_align, avail, content_h);
-                let cell_cursor_y = row_top - ecm.top - v_offset;
-
-                render_cell_content(
-                    content,
-                    &cell_layout.items,
-                    &cell.content,
-                    cx,
-                    col_w,
-                    cell_cursor_y,
-                    v_offset,
-                    ecm,
-                    ctx,
-                    gradient_specs,
-                    links,
-                    tagger,
-                    hf_sub,
-                    behind.as_deref_mut(),
-                );
-            } else if let Some(t) = tagger {
-                t.empty_para(content);
-            }
+            render_cell_box(
+                content,
+                cell,
+                cell_layout,
+                cx,
+                row_top,
+                effective_h,
+                col_w,
+                ctx,
+                gradient_specs,
+                links,
+                tagger,
+                hf_sub,
+                behind.as_deref_mut(),
+            );
         }
 
         for (grid_col, span, cell) in row.grid_cells() {
@@ -1591,14 +1636,17 @@ fn render_table_row(
         let cell_x = cell_x_offset(col_widths, table_left, grid_col);
         // None while repeated header rows are drawn (render_header_rows).
         let page = pb.all_contents.len();
-        let tagger = pb.table_tags.as_mut().map(|table| CellTagger {
-            tags: &mut pb.tags,
-            table,
-            page,
-            row: row_idx,
-            cell: ci,
-            col_span: row_tag_span(row, ci, span, col_widths.len(), grid_col + span),
-        });
+        let tagger = cell_tagger(
+            pb.table_tags
+                .as_mut()
+                .map(|table| (&mut pb.tags, table, page)),
+            row,
+            row_idx,
+            ci,
+            span,
+            col_widths,
+            grid_col,
+        );
 
         if cell.v_merge == VMerge::Continue {
             if let Some(mut t) = tagger {
@@ -1625,14 +1673,7 @@ fn render_table_row(
         );
 
         let has_content = cell_has_visible_content(&cell_layout.items);
-        let ecm = &cell_layout.cm;
-        let mut no_links = Vec::new();
-
-        if !has_content {
-            if let Some(t) = tagger {
-                t.empty_para(&mut pb.content);
-            }
-        } else if cell_layout.text_direction == TextDirection::TbRl {
+        if has_content && cell_layout.text_direction == TextDirection::TbRl {
             render_vertical_cjk_cell(
                 &mut pb.content,
                 cell_layout,
@@ -1641,39 +1682,36 @@ fn render_table_row(
                 row_top,
                 effective_h,
                 col_w,
-                ecm,
+                &cell_layout.cm,
                 ctx,
                 tagger,
             );
         } else {
-            let content_h = cell_content_h_for_valign(&cell_layout.items);
-
-            let avail = effective_h - ecm.top - ecm.bottom;
-            let v_offset = valign_offset(cell.v_align, avail, content_h);
-            let cursor_y = row_top - ecm.top - v_offset;
-
-            render_cell_content(
+            // Repeated header rows are untagged artifacts: no link annotations.
+            let mut no_links = Vec::new();
+            let links = if tagger.is_some() {
+                &mut pb.links
+            } else {
+                &mut no_links
+            };
+            render_cell_box(
                 &mut pb.content,
-                &cell_layout.items,
-                &cell.content,
+                cell,
+                cell_layout,
                 cell_x,
+                row_top,
+                effective_h,
                 col_w,
-                cursor_y,
-                v_offset,
-                ecm,
                 ctx,
                 &mut pb.gradient_specs,
-                // Repeated header rows are untagged artifacts: no link annotations.
-                if tagger.is_some() {
-                    &mut pb.links
-                } else {
-                    &mut no_links
-                },
+                links,
                 tagger,
                 None,
                 Some(&mut pb.behind_shapes),
             );
-            move_cell_comment_anchors(ctx, &mut pb.comment_anchors);
+            if has_content {
+                move_cell_comment_anchors(ctx, &mut pb.comment_anchors);
+            }
         }
     }
 
@@ -1861,14 +1899,15 @@ fn render_partial_row(
     {
         let col_w = cell_span_width(col_widths, grid_col, span);
         let cell_x = cell_x_offset(col_widths, table_left, grid_col);
-        let tagger = tag.as_mut().map(|(tags, table, page)| CellTagger {
-            tags,
-            table,
-            page: *page,
-            row: row_idx,
-            cell: ci,
-            col_span: row_tag_span(row, ci, span, col_widths.len(), grid_col + span),
-        });
+        let tagger = cell_tagger(
+            reborrow(&mut tag),
+            row,
+            row_idx,
+            ci,
+            span,
+            col_widths,
+            grid_col,
+        );
 
         if cell.v_merge == VMerge::Continue {
             if let Some(mut t) = tagger {
