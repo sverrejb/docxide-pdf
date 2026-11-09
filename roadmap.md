@@ -385,7 +385,12 @@ Open queue from the large-corpus and focus-fixture rounds:
   2026-11-08 (later): table and paragraph rules (band top edge on the grid, then the
   writer stretch; body, header, footer, cells) and table-cell baselines now
   follow it too; pictures are not stretched (case181). Open: text-box and
-  footnote text get neither grid nor stretch; table rules ignore w:vAlign's
+  footnote text get neither grid nor stretch (text-box-table-anchor: the
+  text-box paragraphs around the tables sit 0.14-0.17pt high, `spAutoFit`
+  413.23 vs Word 413.37, `3pt borders` 445.23 vs 445.40, `after` 449.23 vs
+  449.40, while the cells inside the same boxes match within 0.02pt; it also
+  costs that fixture 10% TxtBnd through the 8pt line-grouping cliff under
+  Test harness); table rules ignore w:vAlign's
   shift; japanese_interlibrary_loan's cell rows are 0.25pt multiples in Word
   (27.5, 28, 39.25) but 27.45, 27.85, 39.5 in ours, so the layout may quantize
   row heights; hyphen-opening-guillemet's U+2011 falls back to Cambria Math
@@ -1035,3 +1040,10 @@ keep output identical unless the entry says otherwise.
   Quartz producers at the escaped paren.
 - SSIM with ±8px search (~17 CPU-s for a 205-page fixture): rayon over the
   window search, integral images, SIMD, if turnaround becomes a bottleneck.
+- **TxtBnd 8pt line-grouping cliff** (`tests/common/text_boundary.rs`): lines
+  are rebuilt by gluing fragments whose tops are < 8pt apart, on each PDF
+  separately, so side-by-side content offset by ~8pt groups differently on
+  sub-point shifts (text-box-table-anchor: Word 8.00pt apart = two lines, ours
+  7.84pt = one, 100 → 90%). LCS pairing (2026-11-09) stops one bad group
+  failing the rest of the page; the grouping itself should come from the
+  reference, with our fragments assigned to the nearest reference line.
