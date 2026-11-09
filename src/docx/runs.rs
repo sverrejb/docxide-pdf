@@ -175,6 +175,7 @@ fn number_format_switch(instr: &str) -> Option<&'static str> {
 /// parent's evaluated result. A field that begins inside a parent's *result*
 /// region (after `separate`, e.g. a `PAGEREF` inside a `TOC` result) is visible
 /// content and is processed normally. `visible` records which case applies.
+#[derive(Default)]
 struct FieldFrame {
     seen_sep: bool,
     visible: bool,
@@ -223,23 +224,6 @@ fn dynamic_result(stack: &[FieldFrame]) -> bool {
 }
 
 impl FieldFrame {
-    fn new(visible: bool) -> Self {
-        Self {
-            seen_sep: false,
-            visible,
-            carried: false,
-            instr: String::new(),
-            result: String::new(),
-            parts: Vec::new(),
-            opaque: false,
-            checkbox: None,
-            macrobutton: false,
-            instr_deleted: false,
-            instr_fmt: None,
-            result_fmt: None,
-        }
-    }
-
     /// Word lays a regenerated result out in the formatting of the
     /// instruction's first character, or with `\* MERGEFORMAT` in that of
     /// the cached result's; hidden when the instruction is
@@ -1626,8 +1610,9 @@ pub(super) fn parse_runs<R: Read + Seek>(
                             flush_pending(&mut pending_text, &mut runs);
                         }
                         field_stack.push(FieldFrame {
+                            visible: parent_visible,
                             checkbox: parse_checkbox(child, fmt.font_size),
-                            ..FieldFrame::new(parent_visible)
+                            ..Default::default()
                         });
                     }
                     Some("separate") => {
