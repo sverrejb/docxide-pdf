@@ -2171,6 +2171,7 @@ pub(super) fn render_table(
     } else {
         0.0
     };
+    let cursor_before = pb.slot_top;
     let (table_left, saved_slot_top, text_margins) = if let Some(ref fp) = override_pos {
         // The float zone starts at the table's drawn top.
         let saved = Some((
@@ -2225,6 +2226,7 @@ pub(super) fn render_table(
         }
     }
     pb.slot_top -= outer_band(table.rows.first(), true) / 2.0;
+    pb.keep_pending_first_page(cursor_before);
 
     // Count contiguous header rows from the start of the table (per OOXML spec,
     // only contiguous header rows starting from row 0 are repeated).

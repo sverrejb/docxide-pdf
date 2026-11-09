@@ -2583,7 +2583,7 @@ pub(super) struct PageBuilder {
     /// margin, not at the margin (`is_at_page_top`).
     pub(super) page_top_y: f32,
     pub(super) is_first_page_of_section: bool,
-    /// A continuous section whose first ordinary paragraph has not flowed yet.
+    /// A continuous section whose first ordinary paragraph or table has not flowed yet.
     pending_section_first_page: Option<(usize, usize, f32)>,
     /// Section that owns the current page for header/footer purposes.
     /// For continuous section breaks, this stays as the section that started
@@ -3174,6 +3174,17 @@ impl PageBuilder {
             })
     }
 
+    /// A table opening the section's pending first page moves the cursor
+    /// from `from` to its position, space before and top border; nothing has
+    /// flowed yet.
+    pub(super) fn keep_pending_first_page(&mut self, from: f32) {
+        if let Some((_, _, y)) = &mut self.pending_section_first_page
+            && (*y - from).abs() < 0.01
+        {
+            *y = self.slot_top;
+        }
+    }
+
     /// Footnotes carried past the end of a section get a page of their own
     /// under the first-page header before the next section starts (Word
     /// examples: a 630pt row whose note does not fit ends section 1;
@@ -3196,7 +3207,11 @@ impl PageBuilder {
         ctx: &RenderContext,
     ) {
         let first_page = self.take_pending_first_page(sect_idx);
-        self.flush_page(sect_idx);
+        // A section that moved off the page in full leaves it to the one before:
+        // the page neither counts for it nor starts its numbering.
+        let ends_in = if first_page { sect_idx - 1 } else { sect_idx };
+        self.flush_page(ends_in);
+        self.page_hf_section = sect_idx;
         if first_page {
             self.flush_note_page(sect_idx);
         }
@@ -7448,23 +7463,17 @@ fn render_pass(
         }
 
         cur_sp = sp;
-        // If the first ordinary paragraph itself moves to the next sheet,
-        // that sheet is the continuous section's first page. Once it flows
-        // here, a later break gets the default variant as before. Tables,
-        // lifted frames and drawing paragraphs keep their existing handling.
-        state.pb.pending_section_first_page =
-            (matches!(sp.break_type, SectionBreakType::Continuous)
-                && sp.columns.as_ref().is_none_or(|c| c.columns.len() <= 1)
-                && state.pb.float_zone.is_none()
-                && section.blocks.first().is_some_and(|b| {
-                    matches!(b,
-                        Block::Paragraph(p) if p.frame_props.is_none()
-                            && p.image.is_none() && p.inline_chart.is_none()
-                            && p.floating_images.is_empty() && p.textboxes.is_empty()
-                            && p.smartart.is_empty() && p.connectors.is_empty()
-                            && p.runs.iter().all(|r| r.inline_image.is_none())
-                    )
-                }))
+        // If the first block itself moves to the next sheet, that sheet is the
+        // continuous section's first page, whatever the block is (Word
+        // examples: a 100pt table row, floating table, inline picture or kept
+        // 6-line paragraph, also one with an anchored picture or text box, or
+        // in two columns, below a page of section 1 opens page 2 under the
+        // first-page footer, numbered 1). Once it flows here, or when the
+        // section already owns this page, a later break gets the default
+        // variant as before.
+        state.pb.pending_section_first_page = (state.pb.page_hf_section != sect_idx
+            && matches!(sp.break_type, SectionBreakType::Continuous)
+            && state.pb.float_zone.is_none())
             .then_some((sect_idx, state.pb.page_count(), state.pb.slot_top));
         let text_width = sp.text_width();
 
@@ -7526,6 +7535,11 @@ fn render_pass(
                 let block_frame = lifted_frame(block);
                 if let Some(f) = frame.take_if(|f| block_frame.is_none_or(|fp| fp != f.props)) {
                     f.close(state, sp);
+                }
+                // The first block stayed on this page, so a later break opens an
+                // ordinary one, even from where the first block started.
+                if block_idx > 0 {
+                    state.pb.pending_section_first_page = None;
                 }
                 state.band_prescan = last_band_block.is_some_and(|l| block_idx <= l)
                     && frame.is_none()
