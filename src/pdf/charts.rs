@@ -2078,6 +2078,11 @@ fn render_radar(
 
     // Angle for category i: start at top (pi/2) and go clockwise
     let cat_angle = |ci: usize| -> f32 { std::f32::consts::FRAC_PI_2 - ci as f32 * angle_step };
+    // The point `r` out along category `ci`'s spoke.
+    let at = |ci: usize, r: f32| {
+        let a = cat_angle(ci);
+        (cx + r * a.cos(), cy + r * a.sin())
+    };
 
     content.save_state();
 
@@ -2093,25 +2098,16 @@ fn render_radar(
 
     for ti in 1..=num_ticks {
         let r = radius * (ti as f32 / num_ticks as f32);
-        for ci in 0..num_categories {
-            let a = cat_angle(ci);
-            let px = cx + r * a.cos();
-            let py = cy + r * a.sin();
-            if ci == 0 {
-                content.move_to(px, py);
-            } else {
-                content.line_to(px, py);
-            }
-        }
-        content.close_path();
+        let ring: Vec<(f32, f32)> = (0..num_categories).map(|ci| at(ci, r)).collect();
+        polygon(content, &ring);
         content.stroke();
     }
 
     // Radial spokes
     for ci in 0..num_categories {
-        let a = cat_angle(ci);
         content.move_to(cx, cy);
-        content.line_to(cx + radius * a.cos(), cy + radius * a.sin());
+        let (px, py) = at(ci, radius);
+        content.line_to(px, py);
         content.stroke();
     }
 
@@ -2124,30 +2120,21 @@ fn render_radar(
             .unwrap_or(accent_colors[si % accent_colors.len()]);
         content.set_line_width(series.line_width.unwrap_or(DEFAULT_LINE_W));
         stroke_rgb(content, color);
-        for ci in 0..num_categories {
-            let val = series.values.get(ci).copied().unwrap_or(0.0);
-            let r = (val / axis_max) * radius;
-            let a = cat_angle(ci);
-            let px = cx + r * a.cos();
-            let py = cy + r * a.sin();
-            if ci == 0 {
-                content.move_to(px, py);
-            } else {
-                content.line_to(px, py);
-            }
-        }
-        content.close_path();
+        let pts: Vec<(f32, f32)> = (0..num_categories)
+            .map(|ci| {
+                let val = series.values.get(ci).copied().unwrap_or(0.0);
+                at(ci, (val / axis_max) * radius)
+            })
+            .collect();
+        polygon(content, &pts);
         content.stroke();
 
         // Markers
         let sym = resolve_marker(series.marker, si);
         let (marker_color, marker_r) = marker_look(series, si, accent_colors, sym, DEFAULT_LINE_W);
         fill_rgb(content, marker_color);
-        for ci in 0..num_categories {
-            let val = series.values.get(ci).copied().unwrap_or(0.0);
-            let r = (val / axis_max) * radius;
-            let a = cat_angle(ci);
-            draw_marker(content, sym, cx + r * a.cos(), cy + r * a.sin(), marker_r);
+        for &(px, py) in &pts {
+            draw_marker(content, sym, px, py, marker_r);
         }
     }
 
