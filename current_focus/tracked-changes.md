@@ -69,8 +69,16 @@ references). Exports: `inline/` (print preset, inline revisions), `print/`
 - The author colour **replaces** the run's own colour; the revision line
   **replaces** the run's own underline style (a double-underlined insertion
   prints one single underline, a struck deletion one strike). Highlight
-  stays. Moves (`w:moveTo` / `w:moveFrom`) could not be probed: Word hangs on
-  the hand-written move ranges (p05, kept in `skip/`).
+  stays.
+- Moves (measured on 20 corpus redlines, 2026-11-09; Word hangs on
+  hand-written move ranges, p05): moved-from text double struck, moved-to
+  text double underlined, both in 2C6234 whatever the author (11 documents,
+  eleven author colours); a moved list item's bullet is double struck too.
+  A moved paragraph mark is a deleted / inserted mark (final view merges or
+  drops it). A double strike, moves or `w:dstrike` alike, is two lines as
+  thick as the font's OS/2 strikeout, one thickness apart, centred on the
+  single strike, bridging the run's spaces (TNR, Arial, Calibri, Aptos, Gill
+  Sans at 9.6–12pt; case23's online reference to 0.01pt, 89.6 → 93.0).
 - Property changes (`w:rPrChange`, `w:pPrChange`): no inline mark, only the
   change bar. Paragraph marks: an inserted or deleted mark draws no glyph,
   only the bar; a paragraph with a deleted mark stays a separate paragraph
@@ -228,7 +236,8 @@ Probe parity (ours vs Word, inline export): text and reflow identical; bars
 identical where lines are the paragraph's middle lines or table rows.
 
 Known gaps (ponytail ceilings): footnotes and text boxes get no bars in
-markup mode (headers and footers do); moves untested; mirrored margins use
+markup mode (headers and footers do); a moved list item's label is struck
+once, not twice (green is right); mirrored margins use
 the right-side rule only on odd pages; a renumbered item's colour 0078D4
 is the one measured with a single author (its rule with several is open).
 
