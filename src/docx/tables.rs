@@ -144,24 +144,12 @@ impl CondFormat {
             self.borders.left = border_or_fallback(cl, self.borders.left);
             self.borders.right = border_or_fallback(cr, self.borders.right);
         }
-        if let Some(s) = cond.shading {
-            self.shading = Some(s);
-        }
-        if let Some(b) = cond.bold {
-            self.bold = Some(b);
-        }
-        if let Some(i) = cond.italic {
-            self.italic = Some(i);
-        }
-        if let Some(c) = cond.color {
-            self.color = Some(c);
-        }
-        if let Some(fs) = cond.font_size {
-            self.font_size = Some(fs);
-        }
-        if let Some(ref fn_name) = cond.font_name {
-            self.font_name = Some(fn_name.clone());
-        }
+        self.shading = cond.shading.or(self.shading);
+        self.bold = cond.bold.or(self.bold);
+        self.italic = cond.italic.or(self.italic);
+        self.color = cond.color.or(self.color);
+        self.font_size = cond.font_size.or(self.font_size);
+        self.font_name = cond.font_name.clone().or(self.font_name.take());
     }
 }
 
