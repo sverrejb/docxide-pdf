@@ -241,9 +241,7 @@ pub(super) fn render_list_label(
             .show(Str(&label_bytes));
     }
     content.end_text();
-    let strike = |entry: &FontEntry| {
-        super::layout::os2_strike(entry, label_fs).map(|(top, th)| (baseline_y + top - th, th))
-    };
+    let strike = |entry: &FontEntry| super::layout::strike_line(entry, label_fs, baseline_y);
     // Underlines follow the item's text font, strikes the label's own (Word
     // for Mac probe: a Symbol bullet before Calibri 12 text is underlined
     // 0.72pt like Calibri but struck 0.48pt like Symbol).

@@ -4373,6 +4373,12 @@ pub(super) fn os2_strike(entry: &FontEntry, font_size: f32) -> Option<(f32, f32)
     Some(on_quarter_point_grid(pos * font_size, th * font_size))
 }
 
+/// The strike through text on the baseline `y`: its bottom edge and
+/// thickness (see `os2_strike`).
+pub(super) fn strike_line(entry: &FontEntry, font_size: f32, y: f32) -> Option<(f32, f32)> {
+    os2_strike(entry, font_size).map(|(top, th)| (y + top - th, th))
+}
+
 /// A font's post-table underline as Word draws it: its offset below the
 /// baseline and its thickness, on the same 0.25pt grid as `os2_strike`.
 pub(super) fn post_underline(entry: &FontEntry, font_size: f32) -> Option<(f32, f32)> {
@@ -6083,11 +6089,10 @@ pub(super) fn render_paragraph_lines(
                     }
                 }
                 if chunk.strikethrough || chunk.dstrike {
-                    let strike = pdf_name_to_entry
+                    let (st_y, st_thick) = pdf_name_to_entry
                         .get(chunk.pdf_font.as_str())
-                        .and_then(|e| os2_strike(e, chunk.font_size))
-                        .map(|(top, th)| (y + top - th, th));
-                    let (st_y, st_thick) = strike.unwrap_or((y + chunk.font_size * 0.3, thick));
+                        .and_then(|e| strike_line(e, chunk.font_size, y))
+                        .unwrap_or((y + chunk.font_size * 0.3, thick));
                     // One line across the spaces of a struck run, like Word's.
                     // A double strike is two such lines one thickness apart,
                     // centred on the single strike (17 corpus redlines, TNR,
@@ -6222,10 +6227,8 @@ pub(super) fn render_paragraph_lines(
                         chunk.color,
                     );
                     let (st_y, st_thick) = entry
-                        .and_then(|e| os2_strike(e, chunk.font_size))
-                        .map_or((y + chunk.font_size * 0.3, thick), |(top, th)| {
-                            (y + top - th, th)
-                        });
+                        .and_then(|e| strike_line(e, chunk.font_size, y))
+                        .unwrap_or((y + chunk.font_size * 0.3, thick));
                     push_decoration(
                         &mut decorations,
                         box_x,
