@@ -301,11 +301,19 @@ pub(super) fn render_list_label(
         let orig: String = para.list_label.chars().take(split).collect();
         let w_orig = label_text_width(para, fonts, label_font_key(para), &orig);
         let w_all = label_width(para, fonts);
-        if let Some((bottom, th)) = strike(entry) {
+        if para.list_label_revision.is_some() {
+            // A moved-away "2.1." is already struck whole in the move colour;
+            // only its final number is underlined, in the numbering-change
+            // colour (Word for Mac probe 2026-11-09).
+            fill_rgb(content, [0x00, 0x78, 0xD4]);
+        } else if let Some((bottom, th)) = strike(entry) {
             content.rect(x, bottom, w_orig, th).fill_nonzero();
         }
         if let Some((bottom, th)) = underline(entry) {
-            content.rect(x + w_orig, bottom, w_all - w_orig, th).fill_nonzero();
+            // On through the tab gap to the text (probe 2026-11-09: "3.1."
+            // underlined from "1." to the 18pt hanging indent).
+            let w_under = w_all.max(para.indent_hanging) - w_orig;
+            content.rect(x + w_orig, bottom, w_under, th).fill_nonzero();
         }
     }
     if label_color.is_some() {

@@ -713,6 +713,11 @@ pub(super) fn parse_list_info(
     let (final_counter, original_counter) = match revision {
         ItemRevision::Live => (Some(advance(counters)), Some(advance(original))),
         ItemRevision::Inserted(..) => (Some(advance(counters)), None),
+        // A moved-away item also shows the level's start number as its final
+        // one, without taking a number (Word for Mac probes 2026-11-09:
+        // plain, plain, two moved away, plain number 1, 2, "3.1.", "4.1.",
+        // "5.3."; in a list starting at 5, "7.5.", "8.5.").
+        ItemRevision::Deleted(_, true) => (Some(start), Some(advance(original))),
         ItemRevision::Deleted(..) => (None, Some(advance(original))),
     };
     // The label is coloured and struck or underlined like the item's text
@@ -1309,6 +1314,19 @@ mod tests {
                 .map(&mut label)
                 .collect();
         assert_eq!(got, ["1.", "2.", "3.", "4.2.", "3.", "4.", "5.", "6.5."]);
+        // Probe 2026-11-09, continuing the list: plain, plain, two moved
+        // away, plain, the two moved here, plain.
+        let (from, to) = (Deleted([0; 3], true), Inserted([0; 3], true));
+        let got: Vec<String> = [Live, Live, from, from, Live, to, to, Live]
+            .into_iter()
+            .map(&mut label)
+            .collect();
+        assert_eq!(
+            got,
+            [
+                "7.6.", "8.7.", "9.1.", "10.1.", "11.8.", "9.", "10.", "12.11."
+            ]
+        );
     }
 
     #[test]
