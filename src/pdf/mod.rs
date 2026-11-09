@@ -99,14 +99,14 @@ fn leading_para(block: &Block) -> Option<&Paragraph> {
 /// The frame Word lifts `block` out of the flow into: any page- or
 /// margin-anchored framePr (a table's is its first cell paragraph's), which
 /// keeps text off its sides or, wrapping, lets text flow on both of them
-/// (empty-frame-control), or a paragraph's wrapping frame at an offset
-/// (`wrapping_text_frame`), which text then wraps around like a float.
+/// (empty-frame-control), or a paragraph's wrapping frame at an explicit
+/// offset (`paragraph_offset_frame`), which text then wraps around like a float.
 /// ponytail: other text-anchored frames stay in the flow; lift them when a
 /// fixture needs it.
 fn lifted_frame(block: &Block) -> Option<&FrameProperties> {
     let fp = leading_para(block)?.frame_props.as_ref()?;
     if fp.v_relative_from == VRelativeFrom::Paragraph
-        && (matches!(block, Block::Table(_)) || !wrapping_text_frame(fp))
+        && (matches!(block, Block::Table(_)) || !paragraph_offset_frame(fp))
     {
         return None;
     }
@@ -121,14 +121,14 @@ fn frame_beside_text(fp: &FrameProperties, sp: &SectionProperties) -> bool {
     fp.width > 0.0 && (x >= text_x + text_w || x + fp.width <= text_x)
 }
 
-/// A wrapping paragraph-anchored frame at an offset, zero or not, with or
-/// without w:h (fixtures frame-moves-*), or a drop cap: it keeps its own
-/// coordinates, and text wraps around it.
-fn wrapping_text_frame(fp: &FrameProperties) -> bool {
+/// A wrapping paragraph-anchored frame with an explicit height and a nonzero
+/// offset, or a drop cap: it keeps its own coordinates, and text wraps around it.
+fn paragraph_offset_frame(fp: &FrameProperties) -> bool {
     fp.drop_cap.is_some()
         || (!fp.text_below
             && fp.v_relative_from == VRelativeFrom::Paragraph
-            && matches!(fp.v_position, VerticalPosition::Offset(_)))
+            && fp.height > 0.0
+            && matches!(fp.v_position, VerticalPosition::Offset(y) if y != 0.0))
 }
 
 /// The blocks from the start of `blocks` that share the frame `props`.
@@ -1123,26 +1123,12 @@ impl<'a> OpenFrame<'a> {
         state: &mut LayoutState,
         ctx: &RenderContext,
         sp: &SectionProperties,
-        (sect_idx, col_count): (usize, usize),
+        (sect_idx, col_geometry): (usize, &[(f32, f32)]),
     ) -> Self {
         let width = if props.width > 0.0 {
             props.width
         } else {
             auto_frame_width(props, blocks, ctx, sp.text_width())
-        };
-        let (text_x, text_w) = (sp.margin_left, sp.text_width());
-        let x = match props.drop_cap {
-            Some(dc) if dc.in_margin => text_x - props.h_space - width,
-            Some(_) => text_x,
-            None => resolve_h_position(
-                props.h_relative_from,
-                &props.h_position,
-                width,
-                sp,
-                text_x,
-                text_w,
-                text_w,
-            ),
         };
         // A drop cap is as tall as the next paragraph's first `lines` lines.
         // ponytail: that paragraph's space before and indents are not added;
@@ -1185,7 +1171,7 @@ impl<'a> OpenFrame<'a> {
             {
                 state.pb.advance_column_or_page(
                     &mut state.current_col,
-                    col_count,
+                    col_geometry.len(),
                     sect_idx,
                     sp,
                     &mut state.effective_margin_bottom,
@@ -1193,6 +1179,20 @@ impl<'a> OpenFrame<'a> {
                 );
             }
         }
+        let (col_x, col_w) = col_geometry[state.current_col];
+        let x = match props.drop_cap {
+            Some(dc) if dc.in_margin => sp.margin_left - props.h_space - width,
+            Some(_) => sp.margin_left,
+            None => resolve_h_position(
+                props.h_relative_from,
+                &props.h_position,
+                width,
+                sp,
+                col_x,
+                col_w,
+                sp.text_width(),
+            ),
+        };
         let top = sp.page_height - top_y(state.pb.slot_top);
         let flow = SavedFlow {
             slot_top: std::mem::replace(&mut state.pb.slot_top, sp.page_height - top),
@@ -1317,7 +1317,8 @@ fn frame_content_height(
                 let lines = build_lines(&p.runs, ctx, line_w, ctx.cjk(true, p), &opts);
                 let (fs, lhr, _) = tallest_run_metrics(&p.runs, ctx.fonts);
                 let ls = p.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                height += lines.len().max(1) as f32 * resolve_line_h(ls, fs, lhr);
+                let lines_h = lines.len().max(1) as f32 * resolve_line_h(ls, fs, lhr);
+                height += p.image.as_ref().map_or(lines_h, |img| lines_h.max(img.layout_size().1));
                 prev = Some(p);
                 prev_space_after = p.space_after;
             }
@@ -6019,8 +6020,11 @@ fn render_paragraph_block(
                 .floating_images
                 .iter()
                 .any(|fi| leading_full_width_picture(fi, sp, col_x, col_w, text_width));
-        // A frame never splits (Word example, fixture frame-moves-not-beside).
-        if para.keep_lines || para.frame_props.is_some() || leading_picture_keeps_text {
+        // A frame never splits unless it is taller than the page (Word
+        // example, fixture frame-moves-not-beside).
+        let frame_kept = para.frame_props.is_some()
+            && content_h <= sp.page_height - sp.margin_top - sp.margin_bottom;
+        if para.keep_lines || frame_kept || leading_picture_keeps_text {
             lines_that_fit = 0;
         }
 
@@ -7601,7 +7605,7 @@ fn render_pass(
                     match block_frame {
                         Some(fp) => {
                             let blocks = &section.blocks[block_idx..];
-                            frame = Some(OpenFrame::open(fp, blocks, state, &ctx, sp, (sect_idx, col_count)));
+                            frame = Some(OpenFrame::open(fp, blocks, state, &ctx, sp, (sect_idx, &col_geometry)));
                         }
                         None => {
                             // The break comes first: the bands are those of the
