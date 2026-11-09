@@ -5477,6 +5477,49 @@ fn render_paragraph_block(
     } else {
         0.0
     };
+    // Whole, split across pages or beside a float, the lines are drawn the
+    // same way; only the slice and its frame differ. `pb` is a parameter so
+    // the callers keep their own split borrows of `state`.
+    let draw = |pb: &mut PageBuilder,
+                lines: &[TextLine],
+                x: f32,
+                w: f32,
+                baseline: f32,
+                first_idx: usize,
+                geom: Option<&[(f32, f32)]>,
+                total: usize,
+                tag: usize,
+                grid: Option<layout::LineGrid>| {
+        render_paragraph_lines(
+            &mut pb.content,
+            lines,
+            &para.alignment,
+            x,
+            para.indent_left,
+            w,
+            baseline,
+            line_h,
+            para_metrics,
+            total,
+            first_idx,
+            &mut pb.links,
+            text_hanging,
+            ctx.fonts,
+            geom,
+            &mut pb.gradient_specs,
+            Some(&mut pb.comment_anchors),
+            ln_cfg.map(|(start, count_by, right_x)| LineNumberArg {
+                counter: &mut pb.line_number_counter,
+                start,
+                count_by,
+                right_x,
+                font: ln_font.clone(),
+            }),
+            Some(LinkTagger::new(&mut pb.tags, pb.all_contents.len(), tag)),
+            None,
+            grid,
+        );
+    };
     let mut planned_gaps = step_lines_below_floats(
         &mut lines,
         &state.pb,
@@ -6192,37 +6235,16 @@ fn render_paragraph_block(
                 render_list_label(content, para, ctx.fonts, label_x, label_y, font_size)
             });
 
-            render_paragraph_lines(
-                &mut state.pb.content,
+            draw(
+                &mut state.pb,
                 first_part,
-                &para.alignment,
                 para_text_x,
-                para.indent_left,
                 para_text_width,
                 baseline_y,
-                line_h,
-                para_metrics,
-                lines.len(),
                 0,
-                &mut state.pb.links,
-                text_hanging,
-                ctx.fonts,
                 poly_line_geom.as_deref(),
-                &mut state.pb.gradient_specs,
-                Some(&mut state.pb.comment_anchors),
-                ln_cfg.map(|(start, count_by, right_x)| LineNumberArg {
-                    counter: &mut state.pb.line_number_counter,
-                    start,
-                    count_by,
-                    right_x,
-                    font: ln_font.clone(),
-                }),
-                Some(LinkTagger::new(
-                    &mut state.pb.tags,
-                    state.pb.all_contents.len(),
-                    tag,
-                )),
-                None,
+                lines.len(),
+                tag,
                 grid,
             );
             state.pb.end_tag();
@@ -6556,38 +6578,18 @@ fn render_paragraph_block(
                 state.pb.begin_tag(tag);
                 for &(from, to, seg_x, seg_w, seg_baseline) in segments.iter().filter(|s| s.1 > s.0)
                 {
-                    render_paragraph_lines(
-                        &mut state.pb.content,
+                    let grid = line_grid(baseline_offset2, state.pb.all_contents.len());
+                    draw(
+                        &mut state.pb,
                         &chunk[from..to],
-                        &para.alignment,
                         seg_x,
-                        para.indent_left,
                         seg_w,
                         seg_baseline,
-                        line_h,
-                        para_metrics,
-                        lines.len(),
                         start + from,
-                        &mut state.pb.links,
-                        text_hanging,
-                        ctx.fonts,
                         None,
-                        &mut state.pb.gradient_specs,
-                        Some(&mut state.pb.comment_anchors),
-                        ln_cfg.map(|(start, count_by, right_x)| LineNumberArg {
-                            counter: &mut state.pb.line_number_counter,
-                            start,
-                            count_by,
-                            right_x,
-                            font: ln_font.clone(),
-                        }),
-                        Some(LinkTagger::new(
-                            &mut state.pb.tags,
-                            state.pb.all_contents.len(),
-                            tag,
-                        )),
-                        None,
-                        line_grid(baseline_offset2, state.pb.all_contents.len()),
+                        lines.len(),
+                        tag,
+                        grid,
                     );
                 }
                 state.pb.end_tag();
@@ -7247,37 +7249,16 @@ fn render_paragraph_block(
         });
 
         if !lines.is_empty() {
-            render_paragraph_lines(
-                &mut state.pb.content,
+            draw(
+                &mut state.pb,
                 &lines,
-                &para.alignment,
                 para_text_x,
-                para.indent_left,
                 para_text_width,
                 baseline_y,
-                line_h,
-                para_metrics,
-                lines.len(),
                 0,
-                &mut state.pb.links,
-                text_hanging,
-                ctx.fonts,
                 poly_line_geom.as_deref(),
-                &mut state.pb.gradient_specs,
-                Some(&mut state.pb.comment_anchors),
-                ln_cfg.map(|(start, count_by, right_x)| LineNumberArg {
-                    counter: &mut state.pb.line_number_counter,
-                    start,
-                    count_by,
-                    right_x,
-                    font: ln_font.clone(),
-                }),
-                Some(LinkTagger::new(
-                    &mut state.pb.tags,
-                    state.pb.all_contents.len(),
-                    tags.1,
-                )),
-                None,
+                lines.len(),
+                tags.1,
                 grid,
             );
         }
