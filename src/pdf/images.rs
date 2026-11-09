@@ -262,44 +262,19 @@ fn decode_png_raw(data: &[u8]) -> Option<image::DynamicImage> {
 
 /// Write an image XObject into the PDF with the given filter and data.
 /// Optionally attaches a soft mask (alpha channel) reference.
+/// Write an 8-bit image XObject, its color space picked from the component
+/// count (1=gray, 4=cmyk, else rgb).
 fn write_image_xobject(
     pdf: &mut Pdf,
     xobj_ref: Ref,
     data: &[u8],
     filter: Filter,
-    w: u32,
-    h: u32,
-    smask: Option<Ref>,
-) {
-    let mut xobj = pdf.image_xobject(xobj_ref, data);
-    xobj.filter(filter);
-    xobj.width(w as i32);
-    xobj.height(h as i32);
-    xobj.color_space().device_rgb();
-    xobj.bits_per_component(8);
-    // Word smooths only its JPEGs: every Flate picture in the fixture
-    // references has /Interpolate false (118 against 7 DCT ones).
-    if matches!(filter, Filter::DctDecode) {
-        xobj.interpolate(true);
-    }
-    if let Some(mask_ref) = smask {
-        xobj.s_mask(mask_ref);
-    }
-}
-
-/// Embed a baseline JPEG (`DctDecode`) image XObject, picking the color space
-/// from the component count (1=gray, 4=cmyk, else rgb).
-fn write_jpeg_xobject(
-    pdf: &mut Pdf,
-    xobj_ref: Ref,
-    data: &[u8],
-    w: u32,
-    h: u32,
+    (w, h): (u32, u32),
     components: u8,
     smask: Option<Ref>,
 ) {
     let mut xobj = pdf.image_xobject(xobj_ref, data);
-    xobj.filter(Filter::DctDecode);
+    xobj.filter(filter);
     xobj.width(w as i32);
     xobj.height(h as i32);
     match components {
@@ -308,7 +283,11 @@ fn write_jpeg_xobject(
         _ => xobj.color_space().device_rgb(),
     };
     xobj.bits_per_component(8);
-    xobj.interpolate(true);
+    // Word smooths only its JPEGs: every Flate picture in the fixture
+    // references has /Interpolate false (118 against 7 DCT ones).
+    if matches!(filter, Filter::DctDecode) {
+        xobj.interpolate(true);
+    }
     if let Some(mask_ref) = smask {
         xobj.s_mask(mask_ref);
     }
@@ -499,8 +478,8 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                                 xobj_ref,
                                 &jpeg_buf,
                                 Filter::DctDecode,
-                                tw,
-                                th,
+                                (tw, th),
+                                3,
                                 se_mask,
                             );
                             return xobj_ref;
@@ -511,12 +490,12 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                 // Passthrough: embed original JPEG bytes directly
                 let se_mask =
                     make_soft_edge_smask(img.pixel_width, img.pixel_height, self.pdf, self.alloc);
-                write_jpeg_xobject(
+                write_image_xobject(
                     self.pdf,
                     xobj_ref,
                     &img.data,
-                    img.pixel_width,
-                    img.pixel_height,
+                    Filter::DctDecode,
+                    (img.pixel_width, img.pixel_height),
                     img.jpeg_components,
                     se_mask,
                 );
@@ -645,7 +624,7 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                 } else {
                     (Filter::FlateDecode, compressed_rgb)
                 };
-                write_image_xobject(self.pdf, xobj_ref, &data, filter, w, h, smask_ref);
+                write_image_xobject(self.pdf, xobj_ref, &data, filter, (w, h), 3, smask_ref);
             }
             ImageFormat::Emf | ImageFormat::Svg => {
                 // Translate EMF records (or SVG elements) into a PDF Form XObject.
@@ -744,12 +723,12 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
         let refl_ref = self.next_ref();
         match img.format {
             ImageFormat::Jpeg => {
-                write_jpeg_xobject(
+                write_image_xobject(
                     self.pdf,
                     refl_ref,
                     &img.data,
-                    img.pixel_width,
-                    img.pixel_height,
+                    Filter::DctDecode,
+                    (img.pixel_width, img.pixel_height),
                     img.jpeg_components,
                     Some(grad_ref),
                 );
@@ -776,7 +755,15 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                     &image::RgbImage::from_raw(w, h, rgb_data.clone())
                         .expect("RGB data size matches"),
                 ) {
-                    write_jpeg_xobject(self.pdf, refl_ref, &jpeg_buf, w, h, 3, Some(grad_ref));
+                    write_image_xobject(
+                        self.pdf,
+                        refl_ref,
+                        &jpeg_buf,
+                        Filter::DctDecode,
+                        (w, h),
+                        3,
+                        Some(grad_ref),
+                    );
                 } else {
                     let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&rgb_data, 6);
                     write_image_xobject(
@@ -784,8 +771,8 @@ impl<A: FnMut() -> Ref> Embedder<'_, A> {
                         refl_ref,
                         &compressed,
                         Filter::FlateDecode,
-                        w,
-                        h,
+                        (w, h),
+                        3,
                         Some(grad_ref),
                     );
                 }
