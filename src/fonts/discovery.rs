@@ -79,25 +79,28 @@ fn font_family_names(face: &Face) -> (Vec<String>, bool) {
     (names, true)
 }
 
-/// Returns `(names, bold, italic, mac_roman_only, off_weight)` — one entry with
-/// ALL localized family names.
-fn read_font_style(data: &[u8], face_index: u32) -> Option<(Vec<String>, bool, bool, bool, bool)> {
-    let face = Face::parse(data, face_index).ok()?;
+/// One face under each of its localized family names, so a lookup by any of
+/// them finds it.
+fn read_faces(data: &[u8], face_index: u32) -> Vec<CachedFace> {
+    let Ok(face) = Face::parse(data, face_index) else {
+        return Vec::new();
+    };
     let (names, mac_roman_only) = font_family_names(&face);
-    if names.is_empty() {
-        return None;
-    }
     // Thin, Light, Black… faces that share the family name of the regular
     // and bold ones (Apple's HelveticaNeue.ttc: only its Thin face carries a
     // Unicode family name, so it outranked the Mac-Roman-only Regular).
     let off_weight = !(350..=750).contains(&face.weight().to_number());
-    Some((
-        names,
-        face.is_bold(),
-        face.is_italic(),
-        mac_roman_only,
-        off_weight,
-    ))
+    names
+        .into_iter()
+        .map(|family| CachedFace {
+            family,
+            bold: face.is_bold(),
+            italic: face.is_italic(),
+            face_index,
+            mac_roman_only,
+            off_weight,
+        })
+        .collect()
 }
 
 fn font_directories(extra: &[PathBuf]) -> Vec<PathBuf> {
@@ -197,6 +200,20 @@ fn scan_font_dirs(setup: &FontSetup) -> FontIndex {
     let mut dirs_scanned: u32 = 0;
     let mut visited_dirs = HashSet::new();
 
+    let mut index_faces = |faces: &[CachedFace], file_path: &PathBuf| {
+        for face in faces {
+            let tier = if face.off_weight {
+                &mut off_weight_index
+            } else if face.mac_roman_only {
+                &mut mac_roman_index
+            } else {
+                &mut index
+            };
+            tier.entry((face.family.to_lowercase(), face.bold, face.italic))
+                .or_insert((file_path.clone(), face.face_index));
+        }
+    };
+
     let mut stack: Vec<PathBuf> = dirs;
     while let Some(dir) = stack.pop() {
         if !visited_dirs.insert(dir.clone()) {
@@ -238,17 +255,7 @@ fn scan_font_dirs(setup: &FontSetup) -> FontIndex {
             new_cache.dir_mtimes.insert(dir.clone(), current_mtime);
             for file_path in &font_files {
                 if let Some(cached_file) = cache.files.get(file_path) {
-                    for face in &cached_file.faces {
-                        let tier = if face.off_weight {
-                            &mut off_weight_index
-                        } else if face.mac_roman_only {
-                            &mut mac_roman_index
-                        } else {
-                            &mut index
-                        };
-                        tier.entry((face.family.to_lowercase(), face.bold, face.italic))
-                            .or_insert((file_path.clone(), face.face_index));
-                    }
+                    index_faces(&cached_file.faces, file_path);
                     new_cache
                         .files
                         .insert(file_path.clone(), cached_file.clone());
@@ -269,32 +276,10 @@ fn scan_font_dirs(setup: &FontSetup) -> FontIndex {
                 continue;
             };
             let face_count = ttf_parser::fonts_in_collection(&data).unwrap_or(1);
-            let mut faces = Vec::new();
-            for face_idx in 0..face_count {
-                if let Some((families, bold, italic, mac_roman_only, off_weight)) =
-                    read_font_style(&data, face_idx)
-                {
-                    for family in families {
-                        let tier = if off_weight {
-                            &mut off_weight_index
-                        } else if mac_roman_only {
-                            &mut mac_roman_index
-                        } else {
-                            &mut index
-                        };
-                        tier.entry((family.to_lowercase(), bold, italic))
-                            .or_insert((file_path.clone(), face_idx));
-                        faces.push(CachedFace {
-                            family,
-                            bold,
-                            italic,
-                            face_index: face_idx,
-                            mac_roman_only,
-                            off_weight,
-                        });
-                    }
-                }
-            }
+            let faces: Vec<CachedFace> = (0..face_count)
+                .flat_map(|face_idx| read_faces(&data, face_idx))
+                .collect();
+            index_faces(&faces, &file_path);
             new_cache.files.insert(file_path, CachedFile { faces });
         }
     }
