@@ -4095,10 +4095,21 @@ fn compute_bookmark_positions(
     }
 
     let mut bookmark_positions: HashMap<String, (usize, f32)> = HashMap::new();
-    let mut page_idx = 0usize;
     // The section each simulated page opens in, shaped like
-    // `PageBuilder::page_section_indices` for `page_number_formats`.
+    // `PageBuilder::page_section_indices` for `page_number_formats`; a
+    // bookmark's page is the last one opened.
     let mut pages = vec![(0, false, 0)];
+    // Opens the next simulated page of section `si`: its slot top and
+    // effective bottom margin.
+    let open_page =
+        |pages: &mut Vec<(usize, bool, usize)>, si: usize, sp: &SectionProperties, first: bool| {
+            pages.push((si, false, si));
+            let page = last_page_number(&doc.sections, pages.iter());
+            (
+                effective_slot_top(sp, first, page, ctx),
+                compute_effective_margin_bottom(sp, first, page, ctx),
+            )
+        };
     let first_sp = &doc.sections[0].properties;
     let mut sp = first_sp;
     let page = last_page_number(&doc.sections, &pages);
@@ -4114,11 +4125,7 @@ fn compute_bookmark_positions(
                 SectionBreakType::NextPage
                 | SectionBreakType::OddPage
                 | SectionBreakType::EvenPage => {
-                    page_idx += 1;
-                    pages.push((si, false, si));
-                    let page = last_page_number(&doc.sections, &pages);
-                    slot_top = effective_slot_top(sp, true, page, ctx);
-                    margin_bottom = compute_effective_margin_bottom(sp, true, page, ctx);
+                    (slot_top, margin_bottom) = open_page(&mut pages, si, sp, true);
                     prev_space_after = 0.0;
                 }
                 SectionBreakType::Continuous => {}
@@ -4138,15 +4145,11 @@ fn compute_bookmark_positions(
                                 ctx,
                             )
                     {
-                        page_idx += 1;
-                        pages.push((si, false, si));
-                        let page = last_page_number(&doc.sections, &pages);
-                        slot_top = effective_slot_top(sp, false, page, ctx);
-                        margin_bottom = compute_effective_margin_bottom(sp, false, page, ctx);
+                        (slot_top, margin_bottom) = open_page(&mut pages, si, sp, false);
                         prev_space_after = 0.0;
                     }
                     for bm in &para.bookmarks {
-                        bookmark_positions.insert(bm.clone(), (page_idx, slot_top));
+                        bookmark_positions.insert(bm.clone(), (pages.len() - 1, slot_top));
                     }
                     if is_empty_wrapping_frame(para) {
                         continue;
@@ -4220,11 +4223,7 @@ fn compute_bookmark_positions(
                         num_lines as f32 * line_h
                     };
                     let effective_sb = helpers::effective_space_before(para, prev_para);
-                    let next_para = match blocks.get(bi + 1) {
-                        Some(Block::Paragraph(p)) => Some(p),
-                        Some(Block::Table(t)) => first_cell_paragraph(t),
-                        None => None,
-                    };
+                    let next_para = block_para(blocks, bi + 1);
                     let effective_sa = helpers::effective_space_after(para, next_para);
                     let inter_gap = f32::max(prev_space_after, effective_sb);
                     let needed = inter_gap + content_h;
@@ -4237,11 +4236,7 @@ fn compute_bookmark_positions(
                                 ctx,
                             )
                     {
-                        page_idx += 1;
-                        pages.push((si, false, si));
-                        let page = last_page_number(&doc.sections, &pages);
-                        slot_top = effective_slot_top(sp, false, page, ctx);
-                        margin_bottom = compute_effective_margin_bottom(sp, false, page, ctx);
+                        (slot_top, margin_bottom) = open_page(&mut pages, si, sp, false);
                         slot_top -= content_h;
                     } else {
                         slot_top -= inter_gap + content_h;
@@ -4260,17 +4255,13 @@ fn compute_bookmark_positions(
                         cells.iter().map(|c| c.len().max(1)).max().unwrap_or(1) * table.rows.len();
                     let est_h = para_count as f32 * 14.0;
                     if slot_top - est_h < margin_bottom {
-                        page_idx += 1;
-                        pages.push((si, false, si));
-                        let page = last_page_number(&doc.sections, &pages);
-                        slot_top = effective_slot_top(sp, false, page, ctx);
-                        margin_bottom = compute_effective_margin_bottom(sp, false, page, ctx);
+                        (slot_top, margin_bottom) = open_page(&mut pages, si, sp, false);
                     }
                     // Captions in cells count as on the table's page (issue
                     // #146: a panel table's TOC entries had no page numbers).
                     // ponytail: a table that splits keeps its first page.
                     for bm in cells.iter().flatten().flat_map(|p| &p.bookmarks) {
-                        bookmark_positions.insert(bm.clone(), (page_idx, slot_top));
+                        bookmark_positions.insert(bm.clone(), (pages.len() - 1, slot_top));
                     }
                     slot_top -= est_h;
                     prev_space_after = 0.0;
