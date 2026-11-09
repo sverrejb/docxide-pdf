@@ -203,6 +203,7 @@ tests/
 - Rust edition: 2024
 - Test output is compared using **Jaccard similarity on ink pixels** (luma < 200 = ink) and **SSIM** with spatial tolerance (±8px). Run tests with `cargo test -- --nocapture` to see scores.
 - Jaccard threshold: **20.5%**, SSIM threshold: **75%** (defined in `tests/suite/visual_comparison.rs`)
+- Baselines (`tests/baselines.json`, `tests/visual_hashes.json`, written by `tools/target/debug/accept-baselines [--dry-run] [case-substring...]` after a full visual suite): **accept improvements on your own**, in the same push as the change that earned them. **Any score drop needs the user's explicit approval** before it is accepted; show the `--dry-run` output and wait. A flag the tool does not know is ignored and runs a full accept, so always dry-run first.
 - Accessibility (`tests/suite/accessibility.rs`, `tests/common/a11y.rs`): `ua_deficit` (veraPDF PDF/UA-1 rules we fail worse than Word; 0 = as good as Word), `a11y_struct` (tag sequence vs Word's), `a11y_text` (block text in structure order vs Word's), `a11y_missing` (DOCX letters and digits that never reach our structure tree; needs no reference, any increase fails). Untagged references score N/A on the Word-relative three. See the Accessibility section of `roadmap.md`
 - 79 handcrafted test cases (`tests/fixtures/cases/`) covering text, tables, images, charts, shapes, SmartArt, and more, plus the fonts/, hyphenation/ and scraped/ groups
 

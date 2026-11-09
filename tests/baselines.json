@@ -1999,8 +1999,8 @@
     "a11y_text": 1.0
   },
   "cases/case47": {
-    "jaccard": 0.8972,
-    "ssim": 0.9424,
+    "jaccard": 0.9287,
+    "ssim": 0.982,
     "text_boundary": 0.9381,
     "ua_fail": 3,
     "a11y_missing": 0,
