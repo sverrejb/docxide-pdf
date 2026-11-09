@@ -86,14 +86,14 @@ pub fn resolve_path<'a, S: AsRef<str> + 'a>(
             v
         }
     };
-    let scale_y = |v: f64| -> f64 {
-        let scaled = if path_h > 0.0 {
+    let scale_h = |v: f64| -> f64 {
+        if path_h > 0.0 {
             v / path_h * shape_h
         } else {
             v
-        };
-        shape_h - scaled
+        }
     };
+    let scale_y = |v: f64| -> f64 { shape_h - scale_h(v) };
     let rx = |arg: &S| -> f64 { scale_x(env.resolve(arg.as_ref()) as f64) };
     let ry = |arg: &S| -> f64 { scale_y(env.resolve(arg.as_ref()) as f64) };
 
@@ -121,19 +121,17 @@ pub fn resolve_path<'a, S: AsRef<str> + 'a>(
                 x3,
                 y3,
             } => {
-                let cmd = ResolvedCommand::CubicTo {
+                let (x, y) = (rx(x3), ry(y3));
+                result.push(ResolvedCommand::CubicTo {
                     x1: rx(x1),
                     y1: ry(y1),
                     x2: rx(x2),
                     y2: ry(y2),
-                    x: rx(x3),
-                    y: ry(y3),
-                };
-                if let ResolvedCommand::CubicTo { x, y, .. } = &cmd {
-                    cur_x = *x;
-                    cur_y = *y;
-                }
-                result.push(cmd);
+                    x,
+                    y,
+                });
+                cur_x = x;
+                cur_y = y;
             }
             PathCommandDef::QuadBezTo { x1, y1, x2, y2 } => {
                 let (qx, qy) = (rx(x1), ry(y1));
@@ -149,12 +147,7 @@ pub fn resolve_path<'a, S: AsRef<str> + 'a>(
                 sw_ang,
             } => {
                 let wr_val = scale_x(env.resolve(wr.as_ref()) as f64).abs();
-                let hr_raw = env.resolve(hr.as_ref()) as f64;
-                let hr_val = if path_h > 0.0 {
-                    (hr_raw / path_h * shape_h).abs()
-                } else {
-                    hr_raw.abs()
-                };
+                let hr_val = scale_h(env.resolve(hr.as_ref()) as f64).abs();
                 let st = env.resolve(st_ang.as_ref()) as f64;
                 let sw = env.resolve(sw_ang.as_ref()) as f64;
                 arc_to_cubics(&mut result, &mut cur_x, &mut cur_y, wr_val, hr_val, st, sw);
