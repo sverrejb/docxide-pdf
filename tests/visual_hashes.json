@@ -1585,6 +1585,25 @@
     "0131608dad18d2e5be7ed271e6822f996c9eedada422e5a9e398fd2934e09d60",
     "04862c6ec9f3effbb25b08cdeb919ba5bda1ace55f573143c18b9423bcebc9c0"
   ],
+  "cases/frame-balanced-columns": [
+    "7a30de8fd22801fb40f339db12c57416731e869fcbf387767c1b4d2d3408fd7d"
+  ],
+  "cases/frame-balanced-opens-column": [
+    "6c9d34a2865c2092b44811145269b16dca73c4efcd610a3ffb7fa528e7a22c7e"
+  ],
+  "cases/frame-clip-page-break": [
+    "2f3c51669cf14a4b9c61705334c6ceeb3d167c64d8f86995d62e9c8e5f06d223"
+  ],
+  "cases/frame-continuous-columns": [
+    "c5adad07745709ef9a76a522a60b14a986f7ffaa94ebcd440b4b77628f405554",
+    "cf3181f0fa08a97b3b2d1b4249a457461731c20b74feab2bfecb65dcf857a8e5"
+  ],
+  "cases/frame-ends-with-page-break": [
+    "9bb3bffeae98c6682a34384b219875ed76384995a4b8cf5eb389ec5db6fd16ff"
+  ],
+  "cases/frame-exact-box-overflows": [
+    "d5cb1d2d2e72277f88f41ea282ab11a933e210bffa666a5d295cf1f01344d80a"
+  ],
   "cases/frame-float-clearance-f0-y400-h400": [
     "feea9fa457eb640f9b4acd554ab72a4a55699e9945392e9c1fdb61393355e027"
   ],
@@ -1608,6 +1627,48 @@
   ],
   "cases/frame-float-clearance-f1-y700-h700": [
     "956e54faff36f4f7abac85e1e17e7e7253c696df31c33207271dee19751d0370"
+  ],
+  "cases/frame-keep-with-next": [
+    "d57d3e4cc58599b9a3bf8da5fa11caee5fa42291990eea9d2a475059bcc633fa",
+    "9a8e6adb5ff510754167ca5ceb6620285dd837178977f8828dc0b10c62cca021"
+  ],
+  "cases/frame-moved-space-before": [
+    "66a8c0f4ac08c053f13d0f5448bed44fd738a6074983f9e283a19e3bdc27fbf1",
+    "ec75f9837cbb801c512efc78ff91314903e943eac5f2cb5e14d2eac673059496"
+  ],
+  "cases/frame-moves-exact-height": [
+    "c6bd7cb282a6208acf0ad7c3775569ea49e1ee6b6eeada4b699e9747c326d488",
+    "a5447de35a84503a2535dfe0211b49fd33e8acb565ff491e2097e24474b8eadf",
+    "7d71a3ca29fdfb606da5df590b081c01b277c308486ab220cd86916d055ce71c"
+  ],
+  "cases/frame-moves-no-offset": [
+    "c6bd7cb282a6208acf0ad7c3775569ea49e1ee6b6eeada4b699e9747c326d488",
+    "5aac004ac2204b4ac9a5f6c56eaa8a1b2205979c4de1c771a7eeac0784396ead",
+    "7d71a3ca29fdfb606da5df590b081c01b277c308486ab220cd86916d055ce71c"
+  ],
+  "cases/frame-moves-picture-caption": [
+    "54ecfd088591d3eb9ae15703ceca893f8215c2d421c105235270a18682e4eb77",
+    "a972c0503885c33b6ed587234498d4a490ce3389c387136a0e58452a39dd88ea"
+  ],
+  "cases/frame-moves-shared-tall": [
+    "63ce2d81b690270d6a823a7547f314c2918421a1c3a87b7d3b9418b9f014ca5a",
+    "28ea60378bad766e0e138ad281da051b09a9bc4a467d4a48e47ccd0db936110b",
+    "a77527bb7aeab7e51a5213e4f5ba938cce2730ed7b9fad67d0f9f1c582047118"
+  ],
+  "cases/frame-moves-to-next-column": [
+    "3414d4006013bae7b3de1a26b84d2c8e0db9416d8e212c708ea088d3531baea1"
+  ],
+  "cases/frame-not-beside-height": [
+    "c6bd7cb282a6208acf0ad7c3775569ea49e1ee6b6eeada4b699e9747c326d488",
+    "d4b6a5774559f2d721db67c18ae29ccce507301a4fefa8100cfc2a3550466da9",
+    "5a0f82d7fa14801124e9d8977289fdded8f47b69f742e3bb1fa07bc30acae2a3"
+  ],
+  "cases/frame-page-break-before": [
+    "4258960d3d0b731cc930924a832841442ef217fa3a9422eecac5607a560839a7",
+    "328375ba67cafd7ec272ff2292ef924a66f95c32ecaf06643f33550be3b27779"
+  ],
+  "cases/frame-page-break-opens-column": [
+    "accac794f800e1d473cc5e481d7df5b44a1f23161cfbaa8d52344095b8a29575"
   ],
   "cases/full-width-float-empty-anchor": [
     "80d08fac68ff37d225a99d0003c0fa62e7aac5f18fcd3eecacdb66cc213a2943"
@@ -3995,7 +4056,7 @@
     "687cf802b6eb5b32578d66aa8e95e8bb263dde657cf8cf130eed1ab119d2905e",
     "a376b13e8c709ffa35a09a7b465d95f58e3e3c6bd85022832679ff5a4be105e1",
     "7366b506b7d37efb31047fbc00f5ee21e6367d6b33b2b5e1a514123ef8d2ee29",
-    "b7ff186166e1811443696df09499983735133c904e2b4495a2fb8d55b7d9a847",
+    "918145f4e2d728f595e3cd1b52dd6f65178fc3ab1b39d2bc6982e627e7012597",
     "4755ef4028563a756b035d06f96763fe77f04bb0970a755218898ec4009e3dfb",
     "6b9aec523f80007307cf415c5ad435e5ffcc69048cd65f686d51904c958a91c6",
     "515da3d04af3aad0ab8fbe79b4f4f7e166aded9492d86b8700e36e0cbb23ff39",

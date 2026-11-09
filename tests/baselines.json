@@ -4488,6 +4488,30 @@
     "jaccard": 0.9912,
     "ssim": 0.9899
   },
+  "cases/frame-balanced-columns": {
+    "jaccard": 1.0,
+    "ssim": 1.0
+  },
+  "cases/frame-balanced-opens-column": {
+    "jaccard": 0.9308,
+    "ssim": 0.9794
+  },
+  "cases/frame-clip-page-break": {
+    "jaccard": 0.6088,
+    "ssim": 0.7225
+  },
+  "cases/frame-continuous-columns": {
+    "jaccard": 0.9319,
+    "ssim": 0.9874
+  },
+  "cases/frame-ends-with-page-break": {
+    "jaccard": 1.0,
+    "ssim": 1.0
+  },
+  "cases/frame-exact-box-overflows": {
+    "jaccard": 0.9583,
+    "ssim": 0.997
+  },
   "cases/frame-float-clearance-f0-y400-h400": {
     "jaccard": 0.8633,
     "ssim": 0.9416,
@@ -4567,6 +4591,46 @@
     "ua_deficit": 0,
     "a11y_struct": 0.5455,
     "a11y_text": 1.0
+  },
+  "cases/frame-keep-with-next": {
+    "jaccard": 0.9722,
+    "ssim": 0.9979
+  },
+  "cases/frame-moved-space-before": {
+    "jaccard": 0.9763,
+    "ssim": 0.9983
+  },
+  "cases/frame-moves-exact-height": {
+    "jaccard": 0.8177,
+    "ssim": 0.9309
+  },
+  "cases/frame-moves-no-offset": {
+    "jaccard": 0.8162,
+    "ssim": 0.9303
+  },
+  "cases/frame-moves-picture-caption": {
+    "jaccard": 0.9779,
+    "ssim": 0.9954
+  },
+  "cases/frame-moves-shared-tall": {
+    "jaccard": 0.9805,
+    "ssim": 0.9901
+  },
+  "cases/frame-moves-to-next-column": {
+    "jaccard": 0.9351,
+    "ssim": 0.9876
+  },
+  "cases/frame-not-beside-height": {
+    "jaccard": 0.7903,
+    "ssim": 0.9288
+  },
+  "cases/frame-page-break-before": {
+    "jaccard": 0.971,
+    "ssim": 0.9941
+  },
+  "cases/frame-page-break-opens-column": {
+    "jaccard": 0.9351,
+    "ssim": 0.9874
   },
   "cases/full-width-float-empty-anchor": {
     "jaccard": 0.9808,
@@ -10147,8 +10211,8 @@
     "a11y_text": 0.9895
   },
   "scraped/croatian_grant_guidelines": {
-    "jaccard": 0.8006,
-    "ssim": 0.937,
+    "jaccard": 0.8016,
+    "ssim": 0.9374,
     "text_boundary": 1.0,
     "convert_ms": 270.5,
     "ua_fail": 2,
