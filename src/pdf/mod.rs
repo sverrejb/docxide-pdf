@@ -3694,11 +3694,7 @@ fn empty_frame_table_bands(
         let fits = blocks[..start].iter().all(|b| {
             match b {
                 Block::Table(t) => {
-                    if t.rows
-                        .iter()
-                        .flat_map(|r| r.cells.iter())
-                        .flat_map(|c| c.all_paragraphs())
-                        .any(|q| {
+                    if t.all_paragraphs().any(|q| {
                             q.page_break_before
                                 || q.page_break_after
                                 || q.page_break_at.is_some()
@@ -4012,13 +4008,7 @@ fn body_runs<'a>(doc: &'a Document) -> impl Iterator<Item = &'a Run> + 'a {
         |block| -> Box<dyn Iterator<Item = &'a Run> + 'a> {
             match block {
                 Block::Paragraph(p) => Box::new(p.runs.iter()),
-                Block::Table(t) => Box::new(
-                    t.rows
-                        .iter()
-                        .flat_map(|row| row.cells.iter())
-                        .flat_map(|cell| cell.all_paragraphs())
-                        .flat_map(|p| p.runs.iter()),
-                ),
+                Block::Table(t) => Box::new(t.all_paragraphs().flat_map(|p| p.runs.iter())),
             }
         },
     )
@@ -8124,17 +8114,13 @@ fn render_pass(
 
                         // Update styleref tracking (footnotes are already tracked
                         // inside render_table incrementally per row).
-                        for row in &table.rows {
-                            for cell in &row.cells {
-                                for p in cell.all_paragraphs() {
-                                    update_styleref_from_para(
-                                        &mut state.pb.styleref_running,
-                                        &mut state.pb.styleref_page_first,
-                                        p,
-                                        &doc.style_id_to_name,
-                                    );
-                                }
-                            }
+                        for p in table.all_paragraphs() {
+                            update_styleref_from_para(
+                                &mut state.pb.styleref_running,
+                                &mut state.pb.styleref_page_first,
+                                p,
+                                &doc.style_id_to_name,
+                            );
                         }
                     }
                 }
