@@ -2153,40 +2153,22 @@ pub(super) fn render_table(
 
     // Pre-scan each row for footnote and endnote references so we can reserve
     // space as rows containing notes are rendered.
-    let row_footnote_ids: Vec<Vec<u32>> = table
-        .rows
-        .iter()
-        .map(|row| {
-            let mut ids = Vec::new();
-            for cell in &row.cells {
-                for p in cell.all_paragraphs() {
-                    for run in &p.runs {
-                        if let Some(id) = run.footnote_id {
-                            ids.push(id);
-                        }
-                    }
-                }
-            }
-            ids
-        })
-        .collect();
-    let row_endnote_ids: Vec<Vec<u32>> = table
-        .rows
-        .iter()
-        .map(|row| {
-            let mut ids = Vec::new();
-            for cell in &row.cells {
-                for p in cell.all_paragraphs() {
-                    for run in &p.runs {
-                        if let Some(id) = run.endnote_id {
-                            ids.push(id);
-                        }
-                    }
-                }
-            }
-            ids
-        })
-        .collect();
+    let note_ids = |pick: fn(&crate::model::Run) -> Option<u32>| -> Vec<Vec<u32>> {
+        table
+            .rows
+            .iter()
+            .map(|row| {
+                row.cells
+                    .iter()
+                    .flat_map(|cell| cell.all_paragraphs())
+                    .flat_map(|p| &p.runs)
+                    .filter_map(pick)
+                    .collect()
+            })
+            .collect()
+    };
+    let row_footnote_ids = note_ids(|run| run.footnote_id);
+    let row_endnote_ids = note_ids(|run| run.endnote_id);
 
     // Text width for footnote height computation (same as paragraph layout uses).
     // A table's notes go to the foot of its column (the page in one column).
