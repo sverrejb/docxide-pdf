@@ -289,11 +289,10 @@ pub(super) fn render_smartart(
             continue;
         }
 
-        let (txt_x, txt_y, txt_w, txt_h) = if let Some((tx, ty, tw, th)) = shape.text_rect {
-            (tx, ty, tw, th)
-        } else {
-            (shape.x, shape.y, shape.width, shape.height)
-        };
+        let (txt_x, txt_y, txt_w, txt_h) =
+            shape
+                .text_rect
+                .unwrap_or((shape.x, shape.y, shape.width, shape.height));
 
         let (ins_top, ins_right, ins_bottom, ins_left) = shape.text_insets;
         let avail_w = (txt_w - ins_left - ins_right).max(1.0);
@@ -307,22 +306,32 @@ pub(super) fn render_smartart(
             .unwrap_or(10.0);
 
         // Build all wrapped lines across all paragraphs first (for vertical centering)
-        struct WordPiece<'a> {
-            text: String,
+        /// A word, a space or a bullet, measured in its run's font.
+        #[derive(Clone, Copy)]
+        struct Piece<'a> {
+            text: &'a str,
             width: f32,
+            space_w: f32, // width of space in this run's font/size
             fe: Option<&'a FontEntry>,
             run: &'a crate::model::SmartArtRun,
         }
         struct WrappedLine<'a> {
-            pieces: Vec<WordPiece<'a>>,
+            pieces: Vec<Piece<'a>>,
             total_w: f32,
             align: SmartArtTextAlign,
             line_h: f32,
         }
 
+        // A bullet is the paragraph's first word; the strings live here so
+        // the pieces can borrow them like run text.
+        let bullets: Vec<Option<String>> = shape
+            .paragraphs
+            .iter()
+            .map(|p| p.bullet.as_deref().map(|b| format!("{b} ")))
+            .collect();
         let mut all_lines: Vec<WrappedLine<'_>> = Vec::new();
 
-        for para in &shape.paragraphs {
+        for (para, bullet) in shape.paragraphs.iter().zip(&bullets) {
             let para_fs = para
                 .runs
                 .iter()
@@ -337,29 +346,20 @@ pub(super) fn render_smartart(
             };
 
             // Collect word segments: split each run's text by spaces
-            struct WordSeg<'a> {
-                text: String,
-                width: f32,
-                space_w: f32, // width of space in this run's font/size
-                fe: Option<&'a FontEntry>,
-                run: &'a crate::model::SmartArtRun,
-            }
-            let mut words: Vec<WordSeg<'_>> = Vec::new();
+            let mut words: Vec<Piece<'_>> = Vec::new();
 
-            // Handle bullet as the first word
-            if let Some(b) = para.bullet.as_deref() {
-                let bullet_text = format!("{b} ");
-                if let Some(first_run) = para.runs.first() {
-                    let fe = resolve_run_font(first_run, seen_fonts, sa_font_entry);
-                    let bw = charts::text_width(&bullet_text, first_run.font_size, fe);
-                    words.push(WordSeg {
-                        text: bullet_text,
-                        width: bw,
-                        space_w: 0.0,
-                        fe,
-                        run: first_run,
-                    });
-                }
+            if let Some(bullet_text) = bullet.as_deref()
+                && let Some(first_run) = para.runs.first()
+            {
+                let fe = resolve_run_font(first_run, seen_fonts, sa_font_entry);
+                let bw = charts::text_width(bullet_text, first_run.font_size, fe);
+                words.push(Piece {
+                    text: bullet_text,
+                    width: bw,
+                    space_w: 0.0,
+                    fe,
+                    run: first_run,
+                });
             }
 
             for run in &para.runs {
@@ -376,8 +376,8 @@ pub(super) fn render_smartart(
                     } else {
                         charts::text_width(word, efs, fe)
                     };
-                    words.push(WordSeg {
-                        text: word.to_string(),
+                    words.push(Piece {
+                        text: word,
                         width: ww,
                         space_w,
                         fe,
@@ -387,10 +387,10 @@ pub(super) fn render_smartart(
             }
 
             // Greedy line-fill
-            let mut cur_line: Vec<WordPiece<'_>> = Vec::new();
+            let mut cur_line: Vec<Piece<'_>> = Vec::new();
             let mut cur_w = 0.0_f32;
 
-            for seg in &words {
+            for &seg in &words {
                 let needed = if cur_line.is_empty() {
                     seg.width
                 } else {
@@ -409,19 +409,13 @@ pub(super) fn render_smartart(
                 if !cur_line.is_empty() {
                     // Add space before this word
                     cur_w += seg.space_w;
-                    cur_line.push(WordPiece {
-                        text: " ".to_string(),
+                    cur_line.push(Piece {
+                        text: " ",
                         width: seg.space_w,
-                        fe: seg.fe,
-                        run: seg.run,
+                        ..seg
                     });
                 }
-                cur_line.push(WordPiece {
-                    text: seg.text.clone(),
-                    width: seg.width,
-                    fe: seg.fe,
-                    run: seg.run,
-                });
+                cur_line.push(seg);
                 cur_w += seg.width;
             }
             if !cur_line.is_empty() {
@@ -515,7 +509,7 @@ pub(super) fn render_smartart(
                     content
                         .set_text_rendering_mode(pdf_writer::types::TextRenderingMode::FillStroke);
                 }
-                charts::show_text(content, fpn, efs, cx, ry, &piece.text, piece.fe);
+                charts::show_text(content, fpn, efs, cx, ry, piece.text, piece.fe);
                 if needs_synthetic_bold {
                     content.set_text_rendering_mode(pdf_writer::types::TextRenderingMode::Fill);
                 }
