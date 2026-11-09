@@ -48,6 +48,7 @@ pub(super) fn find_text_glow(tb: &Textbox) -> Option<&TextGlow> {
 // Glyph outline extraction
 // ---------------------------------------------------------------------------
 
+#[derive(Default)]
 pub(super) struct GlyphPath {
     pub commands: Vec<GlyphCommand>,
 }
@@ -60,11 +61,7 @@ pub(super) enum GlyphCommand {
     Close,
 }
 
-struct GlyphOutlineCollector {
-    commands: Vec<GlyphCommand>,
-}
-
-impl ttf_parser::OutlineBuilder for GlyphOutlineCollector {
+impl ttf_parser::OutlineBuilder for GlyphPath {
     fn move_to(&mut self, x: f32, y: f32) {
         self.commands.push(GlyphCommand::MoveTo(x, y));
     }
@@ -88,13 +85,9 @@ pub(super) fn extract_glyph_path(face: &ttf_parser::Face, ch: char) -> Option<Gl
     // A glyph without an hmtx entry is not drawn (advances come from
     // `compute_char_advances`).
     face.glyph_hor_advance(gid)?;
-    let mut collector = GlyphOutlineCollector {
-        commands: Vec::new(),
-    };
-    face.outline_glyph(gid, &mut collector)?;
-    Some(GlyphPath {
-        commands: collector.commands,
-    })
+    let mut path = GlyphPath::default();
+    face.outline_glyph(gid, &mut path)?;
+    Some(path)
 }
 
 /// Search seen_fonts for a matching entry with the right bold/italic variant.
