@@ -10739,8 +10739,8 @@
     "a11y_text": 1.0
   },
   "scraped/japanese_hr_consultation_application": {
-    "jaccard": 0.6903,
-    "ssim": 0.7862,
+    "jaccard": 0.6901,
+    "ssim": 0.7859,
     "text_boundary": 0.7556,
     "ua_fail": 0,
     "a11y_missing": 0,

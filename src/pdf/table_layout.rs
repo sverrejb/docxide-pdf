@@ -1506,17 +1506,14 @@ pub(super) fn compute_row_layouts(
                 .grid_cells()
                 .map(|(grid_col, span, cell)| {
                     let span_w = cell_span_width(col_widths, grid_col, span);
-                    // For auto-fit tables the resolved grid width is what the
-                    // renderer draws borders and content at, so the layout must
-                    // use the same width — a larger tcW preference otherwise wraps
-                    // text past the drawn cell border (#115). Fixed-layout tables
-                    // keep honoring the cell's preferred width (their gridCol can
-                    // be narrower than Word's effective column).
-                    let col_w = if table.fixed_layout {
-                        span_w.max(cell.width)
-                    } else {
-                        span_w
-                    };
+                    // The resolved grid width is what the renderer draws borders
+                    // and content at, so the layout must use the same width — a
+                    // larger tcW preference otherwise wraps text past the drawn
+                    // cell border (#115). Fixed layout too: `fixed_columns`
+                    // already takes the cells' widths where Word does, and a
+                    // dxa-wide table keeps its grid (a corpus redline's 2in
+                    // columns under 4800-twip cells break 72pt "aft|er").
+                    let col_w = span_w;
                     if cell.v_merge == VMerge::Continue {
                         return CellLayout {
                             items: vec![],
