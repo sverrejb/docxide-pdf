@@ -6,7 +6,7 @@ use super::{WML_NS, parse_hex_color, twips_attr, wml, wml_attr, wml_bool};
 use crate::model::{Alignment, LabelRevision, LabelSuffix, ListItem, Run};
 use pdf_writer::types::ListNumbering;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub(super) struct LevelDef {
     pub(super) num_fmt: String,
     pub(super) lvl_text: String,
@@ -1041,20 +1041,9 @@ mod tests {
             lvl_text: "%1.".into(),
             indent_left: 36.0,
             indent_hanging: 18.0,
-            tab_stop: None,
             start: 1,
-            label_font_size: None,
-            label_vert_align: None,
-            label_bold: None,
-            label_italic: None,
-            label_caps: None,
-            label_color: None,
             suff: "tab".into(),
-            jc: Alignment::Left,
-            label_font: None,
-            is_lgl: false,
-            lvl_restart: None,
-            pstyle: None,
+            ..Default::default()
         };
         let override_def = LevelDef {
             num_fmt: "upperLetter".into(),
@@ -1276,20 +1265,9 @@ mod tests {
             lvl_text: "%1.".into(),
             indent_left: 36.0,
             indent_hanging: 18.0,
-            tab_stop: None,
             start: 1,
-            label_font_size: None,
-            label_vert_align: None,
-            label_bold: None,
-            label_italic: None,
-            label_caps: None,
-            label_color: None,
             suff: "tab".into(),
-            jc: Alignment::Left,
-            label_font: None,
-            is_lgl: false,
-            lvl_restart: None,
-            pstyle: None,
+            ..Default::default()
         };
         numbering
             .abstract_nums
