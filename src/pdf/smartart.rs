@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use pdf_writer::Content;
 
 use crate::fonts::FontEntry;
-use crate::model::{SmartArtDiagram, SmartArtTextAlign, SmartArtTextAnchor};
+use crate::model::{SmartArtDiagram, SmartArtShape, SmartArtTextAlign, SmartArtTextAnchor};
 
 use super::charts;
 use super::color;
@@ -154,131 +154,17 @@ pub(super) fn render_smartart(
             .unwrap_or(10.0);
 
         // Build all wrapped lines across all paragraphs first (for vertical centering)
-        /// A word, a space or a bullet, measured in its run's font.
-        #[derive(Clone, Copy)]
-        struct Piece<'a> {
-            text: &'a str,
-            width: f32,
-            space_w: f32, // width of space in this run's font/size
-            fe: Option<&'a FontEntry>,
-            run: &'a crate::model::SmartArtRun,
-        }
-        struct WrappedLine<'a> {
-            pieces: Vec<Piece<'a>>,
-            total_w: f32,
-            align: SmartArtTextAlign,
-            line_h: f32,
-        }
-
         // A bullet is the paragraph's first word; the strings live here so
-        // the pieces can borrow them like run text.
+        // the wrapped pieces can borrow them like run text.
         let bullets: Vec<Option<String>> = shape
             .paragraphs
             .iter()
             .map(|p| p.bullet.as_deref().map(|b| format!("{b} ")))
             .collect();
-        let mut all_lines: Vec<WrappedLine<'_>> = Vec::new();
-
-        for (para, bullet) in shape.paragraphs.iter().zip(&bullets) {
-            let para_fs = para
-                .runs
-                .iter()
-                .map(|r| r.font_size)
-                .find(|&fs| fs > 0.0)
-                .unwrap_or(base_fs);
-            // spcPct is percentage of single spacing; single ≈ 1.2× font size
-            let line_h = if para.line_spacing_pct > 0.0 {
-                para_fs * 1.2 * para.line_spacing_pct
-            } else {
-                para_fs * 1.2
-            };
-
-            // Collect word segments: split each run's text by spaces
-            let mut words: Vec<Piece<'_>> = Vec::new();
-
-            if let Some(bullet_text) = bullet.as_deref()
-                && let Some(first_run) = para.runs.first()
-            {
-                let fe = resolve_run_font(first_run, seen_fonts, sa_font_entry);
-                let bw = charts::text_width(bullet_text, first_run.font_size, fe);
-                words.push(Piece {
-                    text: bullet_text,
-                    width: bw,
-                    space_w: 0.0,
-                    fe,
-                    run: first_run,
-                });
-            }
-
-            for run in &para.runs {
-                let fe = resolve_run_font(run, seen_fonts, sa_font_entry);
-                let efs = effective_font_size(run);
-                let space_w = charts::text_width(" ", efs, fe);
-
-                for (i, word) in run.text.split(' ').enumerate() {
-                    if word.is_empty() && i > 0 {
-                        continue;
-                    }
-                    let ww = if word.is_empty() {
-                        0.0
-                    } else {
-                        charts::text_width(word, efs, fe)
-                    };
-                    words.push(Piece {
-                        text: word,
-                        width: ww,
-                        space_w,
-                        fe,
-                        run,
-                    });
-                }
-            }
-
-            // Greedy line-fill
-            let mut cur_line: Vec<Piece<'_>> = Vec::new();
-            let mut cur_w = 0.0_f32;
-
-            for &seg in &words {
-                let needed = if cur_line.is_empty() {
-                    seg.width
-                } else {
-                    seg.space_w + seg.width
-                };
-                if !cur_line.is_empty() && cur_w + needed > avail_w + 0.05 {
-                    let total_w = cur_w;
-                    all_lines.push(WrappedLine {
-                        pieces: std::mem::take(&mut cur_line),
-                        total_w,
-                        align: para.align,
-                        line_h,
-                    });
-                    cur_w = 0.0;
-                }
-                if !cur_line.is_empty() {
-                    // Add space before this word
-                    cur_w += seg.space_w;
-                    cur_line.push(Piece {
-                        text: " ",
-                        width: seg.space_w,
-                        ..seg
-                    });
-                }
-                cur_line.push(seg);
-                cur_w += seg.width;
-            }
-            if !cur_line.is_empty() {
-                let total_w = cur_w;
-                all_lines.push(WrappedLine {
-                    pieces: cur_line,
-                    total_w,
-                    align: para.align,
-                    line_h,
-                });
-            }
-        }
+        let lines = wrap_shape_text(shape, &bullets, avail_w, base_fs, seen_fonts, sa_font_entry);
 
         // Compute total text height and vertical anchor position
-        let total_text_h: f32 = all_lines.iter().map(|l| l.line_h).sum();
+        let total_text_h: f32 = lines.iter().map(|l| l.line_h).sum();
         let content_h = txt_h - ins_top - ins_bottom;
         let text_top_y = match shape.text_anchor {
             SmartArtTextAnchor::Top => diag_y - txt_y - ins_top,
@@ -288,99 +174,241 @@ pub(super) fn render_smartart(
             SmartArtTextAnchor::Bottom => diag_y - txt_y - ins_top - (content_h - total_text_h),
         };
 
-        // Distance from the text block's top to the first baseline. The baseline
-        // sits at the font's ascent within the line box, which is a fraction
-        // (ascender/line-height) of the line height — not the full em. Using the
-        // full em (base_fs) drops every line ~0.15em too low, leaving centered
-        // text noticeably below center. Derive the fraction from the first line's
-        // resolved font metrics, defaulting to a typical ascent ratio.
-        let first_ascent = {
-            let fl = all_lines.first();
-            let frac = fl
-                .and_then(|l| l.pieces.first())
-                .and_then(|p| p.fe)
-                .and_then(|e| match (e.ascender_ratio, e.line_h_ratio) {
-                    (Some(a), Some(lh)) if lh > 0.0 => Some(a / lh),
-                    _ => None,
-                })
-                .unwrap_or(0.85);
-            fl.map(|l| l.line_h * frac).unwrap_or(base_fs)
+        render_shape_text(
+            content,
+            &lines,
+            (diag_x + txt_x + ins_left, text_top_y),
+            avail_w,
+            base_fs,
+            sa_font_pdf_name,
+        );
+    }
+}
+
+/// A word, a space or a bullet, measured in its run's font.
+#[derive(Clone, Copy)]
+struct Piece<'a> {
+    text: &'a str,
+    width: f32,
+    space_w: f32, // width of space in this run's font/size
+    fe: Option<&'a FontEntry>,
+    run: &'a crate::model::SmartArtRun,
+}
+struct WrappedLine<'a> {
+    pieces: Vec<Piece<'a>>,
+    total_w: f32,
+    align: SmartArtTextAlign,
+    line_h: f32,
+}
+
+/// Greedily wrap a shape's paragraphs into lines `avail_w` wide; `bullets`
+/// holds each paragraph's bullet text (see `render_smartart`).
+fn wrap_shape_text<'a>(
+    shape: &'a SmartArtShape,
+    bullets: &'a [Option<String>],
+    avail_w: f32,
+    base_fs: f32,
+    seen_fonts: &'a HashMap<String, FontEntry>,
+    sa_font_entry: Option<&'a FontEntry>,
+) -> Vec<WrappedLine<'a>> {
+    let mut all_lines = Vec::new();
+    for (para, bullet) in shape.paragraphs.iter().zip(bullets) {
+        let para_fs = para
+            .runs
+            .iter()
+            .map(|r| r.font_size)
+            .find(|&fs| fs > 0.0)
+            .unwrap_or(base_fs);
+        // spcPct is percentage of single spacing; single ≈ 1.2× font size
+        let line_h = if para.line_spacing_pct > 0.0 {
+            para_fs * 1.2 * para.line_spacing_pct
+        } else {
+            para_fs * 1.2
         };
 
-        // Render each wrapped line
-        let mut y_cursor = 0.0_f32;
-        for line in &all_lines {
-            let line_x = diag_x
-                + txt_x
-                + ins_left
-                + match line.align {
-                    SmartArtTextAlign::Left => 0.0,
-                    SmartArtTextAlign::Center => (avail_w - line.total_w) / 2.0,
-                    SmartArtTextAlign::Right => avail_w - line.total_w,
-                };
-            let line_y = text_top_y - first_ascent - y_cursor;
+        // Collect word segments: split each run's text by spaces
+        let mut words: Vec<Piece<'_>> = Vec::new();
 
-            content.save_state();
-            let mut cx = line_x;
-
-            for piece in &line.pieces {
-                let efs = effective_font_size(piece.run);
-                let fpn = piece
-                    .fe
-                    .map(|e| e.pdf_name.as_str())
-                    .unwrap_or(sa_font_pdf_name);
-                let y_offset = baseline_y_offset(piece.run, base_fs);
-                let ry = line_y + y_offset;
-
-                if let Some(hl) = piece.run.highlight {
-                    content.save_state();
-                    color::fill_rgb(content, hl);
-                    content.rect(cx, ry - base_fs * 0.15, piece.width, base_fs * 1.15);
-                    content.fill_nonzero();
-                    content.restore_state();
-                }
-
-                if let Some(c) = piece.run.color {
-                    color::fill_rgb(content, c);
-                } else {
-                    content.set_fill_gray(0.0);
-                }
-                let needs_synthetic_bold =
-                    piece.run.bold && piece.fe.is_some_and(|e| e.synthetic_bold);
-                if needs_synthetic_bold {
-                    content.set_line_width(efs * 0.02);
-                    if let Some(c) = piece.run.color {
-                        color::stroke_rgb(content, c);
-                    } else {
-                        content.set_stroke_gray(0.0);
-                    }
-                    content
-                        .set_text_rendering_mode(pdf_writer::types::TextRenderingMode::FillStroke);
-                }
-                charts::show_text(content, fpn, efs, cx, ry, piece.text, piece.fe);
-                if needs_synthetic_bold {
-                    content.set_text_rendering_mode(pdf_writer::types::TextRenderingMode::Fill);
-                }
-
-                if piece.run.underline {
-                    let thick = (efs * 0.05).max(0.5);
-                    let ul_y = ry - efs * 0.12;
-                    content.rect(cx, ul_y - thick, piece.width, thick);
-                    content.fill_nonzero();
-                }
-
-                if piece.run.strikethrough {
-                    let thick = (efs * 0.05).max(0.5);
-                    let st_y = ry + efs * 0.3;
-                    content.rect(cx, st_y, piece.width, thick);
-                    content.fill_nonzero();
-                }
-
-                cx += piece.width;
-            }
-            content.restore_state();
-            y_cursor += line.line_h;
+        if let Some(bullet_text) = bullet.as_deref()
+            && let Some(first_run) = para.runs.first()
+        {
+            let fe = resolve_run_font(first_run, seen_fonts, sa_font_entry);
+            let bw = charts::text_width(bullet_text, first_run.font_size, fe);
+            words.push(Piece {
+                text: bullet_text,
+                width: bw,
+                space_w: 0.0,
+                fe,
+                run: first_run,
+            });
         }
+
+        for run in &para.runs {
+            let fe = resolve_run_font(run, seen_fonts, sa_font_entry);
+            let efs = effective_font_size(run);
+            let space_w = charts::text_width(" ", efs, fe);
+
+            for (i, word) in run.text.split(' ').enumerate() {
+                if word.is_empty() && i > 0 {
+                    continue;
+                }
+                let ww = if word.is_empty() {
+                    0.0
+                } else {
+                    charts::text_width(word, efs, fe)
+                };
+                words.push(Piece {
+                    text: word,
+                    width: ww,
+                    space_w,
+                    fe,
+                    run,
+                });
+            }
+        }
+
+        // Greedy line-fill
+        let mut cur_line: Vec<Piece<'_>> = Vec::new();
+        let mut cur_w = 0.0_f32;
+
+        for &seg in &words {
+            let needed = if cur_line.is_empty() {
+                seg.width
+            } else {
+                seg.space_w + seg.width
+            };
+            if !cur_line.is_empty() && cur_w + needed > avail_w + 0.05 {
+                let total_w = cur_w;
+                all_lines.push(WrappedLine {
+                    pieces: std::mem::take(&mut cur_line),
+                    total_w,
+                    align: para.align,
+                    line_h,
+                });
+                cur_w = 0.0;
+            }
+            if !cur_line.is_empty() {
+                // Add space before this word
+                cur_w += seg.space_w;
+                cur_line.push(Piece {
+                    text: " ",
+                    width: seg.space_w,
+                    ..seg
+                });
+            }
+            cur_line.push(seg);
+            cur_w += seg.width;
+        }
+        if !cur_line.is_empty() {
+            let total_w = cur_w;
+            all_lines.push(WrappedLine {
+                pieces: cur_line,
+                total_w,
+                align: para.align,
+                line_h,
+            });
+        }
+    }
+    all_lines
+}
+
+/// Draw wrapped lines down from `(left, top)`, each aligned within `avail_w`.
+fn render_shape_text(
+    content: &mut Content,
+    lines: &[WrappedLine],
+    (left, top): (f32, f32),
+    avail_w: f32,
+    base_fs: f32,
+    sa_font_pdf_name: &str,
+) {
+    // Distance from the text block's top to the first baseline. The baseline
+    // sits at the font's ascent within the line box, which is a fraction
+    // (ascender/line-height) of the line height — not the full em. Using the
+    // full em (base_fs) drops every line ~0.15em too low, leaving centered
+    // text noticeably below center. Derive the fraction from the first line's
+    // resolved font metrics, defaulting to a typical ascent ratio.
+    let first_ascent = {
+        let fl = lines.first();
+        let frac = fl
+            .and_then(|l| l.pieces.first())
+            .and_then(|p| p.fe)
+            .and_then(|e| match (e.ascender_ratio, e.line_h_ratio) {
+                (Some(a), Some(lh)) if lh > 0.0 => Some(a / lh),
+                _ => None,
+            })
+            .unwrap_or(0.85);
+        fl.map(|l| l.line_h * frac).unwrap_or(base_fs)
+    };
+
+    // Render each wrapped line
+    let mut y_cursor = 0.0_f32;
+    for line in lines {
+        let line_x = left
+            + match line.align {
+                SmartArtTextAlign::Left => 0.0,
+                SmartArtTextAlign::Center => (avail_w - line.total_w) / 2.0,
+                SmartArtTextAlign::Right => avail_w - line.total_w,
+            };
+        let line_y = top - first_ascent - y_cursor;
+
+        content.save_state();
+        let mut cx = line_x;
+
+        for piece in &line.pieces {
+            let efs = effective_font_size(piece.run);
+            let fpn = piece
+                .fe
+                .map(|e| e.pdf_name.as_str())
+                .unwrap_or(sa_font_pdf_name);
+            let y_offset = baseline_y_offset(piece.run, base_fs);
+            let ry = line_y + y_offset;
+
+            if let Some(hl) = piece.run.highlight {
+                content.save_state();
+                color::fill_rgb(content, hl);
+                content.rect(cx, ry - base_fs * 0.15, piece.width, base_fs * 1.15);
+                content.fill_nonzero();
+                content.restore_state();
+            }
+
+            if let Some(c) = piece.run.color {
+                color::fill_rgb(content, c);
+            } else {
+                content.set_fill_gray(0.0);
+            }
+            let needs_synthetic_bold = piece.run.bold && piece.fe.is_some_and(|e| e.synthetic_bold);
+            if needs_synthetic_bold {
+                content.set_line_width(efs * 0.02);
+                if let Some(c) = piece.run.color {
+                    color::stroke_rgb(content, c);
+                } else {
+                    content.set_stroke_gray(0.0);
+                }
+                content.set_text_rendering_mode(pdf_writer::types::TextRenderingMode::FillStroke);
+            }
+            charts::show_text(content, fpn, efs, cx, ry, piece.text, piece.fe);
+            if needs_synthetic_bold {
+                content.set_text_rendering_mode(pdf_writer::types::TextRenderingMode::Fill);
+            }
+
+            if piece.run.underline {
+                let thick = (efs * 0.05).max(0.5);
+                let ul_y = ry - efs * 0.12;
+                content.rect(cx, ul_y - thick, piece.width, thick);
+                content.fill_nonzero();
+            }
+
+            if piece.run.strikethrough {
+                let thick = (efs * 0.05).max(0.5);
+                let st_y = ry + efs * 0.3;
+                content.rect(cx, st_y, piece.width, thick);
+                content.fill_nonzero();
+            }
+
+            cx += piece.width;
+        }
+        content.restore_state();
+        y_cursor += line.line_h;
     }
 }
 
