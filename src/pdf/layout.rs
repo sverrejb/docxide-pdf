@@ -2586,6 +2586,18 @@ pub(super) fn build_paragraph_lines(
             _ => max_width,
         }
     };
+    // A line's right limit: the right region's width once a float pushed it
+    // beside one, else the measure (plus the first line's hanging part).
+    let cur_max_at = |n_lines: usize, in_right: bool, right_info: Option<(usize, f32, f32)>| {
+        let eff_w = left_max(n_lines);
+        if in_right {
+            right_info.map(|(_, _, rw)| rw).unwrap_or(eff_w)
+        } else if n_lines == 0 {
+            eff_w + first_line_hanging
+        } else {
+            eff_w
+        }
+    };
 
     let right_region_for = |line_count: usize| -> Option<(f32, f32, f32)> {
         per_line_dual.and_then(|dual| {
@@ -2682,17 +2694,7 @@ pub(super) fn build_paragraph_lines(
                 // (russian_chess: 19 spaces push the board 57pt right).
                 let proposed_x = current_x + pending_space_w - soft.unwrap_or(0.0);
 
-                let eff_w = left_max(lines.len());
-                let line_max = if lines.is_empty() && !in_right_region {
-                    eff_w + first_line_hanging
-                } else {
-                    eff_w
-                };
-                let cur_max = if in_right_region {
-                    cur_right_info.map(|(_, _, rw)| rw).unwrap_or(eff_w)
-                } else {
-                    line_max
-                };
+                let cur_max = cur_max_at(lines.len(), in_right_region, cur_right_info);
                 if (!current_chunks.is_empty() || pending_space_w > 0.0)
                     && proposed_x + img_w > cur_max
                 {
@@ -2778,15 +2780,7 @@ pub(super) fn build_paragraph_lines(
                 current_chunks.len()
             };
             let proposed_x = current_x + pending_space_w;
-            let cur_max = if in_right_region {
-                cur_right_info
-                    .map(|(_, _, rw)| rw)
-                    .unwrap_or(left_max(lines.len()))
-            } else if lines.is_empty() {
-                left_max(0) + first_line_hanging
-            } else {
-                left_max(lines.len())
-            };
+            let cur_max = cur_max_at(lines.len(), in_right_region, cur_right_info);
             current_x = proposed_x;
             // A zone too long for the line breaks after one of its operators,
             // as many times as it takes; what is left places like a whole zone.
@@ -3078,17 +3072,7 @@ pub(super) fn build_paragraph_lines(
                 current_x - soft.unwrap_or(0.0)
             };
 
-            let eff_w = left_max(lines.len());
-            let line_max = if lines.is_empty() && !in_right_region {
-                eff_w + first_line_hanging
-            } else {
-                eff_w
-            };
-            let cur_max = if in_right_region {
-                cur_right_info.map(|(_, _, rw)| rw).unwrap_or(eff_w)
-            } else {
-                line_max
-            };
+            let cur_max = cur_max_at(lines.len(), in_right_region, cur_right_info);
 
             // Small tolerance for floating-point width accumulation over many glyphs
             let word_closing_pad = if words.is_empty() { closing_pad } else { 0.0 };
