@@ -8610,10 +8610,16 @@ fn render_pass(
         let mut hf = Content::new();
         let mut has_hf = false;
 
-        let (header, hdr_type, hdr_si) = resolve_header_for_page(doc, si, is_first, page_num);
-        if let Some(header_data) = header {
+        // Header first: the content stream order is part of the output.
+        for (resolved, is_header) in [
+            (resolve_header_for_page(doc, si, is_first, page_num), true),
+            (resolve_footer_for_page(doc, si, is_first, page_num), false),
+        ] {
+            let (Some(data), hf_type, hf_si) = resolved else {
+                continue;
+            };
             let (pi_map, ii_map, fi_map, sh_para) = hf_maps_index
-                .get(&(hdr_si, hdr_type))
+                .get(&(hf_si, hf_type))
                 .unwrap_or(&empty_hf_maps);
             let pc = HfPageContext {
                 page_num,
@@ -8629,40 +8635,10 @@ fn render_pass(
             };
             render_header_footer(
                 &mut hf,
-                header_data,
+                data,
                 &ctx,
                 sp,
-                true,
-                &pc,
-                &mut state.pb.all_gradient_specs[page_idx],
-                &mut state.pb.all_links[page_idx],
-            );
-            has_hf = true;
-        }
-
-        let (footer, ftr_type, ftr_si) = resolve_footer_for_page(doc, si, is_first, page_num);
-        if let Some(footer_data) = footer {
-            let (pi_map, ii_map, fi_map, sh_para) = hf_maps_index
-                .get(&(ftr_si, ftr_type))
-                .unwrap_or(&empty_hf_maps);
-            let pc = HfPageContext {
-                page_num,
-                total_pages,
-                section_pages,
-                para_image_names: pi_map,
-                inline_image_names: ii_map,
-                floating_image_names: fi_map,
-                effect_para_names: sh_para,
-
-                styleref_values: page_styleref,
-                page_num_format: effective_page_num_format,
-            };
-            render_header_footer(
-                &mut hf,
-                footer_data,
-                &ctx,
-                sp,
-                false,
+                is_header,
                 &pc,
                 &mut state.pb.all_gradient_specs[page_idx],
                 &mut state.pb.all_links[page_idx],
