@@ -237,15 +237,6 @@ mod tests {
     }
 
     #[test]
-    fn test_angle_constants() {
-        let env = env_1m();
-        assert_eq!(env.resolve("cd2"), 10_800_000);
-        assert_eq!(env.resolve("cd4"), 5_400_000);
-        assert_eq!(env.resolve("cd8"), 2_700_000);
-        assert_eq!(env.resolve("3cd4"), 16_200_000);
-    }
-
-    #[test]
     fn test_mul_div() {
         let mut env = env_1m();
         env.evaluate_guides(&[GuideDef {

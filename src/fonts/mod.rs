@@ -1470,27 +1470,19 @@ mod tests {
     }
 
     #[test]
-    fn test_primary_font_name_simple() {
-        assert_eq!(primary_font_name("Arial"), "Arial");
-        assert_eq!(primary_font_name("Times New Roman"), "Times New Roman");
-    }
-
-    #[test]
-    fn test_primary_font_name_with_fallback() {
-        assert_eq!(primary_font_name("Arial; Helvetica"), "Arial");
-        assert_eq!(primary_font_name("Calibri; sans-serif"), "Calibri");
-    }
-
-    #[test]
-    fn test_primary_font_name_with_whitespace() {
-        assert_eq!(primary_font_name("  Arial  ; Helvetica"), "Arial");
-        assert_eq!(primary_font_name("Verdana, Geneva, sans-serif"), "Verdana");
-        assert_eq!(primary_font_name("\"Calibri\", Arial"), "\"Calibri\"");
-    }
-
-    #[test]
-    fn test_primary_font_name_empty() {
-        assert_eq!(primary_font_name(""), "");
+    fn test_primary_font_name() {
+        for (name, primary) in [
+            ("Arial", "Arial"),
+            ("Times New Roman", "Times New Roman"),
+            ("Arial; Helvetica", "Arial"),
+            ("Calibri; sans-serif", "Calibri"),
+            ("  Arial  ; Helvetica", "Arial"),
+            ("Verdana, Geneva, sans-serif", "Verdana"),
+            ("\"Calibri\", Arial", "\"Calibri\""),
+            ("", ""),
+        ] {
+            assert_eq!(primary_font_name(name), primary);
+        }
     }
 
     fn make_run(font: &str, bold: bool, italic: bool) -> Run {
@@ -1505,37 +1497,17 @@ mod tests {
     }
 
     #[test]
-    fn test_font_key_regular() {
-        let run = make_run("Arial", false, false);
-        let mut buf = String::new();
-        assert_eq!(font_key_buf(&run, &mut buf), "Arial");
-    }
-
-    #[test]
-    fn test_font_key_bold() {
-        let run = make_run("Arial", true, false);
-        let mut buf = String::new();
-        assert_eq!(font_key_buf(&run, &mut buf), "Arial/B");
-    }
-
-    #[test]
-    fn test_font_key_italic() {
-        let run = make_run("Arial", false, true);
-        let mut buf = String::new();
-        assert_eq!(font_key_buf(&run, &mut buf), "Arial/I");
-    }
-
-    #[test]
-    fn test_font_key_bold_italic() {
-        let run = make_run("Arial", true, true);
-        let mut buf = String::new();
-        assert_eq!(font_key_buf(&run, &mut buf), "Arial/BI");
-    }
-
-    #[test]
-    fn test_font_key_with_fallback_font() {
-        let run = make_run("Calibri; sans-serif", false, false);
-        let mut buf = String::new();
-        assert_eq!(font_key_buf(&run, &mut buf), "Calibri");
+    fn test_font_key() {
+        for (font, bold, italic, key) in [
+            ("Arial", false, false, "Arial"),
+            ("Arial", true, false, "Arial/B"),
+            ("Arial", false, true, "Arial/I"),
+            ("Arial", true, true, "Arial/BI"),
+            ("Calibri; sans-serif", false, false, "Calibri"),
+        ] {
+            let run = make_run(font, bold, italic);
+            let mut buf = String::new();
+            assert_eq!(font_key_buf(&run, &mut buf), key);
+        }
     }
 }
