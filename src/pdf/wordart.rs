@@ -48,32 +48,50 @@ pub(super) fn find_text_glow(tb: &Textbox) -> Option<&TextGlow> {
 // Glyph outline extraction
 // ---------------------------------------------------------------------------
 
+/// A glyph outline in font units. PDF has no quadratic operator, so quadratic
+/// segments are raised to cubics as they arrive.
 #[derive(Default)]
 pub(super) struct GlyphPath {
     pub commands: Vec<GlyphCommand>,
+    /// The current point, which raising a quadratic needs.
+    prev: (f64, f64),
 }
 
 pub(super) enum GlyphCommand {
-    MoveTo(f32, f32),
-    LineTo(f32, f32),
-    QuadTo(f32, f32, f32, f32),
-    CubicTo(f32, f32, f32, f32, f32, f32),
+    MoveTo(f64, f64),
+    LineTo(f64, f64),
+    CubicTo(f64, f64, f64, f64, f64, f64),
     Close,
 }
 
 impl ttf_parser::OutlineBuilder for GlyphPath {
     fn move_to(&mut self, x: f32, y: f32) {
-        self.commands.push(GlyphCommand::MoveTo(x, y));
+        self.prev = (x as f64, y as f64);
+        self.commands.push(GlyphCommand::MoveTo(x as f64, y as f64));
     }
     fn line_to(&mut self, x: f32, y: f32) {
-        self.commands.push(GlyphCommand::LineTo(x, y));
+        self.prev = (x as f64, y as f64);
+        self.commands.push(GlyphCommand::LineTo(x as f64, y as f64));
     }
     fn quad_to(&mut self, x1: f32, y1: f32, x: f32, y: f32) {
-        self.commands.push(GlyphCommand::QuadTo(x1, y1, x, y));
+        let (prev_x, prev_y) = self.prev;
+        let (qcx, qcy) = (x1 as f64, y1 as f64);
+        let (p1x, p1y) = (x as f64, y as f64);
+
+        let cp1x = prev_x + (2.0 / 3.0) * (qcx - prev_x);
+        let cp1y = prev_y + (2.0 / 3.0) * (qcy - prev_y);
+        let cp2x = p1x + (2.0 / 3.0) * (qcx - p1x);
+        let cp2y = p1y + (2.0 / 3.0) * (qcy - p1y);
+
+        self.prev = (p1x, p1y);
+        self.commands
+            .push(GlyphCommand::CubicTo(cp1x, cp1y, cp2x, cp2y, p1x, p1y));
     }
     fn curve_to(&mut self, x1: f32, y1: f32, x2: f32, y2: f32, x: f32, y: f32) {
-        self.commands
-            .push(GlyphCommand::CubicTo(x1, y1, x2, y2, x, y));
+        self.prev = (x as f64, y as f64);
+        self.commands.push(GlyphCommand::CubicTo(
+            x1 as f64, y1 as f64, x2 as f64, y2 as f64, x as f64, y as f64,
+        ));
     }
     fn close(&mut self) {
         self.commands.push(GlyphCommand::Close);
@@ -215,55 +233,27 @@ fn resolve_fill_color(
 }
 
 /// Emit glyph path commands into a PDF content stream, applying a coordinate
-/// transform to each point. Handles quad-to-cubic conversion and endpoint tracking.
+/// transform to each point.
 fn emit_glyph_commands(
     glyph: &GlyphPath,
     content: &mut Content,
     transform: impl Fn(f64, f64) -> (f32, f32),
 ) {
-    let mut prev_x = 0.0_f64;
-    let mut prev_y = 0.0_f64;
-
     for cmd in &glyph.commands {
-        match cmd {
+        match *cmd {
             GlyphCommand::MoveTo(gx, gy) => {
-                let (px, py) = transform(*gx as f64, *gy as f64);
+                let (px, py) = transform(gx, gy);
                 content.move_to(px, py);
-                prev_x = *gx as f64;
-                prev_y = *gy as f64;
             }
             GlyphCommand::LineTo(gx, gy) => {
-                let (px, py) = transform(*gx as f64, *gy as f64);
+                let (px, py) = transform(gx, gy);
                 content.line_to(px, py);
-                prev_x = *gx as f64;
-                prev_y = *gy as f64;
-            }
-            GlyphCommand::QuadTo(qcx, qcy, qx, qy) => {
-                let qcx = *qcx as f64;
-                let qcy = *qcy as f64;
-                let p1x = *qx as f64;
-                let p1y = *qy as f64;
-
-                let cp1x = prev_x + (2.0 / 3.0) * (qcx - prev_x);
-                let cp1y = prev_y + (2.0 / 3.0) * (qcy - prev_y);
-                let cp2x = p1x + (2.0 / 3.0) * (qcx - p1x);
-                let cp2y = p1y + (2.0 / 3.0) * (qcy - p1y);
-
-                let (wx1, wy1) = transform(cp1x, cp1y);
-                let (wx2, wy2) = transform(cp2x, cp2y);
-                let (wx3, wy3) = transform(p1x, p1y);
-                content.cubic_to(wx1, wy1, wx2, wy2, wx3, wy3);
-
-                prev_x = p1x;
-                prev_y = p1y;
             }
             GlyphCommand::CubicTo(x1, y1, x2, y2, x3, y3) => {
-                let (wx1, wy1) = transform(*x1 as f64, *y1 as f64);
-                let (wx2, wy2) = transform(*x2 as f64, *y2 as f64);
-                let (wx3, wy3) = transform(*x3 as f64, *y3 as f64);
+                let (wx1, wy1) = transform(x1, y1);
+                let (wx2, wy2) = transform(x2, y2);
+                let (wx3, wy3) = transform(x3, y3);
                 content.cubic_to(wx1, wy1, wx2, wy2, wx3, wy3);
-                prev_x = *x3 as f64;
-                prev_y = *y3 as f64;
             }
             GlyphCommand::Close => {
                 content.close_path();
