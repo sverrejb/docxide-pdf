@@ -328,7 +328,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         shading: para_shading,
         // A direct pageBreakBefore, on or off, overrides the style's
         // (wa_child's Part 1 heading turns its Heading2 break off).
-        page_break_before: parsed.has_explicit_page_break_before && !framed
+        page_break_before: (parsed.has_explicit_page_break_before && !framed)
             || ppr
                 .and_then(|ppr| wml_bool(ppr, "pageBreakBefore"))
                 .unwrap_or_else(|| {
@@ -340,7 +340,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
         page_break_after: parsed.has_page_break_after && !framed,
         page_break_at: parsed.page_break_at.filter(|_| !framed),
         column_break_before: parsed.has_column_break
-            || parsed.has_explicit_page_break_before && framed,
+            || (parsed.has_explicit_page_break_before && framed),
         // split_at_page_break hands a mid-paragraph one to the continuation
         column_break_after: parsed.column_break_at && !framed,
         clears_floats: parsed.has_clear_break,
