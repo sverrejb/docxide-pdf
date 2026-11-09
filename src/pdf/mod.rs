@@ -3217,6 +3217,12 @@ impl PageBuilder {
         }
     }
 
+    /// The text after a full-width picture resumes below the lowest one.
+    fn lower_next_text_to(&mut self, bottom: f32) {
+        self.next_text_below_picture =
+            Some(self.next_text_below_picture.map_or(bottom, |old| old.min(bottom)));
+    }
+
     fn take_pending_first_page(&mut self, sect_idx: usize) -> bool {
         self.pending_section_first_page
             .take()
@@ -6515,12 +6521,7 @@ fn render_paragraph_block(
                         );
                         state.pb.float_zone = Some(FloatZone::for_float(fi, x, top));
                         let bottom = top - fi.image.display_height - fi.dist_bottom;
-                        state.pb.next_text_below_picture = Some(
-                            state
-                                .pb
-                                .next_text_below_picture
-                                .map_or(bottom, |old| old.min(bottom)),
-                        );
+                        state.pb.lower_next_text_to(bottom);
                     }
                 }
                 // (from, to, text_x, text_w, baseline of the segment's first line)
@@ -6927,12 +6928,7 @@ fn render_paragraph_block(
         zones.push(FloatZone::for_float(fi, fi_x, fi_y_top));
         if !text_empty && leading_full_width_picture(fi, sp, col_x, col_w, text_width) {
             let bottom = fi_y_top - fi.image.display_height - fi.dist_bottom;
-            state.pb.next_text_below_picture = Some(
-                state
-                    .pb
-                    .next_text_below_picture
-                    .map_or(bottom, |old| old.min(bottom)),
-            );
+            state.pb.lower_next_text_to(bottom);
         }
     }
     zones.extend(textbox_zones(
