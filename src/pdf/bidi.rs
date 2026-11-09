@@ -404,8 +404,7 @@ pub(super) fn reorder_lines(
 
 fn reorder_strips(lines: &mut [TextLine], bidi: bool, fonts: &HashMap<String, FontEntry>) {
     let base = u8::from(bidi);
-    let by_pdf_name: HashMap<&str, &FontEntry> =
-        fonts.values().map(|e| (e.pdf_name.as_str(), e)).collect();
+    let by_pdf_name = super::fonts::by_pdf_name(fonts);
     let per_line: Vec<Vec<Unit>> = lines.iter().map(|l| line_units(l, base)).collect();
     for li in 0..lines.len() {
         // The line, then the rest of its paragraph (or manual-break segment)
