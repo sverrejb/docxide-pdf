@@ -1027,12 +1027,15 @@ pub(crate) fn register_font(
             Some(m)
         })
         .or_else(|| {
-            // Likewise a missing name starting with "Times" is Times New Roman
-            // (Word for Mac probe panose: "TimesLT" and "TimesXY" with any
-            // panose; "Zorblax" with Times New Roman's panose is still Cambria).
-            // A Lithuanian decree in "TimesLT" wrapped a word early on every
-            // line in Cambria and ran a page over.
-            if !primary.to_ascii_lowercase().starts_with("times") {
+            // Likewise a missing one-word name starting with "Times" is Times
+            // New Roman (Word for Mac probe panose: "TimesLT" and "TimesXY"
+            // with any panose; "Zorblax" with Times New Roman's panose is
+            // still Cambria). A Lithuanian decree in "TimesLT" wrapped a word
+            // early on every line in Cambria and ran a page over. A spaced
+            // variant is not: "Times New Roman CYR" is Cambria in Word
+            // (a Tatar health document, 71 → 12 when it was drawn in Times).
+            let lower = primary.to_ascii_lowercase();
+            if !lower.starts_with("times") || lower.contains(' ') {
                 return None;
             }
             let m = try_candidate("Times New Roman")?;
