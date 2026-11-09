@@ -2274,46 +2274,47 @@ fn inherited_hf(
         })
 }
 
-/// Resolve which header to use for a given page, walking sections backward
-/// for inheritance. Returns `(header_data, hf_type_id, section_index)`.
+/// Resolve which header (or footer) to use for a given page, walking sections
+/// backward for inheritance. Returns `(header_data, hf_type_id, section_index)`.
+fn resolve_hf_for_page(
+    doc: &Document,
+    section_idx: usize,
+    is_first_page: bool,
+    page_num: usize,
+    is_header: bool,
+) -> (Option<&HeaderFooter>, u8, usize) {
+    let sp = &doc.sections[section_idx].properties;
+    let variant = hf_variant(doc.even_and_odd_headers, sp, is_first_page, page_num);
+    let t = match (variant, is_header) {
+        (HfVariant::Default, true) => 0,
+        (HfVariant::First, true) => 1,
+        (HfVariant::Even, true) => 4,
+        (HfVariant::Default, false) => 2,
+        (HfVariant::First, false) => 3,
+        (HfVariant::Even, false) => 5,
+    };
+    match inherited_hf(&doc.sections, section_idx, variant, is_header) {
+        Some((hf, idx)) => (Some(hf), t, idx),
+        None => (None, t, section_idx),
+    }
+}
+
 pub(super) fn resolve_header_for_page(
     doc: &Document,
     section_idx: usize,
     is_first_page: bool,
     page_num: usize,
 ) -> (Option<&HeaderFooter>, u8, usize) {
-    let sp = &doc.sections[section_idx].properties;
-    let variant = hf_variant(doc.even_and_odd_headers, sp, is_first_page, page_num);
-    let t = match variant {
-        HfVariant::Default => 0,
-        HfVariant::First => 1,
-        HfVariant::Even => 4,
-    };
-    match inherited_hf(&doc.sections, section_idx, variant, true) {
-        Some((hf, idx)) => (Some(hf), t, idx),
-        None => (None, t, section_idx),
-    }
+    resolve_hf_for_page(doc, section_idx, is_first_page, page_num, true)
 }
 
-/// Resolve which footer to use for a given page, walking sections backward
-/// for inheritance. Returns `(footer_data, hf_type_id, section_index)`.
 pub(super) fn resolve_footer_for_page(
     doc: &Document,
     section_idx: usize,
     is_first_page: bool,
     page_num: usize,
 ) -> (Option<&HeaderFooter>, u8, usize) {
-    let sp = &doc.sections[section_idx].properties;
-    let variant = hf_variant(doc.even_and_odd_headers, sp, is_first_page, page_num);
-    let t = match variant {
-        HfVariant::Default => 2,
-        HfVariant::First => 3,
-        HfVariant::Even => 5,
-    };
-    match inherited_hf(&doc.sections, section_idx, variant, false) {
-        Some((hf, idx)) => (Some(hf), t, idx),
-        None => (None, t, section_idx),
-    }
+    resolve_hf_for_page(doc, section_idx, is_first_page, page_num, false)
 }
 
 /// The gap above a header/footer paragraph: contextual spacing drops both
