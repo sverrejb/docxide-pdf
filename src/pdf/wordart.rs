@@ -9,13 +9,13 @@ use crate::model::{TextFill, TextGlow, TextOutline, TextShadow, Textbox};
 
 use super::color::{fill_color_or_black, stroke_rgb};
 
-/// Apply text outline rendering state to the PDF content stream.
-/// Returns `true` if an outline mode was set (caller must call `reset_text_outline` afterward).
+/// Apply text outline rendering state to the PDF content stream; the caller
+/// calls `reset_text_outline` afterward.
 pub(super) fn apply_text_outline(
     content: &mut Content,
     outline: &TextOutline,
     text_fill: Option<&TextFill>,
-) -> bool {
+) {
     content.set_line_width(outline.width_pt);
     stroke_rgb(content, outline.color);
 
@@ -24,7 +24,6 @@ pub(super) fn apply_text_outline(
         _ => TextRenderingMode::FillStroke,
     };
     content.set_text_rendering_mode(mode);
-    true
 }
 
 pub(super) fn reset_text_outline(content: &mut Content) {
