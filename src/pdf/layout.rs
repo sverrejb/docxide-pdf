@@ -3771,10 +3771,9 @@ pub(super) fn build_tabbed_line(
     // The fourth tuple element is the `<w:tab/>` run itself (when present) so the
     // segment can see its underline/color formatting and render a decoration line
     // across the tab gap — the Word pattern for underlined signature/HR lines.
-    let mut segments: Vec<(Vec<&Run>, Vec<usize>, Option<TabStop>, Option<&Run>)> = Vec::new();
+    let mut segments: Vec<(Vec<&Run>, Vec<usize>, Option<&Run>)> = Vec::new();
     let mut current_seg: Vec<&Run> = Vec::new();
     let mut current_indices: Vec<usize> = Vec::new();
-    let mut pending_tab: Option<TabStop> = None;
     let mut pending_tab_run: Option<&Run> = None;
 
     for (global_idx, run) in runs.iter().enumerate() {
@@ -3785,14 +3784,8 @@ pub(super) fn build_tabbed_line(
             segments.push((
                 std::mem::take(&mut current_seg),
                 std::mem::take(&mut current_indices),
-                pending_tab.take(),
                 pending_tab_run.take(),
             ));
-            pending_tab = Some(TabStop {
-                position: 0.0, // placeholder, resolved below
-                alignment: TabAlignment::Left,
-                leader: None,
-            });
             pending_tab_run = Some(run);
         } else {
             current_seg.push(run);
@@ -3802,7 +3795,6 @@ pub(super) fn build_tabbed_line(
     segments.push((
         std::mem::take(&mut current_seg),
         std::mem::take(&mut current_indices),
-        pending_tab.take(),
         pending_tab_run.take(),
     ));
 
@@ -3833,9 +3825,7 @@ pub(super) fn build_tabbed_line(
             max_width
         }
     };
-    for (seg_idx, (seg_runs, seg_indices, tab_before, tab_run_before)) in
-        segments.iter().enumerate()
-    {
+    for (seg_idx, (seg_runs, seg_indices, tab_run_before)) in segments.iter().enumerate() {
         let line_max = line_max_at(is_first_line);
         let line_indent = if is_first_line {
             indent_left - first_line_hanging
@@ -3992,95 +3982,93 @@ pub(super) fn build_tabbed_line(
             }
 
             // Draw leader fill between end of previous text and start of aligned text
-            if tab_before.is_some() {
-                let leader = resolved_leader;
+            let leader = resolved_leader;
 
-                // Tab runs with `<w:u>` render the tab gap as an underlined line
-                // (Word pattern for signature/HR lines). Emit a decoration-only
-                // chunk so the underline decoration pass picks it up.
-                if let Some(tab_run) = tab_run_before
-                    && tab_run.underline
-                    && seg_start > current_x + 0.01
-                {
-                    // A tab alone on its line, only tabs and spaces up to
-                    // its break or mark, underlines at its own size, not
-                    // the break's or a space run's.
-                    let alone = all_chunks.iter().all(|c| c.text.trim().is_empty())
-                        && segments[seg_idx..]
-                            .iter()
-                            .flat_map(|(runs, ..)| runs)
-                            .take_while(|r| !r.is_line_break)
-                            .all(|r| {
-                                r.text.trim().is_empty()
-                                    && r.inline_image.is_none()
-                                    && r.math.is_none()
-                                    && r.checkbox.is_none()
-                            });
-                    let font_run: &Run = if alone {
-                        tab_run
-                    } else {
-                        seg_runs
-                            .first()
-                            .copied()
-                            .or_else(|| runs.iter().find(|r| !r.font_name.is_empty()))
-                            .unwrap_or(tab_run)
-                    };
-                    let key = font_key_buf(font_run, &mut key_buf);
-                    let entry = seen_fonts.get(key).expect("font registered");
-                    let eff_fs = effective_font_size(tab_run, entry).max(font_run.font_size);
-                    all_chunks.push(WordChunk::tab_underline(
-                        entry,
-                        eff_fs,
-                        tab_run.color,
-                        tab_run.double_underline,
-                        tab_run.border.clone(),
-                        current_x,
-                        seg_start - current_x,
-                    ));
-                }
-
-                if let Some(leader_char) = leader {
-                    // The leader takes the tab character's own font, size and
-                    // colour (example: a 20pt tab between 10pt words draws 20pt dots).
-                    let font_run: Option<&Run> = tab_run_before
-                        .filter(|r| !r.font_name.is_empty())
-                        .or_else(|| seg_runs.first().copied())
-                        .or_else(|| {
-                            segments[..seg_idx]
-                                .iter()
-                                .rev()
-                                .flat_map(|(r, _, _, _)| r.last().copied())
-                                .next()
-                        })
-                        .or_else(|| {
-                            // Tab-only paragraphs: fall back to any run (including tab runs)
-                            runs.iter().find(|r| !r.font_name.is_empty())
+            // Tab runs with `<w:u>` render the tab gap as an underlined line
+            // (Word pattern for signature/HR lines). Emit a decoration-only
+            // chunk so the underline decoration pass picks it up.
+            if let Some(tab_run) = tab_run_before
+                && tab_run.underline
+                && seg_start > current_x + 0.01
+            {
+                // A tab alone on its line, only tabs and spaces up to
+                // its break or mark, underlines at its own size, not
+                // the break's or a space run's.
+                let alone = all_chunks.iter().all(|c| c.text.trim().is_empty())
+                    && segments[seg_idx..]
+                        .iter()
+                        .flat_map(|(runs, ..)| runs)
+                        .take_while(|r| !r.is_line_break)
+                        .all(|r| {
+                            r.text.trim().is_empty()
+                                && r.inline_image.is_none()
+                                && r.math.is_none()
+                                && r.checkbox.is_none()
                         });
-                    if let Some(run) = font_run {
-                        let key = font_key_buf(run, &mut key_buf);
-                        let entry = seen_fonts.get(key).expect("font registered");
-                        let eff_fs = effective_font_size(run, entry);
-                        let char_w = entry.char_width_1000(leader_char) * eff_fs / 1000.0;
-                        let leader_gap = seg_start - current_x;
-                        if char_w > 0.0 && leader_gap > 0.0 {
-                            // Drawing places the glyphs on the page (see
-                            // `WordChunk::leader`); the text is a stand-in.
-                            all_chunks.push(WordChunk::leader(
-                                entry,
-                                leader_char,
-                                super::glyph_grid::leader_positions(
-                                    char_w,
-                                    (current_x * 4.0).round() as i64,
-                                    (seg_start * 4.0).round() as i64,
-                                )
-                                .len()
-                                .max(1),
-                                eff_fs,
-                                run.color,
-                                current_x,
-                                leader_gap,
-                            ));
-                        }
+                let font_run: &Run = if alone {
+                    tab_run
+                } else {
+                    seg_runs
+                        .first()
+                        .copied()
+                        .or_else(|| runs.iter().find(|r| !r.font_name.is_empty()))
+                        .unwrap_or(tab_run)
+                };
+                let key = font_key_buf(font_run, &mut key_buf);
+                let entry = seen_fonts.get(key).expect("font registered");
+                let eff_fs = effective_font_size(tab_run, entry).max(font_run.font_size);
+                all_chunks.push(WordChunk::tab_underline(
+                    entry,
+                    eff_fs,
+                    tab_run.color,
+                    tab_run.double_underline,
+                    tab_run.border.clone(),
+                    current_x,
+                    seg_start - current_x,
+                ));
+            }
+
+            if let Some(leader_char) = leader {
+                // The leader takes the tab character's own font, size and
+                // colour (example: a 20pt tab between 10pt words draws 20pt dots).
+                let font_run: Option<&Run> = tab_run_before
+                    .filter(|r| !r.font_name.is_empty())
+                    .or_else(|| seg_runs.first().copied())
+                    .or_else(|| {
+                        segments[..seg_idx]
+                            .iter()
+                            .rev()
+                            .flat_map(|(r, _, _)| r.last().copied())
+                            .next()
+                    })
+                    .or_else(|| {
+                        // Tab-only paragraphs: fall back to any run (including tab runs)
+                        runs.iter().find(|r| !r.font_name.is_empty())
+                    });
+                if let Some(run) = font_run {
+                    let key = font_key_buf(run, &mut key_buf);
+                    let entry = seen_fonts.get(key).expect("font registered");
+                    let eff_fs = effective_font_size(run, entry);
+                    let char_w = entry.char_width_1000(leader_char) * eff_fs / 1000.0;
+                    let leader_gap = seg_start - current_x;
+                    if char_w > 0.0 && leader_gap > 0.0 {
+                        // Drawing places the glyphs on the page (see
+                        // `WordChunk::leader`); the text is a stand-in.
+                        all_chunks.push(WordChunk::leader(
+                            entry,
+                            leader_char,
+                            super::glyph_grid::leader_positions(
+                                char_w,
+                                (current_x * 4.0).round() as i64,
+                                (seg_start * 4.0).round() as i64,
+                            )
+                            .len()
+                            .max(1),
+                            eff_fs,
+                            run.color,
+                            current_x,
+                            leader_gap,
+                        ));
                     }
                 }
             }
