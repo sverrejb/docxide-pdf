@@ -2414,6 +2414,16 @@ fn convert_polygon_to_page_coords(
 /// Draw debug overlays for the wrap polygon and effective exclusion zone.
 /// Green = raw polygon, blue = wrap zone (polygon ± dist margins), red = top/bottom bounds.
 fn draw_debug_wrap_overlay(content: &mut Content, fz: &FloatZone) {
+    let polyline = |content: &mut Content, pts: &[(f32, f32)], close: bool| {
+        content.move_to(pts[0].0, pts[0].1);
+        for &(x, y) in &pts[1..] {
+            content.line_to(x, y);
+        }
+        if close {
+            content.close_path();
+        }
+        content.stroke();
+    };
     content.save_state();
 
     // Green: raw polygon outline
@@ -2422,12 +2432,7 @@ fn draw_debug_wrap_overlay(content: &mut Content, fz: &FloatZone) {
     {
         content.set_stroke_rgb(0.0, 0.7, 0.0);
         content.set_line_width(0.5);
-        content.move_to(pts[0].0, pts[0].1);
-        for &(x, y) in &pts[1..] {
-            content.line_to(x, y);
-        }
-        content.close_path();
-        content.stroke();
+        polyline(content, pts, true);
     }
 
     // Blue: effective wrap zone boundaries (polygon shifted by dist margins)
@@ -2446,18 +2451,10 @@ fn draw_debug_wrap_overlay(content: &mut Content, fz: &FloatZone) {
                 }
             }
             if left_pts.len() >= 2 {
-                content.move_to(left_pts[0].0, left_pts[0].1);
-                for &(x, y) in &left_pts[1..] {
-                    content.line_to(x, y);
-                }
-                content.stroke();
+                polyline(content, &left_pts, false);
             }
             if right_pts.len() >= 2 {
-                content.move_to(right_pts[0].0, right_pts[0].1);
-                for &(x, y) in &right_pts[1..] {
-                    content.line_to(x, y);
-                }
-                content.stroke();
+                polyline(content, &right_pts, false);
             }
         }
     }
@@ -2467,12 +2464,8 @@ fn draw_debug_wrap_overlay(content: &mut Content, fz: &FloatZone) {
     content.set_line_width(0.3);
     let page_left = fz.obj_left - 20.0;
     let page_right = fz.obj_right + 20.0;
-    content.move_to(page_left, fz.top_y);
-    content.line_to(page_right, fz.top_y);
-    content.stroke();
-    content.move_to(page_left, fz.bottom_y);
-    content.line_to(page_right, fz.bottom_y);
-    content.stroke();
+    polyline(content, &[(page_left, fz.top_y), (page_right, fz.top_y)], false);
+    polyline(content, &[(page_left, fz.bottom_y), (page_right, fz.bottom_y)], false);
 
     content.restore_state();
 }
