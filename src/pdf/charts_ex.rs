@@ -527,17 +527,7 @@ fn draw_axis_chart(content: &mut Content, ctx: &Ctx, bx: Rect) {
     let above = |v: f32| y_of(v) + pen.desc * t.size + DATA_LABEL_GAP;
     let below = |v: f32| y_of(v) - pen.asc * t.size - DATA_LABEL_GAP;
     if !boxes.is_empty() {
-        draw_boxes(
-            content,
-            pen,
-            t,
-            &boxes,
-            mid,
-            bar_w,
-            &y_of,
-            ctx.accent(0),
-            c.show_values,
-        );
+        draw_boxes(content, ctx, &boxes, mid, bar_w, &y_of);
         return;
     }
     for (i, (&v, &(lo, hi, step))) in values.iter().zip(&bars).enumerate() {
@@ -590,18 +580,17 @@ fn draw_axis_chart(content: &mut Content, ctx: &Ctx, bx: Rect) {
 /// lines of the box's colour, caps 0.3 of the box wide, the mean an X 6pt
 /// across, outliers 3pt dots; every statistic labelled on the box's centre
 /// line (boxwhisker probes).
-#[allow(clippy::too_many_arguments)]
 fn draw_boxes(
     content: &mut Content,
-    pen: &Pen,
-    t: ChartText,
+    ctx: &Ctx,
     boxes: &[BoxStats],
     mid: impl Fn(usize) -> f32,
     bar_w: f32,
     y_of: &impl Fn(f32) -> f32,
-    color: [u8; 3],
-    show_values: bool,
 ) {
+    let Ctx { c, pen, text, .. } = *ctx;
+    let t = text.data_label;
+    let color = ctx.accent(0);
     content.set_line_width(2.25);
     content.set_line_cap(LineCapStyle::RoundCap);
     for (i, b) in boxes.iter().enumerate() {
@@ -631,7 +620,7 @@ fn draw_boxes(
             draw_circle(content, cx, y_of(o), 1.5);
             content.fill_nonzero();
         }
-        if show_values {
+        if c.show_values {
             for v in [b.lo, b.q1, b.median, b.q3, b.hi, b.mean]
                 .iter()
                 .chain(&b.outliers)
