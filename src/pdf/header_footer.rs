@@ -11,8 +11,8 @@ use crate::model::{
 use super::color::stroke_border;
 use super::helpers::{align_offset, draw_horizontal_rule};
 use super::layout::{
-    LineOpts, LinkAnnotation, build_lines, is_text_empty, line_h_with_picture, lines_height,
-    picture_line_bottom, position_stretch, render_paragraph_lines, runs_max_image_h,
+    LineOpts, LinkAnnotation, TextLine, build_lines, is_text_empty, line_h_with_picture,
+    lines_height, picture_line_bottom, position_stretch, render_paragraph_lines, runs_max_image_h,
     size_lines_by_own_runs, tallest_run_metrics,
 };
 use super::positioning::resolve_h_position;
@@ -1252,6 +1252,80 @@ pub(super) struct HfPageContext<'a> {
     pub(super) page_num_format: Option<&'a str>,
 }
 
+/// A header text box's paragraph laid out at the box's content width: the
+/// anchor-offset pass and the draw pass advance by the same height.
+struct HfBoxPara {
+    lines: Vec<TextLine>,
+    inline_imgs: HashMap<usize, String>,
+    ls: LineSpacing,
+    text_w: f32,
+    fs: f32,
+    ar: Option<f32>,
+    line_h: f32,
+}
+
+impl HfBoxPara {
+    fn height(&self, tp: &Paragraph) -> f32 {
+        tp.space_before + self.lines.len().max(1) as f32 * self.line_h + tp.space_after
+    }
+}
+
+/// The text width inside a header text box: its content width less the
+/// paragraph's indents.
+fn hf_box_text_w(tp: &Paragraph, content_w: f32) -> f32 {
+    (content_w - tp.indent_left - tp.indent_right).max(1.0)
+}
+
+fn hf_box_paragraph(
+    tp: &Paragraph,
+    content_w: f32,
+    sub: &HfSubstitution,
+    ctx: &RenderContext,
+) -> HfBoxPara {
+    let ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
+    let text_w = hf_box_text_w(tp, content_w);
+    let hanging = if !tp.list_label.is_empty() {
+        if tp.indent_first_line > 0.0 && tp.indent_hanging == 0.0 {
+            -tp.indent_first_line
+        } else {
+            0.0
+        }
+    } else if tp.indent_hanging > 0.0 {
+        tp.indent_hanging
+    } else {
+        -tp.indent_first_line
+    };
+    let inline_imgs = super::layout::run_image_map(&tp.runs, ctx.textbox_image_names);
+    // Footer page numbers live in text boxes as often as in plain paragraphs;
+    // without this the box kept the template's cached PAGE/NUMPAGES text.
+    let runs = substitute_hf_runs_with(&tp.runs, sub);
+    let lines = build_lines(
+        &runs,
+        ctx,
+        text_w,
+        ctx.cjk(true, tp),
+        &LineOpts {
+            inline_images: Some(&inline_imgs),
+            tab_stops: &tp.tab_stops,
+            indent_left: tp.indent_left,
+            indent_right: tp.indent_right,
+            hanging,
+            ..Default::default()
+        },
+    );
+    let (fs, lhr, ar) = tallest_run_metrics(&runs, ctx.fonts);
+    let line_h = resolve_line_h(ls, fs, lhr);
+    HfBoxPara {
+        lines,
+        inline_imgs,
+        ls,
+        text_w,
+        fs,
+        ar,
+        line_h,
+    }
+}
+
 pub(super) fn render_header_footer(
     content: &mut Content,
     hf: &HeaderFooter,
@@ -1681,29 +1755,12 @@ pub(super) fn render_header_footer(
                             // Word vertically anchors textbox content per bodyPr anchor (ctr/b).
                             // The body textbox path (textbox_render::render_single_textbox) applies this,
                             // but the header/footer loop is a separate renderer that historically
-                            // top-anchored everything. Mirror the body math here. The per-paragraph
-                            // height calc must match the rendering advances below (block image / empty /
-                            // text), so keep the two in sync.
+                            // top-anchored everything. Mirror the body math here; `hf_box_paragraph`
+                            // gives this pass and the draw loop below the same advance.
                             let anchor_offset = match tb.text_anchor {
                                 TextAnchor::Top => 0.0,
                                 TextAnchor::Middle | TextAnchor::Bottom => {
                                     let tp_height = |tp: &Paragraph| -> f32 {
-                                        let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                                        let tp_text_w =
-                                            (content_w - tp.indent_left - tp.indent_right).max(1.0);
-                                        let tp_hanging = if !tp.list_label.is_empty() {
-                                            if tp.indent_first_line > 0.0
-                                                && tp.indent_hanging == 0.0
-                                            {
-                                                -tp.indent_first_line
-                                            } else {
-                                                0.0
-                                            }
-                                        } else if tp.indent_hanging > 0.0 {
-                                            tp.indent_hanging
-                                        } else {
-                                            -tp.indent_first_line
-                                        };
                                         if let Some(img) =
                                             super::textbox_render::textbox_para_block_image(tp)
                                         {
@@ -1712,33 +1769,7 @@ pub(super) fn render_header_footer(
                                                 + img.layout_extra_height
                                                 + tp.space_after;
                                         }
-                                        let inline_imgs = super::layout::run_image_map(
-                                            &tp.runs,
-                                            ctx.textbox_image_names,
-                                        );
-                                        // Footer page numbers live in text boxes as often
-                                        // as in plain paragraphs; without this the box
-                                        // kept the template's cached PAGE/NUMPAGES text.
-                                        let hf_runs = substitute_hf_runs_with(&tp.runs, &sub);
-                                        let tb_lines = build_lines(
-                                            &hf_runs,
-                                            ctx,
-                                            tp_text_w,
-                                            ctx.cjk(true, tp),
-                                            &LineOpts {
-                                                inline_images: Some(&inline_imgs),
-                                                tab_stops: &tp.tab_stops,
-                                                indent_left: tp.indent_left,
-                                                indent_right: tp.indent_right,
-                                                hanging: tp_hanging,
-                                                ..Default::default()
-                                            },
-                                        );
-                                        let (fs, lhr, _) = tallest_run_metrics(&hf_runs, ctx.fonts);
-                                        let line_h = resolve_line_h(tp_ls, fs, lhr);
-                                        tp.space_before
-                                            + tb_lines.len().max(1) as f32 * line_h
-                                            + tp.space_after
+                                        hf_box_paragraph(tp, content_w, &sub, ctx).height(tp)
                                     };
                                     let tables: f32 =
                                         tb.tables.iter().map(|(_, t)| hf_table(t).height()).sum();
@@ -1768,21 +1799,6 @@ pub(super) fn render_header_footer(
                                         Some(&sub),
                                     );
                                 }
-                                let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
-                                let tp_text_w =
-                                    (content_w - tp.indent_left - tp.indent_right).max(1.0);
-                                let tp_hanging = if !tp.list_label.is_empty() {
-                                    if tp.indent_first_line > 0.0 && tp.indent_hanging == 0.0 {
-                                        -tp.indent_first_line
-                                    } else {
-                                        0.0
-                                    }
-                                } else if tp.indent_hanging > 0.0 {
-                                    tp.indent_hanging
-                                } else {
-                                    -tp.indent_first_line
-                                };
-
                                 if let Some(img) =
                                     super::textbox_render::textbox_para_block_image(tp)
                                 {
@@ -1791,7 +1807,8 @@ pub(super) fn render_header_footer(
                                             + tp.indent_left
                                             + align_offset(
                                                 tp.alignment,
-                                                (tp_text_w - img.display_width).max(0.0),
+                                                (hf_box_text_w(tp, content_w) - img.display_width)
+                                                    .max(0.0),
                                             );
                                         let img_y =
                                             tb_cursor - tp.space_before - img.display_height;
@@ -1812,41 +1829,19 @@ pub(super) fn render_header_footer(
                                     continue;
                                 }
 
-                                let inline_imgs =
-                                    super::layout::run_image_map(&tp.runs, ctx.textbox_image_names);
-                                // Same substitution as the height pass above: the
-                                // footer text box's PAGE/NUMPAGES must be evaluated
-                                // for this page, not left at the cached value.
-                                let hf_runs = substitute_hf_runs_with(&tp.runs, &sub);
-                                let tb_lines = build_lines(
-                                    &hf_runs,
-                                    ctx,
-                                    tp_text_w,
-                                    ctx.cjk(true, tp),
-                                    &LineOpts {
-                                        inline_images: Some(&inline_imgs),
-                                        tab_stops: &tp.tab_stops,
-                                        indent_left: tp.indent_left,
-                                        indent_right: tp.indent_right,
-                                        hanging: tp_hanging,
-                                        ..Default::default()
-                                    },
-                                );
-                                let (tb_fs, tb_lhr, tb_ar) =
-                                    tallest_run_metrics(&hf_runs, ctx.fonts);
-                                let tb_line_h = resolve_line_h(tp_ls, tb_fs, tb_lhr);
-                                if tb_lines.is_empty() {
-                                    tb_cursor -= tp.space_before + tb_line_h + tp.space_after;
+                                let bp = hf_box_paragraph(tp, content_w, &sub, ctx);
+                                if bp.lines.is_empty() {
+                                    tb_cursor -= bp.height(tp);
                                     continue;
                                 }
-                                let tb_ascender = tb_ar.unwrap_or(0.75);
-                                let tb_baseline = tb_cursor - tp.space_before - tb_fs * tb_ascender;
+                                let tb_ascender = bp.ar.unwrap_or(0.75);
+                                let tb_baseline = tb_cursor - tp.space_before - bp.fs * tb_ascender;
                                 let tb_metrics = (
-                                    tb_fs * tb_ascender,
-                                    if inline_imgs.is_empty() {
+                                    bp.fs * tb_ascender,
+                                    if bp.inline_imgs.is_empty() {
                                         0.0
                                     } else {
-                                        picture_line_bottom(&tp.runs, tp, ctx.fonts, tp_ls)
+                                        picture_line_bottom(&tp.runs, tp, ctx.fonts, bp.ls)
                                     },
                                 );
                                 super::render_list_label(
@@ -1855,19 +1850,19 @@ pub(super) fn render_header_footer(
                                     ctx.fonts,
                                     content_x + tp.indent_left - tp.indent_hanging,
                                     tb_baseline,
-                                    tb_fs,
+                                    bp.fs,
                                 );
                                 render_paragraph_lines(
                                     content,
-                                    &tb_lines,
+                                    &bp.lines,
                                     &tp.alignment,
                                     content_x + tp.indent_left,
                                     tp.indent_left,
-                                    tp_text_w,
+                                    bp.text_w,
                                     tb_baseline,
-                                    tb_line_h,
+                                    bp.line_h,
                                     tb_metrics,
-                                    tb_lines.len(),
+                                    bp.lines.len(),
                                     0,
                                     links,
                                     0.0,
@@ -1880,9 +1875,7 @@ pub(super) fn render_header_footer(
                                     None,
                                     None,
                                 );
-                                tb_cursor -= tp.space_before
-                                    + (tb_lines.len() as f32) * tb_line_h
-                                    + tp.space_after;
+                                tb_cursor -= bp.height(tp);
                             }
                             if needs_clip {
                                 content.restore_state();
