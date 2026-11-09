@@ -951,9 +951,21 @@ pub(super) fn auto_fit_columns(
 
     // Apply content minimums: ensure each column fits its longest word.
     // If any column needed boosting, shrink others proportionally.
+    // Not for a percentage-width table whose cells all state percentages:
+    // Word keeps those shares and breaks a word that does not fit its
+    // column (a 23-column landscape table: "Total" prints "Tot|al" in a
+    // 23pt column where we widened it and starved the first column to
+    // its longest word, wrapping "Indicator" and running a second page).
+    let pct_shares = table.width_pct.is_some()
+        && table
+            .rows
+            .iter()
+            .flat_map(|r| r.grid_cells())
+            .filter(|(_, span, _)| *span == 1)
+            .all(|(_, _, c)| c.width_pct.is_some());
     let mut extra_needed: f32 = 0.0;
     let mut shrinkable: f32 = 0.0;
-    for i in 0..ncols {
+    for i in (0..ncols).filter(|_| !pct_shares) {
         if min_widths[i] > widths[i] {
             extra_needed += min_widths[i] - widths[i];
             widths[i] = min_widths[i];
