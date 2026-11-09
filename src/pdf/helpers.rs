@@ -82,7 +82,11 @@ pub(crate) fn picture_leading(ls: LineSpacing, font_size: f32, tallest_lhr: Opti
     if matches!(ls, LineSpacing::AtLeast(_)) {
         return 0.0;
     }
-    spacing_leading(resolve_line_h(ls, font_size, tallest_lhr), font_size, tallest_lhr)
+    spacing_leading(
+        resolve_line_h(ls, font_size, tallest_lhr),
+        font_size,
+        tallest_lhr,
+    )
 }
 
 /// How much of its ascent a line's first baseline sits below the line top.
@@ -104,9 +108,7 @@ pub(super) fn border_band(border: Option<&ParagraphBorder>) -> f32 {
 fn border_eq(a: &Option<ParagraphBorder>, b: &Option<ParagraphBorder>) -> bool {
     match (a, b) {
         (None, None) => true,
-        (Some(a), Some(b)) => {
-            a.width_pt == b.width_pt && a.color == b.color && a.style == b.style
-        }
+        (Some(a), Some(b)) => a.width_pt == b.width_pt && a.color == b.color && a.style == b.style,
         _ => false,
     }
 }
@@ -148,7 +150,10 @@ pub(super) fn bottom_border<'a>(
         Some(n) => (para.borders.between.as_ref(), between_band(para, n)),
         None => {
             let b = para.borders.bottom.as_ref();
-            (b, b.map_or((0.0, 0.0), |b| (b.space_pt, border_band(Some(b)))))
+            (
+                b,
+                b.map_or((0.0, 0.0), |b| (b.space_pt, border_band(Some(b)))),
+            )
         }
     }
 }

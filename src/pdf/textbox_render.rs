@@ -1,4 +1,3 @@
-
 use std::collections::HashSet;
 
 use pdf_writer::Content;
@@ -17,9 +16,9 @@ use super::layout::{
 };
 use super::list_label::render_list_label;
 use super::positioning::resolve_h_position;
+use super::smartart::draw_shape_path;
 use super::table::TextboxTable;
 use super::tagging::{Lists, Tags};
-use super::smartart::draw_shape_path;
 use super::wordart;
 use super::{GradientSpec, RenderContext, render_shape_fill, resolve_line_h};
 
@@ -50,7 +49,10 @@ fn box_block_image<'p>(tp: &'p Paragraph, ctx: &RenderContext) -> Option<&'p Emb
 }
 
 fn exact_lines(tp: &Paragraph, ctx: &RenderContext) -> bool {
-    matches!(tp.line_spacing.unwrap_or(ctx.doc_line_spacing), LineSpacing::Exact(_))
+    matches!(
+        tp.line_spacing.unwrap_or(ctx.doc_line_spacing),
+        LineSpacing::Exact(_)
+    )
 }
 
 fn exact_picture_line(tp: &Paragraph, ctx: &RenderContext) -> bool {
@@ -294,7 +296,10 @@ fn layout_box_paragraph(
         picture_line_bottom(runs, tp, ctx.fonts, ls)
     };
     let picture_ascent = if exact {
-        lines.iter().map(line_max_image_h).fold(text_ascent, f32::max)
+        lines
+            .iter()
+            .map(line_max_image_h)
+            .fold(text_ascent, f32::max)
     } else {
         text_ascent
     };
@@ -313,11 +318,7 @@ fn layout_box_paragraph(
 /// table or paragraph, also one taller than the box, and what follows moves
 /// on (text-box-table-linked-tall). ponytail: whole paragraphs and tables;
 /// Word splits a story between lines and table rows.
-pub(super) fn story_window<'t>(
-    tb: &'t Textbox,
-    height: f32,
-    ctx: &RenderContext,
-) -> StoryPart<'t> {
+pub(super) fn story_window<'t>(tb: &'t Textbox, height: f32, ctx: &RenderContext) -> StoryPart<'t> {
     let Some(link) = &tb.link else {
         return StoryPart::whole(tb);
     };
@@ -519,8 +520,14 @@ pub(super) fn render_single_textbox(
         tb.rotation_deg,
         story.paragraphs.len()
     );
-    let rotated =
-        rotate_about_center(content, tb.rotation_deg, tb_x, tb_y_top, tb.width_pt, tb_height);
+    let rotated = rotate_about_center(
+        content,
+        tb.rotation_deg,
+        tb_x,
+        tb_y_top,
+        tb.width_pt,
+        tb_height,
+    );
 
     let frame = (tb_x, tb_y_top - tb_height, tb.width_pt, tb_height);
     if let Some(glow) = &tb.glow {
@@ -544,7 +551,14 @@ pub(super) fn render_single_textbox(
     }
     render_picture_fill(content, tb, frame, ctx);
 
-    stroke_textbox_outline(content, tb, tb_x, tb_y_top - tb_height, tb.width_pt, tb_height);
+    stroke_textbox_outline(
+        content,
+        tb,
+        tb_x,
+        tb_y_top - tb_height,
+        tb.width_pt,
+        tb_height,
+    );
 
     // Lay text out within the shape's text rectangle (e.g. an arrow's body,
     // not its head). For plain rectangles this is the full box, so non-shape
@@ -566,7 +580,10 @@ pub(super) fn render_single_textbox(
 
     // WordArt uses the full frame height, including the vertical insets.
     let needs_clip = !matches!(tb.auto_fit, crate::model::AutoFit::Shape)
-        || story.paragraphs.iter().any(|tp| exact_picture_line(tp, ctx));
+        || story
+            .paragraphs
+            .iter()
+            .any(|tp| exact_picture_line(tp, ctx));
     if needs_clip {
         content.save_state();
         content.rect(tb_x, tb_y_top - tb_height, tb.width_pt, tb_height);
@@ -615,7 +632,6 @@ pub(super) fn render_single_textbox(
 
     let available = txt_h - tb.margin_top - tb.margin_bottom;
     let anchor_offset = anchor_offset(tb, &story, content_w, natural_w, available, ctx);
-
 
     // For fixed-size textboxes, stop rendering content below the textbox bounds
     let clip_bottom = if needs_clip {

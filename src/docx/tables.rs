@@ -2,8 +2,8 @@ use std::io::{Read, Seek};
 
 use crate::model::{
     Alignment, Block, BorderStyle, CellBorder, CellBorders, CellMargins, CellVAlign, FitText,
-    HatchPattern, HorizontalPosition, LineSpacing, Paragraph, Table, TableAlignment, TableCell,
-    Run, TablePosition, TableRow, TextDirection, VMerge,
+    HatchPattern, HorizontalPosition, LineSpacing, Paragraph, Run, Table, TableAlignment,
+    TableCell, TablePosition, TableRow, TextDirection, VMerge,
 };
 
 use super::numbering::{ListCounters, ListLabelInfo, parse_list_info};
@@ -432,7 +432,10 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
     });
     let cells_twip_sized = cell_widths.iter().all(|w| {
         w.is_some_and(|w| {
-            matches!(w.attribute((WML_NS, "type")), None | Some("dxa" | "auto" | "nil"))
+            matches!(
+                w.attribute((WML_NS, "type")),
+                None | Some("dxa" | "auto" | "nil")
+            )
         })
     });
     if col_widths.is_empty() {
@@ -906,7 +909,11 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                     }
                     let tab_stops = super::resolve_tab_stops(ppr, para_style);
                     cell_blocks.push(Block::Paragraph(Paragraph {
-                        widow_control: super::paragraph::widow_control(ppr, para_style, &ctx.styles.defaults),
+                        widow_control: super::paragraph::widow_control(
+                            ppr,
+                            para_style,
+                            &ctx.styles.defaults,
+                        ),
                         keep_lines: super::paragraph::keep_lines(ppr, para_style),
                         runs,
                         alignment,
@@ -944,7 +951,11 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                             .and_then(|ppr| wml_bool(ppr, "snapToGrid"))
                             .or_else(|| para_style.and_then(|s| s.snap_to_grid))
                             .unwrap_or(true),
-                        text_alignment: super::paragraph::text_alignment(ppr, para_style, &ctx.styles.defaults),
+                        text_alignment: super::paragraph::text_alignment(
+                            ppr,
+                            para_style,
+                            &ctx.styles.defaults,
+                        ),
                         // Cells space Latin text from ideographs as the body
                         // does (chinese_costume's "5-10 分钟").
                         auto_space_de,

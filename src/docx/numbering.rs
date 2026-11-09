@@ -150,7 +150,9 @@ fn parse_level_def(lvl: roxmltree::Node) -> Option<(u8, LevelDef)> {
         hansi.map(str::to_string).or_else(|| rfonts_ascii_name(r))
     });
     let label_font_size = rpr.and_then(parse_font_size);
-    let label_vert_align = rpr.and_then(|r| wml_attr(r, "vertAlign")).map(str::to_string);
+    let label_vert_align = rpr
+        .and_then(|r| wml_attr(r, "vertAlign"))
+        .map(str::to_string);
     let label_bold = rpr.and_then(|r| wml_bool(r, "b"));
     let label_italic = rpr.and_then(|r| wml_bool(r, "i"));
     let label_caps = rpr.and_then(|r| wml_bool(r, "caps"));
@@ -795,7 +797,10 @@ pub(super) fn parse_list_info(
             renumbered = Some(orig.chars().count());
             label = orig + &label;
         }
-        (label, expand(placeholder_span(&def.lvl_text), stream, current_counter))
+        (
+            label,
+            expand(placeholder_span(&def.lvl_text), stream, current_counter),
+        )
     };
     // The mark's caps reach the label too: uk_commercial's SH Schedule
     // Heading style numbers its empty paragraphs "SCHEDULE 1".
@@ -1310,9 +1315,9 @@ mod tests {
         // Word for Mac probe p11b: plain, deleted, deleted, plain, inserted,
         // inserted, deleted, plain.
         let got: Vec<String> = [Live, d, d, Live, i, i, d, Live]
-                .into_iter()
-                .map(&mut label)
-                .collect();
+            .into_iter()
+            .map(&mut label)
+            .collect();
         assert_eq!(got, ["1.", "2.", "3.", "4.2.", "3.", "4.", "5.", "6.5."]);
         // Probe 2026-11-09, continuing the list: plain, plain, two moved
         // away, plain, the two moved here, plain.

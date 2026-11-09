@@ -1267,10 +1267,16 @@ pub(super) fn size_lines_by_own_runs(
         .collect();
     for line in lines.iter_mut() {
         if top_aligned {
-            for c in line.chunks.iter_mut().filter(|c| c.math.is_none() && c.raise != 0.0) {
+            for c in line
+                .chunks
+                .iter_mut()
+                .filter(|c| c.math.is_none() && c.raise != 0.0)
+            {
                 let drop = by_pdf_name
                     .get(c.pdf_font.as_str())
-                    .map_or((-c.raise).max(0.0), |e| top_aligned_drop(e, c.line_font_size, c.raise));
+                    .map_or((-c.raise).max(0.0), |e| {
+                        top_aligned_drop(e, c.line_font_size, c.raise)
+                    });
                 c.y_offset -= c.raise + (quarter_pt(drop) - 0.25).max(0.0);
                 c.raise = -drop;
             }
@@ -1336,7 +1342,8 @@ pub(super) fn size_lines_by_own_runs(
                 below = below.max(c.line_font_size * (lhr - ar).max(0.0) + pad - c.raise);
             } else {
                 ascent = ascent.max((c.line_font_size * ar + pad + c.raise).max(0.0));
-                below = below.max((c.line_font_size * (lhr - ar).max(0.0) + pad - c.raise).max(0.0));
+                below =
+                    below.max((c.line_font_size * (lhr - ar).max(0.0) + pad - c.raise).max(0.0));
                 unraised_below = unraised_below.max(c.line_font_size * (lhr - ar).max(0.0) + pad);
             }
             sized = true;
@@ -1372,8 +1379,7 @@ pub(super) fn size_lines_by_own_runs(
             || (line.chunks.iter().any(|c| c.raise != 0.0) && (ascent - para_ascent).abs() > 0.01)
         {
             line.pitch = Some(pitch);
-            line.ascent_shift = (ascent - para_ascent) * ascent_scale
-                + above_extra;
+            line.ascent_shift = (ascent - para_ascent) * ascent_scale + above_extra;
             line.text_box = matches!(line_spacing, LineSpacing::Auto(m) if m > 1.0)
                 .then_some(ascent + below + above_extra + below_extra);
         }
@@ -1402,7 +1408,9 @@ fn with_fallback_faces(
                 .find(|f| f.char_to_gid.as_ref().is_some_and(|m| m.contains_key(&c)))
         })
         .filter_map(|f| Some((f.plain_ascender_ratio?, f.plain_line_h_ratio?)))
-        .fold((ar, lhr - ar), |(a, d), (fa, fl)| (a.max(fa), d.max(fl - fa)));
+        .fold((ar, lhr - ar), |(a, d), (fa, fl)| {
+            (a.max(fa), d.max(fl - fa))
+        });
     (asc + desc, asc)
 }
 
@@ -1804,7 +1812,12 @@ pub(super) fn opening_word_width(runs: &[Run], fonts: &HashMap<String, FontEntry
             width = Some(width.unwrap_or(0.0) + measure(&shown));
             prev_char = shown.chars().last();
         }
-        let trailing = run.text.chars().rev().take_while(|&c| is_break_space(c)).count();
+        let trailing = run
+            .text
+            .chars()
+            .rev()
+            .take_while(|&c| is_break_space(c))
+            .count();
         if width.is_some() {
             spaces_since += trailing;
             space_width += trailing as f32 * measure(" ");
@@ -1813,12 +1826,7 @@ pub(super) fn opening_word_width(runs: &[Run], fonts: &HashMap<String, FontEntry
     width
 }
 
-pub(super) fn word_width_for_run(
-    entry: &FontEntry,
-    run: &Run,
-    word: &str,
-    eff_fs: f32,
-) -> f32 {
+pub(super) fn word_width_for_run(entry: &FontEntry, run: &Run, word: &str, eff_fs: f32) -> f32 {
     if let Some(cb) = run.checkbox {
         return checkbox_cell(entry, cb).0;
     }
@@ -2280,7 +2288,11 @@ const SPACE_SQUEEZE: f32 = 0.25;
 /// "der" after 10, 20 and 30 spaces to 6.76, 6.53 and 6.44 pt, wrapping at
 /// 6.81, 6.58 and 6.49 (fixture squeeze-lead-space).
 fn squeeze_keeps(overflow: f32, word_w: f32, lead_space: f32, spaces: f32) -> bool {
-    let share = if spaces > 0.0 { lead_space / spaces } else { 0.0 };
+    let share = if spaces > 0.0 {
+        lead_space / spaces
+    } else {
+        0.0
+    };
     (overflow - SQUEEZE_KEEP_SLACK) * (3.0 - 2.0 * share) <= word_w + lead_space
 }
 
@@ -2673,17 +2685,18 @@ pub(super) fn build_paragraph_lines(
 
     let right_region_for = |line_count: usize| -> Option<(f32, f32, f32)> {
         per_line_dual.and_then(|dual| {
-            dual.get(line_count + skip.get()).and_then(|&(_, _, rx, rw)| {
-                // The first line gets its first-line/hanging shift like the
-                // left region does (`eff_margin` in render_paragraph_lines).
-                let shift = if line_count == 0 {
-                    first_line_hanging
-                } else {
-                    0.0
-                };
-                let rw = rw + shift;
-                (rw > 0.0).then_some((rx - shift, rw, rw))
-            })
+            dual.get(line_count + skip.get())
+                .and_then(|&(_, _, rx, rw)| {
+                    // The first line gets its first-line/hanging shift like the
+                    // left region does (`eff_margin` in render_paragraph_lines).
+                    let shift = if line_count == 0 {
+                        first_line_hanging
+                    } else {
+                        0.0
+                    };
+                    let rw = rw + shift;
+                    (rw > 0.0).then_some((rx - shift, rw, rw))
+                })
         })
     };
 
@@ -2793,7 +2806,9 @@ pub(super) fn build_paragraph_lines(
                                 proposed_x2,
                                 img,
                                 effect_inline_names.get(&run_idx).cloned(),
-                                seen_fonts.get(font_key_buf(run, &mut key_buf)).map_or_else(String::new, |e| e.pdf_name.clone()),
+                                seen_fonts
+                                    .get(font_key_buf(run, &mut key_buf))
+                                    .map_or_else(String::new, |e| e.pdf_name.clone()),
                             ));
                             current_x = img_w;
                             continue;
@@ -2832,7 +2847,9 @@ pub(super) fn build_paragraph_lines(
                     current_x,
                     img,
                     effect_inline_names.get(&run_idx).cloned(),
-                    seen_fonts.get(font_key_buf(run, &mut key_buf)).map_or_else(String::new, |e| e.pdf_name.clone()),
+                    seen_fonts
+                        .get(font_key_buf(run, &mut key_buf))
+                        .map_or_else(String::new, |e| e.pdf_name.clone()),
                 ));
                 current_x += img_w;
                 word_start = current_chunks.len();
@@ -2948,7 +2965,8 @@ pub(super) fn build_paragraph_lines(
         // the space before it and closes 1.5pt before the next glyph).
         // A bordered word wrapping to a new line opens its box there again
         // (run-borders p8: such lines start 1.5pt in).
-        let pad = |b: Option<&crate::model::ParagraphBorder>| b.map_or(0.0, |b| b.width_pt + b.space_pt);
+        let pad =
+            |b: Option<&crate::model::ParagraphBorder>| b.map_or(0.0, |b| b.width_pt + b.space_pt);
         let line_start_pad = pad(run.border.as_ref());
         if !text.is_empty() && run.border.as_ref() != prev_border {
             current_x += pad(prev_border) + line_start_pad;
@@ -2956,7 +2974,10 @@ pub(super) fn build_paragraph_lines(
         }
         // The box closes after the run's last word unless the next run
         // continues it; a word ending the line needs that room too.
-        let closing_pad = if runs.get(run_idx + 1).is_some_and(|r| r.border == run.border) {
+        let closing_pad = if runs
+            .get(run_idx + 1)
+            .is_some_and(|r| r.border == run.border)
+        {
             0.0
         } else {
             line_start_pad
@@ -2973,7 +2994,14 @@ pub(super) fn build_paragraph_lines(
             let space_w =
                 space_count as f32 * word_space_width(run, entry, eff_fs, source, &mut prev_char);
             if space_count > 0 {
-                push_pending_space(&mut pending_spaces, &mut pending_space_w, run, entry, eff_fs, space_w);
+                push_pending_space(
+                    &mut pending_spaces,
+                    &mut pending_space_w,
+                    run,
+                    entry,
+                    eff_fs,
+                    space_w,
+                );
                 pending_real_space = true;
                 last_space_run = Some(run);
             }
@@ -3001,7 +3029,9 @@ pub(super) fn build_paragraph_lines(
                 let ideograph =
                     |c: char| crate::docx::is_east_asian_char(c) && !is_cjk_punctuation(c);
                 let latin = |c: char| c.is_alphanumeric() && !crate::docx::is_east_asian_char(c);
-                if (ideograph(prev_ch) && latin(first_ch)) || (latin(prev_ch) && ideograph(first_ch)) {
+                if (ideograph(prev_ch) && latin(first_ch))
+                    || (latin(prev_ch) && ideograph(first_ch))
+                {
                     pending_spaces.clear();
                     pending_space_w += eff_fs * 0.25;
                 }
@@ -3044,15 +3074,8 @@ pub(super) fn build_paragraph_lines(
             if ww > soft_room && !in_right_region && source.ends_with(SOFT_HYPHEN) {
                 let whole = (current_chunks.is_empty() || (is_continuation && word_start == 0))
                     && right_region_for(lines.len()).is_none();
-                (source, shown, ww) = soft_continuation(
-                    run,
-                    source,
-                    &mut words,
-                    width,
-                    onward,
-                    soft_room,
-                    whole,
-                );
+                (source, shown, ww) =
+                    soft_continuation(run, source, &mut words, width, onward, soft_room, whole);
             }
             // A strip left of a wrapping float is no line: a word that fits
             // the strip right of it moves there whole (Word puts "Extended"
@@ -3091,8 +3114,9 @@ pub(super) fn build_paragraph_lines(
             // Leading spaces before a word wider than the line keep a line of
             // their own and the word breaks on the next (traditional_skills'
             // " DD/MM/YY" cell; Word probes 2026-11-08): see below.
-            let spaces_wrap_first =
-                pending_space_w > 0.0 && !in_right_region && right_region_for(lines.len()).is_none();
+            let spaces_wrap_first = pending_space_w > 0.0
+                && !in_right_region
+                && right_region_for(lines.len()).is_none();
             let cut_here = if current_chunks.is_empty() {
                 ww > line_room && !spaces_wrap_first
             } else {
@@ -3360,10 +3384,7 @@ pub(super) fn build_paragraph_lines(
                     space_rtl,
                     cjk.compress_punct,
                 );
-                if literal_spaces > 1
-                    && !space_underlined
-                    && chunk_start > 0
-                {
+                if literal_spaces > 1 && !space_underlined && chunk_start > 0 {
                     current_chunks[chunk_start].preceding_spaces = literal_spaces;
                 }
                 current_x += ww;
@@ -3586,7 +3607,14 @@ pub(super) fn build_paragraph_lines(
             pending_space_count += trailing_spaces;
             let space_w =
                 trailing_spaces as f32 * word_space_width(run, entry, eff_fs, "", &mut prev_char);
-            push_pending_space(&mut pending_spaces, &mut pending_space_w, run, entry, eff_fs, space_w);
+            push_pending_space(
+                &mut pending_spaces,
+                &mut pending_space_w,
+                run,
+                entry,
+                eff_fs,
+                space_w,
+            );
             pending_real_space = true;
             last_space_run = Some(run);
         }
@@ -3620,7 +3648,10 @@ pub(super) fn build_paragraph_lines(
     if lines.is_empty() {
         lines.push(TextLine::default());
     }
-    if let Some(line) = lines.last_mut().filter(|l| ends_in_text || l.chunks.is_empty()) {
+    if let Some(line) = lines
+        .last_mut()
+        .filter(|l| ends_in_text || l.chunks.is_empty())
+    {
         underline_line_end(line, cjk, &pending_spaces, current_x, pending_space_w);
     }
     // A display equation broken over lines is aligned as a group: each line
@@ -4245,7 +4276,9 @@ pub(super) fn build_tabbed_line(
                         current_x,
                         img,
                         effect_inline_names.get(&seg_indices[local_idx]).cloned(),
-                        seen_fonts.get(font_key_buf(run, &mut key_buf)).map_or_else(String::new, |e| e.pdf_name.clone()),
+                        seen_fonts
+                            .get(font_key_buf(run, &mut key_buf))
+                            .map_or_else(String::new, |e| e.pdf_name.clone()),
                     ));
                     current_x += img_w;
                 }
@@ -4278,7 +4311,14 @@ pub(super) fn build_tabbed_line(
                 let space_w = space_count as f32
                     * word_space_width(run, entry, eff_fs, source, &mut prev_char);
                 if space_count > 0 {
-                    push_pending_space(&mut pending_spaces, &mut pending_space_w, run, entry, eff_fs, space_w);
+                    push_pending_space(
+                        &mut pending_spaces,
+                        &mut pending_space_w,
+                        run,
+                        entry,
+                        eff_fs,
+                        space_w,
+                    );
                 }
                 // Word advances over explicit spaces wherever they occur, including
                 // as the first content of a line or right after a tab. Whitespace
@@ -4389,7 +4429,14 @@ pub(super) fn build_tabbed_line(
             if trailing_spaces > 0 {
                 let space_w = trailing_spaces as f32
                     * word_space_width(run, entry, eff_fs, "", &mut prev_char);
-                push_pending_space(&mut pending_spaces, &mut pending_space_w, run, entry, eff_fs, space_w);
+                push_pending_space(
+                    &mut pending_spaces,
+                    &mut pending_space_w,
+                    run,
+                    entry,
+                    eff_fs,
+                    space_w,
+                );
             }
         }
 
@@ -4662,13 +4709,11 @@ fn device_grid(
             }
             let pc = &line.chunks[p];
             let sw = gap / n as f32;
-            let plain = [entry.space_width(size)]
-                .into_iter()
-                .chain(
-                    entries
-                        .get(pc.pdf_font.as_str())
-                        .map(|e| e.space_width(pc.font_size)),
-                );
+            let plain = [entry.space_width(size)].into_iter().chain(
+                entries
+                    .get(pc.pdf_font.as_str())
+                    .map(|e| e.space_width(pc.font_size)),
+            );
             let spacing = [0.0, chunk.char_spacing, pc.char_spacing];
             let stretch = [0.0, extra_per_gap / n as f32];
             plain
@@ -4705,13 +4750,17 @@ fn device_grid(
         };
         members.push((i, seq.len()));
         let shaped = line.shaped_kerning && chunk.kern && entry.kern_pairs.is_some();
-        seq.extend(glyph_advances(chunk, entry).enumerate().map(|(j, (advance, kern))| GridGlyph {
-            advance,
-            apart: chunk.char_spacing + if shaped { 0.0 } else { kern },
-            shaped,
-            font_size: size,
-            run_start: (j == 0 && new_run) || chunk.source_starts.contains(&j),
-        }));
+        seq.extend(
+            glyph_advances(chunk, entry)
+                .enumerate()
+                .map(|(j, (advance, kern))| GridGlyph {
+                    advance,
+                    apart: chunk.char_spacing + if shaped { 0.0 } else { kern },
+                    shaped,
+                    font_size: size,
+                    run_start: (j == 0 && new_run) || chunk.source_starts.contains(&j),
+                }),
+        );
         prev = Some((i, x + chunk.width));
     }
     flush(line, x0, &mut seq, &mut members, &mut out);
@@ -5006,7 +5055,13 @@ impl LineGrid {
     /// pictures in Arial 11 and Times New Roman 12 lines). Vertical alignment
     /// moves the line before Word rounds and stretches it; `y` and the result
     /// are before that move.
-    pub(super) fn drawn_baseline(self, y: f32, line: Option<&TextLine>, first: bool, last: bool) -> f32 {
+    pub(super) fn drawn_baseline(
+        self,
+        y: f32,
+        line: Option<&TextLine>,
+        first: bool,
+        last: bool,
+    ) -> f32 {
         let below_top = self.page_height + self.shift - y;
         let baseline = match line {
             _ if self.snapped => below_top,
@@ -5015,9 +5070,8 @@ impl LineGrid {
             }
             _ => {
                 let boost = if first { self.label_boost } else { 0.0 };
-                let ascent = self.ascent - self.label_boost
-                    + boost
-                    + line.map_or(0.0, |l| l.ascent_shift);
+                let ascent =
+                    self.ascent - self.label_boost + boost + line.map_or(0.0, |l| l.ascent_shift);
                 let advance = line.and_then(|l| l.pitch).unwrap_or(self.line_pitch);
                 let natural = if let Some(text_box) = line.and_then(|l| l.text_box) {
                     text_box
@@ -5080,13 +5134,7 @@ fn to_grid(v: f64) -> f64 {
 /// spill into it (Word for Mac probes, fixture line-grid: Arial, Times New
 /// Roman, Calibri and Verdana 6-24pt at single, 0.9 to 2 lines, at-least and
 /// exact spacing, top margins in twip steps).
-fn grid_baseline(
-    top: f32,
-    ascent: f32,
-    natural: f32,
-    advance: f32,
-    leading_above: bool,
-) -> f32 {
+fn grid_baseline(top: f32, ascent: f32, natural: f32, advance: f32, leading_above: bool) -> f32 {
     let r = to_grid;
     let (top, a, nat, adv) = (top as f64, ascent as f64, natural as f64, advance as f64);
     let lead = (adv - nat).max(0.0);
@@ -5296,7 +5344,12 @@ pub(super) fn render_paragraph_lines(
     for (line_num, line) in lines.iter().enumerate() {
         let raw_y = first_baseline_y - line_y_offsets[line_num];
         let y = line_grid.map_or(raw_y, |g| {
-            g.drawn_baseline(raw_y, Some(line), line_num == 0, first_line_index + line_num == last_line_idx)
+            g.drawn_baseline(
+                raw_y,
+                Some(line),
+                line_num == 0,
+                first_line_index + line_num == last_line_idx,
+            )
         });
         let global_line_idx = first_line_index + line_num;
         // Markup view: a revised line's change bar spans its line box, the
@@ -5313,7 +5366,11 @@ pub(super) fn render_paragraph_lines(
                 .fold(text_metrics.0, f32::max);
             let top = visual_top + if global_line_idx == 0 { above } else { 0.0 };
             let advance = inline_line_advance(line, line_pitch, text_metrics)
-                + if global_line_idx + 1 == total_line_count { below } else { 0.0 };
+                + if global_line_idx + 1 == total_line_count {
+                    below
+                } else {
+                    0.0
+                };
             CHANGE_BARS.with(|b| b.borrow_mut().push((visual_top - advance, top)));
         }
 
@@ -5329,13 +5386,12 @@ pub(super) fn render_paragraph_lines(
         } else {
             0.0
         };
-        let (eff_margin, eff_width) = if global_line_idx == first_content_idx
-            && first_line_hanging.abs() > 0.001
-        {
-            (base_margin - shift, base_width + first_line_hanging)
-        } else {
-            (base_margin, base_width)
-        };
+        let (eff_margin, eff_width) =
+            if global_line_idx == first_content_idx && first_line_hanging.abs() > 0.001 {
+                (base_margin - shift, base_width + first_line_hanging)
+            } else {
+                (base_margin, base_width)
+            };
         // Word lays a line out from its frame or margin, left indent and
         // first-line indent each rounded to device pixels on their own
         // (paragraph-offset-frame-*: 261 − 284 + 312 px, not 289.6 → 290).
@@ -5420,13 +5476,13 @@ pub(super) fn render_paragraph_lines(
             && has_cjk_content
             && matches!(*alignment, Alignment::Justify)
             && !(squeezed && line.squeeze_chars))
-        .then(|| {
-            MixedJustify::new(
-                &line.chunks[..left_chunk_count],
-                &gaps_before,
-                eff_width - left_content_width,
-            )
-        });
+            .then(|| {
+                MixedJustify::new(
+                    &line.chunks[..left_chunk_count],
+                    &gaps_before,
+                    eff_width - left_content_width,
+                )
+            });
         let char_justify_gaps = if mixed.is_some() {
             None
         } else if squeezed && line.squeeze_chars {
@@ -5439,8 +5495,7 @@ pub(super) fn render_paragraph_lines(
             char_justify_gaps(*alignment, can_justify, has_cjk_content, left_char_count)
         };
         let is_char_justified = char_justify_gaps.is_some();
-        let is_justified =
-            mixed.is_some() || is_char_justified || (can_justify && left_gaps > 0);
+        let is_justified = mixed.is_some() || is_char_justified || (can_justify && left_gaps > 0);
 
         // A line wider than the measure (a picture too wide for it) starts at
         // the left edge and overflows to the right, whatever the alignment.
@@ -5458,9 +5513,7 @@ pub(super) fn render_paragraph_lines(
             Alignment::Distribute if !is_justified => eff_margin + slack / 2.0,
             // Word probe: a justified right-to-left paragraph's last line
             // ends at the right margin.
-            Alignment::Justify if line.rtl_paragraph && !is_justified => {
-                eff_margin + slack
-            }
+            Alignment::Justify if line.rtl_paragraph && !is_justified => eff_margin + slack,
             Alignment::Left | Alignment::Justify | Alignment::Distribute => eff_margin,
         };
 
@@ -6199,7 +6252,9 @@ pub(super) fn render_paragraph_lines(
                 if chunk.underline && deco_w > 0.0 {
                     let entry = pdf_name_to_entry.get(chunk.pdf_font.as_str()).copied();
                     let link = chunk.hyperlink_url.is_some();
-                    for (top, th) in underline_lines(entry, chunk.font_size, chunk.double_underline, link, y) {
+                    for (top, th) in
+                        underline_lines(entry, chunk.font_size, chunk.double_underline, link, y)
+                    {
                         push_decoration(&mut decorations, x, top, deco_w, th, chunk.color);
                     }
                 }
@@ -6334,15 +6389,40 @@ pub(super) fn render_paragraph_lines(
                 let entry = pdf_name_to_entry.get(chunk.pdf_font.as_str());
                 if chunk.strikethrough {
                     let mid = box_bottom + chunk.inline_image_height / 2.0;
-                    push_decoration(&mut decorations, box_x, mid - 0.72, chunk.width, 1.44, chunk.color);
+                    push_decoration(
+                        &mut decorations,
+                        box_x,
+                        mid - 0.72,
+                        chunk.width,
+                        1.44,
+                        chunk.color,
+                    );
                     let (st_y, st_thick) = entry
                         .and_then(|e| os2_strike(e, chunk.font_size))
-                        .map_or((y + chunk.font_size * 0.3, thick), |(top, th)| (y + top - th, th));
-                    push_decoration(&mut decorations, box_x, st_y, chunk.width, st_thick, chunk.color);
+                        .map_or((y + chunk.font_size * 0.3, thick), |(top, th)| {
+                            (y + top - th, th)
+                        });
+                    push_decoration(
+                        &mut decorations,
+                        box_x,
+                        st_y,
+                        chunk.width,
+                        st_thick,
+                        chunk.color,
+                    );
                 }
                 if chunk.underline {
-                    for (bottom, th) in underline_lines(entry.copied(), chunk.font_size, false, false, y) {
-                        push_decoration(&mut decorations, box_x, bottom, chunk.width, th, chunk.color);
+                    for (bottom, th) in
+                        underline_lines(entry.copied(), chunk.font_size, false, false, y)
+                    {
+                        push_decoration(
+                            &mut decorations,
+                            box_x,
+                            bottom,
+                            chunk.width,
+                            th,
+                            chunk.color,
+                        );
                     }
                 }
                 let clipped = push_clip(content, picture_clip);
@@ -6637,7 +6717,9 @@ pub(super) fn picture_line_bottom(
     // header logo under 1.5 lines of 12pt Times New Roman).
     let leading = tallest_by_ascent(text_runs(), seen_fonts)
         .or_else(|| mark_metrics(para, seen_fonts))
-        .map_or(0.0, |(fs, lhr, _)| super::helpers::picture_leading(ls, fs, lhr));
+        .map_or(0.0, |(fs, lhr, _)| {
+            super::helpers::picture_leading(ls, fs, lhr)
+        });
     let glyph_runs = text_runs().filter(|r| {
         r.text
             .chars()
@@ -6737,7 +6819,9 @@ pub(super) fn grid_snapped_line_h(
     // the glyphs need: 1.5 lines of one 18pt cell is 27pt (case79), while text
     // needing two 15.6pt cells stays 31.2pt at 1.25, 1.5 or 2 lines (Word probes).
     match effective_ls {
-        crate::model::LineSpacing::Auto(m) if grid_h > 0.0 => grid_cells(grid_h, pitch).max(m * pitch),
+        crate::model::LineSpacing::Auto(m) if grid_h > 0.0 => {
+            grid_cells(grid_h, pitch).max(m * pitch)
+        }
         _ => grid_cells(line_h, pitch),
     }
 }
@@ -6872,8 +6956,9 @@ mod tests {
             underline,
             ..Run::default()
         };
-        let fonts: HashMap<String, FontEntry> =
-            [(crate::fonts::font_key(&run(true, true)), tnr)].into_iter().collect();
+        let fonts: HashMap<String, FontEntry> = [(crate::fonts::font_key(&run(true, true)), tnr)]
+            .into_iter()
+            .collect();
         let inserted = [run(true, true)];
         assert!((inserted_picture_descent(&inserted, &fonts) - 12.0 * 0.258).abs() < 0.01);
         // A deleted (struck) picture and a plain one add nothing.
@@ -6885,8 +6970,14 @@ mod tests {
     fn top_aligned_drop_spends_external_leading_first() {
         // Times New Roman's leading is 87/2048 em; Calibri has none. Both
         // keep one more font unit.
-        let tnr = FontEntry { drop_slack_ratio: Some(88.0 / 2048.0), ..FontEntry::stub() };
-        let calibri = FontEntry { drop_slack_ratio: Some(1.0 / 2048.0), ..FontEntry::stub() };
+        let tnr = FontEntry {
+            drop_slack_ratio: Some(88.0 / 2048.0),
+            ..FontEntry::stub()
+        };
+        let calibri = FontEntry {
+            drop_slack_ratio: Some(1.0 / 2048.0),
+            ..FontEntry::stub()
+        };
         assert!(top_aligned_drop(&tnr, 11.0, -0.5) < 0.05);
         assert!((top_aligned_drop(&tnr, 24.0, -7.0) - 5.97).abs() < 0.01);
         assert!((top_aligned_drop(&calibri, 11.0, -0.5) - 0.4946).abs() < 0.001);
@@ -7308,8 +7399,14 @@ mod tests {
             (15.898438, 3.056152, 10.0, 6.769896, 6.770706),
         ] {
             let spaces = lead * count;
-            assert!(squeeze_keeps(keeps_to, word_w, lead, spaces), "{word_w} {count}");
-            assert!(!squeeze_keeps(wraps_at, word_w, lead, spaces), "{word_w} {count}");
+            assert!(
+                squeeze_keeps(keeps_to, word_w, lead, spaces),
+                "{word_w} {count}"
+            );
+            assert!(
+                !squeeze_keeps(wraps_at, word_w, lead, spaces),
+                "{word_w} {count}"
+            );
         }
     }
 

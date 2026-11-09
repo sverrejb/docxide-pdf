@@ -3,8 +3,8 @@ use std::sync::Arc;
 use crate::geometry::{FormulaOp, PathFill};
 
 use super::{
-    HRelativeFrom, HorizontalPosition, Paragraph, Table, VRelativeFrom, VerticalPosition,
-    WrapText, WrapType,
+    HRelativeFrom, HorizontalPosition, Paragraph, Table, VRelativeFrom, VerticalPosition, WrapText,
+    WrapType,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -90,7 +90,10 @@ impl EmbeddedImage {
         let (sin, cos) = self.rotation_deg.to_radians().sin_cos();
         let (s, c) = (sin.abs(), cos.abs());
         let w = self.box_width();
-        (w * c + self.display_height * s, w * s + self.display_height * c)
+        (
+            w * c + self.display_height * s,
+            w * s + self.display_height * c,
+        )
     }
 }
 

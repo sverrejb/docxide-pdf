@@ -10,8 +10,7 @@ pub(super) use super::color::{ColorTransforms, parse_color_transforms};
 use super::wordart::{parse_text_fill, parse_text_glow, parse_text_outline, parse_text_shadow};
 use super::{
     DML_NS, WML_NS, angle_attr, dml, emu_attr, extract_indent_chars, extract_indents, frac_attr,
-    frame_attrs,
-    highlight_color, merge_tab_stops, parse_cell_border, parse_cell_border_left,
+    frame_attrs, highlight_color, merge_tab_stops, parse_cell_border, parse_cell_border_left,
     parse_cell_border_right, parse_hex_color, parse_on_off, parse_one_border,
     parse_paragraph_borders, parse_run_shd, parse_tab_stops_with_clears, parse_text_color,
     read_zip_text, twips_attr, twips_to_pts, wml, wml_attr, wml_bool,
@@ -1131,7 +1130,9 @@ pub(super) fn parse_styles<R: Read + Seek>(
                     .unwrap_or_default();
 
                 let alignment = ppr.and_then(|ppr| wml_attr(ppr, "jc")).map(parse_alignment);
-                let kashida = ppr.and_then(|ppr| wml_attr(ppr, "jc")).map(kashida_fraction);
+                let kashida = ppr
+                    .and_then(|ppr| wml_attr(ppr, "jc"))
+                    .map(kashida_fraction);
 
                 // Kept as Option so a basedOn chain inherits them and an explicit
                 // w:val="0" still turns an ancestor's off.
@@ -1148,8 +1149,9 @@ pub(super) fn parse_styles<R: Read + Seek>(
                 let line_spacing = spacing.and_then(parse_line_spacing);
 
                 let ind = ppr.and_then(|n| wml(n, "ind"));
-                let (indent_left, indent_right, indent_hanging, indent_first_line) =
-                    ind.map(|ind| extract_indents(ind, None)).unwrap_or_default();
+                let (indent_left, indent_right, indent_hanging, indent_first_line) = ind
+                    .map(|ind| extract_indents(ind, None))
+                    .unwrap_or_default();
                 let indent_chars = ind.map(extract_indent_chars).unwrap_or_default();
 
                 let (tab_stops, clear_tab_positions) =
@@ -1687,8 +1689,14 @@ mod tests {
             ),
         ]);
         resolve_based_on(&mut styles);
-        assert_eq!(styles["Child"].text_alignment, Some(crate::model::TextAlignment::Center));
-        assert_eq!(styles["Reset"].text_alignment, Some(crate::model::TextAlignment::Auto));
+        assert_eq!(
+            styles["Child"].text_alignment,
+            Some(crate::model::TextAlignment::Center)
+        );
+        assert_eq!(
+            styles["Reset"].text_alignment,
+            Some(crate::model::TextAlignment::Auto)
+        );
     }
 
     #[test]

@@ -18,8 +18,8 @@ use super::table_layout::{
     CellParagraphLayout, Chunk, HfSubstitution, RowLayout, RowPiece, apply_pct_width,
     auto_fit_columns, autofit_min_widths, cell_span_width, cell_x_offset, chunk_space_before,
     compute_merge_spans, compute_row_layouts, cursor_chunks, find_cell_split, fixed_columns,
-    item_chunk_height, keep_chain_end, min_content_widths, para_block_height,
-    partial_row_height, row_pieces, skip_finished_row, squeeze_to_width,
+    item_chunk_height, keep_chain_end, min_content_widths, para_block_height, partial_row_height,
+    row_pieces, skip_finished_row, squeeze_to_width,
 };
 use super::tagging::{CellTagger, TableTags, Tags};
 
@@ -41,7 +41,11 @@ fn draw_border(
         return;
     }
     // A horizontal border is a band; a vertical one's ends are points.
-    let band = if (y1 - y2).abs() < 0.01 { border.width } else { 0.0 };
+    let band = if (y1 - y2).abs() < 0.01 {
+        border.width
+    } else {
+        0.0
+    };
     let (y1, y2) = (
         super::layout::rule_on_grid(y1, page_top, band),
         super::layout::rule_on_grid(y2, page_top, band),
@@ -120,10 +124,26 @@ fn draw_cell_borders(
         draw_border(content, &borders.top, page_top, bx, top, bx + col_w, top);
     }
     if draw_bottom {
-        draw_border(content, &borders.bottom, page_top, bx, bottom, bx + col_w, bottom);
+        draw_border(
+            content,
+            &borders.bottom,
+            page_top,
+            bx,
+            bottom,
+            bx + col_w,
+            bottom,
+        );
     }
     draw_border(content, &borders.left, page_top, bx, top, bx, bottom);
-    draw_border(content, &borders.right, page_top, bx + col_w, top, bx + col_w, bottom);
+    draw_border(
+        content,
+        &borders.right,
+        page_top,
+        bx + col_w,
+        top,
+        bx + col_w,
+        bottom,
+    );
 }
 
 /// Paint a cell background: hatching when a line/cross pattern is present,
@@ -473,7 +493,14 @@ fn end_cell_tag(content: &mut Content, tagger: &Option<CellTagger<'_>>) {
     }
 }
 
-fn draw_cell_paragraph_bottom(content: &mut Content, para: &CellParagraphLayout, cell_x: f32, col_w: f32, cm: &CellMargins, bottom: f32) {
+fn draw_cell_paragraph_bottom(
+    content: &mut Content,
+    para: &CellParagraphLayout,
+    cell_x: f32,
+    col_w: f32,
+    cm: &CellMargins,
+    bottom: f32,
+) {
     if let Some(border) = &para.bottom_border {
         // Word extends a horizontal paragraph rule 1.5pt past the text area,
         // independently of the stroke width and vertical space.
@@ -576,7 +603,10 @@ fn render_cell_content(
                 };
                 // Tag the behind layer first, preserving the cell's reading
                 // order even when a front picture comes first in the paragraph.
-                let behind_floats = para.floating_images.iter().filter(|fi| layered && fi.behind_doc);
+                let behind_floats = para
+                    .floating_images
+                    .iter()
+                    .filter(|fi| layered && fi.behind_doc);
                 let front_floats = para
                     .floating_images
                     .iter()
@@ -1533,7 +1563,12 @@ fn draw_cell_label(
         content
             .begin_text()
             .next_line(label_x + para.label_shift, baseline_y);
-        super::list_label::show_label_pieces(content, &para.label_pieces, fonts, para.label_font_size);
+        super::list_label::show_label_pieces(
+            content,
+            &para.label_pieces,
+            fonts,
+            para.label_font_size,
+        );
         content.end_text();
         if para.label_color.is_some() {
             content.set_fill_gray(0.0);
@@ -2129,7 +2164,9 @@ pub(super) fn render_table(
         {
             fp.y = zone.bottom_y - fp.top_from_text;
             let side_room = zone.side_strip(area);
-            if zone.from_table && fp.v_anchor_text && fp.v_offset_pt >= 0.0
+            if zone.from_table
+                && fp.v_anchor_text
+                && fp.v_offset_pt >= 0.0
                 && side_room < super::MIN_EMPTY_STRIP
             {
                 // The preceding wide float blocks the anchor paragraph too.
@@ -2520,14 +2557,19 @@ pub(super) fn render_table(
         // two in Word 2013+ layout or for a row taller than the page
         // (croatian_grant's 776pt row waits for the next page rather than put
         // one line in the 21.8pt above a footnote), else one.
-        let start_lines = |p: &CellParagraphLayout| if row_h > page_content_h { 2 } else { widow(p) };
+        let start_lines =
+            |p: &CellParagraphLayout| if row_h > page_content_h { 2 } else { widow(p) };
         // Whether every cell's first chunk fits in the room left: its first
         // paragraph (`start_lines` of a longer one) or first nested row, with
         // the opening space before that find_cell_split charges.
         let first_chunks_fit = layout.cells.iter().all(|c| {
             c.items.first().is_none_or(|it| {
                 let end = match it {
-                    CellContentItem::Paragraph(p) if p.lines.len() >= 2 * start_lines(p) && !p.keep_lines => Some(start_lines(p)),
+                    CellContentItem::Paragraph(p)
+                        if p.lines.len() >= 2 * start_lines(p) && !p.keep_lines =>
+                    {
+                        Some(start_lines(p))
+                    }
                     CellContentItem::Paragraph(_) => None,
                     CellContentItem::NestedTable { rows, .. } => Some(keep_chain_end(rows, 0)),
                 };
@@ -2552,14 +2594,19 @@ pub(super) fn render_table(
         // row above would reject a fitting first paragraph and move the outer
         // row early. Use the same recursive cursors as the actual split, and
         // retain the overflow guard for force-included first items.
-        let first_chunks_fit = first_chunks_fit || (layout.cells.iter().any(|c|
-            matches!(c.items.first(), Some(CellContentItem::NestedTable { rows, .. })
-                if rows.first().is_some_and(|r| r.split_min.is_some()))) && {
-            let ends: Vec<CellCursor> = layout.cells.iter()
-                .map(|c| find_cell_split(c, &CELL_START, available_h, false)).collect();
-            ends.iter().any(|e| *e != CELL_START)
-                && partial_row_height(layout, &[], &ends, f32::INFINITY) <= available_h
-        });
+        let first_chunks_fit = first_chunks_fit
+            || (layout.cells.iter().any(|c| {
+                matches!(c.items.first(), Some(CellContentItem::NestedTable { rows, .. })
+                if rows.first().is_some_and(|r| r.split_min.is_some()))
+            }) && {
+                let ends: Vec<CellCursor> = layout
+                    .cells
+                    .iter()
+                    .map(|c| find_cell_split(c, &CELL_START, available_h, false))
+                    .collect();
+                ends.iter().any(|e| *e != CELL_START)
+                    && partial_row_height(layout, &[], &ends, f32::INFINITY) <= available_h
+            });
         // Word splits with one line of room: nabl's "Remarks" row breaks
         // between its paragraphs with 30pt left. ponytail: 14pt (a line) guard
         // so a near-boundary rounding error can't split off nothing; drop it
@@ -2590,8 +2637,7 @@ pub(super) fn render_table(
         let taller_than_page = row_h > page_content_h && (at_page_top || row_h > next_page_room());
         // Modern Word retries cantSplit rows at a fresh page, then splits
         // content taller than that page. Legacy Word clips such rows instead.
-        let oversized_cant_split = ctx.compat_mode >= 15
-            && taller_than_page && !row.height_exact;
+        let oversized_cant_split = ctx.compat_mode >= 15 && taller_than_page && !row.height_exact;
         // Even when the content needs multiple pages, an explicit minimum
         // must fit before the row starts. Retry at the next page top, where
         // oversized rows can split without repeatedly moving forward; a
@@ -2626,7 +2672,15 @@ pub(super) fn render_table(
                         let bx = cell_x_offset(&col_widths, table_left, grid_col);
                         let right = bx + cell_span_width(&col_widths, grid_col, span);
                         let y = pb.slot_top;
-                        draw_border(&mut pb.content, &cell.borders.bottom, ctx.page_height.get(), bx, y, right, y);
+                        draw_border(
+                            &mut pb.content,
+                            &cell.borders.bottom,
+                            ctx.page_height.get(),
+                            bx,
+                            y,
+                            right,
+                            y,
+                        );
                     }
                 }
             }
@@ -2644,7 +2698,8 @@ pub(super) fn render_table(
             let new_eff_bot = *effective_margin_bottom;
             let new_available = pb.slot_top - new_eff_bot;
             let new_page_h = new_eff_top - new_eff_bot;
-            if row_h > new_available && (row_h > new_page_h || keep_with_anchor)
+            if row_h > new_available
+                && (row_h > new_page_h || keep_with_anchor)
                 && (!row.cant_split || oversized_cant_split)
             {
                 split_row_across_pages(
@@ -2684,8 +2739,7 @@ pub(super) fn render_table(
         // the row leaves no room for go to the next page (Word examples: a
         // page-top row with an 800pt minimum fills the 648pt body and its note
         // starts the next page).
-        let notes_fit =
-            pb.slot_top - *effective_margin_bottom >= row_notes_extra(pb, ri) - 0.5;
+        let notes_fit = pb.slot_top - *effective_margin_bottom >= row_notes_extra(pb, ri) - 0.5;
         for &fn_id in &row_footnote_ids[ri] {
             let fn_h = footnotes
                 .contains_key(&fn_id)
@@ -2740,7 +2794,10 @@ pub(super) fn render_table(
             // override is skipped there rather than anchoring shapes off-page.
             if let Some(top) = flushed_page_top {
                 pb.pending_float_anchor = Some((
-                    super::PendingAnchor { top, kind: super::AnchorKind::TableMoved },
+                    super::PendingAnchor {
+                        top,
+                        kind: super::AnchorKind::TableMoved,
+                    },
                     pb.pending_float_anchor.and_then(|(_, b)| b),
                 ));
                 // Undo the tblpY offset applied to the render start so the flow
@@ -2799,7 +2856,10 @@ pub(super) fn render_table(
                     current.right_from_text = current.right_from_text.max(old.right_from_text);
                 }
                 if let Some(old) = overlapped_table_zone
-                    && pb.float_zone.as_ref().is_some_and(|z| old.bottom_y < z.bottom_y)
+                    && pb
+                        .float_zone
+                        .as_ref()
+                        .is_some_and(|z| old.bottom_y < z.bottom_y)
                 {
                     pb.float_zone = Some(old);
                 }

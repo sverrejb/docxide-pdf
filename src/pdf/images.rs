@@ -373,7 +373,11 @@ fn register_xobject(image_xobjects: &mut ImageXObjects, xobj_ref: Ref) -> String
     pdf_name
 }
 
-fn register_effect(image_xobjects: &mut ImageXObjects, counter: &mut usize, xobj_ref: Ref) -> String {
+fn register_effect(
+    image_xobjects: &mut ImageXObjects,
+    counter: &mut usize,
+    xobj_ref: Ref,
+) -> String {
     *counter += 1;
     let name = format!("Sh{}", *counter);
     image_xobjects.named.push((name.clone(), xobj_ref));

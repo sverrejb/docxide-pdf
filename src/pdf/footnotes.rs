@@ -86,7 +86,15 @@ fn layout_paragraph(
     // marks over 8pt text, the following lines step 9.5 in Word).
     let ascender_ratio = tallest_ar.unwrap_or(0.75);
     if !matches!(line_spacing, LineSpacing::Exact(_)) {
-        size_lines_by_own_runs(&mut lines, ctx.fonts, line_spacing, lh, fs * ascender_ratio, 1.0, para.text_alignment == crate::model::TextAlignment::Top);
+        size_lines_by_own_runs(
+            &mut lines,
+            ctx.fonts,
+            line_spacing,
+            lh,
+            fs * ascender_ratio,
+            1.0,
+            para.text_alignment == crate::model::TextAlignment::Top,
+        );
         super::size_tab_mark_line(&mut lines, para, line_spacing, tallest_lhr, ctx.fonts);
     }
     if lines.is_empty() {

@@ -76,7 +76,8 @@ fn stroke_wave(
         return;
     }
     let (ux, uy) = (dx / len, dy / len);
-    let at = |along: f32, across: f32| (x0 + ux * along + ix * across, y0 + uy * along + iy * across);
+    let at =
+        |along: f32, across: f32| (x0 + ux * along + ix * across, y0 + uy * along + iy * across);
     // A cubic whose inner control points sit 4/3 of the amplitude out peaks
     // at the amplitude.
     let bulge = (b.extent() - w) / 2.0 * 4.0 / 3.0;

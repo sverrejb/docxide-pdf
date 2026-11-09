@@ -178,7 +178,11 @@ fn centred_label_drop(para: &Paragraph, fonts: &HashMap<String, FontEntry>, text
         .runs
         .iter()
         .find(|r| !r.text.trim().is_empty())
-        .and_then(|r| fonts.get(&crate::fonts::font_key(r)).map(|e| (e, r.font_size)));
+        .and_then(|r| {
+            fonts
+                .get(&crate::fonts::font_key(r))
+                .map(|e| (e, r.font_size))
+        });
     match (label, text) {
         (Some(l), Some((t, fs))) => {
             centre(l, para.list_label_font_size.unwrap_or(text_fs)) - centre(t, fs)

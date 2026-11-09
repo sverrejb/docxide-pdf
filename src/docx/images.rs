@@ -543,7 +543,8 @@ pub(super) fn blip_image<R: Read + Seek>(
     w: f32,
     h: f32,
 ) -> Option<EmbeddedImage> {
-    find_blip_embeds(node).find_map(|id| read_image_from_zip(id, ctx.rels, ctx.zip, ctx.media, w, h))
+    find_blip_embeds(node)
+        .find_map(|id| read_image_from_zip(id, ctx.rels, ctx.zip, ctx.media, w, h))
 }
 
 /// An inline drawing's picture with its effect extent and picture properties.
@@ -591,8 +592,7 @@ fn read_media_part<R: Read + Seek>(
     if super::wmf::is_wmf(&data) {
         data = match super::wmf::embedded_emf(&data) {
             Some(emf) => emf,
-            None => super::wmf::wmf_to_raster(&data)
-                .or_else(|| super::wmf::wmf_to_emf(&data))?,
+            None => super::wmf::wmf_to_raster(&data).or_else(|| super::wmf::wmf_to_emf(&data))?,
         };
     }
     if let Some(bmp) = super::emf::emf_to_raster(&data) {
@@ -870,8 +870,8 @@ fn parse_placed_drawing<R: Read + Seek>(
             if let Some(conn) = parse_connector_from_wsp(container, ctx.theme) {
                 return Some(RunDrawingResult::Connector(conn));
             }
-            if let Some(img) = picture_filled_shape(container, ctx, display_w, display_h)
-                .or_else(|| {
+            if let Some(img) =
+                picture_filled_shape(container, ctx, display_w, display_h).or_else(|| {
                     let mut img = blip_image(container, ctx, display_w, display_h)?;
                     apply_pic_props(&mut img, container, ctx.theme);
                     Some(img)
@@ -930,7 +930,9 @@ fn parse_placed_drawing<R: Read + Seek>(
             // unfilled, unlined letterhead box keeps the body below it.
             if let (wrap_type, wrap_text, _) = parse_wrap_type(container)
                 && wrap_type != WrapType::None
-                && container.descendants().any(|n| n.has_tag_name((WPS_NS, "wsp")))
+                && container
+                    .descendants()
+                    .any(|n| n.has_tag_name((WPS_NS, "wsp")))
             {
                 let (h_position, h_relative_from, v_position, v_relative_from) =
                     parse_anchor_position(container);
@@ -978,9 +980,9 @@ fn parse_placed_drawing<R: Read + Seek>(
         }
 
         if let Some(chart_rid) = find_chart_ref(container) {
-            if let Some(ic) =
-                parse_chart_from_zip(chart_rid, ctx.rels, ctx.zip, display_w, display_h, ctx.theme)
-            {
+            if let Some(ic) = parse_chart_from_zip(
+                chart_rid, ctx.rels, ctx.zip, display_w, display_h, ctx.theme,
+            ) {
                 return Some(RunDrawingResult::Chart(ic));
             }
         }
@@ -998,7 +1000,10 @@ fn find_chart_ref<'a>(container: roxmltree::Node<'a, 'a>) -> Option<&'a str> {
         .descendants()
         .find(|n| {
             n.has_tag_name((DML_NS, "graphicData"))
-                && matches!(n.attribute("uri"), Some(CHART_NS | super::chartex::CHARTEX_NS))
+                && matches!(
+                    n.attribute("uri"),
+                    Some(CHART_NS | super::chartex::CHARTEX_NS)
+                )
         })
         .and_then(|gd| {
             gd.children()

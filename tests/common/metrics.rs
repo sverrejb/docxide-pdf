@@ -295,4 +295,3 @@ pub fn ssim_score(img_a_dyn: &DynamicImage, img_b_dyn: &DynamicImage) -> Result<
     }
     Ok(ssim_sum / count as f64)
 }
-

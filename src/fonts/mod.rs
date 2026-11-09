@@ -254,7 +254,10 @@ impl FontEntry {
             };
             let kerning = k * (font_size / 1000.0);
             let metrics = if text_scale != 100.0 {
-                self.fallback_avg_char_width.get(&ch).copied().unwrap_or(self.avg_char_width)
+                self.fallback_avg_char_width
+                    .get(&ch)
+                    .copied()
+                    .unwrap_or(self.avg_char_width)
             } else {
                 None
             };
@@ -494,7 +497,10 @@ pub(crate) fn hhea_box(path: &std::path::Path, face_index: u32) -> Option<(f32, 
     discovery::probe_face(path, face_index, |face| {
         let hhea = face.tables().hhea;
         let units = face.units_per_em() as f32;
-        (hhea.ascender as f32 / units, -(hhea.descender as f32) / units)
+        (
+            hhea.ascender as f32 / units,
+            -(hhea.descender as f32) / units,
+        )
     })
 }
 
@@ -1235,7 +1241,10 @@ mod tests {
                 ..FontEntry::stub()
             };
             let w = entry.scaled_word_width("nnnn", 11.0, false, scale);
-            assert!((w - 4.0 * word_units as f32 * 11.0 / 2048.0).abs() < 1e-4, "{adv} {scale}");
+            assert!(
+                (w - 4.0 * word_units as f32 * 11.0 / 2048.0).abs() < 1e-4,
+                "{adv} {scale}"
+            );
         }
     }
 

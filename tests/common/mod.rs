@@ -266,9 +266,15 @@ pub fn convert(input: &Path, output: &Path) -> Result<(), String> {
 /// `convert`, in Word's All Markup view when `markup` is set.
 pub fn convert_with(input: &Path, output: &Path, markup: bool) -> Result<(), String> {
     use docxide_pdf::{ConvertOptions, RevisionView};
-    let view = if markup { RevisionView::Markup } else { RevisionView::Final };
+    let view = if markup {
+        RevisionView::Markup
+    } else {
+        RevisionView::Final
+    };
     let options = ConvertOptions::from_env().revisions(view);
-    match std::panic::catch_unwind(|| docxide_pdf::convert_docx_to_pdf_with(input, output, &options)) {
+    match std::panic::catch_unwind(|| {
+        docxide_pdf::convert_docx_to_pdf_with(input, output, &options)
+    }) {
         Ok(r) => r.map_err(|e| e.to_string()),
         Err(payload) => {
             let msg = payload
@@ -328,7 +334,11 @@ pub fn markup_output_dir(fixture: &Path) -> PathBuf {
     output_dir(fixture).join("markup")
 }
 
-fn convert_generated_pdf(fixture_dir: &Path, out: PathBuf, markup: bool) -> Result<PathBuf, String> {
+fn convert_generated_pdf(
+    fixture_dir: &Path,
+    out: PathBuf,
+    markup: bool,
+) -> Result<PathBuf, String> {
     let input_docx = fixture_dir.join("input.docx");
     fs::create_dir_all(&out).map_err(|e| e.to_string())?;
     let generated_pdf = out.join("generated.pdf");

@@ -12,9 +12,8 @@ use super::color::stroke_border;
 use super::helpers::{align_offset, draw_horizontal_rule};
 use super::layout::{
     LineOpts, LinkAnnotation, build_lines, is_text_empty, line_h_with_picture, lines_height,
-    picture_line_bottom,
-    position_stretch, render_paragraph_lines, runs_max_image_h, size_lines_by_own_runs,
-    tallest_run_metrics,
+    picture_line_bottom, position_stretch, render_paragraph_lines, runs_max_image_h,
+    size_lines_by_own_runs, tallest_run_metrics,
 };
 use super::positioning::resolve_h_position;
 use super::table;
@@ -169,7 +168,9 @@ fn hf_run_metrics(
     }
     let mark_sizes = !runs.is_empty()
         && (runs.iter().all(|r| r.vanish)
-            || !runs.iter().any(|r| r.is_line_break || r.inline_image.is_some()));
+            || !runs
+                .iter()
+                .any(|r| r.is_line_break || r.inline_image.is_some()));
     if mark_sizes && let Some(mark) = super::layout::mark_metrics(para, fonts) {
         return mark;
     }
@@ -383,7 +384,10 @@ fn wrapped_picture_trailing_descent(
 ) -> f32 {
     if matches!(spacing, LineSpacing::Exact(_))
         || para.runs.iter().any(|r| r.is_line_break)
-        || para.runs.iter().any(|r| !r.vanish && r.underlined_picture())
+        || para
+            .runs
+            .iter()
+            .any(|r| !r.vanish && r.underlined_picture())
         || para
             .paragraph_mark_font_size
             .is_some_and(|mark| (mark - font_size).abs() > 0.01)
@@ -449,7 +453,15 @@ fn wrapped_header_picture_height(para: &Paragraph, ctx: &RenderContext, width: f
         font_size * super::layout::descender_ratio(lhr, ar),
     );
     if !matches!(spacing, LineSpacing::Exact(_)) {
-        size_lines_by_own_runs(&mut lines, ctx.fonts, spacing, line_h, metrics.0, 1.0, para.text_alignment == crate::model::TextAlignment::Top);
+        size_lines_by_own_runs(
+            &mut lines,
+            ctx.fonts,
+            spacing,
+            line_h,
+            metrics.0,
+            1.0,
+            para.text_alignment == crate::model::TextAlignment::Top,
+        );
         super::size_tab_mark_line(&mut lines, para, spacing, lhr, ctx.fonts);
     }
     let trailing_descent = wrapped_picture_trailing_descent(para, font_size, metrics.1, spacing);
@@ -594,7 +606,10 @@ fn measure_header_height(
                     let per_line_widths: Option<Vec<f32>> =
                         geometry.map(|(_, g)| g.iter().map(|&(_, w)| w).collect());
                     let (shift, width) = geometry.map_or(
-                        (0.0, (text_width - para.indent_left - para.indent_right).max(1.0)),
+                        (
+                            0.0,
+                            (text_width - para.indent_left - para.indent_right).max(1.0),
+                        ),
                         |&((x, w), _)| (x - (sp.margin_left + para.indent_left), w),
                     );
                     build_lines(
@@ -661,10 +676,13 @@ fn measure_header_height(
                     // lines are measured at full width.
                     hf_line_geometry(&zones, para, sp, (top, baseline), line_h).filter(|g| {
                         let bottom = top - count_lines(Some(g)) as f32 * (line_h + stretch);
-                        zones.iter().filter(|z| top > z.bottom && bottom < z.top).all(|z| {
-                            let (left, right) = z.side_room(sp);
-                            left < MIN_WRAP_ROOM || right < MIN_WRAP_ROOM
-                        })
+                        zones
+                            .iter()
+                            .filter(|z| top > z.bottom && bottom < z.top)
+                            .all(|z| {
+                                let (left, right) = z.side_room(sp);
+                                left < MIN_WRAP_ROOM || right < MIN_WRAP_ROOM
+                            })
                     })
                 } else {
                     None
@@ -683,7 +701,14 @@ fn measure_header_height(
                 let mut content_h = if let Some(h) = wrapped_h {
                     h
                 } else if picture_h > 0.0 {
-                    line_h_with_picture(picture_h, &para.runs, para, ctx.fonts, effective_ls, line_h)
+                    line_h_with_picture(
+                        picture_h,
+                        &para.runs,
+                        para,
+                        ctx.fonts,
+                        effective_ls,
+                        line_h,
+                    )
                 } else {
                     text_lines.unwrap_or(1) as f32 * line_h
                 } + if with_floats {
@@ -719,7 +744,9 @@ fn measure_header_height(
                         VerticalPosition::Offset(o) => {
                             let top = match fi.v_relative_from {
                                 VRelativeFrom::Page | VRelativeFrom::TopMargin => o,
-                                VRelativeFrom::BottomMargin => sp.page_height - sp.margin_bottom + o,
+                                VRelativeFrom::BottomMargin => {
+                                    sp.page_height - sp.margin_bottom + o
+                                }
                                 _ => sp.margin_top + o,
                             };
                             placed_extent = placed_extent.max(if is_header {
@@ -779,7 +806,8 @@ fn measure_header_height(
                 } else {
                     (0.0, 0.0)
                 };
-                height += top_band + table::compute_hf_table_height(table, ctx, content_w) + bottom_band;
+                height +=
+                    top_band + table::compute_hf_table_height(table, ctx, content_w) + bottom_band;
                 prev_space_after = 0.0;
                 prev_para = None;
             }
@@ -861,7 +889,8 @@ pub(super) fn header_float_floor(
                 text_width,
                 text_width,
             );
-            let overlaps = fi_x - fi.dist_left < right && fi_x + fi.image.display_width + fi.dist_right > left;
+            let overlaps =
+                fi_x - fi.dist_left < right && fi_x + fi.image.display_width + fi.dist_right > left;
             overlaps.then(|| {
                 super::resolve_fi_y_top(fi, sp, slot_top) - fi.image.display_height - fi.dist_bottom
             })
@@ -1486,7 +1515,11 @@ pub(super) fn render_header_footer(
                     }
                     // The stroke sits `space` below the box, outside it,
                     // as the body path's bottom pad places it.
-                    if let Some(b) = if group.next { &bdr.between } else { &bdr.bottom } {
+                    if let Some(b) = if group.next {
+                        &bdr.between
+                    } else {
+                        &bdr.bottom
+                    } {
                         let y = on_grid(box_bottom - group.bottom.0 - b.extent() / 2.0, b.extent());
                         stroke_border(content, b, (h_left, y), (h_right, y), 1.0);
                     }
@@ -1517,13 +1550,7 @@ pub(super) fn render_header_footer(
                     let (left_out, right_out) = super::side_border_outsets(bdr, false);
                     let (left, right) = (box_left - left_out, box_right + right_out);
                     let bottom = box_bottom - group.bottom.0;
-                    let top = box_top
-                        + group.below_prev
-                        + if group.shade_gap {
-                            gap
-                        } else {
-                            0.0
-                        };
+                    let top = box_top + group.below_prev + if group.shade_gap { gap } else { 0.0 };
                     content.save_state();
                     super::color::fill_rgb(content, color);
                     content.rect(left, bottom, right - left, top - bottom);
@@ -1653,7 +1680,10 @@ pub(super) fn render_header_footer(
 
                             // WordArt (a header watermark) draws its glyphs as warped
                             // outlines, as the body path does.
-                            if tb.text_warp.as_ref().is_some_and(|w| w.preset != "textNoShape")
+                            if tb
+                                .text_warp
+                                .as_ref()
+                                .is_some_and(|w| w.preset != "textNoShape")
                                 && super::wordart::render_warped_textbox(
                                     tb, content, ctx.fonts, tb_x, tb_y_top, content_w,
                                 )
@@ -1742,10 +1772,8 @@ pub(super) fn render_header_footer(
                                             + tb_lines.len().max(1) as f32 * line_h
                                             + tp.space_after
                                     };
-                                    let tables: f32 = tb.tables
-                                        .iter()
-                                        .map(|(_, t)| hf_table(t).height())
-                                        .sum();
+                                    let tables: f32 =
+                                        tb.tables.iter().map(|(_, t)| hf_table(t).height()).sum();
                                     let total_h: f32 =
                                         tb.paragraphs.iter().map(tp_height).sum::<f32>() + tables;
                                     let available =
@@ -1760,10 +1788,7 @@ pub(super) fn render_header_footer(
                             };
                             let mut tb_cursor = tb_y_top - tb.margin_top - anchor_offset;
                             for (tp_idx, tp) in tb.paragraphs.iter().enumerate() {
-                                for (_, table) in tb.tables
-                                    .iter()
-                                    .filter(|(at, _)| *at == tp_idx)
-                                {
+                                for (_, table) in tb.tables.iter().filter(|(at, _)| *at == tp_idx) {
                                     hf_table(table).render(
                                         (content_x, content_w),
                                         &mut tb_cursor,
@@ -1923,10 +1948,7 @@ pub(super) fn render_header_footer(
                         };
                         let y_bottom = cursor_y - bottom_depth;
                         let x = sp.margin_left
-                            + align_offset(
-                                para.alignment,
-                                (text_width - img.box_width()).max(0.0),
-                            );
+                            + align_offset(para.alignment, (text_width - img.box_width()).max(0.0));
                         let hf_fx = pc.effect_para_names.get(&pi);
                         if let Some(ref shadow) = img.shadow {
                             super::color::draw_image_shadow(
@@ -2126,8 +2148,8 @@ pub(super) fn render_header_footer(
                             LineSpacing::AtLeast(_) => line_h,
                             _ => font_size * tallest_lhr.unwrap_or(1.2),
                         };
-                        baseline_y = cursor_y - foot + image.layout_extra_height
-                            - image.layout_extra_top;
+                        baseline_y =
+                            cursor_y - foot + image.layout_extra_height - image.layout_extra_top;
                         picture_ascent = Some(cursor_y - baseline_y);
                     }
                 }
@@ -2164,11 +2186,28 @@ pub(super) fn render_header_footer(
                 } else {
                     picture_bottom
                 };
-                let metrics = (picture_ascent.unwrap_or(line_ascent), wrapped_picture_bottom);
+                let metrics = (
+                    picture_ascent.unwrap_or(line_ascent),
+                    wrapped_picture_bottom,
+                );
                 // Each line as tall as its own runs, as in the body.
                 if !matches!(effective_ls, LineSpacing::Exact(_)) {
-                    size_lines_by_own_runs(&mut lines, ctx.fonts, effective_ls, line_h, line_ascent, 1.0, para.text_alignment == crate::model::TextAlignment::Top);
-                    super::size_tab_mark_line(&mut lines, para, effective_ls, tallest_lhr, ctx.fonts);
+                    size_lines_by_own_runs(
+                        &mut lines,
+                        ctx.fonts,
+                        effective_ls,
+                        line_h,
+                        line_ascent,
+                        1.0,
+                        para.text_alignment == crate::model::TextAlignment::Top,
+                    );
+                    super::size_tab_mark_line(
+                        &mut lines,
+                        para,
+                        effective_ls,
+                        tallest_lhr,
+                        ctx.fonts,
+                    );
                 }
                 draw_para_shading(content, cursor_y - lines_height(&lines, line_h, metrics));
                 render_paragraph_lines(
@@ -2340,11 +2379,7 @@ pub(super) fn hf_paragraph_gap(
 /// letterhead logo 4pt below a first paragraph with 36pt before sits at
 /// header margin + 4; after a paragraph with 12pt after, 24pt before puts it
 /// 12pt below the previous line.
-fn hf_own_space_before(
-    prev: Option<&Paragraph>,
-    prev_space_after: f32,
-    para: &Paragraph,
-) -> f32 {
+fn hf_own_space_before(prev: Option<&Paragraph>, prev_space_after: f32, para: &Paragraph) -> f32 {
     let (after, before) = hf_spacing(prev, prev_space_after, para);
     super::own_space_before(before, after)
 }
@@ -2419,7 +2454,10 @@ mod tests {
             cased(FieldCode::SectionPages(Some("lowerLetter"))),
         ];
         let out = substitute_hf_runs(&runs, 1, 2, 2, &HashMap::new(), None);
-        assert_eq!(out.iter().map(|r| r.text.as_str()).collect::<Vec<_>>(), ["a", "b", "b"]);
+        assert_eq!(
+            out.iter().map(|r| r.text.as_str()).collect::<Vec<_>>(),
+            ["a", "b", "b"]
+        );
         assert!(!out[0].caps && !out[0].small_caps && out[0].underline);
         assert!(!out[1].caps && !out[1].small_caps);
         assert!(out[2].caps && out[2].small_caps);

@@ -510,7 +510,10 @@ impl ParagraphBorder {
         }
         let edges = self.style.layers().iter();
         let (near, far) = edges.fold((f32::MAX, f32::MIN), |(near, far), (offset, width)| {
-            (near.min(offset - width / 2.0), far.max(offset + width / 2.0))
+            (
+                near.min(offset - width / 2.0),
+                far.max(offset + width / 2.0),
+            )
         });
         (far - near) * self.width_pt
     }
@@ -867,7 +870,9 @@ pub fn take_shown_image(runs: &mut [Run]) -> (Option<EmbeddedImage>, f32) {
         .iter_mut()
         .find(|r| r.shown_image().is_some())
         .and_then(|r| r.inline_image.take());
-    let h = img.as_ref().map_or(0.0, |i| i.display_height + i.layout_extra_height);
+    let h = img
+        .as_ref()
+        .map_or(0.0, |i| i.display_height + i.layout_extra_height);
     (img, h)
 }
 
@@ -1024,7 +1029,10 @@ pub enum FieldCode {
 impl FieldCode {
     /// PAGE, NUMPAGES or SECTIONPAGES: a page number or count.
     pub fn is_page_count(&self) -> bool {
-        matches!(self, FieldCode::Page(_) | FieldCode::NumPages(_) | FieldCode::SectionPages(_))
+        matches!(
+            self,
+            FieldCode::Page(_) | FieldCode::NumPages(_) | FieldCode::SectionPages(_)
+        )
     }
 }
 

@@ -167,7 +167,10 @@ pub(super) fn image_blocks_band(
 pub(super) fn image_band(fi: &FloatingImage, sp: &SectionProperties) -> (f32, f32) {
     // The slot top only places paragraph-relative floats.
     let top = sp.page_height - resolve_fi_y_top(fi, sp, 0.0);
-    (top - fi.dist_top, top + fi.image.display_height + fi.dist_bottom)
+    (
+        top - fi.dist_top,
+        top + fi.image.display_height + fi.dist_bottom,
+    )
 }
 
 pub(crate) fn resolve_fi_y_top(fi: &FloatingImage, sp: &SectionProperties, slot_top: f32) -> f32 {
@@ -188,9 +191,7 @@ pub(crate) fn resolve_fi_y_top(fi: &FloatingImage, sp: &SectionProperties, slot_
         },
         VerticalPosition::AlignCenter => match fi.v_relative_from {
             VRelativeFrom::Page => (sp.page_height + img.display_height) / 2.0,
-            VRelativeFrom::TopMargin => {
-                sp.page_height - (sp.margin_top - img.display_height) / 2.0
-            }
+            VRelativeFrom::TopMargin => sp.page_height - (sp.margin_top - img.display_height) / 2.0,
             VRelativeFrom::BottomMargin => (sp.margin_bottom + img.display_height) / 2.0,
             _ => {
                 let area = sp.page_height - sp.margin_top - sp.margin_bottom;

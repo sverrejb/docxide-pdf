@@ -85,7 +85,13 @@ fn fixed_layout_columns(table: &Table, table_w: Option<f32>) -> Vec<f32> {
         // `tblW auto`: the cells' twips as they are, the saved grid where a
         // column names none.
         return (0..n)
-            .map(|i| if pct[i].is_some() || dxa[i] <= 0.0 { table.col_widths[i] } else { dxa[i] })
+            .map(|i| {
+                if pct[i].is_some() || dxa[i] <= 0.0 {
+                    table.col_widths[i]
+                } else {
+                    dxa[i]
+                }
+            })
             .collect();
     };
     // ponytail: a column only spanned cells cover keeps the saved grid; how
@@ -214,7 +220,9 @@ fn spacer_widths(table: &Table) -> Vec<f32> {
                 Block::Table(_) => true,
                 Block::Paragraph(p) => {
                     p.image.is_some()
-                        || p.runs.iter().any(|r| !r.text.trim().is_empty() || r.inline_image.is_some())
+                        || p.runs
+                            .iter()
+                            .any(|r| !r.text.trim().is_empty() || r.inline_image.is_some())
                 }
             });
             if has_content {
@@ -231,7 +239,9 @@ fn spacer_widths(table: &Table) -> Vec<f32> {
 /// cell padding: content that never wraps narrower. Pictures alone size the
 /// auto-fit minimum (nested tables fit their column, case51).
 fn hard_content_widths(table: &Table, nested_tables: bool) -> Vec<f32> {
-    column_max(table, |cell| cell_hard_content_width(table, cell, nested_tables))
+    column_max(table, |cell| {
+        cell_hard_content_width(table, cell, nested_tables)
+    })
 }
 
 /// Each grid column's largest `f` over the cells that sit in it alone.
@@ -284,7 +294,11 @@ pub(super) fn para_block_height(p: &CellParagraphLayout) -> f32 {
         if p.paragraph_mark_vanish {
             0.0
         } else {
-            let h = if p.content_height > 0.0 { p.content_height } else { p.line_h };
+            let h = if p.content_height > 0.0 {
+                p.content_height
+            } else {
+                p.line_h
+            };
             h + p.bottom_band.1
         }
     } else {
@@ -295,11 +309,16 @@ pub(super) fn para_block_height(p: &CellParagraphLayout) -> f32 {
 /// Height of a cell paragraph's lines `range`, each at its own pitch
 /// (`size_lines_by_own_runs`).
 pub(super) fn cell_lines_h(p: &CellParagraphLayout, range: std::ops::Range<usize>) -> f32 {
-    let bottom_band = if range.end == p.lines.len() { p.bottom_band.1 } else { 0.0 };
+    let bottom_band = if range.end == p.lines.len() {
+        p.bottom_band.1
+    } else {
+        0.0
+    };
     p.lines[range]
         .iter()
         .map(|l| super::layout::inline_line_advance(l, p.line_h, p.picture_metrics()))
-        .sum::<f32>() + bottom_band
+        .sum::<f32>()
+        + bottom_band
 }
 
 /// Auto-fit column widths so that the longest non-breakable word in each column
@@ -602,7 +621,11 @@ fn cell_preferred_widths(
     for (cols, cell) in merged() {
         let spanned: f32 = widths[cols.clone()].iter().sum();
         if cell.width > spanned {
-            let last = if table.bidi_visual { cols.start } else { cols.end - 1 };
+            let last = if table.bidi_visual {
+                cols.start
+            } else {
+                cols.end - 1
+            };
             widths[last] += cell.width - spanned;
         }
     }
@@ -649,7 +672,10 @@ fn cell_preferred_widths(
         let floor: Vec<f32> = min_widths
             .iter()
             .zip(hard_content_widths(table, true))
-            .map(|(m, h)| m.max(h).max(table.cell_margins.left + table.cell_margins.right))
+            .map(|(m, h)| {
+                m.max(h)
+                    .max(table.cell_margins.left + table.cell_margins.right)
+            })
             .collect();
         squeeze_to_width(&mut widths, &floor, avail);
     }
@@ -686,10 +712,7 @@ pub(super) fn auto_fit_columns(
     // A nested table sized in twips (tblW dxa) keeps its grid like a top-level
     // one: a survey's 465pt nested table inside an auto-width host fills it
     // in Word, where content-fitting made it half as wide.
-    if available_width.is_some()
-        && !table.auto_width
-        && !table.fixed_layout
-        && !table.grid_inferred
+    if available_width.is_some() && !table.auto_width && !table.fixed_layout && !table.grid_inferred
     {
         return auto_fit_columns(table, fonts, None, None, 0.0);
     }
@@ -828,7 +851,11 @@ pub(super) fn auto_fit_columns(
                 // natural width; the 0.9 factor approximates that squeeze.
                 let spacer = spacer_widths(table);
                 let full: Vec<f32> = (0..ncols)
-                    .map(|i| natural_widths[i].max(min_widths[i].max(min_cell)).max(spacer[i]))
+                    .map(|i| {
+                        natural_widths[i]
+                            .max(min_widths[i].max(min_cell))
+                            .max(spacer[i])
+                    })
                     .collect();
                 if full.iter().sum::<f32>() <= avail {
                     full
@@ -909,9 +936,13 @@ pub(super) fn auto_fit_columns(
         let stated_row = table.rows.iter().filter(|_| !table.auto_width).find(|row| {
             let cells: Vec<_> = row.grid_cells().collect();
             cells.len() == ncols
-                && cells.iter().all(|(_, span, cell)| *span == 1 && cell.width > 0.0)
+                && cells
+                    .iter()
+                    .all(|(_, span, cell)| *span == 1 && cell.width > 0.0)
                 && (cells.iter().map(|(_, _, c)| c.width).sum::<f32>() - total).abs() < 0.5
-                && cells.iter().any(|(col, _, cell)| (cell.width - table.col_widths[*col]).abs() > 0.5)
+                && cells
+                    .iter()
+                    .any(|(col, _, cell)| (cell.width - table.col_widths[*col]).abs() > 0.5)
         });
         if let Some(row) = stated_row {
             for (grid_col, _, cell) in row.grid_cells() {
@@ -1112,10 +1143,7 @@ impl CellParagraphLayout {
 
     /// (ascent, descent) that size this paragraph's picture lines.
     pub(super) fn picture_metrics(&self) -> (f32, f32) {
-        (
-            self.image_line_ascent,
-            self.picture_descent,
-        )
+        (self.image_line_ascent, self.picture_descent)
     }
 }
 
@@ -1354,7 +1382,10 @@ fn spacers_clear_nested_registration(
 
 /// The single-line width of a paragraph of plain visible text with its
 /// indents; None for anything else or a missing font.
-fn plain_line_width(p: &crate::model::Paragraph, fonts: &HashMap<String, FontEntry>) -> Option<f32> {
+fn plain_line_width(
+    p: &crate::model::Paragraph,
+    fonts: &HashMap<String, FontEntry>,
+) -> Option<f32> {
     if p.frame_props.is_some()
         || p.list_item.is_some()
         || p.image.is_some()
@@ -2626,7 +2657,10 @@ pub(super) fn row_pieces<'a>(n_rows: usize, c: &Chunk<'a>) -> Vec<RowPiece<'a>> 
 fn row_half_bands(row: &crate::model::TableRow) -> (f32, f32) {
     row.cells.iter().fold((0.0f32, 0.0f32), |(t, b), c| {
         let bottom = c.borders.own_bottom.unwrap_or(c.borders.bottom);
-        (t.max(c.borders.top.band() / 2.0), b.max(bottom.band() / 2.0))
+        (
+            t.max(c.borders.top.band() / 2.0),
+            b.max(bottom.band() / 2.0),
+        )
     })
 }
 
@@ -2904,7 +2938,11 @@ pub(super) fn find_cell_split(
                 .count();
             // ponytail: the one-line start is only taken where the row itself
             // starts (the probes' case); later paragraphs keep two lines.
-            let keep = if first && *start == CELL_START && !p.two_line_widow { 1 } else { 2 };
+            let keep = if first && *start == CELL_START && !p.two_line_widow {
+                1
+            } else {
+                2
+            };
             let fit = room.min(remaining.saturating_sub(keep));
             if fit >= keep && !p.keep_lines {
                 return CellCursor::at(pi, l0 + fit);
@@ -3033,8 +3071,22 @@ mod tests {
         let pct = r#"<w:tblW w:w="5000" w:type="pct"/>"#;
         let auto = r#"<w:tblW w:w="0" w:type="auto"/>"#;
         let six_720: &[(u32, &str)] = &[(720, "dxa"); 6];
-        let quarter_then_360: &[(u32, &str)] = &[(1250, "pct"), (360, "dxa"), (360, "dxa"), (360, "dxa"), (360, "dxa"), (360, "dxa")];
-        let five_quarters: &[(u32, &str)] = &[(1250, "pct"), (1250, "pct"), (1250, "pct"), (1250, "pct"), (1250, "pct"), (360, "dxa")];
+        let quarter_then_360: &[(u32, &str)] = &[
+            (1250, "pct"),
+            (360, "dxa"),
+            (360, "dxa"),
+            (360, "dxa"),
+            (360, "dxa"),
+            (360, "dxa"),
+        ];
+        let five_quarters: &[(u32, &str)] = &[
+            (1250, "pct"),
+            (1250, "pct"),
+            (1250, "pct"),
+            (1250, "pct"),
+            (1250, "pct"),
+            (360, "dxa"),
+        ];
         let close = |got: &[f32], want: &[f32]| {
             assert_eq!(got.len(), want.len(), "{got:?}");
             for (g, w) in got.iter().zip(want) {
@@ -3042,9 +3094,15 @@ mod tests {
             }
         };
         // p28d: tblW auto keeps the cells' twips, the grid is ignored.
-        close(&fixed_layout_columns(&fixed_table(auto, &[six_720, six_720]), None), &[36.0; 6]);
+        close(
+            &fixed_layout_columns(&fixed_table(auto, &[six_720, six_720]), None),
+            &[36.0; 6],
+        );
         // p28a: equal cells share a 100% table equally.
-        close(&fixed_layout_columns(&fixed_table(pct, &[six_720]), Some(468.0)), &[78.0; 6]);
+        close(
+            &fixed_layout_columns(&fixed_table(pct, &[six_720]), Some(468.0)),
+            &[78.0; 6],
+        );
         // p28c: a 25% cell takes its share, the dxa cells share the rest.
         close(
             &fixed_layout_columns(&fixed_table(pct, &[six_720, quarter_then_360]), Some(512.0)),
@@ -3053,7 +3111,10 @@ mod tests {
         // p28e and the corpus document: five 25% cells overrun the width; the
         // last two columns starve to 12pt and the rest share 512 − 24.
         close(
-            &fixed_layout_columns(&fixed_table(pct, &[six_720, quarter_then_360, five_quarters]), Some(512.0)),
+            &fixed_layout_columns(
+                &fixed_table(pct, &[six_720, quarter_then_360, five_quarters]),
+                Some(512.0),
+            ),
             &[122.0, 122.0, 122.0, 122.0, 12.0, 12.0],
         );
     }
@@ -3564,8 +3625,10 @@ mod floating_nested_tests {
         assert_eq!(cell_lines_h(&para, 0..1), 10.0);
         assert_eq!(cell_lines_h(&para, 1..2), 12.5);
         assert_eq!(para_block_height(&para), 22.5);
-        let empty = CellParagraphLayout { lines: vec![], ..para };
+        let empty = CellParagraphLayout {
+            lines: vec![],
+            ..para
+        };
         assert_eq!(para_block_height(&empty), 12.5);
     }
-
 }

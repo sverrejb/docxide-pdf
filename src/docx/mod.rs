@@ -1,7 +1,7 @@
 mod alt_chunk;
 pub(crate) mod arabic;
-mod charts;
 mod chartex;
+mod charts;
 mod color;
 mod comments;
 mod embedded_fonts;
@@ -123,10 +123,17 @@ pub(super) fn parse_on_off(v: &str) -> bool {
 /// `dyaOrig` (240pt for a 144pt chart) and moved to the next page.
 pub(super) fn parse_pt(s: &str) -> Option<f32> {
     let s = s.trim();
-    let (num, per_unit) = [("pt", 1.0), ("in", 72.0), ("cm", 72.0 / 2.54), ("mm", 72.0 / 25.4), ("pc", 12.0), ("px", 0.75)]
-        .into_iter()
-        .find_map(|(unit, k)| s.strip_suffix(unit).map(|n| (n, k)))
-        .unwrap_or((s, 1.0));
+    let (num, per_unit) = [
+        ("pt", 1.0),
+        ("in", 72.0),
+        ("cm", 72.0 / 2.54),
+        ("mm", 72.0 / 25.4),
+        ("pc", 12.0),
+        ("px", 0.75),
+    ]
+    .into_iter()
+    .find_map(|(unit, k)| s.strip_suffix(unit).map(|n| (n, k)))
+    .unwrap_or((s, 1.0));
     num.trim().parse::<f32>().ok().map(|v| v * per_unit)
 }
 
@@ -1331,7 +1338,10 @@ fn parse_zip<R: Read + std::io::Seek>(
         .descendants()
         .filter(|n| n.has_tag_name((WML_NS, "sectPr")))
         .collect();
-    let grid_deltas: Vec<f32> = sect_prs.iter().map(|&n| sections::grid_char_delta(n)).collect();
+    let grid_deltas: Vec<f32> = sect_prs
+        .iter()
+        .map(|&n| sections::grid_char_delta(n))
+        .collect();
     let text_widths: Vec<f32> = sect_prs.iter().map(|&n| sections::text_width(n)).collect();
     let mut sect_idx = 0;
     let mut ctx = ParseContext {
@@ -1723,8 +1733,9 @@ fn resolve_seq_fields(doc: &mut Document) {
                 SeqStep::Repeat => *counter = (*counter).max(1),
                 SeqStep::Restart(n) => *counter = *n,
                 SeqStep::Heading(n) => {
-                    let restarts =
-                        last_heading[..(*n as usize).min(9)].iter().any(|&at| at > *last);
+                    let restarts = last_heading[..(*n as usize).min(9)]
+                        .iter()
+                        .any(|&at| at > *last);
                     *counter = if restarts { 1 } else { *counter + 1 };
                 }
             }
@@ -1821,7 +1832,9 @@ fn toc_switch_arg<'a>(instr: &'a str, switch: &str) -> Option<&'a str> {
 }
 
 fn xml_text(s: &str) -> String {
-    s.replace('&', "&amp;").replace('<', "&lt;").replace('"', "&quot;")
+    s.replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('"', "&quot;")
 }
 
 /// Regenerate the TOC fields whose cache is a single paragraph (issue #145's
@@ -1930,7 +1943,12 @@ fn expand_toc_fields<R: Read + std::io::Seek>(
             .map(|doc| {
                 ctx.fields = Default::default();
                 let mut lists = numbering::ListCounters::default();
-                Block::Paragraph(paragraph::build_paragraph(doc.root_element(), ctx, &mut lists, &opts))
+                Block::Paragraph(paragraph::build_paragraph(
+                    doc.root_element(),
+                    ctx,
+                    &mut lists,
+                    &opts,
+                ))
             })
             .collect();
         if let Some(Block::Paragraph(first)) = generated.first_mut() {
@@ -2038,9 +2056,12 @@ fn resolve_body_stylerefs(doc: &mut Document) {
     let lookup = |key: &str, at: usize| {
         let before = (0..at).rev();
         let after = at + 1..defined.len();
-        before
-            .chain(after)
-            .find_map(|i| defined[i].iter().find(|(k, _)| k == key).map(|(_, v)| v.clone()))
+        before.chain(after).find_map(|i| {
+            defined[i]
+                .iter()
+                .find(|(k, _)| k == key)
+                .map(|(_, v)| v.clone())
+        })
     };
     for (i, p) in paras.iter_mut().enumerate() {
         for run in &mut p.runs {
@@ -2103,9 +2124,18 @@ mod tests {
         );
         let doc = roxmltree::Document::parse(&xml).unwrap();
         let ranges = super::comment_ranges(doc.root_element());
-        assert!(ranges.shown.contains(&1), "deleted text before the end keeps the balloon");
-        assert!(!ranges.shown.contains(&2), "a range over a deleted table between blocks loses it");
-        assert!(ranges.shown.contains(&3), "an empty range keeps its balloon");
+        assert!(
+            ranges.shown.contains(&1),
+            "deleted text before the end keeps the balloon"
+        );
+        assert!(
+            !ranges.shown.contains(&2),
+            "a range over a deleted table between blocks loses it"
+        );
+        assert!(
+            ranges.shown.contains(&3),
+            "an empty range keeps its balloon"
+        );
     }
 
     #[test]
@@ -2113,7 +2143,10 @@ mod tests {
         let spec = super::TocSpec::parse(r#" TOC \o "1-3" \h \z \u "#);
         assert_eq!((spec.outline, spec.page_numbers), (Some(1..=3), true));
         let spec = super::TocSpec::parse(r#" TOC \t "Figure Caption,1,Table Caption,2" \n "#);
-        let styles = [("Figure Caption".to_string(), 1), ("Table Caption".to_string(), 2)];
+        let styles = [
+            ("Figure Caption".to_string(), 1),
+            ("Table Caption".to_string(), 2),
+        ];
         assert_eq!(spec.styles, styles);
         assert!(!spec.page_numbers && spec.outline.is_none());
         let spec = super::TocSpec::parse(r#" TOC \c "Figure" "#);
@@ -2216,8 +2249,6 @@ mod tests {
             assert_eq!(blocks.len(), usize::from(!deleted), "{paragraph}");
         }
     }
-
-
 
     #[test]
     fn test_twips_to_pts() {
@@ -2474,15 +2505,44 @@ mod tests {
             apply_indent_chars(&mut ind, chars, (cw, cw));
             (ind.0 - ind.2 + ind.3, ind.0)
         };
-        let c = |l, h, f| IndentChars { left: l, right: None, hanging: h, first_line: f };
-        assert_eq!(case((10.0, 10.0), c(None, Some(2.0), None), 12.0), (0.0, 24.0));
-        assert_eq!(case((24.0, 10.0), c(None, Some(2.0), None), 12.0), (0.0, 24.0));
-        assert_eq!(case((0.0, 0.0), c(Some(2.0), Some(2.0), None), 12.0), (24.0, 48.0));
-        assert_eq!(case((0.0, 20.0), c(Some(2.0), None, None), 12.0), (24.0, 44.0));
-        assert_eq!(case((48.0, 0.0), c(None, None, Some(2.0)), 12.0), (72.0, 48.0));
-        assert_eq!(case((0.0, 0.0), c(Some(2.0), None, Some(1.0)), 12.0), (36.0, 24.0));
-        assert_eq!(case((10.0, 10.0), c(None, Some(2.0), None), 18.0), (0.0, 36.0));
-        assert_eq!(case((10.0, 10.0), IndentChars::default(), 12.0), (0.0, 10.0));
+        let c = |l, h, f| IndentChars {
+            left: l,
+            right: None,
+            hanging: h,
+            first_line: f,
+        };
+        assert_eq!(
+            case((10.0, 10.0), c(None, Some(2.0), None), 12.0),
+            (0.0, 24.0)
+        );
+        assert_eq!(
+            case((24.0, 10.0), c(None, Some(2.0), None), 12.0),
+            (0.0, 24.0)
+        );
+        assert_eq!(
+            case((0.0, 0.0), c(Some(2.0), Some(2.0), None), 12.0),
+            (24.0, 48.0)
+        );
+        assert_eq!(
+            case((0.0, 20.0), c(Some(2.0), None, None), 12.0),
+            (24.0, 44.0)
+        );
+        assert_eq!(
+            case((48.0, 0.0), c(None, None, Some(2.0)), 12.0),
+            (72.0, 48.0)
+        );
+        assert_eq!(
+            case((0.0, 0.0), c(Some(2.0), None, Some(1.0)), 12.0),
+            (36.0, 24.0)
+        );
+        assert_eq!(
+            case((10.0, 10.0), c(None, Some(2.0), None), 18.0),
+            (0.0, 36.0)
+        );
+        assert_eq!(
+            case((10.0, 10.0), IndentChars::default(), 12.0),
+            (0.0, 10.0)
+        );
         // Issue #139 probes: Normal 10.5pt, 7pt runs, leftChars=400 hangingChars=200
         let mut ind = (0.0, 0.0, 0.0, 0.0);
         apply_indent_chars(&mut ind, c(Some(4.0), Some(2.0), None), (10.5, 7.0));

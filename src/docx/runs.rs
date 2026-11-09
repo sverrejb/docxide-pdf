@@ -3,8 +3,8 @@ use std::io::{Read, Seek};
 use std::sync::Arc;
 
 use crate::model::{
-    ConnectorShape, EmbeddedImage, FieldCode, FitText, FloatingImage, FormCheckbox, HorizontalRule, IfPart,
-    InlineChart, Ruby, Run, SeqStep, SmartArtDiagram, StyleRefForm, TabAlignment, TextFill,
+    ConnectorShape, EmbeddedImage, FieldCode, FitText, FloatingImage, FormCheckbox, HorizontalRule,
+    IfPart, InlineChart, Ruby, Run, SeqStep, SmartArtDiagram, StyleRefForm, TabAlignment, TextFill,
     TextGlow, TextOutline, TextShadow, Textbox, VertAlign,
 };
 
@@ -323,7 +323,10 @@ pub(super) fn quoted_or_word(rest: &str) -> Option<&str> {
     let rest = rest.trim_start();
     match rest.strip_prefix('"') {
         Some(quoted) => quoted.split('"').next(),
-        None => rest.split_whitespace().next().filter(|w| !w.starts_with('\\')),
+        None => rest
+            .split_whitespace()
+            .next()
+            .filter(|w| !w.starts_with('\\')),
     }
 }
 
@@ -665,9 +668,7 @@ impl ParagraphRunDefaults {
             }),
             // ponytail: direct formatting only, as in tokyo_welfare.
             snap_to_grid: rpr.and_then(|n| wml_bool(n, "snapToGrid")) != Some(false),
-            text_scale: rpr
-                .and_then(|n| wml_attr(n, "w"))
-                .map_or(100.0, text_scale),
+            text_scale: rpr.and_then(|n| wml_attr(n, "w")).map_or(100.0, text_scale),
             caps: own.caps.or_else(|| cs(|c| c.caps)).unwrap_or(self.caps),
             small_caps: own
                 .small_caps
@@ -1193,7 +1194,7 @@ macro_rules! handle_drawing_result {
                         RunDrawingResult::Floating(mut fi) => {
                             fi.anchor_at_start =
                                 $pending.is_empty() && anchor_precedes_text(&$runs);
-                                fi.anchor_run = $runs.len();
+                            fi.anchor_run = $runs.len();
                             push_floating(&mut $floating_images, &$textboxes, fi)
                         }
                         RunDrawingResult::TextBox(tb) => {
@@ -1340,7 +1341,8 @@ fn merge_compatible_runs(runs: Vec<Run>) -> Vec<Run> {
                 prev.source_breaks.push(base);
             }
             prev.rsid = run.rsid;
-            prev.source_breaks.extend(run.source_breaks.iter().map(|b| base + b));
+            prev.source_breaks
+                .extend(run.source_breaks.iter().map(|b| base + b));
             prev.text.push_str(&run.text);
         } else {
             result.push(run);
@@ -1926,7 +1928,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                     flush_pending(&mut pending_text, &mut runs);
                     if let Some(mut fi) = parse_object_floating_image(child, ctx) {
                         fi.anchor_at_start = anchor_precedes_text(&runs);
-                            fi.anchor_run = runs.len();
+                        fi.anchor_run = runs.len();
                         push_floating(&mut floating_images, &textboxes, fi);
                     } else if let Some(img) = parse_object_inline_image(child, ctx) {
                         runs.push(fmt.picture_run(img));
@@ -2151,7 +2153,10 @@ mod tests {
     #[test]
     fn quoted_text_holds_no_switch() {
         let instr = r#" IF 1 = 1 "a \* MERGEFORMAT b" "\h"\* Upper \* "x" "#;
-        assert_eq!(switch_args(instr, "\\*").collect::<Vec<_>>(), ["Upper", "x"]);
+        assert_eq!(
+            switch_args(instr, "\\*").collect::<Vec<_>>(),
+            ["Upper", "x"]
+        );
         assert!(!has_switch(instr, "\\h"));
         let escaped = r#" IF 1 = 1 "a \" \* MERGEFORMAT \" b" "c" "#;
         assert!(!has_switch(escaped, "\\*"));
@@ -2220,7 +2225,10 @@ mod tests {
     #[test]
     fn eq_overstrike_checkbox_and_other_fields() {
         assert_eq!(parse_eq_overstrike(r"EQ \o\ac(□,√)").as_deref(), Some("☑"));
-        assert_eq!(parse_eq_overstrike(r" eq \O\ac( ☐ , √ )").as_deref(), Some("☑"));
+        assert_eq!(
+            parse_eq_overstrike(r" eq \O\ac( ☐ , √ )").as_deref(),
+            Some("☑")
+        );
         assert_eq!(parse_eq_overstrike(r"EQ \o(a,´)").as_deref(), Some("a"));
         assert_eq!(parse_eq_overstrike(r"EQ \f(1,2)"), None);
         assert_eq!(parse_eq_overstrike(r"PAGE \* MERGEFORMAT"), None);

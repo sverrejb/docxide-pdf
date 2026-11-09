@@ -471,7 +471,10 @@ pub(super) fn widow_control(
         .unwrap_or(defaults.widow_control)
 }
 
-pub(super) fn borders(ppr: Option<roxmltree::Node>, para_style: Option<&ParagraphStyle>) -> crate::model::ParagraphBorders {
+pub(super) fn borders(
+    ppr: Option<roxmltree::Node>,
+    para_style: Option<&ParagraphStyle>,
+) -> crate::model::ParagraphBorders {
     let own = ppr.map(parse_paragraph_borders).unwrap_or_default();
     match para_style {
         Some(s) => own.over(&s.borders),
@@ -481,7 +484,10 @@ pub(super) fn borders(ppr: Option<roxmltree::Node>, para_style: Option<&Paragrap
 }
 
 /// `w:keepLines`, direct or from the style.
-pub(super) fn keep_lines(ppr: Option<roxmltree::Node>, para_style: Option<&ParagraphStyle>) -> bool {
+pub(super) fn keep_lines(
+    ppr: Option<roxmltree::Node>,
+    para_style: Option<&ParagraphStyle>,
+) -> bool {
     ppr.and_then(|ppr| wml_bool(ppr, "keepLines"))
         .or_else(|| para_style.and_then(|s| s.keep_lines))
         .unwrap_or(false)
@@ -666,7 +672,10 @@ pub(super) fn resolve_indents(
         // under a 284/284 bullet level puts its label at the margin in Word).
         indent_first_line = 0.0;
     }
-    ((indent_left, indent_right, indent_hanging, indent_first_line), chars)
+    (
+        (indent_left, indent_right, indent_hanging, indent_first_line),
+        chars,
+    )
 }
 
 #[cfg(test)]
@@ -885,7 +894,9 @@ mod tests {
                 panic!("expected a paragraph");
             };
             assert_eq!(para.space_after, 0.0);
-            assert!(matches!(para.line_spacing, Some(crate::model::LineSpacing::Auto(m)) if m == 1.0));
+            assert!(
+                matches!(para.line_spacing, Some(crate::model::LineSpacing::Auto(m)) if m == 1.0)
+            );
             assert_eq!(para.paragraph_mark_font_size, Some(9.0));
             assert_eq!(para.paragraph_mark_font_name.as_deref(), Some("Arial"));
             assert_eq!(para.style_id.as_deref(), Some("Normal"));
@@ -893,6 +904,9 @@ mod tests {
         let crate::model::Block::Paragraph(para) = &parsed.sections[0].blocks[0] else {
             panic!("expected a paragraph");
         };
-        assert_eq!((para.runs[0].font_name.as_str(), para.runs[0].font_size), ("Arial", 9.0));
+        assert_eq!(
+            (para.runs[0].font_name.as_str(), para.runs[0].font_size),
+            ("Arial", 9.0)
+        );
     }
 }

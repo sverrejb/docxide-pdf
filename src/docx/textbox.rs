@@ -598,8 +598,7 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
     let own_picture_fill = !group_fill && has_picture_fill;
     if paragraphs.is_empty()
         && link.is_none()
-        && (own_picture_fill
-            || (fill.is_none() && !has_picture_fill && stroke_color.is_none()))
+        && (own_picture_fill || (fill.is_none() && !has_picture_fill && stroke_color.is_none()))
     {
         return None;
     }
@@ -642,7 +641,12 @@ pub(super) fn parse_wsp_shape<R: Read + std::io::Seek>(
 fn crop_within(crop: Option<[f32; 4]>, window: [f32; 4]) -> [f32; 4] {
     let [l, t, r, b] = crop.unwrap_or_default();
     let (w, h) = (1.0 - l - r, 1.0 - t - b);
-    [l + w * window[0], t + h * window[1], r + w * window[2], b + h * window[3]]
+    [
+        l + w * window[0],
+        t + h * window[1],
+        r + w * window[2],
+        b + h * window[3],
+    ]
 }
 
 pub(super) fn parse_connector_from_wsp(
@@ -970,9 +974,11 @@ fn parse_vml_textbox_fill(shape: roxmltree::Node) -> Option<ShapeFill> {
     if fill.is_some_and(|n| n.attribute("type").is_some_and(|t| t != "solid")) {
         return None;
     }
-    let color = shape.attribute("fillcolor")
+    let color = shape
+        .attribute("fillcolor")
         .or_else(|| fill.and_then(|n| n.attribute("color")))
-        .and_then(parse_vml_color).unwrap_or([255, 255, 255]);
+        .and_then(parse_vml_color)
+        .unwrap_or([255, 255, 255]);
     Some(ShapeFill::Solid(color))
 }
 
@@ -1269,8 +1275,6 @@ mod connector_layer_tests {
     }
 
     use std::collections::HashMap;
-
-
 
     #[test]
     fn anchored_connector_preserves_behind_document_layer() {

@@ -336,7 +336,11 @@ pub(super) fn wmf_to_emf(data: &[u8]) -> Option<Vec<u8>> {
             return None;
         }
         let upi = u16::from_le_bytes(data[14..16].try_into().unwrap()) as i32;
-        (40, Some((i16_at(6), i16_at(8), i16_at(10), i16_at(12))), upi.max(1))
+        (
+            40,
+            Some((i16_at(6), i16_at(8), i16_at(10), i16_at(12))),
+            upi.max(1),
+        )
     } else if data.starts_with(&STANDARD_MAGIC) {
         (18, None, 96)
     } else {
@@ -372,7 +376,8 @@ pub(super) fn wmf_to_emf(data: &[u8]) -> Option<Vec<u8>> {
     let mut rop2_nop = false;
     let mut i = skip;
     while i + 6 <= data.len() {
-        let size_bytes = (u32::from_le_bytes(data[i..i + 4].try_into().ok()?) as usize).checked_mul(2)?;
+        let size_bytes =
+            (u32::from_le_bytes(data[i..i + 4].try_into().ok()?) as usize).checked_mul(2)?;
         let func = u16::from_le_bytes(data[i + 4..i + 6].try_into().ok()?);
         if size_bytes < 6 || i + size_bytes > data.len() {
             return None;
@@ -383,7 +388,8 @@ pub(super) fn wmf_to_emf(data: &[u8]) -> Option<Vec<u8>> {
                 .map(|s| i16::from_le_bytes(s.try_into().unwrap()) as i32)
         };
         let pu32 = |o: usize| -> Option<u32> {
-            p.get(o..o + 4).map(|s| u32::from_le_bytes(s.try_into().unwrap()))
+            p.get(o..o + 4)
+                .map(|s| u32::from_le_bytes(s.try_into().unwrap()))
         };
         let path = |recs: &mut Vec<Vec<u8>>, polys: &[&[(i32, i32)]], close: bool| {
             recs.push(rec(59, &[]));
@@ -424,7 +430,10 @@ pub(super) fn wmf_to_emf(data: &[u8]) -> Option<Vec<u8>> {
                 // emblem lost its white detail under 1pt strokes), so it is null.
                 let (style, width) = (pi(0)?, pi(1)?);
                 let style = if width == 0 { 5 } else { style };
-                recs.push(rec(38, &[h, style as u32, width as u32, pi(2)? as u32, pu32(6)?]));
+                recs.push(rec(
+                    38,
+                    &[h, style as u32, width as u32, pi(2)? as u32, pu32(6)?],
+                ));
             }
             // Other object kinds still take a slot.
             0x02fb | 0x0142 | 0x01f9 | 0x0322 | 0x0b23 => {
@@ -446,7 +455,9 @@ pub(super) fn wmf_to_emf(data: &[u8]) -> Option<Vec<u8>> {
             0x0324 | 0x0325 if rop2_nop => {}
             0x0538 => {
                 let n = pi(0)? as usize;
-                let counts: Vec<usize> = (0..n).map(|k| pi(1 + k).map(|c| c as usize)).collect::<Option<_>>()?;
+                let counts: Vec<usize> = (0..n)
+                    .map(|k| pi(1 + k).map(|c| c as usize))
+                    .collect::<Option<_>>()?;
                 let mut at = 1 + n;
                 let mut polys: Vec<Vec<(i32, i32)>> = Vec::new();
                 for c in counts {

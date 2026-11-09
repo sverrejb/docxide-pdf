@@ -15,8 +15,13 @@ use super::{
 /// What a `linesAndChars`/`snapToChars` grid adds to each character, in points:
 /// `charSpace` is in 1/4096 pt (§17.6.5: 40960 = 10pt). Other grids add nothing.
 pub(super) fn grid_char_delta(sect_node: roxmltree::Node) -> f32 {
-    let Some(grid) = wml(sect_node, "docGrid") else { return 0.0 };
-    if !matches!(grid.attribute((WML_NS, "type")), Some("linesAndChars" | "snapToChars")) {
+    let Some(grid) = wml(sect_node, "docGrid") else {
+        return 0.0;
+    };
+    if !matches!(
+        grid.attribute((WML_NS, "type")),
+        Some("linesAndChars" | "snapToChars")
+    ) {
         return 0.0;
     }
     grid.attribute((WML_NS, "charSpace"))
@@ -26,7 +31,9 @@ pub(super) fn grid_char_delta(sect_node: roxmltree::Node) -> f32 {
 
 /// A section's text width in points: page width less side margins and gutter.
 pub(super) fn text_width(sect_node: roxmltree::Node) -> f32 {
-    let page = wml(sect_node, "pgSz").and_then(|n| twips_attr(n, "w")).unwrap_or(612.0);
+    let page = wml(sect_node, "pgSz")
+        .and_then(|n| twips_attr(n, "w"))
+        .unwrap_or(612.0);
     let mar = wml(sect_node, "pgMar");
     let side = |a: &str| mar.and_then(|n| twips_attr(n, a)).unwrap_or(0.0);
     page - side("left") - side("right") - side("gutter")

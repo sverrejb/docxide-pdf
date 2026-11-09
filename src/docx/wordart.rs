@@ -151,15 +151,18 @@ pub(super) fn parse_vml_wordart(
 
     // The fill's opacity is blended into the colour: WordArt sits on the page
     // background (swiss_materials' watermark is red at 50%, drawn pink).
-    let fill_color = shape.attribute("fillcolor").and_then(parse_vml_color).map(|c| {
-        let a = shape
-            .children()
-            .find(|n| n.has_tag_name((super::VML_NS, "fill")))
-            .and_then(|f| f.attribute("opacity"))
-            .and_then(parse_vml_opacity)
-            .unwrap_or(1.0);
-        c.map(|v| (v as f32 * a + 255.0 * (1.0 - a)).round() as u8)
-    });
+    let fill_color = shape
+        .attribute("fillcolor")
+        .and_then(parse_vml_color)
+        .map(|c| {
+            let a = shape
+                .children()
+                .find(|n| n.has_tag_name((super::VML_NS, "fill")))
+                .and_then(|f| f.attribute("opacity"))
+                .and_then(parse_vml_opacity)
+                .unwrap_or(1.0);
+            c.map(|v| (v as f32 * a + 255.0 * (1.0 - a)).round() as u8)
+        });
 
     let run = Run {
         text: text.to_string(),
@@ -209,7 +212,11 @@ pub(super) fn parse_vml_wordart(
         rotation_deg: bs.rotation_deg,
         fit_shape,
         no_text_wrap: true,
-        auto_fit: if fit_shape { AutoFit::None } else { AutoFit::Shape },
+        auto_fit: if fit_shape {
+            AutoFit::None
+        } else {
+            AutoFit::Shape
+        },
         text_warp: fit_shape.then(|| TextWarp {
             preset: "textPlain".to_string(),
             adjustments: Vec::new(),

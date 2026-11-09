@@ -123,7 +123,6 @@ struct Translator<'a> {
     lum: Option<(f32, f32)>,
 }
 
-
 /// Translate an EMF byte stream into a PDF Form XObject. Returns the
 /// allocated Ref, or `None` if the input isn't a parseable EMF. Text draws
 /// with the fonts `collect_and_register_fonts` registered for it.
@@ -213,8 +212,10 @@ impl Translator<'_> {
                 color,
                 width,
             } => {
-                self.objects
-                    .insert(*handle, EmfObject::Pen(color.map(|c| (lum_color(c), *width))));
+                self.objects.insert(
+                    *handle,
+                    EmfObject::Pen(color.map(|c| (lum_color(c), *width))),
+                );
             }
             CreateFont {
                 handle,

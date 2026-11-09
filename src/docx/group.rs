@@ -10,8 +10,7 @@ use std::io::{Read, Seek};
 
 use crate::model::{
     ConnectorShape, ConnectorType, EmbeddedImage, FloatingImage, GroupAlign, HRelativeFrom,
-    HorizontalPosition,
-    Textbox, VRelativeFrom, VerticalPosition, WrapText, WrapType,
+    HorizontalPosition, Textbox, VRelativeFrom, VerticalPosition, WrapText, WrapType,
 };
 
 use super::images::{

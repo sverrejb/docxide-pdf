@@ -326,7 +326,10 @@ fn collect_used_chars(
                 if ic.chart.ex_text.is_some() {
                     chart_label_chars.extend(ic.chart.title.iter().flat_map(|t| t.chars()));
                 }
-                if matches!(ic.chart.chart_type, crate::model::ChartType::Waterfall { .. }) {
+                if matches!(
+                    ic.chart.chart_type,
+                    crate::model::ChartType::Waterfall { .. }
+                ) {
                     chart_label_chars.extend(crate::model::WATERFALL_LEGEND.concat().chars());
                 }
             }
@@ -394,7 +397,10 @@ fn page_number_chars(fc: &FieldCode, page_num_formats: &[&str]) -> HashSet<char>
         _ => return chars,
     };
     chars.extend('0'..='9');
-    for fmt in own_format.into_iter().chain(page_num_formats.iter().copied()) {
+    for fmt in own_format
+        .into_iter()
+        .chain(page_num_formats.iter().copied())
+    {
         extend_chars_for_num_format(&mut chars, fmt);
     }
     chars
