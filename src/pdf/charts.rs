@@ -1760,31 +1760,21 @@ pub(super) fn render_chart(
             let tw = text_width(&label, font_size, label_font);
             let frac = val / axis_max;
 
-            if !horizontal {
+            let (lx, ly) = if !horizontal {
                 let (ax, ay) = at(plot_x, plot_y + frac * plot_h, 0.0);
-                let (lx, ly) = (ax - tw - 9.0, ay - font_size * 0.3);
-                show_text(
-                    content,
-                    label_font_key,
-                    font_size,
-                    lx,
-                    ly,
-                    &label,
-                    label_font,
-                );
+                (ax - tw - 9.0, ay - font_size * 0.3)
             } else {
-                let lx = plot_x + frac * plot_w - tw / 2.0;
-                let ly = plot_y - font_size - 8.0;
-                show_text(
-                    content,
-                    label_font_key,
-                    font_size,
-                    lx,
-                    ly,
-                    &label,
-                    label_font,
-                );
-            }
+                (plot_x + frac * plot_w - tw / 2.0, plot_y - font_size - 8.0)
+            };
+            show_text(
+                content,
+                label_font_key,
+                font_size,
+                lx,
+                ly,
+                &label,
+                label_font,
+            );
         }
 
         // X-axis tick labels for scatter/bubble
