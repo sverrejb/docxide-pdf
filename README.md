@@ -26,7 +26,7 @@ This crate **might** work for your production case, do give it a try! The API, o
 
 Every fixture in the test corpus rendered side by side by Word (the reference) and 
 
-* docxide-pdf (duh)
+* docxide-pdf
 * LibreOffice
 * [MiniPdf](https://github.com/mini-software/MiniPdf)'s Rust crate
 * [rdocx](https://crates.io/crates/rdocx)
