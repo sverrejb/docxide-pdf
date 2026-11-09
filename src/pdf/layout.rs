@@ -1140,6 +1140,16 @@ impl TextLine {
 /// of 14pt steps 17.25 then 16.0 in Word, not 23.0 twice. Lines that come out
 /// at the paragraph pitch keep it; whitespace and picture chunks do not size a
 /// line, and text-less lines (breaks) keep their own handling.
+/// The faces registered for glyphs the document's own fonts lack
+/// (`fonts::GLYPH_FALLBACK`), in the font map's order.
+pub(super) fn glyph_fallbacks(fonts: &HashMap<String, FontEntry>) -> Vec<&FontEntry> {
+    fonts
+        .iter()
+        .filter(|(key, _)| key.starts_with(super::fonts::GLYPH_FALLBACK))
+        .map(|(_, e)| e)
+        .collect()
+}
+
 pub(super) fn size_lines_by_own_runs(
     lines: &mut [TextLine],
     fonts: &HashMap<String, FontEntry>,
@@ -1150,11 +1160,7 @@ pub(super) fn size_lines_by_own_runs(
     top_aligned: bool,
 ) {
     let by_pdf_name = super::fonts::by_pdf_name(fonts);
-    let fallbacks: Vec<&FontEntry> = fonts
-        .iter()
-        .filter(|(key, _)| key.starts_with(super::fonts::GLYPH_FALLBACK))
-        .map(|(_, e)| e)
-        .collect();
+    let fallbacks = glyph_fallbacks(fonts);
     for line in lines.iter_mut() {
         if top_aligned {
             for c in line
@@ -5175,6 +5181,7 @@ pub(super) fn render_paragraph_lines(
     let mut has_text_outline = false;
 
     let pdf_name_to_entry = super::fonts::by_pdf_name(seen_fonts);
+    let fallback_faces = glyph_fallbacks(seen_fonts);
 
     // Per-line baseline offsets below `first_baseline_y`: each line's top is the
     // sum of the previous lines' advances, and a picture line drops its baseline
@@ -5836,15 +5843,7 @@ pub(super) fn render_paragraph_lines(
                 // from the primary font, split into segments and render
                 // missing chars with the fallback font that has them.
                 let has_missing = primary_entry.is_some_and(|e| !e.missing_chars.is_empty());
-                let fallbacks: Vec<&FontEntry> = if has_missing {
-                    seen_fonts
-                        .iter()
-                        .filter(|(key, _)| key.starts_with(super::fonts::GLYPH_FALLBACK))
-                        .map(|(_, entry)| entry)
-                        .collect()
-                } else {
-                    Vec::new()
-                };
+                let fallbacks: &[&FontEntry] = if has_missing { &fallback_faces } else { &[] };
                 // Which of `fallbacks` draws `c`; None when the primary font has it.
                 let fallback_idx = |c: char| {
                     primary_entry.filter(|p| p.missing_chars.contains(&c))?;
