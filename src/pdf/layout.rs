@@ -1857,22 +1857,36 @@ fn source_starts(run: &Run, word: &str) -> Vec<usize> {
     starts
 }
 
+/// What every word of a run shares: its font, effective size, character
+/// spacing and super/subscript offset.
+#[derive(Clone, Copy)]
+struct WordRun<'a> {
+    entry: &'a FontEntry,
+    run: &'a Run,
+    eff_fs: f32,
+    cs: f32,
+    y_off: f32,
+}
+
 /// Push WordChunks for a word, splitting into per-segment chunks for smallCaps.
 /// `original` is the word before `w:caps` uppercased it.
 fn push_word_chunks(
     chunks: &mut Vec<WordChunk>,
-    entry: &FontEntry,
-    run: &Run,
+    wr: &WordRun,
     word: &str,
     original: Option<&str>,
-    eff_fs: f32,
-    cs: f32,
-    y_off: f32,
     x_start: f32,
     total_ww: f32,
     gap_rtl: bool,
     split_punct: bool,
 ) {
+    let WordRun {
+        entry,
+        run,
+        eff_fs,
+        cs,
+        y_off,
+    } = *wr;
     let first = chunks.len();
     let original = original.map(soft_shown);
     let original = original.as_deref();
@@ -2844,9 +2858,13 @@ pub(super) fn build_paragraph_lines(
         let entry = seen_fonts.get(key).expect("font registered");
         let eff_fs = effective_font_size(run, entry);
         let text = &run.text;
-        let y_off = vert_y_offset(run);
-
-        let cs = run.char_spacing;
+        let wr = WordRun {
+            entry,
+            run,
+            eff_fs,
+            cs: run.char_spacing,
+            y_off: vert_y_offset(run),
+        };
         let width = run_width(run, seen_fonts, &mut key_buf);
         let onward = || soft_pieces(&runs[run_idx + 1..], seen_fonts);
 
@@ -3185,13 +3203,9 @@ pub(super) fn build_paragraph_lines(
                 }
                 push_word_chunks(
                     &mut current_chunks,
-                    entry,
-                    run,
+                    &wr,
                     word,
                     original,
-                    eff_fs,
-                    cs,
-                    y_off,
                     line_start_pad,
                     ww,
                     space_rtl,
@@ -3262,13 +3276,9 @@ pub(super) fn build_paragraph_lines(
                 let chunk_start = current_chunks.len();
                 push_word_chunks(
                     &mut current_chunks,
-                    entry,
-                    run,
+                    &wr,
                     word,
                     original,
-                    eff_fs,
-                    cs,
-                    y_off,
                     current_x,
                     ww,
                     space_rtl,
@@ -3316,13 +3326,9 @@ pub(super) fn build_paragraph_lines(
                         word_start = current_chunks.len();
                         push_word_chunks(
                             &mut current_chunks,
-                            entry,
-                            run,
+                            &wr,
                             word,
                             original,
-                            eff_fs,
-                            cs,
-                            y_off,
                             start_x,
                             ww,
                             space_rtl,
@@ -3424,13 +3430,9 @@ pub(super) fn build_paragraph_lines(
                         word_start = 0;
                         push_word_chunks(
                             &mut current_chunks,
-                            entry,
-                            run,
+                            &wr,
                             word,
                             original,
-                            eff_fs,
-                            cs,
-                            y_off,
                             0.0,
                             ww,
                             space_rtl,
@@ -3465,13 +3467,9 @@ pub(super) fn build_paragraph_lines(
             let chunk_start = current_chunks.len();
             push_word_chunks(
                 &mut current_chunks,
-                entry,
-                run,
+                &wr,
                 word,
                 original,
-                eff_fs,
-                cs,
-                y_off,
                 current_x,
                 ww,
                 space_rtl,
@@ -4186,10 +4184,14 @@ pub(super) fn build_tabbed_line(
             let key = font_key_buf(run, &mut key_buf);
             let entry = seen_fonts.get(key).expect("font registered");
             let eff_fs = effective_font_size(run, entry);
-            let y_off = vert_y_offset(run);
             let text = &run.text;
-
-            let cs = run.char_spacing;
+            let wr = WordRun {
+                entry,
+                run,
+                eff_fs,
+                cs: run.char_spacing,
+                y_off: vert_y_offset(run),
+            };
             let width = run_width(run, seen_fonts, &mut key_buf);
             let mut words: std::collections::VecDeque<_> = split_preserving_spaces(text).into();
             let mut prev_char = None;
@@ -4295,13 +4297,9 @@ pub(super) fn build_tabbed_line(
                 }
                 push_word_chunks(
                     &mut all_chunks,
-                    entry,
-                    run,
+                    &wr,
                     word,
                     original,
-                    eff_fs,
-                    cs,
-                    y_off,
                     current_x,
                     ww,
                     false,
@@ -7804,20 +7802,14 @@ mod tests {
         let entry = FontEntry::stub();
         let chunks_for = |run: &Run, word: &str, original: Option<&str>| {
             let mut chunks = Vec::new();
-            push_word_chunks(
-                &mut chunks,
-                &entry,
+            let wr = WordRun {
+                entry: &entry,
                 run,
-                word,
-                original,
-                12.0,
-                0.0,
-                0.0,
-                0.0,
-                30.0,
-                false,
-                false,
-            );
+                eff_fs: 12.0,
+                cs: 0.0,
+                y_off: 0.0,
+            };
+            push_word_chunks(&mut chunks, &wr, word, original, 0.0, 30.0, false, false);
             chunks
                 .into_iter()
                 .map(|c| (c.text, c.actual_text))
