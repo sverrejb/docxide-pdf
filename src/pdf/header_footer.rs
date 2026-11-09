@@ -504,21 +504,12 @@ fn inline_canvas_tab_height(para: &Paragraph, width: f32, line_h: f32) -> Option
         .reduce(f32::max)
 }
 
-fn compute_header_height(
-    hf: &HeaderFooter,
-    ctx: &RenderContext,
-    sp: &SectionProperties,
-    is_header: bool,
-) -> f32 {
-    header_height(hf, ctx, sp, is_header, true)
-}
-
 /// A header/footer (by address, it lives as long as the document) and the
 /// section geometry its measured height depends on.
 pub(super) type HfHeightKey = (usize, [u32; 8], bool, bool);
 
-/// `compute_header_height`, optionally without the floats: the extent of the
-/// header's own text flow.
+/// The header's height, cached per section geometry; without the floats, the
+/// extent of the header's own text flow.
 fn header_height(
     hf: &HeaderFooter,
     ctx: &RenderContext,
@@ -826,7 +817,7 @@ pub(super) fn effective_slot_top(
     match header {
         Some(_) if sp.margin_top_fixed => base,
         Some(hf) => {
-            base.min(sp.page_height - sp.header_margin - compute_header_height(hf, ctx, sp, true))
+            base.min(sp.page_height - sp.header_margin - header_height(hf, ctx, sp, true, true))
         }
         None => base,
     }
@@ -905,7 +896,7 @@ pub(super) fn compute_effective_margin_bottom(
     let base = sp.margin_bottom;
     let mut bottom = match footer {
         Some(_) if sp.margin_bottom_fixed => base,
-        Some(hf) => base.max(sp.footer_margin + compute_header_height(hf, ctx, sp, false)),
+        Some(hf) => base.max(sp.footer_margin + header_height(hf, ctx, sp, false, true)),
         None => base,
     };
     let cols = super::column_geometry(sp);
@@ -982,7 +973,7 @@ pub(super) fn footer_top(
     ctx: &RenderContext,
 ) -> f32 {
     match layout_hf(sp, is_first, page_num, false, ctx) {
-        Some(hf) => sp.footer_margin + compute_header_height(hf, ctx, sp, false),
+        Some(hf) => sp.footer_margin + header_height(hf, ctx, sp, false, true),
         None => sp.footer_margin,
     }
 }
@@ -1348,7 +1339,7 @@ pub(super) fn render_header_footer(
     let mut cursor_y = if is_header {
         sp.page_height - sp.header_margin
     } else {
-        sp.footer_margin + compute_header_height(hf, ctx, sp, false)
+        sp.footer_margin + header_height(hf, ctx, sp, false, true)
     };
 
     let mut pi = 0usize;
@@ -1507,7 +1498,7 @@ pub(super) fn render_header_footer(
                         &table_bands,
                     )
                     - gap;
-                // Mirrors compute_header_height: a line overlapping a frame the
+                // Mirrors header_height: a line overlapping a frame the
                 // text may not sit beside moves below it.
                 cursor_y = sp.page_height
                     - below_blocking_frames(sp.page_height - cursor_y, line_h, &bands);
