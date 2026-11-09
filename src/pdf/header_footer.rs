@@ -17,6 +17,7 @@ use super::layout::{
 };
 use super::positioning::resolve_h_position;
 use super::table;
+use super::table_layout::HfSubstitution;
 use super::{RenderContext, resolve_line_h};
 
 pub(super) fn substitute_hf_runs(
@@ -27,19 +28,24 @@ pub(super) fn substitute_hf_runs(
     styleref_values: &HashMap<String, String>,
     page_num_format: Option<&str>,
 ) -> Vec<Run> {
-    let values = FieldValues {
+    let sub = HfSubstitution {
         page_num,
         total_pages,
         section_pages,
         styleref_values,
         page_num_format,
     };
+    substitute_hf_runs_with(runs, &sub)
+}
+
+/// `runs` with their field codes replaced by this page's values.
+pub(super) fn substitute_hf_runs_with(runs: &[Run], sub: &HfSubstitution) -> Vec<Run> {
     runs.iter()
         .map(|run| {
             let mut r = run.clone();
             if let Some(ref fc) = run.field_code {
                 r.field_code = None;
-                r.text = values.eval(fc).unwrap_or_else(|| run.text.clone());
+                r.text = sub.eval(fc).unwrap_or_else(|| run.text.clone());
                 if matches!(fc, FieldCode::Page(_) | FieldCode::NumPages(_)) {
                     r.caps = false;
                     r.small_caps = false;
@@ -60,16 +66,7 @@ pub(super) fn page_field_text(n: usize, fmt: Option<&str>) -> String {
     )
 }
 
-/// What a header or footer field shows on one page.
-struct FieldValues<'a> {
-    page_num: usize,
-    total_pages: usize,
-    section_pages: usize,
-    styleref_values: &'a HashMap<String, String>,
-    page_num_format: Option<&'a str>,
-}
-
-impl FieldValues<'_> {
+impl HfSubstitution<'_> {
     /// None keeps the cached result.
     fn eval(&self, fc: &FieldCode) -> Option<String> {
         Some(match fc {
@@ -1266,14 +1263,13 @@ pub(super) fn render_header_footer(
     // The page's header/footer links; the text stays an artifact.
     links: &mut Vec<LinkAnnotation>,
 ) {
-    let page_num = pc.page_num;
-    let total_pages = pc.total_pages;
-    let section_pages = pc.section_pages;
-    let para_image_names = pc.para_image_names;
-    let inline_image_names = pc.inline_image_names;
-    let floating_image_names = pc.floating_image_names;
-    let styleref_values = pc.styleref_values;
-    let page_num_format = pc.page_num_format;
+    let sub = HfSubstitution {
+        page_num: pc.page_num,
+        total_pages: pc.total_pages,
+        section_pages: pc.section_pages,
+        styleref_values: pc.styleref_values,
+        page_num_format: pc.page_num_format,
+    };
     let text_width = sp.text_width();
     let mut cursor_y = if is_header {
         sp.page_height - sp.header_margin
@@ -1304,11 +1300,11 @@ pub(super) fn render_header_footer(
                     ctx,
                     content,
                     &mut cursor_y,
-                    page_num,
-                    total_pages,
-                    section_pages,
-                    styleref_values,
-                    page_num_format,
+                    sub.page_num,
+                    sub.total_pages,
+                    sub.section_pages,
+                    sub.styleref_values,
+                    sub.page_num_format,
                     gradient_specs,
                     links,
                     is_header,
@@ -1318,14 +1314,7 @@ pub(super) fn render_header_footer(
             }
             Block::Paragraph(para) if para.frame_props.is_some() => {
                 let fp = para.frame_props.as_ref().unwrap();
-                let substituted_runs = substitute_hf_runs(
-                    &para.runs,
-                    page_num,
-                    total_pages,
-                    section_pages,
-                    styleref_values,
-                    page_num_format,
-                );
+                let substituted_runs = substitute_hf_runs_with(&para.runs, &sub);
                 let (font_size, tallest_lhr, tallest_ar) =
                     tallest_run_metrics(&substituted_runs, ctx.fonts);
                 let ascender_ratio = tallest_ar.unwrap_or(0.75);
@@ -1428,14 +1417,7 @@ pub(super) fn render_header_footer(
                 let own_before = hf_own_space_before(prev_para, prev_space_after, para);
                 prev_para = Some(para);
 
-                let substituted_runs = substitute_hf_runs(
-                    &para.runs,
-                    page_num,
-                    total_pages,
-                    section_pages,
-                    styleref_values,
-                    page_num_format,
-                );
+                let substituted_runs = substitute_hf_runs_with(&para.runs, &sub);
 
                 let (font_size, tallest_lhr, tallest_ar) =
                     hf_run_metrics(&substituted_runs, para, ctx.fonts);
@@ -1586,7 +1568,7 @@ pub(super) fn render_header_footer(
                         let mut by_z: Vec<_> = para.floating_images.iter().enumerate().collect();
                         by_z.sort_by_key(|(_, fi)| fi.z_index);
                         for (fi_idx, fi) in by_z {
-                            if let Some(pdf_name) = floating_image_names.get(&(pi, fi_idx)) {
+                            if let Some(pdf_name) = pc.floating_image_names.get(&(pi, fi_idx)) {
                                 let img = &fi.image;
                                 let zone = hf_float_zone(fi, sp, slot_top, own_before);
                                 super::smartart::render_image_with_clip(
@@ -1667,15 +1649,8 @@ pub(super) fn render_header_footer(
                             let content_x = tb_x + tb.margin_left;
                             let content_w =
                                 (tb.width_pt - tb.margin_left - tb.margin_right).max(0.0);
-                            let hf_sub = super::table_layout::HfSubstitution {
-                                page_num,
-                                total_pages,
-                                section_pages,
-                                styleref_values,
-                                page_num_format,
-                            };
                             let hf_table = |t| {
-                                super::table::TextboxTable::layout(t, content_w, ctx, Some(&hf_sub))
+                                super::table::TextboxTable::layout(t, content_w, ctx, Some(&sub))
                             };
 
                             // WordArt (a header watermark) draws its glyphs as warped
@@ -1744,14 +1719,7 @@ pub(super) fn render_header_footer(
                                         // Footer page numbers live in text boxes as often
                                         // as in plain paragraphs; without this the box
                                         // kept the template's cached PAGE/NUMPAGES text.
-                                        let hf_runs = substitute_hf_runs(
-                                            &tp.runs,
-                                            page_num,
-                                            total_pages,
-                                            section_pages,
-                                            styleref_values,
-                                            page_num_format,
-                                        );
+                                        let hf_runs = substitute_hf_runs_with(&tp.runs, &sub);
                                         let tb_lines = build_lines(
                                             &hf_runs,
                                             ctx,
@@ -1797,7 +1765,7 @@ pub(super) fn render_header_footer(
                                         gradient_specs,
                                         links,
                                         None,
-                                        Some(&hf_sub),
+                                        Some(&sub),
                                     );
                                 }
                                 let tp_ls = tp.line_spacing.unwrap_or(ctx.doc_line_spacing);
@@ -1849,14 +1817,7 @@ pub(super) fn render_header_footer(
                                 // Same substitution as the height pass above: the
                                 // footer text box's PAGE/NUMPAGES must be evaluated
                                 // for this page, not left at the cached value.
-                                let hf_runs = substitute_hf_runs(
-                                    &tp.runs,
-                                    page_num,
-                                    total_pages,
-                                    section_pages,
-                                    styleref_values,
-                                    page_num_format,
-                                );
+                                let hf_runs = substitute_hf_runs_with(&tp.runs, &sub);
                                 let tb_lines = build_lines(
                                     &hf_runs,
                                     ctx,
@@ -1934,7 +1895,7 @@ pub(super) fn render_header_footer(
                 }
 
                 if (has_para_image || text_empty) && para.content_height > 0.0 {
-                    if let Some(pdf_name) = para_image_names.get(&pi) {
+                    if let Some(pdf_name) = pc.para_image_names.get(&pi) {
                         let img = para.image.as_ref().unwrap();
                         let natural_line_h = font_size * tallest_lhr.unwrap_or(1.2);
                         let bottom_depth = if para.content_height > line_h {
@@ -2050,7 +2011,8 @@ pub(super) fn render_header_footer(
                     continue;
                 }
 
-                let block_inline_images: HashMap<usize, String> = inline_image_names
+                let block_inline_images: HashMap<usize, String> = pc
+                    .inline_image_names
                     .iter()
                     .filter(|((pi2, _), _)| *pi2 == pi)
                     .map(|((_, ri), name)| (*ri, name.clone()))
@@ -2419,7 +2381,7 @@ mod tests {
         ];
         let mut styleref_values = HashMap::new();
         let eval = |values: &HashMap<String, String>| {
-            FieldValues {
+            HfSubstitution {
                 page_num: 1,
                 total_pages: 1,
                 section_pages: 1,
