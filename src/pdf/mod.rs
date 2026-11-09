@@ -4560,11 +4560,7 @@ fn render_paragraph_block(
     }
 
     let next_para = adjacent_para(block_idx + 1);
-    let prev_para = if block_idx > 0 {
-        adjacent_para(block_idx - 1)
-    } else {
-        None
-    };
+    let prev_para = block_idx.checked_sub(1).and_then(adjacent_para);
 
     // A continuous section boundary does not interrupt contextual spacing.
     // Border grouping still uses the section-local neighbours above.
@@ -4805,11 +4801,9 @@ fn render_paragraph_block(
         state.pb.more_float_zones.clone(),
     );
     if let Some(zone) = own_zone {
-        state.pb.float_zone = Some(zone);
         // Re-narrow para_text_x / para_text_width using the
         // new float zone (same logic as the block above).
-        let fz = state.pb.float_zone.as_ref().unwrap();
-        fz.narrow_paragraph(
+        zone.narrow_paragraph(
             first_line_top,
             col_x,
             col_w,
@@ -4819,6 +4813,7 @@ fn render_paragraph_block(
             &mut label_x,
             ctx.compat_mode < 15,
         );
+        state.pb.float_zone = Some(zone);
     }
 
     let cjk = ctx.cjk(para.auto_space_de || para.auto_space_dn, para);
@@ -4961,7 +4956,7 @@ fn render_paragraph_block(
 
     // Lines beside floats with no room on a side text may take (floating
     // tables keep their own rule).
-    let mut blocked_lines = vec![false; 0];
+    let mut blocked_lines = Vec::new();
     // Build per-line geometry and dual-region geometry
     let (mut poly_line_geom, mut poly_dual_geom): (
         Option<Vec<(f32, f32)>>,
@@ -5588,13 +5583,15 @@ fn render_paragraph_block(
         LineSpacing::AtLeast(min) => (bottom + inserted_descent).max(min),
         _ => bottom + inserted_descent + mark_line().1,
     };
+    // Modern Word swaps the inline layout axes in the nearest quarter-turn
+    // quadrant; it does not reserve the exact oblique bounding rectangle.
+    let swap_axes = ctx.compat_mode >= 15
+        && para.image.as_ref().is_some_and(|img| {
+            (img.rotation_deg.rem_euclid(360.0) + 45.0).rem_euclid(180.0) >= 90.0
+        });
     let mut content_h = if para.inline_chart.is_some() {
         picture_line_h(para.content_height)
     } else if let Some(img) = &para.image {
-        // Modern Word swaps the inline layout axes in the nearest quarter-turn
-        // quadrant; it does not reserve the exact oblique bounding rectangle.
-        let swap_axes = ctx.compat_mode >= 15
-            && (img.rotation_deg.rem_euclid(360.0) + 45.0).rem_euclid(180.0) >= 90.0;
         let image_height = if swap_axes {
             img.display_width + img.layout_extra_height
         } else {
@@ -7041,8 +7038,6 @@ fn render_paragraph_block(
             // spacing (Word probe: 2.25-12pt pictures under Arial 12 at single
             // and 1.5 lines).
             let turned = img.rotation_deg.abs() > 0.01;
-            let swap_axes = ctx.compat_mode >= 15
-                && (img.rotation_deg.rem_euclid(360.0) + 45.0).rem_euclid(180.0) >= 90.0;
             let trim = if swap_axes { 0.0 } else { img.trimmed_width };
             let (box_w, box_h) = if swap_axes {
                 (img.display_height, img.display_width)
