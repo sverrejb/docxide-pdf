@@ -482,8 +482,8 @@ type Decoration = (f32, f32, f32, f32, Option<[u8; 3]>);
 /// The lines (top, thickness) of an underline at `font_size` under the
 /// baseline `y`. Word draws a single underline from the font's post table, its
 /// offset below the baseline and its thickness each on a 0.25pt grid (online
-/// export probe: Calibri, Times New Roman, Arial, Aptos at 10/12/22pt). Double
-/// underlines keep the old geometry.
+/// export probe: Calibri, Times New Roman, Arial, Aptos at 10/12/22pt). A
+/// double underline is two lines half as thick, see `double_underline`.
 pub(super) fn underline_lines(
     entry: Option<&FontEntry>,
     font_size: f32,
@@ -491,8 +491,19 @@ pub(super) fn underline_lines(
     link: bool,
     y: f32,
 ) -> Vec<(f32, f32)> {
-    if !double && let Some((offset, th)) = entry.and_then(|e| post_underline(e, font_size)) {
-        return vec![(y - offset - th, th)];
+    if let Some(e) = entry
+        && let Some((offset, th)) = post_underline(e, font_size)
+    {
+        if !double {
+            return vec![(y - offset - th, th)];
+        }
+        let descent = e
+            .underline
+            .map_or(f32::MAX, |(_, _, d)| quarter_pt(d * font_size));
+        return double_underline(offset, th, descent)
+            .into_iter()
+            .map(|(top, th)| (y - top - th, th))
+            .collect();
     }
     let thick = (font_size * 0.05).max(0.5);
     let ul_y = if link {
@@ -4466,6 +4477,24 @@ pub(super) fn post_underline(entry: &FontEntry, font_size: f32) -> Option<(f32, 
     let (offset, thickness) = on_quarter_point_grid(pos * font_size, th * font_size);
     let descent = quarter_pt(descent * font_size);
     Some((offset.min(descent - thickness), thickness))
+}
+
+/// Word's double underline from the single one (offset below the baseline and
+/// thickness, both on the 0.25pt grid): two lines half as thick, the upper
+/// starting at half the single's offset, the lower ending where the single
+/// does, at least 1pt between them, the pair pushed up (upper line no higher
+/// than the baseline) to stay inside the font's descent. Returns (offset,
+/// thickness) per line. Online export probe, Arial / Calibri / Times New Roman
+/// / Courier New at every point size 6–48: all 172 pairs exact.
+fn double_underline(offset: f32, thickness: f32, descent: f32) -> [(f32, f32); 2] {
+    let th = quarter_pt(thickness / 2.0).max(0.25);
+    let mut top = quarter_pt(offset / 2.0);
+    let mut bottom = (offset + thickness).max(top + 2.0 * th + 1.0);
+    if bottom > descent {
+        bottom = descent;
+        top = (bottom - 2.0 * th - 1.0).max(0.0);
+    }
+    [(top, th), (bottom - th, th)]
 }
 
 fn on_quarter_point_grid(offset: f32, thickness: f32) -> (f32, f32) {
