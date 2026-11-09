@@ -217,6 +217,11 @@ fn fields_visible(stack: &[FieldFrame]) -> bool {
     stack.iter().all(|f| f.seen_sep)
 }
 
+/// Inside the cached result of a field that is re-evaluated at render time.
+fn dynamic_result(stack: &[FieldFrame]) -> bool {
+    stack.last().is_some_and(|f| f.seen_sep && f.dynamic())
+}
+
 impl FieldFrame {
     fn new(visible: bool) -> Self {
         Self {
@@ -1734,9 +1739,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                 }
                 "t" | "delText" => {
                     let visible = fields_visible(&field_stack);
-                    let dyn_result = field_stack
-                        .last()
-                        .is_some_and(|f| f.seen_sep && f.dynamic());
+                    let dyn_result = dynamic_result(&field_stack);
                     if dyn_result {
                         // Cached result of a dynamic field — keep it as the
                         // field run's placeholder text (re-evaluated at render).
@@ -1781,17 +1784,15 @@ pub(super) fn parse_runs<R: Read + Seek>(
                     } else {
                         '\u{AD}'
                     };
-                    if let Some(f) = field_stack.last_mut().filter(|f| f.seen_sep && f.dynamic()) {
-                        f.result.push(c);
+                    if dynamic_result(&field_stack) {
+                        field_stack.last_mut().unwrap().result.push(c);
                     } else if fields_visible(&field_stack) {
                         pending_text.push(c);
                     }
                 }
                 "tab" => {
                     let visible = fields_visible(&field_stack);
-                    let dyn_result = field_stack
-                        .last()
-                        .is_some_and(|f| f.seen_sep && f.dynamic());
+                    let dyn_result = dynamic_result(&field_stack);
                     // A hidden tab takes no space and doesn't make the line tabbed.
                     if visible && !dyn_result && !fmt.vanish {
                         flush_pending(&mut pending_text, &mut runs);
@@ -1802,9 +1803,7 @@ pub(super) fn parse_runs<R: Read + Seek>(
                     // Positional tab: alignment positions the FOLLOWING text against the
                     // margin box (left/center/right), independent of paragraph tab stops.
                     let visible = fields_visible(&field_stack);
-                    let dyn_result = field_stack
-                        .last()
-                        .is_some_and(|f| f.seen_sep && f.dynamic());
+                    let dyn_result = dynamic_result(&field_stack);
                     if visible && !dyn_result {
                         let alignment = match child.attribute((WML_NS, "alignment")) {
                             Some("center") => TabAlignment::Center,
