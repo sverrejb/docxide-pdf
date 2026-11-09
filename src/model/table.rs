@@ -210,6 +210,18 @@ impl Table {
         self.rows.first()?.cells.first()
     }
 
+    pub fn last_cell_of_first_row(&self) -> Option<&TableCell> {
+        self.rows.first()?.cells.last()
+    }
+
+    /// Every paragraph in the table, nested tables included.
+    pub fn all_paragraphs(&self) -> impl Iterator<Item = &Paragraph> {
+        self.rows
+            .iter()
+            .flat_map(|r| &r.cells)
+            .flat_map(|c| c.all_paragraphs())
+    }
+
     /// How far an AutoFit table may reach past the text area before Word
     /// squeezes it: before compat 15 by its outdent on the left and its last
     /// cell's right margin on the right (parish_housing's 9854 tw tables on a
@@ -221,9 +233,7 @@ impl Table {
         if compat_mode >= 15 {
             let left = self.first_cell().map_or(0.0, |c| c.borders.left.band());
             let right = self
-                .rows
-                .first()
-                .and_then(|r| r.cells.last())
+                .last_cell_of_first_row()
                 .map_or(0.0, |c| c.borders.right.band());
             return -(left + right) / 2.0;
         }
@@ -247,9 +257,7 @@ impl Table {
 
     /// The right margin of the first row's last cell, its own or the table's.
     pub fn last_cell_right_margin(&self) -> f32 {
-        self.rows
-            .first()
-            .and_then(|r| r.cells.last())
+        self.last_cell_of_first_row()
             .and_then(|c| c.cell_margins)
             .map_or(self.cell_margins.right, |m| m.right)
     }
@@ -319,22 +327,13 @@ pub struct TableCell {
 impl TableCell {
     /// Includes paragraphs inside nested tables.
     pub fn all_paragraphs(&self) -> Vec<&Paragraph> {
-        fn collect<'a>(blocks: &'a [Block], out: &mut Vec<&'a Paragraph>) {
-            for block in blocks {
-                match block {
-                    Block::Paragraph(p) => out.push(p),
-                    Block::Table(t) => {
-                        for row in &t.rows {
-                            for cell in &row.cells {
-                                collect(&cell.content, out);
-                            }
-                        }
-                    }
-                }
+        let mut result = Vec::new();
+        for block in &self.content {
+            match block {
+                Block::Paragraph(p) => result.push(p),
+                Block::Table(t) => result.extend(t.all_paragraphs()),
             }
         }
-        let mut result = Vec::new();
-        collect(&self.content, &mut result);
         result
     }
 }
