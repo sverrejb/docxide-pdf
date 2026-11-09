@@ -7949,11 +7949,7 @@ fn render_pass(
                             // fits a strip there (Word examples: "C1P0", 25pt,
                             // holds a 30pt strip, not a 24pt one).
                             Some(w) => {
-                                let room = if fz.wrap_text == WrapText::BothSides {
-                                    space_left.max(space_right)
-                                } else {
-                                    side_room(fz.wrap_text, space_left, space_right)
-                                };
+                                let room = side_room(fz.wrap_text, space_left, space_right);
                                 room >= w.max(MIN_EMPTY_STRIP)
                             }
                             None => {
