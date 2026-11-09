@@ -1298,8 +1298,9 @@ impl<'a> FlowFrame<'a> {
         let space_before = leading_para(&blocks[0]).map_or(0.0, |p| p.space_before);
         let top = state.pb.slot_top + if moved { space_before } else { 0.0 };
         let moved_column = moved && state.pb.page_count() == page;
-        state.frame_overflow |=
-            !fits(state) || (moved_column && frame_content_height(props, blocks, ctx, width) > left);
+        let moved_width = || frame_width(props, blocks, ctx, col_geometry[state.current_col].1);
+        state.frame_overflow |= !fits(state)
+            || (moved_column && frame_content_height(props, blocks, ctx, moved_width()) > left);
         let exact = props.height_exact
             && props.height > 0.0
             && !frame_blocks(props, blocks).any(|b| matches!(b, Block::Table(_)));
