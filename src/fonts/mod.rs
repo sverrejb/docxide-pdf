@@ -127,9 +127,21 @@ impl FontEntry {
     /// A face with no metrics and every glyph 500 units wide, for unit tests.
     pub(crate) fn stub() -> Self {
         FontEntry {
-            pdf_name: "F1".to_string(),
-            font_ref: pdf_writer::Ref::new(1),
             widths_1000: vec![500.0; 224],
+            is_substituted: false,
+            ..Self::unresolved("F1".into(), Ref::new(1), HashSet::new())
+        }
+    }
+}
+
+impl FontEntry {
+    /// The entry for a font no file was found for: standard-14 Helvetica
+    /// widths, no measured metrics and no per-character tables.
+    fn unresolved(pdf_name: String, font_ref: Ref, missing_chars: HashSet<char>) -> Self {
+        FontEntry {
+            pdf_name,
+            font_ref,
+            widths_1000: encoding::helvetica_widths(),
             line_h_ratio: None,
             ascender_ratio: None,
             grid_line_ratio: None,
@@ -151,18 +163,16 @@ impl FontEntry {
             kern_pairs: None,
             synthetic_bold: false,
             synthetic_italic: false,
-            is_substituted: false,
-            missing_chars: Default::default(),
+            is_substituted: true,
+            missing_chars,
             drew_notdef: Default::default(),
             font_path: None,
             face_index: 0,
-            gid_remap: Default::default(),
-            math_boxes: Default::default(),
+            gid_remap: HashMap::new(),
+            math_boxes: HashMap::new(),
         }
     }
-}
 
-impl FontEntry {
     /// Lay lines out with another face's box: Word measures some faces with
     /// metrics other than the file's (`register_font`, `pdf::fonts`).
     pub(crate) fn set_line_box(&mut self, ascent: f32, line_h: f32) {
@@ -1104,8 +1114,6 @@ pub(crate) fn register_font(
 
     let mut entry = match result {
         Some(r) => FontEntry {
-            pdf_name,
-            font_ref: refs.font,
             widths_1000: r.metrics.widths_1000,
             line_h_ratio: Some(r.metrics.line_h_ratio),
             ascender_ratio: Some(r.metrics.ascender_ratio),
@@ -1118,7 +1126,6 @@ pub(crate) fn register_font(
             strikeout: r.metrics.strikeout,
             east_asian: r.metrics.east_asian,
             avg_char_width: r.metrics.avg_char_width,
-            fallback_avg_char_width: Default::default(),
             plain_ascender_ratio: Some(r.metrics.plain_ascender_ratio),
             leading_ratio: Some(r.metrics.leading_ratio),
             drop_slack_ratio: Some(r.metrics.drop_slack_ratio),
@@ -1133,12 +1140,10 @@ pub(crate) fn register_font(
             synthetic_bold: r.synthetic_bold,
             synthetic_italic: r.synthetic_italic,
             is_substituted: substituted.get(),
-            missing_chars,
-            drew_notdef: Default::default(),
             font_path: r.font_path,
             face_index: r.face_index,
             gid_remap: r.metrics.gid_remap,
-            math_boxes: HashMap::new(),
+            ..FontEntry::unresolved(pdf_name, refs.font, missing_chars)
         },
         None => {
             // Pick the matching standard-14 Helvetica variant so a bold/italic run of an
@@ -1157,39 +1162,7 @@ pub(crate) fn register_font(
             pdf.type1_font(refs.font)
                 .base_font(Name(base_font))
                 .encoding_predefined(Name(b"WinAnsiEncoding"));
-            FontEntry {
-                pdf_name,
-                font_ref: refs.font,
-                widths_1000: encoding::helvetica_widths(),
-                line_h_ratio: None,
-                ascender_ratio: None,
-                grid_line_ratio: None,
-                plain_line_h_ratio: None,
-                grid_baseline_shift: None,
-                superscript_ratio: None,
-                subscript_ratio: None,
-                underline: None,
-                strikeout: None,
-                east_asian: false,
-                avg_char_width: None,
-                fallback_avg_char_width: Default::default(),
-                plain_ascender_ratio: None,
-                leading_ratio: None,
-                drop_slack_ratio: None,
-                char_to_gid: None,
-                char_widths_1000: None,
-                char_ink_1000: None,
-                kern_pairs: None,
-                synthetic_bold: false,
-                synthetic_italic: false,
-                is_substituted: true,
-                missing_chars,
-                drew_notdef: Default::default(),
-                font_path: None,
-                face_index: 0,
-                gid_remap: HashMap::new(),
-                math_boxes: HashMap::new(),
-            }
+            FontEntry::unresolved(pdf_name, refs.font, missing_chars)
         }
     };
 
