@@ -7641,20 +7641,14 @@ fn render_pass(
                     state.pb.flush_note_page(sect_idx - 1);
 
                     // Insert blank page for odd/even page alignment
-                    let need_odd = match sp.break_type {
-                        SectionBreakType::OddPage => true,
-                        _ if doc.even_and_odd_headers && sp.page_num_start.is_some() => {
-                            sp.page_num_start.unwrap() % 2 == 1
-                        }
-                        _ => false,
-                    };
-                    let need_even = match sp.break_type {
-                        SectionBreakType::EvenPage => true,
-                        _ if doc.even_and_odd_headers && sp.page_num_start.is_some() => {
-                            sp.page_num_start.unwrap() % 2 == 0
-                        }
-                        _ => false,
-                    };
+                    let restart_parity = sp
+                        .page_num_start
+                        .filter(|_| doc.even_and_odd_headers)
+                        .map(|start| start % 2);
+                    let need_odd =
+                        sp.break_type == SectionBreakType::OddPage || restart_parity == Some(1);
+                    let need_even =
+                        sp.break_type == SectionBreakType::EvenPage || restart_parity == Some(0);
                     if need_odd || need_even {
                         let explicit_parity_break = matches!(
                             sp.break_type,
