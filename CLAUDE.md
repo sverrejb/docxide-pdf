@@ -98,10 +98,13 @@ tests/
   PDF/UA-1 rules we fail worse than Word), `a11y_struct` / `a11y_text` (tag
   sequence and block text vs Word's tree), `a11y_missing` (DOCX letters and
   digits absent from our tree; internal only, never in README or site).
-- Baselines: `accept-baselines` promotes `tests/output/latest_scores.json` and
-  page hashes into the two committed files. Accept **improvements** yourself
-  (dry-run first, full suite before); any score **drop** needs the user's
-  explicit approval.
+- Baselines: `accept-baselines [--dry-run] [case-substring...]` promotes
+  `tests/output/latest_scores.json` and page hashes into the two committed
+  files after a full visual suite. Accept **improvements** yourself, in the
+  same push as the change that earned them; any score **drop** needs the
+  user's explicit approval: show the `--dry-run` output and wait. A flag the
+  tool does not know is ignored and runs a full accept, so always dry-run
+  first.
 - Per-case caches under `tests/output/` are reused while newer than their
   inputs: after changing a metric, `rm tests/output/*/*/visual.json
   tests/output/*/*/text_boundary.json`.
