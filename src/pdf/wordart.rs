@@ -108,22 +108,15 @@ pub(super) fn extract_glyph_path(face: &ttf_parser::Face, ch: char) -> Option<Gl
     Some(path)
 }
 
-/// Search seen_fonts for a matching entry with the right bold/italic variant.
+/// Read the font file behind `font_key` (the face with its bold/italic
+/// suffix), else the family's first entry that has one.
 pub(super) fn load_font_data(
+    font_key: &str,
     font_name: &str,
-    bold: bool,
-    italic: bool,
     seen_fonts: &HashMap<String, FontEntry>,
 ) -> Option<(Vec<u8>, u32)> {
-    let suffix = match (bold, italic) {
-        (true, true) => "/BI",
-        (true, false) => "/B",
-        (false, true) => "/I",
-        (false, false) => "",
-    };
-    let preferred_key = format!("{}{}", font_name, suffix);
     let entry = seen_fonts
-        .get(&preferred_key)
+        .get(font_key)
         .filter(|e| e.font_path.is_some())
         .or_else(|| {
             seen_fonts
@@ -149,9 +142,7 @@ struct WordArtTextInfo {
     text_color: Option<[u8; 3]>,
     outline: Option<TextOutline>,
     fill: Option<TextFill>,
-    bold: bool,
-    italic: bool,
-    /// The first run's key in the document's fonts, for `invisible_text`.
+    /// The first run's key in the document's fonts.
     font_key: String,
 }
 
@@ -164,8 +155,6 @@ fn collect_text_info(tb: &Textbox) -> Option<WordArtTextInfo> {
         text_color: None,
         outline: None,
         fill: None,
-        bold: false,
-        italic: false,
         font_key: String::new(),
     };
 
@@ -179,8 +168,6 @@ fn collect_text_info(tb: &Textbox) -> Option<WordArtTextInfo> {
                     info.text_color = run.color;
                     info.outline = run.text_outline.clone();
                     info.fill = run.text_fill.clone();
-                    info.bold = run.bold;
-                    info.italic = run.italic;
                     info.font_key = crate::fonts::font_key(run);
                 }
             }
@@ -450,8 +437,7 @@ fn prepare(
     seen_fonts: &HashMap<String, FontEntry>,
 ) -> Option<(WordArtTextInfo, Vec<u8>, u32)> {
     let info = collect_text_info(tb)?;
-    let (font_data, face_index) =
-        load_font_data(&info.font_name, info.bold, info.italic, seen_fonts)?;
+    let (font_data, face_index) = load_font_data(&info.font_key, &info.font_name, seen_fonts)?;
     Some((info, font_data, face_index))
 }
 
