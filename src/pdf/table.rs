@@ -613,6 +613,8 @@ fn draw_cell_text(
 fn render_cell_content(
     content: &mut Content,
     items: &[CellContentItem],
+    // The cell's source blocks: compute_row_layouts lays out one item per
+    // block, so item `i` came from block `i`.
     blocks: &[Block],
     cell_x: f32,
     col_w: f32,
@@ -630,21 +632,14 @@ fn render_cell_content(
     mut behind: BehindLayer<'_>,
 ) {
     let mut cursor_y = cursor_y_start;
-    let mut block_idx = 0;
 
     for (item_idx, item) in items.iter().enumerate() {
         match item {
             CellContentItem::Paragraph(para) => {
-                // Advance block_idx past the corresponding Block::Paragraph
-                let mut source_para: Option<&Paragraph> = None;
-                while block_idx < blocks.len() {
-                    if let Block::Paragraph(p) = &blocks[block_idx] {
-                        source_para = Some(p);
-                        block_idx += 1;
-                        break;
-                    }
-                    block_idx += 1;
-                }
+                let source_para = match blocks.get(item_idx) {
+                    Some(Block::Paragraph(p)) => Some(p),
+                    _ => None,
+                };
 
                 // Word tags every cell paragraph, empty ones included.
                 let cell_nodes = tagger.as_mut().map(|t| {
@@ -809,18 +804,7 @@ fn render_cell_content(
                 floating_x_offset,
                 bottom_band,
             } => {
-                // Find the corresponding Block::Table
-                let table = loop {
-                    if block_idx >= blocks.len() {
-                        break None;
-                    }
-                    if let Block::Table(t) = &blocks[block_idx] {
-                        block_idx += 1;
-                        break Some(t);
-                    }
-                    block_idx += 1;
-                };
-                if let Some(table) = table {
+                if let Some(Block::Table(table)) = blocks.get(item_idx) {
                     let saved_y = cursor_y;
                     cursor_y -= space_before + floating_offset.unwrap_or(0.0);
                     render_nested_table(
@@ -1352,6 +1336,7 @@ fn render_nested_table(
 fn render_partial_cell_content(
     content: &mut Content,
     items: &[CellContentItem],
+    // One item per block, as in `render_cell_content`.
     blocks: &[Block],
     start: &CellCursor,
     end: &CellCursor,
@@ -1368,32 +1353,6 @@ fn render_partial_cell_content(
 ) {
     let mut cursor_y = cursor_y_start;
     let mut reanchor_shift = 0.0;
-    // Build a mapping from item index to block index
-    let mut block_idx = 0usize;
-    let mut item_to_block: Vec<usize> = Vec::new();
-    for item in items {
-        item_to_block.push(block_idx);
-        match item {
-            CellContentItem::Paragraph(_) => {
-                while block_idx < blocks.len() {
-                    if matches!(&blocks[block_idx], Block::Paragraph(_)) {
-                        block_idx += 1;
-                        break;
-                    }
-                    block_idx += 1;
-                }
-            }
-            CellContentItem::NestedTable { .. } => {
-                while block_idx < blocks.len() {
-                    if matches!(&blocks[block_idx], Block::Table(_)) {
-                        block_idx += 1;
-                        break;
-                    }
-                    block_idx += 1;
-                }
-            }
-        }
-    }
 
     for chunk in cursor_chunks(items, start, end) {
         let (pi, l0, l1) = (chunk.item, chunk.l0, chunk.l1);
@@ -1482,8 +1441,7 @@ fn render_partial_cell_content(
                 floating_x_offset,
                 bottom_band,
             } => {
-                let bi = item_to_block.get(pi).copied().unwrap_or(0);
-                if let Some(Block::Table(table)) = blocks.get(bi) {
+                if let Some(Block::Table(table)) = blocks.get(pi) {
                     let saved_y = cursor_y;
                     if chunk.l0 == 0 && chunk.from.is_empty() {
                         let drop_anchor = pi == start.item && start.item > 0 && start.line == 0;
