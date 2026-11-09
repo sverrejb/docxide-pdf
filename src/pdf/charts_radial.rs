@@ -88,7 +88,7 @@ fn setup_radial_chart<'a>(
         .fold(0.0f32, f32::max);
     let legend_x = x + w - 9.9 - max_label_w - 8.0;
     let left = x + 11.0;
-    let right = if has_legend && legend_on_right {
+    let right = if legend_on_right {
         legend_x - 15.6
     } else {
         x + w - 11.0

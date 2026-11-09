@@ -1396,7 +1396,6 @@ pub(super) fn render_chart(
     let depth = c.view_3d;
 
     let legend_pos = c.legend.as_ref().map(|l| l.position);
-    let has_legend = legend_pos.is_some();
     let legend_on_right = legend_pos == Some(LegendPosition::Right);
     let legend_on_bottom = legend_pos == Some(LegendPosition::Bottom);
 
@@ -1517,7 +1516,7 @@ pub(super) fn render_chart(
     } else {
         0.0
     };
-    let margin_right = if has_legend && legend_on_right {
+    let margin_right = if legend_on_right {
         LEGEND_PAD_RIGHT + max_series_label_w + key_w + 15.6 + x_overhang
     } else if is_point_chart {
         (w * 0.06).max(20.0)
@@ -1552,13 +1551,9 @@ pub(super) fn render_chart(
     let cat_label_h = line_h * max_wrap_lines as f32 + 4.0;
     let margin_bottom = if table_rows > 0 {
         // Word, f_2d probe: the table ends 29.05pt above the chart's bottom.
-        let legend_band = if has_legend && legend_on_bottom {
-            28.6
-        } else {
-            8.0
-        };
+        let legend_band = if legend_on_bottom { 28.6 } else { 8.0 };
         legend_band + table_rows as f32 * table_row_h(font_size)
-    } else if has_legend && legend_on_bottom {
+    } else if legend_on_bottom {
         cat_label_h + 8.0 + LEGEND_BAND
     } else {
         cat_label_h + 8.0
@@ -1571,7 +1566,7 @@ pub(super) fn render_chart(
     // series names by their width and 1.2pt (line3d against noser and
     // persp3d probes).
     let perspective = depth.is_some_and(|d| d.perspective.is_some());
-    let margin_right = if perspective && !(has_legend && legend_on_right) {
+    let margin_right = if perspective && !legend_on_right {
         CHART_PAD_RIGHT + series_names_w.map_or(0.0, |w| w + 1.2)
     } else {
         margin_right
@@ -2029,16 +2024,8 @@ fn render_radar(
         return;
     }
 
-    let margin_right = if has_legend && legend_on_right {
-        w * 0.22
-    } else {
-        w * 0.08
-    };
-    let margin_bottom = if has_legend && legend_on_bottom {
-        h * 0.18
-    } else {
-        h * 0.08
-    };
+    let margin_right = if legend_on_right { w * 0.22 } else { w * 0.08 };
+    let margin_bottom = if legend_on_bottom { h * 0.18 } else { h * 0.08 };
     let margin_top = h * 0.08;
     let margin_left = w * 0.08;
 

@@ -739,6 +739,16 @@ pub(super) struct StoryTag<'a> {
     pub(super) sect: usize,
 }
 
+impl StoryTag<'_> {
+    fn reborrow(&mut self) -> StoryTag<'_> {
+        StoryTag {
+            tags: &mut *self.tags,
+            page: self.page,
+            sect: self.sect,
+        }
+    }
+}
+
 /// Shared paragraph iteration loop used by the glow, shadow, and normal text passes
 /// within a textbox. Each pass differs only in positional offsets, forced color override,
 /// and whether list labels are rendered.
@@ -777,11 +787,7 @@ pub(super) fn render_textbox_paragraphs(
             let layout = TextboxTable::layout(table, align_w, ctx, hf_sub);
             if render_labels {
                 let mut y = cursor_y - y_offset;
-                let tag = tag.as_mut().map(|t| StoryTag {
-                    tags: &mut *t.tags,
-                    page: t.page,
-                    sect: t.sect,
-                });
+                let tag = tag.as_mut().map(|t| t.reborrow());
                 layout.render(
                     (content_x + x_offset, align_w),
                     &mut y,
