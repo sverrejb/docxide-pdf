@@ -1587,9 +1587,7 @@ fn parse_zip<R: Read + std::io::Seek>(
     let comment_label_font = balloon_style
         .and_then(|s| s.run.font_name.clone())
         .unwrap_or_else(|| "Times New Roman".into());
-    let comment_font_size = balloon_style
-        .and_then(|s| s.run.font_size)
-        .unwrap_or(9.0);
+    let comment_font_size = balloon_style.and_then(|s| s.run.font_size).unwrap_or(9.0);
     // With no CommentText style the text takes Normal's face, as the built-in
     // CommentText would: case63's Aptos Normal over a Cambria theme draws its
     // comments in Aptos (whose "✓" Cambria lacks).

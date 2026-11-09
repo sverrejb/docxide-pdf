@@ -514,13 +514,11 @@ impl ParagraphRunDefaults {
         let run = para_style.map(|s| &s.run);
         let para_font_size = run.and_then(|r| r.font_size);
         let para_font_name = run.and_then(|r| r.font_name.as_deref());
-        let style_or = |f: fn(&RunProps) -> Option<bool>, default: bool| {
-            run.and_then(f).unwrap_or(default)
+        let style_or =
+            |f: fn(&RunProps) -> Option<bool>, default: bool| run.and_then(f).unwrap_or(default);
+        let style_or_clone = |f: fn(&RunProps) -> Option<&String>, default: &Option<String>| {
+            run.and_then(f).or(default.as_ref()).cloned()
         };
-        let style_or_clone =
-            |f: fn(&RunProps) -> Option<&String>, default: &Option<String>| {
-                run.and_then(f).or(default.as_ref()).cloned()
-            };
         Self {
             font_size: para_font_size.unwrap_or(defaults.font_size),
             font_name: para_font_name.unwrap_or(&defaults.font_name).to_string(),
