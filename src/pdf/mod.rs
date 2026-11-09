@@ -3874,6 +3874,25 @@ fn float_subset(
     (sub, names, effects)
 }
 
+/// Whether a picture offset below its paragraph's top leaves no usable text
+/// strip on either side of it.
+fn offset_picture_without_strip(
+    fi: &crate::model::FloatingImage,
+    sp: &SectionProperties,
+    col_x: f32,
+    col_w: f32,
+    text_width: f32,
+) -> bool {
+    if fi.v_relative_from != VRelativeFrom::Paragraph
+        || !matches!(fi.v_position, VerticalPosition::Offset(y) if y > 0.0)
+    {
+        return false;
+    }
+    let x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
+    (x - fi.dist_left - col_x).max(col_x + col_w - x - fi.image.display_width - fi.dist_right)
+        < MIN_EMPTY_STRIP
+}
+
 /// Whether a leading picture leaves no usable text strip on either side.
 fn leading_full_width_picture(
     fi: &crate::model::FloatingImage,
@@ -3882,16 +3901,9 @@ fn leading_full_width_picture(
     col_w: f32,
     text_width: f32,
 ) -> bool {
-    if !fi.anchor_at_start
-        || fi.v_relative_from != VRelativeFrom::Paragraph
-        || !matches!(fi.v_position, VerticalPosition::Offset(y) if y > 0.0)
-        || !matches!(fi.wrap_type, WrapType::Square | WrapType::Tight)
-    {
-        return false;
-    }
-    let x = resolve_fi_x(fi, sp, col_x, col_w, text_width);
-    (x - fi.dist_left - col_x).max(col_x + col_w - x - fi.image.display_width - fi.dist_right)
-        < MIN_EMPTY_STRIP
+    fi.anchor_at_start
+        && matches!(fi.wrap_type, WrapType::Square | WrapType::Tight)
+        && offset_picture_without_strip(fi, sp, col_x, col_w, text_width)
 }
 
 // Full-width rectangular contour wrapping advances through candidate lines,
@@ -6484,18 +6496,8 @@ fn render_paragraph_block(
                 // while intervening empty marks may occupy the space above.
                 let trailing_images_fit = last_fragment
                     && trailing.iter().all(|fi| {
-                        fi.v_relative_from == VRelativeFrom::Paragraph
-                            && matches!(fi.v_position, VerticalPosition::Offset(y) if y > 0.0)
-                            && fi.wrap_type.wraps_beside()
-                            && {
-                                let x = resolve_fi_x(fi, sp, rest_col_x, rest_col_w, text_width);
-                                (x - fi.dist_left - rest_col_x).max(
-                                    rest_col_x + rest_col_w
-                                        - x
-                                        - fi.image.display_width
-                                        - fi.dist_right,
-                                ) < MIN_EMPTY_STRIP
-                            }
+                        fi.wrap_type.wraps_beside()
+                            && offset_picture_without_strip(fi, sp, rest_col_x, rest_col_w, text_width)
                             && resolve_fi_y_top(fi, sp, state.pb.slot_top)
                                 - fi.image.display_height
                                 - fi.dist_bottom
