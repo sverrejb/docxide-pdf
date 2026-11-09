@@ -50,13 +50,35 @@ Times New Roman (probe `panose`: the name prefix decides, panose never, 4.4
 run styled with the character half of its paragraph's linked style takes
 nothing from it (20.6 → 67.5). Fonts: Lato Bold/Italic/BoldItalic and
 Roboto Light/Medium from Office's cloud cache (`fonts/CloudFonts`, assets
-repo). Open, diagnosed:
-- A 100%-width autofit table whose first column's longest unbreakable word
-  does not fit its pct share: Word widens that column and shrinks the rest
-  ("Indicator" wraps to "Indicato|r" in ours, 2 pages for Word's 1).
+repo). Rescored on the whole clean corpus with those seven rules: 66.71 →
+66.82 J, page misses 92 → 90, 17 documents up by more than half a point
+and two down, both fixed by the next rules. Then (2026-11-09): a line wraps
+beside a picture or text box as soon as the float's band reaches into its
+full line box, at-least leading included (Word for Mac probe `wrap_h*`:
+0.5pt is enough, 1.5pt of clearance is not; a title under a logo 5.9 →
+62.6); floating tables keep the old 20% threshold — probe `tblwrap_d*`
+says the band including bottomFromText counts for them too, and case45–47
+gain 3–15 points under that rule, but case40's line 1.6pt into a right
+table's margin runs full width in Word (−19), so tables stay as they were
+until that is understood. A percentage-width table whose cells all state
+percentages keeps those shares and breaks words that do not fit ("Tot|al"),
+no content-minimum widening (a 23-column table 7.6 → 81.0, two pages →
+one). The "Times…" substitution holds for one-word names only ("Times New
+Roman CYR" is Cambria in Word). Under a lines grid a lone picture takes the
+cells its own height needs, not its run's font line (probes `g2`–`g7`:
+Times New Roman 16 in an 18pt grid is two cells with any East Asian font,
+and so is an empty paragraph whose mark is that run; a 17.8pt logo in such
+a run is one). Open, diagnosed:
+- A table style with a `w:pPr` (even `jc` alone) and no `rPr` makes Word
+  draw Normal-styled cell text at a size that is neither Normal's nor
+  docDefaults' in any consistent way (probe matrix `probe_tablesize2/3`:
+  docDefaults 11 / Normal 12 → 11, 10/12 → 12, 14/12 → 14, 11/14 → 14; a
+  table-style rPr sz 10 → 12, sz 14 → 14). Normal's rFonts always apply. A
+  Russian landscape table shows Word at 11 where ours is 12.
 - An empty "No Spacing" paragraph under a 10pt Verdana heading is 12.2pt in
   Word (a 10pt line) although its mark inherits docDefaults' 11pt; ours 14.0.
-  Several Verdana/Cambria documents drift 2–5pt per such gap.
+  A probe of the same structure gives 11pt, so some other property of that
+  document decides.
 - A calendar's table rows come out 1.5pt shorter than Word's per row
   (Century Gothic cells, 4–5 lines each); a header table's shaded row 5pt
   taller. Measure against an online export before chasing (Mac metrics).
