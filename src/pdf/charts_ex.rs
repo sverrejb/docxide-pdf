@@ -18,7 +18,7 @@ use crate::model::{
 };
 
 use super::chart_legend::{SwatchStyle, render_swatch};
-use super::charts::{resolve_accent_colors, show_text, show_text_matrix, text_width};
+use super::charts::{polyline, resolve_accent_colors, show_text, show_text_matrix, text_width};
 use super::charts_radial::{arc_segment_count, emit_arc};
 use super::color::{fill_rgb, stroke_rgb};
 use super::helpers::draw_circle;
@@ -571,16 +571,16 @@ fn draw_axis_chart(content: &mut Content, ctx: &Ctx, bx: Rect) {
             content.set_line_cap(LineCapStyle::RoundCap);
             content.set_line_join(LineJoinStyle::RoundJoin);
             stroke_rgb(content, ctx.accent(1));
-            let mut run = 0.0;
-            for (i, v) in values.iter().enumerate() {
-                run += v;
-                let py = plot.bottom + run / total * plot.h();
-                if i == 0 {
-                    content.move_to(mid(i), py);
-                } else {
-                    content.line_to(mid(i), py);
-                }
-            }
+            let cumulative = values.iter().scan(0.0, |run, v| {
+                *run += v;
+                Some(*run)
+            });
+            polyline(
+                content,
+                cumulative
+                    .enumerate()
+                    .map(|(i, run)| (mid(i), plot.bottom + run / total * plot.h())),
+            );
             content.stroke();
         }
     }

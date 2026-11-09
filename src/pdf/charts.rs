@@ -786,7 +786,7 @@ pub(super) fn polygon(content: &mut Content, pts: &[(f32, f32)]) {
 }
 
 /// An open path through `pts`.
-fn polyline(content: &mut Content, pts: impl IntoIterator<Item = (f32, f32)>) {
+pub(super) fn polyline(content: &mut Content, pts: impl IntoIterator<Item = (f32, f32)>) {
     let mut pts = pts.into_iter();
     if let Some((x, y)) = pts.next() {
         content.move_to(x, y);
@@ -1062,9 +1062,7 @@ fn draw_chart_series(
                 let sym = resolve_marker(series.marker, si);
                 let (color, marker_r) = marker_look(series, si, accents, sym, DEFAULT_LINE_W);
                 fill_rgb(content, color);
-                for (ci, &val) in series.values.iter().enumerate() {
-                    let lx = plot_x + (ci as f32 + 0.5) * group_w;
-                    let ly = plot_y + (val / axis_max) * plot_h;
+                for &(lx, ly) in &pts {
                     draw_marker(content, sym, lx, ly, marker_r);
                 }
             }
@@ -1097,13 +1095,7 @@ fn draw_chart_series(
 
                 set_stroke_color(content, series.color);
                 content.set_line_width(1.5);
-                for (i, &(lx, ly)) in pts.iter().enumerate() {
-                    if i == 0 {
-                        content.move_to(lx, ly);
-                    } else {
-                        content.line_to(lx, ly);
-                    }
-                }
+                polyline(content, pts.iter().copied());
                 content.stroke();
             }
         }
