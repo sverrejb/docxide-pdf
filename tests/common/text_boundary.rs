@@ -153,6 +153,28 @@ fn last_word(s: &str) -> String {
     n.split_whitespace().last().unwrap_or_default().to_string()
 }
 
+/// Lines whose first and last words match, paired by longest common subsequence rather than by
+/// index: two fragments merging into one line (a table cell 7.95pt below its neighbour where
+/// Word's is 8.2pt, either side of the 8pt cluster limit) would otherwise shift every later
+/// line against the reference and fail them all.
+fn aligned_matches(ref_lines: &[String], gen_lines: &[String]) -> usize {
+    let key = |s: &String| (first_word(s), last_word(s));
+    let (r, g): (Vec<_>, Vec<_>) = (
+        ref_lines.iter().map(key).collect(),
+        gen_lines.iter().map(key).collect(),
+    );
+    let mut row = vec![0; g.len() + 1];
+    for rk in &r {
+        let mut diag = 0;
+        for (j, gk) in g.iter().enumerate() {
+            let up = row[j + 1];
+            row[j + 1] = if rk == gk { diag + 1 } else { up.max(row[j]) };
+            diag = up;
+        }
+    }
+    row[g.len()]
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct TextBoundary {
     pub ref_pages: usize,
@@ -201,14 +223,8 @@ pub fn analyze(reference_pdf: &Path, generated_pdf: &Path) -> TextBoundary {
             continue;
         }
 
-        for l in 0..min_count {
-            total_lines += 1;
-            if first_word(&ref_lines[l]) == first_word(&gen_lines[l])
-                && last_word(&ref_lines[l]) == last_word(&gen_lines[l])
-            {
-                matching_lines += 1;
-            }
-        }
+        total_lines += min_count;
+        matching_lines += aligned_matches(ref_lines, gen_lines);
     }
 
     TextBoundary {
@@ -252,6 +268,14 @@ mod tests {
     fn superscript_fragments_are_sorted_left_to_right() {
         let xml = r#"<document><page id="p1"><line bbox="30 6 40 16" text="2"/><line bbox="10 10 20 20" text="x"/><line bbox="10 30 40 40" text="next"/></page></document>"#;
         assert_eq!(parse_stext_pages(xml).unwrap(), vec![vec!["x 2", "next"]]);
+    }
+
+    #[test]
+    fn one_merged_line_costs_only_its_own_lines() {
+        let lines = |s: &[&str]| s.iter().map(|l| l.to_string()).collect::<Vec<_>>();
+        let reference = lines(&["KELAYAKAN", "NO. DOKUMEN", "YA TIDAK", "1. Akta"]);
+        let generated = lines(&["NO. DOKUMEN KELAYAKAN", "YA TIDAK", "1. Akta"]);
+        assert_eq!(super::aligned_matches(&reference, &generated), 2);
     }
 
     #[test]
