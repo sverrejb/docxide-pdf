@@ -544,6 +544,13 @@ Open queue from the large-corpus and focus-fixture rounds:
   type), secondary axes; see `current_focus/3d_charts.md`.
 - WordArt level 5: VML gradient/pattern fills, VML shadow, shapetype →
   prstTxWarp mapping.
+- VML picture fills (`v:fill type="frame" r:id`) draw only on a bare
+  `w:pict` shape (`is_vml_picture`). Still blank: a VML text box with one
+  (`parse_vml_textbox_fill` reads solid fills only; `Textbox.picture_fill`
+  is the slot, as for DrawingML) and a shape inside a `v:group`
+  (`walk_vml_group` reads only `v:imagedata`; reuse `vml_picture_source`).
+  The off check (`filled="f"`, `on="f|false|0"`) is spelled out in
+  images.rs, textbox.rs and wordart.rs; textbox.rs:1012 lacks `"0"`.
 
 ## RTL / BiDi
 
