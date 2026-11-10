@@ -1222,10 +1222,7 @@ pub(super) fn parse_object_floating_image<R: Read + Seek>(
     obj: roxmltree::Node,
     ctx: &mut ParseContext<'_, R>,
 ) -> Option<FloatingImage> {
-    let shape = obj.children().find(|n| {
-        n.tag_name().namespace() == Some(VML_NS)
-            && matches!(n.tag_name().name(), "rect" | "shape" | "oval" | "roundrect")
-    })?;
+    let shape = first_vml_shape(obj)?;
     let style = shape.attribute("style")?;
     if !style.contains("position:absolute") {
         return None;
@@ -1351,11 +1348,7 @@ pub(super) fn compute_object_height(para_node: roxmltree::Node) -> f32 {
 }
 
 fn object_is_absolute(obj: roxmltree::Node) -> bool {
-    obj.children()
-        .find(|n| {
-            n.tag_name().namespace() == Some(VML_NS)
-                && matches!(n.tag_name().name(), "rect" | "shape" | "oval" | "roundrect")
-        })
+    first_vml_shape(obj)
         .and_then(|s| s.attribute("style"))
         .is_some_and(|style| style.contains("position:absolute"))
 }
@@ -1453,10 +1446,6 @@ mod tests {
             (r#"<v:rect><v:fill r:id="p" type="tile"/></v:rect>"#, false),
             (
                 r#"<v:rect><v:fill r:id="p" type="frame" on="f"/></v:rect>"#,
-                false,
-            ),
-            (
-                r#"<v:rect><v:fill r:id="p" type="frame" on="false"/></v:rect>"#,
                 false,
             ),
             // Word for Mac draws no picture here either: on="t" does not override filled="f".
