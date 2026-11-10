@@ -91,7 +91,7 @@ pub fn ensure_screenshots(pdf: &Path, dir: &Path) -> Result<bool, String> {
     screenshot_pdf(pdf, dir).map(|()| false)
 }
 
-/// True if `screenshot_dir` contains PNGs all newer than `pdf` — i.e. the
+/// True if `screenshot_dir` holds one PNG per page, all newer than `pdf` — i.e. the
 /// cached rasterization is still valid for the current PDF.
 pub fn pngs_fresh(pdf: &Path, screenshot_dir: &Path) -> bool {
     let Some(pdf_mtime) = mtime(pdf) else {
@@ -104,7 +104,9 @@ pub fn pngs_fresh(pdf: &Path, screenshot_dir: &Path) -> bool {
         .filter_map(|e| e.ok())
         .filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("png"))
         .collect();
-    if pngs.is_empty() {
+    // An interrupted rasterization leaves a partial folder whose PNGs are all
+    // newer than the PDF; scoring it would average over the first pages only.
+    if pngs.is_empty() || pdf_page_count(pdf).ok() != Some(pngs.len()) {
         return false;
     }
     pngs.iter().all(|e| {
