@@ -14,7 +14,7 @@ Library and CLI for converting DOCX files to PDF, matching Microsoft Word's outp
 
 **🤏 Small files:** Output PDFs should be the same size or smaller than Word's export.
 
-Reference PDFs are generated using Microsoft Word for Mac (16.106.1 and later). Most (173 of 234) use the "Best for electronic distribution and accessibility (uses Microsoft online service)" export option; the other 61 were made with "Best for printing", macOS's untagged print path.
+Reference PDFs are generated using Microsoft Word for Mac (16.106.1 and later). Most use the "Best for electronic distribution and accessibility (uses Microsoft online service)" export option; some have been converted with the "Best for printing" option where some features were not supported by the online conversion.
 
 ## ⚠️ Work in progress.
 
