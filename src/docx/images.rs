@@ -1096,25 +1096,52 @@ pub(super) fn parse_object_inline_image<R: Read + Seek>(
     obj: roxmltree::Node,
     ctx: &mut ParseContext<'_, R>,
 ) -> Option<EmbeddedImage> {
-    let imagedata = obj
-        .descendants()
-        .find(|n| n.has_tag_name((VML_NS, "imagedata")))?;
-    let embed_id = imagedata.attribute((REL_NS, "id"))?;
+    let picture = vml_picture_source(obj)?;
+    let embed_id = picture.attribute((REL_NS, "id"))?;
     let (w, h) = object_dimensions(obj)?;
     let mut img = read_image_from_zip(embed_id, ctx.rels, ctx.zip, ctx.media, w, h)?;
-    (img.src_rect, img.lum) = vml_imagedata_props(imagedata);
+    (img.src_rect, img.lum) = vml_imagedata_props(picture);
     Some(with_object_alt(obj, img))
 }
 
+/// The element holding a VML picture's relationship id: its `v:imagedata`, or
+/// else the frame fill of the shape itself (not of a `v:shapetype` beside it).
+fn vml_picture_source<'a, 'i>(obj: roxmltree::Node<'a, 'i>) -> Option<roxmltree::Node<'a, 'i>> {
+    obj.descendants()
+        .find(|n| n.has_tag_name((VML_NS, "imagedata")))
+        .or_else(|| {
+            first_vml_shape(obj)?
+                .children()
+                .find(|c| is_vml_frame_fill(*c))
+        })
+}
+
 /// A legacy VML picture: a `w:pict` whose shape shows only an image (no text
-/// box). Laid out like an OLE object's preview picture.
+/// box), as `v:imagedata` or as a fill stretched over the shape. Laid out like
+/// an OLE object's preview picture.
 pub(super) fn is_vml_picture(pict: roxmltree::Node) -> bool {
     pict.children().any(|n| {
         n.tag_name().namespace() == Some(VML_NS)
             && matches!(n.tag_name().name(), "shape" | "rect")
-            && n.children().any(|c| c.has_tag_name((VML_NS, "imagedata")))
-            && !n.children().any(|c| c.has_tag_name((VML_NS, "textbox")))
+            && n.children()
+                .any(|c| c.has_tag_name((VML_NS, "imagedata")) || is_vml_frame_fill(c))
+            && !n.children().any(|c| {
+                c.has_tag_name((VML_NS, "textbox")) || c.has_tag_name((VML_NS, "textpath"))
+            })
     })
+}
+
+/// `<v:fill type="frame" r:id="..."/>`: a picture stretched over the whole
+/// shape.
+fn is_vml_frame_fill(node: roxmltree::Node) -> bool {
+    let off = |value: Option<&str>| matches!(value, Some("f" | "false" | "0"));
+    node.has_tag_name((VML_NS, "fill"))
+        && node.attribute("type") == Some("frame")
+        && node.attribute((REL_NS, "id")).is_some()
+        && !off(node.attribute("on"))
+        && !node
+            .parent()
+            .is_some_and(|shape| off(shape.attribute("filled")))
 }
 
 /// VML fractions are plain decimals or 16.16 fixed point with an `f` suffix
@@ -1333,12 +1360,15 @@ fn object_is_absolute(obj: roxmltree::Node) -> bool {
         .is_some_and(|style| style.contains("position:absolute"))
 }
 
-fn object_dimensions(obj: roxmltree::Node) -> Option<(f32, f32)> {
-    let rect = obj.children().find(|n| {
+fn first_vml_shape<'a, 'i>(obj: roxmltree::Node<'a, 'i>) -> Option<roxmltree::Node<'a, 'i>> {
+    obj.children().find(|n| {
         n.tag_name().namespace() == Some(VML_NS)
             && matches!(n.tag_name().name(), "rect" | "shape" | "oval" | "roundrect")
-    });
-    if let Some(rect) = rect
+    })
+}
+
+fn object_dimensions(obj: roxmltree::Node) -> Option<(f32, f32)> {
+    if let Some(rect) = first_vml_shape(obj)
         && let Some(style) = rect.attribute("style")
     {
         let mut w_pt: Option<f32> = None;
@@ -1413,6 +1443,52 @@ mod tests {
             let doc = roxmltree::Document::parse(&xml).unwrap();
             assert_eq!(has_ole_object(doc.root_element()), expected, "{child}");
         }
+    }
+
+    #[test]
+    fn frame_fill_makes_a_vml_picture() {
+        for (shape, expected) in [
+            (r#"<v:rect><v:fill r:id="p" type="frame"/></v:rect>"#, true),
+            (r#"<v:rect><v:imagedata r:id="p"/></v:rect>"#, true),
+            (r#"<v:rect><v:fill r:id="p" type="tile"/></v:rect>"#, false),
+            (
+                r#"<v:rect><v:fill r:id="p" type="frame" on="f"/></v:rect>"#,
+                false,
+            ),
+            (
+                r#"<v:rect><v:fill r:id="p" type="frame" on="false"/></v:rect>"#,
+                false,
+            ),
+            // Word for Mac draws no picture here either: on="t" does not override filled="f".
+            (
+                r#"<v:rect filled="f"><v:fill r:id="p" type="frame" on="t"/></v:rect>"#,
+                false,
+            ),
+            (
+                r#"<v:shape><v:fill r:id="p" type="frame"/><v:textpath string="A"/></v:shape>"#,
+                false,
+            ),
+            (
+                r#"<v:rect><v:fill r:id="p" type="frame"/><v:textbox/></v:rect>"#,
+                false,
+            ),
+        ] {
+            let xml = format!(
+                r#"<w:pict xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:v="{VML_NS}" xmlns:r="{REL_NS}">{shape}</w:pict>"#
+            );
+            let doc = roxmltree::Document::parse(&xml).unwrap();
+            assert_eq!(is_vml_picture(doc.root_element()), expected, "{shape}");
+        }
+    }
+
+    #[test]
+    fn picture_comes_from_the_shape_not_its_shapetype() {
+        let xml = format!(
+            r#"<w:pict xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:v="{VML_NS}" xmlns:r="{REL_NS}"><v:shapetype><v:fill r:id="type" type="frame"/></v:shapetype><v:rect><v:fill r:id="shape" type="frame"/></v:rect></w:pict>"#
+        );
+        let doc = roxmltree::Document::parse(&xml).unwrap();
+        let source = vml_picture_source(doc.root_element()).unwrap();
+        assert_eq!(source.attribute((REL_NS, "id")), Some("shape"));
     }
 
     fn src_rect_of(elem: &str) -> Option<[f32; 4]> {
