@@ -1,4 +1,4 @@
-[![AI:X EXECUTE](https://img.shields.io/badge/AI-EXECUTE-grey?style=flat&logoSize=auto&labelColor=13171f)](https://0rwx.com)
+[![AI:W WRITE](https://img.shields.io/badge/AI-WRITE-grey?style=flat&logoSize=auto&labelColor=13171f)](https://0rwx.com)
 
 # docxide-pdf
 
@@ -55,7 +55,7 @@ If you have a `.docx` file that produces ugly, broken, or just plain wrong outpu
 
 ## AI usage disclaimer 🤖
 
-[![AI:X EXECUTE](https://img.shields.io/badge/AI-EXECUTE-grey?style=flat&logoSize=auto&labelColor=13171f)](https://0rwx.com)
+[![AI:W WRITE](https://img.shields.io/badge/AI-WRITE-grey?style=flat&logoSize=auto&labelColor=13171f)](https://0rwx.com)
 
 While the idea, architecture, testing strategy and validation of output are all human, the vast majority of the code as of now is written by various Claude models with access to the PDF specification (ISO-32000) and the Office Open XML File Formats specification (ECMA-376). This project was done as an exercise to get experience with the usage of coding agents.
 
