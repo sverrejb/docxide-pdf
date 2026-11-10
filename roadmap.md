@@ -481,6 +481,11 @@ Open queue from the large-corpus and focus-fixture rounds:
 
 - Footnotes that don't fit: Word splits a note across pages with a
   continuation separator (uk_commercial p17/18); we move the reference line.
+- frame-clip-page-break (J 60.9, SSIM 72.2): body and frame match Word; the
+  footnote separator rule sits 10.4pt too high (ours 330.30, Word 340.73 from
+  the top). The docx has no styles.xml and the separator paragraph has no
+  pPr, so its line height falls back to defaults; suspect ours differ from
+  Word's (unverified). The near-empty page magnifies the miss in the scores.
 - Footnote paragraphs other than numbered ones are hand-built in
   `parse_footnotes` (endnotes already use `build_paragraph`): borders,
   shading, `style_id`, contextual spacing missing; note tables are flattened
