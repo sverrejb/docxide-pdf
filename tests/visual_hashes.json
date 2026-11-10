@@ -3391,6 +3391,9 @@
     "0d51d04b3130c01ec6cd34573612dfcae4572cf85e375ec6363dd4cba06e5330",
     "4a8c2f1927cd19e9b9a227b020ff263037e7435751c51c88b293bd584f03868d"
   ],
+  "cases/vml-frame-fill-textbox-group": [
+    "768308c3bb527297b5c428097c835b7a15ff2b59c2c7fb4089c1e8d2d13cd322"
+  ],
   "cases/vml-front-rule-over-background": [
     "92941726019bbbfd091ea3f808c8de5f9ab1456cb251eda7610813084da96f83"
   ],

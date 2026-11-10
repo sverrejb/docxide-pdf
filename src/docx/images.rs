@@ -1116,6 +1116,17 @@ fn vml_picture_source<'a, 'i>(obj: roxmltree::Node<'a, 'i>) -> Option<roxmltree:
         })
 }
 
+/// The picture a VML shape's own frame fill stretches over its `w`×`h` box.
+pub(super) fn vml_frame_fill_image<R: Read + Seek>(
+    shape: roxmltree::Node,
+    ctx: &mut ParseContext<'_, R>,
+    w: f32,
+    h: f32,
+) -> Option<EmbeddedImage> {
+    let fill = shape.children().find(|c| is_vml_frame_fill(*c))?;
+    read_image_from_zip(fill.attribute((REL_NS, "id"))?, ctx.rels, ctx.zip, ctx.media, w, h)
+}
+
 /// A legacy VML picture: a `w:pict` whose shape shows only an image (no text
 /// box), as `v:imagedata` or as a fill stretched over the shape. Laid out like
 /// an OLE object's preview picture.

@@ -544,6 +544,8 @@ fn walk_vml_group<R: Read + Seek>(
         {
             (img.src_rect, img.lum) = vml_imagedata_props(data);
             out.push(RunDrawingResult::Floating(group_image(img, x, y, base)));
+        } else if let Some(img) = super::images::vml_frame_fill_image(node, ctx, w, h) {
+            out.push(RunDrawingResult::Floating(group_image(img, x, y, base)));
         }
     }
 }

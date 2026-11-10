@@ -1129,6 +1129,7 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         behind_doc,
         z_index,
         fill: parse_vml_textbox_fill(shape),
+        picture_fill: super::images::vml_frame_fill_image(shape, ctx, width, height),
         margin_left: 7.2,
         margin_right: 7.2,
         margin_top: 3.6,
