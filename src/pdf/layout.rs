@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
 
 use pdf_writer::types::TextRenderingMode;
-use pdf_writer::{Content, Name, Rect, Str};
+use pdf_writer::{Buf, Content, Name, Primitive, Rect, Str};
 
 use crate::fonts::{FontEntry, encode_as_gids, font_key_buf, to_winansi_bytes};
 use crate::model::{
@@ -4536,32 +4536,78 @@ enum GlyphDraw<'a> {
 /// Display "Te" 1.6pt tighter at 20pt, case3), so plain Tj left every glyph
 /// after a kerned pair out of place.
 fn show_kerned(content: &mut Content, entry: &FontEntry, text: &str, boundary_space: bool) {
-    let mut tj = content.show_positioned();
-    let mut items = tj.items();
+    let mut items = Vec::new();
     let mut run = String::new();
-    let mut prev: Option<char> = None;
-    for ch in text.chars() {
-        let k = prev.map_or(0.0, |p| entry.kern_1000(p, ch));
-        if k != 0.0 {
-            items.show(Str(&entry.encode(&run)));
+    for (ch, adjust) in kern_moves(entry, text) {
+        if adjust != 0.0 {
+            items.push(TjItem::Text(entry.encode(&run)));
             run.clear();
-            // TJ subtracts: a negative kern (tighter) is a positive adjustment.
-            items.adjust(-k);
+            items.push(TjItem::Adjust(adjust));
         }
-        run.push(ch);
-        prev = Some(ch);
+        run.push_str(ch);
     }
     if boundary_space {
         run.push(' ');
     }
-    items.show(Str(&entry.encode(&run)));
+    items.push(TjItem::Text(entry.encode(&run)));
+    write_tj(content, &items);
+}
+
+/// Each character of `text` with the TJ adjustment its pair kerning puts
+/// before it. TJ subtracts: a negative kern (tighter) is a positive
+/// adjustment.
+fn kern_moves<'a>(
+    entry: &'a FontEntry,
+    text: &'a str,
+) -> impl Iterator<Item = (&'a str, f32)> + 'a {
+    let mut prev: Option<char> = None;
+    text.char_indices().map(move |(i, ch)| {
+        let kern = prev.map_or(0.0, |p| entry.kern_1000(p, ch));
+        prev = Some(ch);
+        (&text[i..i + ch.len_utf8()], -kern)
+    })
+}
+
+/// The TJ adjustment that takes `pen` to a glyph at `x`, and the pen after
+/// the glyph: whole thousandths keep the numbers short, and the pen follows
+/// the rounded move, so the error never adds up. TJ subtracts: moving right
+/// is a negative adjustment.
+fn placed_move(pen: &mut f32, x: f32, advance: f32) -> f32 {
+    let adjust = (*pen - x).round();
+    *pen += advance - adjust;
+    adjust
+}
+
+enum TjItem {
+    Text(Vec<u8>),
+    Adjust(f32),
+}
+
+/// A TJ array without pdf-writer's spaces between strings and numbers,
+/// `[(ab)9(cd)]` as Word writes it: about 3% of a text page.
+struct TjArray<'a>(&'a [TjItem]);
+
+impl Primitive for TjArray<'_> {
+    fn write(self, buf: &mut Buf) {
+        buf.extend([b'[']);
+        for item in self.0 {
+            match item {
+                TjItem::Text(text) => Str(text).write(buf),
+                TjItem::Adjust(adjust) => adjust.write(buf),
+            }
+        }
+        buf.extend([b']']);
+    }
+}
+
+fn write_tj(content: &mut Content, items: &[TjItem]) {
+    content.op("TJ").operand(TjArray(items));
 }
 
 /// Draws `glyphs` (text, x, advance) in the order given, each at its own x
-/// from the pen's start, with TJ moves between them. Moves and advances
-/// scale alike with Tz, so all of this is in thousandths of the font size.
-/// Whole thousandths keep the numbers short; the pen follows the rounded
-/// moves, so the error never adds up. `trailing` is shown last, unplaced.
+/// from the pen's start, with TJ moves between them (`placed_move`). Moves
+/// and advances scale alike with Tz, so all of this is in thousandths of the
+/// font size. `trailing` is shown last, unplaced.
 /// Starts with the pen at `pen` and returns where it ends.
 fn show_placed(
     content: &mut Content,
@@ -4570,20 +4616,18 @@ fn show_placed(
     trailing: Option<&str>,
     mut pen: f32,
 ) -> f32 {
-    let mut tj = content.show_positioned();
-    let mut items = tj.items();
+    let mut items = Vec::new();
     for &(text, x, advance) in glyphs {
-        // TJ subtracts: moving right is a negative adjustment.
-        let adjust = (pen - x).round();
+        let adjust = placed_move(&mut pen, x, advance);
         if adjust != 0.0 {
-            items.adjust(adjust);
+            items.push(TjItem::Adjust(adjust));
         }
-        items.show(Str(&entry.encode(text)));
-        pen += advance - adjust;
+        items.push(TjItem::Text(entry.encode(text)));
     }
     if let Some(t) = trailing {
-        items.show(Str(&entry.encode(t)));
+        items.push(TjItem::Text(entry.encode(t)));
     }
+    write_tj(content, &items);
     pen
 }
 
@@ -4602,11 +4646,6 @@ struct TjRun {
     pen: f32,
 }
 
-enum TjItem {
-    Text(Vec<u8>),
-    Adjust(f32),
-}
-
 impl TjRun {
     /// Whether a chunk on baseline `y` goes on in this run.
     fn continues(&self, y: f32) -> bool {
@@ -4622,7 +4661,7 @@ impl TjRun {
     /// the pen follows the rounded move, so the error never adds up. Whole
     /// thousandths (0.006pt at 12pt) are enough to tip a glyph over a
     /// rasteriser's subpixel boundary.
-    fn move_to(&mut self, x: f32, font_size: f32) {
+    fn advance_to(&mut self, x: f32, font_size: f32) {
         let step = if font_size > 20.0 { 100.0 } else { 10.0 };
         self.adjust(((self.pen - x) * step).round() / step);
     }
@@ -4654,14 +4693,8 @@ impl TjRun {
         if self.items.is_empty() {
             return;
         }
-        let mut tj = content.show_positioned();
-        let mut items = tj.items();
-        for item in self.items.drain(..) {
-            match item {
-                TjItem::Text(text) => items.show(Str(&text)),
-                TjItem::Adjust(adjust) => items.adjust(adjust),
-            };
-        }
+        write_tj(content, &self.items);
+        self.items.clear();
     }
 }
 
@@ -5871,11 +5904,9 @@ pub(super) fn render_paragraph_lines(
                 }
 
                 // Text outline takes priority over synthetic bold
-                if chunk.text_outline.is_some() != has_text_outline {
-                    run.flush(content);
-                }
                 if let Some(ref outline) = chunk.text_outline {
                     if !has_text_outline {
+                        run.flush(content);
                         super::wordart::apply_text_outline(
                             content,
                             outline,
@@ -5884,6 +5915,7 @@ pub(super) fn render_paragraph_lines(
                         has_text_outline = true;
                     }
                 } else if has_text_outline {
+                    run.flush(content);
                     super::wordart::reset_text_outline(content);
                     has_text_outline = false;
                     if cur_synthetic_bold {
@@ -6155,202 +6187,196 @@ pub(super) fn render_paragraph_lines(
                         }
                     };
                 }
-                let plain = shear == 0.0 && cur_shear == 0.0 && chunk.text_shadow.is_none();
+                let sheared = shear != 0.0 || cur_shear != 0.0;
                 let mut move_to = |content: &mut Content, mx: f32, my: f32| {
-                    if shear != 0.0 || cur_shear != 0.0 {
+                    if sheared {
                         content.set_text_matrix([1.0, 0.0, shear, 1.0, mx, my]);
                         cur_shear = shear;
-                        td_x = mx;
-                        td_y = my;
                     } else {
                         content.next_line(mx - td_x, my - td_y);
-                        td_x = mx;
-                        td_y = my;
                     }
+                    td_x = mx;
+                    td_y = my;
                 };
 
                 // What a run can take: one face the font holds every character
                 // of, so the pen is where the widths say, and nothing drawn
-                // between the chunks. Each text with the move before it, the
-                // moves `show_placed` and `show_kerned` make.
-                let run_glyphs: Option<(&FontEntry, Vec<(&str, f32)>)> = match &draw {
-                    GlyphDraw::Placed(e, glyphs) if glyphs.iter().all(|g| std::ptr::eq(g.0, *e)) => {
-                        let mut pen = 0.0;
-                        let moves = glyphs.iter().map(|&(_, text, x, advance)| {
-                            let adjust = (pen - x).round();
-                            pen += advance - adjust;
-                            (text, adjust)
-                        });
-                        Some((*e, moves.collect()))
-                    }
-                    GlyphDraw::Kerned(e) => {
-                        let mut prev: Option<char> = None;
-                        let moves = chunk.text.char_indices().map(|(i, ch)| {
-                            let kern = prev.map_or(0.0, |p| e.kern_1000(p, ch));
-                            prev = Some(ch);
-                            (&chunk.text[i..i + ch.len_utf8()], -kern)
-                        });
-                        Some((*e, moves.collect()))
-                    }
-                    GlyphDraw::Plain => primary_entry.map(|&e| (e, vec![(chunk.text.as_str(), 0.0)])),
+                // between the chunks.
+                let held = |e: &FontEntry, text: &str| text.chars().all(|c| e.has_char(c));
+                let run_entry = match &draw {
+                    _ if sheared || chunk.text_shadow.is_some() => None,
+                    GlyphDraw::Placed(e, glyphs) => Some(*e).filter(|e| {
+                        glyphs.iter().all(|g| std::ptr::eq(g.0, *e) && held(e, g.1))
+                    }),
+                    GlyphDraw::Kerned(e) => Some(*e).filter(|e| held(e, &chunk.text)),
+                    GlyphDraw::Plain => primary_entry.copied().filter(|e| held(e, &chunk.text)),
                     _ => None,
                 }
-                .filter(|(e, glyphs)| {
-                    plain
-                        && e.char_to_gid.is_some()
-                        && glyphs.iter().all(|g| g.0.chars().all(|c| e.has_char(c)))
-                });
-                if let Some((entry, glyphs)) = run_glyphs {
-                    if chunk.text.is_empty() && !boundary_space {
-                        // Nothing to show: its decorations are drawn below.
-                    } else {
+                .filter(|e| e.char_to_gid.is_some());
+                if let Some(entry) = run_entry {
+                    // Nothing to show otherwise: its decorations are drawn below.
+                    if !chunk.text.is_empty() || boundary_space {
                         if !run.continues(fy) {
                             run.flush(content);
                             move_to(content, start_x, fy);
-                            run.start(td_x, fy);
+                            run.start(start_x, fy);
                         }
                         let unit = chunk.font_size * chunk.text_scale / 100_000.0;
-                        run.move_to((start_x - run.origin.0) / unit, chunk.font_size);
-                        let advance = |text: &str| -> f32 {
-                            text.chars().map(|c| entry.pen_width_1000(c) + tc).sum()
-                        };
-                        for (text, adjust) in glyphs {
+                        run.advance_to((start_x - run.origin.0) / unit, chunk.font_size);
+                        let show = |run: &mut TjRun, adjust: f32, text: &str| {
+                            let advance = text.chars().map(|c| entry.pen_width_1000(c) + tc).sum();
                             run.adjust(adjust);
-                            run.show(entry.encode(text), advance(text));
+                            run.show(entry.encode(text), advance);
+                        };
+                        // Inside the chunk, the moves `show_placed` and
+                        // `show_kerned` make.
+                        match &draw {
+                            GlyphDraw::Placed(_, glyphs) => {
+                                let mut pen = 0.0;
+                                for &(_, text, x, advance) in glyphs {
+                                    show(&mut run, placed_move(&mut pen, x, advance), text);
+                                }
+                            }
+                            GlyphDraw::Kerned(_) => {
+                                for (ch, adjust) in kern_moves(entry, &chunk.text) {
+                                    show(&mut run, adjust, ch);
+                                }
+                            }
+                            _ => show(&mut run, 0.0, &chunk.text),
                         }
                         if boundary_space {
-                            run.show(entry.encode(" "), advance(" "));
+                            show(&mut run, 0.0, " ");
                         }
                     }
                 } else {
-                run.flush(content);
-                move_to(content, start_x, fy);
+                    run.flush(content);
+                    move_to(content, start_x, fy);
 
-                match draw {
-                    GlyphDraw::Placed(entry, glyphs) => {
-                        let trailing = boundary_space.then_some(" ");
-                        show_placed_faces(content, entry, &glyphs, chunk.font_size, trailing);
-                    }
-                    GlyphDraw::Extras(extras) => {
-                        // Only the East Asian gaps widen: one Tc per segment, the
-                        // fallback font where the primary lacks the glyphs.
-                        let chars: Vec<char> = chunk.text.chars().collect();
-                        let mut i = 0;
-                        while i < chars.len() {
-                            let fb = fallback_idx(chars[i]);
-                            let mut j = i + 1;
-                            while j < chars.len()
-                                && extras[j] == extras[i]
-                                && fallback_idx(chars[j]) == fb
-                            {
-                                j += 1;
-                            }
-                            let cs = chunk.char_spacing + extras[i];
-                            if cs != cur_char_spacing {
-                                content.set_char_spacing(cs);
-                                cur_char_spacing = cs;
-                            }
-                            let seg: String = chars[i..j].iter().collect();
-                            let fb = fb.map(|k| fallbacks[k]);
-                            match fb.and_then(|f| Some((f, f.char_to_gid.as_ref()?))) {
-                                Some((fb, map)) => {
-                                    content.set_font(Name(fb.pdf_name.as_bytes()), chunk.font_size);
-                                    content.show(Str(&encode_as_gids(&seg, map)));
-                                    content
-                                        .set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size);
+                    match draw {
+                        GlyphDraw::Placed(entry, glyphs) => {
+                            let trailing = boundary_space.then_some(" ");
+                            show_placed_faces(content, entry, &glyphs, chunk.font_size, trailing);
+                        }
+                        GlyphDraw::Extras(extras) => {
+                            // Only the East Asian gaps widen: one Tc per segment, the
+                            // fallback font where the primary lacks the glyphs.
+                            let chars: Vec<char> = chunk.text.chars().collect();
+                            let mut i = 0;
+                            while i < chars.len() {
+                                let fb = fallback_idx(chars[i]);
+                                let mut j = i + 1;
+                                while j < chars.len()
+                                    && extras[j] == extras[i]
+                                    && fallback_idx(chars[j]) == fb
+                                {
+                                    j += 1;
                                 }
-                                _ => {
-                                    content.show(Str(&encode_text_for_pdf(
-                                        &seg,
-                                        &chunk.pdf_font,
-                                        &pdf_name_to_entry,
-                                    )));
+                                let cs = chunk.char_spacing + extras[i];
+                                if cs != cur_char_spacing {
+                                    content.set_char_spacing(cs);
+                                    cur_char_spacing = cs;
+                                }
+                                let seg: String = chars[i..j].iter().collect();
+                                let fb = fb.map(|k| fallbacks[k]);
+                                match fb.and_then(|f| Some((f, f.char_to_gid.as_ref()?))) {
+                                    Some((fb, map)) => {
+                                        content.set_font(Name(fb.pdf_name.as_bytes()), chunk.font_size);
+                                        content.show(Str(&encode_as_gids(&seg, map)));
+                                        content
+                                            .set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size);
+                                    }
+                                    _ => {
+                                        content.show(Str(&encode_text_for_pdf(
+                                            &seg,
+                                            &chunk.pdf_font,
+                                            &pdf_name_to_entry,
+                                        )));
+                                    }
+                                }
+                                i = j;
+                            }
+                            if boundary_space {
+                                if effective_cs != cur_char_spacing {
+                                    content.set_char_spacing(effective_cs);
+                                    cur_char_spacing = effective_cs;
+                                }
+                                content.show(Str(&encode_text_for_pdf(
+                                    " ",
+                                    &chunk.pdf_font,
+                                    &pdf_name_to_entry,
+                                )));
+                            }
+                        }
+                        GlyphDraw::Rtl(entry) => {
+                            // ponytail: no CJK-fallback glyphs or kerning in right-to-left chunks
+                            show_rtl(
+                                content,
+                                entry,
+                                &chunk.text,
+                                chunk.font_size,
+                                effective_cs,
+                                boundary_space,
+                            );
+                        }
+                        GlyphDraw::Fallbacks => {
+                            // A segment of the chunk in its own font, or in the fallback
+                            // font when its characters are missing from the primary one.
+                            let show_seg = |content: &mut Content, seg: &[char], fb: Option<usize>| {
+                                let seg: String = seg.iter().collect();
+                                if let Some(fallback) = fb.map(|k| fallbacks[k]) {
+                                    if let Some(map) = fallback.char_to_gid.as_ref() {
+                                        content.set_font(
+                                            Name(fallback.pdf_name.as_bytes()),
+                                            chunk.font_size,
+                                        );
+                                        content.show(Str(&encode_as_gids(&seg, map)));
+                                        content
+                                            .set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size);
+                                    }
+                                } else {
+                                    let bytes =
+                                        encode_text_for_pdf(&seg, &chunk.pdf_font, &pdf_name_to_entry);
+                                    content.show(Str(&bytes));
+                                }
+                            };
+                            // Split text into runs of primary vs fallback chars
+                            let mut seg_start = 0;
+                            let mut cur_fb = None;
+                            let chars: Vec<char> = chunk.text.chars().collect();
+                            for (i, &ch) in chars.iter().enumerate() {
+                                let fb = fallback_idx(ch);
+                                if i == 0 {
+                                    cur_fb = fb;
+                                } else if fb != cur_fb {
+                                    show_seg(content, &chars[seg_start..i], cur_fb);
+                                    seg_start = i;
+                                    cur_fb = fb;
                                 }
                             }
-                            i = j;
-                        }
-                        if boundary_space {
-                            if effective_cs != cur_char_spacing {
-                                content.set_char_spacing(effective_cs);
-                                cur_char_spacing = effective_cs;
-                            }
-                            content.show(Str(&encode_text_for_pdf(
-                                " ",
-                                &chunk.pdf_font,
-                                &pdf_name_to_entry,
-                            )));
-                        }
-                    }
-                    GlyphDraw::Rtl(entry) => {
-                        // ponytail: no CJK-fallback glyphs or kerning in right-to-left chunks
-                        show_rtl(
-                            content,
-                            entry,
-                            &chunk.text,
-                            chunk.font_size,
-                            effective_cs,
-                            boundary_space,
-                        );
-                    }
-                    GlyphDraw::Fallbacks => {
-                        // A segment of the chunk in its own font, or in the fallback
-                        // font when its characters are missing from the primary one.
-                        let show_seg = |content: &mut Content, seg: &[char], fb: Option<usize>| {
-                            let seg: String = seg.iter().collect();
-                            if let Some(fallback) = fb.map(|k| fallbacks[k]) {
-                                if let Some(map) = fallback.char_to_gid.as_ref() {
-                                    content.set_font(
-                                        Name(fallback.pdf_name.as_bytes()),
-                                        chunk.font_size,
-                                    );
-                                    content.show(Str(&encode_as_gids(&seg, map)));
-                                    content
-                                        .set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size);
-                                }
-                            } else {
-                                let bytes =
-                                    encode_text_for_pdf(&seg, &chunk.pdf_font, &pdf_name_to_entry);
-                                content.show(Str(&bytes));
-                            }
-                        };
-                        // Split text into runs of primary vs fallback chars
-                        let mut seg_start = 0;
-                        let mut cur_fb = None;
-                        let chars: Vec<char> = chunk.text.chars().collect();
-                        for (i, &ch) in chars.iter().enumerate() {
-                            let fb = fallback_idx(ch);
-                            if i == 0 {
-                                cur_fb = fb;
-                            } else if fb != cur_fb {
-                                show_seg(content, &chars[seg_start..i], cur_fb);
-                                seg_start = i;
-                                cur_fb = fb;
+                            show_seg(content, &chars[seg_start..], cur_fb);
+                            if boundary_space {
+                                content.show(Str(&encode_text_for_pdf(
+                                    " ",
+                                    &chunk.pdf_font,
+                                    &pdf_name_to_entry,
+                                )));
                             }
                         }
-                        show_seg(content, &chars[seg_start..], cur_fb);
-                        if boundary_space {
-                            content.show(Str(&encode_text_for_pdf(
-                                " ",
-                                &chunk.pdf_font,
-                                &pdf_name_to_entry,
-                            )));
+                        GlyphDraw::Kerned(entry) => {
+                            show_kerned(content, entry, &chunk.text, boundary_space);
                         }
-                    }
-                    GlyphDraw::Kerned(entry) => {
-                        show_kerned(content, entry, &chunk.text, boundary_space);
-                    }
-                    GlyphDraw::Plain => {
-                        let mut text_bytes =
-                            encode_text_for_pdf(&chunk.text, &chunk.pdf_font, &pdf_name_to_entry);
-                        if boundary_space {
-                            text_bytes.extend(encode_text_for_pdf(
-                                " ",
-                                &chunk.pdf_font,
-                                &pdf_name_to_entry,
-                            ));
+                        GlyphDraw::Plain => {
+                            let mut text_bytes =
+                                encode_text_for_pdf(&chunk.text, &chunk.pdf_font, &pdf_name_to_entry);
+                            if boundary_space {
+                                text_bytes.extend(encode_text_for_pdf(
+                                    " ",
+                                    &chunk.pdf_font,
+                                    &pdf_name_to_entry,
+                                ));
+                            }
+                            content.show(Str(&text_bytes));
                         }
-                        content.show(Str(&text_bytes));
-                    }
                 }
                 }
 
@@ -7009,17 +7035,17 @@ mod tests {
     fn tj_run_moves_each_chunk_to_its_start_and_joins_text() {
         let mut run = TjRun::default();
         run.start(72.0, 700.0);
-        run.move_to(0.0, 12.0);
+        run.advance_to(0.0, 12.0);
         run.show(b"ab".to_vec(), 900.0);
         run.show(b" ".to_vec(), 250.0);
         // The next word starts 1500.44 thousandths in: 350.4 right of the pen.
-        run.move_to(1500.44, 12.0);
+        run.advance_to(1500.44, 12.0);
         run.show(b"c".to_vec(), 500.0);
         assert!((run.pen - 2000.4).abs() < 1e-3);
         assert!(run.continues(700.0) && !run.continues(690.0));
         let mut content = Content::new();
         run.flush(&mut content);
-        assert_eq!(content.finish().as_slice(), b"[(ab ) -350.4 (c)] TJ");
+        assert_eq!(content.finish().as_slice(), b"[(ab )-350.4(c)] TJ");
         assert!(run.items.is_empty());
     }
 

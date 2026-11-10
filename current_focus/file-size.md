@@ -107,8 +107,9 @@ line-box right edges 0.0003pt off (a threshold in the metric, not found).
    Flate `CIDToGIDMap`. A font with more than 8281 glyphs keeps Identity.
 3. **3-decimal `Td`**: dropped. With one `Td` per line it saved 0.09 MB and
    moved every baseline by up to 0.0005pt (see above).
-4. **Tight arrays**: `tighten_arrays` in `src/pdf/assembly.rs`, a pass over
-   the finished page content (pdf-writer's `Buf` cannot be written raw).
+4. **Tight arrays**: `TjArray` in `src/pdf/layout.rs`, a pdf-writer
+   `Primitive` that writes a TJ array without separators; `show_kerned`,
+   `show_placed` and `TjRun::flush` write through it.
 5. **Deflate 9** for page content, object streams and the xref stream.
 
 **Whole-number `/W`** came with fix 1. MuPDF reads a width as an integer, so
