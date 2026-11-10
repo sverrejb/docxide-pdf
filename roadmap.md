@@ -30,10 +30,9 @@ lines fall differently on the 150 dpi pixel grid.
   85.6 (27/27 exact), japanese_medical_consultation_form 64.9 → 62.2,
   isla_language_lesson_plan 69.5 → 67.4, polish_municipal_letter 77.8 → 76.2.
 
-**Unaccepted drops (2026-11-10, main at c6981122e, from commits before PR
-#161; baselines left at the old scores, cause not bisected):**
-- massachusetts_community_sanitation J 90.9 → 88.9, SSIM 97.4 → 96.9.
-- maine_criminal_history_record J 74.8 → 88.0 but SSIM 94.3 → 92.5.
+**Follow-up (2026-11-10):** sample500kB TxtBnd 34.4 → 32.3 accepted with
+an unchanged PDF; most likely the Nov 9 TxtBnd line-grouping rewrite
+(a1c9eb15d), not confirmed by scoring with the old metric.
 
 **Engine-gap list (CI comparison 2026-11-09, `git show
 origin/gh-pages:report.json`):** 48 fixtures where another engine beats us
