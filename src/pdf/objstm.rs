@@ -92,7 +92,7 @@ fn try_pack(pdf: &[u8]) -> Option<Vec<u8>> {
         let mut plain = index;
         let first = plain.len();
         plain.extend_from_slice(&data);
-        let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&plain, 6);
+        let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&plain, 9);
         xref_rows.push((1, out.len(), 0));
         let _ = write!(
             out,
@@ -114,7 +114,7 @@ fn try_pack(pdf: &[u8]) -> Option<Vec<u8>> {
         rows.extend_from_slice(&u32::try_from(a).ok()?.to_be_bytes());
         rows.extend_from_slice(&u16::try_from(b).ok()?.to_be_bytes());
     }
-    let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&rows, 6);
+    let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&rows, 9);
     // Keep the trailer's own keys (Root, Info, ID) minus the old /Size.
     let trailer = std::str::from_utf8(&trailer[..rfind(trailer, b">>")?]).ok()?;
     let keys: String = trailer

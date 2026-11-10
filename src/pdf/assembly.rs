@@ -420,7 +420,8 @@ pub(super) fn assemble_pdf_pages(
             combined.push(b'\n');
             super::tagging::wrap_artifact(&mut combined, &pane_raw, false);
         }
-        let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&combined, 6);
+        let compressed =
+            miniz_oxide::deflate::compress_to_vec_zlib(&tighten_arrays(&combined), 9);
         pdf.stream(content_ids[i], &compressed)
             .filter(Filter::FlateDecode);
     }
@@ -618,5 +619,57 @@ pub(super) fn assemble_pdf_pages(
                 }
             }
         }
+    }
+}
+
+/// `content` without the spaces pdf-writer puts between an array's strings
+/// and numbers, `[(ab) 9 (cd)]` → `[(ab)9(cd)]` as Word writes a TJ: about
+/// 3% of a text page. Strings are copied as they are.
+fn tighten_arrays(content: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(content.len());
+    let mut in_array = false;
+    let mut depth = 0;
+    let mut bytes = content.iter().copied().peekable();
+    while let Some(b) = bytes.next() {
+        if depth > 0 {
+            match b {
+                b'\\' => {
+                    out.push(b);
+                    out.extend(bytes.next());
+                    continue;
+                }
+                b'(' => depth += 1,
+                b')' => depth -= 1,
+                _ => {}
+            }
+        } else {
+            match b {
+                b'(' => depth = 1,
+                b'[' => in_array = true,
+                b']' => in_array = false,
+                b' ' if in_array
+                    && (matches!(out.last(), Some(b')' | b'>' | b'['))
+                        || matches!(bytes.peek(), Some(b'(' | b'<' | b']'))) =>
+                {
+                    continue;
+                }
+                _ => {}
+            }
+        }
+        out.push(b);
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tighten_arrays;
+
+    #[test]
+    fn tighten_arrays_keeps_strings_and_number_gaps() {
+        let tight = |s: &str| String::from_utf8(tighten_arrays(s.as_bytes())).unwrap();
+        assert_eq!(tight("[(ab) 9 (c d) -3.5 <0041>] TJ"), "[(ab)9(c d)-3.5<0041>] TJ");
+        assert_eq!(tight(r"[(a\) [ b) 1 (\\) 2 (()] TJ"), r"[(a\) [ b)1(\\)2(()] TJ");
+        assert_eq!(tight("[3 2] 0 d\n1 0 0 1 5 5 cm"), "[3 2] 0 d\n1 0 0 1 5 5 cm");
     }
 }
