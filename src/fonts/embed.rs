@@ -101,6 +101,19 @@ pub(super) fn embed_truetype(
             (cid, gid)
         });
 
+    // From here on the ids are the codes the content stream writes, mapped
+    // back to glyphs by the CIDToGIDMap. A subset glyph id's bytes are mostly
+    // control characters, written as a four-character octal escape each.
+    let id_count = remapper.num_gids() + u16::from(hyphen_alias.is_some());
+    let printable = usize::from(id_count) <= PRINTABLE_CODES;
+    let code = |id: u16| if printable { printable_code(id) } else { id };
+    for id in char_to_gid.values_mut().chain(gid_remap.values_mut()) {
+        *id = code(*id);
+    }
+    for (id, ..) in &mut extra_widths {
+        *id = code(*id);
+    }
+
     let mut kern_pairs = HashMap::new();
     let char_gids: Vec<(ttf_parser::GlyphId, u16)> = char_to_gid
         .iter()
@@ -164,10 +177,21 @@ pub(super) fn embed_truetype(
         .stem_v(80.0)
         .font_file2(font_file);
 
-    let cid_to_gid_ref = hyphen_alias.map(|(cid, gid)| {
-        let mapping: Vec<u8> = (0..cid).chain([gid]).flat_map(u16::to_be_bytes).collect();
+    let cid_to_gid_ref = (printable || hyphen_alias.is_some()).then(|| {
+        let mut mapping = vec![0u16; usize::from(code(id_count - 1)) + 1];
+        for (id, gid) in (0..remapper.num_gids())
+            .map(|gid| (gid, gid))
+            .chain(hyphen_alias)
+        {
+            mapping[usize::from(code(id))] = gid;
+        }
+        let bytes: Vec<u8> = mapping.into_iter().flat_map(u16::to_be_bytes).collect();
         let reference = alloc();
-        pdf.stream(reference, &mapping);
+        pdf.stream(
+            reference,
+            &miniz_oxide::deflate::compress_to_vec_zlib(&bytes, 9),
+        )
+        .filter(Filter::FlateDecode);
         reference
     });
     let cid_font_ref = alloc();
@@ -196,8 +220,11 @@ pub(super) fn embed_truetype(
         gid_widths.dedup_by_key(|&mut (gid, _)| gid);
         if !gid_widths.is_empty() {
             let mut w = cid.widths();
+            // Whole numbers, as Word writes them: MuPDF reads a width as an
+            // integer, so only then is the pen in the same place in every
+            // viewer (`FontEntry::pen_width_1000`).
             for &(gid, width) in &gid_widths {
-                w.consecutive(gid, [width]);
+                w.consecutive(gid, [width.round()]);
             }
         }
     }
@@ -302,6 +329,35 @@ pub(super) fn embed_truetype(
         gid_remap,
         stand_ins: hyphen_fallback.map(|_| '\u{2011}').into_iter().collect(),
     })
+}
+
+/// How many ids `printable_code` has codes for: id 0 and every pair of
+/// `PRINTABLE` bytes.
+const PRINTABLE_CODES: usize = 1 + PRINTABLE.len() * PRINTABLE.len();
+
+/// The bytes a literal string holds as themselves: visible ASCII without the
+/// parentheses and backslash, which need an escape.
+const PRINTABLE: [u8; 91] = {
+    let mut bytes = [0; 91];
+    let (mut i, mut b) = (0, b'!');
+    while b <= b'~' {
+        if !matches!(b, b'(' | b')' | b'\\') {
+            bytes[i] = b;
+            i += 1;
+        }
+        b += 1;
+    }
+    bytes
+};
+
+/// The two-byte code of a subset glyph id, both bytes from `PRINTABLE`. Id 0
+/// stays 0: .notdef is drawn as code 0 whatever the font.
+fn printable_code(id: u16) -> u16 {
+    let Some(n) = usize::from(id).checked_sub(1) else {
+        return 0;
+    };
+    let n = (n / PRINTABLE.len(), n % PRINTABLE.len());
+    u16::from_be_bytes([PRINTABLE[n.0], PRINTABLE[n.1]])
 }
 
 /// A symbol font's private-use code (U+F0xx) for `ch`. Runs can hold the low
@@ -748,12 +804,25 @@ mod tests {
     }
 
     #[test]
-    fn solitary_fallback_and_native_hyphen_keep_identity_map() {
-        let (_, pdf) = embed_hyphens(HYPHEN_ASCII, "1\u{2011}2");
-        assert!(pdf.contains("/CIDToGIDMap /Identity"));
-        let (native, pdf) = embed_hyphens(HYPHEN_NATIVE, "1-2\u{2010}1\u{2011}2");
+    fn native_hyphen_keeps_its_glyph_and_advance() {
+        let (native, _) = embed_hyphens(HYPHEN_NATIVE, "1-2\u{2010}1\u{2011}2");
         assert_eq!(native.char_widths_1000[&'\u{2011}'], 700.0);
-        assert!(pdf.contains("/CIDToGIDMap /Identity"));
+        let codes: std::collections::HashSet<u16> = native.char_to_gid.values().copied().collect();
+        assert_eq!(codes.len(), native.char_to_gid.len());
+    }
+
+    #[test]
+    fn printable_codes_are_distinct_and_need_no_escape() {
+        let codes: std::collections::HashSet<u16> =
+            (0..PRINTABLE_CODES as u16).map(printable_code).collect();
+        assert_eq!(codes.len(), PRINTABLE_CODES);
+        assert_eq!(printable_code(0), 0);
+        assert_eq!(printable_code(1), 0x2121);
+        for code in (1..PRINTABLE_CODES as u16).map(printable_code) {
+            for byte in code.to_be_bytes() {
+                assert!(byte.is_ascii_graphic() && !b"()\\".contains(&byte));
+            }
+        }
     }
 
     #[test]
