@@ -3387,6 +3387,10 @@
   "cases/underlined-space-compat15-underline1-split1": [
     "95d1159cdeb2d29b8500f8716d0feea25b9933a8472f02202637046a5d9adc0b"
   ],
+  "cases/vml-frame-fill-picture": [
+    "0d51d04b3130c01ec6cd34573612dfcae4572cf85e375ec6363dd4cba06e5330",
+    "4a8c2f1927cd19e9b9a227b020ff263037e7435751c51c88b293bd584f03868d"
+  ],
   "cases/vml-front-rule-over-background": [
     "92941726019bbbfd091ea3f808c8de5f9ab1456cb251eda7610813084da96f83"
   ],

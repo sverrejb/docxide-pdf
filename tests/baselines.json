@@ -9402,6 +9402,10 @@
     "a11y_struct": 1.0,
     "a11y_text": 1.0
   },
+  "cases/vml-frame-fill-picture": {
+    "jaccard": 0.9552,
+    "ssim": 0.9374
+  },
   "cases/vml-front-rule-over-background": {
     "jaccard": 0.9337,
     "ssim": 0.9757,
