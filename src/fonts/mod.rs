@@ -177,6 +177,17 @@ impl FontEntry {
         }
     }
 
+    /// How far the pen moves after `ch` in the PDF: an embedded font's
+    /// widths are written as whole numbers, the measured width is not one.
+    pub(crate) fn pen_width_1000(&self, ch: char) -> f32 {
+        let width = self.char_width_1000(ch);
+        if self.char_to_gid.is_some() {
+            width.round()
+        } else {
+            width
+        }
+    }
+
     /// Encode text for a PDF show operator: glyph IDs when this font carries a
     /// char→gid map (embedded subset), else WinAnsi bytes (standard font).
     pub(crate) fn encode(&self, text: &str) -> Vec<u8> {

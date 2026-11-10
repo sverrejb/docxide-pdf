@@ -971,6 +971,7 @@ impl<'a> LinkTagger<'a> {
         formula: Option<&Arc<str>>,
         lang: Option<&str>,
         actual: Option<&str>,
+        before_switch: &mut dyn FnMut(&mut Content),
     ) -> bool {
         let lang = lang.filter(|l| !self.tags.is_document_lang(l));
         let same = match (&self.inline, formula) {
@@ -988,6 +989,7 @@ impl<'a> LinkTagger<'a> {
         if same {
             return false;
         }
+        before_switch(content);
         content.end_text();
         let parent = self.open();
         self.inline = match formula {
@@ -1011,18 +1013,19 @@ impl<'a> LinkTagger<'a> {
     /// Before drawing `chunk` in a text object: switch to its Link (a note's
     /// reference mark links to the note), Span or Formula, and nest its Note.
     /// Returns true when the marked content switched (the text matrix is
-    /// reset).
+    /// reset), after `before_switch` wrote what belongs to the old one.
     pub(super) fn chunk(
         &mut self,
         content: &mut Content,
         chunk: &WordChunk,
         link_url: Option<&str>,
         boundary_space: bool,
+        before_switch: &mut dyn FnMut(&mut Content),
     ) -> bool {
         let mut switched = false;
         // Glyph-less chunks (underline bridges over spaces) don't break a link.
         if !chunk.text.is_empty() {
-            switched |= self.enter(content, link_url);
+            switched |= self.enter(content, link_url, before_switch);
             // A Span's /ActualText covers the boundary space the Tj carries too.
             let actual = chunk.actual_text.as_ref().map(|t| {
                 if boundary_space {
@@ -1048,7 +1051,13 @@ impl<'a> LinkTagger<'a> {
                 )) if neutral => lang.clone(),
                 _ => chunk.lang.as_deref().map(str::to_string),
             };
-            switched |= self.inline(content, formula, lang.as_deref(), actual.as_deref());
+            switched |= self.inline(
+                content,
+                formula,
+                lang.as_deref(),
+                actual.as_deref(),
+                before_switch,
+            );
         }
         // The Note goes inside the link on its reference mark (Word nests it there).
         if let Some((endnote, id)) = chunk.note() {
@@ -1062,10 +1071,16 @@ impl<'a> LinkTagger<'a> {
     /// paragraph). Like Word, marked content never changes inside a text
     /// object, so it is ended and reopened around the switch; returns true
     /// when it did (the text matrix is reset).
-    fn enter(&mut self, content: &mut Content, url: Option<&str>) -> bool {
+    fn enter(
+        &mut self,
+        content: &mut Content,
+        url: Option<&str>,
+        before_switch: &mut dyn FnMut(&mut Content),
+    ) -> bool {
         if self.link.as_ref().map(|(u, _)| u.as_str()) == url {
             return false;
         }
+        before_switch(content);
         content.end_text();
         self.inline = None;
         let node = match url {
@@ -4572,6 +4587,84 @@ fn show_placed(
     pen
 }
 
+/// The chunks of a line that share one text state, drawn as a single TJ as
+/// Word draws a line: a `Td` and a TJ per word cost about a quarter of a
+/// dense page's compressed size. Each chunk starts where a `Td` would put
+/// it; inside it the glyphs move as they would in a TJ of their own.
+#[derive(Default)]
+struct TjRun {
+    items: Vec<TjItem>,
+    /// Where the run starts and its baseline.
+    origin: (f32, f32),
+    /// The pen after `items`, in thousandths of the font size from the
+    /// start, as a viewer moves it: by the widths the font dictionary holds
+    /// (`FontEntry::pen_width_1000`).
+    pen: f32,
+}
+
+enum TjItem {
+    Text(Vec<u8>),
+    Adjust(f32),
+}
+
+impl TjRun {
+    /// Whether a chunk on baseline `y` goes on in this run.
+    fn continues(&self, y: f32) -> bool {
+        !self.items.is_empty() && self.origin.1 == y
+    }
+
+    fn start(&mut self, x: f32, y: f32) {
+        self.origin = (x, y);
+        self.pen = 0.0;
+    }
+
+    /// Moves the pen to `x` thousandths from the run's start, within 0.001pt:
+    /// the pen follows the rounded move, so the error never adds up. Whole
+    /// thousandths (0.006pt at 12pt) are enough to tip a glyph over a
+    /// rasteriser's subpixel boundary.
+    fn move_to(&mut self, x: f32, font_size: f32) {
+        let step = if font_size > 20.0 { 100.0 } else { 10.0 };
+        self.adjust(((self.pen - x) * step).round() / step);
+    }
+
+    /// TJ subtracts: moving right is a negative adjustment.
+    fn adjust(&mut self, adjust: f32) {
+        if adjust == 0.0 {
+            return;
+        }
+        match self.items.last_mut() {
+            Some(TjItem::Adjust(open)) => *open += adjust,
+            _ => self.items.push(TjItem::Adjust(adjust)),
+        }
+        self.pen -= adjust;
+    }
+
+    /// Shows `text` where the pen is; `advance` is how far it moves the pen.
+    fn show(&mut self, text: Vec<u8>, advance: f32) {
+        match self.items.last_mut() {
+            Some(TjItem::Text(open)) => open.extend(text),
+            _ => self.items.push(TjItem::Text(text)),
+        }
+        self.pen += advance;
+    }
+
+    /// Writes the run. Called before anything else is written to the
+    /// content: what follows may change how text is drawn.
+    fn flush(&mut self, content: &mut Content) {
+        if self.items.is_empty() {
+            return;
+        }
+        let mut tj = content.show_positioned();
+        let mut items = tj.items();
+        for item in self.items.drain(..) {
+            match item {
+                TjItem::Text(text) => items.show(Str(&text)),
+                TjItem::Adjust(adjust) => items.adjust(adjust),
+            };
+        }
+    }
+}
+
 /// `show_placed` with each glyph in its own face (`base`, the face set, or
 /// a fallback one): one TJ per face, the pen carried across them.
 fn show_placed_faces(
@@ -5698,6 +5791,7 @@ pub(super) fn render_paragraph_lines(
             let mut td_x = 0.0_f32;
             let mut td_y = 0.0_f32;
             let mut cur_shear = 0.0_f32;
+            let mut run = TjRun::default();
 
             // Logical order, so the content stream (and the tags) read the
             // text as written even where bidi stored the chunks visually.
@@ -5724,7 +5818,9 @@ pub(super) fn render_paragraph_lines(
                 // space's advance moves nothing; it only marks the word boundary.
                 let boundary_space = chunk.boundary_space(primary_entry.copied());
                 if let Some(lt) = link_tags.as_mut()
-                    && lt.chunk(content, chunk, link_url, boundary_space)
+                    && lt.chunk(content, chunk, link_url, boundary_space, &mut |c| {
+                        run.flush(c)
+                    })
                 {
                     td_x = 0.0;
                     td_y = 0.0;
@@ -5743,6 +5839,7 @@ pub(super) fn render_paragraph_lines(
                     angle_deg,
                 }) = chunk.text_fill
                 {
+                    run.flush(content);
                     let pat_name = format!("Grd{}", gradient_specs.len());
                     let y_bottom = cy - chunk.font_size * 0.2;
                     gradient_specs.push(super::GradientSpec {
@@ -5767,12 +5864,16 @@ pub(super) fn render_paragraph_lines(
                 };
                 if !chunk_uses_gradient && (pattern_fill_active || effective_color != current_color)
                 {
+                    run.flush(content);
                     fill_color_or_black(content, effective_color);
                     current_color = effective_color;
                     pattern_fill_active = false;
                 }
 
                 // Text outline takes priority over synthetic bold
+                if chunk.text_outline.is_some() != has_text_outline {
+                    run.flush(content);
+                }
                 if let Some(ref outline) = chunk.text_outline {
                     if !has_text_outline {
                         super::wordart::apply_text_outline(
@@ -5791,6 +5892,7 @@ pub(super) fn render_paragraph_lines(
                 }
 
                 if !has_text_outline && chunk.synthetic_bold != cur_synthetic_bold {
+                    run.flush(content);
                     if chunk.synthetic_bold {
                         begin_synthetic_bold(content, chunk);
                     } else {
@@ -5802,21 +5904,25 @@ pub(super) fn render_paragraph_lines(
                 let spreads = chunk_idx >= jf && chunk.leader.is_none();
                 let effective_cs = chunk.char_spacing + if spreads { justify_tc } else { 0.0 };
                 if effective_cs != cur_char_spacing {
+                    run.flush(content);
                     content.set_char_spacing(effective_cs);
                     cur_char_spacing = effective_cs;
                 }
                 if chunk.text_scale != cur_text_scale {
+                    run.flush(content);
                     content.set_horizontal_scaling(chunk.text_scale);
                     cur_text_scale = chunk.text_scale;
                 }
 
                 if cur_font_name != chunk.pdf_font || cur_font_size != chunk.font_size {
+                    run.flush(content);
                     content.set_font(Name(chunk.pdf_font.as_bytes()), chunk.font_size);
                     cur_font_name.clone_from(&chunk.pdf_font);
                     cur_font_size = chunk.font_size;
                 }
 
                 if let Some(mb) = &chunk.math {
+                    run.flush(content);
                     // Each glyph by its subset id at its own place; the font is
                     // set at 1pt and each glyph's size goes in its matrix. The
                     // rules join the line's decorations.
@@ -5995,11 +6101,13 @@ pub(super) fn render_paragraph_lines(
                     GlyphDraw::Plain
                 };
                 if let Some(face) = leader_face {
+                    run.flush(content);
                     content.set_font(Name(face.pdf_name.as_bytes()), chunk.font_size);
                     cur_font_name.clone_from(&face.pdf_name);
                 }
 
                 if let Some(ref sh) = chunk.text_shadow {
+                    run.flush(content);
                     let (sx, sy) = (start_x + sh.offset_x, fy + sh.offset_y);
                     let (ex, ey) = (start_x - sh.offset_x, fy - sh.offset_y);
                     // The copies are drawn as the face is, only moved.
@@ -6047,16 +6155,75 @@ pub(super) fn render_paragraph_lines(
                         }
                     };
                 }
+                let plain = shear == 0.0 && cur_shear == 0.0 && chunk.text_shadow.is_none();
                 let mut move_to = |content: &mut Content, mx: f32, my: f32| {
                     if shear != 0.0 || cur_shear != 0.0 {
                         content.set_text_matrix([1.0, 0.0, shear, 1.0, mx, my]);
                         cur_shear = shear;
+                        td_x = mx;
+                        td_y = my;
                     } else {
                         content.next_line(mx - td_x, my - td_y);
+                        td_x = mx;
+                        td_y = my;
                     }
-                    td_x = mx;
-                    td_y = my;
                 };
+
+                // What a run can take: one face the font holds every character
+                // of, so the pen is where the widths say, and nothing drawn
+                // between the chunks. Each text with the move before it, the
+                // moves `show_placed` and `show_kerned` make.
+                let run_glyphs: Option<(&FontEntry, Vec<(&str, f32)>)> = match &draw {
+                    GlyphDraw::Placed(e, glyphs) if glyphs.iter().all(|g| std::ptr::eq(g.0, *e)) => {
+                        let mut pen = 0.0;
+                        let moves = glyphs.iter().map(|&(_, text, x, advance)| {
+                            let adjust = (pen - x).round();
+                            pen += advance - adjust;
+                            (text, adjust)
+                        });
+                        Some((*e, moves.collect()))
+                    }
+                    GlyphDraw::Kerned(e) => {
+                        let mut prev: Option<char> = None;
+                        let moves = chunk.text.char_indices().map(|(i, ch)| {
+                            let kern = prev.map_or(0.0, |p| e.kern_1000(p, ch));
+                            prev = Some(ch);
+                            (&chunk.text[i..i + ch.len_utf8()], -kern)
+                        });
+                        Some((*e, moves.collect()))
+                    }
+                    GlyphDraw::Plain => primary_entry.map(|&e| (e, vec![(chunk.text.as_str(), 0.0)])),
+                    _ => None,
+                }
+                .filter(|(e, glyphs)| {
+                    plain
+                        && e.char_to_gid.is_some()
+                        && glyphs.iter().all(|g| g.0.chars().all(|c| e.has_char(c)))
+                });
+                if let Some((entry, glyphs)) = run_glyphs {
+                    if chunk.text.is_empty() && !boundary_space {
+                        // Nothing to show: its decorations are drawn below.
+                    } else {
+                        if !run.continues(fy) {
+                            run.flush(content);
+                            move_to(content, start_x, fy);
+                            run.start(td_x, fy);
+                        }
+                        let unit = chunk.font_size * chunk.text_scale / 100_000.0;
+                        run.move_to((start_x - run.origin.0) / unit, chunk.font_size);
+                        let advance = |text: &str| -> f32 {
+                            text.chars().map(|c| entry.pen_width_1000(c) + tc).sum()
+                        };
+                        for (text, adjust) in glyphs {
+                            run.adjust(adjust);
+                            run.show(entry.encode(text), advance(text));
+                        }
+                        if boundary_space {
+                            run.show(entry.encode(" "), advance(" "));
+                        }
+                    }
+                } else {
+                run.flush(content);
                 move_to(content, start_x, fy);
 
                 match draw {
@@ -6185,6 +6352,7 @@ pub(super) fn render_paragraph_lines(
                         content.show(Str(&text_bytes));
                     }
                 }
+                }
 
                 let thick = (chunk.font_size * 0.05).max(0.5);
                 // An underlined space spans its whole justified gap: Word's
@@ -6262,6 +6430,7 @@ pub(super) fn render_paragraph_lines(
                     }
                 }
             }
+            run.flush(content);
             if cur_synthetic_bold {
                 content.set_text_rendering_mode(TextRenderingMode::Fill);
                 cur_synthetic_bold = false;
@@ -6835,6 +7004,24 @@ pub(super) fn push_clip(content: &mut Content, rect: Option<(f32, f32, f32, f32)
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn tj_run_moves_each_chunk_to_its_start_and_joins_text() {
+        let mut run = TjRun::default();
+        run.start(72.0, 700.0);
+        run.move_to(0.0, 12.0);
+        run.show(b"ab".to_vec(), 900.0);
+        run.show(b" ".to_vec(), 250.0);
+        // The next word starts 1500.44 thousandths in: 350.4 right of the pen.
+        run.move_to(1500.44, 12.0);
+        run.show(b"c".to_vec(), 500.0);
+        assert!((run.pen - 2000.4).abs() < 1e-3);
+        assert!(run.continues(700.0) && !run.continues(690.0));
+        let mut content = Content::new();
+        run.flush(&mut content);
+        assert_eq!(content.finish().as_slice(), b"[(ab ) -350.4 (c)] TJ");
+        assert!(run.items.is_empty());
+    }
 
     #[test]
     fn fallback_faces_grow_the_line_box() {
@@ -7879,15 +8066,15 @@ mod tests {
         content.begin_text();
         let mut lt = LinkTagger::new(&mut tags, 0, p);
         assert!(
-            lt.inline(&mut content, None, None, Some("Pirmasis ")),
+            lt.inline(&mut content, None, None, Some("Pirmasis "), &mut |_| {}),
             "opens a Span"
         );
         assert!(
-            !lt.inline(&mut content, None, None, Some("skirsnis")),
+            !lt.inline(&mut content, None, None, Some("skirsnis"), &mut |_| {}),
             "extends it"
         );
         assert!(
-            lt.inline(&mut content, None, None, None),
+            lt.inline(&mut content, None, None, None, &mut |_| {}),
             "back to the paragraph"
         );
         content.end_text();
@@ -7941,23 +8128,23 @@ mod tests {
         content.begin_text();
         let mut lt = LinkTagger::new(&mut tags, 0, p);
         assert!(
-            !lt.inline(&mut content, None, Some("en-GB"), None),
+            !lt.inline(&mut content, None, Some("en-GB"), None, &mut |_| {}),
             "same language, no Span"
         );
         assert!(
-            lt.inline(&mut content, None, Some("fr-FR"), None),
+            lt.inline(&mut content, None, Some("fr-FR"), None, &mut |_| {}),
             "French opens one"
         );
         assert!(
-            !lt.inline(&mut content, None, Some("fr-FR"), None),
+            !lt.inline(&mut content, None, Some("fr-FR"), None, &mut |_| {}),
             "and keeps it"
         );
         assert!(
-            lt.inline(&mut content, None, Some("fr-FR"), Some("Bonjour")),
+            lt.inline(&mut content, None, Some("fr-FR"), Some("Bonjour"), &mut |_| {}),
             "caps need their own"
         );
         assert!(
-            lt.inline(&mut content, None, None, None),
+            lt.inline(&mut content, None, None, None, &mut |_| {}),
             "back to the paragraph"
         );
         content.end_text();
