@@ -741,6 +741,7 @@ def process_fixture(fixture: Path, group: str, tools: dict, opts) -> dict | None
         "pages": {k: [rel(p) for p in v] for k, v in pages.items()},
         "scores": scores,
         "times": {k: v for k, v in times.items() if v is not None},
+        "sizes": {k: p.stat().st_size for k, p in pdfs.items()},
         "reference_app": pdf_creator(ref_pdf),
         "redone": redone,   # for the log line only; main() drops it before the manifest
     }
