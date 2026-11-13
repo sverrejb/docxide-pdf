@@ -352,6 +352,28 @@ pub(super) fn clip_fixed_cell_pictures(
     true
 }
 
+/// A cell paragraph's `w:shd` fill behind its lines, from `top` down `h`.
+pub(super) fn draw_cell_paragraph_shading(
+    content: &mut Content,
+    para: &crate::model::Paragraph,
+    cell_x: f32,
+    col_w: f32,
+    cm: &CellMargins,
+    top: f32,
+    h: f32,
+) {
+    let Some(color) = para.shading else { return };
+    let (box_left_in, box_right_in) = super::helpers::border_box_indents(para);
+    let (left_out, right_out) = super::helpers::shading_outsets(&para.borders);
+    let left = cell_x + cm.left + box_left_in - left_out;
+    let right = cell_x + col_w - cm.right - box_right_in + right_out;
+    content.save_state();
+    super::color::fill_rgb(content, color);
+    content.rect(left, top - h, right - left, h);
+    content.fill_nonzero();
+    content.restore_state();
+}
+
 pub(super) fn draw_cell_paragraph_bottom(
     content: &mut Content,
     para: &CellParagraphLayout,

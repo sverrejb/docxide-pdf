@@ -800,6 +800,7 @@ pub(in crate::docx) fn parse_table_node<R: Read + Seek>(
                         runs,
                         alignment,
                         borders: super::paragraph::borders(ppr, para_style),
+                        shading: super::paragraph::shading(ppr, para_style),
                         space_before_auto,
                         space_after_auto,
                         indent_left,

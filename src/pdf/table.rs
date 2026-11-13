@@ -11,7 +11,8 @@ use crate::model::{
 use super::cell_draw::{
     beside_float_geometry, cell_label_alignment_offset, clip_fixed_cell_pictures, draw_border,
     draw_cell_borders, draw_cell_float, draw_cell_label, draw_cell_paragraph_bottom,
-    draw_cell_shading, render_cell_inline_image, render_simple_textbox, valign_offset,
+    draw_cell_paragraph_shading, draw_cell_shading, render_cell_inline_image,
+    render_simple_textbox, valign_offset,
 };
 use super::color::fill_rgb;
 use super::header_footer::effective_slot_top;
@@ -208,6 +209,15 @@ fn render_cell_content(
                 });
                 let cell_para = cell_nodes.map(|(_, body)| body);
                 let para_top = cursor_y;
+                if let Some(src) = source_para {
+                    let h = if para.lines.is_empty() {
+                        para_block_height(para)
+                    } else {
+                        let l1 = l1.unwrap_or(para.lines.len());
+                        super::table_layout::cell_lines_h(para, l0..l1)
+                    };
+                    draw_cell_paragraph_shading(content, src, cell_x, col_w, cm, cursor_y - sb, h);
+                }
                 if !para_has_visible_content(para) {
                     cursor_y -= sb + para_block_height(para);
                     // A VML horizontal rule (o:hr) rides an otherwise empty

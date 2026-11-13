@@ -269,6 +269,26 @@ pub(super) fn side_border_outsets(
     )
 }
 
+/// How far paragraph shading reaches outside the text box: to a side
+/// border's inner edge, or by the side gaps when there is none
+/// (renewable_dispatch: borderless bars at 70.525–541.725 on a 72–540
+/// measure, and 1.475pt / 1.725pt outside a cell's text).
+pub(super) fn shading_outsets(borders: &crate::model::ParagraphBorders) -> (f32, f32) {
+    let (left, right) = side_border_outsets(borders, false);
+    (
+        if borders.left.is_some() {
+            left
+        } else {
+            LEFT_BORDER_GAP
+        },
+        if borders.right.is_some() {
+            right
+        } else {
+            RIGHT_BORDER_GAP
+        },
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

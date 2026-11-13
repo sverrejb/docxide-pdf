@@ -53,14 +53,7 @@ pub(super) fn build_paragraph<R: std::io::Read + std::io::Seek>(
     let space_before = sp_before.unwrap_or(ctx.styles.defaults.space_before);
     let space_after = sp_after.unwrap_or(ctx.styles.defaults.space_after);
 
-    let inline_shd_node = ppr.and_then(|ppr| wml(ppr, "shd"));
-    let para_shading = if inline_shd_node.is_some() {
-        // Inline w:shd present — use it even if fill="auto" (None), don't inherit
-        inline_shd_node.and_then(super::shd_color)
-    } else {
-        // No inline w:shd — inherit from paragraph style
-        para_style.and_then(|s| s.shading)
-    };
+    let para_shading = shading(ppr, para_style);
 
     let style_color = para_style.and_then(|s| s.run.color);
 
@@ -507,6 +500,19 @@ pub(super) fn text_alignment(
         .map(crate::model::TextAlignment::parse)
         .or_else(|| para_style.and_then(|s| s.text_alignment))
         .unwrap_or(defaults.text_alignment)
+}
+
+/// The paragraph's `w:shd` fill, direct or from the style. A direct `w:shd`
+/// wins even with fill="auto" (no fill). Shared by body and table-cell
+/// paragraphs.
+pub(super) fn shading(
+    ppr: Option<roxmltree::Node>,
+    para_style: Option<&ParagraphStyle>,
+) -> Option<[u8; 3]> {
+    match ppr.and_then(|ppr| wml(ppr, "shd")) {
+        Some(shd) => super::shd_color(shd),
+        None => para_style.and_then(|s| s.shading),
+    }
 }
 
 /// `w:contextualSpacing`, direct or from the style. Shared by body and
