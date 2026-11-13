@@ -337,13 +337,3 @@ impl TableCell {
         result
     }
 }
-
-impl Table {
-    /// Every paragraph in the table's cells, nested tables included.
-    pub fn all_paragraphs(&self) -> impl Iterator<Item = &Paragraph> {
-        self.rows
-            .iter()
-            .flat_map(|r| r.cells.iter())
-            .flat_map(|c| c.all_paragraphs())
-    }
-}
