@@ -247,7 +247,7 @@ fn draw_xobject(content: &mut Content, name: &str, m: [f32; 6]) {
 /// When `shadow_xobj_name` is provided, draws the rasterized blur-mask shadow
 /// image at the correct offset position. When `None`, falls back to a single
 /// pre-blended rectangle (for zero-blur or when embedding was skipped).
-pub(super) fn draw_image_shadow(
+fn draw_image_shadow(
     content: &mut Content,
     shadow: &crate::model::ImageShadow,
     x: f32,
@@ -341,7 +341,7 @@ pub(super) fn generate_inner_shadow_mask(
 
 /// Draw an inner shadow effect on top of an image. Drawn AFTER the image.
 /// Clipped to the image rectangle so the shadow doesn't bleed outside.
-pub(super) fn draw_inner_shadow(
+fn draw_inner_shadow(
     content: &mut Content,
     inner: &crate::model::InnerShadow,
     x: f32,
@@ -369,7 +369,7 @@ pub(super) fn draw_inner_shadow(
 
 /// Draw a reflection below an image. Drawn AFTER the image.
 /// The reflection XObject is the same image with a gradient SMask (fading alpha).
-pub(super) fn draw_reflection(
+fn draw_reflection(
     content: &mut Content,
     reflection: &crate::model::ImageReflection,
     x: f32,
@@ -387,7 +387,7 @@ pub(super) fn draw_reflection(
 
 /// Draw a glow effect around an image. Drawn BEFORE the image.
 /// Glow is like a shadow but centered (no offset) with a custom color.
-pub(super) fn draw_image_glow(
+fn draw_image_glow(
     content: &mut Content,
     glow: &crate::model::ImageGlow,
     x: f32,
@@ -404,5 +404,41 @@ pub(super) fn draw_image_glow(
         let gh = height + 2.0 * r;
 
         draw_xobject(content, name, [gw, 0.0, 0.0, gh, gx, gy]);
+    }
+}
+
+/// The effects behind a picture at (x, y_bottom, width, height): shadow, then glow.
+pub(super) fn draw_image_halo(
+    content: &mut Content,
+    shadow: Option<&crate::model::ImageShadow>,
+    glow: Option<&crate::model::ImageGlow>,
+    (x, y_bottom, width, height): (f32, f32, f32, f32),
+    fx: Option<&super::images::EffectXObjs>,
+) {
+    if let Some(shadow) = shadow {
+        let name = fx.and_then(|fx| fx.shadow.as_deref());
+        draw_image_shadow(content, shadow, x, y_bottom, width, height, name);
+    }
+    if let Some(glow) = glow {
+        let name = fx.and_then(|fx| fx.glow.as_deref());
+        draw_image_glow(content, glow, x, y_bottom, width, height, name);
+    }
+}
+
+/// The effects over and below a picture: inner shadow, then reflection.
+pub(super) fn draw_image_afterglow(
+    content: &mut Content,
+    inner: Option<&crate::model::InnerShadow>,
+    reflection: Option<&crate::model::ImageReflection>,
+    (x, y_bottom, width, height): (f32, f32, f32, f32),
+    fx: Option<&super::images::EffectXObjs>,
+) {
+    if let Some(inner) = inner {
+        let name = fx.and_then(|fx| fx.inner_shadow.as_deref());
+        draw_inner_shadow(content, inner, x, y_bottom, width, height, name);
+    }
+    if let Some(refl) = reflection {
+        let name = fx.and_then(|fx| fx.reflection.as_deref());
+        draw_reflection(content, refl, x, y_bottom, width, height, name);
     }
 }

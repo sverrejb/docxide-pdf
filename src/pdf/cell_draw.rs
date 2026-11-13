@@ -279,28 +279,13 @@ pub(super) fn render_cell_inline_image(
             .end_path();
     }
 
-    if let Some(ref shadow) = para.image_shadow {
-        super::color::draw_image_shadow(
-            content,
-            shadow,
-            img_x,
-            img_y,
-            para.image_width,
-            para.image_height,
-            para.image_shadow_xobj.as_deref(),
-        );
-    }
-    if let Some(ref glow) = para.image_glow {
-        super::color::draw_image_glow(
-            content,
-            glow,
-            img_x,
-            img_y,
-            para.image_width,
-            para.image_height,
-            para.image_glow_xobj.as_deref(),
-        );
-    }
+    super::color::draw_image_halo(
+        content,
+        para.image_shadow.as_ref(),
+        para.image_glow.as_ref(),
+        (img_x, img_y, para.image_width, para.image_height),
+        para.image_fx.as_ref(),
+    );
 
     super::smartart::render_image_with_clip(
         content,

@@ -302,28 +302,8 @@ fn render_one_floating_image(
     }
 
     let fi_fx = effect_pdf_names.get(&(global_block_idx, fi_idx));
-    if let Some(ref shadow) = img.shadow {
-        super::color::draw_image_shadow(
-            content,
-            shadow,
-            fi_x,
-            fi_y_bottom,
-            img.display_width,
-            img.display_height,
-            fi_fx.and_then(|fx| fx.shadow.as_deref()),
-        );
-    }
-    if let Some(ref glow) = img.glow {
-        super::color::draw_image_glow(
-            content,
-            glow,
-            fi_x,
-            fi_y_bottom,
-            img.display_width,
-            img.display_height,
-            fi_fx.and_then(|fx| fx.glow.as_deref()),
-        );
-    }
+    let rect = (fi_x, fi_y_bottom, img.display_width, img.display_height);
+    super::color::draw_image_halo(content, img.shadow.as_ref(), img.glow.as_ref(), rect, fi_fx);
 
     // Only the picture itself: its shadow, glow, reflection and border are decoration.
     if !img.decorative {
@@ -343,28 +323,13 @@ fn render_one_floating_image(
         Tags::end(content);
     }
 
-    if let Some(ref inner) = img.inner_shadow {
-        super::color::draw_inner_shadow(
-            content,
-            inner,
-            fi_x,
-            fi_y_bottom,
-            img.display_width,
-            img.display_height,
-            fi_fx.and_then(|fx| fx.inner_shadow.as_deref()),
-        );
-    }
-    if let Some(ref refl) = img.reflection {
-        super::color::draw_reflection(
-            content,
-            refl,
-            fi_x,
-            fi_y_bottom,
-            img.display_width,
-            img.display_height,
-            fi_fx.and_then(|fx| fx.reflection.as_deref()),
-        );
-    }
+    super::color::draw_image_afterglow(
+        content,
+        img.inner_shadow.as_ref(),
+        img.reflection.as_ref(),
+        rect,
+        fi_fx,
+    );
 
     if let Some(sc) = img.stroke_color {
         super::smartart::stroke_image_border(

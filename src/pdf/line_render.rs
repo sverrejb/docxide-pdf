@@ -1979,29 +1979,13 @@ pub(super) fn render_paragraph_lines(
                 }
 
                 // Pre-image effects: shadow, glow (rendered before image so they appear behind)
-                let chunk_fx = chunk.inline_image_effect_xobjs.as_ref();
-                if let Some(ref shadow) = chunk.inline_image_shadow {
-                    super::color::draw_image_shadow(
-                        content,
-                        shadow,
-                        x,
-                        img_bottom,
-                        w,
-                        h,
-                        chunk_fx.and_then(|fx| fx.shadow.as_deref()),
-                    );
-                }
-                if let Some(ref glow) = chunk.inline_image_glow {
-                    super::color::draw_image_glow(
-                        content,
-                        glow,
-                        x,
-                        img_bottom,
-                        w,
-                        h,
-                        chunk_fx.and_then(|fx| fx.glow.as_deref()),
-                    );
-                }
+                super::color::draw_image_halo(
+                    content,
+                    chunk.inline_image_shadow.as_ref(),
+                    chunk.inline_image_glow.as_ref(),
+                    (x, img_bottom, w, h),
+                    chunk.inline_image_effect_xobjs.as_ref(),
+                );
 
                 super::smartart::render_image_with_clip(
                     content,

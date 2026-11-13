@@ -2831,28 +2831,14 @@ pub(super) fn render_paragraph_block(
                 );
             }
             let img_fx = images.effect_names.get(&state.global_block_idx);
-            if let Some(ref shadow) = img.shadow {
-                color::draw_image_shadow(
-                    &mut state.pb.content,
-                    shadow,
-                    x,
-                    y_bottom,
-                    img.display_width,
-                    img.display_height,
-                    img_fx.and_then(|fx| fx.shadow.as_deref()),
-                );
-            }
-            if let Some(ref glow) = img.glow {
-                color::draw_image_glow(
-                    &mut state.pb.content,
-                    glow,
-                    x,
-                    y_bottom,
-                    img.display_width,
-                    img.display_height,
-                    img_fx.and_then(|fx| fx.glow.as_deref()),
-                );
-            }
+            let rect = (x, y_bottom, img.display_width, img.display_height);
+            color::draw_image_halo(
+                &mut state.pb.content,
+                img.shadow.as_ref(),
+                img.glow.as_ref(),
+                rect,
+                img_fx,
+            );
             smartart::render_image_with_clip(
                 &mut state.pb.content,
                 pdf_name,
@@ -2875,28 +2861,13 @@ pub(super) fn render_paragraph_block(
                 );
             }
             // Post-image effects: inner shadow, reflection (drawn on top / below)
-            if let Some(ref inner) = img.inner_shadow {
-                color::draw_inner_shadow(
-                    &mut state.pb.content,
-                    inner,
-                    x,
-                    y_bottom,
-                    img.display_width,
-                    img.display_height,
-                    img_fx.and_then(|fx| fx.inner_shadow.as_deref()),
-                );
-            }
-            if let Some(ref refl) = img.reflection {
-                color::draw_reflection(
-                    &mut state.pb.content,
-                    refl,
-                    x,
-                    y_bottom,
-                    img.display_width,
-                    img.display_height,
-                    img_fx.and_then(|fx| fx.reflection.as_deref()),
-                );
-            }
+            color::draw_image_afterglow(
+                &mut state.pb.content,
+                img.inner_shadow.as_ref(),
+                img.reflection.as_ref(),
+                rect,
+                img_fx,
+            );
             if turned {
                 state.pb.content.restore_state();
             }

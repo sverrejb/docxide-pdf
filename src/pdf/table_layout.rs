@@ -137,9 +137,8 @@ pub(super) struct CellParagraphLayout {
     pub(super) image_stroke_color: Option<[u8; 3]>,
     pub(super) image_stroke_width: f32,
     pub(super) image_shadow: Option<crate::model::ImageShadow>,
-    pub(super) image_shadow_xobj: Option<String>,
     pub(super) image_glow: Option<crate::model::ImageGlow>,
-    pub(super) image_glow_xobj: Option<String>,
+    pub(super) image_fx: Option<super::images::EffectXObjs>,
     pub(super) image_clip: Option<crate::model::ShapeGeometry>,
     pub(super) content_height: f32,
     pub(super) bottom_border: Option<crate::model::ParagraphBorder>,
@@ -1081,9 +1080,7 @@ pub(super) fn compute_row_layouts(
                                 let table_fx = para.image.as_ref().and_then(|img| {
                                     ctx.effect_table_names.get(&img.id)
                                 });
-                                let img_shadow_xobj = table_fx.and_then(|fx| fx.shadow.clone());
                                 let img_glow = para.image.as_ref().and_then(|img| img.glow.clone());
-                                let img_glow_xobj = table_fx.and_then(|fx| fx.glow.clone());
 
                                 let cell_floats: Vec<CellFloatingImageLayout> = para
                                     .floating_images
@@ -1226,9 +1223,8 @@ pub(super) fn compute_row_layouts(
                                     image_stroke_color: img_stroke_color,
                                     image_stroke_width: img_stroke_width,
                                     image_shadow: img_shadow,
-                                    image_shadow_xobj: img_shadow_xobj,
                                     image_glow: img_glow,
-                                    image_glow_xobj: img_glow_xobj,
+                                    image_fx: table_fx.cloned(),
                                     image_clip: para.image.as_ref().and_then(|img| img.clip_geometry.clone()),
                                     content_height: para_content_h,
                                     bottom_border: bottom_border.cloned(),

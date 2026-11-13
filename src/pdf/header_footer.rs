@@ -1489,29 +1489,13 @@ pub(super) fn render_header_footer(
                         let y_bottom = cursor_y - bottom_depth;
                         let x = sp.margin_left
                             + align_offset(para.alignment, (text_width - img.box_width()).max(0.0));
-                        let hf_fx = pc.effect_para_names.get(&pi);
-                        if let Some(ref shadow) = img.shadow {
-                            super::color::draw_image_shadow(
-                                content,
-                                shadow,
-                                x,
-                                y_bottom,
-                                img.display_width,
-                                img.display_height,
-                                hf_fx.and_then(|fx| fx.shadow.as_deref()),
-                            );
-                        }
-                        if let Some(ref glow) = img.glow {
-                            super::color::draw_image_glow(
-                                content,
-                                glow,
-                                x,
-                                y_bottom,
-                                img.display_width,
-                                img.display_height,
-                                hf_fx.and_then(|fx| fx.glow.as_deref()),
-                            );
-                        }
+                        super::color::draw_image_halo(
+                            content,
+                            img.shadow.as_ref(),
+                            img.glow.as_ref(),
+                            (x, y_bottom, img.display_width, img.display_height),
+                            pc.effect_para_names.get(&pi),
+                        );
                         super::smartart::render_image_with_clip(
                             content,
                             pdf_name,
