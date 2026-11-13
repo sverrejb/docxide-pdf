@@ -720,6 +720,41 @@ pub(super) fn anchored_to_line(container: roxmltree::Node) -> bool {
     wpd(container, "positionV").and_then(|n| n.attribute("relativeFrom")) == Some("line")
 }
 
+/// `base` placed at `container`'s `wp:anchor` position with its wrapping,
+/// size `(width_pt, height_pt)` and stacking.
+pub(super) fn place_anchored(
+    container: roxmltree::Node,
+    (width_pt, height_pt): (f32, f32),
+    base: Textbox,
+) -> Textbox {
+    let (h_position, h_relative_from, v_position, v_relative_from) =
+        parse_anchor_position(container);
+    let (wrap_type, wrap_text, wrap_polygon) = parse_wrap_type(container);
+    let (behind_doc, z_index) = anchor_z_order(container);
+    let (dist_top, dist_bottom) = wrap_dist_top_bottom(container);
+    let (dist_left, dist_right) = wrap_dist_left_right(container, wrap_polygon.is_some());
+    Textbox {
+        width_pt,
+        height_pt,
+        h_position,
+        h_relative_from,
+        v_offset_pt: v_position.offset_or_zero(),
+        v_position,
+        v_relative_from,
+        wrap_type,
+        wrap_text,
+        wrap_polygon,
+        dist_top,
+        dist_bottom,
+        dist_left,
+        dist_right,
+        behind_doc,
+        z_index,
+        v_from_line: anchored_to_line(container),
+        ..base
+    }
+}
+
 pub(super) fn parse_wrap_type(
     container: roxmltree::Node,
 ) -> (WrapType, WrapText, Option<Vec<(i32, i32)>>) {
@@ -839,33 +874,12 @@ fn parse_placed_drawing<R: Read + Seek>(
 
         if is_anchor {
             if let Some(wsp) = parse_textbox_from_wsp(container, ctx) {
-                let (h_position, h_relative, v_pos, v_relative) = parse_anchor_position(container);
-                let (wrap_type, wrap_text, wrap_polygon) = parse_wrap_type(container);
-                let (behind_doc, z_index) = anchor_z_order(container);
-                let (dist_top, dist_bottom) = wrap_dist_top_bottom(container);
-                let (dist_left, dist_right) =
-                    wrap_dist_left_right(container, wrap_polygon.is_some());
-                return Some(RunDrawingResult::TextBox(Textbox {
-                    width_pt: display_w,
+                let base = Textbox {
                     width_pct_margin: pct_width_of_margin(container),
-                    height_pt: display_h,
-                    h_position,
-                    h_relative_from: h_relative,
-                    v_offset_pt: v_pos.offset_or_zero(),
-                    v_position: v_pos,
-                    v_relative_from: v_relative,
-                    wrap_type,
-                    wrap_text,
-                    wrap_polygon,
-                    dist_top,
-                    dist_bottom,
-                    dist_left,
-                    dist_right,
-                    behind_doc,
-                    z_index,
-                    v_from_line: anchored_to_line(container),
                     ..wsp
-                }));
+                };
+                let textbox = place_anchored(container, (display_w, display_h), base);
+                return Some(RunDrawingResult::TextBox(textbox));
             }
             if let Some(conn) = parse_connector_from_wsp(container, ctx.theme) {
                 return Some(RunDrawingResult::Connector(conn));
