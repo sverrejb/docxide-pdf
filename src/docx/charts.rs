@@ -40,15 +40,14 @@ fn collect_indexed_pts<T: Clone>(
     default: T,
     extract: impl Fn(roxmltree::Node) -> Option<T>,
 ) -> Vec<T> {
-    let mut pts: Vec<(usize, T)> = chart_children(cache_node, "pt")
+    let pts: Vec<(usize, T)> = chart_children(cache_node, "pt")
         .filter_map(|pt| {
             let idx = pt.attribute("idx")?.parse::<usize>().ok()?;
             let v = extract(pt)?;
             Some((idx, v))
         })
         .collect();
-    pts.sort_by_key(|(idx, _)| *idx);
-    let count = pts.last().map(|(idx, _)| idx + 1).unwrap_or(0);
+    let count = pts.iter().map(|(idx, _)| idx + 1).max().unwrap_or(0);
     let mut values = vec![default; count];
     for (idx, v) in pts {
         values[idx] = v;
@@ -145,9 +144,9 @@ fn parse_series(ser_node: roxmltree::Node) -> (ChartSeries, Vec<String>, Option<
     };
 
     let (x_values_raw, _) = parse_num_cache(ser_node, "xVal");
-    let x_values = non_empty_vec(x_values_raw);
+    let x_values = Some(x_values_raw).filter(|v| !v.is_empty());
     let (bubble_raw, _) = parse_num_cache(ser_node, "bubbleSize");
-    let bubble_sizes = non_empty_vec(bubble_raw);
+    let bubble_sizes = Some(bubble_raw).filter(|v| !v.is_empty());
 
     let cat_labels = parse_str_cache(chart_child(ser_node, "cat"));
 
@@ -172,10 +171,6 @@ fn parse_series(ser_node: roxmltree::Node) -> (ChartSeries, Vec<String>, Option<
     )
 }
 
-fn non_empty_vec(v: Vec<f32>) -> Option<Vec<f32>> {
-    if v.is_empty() { None } else { Some(v) }
-}
-
 fn parse_axis(ax_node: roxmltree::Node) -> ChartAxis {
     // Lines with no `c:spPr` of their own draw black (the probes' 2-D and
     // 3-D charts, torture_test).
@@ -189,12 +184,6 @@ fn parse_axis(ax_node: roxmltree::Node) -> ChartAxis {
         labels: Vec::new(),
         gridline_color,
         line_color,
-    }
-}
-
-fn parse_legend(legend_node: roxmltree::Node) -> ChartLegend {
-    ChartLegend {
-        position: legend_position(chart_attr(legend_node, "legendPos"), LegendPosition::Right),
     }
 }
 
@@ -240,10 +229,6 @@ fn assign_cat_labels(cat_axis: &mut Option<ChartAxis>, cat_labels: Vec<String>) 
     }
 }
 
-fn extract_plot_border(plot_area: roxmltree::Node) -> Option<[u8; 3]> {
-    chart_child(plot_area, "spPr").and_then(extract_line_color)
-}
-
 fn parse_chart_space(xml_content: &str, accent_colors: Vec<[u8; 3]>) -> Option<Chart> {
     let doc = roxmltree::Document::parse(xml_content).ok()?;
     let chart_space = doc.root_element();
@@ -272,9 +257,11 @@ fn parse_chart_space(xml_content: &str, accent_colors: Vec<[u8; 3]>) -> Option<C
         series: series_list,
         cat_axis,
         val_axis,
-        legend: chart_child(chart_node, "legend").map(parse_legend),
+        legend: chart_child(chart_node, "legend").map(|legend| ChartLegend {
+            position: legend_position(chart_attr(legend, "legendPos"), LegendPosition::Right),
+        }),
         gap_width_pct,
-        plot_border_color: extract_plot_border(plot_area),
+        plot_border_color: chart_child(plot_area, "spPr").and_then(extract_line_color),
         accent_colors,
         val_format_code,
         title: chart_child(chart_node, "title")
