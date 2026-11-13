@@ -5,7 +5,7 @@ use crate::model::{
 
 use super::color::{apply_color_transforms, parse_color_transforms, resolve_dml_color};
 use super::styles::{StylesInfo, ThemeFonts};
-use super::textbox::{parse_avlst, parse_vml_box_style, parse_vml_color};
+use super::textbox::{parse_avlst, parse_vml_box_style, parse_vml_color, vml_style_prop};
 use super::{
     W14_NS, angle_attr, dml as find_dml, emu_attr_opt, find_child, frac_attr, parse_hex_color,
     parse_on_off, parse_pt, resolve_theme_color_key,
@@ -139,14 +139,12 @@ pub(super) fn parse_vml_wordart(
     }
 
     let style_str = textpath.attribute("style").unwrap_or("");
-    let (font_name, font_size) = parse_vml_font_style(style_str);
+    let font_prop =
+        |key| vml_style_prop(style_str, key).map(|v| v.trim_matches('"').trim_matches('\''));
     // Regular unless the textpath style asks for a weight (swiss_materials'
     // watermark is plain Arial; it used to be drawn bold).
-    let bold = style_str.split(';').any(|part| {
-        part.trim()
-            .strip_prefix("font-weight:")
-            .is_some_and(|w| w.trim() == "bold" || w.trim().parse::<u32>().is_ok_and(|n| n >= 600))
-    });
+    let bold = vml_style_prop(style_str, "font-weight")
+        .is_some_and(|w| w == "bold" || w.parse::<u32>().is_ok_and(|n| n >= 600));
 
     // The fill's opacity is blended into the colour: WordArt sits on the page
     // background (swiss_materials' watermark is red at 50%, drawn pink).
@@ -165,8 +163,9 @@ pub(super) fn parse_vml_wordart(
 
     let run = Run {
         text: text.to_string(),
-        font_name: font_name.unwrap_or_else(|| styles.defaults.font_name.clone()),
-        font_size: font_size.unwrap_or(36.0),
+        font_name: font_prop("font-family")
+            .map_or_else(|| styles.defaults.font_name.clone(), str::to_string),
+        font_size: font_prop("font-size").and_then(parse_pt).unwrap_or(36.0),
         bold,
         color: fill_color,
         ..Run::default()
@@ -179,7 +178,6 @@ pub(super) fn parse_vml_wordart(
     };
 
     let shape_style = shape.attribute("style").unwrap_or("");
-    let (width, height) = parse_vml_dimensions(shape_style);
     let bs = parse_vml_box_style(shape_style);
     let (behind_doc, z_index) = super::images::vml_z_order(bs.z_index);
     // `fitshape` stretches the glyphs to the shape box (both ways), which is
@@ -191,8 +189,8 @@ pub(super) fn parse_vml_wordart(
 
     Some(Textbox {
         paragraphs: vec![para],
-        width_pt: width,
-        height_pt: height,
+        width_pt: bs.width,
+        height_pt: bs.height,
         h_position: if bs.h_center {
             HorizontalPosition::AlignCenter
         } else {
@@ -280,40 +278,4 @@ fn parse_w14_gradient(grad: roxmltree::Node, theme: &ThemeFonts) -> Option<TextF
         .unwrap_or(0.0);
 
     Some(TextFill::Gradient { stops, angle_deg })
-}
-
-fn parse_vml_font_style(style: &str) -> (Option<String>, Option<f32>) {
-    let mut font_name = None;
-    let mut font_size = None;
-
-    for part in style.split(';') {
-        if let Some((key, val)) = part.trim().split_once(':') {
-            let val = val.trim().trim_matches('"').trim_matches('\'');
-            match key.trim() {
-                "font-family" => font_name = Some(val.to_string()),
-                "font-size" => {
-                    font_size = parse_pt(val);
-                }
-                _ => {}
-            }
-        }
-    }
-
-    (font_name, font_size)
-}
-
-fn parse_vml_dimensions(style: &str) -> (f32, f32) {
-    let mut width = 0.0_f32;
-    let mut height = 0.0_f32;
-    for part in style.split(';') {
-        if let Some((key, val)) = part.trim().split_once(':') {
-            match key.trim() {
-                "width" => width = parse_pt(val.trim()).unwrap_or(0.0),
-                "height" => height = parse_pt(val.trim()).unwrap_or(0.0),
-                _ => {}
-            }
-        }
-    }
-
-    (width, height)
 }
