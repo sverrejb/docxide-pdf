@@ -13,13 +13,16 @@ use super::header_footer::effective_slot_top;
 
 use super::RenderContext;
 use super::layout::{LinkAnnotation, LinkTagger, encode_text_for_pdf, render_paragraph_lines};
+use super::table_columns::{
+    apply_pct_width, auto_fit_columns, autofit_min_widths, cell_span_width, cell_x_offset,
+    fixed_columns, min_content_widths, squeeze_to_width,
+};
 use super::table_layout::{
     CELL_START, CellContentItem, CellCursor, CellFloatingImageLayout, CellLayout,
-    CellParagraphLayout, Chunk, HfSubstitution, RowLayout, RowPiece, apply_pct_width,
-    auto_fit_columns, autofit_min_widths, cell_span_width, cell_x_offset, chunk_space_before,
+    CellParagraphLayout, Chunk, HfSubstitution, RowLayout, RowPiece, chunk_space_before,
     compute_merge_spans, compute_row_layouts, continues_whole, cursor_chunks, find_cell_split,
-    fixed_columns, item_chunk_height, keep_chain_end, min_content_widths, para_block_height,
-    partial_row_height, row_pieces, skip_finished_row, squeeze_to_width,
+    item_chunk_height, keep_chain_end, para_block_height, partial_row_height, row_pieces,
+    skip_finished_row,
 };
 use super::tagging::{CellTagger, TableTags, Tags};
 

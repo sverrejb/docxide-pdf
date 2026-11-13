@@ -21,6 +21,7 @@ mod shape_path;
 mod smartart;
 mod svg;
 mod table;
+mod table_columns;
 mod table_layout;
 mod tagging;
 mod textbox_render;
