@@ -8,8 +8,9 @@ use crate::model::{
 };
 
 use super::color::{apply_color_transforms, parse_solid_fill, resolve_dml_color};
-use super::images::{extent_dimensions, parse_anchor_position, vml_z_order};
+use super::images::{extent_dimensions, parse_anchor_position};
 use super::styles::{ThemeFillStyle, ThemeFonts};
+use super::vml_object::{vml_frame_fill_image, vml_z_order};
 use super::{
     DML_NS, MC_NS_TOP, OFFICE_NS, ParseContext, VML_NS, WML_NS, WPD_NS, WPG_NS, WPS_NS, angle_attr,
     dml as find_dml, dml_children as find_dml_all, emu_attr_opt, frac_attr, parse_pt,
@@ -1043,7 +1044,7 @@ pub(super) fn parse_textbox_from_vml<R: Read + std::io::Seek>(
         behind_doc,
         z_index,
         fill: parse_vml_textbox_fill(shape),
-        picture_fill: super::images::vml_frame_fill_image(shape, ctx, width, height),
+        picture_fill: vml_frame_fill_image(shape, ctx, width, height),
         margin_left: 7.2,
         margin_right: 7.2,
         margin_top: 3.6,

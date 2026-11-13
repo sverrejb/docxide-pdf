@@ -15,12 +15,13 @@ use crate::model::{
 
 use super::images::{
     RunDrawingResult, anchor_z_order, anchored_to_line, extent_dimensions, parse_anchor_position,
-    parse_wrap_type, place_anchored, read_image_from_zip, vml_imagedata_props, vml_z_order,
+    parse_wrap_type, place_anchored, read_image_from_zip,
 };
 use super::textbox::{
     find_sp_pr, is_connector_wsp, parse_connector_shape_node, parse_vml_box_style, parse_vml_line,
     parse_wsp_shape, vml_style_prop,
 };
+use super::vml_object::{vml_frame_fill_image, vml_imagedata_props, vml_z_order};
 use super::{
     PIC_NS, ParseContext, REL_NS, VML_NS, WPC_NS, WPG_NS, WPS_NS, dml, emu_attr, parse_pt,
 };
@@ -512,7 +513,7 @@ fn walk_vml_group<R: Read + Seek>(
         {
             (img.src_rect, img.lum) = vml_imagedata_props(data);
             out.push(RunDrawingResult::Floating(group_image(img, x, y, base)));
-        } else if let Some(img) = super::images::vml_frame_fill_image(node, ctx, w, h) {
+        } else if let Some(img) = vml_frame_fill_image(node, ctx, w, h) {
             out.push(RunDrawingResult::Floating(group_image(img, x, y, base)));
         }
     }

@@ -21,6 +21,7 @@ mod styles;
 pub(crate) mod svg;
 mod tables;
 mod textbox;
+mod vml_object;
 mod wmf;
 mod wordart;
 
