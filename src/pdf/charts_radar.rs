@@ -7,9 +7,10 @@ use crate::model::{InlineChart, LegendPosition};
 
 use super::chart_legend::{LegendItem, LegendPlacement, SwatchStyle, render_chart_legend};
 use super::charts::{
-    DEFAULT_AXIS_COLOR, DEFAULT_LINE_W, compute_axis_range, draw_marker, format_tick_label,
-    marker_look, polygon, resolve_accent_colors, resolve_marker, show_text, text_width,
+    DEFAULT_AXIS_COLOR, DEFAULT_LINE_W, draw_marker, marker_look, polygon, resolve_accent_colors,
+    resolve_marker, show_text,
 };
+use super::charts_format::{compute_axis_range, format_tick_label, text_width};
 use super::color::{fill_rgb, stroke_rgb};
 
 pub(super) fn render_radar(
